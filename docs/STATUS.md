@@ -42,4 +42,7 @@ Spec 001 (core) is written and reviewed. No code yet.
 
 ## Waiting on Toni
 
+- Sign in to Xcode with an Apple ID (Xcode → Settings → Accounts) so the free Personal Team can
+  sign the app and helper. Needed for M0.
+
 - Apple Developer ID (Toni is getting one). Until then, build with Apple Development signing.

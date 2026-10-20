@@ -5,6 +5,8 @@ paths:
 
 # macOS app rules and gotchas
 
+- `macos/project.yml` is the source of truth for the Xcode project. Edit it and run `xcodegen`;
+  never hand-edit the generated `.xcodeproj` (it is gitignored).
 - Real Mac app only: Apple-supported APIs and standard approval prompts. No Terminal steps, no
   sudoers edits, no private frameworks where a public API exists (Constitution IV).
 - Power assertions (`IOPMAssertion`, `caffeinate`) prevent idle sleep but NOT lid-close sleep.
