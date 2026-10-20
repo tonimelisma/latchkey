@@ -1,0 +1,228 @@
+# Plan 001: Core — HOW
+
+Derived from `spec.md`. Every decision names the requirement(s) it serves. Evidence is in
+`research.md`.
+
+## Architecture
+
+```
+Claude (web / Desktop / iOS / Android)          Anthropic's cloud calls the relay; egress 160.79.104.0/21
+        │  HTTPS, MCP Streamable HTTP, OAuth 2.1 bearer token
+        ▼
+┌──────────────────────────── Relay (Go, one binary, SQLite) ────────────────────────────┐
+│  /mcp            MCP server: handshake, tools/list (cached), laptop_status, forwarding   │
+│  /.well-known/*  OAuth discovery (RFC 9728 protected resource, RFC 8414 auth server)    │
+│  /authorize /token /register   OAuth authorization server (fosite)                       │
+│  /account        Web pages: sign-up, passkey sign-in, recovery, revoke, delete, audit    │
+│  /agent/v1       WebSocket endpoint the Mac app dials into                               │
+│  Hub: in-memory map device_id -> live connection; deadlines; offline answers            │
+└──────────────────────────────────────────────────────────────────────────────────────────┘
+        ▲  WSS, outbound from the Mac (contracts/agent-protocol.md)
+        │
+┌──────────────── Mac app (Swift, menu bar) ────────────────┐
+│  Connection: URLSessionWebSocketTask, NWPathMonitor, wake  │
+│  Power monitor: IOKit power sources, thermal state         │
+│  Capabilities: System info -> battery_status               │
+│  Settings: relay URL, capabilities; local tool-call trace  │
+│        │ XPC (code-signing-checked)                         │
+│  Helper daemon (root, SMAppService): sleep on/off only     │
+└────────────────────────────────────────────────────────────┘
+```
+
+## Decisions
+
+### D1. NAT traversal: the Mac app keeps one outbound WebSocket to the relay
+Serves FR-002, FR-004, FR-012; Constitution I.
+The relay must exist anyway (stable URL, OAuth, memory), so a third-party tunnel would only add a
+second hop and a per-user provisioning step. A closed socket means "offline" instantly.
+- Transport: WSS on 443 (passes through home routers, hotel Wi-Fi, and most corporate proxies).
+- Liveness: the app sends a `state` message every 15 s; the relay also sends WebSocket pings.
+  Offline after 35 s of silence (SC-04 requires 45 s).
+- Reconnect: immediately on network path change (`NWPathMonitor`) and on wake
+  (`NSWorkspace.didWakeNotification`); otherwise exponential backoff with jitter, 1 s to 30 s cap
+  (SC-05).
+- Newest connection for a device wins; the old one is closed with code 4003.
+
+### D2. The relay is the MCP server, not a pass-through
+Serves FR-010, FR-013, FR-014, FR-021, SC-03, SC-07; Constitution II.
+- Library: official `github.com/modelcontextprotocol/go-sdk` (v1.8+), `mcp.StreamableHTTPHandler`.
+- Protocol versions: 2025-11-25 (stateful; Claude's hosted runtime still sends `initialize`) and
+  2026-07-28 (stateless) as the SDK negotiates. Stateful sessions live in memory on the single
+  server.
+- `tools/list` returns `laptop_status` plus the last tool list the Mac reported, even when offline.
+- `tools/call` for a Mac tool goes to the hub. Offline: immediate `isError: true` result with the
+  offline message (FR-010). Online: forwarded with a deadline (D3).
+- Tool-list changes: `notifications/tools/list_changed` to stateful sessions (FR-062).
+
+### D3. Deadlines
+Serves FR-011, Constitution II.
+- Default deadline 10 s per call. A tool may declare a longer one in its metadata, capped at 60 s.
+  `battery_status` uses 5 s.
+- On deadline: the relay returns a timeout error, sends `cancel` to the Mac, and drops any late
+  result.
+- [NEEDS CLARIFICATION: Claude's hosted client timeout is undocumented. Measure it in M4 and keep
+  our cap below it.]
+
+### D4. OAuth authorization server: fosite plus Claude's client registration methods
+Serves FR-040, FR-014.
+- `github.com/ory/fosite` (Apache-2.0) for authorization code + PKCE S256, token issuance, refresh
+  rotation. Opaque HMAC tokens stored hashed.
+- Client registration, implemented in fosite's client storage:
+  - CIMD: when `client_id` is an HTTPS URL, fetch and validate the metadata document, cache it
+    (respect HTTP caching, max 24 h).
+  - DCR (RFC 7591) at `/register` for clients that don't use CIMD.
+- Metadata: advertise `client_id_metadata_document_supported: true`,
+  `token_endpoint_auth_methods_supported` including `none`, `code_challenge_methods_supported:
+  ["S256"]`, `offline_access` in `scopes_supported`.
+- Redirect URIs accepted: `https://claude.ai/api/mcp/auth_callback`, plus loopback
+  `http://localhost/*` and `http://127.0.0.1/*` with any port (Claude Code).
+- Resource side: go-sdk `auth.RequireBearerToken` and `auth.ProtectedResourceMetadataHandler`;
+  unauthenticated requests get `401` with `WWW-Authenticate: Bearer resource_metadata=...`.
+- Lifetimes: access token 1 h, refresh token 90 days, rotated on every use, with a 60 s grace
+  window for the previous token (network retries). SC-07 needs at least 7 days.
+- Endpoint latency: discovery, registration, and token endpoints respond well under 10 s (Claude's
+  limit); no outbound calls on the token path except a cached CIMD fetch.
+- Consent screen shows the client name and the redirect URI's host.
+
+### D5. Owner authentication: passkeys only, email recovery
+Serves FR-041, FR-042, FR-043.
+- `github.com/go-webauthn/webauthn` (BSD-3), discoverable credentials, user verification required.
+- Sign-up: email → verification link → create passkey.
+- Recovery: single-use link, 15 min expiry, stored hashed; using it is announced by email and in the
+  Mac app.
+- Email: SMTP via `github.com/wneessen/go-mail`; configured by environment variables (FR-080).
+- Web pages: server-rendered `html/template` with a small script for WebAuthn calls. No frontend
+  framework.
+
+### D6. Pairing: browser sign-in, Secure Enclave device key
+Serves FR-050, FR-051, FR-052; Constitution IV.
+- The app opens `ASWebAuthenticationSession` to `/pair`; the Owner signs in with a passkey; the
+  relay redirects to `latchkey://paired?code=...`; the app exchanges the code.
+- During the exchange the app registers a P-256 public key whose private key lives in the Secure
+  Enclave (CryptoKit). No bearer secret leaves the Mac.
+- WebSocket authentication: the relay sends a nonce; the app signs it with the device key
+  (contracts/agent-protocol.md).
+- Revocation deletes the device's public key and closes its socket with code 4002.
+
+### D7. Keep-awake: SMAppService helper daemon
+Serves FR-030, FR-031, FR-035, FR-073; Constitution IV.
+- Lid open, idle: the app itself holds an `IOPMAssertion` of type
+  `PreventUserIdleSystemSleep`. Public API, no privileges.
+- Lid closed: only the system `SleepDisabled` setting prevents clamshell sleep. That requires root,
+  so a helper daemon registered with `SMAppService.daemon(plistName:)` performs exactly two
+  operations: set it on and set it off, by running `/usr/bin/pmset -a disablesleep 1|0` (there is
+  no public API for this setting).
+- The Owner approves the helper once in System Settings → General → Login Items.
+- XPC: Mach service; the helper accepts connections only from our app's code-signing requirement
+  (`setCodeSigningRequirement`).
+- Re-apply and verify on every power-source change (`IOPSNotificationCreateRunLoopSource`) and wake;
+  read back the setting to confirm (FR-031).
+- Restore: the app turns it off on quit; the helper turns it off when its client disconnects and on
+  its own startup if no client connects within 60 s. That covers crashes and uninstall (FR-035,
+  SC-09).
+- Risk: reports conflict about whether `disablesleep` survives power-source changes on Apple
+  silicon. M0 tests this first; if it fails, this decision is revisited before anything else is
+  built.
+
+### D8. Power and thermal monitoring
+Serves FR-032, FR-033, FR-034, FR-036, FR-063.
+- Battery and power source: `IOPSCopyPowerSourcesInfo` and change notifications.
+- Thermal: `ProcessInfo.thermalState` and `thermalStateDidChangeNotification`. Serious or critical
+  turns keep-awake off.
+- Low Power Mode is reported in state but does not by itself turn keep-awake off.
+- Before turning keep-awake off, the app sends `goodbye` with the reason, so the relay can answer
+  "went to sleep: low battery at 14%".
+
+### D9. Mac app packaging
+Serves FR-070, FR-071, FR-072; Constitution IV.
+- SwiftUI `MenuBarExtra`; `SMAppService.mainApp` for start at login.
+- Hardened runtime, Developer ID signing, notarization. Not sandboxed: later capabilities (Full Disk
+  Access for Messages, Apple Events, Accessibility) are incompatible with the App Sandbox, and
+  changing that later would mean migrating containers. This deviation from "sandboxed where
+  possible" is deliberate.
+- Updates: Sparkle 2 with EdDSA-signed archives.
+- Until the Developer ID exists: local builds with an Apple Development certificate.
+  [NEEDS CLARIFICATION: confirm SMAppService daemons run under a free Personal Team signature.]
+- Minimum macOS: current and previous major release, Apple silicon only (FR-075). If a required
+  API needs a newer release, the floor moves up and this line says why.
+
+### D10. Relay implementation
+Serves FR-080, Constitution V, VIII.
+- Go, standard library `net/http`.
+- WebSocket: `github.com/coder/websocket`.
+- SQLite: `modernc.org/sqlite` (pure Go, so the binary stays static with no cgo).
+- TLS: optional built-in ACME (`golang.org/x/crypto/acme/autocert`) so a self-hoster needs no
+  reverse proxy; or plain HTTP behind one.
+- Container: distroless image, one volume at `/data`.
+- Config (environment): `PUBLIC_URL`, `DATA_DIR`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`,
+  `SMTP_PASSWORD`, `SMTP_FROM`, `ACME_EMAIL` (optional).
+- Scaling: one server. The hub interface is written so a later version can route across servers;
+  nothing more is built now.
+
+### D11. Audit log and local trace
+Serves FR-022, FR-023, FR-024, FR-026, Constitution VI.
+- Relay: one row per tool call, metadata only (no arguments, no results); daily purge after 30 days.
+- Mac app: full trace (arguments, results, errors, timings) in a local SQLite file in the app's
+  Application Support folder, shown in a log window from the menu bar. Never sent to the relay.
+  Purged after 90 days by default.
+
+## Repository layout
+
+```
+latchkey/
+  memory/constitution.md
+  specs/001-core/...
+  relay/                      Go module
+    cmd/relay/main.go
+    internal/hub/             live device connections, deadlines, offline answers
+    internal/agentproto/      message types for contracts/agent-protocol.md
+    internal/mcpserver/       MCP surface, laptop_status, forwarding
+    internal/oauth/           fosite wiring, CIMD, DCR, metadata
+    internal/account/         passkeys, recovery, pairing, web pages
+    internal/store/           SQLite schema and queries
+    Dockerfile
+  macos/
+    Latchkey.xcodeproj
+    App/                      menu bar UI, connection, power monitor, capabilities
+    Helper/                   privileged daemon, XPC listener
+    Shared/                   XPC protocol, agent protocol types
+```
+
+## Testing strategy (Constitution VII)
+
+- Contract tests first, failing before implementation:
+  - Agent protocol: a Go test agent that speaks `contracts/agent-protocol.md`, including bad
+    signatures, missed heartbeats, late results, and replaced connections.
+  - MCP surface: go-sdk client against the relay; offline, timeout, and list-changed cases.
+  - OAuth: full authorization code + PKCE flow with CIMD and with DCR; refresh rotation; bad
+    redirect URIs; `401` discovery headers.
+- Mac app: unit tests for the keep-awake state machine (inputs: power source, battery %,
+  thermal state, user setting; output: on/off plus reason).
+- Integration: MCP Inspector against a local relay; then real Claude on web, Desktop, and phone
+  through a public test deployment (quickstart checklist).
+- Hardware: SC-06 run on a real Apple silicon MacBook, lid closed on battery, with charger cycles.
+
+## Milestones
+
+| # | Milestone | Proves |
+|---|---|---|
+| M0 | Keep-awake spike: minimal app + helper on your Mac | D7 works on real hardware (SC-06) |
+| M1 | Relay hub + agent protocol with Go test agent | D1, D3, FR-010 to FR-013 |
+| M2 | Mac app connects, sends state, answers `battery_status` | D6 (without browser pairing), D8 |
+| M3 | OAuth + passkeys + pairing | D4, D5, D6 |
+| M4 | End to end from Claude on phone, web, Desktop | FR-001, SC-02, SC-03, SC-07 |
+| M5 | Packaging: signing, notarization, Sparkle, Docker image | FR-072, FR-080 |
+
+## Constitution check
+
+| Article | Status |
+|---|---|
+| I. Outbound only | Pass (D1) |
+| II. Fail fast | Pass (D2, D3); hosted Claude timeout to be measured |
+| III. Disabled means nonexistent | Pass (FR-061) |
+| IV. Good macOS citizen | Pass with one documented exception: no App Sandbox (D9) |
+| V. Self-hostable | Pass (D10) |
+| VI. Store the minimum | Pass (D11, data-model.md) |
+| VII. Test-first | Planned (testing strategy) |
+| VIII. Simplicity | Pass: relay, Mac app, specs |
+| IX. Open source | Pass: all dependencies MIT, BSD, or Apache |

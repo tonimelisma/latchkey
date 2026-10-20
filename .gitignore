@@ -1,0 +1,19 @@
+.DS_Store
+
+# Go
+/relay/bin/
+*.test
+*.out
+
+# Relay local data
+/relay/data/
+*.db
+*.db-shm
+*.db-wal
+.env
+
+# Xcode
+xcuserdata/
+DerivedData/
+*.xcuserstate
+build/
