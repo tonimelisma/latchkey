@@ -72,7 +72,8 @@ Evidence behind `plan.md`, gathered 2026-10-18 to 2026-10-19. Re-check anything 
 - Conflicting reports that it fails on Apple silicon when the power source changes; Amphetamine
   added a "Power Protect" script for exactly that case. https://mac.softpedia.com/progChangelog/Amphetamine-Changelog-140109.html
   and https://pasqualepillitteri.it/en/news/779/disable-laptop-sleep-lid-close-ai-agents
-- Conclusion: test on hardware first (milestone M0), re-apply on every power change, verify.
+- Conclusion: re-apply on every power change and wake, and read back to verify. (A hardware spike
+  was planned, then dropped by Toni on 2026-10-20.)
 
 ## macOS packaging
 

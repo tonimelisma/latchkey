@@ -89,7 +89,9 @@ Serves FR-041, FR-042, FR-043.
 - `github.com/go-webauthn/webauthn` (BSD-3), discoverable credentials, user verification required.
 - Sign-up: email → verification link → create passkey.
 - Recovery: single-use link, 15 min expiry, stored hashed; using it is announced by email and in the
-  Mac app.
+  Mac app. The Mac app learns of it through a `notice` message (contracts/agent-protocol.md), sent
+  at once if the Mac is online, otherwise on its next connection (the relay compares the
+  recovery's `used_at` with the device's last connection; nothing new is stored).
 - Email: SMTP via `github.com/wneessen/go-mail`; configured by environment variables (FR-080).
 - Web pages: server-rendered `html/template` with a small script for WebAuthn calls. No frontend
   framework.
@@ -102,7 +104,9 @@ Serves FR-050, FR-051, FR-052; Constitution IV.
   Enclave (CryptoKit). No bearer secret leaves the Mac.
 - WebSocket authentication: the relay sends a nonce; the app signs it with the device key
   (contracts/agent-protocol.md).
-- Revocation deletes the device's public key and closes its socket with code 4002.
+- Revocation deletes the device's public key and closes its socket with code 4002. It starts from
+  the web account page, or from "Disconnect" in the app, which sends `goodbye` with reason
+  `user_disconnected`; the relay treats that reason as a revocation.
 
 ### D7. Keep-awake: SMAppService helper daemon
 Serves FR-030, FR-031, FR-035, FR-073; Constitution IV.
@@ -120,9 +124,10 @@ Serves FR-030, FR-031, FR-035, FR-073; Constitution IV.
 - Restore: the app turns it off on quit; the helper turns it off when its client disconnects and on
   its own startup if no client connects within 60 s. That covers crashes and uninstall (FR-035,
   SC-09).
-- Risk: reports conflict about whether `disablesleep` survives power-source changes on Apple
-  silicon. M0 tests this first; if it fails, this decision is revisited before anything else is
-  built.
+- `disablesleep` is not documented by Apple; its behavior is known from third-party apps
+  (research.md), with conflicting reports about power-source changes on Apple silicon. The
+  re-apply-and-read-back above is the mitigation. No separate spike or hardware test run
+  (Toni, 2026-10-20).
 
 ### D8. Power and thermal monitoring
 Serves FR-032, FR-033, FR-034, FR-036, FR-063.
@@ -143,8 +148,8 @@ Serves FR-070, FR-071, FR-072; Constitution IV.
   changing that later would mean migrating containers. This deviation from "sandboxed where
   possible" is deliberate.
 - Updates: Sparkle 2 with EdDSA-signed archives.
-- Until the Developer ID exists: local builds with an Apple Development certificate.
-  [NEEDS CLARIFICATION: confirm SMAppService daemons run under a free Personal Team signature.]
+- Until the Developer ID exists: local builds with Toni's Apple Development certificate (team ID
+  in gitignored `macos/Local.xcconfig`).
 - Minimum macOS: current and previous major release, Apple silicon only (FR-075). If a required
   API needs a newer release, the floor moves up and this line says why.
 
@@ -164,6 +169,7 @@ Serves FR-080, Constitution V, VIII.
 ### D11. Audit log and local trace
 Serves FR-022, FR-023, FR-024, FR-026, Constitution VI.
 - Relay: one row per tool call, metadata only (no arguments, no results); daily purge after 30 days.
+  "Surface" (FR-022) is the MCP `clientInfo.name` from the session's `initialize`, when sent.
 - Mac app: full trace (arguments, results, errors, timings) in a local SQLite file in the app's
   Application Support folder, shown in a log window from the menu bar. Never sent to the relay.
   Purged after 90 days by default.
@@ -198,20 +204,24 @@ latchkey/
   - MCP surface: go-sdk client against the relay; offline, timeout, and list-changed cases.
   - OAuth: full authorization code + PKCE flow with CIMD and with DCR; refresh rotation; bad
     redirect URIs; `401` discovery headers.
+- Shared fixtures: one JSON example per agent protocol message in `contracts/fixtures/`, read by
+  both the Go and the Swift tests so the two sides cannot drift.
 - Mac app: unit tests for the keep-awake state machine (inputs: power source, battery %,
   thermal state, user setting; output: on/off plus reason).
 - Integration: MCP Inspector against a local relay; then real Claude on web, Desktop, and phone
   through a public test deployment (quickstart checklist).
-- Hardware: SC-06 run on a real Apple silicon MacBook, lid closed on battery, with charger cycles.
+- No hardware test runs for keep-awake (Toni, 2026-10-20); SC-06 is checked in normal use.
 
 ## Milestones
 
+Pairing comes before the Mac app, so the app connects the real way from its first build (Toni,
+2026-10-20).
+
 | # | Milestone | Proves |
 |---|---|---|
-| M0 | Keep-awake spike: minimal app + helper on your Mac | D7 works on real hardware (SC-06) |
 | M1 | Relay hub + agent protocol with Go test agent | D1, D3, FR-010 to FR-013 |
-| M2 | Mac app connects, sends state, answers `battery_status` | D6 (without browser pairing), D8 |
-| M3 | OAuth + passkeys + pairing | D4, D5, D6 |
+| M2 | OAuth + passkeys + pairing (relay side) | D4, D5, D6 |
+| M3 | Mac app: pairs, connects, keeps awake, answers `battery_status` | D6, D7, D8, D9 |
 | M4 | End to end from Claude on phone, web, Desktop | FR-001, SC-02, SC-03, SC-07 |
 | M5 | Packaging: signing, notarization, Sparkle, Docker image | FR-072, FR-080 |
 
@@ -227,4 +237,4 @@ latchkey/
 | VI. Store the minimum | Pass (D11, data-model.md) |
 | VII. Test-first | Planned (testing strategy) |
 | VIII. Simplicity | Pass: relay, Mac app, specs |
-| IX. Open source | Pass: all dependencies MIT, BSD, or Apache |
+| IX. Open source | Pass: Apache-2.0; all dependencies MIT, BSD, or Apache |

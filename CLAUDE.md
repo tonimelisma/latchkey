@@ -31,6 +31,11 @@ step is done or needs a decision from Toni.
 2. Mark anything undecided `[NEEDS CLARIFICATION: ...]`. Never guess.
 3. Plan the how in `plan.md`; every decision names the requirements it serves; end with the
    constitution check.
+3a. Before a plan, contract, or task list is done, check that it holds together: every
+   requirement has a mechanism in the plan and, where it crosses the relay–Mac boundary, a
+   message in the contracts; no two docs contradict each other; milestone order matches the
+   dependencies. Fix gaps that follow from the spec; ask Toni only where the spec leaves a real
+   choice. Never hand Toni a plan with known gaps.
 4. Break into `tasks.md`; each task testable, parallel-safe ones marked `[P]`.
 5. Implement test-first: contract and integration tests written and seen failing first.
    Integration tests use a real MCP client, not mocks.
@@ -46,8 +51,21 @@ code or decision that changes them. Never let them drift.
 
 - Plain, short language. Lead with the answer. Explain unavoidable jargon in a few words.
 - Toni wants complete solutions, not partial matches. Say plainly when something falls short.
-- Put decisions to Toni with the AskUserQuestion tool: multiple choice, recommended default
-  first. Record answers in the spec and `docs/decisions.md`.
+
+## Toni decides
+
+IMPORTANT: Toni makes every product and engineering choice. Claude proposes; Toni picks.
+
+- Never make a choice silently, even a small one: features, behavior, wording users see,
+  libraries, architecture, file layout, protocol or schema changes, milestone and task order, test
+  approach, temporary workarounds, defaults, naming.
+- Ask with the AskUserQuestion tool: multiple choice, recommended option first with a one-line
+  why. Batch related questions (up to 4 per call).
+- Anything not already settled in a spec, plan, or `docs/decisions.md` is undecided. Ask before
+  acting on it, and never write it into a doc as if it were settled.
+- When a task needs choices, ask them all before starting the work, not after.
+- Don't re-ask what `docs/decisions.md` already records.
+- Record each answer in the spec or plan and in `docs/decisions.md`, in the same commit.
 
 ## Git
 

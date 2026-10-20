@@ -219,7 +219,7 @@ Measurable, technology-free. Each one has a test.
   45 seconds.
 - **SC-05** After network loss and recovery, the Mac is reachable again within 10 seconds of the
   network returning.
-- **SC-06** With the lid closed on battery, the Mac stays reachable for 8 hours, including 3
+- **SC-06** (Checked in normal use, no dedicated test run; Toni, 2026-10-20.) With the lid closed on battery, the Mac stays reachable for 8 hours, including 3
   charger plug and unplug cycles, until the low-battery threshold.
 - **SC-07** After the Mac has been offline 7 days, the Claude connector still works for
   `laptop_status` without signing in again.

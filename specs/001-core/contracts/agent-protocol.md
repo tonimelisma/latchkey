@@ -71,12 +71,20 @@ Sent in `hello`, in every `state` message, and in `goodbye`.
 `goodbye.reason`: `low_battery`, `too_hot`, `user_quit`, `system_sleep`, `system_shutdown`,
 `user_disconnected`.
 
+`user_disconnected` means the Owner clicked "Disconnect" in the app: the relay revokes the device
+(deletes its public key) and closes with 4002. The app deletes its local key.
+
 ## Relay → agent messages
 
 | type | When | Fields |
 |---|---|---|
 | `call` | Claude called a Mac tool | `id`, `tool`, `arguments`, `deadline_ms` |
 | `cancel` | Deadline passed or Claude cancelled | `id`, `reason` (`deadline` or `client_cancelled`) |
+| `notice` | Something the Owner must be told on the Mac | `kind`, `at` |
+
+`notice.kind`: `account_recovered` (a recovery link was used, FR-042). Sent right after `welcome`
+if it happened since the device's previous connection, or immediately if the device is online.
+The app shows a macOS notification.
 
 `id` is an opaque string unique per connection. The agent may run calls concurrently. A `result`
 for an unknown or cancelled `id` is ignored.
