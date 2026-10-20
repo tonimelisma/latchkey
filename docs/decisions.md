@@ -31,3 +31,4 @@ Add a row when a decision is made; never delete one, mark it "superseded by" ins
 | 2026-10-19 | Terms and privacy policy deferred; launch blocker | spec open questions |
 | 2026-10-19 | Name: Latchkey | README |
 | 2026-10-20 | CLAUDE.md slim; status in docs/STATUS.md; decisions here; topic rules in .claude/rules | CLAUDE.md |
+| 2026-10-20 | No slash-command skills; Toni says "next step" and Claude takes the top item in docs/STATUS.md | CLAUDE.md |

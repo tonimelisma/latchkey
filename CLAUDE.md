@@ -9,6 +9,13 @@ Apple silicon, current + previous macOS. Owner: Toni Melisma (`tonimelisma`).
 **At the start of every session, read `docs/STATUS.md`** (current phase, next step, open
 questions). Then read the spec folder you are working in.
 
+## "Do the next step"
+
+When Toni says "next step", "continue", or similar: take the first item under "Next steps" in
+`docs/STATUS.md`, do it following the process below, verify it, then update `docs/STATUS.md`
+(mark it done, write the new next steps) and commit. Stop and report in plain language when the
+step is done or needs a decision from Toni.
+
 ## Source of truth
 
 - `memory/constitution.md`: nine principles every plan must pass. Change only with Toni's approval.
@@ -27,9 +34,10 @@ questions). Then read the spec folder you are working in.
 4. Break into `tasks.md`; each task testable, parallel-safe ones marked `[P]`.
 5. Implement test-first: contract and integration tests written and seen failing first.
    Integration tests use a real MCP client, not mocks.
-6. Run `/new-spec NNN-name` to start a new capability. One capability at a time, in this order:
-   files, Notes + iMessage, shell, browser and computer control. Each needs its own design
-   discussion with Toni.
+6. New capabilities get their own `specs/NNN-name/` on branch `NNN-name`, one at a time, in this
+   order: files, Notes + iMessage, shell, browser and computer control. Start each with research
+   (existing MCP servers, macOS APIs, permissions, risks) and an interview of Toni; stop for
+   Toni's review before writing tasks or code.
 
 IMPORTANT: specs, `docs/STATUS.md`, and `docs/decisions.md` are updated in the same commit as the
 code or decision that changes them. Never let them drift.
@@ -57,5 +65,5 @@ code or decision that changes them. Never let them drift.
 None yet. Add build, test, and run commands for `relay/` and `macos/` as soon as they exist.
 
 <!-- Maintainers: keep this file under ~100 lines. Status and decisions live in docs/, topic
-knowledge in .claude/rules/, procedures in .claude/skills/. Test each line: would removing it
+knowledge in .claude/rules/, multi-step procedures in docs/. Test each line: would removing it
 cause Claude to make mistakes? -->
