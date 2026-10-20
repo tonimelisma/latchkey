@@ -2,6 +2,10 @@
 
 Last updated: 2026-10-20
 
+Xcode signing ready (2026-10-20): Toni's Xcode account has a valid "Apple Development" certificate
+(team ID `TEAMID1234`, expires 2027-07-22). Keep the team ID out of committed project files
+(open source); put it in a gitignored `macos/Local.xcconfig` as `DEVELOPMENT_TEAM`.
+
 ## Current phase
 
 Spec 001 (core) is written and reviewed. No code yet.
@@ -41,8 +45,5 @@ Spec 001 (core) is written and reviewed. No code yet.
 | Terms, privacy policy, abuse handling for the hosted relay | Launch blocker, deferred |
 
 ## Waiting on Toni
-
-- Sign in to Xcode with an Apple ID (Xcode → Settings → Accounts) so the free Personal Team can
-  sign the app and helper. Needed for M0.
 
 - Apple Developer ID (Toni is getting one). Until then, build with Apple Development signing.
