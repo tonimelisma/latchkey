@@ -11,6 +11,9 @@ when the Mac is offline.
 Work starts as a written spec and flows downward. Code is the last step, not the first.
 
 ```
+CLAUDE.md                       Instructions for Claude Code sessions (process, rules, commands).
+docs/STATUS.md                  Current phase, next steps, risks, open questions.
+docs/decisions.md               Index of approved decisions, linking to the specs.
 memory/constitution.md          Non-negotiable principles. Every plan is checked against them.
 specs/001-core/
   spec.md                       WHAT and WHY: user stories, requirements, success criteria. No tech.
