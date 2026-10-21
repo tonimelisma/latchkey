@@ -49,3 +49,9 @@ Add a row when a decision is made; never delete one, mark it "superseded by" ins
 | 2026-10-20 | Web pages: small hand-written CSS embedded in the relay | plan D5 |
 | 2026-10-20 | App downloads and Sparkle feed on GitHub Releases; relay image on ghcr.io | plan D9, D10 |
 | 2026-10-20 | When blocked on Toni, build everything around it and list the blocked steps at the end | CLAUDE.md |
+| 2026-10-20 | Sign-up open unless the operator sets an allowed-emails list | FR-046 |
+| 2026-10-20 | Pairing a second Mac replaces the first after confirmation | FR-053 |
+| 2026-10-20 | Recovery removes old passkeys | FR-047 |
+| 2026-10-20 | Web sign-in lasts 30 days; account deletion asks for the passkey again | FR-048 |
+| 2026-10-20 | Claude client approval remembered per client after the first time | FR-049 |
+| 2026-10-20 | System info on and start at login on by default | FR-064, FR-076 |

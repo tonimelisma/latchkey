@@ -63,10 +63,15 @@ The status must be 401; Claude ignores `WWW-Authenticate` on other statuses.
 
 ## Redirect URIs accepted
 
+A redirect URI must be listed in the client's CIMD document or DCR registration. For loopback
+URIs (`http://localhost`, `http://127.0.0.1`, `http://[::1]`) the port is ignored, since Claude
+Code picks a new port each time. In practice:
+
 - `https://claude.ai/api/mcp/auth_callback` (claude.ai web, Desktop, mobile, Cowork)
 - `http://localhost:<any>/callback` and `http://127.0.0.1:<any>/callback` (Claude Code)
-- Any other URI only if listed in the client's CIMD document or DCR registration, shown on the
-  consent screen with its host.
+
+Registered redirect URIs must be `https`, or `http` on a loopback host. The consent screen shows
+the redirect URI's host.
 
 ## Token endpoint behavior
 

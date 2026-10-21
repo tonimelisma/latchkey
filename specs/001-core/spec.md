@@ -171,12 +171,22 @@ Format: EARS ("When <trigger>, the <system> shall <response>"). IDs are stable; 
 - **FR-044** An Owner shall be able to revoke Claude's access and revoke a paired Mac from a web
   account page.
 - **FR-045** An Owner shall be able to delete their account and all data the relay holds about it.
+- **FR-046** Where the relay operator has configured a list of allowed email addresses, the relay
+  shall refuse sign-up for any other address; otherwise sign-up is open.
+- **FR-047** When an Owner completes account recovery, the relay shall remove all of the Owner's
+  previous passkeys.
+- **FR-048** The relay shall keep an Owner signed in to its web pages for 30 days, and shall ask
+  for the passkey again before deleting the account.
+- **FR-049** When an Owner has approved a Claude client once, the relay shall not ask again for the
+  same client and scopes.
 
 ### Pairing
 - **FR-050** The Mac app shall pair with an account through a browser sign-in started from the app,
   without the Owner copying codes or tokens by hand.
 - **FR-051** The Mac app shall store its credential in the macOS Keychain.
 - **FR-052** When a Mac is revoked, the relay shall close its connection and reject its credential.
+- **FR-053** When an Owner pairs a Mac while another Mac is paired, the relay shall name the
+  current Mac, ask the Owner to confirm the replacement, and on confirmation revoke the current Mac.
 
 ### Capabilities
 - **FR-060** The Mac app shall let the Owner enable and disable each capability.
@@ -185,6 +195,7 @@ Format: EARS ("When <trigger>, the <system> shall <response>"). IDs are stable; 
 - **FR-062** When the enabled set changes, the Mac app shall send the new tool list to the relay
   and the relay shall notify connected Claude sessions that the list changed, where the protocol
   supports it.
+- **FR-064** On first launch, the "System info" capability shall be enabled.
 - **FR-063** This spec ships one capability, "System info", with one tool, `battery_status`, which
   returns live battery percentage, charging state, power source, and time remaining if known.
 
@@ -192,6 +203,8 @@ Format: EARS ("When <trigger>, the <system> shall <response>"). IDs are stable; 
 - **FR-070** The app shall live in the menu bar and show: connected or not, battery, keep-awake
   state, and why keep-awake is off if it is.
 - **FR-071** The app shall offer to start at login.
+- **FR-076** On first launch, the app shall be set to start at login; the Owner can turn this off
+  in the menu.
 - **FR-072** The app shall update itself through signed updates.
 - **FR-073** All privileged operations shall go through Apple-supported mechanisms with standard
   system approval prompts.

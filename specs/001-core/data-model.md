@@ -13,9 +13,10 @@ milliseconds. Device public keys are stored as PKIX DER.
 | **devices** | id, user_id, name, public_key (P-256), app_version, os_version, created_at, revoked_at | One active device per user in this spec |
 | **device_state** | device_id, online, connected_at, last_seen_at, offline_reason, state_json, tools_json | Latest state only, no history (FR-020) |
 | **pairing_codes** | code_hash, user_id, expires_at, used_at | 5 min, single use |
+| **oauth_consents** | user_id, client_id, scopes, created_at | Remembered approvals (FR-049); deleted when Claude's access is revoked |
+| **relay_keys** | name, value | Server secrets, e.g. the 32-byte HMAC key for OAuth tokens; never leaves the server |
 | **oauth_clients** | id, kind (`dcr` or `cimd`), metadata_json, secret_hash, created_at, fetched_at | CIMD documents cached; DCR clients stored |
-| **oauth_codes** | signature, client_id, user_id, pkce_challenge, redirect_uri, scopes, expires_at | fosite authorize codes, 1 min |
-| **oauth_tokens** | signature, kind (`access` or `refresh`), client_id, user_id, scopes, expires_at, rotated_at, revoked_at | fosite HMAC token signatures, never raw tokens |
+| **oauth_requests** | signature, kind (`code`, `pkce`, `access`, `refresh`), request_id, client_id, user_id, requested_at, scopes, granted_scopes, form, session_json, expires_at, used_at, rotated_at, revoked_at | fosite's stored requests, keyed by token signature (never raw tokens). `form` keeps the authorize parameters fosite re-checks (redirect URI, PKCE challenge); `session_json` holds subject and expiry times. Codes live 1 min, access tokens 1 h, refresh tokens 90 days |
 | **audit_log** | id, user_id, device_id, at, tool, surface, outcome, duration_ms | No arguments, no results (FR-022, FR-023); purged after retention |
 
 ## Outside the database

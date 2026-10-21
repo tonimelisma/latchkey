@@ -85,13 +85,27 @@ Serves FR-040, FR-014.
   window for the previous token (network retries). SC-07 needs at least 7 days.
 - Endpoint latency: discovery, registration, and token endpoints respond well under 10 s (Claude's
   limit); no outbound calls on the token path except a cached CIMD fetch.
-- Consent screen shows the client name and the redirect URI's host.
+- Consent screen shows the client name and the redirect URI's host. An approval is remembered per
+  Owner, client, and scope set (FR-049), and forgotten when the Owner revokes Claude's access.
+- Redirect URIs must be registered by the client (CIMD document or DCR); for loopback URIs
+  (`localhost`, `127.0.0.1`, `[::1]`) the port is ignored. fosite ignores the port only for IP
+  literals, so the client lookup adds the requested `localhost` URI when it matches a registered
+  one on everything but the port.
+- Tokens: fosite's HMAC strategy with a 32-byte secret generated on first start and kept in the
+  database, so tokens survive restarts (SC-07). Refresh rotation marks the old token rotated; it
+  stays valid for 60 s, after which reuse revokes the whole token family (RFC 6819 §5.2.2.3).
+- Resource indicator: an `resource` parameter, if sent, must equal the connector URL.
 
 ### D5. Owner authentication: passkeys only, email recovery
 Serves FR-041, FR-042, FR-043.
 - `github.com/go-webauthn/webauthn` (BSD-3), discoverable credentials, user verification required.
-- Sign-up: email → verification link → create passkey.
-- Recovery: single-use link, 15 min expiry, stored hashed; using it is announced by email and in the
+- Sign-up: email → verification link → create passkey. Open unless `ALLOWED_EMAILS` is set
+  (FR-046).
+- Web sessions: an HTTP-only, Secure, SameSite=Lax cookie holding a random ID stored hashed;
+  30 days (FR-048). Account deletion requires a fresh passkey assertion. Forms carry a CSRF token
+  tied to the session.
+- Recovery: single-use link, 15 min expiry, stored hashed; completing it removes all old passkeys
+  (FR-047); using it is announced by email and in the
   Mac app. The Mac app learns of it through a `notice` message (contracts/agent-protocol.md), sent
   at once if the Mac is online, otherwise on its next connection (the relay compares the
   recovery's `used_at` with the device's last connection; nothing new is stored).
@@ -108,6 +122,8 @@ Serves FR-050, FR-051, FR-052; Constitution IV.
   Enclave (CryptoKit). No bearer secret leaves the Mac.
 - WebSocket authentication: the relay sends a nonce; the app signs it with the device key
   (contracts/agent-protocol.md).
+- Pairing while a Mac is paired shows the current Mac's name and asks to replace it (FR-053);
+  confirming revokes the current Mac before the new one is created.
 - Revocation deletes the device's public key and closes its socket with code 4002. It starts from
   the web account page, or from "Disconnect" in the app, which sends `goodbye` with reason
   `user_disconnected`; the relay treats that reason as a revocation.
@@ -172,7 +188,8 @@ Serves FR-080, Constitution V, VIII.
 - Container: distroless image, one volume at `/data`, published to
   `ghcr.io/tonimelisma/latchkey-relay`.
 - Config (environment): `PUBLIC_URL`, `DATA_DIR`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`,
-  `SMTP_PASSWORD`, `SMTP_FROM`, `ACME_EMAIL` (optional), `PORT` (optional, default 8080).
+  `SMTP_PASSWORD`, `SMTP_FROM`, `ACME_EMAIL` (optional), `PORT` (optional, default 8080),
+  `ALLOWED_EMAILS` (optional, comma-separated; empty means open sign-up, FR-046).
 - Listening: one port, `PORT`, on all network interfaces, IPv4 and IPv6 (research.md). Plain HTTP
   behind a proxy; with `ACME_EMAIL` set, HTTPS on the same port, and the self-hoster maps public
   port 443 to it (Let's Encrypt checks port 443). Certificates and the ACME account key are cached
