@@ -66,8 +66,10 @@ func run() error {
 	base := "http://localhost:" + port(relayAddr)
 	public, _ := url.Parse(base)
 	mail := &account.MemoryMailer{}
-	r, err := server.New(ctx, server.Options{PublicURL: public, Store: db, Mailer: mail,
-		Logger: slog.New(slog.NewTextHandler(io.Discard, nil))})
+	r, err := server.New(ctx, server.Options{
+		PublicURL: public, Store: db, Mailer: mail,
+		Logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
+	})
 	if err != nil {
 		return err
 	}

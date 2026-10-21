@@ -106,9 +106,9 @@ func run(ctx context.Context) error {
 
 // healthcheck asks the running relay's /healthz on this machine; 0 means healthy.
 func healthcheck() int {
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = "8080"
+	port := 8080
+	if p, err := strconv.Atoi(os.Getenv("PORT")); err == nil && p > 0 && p < 65536 {
+		port = p
 	}
 	scheme := "http"
 	if os.Getenv("ACME_EMAIL") != "" {
@@ -116,12 +116,13 @@ func healthcheck() int {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
 	defer cancel()
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, scheme+"://127.0.0.1:"+port+"/healthz", nil)
+	target := fmt.Sprintf("%s://127.0.0.1:%d/healthz", scheme, port)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, target, nil) //nolint:gosec // loopback only
 	if err != nil {
 		return 1
 	}
 	client := &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}}} //nolint:gosec // local liveness probe of our own process
-	resp, err := client.Do(req)
+	resp, err := client.Do(req)                                                                                //nolint:gosec // loopback only, numeric port
 	if err != nil {
 		return 1
 	}

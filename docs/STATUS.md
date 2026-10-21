@@ -8,21 +8,35 @@ Xcode signing ready (2026-10-20): Toni's Xcode account has a valid "Apple Develo
 
 ## Current phase
 
-Relay done through M2: hub, MCP surface (both protocol versions), OAuth (DCR, CIMD, PKCE, refresh
-rotation), passkeys, email links, recovery, account page, pairing. Verified by unit and contract
-tests, a headless-Chrome end-to-end test, and real Claude Code (`make claude-check`, passed
-2026-10-20). Working through the rest of the plan in one go (Toni, 2026-10-20).
+Spec 001 is built. Everything that doesn't need Toni is done and verified on this Mac
+(2026-10-20):
 
-Note: the OAuth server code was written before its contract tests (Constitution VII asks for the
-tests first). The tests were then written against the contract, run, and two expectations fixed.
+- Relay: all tests pass (`make test`, including a headless-Chrome sign-up → OAuth → pairing →
+  battery test), lint clean, container check passes (11 MB image).
+- Real Claude Code through a private relay: passes (`make claude-check`).
+- Mac app: 32 Swift tests pass (shared fixtures, Secure Enclave key, policies, trace); the real
+  connection code passes `make mac-check` (battery matches pmset, a turned-off tool disappears,
+  offline noticed in 35 s, reconnect in 0.1 s).
 
-Mac app (M3) built and tested: 32 Swift tests including a real Secure Enclave key and the shared
-fixtures, and `make mac-check` running the real connection code against a relay. The helper and
-lid-closed keep-awake run only after Toni approves the helper once in System Settings.
+Notes:
+- The OAuth server code was written before its contract tests (Constitution VII asks for tests
+  first). The tests were then written against the contract and run.
+- Not yet run on hardware: the helper (lid-closed keep-awake), because it needs Toni's one-time
+  approval. Constitution check unchanged.
 
-## Next steps
+## Next steps (each needs Toni; everything around them is ready)
 
-1. M4 and M5: everything not blocked on Toni; list the blocked steps at the end.
+1. **Approve the helper on this Mac.** Run `make -C macos install` (or let Claude run it), then
+   turn on Latchkey in System Settings → General → Login Items. Then Claude runs
+   `macos/scripts/helper-check.sh` (keep-awake on, restored after quit and after a crash).
+2. **Pick the domain and the public test host** for the hosted relay (open question). Then Claude
+   deploys the container (T070) and runs the quickstart steps it can.
+3. **Try it from your Claude account and devices** (T072 to T074): add the connector on claude.ai,
+   ask from the phone and Desktop. Checklist: `specs/001-core/quickstart.md`. Claude measures the
+   hosted tool-call timeout (T073) from the relay's logs during this.
+4. **Developer ID, update key, public repository** for signed releases and updates (T082, T083):
+   setup steps are at the top of `macos/scripts/release.sh`; then one command publishes.
+5. **Uninstall check** (T084) once the app is installed and approved.
 
 ## Milestones (from `specs/001-core/plan.md`)
 
@@ -30,9 +44,9 @@ lid-closed keep-awake run only after Toni approves the helper once in System Set
 |---|---|---|
 | M1 | Relay hub + agent protocol, Go test agent | Done |
 | M2 | OAuth, passkeys, pairing (relay side) | Done |
-| M3 | Mac app: pairs, connects, keeps awake, answers `battery_status` | Done, except the helper approval step (Toni) |
-| M4 | End to end from Claude on phone, web, Desktop | Not started |
-| M5 | Signing, notarization, Sparkle, Docker image | Not started |
+| M3 | Mac app: pairs, connects, keeps awake, answers `battery_status` | Done; helper waits for approval |
+| M4 | End to end from Claude on phone, web, Desktop | Ready; needs domain, host, Toni's devices |
+| M5 | Signing, notarization, Sparkle, Docker image | Container done; release needs Developer ID |
 
 ## Risks
 
@@ -47,7 +61,4 @@ lid-closed keep-awake run only after Toni approves the helper once in System Set
 | Domain for the hosted relay, and where the public test relay runs | Toni, before M4 |
 | Claude's hosted-client tool-call timeout (undocumented) | Measure in M4; keep our 60 s cap below it |
 | Terms, privacy policy, abuse handling for the hosted relay | Launch blocker, deferred |
-
-## Waiting on Toni
-
-- Apple Developer ID (Toni is getting one). Until then, build with Apple Development signing.
+| The repository must be public for update downloads (GitHub Releases) | Toni, before the first release |
