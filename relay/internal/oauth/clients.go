@@ -1,0 +1,368 @@
+package oauth
+
+import (
+	"context"
+	"crypto/rand"
+	"crypto/sha256"
+	"crypto/subtle"
+	"encoding/base64"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"net"
+	"net/http"
+	"net/url"
+	"slices"
+	"strconv"
+	"strings"
+	"syscall"
+	"time"
+
+	"github.com/ory/fosite"
+
+	"github.com/tonimelisma/latchkey/relay/internal/store"
+)
+
+// Scopes this relay grants (contracts/mcp-surface.md).
+var supportedScopes = []string{"mcp", "offline_access"}
+
+const (
+	cimdMaxAge   = 24 * time.Hour
+	cimdMaxBytes = 64 << 10
+)
+
+// clientMetadata is the part of a CIMD document or DCR request the relay uses.
+type clientMetadata struct {
+	ClientID                string   `json:"client_id,omitempty"`
+	ClientName              string   `json:"client_name,omitempty"`
+	ClientURI               string   `json:"client_uri,omitempty"`
+	LogoURI                 string   `json:"logo_uri,omitempty"`
+	RedirectURIs            []string `json:"redirect_uris"`
+	TokenEndpointAuthMethod string   `json:"token_endpoint_auth_method,omitempty"`
+	GrantTypes              []string `json:"grant_types,omitempty"`
+	ResponseTypes           []string `json:"response_types,omitempty"`
+	Scope                   string   `json:"scope,omitempty"`
+}
+
+// cachedDocument wraps a CIMD document with its cache expiry.
+type cachedDocument struct {
+	Document   clientMetadata `json:"document"`
+	CacheUntil time.Time      `json:"cache_until"`
+}
+
+// client is a fosite client plus what the consent page shows.
+type client struct {
+	*fosite.DefaultOpenIDConnectClient
+	Name string
+}
+
+type clients struct {
+	st   *store.Store
+	http *http.Client
+	now  func() time.Time
+}
+
+// requestedRedirectKey carries the redirect_uri of the authorize request into client lookup,
+// so a localhost URI on a different port can match (fosite ignores ports only for IP literals).
+type requestedRedirectKey struct{}
+
+func withRequestedRedirect(ctx context.Context, uri string) context.Context {
+	return context.WithValue(ctx, requestedRedirectKey{}, uri)
+}
+
+func (c *clients) get(ctx context.Context, id string) (*client, error) {
+	var md clientMetadata
+	var secretHash []byte
+	if isCIMD(id) {
+		doc, err := c.cimd(ctx, id)
+		if err != nil {
+			return nil, fosite.ErrInvalidClient.WithHintf("Client metadata document could not be used: %v", err)
+		}
+		md = doc
+	} else {
+		row, err := c.st.OAuthClient(ctx, id)
+		if errors.Is(err, store.ErrNotFound) || (err == nil && row.Kind != "dcr") {
+			return nil, fosite.ErrNotFound
+		}
+		if err != nil {
+			return nil, err
+		}
+		if err := json.Unmarshal(row.MetadataJSON, &md); err != nil {
+			return nil, err
+		}
+		secretHash = row.SecretHash
+	}
+	method := md.TokenEndpointAuthMethod
+	if method == "" {
+		method = "none"
+	}
+	redirects := slices.Clone(md.RedirectURIs)
+	if req, ok := ctx.Value(requestedRedirectKey{}).(string); ok && matchesLocalhost(req, redirects) {
+		redirects = append(redirects, req)
+	}
+	return &client{
+		DefaultOpenIDConnectClient: &fosite.DefaultOpenIDConnectClient{
+			DefaultClient: &fosite.DefaultClient{
+				ID: id, Secret: secretHash, RedirectURIs: redirects,
+				GrantTypes:    []string{"authorization_code", "refresh_token"},
+				ResponseTypes: []string{"code"},
+				Scopes:        supportedScopes,
+				Public:        method == "none",
+			},
+			TokenEndpointAuthMethod: method,
+		},
+		Name: displayName(md, id),
+	}, nil
+}
+
+func displayName(md clientMetadata, id string) string {
+	if md.ClientName != "" {
+		return md.ClientName
+	}
+	for _, raw := range []string{md.ClientURI, id} {
+		if u, err := url.Parse(raw); err == nil && u.Host != "" {
+			return u.Host
+		}
+	}
+	return "An unnamed app"
+}
+
+// matchesLocalhost reports whether uri is http://localhost:<port><path> and a registered URI
+// differs from it only in the port (RFC 8252 §7.3).
+func matchesLocalhost(uri string, registered []string) bool {
+	req, err := url.Parse(uri)
+	if err != nil || req.Scheme != "http" || req.Hostname() != "localhost" {
+		return false
+	}
+	for _, r := range registered {
+		reg, err := url.Parse(r)
+		if err == nil && reg.Scheme == "http" && reg.Hostname() == "localhost" &&
+			reg.Path == req.Path && reg.RawQuery == req.RawQuery {
+			return true
+		}
+	}
+	return false
+}
+
+func isCIMD(id string) bool {
+	u, err := url.Parse(id)
+	return err == nil && u.Scheme == "https" && u.Host != "" && u.Path != "" && u.Path != "/"
+}
+
+// cimd returns a client metadata document, fetching it at most once per cache period.
+func (c *clients) cimd(ctx context.Context, id string) (clientMetadata, error) {
+	now := c.now()
+	if row, err := c.st.OAuthClient(ctx, id); err == nil && row.Kind == "cimd" {
+		var cached cachedDocument
+		if json.Unmarshal(row.MetadataJSON, &cached) == nil && now.Before(cached.CacheUntil) {
+			return cached.Document, nil
+		}
+	}
+	doc, maxAge, err := c.fetch(ctx, id)
+	if err != nil {
+		return clientMetadata{}, err
+	}
+	data, err := json.Marshal(cachedDocument{Document: doc, CacheUntil: now.Add(maxAge)})
+	if err != nil {
+		return clientMetadata{}, err
+	}
+	err = c.st.PutOAuthClient(ctx, store.OAuthClient{ID: id, Kind: "cimd", MetadataJSON: data, CreatedAt: now, FetchedAt: now})
+	return doc, err
+}
+
+func (c *clients) fetch(ctx context.Context, id string) (clientMetadata, time.Duration, error) {
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, id, nil)
+	if err != nil {
+		return clientMetadata{}, 0, err
+	}
+	req.Header.Set("Accept", "application/json")
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return clientMetadata{}, 0, err
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusOK {
+		return clientMetadata{}, 0, fmt.Errorf("HTTP %d", resp.StatusCode)
+	}
+	body, err := io.ReadAll(io.LimitReader(resp.Body, cimdMaxBytes+1))
+	if err != nil {
+		return clientMetadata{}, 0, err
+	}
+	if len(body) > cimdMaxBytes {
+		return clientMetadata{}, 0, errors.New("document too large")
+	}
+	var doc clientMetadata
+	if err := json.Unmarshal(body, &doc); err != nil {
+		return clientMetadata{}, 0, err
+	}
+	if doc.ClientID != id {
+		return clientMetadata{}, 0, errors.New("client_id does not match the document URL")
+	}
+	if doc.TokenEndpointAuthMethod != "" && doc.TokenEndpointAuthMethod != "none" {
+		return clientMetadata{}, 0, errors.New("only token_endpoint_auth_method none is supported for metadata documents")
+	}
+	if err := validRedirects(doc.RedirectURIs); err != nil {
+		return clientMetadata{}, 0, err
+	}
+	return doc, cacheMaxAge(resp.Header.Get("Cache-Control")), nil
+}
+
+// cacheMaxAge honors Cache-Control max-age up to 24 hours.
+func cacheMaxAge(header string) time.Duration {
+	for d := range strings.SplitSeq(header, ",") {
+		d = strings.TrimSpace(strings.ToLower(d))
+		if d == "no-store" || d == "no-cache" {
+			return 0
+		}
+		if v, ok := strings.CutPrefix(d, "max-age="); ok {
+			if n, err := strconv.Atoi(v); err == nil && n >= 0 {
+				return min(time.Duration(n)*time.Second, cimdMaxAge)
+			}
+		}
+	}
+	return cimdMaxAge
+}
+
+// validRedirects requires https URIs, or http on a loopback host, without fragments.
+func validRedirects(uris []string) error {
+	if len(uris) == 0 {
+		return errors.New("redirect_uris is required")
+	}
+	for _, raw := range uris {
+		u, err := url.Parse(raw)
+		if err != nil || u.Host == "" || u.Fragment != "" {
+			return fmt.Errorf("invalid redirect URI %q", raw)
+		}
+		switch {
+		case u.Scheme == "https":
+		case u.Scheme == "http" && isLoopbackHost(u.Hostname()):
+		default:
+			return fmt.Errorf("redirect URI %q must use https (http only on localhost)", raw)
+		}
+	}
+	return nil
+}
+
+func isLoopbackHost(h string) bool {
+	if h == "localhost" {
+		return true
+	}
+	ip := net.ParseIP(h)
+	return ip != nil && ip.IsLoopback()
+}
+
+// publicOnlyDialer refuses connections to loopback, private, and link-local addresses, so a
+// metadata document URL cannot be used to probe the relay's own network.
+func publicOnlyDialer() *net.Dialer {
+	return &net.Dialer{
+		Timeout: 5 * time.Second,
+		Control: func(_, address string, _ syscall.RawConn) error {
+			host, _, err := net.SplitHostPort(address)
+			if err != nil {
+				return err
+			}
+			ip := net.ParseIP(host)
+			if ip == nil || ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() ||
+				ip.IsLinkLocalMulticast() || ip.IsUnspecified() || ip.IsMulticast() {
+				return fmt.Errorf("refusing to fetch client metadata from %s", host)
+			}
+			return nil
+		},
+	}
+}
+
+// registerRequest is an RFC 7591 registration.
+type registerResponse struct {
+	clientMetadata
+	ClientSecret          string `json:"client_secret,omitempty"`
+	ClientIDIssuedAt      int64  `json:"client_id_issued_at"`
+	ClientSecretExpiresAt int64  `json:"client_secret_expires_at"`
+}
+
+// register handles POST /register (RFC 7591).
+func (c *clients) register(w http.ResponseWriter, r *http.Request) {
+	var md clientMetadata
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, cimdMaxBytes)).Decode(&md); err != nil {
+		registerError(w, "invalid_client_metadata", "The request body is not valid client metadata.")
+		return
+	}
+	if err := validRedirects(md.RedirectURIs); err != nil {
+		registerError(w, "invalid_redirect_uri", err.Error())
+		return
+	}
+	switch md.TokenEndpointAuthMethod {
+	case "":
+		md.TokenEndpointAuthMethod = "client_secret_basic" // RFC 7591 default
+	case "none", "client_secret_basic", "client_secret_post":
+	default:
+		registerError(w, "invalid_client_metadata", "Unsupported token_endpoint_auth_method.")
+		return
+	}
+	for _, g := range md.GrantTypes {
+		if g != "authorization_code" && g != "refresh_token" {
+			registerError(w, "invalid_client_metadata", "Unsupported grant type "+g+".")
+			return
+		}
+	}
+	md.ClientID = "cl_" + randomString(16)
+	md.GrantTypes = []string{"authorization_code", "refresh_token"}
+	md.ResponseTypes = []string{"code"}
+	md.Scope = strings.Join(supportedScopes, " ")
+
+	var secret string
+	var secretHash []byte
+	if md.TokenEndpointAuthMethod != "none" {
+		secret = randomString(32)
+		h := sha256.Sum256([]byte(secret))
+		secretHash = h[:]
+	}
+	data, err := json.Marshal(md)
+	if err != nil {
+		http.Error(w, "server error", http.StatusInternalServerError)
+		return
+	}
+	now := c.now()
+	if err := c.st.PutOAuthClient(r.Context(), store.OAuthClient{
+		ID: md.ClientID, Kind: "dcr", MetadataJSON: data, SecretHash: secretHash, CreatedAt: now,
+	}); err != nil {
+		http.Error(w, "server error", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", "no-store")
+	w.WriteHeader(http.StatusCreated)
+	// RFC 7591: the secret is returned once, at registration.
+	resp := registerResponse{clientMetadata: md, ClientSecret: secret, ClientIDIssuedAt: now.Unix()}
+	_ = json.NewEncoder(w).Encode(resp) //nolint:gosec // see above
+}
+
+func registerError(w http.ResponseWriter, code, desc string) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusBadRequest)
+	_ = json.NewEncoder(w).Encode(map[string]string{"error": code, "error_description": desc})
+}
+
+func randomString(n int) string {
+	b := make([]byte, n)
+	_, _ = rand.Read(b) // never fails (crypto/rand)
+	return base64.RawURLEncoding.EncodeToString(b)
+}
+
+// sha256Hasher compares client secrets by SHA-256 (they are random, so no slow hash is needed).
+type sha256Hasher struct{}
+
+func (sha256Hasher) Compare(_ context.Context, hash, data []byte) error {
+	h := sha256.Sum256(data)
+	if subtle.ConstantTimeCompare(hash, h[:]) != 1 {
+		return errors.New("secret mismatch")
+	}
+	return nil
+}
+
+func (sha256Hasher) Hash(_ context.Context, data []byte) ([]byte, error) {
+	h := sha256.Sum256(data)
+	return h[:], nil
+}

@@ -77,9 +77,9 @@ Package directories are created when they get code, not up front (T010).
 
 ## M2: OAuth, passkeys, pairing (relay side)
 
-- **T030** Store: the remaining tables from `data-model.md` (passkeys, email_tokens,
+- **T030** ✅ Store: the remaining tables from `data-model.md` (passkeys, email_tokens,
   web_sessions, pairing_codes, oauth_clients, oauth_codes, oauth_tokens). Tests first.
-- **T031** **(test first)** OAuth contract tests against the relay:
+- **T031** ✅ **(test first)** OAuth contract tests against the relay:
   - unauthenticated `/mcp` → exactly `401` with the `WWW-Authenticate` header from the contract
   - protected resource metadata at both paths; `resource` equals the connector URL
   - authorization server metadata has every required field
@@ -94,9 +94,9 @@ Package directories are created when they get code, not up front (T010).
   - token endpoint p99 under 2 s with no outbound calls (CIMD cached)
   - after 7 days offline (fake clock), refresh still works and `laptop_status` answers (SC-07)
   *Serves D4, FR-014, FR-040.*
-- **T032** fosite wiring with SQLite storage, opaque HMAC tokens stored hashed, lifetimes from D4.
-- **T033** Client lookup: CIMD fetch and cache, DCR registration, redirect URI matching.
-- **T034** Bearer protection on `/mcp` with go-sdk `auth.RequireBearerToken` and
+- **T032** ✅ fosite wiring with SQLite storage, opaque HMAC tokens stored hashed, lifetimes from D4.
+- **T033** ✅ Client lookup: CIMD fetch and cache, DCR registration, redirect URI matching.
+- **T034** ✅ Bearer protection on `/mcp` with go-sdk `auth.RequireBearerToken` and
   `auth.ProtectedResourceMetadataHandler`; token → user → device. `/mcp` never redirects.
   *Done when T031 passes.*
 - **T035** [P] **(test first)** Passkey and email tests with a software WebAuthn authenticator and

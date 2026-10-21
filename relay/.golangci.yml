@@ -15,7 +15,7 @@ linters:
   exclusions:
     rules:
       - path: _test\.go
-        linters: [gosec]
+        linters: [gosec, bodyclose] # test helpers close bodies in t.Cleanup
 
 formatters:
   enable:
