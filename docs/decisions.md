@@ -44,3 +44,8 @@ Add a row when a decision is made; never delete one, mark it "superseded by" ins
 | 2026-10-20 | No manual work for Toni; Claude runs all checks, including a scripted Claude Code check | CLAUDE.md, plan testing strategy, T023 |
 | 2026-10-20 | Public test host for Claude web/Desktop/phone decided at M4 | STATUS open questions |
 | 2026-10-20 | Relay listens on all interfaces, port from `PORT`, default 8080 | plan D10, research.md |
+| 2026-10-20 | Mac app: Swift Testing, SwiftData for the local trace, swift-format | plan D9, D11 |
+| 2026-10-20 | Claude drafts all user-facing wording and design, checked against Apple HIG; Toni not asked | CLAUDE.md |
+| 2026-10-20 | Web pages: small hand-written CSS embedded in the relay | plan D5 |
+| 2026-10-20 | App downloads and Sparkle feed on GitHub Releases; relay image on ghcr.io | plan D9, D10 |
+| 2026-10-20 | When blocked on Toni, build everything around it and list the blocked steps at the end | CLAUDE.md |

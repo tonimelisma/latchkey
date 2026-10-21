@@ -73,11 +73,6 @@ Package directories are created when they get code, not up front (T010).
 - **T022** [P] Audit log: one metadata row per tool call (tool, surface from `clientInfo.name`,
   outcome, duration; no arguments, no results), daily purge after 30 days. Tests first.
   *Serves D11, FR-022, FR-023, FR-024.*
-- **T023** Claude Code check (run by Claude): start the relay and the Go test agent locally, run
-  Claude Code non-interactively with an MCP config pointing at the relay, ask for the battery,
-  and check the answer; stop the test agent and check the offline answer. Script it under
-  `relay/scripts/` so it can be rerun.
-
 ---
 
 ## M2: OAuth, passkeys, pairing (relay side)
@@ -124,6 +119,12 @@ Package directories are created when they get code, not up front (T010).
   (email link read from the fake SMTP server), sign in, approve Claude on the consent page, and
   pair the Go test agent; then a go-sdk client completes OAuth and calls `battery_status`.
   Skipped with a clear message when Chrome is not installed. *Serves FR-040 to FR-043, FR-050.*
+- **T041** Claude Code check (run by Claude): a script under `relay/scripts/` starts the relay
+  with a fake SMTP server, uses the T040 browser automation to sign up, approve a loopback client,
+  and pair the Go test agent, then runs Claude Code non-interactively (`claude -p`) with an MCP
+  config carrying the resulting access token. It asks for the battery and checks the answer, then
+  stops the test agent and checks the offline answer. (Moved here from M1: it needs real sign-in
+  and pairing, and temporary shortcuts were ruled out.)
 
 ---
 

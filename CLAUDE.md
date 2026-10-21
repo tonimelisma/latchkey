@@ -57,12 +57,17 @@ code or decision that changes them. Never let them drift.
   what only Toni can do (his accounts, his devices, approvals), keep it to the minimum, and say so
   plainly up front.
 - Toni wants complete solutions, not partial matches. Say plainly when something falls short.
+- When work is blocked on something only Toni can do, build everything around it, prepare the
+  blocked step so it is a single action for him, and list all such steps together at the end.
 
 ## Toni decides
 
 IMPORTANT: Toni makes every product and engineering choice. Claude proposes; Toni picks.
 
-- Ask Toni about: features, behavior and wording users see, libraries and tools, architecture,
+- Wording and visual design users see (pages, emails, menus, icons): Claude drafts it, reviews it
+  against Apple's Human Interface Guidelines and common usability guidance, and never asks Toni
+  to confirm it.
+- Ask Toni about: features and behavior users see, libraries and tools, architecture,
   repository layout, protocol or schema shape, milestone and task order, test approach, temporary
   workarounds, user-facing defaults. Never make one of these silently.
 - Don't ask about low-level implementation details (encodings, internal function names, private
