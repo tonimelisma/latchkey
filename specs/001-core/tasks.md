@@ -193,8 +193,8 @@ Package directories are created when they get code, not up front (T010).
 Claude prepares and runs everything it can. Toni is needed only to add the connector to his
 Claude account and to try it on his phone and Desktop; that is listed in one short checklist.
 
-- **T070** Public test deployment of the relay with HTTPS. [Blocked: hosted relay domain is an
-  open question for Toni.]
+- **T070** ✅ Public test deployment of the relay with HTTPS: https://relay.example.com on my-vm
+  (`deploy/deploy-vps.sh`). Email sending domain pending the Resend admin key.
 - **T071** ✅ Write `specs/001-core/quickstart.md`: the setup checklist from a fresh Mac and fresh
   Claude account.
 - **T072** Run the quickstart: add the connector on claude.ai web; confirm it appears on Desktop,
