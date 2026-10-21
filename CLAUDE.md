@@ -110,7 +110,8 @@ Relay (run in `relay/`):
 
 Hosted relay: `deploy/deploy-vps.sh` deploys to https://relay.example.com on GCP `my-vm`
 (project my-gcp-project) behind its Caddy; needs `CLOUDFLARE_API_TOKEN` and `RESEND_API_KEY`
-in the gitignored `.env`.
+(send-only) in the gitignored `.env`, plus `RESEND_ADMIN_KEY` (full access) for the first run that
+sets up the sending domain.
 
 Mac app (run in `macos/`; `project.yml` is the source, the `.xcodeproj` is generated):
 - `make test`: unit and contract tests (Swift Testing); exit code is the result

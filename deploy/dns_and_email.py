@@ -4,7 +4,9 @@
   and the agent WebSocket goes straight through).
 - Resend: a sending domain for HOST, with its SPF, DKIM and bounce records created in Cloudflare,
   then verification requested.
-Reads CLOUDFLARE_API_TOKEN and RESEND_API_KEY from the environment; never prints them.
+Reads CLOUDFLARE_API_TOKEN and RESEND_ADMIN_KEY (full access) from the environment; never prints
+them. Without RESEND_ADMIN_KEY the email domain step is skipped, so a redeploy needs only the
+send-only key.
 """
 import json
 import os
@@ -57,7 +59,10 @@ def upsert(rtype, name, content, priority=None):
 upsert("A", HOST, IP)
 
 RS = "https://api.resend.com"
-rs_token = os.environ["RESEND_API_KEY"]
+rs_token = os.environ.get("RESEND_ADMIN_KEY", "")
+if not rs_token:
+    print("  email domain: skipped (no RESEND_ADMIN_KEY; fine once the domain is verified)")
+    sys.exit(0)
 domains = call(f"{RS}/domains", token=rs_token).get("data", [])
 dom = next((d for d in domains if d["name"] == HOST), None)
 if dom is None:

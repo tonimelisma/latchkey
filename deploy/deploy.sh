@@ -1,7 +1,9 @@
 #!/bin/sh
 # Deploys the relay to https://relay.example.com on my-vm (GCP project my-gcp-project).
 # Needs in the repository's .env (gitignored): CLOUDFLARE_API_TOKEN (Zone DNS edit on
-# example.com) and RESEND_API_KEY (full access). Safe to rerun: every step is idempotent.
+# example.com), RESEND_API_KEY (send-only; the relay sends with it), and RESEND_ADMIN_KEY (full
+# access; used here only to set up the sending domain, never copied to the server; can be deleted
+# once the domain is verified). Safe to rerun: every step is idempotent.
 set -eu
 cd "$(dirname "$0")/.."
 set -a; . ./.env; set +a
