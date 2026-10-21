@@ -90,7 +90,7 @@ struct SetupView: View {
         }
         .padding(24)
         .frame(width: 480)
-        .onAppear { relay = model.relayURL?.absoluteString ?? relay }
+        .onAppear { relay = model.relayURL?.absoluteString ?? AppModel.hostedRelay }
         .task {
             while !Task.isCancelled {  // notice the approval in System Settings
                 await model.checkHelperApproval()
@@ -139,6 +139,7 @@ final class SetupWindow {
             w.center()
             window = w
         }
+        NSApp.setActivationPolicy(.regular)  // in the Dock and Cmd-Tab while open (FR-079)
         window?.makeKeyAndOrderFront(nil)
         NSApp.activate()
     }

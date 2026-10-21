@@ -28,8 +28,10 @@ final class PairingFlow: NSObject, ASWebAuthenticationPresentationContextProvidi
         p.resume(with: result)
     }
 
-    /// A latchkey://paired link opened from another browser window (for example after signing
-    /// up through the emailed link) completes the pairing in progress. Returns false if none is.
+    var isPairing: Bool { pending != nil }
+
+    /// A latchkey://paired link opened from another browser window completes the pairing in
+    /// progress. Returns false if none is.
     func receive(_ url: URL) -> Bool {
         guard pending != nil, url.scheme == "latchkey", url.host() == "paired" else { return false }
         session?.cancel()
@@ -38,10 +40,23 @@ final class PairingFlow: NSObject, ASWebAuthenticationPresentationContextProvidi
     }
 
     nonisolated func presentationAnchor(for session: ASWebAuthenticationSession) -> ASPresentationAnchor {
-        MainActor.assumeIsolated { NSApp.keyWindow ?? NSApp.windows.first ?? ASPresentationAnchor() }
+        let anchor = { @MainActor in
+            NSApp.keyWindow ?? NSApp.windows.first(where: \.isVisible) ?? ASPresentationAnchor()
+        }
+        if Thread.isMainThread { return MainActor.assumeIsolated(anchor) }
+        return DispatchQueue.main.sync { MainActor.assumeIsolated(anchor) }
     }
 
-    static func normalize(_ text: String) -> URL? {
+    /// The code and relay from a latchkey://paired link.
+    nonisolated static func parse(_ url: URL) -> (code: String, relay: URL?)? {
+        guard url.scheme == "latchkey", url.host() == "paired",
+            let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems,
+            let code = items.first(where: { $0.name == "code" })?.value, !code.isEmpty
+        else { return nil }
+        return (code, items.first(where: { $0.name == "relay" })?.value.flatMap(normalize))
+    }
+
+    nonisolated static func normalize(_ text: String) -> URL? {
         var t = text.trimmingCharacters(in: .whitespacesAndNewlines)
         if !t.contains("://") { t = "https://" + t }
         guard var c = URLComponents(string: t), let host = c.host, !host.isEmpty,
@@ -59,16 +74,15 @@ final class PairingFlow: NSObject, ASWebAuthenticationPresentationContextProvidi
         c.queryItems = [URLQueryItem(name: "name", value: macName)]
         let callback = try await withCheckedThrowingContinuation { (cont: CheckedContinuation<URL, Error>) in
             pending = cont
+            // The completion handler runs on a background thread; hop to the main actor.
             let s = ASWebAuthenticationSession(url: c.url!, callback: .customScheme("latchkey")) {
                 [weak self] url, error in
-                MainActor.assumeIsolated {
-                    if let url {
-                        self?.finish(.success(url))
-                    } else {
-                        let cancelled = (error as? ASWebAuthenticationSessionError)?.code == .canceledLogin
-                        self?.finish(.failure(cancelled ? PairingError.cancelled : (error ?? PairingError.cancelled)))
+                let cancelled = (error as? ASWebAuthenticationSessionError)?.code == .canceledLogin
+                let result: Result<URL, Error> =
+                    if let url { .success(url) } else {
+                        .failure(cancelled ? PairingError.cancelled : (error ?? PairingError.cancelled))
                     }
-                }
+                Task { @MainActor in self?.finish(result) }
             }
             s.presentationContextProvider = self
             s.prefersEphemeralWebBrowserSession = false  // use the browser's passkeys and session

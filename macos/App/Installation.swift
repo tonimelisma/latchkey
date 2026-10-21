@@ -29,8 +29,10 @@ enum AppLocation {
         let source = Bundle.main.bundleURL
         let dest = URL(fileURLWithPath: "/Applications").appending(path: source.lastPathComponent)
         let fm = FileManager.default
+        quitOtherCopies()
         do {
-            if fm.fileExists(atPath: dest.path) { try fm.trashItem(at: dest, resultingItemURL: nil) }
+            // Removed rather than trashed, so a running older copy never mistakes it for an uninstall.
+            if fm.fileExists(atPath: dest.path) { try fm.removeItem(at: dest) }
             if fm.isWritableFile(atPath: source.deletingLastPathComponent().path) {
                 try fm.moveItem(at: source, to: dest)
             } else {
@@ -48,6 +50,30 @@ enum AppLocation {
             Task { @MainActor in NSApp.terminate(nil) }
         }
         return true
+    }
+}
+
+extension AppLocation {
+    /// Quits other running copies of Latchkey (an older version being replaced), waiting up to 5 s.
+    @MainActor
+    static func quitOtherCopies() {
+        let others = NSRunningApplication.runningApplications(withBundleIdentifier: HelperIdentity.appBundleID)
+            .filter { $0 != NSRunningApplication.current }
+        others.forEach { $0.terminate() }
+        let deadline = Date().addingTimeInterval(5)
+        while others.contains(where: { !$0.isTerminated }) && Date() < deadline {
+            RunLoop.current.run(until: Date().addingTimeInterval(0.1))
+        }
+    }
+
+    /// True when a Latchkey bundle is (again) at path: the app in the Trash was replaced by a newer
+    /// copy, which is an update, not an uninstall.
+    static func replaced(at path: String) -> Bool {
+        // Read the file itself: Bundle(path:) caches by path and would answer from this app's own
+        // (now trashed) bundle.
+        let plist = URL(fileURLWithPath: path).appending(path: "Contents/Info.plist")
+        let info = NSDictionary(contentsOf: plist)
+        return info?["CFBundleIdentifier"] as? String == HelperIdentity.appBundleID
     }
 }
 

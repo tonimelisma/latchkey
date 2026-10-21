@@ -21,6 +21,7 @@ struct LatchkeyApp: App {
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     let model = AppModel()
+    private let presence = WindowPresence()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         if ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil { return }  // unit tests
@@ -37,5 +38,35 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             sender.reply(toApplicationShouldTerminate: true)
         }
         return .terminateLater
+    }
+}
+
+/// Shows Latchkey in the Dock and in Cmd-Tab while one of its windows is open, and goes back to
+/// menu bar only when the last one closes (the usual pattern for menu bar apps; FR-079).
+@MainActor
+final class WindowPresence {
+    private var observers: [NSObjectProtocol] = []
+
+    init() {
+        let nc = NotificationCenter.default
+        for name in [
+            NSWindow.didBecomeKeyNotification, NSWindow.didBecomeMainNotification, NSWindow.willCloseNotification,
+        ] {
+            observers.append(
+                nc.addObserver(forName: name, object: nil, queue: .main) { [weak self] note in
+                    let closing = name == NSWindow.willCloseNotification ? note.object as? NSWindow : nil
+                    MainActor.assumeIsolated { self?.update(closing: closing) }
+                })
+        }
+    }
+
+    private func update(closing: NSWindow?) {
+        let open = NSApp.windows.contains {
+            $0 !== closing && $0.isVisible && $0.styleMask.contains(.titled) && !($0 is NSPanel)
+        }
+        let policy: NSApplication.ActivationPolicy = open ? .regular : .accessory
+        guard NSApp.activationPolicy() != policy else { return }
+        NSApp.setActivationPolicy(policy)
+        if open { NSApp.activate() }
     }
 }

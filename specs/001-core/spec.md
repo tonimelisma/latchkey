@@ -210,7 +210,10 @@ Format: EARS ("When <trigger>, the <system> shall <response>"). IDs are stable; 
   in the menu.
 - **FR-077** When the Owner moves the app to the Trash while it runs, the app shall disconnect the
   Mac from the account, restore normal sleep, remove its login and background items and all its
-  local data, and quit.
+  local data, and quit. When a newer copy replaces it instead (an update), the app shall hand over
+  to the new copy without removing anything.
+- **FR-079** While any of its windows is open, the app shall appear in the Dock and the app
+  switcher (Cmd-Tab); with no window open it shall live only in the menu bar.
 - **FR-078** On first launch, the app shall offer to move itself into the Applications folder,
   and shall show a setup window listing the remaining steps (approve keep-awake, connect to an
   account) until they are done.

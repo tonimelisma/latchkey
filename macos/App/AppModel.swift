@@ -68,8 +68,9 @@ final class AppModel {
             }
         }
         helperStatus = keepAwakeController.helper.status
+        let installedPath = Bundle.main.bundleURL.path
         trashWatcher = TrashWatcher(bundle: Bundle.main.bundleURL) { [weak self] in
-            Task { await self?.uninstall() }
+            Task { await self?.movedToTrash(installedPath: installedPath) }
         }
         powerMonitor = PowerMonitor { [weak self] in Task { await self?.refresh() } }
         watchSystem()
@@ -92,6 +93,24 @@ final class AppModel {
         let before = helperStatus
         helperStatus = keepAwakeController.helper.status
         if before != helperStatus { await refresh() }
+    }
+
+    /// The app landed in the Trash. If a newer copy takes its place within a few seconds, this is
+    /// an update: hand over to it and quit. Otherwise uninstall.
+    func movedToTrash(installedPath: String) async {
+        for _ in 0..<25 {
+            if AppLocation.replaced(at: installedPath) {
+                await shutdown()
+                let config = NSWorkspace.OpenConfiguration()
+                config.createsNewApplicationInstance = true
+                _ = try? await NSWorkspace.shared.openApplication(
+                    at: URL(fileURLWithPath: installedPath), configuration: config)
+                NSApp.terminate(nil)
+                return
+            }
+            try? await Task.sleep(for: .milliseconds(200))
+        }
+        await uninstall()
     }
 
     /// Moved to the Trash: disconnect from the account, restore sleep, remove the login and
@@ -220,11 +239,38 @@ final class AppModel {
     }
 
     /// A latchkey:// link opened by the system.
+    /// A latchkey://paired link. During a pairing it completes it. Otherwise (for example after
+    /// the app restarted) it finishes pairing only after the Owner confirms the relay, so a link
+    /// from someone else can't connect this Mac to their relay.
     func open(_ url: URL) {
-        if !pairing.receive(url) {
-            lastError = "That link is from an earlier connection attempt. Choose Connect to a Relay… again."
+        if pairing.receive(url) { return }
+        guard let link = PairingFlow.parse(url), let relay = link.relay else {
+            lastError = "That connection link is incomplete. Choose Connect to a Relay… again."
+            return
+        }
+        let alert = NSAlert()
+        alert.messageText = "Connect this Mac to \(relay.host() ?? relay.absoluteString)?"
+        alert.informativeText =
+            "A Latchkey connection link was opened. Continue only if you just clicked Connect on that site yourself."
+        alert.addButton(withTitle: "Connect")
+        alert.addButton(withTitle: "Cancel")
+        NSApp.activate()
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        Task {
+            do {
+                let identity = try await PairingFlow.exchange(
+                    relay: relay, code: link.code, macName: Host.current().localizedName ?? "Mac")
+                relayURL = relay
+                connect(identity)
+            } catch {
+                lastError = error.localizedDescription
+                showSetup()
+            }
         }
     }
+
+    /// The hosted relay, offered by default in setup; self-hosters type their own.
+    static let hostedRelay = "https://relay.example.com"
 
     /// Disconnect This Mac: the relay revokes it (goodbye user_disconnected) and the key is deleted.
     func disconnect() async {
@@ -235,6 +281,8 @@ final class AppModel {
     }
 
     private func connect(_ identity: DeviceIdentity) {
+        if let old = connection { Task { await old.stop(goodbye: nil) } }
+        lastError = nil
         let hooks = ConnectionHooks(
             state: { [weak self] in
                 await MainActor.run { self?.agentState } ?? PowerReader.read().agentState(keepAwake: .offUser)

@@ -70,3 +70,35 @@ import Testing
         #expect(PowerReader.sleepDisabled() != nil, "IOPMrootDomain SleepDisabled is readable without privileges")
     }
 }
+
+@Suite struct PairingLinkTests {
+    @Test func parsesCodeAndRelay() throws {
+        let link = try #require(
+            PairingFlow.parse(URL(string: "latchkey://paired?code=abc&relay=https%3A%2F%2Frelay.example.com")!))
+        #expect(link.code == "abc")
+        #expect(link.relay == URL(string: "https://relay.example.com"))
+    }
+
+    @Test func rejectsOtherLinks() {
+        #expect(PairingFlow.parse(URL(string: "latchkey://paired")!) == nil, "no code")
+        #expect(PairingFlow.parse(URL(string: "latchkey://other?code=abc")!) == nil)
+        #expect(PairingFlow.parse(URL(string: "https://paired?code=abc")!) == nil)
+    }
+
+    @Test func refusesAPlainHTTPRelay() throws {
+        let link = try #require(
+            PairingFlow.parse(URL(string: "latchkey://paired?code=a&relay=http%3A%2F%2Fevil.example")!))
+        #expect(link.relay == nil, "only https, or http on localhost")
+    }
+
+    @Test func replacementIsNotAnUninstall() throws {
+        let dir = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let fake = dir.appending(path: "Latchkey.app/Contents")
+        try FileManager.default.createDirectory(at: fake, withIntermediateDirectories: true)
+        #expect(!AppLocation.replaced(at: dir.appending(path: "Latchkey.app").path), "no bundle there")
+        try FileManager.default.removeItem(at: dir.appending(path: "Latchkey.app"))
+        try FileManager.default.copyItem(at: Bundle.main.bundleURL, to: dir.appending(path: "Latchkey.app"))
+        #expect(AppLocation.replaced(at: dir.appending(path: "Latchkey.app").path), "a Latchkey took its place")
+    }
+}
