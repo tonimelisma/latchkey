@@ -5,35 +5,27 @@ import (
 	"time"
 )
 
-func emailVerify(link string) string {
-	return fmt.Sprintf(`Open this link to create your passkey and finish setting up Latchkey:
+func emailVerifyCode(code string) string {
+	return fmt.Sprintf(`Your Latchkey code is:
 
-%s
+    %s
 
-The link works once and expires in 15 minutes.
+Enter it on the sign-in page to finish setting up your account. It expires in 15 minutes.
 
-If you didn't sign up for Latchkey, you can ignore this email.
-`, link)
+If you didn't try to sign up for Latchkey, you can ignore this email.
+`, code)
 }
 
-func emailAlreadyRegistered(signin, recover string) string {
-	return fmt.Sprintf(`Someone, probably you, tried to create a Latchkey account with this email address. You already have one.
+func emailRecoverCode(code string) string {
+	return fmt.Sprintf(`Your Latchkey recovery code is:
 
-Sign in with your passkey: %s
+    %s
 
-Lost your passkeys? Recover your account: %s
-`, signin, recover)
-}
+Enter it on the sign-in page to create a new passkey. Your old passkeys will stop working once you
+do. The code expires in 15 minutes.
 
-func emailRecover(link string) string {
-	return fmt.Sprintf(`Open this link to create a new passkey for your Latchkey account:
-
-%s
-
-Your old passkeys will stop working once you do. The link works once and expires in 15 minutes.
-
-If you didn't ask for this, ignore this email. Nothing changes unless the link is used.
-`, link)
+If you didn't ask for this, ignore this email. Nothing changes unless the code is used.
+`, code)
 }
 
 func emailRecovered(at time.Time, recover, account string) string {

@@ -26,7 +26,7 @@ import (
 	"github.com/tonimelisma/latchkey/relay/internal/testagent"
 )
 
-var linkRE = regexp.MustCompile(`http://localhost:\d+/\S+`)
+var codeRE = regexp.MustCompile(`\b\d{6}\b`)
 
 // startRelay runs the fully assembled relay on localhost.
 func startRelay(t *testing.T) (base string, mail *account.MemoryMailer) {
@@ -48,12 +48,12 @@ func startRelay(t *testing.T) (base string, mail *account.MemoryMailer) {
 	return base, mail
 }
 
-func linkFrom(mail *account.MemoryMailer) func(string) (string, error) {
+func codeFrom(mail *account.MemoryMailer) func(string) (string, error) {
 	return func(email string) (string, error) {
 		msgs := mail.Sent()
 		for i := len(msgs) - 1; i >= 0; i-- {
 			if msgs[i].To == email {
-				return linkRE.FindString(msgs[i].Body), nil
+				return codeRE.FindString(msgs[i].Body), nil
 			}
 		}
 		return "", errors.New("no email sent")
@@ -76,7 +76,7 @@ func TestEndToEndInBrowser(t *testing.T) {
 	defer b.Close()
 
 	base, mail := startRelay(t)
-	require.NoError(t, b.SignUp(base, "owner@example.com", linkFrom(mail)), "sign up with a passkey")
+	require.NoError(t, b.SignUp(base, "owner@example.com", codeFrom(mail)), "sign up with a passkey")
 	require.NoError(t, b.SignOut())
 	require.NoError(t, b.SignIn(base), "sign in with the passkey")
 

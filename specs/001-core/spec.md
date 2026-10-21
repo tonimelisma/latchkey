@@ -165,9 +165,12 @@ Format: EARS ("When <trigger>, the <system> shall <response>"). IDs are stable; 
 - **FR-040** The relay shall authenticate Claude using OAuth as required by Claude's connector
   platform, so that the connector works on every Claude surface (see contracts/mcp-surface.md).
 - **FR-041** The relay shall authenticate Owners with passkeys only.
-- **FR-042** The relay shall offer account recovery by a single-use, expiring email link that
-  allows registering a new passkey.
-- **FR-043** The relay shall verify the Owner's email address at sign-up.
+- **FR-042** The relay shall offer account recovery by a single-use, expiring code sent by email
+  that allows registering a new passkey; a code stops working after 5 wrong attempts.
+- **FR-043** The relay shall verify the Owner's email address at sign-up with a code sent by email.
+- **FR-043a** The relay shall offer one sign-in page for every journey: the Owner enters an email
+  address and continues with a passkey for a known account, or an emailed code and a new passkey
+  for a new account or a recovery, without leaving the page.
 - **FR-044** An Owner shall be able to revoke Claude's access and revoke a paired Mac from a web
   account page.
 - **FR-045** An Owner shall be able to delete their account and all data the relay holds about it.

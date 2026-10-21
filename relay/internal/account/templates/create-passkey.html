@@ -1,7 +1,0 @@
-{{template "head" .}}
-<h1>{{.Title}}</h1>
-<p>{{.Message}}</p>
-<p class="small">Account: <strong>{{.Email}}</strong></p>
-{{template "error" .}}
-<button class="primary" type="button" data-passkey="create" data-purpose="{{.Data.Purpose}}" data-token="{{.Data.Token}}" data-next="{{.Next}}">Create passkey</button>
-{{template "foot" .}}

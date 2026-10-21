@@ -1,7 +1,47 @@
 {{template "head" .}}
-<h1>Sign in</h1>
-<p>Use the passkey you created for Latchkey.</p>
-{{template "error" .}}
-<button class="primary" type="button" data-passkey="signin" data-next="{{.Next}}">Sign in with passkey</button>
-<p class="small">New here? <a href="/signup?next={{.Next}}">Create an account</a> · Lost your passkey? <a href="/recover">Recover your account</a></p>
+<div id="flow" data-next="{{.Next}}" data-recover="{{if .Data.Recover}}1{{end}}">
+
+  <section data-step="email">
+    <h1 data-title-normal>Sign in to Latchkey</h1>
+    <h1 data-title-recover hidden>Recover your account</h1>
+    <p class="lead" data-text-normal>Enter your email. New here? We'll set up your account.</p>
+    <p class="lead" data-text-recover hidden>We'll email you a code so you can create a new passkey. Your old passkeys will stop working.</p>
+    <form id="email-form" novalidate>
+      <label for="email">Email</label>
+      <input id="email" name="email" type="email" autocomplete="username webauthn" inputmode="email" required autofocus>
+      {{template "error" .}}
+      <button class="primary wide" type="submit">Continue</button>
+    </form>
+    <p class="small center" data-text-normal><a href="/signin?recover=1&amp;next={{.Next}}">Lost your passkey?</a></p>
+    <p class="small center" data-text-recover hidden><a href="/signin?next={{.Next}}">Back to sign in</a></p>
+  </section>
+
+  <section data-step="passkey" hidden>
+    <h1>Welcome back</h1>
+    <p class="lead">Sign in to <strong data-email></strong> with your passkey.</p>
+    <p class="error" role="alert" data-error hidden></p>
+    <button class="primary wide" type="button" data-action="signin">Sign in with passkey</button>
+    <p class="small center"><button class="link" type="button" data-action="back">Use a different email</button> · <a href="/signin?recover=1&amp;next={{.Next}}">Lost your passkey?</a></p>
+  </section>
+
+  <section data-step="code" hidden>
+    <h1>Check your email</h1>
+    <p class="lead">We sent a 6-digit code to <strong data-email></strong>.</p>
+    <form id="code-form" novalidate>
+      <label for="code">Code</label>
+      <input id="code" name="code" type="text" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9 ]*" maxlength="7" required class="code">
+      <p class="error" role="alert" data-error hidden></p>
+      <button class="primary wide" type="submit">Continue</button>
+    </form>
+    <p class="small center">No email? Check spam, or <button class="link" type="button" data-action="back">start again</button> in a minute.</p>
+  </section>
+
+  <section data-step="create" hidden>
+    <h1>Create your passkey</h1>
+    <p class="lead">You'll sign in to Latchkey with Touch ID or your device's passkey. There's no password.</p>
+    <p class="error" role="alert" data-error hidden></p>
+    <button class="primary wide" type="button" data-action="create">Create passkey</button>
+  </section>
+
+</div>
 {{template "foot" .}}

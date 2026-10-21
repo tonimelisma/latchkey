@@ -53,6 +53,7 @@ func chromePath() string {
 type Browser struct {
 	ctx    context.Context
 	cancel func()
+	email  string // the account SignUp created
 }
 
 // NewBrowser starts Chrome.
@@ -118,29 +119,47 @@ func (b *Browser) waitURL(prefix string) (string, error) {
 	return "", fmt.Errorf("browser at %q, expected %q (page error: %q)", loc, prefix, errText)
 }
 
-// SignUp creates an account: email form, the emailed link (from linkFor), and a passkey.
-func (b *Browser) SignUp(base, email string, linkFor func(email string) (string, error)) error {
-	err := b.run(chromedp.Navigate(base+"/signup"),
-		chromedp.WaitVisible(chromedp.ID("email")),
-		chromedp.SendKeys(chromedp.ID("email"), email),
-		chromedp.Click(chromedp.CSS(`button[type=submit]`)),
-		chromedp.WaitVisible(`//h1[text()="Check your email"]`),
-	)
-	if err != nil {
-		return fmt.Errorf("sign-up form: %w", err)
+// SignUp creates an account on the sign-in page: email, the emailed code (from codeFor), and a
+// passkey.
+func (b *Browser) SignUp(base, email string, codeFor func(email string) (string, error)) error {
+	b.email = email
+	if err := b.enterEmail(base + "/signin"); err != nil {
+		return fmt.Errorf("sign-in page: %w", err)
 	}
-	link, err := linkFor(email)
+	if err := b.run(chromedp.WaitVisible(chromedp.ID("code"))); err != nil {
+		return fmt.Errorf("code step: %w", err)
+	}
+	code, err := codeFor(email)
 	if err != nil {
 		return err
 	}
-	if err := b.run(chromedp.Navigate(link),
-		chromedp.WaitVisible(chromedp.CSS(`button[data-passkey=create]`)),
-		chromedp.Click(chromedp.CSS(`button[data-passkey=create]`)),
+	if err := b.run(
+		chromedp.SendKeys(chromedp.ID("code"), code), // six digits submit by themselves
+		chromedp.WaitVisible(chromedp.CSS(`button[data-action=create]`)),
+		chromedp.Click(chromedp.CSS(`button[data-action=create]`)),
 	); err != nil {
 		return fmt.Errorf("create passkey: %w", err)
 	}
 	_, err = b.waitURL(base + "/account")
 	return err
+}
+
+// enterEmail opens the sign-in page at url and continues with the Browser's email.
+func (b *Browser) enterEmail(url string) error {
+	return b.run(
+		chromedp.Navigate(url),
+		chromedp.WaitVisible(chromedp.ID("email")),
+		chromedp.SendKeys(chromedp.ID("email"), b.email),
+		chromedp.Click(chromedp.CSS(`#email-form button[type=submit]`)),
+	)
+}
+
+// passkeyStep signs in on the passkey step of the sign-in page.
+func (b *Browser) passkeyStep() error {
+	return b.run(
+		chromedp.WaitVisible(chromedp.CSS(`button[data-action=signin]`)),
+		chromedp.Click(chromedp.CSS(`button[data-action=signin]`)),
+	)
 }
 
 // SignOut clears the browser's cookies.
@@ -149,16 +168,36 @@ func (b *Browser) SignOut() error {
 	return err
 }
 
-// SignIn signs in with the passkey.
+// SignIn signs in with the email and passkey from SignUp.
 func (b *Browser) SignIn(base string) error {
-	if err := b.run(chromedp.Navigate(base+"/signin"),
-		chromedp.WaitVisible(chromedp.CSS(`button[data-passkey=signin]`)),
-		chromedp.Click(chromedp.CSS(`button[data-passkey=signin]`)),
-	); err != nil {
+	if err := b.run(chromedp.Navigate(base + "/signin")); err != nil {
+		return err
+	}
+	if err := b.signinHere(base); err != nil {
 		return err
 	}
 	_, err := b.waitURL(base + "/account")
 	return err
+}
+
+// signinHere completes the sign-in page the browser is on. The passkey autofill may finish by
+// itself (the virtual authenticator answers it, as a person picking the suggested passkey
+// would); otherwise it types the email and uses the passkey button.
+func (b *Browser) signinHere(base string) error {
+	deadline := time.Now().Add(3 * time.Second)
+	for time.Now().Before(deadline) {
+		if loc, err := b.location(); err == nil && !strings.HasPrefix(loc, base+"/signin") {
+			return nil // signed in through autofill
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	if err := b.run(
+		chromedp.SendKeys(chromedp.ID("email"), b.email),
+		chromedp.Click(chromedp.CSS(`#email-form button[type=submit]`)),
+	); err != nil {
+		return err
+	}
+	return b.passkeyStep()
 }
 
 // Approve opens an authorization URL, signs in if asked, clicks Allow if asked, and returns
@@ -176,8 +215,7 @@ func (b *Browser) Approve(base, authorizeURL, redirectPrefix string) (*url.URL, 
 		case strings.HasPrefix(loc, redirectPrefix):
 			return url.Parse(loc)
 		case strings.HasPrefix(loc, base+"/signin"):
-			if err := b.run(chromedp.WaitVisible(chromedp.CSS(`button[data-passkey=signin]`)),
-				chromedp.Click(chromedp.CSS(`button[data-passkey=signin]`))); err != nil {
+			if err := b.signinHere(base); err != nil {
 				return nil, err
 			}
 			if _, err := b.waitURL(base + "/authorize"); err != nil {

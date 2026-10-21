@@ -99,12 +99,16 @@ Serves FR-040, FR-014.
 ### D5. Owner authentication: passkeys only, email recovery
 Serves FR-041, FR-042, FR-043.
 - `github.com/go-webauthn/webauthn` (BSD-3), discoverable credentials, user verification required.
-- Sign-up: email → verification link → create passkey. Open unless `ALLOWED_EMAILS` is set
-  (FR-046).
+- One sign-in page (FR-043a), email first: a verified account with passkeys continues with its
+  passkey; a new account gets a 6-digit code by email (15 minutes, 5 wrong attempts, stored hashed
+  with the user ID), then creates a passkey. Recovery is the same with a recovery code. The email
+  field also offers saved passkeys through WebAuthn conditional mediation (autofill). Codes keep
+  the whole journey in one window, so the Mac app's sign-in window never sends the Owner to
+  another tab. Sign-up is open unless `ALLOWED_EMAILS` is set (FR-046).
 - Web sessions: an HTTP-only, Secure, SameSite=Lax cookie holding a random ID stored hashed;
   30 days (FR-048). Account deletion requires a fresh passkey assertion. Forms carry a CSRF token
   tied to the session.
-- Recovery: single-use link, 15 min expiry, stored hashed; completing it removes all old passkeys
+- Recovery: single-use code, 15 min expiry, stored hashed; completing it removes all old passkeys
   (FR-047); using it is announced by email and in the
   Mac app. The Mac app learns of it through a `notice` message (contracts/agent-protocol.md), sent
   at once if the Mac is online, otherwise on its next connection (the relay compares the

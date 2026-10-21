@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"crypto/subtle"
 	"database/sql"
 	"errors"
 	"time"
@@ -470,4 +471,44 @@ func (s *Store) Consents(ctx context.Context, userID string) ([]Consent, error) 
 		out = append(out, c)
 	}
 	return out, rows.Err()
+}
+
+// MaxCodeAttempts is how many wrong codes end a code (FR-042).
+const MaxCodeAttempts = 5
+
+// ErrWrongCode means the code did not match; attempts remain.
+var ErrWrongCode = errors.New("wrong code")
+
+// CreateEmailCode stores a new code for the user and purpose, replacing any earlier unused one.
+func (s *Store) CreateEmailCode(ctx context.Context, userID, purpose string, codeHash []byte, expires time.Time) error {
+	if _, err := s.db.ExecContext(ctx,
+		`DELETE FROM email_tokens WHERE user_id = ? AND purpose = ? AND used_at IS NULL`, userID, purpose); err != nil {
+		return err
+	}
+	return s.CreateEmailToken(ctx, codeHash, userID, purpose, expires)
+}
+
+// CheckEmailCode uses the user's current code if codeHash matches. A wrong code counts an attempt
+// (ErrWrongCode); an expired code, a used one, or one with too many attempts is ErrNotFound.
+func (s *Store) CheckEmailCode(ctx context.Context, userID, purpose string, codeHash []byte, now time.Time) error {
+	var stored []byte
+	var attempts int
+	err := s.db.QueryRowContext(ctx, `
+		SELECT token_hash, attempts FROM email_tokens
+		WHERE user_id = ? AND purpose = ? AND used_at IS NULL AND expires_at > ?
+		ORDER BY expires_at DESC LIMIT 1`, userID, purpose, now.UnixMilli()).Scan(&stored, &attempts)
+	if err != nil {
+		return mapErr(err)
+	}
+	if attempts >= MaxCodeAttempts {
+		return ErrNotFound
+	}
+	if subtle.ConstantTimeCompare(stored, codeHash) != 1 {
+		if _, err := s.db.ExecContext(ctx, `UPDATE email_tokens SET attempts = attempts + 1 WHERE token_hash = ?`, stored); err != nil {
+			return err
+		}
+		return ErrWrongCode
+	}
+	_, err = s.db.ExecContext(ctx, `UPDATE email_tokens SET used_at = ? WHERE token_hash = ?`, toMS(now), stored)
+	return err
 }

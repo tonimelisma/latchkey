@@ -11,10 +11,13 @@ import (
 	"crypto/subtle"
 	"embed"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"html/template"
 	"io/fs"
 	"log/slog"
+	"math/big"
 	"net/http"
 	"net/mail"
 	"net/url"
@@ -32,7 +35,7 @@ import (
 
 const (
 	sessionLifetime = 30 * 24 * time.Hour // FR-048
-	linkLifetime    = 15 * time.Minute    // email links (plan D5)
+	linkLifetime    = 15 * time.Minute    // email codes (plan D5)
 	pairingLifetime = 5 * time.Minute     // pairing codes (data-model.md)
 	reauthWindow    = 5 * time.Minute     // fresh passkey check before deleting the account
 	emailInterval   = time.Minute         // at most one email per address per minute
@@ -76,6 +79,7 @@ type Service struct {
 
 	mu         sync.Mutex
 	ceremonies map[string]*ceremony
+	tickets    map[string]*ticket
 	lastEmail  map[string]time.Time
 }
 
@@ -124,7 +128,7 @@ func New(ctx context.Context, cfg Config) (*Service, error) {
 	}
 	return &Service{
 		cfg: cfg, webauthn: wa, pages: pages, csrfKey: key, secure: secure, cookie: cookie,
-		ceremonies: map[string]*ceremony{}, lastEmail: map[string]time.Time{},
+		ceremonies: map[string]*ceremony{}, tickets: map[string]*ticket{}, lastEmail: map[string]time.Time{},
 	}, nil
 }
 
@@ -133,14 +137,12 @@ func (s *Service) Register(mux *http.ServeMux) {
 	static, _ := fs.Sub(staticFS, "static")
 	mux.Handle("GET /static/", http.StripPrefix("/static/", http.FileServerFS(static)))
 	mux.HandleFunc("GET /{$}", s.home)
-	mux.HandleFunc("GET /signup", s.signupPage)
-	mux.HandleFunc("POST /signup", s.signup)
-	mux.HandleFunc("GET /verify", s.verifyPage)
 	mux.HandleFunc("GET /signin", s.signinPage)
+	mux.HandleFunc("GET /signup", s.toSignin(false))
+	mux.HandleFunc("GET /recover", s.toSignin(true))
+	mux.HandleFunc("POST /auth/email", s.authEmail)
+	mux.HandleFunc("POST /auth/code", s.authCode)
 	mux.HandleFunc("POST /signout", s.signout)
-	mux.HandleFunc("GET /recover", s.recoverPage)
-	mux.HandleFunc("POST /recover", s.recover)
-	mux.HandleFunc("GET /recover/confirm", s.recoverConfirmPage)
 	mux.HandleFunc("POST /passkey/register/begin", s.registerBegin)
 	mux.HandleFunc("POST /passkey/register/finish", s.registerFinish)
 	mux.HandleFunc("POST /passkey/login/begin", s.loginBegin)
@@ -273,6 +275,7 @@ type page struct {
 	Error    string
 	Data     any
 	SignedIn bool
+	Wide     bool // the account page needs room for its table
 }
 
 func (s *Service) render(w http.ResponseWriter, status int, name string, p page) {
@@ -299,8 +302,24 @@ func (s *Service) home(w http.ResponseWriter, r *http.Request) {
 	s.render(w, http.StatusOK, "home.html", page{Title: "Latchkey"})
 }
 
-func (s *Service) signupPage(w http.ResponseWriter, r *http.Request) {
-	s.render(w, http.StatusOK, "signup.html", page{Title: "Create your account", Next: safeNext(r.URL.Query().Get("next"))})
+// signinPage is the one page for signing in, creating an account, and recovering it: email
+// first, then a passkey for a known account or an emailed code for a new one (FR-041 to FR-043).
+func (s *Service) signinPage(w http.ResponseWriter, r *http.Request) {
+	s.render(w, http.StatusOK, "signin.html", page{
+		Title: "Sign in to Latchkey", Next: safeNext(r.URL.Query().Get("next")),
+		Data: map[string]bool{"Recover": r.URL.Query().Get("recover") == "1"},
+	})
+}
+
+// legacy addresses from earlier versions and emails lead to the same page.
+func (s *Service) toSignin(recover bool) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		q := url.Values{"next": {safeNext(r.URL.Query().Get("next"))}}
+		if recover {
+			q.Set("recover", "1")
+		}
+		http.Redirect(w, r, "/signin?"+q.Encode(), http.StatusFound)
+	}
 }
 
 // allowEmail limits how often one address can be emailed.
@@ -327,82 +346,129 @@ func (s *Service) link(path string, q url.Values) string {
 	return u.String()
 }
 
-func (s *Service) signup(w http.ResponseWriter, r *http.Request) {
-	email := normalizeEmail(r.PostFormValue("email"))
-	next := safeNext(r.PostFormValue("next"))
-	if !validEmail(email) {
-		s.render(w, http.StatusBadRequest, "signup.html", page{Title: "Create your account", Email: email, Next: next, Error: "Enter a valid email address."})
+func newCode() string {
+	n, err := rand.Int(rand.Reader, big.NewInt(1_000_000))
+	if err != nil {
+		panic(err) // crypto/rand never fails
+	}
+	return fmt.Sprintf("%06d", n.Int64())
+}
+
+// codeHash binds a code to its user, so two users' codes never collide.
+func codeHash(userID, code string) []byte { return hash(userID + ":" + code) }
+
+type emailRequest struct {
+	Email   string `json:"email"`
+	Recover bool   `json:"recover"`
+}
+
+// authEmail is the first step: known accounts continue with a passkey; new ones (and
+// recoveries) get a code by email.
+func (s *Service) authEmail(w http.ResponseWriter, r *http.Request) {
+	if !requireJSON(w, r) {
 		return
 	}
-	if len(s.cfg.AllowedEmails) > 0 && !slices.Contains(s.cfg.AllowedEmails, email) {
-		s.render(w, http.StatusForbidden, "signup.html", page{
-			Title: "Create your account", Email: email, Next: next,
-			Error: "This relay only accepts sign-ups from approved email addresses.",
-		})
+	var req emailRequest
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096)).Decode(&req); err != nil {
+		jsonError(w, http.StatusBadRequest, "Bad request.")
+		return
+	}
+	email := normalizeEmail(req.Email)
+	if !validEmail(email) {
+		jsonError(w, http.StatusBadRequest, "Enter a valid email address.")
 		return
 	}
 	ctx := r.Context()
-	if s.allowEmail(email) {
-		if err := s.sendSignupEmail(ctx, email, next); err != nil {
-			s.cfg.Logger.Error("sign-up email", "err", err)
-			s.errorPage(w, http.StatusBadGateway, "Email not sent", "The relay couldn't send email right now. Try again in a few minutes.")
+	u, err := s.cfg.Store.UserByEmail(ctx, email)
+	known := err == nil && !u.EmailVerifiedAt.IsZero()
+	if req.Recover {
+		// The answer never reveals whether the account exists.
+		if known {
+			s.sendCode(ctx, u, store.PurposeRecover)
+		}
+		writeJSON(w, http.StatusOK, map[string]string{"step": "code", "purpose": store.PurposeRecover})
+		return
+	}
+	if known {
+		writeJSON(w, http.StatusOK, map[string]string{"step": "passkey"})
+		return
+	}
+	if len(s.cfg.AllowedEmails) > 0 && !slices.Contains(s.cfg.AllowedEmails, email) {
+		jsonError(w, http.StatusForbidden, "This relay only accepts sign-ups from approved email addresses.")
+		return
+	}
+	if errors.Is(err, store.ErrNotFound) {
+		if u, err = s.cfg.Store.CreateUser(ctx, email, s.now()); err != nil {
+			jsonError(w, http.StatusInternalServerError, "Something went wrong. Try again.")
 			return
 		}
+	} else if err != nil {
+		jsonError(w, http.StatusInternalServerError, "Something went wrong. Try again.")
+		return
 	}
-	s.render(w, http.StatusOK, "check-email.html", page{Title: "Check your email", Email: email})
+	if !s.sendCode(ctx, u, store.PurposeVerify) {
+		jsonError(w, http.StatusBadGateway, "The relay couldn't send email right now. Try again in a few minutes.")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"step": "code", "purpose": store.PurposeVerify})
 }
 
-func (s *Service) sendSignupEmail(ctx context.Context, email, next string) error {
-	u, err := s.cfg.Store.UserByEmail(ctx, email)
-	switch {
-	case errors.Is(err, store.ErrNotFound):
-		if u, err = s.cfg.Store.CreateUser(ctx, email, s.now()); err != nil {
-			return err
-		}
+// sendCode emails a fresh code, at most once a minute per address. It reports false only when
+// sending failed; a rate-limited request keeps the earlier code valid.
+func (s *Service) sendCode(ctx context.Context, u store.User, purpose string) bool {
+	if !s.allowEmail(u.Email) {
+		return true
+	}
+	code := newCode()
+	if err := s.cfg.Store.CreateEmailCode(ctx, u.ID, purpose, codeHash(u.ID, code), s.now().Add(linkLifetime)); err != nil {
+		s.cfg.Logger.Error("store email code", "err", err)
+		return false
+	}
+	subject, body := "Your Latchkey code: "+code, emailVerifyCode(code)
+	if purpose == store.PurposeRecover {
+		subject, body = "Your Latchkey recovery code: "+code, emailRecoverCode(code)
+	}
+	if err := s.cfg.Mailer.Send(ctx, u.Email, subject, body); err != nil {
+		s.cfg.Logger.Error("send email code", "err", err)
+		return false
+	}
+	return true
+}
+
+type codeRequest struct {
+	Email   string `json:"email"`
+	Code    string `json:"code"`
+	Purpose string `json:"purpose"`
+}
+
+// authCode checks an emailed code and returns a ticket for creating the passkey.
+func (s *Service) authCode(w http.ResponseWriter, r *http.Request) {
+	if !requireJSON(w, r) {
+		return
+	}
+	var req codeRequest
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096)).Decode(&req); err != nil ||
+		(req.Purpose != store.PurposeVerify && req.Purpose != store.PurposeRecover) {
+		jsonError(w, http.StatusBadRequest, "Bad request.")
+		return
+	}
+	expired := "This code has expired or was tried too many times. Go back and get a new code."
+	ctx := r.Context()
+	u, err := s.cfg.Store.UserByEmail(ctx, normalizeEmail(req.Email))
+	if err != nil {
+		jsonError(w, http.StatusBadRequest, expired)
+		return
+	}
+	code := strings.Join(strings.Fields(req.Code), "")
+	switch err := s.cfg.Store.CheckEmailCode(ctx, u.ID, req.Purpose, codeHash(u.ID, code), s.now()); {
+	case errors.Is(err, store.ErrWrongCode):
+		jsonError(w, http.StatusBadRequest, "That code isn't right. Check the email and try again.")
+		return
 	case err != nil:
-		return err
-	case !u.EmailVerifiedAt.IsZero():
-		return s.cfg.Mailer.Send(ctx, email, "Sign in to Latchkey", emailAlreadyRegistered(s.link("/signin", nil), s.link("/recover", nil)))
-	}
-	tok := randomToken()
-	if err := s.cfg.Store.CreateEmailToken(ctx, hash(tok), u.ID, store.PurposeVerify, s.now().Add(linkLifetime)); err != nil {
-		return err
-	}
-	return s.cfg.Mailer.Send(ctx, email, "Finish creating your Latchkey account",
-		emailVerify(s.link("/verify", url.Values{"token": {tok}, "next": {next}})))
-}
-
-func (s *Service) verifyPage(w http.ResponseWriter, r *http.Request) {
-	s.passkeyPage(w, r, store.PurposeVerify, "Create your passkey",
-		"Your email is confirmed. Create a passkey to finish setting up your account. You'll use it to sign in; there is no password.")
-}
-
-func (s *Service) recoverConfirmPage(w http.ResponseWriter, r *http.Request) {
-	s.passkeyPage(w, r, store.PurposeRecover, "Create a new passkey",
-		"Create a new passkey for your account. Your old passkeys will stop working.")
-}
-
-func (s *Service) passkeyPage(w http.ResponseWriter, r *http.Request, purpose, title, msg string) {
-	tok := r.URL.Query().Get("token")
-	userID, err := s.cfg.Store.PeekEmailToken(r.Context(), hash(tok), purpose, s.now())
-	if err != nil {
-		s.errorPage(w, http.StatusBadRequest, "This link has expired",
-			"Links work once and expire after 15 minutes. Start again to get a new one.")
+		jsonError(w, http.StatusBadRequest, expired)
 		return
 	}
-	u, err := s.cfg.Store.User(r.Context(), userID)
-	if err != nil {
-		s.errorPage(w, http.StatusBadRequest, "This link has expired", "Start again to get a new one.")
-		return
-	}
-	s.render(w, http.StatusOK, "create-passkey.html", page{
-		Title: title, Message: msg, Email: u.Email, Next: safeNext(r.URL.Query().Get("next")),
-		Data: map[string]string{"Token": tok, "Purpose": purpose},
-	})
-}
-
-func (s *Service) signinPage(w http.ResponseWriter, r *http.Request) {
-	s.render(w, http.StatusOK, "signin.html", page{Title: "Sign in", Next: safeNext(r.URL.Query().Get("next"))})
+	writeJSON(w, http.StatusOK, map[string]string{"ticket": s.putTicket(u.ID, req.Purpose)})
 }
 
 func (s *Service) signout(w http.ResponseWriter, r *http.Request) {
@@ -415,33 +481,6 @@ func (s *Service) signout(w http.ResponseWriter, r *http.Request) {
 	}
 	s.clearSession(w)
 	http.Redirect(w, r, "/", http.StatusSeeOther)
-}
-
-func (s *Service) recoverPage(w http.ResponseWriter, _ *http.Request) {
-	s.render(w, http.StatusOK, "recover.html", page{Title: "Recover your account"})
-}
-
-func (s *Service) recover(w http.ResponseWriter, r *http.Request) {
-	email := normalizeEmail(r.PostFormValue("email"))
-	if !validEmail(email) {
-		s.render(w, http.StatusBadRequest, "recover.html", page{Title: "Recover your account", Email: email, Error: "Enter a valid email address."})
-		return
-	}
-	ctx := r.Context()
-	// The answer is the same whether or not an account exists.
-	if u, err := s.cfg.Store.UserByEmail(ctx, email); err == nil && !u.EmailVerifiedAt.IsZero() && s.allowEmail(email) {
-		tok := randomToken()
-		if err := s.cfg.Store.CreateEmailToken(ctx, hash(tok), u.ID, store.PurposeRecover, s.now().Add(linkLifetime)); err == nil {
-			if err := s.cfg.Mailer.Send(ctx, email, "Recover your Latchkey account",
-				emailRecover(s.link("/recover/confirm", url.Values{"token": {tok}}))); err != nil {
-				s.cfg.Logger.Error("recovery email", "err", err)
-			}
-		}
-	}
-	s.render(w, http.StatusOK, "check-email.html", page{
-		Title: "Check your email", Email: email,
-		Message: "If an account uses this address, we sent it a recovery link.",
-	})
 }
 
 // NoticesOnConnect tells a Mac about recoveries since it last connected (plan D5).

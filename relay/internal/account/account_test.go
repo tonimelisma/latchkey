@@ -171,52 +171,15 @@ func (b *browser) json(path string, v any) (int, map[string]any) {
 }
 
 var (
-	linkRE = regexp.MustCompile(`http://localhost:\d+/\S+`)
+	codeRE = regexp.MustCompile(`\b(\d{6})\b`)
 	csrfRE = regexp.MustCompile(`name="csrf" value="([^"]+)"`)
-	tokRE  = regexp.MustCompile(`data-token="([^"]+)"`)
 )
-
-func (e *env) lastLink() string {
-	e.t.Helper()
-	const to = "owner@example.com"
-	msgs := e.mail.Sent()
-	for i := len(msgs) - 1; i >= 0; i-- {
-		if msgs[i].To == to {
-			return linkRE.FindString(msgs[i].Body)
-		}
-	}
-	e.t.Fatalf("no email to %s", to)
-	return ""
-}
 
 func csrf(t *testing.T, body string) string {
 	t.Helper()
 	m := csrfRE.FindStringSubmatch(body)
 	require.NotNil(t, m, "no CSRF token on page")
 	return m[1]
-}
-
-// createPasskey runs the create-passkey page at link (verify or recover).
-func (b *browser) createPasskey(link, purpose string) (int, map[string]any) {
-	b.e.t.Helper()
-	page := b.get(link)
-	require.Equal(b.e.t, http.StatusOK, page.status, page.body)
-	tok := tokRE.FindStringSubmatch(page.body)
-	require.NotNil(b.e.t, tok)
-	status, begin := b.json("/passkey/register/begin", map[string]string{"purpose": purpose, "token": tok[1]})
-	require.Equal(b.e.t, http.StatusOK, status, begin)
-	cred := b.authn.create(b.e.t, begin["options"].(map[string]any), b.e.base)
-	return b.json("/passkey/register/finish?ceremony="+begin["ceremony"].(string)+"&next=/account", cred)
-}
-
-func (b *browser) signUp() {
-	const email = "owner@example.com"
-	b.e.t.Helper()
-	r := b.form("/signup", url.Values{"email": {email}})
-	require.Equal(b.e.t, http.StatusOK, r.status, r.body)
-	status, done := b.createPasskey(b.e.lastLink(), store.PurposeVerify)
-	require.Equal(b.e.t, http.StatusOK, status, done)
-	assert.Equal(b.e.t, "/account", done["next"])
 }
 
 func (b *browser) signIn(purpose string, c *softCred) (int, map[string]any) {
@@ -228,56 +191,6 @@ func (b *browser) signIn(purpose string, c *softCred) (int, map[string]any) {
 	}
 	assertion := b.authn.get(b.e.t, begin["options"].(map[string]any), b.e.base, c)
 	return b.json("/passkey/login/finish?ceremony="+begin["ceremony"].(string)+"&next=/account", assertion)
-}
-
-func TestSignUpVerifiesEmailAndCreatesPasskey(t *testing.T) {
-	e := setup(t)
-	b := e.browser()
-	r := b.form("/signup", url.Values{"email": {" Owner@Example.com "}})
-	require.Equal(t, http.StatusOK, r.status)
-	assert.Contains(t, r.body, "Check your email")
-	require.Len(t, e.mail.Sent(), 1)
-	assert.Equal(t, "Finish creating your Latchkey account", e.mail.Sent()[0].Subject)
-
-	link := e.lastLink()
-	b.get(link) // a mail scanner prefetching the link must not use it up
-	status, done := b.createPasskey(link, store.PurposeVerify)
-	require.Equal(t, http.StatusOK, status, done)
-
-	u, err := e.store.UserByEmail(context.Background(), "owner@example.com")
-	require.NoError(t, err)
-	assert.False(t, u.EmailVerifiedAt.IsZero())
-	keys, err := e.store.Passkeys(context.Background(), u.ID)
-	require.NoError(t, err)
-	assert.Len(t, keys, 1)
-
-	page := b.get("/account")
-	assert.Equal(t, http.StatusOK, page.status)
-	assert.Contains(t, page.body, "owner@example.com")
-
-	// The link is single-use.
-	assert.Equal(t, http.StatusBadRequest, b.get(link).status)
-}
-
-func TestNoPasswordAnywhere(t *testing.T) {
-	e := setup(t)
-	b := e.browser()
-	for _, p := range []string{"/", "/signup", "/signin", "/recover"} {
-		assert.NotContains(t, strings.ToLower(b.get(p).body), `type="password"`, p)
-	}
-}
-
-func TestSignInWithPasskey(t *testing.T) {
-	e := setup(t)
-	first := e.browser()
-	first.signUp()
-
-	other := e.browser()
-	other.authn = first.authn // same passkey, synced to another browser
-	assert.Equal(t, http.StatusFound, other.get("/account").status, "not signed in yet")
-	status, done := other.signIn("signin", nil)
-	require.Equal(t, http.StatusOK, status, done)
-	assert.Equal(t, http.StatusOK, other.get("/account").status)
 }
 
 func TestUnknownPasskeyRejected(t *testing.T) {
@@ -293,113 +206,6 @@ func mustKey(t *testing.T) *ecdsa.PrivateKey {
 	k, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	require.NoError(t, err)
 	return k
-}
-
-func TestSignUpWhenAlreadyRegistered(t *testing.T) {
-	e := setup(t)
-	e.browser().signUp()
-	e.clock.advance(2 * time.Minute)
-	r := e.browser().form("/signup", url.Values{"email": {"owner@example.com"}})
-	assert.Equal(t, http.StatusOK, r.status, "same answer as a new sign-up")
-	msgs := e.mail.Sent()
-	assert.Equal(t, "Sign in to Latchkey", msgs[len(msgs)-1].Subject)
-}
-
-func TestEmailRateLimit(t *testing.T) {
-	e := setup(t)
-	b := e.browser()
-	b.form("/signup", url.Values{"email": {"owner@example.com"}})
-	b.form("/signup", url.Values{"email": {"owner@example.com"}})
-	assert.Len(t, e.mail.Sent(), 1, "at most one email per minute per address")
-	e.clock.advance(61 * time.Second)
-	b.form("/signup", url.Values{"email": {"owner@example.com"}})
-	assert.Len(t, e.mail.Sent(), 2)
-}
-
-func TestAllowedEmails(t *testing.T) {
-	e := setup(t, "Toni@example.com")
-	r := e.browser().form("/signup", url.Values{"email": {"stranger@example.com"}})
-	assert.Equal(t, http.StatusForbidden, r.status)
-	assert.Empty(t, e.mail.Sent())
-	r = e.browser().form("/signup", url.Values{"email": {"toni@example.com"}})
-	assert.Equal(t, http.StatusOK, r.status)
-	assert.Len(t, e.mail.Sent(), 1)
-}
-
-func TestInvalidEmail(t *testing.T) {
-	e := setup(t)
-	r := e.browser().form("/signup", url.Values{"email": {"not an email"}})
-	assert.Equal(t, http.StatusBadRequest, r.status)
-	assert.Contains(t, r.body, "valid email")
-}
-
-func TestRecovery(t *testing.T) {
-	e := setup(t)
-	b := e.browser()
-	b.signUp()
-	oldCred := b.authn.only(t)
-	u, err := e.store.UserByEmail(context.Background(), "owner@example.com")
-	require.NoError(t, err)
-	d, err := e.store.CreateDevice(context.Background(), store.NewDevice{UserID: u.ID, Name: "Mac", PublicKey: []byte("k")}, e.clock.now())
-	require.NoError(t, err)
-	e.macs.online[d.ID] = true
-
-	lost := e.browser() // the passkeys are gone; a new device
-	e.clock.advance(2 * time.Minute)
-	r := lost.form("/recover", url.Values{"email": {"owner@example.com"}})
-	assert.Equal(t, http.StatusOK, r.status)
-	status, done := lost.createPasskey(e.lastLink(), store.PurposeRecover)
-	require.Equal(t, http.StatusOK, status, done)
-	assert.Equal(t, http.StatusOK, lost.get("/account").status, "signed in with the new passkey")
-
-	keys, err := e.store.Passkeys(context.Background(), u.ID)
-	require.NoError(t, err)
-	assert.Len(t, keys, 1, "old passkeys removed (FR-047)")
-	assert.Equal(t, http.StatusFound, b.get("/account").status, "old sessions signed out")
-	status, _ = b.signIn("signin", oldCred)
-	assert.Equal(t, http.StatusUnauthorized, status, "the old passkey no longer works")
-
-	msgs := e.mail.Sent()
-	assert.Equal(t, "Your Latchkey account was recovered", msgs[len(msgs)-1].Subject, "announced by email")
-	require.Len(t, e.macs.notices, 1, "announced on the Mac")
-	assert.Equal(t, agentproto.NoticeAccountRecovered, e.macs.notices[0].Kind)
-}
-
-func TestRecoveryForUnknownEmailLooksTheSame(t *testing.T) {
-	e := setup(t)
-	r := e.browser().form("/recover", url.Values{"email": {"nobody@example.com"}})
-	assert.Equal(t, http.StatusOK, r.status)
-	assert.Contains(t, r.body, "If an account uses this address")
-	assert.Empty(t, e.mail.Sent())
-}
-
-func TestRecoveryLinkExpires(t *testing.T) {
-	e := setup(t)
-	e.browser().signUp()
-	e.clock.advance(2 * time.Minute)
-	e.browser().form("/recover", url.Values{"email": {"owner@example.com"}})
-	link := e.lastLink()
-	e.clock.advance(16 * time.Minute)
-	assert.Equal(t, http.StatusBadRequest, e.browser().get(link).status)
-}
-
-func TestNoticesOnConnect(t *testing.T) {
-	e := setup(t)
-	e.browser().signUp()
-	u, _ := e.store.UserByEmail(context.Background(), "owner@example.com")
-	d, err := e.store.CreateDevice(context.Background(), store.NewDevice{UserID: u.ID, Name: "Mac", PublicKey: []byte("k")}, e.clock.now())
-	require.NoError(t, err)
-	connected := e.clock.now()
-
-	e.clock.advance(2 * time.Minute)
-	e.browser().form("/recover", url.Values{"email": {"owner@example.com"}})
-	e.browser().createPasskey(e.lastLink(), store.PurposeRecover)
-	assert.Empty(t, e.macs.notices, "the Mac was offline")
-
-	svc := e.service(t)
-	notices := svc.NoticesOnConnect(context.Background(), d, connected)
-	require.Len(t, notices, 1, "told on its next connection")
-	assert.Empty(t, svc.NoticesOnConnect(context.Background(), d, e.clock.now()), "only once")
 }
 
 // service builds a second service over the same store, for calling Go methods directly.
@@ -474,6 +280,7 @@ func (b *browser) pairCode(name string) string {
 	require.NoError(b.e.t, err)
 	require.Equal(b.e.t, "latchkey", loc.Scheme)
 	require.Equal(b.e.t, "paired", loc.Host)
+	require.Equal(b.e.t, b.e.base, loc.Query().Get("relay"), "the link names the relay")
 	return loc.Query().Get("code")
 }
 
@@ -556,14 +363,6 @@ func TestRevokeMacAndClaude(t *testing.T) {
 	require.ErrorIs(t, err, store.ErrNotFound)
 }
 
-func TestNextIsAlwaysLocal(t *testing.T) {
-	e := setup(t)
-	page := e.browser().get("/signin?next=//evil.example/x")
-	assert.Contains(t, page.body, `data-next="/account"`)
-	page = e.browser().get("/signin?next=" + url.QueryEscape("/authorize?client_id=x"))
-	assert.Contains(t, page.body, `data-next="/authorize?client_id=x"`)
-}
-
 func TestPasskeyEndpointsNeedJSON(t *testing.T) {
 	e := setup(t)
 	r := e.browser().form("/passkey/login/begin", url.Values{"purpose": {"signin"}})
@@ -587,4 +386,251 @@ func TestConsentPageViaAuthorize(t *testing.T) {
 	r := b.form("/authorize?"+q.Encode(), url.Values{"csrf": {csrf(t, page.body)}, "decision": {"allow"}})
 	require.Contains(t, []int{http.StatusFound, http.StatusSeeOther}, r.status, r.body)
 	assert.True(t, strings.HasPrefix(r.header.Get("Location"), "https://claude.ai/api/mcp/auth_callback?code="))
+}
+
+const owner = "owner@example.com"
+
+// lastCode is the code in the newest email to the owner.
+func (e *env) lastCode() string {
+	e.t.Helper()
+	msgs := e.mail.Sent()
+	for i := len(msgs) - 1; i >= 0; i-- {
+		if msgs[i].To == owner {
+			return codeRE.FindStringSubmatch(msgs[i].Body)[1]
+		}
+	}
+	e.t.Fatal("no email to the owner")
+	return ""
+}
+
+// startEmail is the first step of the sign-in page.
+func (b *browser) startEmail(email string, recover bool) (int, map[string]any) {
+	return b.json("/auth/email", map[string]any{"email": email, "recover": recover})
+}
+
+// confirmCode enters a code and returns the ticket for creating a passkey.
+func (b *browser) confirmCode(code, purpose string) (int, map[string]any) {
+	return b.json("/auth/code", map[string]string{"email": owner, "code": code, "purpose": purpose})
+}
+
+// createPasskey runs the last step with a ticket.
+func (b *browser) createPasskey(ticket string) (int, map[string]any) {
+	b.e.t.Helper()
+	status, begin := b.json("/passkey/register/begin", map[string]string{"ticket": ticket})
+	require.Equal(b.e.t, http.StatusOK, status, begin)
+	cred := b.authn.create(b.e.t, begin["options"].(map[string]any), b.e.base)
+	return b.json("/passkey/register/finish?ceremony="+begin["ceremony"].(string)+"&next=/account", cred)
+}
+
+// codeFlow runs email → code → passkey for a purpose.
+func (b *browser) codeFlow(purpose string) {
+	b.e.t.Helper()
+	status, r := b.startEmail(owner, purpose == store.PurposeRecover)
+	require.Equal(b.e.t, http.StatusOK, status, r)
+	require.Equal(b.e.t, "code", r["step"])
+	require.Equal(b.e.t, purpose, r["purpose"])
+	status, t := b.confirmCode(b.e.lastCode(), purpose)
+	require.Equal(b.e.t, http.StatusOK, status, t)
+	status, done := b.createPasskey(t["ticket"].(string))
+	require.Equal(b.e.t, http.StatusOK, status, done)
+	assert.Equal(b.e.t, "/account", done["next"])
+}
+
+func (b *browser) signUp() { b.codeFlow(store.PurposeVerify) }
+
+func TestSignUpWithEmailCode(t *testing.T) {
+	e := setup(t)
+	b := e.browser()
+	status, r := b.startEmail(" Owner@Example.com ", false)
+	require.Equal(t, http.StatusOK, status)
+	assert.Equal(t, map[string]any{"step": "code", "purpose": "verify"}, r)
+	require.Len(t, e.mail.Sent(), 1)
+	code := e.lastCode()
+	assert.Equal(t, "Your Latchkey code: "+code, e.mail.Sent()[0].Subject)
+
+	status, ticket := b.confirmCode(code, store.PurposeVerify)
+	require.Equal(t, http.StatusOK, status, ticket)
+	status, done := b.createPasskey(ticket["ticket"].(string))
+	require.Equal(t, http.StatusOK, status, done)
+
+	u, err := e.store.UserByEmail(context.Background(), owner)
+	require.NoError(t, err)
+	assert.False(t, u.EmailVerifiedAt.IsZero(), "FR-043")
+	keys, err := e.store.Passkeys(context.Background(), u.ID)
+	require.NoError(t, err)
+	assert.Len(t, keys, 1)
+	assert.Equal(t, http.StatusOK, b.get("/account").status)
+
+	status, _ = b.confirmCode(code, store.PurposeVerify)
+	assert.Equal(t, http.StatusBadRequest, status, "codes are single-use")
+}
+
+func TestWrongCodesLock(t *testing.T) {
+	e := setup(t)
+	b := e.browser()
+	b.startEmail(owner, false)
+	code := e.lastCode()
+	wrong := "000000"
+	if code == wrong {
+		wrong = "111111"
+	}
+	for range store.MaxCodeAttempts {
+		status, r := b.confirmCode(wrong, store.PurposeVerify)
+		require.Equal(t, http.StatusBadRequest, status)
+		assert.Contains(t, r["error"], "isn't right")
+	}
+	status, r := b.confirmCode(code, store.PurposeVerify)
+	assert.Equal(t, http.StatusBadRequest, status, "locked after 5 wrong codes")
+	assert.Contains(t, r["error"], "get a new code")
+}
+
+func TestCodeExpires(t *testing.T) {
+	e := setup(t)
+	b := e.browser()
+	b.startEmail(owner, false)
+	e.clock.advance(16 * time.Minute)
+	status, _ := b.confirmCode(e.lastCode(), store.PurposeVerify)
+	assert.Equal(t, http.StatusBadRequest, status)
+}
+
+func TestTicketCannotBeGuessed(t *testing.T) {
+	e := setup(t)
+	status, _ := e.browser().json("/passkey/register/begin", map[string]string{"ticket": "made-up"})
+	assert.Equal(t, http.StatusBadRequest, status)
+}
+
+func TestNoPasswordAnywhere(t *testing.T) {
+	e := setup(t)
+	b := e.browser()
+	for _, p := range []string{"/", "/signin", "/signin?recover=1"} {
+		page := b.get(p)
+		require.Equal(t, http.StatusOK, page.status, p)
+		assert.NotContains(t, strings.ToLower(page.body), `type="password"`, p)
+	}
+}
+
+func TestOldAddressesLeadToSignIn(t *testing.T) {
+	e := setup(t)
+	r := e.browser().get("/signup?next=/pair")
+	assert.Equal(t, http.StatusFound, r.status)
+	assert.Equal(t, "/signin?next=%2Fpair", r.header.Get("Location"))
+	r = e.browser().get("/recover")
+	assert.Contains(t, r.header.Get("Location"), "recover=1")
+}
+
+func TestKnownAccountGoesToPasskey(t *testing.T) {
+	e := setup(t)
+	first := e.browser()
+	first.signUp()
+	sent := len(e.mail.Sent())
+
+	other := e.browser()
+	other.authn = first.authn // the same passkey, synced to another browser
+	status, r := other.startEmail(owner, false)
+	require.Equal(t, http.StatusOK, status)
+	assert.Equal(t, "passkey", r["step"])
+	assert.Len(t, e.mail.Sent(), sent, "no email for a known account")
+
+	status, done := other.signIn("signin", nil)
+	require.Equal(t, http.StatusOK, status, done)
+	assert.Equal(t, http.StatusOK, other.get("/account").status)
+}
+
+func TestEmailRateLimit(t *testing.T) {
+	e := setup(t)
+	b := e.browser()
+	b.startEmail(owner, false)
+	first := e.lastCode()
+	status, r := b.startEmail(owner, false)
+	assert.Equal(t, http.StatusOK, status)
+	assert.Equal(t, "code", r["step"])
+	assert.Len(t, e.mail.Sent(), 1, "at most one email per minute per address")
+	status, _ = b.confirmCode(first, store.PurposeVerify)
+	assert.Equal(t, http.StatusOK, status, "the earlier code still works")
+
+	e.clock.advance(61 * time.Second)
+	b.startEmail(owner, false)
+	assert.Len(t, e.mail.Sent(), 2)
+}
+
+func TestAllowedEmails(t *testing.T) {
+	e := setup(t, "Toni@example.com")
+	status, r := e.browser().startEmail("stranger@example.com", false)
+	assert.Equal(t, http.StatusForbidden, status)
+	assert.Contains(t, r["error"], "approved email")
+	assert.Empty(t, e.mail.Sent())
+	status, _ = e.browser().startEmail("toni@example.com", false)
+	assert.Equal(t, http.StatusOK, status)
+	assert.Len(t, e.mail.Sent(), 1)
+}
+
+func TestInvalidEmail(t *testing.T) {
+	e := setup(t)
+	status, r := e.browser().startEmail("not an email", false)
+	assert.Equal(t, http.StatusBadRequest, status)
+	assert.Contains(t, r["error"], "valid email")
+}
+
+func TestRecovery(t *testing.T) {
+	e := setup(t)
+	b := e.browser()
+	b.signUp()
+	oldCred := b.authn.only(t)
+	u, err := e.store.UserByEmail(context.Background(), owner)
+	require.NoError(t, err)
+	d, err := e.store.CreateDevice(context.Background(), store.NewDevice{UserID: u.ID, Name: "Mac", PublicKey: []byte("k")}, e.clock.now())
+	require.NoError(t, err)
+	e.macs.online[d.ID] = true
+
+	lost := e.browser() // the passkeys are gone; a new device
+	e.clock.advance(2 * time.Minute)
+	lost.codeFlow(store.PurposeRecover)
+	assert.Contains(t, e.mail.Sent()[len(e.mail.Sent())-2].Subject, "recovery code")
+	assert.Equal(t, http.StatusOK, lost.get("/account").status, "signed in with the new passkey")
+
+	keys, err := e.store.Passkeys(context.Background(), u.ID)
+	require.NoError(t, err)
+	assert.Len(t, keys, 1, "old passkeys removed (FR-047)")
+	assert.Equal(t, http.StatusFound, b.get("/account").status, "old sessions signed out")
+	status, _ := b.signIn("signin", oldCred)
+	assert.Equal(t, http.StatusUnauthorized, status, "the old passkey no longer works")
+
+	msgs := e.mail.Sent()
+	assert.Equal(t, "Your Latchkey account was recovered", msgs[len(msgs)-1].Subject, "announced by email")
+	require.Len(t, e.macs.notices, 1, "announced on the Mac")
+	assert.Equal(t, agentproto.NoticeAccountRecovered, e.macs.notices[0].Kind)
+}
+
+func TestRecoveryForUnknownEmailLooksTheSame(t *testing.T) {
+	e := setup(t)
+	status, r := e.browser().startEmail("nobody@example.com", true)
+	assert.Equal(t, http.StatusOK, status)
+	assert.Equal(t, "code", r["step"])
+	assert.Empty(t, e.mail.Sent())
+}
+
+func TestNoticesOnConnect(t *testing.T) {
+	e := setup(t)
+	e.browser().signUp()
+	u, _ := e.store.UserByEmail(context.Background(), owner)
+	d, err := e.store.CreateDevice(context.Background(), store.NewDevice{UserID: u.ID, Name: "Mac", PublicKey: []byte("k")}, e.clock.now())
+	require.NoError(t, err)
+	connected := e.clock.now()
+
+	e.clock.advance(2 * time.Minute)
+	e.browser().codeFlow(store.PurposeRecover)
+	assert.Empty(t, e.macs.notices, "the Mac was offline")
+
+	svc := e.service(t)
+	notices := svc.NoticesOnConnect(context.Background(), d, connected)
+	require.Len(t, notices, 1, "told on its next connection")
+	assert.Empty(t, svc.NoticesOnConnect(context.Background(), d, e.clock.now()), "only once")
+}
+
+func TestNextIsAlwaysLocal(t *testing.T) {
+	e := setup(t)
+	page := e.browser().get("/signin?next=//evil.example/x")
+	assert.Contains(t, page.body, `data-next="/account"`)
+	page = e.browser().get("/signin?next=" + url.QueryEscape("/authorize?client_id=x"))
+	assert.Contains(t, page.body, `data-next="/authorize?client_id=x"`)
 }

@@ -58,7 +58,7 @@ func (s *Service) accountPage(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	v.Audit, _ = s.cfg.Store.AuditForUser(ctx, u.ID, 100)
-	s.render(w, http.StatusOK, "account.html", page{Title: "Your account", Email: u.Email, CSRF: s.csrfFor(tok), Data: v, SignedIn: true})
+	s.render(w, http.StatusOK, "account.html", page{Title: "Your account", Email: u.Email, CSRF: s.csrfFor(tok), Data: v, Wide: true})
 }
 
 func doneMessage(code string) string {
@@ -175,7 +175,7 @@ func (s *Service) pairPage(w http.ResponseWriter, r *http.Request) {
 	if d, err := s.cfg.Store.ActiveDevice(r.Context(), u.ID); err == nil {
 		data["Replaces"] = d.Name
 	}
-	s.render(w, http.StatusOK, "pair.html", page{Title: "Connect your Mac", Email: u.Email, CSRF: s.csrfFor(tok), Data: data, SignedIn: true})
+	s.render(w, http.StatusOK, "pair.html", page{Title: "Connect your Mac", Email: u.Email, CSRF: s.csrfFor(tok), Data: data})
 }
 
 func (s *Service) pair(w http.ResponseWriter, r *http.Request) {
@@ -188,7 +188,9 @@ func (s *Service) pair(w http.ResponseWriter, r *http.Request) {
 		s.errorPage(w, http.StatusInternalServerError, "Something went wrong", "Try again.")
 		return
 	}
-	w.Header().Set("Location", "latchkey://paired?"+url.Values{"code": {code}}.Encode())
+	// The relay's address rides along, so the app can finish pairing even if it was restarted.
+	relay := strings.TrimSuffix(s.cfg.PublicURL.String(), "/")
+	w.Header().Set("Location", "latchkey://paired?"+url.Values{"code": {code}, "relay": {relay}}.Encode())
 	w.WriteHeader(http.StatusSeeOther)
 }
 
@@ -244,5 +246,5 @@ func isP256(der []byte) bool {
 // Consent implements oauth.Authenticator.
 func (s *Service) Consent(w http.ResponseWriter, r *http.Request, c oauth.ConsentRequest) {
 	tok := s.sessionToken(r)
-	s.render(w, http.StatusOK, "consent.html", page{Title: "Allow access to your Mac", CSRF: s.csrfFor(tok), Data: c, SignedIn: true})
+	s.render(w, http.StatusOK, "consent.html", page{Title: "Allow access to your Mac", CSRF: s.csrfFor(tok), Data: c})
 }

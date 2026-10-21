@@ -1,12 +1,10 @@
 {{template "head" .}}
 <h1>Allow {{.Data.ClientName}} to use your Mac?</h1>
-<p>{{.Data.ClientName}} will be able to see whether your Mac is online and use the tools you've turned on in the Latchkey app on your Mac.</p>
-<p class="small">You'll go back to <strong>{{.Data.RedirectHost}}</strong>. You can remove access at any time on your account page.</p>
+<p class="lead">{{.Data.ClientName}} will see whether your Mac is online and can use the tools you've turned on in the Latchkey app.</p>
 <form method="post">
   <input type="hidden" name="csrf" value="{{.CSRF}}">
-  <div class="actions">
-    <button class="primary" type="submit" name="decision" value="allow">Allow</button>
-    <button type="submit" name="decision" value="deny">Don't Allow</button>
-  </div>
+  <button class="primary wide" type="submit" name="decision" value="allow">Allow</button>
+  <button class="wide" type="submit" name="decision" value="deny">Don't Allow</button>
 </form>
+<p class="small center">You'll go back to {{.Data.RedirectHost}}. You can remove access at any time on your account page.</p>
 {{template "foot" .}}

@@ -24,12 +24,12 @@ const (
 
 // ceremony is a WebAuthn exchange in progress, kept in memory between begin and finish.
 type ceremony struct {
-	data      webauthn.SessionData
-	purpose   string // verify, recover, signin, reauth
-	userID    string
-	tokenHash []byte // email link, for verify and recover
-	session   string // session token, for reauth
-	expires   time.Time
+	data    webauthn.SessionData
+	purpose string // verify, recover, signin, reauth
+	userID  string
+	ticket  string // confirmed email code, for verify and recover
+	session string // session token, for reauth
+	expires time.Time
 }
 
 func (s *Service) putCeremony(c *ceremony) string {
@@ -111,7 +111,44 @@ func requireJSON(w http.ResponseWriter, r *http.Request) bool {
 
 type beginRequest struct {
 	Purpose string `json:"purpose"`
-	Token   string `json:"token"`
+	Ticket  string `json:"ticket"`
+}
+
+const ticketLifetime = 10 * time.Minute
+
+// ticket says an emailed code was confirmed: its holder may create a passkey for the user.
+type ticket struct {
+	userID  string
+	purpose string // verify or recover
+	expires time.Time
+}
+
+func (s *Service) putTicket(userID, purpose string) string {
+	id := randomToken()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	now := s.now()
+	for k, t := range s.tickets {
+		if now.After(t.expires) {
+			delete(s.tickets, k)
+		}
+	}
+	s.tickets[id] = &ticket{userID: userID, purpose: purpose, expires: now.Add(ticketLifetime)}
+	return id
+}
+
+// ticketFor returns a live ticket; take removes it (after the passkey is saved).
+func (s *Service) ticketFor(id string, take bool) (*ticket, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	t, ok := s.tickets[id]
+	if !ok || s.now().After(t.expires) {
+		return nil, false
+	}
+	if take {
+		delete(s.tickets, id)
+	}
+	return t, true
 }
 
 func (s *Service) registerBegin(w http.ResponseWriter, r *http.Request) {
@@ -119,19 +156,16 @@ func (s *Service) registerBegin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req beginRequest
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096)).Decode(&req); err != nil ||
-		(req.Purpose != store.PurposeVerify && req.Purpose != store.PurposeRecover) {
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096)).Decode(&req); err != nil {
 		jsonError(w, http.StatusBadRequest, "Bad request.")
 		return
 	}
-	ctx := r.Context()
-	tokenHash := hash(req.Token)
-	userID, err := s.cfg.Store.PeekEmailToken(ctx, tokenHash, req.Purpose, s.now())
-	if err != nil {
-		jsonError(w, http.StatusBadRequest, "This link has expired. Start again to get a new one.")
+	t, ok := s.ticketFor(req.Ticket, false)
+	if !ok {
+		jsonError(w, http.StatusBadRequest, "This took too long. Start again to get a new code.")
 		return
 	}
-	user, err := s.loadUser(ctx, userID)
+	user, err := s.loadUser(r.Context(), t.userID)
 	if err != nil {
 		jsonError(w, http.StatusInternalServerError, "Something went wrong. Try again.")
 		return
@@ -146,20 +180,24 @@ func (s *Service) registerBegin(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, http.StatusInternalServerError, "Something went wrong. Try again.")
 		return
 	}
-	id := s.putCeremony(&ceremony{data: *data, purpose: req.Purpose, userID: userID, tokenHash: tokenHash})
+	id := s.putCeremony(&ceremony{data: *data, purpose: t.purpose, userID: t.userID, ticket: req.Ticket})
 	writeJSON(w, http.StatusOK, map[string]any{"ceremony": id, "options": creation})
 }
 
 func (s *Service) registerFinish(w http.ResponseWriter, r *http.Request) {
 	c, ok := s.takeCeremony(r.URL.Query().Get("ceremony"))
 	if !ok || (c.purpose != store.PurposeVerify && c.purpose != store.PurposeRecover) {
-		jsonError(w, http.StatusBadRequest, "This took too long. Reload the page and try again.")
+		jsonError(w, http.StatusBadRequest, "This took too long. Try again.")
+		return
+	}
+	if _, ok := s.ticketFor(c.ticket, false); !ok {
+		jsonError(w, http.StatusBadRequest, "This took too long. Start again to get a new code.")
 		return
 	}
 	ctx := r.Context()
 	user, err := s.loadUser(ctx, c.userID)
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "This link has expired. Start again to get a new one.")
+		jsonError(w, http.StatusBadRequest, "Start again to get a new code.")
 		return
 	}
 	cred, err := s.webauthn.FinishRegistration(user, c.data, r)
@@ -168,10 +206,6 @@ func (s *Service) registerFinish(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	now := s.now()
-	if _, err := s.cfg.Store.UseEmailToken(ctx, c.tokenHash, c.purpose, now); err != nil {
-		jsonError(w, http.StatusBadRequest, "This link has already been used. Start again to get a new one.")
-		return
-	}
 	data, err := json.Marshal(cred)
 	if err == nil {
 		err = s.cfg.Store.AddPasskey(ctx, c.userID, cred.ID, data, now)
@@ -180,6 +214,7 @@ func (s *Service) registerFinish(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, http.StatusInternalServerError, "The passkey couldn't be saved. Try again.")
 		return
 	}
+	s.ticketFor(c.ticket, true)
 	switch c.purpose {
 	case store.PurposeVerify:
 		err = s.cfg.Store.VerifyEmail(ctx, c.userID, now)

@@ -62,3 +62,5 @@ Add a row when a decision is made; never delete one, mark it "superseded by" ins
 | 2026-10-20 | Push after every finished step and fast-forward main | CLAUDE.md |
 | 2026-10-20 | Hosted relay at relay.example.com on GCP my-vm behind its Caddy | plan D10, deploy/ |
 | 2026-10-20 | Email through Resend (SMTP), sending domain relay.example.com | plan D5, research.md |
+| 2026-10-21 | One email-first sign-in page; 6-digit email codes instead of links | FR-042, FR-043, FR-043a |
+| 2026-10-21 | Mac app signs in through Apple's sign-in window (ASWebAuthenticationSession), not a browser tab | plan D6 |

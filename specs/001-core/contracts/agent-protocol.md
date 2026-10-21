@@ -12,8 +12,10 @@ The app pairs once, through the Owner's browser (plan D6):
    with callback scheme `latchkey`.
 2. The Owner signs in with a passkey if needed and clicks Connect (or Replace and Connect, when
    another Mac is paired, FR-053).
-3. The relay redirects to `latchkey://paired?code=<code>`. The code is single-use and expires in
-   5 minutes.
+3. The relay redirects to `latchkey://paired?code=<code>&relay=<relay origin>`. The code is
+   single-use and expires in 5 minutes. If the link reaches the app when it did not start a
+   pairing (for example after a restart), the app asks the Owner to confirm the relay's host before
+   using it, so a link from someone else cannot connect the Mac to their relay.
 4. The app creates its Secure Enclave P-256 key and calls:
 
 ```http

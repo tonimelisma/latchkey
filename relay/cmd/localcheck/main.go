@@ -81,11 +81,11 @@ func run(model string) error {
 		return fmt.Errorf("browser: %w", err)
 	}
 	defer b.Close()
-	linkRE := regexp.MustCompile(`http://localhost:\d+/\S+`)
+	codeRE := regexp.MustCompile(`\b\d{6}\b`)
 	err = b.SignUp(base, "check@example.com", func(email string) (string, error) {
 		for _, m := range mail.Sent() {
 			if m.To == email {
-				return linkRE.FindString(m.Body), nil
+				return codeRE.FindString(m.Body), nil
 			}
 		}
 		return "", errors.New("no email")

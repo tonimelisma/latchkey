@@ -268,3 +268,24 @@ func TestRelayKeys(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, []byte("first"), k, "a key is created once")
 }
+
+func TestEmailCodes(t *testing.T) {
+	ctx := context.Background()
+	s := open(t)
+	u := newUser(t, s)
+	require.NoError(t, s.CreateEmailCode(ctx, u.ID, store.PurposeVerify, []byte("old"), t0.Add(15*time.Minute)))
+	require.NoError(t, s.CreateEmailCode(ctx, u.ID, store.PurposeVerify, []byte("new"), t0.Add(15*time.Minute)))
+	require.ErrorIs(t, s.CheckEmailCode(ctx, u.ID, store.PurposeVerify, []byte("old"), t0), store.ErrWrongCode, "a new code replaces the old one")
+	require.ErrorIs(t, s.CheckEmailCode(ctx, u.ID, store.PurposeRecover, []byte("new"), t0), store.ErrNotFound, "purpose must match")
+	require.NoError(t, s.CheckEmailCode(ctx, u.ID, store.PurposeVerify, []byte("new"), t0))
+	require.ErrorIs(t, s.CheckEmailCode(ctx, u.ID, store.PurposeVerify, []byte("new"), t0), store.ErrNotFound, "single use")
+
+	require.NoError(t, s.CreateEmailCode(ctx, u.ID, store.PurposeRecover, []byte("c"), t0.Add(15*time.Minute)))
+	for range store.MaxCodeAttempts {
+		require.ErrorIs(t, s.CheckEmailCode(ctx, u.ID, store.PurposeRecover, []byte("x"), t0), store.ErrWrongCode)
+	}
+	require.ErrorIs(t, s.CheckEmailCode(ctx, u.ID, store.PurposeRecover, []byte("c"), t0), store.ErrNotFound, "locked after 5 wrong codes")
+
+	require.NoError(t, s.CreateEmailCode(ctx, u.ID, store.PurposeVerify, []byte("e"), t0.Add(time.Minute)))
+	require.ErrorIs(t, s.CheckEmailCode(ctx, u.ID, store.PurposeVerify, []byte("e"), t0.Add(2*time.Minute)), store.ErrNotFound, "expired")
+}

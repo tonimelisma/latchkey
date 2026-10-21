@@ -4,17 +4,19 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light dark">
-<title>{{.Title}} · Latchkey</title>
+<title>{{.Title}}</title>
+<link rel="icon" href="/static/icon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="/static/style.css">
 <script src="/static/passkey.js" defer></script>
 </head>
 <body>
-<header class="bar"><a class="brand" href="/">Latchkey</a>{{if .SignedIn}}<a href="/account">Account</a>{{end}}</header>
-<main>
+<main class="card{{if .Wide}} wide{{end}}">
+<div class="mark" aria-hidden="true"><img src="/static/icon.svg" alt="" width="44" height="44"></div>
 {{end}}
 
 {{define "foot"}}
 </main>
+{{if .SignedIn}}<p class="footer"><a href="/account">Your account</a></p>{{end}}
 </body>
 </html>
 {{end}}
