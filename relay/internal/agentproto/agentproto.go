@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"regexp"
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -280,19 +281,31 @@ func Encode(m Message) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-// ValidateTools rejects unnamed or duplicate tools and tools named like a relay tool.
+var toolName = regexp.MustCompile(`^[A-Za-z0-9_.-]{1,128}$`)
+
+// ValidateTools enforces the contract's tool rules: valid unique names, none reserved by the relay,
+// and object input (and output) schemas. The MCP server would refuse such tools later anyway.
 func ValidateTools(tools []*mcp.Tool) error {
 	seen := make(map[string]bool, len(tools))
 	for _, t := range tools {
 		switch {
-		case t == nil || t.Name == "":
-			return fmt.Errorf("%w: tool without a name", ErrProtocolViolation)
+		case t == nil || !toolName.MatchString(t.Name):
+			return fmt.Errorf("%w: invalid tool name", ErrProtocolViolation)
 		case t.Name == RelayToolLaptopStatus:
 			return fmt.Errorf("%w: tool name %q is reserved by the relay", ErrProtocolViolation, t.Name)
 		case seen[t.Name]:
 			return fmt.Errorf("%w: duplicate tool %q", ErrProtocolViolation, t.Name)
+		case !isObjectSchema(t.InputSchema):
+			return fmt.Errorf("%w: tool %q: inputSchema must have type \"object\"", ErrProtocolViolation, t.Name)
+		case t.OutputSchema != nil && !isObjectSchema(t.OutputSchema):
+			return fmt.Errorf("%w: tool %q: outputSchema must have type \"object\"", ErrProtocolViolation, t.Name)
 		}
 		seen[t.Name] = true
 	}
 	return nil
+}
+
+func isObjectSchema(schema any) bool {
+	m, ok := schema.(map[string]any)
+	return ok && m["type"] == "object"
 }

@@ -219,3 +219,10 @@ func (s *Store) PurgeAudit(ctx context.Context, before time.Time) (int64, error)
 	}
 	return res.RowsAffected()
 }
+
+// MarkAllOffline clears the online flag everywhere. The hub calls it at startup, since no
+// connection survives a relay restart.
+func (s *Store) MarkAllOffline(ctx context.Context) error {
+	_, err := s.db.ExecContext(ctx, `UPDATE device_state SET online = 0 WHERE online = 1`)
+	return err
+}

@@ -173,9 +173,10 @@ func TestNewNonceIs32RandomBytes(t *testing.T) {
 }
 
 func TestValidateTools(t *testing.T) {
-	ok := []*mcp.Tool{{Name: "battery_status"}, {Name: "other"}}
+	obj := map[string]any{"type": "object"}
+	ok := []*mcp.Tool{{Name: "battery_status", InputSchema: obj}, {Name: "other.v2", InputSchema: obj, OutputSchema: obj}}
 	require.NoError(t, agentproto.ValidateTools(ok))
 	require.NoError(t, agentproto.ValidateTools(nil))
-	require.ErrorIs(t, agentproto.ValidateTools([]*mcp.Tool{{Name: agentproto.RelayToolLaptopStatus}}), agentproto.ErrProtocolViolation)
+	require.ErrorIs(t, agentproto.ValidateTools([]*mcp.Tool{{Name: agentproto.RelayToolLaptopStatus, InputSchema: obj}}), agentproto.ErrProtocolViolation)
 	require.ErrorIs(t, agentproto.ValidateTools([]*mcp.Tool{nil}), agentproto.ErrProtocolViolation)
 }

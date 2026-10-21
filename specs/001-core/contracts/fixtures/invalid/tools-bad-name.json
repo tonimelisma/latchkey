@@ -1,0 +1,1 @@
+{"type": "tools", "tools": [{"name": "battery status!", "inputSchema": {"type": "object"}}]}

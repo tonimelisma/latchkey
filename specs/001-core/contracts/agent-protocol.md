@@ -103,6 +103,10 @@ Tool objects follow the MCP `Tool` shape (`name`, `title`, `description`, `input
 {"_meta": {"latchkey/deadline_ms": 5000}}
 ```
 
+`inputSchema` is required and must be a JSON Schema object with `"type": "object"`; `outputSchema`,
+if present, likewise. Names use only letters, digits, `_`, `-`, and `.`, 1 to 128 characters (MCP
+tool name rules). A tool list breaking these rules is a protocol violation (close 4005).
+
 The relay caps `deadline_ms` at 60000. Tool names must not collide with relay tools
 (`laptop_status`); the relay rejects a `tools` list that contains one (close 4005).
 
