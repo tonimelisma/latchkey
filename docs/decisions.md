@@ -40,3 +40,6 @@ Add a row when a decision is made; never delete one, mark it "superseded by" ins
 | 2026-10-20 | License: Apache-2.0 | LICENSE, Constitution IX |
 | 2026-10-20 | Relay migrations with goose; tests with testify; golangci-lint + gofumpt; Makefile | plan D10 |
 | 2026-10-20 | Ask Toni about product and significant engineering choices; Claude decides low-level details and records options | CLAUDE.md |
+| 2026-10-20 | Automated browser sign-in test in Go with chromedp and a virtual passkey | plan testing strategy, T040 |
+| 2026-10-20 | No manual work for Toni; Claude runs all checks, including a scripted Claude Code check | CLAUDE.md, plan testing strategy, T023 |
+| 2026-10-20 | Public test host for Claude web/Desktop/phone decided at M4 | STATUS open questions |

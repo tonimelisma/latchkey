@@ -73,6 +73,10 @@ Package directories are created when they get code, not up front (T010).
 - **T022** [P] Audit log: one metadata row per tool call (tool, surface from `clientInfo.name`,
   outcome, duration; no arguments, no results), daily purge after 30 days. Tests first.
   *Serves D11, FR-022, FR-023, FR-024.*
+- **T023** Claude Code check (run by Claude): start the relay and the Go test agent locally, run
+  Claude Code non-interactively with an MCP config pointing at the relay, ask for the battery,
+  and check the answer; stop the test agent and check the offline answer. Script it under
+  `relay/scripts/` so it can be rerun.
 
 ---
 
@@ -116,8 +120,10 @@ Package directories are created when they get code, not up front (T010).
   `latchkey://paired?code=...`; single-use 5-minute code exchanged together with the device's
   P-256 public key, creating the device. Tested with the Go test agent end to end. *Serves D6,
   FR-050.*
-- **T040** MCP Inspector against the local relay through the full OAuth flow, with the Go test
-  agent paired.
+- **T040** **(test first)** Browser sign-in test with chromedp and a virtual passkey: sign up
+  (email link read from the fake SMTP server), sign in, approve Claude on the consent page, and
+  pair the Go test agent; then a go-sdk client completes OAuth and calls `battery_status`.
+  Skipped with a clear message when Chrome is not installed. *Serves FR-040 to FR-043, FR-050.*
 
 ---
 
@@ -173,13 +179,17 @@ Package directories are created when they get code, not up front (T010).
 - **T064** Local trace: SQLite in Application Support recording every executed call (arguments,
   results, errors, timings), a log window, 90-day purge. Never sent to the relay. *Serves D11,
   FR-026.*
-- **T065** Integration check with a local relay: pair through the browser; a go-sdk client calls
-  `battery_status` and gets live data; Wi-Fi off → offline within 35 s (SC-04); Wi-Fi on →
-  reachable within 10 s (SC-05); disabling System info removes the tool (SC-08).
+- **T065** Integration check with a local relay, run by Claude: pair through the browser; a
+  go-sdk client calls `battery_status` and gets live data; network loss simulated by a local proxy
+  between app and relay that the script cuts and restores → offline within 35 s (SC-04),
+  reachable again within 10 s (SC-05); disabling System info removes the tool (SC-08).
 
 ---
 
 ## M4: End to end from Claude
+
+Claude prepares and runs everything it can. Toni is needed only to add the connector to his
+Claude account and to try it on his phone and Desktop; that is listed in one short checklist.
 
 - **T070** Public test deployment of the relay with HTTPS. [Blocked: hosted relay domain is an
   open question for Toni.]

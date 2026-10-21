@@ -38,7 +38,7 @@ and `store` are in, with tests and lint passing.
 
 | Question | Resolve by |
 |---|---|
-| Domain for the hosted relay | Toni, before M4 |
+| Domain for the hosted relay, and where the public test relay runs | Toni, before M4 |
 | Claude's hosted-client tool-call timeout (undocumented) | Measure in M4; keep our 60 s cap below it |
 | Terms, privacy policy, abuse handling for the hosted relay | Launch blocker, deferred |
 

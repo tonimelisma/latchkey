@@ -211,8 +211,15 @@ latchkey/
   both the Go and the Swift tests so the two sides cannot drift.
 - Mac app: unit tests for the keep-awake state machine (inputs: power source, battery %,
   thermal state, user setting; output: on/off plus reason).
-- Integration: MCP Inspector against a local relay; then real Claude on web, Desktop, and phone
-  through a public test deployment (quickstart checklist).
+- Browser sign-in: an automated test drives headless Chrome with a virtual passkey through the
+  real sign-up, sign-in, consent, and pairing pages, using `github.com/chromedp/chromedp` (MIT).
+  Runs in any container with Chrome.
+- Claude Code check, run by Claude, not Toni: Claude Code in non-interactive mode (`claude -p` with
+  an MCP config) against a local relay plus the Go test agent, asking for the battery. Done when
+  the relay has no sign-in yet; once sign-in exists, the automated tests cover it.
+- Real Claude on web, Desktop, and phone through a public test deployment (quickstart checklist).
+  Hosting decided at M4.
+- No manual testing by Toni; he is asked only for steps that need his accounts or devices.
 - No hardware test runs for keep-awake (Toni, 2026-10-20); SC-06 is checked in normal use.
 
 ## Milestones

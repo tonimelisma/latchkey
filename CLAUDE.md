@@ -50,6 +50,12 @@ code or decision that changes them. Never let them drift.
 ## Working with Toni
 
 - Plain, short language. Lead with the answer. Explain unavoidable jargon in a few words.
+- Never use internal labels with Toni (milestone codes like M1, task IDs like T015, requirement
+  IDs, command names like `make run`) without saying in words what they are. Questions especially
+  must make sense to someone who hasn't read the plan.
+- No manual work for Toni. Claude runs every test and check itself, scripted. Ask Toni only for
+  what only Toni can do (his accounts, his devices, approvals), keep it to the minimum, and say so
+  plainly up front.
 - Toni wants complete solutions, not partial matches. Say plainly when something falls short.
 
 ## Toni decides
