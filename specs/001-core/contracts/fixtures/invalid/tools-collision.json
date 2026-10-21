@@ -1,0 +1,11 @@
+{
+  "type": "tools",
+  "tools": [
+    {
+      "name": "laptop_status",
+      "inputSchema": {
+        "type": "object"
+      }
+    }
+  ]
+}

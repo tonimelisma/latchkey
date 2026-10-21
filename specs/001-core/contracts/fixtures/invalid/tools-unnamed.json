@@ -1,0 +1,11 @@
+{
+  "type": "tools",
+  "tools": [
+    {
+      "name": "",
+      "inputSchema": {
+        "type": "object"
+      }
+    }
+  ]
+}

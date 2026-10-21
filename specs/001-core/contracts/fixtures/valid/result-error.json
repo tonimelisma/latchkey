@@ -1,0 +1,11 @@
+{
+  "type": "result",
+  "id": "c_18",
+  "content": [
+    {
+      "type": "text",
+      "text": "Battery information is not available on this Mac."
+    }
+  ],
+  "is_error": true
+}

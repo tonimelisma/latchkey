@@ -1,0 +1,17 @@
+{
+  "type": "tools",
+  "tools": [
+    {
+      "name": "battery_status",
+      "inputSchema": {
+        "type": "object"
+      }
+    },
+    {
+      "name": "battery_status",
+      "inputSchema": {
+        "type": "object"
+      }
+    }
+  ]
+}

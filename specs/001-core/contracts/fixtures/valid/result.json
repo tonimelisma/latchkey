@@ -1,0 +1,17 @@
+{
+  "type": "result",
+  "id": "c_17",
+  "content": [
+    {
+      "type": "text",
+      "text": "{\"battery_percent\":82,\"charging\":false,\"power_source\":\"battery\",\"time_remaining_min\":312}"
+    }
+  ],
+  "structured_content": {
+    "battery_percent": 82,
+    "charging": false,
+    "power_source": "battery",
+    "time_remaining_min": 312
+  },
+  "is_error": false
+}

@@ -1,0 +1,15 @@
+{
+  "type": "state",
+  "state": {
+    "battery_percent": 100,
+    "power_source": "unknown",
+    "charging": false,
+    "time_remaining_min": null,
+    "thermal_state": "fair",
+    "low_power_mode": true,
+    "lid_closed": null,
+    "time_zone": null,
+    "keep_awake": "off_helper_unavailable",
+    "observed_at": "2026-10-19T17:02:10Z"
+  }
+}

@@ -1,7 +1,8 @@
 # Data model (relay, SQLite)
 
 Everything the relay stores. Anything not listed here is not stored (Constitution VI).
-Secrets are stored as SHA-256 hashes unless noted. All timestamps are UTC.
+Secrets are stored as SHA-256 hashes unless noted. All timestamps are UTC, stored as Unix
+milliseconds. Device public keys are stored as PKIX DER.
 
 | Entity | Fields | Notes |
 |---|---|---|

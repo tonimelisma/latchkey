@@ -17,19 +17,21 @@ which pairs the real way from its first build. No keep-awake spike or hardware t
 
 ## M1: Relay hub and agent protocol, Go test agent
 
-- **T010** Go module `relay/` (`github.com/tonimelisma/latchkey/relay`), `cmd/relay/main.go`
+Package directories are created when they get code, not up front (T010).
+
+- **T010** ✅ Go module `relay/` (`github.com/tonimelisma/latchkey/relay`), `cmd/relay/main.go`
   reading the D10 environment config, and the package directories from the plan's layout. Add
   `go test ./...` and run commands to CLAUDE.md. *Serves D10.*
-- **T011** Contract fixtures: `contracts/fixtures/*.json` for every message in
+- **T011** ✅ Contract fixtures: `contracts/fixtures/*.json` for every message in
   `agent-protocol.md` (challenge, hello, welcome, state, tools, progress, result, goodbye, call,
   cancel, notice), plus invalid examples (unknown type, tool named `laptop_status`).
   *Serves Constitution VII.*
-- **T012** [P] **(test first)** `internal/agentproto` tests: every fixture round-trips; unknown
+- **T012** ✅ [P] **(test first)** `internal/agentproto` tests: every fixture round-trips; unknown
   fields are ignored; unknown types and colliding tool names are rejected; `deadline_ms` is capped
   at 60000; the signature input is built exactly as the contract says.
-- **T013** [P] **(test first)** `internal/store` tests for the M1 tables: `users`, `devices`,
+- **T013** ✅ [P] **(test first)** `internal/store` tests for the M1 tables: `users`, `devices`,
   `device_state`, `audit_log` (`data-model.md`).
-- **T014** Implement `internal/agentproto` and `internal/store` (SQLite via `modernc.org/sqlite`,
+- **T014** ✅ Implement `internal/agentproto` and `internal/store` (SQLite via `modernc.org/sqlite`,
   schema migrations). *Done when T012 and T013 pass.*
 - **T015** Go test agent `internal/testagent`: dials `/agent/v1`, signs the challenge with a P-256
   key, sends tools and state, answers calls through pluggable handlers (delay, error, never answer,

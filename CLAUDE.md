@@ -56,9 +56,12 @@ code or decision that changes them. Never let them drift.
 
 IMPORTANT: Toni makes every product and engineering choice. Claude proposes; Toni picks.
 
-- Never make a choice silently, even a small one: features, behavior, wording users see,
-  libraries, architecture, file layout, protocol or schema changes, milestone and task order, test
-  approach, temporary workarounds, defaults, naming.
+- Ask Toni about: features, behavior and wording users see, libraries and tools, architecture,
+  repository layout, protocol or schema shape, milestone and task order, test approach, temporary
+  workarounds, user-facing defaults. Never make one of these silently.
+- Don't ask about low-level implementation details (encodings, internal function names, private
+  helpers, file names inside a package). Decide them yourself: weigh two or three options, pick
+  one, and record options, pros and cons, and the choice in `research.md` or the contract.
 - Ask with the AskUserQuestion tool: multiple choice, recommended option first with a one-line
   why. Batch related questions (up to 4 per call).
 - Anything not already settled in a spec, plan, or `docs/decisions.md` is undecided. Ask before
@@ -80,7 +83,13 @@ IMPORTANT: Toni makes every product and engineering choice. Claude proposes; Ton
 
 ## Commands
 
-None yet. Add build, test, and run commands for `relay/` and `macos/` as soon as they exist.
+Relay (run in `relay/`):
+- `make test`: all tests, with the race detector
+- `make lint`: golangci-lint (pinned in the Makefile) with gofumpt; must report 0 issues
+- `make fmt`: format
+- `make run`: run locally with development defaults (data in `relay/.data/`)
+
+Mac app: none yet. Add them when `macos/` exists.
 
 <!-- Maintainers: keep this file under ~100 lines. Status and decisions live in docs/, topic
 knowledge in .claude/rules/, multi-step procedures in docs/. Test each line: would removing it

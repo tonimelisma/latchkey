@@ -1,0 +1,298 @@
+// Package agentproto defines the messages of the Mac app ↔ relay agent protocol, v1
+// (specs/001-core/contracts/agent-protocol.md).
+package agentproto
+
+import (
+	"bytes"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"time"
+
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+)
+
+// Subprotocol is the WebSocket subprotocol the agent must request.
+const Subprotocol = "latchkey.v1"
+
+// MaxFrameBytes is the largest frame either side accepts; larger frames close with 1009.
+const MaxFrameBytes = 4 << 20
+
+// RelayToolLaptopStatus is answered by the relay itself; a Mac tool must not use the name.
+const RelayToolLaptopStatus = "laptop_status"
+
+// Close codes from the contract.
+const (
+	CloseNormal             = 1000
+	CloseMessageTooBig      = 1009
+	CloseAuthFailed         = 4001
+	CloseRevoked            = 4002
+	CloseReplaced           = 4003
+	CloseUnsupportedVersion = 4004
+	CloseProtocolViolation  = 4005
+	CloseHandshakeTimeout   = 4006
+)
+
+var (
+	// ErrProtocolViolation means the peer sent something the contract forbids (close 4005).
+	ErrProtocolViolation = errors.New("agent protocol violation")
+	// ErrBadSignature means the hello signature does not verify (close 4001).
+	ErrBadSignature = errors.New("bad agent signature")
+)
+
+// Type is a message's "type" field.
+type Type string
+
+// Message types.
+const (
+	TypeChallenge Type = "challenge"
+	TypeHello     Type = "hello"
+	TypeWelcome   Type = "welcome"
+	TypeState     Type = "state"
+	TypeTools     Type = "tools"
+	TypeProgress  Type = "progress"
+	TypeResult    Type = "result"
+	TypeGoodbye   Type = "goodbye"
+	TypeCall      Type = "call"
+	TypeCancel    Type = "cancel"
+	TypeNotice    Type = "notice"
+)
+
+// AllTypes lists every message type in the contract.
+var AllTypes = []Type{
+	TypeChallenge, TypeHello, TypeWelcome, TypeState, TypeTools, TypeProgress,
+	TypeResult, TypeGoodbye, TypeCall, TypeCancel, TypeNotice,
+}
+
+// Message is any protocol message.
+type Message interface {
+	MessageType() Type
+}
+
+// State is the Mac's reported condition, sent in hello, state, and goodbye.
+type State struct {
+	BatteryPercent   int       `json:"battery_percent"`
+	PowerSource      string    `json:"power_source"`
+	Charging         bool      `json:"charging"`
+	TimeRemainingMin *int      `json:"time_remaining_min"`
+	ThermalState     string    `json:"thermal_state"`
+	LowPowerMode     bool      `json:"low_power_mode"`
+	LidClosed        *bool     `json:"lid_closed"`
+	TimeZone         *string   `json:"time_zone"`
+	KeepAwake        string    `json:"keep_awake"`
+	ObservedAt       time.Time `json:"observed_at"`
+}
+
+// Values of State.PowerSource.
+const (
+	PowerBattery = "battery"
+	PowerAC      = "ac"
+	PowerUPS     = "ups"
+	PowerUnknown = "unknown"
+)
+
+// Values of State.KeepAwake.
+const (
+	KeepAwakeOn                = "on"
+	KeepAwakeOffUser           = "off_user"
+	KeepAwakeOffLowBattery     = "off_low_battery"
+	KeepAwakeOffTooHot         = "off_too_hot"
+	KeepAwakeOffHelperUnusable = "off_helper_unavailable"
+)
+
+// Values of Goodbye.Reason.
+const (
+	ReasonLowBattery       = "low_battery"
+	ReasonTooHot           = "too_hot"
+	ReasonUserQuit         = "user_quit"
+	ReasonSystemSleep      = "system_sleep"
+	ReasonSystemShutdown   = "system_shutdown"
+	ReasonUserDisconnected = "user_disconnected"
+)
+
+// Values of Cancel.Reason.
+const (
+	CancelDeadline        = "deadline"
+	CancelClientCancelled = "client_cancelled"
+)
+
+// Values of Notice.Kind.
+const NoticeAccountRecovered = "account_recovered"
+
+// Challenge is the relay's first message.
+type Challenge struct {
+	Nonce      string    `json:"nonce"`
+	ServerTime time.Time `json:"server_time"`
+}
+
+// Hello is the agent's answer to the challenge.
+type Hello struct {
+	DeviceID   string      `json:"device_id"`
+	Signature  string      `json:"signature"`
+	AppVersion string      `json:"app_version"`
+	OSVersion  string      `json:"os_version"`
+	Tools      []*mcp.Tool `json:"tools"`
+	State      State       `json:"state"`
+}
+
+// Welcome accepts the agent.
+type Welcome struct {
+	HeartbeatIntervalS int       `json:"heartbeat_interval_s"`
+	ServerTime         time.Time `json:"server_time"`
+}
+
+// StateUpdate is the heartbeat and change report.
+type StateUpdate struct {
+	State State `json:"state"`
+}
+
+// ToolsUpdate replaces the agent's tool list.
+type ToolsUpdate struct {
+	Tools []*mcp.Tool `json:"tools"`
+}
+
+// Progress reports progress on a long call.
+type Progress struct {
+	ID       string   `json:"id"`
+	Progress float64  `json:"progress"`
+	Total    *float64 `json:"total,omitempty"`
+	Message  string   `json:"message,omitempty"`
+}
+
+// Result finishes a call. Content is an MCP content array, passed through unchanged.
+type Result struct {
+	ID                string          `json:"id"`
+	Content           json.RawMessage `json:"content"`
+	StructuredContent json.RawMessage `json:"structured_content,omitempty"`
+	IsError           bool            `json:"is_error"`
+}
+
+// Goodbye precedes an intentional disconnect.
+type Goodbye struct {
+	Reason string `json:"reason"`
+	State  State  `json:"state"`
+}
+
+// Call asks the agent to run a tool.
+type Call struct {
+	ID         string          `json:"id"`
+	Tool       string          `json:"tool"`
+	Arguments  json.RawMessage `json:"arguments"`
+	DeadlineMS int64           `json:"deadline_ms"`
+}
+
+// Cancel withdraws a call.
+type Cancel struct {
+	ID     string `json:"id"`
+	Reason string `json:"reason"`
+}
+
+// Notice tells the Owner something on the Mac.
+type Notice struct {
+	Kind string    `json:"kind"`
+	At   time.Time `json:"at"`
+}
+
+func (*Challenge) MessageType() Type   { return TypeChallenge }
+func (*Hello) MessageType() Type       { return TypeHello }
+func (*Welcome) MessageType() Type     { return TypeWelcome }
+func (*StateUpdate) MessageType() Type { return TypeState }
+func (*ToolsUpdate) MessageType() Type { return TypeTools }
+func (*Progress) MessageType() Type    { return TypeProgress }
+func (*Result) MessageType() Type      { return TypeResult }
+func (*Goodbye) MessageType() Type     { return TypeGoodbye }
+func (*Call) MessageType() Type        { return TypeCall }
+func (*Cancel) MessageType() Type      { return TypeCancel }
+func (*Notice) MessageType() Type      { return TypeNotice }
+
+func newMessage(t Type) Message {
+	switch t {
+	case TypeChallenge:
+		return &Challenge{}
+	case TypeHello:
+		return &Hello{}
+	case TypeWelcome:
+		return &Welcome{}
+	case TypeState:
+		return &StateUpdate{}
+	case TypeTools:
+		return &ToolsUpdate{}
+	case TypeProgress:
+		return &Progress{}
+	case TypeResult:
+		return &Result{}
+	case TypeGoodbye:
+		return &Goodbye{}
+	case TypeCall:
+		return &Call{}
+	case TypeCancel:
+		return &Cancel{}
+	case TypeNotice:
+		return &Notice{}
+	}
+	return nil
+}
+
+// Decode parses one text frame. Unknown fields are ignored; an unknown or missing type, a
+// malformed body, or an invalid tool list is ErrProtocolViolation.
+func Decode(data []byte) (Message, error) {
+	var env struct {
+		Type Type `json:"type"`
+	}
+	if err := json.Unmarshal(data, &env); err != nil {
+		return nil, fmt.Errorf("%w: %w", ErrProtocolViolation, err)
+	}
+	msg := newMessage(env.Type)
+	if msg == nil {
+		return nil, fmt.Errorf("%w: unknown message type %q", ErrProtocolViolation, env.Type)
+	}
+	if err := json.Unmarshal(data, msg); err != nil {
+		return nil, fmt.Errorf("%w: %s: %w", ErrProtocolViolation, env.Type, err)
+	}
+	switch m := msg.(type) {
+	case *Hello:
+		return msg, ValidateTools(m.Tools)
+	case *ToolsUpdate:
+		return msg, ValidateTools(m.Tools)
+	}
+	return msg, nil
+}
+
+// Encode serializes a message with its "type" field first.
+func Encode(m Message) ([]byte, error) {
+	body, err := json.Marshal(m)
+	if err != nil {
+		return nil, err
+	}
+	typ, err := json.Marshal(m.MessageType())
+	if err != nil {
+		return nil, err
+	}
+	var buf bytes.Buffer
+	buf.WriteString(`{"type":`)
+	buf.Write(typ)
+	if len(body) > 2 { // body is a JSON object; splice its fields after "type"
+		buf.WriteByte(',')
+		buf.Write(body[1:])
+	} else {
+		buf.WriteByte('}')
+	}
+	return buf.Bytes(), nil
+}
+
+// ValidateTools rejects unnamed or duplicate tools and tools named like a relay tool.
+func ValidateTools(tools []*mcp.Tool) error {
+	seen := make(map[string]bool, len(tools))
+	for _, t := range tools {
+		switch {
+		case t == nil || t.Name == "":
+			return fmt.Errorf("%w: tool without a name", ErrProtocolViolation)
+		case t.Name == RelayToolLaptopStatus:
+			return fmt.Errorf("%w: tool name %q is reserved by the relay", ErrProtocolViolation, t.Name)
+		case seen[t.Name]:
+			return fmt.Errorf("%w: duplicate tool %q", ErrProtocolViolation, t.Name)
+		}
+		seen[t.Name] = true
+	}
+	return nil
+}

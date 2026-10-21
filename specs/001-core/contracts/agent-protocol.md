@@ -33,6 +33,11 @@ Limits: max frame 4 MiB. The relay closes connections that exceed it (code 1009)
 }
 ```
 
+Signature: ECDSA P-256 with SHA-256 over the UTF-8 bytes of
+`"latchkey-agent-v1\n" + nonce + "\n" + device_id`, where `nonce` is the base64url string exactly
+as received. Encoded as ASN.1 DER, then base64url without padding (RFC 4648 §5). All base64url
+values in this protocol are unpadded.
+
 3. relay → agent
 ```json
 {"type": "welcome", "heartbeat_interval_s": 15, "server_time": "..."}
@@ -52,7 +57,7 @@ Sent in `hello`, in every `state` message, and in `goodbye`.
   "thermal_state": "nominal",         // "nominal" | "fair" | "serious" | "critical"
   "low_power_mode": false,
   "lid_closed": true,                 // null if unknown
-  "time_zone": "America/Los_Angeles", // IANA name
+  "time_zone": "America/Los_Angeles", // IANA name; null if unknown
   "keep_awake": "on",                 // "on" | "off_user" | "off_low_battery" | "off_too_hot" | "off_helper_unavailable"
   "observed_at": "2026-10-19T17:02:10Z"
 }

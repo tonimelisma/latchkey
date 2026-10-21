@@ -8,20 +8,21 @@ Xcode signing ready (2026-10-20): Toni's Xcode account has a valid "Apple Develo
 
 ## Current phase
 
-Spec 001 (core) is written and reviewed; `specs/001-core/tasks.md` is written. No code yet.
+Spec 001 (core) is written and reviewed. M1 started: relay module, protocol fixtures, `agentproto`,
+and `store` are in, with tests and lint passing.
 
 ## Next steps
 
-1. M1, tasks T010 to T014: Go module skeleton, agent protocol fixtures, `agentproto` and `store`
-   (tests first).
-2. M1, tasks T015 to T022: Go test agent, hub, MCP surface, audit log.
+1. M1, tasks T015 to T017: Go test agent, agent protocol contract tests, hub. Ask Toni first:
+   the relay's listen address and port settings for self-hosters (D10 lists no variable for it).
+2. M1, tasks T018 to T022: offline messages, MCP surface, audit log.
 3. M2: OAuth, passkeys, pairing on the relay.
 
 ## Milestones (from `specs/001-core/plan.md`)
 
 | # | Milestone | State |
 |---|---|---|
-| M1 | Relay hub + agent protocol, Go test agent | Not started |
+| M1 | Relay hub + agent protocol, Go test agent | In progress: T010 to T014 done |
 | M2 | OAuth, passkeys, pairing (relay side) | Not started |
 | M3 | Mac app: pairs, connects, keeps awake, answers `battery_status` | Not started |
 | M4 | End to end from Claude on phone, web, Desktop | Not started |

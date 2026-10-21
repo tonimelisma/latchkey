@@ -1,0 +1,17 @@
+{
+  "type": "state",
+  "future_field": 1,
+  "state": {
+    "battery_percent": 82,
+    "power_source": "ac",
+    "charging": true,
+    "time_remaining_min": null,
+    "thermal_state": "nominal",
+    "low_power_mode": false,
+    "lid_closed": false,
+    "time_zone": "Europe/Helsinki",
+    "keep_awake": "on",
+    "observed_at": "2026-10-19T17:02:10Z",
+    "fan_rpm": 1200
+  }
+}

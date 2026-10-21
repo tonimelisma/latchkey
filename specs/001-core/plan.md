@@ -157,7 +157,10 @@ Serves FR-070, FR-071, FR-072; Constitution IV.
 Serves FR-080, Constitution V, VIII.
 - Go, standard library `net/http`.
 - WebSocket: `github.com/coder/websocket`.
-- SQLite: `modernc.org/sqlite` (pure Go, so the binary stays static with no cgo).
+- SQLite: `modernc.org/sqlite` (pure Go, so the binary stays static with no cgo). Schema
+  migrations with `github.com/pressly/goose/v3` (MIT), SQL files embedded in the binary.
+- Tests: standard `testing` with `github.com/stretchr/testify` (MIT). Lint and format:
+  golangci-lint with gofumpt, run through `relay/Makefile`.
 - TLS: optional built-in ACME (`golang.org/x/crypto/acme/autocert`) so a self-hoster needs no
   reverse proxy; or plain HTTP behind one.
 - Container: distroless image, one volume at `/data`.

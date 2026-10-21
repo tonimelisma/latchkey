@@ -1,0 +1,54 @@
+{
+  "type": "tools",
+  "tools": [
+    {
+      "name": "battery_status",
+      "title": "Battery status",
+      "description": "Live battery level and power state of the user's Mac.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "battery_percent": {
+            "type": "integer"
+          },
+          "charging": {
+            "type": "boolean"
+          },
+          "power_source": {
+            "type": "string",
+            "enum": [
+              "battery",
+              "ac",
+              "ups",
+              "unknown"
+            ]
+          },
+          "time_remaining_min": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "battery_percent",
+          "charging",
+          "power_source"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "idempotentHint": false,
+        "openWorldHint": false
+      },
+      "_meta": {
+        "latchkey/deadline_ms": 5000
+      }
+    }
+  ]
+}

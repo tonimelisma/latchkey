@@ -88,3 +88,15 @@ Evidence behind `plan.md`, gathered 2026-10-18 to 2026-10-19. Re-check anything 
 - Apple app servers for later specs: apple-mcps, mac_messages_mcp, imessage-mcp, macnotes-mcp.
 - Computer use for later specs: Peekaboo, trycua/cua, mcp-server-macos-use.
   https://pinggy.io/amp/blog/best_computer_use_mcp_servers/
+
+## Agent signature encoding (decided 2026-10-20)
+
+Options for `hello.signature`:
+- **ASN.1 DER** (chosen): the standard ECDSA encoding. One call on each side (Go
+  `ecdsa.VerifyASN1`, CryptoKit `.derRepresentation`). Variable length (70 to 72 bytes), which
+  doesn't matter here.
+- Raw r||s (64 bytes, JWS ES256 style): fixed length, but Go needs hand-written splitting into two
+  big integers, and a wrong-length input is one more case to handle.
+- A JWS/JWT token: self-describing, but adds a library and a format for a single signature.
+
+Base64url without padding, matching common practice (JWS) and avoiding `=` handling.

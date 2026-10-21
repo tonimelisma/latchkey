@@ -1,0 +1,16 @@
+{
+  "type": "goodbye",
+  "reason": "low_battery",
+  "state": {
+    "battery_percent": 14,
+    "power_source": "battery",
+    "charging": false,
+    "time_remaining_min": 40,
+    "thermal_state": "nominal",
+    "low_power_mode": false,
+    "lid_closed": true,
+    "time_zone": "America/Los_Angeles",
+    "keep_awake": "off_low_battery",
+    "observed_at": "2026-10-19T21:02:11Z"
+  }
+}

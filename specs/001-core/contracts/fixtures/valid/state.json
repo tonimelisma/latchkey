@@ -1,0 +1,15 @@
+{
+  "type": "state",
+  "state": {
+    "battery_percent": 82,
+    "power_source": "battery",
+    "charging": false,
+    "time_remaining_min": 312,
+    "thermal_state": "nominal",
+    "low_power_mode": false,
+    "lid_closed": true,
+    "time_zone": "America/Los_Angeles",
+    "keep_awake": "on",
+    "observed_at": "2026-10-19T17:02:10Z"
+  }
+}

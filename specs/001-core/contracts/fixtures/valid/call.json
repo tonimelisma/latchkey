@@ -1,0 +1,7 @@
+{
+  "type": "call",
+  "id": "c_17",
+  "tool": "battery_status",
+  "arguments": {},
+  "deadline_ms": 5000
+}
