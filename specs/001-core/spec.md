@@ -205,6 +205,12 @@ Format: EARS ("When <trigger>, the <system> shall <response>"). IDs are stable; 
 - **FR-071** The app shall offer to start at login.
 - **FR-076** On first launch, the app shall be set to start at login; the Owner can turn this off
   in the menu.
+- **FR-077** When the Owner moves the app to the Trash while it runs, the app shall disconnect the
+  Mac from the account, restore normal sleep, remove its login and background items and all its
+  local data, and quit.
+- **FR-078** On first launch, the app shall offer to move itself into the Applications folder,
+  and shall show a setup window listing the remaining steps (approve keep-awake, connect to an
+  account) until they are done.
 - **FR-072** The app shall update itself through signed updates.
 - **FR-073** All privileged operations shall go through Apple-supported mechanisms with standard
   system approval prompts.

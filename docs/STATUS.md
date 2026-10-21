@@ -21,14 +21,12 @@ Spec 001 is built. Everything that doesn't need Toni is done and verified on thi
 Notes:
 - The OAuth server code was written before its contract tests (Constitution VII asks for tests
   first). The tests were then written against the contract and run.
-- Not yet run on hardware: the helper (lid-closed keep-awake), because it needs Toni's one-time
-  approval. Constitution check unchanged.
+- No keep-awake test runs (Toni, 2026-10-20). The helper runs once Toni approves it during setup.
 
 ## Next steps (each needs Toni; everything around them is ready)
 
-1. **Approve the helper on this Mac.** Run `make -C macos install` (or let Claude run it), then
-   turn on Latchkey in System Settings → General → Login Items. Then Claude runs
-   `macos/scripts/helper-check.sh` (keep-awake on, restored after quit and after a crash).
+1. **Install the app:** open `macos/build/Latchkey-0.1.0.dmg`, drag Latchkey to Applications,
+   open it, and follow the setup window (approve keep-awake in System Settings, connect).
 2. **Pick the domain and the public test host** for the hosted relay (open question). Then Claude
    deploys the container (T070) and runs the quickstart steps it can.
 3. **Try it from your Claude account and devices** (T072 to T074): add the connector on claude.ai,
@@ -36,7 +34,6 @@ Notes:
    hosted tool-call timeout (T073) from the relay's logs during this.
 4. **Developer ID, update key, public repository** for signed releases and updates (T082, T083):
    setup steps are at the top of `macos/scripts/release.sh`; then one command publishes.
-5. **Uninstall check** (T084) once the app is installed and approved.
 
 ## Milestones (from `specs/001-core/plan.md`)
 

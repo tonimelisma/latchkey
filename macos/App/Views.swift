@@ -9,7 +9,7 @@ struct MenuContent: View {
         Text(model.batteryLine)
         Text(model.keepAwakeLine)
         if model.keepAwake == .offHelperUnavailable {
-            Button("Approve Keep-Awake in System Settings…") { model.approveHelper() }
+            Button("Finish Setting Up…") { model.showSetup() }
         }
         if let error = model.lastError { Text(error) }
         Divider()
@@ -28,10 +28,7 @@ struct MenuContent: View {
             if let relay = model.relayURL { Text("Relay: \(relay.host() ?? relay.absoluteString)") }
             Button("Disconnect This Mac") { Task { await model.disconnect() } }
         } else {
-            Button("Connect to a Relay…") {
-                openWindow(id: "connect")
-                NSApp.activate()
-            }
+            Button("Connect to a Relay…") { model.showSetup() }
         }
         Button("Activity…") {
             openWindow(id: "activity")
@@ -47,38 +44,75 @@ struct MenuContent: View {
     }
 }
 
-struct ConnectView: View {
+/// The setup window shown at first launch and whenever a step is missing (FR-078).
+struct SetupView: View {
     @Bindable var model: AppModel
+    var close: () -> Void
     @State private var relay = ""
     @State private var working = false
-    @Environment(\.dismissWindow) private var dismiss
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Connect this Mac to your account").font(.title2.bold())
-            Text(
-                "Enter the address of your Latchkey relay. Your browser opens so you can sign in with your passkey and confirm."
-            )
-            .foregroundStyle(.secondary)
-            .fixedSize(horizontal: false, vertical: true)
-            TextField("Relay address", text: $relay, prompt: Text("https://relay.example.com"))
-                .textFieldStyle(.roundedBorder)
-                .onSubmit(connect)
-            if let error = model.lastError {
-                Text(error).foregroundStyle(.red).fixedSize(horizontal: false, vertical: true)
+        VStack(alignment: .leading, spacing: 20) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Set Up Latchkey").font(.title.bold())
+                Text("Two steps, then Claude can reach this Mac from anywhere.").foregroundStyle(.secondary)
+            }
+            step(1, "Let Latchkey keep this Mac awake", done: model.helperStatus == .enabled) {
+                Text(
+                    "So Claude can reach your Mac with the lid closed. In System Settings, turn on Latchkey under Allow in the Background."
+                )
+                .foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                Button("Open System Settings") { model.approveHelper() }
+            }
+            step(2, "Connect to your account", done: model.isPaired) {
+                Text(
+                    "Enter your relay's address. Your browser opens so you can sign in or create an account with a passkey."
+                )
+                .foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                HStack {
+                    TextField("Relay address", text: $relay, prompt: Text("https://relay.example.com"))
+                        .textFieldStyle(.roundedBorder)
+                        .onSubmit(connect)
+                    Button("Connect", action: connect)
+                        .disabled(relay.trimmingCharacters(in: .whitespaces).isEmpty || working)
+                }
+                if let error = model.lastError {
+                    Text(error).foregroundStyle(.red).fixedSize(horizontal: false, vertical: true)
+                }
             }
             HStack {
+                Text("Latchkey lives in the menu bar. To uninstall, move it to the Trash.")
+                    .font(.footnote).foregroundStyle(.secondary)
                 Spacer()
-                Button("Cancel") { dismiss(id: "connect") }
-                    .keyboardShortcut(.cancelAction)
-                Button("Connect", action: connect)
+                Button(model.needsSetup ? "Later" : "Done", action: close)
                     .keyboardShortcut(.defaultAction)
-                    .disabled(relay.trimmingCharacters(in: .whitespaces).isEmpty || working)
             }
         }
-        .padding(20)
-        .frame(width: 420)
+        .padding(24)
+        .frame(width: 480)
         .onAppear { relay = model.relayURL?.absoluteString ?? relay }
+        .task {
+            while !Task.isCancelled {  // notice the approval in System Settings
+                await model.checkHelperApproval()
+                try? await Task.sleep(for: .seconds(1))
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func step<Content: View>(_ n: Int, _ title: String, done: Bool, @ViewBuilder content: () -> Content)
+        -> some View
+    {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: done ? "checkmark.circle.fill" : "\(n).circle")
+                .font(.title2)
+                .foregroundStyle(done ? .green : .secondary)
+                .accessibilityLabel(done ? "Done" : "Step \(n)")
+            VStack(alignment: .leading, spacing: 8) {
+                Text(title).font(.headline)
+                if !done { content() }
+            }
+        }
     }
 
     private func connect() {
@@ -86,8 +120,27 @@ struct ConnectView: View {
         Task {
             await model.pair(relayText: relay)
             working = false
-            if model.isPaired { dismiss(id: "connect") }
         }
+    }
+}
+
+/// Hosts SetupView in an ordinary window (the app has no Dock icon).
+@MainActor
+final class SetupWindow {
+    private var window: NSWindow?
+
+    func show(model: AppModel) {
+        if window == nil {
+            let w = NSWindow(
+                contentRect: .zero, styleMask: [.titled, .closable], backing: .buffered, defer: false)
+            w.title = "Latchkey"
+            w.isReleasedWhenClosed = false
+            w.contentViewController = NSHostingController(rootView: SetupView(model: model) { [weak w] in w?.close() })
+            w.center()
+            window = w
+        }
+        window?.makeKeyAndOrderFront(nil)
+        NSApp.activate()
     }
 }
 

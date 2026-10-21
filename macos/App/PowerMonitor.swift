@@ -63,6 +63,16 @@ enum PowerReader {
         }
     }
 
+    /// The kernel's SleepDisabled flag on IOPMrootDomain (what `pmset disablesleep` sets), read
+    /// with a public, unprivileged IORegistry call. nil if unreadable.
+    static func sleepDisabled() -> Bool? {
+        let root = IOServiceGetMatchingService(kIOMainPortDefault, IOServiceMatching("IOPMrootDomain"))
+        guard root != 0 else { return nil }
+        defer { IOObjectRelease(root) }
+        let value = IORegistryEntryCreateCFProperty(root, "SleepDisabled" as CFString, kCFAllocatorDefault, 0)
+        return value?.takeRetainedValue() as? Bool
+    }
+
     /// AppleClamshellState on IOPMrootDomain: true when the lid is closed; nil on Macs without one.
     static func lidClosed() -> Bool? {
         let root = IOServiceGetMatchingService(kIOMainPortDefault, IOServiceMatching("IOPMrootDomain"))

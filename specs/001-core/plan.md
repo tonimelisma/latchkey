@@ -179,9 +179,21 @@ Serves FR-070, FR-071, FR-072; Constitution IV.
   in gitignored `macos/Local.xcconfig`).
 - Bundle identifiers: app `net.melisma.latchkey`, helper `net.melisma.latchkey.helper` (also its
   Mach service name). Swift 6 language mode with strict concurrency.
-- The helper's launchd plist sets `RunAtLoad`, so after a reboot it starts, waits 60 s for the
-  app, and restores sleep if the app does not connect (covers a crash or power loss while
-  keep-awake was on).
+- The helper's launchd plist sets `RunAtLoad`. Every helper start (at boot or on demand) first
+  restores normal sleep; the app turns keep-awake back on when it connects, and re-applies when
+  its XPC connection is interrupted. `SleepDisabled` is kernel runtime state (research.md), so a
+  setting from a crash or power loss cannot outlive a restart, even if the app was deleted.
+- Verification reads `SleepDisabled` from `IOPMrootDomain` (public, unprivileged IORegistry read).
+- Install: a disk image with the app and an Applications link (`macos/scripts/package.sh`). On
+  first launch outside an Applications folder the app offers to move itself there (FR-078), then
+  registers the login item and the helper and opens a setup window for the two steps only the
+  Owner can do.
+- Uninstall: deleting the app removes the helper's launchd plist and the login item with it,
+  because `SMAppService` keeps both inside the bundle. A running app also watches its bundle; when
+  it lands in the Trash it disconnects (goodbye `user_disconnected`), restores sleep, unregisters
+  both items, deletes the Keychain key, settings, activity log, caches, and saved state, and quits
+  (FR-077). If the app was quit before being deleted, its small settings file and activity log
+  remain, as with most Mac apps; sleep and background items are clean either way.
 - Minimum macOS: current and previous major release, Apple silicon only (FR-075). If a required
   API needs a newer release, the floor moves up and this line says why.
 

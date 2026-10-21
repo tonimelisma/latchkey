@@ -12,10 +12,6 @@ struct LatchkeyApp: App {
             Image(systemName: delegate.model.menuIcon)
                 .accessibilityLabel("Latchkey: \(delegate.model.statusLine)")
         }
-        Window("Connect to a Relay", id: "connect") {
-            ConnectView(model: delegate.model)
-        }
-        .windowResizability(.contentSize)
         Window("Latchkey Activity", id: "activity") {
             ActivityView(model: delegate.model)
         }

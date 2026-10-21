@@ -55,3 +55,7 @@ Add a row when a decision is made; never delete one, mark it "superseded by" ins
 | 2026-10-20 | Web sign-in lasts 30 days; account deletion asks for the passkey again | FR-048 |
 | 2026-10-20 | Claude client approval remembered per client after the first time | FR-049 |
 | 2026-10-20 | System info on and start at login on by default | FR-064, FR-076 |
+| 2026-10-20 | No keep-awake test runs of any kind | plan D7, STATUS |
+| 2026-10-20 | Installable disk image; first launch moves to Applications and opens setup | FR-078, plan D9 |
+| 2026-10-20 | Moving the app to the Trash uninstalls cleanly: disconnects, restores sleep, removes items and data | FR-077, plan D9 |
+| 2026-10-20 | Lid-open: public power assertion (as Claude does); lid-closed: Apple's pmset via the helper | research.md, plan D7 |

@@ -218,10 +218,10 @@ Claude account and to try it on his phone and Desktop; that is listed in one sho
 - **T083** ✅ in code, off until set up: Sparkle 2.10.0 in the app (updater runs only with a public key),
   `macos/scripts/release.sh` builds, notarizes, signs, and publishes. Needs Toni: Developer ID,
   update key, public repository. *Serves FR-072.*
-- **T084** (script ready: `macos/scripts/helper-check.sh` covers quit and crash; deleting the
-  app needs the installed, approved app first) Uninstall check: deleting the app leaves sleep at the default and no background item
-  (SC-09).
-
+- **T084** ✅ Installable app and clean uninstall (Toni, 2026-10-20; no keep-awake test runs):
+  disk image (`make -C macos dmg`), move-to-Applications on first launch, setup window, uninstall
+  on move to Trash. Tests cover the move rule, Trash detection with a real move, and data
+  removal. *Serves FR-077, FR-078, SC-09.*
 ---
 
 ## Requirement coverage

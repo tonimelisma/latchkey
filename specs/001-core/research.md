@@ -120,3 +120,23 @@ Options for `hello.signature`:
 - A JWS/JWT token: self-describing, but adds a library and a format for a single signature.
 
 Base64url without padding, matching common practice (JWS) and avoiding `=` handling.
+
+## How others keep a Mac awake, and the right way for the lid-closed case (2026-10-20)
+
+- Claude Desktop's "Keep awake" and Claude Code run `caffeinate` (a power assertion). Desktop
+  first used `caffeinate -d`, which also blocked display sleep; users asked for `-i`.
+  https://claudeissues.com/issue/36872-claude-desktop-keep-awake-should-not-prevent-display-sleep,
+  https://forum.cursor.com/t/option-to-enable-caffeinate-spawning-or-similar-for-other-oses/165844
+- Apple's SDK header (IOPMLib.h, `kIOPMAssertPreventUserIdleSystemSleep`): "The system may still
+  sleep for lid close, Apple menu, low battery, or other sleep reasons." So assertions cover the
+  lid-open case only. `kIOPMAssertionTypePreventSystemSleep` is deprecated and unsupported.
+- Lid closed: no public API. `/usr/bin/pmset disablesleep` imports `IOPMSetSystemPowerSetting`
+  (exported by IOKit, not in the public headers) and sets `SleepDisabled`, which `ioreg` shows as a
+  property of `IOPMrootDomain`. It is not in `/Library/Preferences/com.apple.PowerManagement.plist`
+  on this Mac, so it is kernel runtime state and does not survive a restart (inference; not
+  tested). Amphetamine needs a separate privileged script ("Power Protect") for the same case.
+  https://mac.softpedia.com/progChangelog/Amphetamine-Changelog-140109.html
+- Choice: lid open, the public assertion that lets the display sleep (as Claude does); lid
+  closed, the helper runs Apple's `pmset` rather than calling the undeclared function
+  (Constitution IV). The app verifies by reading `SleepDisabled` from `IOPMrootDomain`, a public,
+  unprivileged IORegistry read, instead of parsing `pmset` output.

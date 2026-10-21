@@ -110,6 +110,7 @@ Mac app (run in `macos/`; `project.yml` is the source, the `.xcodeproj` is gener
 - `make test`: unit and contract tests (Swift Testing); exit code is the result
 - `make lint` / `make fmt`: swift-format
 - `make build` / `make run`: build, or build and open the app
+- `make dmg`: the installable disk image, `build/Latchkey-<version>.dmg`
 - Signing: copy `Config/Local.xcconfig.example` to `Config/Local.xcconfig` and set your team ID
 
 <!-- Maintainers: keep this file under ~100 lines. Status and decisions live in docs/, topic

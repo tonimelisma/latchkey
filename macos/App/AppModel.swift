@@ -32,6 +32,9 @@ final class AppModel {
     private var observers: [NSObjectProtocol] = []
     private let defaults = UserDefaults.standard
     private let pairing = PairingFlow()
+    private var trashWatcher: TrashWatcher?
+    private var uninstalling = false
+    private let setupWindow = SetupWindow()
 
     private enum Keys {
         static let keepAwake = "keepAwakeEnabled"
@@ -58,7 +61,16 @@ final class AppModel {
             setStartsAtLogin(true)  // FR-076
         }
         keepAwakeController.helper.registerIfNeeded()
+        keepAwakeController.helper.onInterrupted = { [weak self] in
+            Task {
+                try? await Task.sleep(for: .seconds(1))  // the helper restarts with normal sleep
+                await self?.refresh()
+            }
+        }
         helperStatus = keepAwakeController.helper.status
+        trashWatcher = TrashWatcher(bundle: Bundle.main.bundleURL) { [weak self] in
+            Task { await self?.uninstall() }
+        }
         powerMonitor = PowerMonitor { [weak self] in Task { await self?.refresh() } }
         watchSystem()
         purgeTrace()
@@ -67,10 +79,37 @@ final class AppModel {
             connect(identity)
         }
         Task { await refresh() }
+        if needsSetup { showSetup() }
+    }
+
+    /// The setup window: approve keep-awake, connect to a relay (FR-078).
+    func showSetup() { setupWindow.show(model: self) }
+
+    var needsSetup: Bool { !isPaired || helperStatus != .enabled }
+
+    /// Re-reads whether the Owner approved the helper; applies keep-awake as soon as they do.
+    func checkHelperApproval() async {
+        let before = helperStatus
+        helperStatus = keepAwakeController.helper.status
+        if before != helperStatus { await refresh() }
+    }
+
+    /// Moved to the Trash: disconnect from the account, restore sleep, remove the login and
+    /// background items and every local file, then quit (FR-077, SC-09).
+    func uninstall() async {
+        guard !uninstalling else { return }
+        uninstalling = true
+        await connection?.stop(goodbye: .userDisconnected)
+        connection = nil
+        await keepAwakeController.restore()
+        await BackgroundItems.unregisterAll()
+        LocalData().remove()
+        NSApp.terminate(nil)
     }
 
     /// Quit: tell the relay, restore sleep (FR-035).
     func shutdown() async {
+        if uninstalling { return }
         await connection?.stop(goodbye: .userQuit)
         await keepAwakeController.restore()
     }

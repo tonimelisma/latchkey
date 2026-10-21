@@ -7,6 +7,8 @@ import ServiceManagement
 final class HelperClient {
     private let service = SMAppService.daemon(plistName: HelperIdentity.plistName)
     private var connection: NSXPCConnection?
+    /// Called when the helper went away (it restarts with normal sleep), so keep-awake is re-applied.
+    var onInterrupted: (@MainActor () -> Void)?
 
     var status: SMAppService.Status { service.status }
 
@@ -27,7 +29,12 @@ final class HelperClient {
                 c.setCodeSigningRequirement(req)
             }
             c.invalidationHandler = { [weak self] in Task { @MainActor in self?.connection = nil } }
-            c.interruptionHandler = { [weak self] in Task { @MainActor in self?.connection = nil } }
+            c.interruptionHandler = { [weak self] in
+                Task { @MainActor in
+                    self?.connection = nil
+                    self?.onInterrupted?()
+                }
+            }
             c.resume()
             connection = c
         }
@@ -99,8 +106,9 @@ final class KeepAwakeController {
             verified = !on
             return verified
         }
-        let now = await helper.setSleepDisabled(on)
-        verified = now == on
+        _ = await helper.setSleepDisabled(on)
+        // Verify from the kernel itself rather than trusting the reply (FR-031).
+        verified = PowerReader.sleepDisabled() == on
         return verified
     }
 
