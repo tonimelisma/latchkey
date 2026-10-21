@@ -1,0 +1,57 @@
+{{template "head" .}}
+<h1>Your account</h1>
+<p class="small">Signed in as <strong>{{.Email}}</strong></p>
+{{with .Data.Done}}<p class="notice" role="status">{{.}}</p>{{end}}
+
+<section>
+  <h2>Mac</h2>
+  {{with .Data.Mac}}
+    <p><strong>{{.Name}}</strong> · {{if .Online}}<span class="online">Online</span>{{else}}<span class="offline">Offline</span>{{if not .LastSeen.IsZero}}, last seen {{when .LastSeen}}{{end}}{{end}}</p>
+    {{if .AppVersion}}<p class="small">Latchkey {{.AppVersion}} on macOS {{.OSVersion}}</p>{{end}}
+    <form method="post" action="/account/revoke-mac">
+      <input type="hidden" name="csrf" value="{{$.CSRF}}">
+      <button type="submit" class="destructive">Disconnect Mac</button>
+    </form>
+  {{else}}
+    <p>No Mac is connected. Open the Latchkey app on your Mac and click Connect.</p>
+  {{end}}
+</section>
+
+<section>
+  <h2>Claude</h2>
+  {{if .Data.Clients}}
+    <ul>{{range .Data.Clients}}<li><strong>{{.Name}}</strong> · approved {{when .Approved}}</li>{{end}}</ul>
+    <form method="post" action="/account/revoke-claude">
+      <input type="hidden" name="csrf" value="{{.CSRF}}">
+      <button type="submit" class="destructive">Remove Claude's access</button>
+    </form>
+  {{else}}
+    <p>Claude isn't connected yet. In Claude, open Settings → Connectors → Add custom connector, and paste this relay's address followed by <code>/mcp</code>.</p>
+  {{end}}
+</section>
+
+<section>
+  <h2>Activity</h2>
+  {{if .Data.Audit}}
+  <table>
+    <thead><tr><th scope="col">When</th><th scope="col">Tool</th><th scope="col">Result</th><th scope="col">Time taken</th><th scope="col">From</th></tr></thead>
+    <tbody>{{range .Data.Audit}}<tr><td>{{when .At}}</td><td><code>{{.Tool}}</code></td><td>{{.Outcome}}</td><td>{{ms .Duration}} ms</td><td>{{.Surface}}</td></tr>{{end}}</tbody>
+  </table>
+  <p class="small">The last 100 calls from the past 30 days. Arguments and results are never stored here; your Mac keeps the full log.</p>
+  {{else}}<p>No tool calls yet.</p>{{end}}
+</section>
+
+<section>
+  <h2>Account</h2>
+  <form method="post" action="/signout">
+    <input type="hidden" name="csrf" value="{{.CSRF}}">
+    <button type="submit">Sign out</button>
+  </form>
+  <form method="post" action="/account/delete" data-reauth>
+    <input type="hidden" name="csrf" value="{{.CSRF}}">
+    {{template "error" .}}
+    <button type="submit" class="destructive">Delete account…</button>
+    <p class="small">Deletes everything this relay stores about you and disconnects your Mac. You'll confirm with your passkey.</p>
+  </form>
+</section>
+{{template "foot" .}}

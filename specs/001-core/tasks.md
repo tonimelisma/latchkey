@@ -99,27 +99,27 @@ Package directories are created when they get code, not up front (T010).
 - **T034** ✅ Bearer protection on `/mcp` with go-sdk `auth.RequireBearerToken` and
   `auth.ProtectedResourceMetadataHandler`; token → user → device. `/mcp` never redirects.
   *Done when T031 passes.*
-- **T035** [P] **(test first)** Passkey and email tests with a software WebAuthn authenticator and
+- **T035** ✅ [P] **(test first)** Passkey and email tests with a software WebAuthn authenticator and
   a fake SMTP server: sign-up requires email verification; passkey sign-in; no password path
   exists; the recovery link is single-use, expires in 15 min, and is announced by email; a
   connected test agent receives `notice` `account_recovered`, and an offline one receives it on
   its next connection. *Serves D5, FR-041, FR-042, FR-043.*
-- **T036** Implement `internal/account`: go-webauthn (discoverable, user verification required),
+- **T036** ✅ Implement `internal/account`: go-webauthn (discoverable, user verification required),
   go-mail SMTP, server-rendered sign-up, sign-in, and recovery pages, and the recovery `notice`.
   *Done when T035 passes.*
-- **T037** Consent page at `/authorize` showing the client name and the redirect URI's host.
-- **T038** Account page: list and revoke the Mac (close 4002), revoke Claude's access (tokens),
+- **T037** ✅ Consent page at `/authorize` showing the client name and the redirect URI's host.
+- **T038** ✅ Account page: list and revoke the Mac (close 4002), revoke Claude's access (tokens),
   delete the account (hard delete of all rows), audit log view. Tests first. *Serves FR-044,
   FR-045, FR-052, US7.*
-- **T039** **(test first, then implement)** Pairing: `/pair` after passkey sign-in →
+- **T039** ✅ **(test first, then implement)** Pairing: `/pair` after passkey sign-in →
   `latchkey://paired?code=...`; single-use 5-minute code exchanged together with the device's
   P-256 public key, creating the device. Tested with the Go test agent end to end. *Serves D6,
   FR-050.*
-- **T040** **(test first)** Browser sign-in test with chromedp and a virtual passkey: sign up
+- **T040** ✅ **(test first)** Browser sign-in test with chromedp and a virtual passkey: sign up
   (email link read from the fake SMTP server), sign in, approve Claude on the consent page, and
   pair the Go test agent; then a go-sdk client completes OAuth and calls `battery_status`.
   Skipped with a clear message when Chrome is not installed. *Serves FR-040 to FR-043, FR-050.*
-- **T041** Claude Code check (run by Claude): a script under `relay/scripts/` starts the relay
+- **T041** ✅ Claude Code check (run by Claude): a script under `relay/scripts/` starts the relay
   with a fake SMTP server, uses the T040 browser automation to sign up, approve a loopback client,
   and pair the Go test agent, then runs Claude Code non-interactively (`claude -p`) with an MCP
   config carrying the resulting access token. It asks for the battery and checks the answer, then

@@ -223,6 +223,10 @@ func TestOAuthRequests(t *testing.T) {
 	scopes, err := s.Consent(ctx, u.ID, "cl_1")
 	require.NoError(t, err)
 	assert.Equal(t, "mcp offline_access", scopes)
+	consents, err := s.Consents(ctx, u.ID)
+	require.NoError(t, err)
+	require.Len(t, consents, 1)
+	assert.Equal(t, "cl_1", consents[0].ClientID)
 
 	// Revoking Claude's access deletes every token and remembered approval (FR-044).
 	require.NoError(t, s.DeleteUserOAuth(ctx, u.ID))

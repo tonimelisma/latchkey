@@ -443,3 +443,31 @@ func (s *Store) KeyOrCreate(ctx context.Context, name string, gen func() ([]byte
 	err = s.db.QueryRowContext(ctx, `SELECT value FROM relay_keys WHERE name = ?`, name).Scan(&v)
 	return v, err
 }
+
+// Consent is a remembered approval.
+type Consent struct {
+	ClientID  string
+	Scopes    string
+	CreatedAt time.Time
+}
+
+// Consents lists the user's remembered approvals, newest first.
+func (s *Store) Consents(ctx context.Context, userID string) ([]Consent, error) {
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT client_id, scopes, created_at FROM oauth_consents WHERE user_id = ? ORDER BY created_at DESC`, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	var out []Consent
+	for rows.Next() {
+		var c Consent
+		var at sql.NullInt64
+		if err := rows.Scan(&c.ClientID, &c.Scopes, &at); err != nil {
+			return nil, err
+		}
+		c.CreatedAt = fromMS(at)
+		out = append(out, c)
+	}
+	return out, rows.Err()
+}

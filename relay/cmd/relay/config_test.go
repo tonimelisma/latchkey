@@ -31,9 +31,10 @@ func TestLoadConfig(t *testing.T) {
 	assert.Equal(t, "a@example.com", c.ACMEEmail)
 	assert.Equal(t, 8080, c.Port, "default port")
 
-	c, err = loadConfig(env(map[string]string{"PORT": "9000"}))
+	c, err = loadConfig(env(map[string]string{"PORT": "9000", "ALLOWED_EMAILS": " toni@example.com, ,b@example.com"}))
 	require.NoError(t, err)
 	assert.Equal(t, 9000, c.Port)
+	assert.Equal(t, []string{"toni@example.com", "b@example.com"}, c.AllowedEmails)
 }
 
 func TestLoadConfigRejects(t *testing.T) {

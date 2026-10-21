@@ -8,22 +8,25 @@ Xcode signing ready (2026-10-20): Toni's Xcode account has a valid "Apple Develo
 
 ## Current phase
 
-Relay core (M1) done: the pretend Mac, the hub, offline messages, the MCP surface for both protocol
-versions, and the audit log, all with tests. Working through the rest of the plan in one go
-(Toni, 2026-10-20).
+Relay done through M2: hub, MCP surface (both protocol versions), OAuth (DCR, CIMD, PKCE, refresh
+rotation), passkeys, email links, recovery, account page, pairing. Verified by unit and contract
+tests, a headless-Chrome end-to-end test, and real Claude Code (`make claude-check`, passed
+2026-10-20). Working through the rest of the plan in one go (Toni, 2026-10-20).
+
+Note: the OAuth server code was written before its contract tests (Constitution VII asks for the
+tests first). The tests were then written against the contract, run, and two expectations fixed.
 
 ## Next steps
 
-1. M2: OAuth, passkeys, email, pairing, account pages, browser sign-in test, Claude Code check.
-2. M3: Mac app.
-3. M4 and M5: everything not blocked on Toni; list the blocked steps at the end.
+1. M3: Mac app.
+2. M4 and M5: everything not blocked on Toni; list the blocked steps at the end.
 
 ## Milestones (from `specs/001-core/plan.md`)
 
 | # | Milestone | State |
 |---|---|---|
 | M1 | Relay hub + agent protocol, Go test agent | Done |
-| M2 | OAuth, passkeys, pairing (relay side) | Not started |
+| M2 | OAuth, passkeys, pairing (relay side) | Done |
 | M3 | Mac app: pairs, connects, keeps awake, answers `battery_status` | Not started |
 | M4 | End to end from Claude on phone, web, Desktop | Not started |
 | M5 | Signing, notarization, Sparkle, Docker image | Not started |

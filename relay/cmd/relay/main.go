@@ -18,15 +18,13 @@ import (
 
 	"golang.org/x/crypto/acme/autocert"
 
-	"github.com/tonimelisma/latchkey/relay/internal/hub"
-	"github.com/tonimelisma/latchkey/relay/internal/mcpserver"
+	"github.com/tonimelisma/latchkey/relay/internal/account"
+	"github.com/tonimelisma/latchkey/relay/internal/server"
 	"github.com/tonimelisma/latchkey/relay/internal/store"
 )
 
 // version is set at build time with -ldflags "-X main.version=...".
 var version = "dev"
-
-const auditRetention = 30 * 24 * time.Hour // FR-024
 
 func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -52,21 +50,19 @@ func run(ctx context.Context) error {
 	}
 	defer func() { _ = db.Close() }()
 
-	var ms *mcpserver.Server
-	h := hub.New(db, hub.Config{
-		Logger:         logger,
-		OnToolsChanged: func(userID string) { ms.ToolsChanged(userID) },
+	r, err := server.New(ctx, server.Options{
+		PublicURL: cfg.PublicURL, Store: db, AllowedEmails: cfg.AllowedEmails, Logger: logger, Version: version,
+		Mailer: account.NewSMTPMailer(account.SMTPConfig{
+			Host: cfg.SMTPHost, Port: cfg.SMTPPort, User: cfg.SMTPUser, Password: cfg.SMTPPassword, From: cfg.SMTPFrom,
+		}),
 	})
-	ms = mcpserver.New(db, h, mcpserver.Options{Logger: logger, Version: version})
-
-	mux := http.NewServeMux()
-	mux.Handle("GET /agent/v1", h)
-	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte("ok\n")) })
-	// /mcp, OAuth, and account pages are added with sign-in (tasks T030 to T039).
+	if err != nil {
+		return err
+	}
 
 	srv := &http.Server{
 		Addr:              ":" + strconv.Itoa(cfg.Port), // all interfaces, IPv4 and IPv6 (plan D10)
-		Handler:           mux,
+		Handler:           r.Handler,
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 	if cfg.ACMEEmail != "" {
@@ -79,7 +75,7 @@ func run(ctx context.Context) error {
 		srv.TLSConfig = &tls.Config{GetCertificate: m.GetCertificate, NextProtos: []string{"h2", "http/1.1", "acme-tls/1"}, MinVersion: tls.VersionTLS12}
 	}
 
-	go purgeAudit(ctx, db, logger)
+	go server.Purge(ctx, db, logger)
 
 	errc := make(chan error, 1)
 	go func() {
@@ -98,28 +94,9 @@ func run(ctx context.Context) error {
 	logger.Info("shutting down")
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	h.Close()
+	r.Hub.Close()
 	if err := srv.Shutdown(shutdownCtx); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		return err
 	}
 	return nil
-}
-
-// purgeAudit deletes audit entries past retention at startup and then daily.
-func purgeAudit(ctx context.Context, db *store.Store, logger *slog.Logger) {
-	t := time.NewTicker(24 * time.Hour)
-	defer t.Stop()
-	for {
-		n, err := db.PurgeAudit(ctx, time.Now().Add(-auditRetention))
-		if err != nil {
-			logger.Error("purge audit log", "err", err)
-		} else if n > 0 {
-			logger.Info("purged audit log", "rows", n)
-		}
-		select {
-		case <-ctx.Done():
-			return
-		case <-t.C:
-		}
-	}
 }

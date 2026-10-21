@@ -320,3 +320,11 @@ func (c *challengeWriter) Unwrap() http.ResponseWriter { return c.ResponseWriter
 func (s *Server) RevokeUser(ctx context.Context, userID string) error {
 	return s.cfg.Store.DeleteUserOAuth(ctx, userID)
 }
+
+// ClientName is the display name of a client the Owner approved.
+func (s *Server) ClientName(ctx context.Context, clientID string) string {
+	if c, err := s.clients.get(ctx, clientID); err == nil {
+		return c.Name
+	}
+	return clientID
+}

@@ -1,0 +1,7 @@
+{{template "head" .}}
+<h1>Sign in</h1>
+<p>Use the passkey you created for Latchkey.</p>
+{{template "error" .}}
+<button class="primary" type="button" data-passkey="signin" data-next="{{.Next}}">Sign in with passkey</button>
+<p class="small">New here? <a href="/signup?next={{.Next}}">Create an account</a> · Lost your passkey? <a href="/recover">Recover your account</a></p>
+{{template "foot" .}}

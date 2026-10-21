@@ -6,6 +6,7 @@ import (
 	"net"
 	"net/url"
 	"strconv"
+	"strings"
 )
 
 // config is the relay's environment configuration (plan D10).
@@ -19,6 +20,8 @@ type config struct {
 	SMTPFrom     string
 	ACMEEmail    string
 	Port         int
+	// AllowedEmails limits sign-up (FR-046); empty means open.
+	AllowedEmails []string
 }
 
 func loadConfig(getenv func(string) string) (config, error) {
@@ -48,6 +51,11 @@ func loadConfig(getenv func(string) string) (config, error) {
 	if p := getenv("PORT"); p != "" {
 		if c.Port, err = strconv.Atoi(p); err != nil || c.Port <= 0 || c.Port > 65535 {
 			errs = append(errs, errors.New("PORT must be a port number"))
+		}
+	}
+	for e := range strings.SplitSeq(getenv("ALLOWED_EMAILS"), ",") {
+		if e = strings.TrimSpace(e); e != "" {
+			c.AllowedEmails = append(c.AllowedEmails, e)
 		}
 	}
 	if (c.SMTPUser == "") != (c.SMTPPassword == "") {

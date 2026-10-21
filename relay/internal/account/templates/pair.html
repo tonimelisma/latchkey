@@ -1,0 +1,12 @@
+{{template "head" .}}
+<h1>Connect “{{.Data.Name}}”?</h1>
+{{if .Data.Replaces}}<p class="warning">Your account can have one Mac. Connecting this one disconnects “{{.Data.Replaces}}”.</p>{{end}}
+<p>Claude will be able to reach this Mac through your account <strong>{{.Email}}</strong>, using only the tools you turn on in the Latchkey app.</p>
+<form method="post" action="/pair">
+  <input type="hidden" name="csrf" value="{{.CSRF}}">
+  <div class="actions">
+    <button class="primary" type="submit">{{if .Data.Replaces}}Replace and Connect{{else}}Connect{{end}}</button>
+    <a class="button" href="/account">Cancel</a>
+  </div>
+</form>
+{{template "foot" .}}

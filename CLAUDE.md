@@ -95,7 +95,10 @@ IMPORTANT: Toni makes every product and engineering choice. Claude proposes; Ton
 ## Commands
 
 Relay (run in `relay/`):
-- `make test`: all tests, with the race detector
+- `make test`: all tests, with the race detector (includes a headless-Chrome test; skipped if
+  Chrome is missing)
+- `make test-short`: the same without the browser test
+- `make claude-check`: real Claude Code against a private relay and the pretend Mac
 - `make lint`: golangci-lint (pinned in the Makefile) with gofumpt; must report 0 issues
 - `make fmt`: format
 - `make run`: run locally with development defaults (data in `relay/.data/`)

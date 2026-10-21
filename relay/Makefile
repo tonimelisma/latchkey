@@ -1,4 +1,4 @@
-.PHONY: build test lint fmt run tidy
+.PHONY: build test test-short lint fmt run tidy claude-check
 
 # Pinned and built with the installed Go, so every contributor lints the same way.
 GOLANGCI_LINT = go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.15.0
@@ -8,6 +8,14 @@ build:
 
 test:
 	go test -race ./...
+
+# Skips the headless-Chrome test.
+test-short:
+	go test -race -short ./...
+
+# Real Claude Code against a private relay and the pretend Mac (needs Chrome and Claude Code).
+claude-check:
+	./scripts/claude-code-check.sh
 
 lint:
 	$(GOLANGCI_LINT) run

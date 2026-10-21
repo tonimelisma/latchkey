@@ -223,6 +223,10 @@ latchkey/
     internal/oauth/           fosite wiring, CIMD, DCR, metadata
     internal/account/         passkeys, recovery, pairing, web pages
     internal/store/           SQLite schema and queries
+    internal/server/          assembles the parts into one http.Handler (used by cmd/relay and tests)
+    internal/testagent/       pretend Mac speaking the agent protocol (tests and local checks)
+    internal/e2e/             headless Chrome with a virtual passkey, OAuth and pairing helpers
+    cmd/localcheck/           the Claude Code check (scripts/claude-code-check.sh)
     Dockerfile
   macos/
     project.yml               XcodeGen definition (generates Latchkey.xcodeproj, not committed)

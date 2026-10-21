@@ -4,6 +4,33 @@ The Mac app ("agent") dials the relay. All messages are JSON objects in WebSocke
 Every message has a `type`. Field names are snake_case. Unknown fields are ignored; unknown types
 are an error (close 4005).
 
+## Pairing (before the first connection)
+
+The app pairs once, through the Owner's browser (plan D6):
+
+1. The app opens `ASWebAuthenticationSession` at `https://<relay>/pair?name=<URL-encoded Mac name>`
+   with callback scheme `latchkey`.
+2. The Owner signs in with a passkey if needed and clicks Connect (or Replace and Connect, when
+   another Mac is paired, FR-053).
+3. The relay redirects to `latchkey://paired?code=<code>`. The code is single-use and expires in
+   5 minutes.
+4. The app creates its Secure Enclave P-256 key and calls:
+
+```http
+POST /pair/exchange
+Content-Type: application/json
+
+{"code": "<code>", "public_key": "<PKIX DER, base64url unpadded>", "name": "Toni's MacBook Pro"}
+```
+
+```json
+{"device_id": "dev_8f3k..."}
+```
+
+Errors are `400` with `{"error": "<sentence for the Owner>"}` (expired or used code, key not
+P-256). On success, any previously paired Mac is revoked (closed with 4002). The app stores the
+relay URL and `device_id` in its settings and the key in the Secure Enclave, then connects.
+
 ## Connection
 
 ```
