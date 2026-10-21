@@ -103,7 +103,14 @@ Relay (run in `relay/`):
 - `make fmt`: format
 - `make run`: run locally with development defaults (data in `relay/.data/`)
 
-Mac app: none yet. Add them when `macos/` exists.
+- `make mac-check`: the Mac app's real connection code against a private relay (battery vs
+  pmset, tool off, silent network cut, reconnect)
+
+Mac app (run in `macos/`; `project.yml` is the source, the `.xcodeproj` is generated):
+- `make test`: unit and contract tests (Swift Testing); exit code is the result
+- `make lint` / `make fmt`: swift-format
+- `make build` / `make run`: build, or build and open the app
+- Signing: copy `Config/Local.xcconfig.example` to `Config/Local.xcconfig` and set your team ID
 
 <!-- Maintainers: keep this file under ~100 lines. Status and decisions live in docs/, topic
 knowledge in .claude/rules/, multi-step procedures in docs/. Test each line: would removing it

@@ -64,10 +64,10 @@ final class PairingFlow: NSObject, ASWebAuthenticationPresentationContextProvidi
     }
 
     /// Registers this Mac's new Secure Enclave key with the relay and saves the pairing.
-    static func exchange(relay: URL, code: String, macName: String, key: SecureEnclaveSigningKey? = nil) async throws
+    static func exchange(relay: URL, code: String, macName: String, save: Bool = true) async throws
         -> DeviceIdentity
     {
-        let key = try key ?? SecureEnclaveSigningKey.create()
+        let key = try SecureEnclaveSigningKey.create()
         var req = URLRequest(url: relay.appending(path: "pair/exchange"))
         req.httpMethod = "POST"
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -80,7 +80,7 @@ final class PairingFlow: NSObject, ASWebAuthenticationPresentationContextProvidi
         guard (resp as? HTTPURLResponse)?.statusCode == 200, let deviceID = body["device_id"] else {
             throw PairingError.relay(body["error"] ?? "The relay couldn't connect this Mac. Try again.")
         }
-        try DeviceIdentity.save(relayURL: relay, deviceID: deviceID, key: key)
+        if save { try DeviceIdentity.save(relayURL: relay, deviceID: deviceID, key: key) }
         return DeviceIdentity(relayURL: relay, deviceID: deviceID, key: key)
     }
 }

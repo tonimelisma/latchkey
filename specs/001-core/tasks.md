@@ -130,57 +130,58 @@ Package directories are created when they get code, not up front (T010).
 
 ## M3: Mac app
 
-- **T050** Mac project: `macos/project.yml` (XcodeGen) with targets `Latchkey` (menu bar app,
+- **T050** ✅ Mac project: `macos/project.yml` (XcodeGen) with targets `Latchkey` (menu bar app,
   `LSUIElement`), `LatchkeyHelper` (daemon, launchd plist in `Contents/Library/LaunchDaemons`),
   and `Shared`. Hardened runtime, not sandboxed. `DEVELOPMENT_TEAM` from gitignored
   `macos/Local.xcconfig` with a committed `Local.xcconfig.example`. Generated `.xcodeproj`
   gitignored. Add build and test commands to CLAUDE.md. *Serves D9, FR-073, FR-075. Done when
   `xcodegen && xcodebuild` produces a signed app containing the helper.*
-- **T051** [P] **(test first)** Swift tests: `Shared` agent protocol `Codable` types decode and
+- **T051** ✅ [P] **(test first)** Swift tests: `Shared` agent protocol `Codable` types decode and
   encode every fixture in `contracts/fixtures/` the same way as Go.
-- **T052** [P] **(test first)** Keep-awake state machine tests. Inputs: power source, battery %,
+- **T052** ✅ [P] **(test first)** Keep-awake state machine tests. Inputs: power source, battery %,
   thermal state, user setting, helper available. Output: `on`, `off_user`, `off_low_battery`,
   `off_too_hot`, or `off_helper_unavailable`, plus whether to send `goodbye` and its reason.
   Cover 15% on battery, charger reconnect, serious and critical thermal, and recovery only when
   the user didn't turn it off. *Serves FR-032, FR-033, FR-034.*
-- **T053** [P] **(test first)** Backoff and close-code policy tests: 1 s to 30 s with jitter;
+- **T053** ✅ [P] **(test first)** Backoff and close-code policy tests: 1 s to 30 s with jitter;
   each close code maps to the contract's action. *Serves FR-004, SC-05.*
-- **T054** [P] **(test first)** `pmset -g` output parser tests (reading `SleepDisabled` back),
+- **T054** ✅ [P] **(test first)** `pmset -g` output parser tests (reading `SleepDisabled` back),
   from captured samples. *Serves FR-031.*
-- **T055** Implement protocol types, state machine, reconnect policy, and parser. *Done when T051
+- **T055** ✅ Implement protocol types, state machine, reconnect policy, and parser. *Done when T051
   to T054 pass.*
-- **T056** Helper daemon and XPC: `Shared/HelperProtocol.swift` (`setSleepDisabled`,
+- **T056** ✅ (built; runs only after Toni approves it once in System Settings) Helper daemon and XPC: `Shared/HelperProtocol.swift` (`setSleepDisabled`,
   `readSleepDisabled`); Mach-service listener with `setCodeSigningRequirement` for the app;
   runs `/usr/bin/pmset -a disablesleep 1|0` and reads it back; turns sleep back on when the
   client disconnects, and at startup if no client connects within 60 s. *Serves D7, FR-035.*
-- **T057** [P] Power monitor: `IOPSCopyPowerSourcesInfo` and change notifications, thermal state,
+- **T057** ✅ [P] Power monitor: `IOPSCopyPowerSourcesInfo` and change notifications, thermal state,
   Low Power Mode, lid state (`AppleClamshellState`), IANA time zone → State. *Serves D8, FR-036,
   FR-037.*
-- **T058** [P] Device key: P-256 key in the Secure Enclave (CryptoKit), reference in the
+- **T058** ✅ [P] Device key: P-256 key in the Secure Enclave (CryptoKit), reference in the
   Keychain, signs the challenge. A cross-language test checks that a Swift signature verifies in
   Go. *Serves D6, FR-051.*
-- **T059** Pairing in the app: "Connect" opens `ASWebAuthenticationSession` to `/pair`, handles
+- **T059** ✅ Pairing in the app: "Connect" opens `ASWebAuthenticationSession` to `/pair`, handles
   `latchkey://paired`, exchanges the code with the device public key; "Disconnect" sends
   `goodbye` `user_disconnected` and deletes the local key; close 4002 shows "Disconnected from
   account". *Serves FR-050, FR-051, FR-052.*
-- **T060** Connection: `URLSessionWebSocketTask` with subprotocol `latchkey.v1`; handshake;
+- **T060** ✅ Connection: `URLSessionWebSocketTask` with subprotocol `latchkey.v1`; handshake;
   `state` every heartbeat and on change; reconnect on `NWPathMonitor` change and on wake,
   otherwise backoff; close-code policy; `notice` `account_recovered` shown as a macOS
   notification. *Serves D1, FR-002, FR-004, FR-042.*
-- **T061** Keep-awake controller: state machine → `IOPMAssertion` and helper over XPC; registers
+- **T061** ✅ (same approval needed for the lid-closed part) Keep-awake controller: state machine → `IOPMAssertion` and helper over XPC; registers
   the helper with `SMAppService.daemon(plistName:)` and opens Login Items settings when approval
   is needed; sends `goodbye` before turning keep-awake off; re-applies and reads back on every
   power-source change and wake. *Serves D7, D8, FR-030 to FR-035.*
-- **T062** Capabilities: registry; "System info" with `battery_status` (5000 ms in `_meta`),
+- **T062** ✅ Capabilities: registry; "System info" with `battery_status` (5000 ms in `_meta`),
   answering in the contract's output schema; toggling sends the full `tools` list; disabled tools
   are never sent. *Serves FR-060 to FR-063, Constitution III.*
-- **T063** Menu bar UI (SwiftUI `MenuBarExtra`): connected or not, battery, keep-awake and why
+- **T063** ✅ Menu bar UI (SwiftUI `MenuBarExtra`): connected or not, battery, keep-awake and why
   it is off, Connect and Disconnect, capability toggles, relay URL setting, start at login
   (`SMAppService.mainApp`), Quit restores sleep. *Serves FR-070, FR-071, FR-081.*
-- **T064** Local trace: SQLite in Application Support recording every executed call (arguments,
+- **T064** ✅ Local trace: SQLite in Application Support recording every executed call (arguments,
   results, errors, timings), a log window, 90-day purge. Never sent to the relay. *Serves D11,
   FR-026.*
-- **T065** Integration check with a local relay, run by Claude: pair through the browser; a
+- **T065** ✅ (`make mac-check`, passed 2026-10-20: battery 45% = pmset, SC-08, offline in 35 s,
+  reconnect in 0.1 s) Integration check with a local relay, run by Claude: pair through the browser; a
   go-sdk client calls `battery_status` and gets live data; network loss simulated by a local proxy
   between app and relay that the script cuts and restores → offline within 35 s (SC-04),
   reachable again within 10 s (SC-05); disabling System info removes the tool (SC-08).

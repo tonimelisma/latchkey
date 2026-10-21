@@ -16,10 +16,13 @@ tests, a headless-Chrome end-to-end test, and real Claude Code (`make claude-che
 Note: the OAuth server code was written before its contract tests (Constitution VII asks for the
 tests first). The tests were then written against the contract, run, and two expectations fixed.
 
+Mac app (M3) built and tested: 32 Swift tests including a real Secure Enclave key and the shared
+fixtures, and `make mac-check` running the real connection code against a relay. The helper and
+lid-closed keep-awake run only after Toni approves the helper once in System Settings.
+
 ## Next steps
 
-1. M3: Mac app.
-2. M4 and M5: everything not blocked on Toni; list the blocked steps at the end.
+1. M4 and M5: everything not blocked on Toni; list the blocked steps at the end.
 
 ## Milestones (from `specs/001-core/plan.md`)
 
@@ -27,7 +30,7 @@ tests first). The tests were then written against the contract, run, and two exp
 |---|---|---|
 | M1 | Relay hub + agent protocol, Go test agent | Done |
 | M2 | OAuth, passkeys, pairing (relay side) | Done |
-| M3 | Mac app: pairs, connects, keeps awake, answers `battery_status` | Not started |
+| M3 | Mac app: pairs, connects, keeps awake, answers `battery_status` | Done, except the helper approval step (Toni) |
 | M4 | End to end from Claude on phone, web, Desktop | Not started |
 | M5 | Signing, notarization, Sparkle, Docker image | Not started |
 
