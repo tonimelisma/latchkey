@@ -155,8 +155,12 @@ Serves FR-032, FR-033, FR-034, FR-036, FR-063.
 - Thermal: `ProcessInfo.thermalState` and `thermalStateDidChangeNotification`. Serious or critical
   turns keep-awake off.
 - Low Power Mode is reported in state but does not by itself turn keep-awake off.
-- Before turning keep-awake off, the app sends `goodbye` with the reason, so the relay can answer
-  "went to sleep: low battery at 14%".
+- Turning keep-awake off is reported at once in a `state` message (`keep_awake:
+  off_low_battery` or `off_too_hot`); the Mac may stay awake and reachable for a while (lid open,
+  in use). When macOS announces sleep (`NSWorkspace.willSleepNotification`), the app sends
+  `goodbye` with reason `low_battery` or `too_hot` if keep-awake was off for that reason, else
+  `system_sleep`, so the relay can answer "went to sleep for low battery at 14%". Power-off
+  (`willPowerOffNotification`) sends `system_shutdown`; quitting sends `user_quit`.
 
 ### D9. Mac app packaging
 Serves FR-070, FR-071, FR-072; Constitution IV.
@@ -172,6 +176,11 @@ Serves FR-070, FR-071, FR-072; Constitution IV.
   the repository's GitHub Releases.
 - Until the Developer ID exists: local builds with Toni's Apple Development certificate (team ID
   in gitignored `macos/Local.xcconfig`).
+- Bundle identifiers: app `net.melisma.latchkey`, helper `net.melisma.latchkey.helper` (also its
+  Mach service name). Swift 6 language mode with strict concurrency.
+- The helper's launchd plist sets `RunAtLoad`, so after a reboot it starts, waits 60 s for the
+  app, and restores sleep if the app does not connect (covers a crash or power loss while
+  keep-awake was on).
 - Minimum macOS: current and previous major release, Apple silicon only (FR-075). If a required
   API needs a newer release, the floor moves up and this line says why.
 
