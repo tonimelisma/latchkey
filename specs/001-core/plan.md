@@ -165,7 +165,10 @@ Serves FR-080, Constitution V, VIII.
   reverse proxy; or plain HTTP behind one.
 - Container: distroless image, one volume at `/data`.
 - Config (environment): `PUBLIC_URL`, `DATA_DIR`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`,
-  `SMTP_PASSWORD`, `SMTP_FROM`, `ACME_EMAIL` (optional).
+  `SMTP_PASSWORD`, `SMTP_FROM`, `ACME_EMAIL` (optional), `PORT` (optional, default 8080).
+- Listening: one port, `PORT`, on all network interfaces, IPv4 and IPv6 (research.md). Plain HTTP
+  behind a proxy; with `ACME_EMAIL` set, HTTPS on the same port, and the self-hoster maps public
+  port 443 to it (Let's Encrypt checks port 443).
 - Scaling: one server. The hub interface is written so a later version can route across servers;
   nothing more is built now.
 

@@ -43,3 +43,4 @@ Add a row when a decision is made; never delete one, mark it "superseded by" ins
 | 2026-10-20 | Automated browser sign-in test in Go with chromedp and a virtual passkey | plan testing strategy, T040 |
 | 2026-10-20 | No manual work for Toni; Claude runs all checks, including a scripted Claude Code check | CLAUDE.md, plan testing strategy, T023 |
 | 2026-10-20 | Public test host for Claude web/Desktop/phone decided at M4 | STATUS open questions |
+| 2026-10-20 | Relay listens on all interfaces, port from `PORT`, default 8080 | plan D10, research.md |

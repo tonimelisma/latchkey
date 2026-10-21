@@ -89,6 +89,26 @@ Evidence behind `plan.md`, gathered 2026-10-18 to 2026-10-19. Re-check anything 
 - Computer use for later specs: Peekaboo, trycua/cua, mcp-server-macos-use.
   https://pinggy.io/amp/blog/best_computer_use_mcp_servers/
 
+## Relay listen address and port (decided 2026-10-20)
+
+- Address: all interfaces, as Toni proposed (`0.0.0.0`). In Go that is written `":8080"`, which
+  also covers IPv6; a literal `0.0.0.0:8080` would be IPv4 only. Inside a container this is
+  required: listening on `127.0.0.1` is unreachable from outside the container.
+- Port: read the `PORT` environment variable, default 8080. `PORT` is the de facto convention that
+  hosting platforms inject (Cloud Run always sets it, default 8080; Fly.io's default internal port
+  is 8080). 8080 rather than 80 or 443 because the container runs as non-root, and ports under
+  1024 need root or an extra Linux capability.
+- ACME: Go's `autocert` validates over TLS-ALPN-01 (public port 443) or HTTP-01 (public port 80).
+  The process can listen on any local port as long as public 443 is forwarded to it, so built-in
+  TLS uses the same single port. A TLS-terminating proxy in front breaks TLS-ALPN-01; that setup
+  uses plain HTTP instead.
+- Options not taken: a separate `LISTEN_ADDR` (host and port) variable, which adds a setting
+  nobody needs in a container; and serving on 80 and 443 directly, which needs root.
+
+Sources: https://docs.cloud.google.com/run/docs/configuring/services/containers,
+https://fly.io/blog/fly-friday-flyctl-and-ports.md, https://env.dev/variables/PORT,
+https://go.googlesource.com/crypto/+/56440b844dfe139a8ac053f4ecac0b20b79058f4%5E%21/
+
 ## Agent signature encoding (decided 2026-10-20)
 
 Options for `hello.signature`:

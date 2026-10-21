@@ -13,8 +13,8 @@ and `store` are in, with tests and lint passing.
 
 ## Next steps
 
-1. M1, tasks T015 to T017: Go test agent, agent protocol contract tests, hub. Ask Toni first:
-   the relay's listen address and port settings for self-hosters (D10 lists no variable for it).
+1. M1, tasks T015 to T017: Go test agent, agent protocol contract tests, hub, and the HTTP
+   server (listens on all interfaces, `PORT`, default 8080; plan D10).
 2. M1, tasks T018 to T022: offline messages, MCP surface, audit log.
 3. M2: OAuth, passkeys, pairing on the relay.
 
