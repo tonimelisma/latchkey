@@ -27,8 +27,9 @@ Notes:
 
 1. **Install the app:** open `macos/build/Latchkey-0.1.0.dmg`, drag Latchkey to Applications,
    open it, and follow the setup window (approve keep-awake in System Settings, connect).
-2. **Pick the domain and the public test host** for the hosted relay (open question). Then Claude
-   deploys the container (T070) and runs the quickstart steps it can.
+2. **Hosted relay at relay.example.com on my-vm (decided).** Waiting on Toni: a working
+   Cloudflare token (Zone DNS edit on example.com) and a Resend account (sign-up is Toni's) with
+   `RESEND_API_KEY` in `.env`. Then Claude runs `deploy/deploy-vps.sh` (T070).
 3. **Try it from your Claude account and devices** (T072 to T074): add the connector on claude.ai,
    ask from the phone and Desktop. Checklist: `specs/001-core/quickstart.md`. Claude measures the
    hosted tool-call timeout (T073) from the relay's logs during this.
@@ -55,7 +56,6 @@ Notes:
 
 | Question | Resolve by |
 |---|---|
-| Domain for the hosted relay, and where the public test relay runs | Toni, before M4 |
 | Claude's hosted-client tool-call timeout (undocumented) | Measure in M4; keep our 60 s cap below it |
 | Terms, privacy policy, abuse handling for the hosted relay | Launch blocker, deferred |
 | The repository must be public for update downloads (GitHub Releases) | Toni, before the first release |

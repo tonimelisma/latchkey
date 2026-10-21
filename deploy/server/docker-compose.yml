@@ -1,0 +1,18 @@
+# The hosted Latchkey relay on my-vm (GCP my-gcp-project). Caddy (/opt/reverse-proxy) serves
+# HTTPS for relay.example.com and proxies to this container on the shared network.
+services:
+  relay:
+    image: latchkey-relay:${TAG:?set TAG}
+    container_name: latchkey-relay
+    restart: unless-stopped
+    env_file: relay.env
+    volumes:
+      - latchkey-data:/data
+    networks:
+      - reverse_proxy
+    mem_limit: 160m
+networks:
+  reverse_proxy:
+    external: true
+volumes:
+  latchkey-data:

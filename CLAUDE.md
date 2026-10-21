@@ -85,6 +85,8 @@ IMPORTANT: Toni makes every product and engineering choice. Claude proposes; Ton
 
 - Private remote `github.com/tonimelisma/latchkey`, default branch `main`.
 - Branch per spec or task: `NNN-short-name`. Small commits. Open PRs only when asked.
+- Push the branch after every finished step, and fast-forward `main` to it (Toni, 2026-10-20).
+  Never force-push.
 
 ## Gotchas
 
@@ -105,6 +107,10 @@ Relay (run in `relay/`):
 
 - `make mac-check`: the Mac app's real connection code against a private relay (battery vs
   pmset, tool off, silent network cut, reconnect)
+
+Hosted relay: `deploy/deploy-vps.sh` deploys to https://relay.example.com on GCP `my-vm`
+(project my-gcp-project) behind its Caddy; needs `CLOUDFLARE_API_TOKEN` and `RESEND_API_KEY`
+in the gitignored `.env`.
 
 Mac app (run in `macos/`; `project.yml` is the source, the `.xcodeproj` is generated):
 - `make test`: unit and contract tests (Swift Testing); exit code is the result

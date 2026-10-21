@@ -140,3 +140,15 @@ Base64url without padding, matching common practice (JWS) and avoiding `=` handl
   closed, the helper runs Apple's `pmset` rather than calling the undeclared function
   (Constitution IV). The app verifies by reading `SleepDisabled` from `IOPMrootDomain`, a public,
   unprivileged IORegistry read, instead of parsing `pmset` output.
+
+## Email provider for the hosted relay (2026-10-20)
+
+Mailgun (already in use) allows one domain on its plan, taken by walkbikewc.com. Compared:
+- **Resend (chosen):** SMTP with the API key as password (no relay code change); domains and DNS
+  records by API; official MCP server; free 3,000 emails/month, 100/day.
+- Postmark: best deliverability; manual account approval before sending to outside addresses.
+- Amazon SES: cheapest; sandbox exit and AWS setup.
+- Cloudflare Email Sending: public beta, Workers paid plan, no SMTP found (would need new code).
+Sources: https://dev.to/northloopworks/i-compared-7-transactional-email-apis-so-you-dont-have-to-2026-pricing-5912,
+https://chatforest.com/reviews/resend-mcp-server/,
+https://developers.cloudflare.com/changelog/post/2026-04-16-email-sending-public-beta/

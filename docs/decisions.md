@@ -59,3 +59,6 @@ Add a row when a decision is made; never delete one, mark it "superseded by" ins
 | 2026-10-20 | Installable disk image; first launch moves to Applications and opens setup | FR-078, plan D9 |
 | 2026-10-20 | Moving the app to the Trash uninstalls cleanly: disconnects, restores sleep, removes items and data | FR-077, plan D9 |
 | 2026-10-20 | Lid-open: public power assertion (as Claude does); lid-closed: Apple's pmset via the helper | research.md, plan D7 |
+| 2026-10-20 | Push after every finished step and fast-forward main | CLAUDE.md |
+| 2026-10-20 | Hosted relay at relay.example.com on GCP my-vm behind its Caddy | plan D10, deploy/ |
+| 2026-10-20 | Email through Resend (SMTP), sending domain relay.example.com | plan D5, research.md |
