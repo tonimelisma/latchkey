@@ -33,11 +33,11 @@ Package directories are created when they get code, not up front (T010).
   `device_state`, `audit_log` (`data-model.md`).
 - **T014** ✅ Implement `internal/agentproto` and `internal/store` (SQLite via `modernc.org/sqlite`,
   schema migrations). *Done when T012 and T013 pass.*
-- **T015** Go test agent `internal/testagent`: dials `/agent/v1`, signs the challenge with a P-256
+- **T015** ✅ Go test agent `internal/testagent`: dials `/agent/v1`, signs the challenge with a P-256
   key, sends tools and state, answers calls through pluggable handlers (delay, error, never answer,
   late answer), and can send bad signatures, skip heartbeats, and send oversize frames. Tests
   register its key directly in the store.
-- **T016** **(test first)** Agent protocol contract tests using the test agent against an
+- **T016** ✅ **(test first)** Agent protocol contract tests using the test agent against an
   `httptest` relay. Clock and timeouts injectable so tests run fast:
   - valid handshake → `welcome`; state is stored (FR-020, FR-036)
   - bad signature or unknown device → close 4001
@@ -48,15 +48,15 @@ Package directories are created when they get code, not up front (T010).
   - `goodbye` → offline with its reason stored (FR-020)
   - `goodbye` with `user_disconnected` → device revoked, close 4002 (FR-052)
   - device revoked → 4002 and its in-flight calls fail (FR-052)
-- **T017** Hub `internal/hub`: device ID → live connection, per-connection call IDs, concurrent
+- **T017** ✅ Hub `internal/hub`: device ID → live connection, per-connection call IDs, concurrent
   calls, deadlines (default 10 s, tool `_meta` up to 60 s), `cancel` on deadline, late results
   dropped, no queueing. Behind an interface so a later version can route across servers.
   *Serves D1, D3, FR-011, FR-012, FR-025. Done when T016 passes.*
-- **T018** [P] **(test first)** Offline message rendering: every row of the table in
+- **T018** ✅ [P] **(test first)** Offline message rendering: every row of the table in
   `mcp-surface.md`, in the Mac's time zone with relative time, labeled UTC as fallback. Fixed
   clock. *Serves FR-010, FR-037.*
-- **T019** [P] Implement offline message rendering. *Done when T018 passes.*
-- **T020** **(test first)** MCP surface contract tests with the go-sdk client against the relay
+- **T019** ✅ [P] Implement offline message rendering. *Done when T018 passes.*
+- **T020** ✅ **(test first)** MCP surface contract tests with the go-sdk client against the relay
   (handler built without the auth layer; auth is added in M2):
   - `initialize` works with 2025-11-25 (stateful) and 2026-07-28 (stateless)
   - never paired: `tools/list` is only `laptop_status`; calling a Mac tool returns the
@@ -68,9 +68,9 @@ Package directories are created when they get code, not up front (T010).
   - revoked during a call: "disconnected" text
   - new `tools` from the agent → `notifications/tools/list_changed` to stateful sessions (FR-062)
   - `laptop_status` structured content and text match the contract (FR-021)
-- **T021** Implement `internal/mcpserver` with go-sdk `StreamableHTTPHandler`. *Serves D2. Done
+- **T021** ✅ Implement `internal/mcpserver` with go-sdk `StreamableHTTPHandler`. *Serves D2. Done
   when T020 passes.*
-- **T022** [P] Audit log: one metadata row per tool call (tool, surface from `clientInfo.name`,
+- **T022** ✅ [P] Audit log: one metadata row per tool call (tool, surface from `clientInfo.name`,
   outcome, duration; no arguments, no results), daily purge after 30 days. Tests first.
   *Serves D11, FR-022, FR-023, FR-024.*
 ---

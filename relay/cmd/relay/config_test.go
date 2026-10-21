@@ -29,6 +29,11 @@ func TestLoadConfig(t *testing.T) {
 	assert.Equal(t, 587, c.SMTPPort)
 	assert.Equal(t, "u", c.SMTPUser)
 	assert.Equal(t, "a@example.com", c.ACMEEmail)
+	assert.Equal(t, 8080, c.Port, "default port")
+
+	c, err = loadConfig(env(map[string]string{"PORT": "9000"}))
+	require.NoError(t, err)
+	assert.Equal(t, 9000, c.Port)
 }
 
 func TestLoadConfigRejects(t *testing.T) {
@@ -43,6 +48,7 @@ func TestLoadConfigRejects(t *testing.T) {
 		"missing SMTP_FROM":     {"SMTP_FROM": ""},
 		"user without password": {"SMTP_USER": "u"},
 		"password without user": {"SMTP_PASSWORD": "p"},
+		"bad PORT":              {"PORT": "http"},
 	}
 	for name, o := range cases {
 		t.Run(name, func(t *testing.T) {

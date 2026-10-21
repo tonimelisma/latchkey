@@ -92,12 +92,21 @@ Example result (`structuredContent`, with the same information as text in `conte
 
 ```json
 {
+  "paired": true,
   "online": false,
   "last_seen": "2026-10-19T14:02:11Z",
   "offline_reason": "low_battery",
-  "state": {"battery_percent": 14, "power_source": "battery", "charging": false, "thermal_state": "nominal", "keep_awake": "off_low_battery"}
+  "state": {"battery_percent": 14, "power_source": "battery", "charging": false, "time_remaining_min": 40, "thermal_state": "nominal", "low_power_mode": false, "lid_closed": true, "time_zone": "America/Los_Angeles", "keep_awake": "off_low_battery", "observed_at": "2026-10-19T14:02:10Z"}
 }
 ```
+
+- `state` is the last State object the Mac reported (agent-protocol.md), or `null` if none.
+- `last_seen` is `null` if the Mac never connected; `offline_reason` is `null` while online or
+  when unknown. Never paired: `{"paired": false, "online": false, "last_seen": null,
+  "offline_reason": null, "state": null}`.
+- The text is the offline message below when offline, or, when online, for example: "Your Mac
+  is online: 82% battery, on battery power. Keep-awake is on."
+- `laptop_status` never returns `isError`.
 
 ### `battery_status` (capability "System info", answered live by the Mac)
 
@@ -129,11 +138,19 @@ They are never transport errors or HTTP failures.
 
 | Situation | Text returned |
 |---|---|
-| Never paired | "No Mac is connected to this account yet. Open the latchkey app on your Mac and click Connect." |
+| Never paired | "No Mac is connected to this account yet. Open the Latchkey app on your Mac and click Connect." |
+| Paired, never connected | "Your Mac is offline. It hasn't connected to Latchkey yet." |
 | Offline, reason known | "Your Mac is offline. It went to sleep for low battery at 14%, at 2:02 PM (3 hours ago)." |
 | Offline, reason unknown | "Your Mac is offline. It was last seen at 2:02 PM (3 hours ago) with 62% battery, on battery power." |
 | Deadline passed | "Your Mac didn't answer within 5 seconds. It may be busy or losing its connection." |
 | Revoked during call | "Your Mac was disconnected from this account while the request was running." |
+| Connection lost during call | "Your Mac lost its connection while the request was running." |
+| Unreadable result from the Mac | "Your Mac sent a result the relay couldn't read." |
+
+Other known offline reasons: too hot ("It went to sleep because it was too hot, at …"), system
+sleep ("It went to sleep at …"), shutdown ("It shut down at …"), app quit ("The Latchkey app was
+quit at …"). Power phrases: "on battery power", "plugged in", "charging", "on UPS power". A time on
+an earlier day adds the date: "at 3:02 PM on Oct 17 (2 days ago)".
 
 Times are rendered in the Mac's time zone (reported in state, FR-037) plus a relative time, for
 example "at 2:02 PM (3 hours ago)". If the time zone is unknown, UTC is used and labeled.

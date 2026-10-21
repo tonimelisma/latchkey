@@ -47,8 +47,11 @@ second hop and a per-user provisioning step. A closed socket means "offline" ins
 Serves FR-010, FR-013, FR-014, FR-021, SC-03, SC-07; Constitution II.
 - Library: official `github.com/modelcontextprotocol/go-sdk` (v1.8+), `mcp.StreamableHTTPHandler`.
 - Protocol versions: 2025-11-25 (stateful; Claude's hosted runtime still sends `initialize`) and
-  2026-07-28 (stateless) as the SDK negotiates. Stateful sessions live in memory on the single
-  server.
+  2026-07-28 (stateless). The SDK serves 2026-07-28 only from a stateless handler, so `/mcp` runs
+  two handlers and routes by the `MCP-Protocol-Version` request header (2026-07-28 or later →
+  stateless). Stateful sessions live in memory on the single server.
+- One MCP server instance per Owner, created on first use, holding `laptop_status` plus that
+  Owner's Mac tools; sessions are bound to the OAuth token's user by the SDK.
 - `tools/list` returns `laptop_status` plus the last tool list the Mac reported, even when offline.
 - `tools/call` for a Mac tool goes to the hub. Offline: immediate `isError: true` result with the
   offline message (FR-010). Online: forwarded with a deadline (D3).

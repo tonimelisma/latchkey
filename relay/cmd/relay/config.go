@@ -18,6 +18,7 @@ type config struct {
 	SMTPPassword string
 	SMTPFrom     string
 	ACMEEmail    string
+	Port         int
 }
 
 func loadConfig(getenv func(string) string) (config, error) {
@@ -42,6 +43,12 @@ func loadConfig(getenv func(string) string) (config, error) {
 	}
 	if c.SMTPPort, err = strconv.Atoi(getenv("SMTP_PORT")); err != nil || c.SMTPPort <= 0 || c.SMTPPort > 65535 {
 		errs = append(errs, errors.New("SMTP_PORT must be a port number"))
+	}
+	c.Port = 8080
+	if p := getenv("PORT"); p != "" {
+		if c.Port, err = strconv.Atoi(p); err != nil || c.Port <= 0 || c.Port > 65535 {
+			errs = append(errs, errors.New("PORT must be a port number"))
+		}
 	}
 	if (c.SMTPUser == "") != (c.SMTPPassword == "") {
 		errs = append(errs, errors.New("SMTP_USER and SMTP_PASSWORD must be set together"))
