@@ -38,6 +38,9 @@ struct MenuContent: View {
             NSApp.activate()
         }
         Toggle("Start at Login", isOn: Binding(get: { model.startsAtLogin }, set: { model.setStartsAtLogin($0) }))
+        if model.updates.available {
+            Button("Check for Updates…") { model.updates.checkForUpdates() }
+        }
         Divider()
         Button("Quit Latchkey") { NSApp.terminate(nil) }
             .keyboardShortcut("q")

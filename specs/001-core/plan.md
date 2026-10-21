@@ -172,8 +172,9 @@ Serves FR-070, FR-071, FR-072; Constitution IV.
   Access for Messages, Apple Events, Accessibility) are incompatible with the App Sandbox, and
   changing that later would mean migrating containers. This deviation from "sandboxed where
   possible" is deliberate.
-- Updates: Sparkle 2 with EdDSA-signed archives. Downloads and the update feed are published on
-  the repository's GitHub Releases.
+- Updates: Sparkle 2 (pinned 2.10.0) with EdDSA-signed archives. Downloads and the update feed
+  (`appcast.xml`) are published on the repository's GitHub Releases by `macos/scripts/release.sh`.
+  The updater starts only in builds that carry the public key; the feed needs a public repository.
 - Until the Developer ID exists: local builds with Toni's Apple Development certificate (team ID
   in gitignored `macos/Local.xcconfig`).
 - Bundle identifiers: app `net.melisma.latchkey`, helper `net.melisma.latchkey.helper` (also its

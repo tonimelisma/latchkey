@@ -23,6 +23,7 @@ final class AppModel {
     private(set) var startsAtLogin = SMAppService.mainApp.status == .enabled
 
     let trace: TraceStore?
+    let updates = Updates()
     private let keepAwakeController = KeepAwakeController()
     private var connection: RelayConnection?
     private var powerMonitor: PowerMonitor?

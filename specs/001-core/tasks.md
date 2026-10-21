@@ -209,13 +209,15 @@ Claude account and to try it on his phone and Desktop; that is listed in one sho
 
 ## M5: Packaging
 
-- **T080** Relay container: distroless Dockerfile, one volume at `/data`, optional ACME. Test
+- **T080** ✅ (`relay/scripts/container-check.sh`, 11 MB image) Relay container: distroless Dockerfile, one volume at `/data`, optional ACME. Test
   that it starts with only the D10 environment variables. *Serves FR-080.*
-- **T081** [P] Self-hosting README: run the container, set up SMTP, point the app at a custom URL.
+- **T081** ✅ (`docs/self-hosting.md`) [P] Self-hosting README: run the container, set up SMTP, point the app at a custom URL.
   *Serves US8, FR-081.*
 - **T082** Developer ID signing and notarization for the app and helper. [Waiting on Toni's Apple
   Developer ID.] *Serves FR-072, Constitution IV.*
-- **T083** Sparkle 2 with EdDSA-signed archives and an appcast. *Serves FR-072.*
+- **T083** ✅ in code, off until set up: Sparkle 2.10.0 in the app (updater runs only with a public key),
+  `macos/scripts/release.sh` builds, notarizes, signs, and publishes. Needs Toni: Developer ID,
+  update key, public repository. *Serves FR-072.*
 - **T084** Uninstall check: deleting the app leaves sleep at the default and no background item
   (SC-09).
 

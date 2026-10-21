@@ -1,3 +1,7 @@
 // Shared build settings. Personal signing settings (DEVELOPMENT_TEAM) live in the gitignored
 // Local.xcconfig next to this file; copy Local.xcconfig.example to create it.
+// Sparkle's EdDSA public key for signed updates (FR-072). Empty: the updater stays off.
+// Set it here once the key exists (scripts/release.sh explains how); the public key is not secret.
+SPARKLE_PUBLIC_ED_KEY =
+
 #include? "Local.xcconfig"
