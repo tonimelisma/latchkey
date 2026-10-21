@@ -20,6 +20,22 @@ enum PairingError: LocalizedError {
 @MainActor
 final class PairingFlow: NSObject, ASWebAuthenticationPresentationContextProviding {
     private var session: ASWebAuthenticationSession?
+    private var pending: CheckedContinuation<URL, Error>?
+
+    private func finish(_ result: Result<URL, Error>) {
+        guard let p = pending else { return }
+        pending = nil
+        p.resume(with: result)
+    }
+
+    /// A latchkey://paired link opened from another browser window (for example after signing
+    /// up through the emailed link) completes the pairing in progress. Returns false if none is.
+    func receive(_ url: URL) -> Bool {
+        guard pending != nil, url.scheme == "latchkey", url.host() == "paired" else { return false }
+        session?.cancel()
+        finish(.success(url))
+        return true
+    }
 
     nonisolated func presentationAnchor(for session: ASWebAuthenticationSession) -> ASPresentationAnchor {
         MainActor.assumeIsolated { NSApp.keyWindow ?? NSApp.windows.first ?? ASPresentationAnchor() }
@@ -42,12 +58,16 @@ final class PairingFlow: NSObject, ASWebAuthenticationPresentationContextProvidi
         c.path = "/pair"
         c.queryItems = [URLQueryItem(name: "name", value: macName)]
         let callback = try await withCheckedThrowingContinuation { (cont: CheckedContinuation<URL, Error>) in
-            let s = ASWebAuthenticationSession(url: c.url!, callback: .customScheme("latchkey")) { url, error in
-                if let url {
-                    cont.resume(returning: url)
-                } else {
-                    let cancelled = (error as? ASWebAuthenticationSessionError)?.code == .canceledLogin
-                    cont.resume(throwing: cancelled ? PairingError.cancelled : (error ?? PairingError.cancelled))
+            pending = cont
+            let s = ASWebAuthenticationSession(url: c.url!, callback: .customScheme("latchkey")) {
+                [weak self] url, error in
+                MainActor.assumeIsolated {
+                    if let url {
+                        self?.finish(.success(url))
+                    } else {
+                        let cancelled = (error as? ASWebAuthenticationSessionError)?.code == .canceledLogin
+                        self?.finish(.failure(cancelled ? PairingError.cancelled : (error ?? PairingError.cancelled)))
+                    }
                 }
             }
             s.presentationContextProvider = self

@@ -195,7 +195,7 @@ Claude account and to try it on his phone and Desktop; that is listed in one sho
 
 - **T070** Public test deployment of the relay with HTTPS. [Blocked: hosted relay domain is an
   open question for Toni.]
-- **T071** Write `specs/001-core/quickstart.md`: the setup checklist from a fresh Mac and fresh
+- **T071** ✅ Write `specs/001-core/quickstart.md`: the setup checklist from a fresh Mac and fresh
   Claude account.
 - **T072** Run the quickstart: add the connector on claude.ai web; confirm it appears on Desktop,
   iOS, and Android; call `battery_status` from each. Measure SC-01 (time, number of actions) and
@@ -218,7 +218,8 @@ Claude account and to try it on his phone and Desktop; that is listed in one sho
 - **T083** ✅ in code, off until set up: Sparkle 2.10.0 in the app (updater runs only with a public key),
   `macos/scripts/release.sh` builds, notarizes, signs, and publishes. Needs Toni: Developer ID,
   update key, public repository. *Serves FR-072.*
-- **T084** Uninstall check: deleting the app leaves sleep at the default and no background item
+- **T084** (script ready: `macos/scripts/helper-check.sh` covers quit and crash; deleting the
+  app needs the installed, approved app first) Uninstall check: deleting the app leaves sleep at the default and no background item
   (SC-09).
 
 ---

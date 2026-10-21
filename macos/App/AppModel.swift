@@ -180,6 +180,13 @@ final class AppModel {
         }
     }
 
+    /// A latchkey:// link opened by the system.
+    func open(_ url: URL) {
+        if !pairing.receive(url) {
+            lastError = "That link is from an earlier connection attempt. Choose Connect to a Relay… again."
+        }
+    }
+
     /// Disconnect This Mac: the relay revokes it (goodbye user_disconnected) and the key is deleted.
     func disconnect() async {
         await connection?.stop(goodbye: .userDisconnected)

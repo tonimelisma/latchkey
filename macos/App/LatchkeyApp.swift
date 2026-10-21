@@ -31,6 +31,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         model.start()
     }
 
+    func application(_ application: NSApplication, open urls: [URL]) {
+        urls.forEach(model.open)
+    }
+
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         Task {
             await model.shutdown()

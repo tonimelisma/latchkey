@@ -1,4 +1,4 @@
-.PHONY: project build test lint fmt run clean
+.PHONY: project build test lint fmt run install clean
 
 XCODEBUILD = xcodebuild -project Latchkey.xcodeproj -scheme Latchkey -destination 'platform=macOS' -derivedDataPath build/DerivedData
 
@@ -21,6 +21,13 @@ fmt:
 # Builds and opens the app from build/.
 run: build
 	open build/DerivedData/Build/Products/Debug/Latchkey.app
+
+# Copies the build to /Applications and opens it (the helper needs a stable app location).
+install: build
+	osascript -e 'quit app "Latchkey"' 2>/dev/null || true
+	rm -rf /Applications/Latchkey.app
+	cp -R build/DerivedData/Build/Products/Debug/Latchkey.app /Applications/
+	open /Applications/Latchkey.app
 
 clean:
 	rm -rf build Latchkey.xcodeproj
