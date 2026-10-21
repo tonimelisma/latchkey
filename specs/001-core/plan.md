@@ -168,7 +168,12 @@ Serves FR-080, Constitution V, VIII.
   `SMTP_PASSWORD`, `SMTP_FROM`, `ACME_EMAIL` (optional), `PORT` (optional, default 8080).
 - Listening: one port, `PORT`, on all network interfaces, IPv4 and IPv6 (research.md). Plain HTTP
   behind a proxy; with `ACME_EMAIL` set, HTTPS on the same port, and the self-hoster maps public
-  port 443 to it (Let's Encrypt checks port 443).
+  port 443 to it (Let's Encrypt checks port 443). Certificates and the ACME account key are cached
+  in `DATA_DIR/certs`, so restarts reuse them instead of hitting Let's Encrypt's rate limits.
+- HTTPS is always required in production (Claude only connects over HTTPS). Typical deployments:
+  a hosting platform that terminates HTTPS itself (relay serves plain HTTP on `PORT`); a reverse
+  proxy such as Caddy in front; the built-in ACME above; or a tunnel such as Cloudflare Tunnel
+  for a home server. Plain HTTP without any of these is accepted only on localhost.
 - Scaling: one server. The hub interface is written so a later version can route across servers;
   nothing more is built now.
 

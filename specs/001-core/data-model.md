@@ -18,6 +18,11 @@ milliseconds. Device public keys are stored as PKIX DER.
 | **oauth_tokens** | signature, kind (`access` or `refresh`), client_id, user_id, scopes, expires_at, rotated_at, revoked_at | fosite HMAC token signatures, never raw tokens |
 | **audit_log** | id, user_id, device_id, at, tool, surface, outcome, duration_ms | No arguments, no results (FR-022, FR-023); purged after retention |
 
+## Outside the database
+
+- With built-in TLS (`ACME_EMAIL` set): TLS certificates and the ACME account key, in
+  `DATA_DIR/certs`. Nothing about users.
+
 ## Not stored
 
 - Tool arguments or results.
