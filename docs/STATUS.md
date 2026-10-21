@@ -28,8 +28,8 @@ Notes:
 1. **Install the app:** open `macos/build/Latchkey-0.1.0.dmg`, drag Latchkey to Applications,
    open it, and follow the setup window (approve keep-awake in System Settings, connect).
 2. **Hosted relay live at https://relay.example.com** (deployed 2026-10-20, Let's Encrypt
-   certificate, 7 MB memory on my-vm). Sign-up emails wait on the Resend sending domain: Toni adds
-   a full-access `RESEND_ADMIN_KEY` to `.env`, then Claude reruns `deploy/deploy-vps.sh`.
+   certificate, 7 MB memory on my-vm). Email: Resend domain relay.example.com verified, SMTP
+   send from the relay's settings accepted. `RESEND_ADMIN_KEY` is no longer needed.
 3. **Try it from your Claude account and devices** (T072 to T074): add the connector on claude.ai,
    ask from the phone and Desktop. Checklist: `specs/001-core/quickstart.md`. Claude measures the
    hosted tool-call timeout (T073) from the relay's logs during this.

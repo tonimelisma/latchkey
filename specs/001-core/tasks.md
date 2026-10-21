@@ -194,7 +194,7 @@ Claude prepares and runs everything it can. Toni is needed only to add the conne
 Claude account and to try it on his phone and Desktop; that is listed in one short checklist.
 
 - **T070** ✅ Public test deployment of the relay with HTTPS: https://relay.example.com on my-vm
-  (`deploy/deploy-vps.sh`). Email sending domain pending the Resend admin key.
+  (`deploy/deploy-vps.sh`), email through Resend from no-reply@relay.example.com (verified).
 - **T071** ✅ Write `specs/001-core/quickstart.md`: the setup checklist from a fresh Mac and fresh
   Claude account.
 - **T072** Run the quickstart: add the connector on claude.ai web; confirm it appears on Desktop,
