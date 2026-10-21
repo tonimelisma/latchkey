@@ -27,6 +27,9 @@ import (
 var version = "dev"
 
 func main() {
+	if len(os.Args) > 1 && os.Args[1] == "healthcheck" { // for the container's HEALTHCHECK (no shell in the image)
+		os.Exit(healthcheck())
+	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	err := run(ctx)
 	stop()
@@ -99,4 +102,32 @@ func run(ctx context.Context) error {
 		return err
 	}
 	return nil
+}
+
+// healthcheck asks the running relay's /healthz on this machine; 0 means healthy.
+func healthcheck() int {
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
+	}
+	scheme := "http"
+	if os.Getenv("ACME_EMAIL") != "" {
+		scheme = "https"
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, scheme+"://127.0.0.1:"+port+"/healthz", nil)
+	if err != nil {
+		return 1
+	}
+	client := &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}}} //nolint:gosec // local liveness probe of our own process
+	resp, err := client.Do(req)
+	if err != nil {
+		return 1
+	}
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return 1
+	}
+	return 0
 }

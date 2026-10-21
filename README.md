@@ -6,6 +6,10 @@ A native macOS menu bar app keeps an outbound connection to an always-on relay. 
 MCP server Claude talks to: it handles sign-in, remembers the Mac's state, and answers immediately
 when the Mac is offline.
 
+## Run your own relay
+
+One container with one data volume; see [docs/self-hosting.md](docs/self-hosting.md).
+
 ## How this repo is organized (spec-driven)
 
 Work starts as a written spec and flows downward. Code is the last step, not the first.
@@ -23,7 +27,10 @@ specs/001-core/
   contracts/
     agent-protocol.md           Mac app <-> relay WebSocket protocol.
     mcp-surface.md              What Claude sees: endpoints, OAuth, tools, offline behavior.
-  tasks.md                      (next) Ordered, testable tasks generated from plan + contracts.
+  tasks.md                      Ordered, testable tasks generated from plan + contracts.
+relay/                          The relay (Go). `make test`, `make run`; see CLAUDE.md for commands.
+macos/                          The Mac app and its helper (Swift, XcodeGen). `make test`, `make run`.
+docs/self-hosting.md            Run your own relay.
 ```
 
 Later capabilities (files, Notes and iMessage, shell, browser and computer control) each get their
