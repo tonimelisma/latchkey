@@ -5,7 +5,9 @@ import (
 	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/sha256"
+	"crypto/x509"
 	"encoding/base64"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
@@ -179,4 +181,49 @@ func TestValidateTools(t *testing.T) {
 	require.NoError(t, agentproto.ValidateTools(nil))
 	require.ErrorIs(t, agentproto.ValidateTools([]*mcp.Tool{{Name: agentproto.RelayToolLaptopStatus, InputSchema: obj}}), agentproto.ErrProtocolViolation)
 	require.ErrorIs(t, agentproto.ValidateTools([]*mcp.Tool{nil}), agentproto.ErrProtocolViolation)
+}
+
+type signatureFixture struct {
+	PublicKey string `json:"public_key"`
+	Nonce     string `json:"nonce"`
+	DeviceID  string `json:"device_id"`
+	Signature string `json:"signature"`
+}
+
+// TestCrossLanguageSignatures: a Go-made signature fixture for the Swift tests (written once),
+// and the Swift-made one (written by the Swift tests) must verify here.
+func TestCrossLanguageSignatures(t *testing.T) {
+	dir := filepath.Join(fixtureDir, "signatures")
+	goFile := filepath.Join(dir, "go.json")
+	if _, err := os.Stat(goFile); os.IsNotExist(err) {
+		key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+		require.NoError(t, err)
+		der, err := x509.MarshalPKIXPublicKey(&key.PublicKey)
+		require.NoError(t, err)
+		nonce := "q3Jt0b8bK9mH2y1cX7vLZ0aP4sE6dR5fG8hJ1kM2nQo"
+		data, err := json.MarshalIndent(signatureFixture{
+			PublicKey: base64.RawURLEncoding.EncodeToString(der), Nonce: nonce, DeviceID: "dev_go",
+			Signature: sign(t, key, nonce, "dev_go"),
+		}, "", "  ")
+		require.NoError(t, err)
+		require.NoError(t, os.MkdirAll(dir, 0o755))
+		require.NoError(t, os.WriteFile(goFile, append(data, '\n'), 0o600))
+	}
+	for _, name := range []string{"go.json", "swift.json"} {
+		data, err := os.ReadFile(filepath.Join(dir, name))
+		if os.IsNotExist(err) && name == "swift.json" {
+			t.Log("swift.json not written yet; run the Mac app tests")
+			continue
+		}
+		require.NoError(t, err)
+		var f signatureFixture
+		require.NoError(t, json.Unmarshal(data, &f))
+		der, err := base64.RawURLEncoding.DecodeString(f.PublicKey)
+		require.NoError(t, err)
+		pub, err := x509.ParsePKIXPublicKey(der)
+		require.NoError(t, err)
+		ec, ok := pub.(*ecdsa.PublicKey)
+		require.True(t, ok)
+		require.NoError(t, agentproto.VerifySignature(ec, f.Nonce, f.DeviceID, f.Signature), name)
+	}
 }

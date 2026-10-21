@@ -1,0 +1,86 @@
+name: Latchkey
+options:
+  bundleIdPrefix: net.melisma
+  deploymentTarget:
+    macOS: "26.0"
+  createIntermediateGroups: true
+configFiles:
+  Debug: Config/Base.xcconfig
+  Release: Config/Base.xcconfig
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    SWIFT_STRICT_CONCURRENCY: complete
+    ENABLE_HARDENED_RUNTIME: YES
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    ARCHS: arm64
+    DEAD_CODE_STRIPPING: YES
+targets:
+  Latchkey:
+    type: application
+    platform: macOS
+    sources:
+      - App
+      - Shared
+      - path: Helper/net.melisma.latchkey.helper.plist
+        buildPhase:
+          copyFiles:
+            destination: wrapper
+            subpath: Contents/Library/LaunchDaemons
+    dependencies:
+      - target: LatchkeyHelper
+        embed: true
+        copy:
+          destination: executables
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: net.melisma.latchkey
+        PRODUCT_NAME: Latchkey
+        INFOPLIST_FILE: App/Info.plist
+        CODE_SIGN_ENTITLEMENTS: App/Latchkey.entitlements
+        CODE_SIGN_STYLE: Automatic
+        ENABLE_APP_SANDBOX: NO
+  LatchkeyHelper:
+    type: tool
+    platform: macOS
+    sources:
+      - Helper
+      - Shared/HelperProtocol.swift
+      - Shared/PmsetParser.swift
+      - Shared/CodeSigning.swift
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: net.melisma.latchkey.helper
+        PRODUCT_NAME: LatchkeyHelper
+        INFOPLIST_FILE: Helper/Info.plist
+        CREATE_INFOPLIST_SECTION_IN_BINARY: YES
+        CODE_SIGN_STYLE: Automatic
+        SKIP_INSTALL: YES
+    excludes:
+      - "*.plist"
+  LatchkeyTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - Tests
+    dependencies:
+      - target: Latchkey
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: net.melisma.latchkey.tests
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/Latchkey.app/Contents/MacOS/Latchkey"
+        BUNDLE_LOADER: "$(TEST_HOST)"
+        CODE_SIGN_STYLE: Automatic
+schemes:
+  Latchkey:
+    build:
+      targets:
+        Latchkey: all
+        LatchkeyTests: [test]
+    test:
+      targets:
+        - LatchkeyTests
+      environmentVariables:
+        LATCHKEY_FIXTURES: "$(SRCROOT)/../specs/001-core/contracts/fixtures"
