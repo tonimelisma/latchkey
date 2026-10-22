@@ -161,7 +161,7 @@ final class AppModel {
                 }
             })
         let monitor = NWPathMonitor()
-        monitor.pathUpdateHandler = { [weak self] path in
+        monitor.pathUpdateHandler = { @Sendable [weak self] path in
             let ok = path.status == .satisfied
             Task { @MainActor in await self?.pathChanged(satisfied: ok) }
         }

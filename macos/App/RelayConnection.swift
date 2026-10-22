@@ -210,7 +210,7 @@ actor RelayConnection {
     private func ping(_ t: URLSessionWebSocketTask) {
         let id = UUID()
         pendingPing = id
-        t.sendPing { error in
+        t.sendPing { @Sendable error in
             Task { await self.pong(id, ok: error == nil, on: t) }
         }
         Task {

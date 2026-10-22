@@ -30,6 +30,23 @@ final class PairingFlow: NSObject, ASWebAuthenticationPresentationContextProvidi
 
     var isPairing: Bool { pending != nil }
 
+    /// The sign-in window's completion handler. macOS calls it on a background thread, so it is
+    /// built outside the main actor and marked @Sendable: a closure written inside this
+    /// main-actor class would inherit main-actor isolation, and Swift 6 traps when it is called
+    /// from another thread (that crashed 0.1.0 and 0.1.1).
+    nonisolated static func completionHandler(
+        _ deliver: @escaping @Sendable (Result<URL, Error>) -> Void
+    ) -> @Sendable (URL?, Error?) -> Void {
+        { @Sendable url, error in
+            let cancelled = (error as? ASWebAuthenticationSessionError)?.code == .canceledLogin
+            if let url {
+                deliver(.success(url))
+            } else {
+                deliver(.failure(cancelled ? PairingError.cancelled : (error ?? PairingError.cancelled)))
+            }
+        }
+    }
+
     /// A latchkey://paired link opened from another browser window completes the pairing in
     /// progress. Returns false if none is.
     func receive(_ url: URL) -> Bool {
@@ -74,16 +91,11 @@ final class PairingFlow: NSObject, ASWebAuthenticationPresentationContextProvidi
         c.queryItems = [URLQueryItem(name: "name", value: macName)]
         let callback = try await withCheckedThrowingContinuation { (cont: CheckedContinuation<URL, Error>) in
             pending = cont
-            // The completion handler runs on a background thread; hop to the main actor.
-            let s = ASWebAuthenticationSession(url: c.url!, callback: .customScheme("latchkey")) {
-                [weak self] url, error in
-                let cancelled = (error as? ASWebAuthenticationSessionError)?.code == .canceledLogin
-                let result: Result<URL, Error> =
-                    if let url { .success(url) } else {
-                        .failure(cancelled ? PairingError.cancelled : (error ?? PairingError.cancelled))
-                    }
-                Task { @MainActor in self?.finish(result) }
-            }
+            let s = ASWebAuthenticationSession(
+                url: c.url!, callback: .customScheme("latchkey"),
+                completionHandler: Self.completionHandler { [weak self] result in
+                    Task { @MainActor in self?.finish(result) }
+                })
             s.presentationContextProvider = self
             s.prefersEphemeralWebBrowserSession = false  // use the browser's passkeys and session
             session = s

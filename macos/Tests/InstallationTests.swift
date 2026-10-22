@@ -1,3 +1,4 @@
+import AuthenticationServices
 import Foundation
 import Testing
 
@@ -100,5 +101,24 @@ import Testing
         try FileManager.default.removeItem(at: dir.appending(path: "Latchkey.app"))
         try FileManager.default.copyItem(at: Bundle.main.bundleURL, to: dir.appending(path: "Latchkey.app"))
         #expect(AppLocation.replaced(at: dir.appending(path: "Latchkey.app").path), "a Latchkey took its place")
+    }
+}
+
+@Suite struct PairingCallbackThreadTests {
+    /// macOS calls the sign-in window's completion handler on a background thread. If the
+    /// handler carried main-actor isolation, this call would trap (as 0.1.0 and 0.1.1 did).
+    @Test func completionHandlerRunsOffTheMainThread() async {
+        let got = Locked<String?>(nil)
+        let handler = PairingFlow.completionHandler { result in
+            got.mutate { $0 = (try? result.get())?.absoluteString ?? "error" }
+        }
+        await withCheckedContinuation { (done: CheckedContinuation<Void, Never>) in
+            DispatchQueue.global().async {
+                handler(URL(string: "latchkey://paired?code=x"), nil)
+                handler(nil, ASWebAuthenticationSessionError(.canceledLogin))
+                done.resume()
+            }
+        }
+        #expect(got.value == "error", "the second call (cancelled) is delivered too")
     }
 }

@@ -46,7 +46,7 @@ enum AppLocation {
         }
         let config = NSWorkspace.OpenConfiguration()
         config.createsNewApplicationInstance = true
-        NSWorkspace.shared.openApplication(at: dest, configuration: config) { _, _ in
+        NSWorkspace.shared.openApplication(at: dest, configuration: config) { @Sendable _, _ in
             Task { @MainActor in NSApp.terminate(nil) }
         }
         return true

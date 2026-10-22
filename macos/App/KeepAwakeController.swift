@@ -28,8 +28,9 @@ final class HelperClient {
             if let req = CodeSigning.requirement(identifier: HelperIdentity.helperBundleID) {
                 c.setCodeSigningRequirement(req)
             }
-            c.invalidationHandler = { [weak self] in Task { @MainActor in self?.connection = nil } }
-            c.interruptionHandler = { [weak self] in
+            // XPC calls these on its own queue: @Sendable keeps them free of main-actor isolation.
+            c.invalidationHandler = { @Sendable [weak self] in Task { @MainActor in self?.connection = nil } }
+            c.interruptionHandler = { @Sendable [weak self] in
                 Task { @MainActor in
                     self?.connection = nil
                     self?.onInterrupted?()

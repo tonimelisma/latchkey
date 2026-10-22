@@ -15,8 +15,12 @@ paths:
 - Re-apply and read back `SleepDisabled` on every power-source change and wake; reports say it can
   be lost on Apple silicon when the charger is plugged or unplugged.
 - Always restore sleep: on quit, when the helper's client disconnects, and at every helper start.
-- `ASWebAuthenticationSession`'s completion handler runs on a background thread: never
-  `MainActor.assumeIsolated` in it; hop with `Task { @MainActor in … }`. (It crashed 0.1.0.)
+- Swift 6: a closure written inside a `@MainActor` type (or an actor) and handed to an Apple API
+  inherits that isolation, and Swift traps at the closure's first line when the API calls it on
+  another thread. Every callback Apple may call off the main thread (ASWebAuthenticationSession
+  completion, XPC invalidation/interruption, NSWorkspace completions, NWPathMonitor, URLSession
+  ping) must be written `{ @Sendable … }` and hop with `Task { @MainActor in … }`. This crashed
+  0.1.0 and 0.1.1 at sign-in; `PairingTests` calls the handler from a background thread.
 - An `LSUIElement` app's windows are invisible to the Dock and Cmd-Tab: switch the activation
   policy to `.regular` while a window is open (`WindowPresence`).
 - `Bundle(path:)` caches by path; to see what is on disk now, read `Contents/Info.plist`.
