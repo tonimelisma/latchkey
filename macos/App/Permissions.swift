@@ -22,6 +22,7 @@ enum Permissions {
     }
 
     static let notesApp = "com.apple.Notes"
+    static let messagesApp = "com.apple.MobileSMS"
 
     enum Automation: Sendable, Equatable { case allowed, denied, notAsked }
 

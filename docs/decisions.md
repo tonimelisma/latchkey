@@ -77,3 +77,5 @@ Add a row when a decision is made; never delete one, mark it "superseded by" ins
 | 2026-10-22 | Notes changes through AppleScript only (no Shortcuts, no typing); checklists Claude writes appear as ☐/☑ | spec 002 FR-107, plan D3 |
 | 2026-10-22 | Claude can also edit a passage of a note; any change that would lose checklists, images, or tables is refused with the reason | spec 002 FR-102, FR-106 |
 | 2026-10-22 | Automation (Notes) and Contacts are asked for in the setup window, never when a request arrives (a prompt would wait on an unattended Mac) | spec 002 FR-140, plan D4, D5 |
+| 2026-10-22 | Message attachments are copied to a visible Pictures/Latchkey folder and sent from there (Messages delivers scripted attachments reliably only from Pictures); copies older than a day are removed | spec 002 FR-112, plan D3 |
+| 2026-10-22 | Live check of sending: one test message with a tiny image to Toni's own address (owner@example.com) after the new app is installed | spec 002 tasks T140 |

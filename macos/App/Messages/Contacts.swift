@@ -4,6 +4,13 @@ import Foundation
 /// Names for phone numbers and email addresses (spec 002 FR-111, plan D4).
 protocol ContactsLookup: Sendable {
     func name(for handle: String) -> String?
+    /// People whose name contains `name`, with their numbers and addresses (for sending).
+    func people(matching name: String) -> [ContactPerson]
+}
+
+struct ContactPerson: Sendable, Equatable {
+    var name: String
+    var handles: [String]
 }
 
 /// The Mac's Contacts, read once and refreshed every few minutes. Without the Contacts
@@ -13,16 +20,28 @@ final class ContactBook: ContactsLookup, @unchecked Sendable {
     private var byEmail: [String: String] = [:]
     /// Phone numbers by their last 9 digits; a number matches when one ends with the other.
     private var byPhone: [String: [(digits: String, name: String)]] = [:]
+    private var everyone: [ContactPerson] = []
     private var loaded: Date?
 
     static var allowed: Bool {
         CNContactStore.authorizationStatus(for: .contacts) == .authorized
     }
 
+    func people(matching name: String) -> [ContactPerson] {
+        lock.lock()
+        defer { lock.unlock() }
+        refresh()
+        return everyone.filter { $0.name.range(of: name, options: [.caseInsensitive, .diacriticInsensitive]) != nil }
+    }
+
+    private func refresh() {
+        if loaded.map({ Date().timeIntervalSince($0) > 300 }) ?? true { load() }
+    }
+
     func name(for handle: String) -> String? {
         lock.lock()
         defer { lock.unlock() }
-        if loaded.map({ Date().timeIntervalSince($0) > 300 }) ?? true { load() }
+        refresh()
         if handle.contains("@") { return byEmail[handle.lowercased()] }
         let digits = Self.digits(handle)
         guard digits.count >= 7 else { return nil }
@@ -36,6 +55,7 @@ final class ContactBook: ContactsLookup, @unchecked Sendable {
         guard Self.allowed else { return }
         var email: [String: String] = [:]
         var phone: [String: [(String, String)]] = [:]
+        var people: [ContactPerson] = []
         let keys: [CNKeyDescriptor] = [
             CNContactFormatter.descriptorForRequiredKeys(for: .fullName), CNContactPhoneNumbersKey as CNKeyDescriptor,
             CNContactEmailAddressesKey as CNKeyDescriptor, CNContactOrganizationNameKey as CNKeyDescriptor,
@@ -43,6 +63,10 @@ final class ContactBook: ContactsLookup, @unchecked Sendable {
         try? CNContactStore().enumerateContacts(with: CNContactFetchRequest(keysToFetch: keys)) { c, _ in
             let name = CNContactFormatter.string(from: c, style: .fullName) ?? c.organizationName
             guard !name.isEmpty else { return }
+            people.append(
+                ContactPerson(
+                    name: name,
+                    handles: c.phoneNumbers.map { $0.value.stringValue } + c.emailAddresses.map { $0.value as String }))
             for e in c.emailAddresses { email[(e.value as String).lowercased()] = name }
             for p in c.phoneNumbers {
                 let d = Self.digits(p.value.stringValue)
@@ -51,6 +75,7 @@ final class ContactBook: ContactsLookup, @unchecked Sendable {
         }
         byEmail = email
         byPhone = phone
+        everyone = people
     }
 
     static func digits(_ s: String) -> String { s.filter(\.isASCII).filter(\.isNumber) }

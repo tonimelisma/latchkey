@@ -17,7 +17,33 @@ enum MessagesFixture {
 
     struct FakeContacts: ContactsLookup {
         var names: [String: String] = ["+15551234567": "Sarah Lee", "bob@example.com": "Bob Stone"]
+        var people: [ContactPerson] = [
+            ContactPerson(name: "Sarah Lee", handles: ["+1 (555) 123-4567"]),
+            ContactPerson(name: "Bob Stone", handles: ["bob@example.com", "+15559990000"]),
+            ContactPerson(name: "Sam Ito", handles: ["+15550001111"]),
+            ContactPerson(name: "Sam Ross", handles: ["+15550002222"]),
+            ContactPerson(name: "Ann Park", handles: ["+15550003333", "ann@example.com"]),
+        ]
         func name(for handle: String) -> String? { names[handle] }
+        func people(matching name: String) -> [ContactPerson] {
+            people.filter { $0.name.localizedCaseInsensitiveContains(name) }
+        }
+    }
+
+    /// Plays Messages: records an outgoing message the way Messages writes one after a send.
+    static func recordOutgoing(in db: URL, chat: Int, text: String, error: Int = 0) {
+        var h: OpaquePointer?
+        sqlite3_open(db.path, &h)
+        defer { sqlite3_close(h) }
+        let date = Int64(Date().timeIntervalSinceReferenceDate * 1_000_000_000)
+        let id = Int(Date().timeIntervalSince1970 * 1000) % 1_000_000 + 500_000
+        sqlite3_exec(
+            h,
+            """
+            INSERT INTO message (ROWID, guid, text, handle_id, date, is_from_me, cache_has_attachments, is_sent, error)
+              VALUES (\(id), 'M-SENT-\(id)', '\(text)', 0, \(date), 1, 0, \(error == 0 ? 1 : 0), \(error));
+            INSERT INTO chat_message_join VALUES (\(chat), \(id), \(date));
+            """, nil, nil, nil)
     }
 
     static func make(extraMessages: Int = 0) throws -> URL {
@@ -41,7 +67,8 @@ enum MessagesFixture {
             CREATE TABLE chat_handle_join (chat_id INTEGER, handle_id INTEGER);
             CREATE TABLE message (ROWID INTEGER PRIMARY KEY, guid TEXT, text TEXT, attributedBody BLOB,
               handle_id INTEGER, date INTEGER, is_from_me INTEGER, cache_has_attachments INTEGER,
-              associated_message_type INTEGER DEFAULT 0, item_type INTEGER DEFAULT 0, service TEXT);
+              associated_message_type INTEGER DEFAULT 0, item_type INTEGER DEFAULT 0, service TEXT,
+              is_sent INTEGER DEFAULT 0, error INTEGER DEFAULT 0);
             CREATE TABLE chat_message_join (chat_id INTEGER, message_id INTEGER, message_date INTEGER);
             CREATE TABLE attachment (ROWID INTEGER PRIMARY KEY, guid TEXT, filename TEXT, mime_type TEXT,
               transfer_name TEXT, uti TEXT);

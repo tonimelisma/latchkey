@@ -41,7 +41,7 @@ final class AppModel {
         static let keepAwake = "keepAwakeEnabled"
         static let levels = "capabilityLevels"
         static let launchedBefore = "launchedBefore"
-        static let notesControl = "notesControlAllowed"
+        static let appControl = "appControlAllowed"
     }
 
     init() {
@@ -91,7 +91,7 @@ final class AppModel {
     func showSetup() { setupWindow.show(model: self) }
 
     var needsSetup: Bool {
-        !isPaired || helperStatus != .enabled || (capabilities.anyOn && !fullDiskAccess) || needsNotesControl
+        !isPaired || helperStatus != .enabled || (capabilities.anyOn && !fullDiskAccess) || needsAppControl
             || needsContacts
     }
 
@@ -215,7 +215,7 @@ final class AppModel {
         capabilities.setLevel(id, level)
         defaults.set(capabilities.levels.mapValues(\.rawValue), forKey: Keys.levels)
         Task { await connection?.sendTools() }  // FR-062
-        if (capabilities.anyOn && !fullDiskAccess) || needsNotesControl { showSetup() }
+        if (capabilities.anyOn && !fullDiskAccess) || needsAppControl { showSetup() }
     }
 
     // MARK: permissions
@@ -224,30 +224,49 @@ final class AppModel {
 
     func checkFullDiskAccess() { fullDiskAccess = Permissions.hasFullDiskAccess }
 
-    /// Whether Latchkey may control Notes, remembered once seen: macOS can only say while Notes runs.
-    private(set) var notesControl: Permissions.Automation =
-        UserDefaults.standard.bool(forKey: Keys.notesControl) ? .allowed : .notAsked
+    /// Which apps Latchkey may control (Automation), remembered once seen: macOS can only say
+    /// while the app runs.
+    private(set) var appControl: [String: Permissions.Automation] = Dictionary(
+        uniqueKeysWithValues: (UserDefaults.standard.stringArray(forKey: Keys.appControl) ?? []).map { ($0, .allowed) })
 
-    /// Changing notes needs it; asked in setup so no prompt waits on an unattended Mac (FR-140).
-    var needsNotesControl: Bool {
-        capabilities.level(CapabilityRegistry.notes) == .readWrite && notesControl != .allowed
+    /// The app each capability drives when it changes things.
+    static let controlledApps = [
+        CapabilityRegistry.notes: Permissions.notesApp, CapabilityRegistry.messages: Permissions.messagesApp,
+    ]
+
+    func control(of app: String) -> Permissions.Automation { appControl[app] ?? .notAsked }
+
+    /// Changing notes and sending messages need it; asked in setup so no prompt waits on an
+    /// unattended Mac (FR-140).
+    func needsControl(for capability: String) -> Bool {
+        guard let app = Self.controlledApps[capability] else { return false }
+        return capabilities.level(capability) == .readWrite && control(of: app) != .allowed
     }
 
-    func checkNotesControl() async {
-        let state = await Task.detached { Permissions.automation(of: Permissions.notesApp, ask: false) }.value
-        if let state { setNotesControl(state) }
+    var needsAppControl: Bool { Self.controlledApps.keys.contains { needsControl(for: $0) } }
+
+    func checkAppControl() async {
+        for app in Self.controlledApps.values {
+            let state = await Task.detached { Permissions.automation(of: app, ask: false) }.value
+            if let state { setControl(app, state) }
+        }
     }
 
-    /// Opens Notes in the background if needed, then lets macOS ask the Owner.
-    func allowNotesControl() async {
-        if let app = NSWorkspace.shared.urlForApplication(withBundleIdentifier: Permissions.notesApp) {
+    /// Opens the app in the background if needed, then lets macOS ask the Owner.
+    func allowControl(of app: String) async {
+        if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: app) {
             let config = NSWorkspace.OpenConfiguration()
             config.activates = false
             config.hides = true
-            _ = try? await NSWorkspace.shared.openApplication(at: app, configuration: config)
+            _ = try? await NSWorkspace.shared.openApplication(at: url, configuration: config)
         }
-        let state = await Task.detached { Permissions.automation(of: Permissions.notesApp, ask: true) }.value
-        if let state { setNotesControl(state) }
+        let state = await Task.detached { Permissions.automation(of: app, ask: true) }.value
+        if let state { setControl(app, state) }
+    }
+
+    private func setControl(_ app: String, _ state: Permissions.Automation) {
+        appControl[app] = state
+        defaults.set(appControl.filter { $0.value == .allowed }.keys.sorted(), forKey: Keys.appControl)
     }
 
     /// Contacts gives names to numbers in Messages (FR-111). Asked once in setup; after a "Don't
@@ -263,11 +282,6 @@ final class AppModel {
     func allowContacts() async {
         _ = try? await CNContactStore().requestAccess(for: .contacts)
         checkContacts()
-    }
-
-    private func setNotesControl(_ state: Permissions.Automation) {
-        notesControl = state
-        defaults.set(state == .allowed, forKey: Keys.notesControl)
     }
 
     func setStartsAtLogin(_ on: Bool) {

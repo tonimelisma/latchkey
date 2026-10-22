@@ -173,6 +173,84 @@ final class MessagesStore: @unchecked Sendable {
         }
     }
 
+    // MARK: sending (increment 5)
+
+    func conversationExists(_ id: String) throws -> Bool {
+        try locked { try !rows("SELECT 1 FROM chat WHERE guid = ?", bind: [.text(id)]).isEmpty }
+    }
+
+    /// The group whose name is `name`, if exactly one has it.
+    func group(named name: String) throws -> String? {
+        try locked {
+            let hits = try rows(
+                "SELECT guid FROM chat WHERE style = 43 AND display_name = ? COLLATE NOCASE", bind: [.text(name)])
+            return hits.count == 1 ? hits[0][0].text : nil
+        }
+    }
+
+    /// The most recent one-to-one conversation with this number or address.
+    func conversation(with handle: String) throws -> String? {
+        try locked {
+            let ids = try handleRows(matching: handle)
+            guard !ids.isEmpty else { return nil }
+            let list = ids.map(String.init).joined(separator: ",")
+            let last =
+                "(SELECT MAX(\(Self.seconds("j.message_date"))) FROM chat_message_join j WHERE j.chat_id = c.ROWID)"
+            return try rows(
+                """
+                SELECT c.guid FROM chat c JOIN chat_handle_join x ON x.chat_id = c.ROWID
+                WHERE x.handle_id IN (\(list)) AND c.style <> 43 ORDER BY \(last) DESC LIMIT 1
+                """
+            ).first?[0].text
+        }
+    }
+
+    enum Outcome: Equatable { case sent, failed }
+
+    /// What Messages recorded for a message this Mac sent since `since` to the conversation or
+    /// handle; nil while nothing is recorded yet.
+    func outgoing(since: Date, conversation: String?, handle: String?) throws -> Outcome? {
+        try locked {
+            var target: [String] = []
+            var bind: [SQLite.Value] = [.double(since.timeIntervalSinceReferenceDate)]
+            if let conversation {
+                target.append("c.guid = ?")
+                bind.append(.text(conversation))
+            }
+            if let handle {
+                let ids = try handleRows(matching: handle)
+                if !ids.isEmpty { target.append("x.handle_id IN (\(ids.map(String.init).joined(separator: ",")))") }
+            }
+            guard !target.isEmpty else { return nil }
+            let columns = Set(try rows("PRAGMA table_info(message)").compactMap { $0[1].text })
+            let error = columns.contains("error") ? "m.error" : "0"
+            let sent = columns.contains("is_sent") ? "m.is_sent" : "1"
+            let sql = """
+                SELECT \(error), \(sent) FROM message m
+                JOIN chat_message_join j ON j.message_id = m.ROWID JOIN chat c ON c.ROWID = j.chat_id
+                LEFT JOIN chat_handle_join x ON x.chat_id = c.ROWID
+                WHERE m.is_from_me = 1 AND \(Self.seconds("m.date")) >= ? AND (\(target.joined(separator: " OR ")))
+                ORDER BY m.ROWID DESC LIMIT 1
+                """
+            guard let r = try rows(sql, bind: bind).first else { return nil }
+            if (r[0].int ?? 0) != 0 { return .failed }
+            return (r[1].int ?? 0) == 1 ? .sent : nil
+        }
+    }
+
+    /// Handle rows for a number (compared on digits, one ending with the other) or an address.
+    private func handleRows(matching handle: String) throws -> [Int64] {
+        let digits = ContactBook.digits(handle)
+        let isAddress = handle.contains("@")
+        return try rows("SELECT ROWID, id FROM handle").compactMap { r in
+            let id = r[1].text ?? ""
+            if isAddress { return id.caseInsensitiveCompare(handle) == .orderedSame ? r[0].int : nil }
+            let d = ContactBook.digits(id)
+            guard digits.count >= 7, d.count >= 7, !id.contains("@") else { return nil }
+            return d.hasSuffix(digits) || digits.hasSuffix(d) ? r[0].int : nil
+        }
+    }
+
     func image(message: String, attachment: String) throws -> PreparedImage {
         let path: String = try locked {
             guard

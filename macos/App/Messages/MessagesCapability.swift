@@ -1,16 +1,19 @@
 import Foundation
 
 /// Messages: iMessage, SMS, RCS (spec 002 US2). Reading comes from Messages' database (plan D2);
-/// sending arrives in increment 5.
+/// sending goes through Messages with AppleScript (plan D3).
 enum MessagesCapability {
     /// Opens the store on first use; nil while Latchkey lacks Full Disk Access.
     typealias StoreSource = @Sendable () throws -> MessagesStore?
 
     static func make() -> Capability {
-        let source = Opener()
+        let contacts = ContactBook()
+        let source = Opener(contacts: contacts)
         return Capability(
             id: CapabilityRegistry.messages, title: "Messages", summary: "Read, search, and send messages",
-            readTools: readTools(store: { try source.store() }), writeTools: [])
+            readTools: readTools(store: { try source.store() }),
+            writeTools: writeTools(
+                store: { try source.store() }, contacts: contacts, scripts: OSAScriptRunner(), staging: staging))
     }
 
     static let noAccess = """
@@ -121,6 +124,207 @@ enum MessagesCapability {
         ]
     }
 
+    // MARK: sending (plan D3)
+
+    /// Messages delivers scripted attachments reliably only from Pictures (Toni chose the visible
+    /// folder, 2026-10-22).
+    static let staging = URL.homeDirectory.appending(path: "Pictures/Latchkey")
+
+    static func writeTools(
+        store: @escaping StoreSource, contacts: any ContactsLookup, scripts: any ScriptRunner, staging: URL,
+        confirmWait: Duration = .seconds(5)
+    ) -> [ToolEntry] {
+        [
+            ToolEntry(
+                tool: .make(
+                    "messages_send", title: "Send a Message",
+                    description:
+                        "Sends a message from the Mac's Messages app: text, files, or both. to is a name from Contacts, a phone number, an email address, a group's name, or a conversation id from messages_conversations. Attachments are paths of files on the Mac. If a name matches several people or numbers, nothing is sent and the choices are returned.",
+                    input: [
+                        "to": .stringParam("Who or which conversation to send to"),
+                        "text": .stringParam("The message text"),
+                        "attachments": .object([
+                            "type": .string("array"), "items": .object(["type": .string("string")]),
+                            "description": .string("Paths of files on the Mac to send"),
+                        ]),
+                    ], required: ["to"], readOnly: false, openWorld: true, deadlineMS: 30_000),
+                handler: { args in
+                    await run(store) { s in
+                        guard let to = args["to"]?.stringValue?.trimmingCharacters(in: .whitespaces), !to.isEmpty
+                        else { return .text("Say who to send to.", isError: true) }
+                        let text = args["text"]?.stringValue ?? ""
+                        var paths: [String] = []
+                        if case .array(let a) = args["attachments"] { paths = a.compactMap(\.stringValue) }
+                        guard !text.isEmpty || !paths.isEmpty else {
+                            return .text("Give the text or files to send.", isError: true)
+                        }
+                        let target: Target
+                        switch try resolve(to, store: s, contacts: contacts) {
+                        case .success(let t): target = t
+                        case .failure(let why): return .text(why.message, isError: true)
+                        }
+                        var files: [String] = []
+                        for path in paths {
+                            let source = URL(filePath: (path as NSString).expandingTildeInPath)
+                            var isDir: ObjCBool = false
+                            guard FileManager.default.fileExists(atPath: source.path, isDirectory: &isDir),
+                                !isDir.boolValue,
+                                FileManager.default.isReadableFile(atPath: source.path)
+                            else {
+                                return .text("Nothing was sent: there's no readable file at \(path).", isError: true)
+                            }
+                            files.append(source.path)
+                        }
+                        let copies = try stage(files, in: staging)
+                        let start = Date().addingTimeInterval(-2)
+                        _ = try await scripts.run(Script.send, [target.kind, target.id, text] + copies.map(\.path))
+                        var outcome: MessagesStore.Outcome?
+                        let deadline = ContinuousClock.now + confirmWait
+                        while outcome == nil, ContinuousClock.now < deadline {
+                            try? await Task.sleep(for: .milliseconds(250))
+                            outcome = try s.outgoing(
+                                since: start, conversation: target.kind == "chat" ? target.id : nil,
+                                handle: target.kind == "participant" ? target.id : nil)
+                        }
+                        let what =
+                            [
+                                text.isEmpty ? nil : "«\(text)»",
+                                files.isEmpty ? nil : "\(files.count) file\(files.count == 1 ? "" : "s")",
+                            ]
+                            .compactMap { $0 }.joined(separator: " and ")
+                        switch outcome {
+                        case .failed:
+                            return .text(
+                                "Messages couldn't send it to \(target.label). The number may not be on iMessage, or the Mac may be offline.",
+                                isError: true)
+                        case .sent:
+                            var r = ToolResult.text("Sent to \(target.label): \(what).")
+                            r.activity = "Claude sent a message to \(target.name)"
+                            return r
+                        case nil:
+                            var r = ToolResult.text(
+                                "Messages accepted \(what) for \(target.label) but hasn't confirmed sending yet. Check with messages_read in a moment."
+                            )
+                            r.activity = "Claude sent a message to \(target.name)"
+                            return r
+                        }
+                    }
+                })
+        ]
+    }
+
+    struct Target {
+        /// "chat" (an existing conversation) or "participant" (a new one, over iMessage).
+        var kind: String
+        var id: String
+        var name: String
+        var label: String
+    }
+
+    struct Unclear: Error { var message: String }
+
+    /// Plan D3's order: conversation id, group name, number or address, name in Contacts.
+    static func resolve(_ to: String, store s: MessagesStore, contacts: any ContactsLookup) throws -> Result<
+        Target, Unclear
+    > {
+        if try s.conversationExists(to) { return .success(Target(kind: "chat", id: to, name: to, label: to)) }
+        if let g = try s.group(named: to) {
+            return .success(Target(kind: "chat", id: g, name: to, label: "the group «\(to)»"))
+        }
+        let digits = ContactBook.digits(to)
+        let isNumber = digits.count >= 7 && to.allSatisfy { $0.isNumber || " +-().".contains($0) }
+        if isNumber || (to.contains("@") && !to.contains(" ")) {
+            let name = contacts.name(for: to) ?? to
+            let label = name == to ? to : "\(name) (\(to))"
+            if let chat = try s.conversation(with: to) {
+                return .success(Target(kind: "chat", id: chat, name: name, label: label))
+            }
+            let handle = isNumber ? (to.hasPrefix("+") ? "+" : "") + digits : to
+            return .success(Target(kind: "participant", id: handle, name: name, label: label))
+        }
+        let people = contacts.people(matching: to)
+        switch people.count {
+        case 0:
+            return .failure(
+                Unclear(
+                    message:
+                        "Nothing was sent: no one in Contacts is called \(to). Give a phone number or email address, or a conversation id from messages_conversations."
+                ))
+        case 1:
+            let p = people[0]
+            if let chat = try p.handles.lazy.compactMap({ try s.conversation(with: $0) }).first {
+                return .success(Target(kind: "chat", id: chat, name: p.name, label: p.name))
+            }
+            if p.handles.count == 1 {
+                let h = p.handles[0]
+                let handle = h.contains("@") ? h : (h.hasPrefix("+") ? "+" : "") + ContactBook.digits(h)
+                return .success(Target(kind: "participant", id: handle, name: p.name, label: "\(p.name) (\(h))"))
+            }
+            return .failure(
+                Unclear(
+                    message:
+                        "Nothing was sent: \(p.name) has several numbers and addresses and no conversation yet. Send again with one of: \(p.handles.joined(separator: ", "))."
+                ))
+        default:
+            let list = people.map { "\($0.name) (\($0.handles.joined(separator: ", ")))" }.joined(separator: "; ")
+            return .failure(
+                Unclear(
+                    message:
+                        "Nothing was sent: several people match \(to): \(list). Send again with a number or address."))
+        }
+    }
+
+    /// Copies files to the Pictures folder Messages sends from, and removes day-old copies.
+    static func stage(_ files: [String], in dir: URL) throws -> [URL] {
+        guard !files.isEmpty else { return [] }
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        removeOldCopies(in: dir)
+        return try files.map { path in
+            let folder = dir.appending(path: UUID().uuidString)
+            try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+            let copy = folder.appending(path: URL(filePath: path).lastPathComponent)
+            try FileManager.default.copyItem(at: URL(filePath: path), to: copy)
+            return copy
+        }
+    }
+
+    static func removeOldCopies(in dir: URL) {
+        let fm = FileManager.default
+        let items =
+            (try? fm.contentsOfDirectory(at: dir, includingPropertiesForKeys: [.contentModificationDateKey])) ?? []
+        for item in items {
+            let date =
+                (try? item.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .now
+            if Date().timeIntervalSince(date) > 86_400 { try? fm.removeItem(at: item) }
+        }
+    }
+
+    enum Script {
+        /// argv: kind ("chat" or "participant"), target, text, then file paths.
+        static let send = """
+            on run argv
+            set kind to item 1 of argv
+            set target to item 2 of argv
+            set theText to item 3 of argv
+            set theFiles to {}
+            repeat with i from 4 to count of argv
+            set end of theFiles to (POSIX file (item i of argv))
+            end repeat
+            tell application "Messages"
+            if kind is "chat" then
+            set dest to chat id target
+            else
+            set dest to participant target of (1st account whose service type = iMessage)
+            end if
+            repeat with f in theFiles
+            send f to dest
+            end repeat
+            if theText is not "" then send theText to dest
+            end tell
+            end run
+            """
+    }
+
     // MARK: text for Claude (plan D6)
 
     /// Others' words in «», so nothing inside can pose as the end of the quote or a new message.
@@ -219,14 +423,28 @@ enum MessagesCapability {
 
     // MARK: helpers
 
-    private static func run(_ source: StoreSource, _ body: (MessagesStore) throws -> ToolResult) async -> ToolResult {
+    private static func run(_ source: StoreSource, _ body: (MessagesStore) async throws -> ToolResult) async
+        -> ToolResult
+    {
         do {
             guard let store = try source() else { return .text(noAccess, isError: true) }
-            return try body(store)
+            return try await body(store)
         } catch let f as MessagesStore.Failure {
+            return .text(explain(f), isError: true)
+        } catch let f as ScriptError {
             return .text(explain(f), isError: true)
         } catch {
             return .text("Messages couldn't be read: \(error.localizedDescription)", isError: true)
+        }
+    }
+
+    static func explain(_ f: ScriptError) -> String {
+        switch f {
+        case .notAllowed:
+            "Latchkey isn't allowed to control Messages. The Mac's owner can allow it in System Settings → Privacy & Security → Automation → Latchkey."
+        case .timedOut:
+            "Messages didn't answer within 25 seconds. The message may or may not have been sent; check with messages_read."
+        case .failed(let message): "Messages reported an error: \(message)"
         }
     }
 
@@ -246,7 +464,9 @@ enum MessagesCapability {
     private final class Opener: @unchecked Sendable {
         private let lock = NSLock()
         private var opened: MessagesStore?
-        private let contacts = ContactBook()
+        private let contacts: ContactBook
+
+        init(contacts: ContactBook) { self.contacts = contacts }
 
         func store() throws -> MessagesStore? {
             lock.lock()

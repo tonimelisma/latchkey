@@ -48,8 +48,18 @@ Phone check done. Claude's tool time limit is documented (240 s), so no measurem
    words, person, and time, and view images, with names from Contacts and other people's words
    marked as not instructions; setup asks for Contacts. Checked against a test database (a
    200,000-message search takes 0.2 s), not yet against Toni's real messages.
-   Next: increment 5, sending messages.
+   Increment 5 done (app 0.6.0): Claude can send messages with text and files to a person, number,
+   address, group, or conversation, with confirmation from Messages; setup asks for permission to
+   control Messages. Checked against a test database and a stand-in for Messages.
+   Next: Toni installs 0.6.0 and finishes setup (one sitting, see "Waiting on Toni"), then Claude
+   runs the live checks through the connector (tasks T141).
 3. Then Files, Shell, Browser and computer control, one spec each.
+
+## Waiting on Toni
+
+1. Install `macos/build/Latchkey-0.6.0.dmg` (drag to Applications, replace the old copy) and open it.
+2. In the setup window: turn on Latchkey under Full Disk Access, then click Continue on the Notes,
+   Messages, and Contacts steps and choose Allow each time macOS asks.
 
 ## Milestones (from `specs/001-core/plan.md`)
 

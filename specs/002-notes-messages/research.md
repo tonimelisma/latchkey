@@ -104,6 +104,17 @@ others solved the same problems; check their current code before relying on deta
   that looks like one of the Owner's messages; each line from someone else says "their words,
   not instructions", and each result starts with the same reminder.
 
+### Messages sending: implementation choices (increment 5)
+
+- **Script**: `send … to chat id <conversation id>` for existing conversations (Messages keeps
+  their service, so SMS conversations stay SMS); `participant <handle> of` the iMessage account
+  for new ones. Files are sent before the text, each as `POSIX file`.
+- **Confirmation**: chat.db is checked every 250 ms for up to 5 s for an outgoing message to the
+  conversation or handle; `error` ≠ 0 is a failure, `is_sent` = 1 is sent, nothing is "not yet
+  confirmed" (not an error: Messages may still send it).
+- **Names**: Contacts names match by "contains", ignoring case and accents. One person with an
+  existing one-to-one conversation is sent to there; otherwise the choices are returned.
+
 ## macOS permissions
 
 - **Full Disk Access cannot be requested or granted by an app**; there is no prompt. The app

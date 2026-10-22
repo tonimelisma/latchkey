@@ -106,24 +106,17 @@ struct SetupView: View {
                 }
             }
             if model.capabilities.level(CapabilityRegistry.notes) == .readWrite {
-                step(4, "Let Latchkey change your notes", done: model.notesControl == .allowed) {
-                    if model.notesControl == .denied {
-                        Text(
-                            "Latchkey isn't allowed to control Notes. In System Settings, open Automation and turn on Notes under Latchkey."
-                        )
-                        .foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-                        Button("Open System Settings") { Permissions.openAutomationSettings() }
-                    } else {
-                        Text(
-                            "So Claude can create, edit, and delete notes. When macOS asks whether Latchkey may control Notes, click Allow."
-                        )
-                        .foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-                        Button("Continue") { Task { await model.allowNotesControl() } }
-                    }
-                }
+                controlStep(
+                    4, "Let Latchkey change your notes", app: Permissions.notesApp, appName: "Notes",
+                    purpose: "So Claude can create, edit, and delete notes.")
+            }
+            if model.capabilities.level(CapabilityRegistry.messages) == .readWrite {
+                controlStep(
+                    5, "Let Latchkey send messages", app: Permissions.messagesApp, appName: "Messages",
+                    purpose: "So Claude can send messages for you.")
             }
             if model.capabilities.level(CapabilityRegistry.messages) != .off {
-                step(5, "Show names in Messages", done: model.contactsStatus == .authorized) {
+                step(6, "Show names in Messages", done: model.contactsStatus == .authorized) {
                     if model.contactsStatus == .notDetermined {
                         Text(
                             "So Claude sees who wrote each message, not just phone numbers. When macOS asks about Contacts, click Allow."
@@ -154,9 +147,25 @@ struct SetupView: View {
             while !Task.isCancelled {  // notice the approvals in System Settings
                 await model.checkHelperApproval()
                 model.checkFullDiskAccess()
-                await model.checkNotesControl()
+                await model.checkAppControl()
                 model.checkContacts()
                 try? await Task.sleep(for: .seconds(1))
+            }
+        }
+    }
+
+    private func controlStep(_ n: Int, _ title: String, app: String, appName: String, purpose: String) -> some View {
+        step(n, title, done: model.control(of: app) == .allowed) {
+            if model.control(of: app) == .denied {
+                Text(
+                    "Latchkey isn't allowed to control \(appName). In System Settings, open Automation and turn on \(appName) under Latchkey."
+                )
+                .foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                Button("Open System Settings") { Permissions.openAutomationSettings() }
+            } else {
+                Text("\(purpose) When macOS asks whether Latchkey may control \(appName), click Allow.")
+                    .foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                Button("Continue") { Task { await model.allowControl(of: app) } }
             }
         }
     }

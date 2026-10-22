@@ -109,7 +109,8 @@ extension Tool {
     /// A tool with the annotations Claude requires on every tool.
     static func make(
         _ name: String, title: String, description: String, input: [String: JSONValue] = [:],
-        required: [String] = [], readOnly: Bool, destructive: Bool = false, deadlineMS: Int = 10_000
+        required: [String] = [], readOnly: Bool, destructive: Bool = false, openWorld: Bool = false,
+        deadlineMS: Int = 10_000
     ) -> Tool {
         Tool(
             name: name, title: title, description: description,
@@ -119,7 +120,7 @@ extension Tool {
             ]),
             outputSchema: nil,
             annotations: ToolAnnotations(
-                title: title, readOnlyHint: readOnly, destructiveHint: destructive, openWorldHint: false),
+                title: title, readOnlyHint: readOnly, destructiveHint: destructive, openWorldHint: openWorld),
             meta: [Tool.deadlineKey: .number(Double(deadlineMS))])
     }
 }
