@@ -30,7 +30,11 @@ Notes:
 2. **Hosted relay live at https://relay.example.com** (deployed 2026-10-20, Let's Encrypt
    certificate, 7 MB memory on my-vm). Email: Resend domain relay.example.com verified, SMTP
    send from the relay's settings accepted. `RESEND_ADMIN_KEY` is no longer needed.
-3. **Try it from your Claude account and devices** (T072 to T074): add the connector on claude.ai,
+3. **Connector verified 2026-10-22:** Toni's Claude account has the Latchkey connector; Claude
+   called `battery_status` (80%, plugged in, matching pmset) and `laptop_status` (online,
+   keep-awake on) on Toni's real Mac through https://relay.example.com. Remaining: try from
+   the phone.
+   **Try it from your Claude account and devices** (T072 to T074): add the connector on claude.ai,
    ask from the phone and Desktop. Checklist: `specs/001-core/quickstart.md`. Claude measures the
    hosted tool-call timeout (T073) from the relay's logs during this.
 4. **Developer ID, update key, public repository** for signed releases and updates (T082, T083):
