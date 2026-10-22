@@ -73,3 +73,4 @@ Add a row when a decision is made; never delete one, mark it "superseded by" ins
 | 2026-10-22 | No Latchkey-side approvals or limits; Claude's apps handle approval; others' text is labeled | spec 002 FR-114, FR-115 |
 | 2026-10-22 | Notifications for changes; recent activity in the menu; busy indicator | spec 002 FR-130 to FR-132 |
 | 2026-10-22 | Images from notes and messages on request | spec 002 FR-104, FR-113 |
+| 2026-10-22 | Spec 002 approved as is; message attachments may be any file the Mac can read | spec 002 plan |

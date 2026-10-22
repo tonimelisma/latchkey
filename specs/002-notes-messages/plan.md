@@ -128,8 +128,6 @@ capability's level; a level change sends a new list (FR-062). No protocol change
 | VIII. Simplicity | Pass: no new projects or services |
 | IX. Open source | Pass: no new dependencies planned (own protobuf and typedstream decoders) |
 
-## Open for review
+## Reviewed
 
-- [NEEDS CLARIFICATION: Sending attachments from arbitrary paths lets Claude send any file on the
-  Mac it can name. Toni chose attachments; confirm that any readable file may be attached, or limit
-  to files from notes and messages until the Files capability exists.]
+Approved as is by Toni on 2026-10-22, including attachments from any file the Mac can read.
