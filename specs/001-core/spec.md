@@ -120,8 +120,8 @@ Format: EARS ("When <trigger>, the <system> shall <response>"). IDs are stable; 
   passes, the relay shall return a timeout error to Claude and send a cancel to the Mac.
 - **FR-012** When the Mac stops responding without closing its connection, the relay shall mark it
   offline within a bounded detection window.
-- **FR-013** While the Mac is offline, the relay shall still answer the MCP handshake, the tool
-  list (last list the Mac reported), and `laptop_status`.
+- **FR-013** While the Mac is offline, the relay shall still answer the MCP handshake and the tool
+  list (last list the Mac reported); calling a Mac tool returns the offline answer (FR-010).
 - **FR-014** While the Mac is offline, the relay shall keep the Owner's Claude connection signed
   in, including refreshing tokens.
 
@@ -129,8 +129,12 @@ Format: EARS ("When <trigger>, the <system> shall <response>"). IDs are stable; 
 - **FR-020** The relay shall record, per Mac: connected or not, last seen time, last known battery
   percentage, power source, charging state, thermal state, keep-awake state, and the reason for the
   last disconnect if the Mac reported one.
-- **FR-021** The relay shall provide a `laptop_status` tool that returns this state, available
-  whether or not the Mac is online.
+- **FR-021** *Withdrawn 2026-10-22 (Toni): no status tool; the Mac's state is context in tool
+  results (FR-065).*
+- **FR-065** Every tool result that comes from the Mac shall end with a short line of the Mac's
+  state (online, battery, power source, keep-awake, and a warning when the Mac may soon sleep),
+  and every answer for a Mac that is away shall say since when and why, so Claude knows the
+  laptop's condition as a byproduct of real work.
 - **FR-022** The relay shall record an audit entry for every tool call: time, tool name, Claude
   surface if known, outcome (ok, error, timeout, offline), and duration. It shall not record tool
   arguments.
@@ -198,9 +202,9 @@ Format: EARS ("When <trigger>, the <system> shall <response>"). IDs are stable; 
 - **FR-062** When the enabled set changes, the Mac app shall send the new tool list to the relay
   and the relay shall notify connected Claude sessions that the list changed, where the protocol
   supports it.
-- **FR-064** On first launch, the "System info" capability shall be enabled.
-- **FR-063** This spec ships one capability, "System info", with one tool, `battery_status`, which
-  returns live battery percentage, charging state, power source, and time remaining if known.
+- **FR-064** *Withdrawn 2026-10-22 with FR-063.*
+- **FR-063** *Withdrawn 2026-10-22 (Toni): the "System info" capability and `battery_status` are
+  removed; the first real capability is Notes and Messages (spec 002).*
 
 ### Mac app behavior
 - **FR-070** The app shall live in the menu bar and show: connected or not, battery, keep-awake

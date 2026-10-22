@@ -64,3 +64,6 @@ Add a row when a decision is made; never delete one, mark it "superseded by" ins
 | 2026-10-20 | Email through Resend (SMTP), sending domain relay.example.com | plan D5, research.md |
 | 2026-10-21 | One email-first sign-in page; 6-digit email codes instead of links | FR-042, FR-043, FR-043a |
 | 2026-10-21 | Mac app signs in through Apple's sign-in window (ASWebAuthenticationSession), not a browser tab | plan D6 |
+| 2026-10-22 | No status tool; the Mac's state is a short line in every Mac tool result | spec 001 FR-021 (withdrawn), FR-065 |
+| 2026-10-22 | System info / battery_status removed; first capability is Notes + Messages | FR-063 (withdrawn), spec 002 |
+| 2026-10-22 | Work longer than Claude's 240 s limit: a start tool and a check tool (job ID) | spec 002 research |

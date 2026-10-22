@@ -32,23 +32,14 @@ after the app was quit.
 
 ## Next steps
 
-Finishing the first version:
-1. **Phone check (Toni):** ask Claude on the phone for the battery (US1).
-2. **Measure Claude's tool-call time limit (Claude):** a temporary slow test tool on a test
-   account, to confirm our 60 s cap sits below Claude's (T073).
-3. **Public, signed releases (Toni, then Claude):** Apple Developer ID, the update signing key,
-   and a public repository; then `macos/scripts/release.sh` publishes notarized builds with
-   automatic updates (T082, T083).
-4. **Before others use the hosted relay (Toni decides):** terms of service, privacy policy, and
-   abuse handling; then lift the sign-up limit (`ALLOWED_EMAILS`).
-5. **Later:** listing in Anthropic's connectors directory (one-click connect, no review screen).
+Releases, terms and privacy, and the directory listing are much later (Toni, 2026-10-22).
+Phone check done. Claude's tool time limit is documented (240 s), so no measurement is needed.
 
-Then the capabilities, one spec each, in this order (CLAUDE.md, step 6): each starts with
-research and an interview of Toni, and stops for Toni's review before tasks or code.
-6. Files (spec 002).
-7. Notes and iMessage.
-8. Shell.
-9. Browser and computer control.
+1. **Spec 002, Notes and Messages** (branch `002-notes-messages`): research written; interview
+   Toni; write `spec.md` and `plan.md`; stop for Toni's review before tasks or code.
+2. Spec 001 follow-up, done with spec 002's code: remove `battery_status` and `laptop_status`, add
+   the status line to every Mac tool result (FR-065), add `destructiveHint` to every tool.
+3. Then Files, Shell, Browser and computer control, one spec each.
 
 ## Milestones (from `specs/001-core/plan.md`)
 
