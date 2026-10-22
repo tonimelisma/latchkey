@@ -1,4 +1,5 @@
 import AppKit
+import CoreServices
 import Foundation
 import UserNotifications
 
@@ -18,6 +19,31 @@ enum Permissions {
             try? handle.close()
             return true
         }
+    }
+
+    static let notesApp = "com.apple.Notes"
+
+    enum Automation: Sendable, Equatable { case allowed, denied, notAsked }
+
+    /// Whether Latchkey may control the app (Automation). Blocks while macOS asks the Owner, so
+    /// call it off the main thread. Nil when it can't be known (the app isn't running).
+    nonisolated static func automation(of bundleID: String, ask: Bool) -> Automation? {
+        var target = AEAddressDesc()
+        let id = Array(bundleID.utf8)
+        guard AECreateDesc(DescType(typeApplicationBundleID), id, id.count, &target) == noErr else { return nil }
+        defer { AEDisposeDesc(&target) }
+        switch AEDeterminePermissionToAutomateTarget(&target, AEEventClass(typeWildCard), AEEventID(typeWildCard), ask)
+        {
+        case noErr: return .allowed
+        case OSStatus(errAEEventNotPermitted): return .denied
+        case OSStatus(errAEEventWouldRequireUserConsent): return .notAsked
+        default: return nil
+        }
+    }
+
+    static func openAutomationSettings() {
+        let pane = "x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension?Privacy_Automation"
+        if let url = URL(string: pane) { NSWorkspace.shared.open(url) }
     }
 
     /// Opens System Settings → Privacy & Security → Full Disk Access.

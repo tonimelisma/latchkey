@@ -14,7 +14,7 @@ requires both). Results are text plus `structuredContent`; images are MCP image 
 | `notes_read` (id) | Read only | yes | no | FR-101, FR-105 |
 | `notes_image` (note id, attachment id) | Read only | yes | no | FR-104 |
 | `notes_create` (title, text, folder?) | Read & write | no | no | FR-102 |
-| `notes_update` (id, text, mode: replace or append) | Read & write | no | yes (replace) | FR-102 |
+| `notes_update` (id, mode: append, replace, or edit; text; find for edit) | Read & write | no | yes | FR-102, FR-106 |
 | `notes_delete` (id) | Read & write | no | yes | FR-102, FR-103 |
 | `messages_conversations` (query?, limit) | Read only | yes | no | FR-110 |
 | `messages_read` (conversation, before?, limit) | Read only | yes | no | FR-110, FR-111 |
@@ -43,10 +43,20 @@ Serves FR-101, FR-110, FR-150; research "Apple Notes", "Messages".
 ## D3. Changing: through the apps, with Apple Events
 
 Serves FR-102, FR-103, FR-112.
-- Notes create, update, delete via AppleScript to Notes.app (`NSAppleScript`, run off the main
-  thread with a deadline). Markdown-like text converts to the HTML body Notes accepts; checklists
-  are written as plain list items (Notes has no scripting API for checklist state; recorded as a
-  limitation). Delete uses Notes' own `delete`, which moves the note to Recently Deleted.
+- Notes create, update, delete via AppleScript to Notes.app (Toni chose AppleScript only over
+  Shortcuts and typing, 2026-10-22). Scripts run in `osascript` with the user's text passed as
+  arguments, never pasted into the script, and a 25 s deadline after which the process is
+  ended. Markdown-like text converts to the HTML body Notes accepts; checklists come out as
+  ☐/☑ items (FR-107). The title is the note's first line.
+- Append adds HTML to the existing body; replace keeps the title and sets the rest; edit
+  replaces one exact passage (it must occur once in the note's text). All three rewrite the
+  body, which AppleScript can't do without losing checklists, attachments (images, tables), so
+  before any change the app checks the database and refuses notes that have them, or are
+  locked, saying why (FR-106).
+- New notes: the id Notes returns (`x-coredata://<store>/ICNote/p<row>`) is mapped back to the
+  note's id in the database (waits up to 3 s for Notes to write it). Changes find the note's
+  scripting id the same way in reverse.
+- Delete uses Notes' own `delete`, which moves the note to Recently Deleted (FR-103).
 - Messages send via AppleScript to Messages.app: to a participant (resolved to a handle) or an
   existing chat ID; attachments as `POSIX file`. After sending, the app checks `chat.db` for the
   new outgoing message (up to 5 s) and reports sent, failed, or pending.
@@ -66,8 +76,12 @@ Serves FR-140, FR-121.
 - Full Disk Access cannot be requested: the app checks by opening the databases; when missing, the
   setup window adds a step "Allow Latchkey to read Notes and Messages" with a button that opens
   System Settings → Privacy & Security → Full Disk Access. The window notices the change by itself.
-- Automation and Contacts prompts appear on first use; a denial is explained in the tool result
-  and in setup.
+- Automation is asked for in setup, not on first use: a prompt raised by a request from the phone
+  would wait on an unattended Mac. The step ("Let Latchkey change your notes") opens Notes in the
+  background and lets macOS ask (`AEDeterminePermissionToAutomateTarget`); after a denial it
+  opens System Settings → Automation. macOS can only tell while Notes runs, so an Allow once seen
+  is remembered. A denial at call time is explained in the tool result. Contacts prompts on
+  first use (increment 4).
 - Levels start at Read & write (FR-121), so setup shows these steps on first launch.
 
 ## D6. Text written by others

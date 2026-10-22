@@ -105,6 +105,23 @@ struct SetupView: View {
                     Button("Open System Settings") { Permissions.openFullDiskAccessSettings() }
                 }
             }
+            if model.capabilities.level(CapabilityRegistry.notes) == .readWrite {
+                step(4, "Let Latchkey change your notes", done: model.notesControl == .allowed) {
+                    if model.notesControl == .denied {
+                        Text(
+                            "Latchkey isn't allowed to control Notes. In System Settings, open Automation and turn on Notes under Latchkey."
+                        )
+                        .foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                        Button("Open System Settings") { Permissions.openAutomationSettings() }
+                    } else {
+                        Text(
+                            "So Claude can create, edit, and delete notes. When macOS asks whether Latchkey may control Notes, click Allow."
+                        )
+                        .foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                        Button("Continue") { Task { await model.allowNotesControl() } }
+                    }
+                }
+            }
             HStack {
                 Text("Latchkey lives in the menu bar. To uninstall, move it to the Trash.")
                     .font(.footnote).foregroundStyle(.secondary)
@@ -120,6 +137,7 @@ struct SetupView: View {
             while !Task.isCancelled {  // notice the approvals in System Settings
                 await model.checkHelperApproval()
                 model.checkFullDiskAccess()
+                await model.checkNotesControl()
                 try? await Task.sleep(for: .seconds(1))
             }
         }

@@ -74,3 +74,5 @@ Add a row when a decision is made; never delete one, mark it "superseded by" ins
 | 2026-10-22 | Notifications for changes; recent activity in the menu; busy indicator | spec 002 FR-130 to FR-132 |
 | 2026-10-22 | Images from notes and messages on request | spec 002 FR-104, FR-113 |
 | 2026-10-22 | Spec 002 approved as is; message attachments may be any file the Mac can read | spec 002 plan |
+| 2026-10-22 | Notes changes through AppleScript only (no Shortcuts, no typing); checklists Claude writes appear as ☐/☑ | spec 002 FR-107, plan D3 |
+| 2026-10-22 | Claude can also edit a passage of a note; any change that would lose checklists, images, or tables is refused with the reason | spec 002 FR-102, FR-106 |

@@ -50,7 +50,7 @@ import Testing
     @Test func listsFoldersWithoutTrash() throws {
         let folders = try store().folders()
         #expect(folders.map(\.name) == ["Notes", "Trips"])
-        #expect(folders.first?.noteCount == 2)
+        #expect(folders.first?.noteCount == 3)
     }
 
     @Test func searchesTitlesAndText() throws {
@@ -66,7 +66,7 @@ import Testing
 
     @Test func emptyQueryListsRecentNotes() throws {
         let hits = try store().search("", folder: nil, limit: 10)
-        #expect(hits.map(\.id) == ["N-GROCERIES", "N-SECRET", "N-LISBON"], "newest first")
+        #expect(hits.map(\.id) == ["N-GROCERIES", "N-SECRET", "N-LISBON", "N-IDEAS"], "newest first")
     }
 
     @Test func readsANote() throws {

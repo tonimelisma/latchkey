@@ -40,6 +40,7 @@ final class AppModel {
         static let keepAwake = "keepAwakeEnabled"
         static let levels = "capabilityLevels"
         static let launchedBefore = "launchedBefore"
+        static let notesControl = "notesControlAllowed"
     }
 
     init() {
@@ -89,7 +90,7 @@ final class AppModel {
     func showSetup() { setupWindow.show(model: self) }
 
     var needsSetup: Bool {
-        !isPaired || helperStatus != .enabled || (capabilities.anyOn && !fullDiskAccess)
+        !isPaired || helperStatus != .enabled || (capabilities.anyOn && !fullDiskAccess) || needsNotesControl
     }
 
     /// Re-reads whether the Owner approved the helper; applies keep-awake as soon as they do.
@@ -212,7 +213,7 @@ final class AppModel {
         capabilities.setLevel(id, level)
         defaults.set(capabilities.levels.mapValues(\.rawValue), forKey: Keys.levels)
         Task { await connection?.sendTools() }  // FR-062
-        if capabilities.anyOn && !fullDiskAccess { showSetup() }
+        if (capabilities.anyOn && !fullDiskAccess) || needsNotesControl { showSetup() }
     }
 
     // MARK: permissions
@@ -220,6 +221,37 @@ final class AppModel {
     private(set) var fullDiskAccess = Permissions.hasFullDiskAccess
 
     func checkFullDiskAccess() { fullDiskAccess = Permissions.hasFullDiskAccess }
+
+    /// Whether Latchkey may control Notes, remembered once seen: macOS can only say while Notes runs.
+    private(set) var notesControl: Permissions.Automation =
+        UserDefaults.standard.bool(forKey: Keys.notesControl) ? .allowed : .notAsked
+
+    /// Changing notes needs it; asked in setup so no prompt waits on an unattended Mac (FR-140).
+    var needsNotesControl: Bool {
+        capabilities.level(CapabilityRegistry.notes) == .readWrite && notesControl != .allowed
+    }
+
+    func checkNotesControl() async {
+        let state = await Task.detached { Permissions.automation(of: Permissions.notesApp, ask: false) }.value
+        if let state { setNotesControl(state) }
+    }
+
+    /// Opens Notes in the background if needed, then lets macOS ask the Owner.
+    func allowNotesControl() async {
+        if let app = NSWorkspace.shared.urlForApplication(withBundleIdentifier: Permissions.notesApp) {
+            let config = NSWorkspace.OpenConfiguration()
+            config.activates = false
+            config.hides = true
+            _ = try? await NSWorkspace.shared.openApplication(at: app, configuration: config)
+        }
+        let state = await Task.detached { Permissions.automation(of: Permissions.notesApp, ask: true) }.value
+        if let state { setNotesControl(state) }
+    }
+
+    private func setNotesControl(_ state: Permissions.Automation) {
+        notesControl = state
+        defaults.set(state == .allowed, forKey: Keys.notesControl)
+    }
 
     func setStartsAtLogin(_ on: Bool) {
         do {

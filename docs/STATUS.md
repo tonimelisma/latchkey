@@ -38,10 +38,13 @@ Phone check done. Claude's tool time limit is documented (240 s), so no measurem
 1. **Spec 002, Notes and Messages** (approved; branch `002-notes-messages`; `tasks.md`).
    Increment 1 done (app 0.2.0, relay deployed): state line in every Mac answer, status tools
    removed, Off / Read only / Read & write levels, activity in the menu, busy dot, notifications,
-   Full Disk Access setup step. Increment 2 done (app 0.3.0): Claude can search, list folders,
-   read notes (with checklists), and view note images; checked against a test database, not yet
-   against Toni's real notes (needs the new app installed with Full Disk Access). Next:
-   increment 3, Notes changes (create, edit, delete through Notes).
+   Full Disk Access setup step. Increment 2 done (app 0.3.0): Claude can search, list folders, read notes (with
+   checklists), and view note images. Increment 3 done (app 0.4.0): create, append, replace, edit
+   a passage, delete (to Recently Deleted), all through Notes with AppleScript; notes with
+   checklists, images, or tables are refused with the reason; setup asks for permission to
+   control Notes. Checked against a test database and a stand-in for Notes, not yet against
+   Toni's real Notes (needs 0.4.0 installed with Full Disk Access and Notes control allowed).
+   Next: increment 4, Messages reading.
 3. Then Files, Shell, Browser and computer control, one spec each.
 
 ## Milestones (from `specs/001-core/plan.md`)

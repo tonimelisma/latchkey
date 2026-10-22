@@ -1,6 +1,7 @@
 import Foundation
 
-/// Apple Notes (spec 002 US1). Reading comes from Notes' database; changes arrive in increment 3.
+/// Apple Notes (spec 002 US1). Reading comes from Notes' database (plan D2); changes go through
+/// Notes with AppleScript (plan D3).
 enum NotesCapability {
     /// Opens the store on first use; nil while Latchkey lacks Full Disk Access.
     typealias StoreSource = @Sendable () throws -> NotesStore?
@@ -9,7 +10,8 @@ enum NotesCapability {
         let source = Opener()
         return Capability(
             id: CapabilityRegistry.notes, title: "Notes", summary: "Read, search, create, edit, and delete notes",
-            readTools: readTools(store: { try source.store() }), writeTools: [])
+            readTools: readTools(store: { try source.store() }, scripts: OSAScriptRunner()),
+            writeTools: writeTools(store: { try source.store() }, scripts: OSAScriptRunner()))
     }
 
     static let noAccess = """
@@ -20,7 +22,8 @@ enum NotesCapability {
     /// FR-151: results stay well within Claude's limit.
     static let maxText = 100_000
 
-    static func readTools(store: @escaping StoreSource) -> [ToolEntry] {
+    /// `scripts`, when given, reads through Notes if the database layout is unknown (plan D2).
+    static func readTools(store: @escaping StoreSource, scripts: (any ScriptRunner)? = nil) -> [ToolEntry] {
         [
             ToolEntry(
                 tool: .make(
@@ -33,9 +36,9 @@ enum NotesCapability {
                         "limit": .integerParam("At most this many notes (default 20, up to 100)"),
                     ], readOnly: true, deadlineMS: 30_000),
                 handler: { args in
-                    await run(store) { s in
+                    await run(store, scripts) { s in
                         let limit = min(max(Int(args["limit"]?.numberValue ?? 20), 1), 100)
-                        let hits = try s.search(
+                        let hits = try await s.search(
                             args["query"]?.stringValue ?? "", folder: args["folder"]?.stringValue, limit: limit)
                         let text =
                             hits.isEmpty
@@ -53,8 +56,8 @@ enum NotesCapability {
                     description: "Lists the Notes folders and how many notes each holds.",
                     readOnly: true),
                 handler: { _ in
-                    await run(store) { s in
-                        let folders = try s.folders()
+                    await run(store, scripts) { s in
+                        let folders = try await s.folders()
                         let text = folders.map { "- \($0.name): \($0.noteCount) notes" }.joined(separator: "\n")
                         return .data(
                             .object([
@@ -75,11 +78,11 @@ enum NotesCapability {
                         "Reads one note: title, folder, dates, and text as Markdown (checklists as - [ ] and - [x]). Attached images appear as [image <id>]; view them with notes_image.",
                     input: ["id": .stringParam("The note's id, from notes_search")], required: ["id"], readOnly: true),
                 handler: { args in
-                    await run(store) { s in
+                    await run(store, scripts) { s in
                         guard let id = args["id"]?.stringValue else {
                             return .text("Give the note's id.", isError: true)
                         }
-                        let n = try s.read(id: id)
+                        let n = try await s.read(id: id)
                         var text = n.text
                         var shortened = false
                         if text.count > maxText {
@@ -108,12 +111,12 @@ enum NotesCapability {
                         "attachment": .stringParam("The image's id, from [image <id>] in notes_read"),
                     ], required: ["note", "attachment"], readOnly: true),
                 handler: { args in
-                    await run(store) { s in
+                    await run(store, scripts) { s in
                         guard let note = args["note"]?.stringValue, let attachment = args["attachment"]?.stringValue
                         else {
                             return .text("Give the note's id and the image's id.", isError: true)
                         }
-                        let image = try s.image(note: note, attachment: attachment)
+                        let image = try await s.image(note: note, attachment: attachment)
                         return .image(image.data, mimeType: image.mimeType)
                     }
                 }),
@@ -122,16 +125,34 @@ enum NotesCapability {
 
     // MARK: helpers
 
-    private static func run(_ source: StoreSource, _ body: @Sendable (NotesStore) throws -> ToolResult) async
-        -> ToolResult
-    {
+    private static func run(
+        _ source: StoreSource, _ scripts: (any ScriptRunner)?, _ body: (any NotesReader) async throws -> ToolResult
+    ) async -> ToolResult {
         do {
-            guard let store = try source() else { return .text(noAccess, isError: true) }
-            return try body(store)
+            let reader: any NotesReader
+            do {
+                guard let store = try source() else { return .text(noAccess, isError: true) }
+                reader = store
+            } catch NotesStore.Failure.unknownLayout(_) where scripts != nil {
+                reader = NotesScriptReader(scripts: scripts!)
+            }
+            return try await body(reader)
         } catch let failure as NotesStore.Failure {
+            return .text(explain(failure), isError: true)
+        } catch let failure as ScriptError {
             return .text(explain(failure), isError: true)
         } catch {
             return .text("Notes couldn't be read: \(error.localizedDescription)", isError: true)
+        }
+    }
+
+    static func explain(_ f: ScriptError) -> String {
+        switch f {
+        case .notAllowed:
+            "Latchkey isn't allowed to control Notes. The Mac's owner can allow it in System Settings → Privacy & Security → Automation → Latchkey."
+        case .timedOut:
+            "Notes didn't answer within 25 seconds. The change may or may not have happened; check with notes_read."
+        case .failed(let message): "Notes reported an error: \(message)"
         }
     }
 
@@ -164,6 +185,200 @@ enum NotesCapability {
         ]
         if let c = n.created { o["created"] = .string(c.formatted(.iso8601)) }
         return .object(o)
+    }
+
+    // MARK: changing notes (plan D3)
+
+    static func writeTools(store: @escaping StoreSource, scripts: any ScriptRunner) -> [ToolEntry] {
+        [
+            ToolEntry(
+                tool: .make(
+                    "notes_create", title: "Create a Note",
+                    description:
+                        "Creates a note in Notes on the Mac. The text is Markdown-like: # headings, - lists, 1. numbered lists; - [ ] items become ☐ (Notes doesn't let other apps make real checklists).",
+                    input: [
+                        "title": .stringParam("The note's title"),
+                        "text": .stringParam("The note's text, below the title"),
+                        "folder": .stringParam("Folder name from notes_folders; the default folder if left out"),
+                    ], required: ["title"], readOnly: false, deadlineMS: 30_000),
+                handler: { args in
+                    await run(store, scripts) { s in
+                        guard let title = args["title"]?.stringValue, !title.isEmpty else {
+                            return .text("Give the note a title.", isError: true)
+                        }
+                        var folder = ""
+                        if let wanted = args["folder"]?.stringValue, !wanted.isEmpty {
+                            let folders = try await s.folders()
+                            guard
+                                let match = folders.first(where: {
+                                    $0.name.caseInsensitiveCompare(wanted) == .orderedSame
+                                })
+                            else {
+                                return .text(
+                                    "There is no folder named \(wanted). The folders are: "
+                                        + folders.map(\.name).joined(separator: ", ") + ".", isError: true)
+                            }
+                            folder = match.name
+                        }
+                        let text = args["text"]?.stringValue ?? ""
+                        let html = NoteHTML.title(title) + (text.isEmpty ? "" : NoteHTML.from(text))
+                        let scriptID = try await scripts.run(Script.create, [html, folder])
+                        var id: String?
+                        for _ in 0..<15 {  // Notes writes its database a moment later
+                            id = try await s.identifier(forScriptID: scriptID)
+                            if id != nil { break }
+                            try? await Task.sleep(for: .milliseconds(200))
+                        }
+                        var result = ToolResult.data(
+                            .object(["id": id.map(JSONValue.string) ?? .null, "title": .string(title)]),
+                            text: id.map { "Created “\(title)” (id \($0))." }
+                                ?? "Created “\(title)”. It will show up in notes_search in a moment.")
+                        result.activity = "Claude created the note “\(title)”"
+                        return result
+                    }
+                }),
+            ToolEntry(
+                tool: .make(
+                    "notes_update", title: "Change a Note",
+                    description:
+                        "Changes a note's text. mode append adds text at the end; replace sets everything below the title; edit replaces the passage given in find (it must appear exactly once in one paragraph). Text is Markdown-like as in notes_create. Notes with checklists, images, or tables can't be changed this way without losing them, so Latchkey refuses those.",
+                    input: [
+                        "id": .stringParam("The note's id, from notes_search"),
+                        "mode": .object([
+                            "type": .string("string"),
+                            "enum": .array(["append", "replace", "edit"].map(JSONValue.string)),
+                            "description": .string("append, replace, or edit"),
+                        ]),
+                        "text": .stringParam("The text to add, the new text, or the passage's replacement"),
+                        "find": .stringParam("For edit: the exact passage to replace"),
+                    ], required: ["id", "mode", "text"], readOnly: false, destructive: true, deadlineMS: 30_000),
+                handler: { args in
+                    await run(store, scripts) { s in
+                        guard let id = args["id"]?.stringValue, let mode = args["mode"]?.stringValue,
+                            let text = args["text"]?.stringValue
+                        else { return .text("Give the note's id, a mode, and the text.", isError: true) }
+                        let note = try await s.read(id: id)
+                        guard s.knowsContents else {
+                            return .text(
+                                "Latchkey can't check this note for checklists or images with this version of Notes, so it doesn't change existing notes. Create a new note instead.",
+                                isError: true)
+                        }
+                        if let why = refusal(note) { return .text(why, isError: true) }
+                        switch mode {
+                        case "append":
+                            _ = try await scripts.run(Script.append, [note.scriptID, NoteHTML.from(text)])
+                        case "replace":
+                            _ = try await scripts.run(
+                                Script.setBody, [note.scriptID, NoteHTML.title(note.title) + NoteHTML.from(text)])
+                        case "edit":
+                            guard let find = args["find"]?.stringValue, !find.isEmpty else {
+                                return .text("For edit, give the passage to replace in find.", isError: true)
+                            }
+                            let body = try await scripts.run(Script.getBody, [note.scriptID])
+                            let needle = NoteHTML.escape(find)
+                            let count = body.components(separatedBy: needle).count - 1
+                            guard count == 1 else {
+                                return .text(
+                                    count == 0
+                                        ? "The passage wasn't found in “\(note.title)”, or it spans paragraphs or formatting. Read the note again and give a shorter passage."
+                                        : "The passage appears \(count) times in “\(note.title)”. Include more of the surrounding text.",
+                                    isError: true)
+                            }
+                            _ = try await scripts.run(
+                                Script.setBody,
+                                [note.scriptID, body.replacingOccurrences(of: needle, with: NoteHTML.escape(text))])
+                        default:
+                            return .text("mode must be append, replace, or edit.", isError: true)
+                        }
+                        var result = ToolResult.text(
+                            mode == "append" ? "Added to “\(note.title)”." : "Changed “\(note.title)”.")
+                        result.activity =
+                            mode == "append"
+                            ? "Claude added to the note “\(note.title)”" : "Claude changed the note “\(note.title)”"
+                        return result
+                    }
+                }),
+            ToolEntry(
+                tool: .make(
+                    "notes_delete", title: "Delete a Note",
+                    description: "Moves a note to Recently Deleted in Notes, where it stays for 30 days.",
+                    input: ["id": .stringParam("The note's id, from notes_search")], required: ["id"], readOnly: false,
+                    destructive: true, deadlineMS: 30_000),
+                handler: { args in
+                    await run(store, scripts) { s in
+                        guard let id = args["id"]?.stringValue else {
+                            return .text("Give the note's id.", isError: true)
+                        }
+                        let note = try await s.read(id: id)
+                        _ = try await scripts.run(Script.delete, [note.scriptID])
+                        var result = ToolResult.text(
+                            "Moved “\(note.title)” to Recently Deleted. Notes keeps it there for 30 days.")
+                        result.activity = "Claude deleted the note “\(note.title)”"
+                        return result
+                    }
+                }),
+        ]
+    }
+
+    /// FR-106: why a note can't be changed without losing part of it, or nil.
+    static func refusal(_ note: NotesStore.Note) -> String? {
+        var parts: [String] = []
+        if note.locked { parts.append("it's locked with a password") }
+        if note.hasChecklists { parts.append("it has checklists") }
+        if !note.attachments.isEmpty { parts.append("it has images, tables, or other attachments") }
+        guard !parts.isEmpty else { return nil }
+        return """
+            Latchkey didn't change “\(note.title)”: \(parts.joined(separator: " and ")). Notes only lets \
+            other apps rewrite a note's whole text, which would lose those. Create a new note instead, \
+            or ask the Mac's owner to change this one in Notes.
+            """
+    }
+
+    /// AppleScript for Notes; the user's text arrives as arguments (argv).
+    enum Script {
+        static let create = """
+            on run argv
+            set theBody to item 1 of argv
+            set folderName to item 2 of argv
+            tell application "Notes"
+            if folderName is "" then
+            set n to make new note with properties {body:theBody}
+            else
+            set n to make new note at folder folderName with properties {body:theBody}
+            end if
+            return id of n
+            end tell
+            end run
+            """
+        static let append = """
+            on run argv
+            set theID to item 1 of argv
+            set extra to item 2 of argv
+            tell application "Notes"
+            set n to note id theID
+            set body of n to (body of n) & extra
+            end tell
+            end run
+            """
+        static let setBody = """
+            on run argv
+            set theID to item 1 of argv
+            set newBody to item 2 of argv
+            tell application "Notes" to set body of note id theID to newBody
+            end run
+            """
+        static let getBody = """
+            on run argv
+            set theID to item 1 of argv
+            tell application "Notes" to return body of note id theID
+            end run
+            """
+        static let delete = """
+            on run argv
+            set theID to item 1 of argv
+            tell application "Notes" to delete note id theID
+            end run
+            """
     }
 
     /// Opens the database once, on first use, so a later grant of Full Disk Access takes effect.

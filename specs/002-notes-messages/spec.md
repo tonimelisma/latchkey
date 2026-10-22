@@ -69,10 +69,17 @@ As an Owner, I set Notes and Messages each to Off, Read only, or Read & write in
 - **FR-101** While Notes is Read only or Read & write, Claude shall be able to search notes by
   text, list folders, and read a note's title, folder, dates, text, and checklist items.
 - **FR-102** While Notes is Read & write, Claude shall be able to create a note (optionally in a
-  folder), replace or append to a note's text, and delete a note.
+  folder), append to a note, replace a note's text, edit a passage of a note, and delete a note
+  (edit added by Toni, 2026-10-22).
 - **FR-103** Deleting a note shall move it to Recently Deleted, never erase it.
 - **FR-104** Claude shall be able to view an image attached to a note.
 - **FR-105** Password-locked notes shall be listed as locked, with no content.
+- **FR-106** When a change would lose part of a note (checklists, images, tables, or a locked
+  note), Latchkey shall not change it and shall tell Claude why, so Claude can create a new note
+  instead (Toni, 2026-10-22).
+- **FR-107** Checklists in text Claude writes shall appear as ☐ and ☑ items, because Notes offers
+  no way for other apps to make real checklists without Shortcuts (Toni chose AppleScript only,
+  2026-10-22).
 
 ### Messages
 - **FR-110** While Messages is Read only or Read & write, Claude shall be able to list recent

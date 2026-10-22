@@ -107,6 +107,8 @@ enum NotesFixture {
               ZCREATIONDATE3 TIMESTAMP, ZMODIFICATIONDATE1 TIMESTAMP, ZMARKEDFORDELETION INTEGER,
               ZISPASSWORDPROTECTED INTEGER, ZFOLDERTYPE INTEGER, ZNOTE INTEGER, ZTYPEUTI VARCHAR,
               ZMEDIA INTEGER, ZFILENAME VARCHAR);
+            CREATE TABLE Z_METADATA (Z_VERSION INTEGER PRIMARY KEY, Z_UUID VARCHAR(255), Z_PLIST BLOB);
+            INSERT INTO Z_METADATA VALUES (1, 'STORE-UUID', NULL);
             CREATE TABLE ZICNOTEDATA (Z_PK INTEGER PRIMARY KEY, ZDATA BLOB, ZNOTE INTEGER);
             """)
         let t = coreData(modified)
@@ -120,7 +122,8 @@ enum NotesFixture {
               (10,12,'N-GROCERIES','Groceries','Milk',1,100,\(t - 86400),\(t),0),
               (11,12,'N-LISBON','Lisbon trip','Flights booked',2,101,\(t - 864000),\(t - 3600),0),
               (12,12,'N-SECRET','Bank codes','',1,102,\(t),\(t),1),
-              (13,12,'N-OLD','Old draft','gone',3,103,\(t),\(t),0);
+              (13,12,'N-OLD','Old draft','gone',3,103,\(t),\(t),0),
+              (14,12,'N-IDEAS','Ideas','Garden',1,104,\(t - 7200),\(t - 7200),0);
             INSERT INTO ZICCLOUDSYNCINGOBJECT (Z_PK,Z_ENT,ZIDENTIFIER,ZNOTE,ZTYPEUTI,ZMEDIA) VALUES
               (20,5,'A-PHOTO',11,'public.png',21);
             INSERT INTO ZICCLOUDSYNCINGOBJECT (Z_PK,Z_ENT,ZIDENTIFIER,ZFILENAME) VALUES (21,11,'MEDIA-1','photo.png');
@@ -148,6 +151,7 @@ enum NotesFixture {
             ),
             (102, Data()),
             (103, body("Old draft\ngone", runs: [Run(length: 14)])),
+            (104, body("Ideas\nGarden & shed\nPaint the fence", runs: [Run(length: 6, style: 0), Run(length: 29)])),
         ]
         for (pk, data) in bodies {
             var stmt: OpaquePointer?

@@ -21,6 +21,7 @@ struct NoteBody: Sendable, Equatable {
     var markdown: String
     var plainText: String
     var attachments: [Attachment]
+    var hasChecklists = false
 
     enum Failure: Error { case notGzip, badProtobuf }
 
@@ -122,7 +123,9 @@ struct NoteBody: Sendable, Equatable {
             start = end + 1
         }
         let plain = text.replacingOccurrences(of: "\u{FFFC}", with: "")
-        return NoteBody(markdown: lines.joined(separator: "\n"), plainText: plain, attachments: attachments)
+        return NoteBody(
+            markdown: lines.joined(separator: "\n"), plainText: plain, attachments: attachments,
+            hasChecklists: runs.contains { $0.style == 103 })
     }
 
     // MARK: gzip

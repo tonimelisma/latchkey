@@ -31,6 +31,9 @@ final class NotesStore: @unchecked Sendable {
         var locked: Bool
         var text: String
         var attachments: [NoteBody.Attachment]
+        var hasChecklists = false
+        /// Notes' scripting id, `x-coredata://<store>/ICNote/p<row>`.
+        var scriptID = ""
     }
 
     enum Failure: Error, Equatable {
@@ -150,8 +153,26 @@ final class NotesStore: @unchecked Sendable {
             let body = row.locked ? nil : body(row)
             return Note(
                 id: row.id, title: row.title, folder: row.folder, created: row.created, modified: row.modified,
-                locked: row.locked, text: body?.markdown ?? "", attachments: body?.attachments ?? [])
+                locked: row.locked, text: body?.markdown ?? "", attachments: body?.attachments ?? [],
+                hasChecklists: body?.hasChecklists ?? false, scriptID: try scriptPrefix() + "\(row.pk)")
         }
+    }
+
+    /// The note id for a scripting id Notes returned, once Notes has written the note.
+    func identifier(forScriptID scriptID: String) throws -> String? {
+        guard let r = scriptID.range(of: "/ICNote/p"), let pk = Int64(scriptID[r.upperBound...]) else { return nil }
+        return try locked {
+            try Self.rows(
+                db, "SELECT ZIDENTIFIER FROM ZICCLOUDSYNCINGOBJECT WHERE Z_PK = \(pk) AND Z_ENT = \(ent.note)"
+            ).first?[0].text
+        }
+    }
+
+    private func scriptPrefix() throws -> String {
+        guard let uuid = try Self.rows(db, "SELECT Z_UUID FROM Z_METADATA").first?[0].text else {
+            throw Failure.unknownLayout("no store id")
+        }
+        return "x-coredata://\(uuid)/ICNote/p"
     }
 
     struct Image: Sendable {

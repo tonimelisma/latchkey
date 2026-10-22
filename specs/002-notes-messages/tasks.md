@@ -27,13 +27,14 @@ deployed if it changed, a commit, and a push (Toni, 2026-10-22). `[P]` = paralle
   notes, image lookup. *FR-101, FR-104, FR-105, FR-150.*
 - **T113** ✅ Tools `notes_search`, `notes_folders`, `notes_read`, `notes_image`. *D1.*
 
-## Increment 3: Notes changes
+## Increment 3: Notes changes (done 2026-10-22, app 0.4.0)
 
-- **T120** Apple Events runner behind a protocol (fake in tests); Markdown-like text → Notes HTML.
+- **T120** ✅ Apple Events runner behind a protocol (fake in tests); Markdown-like text → Notes HTML.
   Also the reading fallback through Notes for a database layout Latchkey doesn't know (plan D2;
   moved here from increment 2 because it needs this runner).
-- **T121** Tools `notes_create`, `notes_update` (replace, append), `notes_delete`; notifications.
-  *FR-102, FR-103, FR-130.*
+- **T121** ✅ Tools `notes_create`, `notes_update` (append, replace, edit), `notes_delete`;
+  notifications; refusals that protect checklists and images; setup step for Automation.
+  *FR-102, FR-103, FR-106, FR-107, FR-130, FR-140.*
 
 ## Increment 4: Messages reading
 

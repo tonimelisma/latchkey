@@ -54,6 +54,20 @@ others solved the same problems; check their current code before relying on deta
   1568 px and 3 MB go as they are, everything else (HEIC, large photos) becomes JPEG scaled to
   1568 px on the longest side (the size Claude reads images at) with ImageIO.
 
+### Notes changes: implementation choices (increment 3)
+
+- **Running AppleScript**: `osascript` child process (chosen) vs in-process `NSAppleScript`.
+  osascript can be stopped at the deadline and runs off the main thread; NSAppleScript must run
+  on the main thread and can't be interrupted. The user's text goes in `argv`, so no quoting or
+  injection problems. Cost: about 100 ms to start a process.
+- **Which errors mean what**: -1743 not allowed (Automation), -1712 Notes didn't answer.
+- **Edit**: matches the passage in the body HTML Notes returns (escaped the same way), so it
+  works within one paragraph without formatting inside; otherwise Claude is told to give a
+  shorter passage or use replace.
+- Checked on this Mac 2026-10-22: the `osascript` runner passes arguments verbatim and stops at
+  its deadline (tests). A live run against Notes from Claude's terminal waited on macOS's
+  Automation prompt; the live check runs through the installed Latchkey instead.
+
 ## Messages (iMessage, SMS, RCS)
 
 - Reading: `~/Library/Messages/chat.db`, opened read-only; needs **Full Disk Access**. On
