@@ -17,19 +17,21 @@ deployed if it changed, a commit, and a push (Toni, 2026-10-22). `[P]` = paralle
   opens the System Settings page; notices the change). Info.plist usage strings and the Apple
   Events entitlement. *FR-140, D5.*
 
-## Increment 2: Notes reading
+## Increment 2: Notes reading (done 2026-10-22, app 0.3.0)
 
-- **T110** [P] Fixture `NoteStore.sqlite` built by a script: folders, notes with compressed
+- **T110** ✅ [P] Fixture `NoteStore.sqlite` built by the test code (`Tests/NotesFixture.swift`): folders, notes with compressed
   protobuf bodies (headings, lists, checklists, an image attachment), a locked note.
-- **T111** Tests first, then the note body decoder (gzip + protobuf → text with Markdown-like
+- **T111** ✅ Tests first, then the note body decoder (gzip + protobuf → text with Markdown-like
   styles, checklist state, attachment references). *D2.*
-- **T112** Tests first, then the Notes store: schema discovery, folders, search, read, locked
+- **T112** ✅ Tests first, then the Notes store: schema discovery, folders, search, read, locked
   notes, image lookup. *FR-101, FR-104, FR-105, FR-150.*
-- **T113** Tools `notes_search`, `notes_folders`, `notes_read`, `notes_image`. *D1.*
+- **T113** ✅ Tools `notes_search`, `notes_folders`, `notes_read`, `notes_image`. *D1.*
 
 ## Increment 3: Notes changes
 
 - **T120** Apple Events runner behind a protocol (fake in tests); Markdown-like text → Notes HTML.
+  Also the reading fallback through Notes for a database layout Latchkey doesn't know (plan D2;
+  moved here from increment 2 because it needs this runner).
 - **T121** Tools `notes_create`, `notes_update` (replace, append), `notes_delete`; notifications.
   *FR-102, FR-103, FR-130.*
 

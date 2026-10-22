@@ -33,6 +33,27 @@ others solved the same problems; check their current code before relying on deta
   https://github.com/PsychQuant/che-apple-notes-mcp, https://github.com/CaseyRo/mcp-apple-notes,
   https://github.com/iangray001/applenotes-mcp
 
+### Notes reader: implementation choices (increment 2)
+
+- **Fixture**: built by the test code at run time (`Tests/NotesFixture.swift`, with the matching
+  protobuf and gzip encoder) instead of a checked-in binary file. Pros: readable, reviewable,
+  no binary blobs in git, layout changes are one edit. Cons: the encoder could share a mistake
+  with the decoder; real data is still checked live through the connector. Chosen.
+- **Protobuf**: a ~60-line reader of fields (no `swift-protobuf` dependency, Constitution IX).
+  Pros: no dependency, tolerant of unknown fields. Cons: no generated types. Chosen.
+- **gzip**: the system `zlib` (importable from Swift; `inflateInit2` window 47 auto-detects gzip).
+- **Columns**: looked up with `PRAGMA table_info` at open (first match among `ZTITLE1`/`ZTITLE`,
+  `ZCREATIONDATE3`/`ZCREATIONDATE1`/`ZCREATIONDATE`, `ZMODIFICATIONDATE1`/`ZMODIFICATIONDATE`),
+  entity numbers from `Z_PRIMARYKEY`.
+- **Search**: SQL lists live notes newest first; bodies are decoded once and kept in memory
+  while the note's modification date is unchanged; matching is case- and accent-insensitive.
+  Recently Deleted (folder type 1) and notes marked for deletion are excluded. Locked notes
+  match by title only and never show content.
+- **Note ids**: Notes' own `ZIDENTIFIER` (a UUID, stable across syncs).
+- **Images**: media file found under `Accounts/<account>/Media/<media id>/`; JPEG or PNG up to
+  1568 px and 3 MB go as they are, everything else (HEIC, large photos) becomes JPEG scaled to
+  1568 px on the longest side (the size Claude reads images at) with ImageIO.
+
 ## Messages (iMessage, SMS, RCS)
 
 - Reading: `~/Library/Messages/chat.db`, opened read-only; needs **Full Disk Access**. On
