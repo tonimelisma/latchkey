@@ -1,4 +1,4 @@
-import AppKit
+import Contacts
 import Foundation
 import Network
 import Observation
@@ -91,6 +91,7 @@ final class AppModel {
 
     var needsSetup: Bool {
         !isPaired || helperStatus != .enabled || (capabilities.anyOn && !fullDiskAccess) || needsNotesControl
+            || needsContacts
     }
 
     /// Re-reads whether the Owner approved the helper; applies keep-awake as soon as they do.
@@ -246,6 +247,21 @@ final class AppModel {
         }
         let state = await Task.detached { Permissions.automation(of: Permissions.notesApp, ask: true) }.value
         if let state { setNotesControl(state) }
+    }
+
+    /// Contacts gives names to numbers in Messages (FR-111). Asked once in setup; after a "Don't
+    /// Allow", messages show numbers and setup stops asking.
+    private(set) var contactsStatus = CNContactStore.authorizationStatus(for: .contacts)
+
+    var needsContacts: Bool {
+        capabilities.level(CapabilityRegistry.messages) != .off && contactsStatus == .notDetermined
+    }
+
+    func checkContacts() { contactsStatus = CNContactStore.authorizationStatus(for: .contacts) }
+
+    func allowContacts() async {
+        _ = try? await CNContactStore().requestAccess(for: .contacts)
+        checkContacts()
     }
 
     private func setNotesControl(_ state: Permissions.Automation) {

@@ -41,6 +41,11 @@ enum Permissions {
         }
     }
 
+    static func openContactsSettings() {
+        let pane = "x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension?Privacy_Contacts"
+        if let url = URL(string: pane) { NSWorkspace.shared.open(url) }
+    }
+
     static func openAutomationSettings() {
         let pane = "x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension?Privacy_Automation"
         if let url = URL(string: pane) { NSWorkspace.shared.open(url) }

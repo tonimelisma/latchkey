@@ -44,7 +44,11 @@ Phone check done. Claude's tool time limit is documented (240 s), so no measurem
    checklists, images, or tables are refused with the reason; setup asks for permission to
    control Notes. Checked against a test database and a stand-in for Notes, not yet against
    Toni's real Notes (needs 0.4.0 installed with Full Disk Access and Notes control allowed).
-   Next: increment 4, Messages reading.
+   Increment 4 done (app 0.5.0): Claude can list conversations, read them, search all history by
+   words, person, and time, and view images, with names from Contacts and other people's words
+   marked as not instructions; setup asks for Contacts. Checked against a test database (a
+   200,000-message search takes 0.2 s), not yet against Toni's real messages.
+   Next: increment 5, sending messages.
 3. Then Files, Shell, Browser and computer control, one spec each.
 
 ## Milestones (from `specs/001-core/plan.md`)

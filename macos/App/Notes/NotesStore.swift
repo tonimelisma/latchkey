@@ -1,7 +1,5 @@
 import Foundation
-import ImageIO
 import SQLite3
-import UniformTypeIdentifiers
 
 /// Reads Notes' own database, read-only (plan D2). Notes, folders, attachments, and media share one
 /// table told apart by entity number; column names differ between macOS versions, so both are
@@ -65,14 +63,8 @@ final class NotesStore: @unchecked Sendable {
     }
 
     init(url: URL) throws {
-        var handle: OpaquePointer?
-        let uri = "file:\(url.path(percentEncoded: true))?mode=ro"
-        guard sqlite3_open_v2(uri, &handle, SQLITE_OPEN_READONLY | SQLITE_OPEN_URI, nil) == SQLITE_OK, let handle
-        else {
-            sqlite3_close(handle)
-            throw Failure.cannotOpen(url.path)
-        }
-        sqlite3_busy_timeout(handle, 2_000)
+        let handle: OpaquePointer
+        do { handle = try SQLite.openReadOnly(url) } catch { throw Failure.cannotOpen(url.path) }
         db = handle
         folderURL = url.deletingLastPathComponent()
         do {
@@ -175,13 +167,7 @@ final class NotesStore: @unchecked Sendable {
         return "x-coredata://\(uuid)/ICNote/p"
     }
 
-    struct Image: Sendable {
-        var data: Data
-        var mimeType: String
-    }
-
-    /// The longest side Claude reads images at; larger ones are scaled down.
-    static let maxImageSide = 1568
+    typealias Image = PreparedImage
 
     /// An image attached to a note, as JPEG or PNG, scaled down if large (FR-104).
     func image(note: String, attachment: String) throws -> Image {
@@ -306,89 +292,14 @@ final class NotesStore: @unchecked Sendable {
         return nil
     }
 
-    /// JPEG and PNG under the size limit go as they are; anything else (HEIC, large photos) becomes
-    /// a JPEG no larger than `maxImageSide`.
     static func prepareImage(_ file: URL) throws -> Image {
-        guard let source = CGImageSourceCreateWithURL(file as CFURL, nil),
-            let type = CGImageSourceGetType(source) as String?
-        else { throw Failure.notAnImage(file.lastPathComponent) }
-        let props = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any]
-        let side = max(
-            props?[kCGImagePropertyPixelWidth] as? Int ?? 0, props?[kCGImagePropertyPixelHeight] as? Int ?? 0)
-        let size = (try? file.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? .max
-        if side > 0, side <= maxImageSide, size < 3_000_000,
-            let mime = [UTType.jpeg.identifier: "image/jpeg", UTType.png.identifier: "image/png"][type],
-            let data = try? Data(contentsOf: file)
-        {
-            return Image(data: data, mimeType: mime)
-        }
-        let options: [CFString: Any] = [
-            kCGImageSourceCreateThumbnailFromImageAlways: true, kCGImageSourceCreateThumbnailWithTransform: true,
-            kCGImageSourceThumbnailMaxPixelSize: maxImageSide,
-        ]
-        guard let image = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else {
-            throw Failure.notAnImage(file.lastPathComponent)
-        }
-        let out = NSMutableData()
-        guard let dest = CGImageDestinationCreateWithData(out, UTType.jpeg.identifier as CFString, 1, nil) else {
-            throw Failure.notAnImage(file.lastPathComponent)
-        }
-        CGImageDestinationAddImage(dest, image, [kCGImageDestinationLossyCompressionQuality: 0.8] as CFDictionary)
-        guard CGImageDestinationFinalize(dest) else { throw Failure.notAnImage(file.lastPathComponent) }
-        return Image(data: out as Data, mimeType: "image/jpeg")
+        do { return try ImagePrep.prepare(file) } catch { throw Failure.notAnImage(file.lastPathComponent) }
     }
 
-    // MARK: SQLite
-
-    enum Value {
-        case null, int(Int64), double(Double), text(String), blob(Data)
-
-        var int: Int64? {
-            switch self {
-            case .int(let i): i
-            case .double(let d): Int64(d)
-            default: nil
-            }
+    /// Runs a query; a failing one means a layout Latchkey doesn't know.
+    static func rows(_ db: OpaquePointer, _ sql: String, bind: [String] = []) throws -> [[SQLite.Value]] {
+        do { return try SQLite.rows(db, sql, bind: bind.map(SQLite.Value.text)) } catch let e as SQLite.Failure {
+            throw Failure.unknownLayout(e.message)
         }
-        var double: Double? {
-            switch self {
-            case .double(let d): d
-            case .int(let i): Double(i)
-            default: nil
-            }
-        }
-        var text: String? { if case .text(let s) = self { s } else { nil } }
-        var blob: Data? { if case .blob(let b) = self { b } else { nil } }
-    }
-
-    static func rows(_ db: OpaquePointer, _ sql: String, bind: [String] = []) throws -> [[Value]] {
-        var stmt: OpaquePointer?
-        guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK, let stmt else {
-            throw Failure.unknownLayout(String(cString: sqlite3_errmsg(db)))
-        }
-        defer { sqlite3_finalize(stmt) }
-        let transient = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
-        for (i, s) in bind.enumerated() { sqlite3_bind_text(stmt, Int32(i + 1), s, -1, transient) }
-        var out: [[Value]] = []
-        while true {
-            let rc = sqlite3_step(stmt)
-            if rc == SQLITE_DONE { break }
-            guard rc == SQLITE_ROW else { throw Failure.unknownLayout(String(cString: sqlite3_errmsg(db))) }
-            out.append(
-                (0..<sqlite3_column_count(stmt)).map { c in
-                    switch sqlite3_column_type(stmt, c) {
-                    case SQLITE_INTEGER: .int(sqlite3_column_int64(stmt, c))
-                    case SQLITE_FLOAT: .double(sqlite3_column_double(stmt, c))
-                    case SQLITE_TEXT: .text(String(cString: sqlite3_column_text(stmt, c)))
-                    case SQLITE_BLOB:
-                        .blob(
-                            sqlite3_column_bytes(stmt, c) > 0
-                                ? Data(bytes: sqlite3_column_blob(stmt, c), count: Int(sqlite3_column_bytes(stmt, c)))
-                                : Data())
-                    default: .null
-                    }
-                })
-        }
-        return out
     }
 }

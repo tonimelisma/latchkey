@@ -122,6 +122,23 @@ struct SetupView: View {
                     }
                 }
             }
+            if model.capabilities.level(CapabilityRegistry.messages) != .off {
+                step(5, "Show names in Messages", done: model.contactsStatus == .authorized) {
+                    if model.contactsStatus == .notDetermined {
+                        Text(
+                            "So Claude sees who wrote each message, not just phone numbers. When macOS asks about Contacts, click Allow."
+                        )
+                        .foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                        Button("Continue") { Task { await model.allowContacts() } }
+                    } else {
+                        Text(
+                            "Optional. Messages show phone numbers and email addresses. To show names, turn on Latchkey under Contacts in System Settings."
+                        )
+                        .foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                        Button("Open System Settings") { Permissions.openContactsSettings() }
+                    }
+                }
+            }
             HStack {
                 Text("Latchkey lives in the menu bar. To uninstall, move it to the Trash.")
                     .font(.footnote).foregroundStyle(.secondary)
@@ -138,6 +155,7 @@ struct SetupView: View {
                 await model.checkHelperApproval()
                 model.checkFullDiskAccess()
                 await model.checkNotesControl()
+                model.checkContacts()
                 try? await Task.sleep(for: .seconds(1))
             }
         }

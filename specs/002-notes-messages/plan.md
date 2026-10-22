@@ -66,7 +66,10 @@ Serves FR-102, FR-103, FR-112.
 
 Serves FR-111, FR-112. The Contacts framework maps phone numbers and emails to names, and names to
 handles for sending. An ambiguous name (two Sarahs, or one Sarah with several numbers) returns the
-choices instead of guessing.
+choices instead of guessing. Contacts access is asked for in setup ("Show names in Messages"),
+never at call time; without it, messages show numbers and addresses. A number matches a contact
+when one ends with the other (compared on the last 9 digits), so "+1 555…" and "(555) …" agree;
+a number two contacts share gets no name.
 
 ## D5. Permissions and setup
 

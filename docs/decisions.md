@@ -76,3 +76,4 @@ Add a row when a decision is made; never delete one, mark it "superseded by" ins
 | 2026-10-22 | Spec 002 approved as is; message attachments may be any file the Mac can read | spec 002 plan |
 | 2026-10-22 | Notes changes through AppleScript only (no Shortcuts, no typing); checklists Claude writes appear as ☐/☑ | spec 002 FR-107, plan D3 |
 | 2026-10-22 | Claude can also edit a passage of a note; any change that would lose checklists, images, or tables is refused with the reason | spec 002 FR-102, FR-106 |
+| 2026-10-22 | Automation (Notes) and Contacts are asked for in the setup window, never when a request arrives (a prompt would wait on an unattended Mac) | spec 002 FR-140, plan D4, D5 |

@@ -36,15 +36,17 @@ deployed if it changed, a commit, and a push (Toni, 2026-10-22). `[P]` = paralle
   notifications; refusals that protect checklists and images; setup step for Automation.
   *FR-102, FR-103, FR-106, FR-107, FR-130, FR-140.*
 
-## Increment 4: Messages reading
+## Increment 4: Messages reading (done 2026-10-22, app 0.5.0)
 
-- **T130** [P] Fixture `chat.db`: handles, chats (one-to-one and group), messages with `text` and
+- **T130** ✅ [P] Fixture `chat.db` built by the test code (`Tests/MessagesFixture.swift`, bodies
+  made by Apple's own archiver): handles, chats (one-to-one and group), messages with `text` and
   with `attributedBody` only, attachments, nanosecond timestamps.
-- **T131** Tests first, then the `attributedBody` decoder and the Messages store (conversations,
+- **T131** ✅ Tests first, then the `attributedBody` decoder and the Messages store (conversations,
   read, search). *FR-110, D2.*
-- **T132** Contacts lookup (numbers and emails → names; names → handles; ambiguity). *FR-111, D4.*
-- **T133** Others' text marked in results; injection test. *FR-114, SC-104, D6.*
-- **T134** Tools `messages_conversations`, `messages_read`, `messages_search`, `messages_image`.
+- **T132** ✅ Contacts lookup (numbers and emails → names; search by name finds the person's
+  conversations) and the setup step. Names → handles for sending moves to increment 5. *FR-111, D4.*
+- **T133** ✅ Others' text marked in results; injection test. *FR-114, SC-104, D6.*
+- **T134** ✅ Tools `messages_conversations`, `messages_read`, `messages_search`, `messages_image`.
 
 ## Increment 5: Messages sending
 
