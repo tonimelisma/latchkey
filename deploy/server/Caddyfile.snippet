@@ -1,4 +1,11 @@
 
 relay.example.com {
+	# Access log for troubleshooting connector checks; kept 30 days (data-model.md).
+	log {
+		output file /data/latchkey-access.log {
+			roll_size 10MiB
+			roll_keep_for 720h
+		}
+	}
 	reverse_proxy latchkey-relay:8080
 }
