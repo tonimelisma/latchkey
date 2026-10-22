@@ -67,3 +67,9 @@ Add a row when a decision is made; never delete one, mark it "superseded by" ins
 | 2026-10-22 | No status tool; the Mac's state is a short line in every Mac tool result | spec 001 FR-021 (withdrawn), FR-065 |
 | 2026-10-22 | System info / battery_status removed; first capability is Notes + Messages | FR-063 (withdrawn), spec 002 |
 | 2026-10-22 | Work longer than Claude's 240 s limit: a start tool and a check tool (job ID) | spec 002 research |
+| 2026-10-22 | Notes: read, search, create, edit, delete (to Recently Deleted) | spec 002 FR-101 to FR-103 |
+| 2026-10-22 | Messages: read all history, search, send text and attachments; contact names | spec 002 FR-110 to FR-113 |
+| 2026-10-22 | Levels Off / Read only / Read & write per capability; start at Read & write | spec 002 FR-120, FR-121 |
+| 2026-10-22 | No Latchkey-side approvals or limits; Claude's apps handle approval; others' text is labeled | spec 002 FR-114, FR-115 |
+| 2026-10-22 | Notifications for changes; recent activity in the menu; busy indicator | spec 002 FR-130 to FR-132 |
+| 2026-10-22 | Images from notes and messages on request | spec 002 FR-104, FR-113 |

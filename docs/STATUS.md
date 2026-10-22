@@ -35,8 +35,9 @@ after the app was quit.
 Releases, terms and privacy, and the directory listing are much later (Toni, 2026-10-22).
 Phone check done. Claude's tool time limit is documented (240 s), so no measurement is needed.
 
-1. **Spec 002, Notes and Messages** (branch `002-notes-messages`): research written; interview
-   Toni; write `spec.md` and `plan.md`; stop for Toni's review before tasks or code.
+1. **Spec 002, Notes and Messages** (branch `002-notes-messages`): research, interview, `spec.md`
+   and `plan.md` written. **Waiting for Toni's review**, including one open question (attachments
+   from any file). Then tasks and code.
 2. Spec 001 follow-up, done with spec 002's code: remove `battery_status` and `laptop_status`, add
    the status line to every Mac tool result (FR-065), add `destructiveHint` to every tool.
 3. Then Files, Shell, Browser and computer control, one spec each.
