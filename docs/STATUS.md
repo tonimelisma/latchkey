@@ -23,22 +23,32 @@ Notes:
   first). The tests were then written against the contract and run.
 - No keep-awake test runs (Toni, 2026-10-20). The helper runs once Toni approves it during setup.
 
-## Next steps (each needs Toni; everything around them is ready)
+## Done (2026-10-22)
 
-1. **Install the app:** open `macos/build/Latchkey-0.1.0.dmg`, drag Latchkey to Applications,
-   open it, and follow the setup window (approve keep-awake in System Settings, connect).
-2. **Hosted relay live at https://relay.example.com** (deployed 2026-10-20, Let's Encrypt
-   certificate, 7 MB memory on my-vm). Email: Resend domain relay.example.com verified, SMTP
-   send from the relay's settings accepted. `RESEND_ADMIN_KEY` is no longer needed.
-3. **Connector verified 2026-10-22:** Toni's Claude account has the Latchkey connector; Claude
-   called `battery_status` (80%, plugged in, matching pmset) and `laptop_status` (online,
-   keep-awake on) on Toni's real Mac through https://relay.example.com. Remaining: try from
-   the phone.
-   **Try it from your Claude account and devices** (T072 to T074): add the connector on claude.ai,
-   ask from the phone and Desktop. Checklist: `specs/001-core/quickstart.md`. Claude measures the
-   hosted tool-call timeout (T073) from the relay's logs during this.
-4. **Developer ID, update key, public repository** for signed releases and updates (T082, T083):
-   setup steps are at the top of `macos/scripts/release.sh`; then one command publishes.
+The first version works end to end: Latchkey 0.1.2 installed on Toni's Mac and paired with the
+hosted relay at https://relay.example.com (my-vm, email via Resend); real Claude called
+`battery_status` and `laptop_status` through the connector, and got the immediate offline answer
+after the app was quit.
+
+## Next steps
+
+Finishing the first version:
+1. **Phone check (Toni):** ask Claude on the phone for the battery (US1).
+2. **Measure Claude's tool-call time limit (Claude):** a temporary slow test tool on a test
+   account, to confirm our 60 s cap sits below Claude's (T073).
+3. **Public, signed releases (Toni, then Claude):** Apple Developer ID, the update signing key,
+   and a public repository; then `macos/scripts/release.sh` publishes notarized builds with
+   automatic updates (T082, T083).
+4. **Before others use the hosted relay (Toni decides):** terms of service, privacy policy, and
+   abuse handling; then lift the sign-up limit (`ALLOWED_EMAILS`).
+5. **Later:** listing in Anthropic's connectors directory (one-click connect, no review screen).
+
+Then the capabilities, one spec each, in this order (CLAUDE.md, step 6): each starts with
+research and an interview of Toni, and stops for Toni's review before tasks or code.
+6. Files (spec 002).
+7. Notes and iMessage.
+8. Shell.
+9. Browser and computer control.
 
 ## Milestones (from `specs/001-core/plan.md`)
 
@@ -46,9 +56,9 @@ Notes:
 |---|---|---|
 | M1 | Relay hub + agent protocol, Go test agent | Done |
 | M2 | OAuth, passkeys, pairing (relay side) | Done |
-| M3 | Mac app: pairs, connects, keeps awake, answers `battery_status` | Done; helper waits for approval |
-| M4 | End to end from Claude on phone, web, Desktop | Ready; needs domain, host, Toni's devices |
-| M5 | Signing, notarization, Sparkle, Docker image | Container done; release needs Developer ID |
+| M3 | Mac app: pairs, connects, keeps awake, answers `battery_status` | Done (0.1.2) |
+| M4 | End to end from Claude on phone, web, Desktop | Desktop done; phone check and time limit left |
+| M5 | Signing, notarization, Sparkle, Docker image | Container and hosting done; releases need Developer ID |
 
 ## Risks
 
