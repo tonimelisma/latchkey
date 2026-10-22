@@ -3,17 +3,17 @@
 From `plan.md`. Built in increments; each ends with tests passing, a disk image, the relay
 deployed if it changed, a commit, and a push (Toni, 2026-10-22). `[P]` = parallel-safe.
 
-## Increment 1: foundations
+## Increment 1: foundations (done 2026-10-22, app 0.2.0)
 
-- **T101** Relay: append the Mac's state line to every Mac tool result; offline answers unchanged;
+- **T101** ✅ Relay: append the Mac's state line to every Mac tool result; offline answers unchanged;
   remove `laptop_status`. Tests first (mcpserver). *FR-065 (spec 001), D7.*
-- **T102** Contracts: mcp-surface without `laptop_status`/`battery_status`, with the state line.
-- **T103** App: capability levels (Off, Read only, Read & write) for `notes` and `messages`,
+- **T102** ✅ Contracts: mcp-surface without `laptop_status`/`battery_status`, with the state line.
+- **T103** ✅ App: capability levels (Off, Read only, Read & write) for `notes` and `messages`,
   stored in user defaults, starting at Read & write; tools sent per level; remove "System info"
   and `battery_status`. Tests first. *FR-120, FR-121, D9.*
-- **T104** App: menu shows the 10 most recent activities (expandable) and a busy dot on the icon
+- **T104** ✅ App: menu shows the 10 most recent activities (expandable) and a busy dot on the icon
   while a call runs; notifications helper for changes. *FR-130 to FR-132, D8.*
-- **T105** App: setup window step for Full Disk Access (detect by opening the databases; button
+- **T105** ✅ App: setup window step for Full Disk Access (detect by opening the databases; button
   opens the System Settings page; notices the change). Info.plist usage strings and the Apple
   Events entitlement. *FR-140, D5.*
 

@@ -131,16 +131,25 @@ func TestCallFailureTexts(t *testing.T) {
 	assert.Equal(t, "Your Mac lost its connection while the request was running.", disconnectedText)
 }
 
-func TestOnlineText(t *testing.T) {
-	s := lastState(82, "battery")
-	assert.Equal(t, "Your Mac is online: 82% battery, on battery power. Keep-awake is on.",
-		onlineText(s))
-	s.KeepAwake = agentproto.KeepAwakeOffLowBattery
-	assert.Equal(t, "Your Mac is online: 82% battery, on battery power. Keep-awake is off because the battery is low.",
-		onlineText(s))
-	s.KeepAwake = agentproto.KeepAwakeOffHelperUnusable
-	s.PowerSource = "ac"
+func TestStatusLine(t *testing.T) {
+	s := lastState(64, "battery")
+	assert.Equal(t, "Mac: online · 64% battery, on battery power · keep-awake on", statusLine(s))
+
+	s = lastState(82, "ac")
 	s.Charging = true
-	assert.Equal(t, "Your Mac is online: 82% battery, charging. Keep-awake is off because it hasn't been approved in System Settings.",
-		onlineText(s))
+	assert.Equal(t, "Mac: online · 82% battery, charging · keep-awake on", statusLine(s))
+
+	s = lastState(22, "battery")
+	assert.Equal(t, "Mac: online · 22% battery, on battery power · keep-awake on · battery low: the Mac goes to sleep at 15%", statusLine(s))
+
+	s = lastState(70, "ac")
+	s.ThermalState = "serious"
+	s.KeepAwake = agentproto.KeepAwakeOffTooHot
+	assert.Equal(t, "Mac: online · 70% battery, plugged in · keep-awake off (too hot) · the Mac is too hot and may go to sleep", statusLine(s))
+
+	s = lastState(90, "ac")
+	s.KeepAwake = agentproto.KeepAwakeOffHelperUnusable
+	assert.Equal(t, "Mac: online · 90% battery, plugged in · keep-awake off (not approved in System Settings)", statusLine(s))
+
+	assert.Equal(t, "Mac: online", statusLine(nil))
 }

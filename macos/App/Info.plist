@@ -28,6 +28,10 @@
 	<true/>
 	<key>NSHumanReadableCopyright</key>
 	<string>Apache-2.0</string>
+	<key>NSAppleEventsUsageDescription</key>
+	<string>Latchkey uses Notes and Messages to create and change notes and send messages when you ask Claude to.</string>
+	<key>NSContactsUsageDescription</key>
+	<string>Latchkey shows Claude your contacts' names instead of phone numbers, and finds who to message.</string>
 	<key>SUFeedURL</key>
 	<string>https://github.com/tonimelisma/latchkey/releases/latest/download/appcast.xml</string>
 	<key>SUPublicEDKey</key>

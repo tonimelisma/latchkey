@@ -1,93 +1,134 @@
 import Foundation
 
-/// A tool's answer, as the agent protocol's result carries it.
+/// A tool's answer, as the agent protocol's result carries it. `activity`, when set, names a change
+/// Claude made on the Mac ("Sent a message to Sarah"); it becomes a notification (FR-130).
 struct ToolResult: Sendable, Equatable {
     var content: JSONValue
     var structuredContent: JSONValue?
     var isError: Bool
+    var activity: String?
 
     static func text(_ s: String, isError: Bool = false) -> ToolResult {
         ToolResult(content: .array([.object(["type": .string("text"), "text": .string(s)])]), isError: isError)
     }
-}
 
-/// The "System info" capability (FR-063): one tool, battery_status.
-enum SystemInfoCapability {
-    static let id = "system_info"
-    static let title = "System info"
-    static let summary = "Battery level and power state"
-
-    static let batteryStatusTool = Tool(
-        name: "battery_status",
-        title: "Battery status",
-        description: "Live battery level and power state of the user's Mac.",
-        inputSchema: .object([
-            "type": .string("object"), "properties": .object([:]), "additionalProperties": .bool(false),
-        ]),
-        outputSchema: .object([
-            "type": .string("object"),
-            "properties": .object([
-                "battery_percent": .object(["type": .string("integer")]),
-                "charging": .object(["type": .string("boolean")]),
-                "power_source": .object([
-                    "type": .string("string"),
-                    "enum": .array([.string("battery"), .string("ac"), .string("ups"), .string("unknown")]),
-                ]),
-                "time_remaining_min": .object(["type": .array([.string("integer"), .string("null")])]),
-            ]),
-            "required": .array([.string("battery_percent"), .string("charging"), .string("power_source")]),
-        ]),
-        annotations: ToolAnnotations(readOnlyHint: true, openWorldHint: false),
-        meta: [Tool.deadlineKey: .number(5000)])
-
-    static func batteryStatus(_ p: PowerSnapshot) -> ToolResult {
-        guard p.hasBattery else { return .text("This Mac has no battery; it runs on mains power.", isError: true) }
-        let structured: JSONValue = .object([
-            "battery_percent": .number(Double(p.batteryPercent)),
-            "charging": .bool(p.charging),
-            "power_source": .string(p.powerSource.rawValue),
-            "time_remaining_min": p.timeRemainingMin.map { .number(Double($0)) } ?? .null,
-        ])
-        var r = ToolResult.text(structured.jsonText)
-        r.structuredContent = structured
+    /// Text plus the same data as structured content.
+    static func data(_ value: JSONValue, text: String? = nil) -> ToolResult {
+        var r = ToolResult.text(text ?? value.jsonText)
+        r.structuredContent = value
         return r
     }
+
+    static func image(_ data: Data, mimeType: String) -> ToolResult {
+        ToolResult(
+            content: .array([
+                .object([
+                    "type": .string("image"), "data": .string(data.base64EncodedString()),
+                    "mimeType": .string(mimeType),
+                ])
+            ]), isError: false)
+    }
 }
 
-/// The capabilities the Owner enabled; only their tools exist for Claude (Constitution III).
+/// How much Claude may do with a capability (spec 002 FR-120).
+enum AccessLevel: String, CaseIterable, Codable, Sendable {
+    case off
+    case readOnly = "read"
+    case readWrite = "write"
+
+    var title: String {
+        switch self {
+        case .off: "Off"
+        case .readOnly: "Read Only"
+        case .readWrite: "Read & Write"
+        }
+    }
+}
+
+typealias ToolHandler = @Sendable (JSONValue) async -> ToolResult
+
+/// A tool and the code that answers it.
+struct ToolEntry: Sendable {
+    var tool: Tool
+    var handler: ToolHandler
+}
+
+/// A group of tools the Owner allows as a whole, at a level.
+struct Capability: Identifiable, Sendable {
+    var id: String
+    var title: String
+    var summary: String
+    var readTools: [ToolEntry]
+    var writeTools: [ToolEntry]
+
+    func entries(at level: AccessLevel) -> [ToolEntry] {
+        switch level {
+        case .off: []
+        case .readOnly: readTools
+        case .readWrite: readTools + writeTools
+        }
+    }
+}
+
+/// The capabilities and the Owner's level for each; only the tools of those levels exist for
+/// Claude (Constitution III).
 struct CapabilityRegistry: Sendable {
-    static let defaultEnabled: Set<String> = [SystemInfoCapability.id]  // FR-064
+    static let notes = "notes"
+    static let messages = "messages"
+    /// FR-121: both start at Read & write.
+    static let defaultLevels: [String: AccessLevel] = [notes: .readWrite, messages: .readWrite]
 
-    struct Capability: Identifiable, Sendable {
-        var id: String
-        var title: String
-        var summary: String
-        var tools: [Tool]
+    let capabilities: [Capability]
+    private(set) var levels: [String: AccessLevel]
+
+    init(capabilities: [Capability], levels: [String: AccessLevel]) {
+        self.capabilities = capabilities
+        self.levels = levels
     }
 
-    static let all: [Capability] = [
-        Capability(
-            id: SystemInfoCapability.id, title: SystemInfoCapability.title,
-            summary: SystemInfoCapability.summary, tools: [SystemInfoCapability.batteryStatusTool])
-    ]
+    func level(_ id: String) -> AccessLevel { levels[id] ?? .off }
 
-    private(set) var enabled: Set<String>
+    mutating func setLevel(_ id: String, _ level: AccessLevel) { levels[id] = level }
 
-    init(enabled: Set<String>) { self.enabled = enabled }
+    private var entries: [ToolEntry] { capabilities.flatMap { $0.entries(at: level($0.id)) } }
 
-    mutating func setEnabled(_ id: String, _ on: Bool) {
-        if on { enabled.insert(id) } else { enabled.remove(id) }
-    }
+    var tools: [Tool] { entries.map(\.tool) }
 
-    var tools: [Tool] { Self.all.filter { enabled.contains($0.id) }.flatMap(\.tools) }
+    /// True when any capability is on (it then needs the macOS permissions).
+    var anyOn: Bool { capabilities.contains { level($0.id) != .off } }
 
-    func call(tool: String, arguments: JSONValue, power: @Sendable () -> PowerSnapshot) async -> ToolResult {
-        guard tools.contains(where: { $0.name == tool }) else {
+    func call(tool: String, arguments: JSONValue) async -> ToolResult {
+        guard let entry = entries.first(where: { $0.tool.name == tool }) else {
             return .text("The tool \(tool) is turned off in the Latchkey app on this Mac.", isError: true)
         }
-        switch tool {
-        case SystemInfoCapability.batteryStatusTool.name: return SystemInfoCapability.batteryStatus(power())
-        default: return .text("Unknown tool \(tool).", isError: true)
-        }
+        return await entry.handler(arguments)
+    }
+}
+
+extension Tool {
+    /// A tool with the annotations Claude requires on every tool.
+    static func make(
+        _ name: String, title: String, description: String, input: [String: JSONValue] = [:],
+        required: [String] = [], readOnly: Bool, destructive: Bool = false, deadlineMS: Int = 10_000
+    ) -> Tool {
+        Tool(
+            name: name, title: title, description: description,
+            inputSchema: .object([
+                "type": .string("object"), "properties": .object(input),
+                "required": .array(required.map(JSONValue.string)), "additionalProperties": .bool(false),
+            ]),
+            outputSchema: nil,
+            annotations: ToolAnnotations(
+                title: title, readOnlyHint: readOnly, destructiveHint: destructive, openWorldHint: false),
+            meta: [Tool.deadlineKey: .number(Double(deadlineMS))])
+    }
+}
+
+extension JSONValue {
+    static func stringParam(_ description: String) -> JSONValue {
+        .object(["type": .string("string"), "description": .string(description)])
+    }
+    static func integerParam(_ description: String) -> JSONValue {
+        .object(["type": .string("integer"), "description": .string(description)])
     }
 }

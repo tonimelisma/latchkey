@@ -109,9 +109,9 @@ func TestEndToEndInBrowser(t *testing.T) {
 	defer func() { _ = cs.Close() }()
 	assert.Equal(t, 1, consents)
 
-	res, err := cs.CallTool(ctx, &mcp.CallToolParams{Name: "laptop_status"})
+	tools, err := cs.ListTools(ctx, nil)
 	require.NoError(t, err)
-	assert.Contains(t, textOf(res), "No Mac is connected")
+	assert.Empty(t, tools.Tools, "no Mac yet, no tools")
 
 	// Pair the pretend Mac through the pairing page.
 	code, err := b.PairCode(base, "Test MacBook")
@@ -127,10 +127,11 @@ func TestEndToEndInBrowser(t *testing.T) {
 		return err == nil && slices.ContainsFunc(tools.Tools, func(t *mcp.Tool) bool { return t.Name == "battery_status" })
 	}, 10*time.Second, 50*time.Millisecond, "battery_status appears once the Mac connects")
 
-	res, err = cs.CallTool(ctx, &mcp.CallToolParams{Name: "battery_status", Arguments: map[string]any{}})
+	res, err := cs.CallTool(ctx, &mcp.CallToolParams{Name: "battery_status", Arguments: map[string]any{}})
 	require.NoError(t, err)
 	assert.False(t, res.IsError)
 	assert.Contains(t, textOf(res), `"battery_percent":82`)
+	assert.Contains(t, textOf(res), "Mac: online · 82% battery", "the state line rides along (FR-065)")
 
 	// The Mac goes away: Claude gets the offline answer right away.
 	require.NoError(t, conn.Close())

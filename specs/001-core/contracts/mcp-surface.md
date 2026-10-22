@@ -81,60 +81,27 @@ the redirect URI's host.
 
 ## Tools
 
-### `laptop_status` (always present, answered by the relay)
+The relay offers no tools of its own (status tool withdrawn 2026-10-22, spec 001 FR-021). The tool
+list is the Mac's last reported list (FR-013): the tools of each capability at its current level
+(spec 002). With no Mac paired, or every capability off, the list is empty.
 
-```json
-{
-  "name": "laptop_status",
-  "title": "Laptop status",
-  "description": "Whether the user's Mac is online, when it was last seen, and its last known battery, power, thermal and keep-awake state. Works even when the Mac is offline.",
-  "inputSchema": {"type": "object", "properties": {}, "additionalProperties": false},
-  "annotations": {"readOnlyHint": true, "openWorldHint": false}
-}
+### The Mac's state in every answer (FR-065)
+
+Every result from a Mac tool, success or the Mac's own error, ends with one extra text block,
+built by the relay from the state it holds:
+
+```
+Mac: online · 64% battery, on battery power · keep-awake on
 ```
 
-Example result (`structuredContent`, with the same information as text in `content`):
+- Power: "on battery power", "plugged in", "charging", or "on UPS power".
+- Keep-awake: "keep-awake on", "keep-awake off", "keep-awake off (battery low)", "keep-awake off
+  (too hot)", "keep-awake off (not approved in System Settings)".
+- Warnings appended: "battery low: the Mac goes to sleep at 15%" (on battery at 25% or less), "the
+  Mac is too hot and may go to sleep" (thermal serious or critical).
 
-```json
-{
-  "paired": true,
-  "online": false,
-  "last_seen": "2026-10-19T14:02:11Z",
-  "offline_reason": "low_battery",
-  "state": {"battery_percent": 14, "power_source": "battery", "charging": false, "time_remaining_min": 40, "thermal_state": "nominal", "low_power_mode": false, "lid_closed": true, "time_zone": "America/Los_Angeles", "keep_awake": "off_low_battery", "observed_at": "2026-10-19T14:02:10Z"}
-}
-```
-
-- `state` is the last State object the Mac reported (agent-protocol.md), or `null` if none.
-- `last_seen` is `null` if the Mac never connected; `offline_reason` is `null` while online or
-  when unknown. Never paired: `{"paired": false, "online": false, "last_seen": null,
-  "offline_reason": null, "state": null}`.
-- The text is the offline message below when offline, or, when online, for example: "Your Mac
-  is online: 82% battery, on battery power. Keep-awake is on."
-- `laptop_status` never returns `isError`.
-
-### `battery_status` (capability "System info", answered live by the Mac)
-
-```json
-{
-  "name": "battery_status",
-  "title": "Battery status",
-  "description": "Live battery level and power state of the user's Mac.",
-  "inputSchema": {"type": "object", "properties": {}, "additionalProperties": false},
-  "outputSchema": {
-    "type": "object",
-    "properties": {
-      "battery_percent": {"type": "integer"},
-      "charging": {"type": "boolean"},
-      "power_source": {"type": "string", "enum": ["battery", "ac", "ups", "unknown"]},
-      "time_remaining_min": {"type": ["integer", "null"]}
-    },
-    "required": ["battery_percent", "charging", "power_source"]
-  },
-  "annotations": {"readOnlyHint": true, "openWorldHint": false},
-  "_meta": {"latchkey/deadline_ms": 5000}
-}
-```
+When the Mac cannot answer, the result is the explanation below instead, which carries the last
+known state.
 
 ## Results when a Mac tool cannot run
 
@@ -143,7 +110,6 @@ They are never transport errors or HTTP failures.
 
 | Situation | Text returned |
 |---|---|
-| Never paired | "No Mac is connected to this account yet. Open the Latchkey app on your Mac and click Connect." |
 | Paired, never connected | "Your Mac is offline. It hasn't connected to Latchkey yet." |
 | Offline, reason known | "Your Mac is offline. It went to sleep for low battery at 14%, at 2:02 PM (3 hours ago)." |
 | Offline, reason unknown | "Your Mac is offline. It was last seen at 2:02 PM (3 hours ago) with 62% battery, on battery power." |

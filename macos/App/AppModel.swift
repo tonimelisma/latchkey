@@ -38,18 +38,19 @@ final class AppModel {
 
     private enum Keys {
         static let keepAwake = "keepAwakeEnabled"
-        static let capabilities = "enabledCapabilities"
+        static let levels = "capabilityLevels"
         static let launchedBefore = "launchedBefore"
     }
 
     init() {
         let d = UserDefaults.standard
         keepAwakeEnabled = d.object(forKey: Keys.keepAwake) as? Bool ?? true
-        if let saved = d.array(forKey: Keys.capabilities) as? [String] {
-            capabilities = CapabilityRegistry(enabled: Set(saved))
-        } else {
-            capabilities = CapabilityRegistry(enabled: CapabilityRegistry.defaultEnabled)  // FR-064
+        var levels = CapabilityRegistry.defaultLevels  // FR-121
+        for (id, raw) in d.dictionary(forKey: Keys.levels) as? [String: String] ?? [:] {
+            if let level = AccessLevel(rawValue: raw) { levels[id] = level }
         }
+        capabilities = CapabilityRegistry(
+            capabilities: [NotesCapability.make(), MessagesCapability.make()], levels: levels)
         trace = try? TraceStore()
     }
 
@@ -80,13 +81,16 @@ final class AppModel {
             connect(identity)
         }
         Task { await refresh() }
+        loadRecentActivity()
         if needsSetup { showSetup() }
     }
 
     /// The setup window: approve keep-awake, connect to a relay (FR-078).
     func showSetup() { setupWindow.show(model: self) }
 
-    var needsSetup: Bool { !isPaired || helperStatus != .enabled }
+    var needsSetup: Bool {
+        !isPaired || helperStatus != .enabled || (capabilities.anyOn && !fullDiskAccess)
+    }
 
     /// Re-reads whether the Owner approved the helper; applies keep-awake as soon as they do.
     func checkHelperApproval() async {
@@ -204,11 +208,18 @@ final class AppModel {
 
     // MARK: capabilities
 
-    func setCapability(_ id: String, enabled: Bool) {
-        capabilities.setEnabled(id, enabled)
-        defaults.set(Array(capabilities.enabled), forKey: Keys.capabilities)
+    func setLevel(_ id: String, _ level: AccessLevel) {
+        capabilities.setLevel(id, level)
+        defaults.set(capabilities.levels.mapValues(\.rawValue), forKey: Keys.levels)
         Task { await connection?.sendTools() }  // FR-062
+        if capabilities.anyOn && !fullDiskAccess { showSetup() }
     }
+
+    // MARK: permissions
+
+    private(set) var fullDiskAccess = Permissions.hasFullDiskAccess
+
+    func checkFullDiskAccess() { fullDiskAccess = Permissions.hasFullDiskAccess }
 
     func setStartsAtLogin(_ on: Bool) {
         do {
@@ -307,15 +318,27 @@ final class AppModel {
     /// Runs a call and records it in the local trace (FR-026).
     private func handle(_ call: Call) async -> ToolResult {
         let started = Date()
+        busy += 1  // FR-132
+        defer { busy -= 1 }
         let registry = capabilities
-        let result = await registry.call(tool: call.tool, arguments: call.arguments, power: { PowerReader.read() })
+        let result = await registry.call(tool: call.tool, arguments: call.arguments)
         let entry = TraceEntry(
             at: started, tool: call.tool, arguments: call.arguments.jsonText,
             result: (result.structuredContent ?? result.content).jsonText, isError: result.isError,
             durationMS: Int(Date().timeIntervalSince(started) * 1000))
         try? trace?.record(entry)
+        loadRecentActivity()
+        if let activity = result.activity, !result.isError { Notifier.post(activity) }  // FR-130
         return result
     }
+
+    // MARK: activity (FR-131, FR-132)
+
+    /// Calls running now; the menu bar icon shows a dot while above zero.
+    private(set) var busy = 0
+    private(set) var recentActivity: [TraceEntry] = []
+
+    func loadRecentActivity() { recentActivity = (try? trace?.recent(limit: 10)) ?? [] }
 
     /// Account recovered: tell the Owner on this Mac (plan D5).
     private func show(_ n: Notice) async {

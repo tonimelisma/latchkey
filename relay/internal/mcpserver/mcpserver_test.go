@@ -158,7 +158,7 @@ func TestBothProtocolVersions(t *testing.T) {
 		t.Run(v, func(t *testing.T) {
 			e := setup(t)
 			cs := e.client(v, nil)
-			assert.Equal(t, []string{"laptop_status"}, toolNames(t, cs))
+			assert.Empty(t, toolNames(t, cs), "no Mac paired, no tools")
 			assert.Equal(t, v, cs.InitializeResult().ProtocolVersion)
 		})
 	}
@@ -178,11 +178,7 @@ func TestUnauthenticatedIsRejected(t *testing.T) {
 func TestNeverPaired(t *testing.T) {
 	e := setup(t)
 	cs := e.client(stateful, nil)
-	assert.Equal(t, []string{"laptop_status"}, toolNames(t, cs))
-	res := call(t, cs, "laptop_status")
-	assert.False(t, res.IsError)
-	assert.Equal(t, "No Mac is connected to this account yet. Open the Latchkey app on your Mac and click Connect.", text(t, res))
-	assert.Equal(t, map[string]any{"paired": false, "online": false, "last_seen": nil, "offline_reason": nil, "state": nil}, structured(t, res))
+	assert.Empty(t, toolNames(t, cs), "the connector has no tools until a Mac reports some")
 }
 
 func TestOnline(t *testing.T) {
@@ -192,23 +188,16 @@ func TestOnline(t *testing.T) {
 			e.pair()
 			e.connectMac()
 			cs := e.client(v, nil)
-			assert.ElementsMatch(t, []string{"laptop_status", "battery_status"}, toolNames(t, cs))
+			assert.Equal(t, []string{"battery_status"}, toolNames(t, cs))
 
 			res := call(t, cs, "battery_status")
 			assert.False(t, res.IsError)
 			assert.Equal(t, map[string]any{"battery_percent": 82.0, "charging": false, "power_source": "battery", "time_remaining_min": 312.0}, structured(t, res))
-
-			res = call(t, cs, "laptop_status")
-			assert.False(t, res.IsError)
-			assert.Equal(t, "Your Mac is online: 82% battery, on battery power. Keep-awake is on.", text(t, res))
-			s := structured(t, res)
-			assert.Equal(t, true, s["paired"])
-			assert.Equal(t, true, s["online"])
-			assert.NotNil(t, s["last_seen"])
-			state, ok := s["state"].(map[string]any)
+			// FR-065: the Mac's state comes along as the last text block.
+			require.Len(t, res.Content, 2)
+			last, ok := res.Content[1].(*mcp.TextContent)
 			require.True(t, ok)
-			assert.InDelta(t, 82, state["battery_percent"], 0)
-			assert.Equal(t, "on", state["keep_awake"])
+			assert.Equal(t, "Mac: online · 82% battery, on battery power · keep-awake on", last.Text)
 		})
 	}
 }
@@ -245,19 +234,13 @@ func TestOffline(t *testing.T) {
 			require.Eventually(t, func() bool { return !e.hub.Online(e.device.ID) }, 5*time.Second, 10*time.Millisecond)
 
 			cs := e.client(v, nil)
-			assert.ElementsMatch(t, []string{"laptop_status", "battery_status"}, toolNames(t, cs), "last reported tools stay listed (FR-013)")
+			assert.Equal(t, []string{"battery_status"}, toolNames(t, cs), "last reported tools stay listed (FR-013)")
 
 			start := time.Now()
 			res := call(t, cs, "battery_status")
 			assert.Less(t, time.Since(start), time.Second, "SC-03")
 			assert.True(t, res.IsError)
 			assert.Regexp(t, `^Your Mac is offline\. It went to sleep for low battery at 14%, at \d{1,2}:\d\d [AP]M \(just now\)\.$`, text(t, res))
-
-			res = call(t, cs, "laptop_status")
-			assert.False(t, res.IsError, "laptop_status works offline")
-			st := structured(t, res)
-			assert.Equal(t, false, st["online"])
-			assert.Equal(t, "low_battery", st["offline_reason"])
 		})
 	}
 }
@@ -305,7 +288,7 @@ func TestRevokedDuringCall(t *testing.T) {
 	assert.True(t, res.IsError)
 	assert.Equal(t, "Your Mac was disconnected from this account while the request was running.", text(t, res))
 	require.Eventually(t, func() bool {
-		return len(toolNames(t, cs)) == 1
+		return len(toolNames(t, cs)) == 0
 	}, 5*time.Second, 20*time.Millisecond, "a revoked Mac's tools disappear")
 }
 
@@ -322,7 +305,7 @@ func TestToolListChanged(t *testing.T) {
 			mu.Unlock()
 		},
 	})
-	require.ElementsMatch(t, []string{"laptop_status", "battery_status"}, toolNames(t, cs))
+	require.Equal(t, []string{"battery_status"}, toolNames(t, cs))
 
 	// The Owner turns System info off: its tool must vanish (FR-061, FR-062, SC-08).
 	require.NoError(t, c.Send(ctx(t), &agentproto.ToolsUpdate{Tools: []*mcp.Tool{}}))
@@ -331,7 +314,7 @@ func TestToolListChanged(t *testing.T) {
 		defer mu.Unlock()
 		return notified > 0
 	}, 5*time.Second, 10*time.Millisecond, "list_changed sent")
-	assert.Equal(t, []string{"laptop_status"}, toolNames(t, cs))
+	assert.Empty(t, toolNames(t, cs))
 
 	res, err := cs.CallTool(ctx(t), &mcp.CallToolParams{Name: "battery_status"})
 	if err == nil {
@@ -348,7 +331,7 @@ func TestToolListIsPerUser(t *testing.T) {
 	mine := e.user
 	e.user = other
 	cs := e.client(stateful, nil)
-	assert.Equal(t, []string{"laptop_status"}, toolNames(t, cs), "another user never sees my Mac's tools")
+	assert.Empty(t, toolNames(t, cs), "another user never sees my Mac's tools")
 	e.user = mine
 }
 
@@ -358,21 +341,18 @@ func TestAuditLog(t *testing.T) {
 	c := e.connectMac()
 	cs := e.client(stateful, nil)
 	call(t, cs, "battery_status")
-	call(t, cs, "laptop_status")
 	require.NoError(t, c.Close())
 	require.Eventually(t, func() bool { return !e.hub.Online(e.device.ID) }, 5*time.Second, 10*time.Millisecond)
 	call(t, cs, "battery_status")
 
 	entries, err := e.store.AuditForUser(context.Background(), e.user.ID, 10)
 	require.NoError(t, err)
-	require.Len(t, entries, 3)
+	require.Len(t, entries, 2)
 	assert.Equal(t, "battery_status", entries[0].Tool)
 	assert.Equal(t, store.OutcomeOffline, entries[0].Outcome)
-	assert.Equal(t, "laptop_status", entries[1].Tool)
 	assert.Equal(t, store.OutcomeOK, entries[1].Outcome)
-	assert.Equal(t, store.OutcomeOK, entries[2].Outcome)
-	assert.Equal(t, "test-client", entries[2].Surface)
-	assert.Equal(t, e.device.ID, entries[2].DeviceID)
+	assert.Equal(t, "test-client", entries[1].Surface)
+	assert.Equal(t, e.device.ID, entries[1].DeviceID)
 }
 
 func TestMacErrorResultPassesThrough(t *testing.T) {
@@ -385,7 +365,9 @@ func TestMacErrorResultPassesThrough(t *testing.T) {
 	cs := e.client(stateful, nil)
 	res := call(t, cs, "battery_status")
 	assert.True(t, res.IsError)
-	assert.Equal(t, "No battery found.", text(t, res))
+	require.Len(t, res.Content, 2, "the Mac's own error, then the state line")
+	first, _ := res.Content[0].(*mcp.TextContent)
+	assert.Equal(t, "No battery found.", first.Text)
 	entries, err := e.store.AuditForUser(context.Background(), e.user.ID, 1)
 	require.NoError(t, err)
 	assert.Equal(t, store.OutcomeError, entries[0].Outcome)
@@ -401,5 +383,7 @@ func TestMalformedMacResult(t *testing.T) {
 	cs := e.client(stateful, nil)
 	res := call(t, cs, "battery_status")
 	assert.True(t, res.IsError)
-	assert.Contains(t, text(t, res), "couldn't read")
+	require.Len(t, res.Content, 2)
+	first, _ := res.Content[0].(*mcp.TextContent)
+	assert.Contains(t, first.Text, "couldn't read")
 }

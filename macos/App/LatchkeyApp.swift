@@ -9,8 +9,14 @@ struct LatchkeyApp: App {
         MenuBarExtra {
             MenuContent(model: delegate.model)
         } label: {
-            Image(systemName: delegate.model.menuIcon)
-                .accessibilityLabel("Latchkey: \(delegate.model.statusLine)")
+            HStack(spacing: 1) {
+                Image(systemName: delegate.model.menuIcon)
+                if delegate.model.busy > 0 {
+                    Image(systemName: "circle.fill").font(.system(size: 5))  // working (FR-132)
+                }
+            }
+            .accessibilityLabel(
+                "Latchkey: \(delegate.model.statusLine)\(delegate.model.busy > 0 ? ", working" : "")")
         }
         Window("Latchkey Activity", id: "activity") {
             ActivityView(model: delegate.model)

@@ -4,59 +4,47 @@ import Testing
 @testable import Latchkey
 
 @Suite struct CapabilityTests {
-    let snapshot = PowerSnapshot(
-        hasBattery: true, batteryPercent: 67, powerSource: .battery, charging: false, timeRemainingMin: 245,
-        thermal: .nominal, lowPowerMode: false, lidClosed: true, timeZone: "Europe/Helsinki")
+    static let readTool = Tool.make("demo_read", title: "Read", description: "Reads.", readOnly: true)
+    static let writeTool = Tool.make(
+        "demo_write", title: "Write", description: "Writes.", readOnly: false, destructive: true)
 
-    @Test func batteryStatusMatchesContract() throws {
-        let tool = SystemInfoCapability.batteryStatusTool
-        #expect(tool.name == "battery_status")
-        #expect(tool.deadlineMS == 5000)
-        #expect(tool.annotations?.readOnlyHint == true)
-        let result = SystemInfoCapability.batteryStatus(snapshot)
-        #expect(result.isError == false)
-        let structured = try #require(result.structuredContent)
-        #expect(
-            structured
-                == .object([
-                    "battery_percent": .number(67), "charging": .bool(false), "power_source": .string("battery"),
-                    "time_remaining_min": .number(245),
-                ]))
-        guard case .array(let content) = result.content, case .object(let first) = content.first,
-            case .string(let text) = first["text"]
-        else { Issue.record("no text content"); return }
-        #expect(text.contains("\"battery_percent\":67"))
+    static func registry(_ level: AccessLevel) -> CapabilityRegistry {
+        let cap = Capability(
+            id: "demo", title: "Demo", summary: "",
+            readTools: [ToolEntry(tool: readTool, handler: { _ in .text("read") })],
+            writeTools: [ToolEntry(tool: writeTool, handler: { _ in .text("wrote") })])
+        return CapabilityRegistry(capabilities: [cap], levels: ["demo": level])
     }
 
-    @Test func noBatteryIsAnError() {
-        var desktop = snapshot
-        desktop.hasBattery = false
-        let result = SystemInfoCapability.batteryStatus(desktop)
+    @Test func levelsDecideWhichToolsExist() {
+        #expect(Self.registry(.off).tools.isEmpty, "Constitution III")
+        #expect(Self.registry(.readOnly).tools.map(\.name) == ["demo_read"])
+        #expect(Self.registry(.readWrite).tools.map(\.name) == ["demo_read", "demo_write"])
+    }
+
+    @Test func toolsOutsideTheLevelCannotBeCalled() async {
+        let result = await Self.registry(.readOnly).call(tool: "demo_write", arguments: .object([:]))
         #expect(result.isError)
+        let ok = await Self.registry(.readWrite).call(tool: "demo_write", arguments: .object([:]))
+        #expect(!ok.isError)
     }
 
-    @Test func disabledCapabilityHasNoTools() {
-        var registry = CapabilityRegistry(enabled: [])
-        #expect(registry.tools.isEmpty, "Constitution III")
-        registry.setEnabled(SystemInfoCapability.id, true)
-        #expect(registry.tools.map(\.name) == ["battery_status"])
-        registry.setEnabled(SystemInfoCapability.id, false)
-        #expect(registry.tools.isEmpty)
+    @Test func everyToolDeclaresBothHints() {
+        // Claude requires readOnlyHint and destructiveHint on every tool.
+        for tool in [Self.readTool, Self.writeTool] {
+            #expect(tool.annotations?.readOnlyHint != nil)
+            #expect(tool.annotations?.destructiveHint != nil)
+        }
     }
 
-    @Test func callingADisabledToolFails() async {
-        let registry = CapabilityRegistry(enabled: [])
-        let result = await registry.call(tool: "battery_status", arguments: .object([:]), power: { snapshot })
-        #expect(result.isError)
+    @Test func notesAndMessagesStartAtReadAndWrite() {
+        #expect(CapabilityRegistry.defaultLevels == ["notes": .readWrite, "messages": .readWrite], "FR-121")
     }
 
-    @Test func callingAnEnabledTool() async {
-        let registry = CapabilityRegistry(enabled: [SystemInfoCapability.id])
-        let result = await registry.call(tool: "battery_status", arguments: .object([:]), power: { snapshot })
-        #expect(!result.isError)
-    }
-
-    @Test func systemInfoIsOnByDefault() {
-        #expect(CapabilityRegistry.defaultEnabled == [SystemInfoCapability.id], "FR-064")
+    @Test func activityTitles() {
+        let e = TraceEntry(
+            at: Date(), tool: "notes_create", arguments: "{}", result: "{}", isError: true, durationMS: 3)
+        #expect(ActivityFormat.title(e).hasSuffix("notes create (failed)"))
+        #expect(ActivityFormat.clip(String(repeating: "x", count: 200)).count == 80)
     }
 }

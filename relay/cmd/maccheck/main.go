@@ -181,7 +181,7 @@ func run() error {
 	}
 	step("battery_status from the real Mac code: %s (pmset: %d%%)", got, want)
 
-	step("turning System info off in the app")
+	step("turning the test tool off in the app")
 	send("tools-off")
 	if !waitFor(10*time.Second, func() bool {
 		tools, err := cs.ListTools(ctx, nil)

@@ -1,7 +1,7 @@
 // Package mcpserver is what Claude talks to (plan D2, contracts/mcp-surface.md): the MCP
-// handshake, the tool list (laptop_status plus the Mac's last reported tools), laptop_status
-// itself, and forwarding of Mac tool calls through the hub. Every call ends in a tool result;
-// a Mac that cannot answer is explained in words, never a protocol error.
+// handshake, the tool list (the Mac's last reported tools), and forwarding of Mac tool calls
+// through the hub. Every call ends in a tool result; a Mac that cannot answer is explained in
+// words, never a protocol error, and every answer carries the Mac's state (FR-065).
 package mcpserver
 
 import (
@@ -126,7 +126,6 @@ func (s *Server) user(ctx context.Context, id string) *userServer {
 				&mcp.ServerOptions{Logger: s.opts.Logger}),
 			tools: map[string]*mcp.Tool{},
 		}
-		u.server.AddTool(laptopStatusTool(), s.laptopStatus(id))
 		s.users[id] = u
 	}
 	s.mu.Unlock()
@@ -216,51 +215,6 @@ func (s *Server) status(ctx context.Context, userID string) (status, store.Devic
 	return st, d
 }
 
-func laptopStatusTool() *mcp.Tool {
-	return &mcp.Tool{
-		Name:  agentproto.RelayToolLaptopStatus,
-		Title: "Laptop status",
-		Description: "Whether the user's Mac is online, when it was last seen, and its last known battery, " +
-			"power, thermal and keep-awake state. Works even when the Mac is offline.",
-		InputSchema: map[string]any{"type": "object", "properties": map[string]any{}, "additionalProperties": false},
-		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true, OpenWorldHint: new(false)},
-	}
-}
-
-// laptopStatusResult is laptop_status's structured content.
-type laptopStatusResult struct {
-	Paired        bool              `json:"paired"`
-	Online        bool              `json:"online"`
-	LastSeen      *time.Time        `json:"last_seen"`
-	OfflineReason *string           `json:"offline_reason"`
-	State         *agentproto.State `json:"state"`
-}
-
-func (s *Server) laptopStatus(userID string) mcp.ToolHandler {
-	return func(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		start := s.opts.Now()
-		st, d := s.status(ctx, userID)
-		out := laptopStatusResult{Paired: st.Paired, Online: st.Online, State: st.State}
-		if !st.LastSeen.IsZero() {
-			out.LastSeen = &st.LastSeen
-		}
-		if st.OfflineReason != "" && !st.Online {
-			out.OfflineReason = &st.OfflineReason
-		}
-		var msg string
-		switch {
-		case st.Online && st.State != nil:
-			msg = onlineText(st.State)
-		case st.Online:
-			msg = "Your Mac is online."
-		default:
-			msg = offlineText(st, s.opts.Now())
-		}
-		s.audit(ctx, req, userID, d.ID, agentproto.RelayToolLaptopStatus, store.OutcomeOK, start)
-		return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: msg}}, StructuredContent: out}, nil
-	}
-}
-
 func errorResult(text string) *mcp.CallToolResult {
 	return &mcp.CallToolResult{IsError: true, Content: []mcp.Content{&mcp.TextContent{Text: text}}}
 }
@@ -295,6 +249,9 @@ func (s *Server) forward(userID string, tool *mcp.Tool) mcp.ToolHandler {
 			if result.IsError {
 				outcome = store.OutcomeError
 			}
+			// The Mac answered: add its state, read after the call so it is current (FR-065).
+			now, _ := s.status(ctx, userID)
+			result.Content = append(result.Content, &mcp.TextContent{Text: statusLine(now.State)})
 		}
 		s.audit(ctx, req, userID, d.ID, tool.Name, outcome, start)
 		return result, nil

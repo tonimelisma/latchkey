@@ -14,13 +14,33 @@ struct MenuContent: View {
         if let error = model.lastError { Text(error) }
         Divider()
         Toggle("Keep Mac Awake", isOn: $model.keepAwakeEnabled)
-        Menu("Tools for Claude") {
-            ForEach(CapabilityRegistry.all) { cap in
-                Toggle(
-                    "\(cap.title) (\(cap.summary.lowercased()))",
-                    isOn: Binding(
-                        get: { model.capabilities.enabled.contains(cap.id) },
-                        set: { model.setCapability(cap.id, enabled: $0) }))
+        Section("What Claude Can Do") {
+            ForEach(model.capabilities.capabilities) { cap in
+                Picker(
+                    "\(cap.title): \(model.capabilities.level(cap.id).title)",
+                    selection: Binding(
+                        get: { model.capabilities.level(cap.id) },
+                        set: { model.setLevel(cap.id, $0) })
+                ) {
+                    ForEach(AccessLevel.allCases, id: \.self) { Text($0.title).tag($0) }
+                }
+            }
+        }
+        Divider()
+        Section("Recent Activity") {
+            if model.recentActivity.isEmpty {
+                Text("Nothing yet")
+            }
+            ForEach(model.recentActivity) { entry in
+                Menu(ActivityFormat.title(entry)) {
+                    Text("Asked: \(ActivityFormat.clip(entry.arguments))")
+                    Text("\(entry.isError ? "Failed" : "Result"): \(ActivityFormat.clip(entry.result))")
+                    Text("Took \(entry.durationMS) ms")
+                }
+            }
+            Button("Show All Activity…") {
+                openWindow(id: "activity")
+                NSApp.activate()
             }
         }
         Divider()
@@ -29,10 +49,6 @@ struct MenuContent: View {
             Button("Disconnect This Mac") { Task { await model.disconnect() } }
         } else {
             Button("Connect to a Relay…") { model.showSetup() }
-        }
-        Button("Activity…") {
-            openWindow(id: "activity")
-            NSApp.activate()
         }
         Toggle("Start at Login", isOn: Binding(get: { model.startsAtLogin }, set: { model.setStartsAtLogin($0) }))
         if model.updates.available {
@@ -55,7 +71,7 @@ struct SetupView: View {
         VStack(alignment: .leading, spacing: 20) {
             VStack(alignment: .leading, spacing: 4) {
                 Text("Set Up Latchkey").font(.title.bold())
-                Text("Two steps, then Claude can reach this Mac from anywhere.").foregroundStyle(.secondary)
+                Text("A few steps, then Claude can reach this Mac from anywhere.").foregroundStyle(.secondary)
             }
             step(1, "Let Latchkey keep this Mac awake", done: model.helperStatus == .enabled) {
                 Text(
@@ -80,6 +96,15 @@ struct SetupView: View {
                     Text(error).foregroundStyle(.red).fixedSize(horizontal: false, vertical: true)
                 }
             }
+            if model.capabilities.anyOn {
+                step(3, "Let Latchkey read Notes and Messages", done: model.fullDiskAccess) {
+                    Text(
+                        "macOS needs you to switch this on yourself. In System Settings, turn on Latchkey under Full Disk Access."
+                    )
+                    .foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                    Button("Open System Settings") { Permissions.openFullDiskAccessSettings() }
+                }
+            }
             HStack {
                 Text("Latchkey lives in the menu bar. To uninstall, move it to the Trash.")
                     .font(.footnote).foregroundStyle(.secondary)
@@ -92,8 +117,9 @@ struct SetupView: View {
         .frame(width: 480)
         .onAppear { relay = model.relayURL?.absoluteString ?? AppModel.hostedRelay }
         .task {
-            while !Task.isCancelled {  // notice the approval in System Settings
+            while !Task.isCancelled {  // notice the approvals in System Settings
                 await model.checkHelperApproval()
+                model.checkFullDiskAccess()
                 try? await Task.sleep(for: .seconds(1))
             }
         }
@@ -176,4 +202,19 @@ struct ActivityView: View {
     }
 
     private func load() { entries = (try? model.trace?.recent(limit: 500)) ?? [] }
+}
+
+/// How an activity appears in the menu.
+enum ActivityFormat {
+    static func title(_ e: TraceEntry) -> String {
+        let time = e.at.formatted(date: .omitted, time: .shortened)
+        let name = e.tool.replacingOccurrences(of: "_", with: " ")
+        return "\(time)  \(name)\(e.isError ? " (failed)" : "")"
+    }
+
+    /// One line, at most 80 characters, for a menu item.
+    static func clip(_ s: String) -> String {
+        let line = s.replacingOccurrences(of: "\n", with: " ")
+        return line.count > 80 ? String(line.prefix(79)) + "…" : line
+    }
 }

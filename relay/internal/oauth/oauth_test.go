@@ -247,8 +247,7 @@ func TestDCRFlowWithRealClient(t *testing.T) {
 	})
 	res, err := cs.ListTools(ctxT(t), nil)
 	require.NoError(t, err)
-	require.Len(t, res.Tools, 1)
-	assert.Equal(t, "laptop_status", res.Tools[0].Name)
+	assert.Empty(t, res.Tools, "signed in; no Mac paired yet")
 	require.Equal(t, 1, e.auth.consentCount())
 	assert.Equal(t, oauth.ConsentRequest{ClientName: "Claude Code", RedirectHost: "localhost:51234"}, e.auth.consents[0])
 }
@@ -259,9 +258,8 @@ func TestCIMDFlowWithRealClient(t *testing.T) {
 		RedirectURL:                    "http://localhost:7777/callback",
 		ClientIDMetadataDocumentConfig: &auth.ClientIDMetadataDocumentConfig{URL: e.cimd.URL + "/oauth/client.json"},
 	})
-	call, err := cs.CallTool(ctxT(t), &mcp.CallToolParams{Name: "laptop_status"})
-	require.NoError(t, err)
-	assert.False(t, call.IsError)
+	_, err := cs.ListTools(ctxT(t), nil)
+	require.NoError(t, err, "signed in through the metadata document")
 	require.Equal(t, 1, e.auth.consentCount())
 	assert.Equal(t, "Claude", e.auth.consents[0].ClientName)
 }

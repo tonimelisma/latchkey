@@ -83,29 +83,41 @@ func powerPhrase(s *agentproto.State) string {
 	return ""
 }
 
-// onlineText summarizes a connected Mac for laptop_status.
-func onlineText(s *agentproto.State) string {
-	text := fmt.Sprintf("Your Mac is online: %d%% battery", s.BatteryPercent)
-	if p := powerPhrase(s); p != "" {
-		text += ", " + p
+// statusLine is the Mac's state, appended to every Mac tool result so Claude knows the laptop's
+// condition as a byproduct of real work (spec 001 FR-065).
+func statusLine(s *agentproto.State) string {
+	if s == nil {
+		return "Mac: online"
 	}
-	return text + ". " + keepAwakeText(s.KeepAwake)
+	line := fmt.Sprintf("Mac: online · %d%% battery", s.BatteryPercent)
+	if p := powerPhrase(s); p != "" {
+		line += ", " + p
+	}
+	line += " · " + keepAwakePhrase(s.KeepAwake)
+	if s.PowerSource == agentproto.PowerBattery && !s.Charging && s.BatteryPercent <= lowBatteryWarning {
+		line += " · battery low: the Mac goes to sleep at 15%"
+	}
+	if s.ThermalState == "serious" || s.ThermalState == "critical" {
+		line += " · the Mac is too hot and may go to sleep"
+	}
+	return line
 }
 
-func keepAwakeText(k string) string {
+// lowBatteryWarning is 10 points above the Mac's 15% sleep threshold (spec 001 FR-032).
+const lowBatteryWarning = 25
+
+func keepAwakePhrase(k string) string {
 	switch k {
 	case agentproto.KeepAwakeOn:
-		return "Keep-awake is on."
-	case agentproto.KeepAwakeOffUser:
-		return "Keep-awake is off (turned off on the Mac)."
+		return "keep-awake on"
 	case agentproto.KeepAwakeOffLowBattery:
-		return "Keep-awake is off because the battery is low."
+		return "keep-awake off (battery low)"
 	case agentproto.KeepAwakeOffTooHot:
-		return "Keep-awake is off because the Mac is too hot."
+		return "keep-awake off (too hot)"
 	case agentproto.KeepAwakeOffHelperUnusable:
-		return "Keep-awake is off because it hasn't been approved in System Settings."
+		return "keep-awake off (not approved in System Settings)"
 	}
-	return "Keep-awake state is unknown."
+	return "keep-awake off"
 }
 
 // when renders a past time in the Mac's time zone, with a relative time: "at 2:02 PM (3 hours
