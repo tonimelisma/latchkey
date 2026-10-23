@@ -42,6 +42,7 @@ final class AppModel {
         static let levels = "capabilityLevels"
         static let launchedBefore = "launchedBefore"
         static let appControl = "appControlAllowed"
+        static let safariJavaScript = "safariJavaScriptAllowed"
     }
 
     init() {
@@ -95,6 +96,7 @@ final class AppModel {
 
     var needsSetup: Bool {
         !isPaired || helperStatus != .enabled || (capabilities.anyOn && !fullDiskAccess) || needsAppControl
+            || needsSafariJavaScript
             || needsContacts
     }
 
@@ -219,7 +221,7 @@ final class AppModel {
         capabilities.setLevel(id, level)
         defaults.set(capabilities.levels.mapValues(\.rawValue), forKey: Keys.levels)
         Task { await connection?.sendTools() }  // FR-062
-        if (capabilities.anyOn && !fullDiskAccess) || needsAppControl { showSetup() }
+        if needsSetup { showSetup() }
     }
 
     // MARK: permissions
@@ -244,7 +246,28 @@ final class AppModel {
     /// unattended Mac (FR-140).
     func needsControl(for capability: String) -> Bool {
         guard let app = Self.controlledApps[capability] else { return false }
-        return capabilities.level(capability) == .readWrite && control(of: app) != .allowed
+        // Reading Safari pages needs it too; Notes and Messages read their databases.
+        let level = capabilities.level(capability)
+        let needed = capability == CapabilityRegistry.browser ? level != .off : level == .readWrite
+        return needed && control(of: app) != .allowed
+    }
+
+    /// Safari's "Allow JavaScript from Apple Events" (spec 005 FR-406): only a test shows it.
+    private(set) var safariJavaScript: Bool? =
+        UserDefaults.standard.object(forKey: Keys.safariJavaScript) as? Bool == true ? true : nil
+
+    var needsSafariJavaScript: Bool {
+        capabilities.level(CapabilityRegistry.browser) != .off && safariJavaScript != true
+    }
+
+    func checkSafariJavaScript() async {
+        do {
+            try await BrowserCapability.browser.probe()
+            safariJavaScript = true
+        } catch {
+            safariJavaScript = false
+        }
+        defaults.set(safariJavaScript == true, forKey: Keys.safariJavaScript)
     }
 
     var needsAppControl: Bool { Self.controlledApps.keys.contains { needsControl(for: $0) } }

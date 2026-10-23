@@ -23,6 +23,7 @@ enum Permissions {
 
     static let notesApp = "com.apple.Notes"
     static let messagesApp = "com.apple.MobileSMS"
+    static let safariApp = "com.apple.Safari"
 
     enum Automation: Sendable, Equatable { case allowed, denied, notAsked }
 
@@ -39,6 +40,12 @@ enum Permissions {
         case OSStatus(errAEEventNotPermitted): return .denied
         case OSStatus(errAEEventWouldRequireUserConsent): return .notAsked
         default: return nil
+        }
+    }
+
+    static func open(app bundleID: String) {
+        if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) {
+            NSWorkspace.shared.openApplication(at: url, configuration: NSWorkspace.OpenConfiguration())
         }
     }
 

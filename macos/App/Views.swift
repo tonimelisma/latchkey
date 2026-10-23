@@ -73,14 +73,14 @@ struct SetupView: View {
                 Text("Set Up Latchkey").font(.title.bold())
                 Text("A few steps, then Claude can reach this Mac from anywhere.").foregroundStyle(.secondary)
             }
-            step(1, "Let Latchkey keep this Mac awake", done: model.helperStatus == .enabled) {
+            step(n("helper"), "Let Latchkey keep this Mac awake", done: model.helperStatus == .enabled) {
                 Text(
                     "So Claude can reach your Mac with the lid closed. In System Settings, turn on Latchkey under Allow in the Background."
                 )
                 .foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                 Button("Open System Settings") { model.approveHelper() }
             }
-            step(2, "Connect to your account", done: model.isPaired) {
+            step(n("connect"), "Connect to your account", done: model.isPaired) {
                 Text(
                     "Enter your relay's address. Your browser opens so you can sign in or create an account with a passkey."
                 )
@@ -97,7 +97,7 @@ struct SetupView: View {
                 }
             }
             if model.capabilities.anyOn {
-                step(3, "Let Latchkey read Notes and Messages", done: model.fullDiskAccess) {
+                step(n("disk"), "Let Latchkey read your files, notes, and messages", done: model.fullDiskAccess) {
                     Text(
                         "macOS needs you to switch this on yourself. In System Settings, turn on Latchkey under Full Disk Access."
                     )
@@ -105,18 +105,18 @@ struct SetupView: View {
                     Button("Open System Settings") { Permissions.openFullDiskAccessSettings() }
                 }
             }
-            if model.capabilities.level(CapabilityRegistry.notes) == .readWrite {
+            if level(CapabilityRegistry.notes) == .readWrite {
                 controlStep(
-                    4, "Let Latchkey change your notes", app: Permissions.notesApp, appName: "Notes",
+                    n("notes"), "Let Latchkey change your notes", app: Permissions.notesApp, appName: "Notes",
                     purpose: "So Claude can create, edit, and delete notes.")
             }
             if model.capabilities.level(CapabilityRegistry.messages) == .readWrite {
                 controlStep(
-                    5, "Let Latchkey send messages", app: Permissions.messagesApp, appName: "Messages",
+                    n("messages"), "Let Latchkey send messages", app: Permissions.messagesApp, appName: "Messages",
                     purpose: "So Claude can send messages for you.")
             }
             if model.capabilities.level(CapabilityRegistry.messages) != .off {
-                step(6, "Show names in Messages", done: model.contactsStatus == .authorized) {
+                step(n("contacts"), "Show names in Messages", done: model.contactsStatus == .authorized) {
                     if model.contactsStatus == .notDetermined {
                         Text(
                             "So Claude sees who wrote each message, not just phone numbers. When macOS asks about Contacts, click Allow."
@@ -129,6 +129,24 @@ struct SetupView: View {
                         )
                         .foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                         Button("Open System Settings") { Permissions.openContactsSettings() }
+                    }
+                }
+            }
+            if level(CapabilityRegistry.browser) != .off {
+                controlStep(
+                    n("safari"), "Let Latchkey use Safari", app: Permissions.safariApp, appName: "Safari",
+                    purpose: "So Claude can open and read web pages, signed in as you.")
+                step(n("safariJS"), "Turn on Safari's setting for Latchkey", done: model.safariJavaScript == true) {
+                    Text(
+                        "In Safari, choose Safari → Settings. Under Advanced, turn on “Show features for web developers”. Then under Developer, turn on “Allow JavaScript from Apple Events”. Then click Check."
+                    )
+                    .foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                    if model.safariJavaScript == false {
+                        Text("Safari's setting isn't on yet.").foregroundStyle(.red)
+                    }
+                    HStack {
+                        Button("Open Safari") { Permissions.open(app: Permissions.safariApp) }
+                        Button("Check") { Task { await model.checkSafariJavaScript() } }
                     }
                 }
             }
@@ -153,6 +171,21 @@ struct SetupView: View {
             }
         }
     }
+
+    private func level(_ id: String) -> AccessLevel { model.capabilities.level(id) }
+
+    /// The setup steps showing now, so they're numbered without gaps.
+    private var visibleSteps: [String] {
+        var steps = ["helper", "connect"]
+        if model.capabilities.anyOn { steps.append("disk") }
+        if level(CapabilityRegistry.notes) == .readWrite { steps.append("notes") }
+        if level(CapabilityRegistry.messages) == .readWrite { steps.append("messages") }
+        if level(CapabilityRegistry.messages) != .off { steps.append("contacts") }
+        if level(CapabilityRegistry.browser) != .off { steps += ["safari", "safariJS"] }
+        return steps
+    }
+
+    private func n(_ step: String) -> Int { (visibleSteps.firstIndex(of: step) ?? 0) + 1 }
 
     private func controlStep(_ n: Int, _ title: String, app: String, appName: String, purpose: String) -> some View {
         step(n, title, done: model.control(of: app) == .allowed) {
