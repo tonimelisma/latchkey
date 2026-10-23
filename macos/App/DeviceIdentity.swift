@@ -78,7 +78,12 @@ struct DeviceIdentity: Sendable {
         return parts.isEmpty ? "key unreadable" : "missing " + parts.joined(separator: ", ")
     }
 
+    /// Tests run inside a copy of the app that shares the installed app's Keychain and settings;
+    /// they must never change the real pairing (a test erased it on 2026-10-22).
+    private static var underTest: Bool { ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil }
+
     static func save(relayURL: URL, deviceID: String, key: SecureEnclaveSigningKey) throws {
+        guard !underTest else { return }
         try Keychain.write(key.dataRepresentation, account: Keychain.deviceKeyAccount)
         UserDefaults.standard.set(relayURL.absoluteString, forKey: defaultsRelay)
         UserDefaults.standard.set(deviceID, forKey: defaultsDevice)
@@ -86,6 +91,7 @@ struct DeviceIdentity: Sendable {
 
     /// Forgets the pairing (Disconnect, or the relay revoked this Mac).
     static func delete() {
+        guard !underTest else { return }
         Keychain.delete(account: Keychain.deviceKeyAccount)
         UserDefaults.standard.removeObject(forKey: defaultsRelay)
         UserDefaults.standard.removeObject(forKey: defaultsDevice)

@@ -117,6 +117,8 @@ struct LocalData {
     var supportDirectory = URL.applicationSupportDirectory.appending(path: "Latchkey", directoryHint: .isDirectory)
     var defaultsDomain = HelperIdentity.appBundleID
     var defaults = UserDefaults.standard
+    /// Forgets the pairing (the device key in the Keychain and the relay in settings).
+    var forgetIdentity: () -> Void = { DeviceIdentity.delete() }
     /// Folders macOS creates for the app by itself: network cache, cookies, saved window state.
     var systemFolders: [URL] = {
         let library = URL.libraryDirectory
@@ -131,7 +133,7 @@ struct LocalData {
 
     /// Deletes the device key, settings, the activity log, and the app's system folders.
     func remove() {
-        DeviceIdentity.delete()
+        forgetIdentity()
         try? FileManager.default.removeItem(at: supportDirectory)
         for folder in systemFolders { try? FileManager.default.removeItem(at: folder) }
         defaults.removePersistentDomain(forName: defaultsDomain)

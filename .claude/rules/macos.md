@@ -45,5 +45,9 @@ paths:
   marking all vanished).
 - AppleScript variables must not be app terms (`kind` in Messages, `before`/`after` everywhere);
   `osacompile` doesn't catch app terms. Prefix variables (`targetKind`, `theText`).
+- Tests run in a debug copy of the app with the same bundle ID: it shares the installed app's
+  user defaults and Keychain. Tests must never touch `UserDefaults.standard`, the Keychain, or
+  `DeviceIdentity` (an uninstall test erased Toni's pairing twice on 2026-10-22);
+  `DeviceIdentity.save/delete` now refuse under XCTest.
 
 Add new gotchas here as they are discovered.

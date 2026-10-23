@@ -61,7 +61,13 @@ import Testing
         let cache = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
         try FileManager.default.createDirectory(at: cache, withIntermediateDirectories: true)
 
-        LocalData(supportDirectory: support, defaultsDomain: suite, defaults: defaults, systemFolders: [cache]).remove()
+        // Never the real pairing: the test app shares the installed app's Keychain and settings.
+        var forgot = false
+        LocalData(
+            supportDirectory: support, defaultsDomain: suite, defaults: defaults, forgetIdentity: { forgot = true },
+            systemFolders: [cache]
+        ).remove()
+        #expect(forgot)
         #expect(!FileManager.default.fileExists(atPath: support.path))
         #expect(!FileManager.default.fileExists(atPath: cache.path))
         #expect(UserDefaults(suiteName: suite)?.object(forKey: "keepAwakeEnabled") == nil)
