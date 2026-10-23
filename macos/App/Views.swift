@@ -150,6 +150,20 @@ struct SetupView: View {
                     }
                 }
             }
+            if level(CapabilityRegistry.computer) != .off {
+                step(n("screen"), "Let Claude see the screen", done: model.screenRecording) {
+                    Text(
+                        "For computer control, while the Mac is unlocked. In System Settings, turn on Latchkey under Screen & System Audio Recording."
+                    )
+                    .foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                    Button("Continue") { model.allowScreenRecording() }
+                }
+                step(n("accessibility"), "Let Claude use the mouse and keyboard", done: model.accessibility) {
+                    Text("In System Settings, turn on Latchkey under Accessibility.")
+                        .foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                    Button("Continue") { model.allowAccessibility() }
+                }
+            }
             HStack {
                 Text("Latchkey lives in the menu bar. To uninstall, move it to the Trash.")
                     .font(.footnote).foregroundStyle(.secondary)
@@ -167,6 +181,7 @@ struct SetupView: View {
                 model.checkFullDiskAccess()
                 await model.checkAppControl()
                 model.checkContacts()
+                model.checkScreenPermissions()
                 try? await Task.sleep(for: .seconds(1))
             }
         }
@@ -182,6 +197,7 @@ struct SetupView: View {
         if level(CapabilityRegistry.messages) == .readWrite { steps.append("messages") }
         if level(CapabilityRegistry.messages) != .off { steps.append("contacts") }
         if level(CapabilityRegistry.browser) != .off { steps += ["safari", "safariJS"] }
+        if level(CapabilityRegistry.computer) != .off { steps += ["screen", "accessibility"] }
         return steps
     }
 

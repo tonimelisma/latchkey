@@ -1,4 +1,5 @@
 import AppKit
+import ApplicationServices
 import Contacts
 import Foundation
 import Network
@@ -96,7 +97,7 @@ final class AppModel {
 
     var needsSetup: Bool {
         !isPaired || helperStatus != .enabled || (capabilities.anyOn && !fullDiskAccess) || needsAppControl
-            || needsSafariJavaScript
+            || needsSafariJavaScript || needsScreenRecording || needsAccessibility
             || needsContacts
     }
 
@@ -258,6 +259,32 @@ final class AppModel {
 
     var needsSafariJavaScript: Bool {
         capabilities.level(CapabilityRegistry.browser) != .off && safariJavaScript != true
+    }
+
+    /// Computer control (spec 006 FR-506): Screen Recording to see, Accessibility to act.
+    private(set) var screenRecording = CGPreflightScreenCaptureAccess()
+    private(set) var accessibility = AXIsProcessTrusted()
+
+    var needsScreenRecording: Bool { capabilities.level(CapabilityRegistry.computer) != .off && !screenRecording }
+    var needsAccessibility: Bool { capabilities.level(CapabilityRegistry.computer) != .off && !accessibility }
+
+    func checkScreenPermissions() {
+        screenRecording = CGPreflightScreenCaptureAccess()
+        accessibility = AXIsProcessTrusted()
+    }
+
+    /// Asks macOS to show its prompt the first time; after that, opens System Settings.
+    func allowScreenRecording() {
+        if !CGRequestScreenCaptureAccess() { Permissions.openPrivacySettings("Privacy_ScreenCapture") }
+        checkScreenPermissions()
+    }
+
+    func allowAccessibility() {
+        let prompt = "AXTrustedCheckOptionPrompt"  // kAXTrustedCheckOptionPrompt, which Swift 6 rejects as shared state
+        if !AXIsProcessTrustedWithOptions([prompt: true] as CFDictionary) {
+            Permissions.openPrivacySettings("Privacy_Accessibility")
+        }
+        checkScreenPermissions()
     }
 
     func checkSafariJavaScript() async {

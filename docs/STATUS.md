@@ -1,6 +1,6 @@
 # Status
 
-Last updated: 2026-10-22 (spec 002 increment 2)
+Last updated: 2026-10-22 (specs 003–006 built)
 
 Xcode signing ready (2026-10-20): Toni's Xcode account has a valid "Apple Development" certificate
 (team ID `TEAMID1234`, expires 2027-07-22). Keep the team ID out of committed project files
@@ -33,33 +33,25 @@ after the app was quit.
 ## Next steps
 
 Releases, terms and privacy, and the directory listing are much later (Toni, 2026-10-22).
-Phone check done. Claude's tool time limit is documented (240 s), so no measurement is needed.
 
-1. **Spec 002, Notes and Messages** (approved; branch `002-notes-messages`; `tasks.md`).
-   Increment 1 done (app 0.2.0, relay deployed): state line in every Mac answer, status tools
-   removed, Off / Read only / Read & write levels, activity in the menu, busy dot, notifications,
-   Full Disk Access setup step. Increment 2 done (app 0.3.0): Claude can search, list folders, read notes (with
-   checklists), and view note images. Increment 3 done (app 0.4.0): create, append, replace, edit
-   a passage, delete (to Recently Deleted), all through Notes with AppleScript; notes with
-   checklists, images, or tables are refused with the reason; setup asks for permission to
-   control Notes. Checked against a test database and a stand-in for Notes, not yet against
-   Toni's real Notes (needs 0.4.0 installed with Full Disk Access and Notes control allowed).
-   Increment 4 done (app 0.5.0): Claude can list conversations, read them, search all history by
-   words, person, and time, and view images, with names from Contacts and other people's words
-   marked as not instructions; setup asks for Contacts. Checked against a test database (a
-   200,000-message search takes 0.2 s), not yet against Toni's real messages.
-   Increment 5 done (app 0.6.0): Claude can send messages with text and files to a person, number,
-   address, group, or conversation, with confirmation from Messages; setup asks for permission to
-   control Messages. Checked against a test database and a stand-in for Messages.
-   Next: Toni installs 0.6.0 and finishes setup (one sitting, see "Waiting on Toni"), then Claude
-   runs the live checks through the connector (tasks T141).
-3. Then Files, Shell, Browser and computer control, one spec each.
+1. **All capabilities are built** (app 0.7.0, 2026-10-22): Notes and Messages (spec 002), Files
+   (003), Shell (004), Browser through Toni's Safari (005), Computer control (006). 152 Mac tests
+   pass; Notes, Messages, Safari scripts compile against the real apps; Files and Shell are tested
+   with real files and commands. Not yet checked on Toni's real data or with the real
+   permissions (the installed app is 0.1.2, quit).
+2. When Toni has installed 0.7.0 and finished setup (see "Waiting on Toni"), Claude runs the live
+   checks through the connector: read a note, change a test note, read a conversation, send the
+   one test message to owner@example.com, search and read a file, run `df -h`, open and read a
+   page in Safari, take a screenshot (tasks 002 T141 and the same for 003–006).
+3. Toni reviews specs 003–006 (built without review stops, at Toni's request).
 
 ## Waiting on Toni
 
-1. Install `macos/build/Latchkey-0.6.0.dmg` (drag to Applications, replace the old copy) and open it.
-2. In the setup window: turn on Latchkey under Full Disk Access, then click Continue on the Notes,
-   Messages, and Contacts steps and choose Allow each time macOS asks.
+1. Install `macos/build/Latchkey-0.7.0.dmg` (drag to Applications, replace the old copy) and open it.
+2. In the setup window, top to bottom: Full Disk Access; Continue (then Allow) for Notes,
+   Messages, Contacts, Safari, Screen Recording, and Accessibility; and in Safari's settings turn
+   on "Show features for web developers" (Advanced) and "Allow JavaScript from Apple Events"
+   (Developer), then click Check.
 
 ## Milestones (from `specs/001-core/plan.md`)
 

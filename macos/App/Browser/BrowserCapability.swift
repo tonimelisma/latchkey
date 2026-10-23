@@ -1,3 +1,4 @@
+import CoreGraphics
 import Foundation
 
 /// The Owner's Safari (spec 005).
@@ -61,6 +62,26 @@ enum BrowserCapability {
                     description: "Goes back to the previous page in Claude's Safari window.",
                     readOnly: true, openWorld: true, deadlineMS: 30_000),
                 handler: { _ in await run { page(try await browser.back()) } }),
+            ToolEntry(
+                tool: .make(
+                    "browser_screenshot", title: "Screenshot of the Page",
+                    description:
+                        "Shows Claude's Safari window as an image. Needs the Mac unlocked with its screen on; reading pages doesn't.",
+                    readOnly: true, openWorld: true, deadlineMS: 20_000),
+                handler: { _ in
+                    await run {
+                        guard CGPreflightScreenCaptureAccess() else {
+                            throw Failure.failed(
+                                "Latchkey can't see the screen yet: the Mac's owner can turn on Latchkey in System Settings → Privacy & Security → Screen & System Audio Recording."
+                            )
+                        }
+                        if let problem = await ScreenCheck.problem(SystemScreen()) { throw Failure.failed(problem) }
+                        let t = try await browser.tabs(select: nil)
+                        let title = t.tabs.first { $0.0 == t.current }?.1 ?? ""
+                        let image = try await ScreenCapture.window(app: Permissions.safariApp, title: title)
+                        return .image(image.data, mimeType: image.mimeType)
+                    }
+                }),
         ]
     }
 
@@ -155,7 +176,7 @@ enum BrowserCapability {
         case .elementMissing(let ref):
             "There's no \(ref) on the page now (it may have changed). Read it again with browser_read."
         case .noOption(let text): "That list has no option \"\(text)\"."
-        case .failed(let message): "Safari reported a problem: \(message)"
+        case .failed(let message): message
         }
     }
 

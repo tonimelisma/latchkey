@@ -123,10 +123,10 @@ final class FakeSafari: ScriptRunner, @unchecked Sendable {
         let t = tools(FakeSafari())
         #expect(
             Set(t.keys) == [
-                "browser_open", "browser_read", "browser_tabs", "browser_back", "browser_click", "browser_type",
-                "browser_script",
+                "browser_open", "browser_read", "browser_tabs", "browser_back", "browser_screenshot", "browser_click",
+                "browser_type", "browser_script",
             ])
-        for n in ["browser_open", "browser_read", "browser_tabs", "browser_back"] {
+        for n in ["browser_open", "browser_read", "browser_tabs", "browser_back", "browser_screenshot"] {
             #expect(t[n]?.tool.annotations?.readOnlyHint == true)
         }
         for n in ["browser_click", "browser_type", "browser_script"] {

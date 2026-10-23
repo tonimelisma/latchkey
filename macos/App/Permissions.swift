@@ -49,6 +49,12 @@ enum Permissions {
         }
     }
 
+    /// Opens a page of System Settings → Privacy & Security, like "Privacy_Accessibility".
+    static func openPrivacySettings(_ page: String) {
+        let pane = "x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension?\(page)"
+        if let url = URL(string: pane) { NSWorkspace.shared.open(url) }
+    }
+
     static func openContactsSettings() {
         let pane = "x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension?Privacy_Contacts"
         if let url = URL(string: pane) { NSWorkspace.shared.open(url) }

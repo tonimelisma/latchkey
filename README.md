@@ -22,8 +22,9 @@ Claude (web, Desktop, phone)  ──HTTPS──▶  Latchkey relay  ◀──out
   (passkeys, no passwords), remembers your Mac's last state, and answers instantly when the Mac
   is away.
 - **You choose what Claude can do.** Each capability is a switch in the app; a capability that's
-  off doesn't exist as far as Claude knows. This first version has one: System info (battery and
-  power state). Files, Notes and Messages, shell, and browser control come next.
+  off doesn't exist as far as Claude knows: Notes, Messages, Files, Shell, Browser (your Safari,
+  with your logins), and Computer control (the screen, mouse, and keyboard, while the Mac is
+  unlocked). Most have Off, Read only, and Read & write; Shell is Off or On.
 - **Keep-awake:** while connected, the app keeps the Mac awake, lid closed included, and lets it
   sleep when the battery reaches 15% or it gets too hot.
 - **Privacy:** the relay never stores what tools return. It keeps a 30-day list of which tools ran

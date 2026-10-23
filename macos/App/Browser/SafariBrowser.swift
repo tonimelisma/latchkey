@@ -28,7 +28,7 @@ actor SafariBrowser {
         do {
             return try PageScripts.decode(try await javaScript(PageScripts.read(offset: offset)))
         } catch is DecodingError {
-            throw Failure.failed("the page didn't answer as expected")
+            throw Failure.failed("Safari reported a problem: the page didn't answer as expected.")
         }
     }
 
@@ -99,7 +99,7 @@ actor SafariBrowser {
         case "ok": return
         case "missing": throw Failure.elementMissing(ref)
         case "nooption": throw Failure.noOption(option)
-        default: throw Failure.failed(answer)
+        default: throw Failure.failed("The page answered: \(answer)")
         }
     }
 
@@ -110,7 +110,7 @@ actor SafariBrowser {
                 throw Failure.noWindow
             }
             if message.contains("Allow JavaScript from Apple Events") { throw Failure.javaScriptOff }
-            throw Failure.failed(message)
+            throw Failure.failed("Safari reported a problem: \(message)")
         }
     }
 

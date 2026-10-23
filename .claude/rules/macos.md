@@ -29,4 +29,13 @@ paths:
 - Not sandboxed (later capabilities need Full Disk Access, Apple Events, Accessibility). Hardened
   runtime on.
 
+- Swift 6 rejects Apple's `kAX…` CFString globals (e.g. `kAXTrustedCheckOptionPrompt`) as shared
+  mutable state; use the constant's string value.
+- `NSRegularExpression` patterns written as Swift raw strings need ICU escapes (`\x{1B}`), not
+  Swift's `\u{1B}`.
+- AppleScript sent with `osascript` must compile: `ScriptSyntaxTests` compiles every script with
+  `osacompile` (reserved words like `before`/`after` as variable names break a script).
+- Shell: `macOS sed` doesn't turn `\n` into a newline in replacements, and `make … | tail` hides a
+  failed build; use `set -o pipefail`.
+
 Add new gotchas here as they are discovered.

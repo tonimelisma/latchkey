@@ -1,0 +1,126 @@
+import AppKit
+import ApplicationServices
+import Foundation
+import ImageIO
+import ScreenCaptureKit
+import UniformTypeIdentifiers
+
+/// Screenshots with ScreenCaptureKit (plan D3, D7); needs the Screen Recording permission.
+enum ScreenCapture {
+    struct Failure: Error { var message: String }
+
+    static func display(_ d: DisplayInfo) async throws -> PreparedImage {
+        let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
+        guard let display = content.displays.first(where: { $0.displayID == d.id }) else {
+            throw Failure(message: "That display isn't available to capture.")
+        }
+        let (w, h) = ScreenGeometry.imageSize(d)
+        let config = SCStreamConfiguration()
+        config.width = w
+        config.height = h
+        config.showsCursor = true
+        let image = try await SCScreenshotManager.captureImage(
+            contentFilter: SCContentFilter(display: display, excludingWindows: []), configuration: config)
+        return try jpeg(image)
+    }
+
+    /// The window of `bundleID` whose title is `title` (Claude's Safari tab).
+    static func window(app bundleID: String, title: String) async throws -> PreparedImage {
+        let content = try await SCShareableContent.excludingDesktopWindows(true, onScreenWindowsOnly: true)
+        guard
+            let window = content.windows.first(where: {
+                $0.owningApplication?.bundleIdentifier == bundleID && $0.title == title
+            })
+                ?? content.windows.first(where: {
+                    $0.owningApplication?.bundleIdentifier == bundleID && ($0.title ?? "").contains(title)
+                })
+        else {
+            throw Failure(
+                message: "Claude's Safari window isn't on screen (it may be minimized or behind a full-screen app).")
+        }
+        let scale = Double(NSScreen.main?.backingScaleFactor ?? 2)
+        let px = (window.frame.width * scale, window.frame.height * scale)
+        let fit = min(1, Double(ScreenGeometry.maxSide) / max(px.0, px.1))
+        let config = SCStreamConfiguration()
+        config.width = Int(px.0 * fit)
+        config.height = Int(px.1 * fit)
+        let image = try await SCScreenshotManager.captureImage(
+            contentFilter: SCContentFilter(desktopIndependentWindow: window), configuration: config)
+        return try jpeg(image)
+    }
+
+    private static func jpeg(_ image: CGImage) throws -> PreparedImage {
+        let out = NSMutableData()
+        guard let dest = CGImageDestinationCreateWithData(out, UTType.jpeg.identifier as CFString, 1, nil) else {
+            throw Failure(message: "The screenshot couldn't be encoded.")
+        }
+        CGImageDestinationAddImage(dest, image, [kCGImageDestinationLossyCompressionQuality: 0.75] as CFDictionary)
+        guard CGImageDestinationFinalize(dest) else { throw Failure(message: "The screenshot couldn't be encoded.") }
+        return PreparedImage(data: out as Data, mimeType: "image/jpeg")
+    }
+}
+
+struct UIElementInfo: Sendable, Equatable {
+    var role: String
+    var label: String
+    var value: String?
+    /// In global screen points.
+    var frame: CGRect
+}
+
+/// The front app's focused window through the Accessibility API (plan D3).
+enum FrontWindow {
+    static let maxElements = 300
+
+    static func elements() -> [UIElementInfo] {
+        guard let app = NSWorkspace.shared.frontmostApplication else { return [] }
+        let root = AXUIElementCreateApplication(app.processIdentifier)
+        var window: AnyObject?
+        guard AXUIElementCopyAttributeValue(root, kAXFocusedWindowAttribute as CFString, &window) == .success,
+            let window
+        else { return [] }
+        var out: [UIElementInfo] = []
+        walk(window as! AXUIElement, depth: 0, into: &out)
+        return out
+    }
+
+    private static func walk(_ e: AXUIElement, depth: Int, into out: inout [UIElementInfo]) {
+        guard out.count < maxElements, depth < 15 else { return }
+        let role = string(e, kAXRoleAttribute) ?? ""
+        let label =
+            [kAXTitleAttribute, kAXDescriptionAttribute, kAXHelpAttribute].lazy.compactMap { string(e, $0) }
+            .first { !$0.isEmpty } ?? ""
+        let value = string(e, kAXValueAttribute)
+        if let frame = frame(e), !label.isEmpty || !(value ?? "").isEmpty || role == kAXButtonRole as String {
+            out.append(
+                UIElementInfo(role: role, label: label, value: value.map { String($0.prefix(200)) }, frame: frame))
+        }
+        var children: AnyObject?
+        if AXUIElementCopyAttributeValue(e, kAXChildrenAttribute as CFString, &children) == .success,
+            let list = children as? [AXUIElement]
+        {
+            for c in list { walk(c, depth: depth + 1, into: &out) }
+        }
+    }
+
+    private static func string(_ e: AXUIElement, _ attribute: String) -> String? {
+        var v: AnyObject?
+        guard AXUIElementCopyAttributeValue(e, attribute as CFString, &v) == .success else { return nil }
+        if let s = v as? String { return s }
+        if let n = v as? NSNumber { return n.stringValue }
+        return nil
+    }
+
+    private static func frame(_ e: AXUIElement) -> CGRect? {
+        var pos: AnyObject?
+        var size: AnyObject?
+        guard AXUIElementCopyAttributeValue(e, kAXPositionAttribute as CFString, &pos) == .success,
+            AXUIElementCopyAttributeValue(e, kAXSizeAttribute as CFString, &size) == .success
+        else { return nil }
+        var p = CGPoint.zero
+        var s = CGSize.zero
+        AXValueGetValue(pos as! AXValue, .cgPoint, &p)
+        AXValueGetValue(size as! AXValue, .cgSize, &s)
+        return CGRect(origin: p, size: s)
+    }
+}
