@@ -17,12 +17,12 @@ struct MenuContent: View {
         Section("What Claude Can Do") {
             ForEach(model.capabilities.capabilities) { cap in
                 Picker(
-                    "\(cap.title): \(model.capabilities.level(cap.id).title)",
+                    "\(cap.title): \(cap.title(for: model.capabilities.level(cap.id)))",
                     selection: Binding(
                         get: { model.capabilities.level(cap.id) },
                         set: { model.setLevel(cap.id, $0) })
                 ) {
-                    ForEach(AccessLevel.allCases, id: \.self) { Text($0.title).tag($0) }
+                    ForEach(cap.levels, id: \.self) { Text(cap.title(for: $0)).tag($0) }
                 }
             }
         }

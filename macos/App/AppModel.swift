@@ -52,7 +52,10 @@ final class AppModel {
             if let level = AccessLevel(rawValue: raw) { levels[id] = level }
         }
         capabilities = CapabilityRegistry(
-            capabilities: [NotesCapability.make(), MessagesCapability.make(), FilesCapability.make()], levels: levels)
+            capabilities: [
+                NotesCapability.make(), MessagesCapability.make(), FilesCapability.make(), ShellCapability.make(),
+            ],
+            levels: levels)
         trace = try? TraceStore()
     }
 
@@ -137,6 +140,7 @@ final class AppModel {
     func shutdown() async {
         if uninstalling { return }
         await connection?.stop(goodbye: .userQuit)
+        await ShellCapability.jobs.stopAll()  // spec 004 FR-309
         await keepAwakeController.restore()
     }
 

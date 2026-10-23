@@ -60,6 +60,14 @@ struct Capability: Identifiable, Sendable {
     var summary: String
     var readTools: [ToolEntry]
     var writeTools: [ToolEntry]
+    /// The levels the Owner can choose; shell offers only Off and On (spec 004 FR-308).
+    var levels: [AccessLevel] = AccessLevel.allCases
+    /// The name of the top level when it isn't "Read & Write".
+    var onTitle: String?
+
+    func title(for level: AccessLevel) -> String {
+        level == .readWrite ? onTitle ?? level.title : level.title
+    }
 
     func entries(at level: AccessLevel) -> [ToolEntry] {
         switch level {
@@ -76,7 +84,8 @@ struct CapabilityRegistry: Sendable {
     static let notes = "notes"
     static let messages = "messages"
     static let files = "files"
-    static let all = [notes, messages, files]
+    static let shell = "shell"
+    static let all = [notes, messages, files, shell]
     /// Every capability starts fully on (spec 002 FR-121; specs 003–006, Toni 2026-10-22).
     static let defaultLevels = Dictionary(uniqueKeysWithValues: all.map { ($0, AccessLevel.readWrite) })
 
