@@ -75,8 +75,10 @@ struct Capability: Identifiable, Sendable {
 struct CapabilityRegistry: Sendable {
     static let notes = "notes"
     static let messages = "messages"
-    /// FR-121: both start at Read & write.
-    static let defaultLevels: [String: AccessLevel] = [notes: .readWrite, messages: .readWrite]
+    static let files = "files"
+    static let all = [notes, messages, files]
+    /// Every capability starts fully on (spec 002 FR-121; specs 003–006, Toni 2026-10-22).
+    static let defaultLevels = Dictionary(uniqueKeysWithValues: all.map { ($0, AccessLevel.readWrite) })
 
     let capabilities: [Capability]
     private(set) var levels: [String: AccessLevel]

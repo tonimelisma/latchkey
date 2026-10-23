@@ -79,3 +79,11 @@ Add a row when a decision is made; never delete one, mark it "superseded by" ins
 | 2026-10-22 | Automation (Notes) and Contacts are asked for in the setup window, never when a request arrives (a prompt would wait on an unattended Mac) | spec 002 FR-140, plan D4, D5 |
 | 2026-10-22 | Message attachments are copied to a visible Pictures/Latchkey folder and sent from there (Messages delivers scripted attachments reliably only from Pictures); copies older than a day are removed | spec 002 FR-112, plan D3 |
 | 2026-10-22 | Live check of sending: one test message with a tiny image to Toni's own address (owner@example.com) after the new app is installed | spec 002 tasks T140 |
+| 2026-10-22 | No dedicated tools for Calendar, Reminders, Shortcuts, Mail, Photos, or system controls; the remaining scope is files, shell, browser control, computer control | roadmap |
+| 2026-10-22 | Research all four remaining capabilities first, ask all questions in one round, then build them straight through without per-spec review stops; Toni reviews at the end | CLAUDE.md process step 6 (exception for this run) |
+| 2026-10-22 | Files: everything the Owner can open (home, iCloud Drive, connected drives); deletes go to the Trash | spec 003 |
+| 2026-10-22 | Browser control drives the Owner's real Safari (own window, Owner's logins) through Apple Events; Owner turns on "Allow JavaScript from Apple Events" once | spec 005 |
+| 2026-10-22 | Computer control is built even though it works only while the screen is on and unlocked; otherwise Claude is told why | spec 006 |
+| 2026-10-22 | New capabilities start fully on after the update | specs 003–006 |
+| 2026-10-22 | Levels: Files, Browser, Computer control Off / Read only / Read & write; Shell Off / On | specs 003–006 |
+| 2026-10-22 | Shell has full sessions: start, check later, send input, stop | spec 004 |

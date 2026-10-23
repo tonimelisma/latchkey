@@ -52,7 +52,7 @@ final class AppModel {
             if let level = AccessLevel(rawValue: raw) { levels[id] = level }
         }
         capabilities = CapabilityRegistry(
-            capabilities: [NotesCapability.make(), MessagesCapability.make()], levels: levels)
+            capabilities: [NotesCapability.make(), MessagesCapability.make(), FilesCapability.make()], levels: levels)
         trace = try? TraceStore()
     }
 
