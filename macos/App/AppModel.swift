@@ -44,6 +44,14 @@ final class AppModel {
     static let log = Logger(subsystem: "net.melisma.latchkey", category: "lifecycle")
     static let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?"
 
+    /// Every capability, in menu order.
+    static func makeCapabilities() -> [Capability] {
+        [
+            NotesCapability.make(), MessagesCapability.make(), FilesCapability.make(), ShellCapability.make(),
+            BrowserCapability.make(), ComputerCapability.make(),
+        ]
+    }
+
     private enum Keys {
         static let keepAwake = "keepAwakeEnabled"
         static let levels = "capabilityLevels"
@@ -60,10 +68,7 @@ final class AppModel {
             if let level = AccessLevel(rawValue: raw) { levels[id] = level }
         }
         capabilities = CapabilityRegistry(
-            capabilities: [
-                NotesCapability.make(), MessagesCapability.make(), FilesCapability.make(), ShellCapability.make(),
-            ],
-            levels: levels)
+            capabilities: Self.makeCapabilities(), levels: levels)
         trace = try? TraceStore()
     }
 

@@ -37,6 +37,10 @@ import Testing
         }
     }
 
+    @MainActor @Test func everyCapabilityIsRegistered() {
+        #expect(AppModel.makeCapabilities().map(\.id) == CapabilityRegistry.all)
+    }
+
     @Test func everythingStartsFullyOn() {
         // Spec 002 FR-121, specs 003–006 (Toni, 2026-10-22).
         #expect(Set(CapabilityRegistry.defaultLevels.keys) == Set(CapabilityRegistry.all))

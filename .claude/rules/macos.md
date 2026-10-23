@@ -37,5 +37,8 @@ paths:
   `osacompile` (reserved words like `before`/`after` as variable names break a script).
 - Shell: `macOS sed` doesn't turn `\n` into a newline in replacements, and `make … | tail` hides a
   failed build; use `set -o pipefail`.
+- Scripted edits (Python `str.replace`) must assert the old text is present: after `make fmt`
+  rewraps a line, a replace silently does nothing. 0.7.0–0.7.1 shipped without Browser and
+  Computer control registered because of this; `everyCapabilityIsRegistered` now guards it.
 
 Add new gotchas here as they are discovered.
