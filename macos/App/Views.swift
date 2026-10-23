@@ -66,6 +66,7 @@ struct SetupView: View {
     var close: () -> Void
     @State private var relay = ""
     @State private var working = false
+    @State private var opened: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
@@ -73,14 +74,14 @@ struct SetupView: View {
                 Text("Set Up Latchkey").font(.title.bold())
                 Text("A few steps, then Claude can reach this Mac from anywhere.").foregroundStyle(.secondary)
             }
-            step(n("helper"), "Let Latchkey keep this Mac awake", done: model.helperStatus == .enabled) {
+            step("helper", "Let Latchkey keep this Mac awake") {
                 Text(
                     "So Claude can reach your Mac with the lid closed. In System Settings, turn on Latchkey under Allow in the Background."
                 )
                 .foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                 Button("Open System Settings") { model.approveHelper() }
             }
-            step(n("connect"), "Connect to your account", done: model.isPaired) {
+            step("connect", "Connect to your account") {
                 Text(
                     "Enter your relay's address. Your browser opens so you can sign in or create an account with a passkey."
                 )
@@ -97,7 +98,7 @@ struct SetupView: View {
                 }
             }
             if model.capabilities.anyOn {
-                step(n("disk"), "Let Latchkey read your files, notes, and messages", done: model.fullDiskAccess) {
+                step("disk", "Let Latchkey read your files, notes, and messages") {
                     Text(
                         "macOS needs you to switch this on yourself. In System Settings, turn on Latchkey under Full Disk Access."
                     )
@@ -107,16 +108,16 @@ struct SetupView: View {
             }
             if level(CapabilityRegistry.notes) == .readWrite {
                 controlStep(
-                    n("notes"), "Let Latchkey change your notes", app: Permissions.notesApp, appName: "Notes",
+                    "notes", "Let Latchkey change your notes", app: Permissions.notesApp, appName: "Notes",
                     purpose: "So Claude can create, edit, and delete notes.")
             }
             if model.capabilities.level(CapabilityRegistry.messages) == .readWrite {
                 controlStep(
-                    n("messages"), "Let Latchkey send messages", app: Permissions.messagesApp, appName: "Messages",
+                    "messages", "Let Latchkey send messages", app: Permissions.messagesApp, appName: "Messages",
                     purpose: "So Claude can send messages for you.")
             }
             if model.capabilities.level(CapabilityRegistry.messages) != .off {
-                step(n("contacts"), "Show names in Messages", done: model.contactsStatus == .authorized) {
+                step("contacts", "Show names in Messages") {
                     if model.contactsStatus == .notDetermined {
                         Text(
                             "So Claude sees who wrote each message, not just phone numbers. When macOS asks about Contacts, click Allow."
@@ -134,9 +135,9 @@ struct SetupView: View {
             }
             if level(CapabilityRegistry.browser) != .off {
                 controlStep(
-                    n("safari"), "Let Latchkey use Safari", app: Permissions.safariApp, appName: "Safari",
+                    "safari", "Let Latchkey use Safari", app: Permissions.safariApp, appName: "Safari",
                     purpose: "So Claude can open and read web pages, signed in as you.")
-                step(n("safariJS"), "Turn on Safari's setting for Latchkey", done: model.safariJavaScript == true) {
+                step("safariJS", "Turn on Safari's setting for Latchkey") {
                     Text(
                         "In Safari, choose Safari → Settings. Under Advanced, turn on “Show features for web developers”. Then under Developer, turn on “Allow JavaScript from Apple Events”. Then click Check."
                     )
@@ -151,14 +152,14 @@ struct SetupView: View {
                 }
             }
             if level(CapabilityRegistry.computer) != .off {
-                step(n("screen"), "Let Claude see the screen", done: model.screenRecording) {
+                step("screen", "Let Claude see the screen") {
                     Text(
                         "For computer control, while the Mac is unlocked. In System Settings, turn on Latchkey under Screen & System Audio Recording."
                     )
                     .foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                     Button("Continue") { model.allowScreenRecording() }
                 }
-                step(n("accessibility"), "Let Claude use the mouse and keyboard", done: model.accessibility) {
+                step("accessibility", "Let Claude use the mouse and keyboard") {
                     Text("In System Settings, turn on Latchkey under Accessibility.")
                         .foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                     Button("Continue") { model.allowAccessibility() }
@@ -203,8 +204,9 @@ struct SetupView: View {
 
     private func n(_ step: String) -> Int { (visibleSteps.firstIndex(of: step) ?? 0) + 1 }
 
-    private func controlStep(_ n: Int, _ title: String, app: String, appName: String, purpose: String) -> some View {
-        step(n, title, done: model.control(of: app) == .allowed) {
+    private func controlStep(_ key: String, _ title: String, app: String, appName: String, purpose: String) -> some View
+    {
+        step(key, title) {
             if model.control(of: app) == .denied {
                 Text(
                     "Latchkey isn't allowed to control \(appName). In System Settings, open Automation and turn on \(appName) under Latchkey."
@@ -219,18 +221,52 @@ struct SetupView: View {
         }
     }
 
+    private func isDone(_ key: String) -> Bool {
+        switch key {
+        case "helper": model.helperStatus == .enabled
+        case "connect": model.isPaired
+        case "disk": model.fullDiskAccess
+        case "notes": model.control(of: Permissions.notesApp) == .allowed
+        case "messages": model.control(of: Permissions.messagesApp) == .allowed
+        case "contacts": model.contactsStatus == .authorized
+        case "safari": model.control(of: Permissions.safariApp) == .allowed
+        case "safariJS": model.safariJavaScript == true
+        case "screen": model.screenRecording
+        case "accessibility": model.accessibility
+        default: false
+        }
+    }
+
+    /// The step shown in full: the one the Owner opened, else the first one not done. The others
+    /// are one line each, so the window fits any screen.
+    private var current: String? {
+        if let opened, visibleSteps.contains(opened), !isDone(opened) { return opened }
+        return visibleSteps.first { !isDone($0) }
+    }
+
     @ViewBuilder
-    private func step<Content: View>(_ n: Int, _ title: String, done: Bool, @ViewBuilder content: () -> Content)
-        -> some View
-    {
+    private func step<Content: View>(_ key: String, _ title: String, @ViewBuilder content: () -> Content) -> some View {
+        let n = n(key)
+        let done = isDone(key)
+        let open = key == current
         HStack(alignment: .top, spacing: 12) {
             Image(systemName: done ? "checkmark.circle.fill" : "\(n).circle")
                 .font(.title2)
-                .foregroundStyle(done ? .green : .secondary)
+                .foregroundStyle(done ? .green : open ? .primary : .secondary)
                 .accessibilityLabel(done ? "Done" : "Step \(n)")
             VStack(alignment: .leading, spacing: 8) {
-                Text(title).font(.headline)
-                if !done { content() }
+                if done || open {
+                    Text(title).font(.headline)
+                } else {
+                    Button {
+                        opened = key
+                    } label: {
+                        Text(title).font(.headline).foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityHint("Shows this step")
+                }
+                if open { content() }
             }
         }
     }

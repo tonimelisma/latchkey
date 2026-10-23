@@ -3,6 +3,7 @@ import ApplicationServices
 import Contacts
 import Foundation
 import Network
+import OSLog
 import Observation
 import ServiceManagement
 import UserNotifications
@@ -37,6 +38,11 @@ final class AppModel {
     private var trashWatcher: TrashWatcher?
     private var uninstalling = false
     private let setupWindow = SetupWindow()
+
+    /// Pairing and uninstall events, readable with `log show --predicate 'subsystem == "net.melisma.latchkey"'`.
+    /// Events only, never arguments or results.
+    static let log = Logger(subsystem: "net.melisma.latchkey", category: "lifecycle")
+    static let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?"
 
     private enum Keys {
         static let keepAwake = "keepAwakeEnabled"
@@ -84,8 +90,14 @@ final class AppModel {
         watchSystem()
         purgeTrace()
         if let identity = DeviceIdentity.load() {
+            Self.log.notice(
+                "Started \(Self.version, privacy: .public), paired with \(identity.relayURL.absoluteString, privacy: .public)"
+            )
             relayURL = identity.relayURL
             connect(identity)
+        } else {
+            Self.log.notice(
+                "Started \(Self.version, privacy: .public), not paired (\(DeviceIdentity.missing, privacy: .public))")
         }
         Task { await refresh() }
         loadRecentActivity()
@@ -111,6 +123,7 @@ final class AppModel {
     /// The app landed in the Trash. If a newer copy takes its place within a few seconds, this is
     /// an update: hand over to it and quit. Otherwise uninstall.
     func movedToTrash(installedPath: String) async {
+        Self.log.notice("The app was moved to the Trash; waiting to see whether it was replaced")
         for _ in 0..<25 {
             if AppLocation.replaced(at: installedPath) {
                 await shutdown()
@@ -123,6 +136,7 @@ final class AppModel {
             }
             try? await Task.sleep(for: .milliseconds(200))
         }
+        Self.log.notice("Not replaced: uninstalling")
         await uninstall()
     }
 
@@ -404,6 +418,7 @@ final class AppModel {
     func disconnect() async {
         await connection?.stop(goodbye: .userDisconnected)
         connection = nil
+        Self.log.notice("Disconnect This Mac: forgetting the pairing")
         DeviceIdentity.delete()
         status = .notPaired
     }
@@ -427,6 +442,7 @@ final class AppModel {
     private func connectionChanged(_ s: ConnectionStatus) {
         status = s
         if s == .revoked {  // 4002: delete the local key (agent-protocol.md)
+            Self.log.notice("The relay revoked this Mac: forgetting the pairing")
             DeviceIdentity.delete()
             connection = nil
         }

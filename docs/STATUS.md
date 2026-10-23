@@ -47,7 +47,7 @@ Releases, terms and privacy, and the directory listing are much later (Toni, 202
 
 ## Waiting on Toni
 
-1. Install `macos/build/Latchkey-0.7.0.dmg` (drag to Applications, replace the old copy) and open it.
+1. Install `macos/build/Latchkey-0.7.1.dmg` (drag to Applications, replace the old copy) and open it.
 2. In the setup window, top to bottom: Full Disk Access; Continue (then Allow) for Notes,
    Messages, Contacts, Safari, Screen Recording, and Accessibility; and in Safari's settings turn
    on "Show features for web developers" (Advanced) and "Allow JavaScript from Apple Events"

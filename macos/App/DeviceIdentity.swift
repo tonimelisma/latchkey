@@ -68,6 +68,16 @@ struct DeviceIdentity: Sendable {
         return DeviceIdentity(relayURL: relay, deviceID: device, key: key)
     }
 
+    /// Which parts of a pairing are missing, for the log.
+    static var missing: String {
+        let d = UserDefaults.standard
+        var parts: [String] = []
+        if d.string(forKey: defaultsRelay) == nil { parts.append("relay address") }
+        if d.string(forKey: defaultsDevice) == nil { parts.append("device id") }
+        if Keychain.read(account: Keychain.deviceKeyAccount) == nil { parts.append("key") }
+        return parts.isEmpty ? "key unreadable" : "missing " + parts.joined(separator: ", ")
+    }
+
     static func save(relayURL: URL, deviceID: String, key: SecureEnclaveSigningKey) throws {
         try Keychain.write(key.dataRepresentation, account: Keychain.deviceKeyAccount)
         UserDefaults.standard.set(relayURL.absoluteString, forKey: defaultsRelay)
