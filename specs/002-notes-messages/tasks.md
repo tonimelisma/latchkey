@@ -53,7 +53,7 @@ deployed if it changed, a commit, and a push (Toni, 2026-10-22). `[P]` = paralle
 - **T140** ✅ Tool `messages_send` (to person, number, email, or conversation; text; attachments);
   confirmation from `chat.db`; notification; attachments sent from Pictures/Latchkey; setup step
   for controlling Messages. *FR-112, FR-130, FR-140, D3.*
-- **T141** Live checks through the connector once Toni has installed 0.6.0 and finished setup:
+- **T141** ✅ Live checks through the connector once Toni has installed 0.6.0 and finished setup:
   read a note, change a test note, read a conversation, send one test message with a tiny image
   to Toni's own address (Toni, 2026-10-22).
 

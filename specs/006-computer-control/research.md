@@ -23,6 +23,11 @@ Done 2026-10-22 with 003–005.
   be woken with `IOPMAssertionDeclareUserActivity`; if macOS then shows the lock screen, Claude
   is told the Mac is locked. Latchkey never types a password.
 
+- Live check 2026-10-22: capture works, and macOS also shows its own alert asking whether
+  Latchkey may access the screen and audio directly (ScreenCaptureKit's periodic confirmation).
+  Only the Owner at the Mac can answer it; capture is only possible while the Mac is in use
+  anyway.
+
 ## Existing designs
 
 - Claude's own computer-use tool takes screenshots and acts on pixel coordinates (click, type,
