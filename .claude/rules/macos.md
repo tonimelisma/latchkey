@@ -40,5 +40,10 @@ paths:
 - Scripted edits (Python `str.replace`) must assert the old text is present: after `make fmt`
   rewraps a line, a replace silently does nothing. 0.7.0–0.7.1 shipped without Browser and
   Computer control registered because of this; `everyCapabilityIsRegistered` now guards it.
+- Tool results go to Claude as text only: with `structuredContent` present, Claude's apps show it
+  instead of the text (live check 2026-10-22: shell output, the Mac state line, and message
+  marking all vanished).
+- AppleScript variables must not be app terms (`kind` in Messages, `before`/`after` everywhere);
+  `osacompile` doesn't catch app terms. Prefix variables (`targetKind`, `theText`).
 
 Add new gotchas here as they are discovered.

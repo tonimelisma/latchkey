@@ -30,6 +30,8 @@ final class NotesStore: @unchecked Sendable {
         var text: String
         var attachments: [NoteBody.Attachment]
         var hasChecklists = false
+        /// Mentions, tags, or links kept inline; a rewrite would turn them into plain text.
+        var hasInlineItems = false
         /// Notes' scripting id, `x-coredata://<store>/ICNote/p<row>`.
         var scriptID = ""
     }
@@ -60,6 +62,7 @@ final class NotesStore: @unchecked Sendable {
         var deleted: String?
         var locked: String?
         var folderType: String?
+        var altText: String?
     }
 
     init(url: URL) throws {
@@ -86,7 +89,8 @@ final class NotesStore: @unchecked Sendable {
                 noteTitle: noteTitle, folderTitle: folderTitle,
                 created: first("ZCREATIONDATE3", "ZCREATIONDATE1", "ZCREATIONDATE"), modified: modified,
                 snippet: first("ZSNIPPET"), noteData: first("ZNOTEDATA"), deleted: first("ZMARKEDFORDELETION"),
-                locked: first("ZISPASSWORDPROTECTED"), folderType: first("ZFOLDERTYPE"))
+                locked: first("ZISPASSWORDPROTECTED"), folderType: first("ZFOLDERTYPE"),
+                altText: first("ZALTTEXT"))
         } catch {
             sqlite3_close(handle)
             throw error
@@ -143,11 +147,34 @@ final class NotesStore: @unchecked Sendable {
                 throw Failure.noSuchNote(id)
             }
             let body = row.locked ? nil : body(row)
+            var text = body?.markdown ?? ""
+            var attachments = body?.attachments ?? []
+            // Mentions, tags, and links Notes keeps inline read as their text.
+            let inline = attachments.filter { $0.uti.hasPrefix("com.apple.notes.inlinetextattachment") }
+            if !inline.isEmpty {
+                let alt = try altTexts(inline.map(\.id))
+                for a in inline {
+                    text = text.replacingOccurrences(of: "[attachment \(a.id) (\(a.uti))]", with: alt[a.id] ?? "")
+                }
+                attachments.removeAll { $0.uti.hasPrefix("com.apple.notes.inlinetextattachment") }
+            }
             return Note(
                 id: row.id, title: row.title, folder: row.folder, created: row.created, modified: row.modified,
-                locked: row.locked, text: body?.markdown ?? "", attachments: body?.attachments ?? [],
-                hasChecklists: body?.hasChecklists ?? false, scriptID: try scriptPrefix() + "\(row.pk)")
+                locked: row.locked, text: text, attachments: attachments, hasChecklists: body?.hasChecklists ?? false,
+                hasInlineItems: !inline.isEmpty, scriptID: try scriptPrefix() + "\(row.pk)")
         }
+    }
+
+    private func altTexts(_ ids: [String]) throws -> [String: String] {
+        guard let column = col.altText else { return [:] }
+        var out: [String: String] = [:]
+        for id in ids {
+            let rows = try Self.rows(
+                db, "SELECT \(column) FROM ZICCLOUDSYNCINGOBJECT WHERE Z_ENT = \(ent.attachment) AND ZIDENTIFIER = ?",
+                bind: [id])
+            if let t = rows.first?[0].text { out[id] = t }
+        }
+        return out
     }
 
     /// The note id for a scripting id Notes returned, once Notes has written the note.

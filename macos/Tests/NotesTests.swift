@@ -87,7 +87,9 @@ import Testing
     @Test func findsAnAttachedImage() throws {
         let s = try store()
         let note = try s.read(id: "N-LISBON")
-        #expect(note.attachments.map(\.id) == ["A-PHOTO"])
+        #expect(note.attachments.map(\.id) == ["A-PHOTO"], "the tag isn't an attachment to Claude")
+        #expect(note.text.hasSuffix("Hotel near Alfama #travel"))
+        #expect(note.hasInlineItems)
         let image = try s.image(note: "N-LISBON", attachment: "A-PHOTO")
         #expect(image.mimeType == "image/png")
         #expect(!image.data.isEmpty)

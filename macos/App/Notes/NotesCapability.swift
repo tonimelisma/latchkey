@@ -325,6 +325,7 @@ enum NotesCapability {
         var parts: [String] = []
         if note.locked { parts.append("it's locked with a password") }
         if note.hasChecklists { parts.append("it has checklists") }
+        if note.hasInlineItems { parts.append("it has mentions, tags, or links") }
         if !note.attachments.isEmpty { parts.append("it has images, tables, or other attachments") }
         guard !parts.isEmpty else { return nil }
         return """

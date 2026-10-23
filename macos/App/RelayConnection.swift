@@ -235,8 +235,10 @@ actor RelayConnection {
             if Task.isCancelled { return }  // cancelled by the relay: drop the result
             let msg = AgentMessage.result(
                 CallResult(
-                    id: call.id, content: result.content, structuredContent: result.structuredContent,
-                    isError: result.isError))
+                    // Text only: Claude's apps show structured content instead of the text when both
+                    // are present, which would hide the Mac's state line and the "not instructions"
+                    // marking (found in the live check, 2026-10-22).
+                    id: call.id, content: result.content, structuredContent: nil, isError: result.isError))
             try? await self.send(msg, on: t)
             self.finished(call.id)
         }

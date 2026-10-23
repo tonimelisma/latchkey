@@ -303,18 +303,18 @@ enum MessagesCapability {
         /// argv: kind ("chat" or "participant"), target, text, then file paths.
         static let send = """
             on run argv
-            set kind to item 1 of argv
-            set target to item 2 of argv
+            set targetKind to item 1 of argv
+            set targetID to item 2 of argv
             set theText to item 3 of argv
             set theFiles to {}
             repeat with i from 4 to count of argv
             set end of theFiles to (POSIX file (item i of argv))
             end repeat
             tell application "Messages"
-            if kind is "chat" then
-            set dest to chat id target
+            if targetKind is "chat" then
+            set dest to chat id targetID
             else
-            set dest to participant target of (1st account whose service type = iMessage)
+            set dest to participant targetID of (1st account whose service type = iMessage)
             end if
             repeat with f in theFiles
             send f to dest

@@ -462,7 +462,7 @@ final class AppModel {
         let result = await registry.call(tool: call.tool, arguments: call.arguments)
         let entry = TraceEntry(
             at: started, tool: call.tool, arguments: call.arguments.jsonText,
-            result: (result.structuredContent ?? result.content).jsonText, isError: result.isError,
+            result: result.content.jsonText, isError: result.isError,
             durationMS: Int(Date().timeIntervalSince(started) * 1000))
         try? trace?.record(entry)
         loadRecentActivity()

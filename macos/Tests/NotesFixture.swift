@@ -106,7 +106,7 @@ enum NotesFixture {
               ZTITLE1 VARCHAR, ZTITLE2 VARCHAR, ZSNIPPET VARCHAR, ZFOLDER INTEGER, ZNOTEDATA INTEGER,
               ZCREATIONDATE3 TIMESTAMP, ZMODIFICATIONDATE1 TIMESTAMP, ZMARKEDFORDELETION INTEGER,
               ZISPASSWORDPROTECTED INTEGER, ZFOLDERTYPE INTEGER, ZNOTE INTEGER, ZTYPEUTI VARCHAR,
-              ZMEDIA INTEGER, ZFILENAME VARCHAR);
+              ZMEDIA INTEGER, ZFILENAME VARCHAR, ZALTTEXT VARCHAR);
             CREATE TABLE Z_METADATA (Z_VERSION INTEGER PRIMARY KEY, Z_UUID VARCHAR(255), Z_PLIST BLOB);
             INSERT INTO Z_METADATA VALUES (1, 'STORE-UUID', NULL);
             CREATE TABLE ZICNOTEDATA (Z_PK INTEGER PRIMARY KEY, ZDATA BLOB, ZNOTE INTEGER);
@@ -127,9 +127,11 @@ enum NotesFixture {
             INSERT INTO ZICCLOUDSYNCINGOBJECT (Z_PK,Z_ENT,ZIDENTIFIER,ZNOTE,ZTYPEUTI,ZMEDIA) VALUES
               (20,5,'A-PHOTO',11,'public.png',21);
             INSERT INTO ZICCLOUDSYNCINGOBJECT (Z_PK,Z_ENT,ZIDENTIFIER,ZFILENAME) VALUES (21,11,'MEDIA-1','photo.png');
+            INSERT INTO ZICCLOUDSYNCINGOBJECT (Z_PK,Z_ENT,ZIDENTIFIER,ZNOTE,ZTYPEUTI,ZALTTEXT) VALUES
+              (22,5,'A-TAG',11,'com.apple.notes.inlinetextattachment.hashtag','#travel');
             """)
         let groceries = "Groceries\nMilk\nBread\nShop on Saturday"
-        let lisbon = "Lisbon trip\nFlights\nFlights booked for May 3\n\u{FFFC}\nHotel near Alfama"
+        let lisbon = "Lisbon trip\nFlights\nFlights booked for May 3\n\u{FFFC}\nHotel near Alfama \u{FFFC}"
         let bodies: [(Int, Data)] = [
             (
                 100,
@@ -146,7 +148,8 @@ enum NotesFixture {
                     lisbon,
                     runs: [
                         Run(length: 12, style: 0), Run(length: 8, style: 1), Run(length: 25, style: 100),
-                        Run(length: 1, attachment: ("A-PHOTO", "public.png")), Run(length: 18),
+                        Run(length: 1, attachment: ("A-PHOTO", "public.png")), Run(length: 19),
+                        Run(length: 1, attachment: ("A-TAG", "com.apple.notes.inlinetextattachment.hashtag")),
                     ])
             ),
             (102, Data()),

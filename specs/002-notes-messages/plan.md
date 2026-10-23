@@ -5,7 +5,7 @@ Derived from `spec.md`; evidence in `research.md`. Every decision names the requ
 ## D1. Tools Claude sees
 
 Names are short and grouped by prefix. Each declares `readOnlyHint` and `destructiveHint` (Claude
-requires both). Results are text plus `structuredContent`; images are MCP image content.
+requires both). Results are text only, and images are MCP image content. The app builds structured data too, but doesn't send it: Claude's apps show structured content instead of the text when both are present, which hid the state line and the "not instructions" marking (live check, 2026-10-22).
 
 | Tool | Level | readOnly | destructive | Serves |
 |---|---|---|---|---|
