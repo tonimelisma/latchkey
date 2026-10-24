@@ -11,6 +11,7 @@
 # Safe to rerun: every step is idempotent.
 set -eu
 cd "$(dirname "$0")/.."
+scripts/link-local-files.sh
 set -a; . ./.env; set +a
 : "${CLOUDFLARE_API_TOKEN:?missing in .env}" "${RESEND_API_KEY:?missing in .env}"
 : "${DEPLOY_HOST:?missing in .env}" "${DEPLOY_DNS_ZONE:?missing in .env}" "${ALLOWED_EMAILS:?missing in .env}"

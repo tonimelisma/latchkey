@@ -82,22 +82,55 @@ IMPORTANT: Toni makes every product and engineering choice. Claude proposes; Ton
 - Don't re-ask what `docs/decisions.md` already records.
 - Record each answer in the spec or plan and in `docs/decisions.md`, in the same commit.
 
-## Git
+## Git and worktrees
 
-- Private remote `github.com/tonimelisma/latchkey`, default branch `main`.
-- Branch per spec or task: `NNN-short-name`. Small commits. Open PRs only when asked.
-- Push the branch after every finished step, and fast-forward `main` to it (Toni, 2026-10-20).
-  Never force-push (one exception, approved by Toni 2026-10-23: rewriting history to remove the
-  relay's address).
+IMPORTANT: every session or task that changes files works in its own git worktree (Toni,
+2026-10-23), so agents never overlap in one checkout:
+
+- Before the first change, call `EnterWorktree` with a short task name (it branches from the
+  latest `origin/main` under `.claude/worktrees/`). Never edit, build, or commit in the main
+  checkout at `~/Development/latchkey`; it stays on `main`, untouched.
+- In a fresh worktree, `scripts/link-local-files.sh` links the gitignored personal files from the
+  main checkout (`.env`, `CLAUDE.local.md`, `macos/Config/Local.xcconfig`). The Mac Makefile,
+  `package.sh`, and `deploy/deploy.sh` run it themselves; `package.sh` refuses to build without the
+  signing team, because a differently signed app loses the installed app's permissions and pairing.
+- Merge by fast-forward: `git fetch origin && git rebase origin/main`, then `git push origin
+  HEAD:<branch>` and `git push origin HEAD:main`. If main moved meanwhile (another session),
+  rebase again and retest. Never force-push (one exception, approved by Toni 2026-10-23:
+  rewriting history to remove the relay's address).
+- When the task is merged, leave with `ExitWorktree` (`remove`). `scripts/tidy.sh` also removes
+  any worktree that is merged, clean, and untouched for a day.
+- Stage files by name, never `git add -A` or `git add .` (unfinished work of others was committed
+  that way on 2026-10-23). Never use bare `git stash` (the stash is shared between worktrees).
+- Private remote `github.com/tonimelisma/latchkey`, default branch `main`. Small commits. Open
+  PRs only when asked.
+
+## Every increment ships (Toni, 2026-10-23)
+
+IMPORTANT: every working increment, however small, is published and installed. In order:
+
+1. Tests and lint pass for what changed (`make test` / `make lint` in `relay/` and `macos/`).
+2. Bump the app's patch version (`MARKETING_VERSION` in `macos/project.yml`) when anything in the
+   Mac app changed.
+3. Update specs, `docs/STATUS.md`, `docs/decisions.md`, and `README.md` in the same commit.
+4. Commit (files by name) and fast-forward `main` (above).
+5. If `relay/` changed: `deploy/deploy.sh`.
+6. If `macos/` changed: `make -C macos install` builds the disk image, quits the running app
+   cleanly, replaces `/Applications/Latchkey.app`, starts it, and checks it reports the new
+   version (pairing and permissions carry over). Toni never installs by hand.
+7. If behavior changed: a live check through the hosted relay with a fresh Claude Code session
+   (`claude -p --allowedTools mcp__claude_ai_Latchkey`); this session's own connector keeps the
+   tool list it started with.
+
+## Nothing left behind (Toni, 2026-10-23)
+
 - After every push, `scripts/tidy.sh` runs automatically (Claude Code hook in
-  `.claude/settings.json`): it deletes branches merged into main, locally and on GitHub (except
-  main and the current branch), prunes worktrees and remote refs, and keeps only the newest disk
-  image and relay Docker image. Never work around it; run it by hand if a push happened outside
-  Claude Code (Toni, 2026-10-23).
-- Stage files by name, never `git add -A` or `git add .`: other Claude sessions may be working in
-  this same checkout, and `-A` commits their unfinished work (happened 2026-10-23).
-- Delete temporary files (scratch scripts, copies of databases, old app copies) as soon as the
-  task that needed them is done.
+  `.claude/settings.json`): branches merged into main (local and GitHub; never main, the current
+  branch, or a branch checked out in a worktree), finished worktrees, stale refs, all but the
+  newest disk image, and all but the newest relay Docker image. Run it by hand after a push made
+  outside Claude Code.
+- Delete temporary files (scratch scripts, copies of databases, old app copies, servers' `/tmp`
+  files) as soon as the task that needed them is done; scratchpad folders end empty.
 - Never commit the hosted relay's address, its server details, or the Apple team ID; they live in
   the gitignored `.env`, `macos/Config/Local.xcconfig`, and `CLAUDE.local.md` (Toni, 2026-10-23).
 
@@ -131,6 +164,7 @@ Mac app (run in `macos/`; `project.yml` is the source, the `.xcodeproj` is gener
 - `make lint` / `make fmt`: swift-format
 - `make build` / `make run`: build, or build and open the app
 - `make dmg`: the installable disk image, `build/Latchkey-<version>.dmg`
+- `make install`: the disk image, installed into /Applications and started (every increment)
 - Signing: copy `Config/Local.xcconfig.example` to `Config/Local.xcconfig` and set your team ID
 
 <!-- Maintainers: keep this file under ~100 lines. Status and decisions live in docs/, topic

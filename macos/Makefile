@@ -1,9 +1,10 @@
-.PHONY: project build test lint fmt run dmg clean
+.PHONY: project build test lint fmt run dmg install clean
 
 XCODEBUILD = xcodebuild -project Latchkey.xcodeproj -scheme Latchkey -destination 'platform=macOS' -derivedDataPath build/DerivedData
 
 # Generates Latchkey.xcodeproj from project.yml (never edit the .xcodeproj by hand).
 project:
+	../scripts/link-local-files.sh
 	xcodegen generate --quiet
 
 build: project
@@ -25,6 +26,10 @@ run: build
 # Builds the installable disk image: build/Latchkey-<version>.dmg (Release, signed).
 dmg: project
 	./scripts/package.sh
+
+# Builds the disk image, installs it into /Applications, and starts it (every increment, CLAUDE.md).
+install: dmg
+	./scripts/install.sh
 
 clean:
 	rm -rf build Latchkey.xcodeproj

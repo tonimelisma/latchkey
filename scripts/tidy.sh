@@ -4,13 +4,30 @@
 #
 # - Branches merged into origin/main, locally and on GitHub, except main, the current branch, and
 #   any branch checked out in a worktree. Unmerged branches are never touched.
-# - Worktree records whose folder no longer exists, and remote-tracking refs gone from GitHub.
+# - Finished worktrees under .claude/worktrees (merged, clean, untouched for a day), worktree
+#   records whose folder no longer exists, and remote-tracking refs gone from GitHub.
 # - Old disk images in macos/build (only the newest is kept) and stray build folders.
 # - Old local Docker images of the relay (only the newest is kept).
 # Never fails the push: problems are reported and skipped.
 cd "$(dirname "$0")/.." || exit 0
 
 git fetch --quiet --prune origin 2>/dev/null || echo "tidy: couldn't reach origin; skipping remote cleanup"
+here=$(git rev-parse --show-toplevel)
+
+# Finished worktrees: branch merged into origin/main, nothing uncommitted, nothing changed for a
+# day (a worktree just made from main also counts as merged, so recency protects it).
+git worktree list --porcelain | sed -n 's/^worktree //p' | while read -r wt; do
+  case "$wt" in */.claude/worktrees/*) ;; *) continue ;; esac
+  [ "$wt" = "$here" ] && continue
+  [ -d "$wt" ] || continue
+  branch=$(git -C "$wt" symbolic-ref --quiet --short HEAD 2>/dev/null || echo "")
+  [ -n "$branch" ] || continue
+  git merge-base --is-ancestor "$branch" origin/main 2>/dev/null || continue
+  [ -z "$(git -C "$wt" status --porcelain 2>/dev/null)" ] || continue
+  [ -z "$(find "$wt" -path "$wt/macos/build" -prune -o -type f -mmin -1440 -print 2>/dev/null | head -1)" ] || continue
+  git worktree remove --force "$wt" && echo "tidy: removed finished worktree $wt"
+done
+
 current=$(git symbolic-ref --quiet --short HEAD 2>/dev/null || echo "")
 inuse=$(git worktree list --porcelain | sed -n 's|^branch refs/heads/||p')
 keep() { [ "$1" = main ] || [ "$1" = "$current" ] || printf '%s\n' "$inuse" | grep -qx "$1"; }

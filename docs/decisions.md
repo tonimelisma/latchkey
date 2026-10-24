@@ -99,3 +99,5 @@ Add a row when a decision is made; never delete one, mark it "superseded by" ins
 | 2026-10-23 | No sensitive-site rule for the browser (a product change, not security) | Toni, docs/best-practices.md §2 |
 | 2026-10-23 | No prompt-injection tests or Latchkey-side injection defenses (Toni: not a concern with Anthropic models) | Toni, docs/best-practices.md §5 |
 | 2026-10-23 | Belt-and-suspenders hardening with no change to normal use: relay abuse limits, body and header caps, security headers, unused-client cleanup, hardened container; `make security` (govulncheck, gitleaks, tidy) gates deploys, CI on every push and daily, and releases; Dependabot; images pinned by digest, actions by SHA, Go 1.27.3 | Toni, docs/best-practices.md §4, §7 |
+| 2026-10-23 | Every session or task works in its own worktree; the main checkout stays untouched on main | CLAUDE.md |
+| 2026-10-23 | Every working increment is published (commit, main, relay deploy) and the app installed automatically into /Applications (make -C macos install) | CLAUDE.md Every increment ships |

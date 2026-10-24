@@ -85,7 +85,7 @@ Latchkey follows current best practice are in [docs/best-practices.md](docs/best
 | Part | Where | Commands |
 |---|---|---|
 | Relay (Go) | `relay/` | `make test`, `make lint`, `make run`, `make claude-check`, `make mac-check` |
-| Mac app and helper (Swift) | `macos/` | `make test`, `make lint`, `make run`, `make dmg` |
+| Mac app and helper (Swift) | `macos/` | `make test`, `make lint`, `make run`, `make dmg`, `make install` (build, install into Applications, start) |
 | Hosted relay deployment | `deploy/` | `deploy/deploy.sh` |
 | Cleanup after merging | `scripts/` | `scripts/tidy.sh` (runs automatically after every push from Claude Code) |
 

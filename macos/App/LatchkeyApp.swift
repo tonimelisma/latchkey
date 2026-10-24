@@ -28,10 +28,22 @@ struct LatchkeyApp: App {
 final class AppDelegate: NSObject, NSApplicationDelegate {
     let model = AppModel()
     private let presence = WindowPresence()
+    private var terminateSignal: DispatchSourceSignal?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         if ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil { return }  // unit tests
+        quitCleanlyOnSIGTERM()
         model.start()
+    }
+
+    /// The installer (macos/scripts/install.sh) quits the app with SIGTERM; quit as if from the
+    /// menu, so the relay is told and sleep is restored.
+    private func quitCleanlyOnSIGTERM() {
+        signal(SIGTERM, SIG_IGN)
+        let source = DispatchSource.makeSignalSource(signal: SIGTERM, queue: .main)
+        source.setEventHandler { NSApp.terminate(nil) }
+        source.resume()
+        terminateSignal = source
     }
 
     func application(_ application: NSApplication, open urls: [URL]) {

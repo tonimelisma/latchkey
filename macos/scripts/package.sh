@@ -5,6 +5,11 @@
 # and runs on Macs registered to the team (this Mac), not on others (see scripts/release.sh).
 set -eu
 cd "$(dirname "$0")/.."
+../scripts/link-local-files.sh
+grep -q '^ *DEVELOPMENT_TEAM *= *[A-Z0-9]' Config/Local.xcconfig 2>/dev/null || {
+  echo "package: Config/Local.xcconfig with DEVELOPMENT_TEAM is missing; a build signed otherwise would lose the installed app's permissions and pairing" >&2
+  exit 1
+}
 VERSION=$(sed -n 's/^ *MARKETING_VERSION: *"\(.*\)"/\1/p' project.yml)
 OUT=build/package
 rm -rf "$OUT"

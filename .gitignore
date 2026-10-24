@@ -26,3 +26,6 @@ macos/Config/Local.xcconfig
 CLAUDE.local.md
 
 __pycache__/
+
+# Claude Code worktrees (one per session or task)
+.claude/worktrees/
