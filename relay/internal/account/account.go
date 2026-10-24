@@ -161,6 +161,7 @@ func (s *Service) Register(mux *http.ServeMux) {
 	mux.HandleFunc("POST /account/delete", s.deleteAccount)
 	mux.HandleFunc("GET /pair", s.pairPage)
 	mux.HandleFunc("POST /pair", s.pair)
+	mux.HandleFunc("POST /pair/preview", s.pairPreview)
 	mux.HandleFunc("POST /pair/exchange", s.pairExchange)
 }
 
