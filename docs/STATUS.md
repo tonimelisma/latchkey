@@ -65,7 +65,9 @@ The Mac state line appears in every result (it reported the battery warning at 1
 
 ## Waiting on Toni
 
-1. Answer the macOS alert about Latchkey accessing the screen (Allow), if it's still showing.
+1. Connect the Mac again (app 0.8.4 lost the pairing on 2026-10-24): Latchkey menu → Connect to
+   a Relay… → sign in with the passkey. Then Claude runs the live check of the security fixes.
+2. Answer the macOS alert about Latchkey accessing the screen (Allow), if it's still showing.
 
 ## Milestones (from `specs/001-core/plan.md`)
 
