@@ -124,8 +124,8 @@ func healthcheck() int {
 	if err != nil {
 		return 1
 	}
-	client := &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}}} //nolint:gosec // local liveness probe of our own process
-	resp, err := client.Do(req)                                                                                //nolint:gosec // loopback only, numeric port
+	client := &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true, MinVersion: tls.VersionTLS12}}} //nolint:gosec // local liveness probe of our own process
+	resp, err := client.Do(req)                                                                                                              //nolint:gosec // loopback only, numeric port
 	if err != nil {
 		return 1
 	}
