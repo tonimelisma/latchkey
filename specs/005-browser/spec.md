@@ -39,6 +39,8 @@ phone, Claude can't check a reservation in the Owner's account or fill in a form
 - **FR-407** Browser shall have the levels Off, Read only, Read & write, and start at Read &
   write (Toni, 2026-10-22).
 - **FR-408** Each click, typing, and script Claude does shall appear in the menu's activity.
+- **FR-409** Browser shall open only http and https addresses (and about:blank); other kinds,
+  such as javascript:, file:, and data:, shall be refused (Toni, 2026-10-24, security scan).
 
 ## Success criteria
 

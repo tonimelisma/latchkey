@@ -144,6 +144,8 @@ Format: EARS ("When <trigger>, the <system> shall <response>"). IDs are stable; 
 - **FR-026** The Mac app shall keep a full local trace of every tool call it executes, including
   arguments, results, and errors, viewable in the app, stored only on the Mac.
   The app shall delete trace entries older than 90 days by default.
+- **FR-026a** The Mac app shall store the trace encrypted, with a key only the app can read, so
+  other programs on the Mac can't read it (Toni, 2026-10-24, security scan).
 
 ### Keep-awake and power
 - **FR-030** While keep-awake is on, the Mac shall not sleep, on battery or power, with the lid
@@ -171,6 +173,9 @@ Format: EARS ("When <trigger>, the <system> shall <response>"). IDs are stable; 
 - **FR-041** The relay shall authenticate Owners with passkeys only.
 - **FR-042** The relay shall offer account recovery by a single-use, expiring code sent by email
   that allows registering a new passkey; a code stops working after 5 wrong attempts.
+- **FR-042a** When 20 wrong codes have been entered for one email address within a day, the
+  relay shall refuse every emailed code for that address until the day is over; passkey sign-in
+  keeps working (Toni, 2026-10-24, security scan).
 - **FR-043** The relay shall verify the Owner's email address at sign-up with a code sent by email.
 - **FR-043a** The relay shall offer one sign-in page for every journey: the Owner enters an email
   address and continues with a passkey for a known account, or an emailed code and a new passkey
@@ -182,6 +187,8 @@ Format: EARS ("When <trigger>, the <system> shall <response>"). IDs are stable; 
   shall refuse sign-up for any other address; otherwise sign-up is open.
 - **FR-047** When an Owner completes account recovery, the relay shall remove all of the Owner's
   previous passkeys.
+- **FR-047a** When an Owner completes account recovery, the relay shall also remove every Claude
+  client's access, so each must be approved again (Toni, 2026-10-24, security scan).
 - **FR-048** The relay shall keep an Owner signed in to its web pages for 30 days, and shall ask
   for the passkey again before deleting the account.
 - **FR-049** When an Owner has approved a Claude client once, the relay shall not ask again for the
@@ -194,6 +201,10 @@ Format: EARS ("When <trigger>, the <system> shall <response>"). IDs are stable; 
 - **FR-052** When a Mac is revoked, the relay shall close its connection and reject its credential.
 - **FR-053** When an Owner pairs a Mac while another Mac is paired, the relay shall name the
   current Mac, ask the Owner to confirm the replacement, and on confirmation revoke the current Mac.
+- **FR-054** When a pairing link reaches the Mac app other than through the app's own sign-in
+  window, the app shall connect only after the Owner confirms in a dialog that names the relay and
+  the email address of the account the link belongs to, and says that it replaces the current
+  pairing if there is one (Toni, 2026-10-24, security scan).
 
 ### Capabilities
 - **FR-060** The Mac app shall let the Owner enable and disable each capability.
@@ -233,6 +244,9 @@ Format: EARS ("When <trigger>, the <system> shall <response>"). IDs are stable; 
 - **FR-080** The relay shall run as one container with one data file, configured by environment
   variables, with no other required services except an SMTP server for email.
 - **FR-081** The Mac app shall let the Owner choose a custom relay URL.
+- **FR-082** The relay shall take a client's address from a proxy's forwarded-for header only when
+  the proxy is on the same machine, or at an address the operator has listed as a trusted proxy
+  (Toni, 2026-10-24, security scan).
 
 ## Success criteria
 

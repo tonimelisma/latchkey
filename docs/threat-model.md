@@ -77,8 +77,11 @@ Boundaries, each a place where input must be treated as hostile:
   Latchkey-side stop when Claude was asked to.
 - **Tools act with the owner's full rights when on.** Shell runs any command; Files reads and
   writes anywhere the owner can. That is the feature, not a bug.
-- The Mac's full local activity log (arguments and results) is readable by the owner's own
-  account; it lives in the app's Application Support folder.
+- **Remembered consent covers Claude Code too** (Toni, 2026-10-24): once the owner approved a
+  client, a later sign-in with the same client and a loopback redirect on any port is approved
+  without asking, so a program on the owner's computer posing as that client gets a token.
+- **Pairing links from outside the app's sign-in window** are accepted after a dialog that names
+  the relay and the link's account email (Toni, 2026-10-24); not bound by a one-time secret.
 
 ## Invariants that must hold (what a finding violates)
 

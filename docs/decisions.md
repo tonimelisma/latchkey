@@ -105,3 +105,10 @@ Add a row when a decision is made; never delete one, mark it "superseded by" ins
 | 2026-10-24 | Security scanning: a written threat model first (docs/threat-model.md), then Anthropic's Claude Security plugin over the whole repository, run twice; each finding proven by a failing test, then fixed and shipped at once (changes users would see go to Toni first) | Toni, docs/threat-model.md |
 | 2026-10-24 | Deploy security gate adds Semgrep (Swift and Go, plus Latchkey rules), ShellCheck (scripts), and OSV-Scanner (Go modules and Sparkle); Trivy not added | Toni |
 | 2026-10-24 | Anthropic's security-guidance plugin on for every Claude Code session in this repository (checks each edit, turn, and commit); rules in .claude/claude-security-guidance.md | Toni |
+| 2026-10-24 | Pairing links that don't come through the app's own sign-in window connect only after a dialog naming the relay and the link's account email, warning that it replaces the current pairing; not bound by a one-time secret | Toni, spec 001 FR-054 |
+| 2026-10-24 | Browser opens only http and https addresses (and about:blank) | Toni, spec 005 FR-409 |
+| 2026-10-24 | Remembered consent stays per client, Claude Code included (a local program posing as Claude Code is accepted) | Toni, spec 001 FR-049, docs/threat-model.md |
+| 2026-10-24 | Account recovery also removes every Claude client's access | Toni, spec 001 FR-047a |
+| 2026-10-24 | The activity log on the Mac is encrypted with a key in the Keychain | Toni, spec 001 FR-026a |
+| 2026-10-24 | Forwarded client addresses are trusted only from a proxy on the same machine, or from addresses listed in a new setting (TRUSTED_PROXIES); the hosted relay lists its Caddy network | Toni, spec 001 FR-082 |
+| 2026-10-24 | At most 20 wrong emailed codes per email address per day; then emailed codes stop working for that address until the day is over | Toni, spec 001 FR-042a |
