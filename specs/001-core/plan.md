@@ -96,8 +96,9 @@ Serves FR-040, FR-014.
   stays valid for 60 s, after which reuse revokes the whole token family (RFC 6819 §5.2.2.3).
 - Revoking Claude's access (FR-044) cannot be outrun by a refresh already in flight: it deletes
   the Owner's tokens and approvals in one transaction, and a new access or refresh token is
-  written only if a code or refresh token of the same grant and Owner still exists, checked in
-  the same SQL statement as the insert. A refresh whose token vanished mid-exchange fails
+  written only if a code or refresh token of the same grant and Owner still exists and no token
+  of that grant has been revoked (a client's `/revoke` and reuse detection mark tokens revoked
+  rather than deleting them), checked in the same SQL statement as the insert. A refresh whose token vanished mid-exchange fails
   (`invalid_request`) instead of minting tokens. Options weighed: fosite's transactional
   storage with `BEGIN IMMEDIATE` (touches every storage call and holds the write lock across
   the client lookup, which may fetch a CIMD document for seconds), or a per-Owner revocation

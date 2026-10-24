@@ -263,6 +263,10 @@ func TestTokensNeedTheirGrant(t *testing.T) {
 	other.RequestID, other.UserID = "req1", "usr_someone_else"
 	require.ErrorIs(t, s.PutOAuthToken(ctx, other), store.ErrNotFound, "another user's grant")
 
+	require.NoError(t, s.RevokeOAuthRequests(ctx, store.KindRefresh, "req1", t0))
+	tok.Signature = "ref4"
+	require.ErrorIs(t, s.PutOAuthToken(ctx, tok), store.ErrNotFound, "a revoked grant gets no new tokens")
+
 	require.NoError(t, s.DeleteUserOAuth(ctx, u.ID))
 	tok.Signature = "ref3"
 	require.ErrorIs(t, s.PutOAuthToken(ctx, tok), store.ErrNotFound, "after revocation")

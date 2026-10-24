@@ -628,6 +628,51 @@ func TestRevokeUserDuringRefresh(t *testing.T) {
 	}
 }
 
+// A grant revoked by marking its tokens (POST /revoke, or reuse detection) while a refresh is in
+// flight: the refresh must not write fresh, unrevoked tokens for it (security review).
+func TestGrantRevokedDuringRefresh(t *testing.T) {
+	e := setup(t)
+	clientID := e.cimd.URL + "/oauth/client.json"
+	const redirect = "http://localhost:7777/callback"
+	e.cimdMu.Lock()
+	e.cimdFetched = func() {}
+	e.cimdMu.Unlock()
+	p := newPKCE()
+	code := e.approve(authorizeURL(clientID, redirect, &p, nil)).Query().Get("code")
+	resp, m := e.tokenRequest(url.Values{
+		"grant_type": {"authorization_code"}, "code": {code}, "redirect_uri": {redirect},
+		"client_id": {clientID}, "code_verifier": {p.verifier},
+	})
+	require.Equal(t, http.StatusOK, resp.StatusCode, m)
+	refresh, _ := m["refresh_token"].(string)
+	row, err := e.store.OAuthRequest(ctxT(t), store.KindRefresh, strings.SplitN(refresh, ".", 2)[1])
+	require.NoError(t, err)
+
+	var mu sync.Mutex
+	fetches := 0
+	e.cimdMu.Lock()
+	e.cimdFetched = func() {
+		mu.Lock()
+		fetches++
+		n := fetches
+		mu.Unlock()
+		if n == 2 { // after the refresh token's row was read, as /revoke would do it
+			assert.NoError(t, e.store.RevokeOAuthRequests(context.Background(), store.KindRefresh, row.RequestID, time.Now()))
+			assert.NoError(t, e.store.RevokeOAuthRequests(context.Background(), store.KindAccess, row.RequestID, time.Now()))
+		}
+	}
+	e.cimdMu.Unlock()
+	resp, m = e.tokenRequest(url.Values{"grant_type": {"refresh_token"}, "refresh_token": {refresh}, "client_id": {clientID}})
+	assert.Equal(t, http.StatusBadRequest, resp.StatusCode, m)
+	if access, ok := m["access_token"].(string); ok {
+		assert.Equal(t, http.StatusUnauthorized, e.mcpStatus(access), "a token minted across the revocation must not work")
+	}
+	if newRefresh, ok := m["refresh_token"].(string); ok {
+		resp, m = e.tokenRequest(url.Values{"grant_type": {"refresh_token"}, "refresh_token": {newRefresh}, "client_id": {clientID}})
+		assert.Equal(t, http.StatusBadRequest, resp.StatusCode, m)
+	}
+}
+
 func TestTokenEndpointNeedsFormEncoding(t *testing.T) {
 	e := setup(t)
 	resp := e.do(http.MethodPost, "/token", strings.NewReader(`{"grant_type":"refresh_token"}`), "application/json", false)
