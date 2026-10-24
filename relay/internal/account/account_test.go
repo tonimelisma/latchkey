@@ -659,6 +659,15 @@ func TestRecovery(t *testing.T) {
 	d, err := e.store.CreateDevice(context.Background(), store.NewDevice{UserID: u.ID, Name: "Mac", PublicKey: []byte("k")}, e.clock.now())
 	require.NoError(t, err)
 	e.macs.online[d.ID] = true
+	// A Claude client approved before the recovery (perhaps by whoever took the passkeys).
+	ctx := context.Background()
+	require.NoError(t, e.store.PutConsent(ctx, u.ID, "cl_x", "mcp offline_access", e.clock.now()))
+	for _, kind := range []string{store.KindCode, store.KindRefresh} {
+		require.NoError(t, e.store.PutOAuthRequest(ctx, store.OAuthRequest{
+			Signature: "sig-" + kind, Kind: kind, RequestID: "req1", ClientID: "cl_x", UserID: u.ID,
+			RequestedAt: e.clock.now(), SessionJSON: []byte(`{}`), ExpiresAt: e.clock.now().Add(time.Hour),
+		}))
+	}
 
 	lost := e.browser() // the passkeys are gone; a new device
 	e.clock.advance(2 * time.Minute)
@@ -672,6 +681,10 @@ func TestRecovery(t *testing.T) {
 	assert.Equal(t, http.StatusFound, b.get("/account").status, "old sessions signed out")
 	status, _ := b.signIn("signin", oldCred)
 	assert.Equal(t, http.StatusUnauthorized, status, "the old passkey no longer works")
+	_, err = e.store.Consent(ctx, u.ID, "cl_x")
+	require.ErrorIs(t, err, store.ErrNotFound, "every Claude client must be approved again (FR-047a)")
+	_, err = e.store.OAuthRequest(ctx, store.KindRefresh, "sig-refresh")
+	require.ErrorIs(t, err, store.ErrNotFound, "Claude's tokens are removed (FR-047a)")
 
 	msgs := e.mail.Sent()
 	assert.Equal(t, "Your Latchkey account was recovered", msgs[len(msgs)-1].Subject, "announced by email")

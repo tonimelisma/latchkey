@@ -236,13 +236,16 @@ func (s *Service) registerFinish(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"next": safeNext(r.URL.Query().Get("next"))})
 }
 
-// completeRecovery removes old passkeys and sessions (FR-047) and announces the recovery by
-// email and on the Mac (plan D5).
+// completeRecovery removes old passkeys and sessions (FR-047) and every Claude client's access
+// (FR-047a), and announces the recovery by email and on the Mac (plan D5).
 func (s *Service) completeRecovery(ctx context.Context, u store.User, keep []byte, now time.Time) error {
 	if _, err := s.cfg.Store.DeletePasskeysExcept(ctx, u.ID, keep); err != nil {
 		return err
 	}
 	if err := s.cfg.Store.DeleteUserSessions(ctx, u.ID); err != nil {
+		return err
+	}
+	if err := s.cfg.OAuth.RevokeUser(ctx, u.ID); err != nil {
 		return err
 	}
 	if err := s.cfg.Mailer.Send(ctx, u.Email, "Your Latchkey account was recovered",
