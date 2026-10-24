@@ -77,8 +77,9 @@ Releases are not notarized yet, so the app installs on the developer's own Macs 
 
 ## Security
 
-Report vulnerabilities privately; see [SECURITY.md](SECURITY.md). The threat model and how
-Latchkey follows current best practice are in [docs/best-practices.md](docs/best-practices.md).
+Report vulnerabilities privately; see [SECURITY.md](SECURITY.md). The threat model (what is
+protected, from whom, and which risks are accepted) is in [docs/threat-model.md](docs/threat-model.md);
+how Latchkey follows current best practice is in [docs/best-practices.md](docs/best-practices.md).
 
 ## Development
 
@@ -115,6 +116,7 @@ specs/004-shell/                Shell.
 specs/005-browser/              Browser control (Safari).
 specs/006-computer-control/     Computer control.
 docs/best-practices.md          Research on best practices, checked against Latchkey.
+docs/threat-model.md            What is protected, attackers, trust boundaries, accepted risks.
 docs/self-hosting.md            Run your own relay.
 SECURITY.md                     How to report vulnerabilities.
 ```
