@@ -107,7 +107,18 @@ function setupFlow(flow) {
     button.disabled = true;
     try { await work(); } finally { button.disabled = false; }
   };
-  const done = (result) => location.assign(result.next || next);
+  // Only ever go to a page on this site, whatever the server or the link said.
+  const sameOrigin = (target) => {
+    try {
+      return new URL(target, location.origin).origin === location.origin;
+    } catch {
+      return false;
+    }
+  };
+  const done = (result) => {
+    const target = result.next || next;
+    location.assign(sameOrigin(target) ? target : "/account");
+  };
 
   // Passkey autofill on the email field: one tap for a returning user.
   const startAutofill = async () => {

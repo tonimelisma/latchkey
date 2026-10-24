@@ -676,4 +676,25 @@ func TestNextIsAlwaysLocal(t *testing.T) {
 	assert.Contains(t, page.body, `data-next="/account"`)
 	page = e.browser().get("/signin?next=" + url.QueryEscape("/authorize?client_id=x"))
 	assert.Contains(t, page.body, `data-next="/authorize?client_id=x"`)
+
+	// Browsers drop tab and newline from URLs and read a backslash as a slash, so each of these
+	// would leave the site after sign-in (security scan).
+	for _, next := range []string{
+		"/\t/evil.example", "/\n\\evil.example", "/\r//evil.example", "\\evil.example", "/\\evil.example",
+		"/x\\..\\..\\/evil.example", "https://evil.example/", "/\x7f/evil.example", "/\x00/evil.example",
+	} {
+		page = e.browser().get("/signin?next=" + url.QueryEscape(next))
+		assert.Contains(t, page.body, `data-next="/account"`, "%q", next)
+	}
+	// What a passkey sign-in sends back is checked the same way.
+	b := e.browser()
+	b.signUp()
+	status, begin := b.json("/passkey/login/begin", map[string]string{"purpose": "signin"})
+	require.Equal(t, http.StatusOK, status)
+	assertion := b.authn.get(t, begin["options"].(map[string]any), e.base, b.authn.only(t))
+	status, done := b.json("/passkey/login/finish?"+url.Values{
+		"ceremony": {begin["ceremony"].(string)}, "next": {"/\t/evil.example"},
+	}.Encode(), assertion)
+	require.Equal(t, http.StatusOK, status, done)
+	assert.Equal(t, "/account", done["next"])
 }
