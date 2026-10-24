@@ -111,6 +111,23 @@ final class FakeCommands: CommandRunner, @unchecked Sendable {
         }
     }
 
+    /// The 100 MB cap is checked on the file that is read, not on a link to it (scan 2026-10-24).
+    @Test func sizeCapAppliesToALinksTarget() throws {
+        let f = try FilesFixture()
+        let big = f.root.appending(path: "big.txt")
+        FileManager.default.createFile(atPath: big.path, contents: nil)
+        let h = try FileHandle(forWritingTo: big)
+        try h.truncate(atOffset: UInt64(FileReader.maxBytes) + 1_000_000)  // sparse: no disk used
+        try h.close()
+        let link = f.root.appending(path: "notes.txt")
+        try FileManager.default.createSymbolicLink(at: link, withDestinationURL: big)
+        guard case .notReadable(let why) = try FileReader.read(link, offset: 0) else {
+            Issue.record("read past the cap")
+            return
+        }
+        #expect(why.contains("100 MB"), "\(why)")
+    }
+
     @Test func pagesLongText() throws {
         let f = try FilesFixture()
         let long = f.root.appending(path: "long.txt")
