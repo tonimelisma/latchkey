@@ -35,7 +35,11 @@ docker save "latchkey-relay:$TAG" | gzip | gcloud compute ssh "$VM" --project "$
   --command 'gunzip | sudo docker load -q'
 
 echo "• configuration"
-gcloud compute scp --project "$PROJECT" --zone "$ZONE" --quiet deploy/server/docker-compose.yml "$VM:/tmp/latchkey-compose.yml" >/dev/null
+# Files are streamed over SSH straight into root-owned /opt/latchkey: nothing is staged under a
+# guessable name in the VM's shared /tmp, and the secrets never touch a local or remote temp file.
+ssh_vm 'set -e; sudo install -d -m 755 /opt/latchkey
+sudo sh -c "umask 022; cat > /opt/latchkey/docker-compose.yml.new && mv /opt/latchkey/docker-compose.yml.new /opt/latchkey/docker-compose.yml"' \
+  < deploy/server/docker-compose.yml
 # Caddy reaches the relay over the docker network "reverse_proxy"; the relay believes the client
 # address Caddy forwards only from that network's own address ranges (FR-082, research.md).
 PROXY_NETS=$(ssh_vm "sudo docker network inspect reverse_proxy --format '{{range .IPAM.Config}}{{.Subnet}},{{end}}'" | tr -d ' \r\n')
@@ -43,25 +47,20 @@ PROXY_NETS=${PROXY_NETS%,}
 case $PROXY_NETS in
   '' | *[!0-9a-fA-F.:/,]*) echo "FAIL: could not read the reverse_proxy network's address ranges (got '$PROXY_NETS')"; exit 1 ;;
 esac
-umask 077
-ENVFILE=$(mktemp)
-cat > "$ENVFILE" <<ENV
-PUBLIC_URL=https://$HOST
-SMTP_HOST=smtp.resend.com
-SMTP_PORT=465
-SMTP_USER=resend
-SMTP_PASSWORD=$RESEND_API_KEY
-SMTP_FROM=Latchkey <no-reply@$HOST>
-ALLOWED_EMAILS=$ALLOWED_EMAILS
-TRUSTED_PROXIES=$PROXY_NETS
-ENV
-gcloud compute scp --project "$PROJECT" --zone "$ZONE" --quiet "$ENVFILE" "$VM:/tmp/latchkey-relay.env" >/dev/null
-rm -f "$ENVFILE"
+# printf is a shell builtin, so the secret is in no process's arguments; a here-document would
+# go through a temp file in some shells.
+printf '%s\n' \
+  "PUBLIC_URL=https://$HOST" \
+  "SMTP_HOST=smtp.resend.com" \
+  "SMTP_PORT=465" \
+  "SMTP_USER=resend" \
+  "SMTP_PASSWORD=$RESEND_API_KEY" \
+  "SMTP_FROM=Latchkey <no-reply@$HOST>" \
+  "ALLOWED_EMAILS=$ALLOWED_EMAILS" \
+  "TRUSTED_PROXIES=$PROXY_NETS" |
+  ssh_vm 'sudo sh -c "umask 077; cat > /opt/latchkey/relay.env.new && chmod 600 /opt/latchkey/relay.env.new && mv /opt/latchkey/relay.env.new /opt/latchkey/relay.env"'
 SNIPPET=$(sed "s/{{HOST}}/$HOST/" deploy/server/Caddyfile.snippet)
 ssh_vm "set -e
-sudo mkdir -p /opt/latchkey
-sudo mv /tmp/latchkey-compose.yml /opt/latchkey/docker-compose.yml
-sudo install -m 600 /tmp/latchkey-relay.env /opt/latchkey/relay.env && rm -f /tmp/latchkey-relay.env
 grep -q '^$HOST ' /opt/reverse-proxy/Caddyfile || printf '%s\n' '$SNIPPET' >> /opt/reverse-proxy/Caddyfile
 cd /opt/latchkey && sudo TAG=$TAG docker compose up -d --remove-orphans --quiet-pull
 sudo docker exec caddy caddy reload --config /etc/caddy/Caddyfile
