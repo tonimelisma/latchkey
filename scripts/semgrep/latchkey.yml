@@ -1,0 +1,62 @@
+# Latchkey's own Semgrep rules: the invariants in docs/threat-model.md that public rule sets can't
+# know (invariants 8 and 11). Run by `make -C relay semgrep`, part of the deploy gate. A finding
+# that is safe gets `// nosemgrep: <rule id> -- <why>` on its line.
+rules:
+  - id: latchkey-applescript-constant
+    languages: [swift]
+    severity: ERROR
+    message: >-
+      AppleScript sources are fixed text: pass values as arguments (`on run argv`), never
+      interpolate them into the script (threat model, invariant 11).
+    patterns:
+      - pattern-inside: |
+          enum Script { ... }
+      - pattern: '"...\($X)..."'
+
+  - id: latchkey-page-script-literal
+    languages: [swift]
+    severity: ERROR
+    message: >-
+      Page scripts may splice in only `literal(...)` values (JSON-encoded): anything else could
+      break out of the JavaScript (threat model, invariant 11). Numbers and booleans are safe;
+      mark them with nosemgrep.
+    patterns:
+      - pattern-inside: |
+          enum PageScripts { ... }
+      - pattern: '"...\($X)..."'
+      - metavariable-pattern:
+          metavariable: $X
+          patterns:
+            - pattern-not: literal(...)
+            - pattern-not: Self.literal(...)
+
+  - id: latchkey-sql-bound
+    languages: [swift]
+    severity: ERROR
+    message: >-
+      SQL text reaching SQLite must not carry interpolated values: bind them (`bind:`). Fixed SQL
+      fragments and numbers are safe; mark them with nosemgrep (threat model, invariant 11).
+    mode: taint
+    pattern-sources:
+      - pattern: '"...\($X)..."'
+    pattern-sinks:
+      - patterns:
+          - pattern: SQLite.$F($DB, $SQL, ...)
+          - focus-metavariable: $SQL
+
+  - id: latchkey-outbound-http-guarded
+    languages: [go]
+    severity: ERROR
+    message: >-
+      The relay makes outbound requests only through a client whose dialer refuses loopback,
+      private, and link-local addresses (publicOnlyDialer); the default client reaches anything
+      (threat model, invariant 8).
+    paths:
+      exclude: ["*_test.go", "**/cmd/localcheck/**", "**/cmd/maccheck/**", "**/internal/e2e/**", "**/internal/testagent/**"]
+    pattern-either:
+      - pattern: http.Get(...)
+      - pattern: http.Post(...)
+      - pattern: http.PostForm(...)
+      - pattern: http.Head(...)
+      - pattern: http.DefaultClient
+      - pattern: http.DefaultTransport

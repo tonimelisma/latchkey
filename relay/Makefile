@@ -1,9 +1,12 @@
-.PHONY: build test test-short lint fmt run tidy tidy-check vuln secrets security claude-check mac-check
+.PHONY: build test test-short lint fmt run tidy tidy-check vuln secrets semgrep shellcheck deps security claude-check mac-check
 
 # Pinned and built with the installed Go, so every contributor lints the same way.
 GOLANGCI_LINT = go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.15.0
 GOVULNCHECK = go run golang.org/x/vuln/cmd/govulncheck@v1.9.0
 GITLEAKS = go run github.com/zricethezav/gitleaks/v8@v8.30.1
+SEMGREP = uvx --from semgrep==1.182.0 semgrep
+OSV_SCANNER = go run github.com/google/osv-scanner/v2/cmd/osv-scanner@v2.7.0
+SHELLCHECK_IMAGE = koalaman/shellcheck:v0.11.0@sha256:61862eba1fcf09a484ebcc6feea46f1782532571a34ed51fedf90dd25f925a8d
 
 build:
 	go build -o bin/relay ./cmd/relay
@@ -45,8 +48,28 @@ vuln:
 secrets:
 	cd .. && $(GITLEAKS) git --redact --no-banner .
 
+# Static analysis of the Go relay and the Swift app: Semgrep's public Go, Swift, secrets, and
+# Dockerfile rules (fetched from the registry at run time, so not pinned) plus Latchkey's own
+# rules in scripts/semgrep/, whose tests run first. Fails on any finding; a reviewed safe line
+# carries `nosemgrep: <rule id> -- <why>`.
+semgrep:
+	cd .. && $(SEMGREP) --test --metrics=off scripts/semgrep
+	cd .. && $(SEMGREP) scan --metrics=off --error --quiet --config p/golang --config p/swift \
+		--config p/secrets --config p/dockerfile --config scripts/semgrep/latchkey.yml \
+		--exclude 'scripts/semgrep' --exclude 'CLAUDE-SECURITY-*' --exclude '.claude/worktrees'
+
+# Every tracked shell script, at warning level and above (needs Docker).
+shellcheck:
+	cd .. && git ls-files -z '*.sh' | xargs -0 docker run --rm -v "$$PWD:/mnt:ro" -w /mnt $(SHELLCHECK_IMAGE) -S warning
+
+# Known vulnerabilities in dependencies: the relay's Go modules (OSV database) and the Mac app's
+# Sparkle. Fails on any.
+deps:
+	$(OSV_SCANNER) -L go.mod
+	../scripts/sparkle-advisories.sh
+
 # Every security check; the deploy script and CI run it.
-security: tidy-check vuln secrets
+security: tidy-check vuln secrets semgrep shellcheck deps
 
 # Local run with development defaults; override any variable on the command line.
 run: export PUBLIC_URL ?= http://localhost:8080

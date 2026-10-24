@@ -295,13 +295,14 @@ final class MessagesStore: @unchecked Sendable {
         var bind = bind
         if let keep {
             var ids: [Int64] = []
-            try SQLite.forEachRaw(
-                db,
-                """
+            // Only fixed fragments (joins, filters, seconds) and callers' conditions, which are fixed
+            // text with `?` placeholders or Int64 row ids.
+            let scan = """
                 SELECT m.ROWID, m.text, m.attributedBody \(Self.joins)
                 WHERE \(Self.filters) AND \(condition) ORDER BY \(Self.seconds("m.date")) DESC, m.ROWID DESC
-                """, bind: bind
-            ) { stmt in
+                """
+            // nosemgrep: latchkey-sql-bound -- `scan` is fixed fragments, `?`, and Int64 ids.
+            try SQLite.forEachRaw(db, scan, bind: bind) { stmt in
                 var text = SQLite.text(stmt, 1) ?? ""
                 if text.isEmpty || text == "\u{FFFC}", let body = SQLite.blob(stmt, 2) {
                     text = AttributedBody.text(body) ?? text
@@ -321,6 +322,7 @@ final class MessagesStore: @unchecked Sendable {
             ORDER BY secs DESC, m.ROWID DESC
             """
         var out: [Message] = []
+        // nosemgrep: latchkey-sql-bound -- `sql` is built as above: fixed fragments, `?`, Int64 ids.
         try SQLite.forEachRow(db, sql, bind: bind) { r in
             var text = r[2].text ?? ""
             if text.isEmpty || text == "\u{FFFC}", let body = r[3].blob { text = AttributedBody.text(body) ?? text }
