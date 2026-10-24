@@ -46,18 +46,26 @@ enum FileReader {
         return .text(page, total: text.count, next: next)
     }
 
-    private static let documentTypes: [UTType] = [
-        .rtf, .rtfd, .html, .webArchive, UTType("org.openxmlformats.wordprocessingml.document"),
-        UTType("com.microsoft.word.doc"), UTType("org.oasis-open.opendocument.text"),
-    ].compactMap { $0 }
+    /// Documents AppKit converts itself, each with its type named so the content is never sniffed
+    /// as HTML (whose importer is WebKit and loads what the page links to).
+    private static let documentTypes: [(UTType, NSAttributedString.DocumentType)] = {
+        let named: [(UTType?, NSAttributedString.DocumentType)] = [
+            (.rtfd, .rtfd), (.rtf, .rtf), (UTType("org.openxmlformats.wordprocessingml.document"), .officeOpenXML),
+            (UTType("com.microsoft.word.doc"), .docFormat), (UTType("org.oasis-open.opendocument.text"), .openDocument),
+        ]
+        return named.compactMap { pair in pair.0.map { ($0, pair.1) } }
+    }()
 
     private static func text(of url: URL, type: UTType) throws -> String? {
         if type.conforms(to: .pdf) {
             guard let doc = PDFDocument(url: url) else { return nil }
             return (0..<doc.pageCount).compactMap { doc.page(at: $0)?.string }.joined(separator: "\n\n")
         }
-        if documentTypes.contains(where: { type.conforms(to: $0) }) {
-            return try NSAttributedString(url: url, options: [:], documentAttributes: nil).string
+        if type.conforms(to: .webArchive) { return HTMLText.fromWebArchive(try contents(url)) }
+        if type.conforms(to: .html) { return HTMLText.fromHTML(decode(try contents(url)) ?? "") }
+        if let (_, documentType) = documentTypes.first(where: { type.conforms(to: $0.0) }) {
+            return try NSAttributedString(url: url, options: [.documentType: documentType], documentAttributes: nil)
+                .string
         }
         let data = try contents(url)
         if data.prefix(8192).contains(0) {
@@ -67,7 +75,11 @@ enum FileReader {
             }
             return nil
         }
-        return String(data: data, encoding: .utf8) ?? String(data: data, encoding: .isoLatin1)
+        return decode(data)
+    }
+
+    private static func decode(_ data: Data) -> String? {
+        String(data: data, encoding: .utf8) ?? String(data: data, encoding: .isoLatin1)
     }
 
     /// The file's bytes, at most `maxBytes`: the size seen before opening may not be what is read.
@@ -77,5 +89,105 @@ enum FileReader {
         let data = try handle.read(upToCount: maxBytes + 1) ?? Data()
         guard data.count <= maxBytes else { throw TooLarge() }
         return data
+    }
+}
+
+/// The readable text of a web page, without loading anything it links to (spec 003 research):
+/// Foundation's XML parser in HTML-tidy mode builds the tree and is told never to load external
+/// entities; it has no notion of images, style sheets, scripts, or frames, so it fetches nothing.
+enum HTMLText {
+    private static let skipped: Set<String> = [
+        "head", "script", "style", "noscript", "template", "svg", "math", "object", "iframe", "frameset",
+    ]
+    private static let blocks: Set<String> = [
+        "address", "article", "aside", "blockquote", "br", "dd", "div", "dl", "dt", "fieldset", "figcaption",
+        "figure", "footer", "form", "h1", "h2", "h3", "h4", "h5", "h6", "header", "hr", "li", "main", "nav", "ol",
+        "p", "pre", "section", "table", "tr", "ul",
+    ]
+
+    static func fromHTML(_ html: String) -> String {
+        guard
+            let doc = try? XMLDocument(
+                xmlString: html, options: [.documentTidyHTML, .nodeLoadExternalEntitiesNever])
+        else { return stripped(html) }
+        var out = ""
+        walk(doc, into: &out, preformatted: false)
+        return tidy(out)
+    }
+
+    /// A Safari web archive: a property list whose main resource holds the page's bytes. The
+    /// archived subresources are never looked at.
+    static func fromWebArchive(_ data: Data) -> String? {
+        guard
+            let plist = try? PropertyListSerialization.propertyList(from: data, format: nil) as? [String: Any],
+            let main = plist["WebMainResource"] as? [String: Any],
+            let body = main["WebResourceData"] as? Data
+        else { return nil }
+        var encoding = String.Encoding.utf8
+        if let name = main["WebResourceTextEncodingName"] as? String {
+            let cf = CFStringConvertIANACharSetNameToEncoding(name as CFString)
+            if cf != kCFStringEncodingInvalidId {
+                encoding = .init(rawValue: CFStringConvertEncodingToNSStringEncoding(cf))
+            }
+        }
+        guard let text = String(data: body, encoding: encoding) ?? String(data: body, encoding: .isoLatin1) else {
+            return nil
+        }
+        let mime = (main["WebResourceMIMEType"] as? String ?? "text/html").lowercased()
+        if mime.contains("html") { return fromHTML(text) }
+        return mime.hasPrefix("text/") ? text : nil
+    }
+
+    private static func walk(_ node: XMLNode, into out: inout String, preformatted: Bool) {
+        switch node.kind {
+        case .text:
+            let s = node.stringValue ?? ""
+            if preformatted {
+                out += s
+            } else {
+                let words = s.split(whereSeparator: \.isWhitespace).joined(separator: " ")
+                guard !words.isEmpty else {
+                    if !s.isEmpty, let last = out.last, !last.isWhitespace { out += " " }
+                    return
+                }
+                if s.first?.isWhitespace == true, let last = out.last, !last.isWhitespace { out += " " }
+                out += words
+                if s.last?.isWhitespace == true { out += " " }
+            }
+        case .element:
+            let name = node.name?.lowercased() ?? ""
+            if skipped.contains(name) { return }
+            let block = blocks.contains(name)
+            if block { lineBreak(&out) }
+            for child in node.children ?? [] { walk(child, into: &out, preformatted: preformatted || name == "pre") }
+            if block { lineBreak(&out) }
+            if name == "td" || name == "th" { out += "\t" }
+        case .comment, .processingInstruction, .DTDKind, .entityDeclaration, .attribute, .namespace:
+            return
+        default:
+            for child in node.children ?? [] { walk(child, into: &out, preformatted: preformatted) }
+        }
+    }
+
+    private static func lineBreak(_ out: inout String) {
+        while out.last == " " || out.last == "\t" { out.removeLast() }
+        if !out.isEmpty, !out.hasSuffix("\n") { out += "\n" }
+    }
+
+    /// Lines trimmed, at most one empty line in a row.
+    private static func tidy(_ text: String) -> String {
+        var lines: [String] = []
+        for line in text.components(separatedBy: "\n").map({ $0.trimmingCharacters(in: .whitespaces) }) {
+            if line.isEmpty, lines.last?.isEmpty ?? true { continue }
+            lines.append(line)
+        }
+        while lines.last?.isEmpty == true { lines.removeLast() }
+        return lines.joined(separator: "\n")
+    }
+
+    /// When the page can't be parsed at all: the text between tags.
+    private static func stripped(_ html: String) -> String {
+        let noTags = html.replacingOccurrences(of: "<[^>]*>", with: " ", options: .regularExpression)
+        return tidy(noTags.split(whereSeparator: \.isWhitespace).joined(separator: " "))
     }
 }
