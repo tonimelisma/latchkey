@@ -69,7 +69,12 @@ final class AppModel {
         }
         capabilities = CapabilityRegistry(
             capabilities: Self.makeCapabilities(), levels: levels)
-        trace = try? TraceStore()
+        do {
+            trace = try TraceStore()
+        } catch {
+            trace = nil
+            Self.log.error("Activity log unavailable: \(error.localizedDescription, privacy: .public)")
+        }
     }
 
     // MARK: lifecycle
@@ -473,7 +478,7 @@ final class AppModel {
         defer { busy -= 1 }
         let registry = capabilities
         let result = await registry.call(tool: call.tool, arguments: call.arguments)
-        let entry = TraceEntry(
+        let entry = Activity(
             at: started, tool: call.tool, arguments: call.arguments.jsonText,
             result: result.content.jsonText, isError: result.isError,
             durationMS: Int(Date().timeIntervalSince(started) * 1000))
@@ -487,7 +492,7 @@ final class AppModel {
 
     /// Calls running now; the menu bar icon shows a dot while above zero.
     private(set) var busy = 0
-    private(set) var recentActivity: [TraceEntry] = []
+    private(set) var recentActivity: [Activity] = []
 
     func loadRecentActivity() { recentActivity = (try? trace?.recent(limit: 10)) ?? [] }
 
