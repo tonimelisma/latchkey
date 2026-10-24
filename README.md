@@ -80,6 +80,10 @@ Releases are not notarized yet, so the app installs on the developer's own Macs 
 Report vulnerabilities privately; see [SECURITY.md](SECURITY.md). The threat model (what is
 protected, from whom, and which risks are accepted) is in [docs/threat-model.md](docs/threat-model.md);
 how Latchkey follows current best practice is in [docs/best-practices.md](docs/best-practices.md).
+Every deploy first passes `make -C relay security`: known vulnerabilities in the relay's code and
+dependencies (govulncheck, OSV-Scanner) and in the Mac app's Sparkle, leaked secrets (gitleaks),
+static analysis of the Go and Swift code with Latchkey's own rules (Semgrep), and the shell
+scripts (ShellCheck).
 
 ## Development
 

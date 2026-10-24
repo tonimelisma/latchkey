@@ -227,9 +227,19 @@ for local connectors and expected for remote ones); documented incident response
   toolchain pinned (1.27.3); the published image carries an SBOM and build provenance. The
   first scan found 16 reachable vulnerabilities (Go 1.27.1, go-jose 3.0.3, OpenTelemetry
   exporters 1.21.0), all fixed; the history has no leaked secrets.
-- **Not covered:** the Mac app's one package (Sparkle, pinned to an exact version) isn't in
-  Dependabot, which can't read an XcodeGen project. GitHub's code scanning and secret push
-  protection need a paid plan on a private repository.
+- **Done (2026-10-24):** static analysis and more dependency checks in `make security` (Toni):
+  Semgrep (pinned 1.182.0) with the public Go, Swift, secrets, and Dockerfile rules and
+  Latchkey's own rules in `scripts/semgrep/` (AppleScript sources fixed text, page scripts splice
+  only JSON literals, SQL values bound, outbound HTTP only through the guarded client; each rule
+  has tests); ShellCheck (pinned image) over every tracked script; OSV-Scanner over the relay's
+  modules; and the OSV database queried for the Sparkle version the app pins. The public Semgrep
+  rule sets are fetched at run time and not pinned, so a new public rule can fail the gate; a
+  reviewed safe line carries `nosemgrep: <rule> -- <why>`.
+- **Done (2026-10-24):** a whole-repository scan with Anthropic's Claude Security plugin, run
+  twice at high effort after the threat model (`docs/threat-model.md`); the two passes' findings
+  merged (57 into 25 distinct), each fixed with a failing test first.
+- **Not covered:** GitHub's code scanning and secret push protection need a paid plan on a
+  private repository.
 - **Later:** privacy policy and terms (with the directory listing).
 
 ## Decisions after this review (Toni, 2026-10-23)
