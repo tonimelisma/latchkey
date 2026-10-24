@@ -48,7 +48,7 @@ paths:
 - Tests run in a debug copy of the app with the same bundle ID: it shares the installed app's
   user defaults and Keychain. Tests must never touch `UserDefaults.standard`, the Keychain, or
   `DeviceIdentity` (an uninstall test erased Toni's pairing twice on 2026-10-22);
-  `DeviceIdentity.save/delete` now refuse under XCTest.
+  the real `KeychainVault` changes nothing under XCTest; pairing tests inject a `MemoryVault`.
 - Never call `NSApp.terminate` from inside a main-queue block (a dispatch source handler,
   `DispatchQueue.main.async`): with `.terminateLater`, AppKit's wait for the reply runs nested in
   that block, the serial main queue never runs again, and the app hangs forever (SIGTERM, 0.8.2).

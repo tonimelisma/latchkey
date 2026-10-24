@@ -129,6 +129,16 @@ Serves FR-050, FR-051, FR-052; Constitution IV.
   progress is used only after the Owner confirms the relay's host.
 - During the exchange the app registers a P-256 public key whose private key lives in the Secure
   Enclave (CryptoKit). No bearer secret leaves the Mac.
+- The pairing (relay address, device ID, and the key's Secure Enclave blob) is one generic
+  password item in the Owner's login keychain, created by the app, so other programs can't read
+  or change it without the Owner's password. User defaults, which any program running as the
+  Owner can change without a permission, hold none of it: a relay address there pointed the app
+  and its privacy permissions at another relay (security scan, 2026-10-24). Reads look only in
+  the login keychain (opened by its path), never prompt, and refuse more than one match; the
+  address must still be https (http only for localhost). An older version's pairing (address and
+  ID in user defaults, key in its own item) moves into the record once, after which the old
+  settings are removed and never read again. Capability levels stay in user defaults: they only
+  limit what the paired Claude can use.
 - WebSocket authentication: the relay sends a nonce; the app signs it with the device key
   (contracts/agent-protocol.md).
 - Pairing while a Mac is paired shows the current Mac's name and asks to replace it (FR-053);
