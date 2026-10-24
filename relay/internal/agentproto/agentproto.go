@@ -4,6 +4,7 @@ package agentproto
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -289,9 +290,11 @@ func Encode(m Message) ([]byte, error) {
 var toolName = regexp.MustCompile(`^[A-Za-z0-9_.-]{1,128}$`)
 
 // ValidateTools enforces the contract's tool rules: valid unique names, none reserved by the relay,
-// and object input (and output) schemas. The MCP server would refuse such tools later anyway.
+// object input (and output) schemas, and nothing else the MCP SDK's AddTool refuses (it panics,
+// for example on an invalid x-mcp-header annotation), so a Mac can't make the relay panic.
 func ValidateTools(tools []*mcp.Tool) error {
 	seen := make(map[string]bool, len(tools))
+	var trial *mcp.Server
 	for _, t := range tools {
 		switch {
 		case t == nil || !toolName.MatchString(t.Name):
@@ -305,9 +308,31 @@ func ValidateTools(tools []*mcp.Tool) error {
 		case t.OutputSchema != nil && !isObjectSchema(t.OutputSchema):
 			return fmt.Errorf("%w: tool %q: outputSchema must have type \"object\"", ErrProtocolViolation, t.Name)
 		}
+		if trial == nil {
+			trial = mcp.NewServer(&mcp.Implementation{Name: "validate", Version: "0"}, nil)
+		}
+		if err := TryAddTool(trial, t, refuseCalls); err != nil {
+			return fmt.Errorf("%w: tool %q: %w", ErrProtocolViolation, t.Name, err)
+		}
 		seen[t.Name] = true
 	}
 	return nil
+}
+
+// TryAddTool adds t to srv, turning the SDK's panic on a tool it refuses into an error. It checks
+// exactly what the pinned SDK checks, so the rules can't drift from it.
+func TryAddTool(srv *mcp.Server, t *mcp.Tool, h mcp.ToolHandler) (err error) {
+	defer func() {
+		if p := recover(); p != nil {
+			err = fmt.Errorf("refused by the MCP SDK: %v", p)
+		}
+	}()
+	srv.AddTool(t, h)
+	return nil
+}
+
+func refuseCalls(context.Context, *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	return nil, errors.New("validation only")
 }
 
 func isObjectSchema(schema any) bool {

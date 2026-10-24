@@ -161,7 +161,7 @@ func (s *Server) macTools(ctx context.Context, userID string) []*mcp.Tool {
 		return nil
 	}
 	if agentproto.ValidateTools(tools) != nil {
-		return nil // validated on arrival; never hand the SDK a tool it would panic on
+		return nil // validated on arrival, including a trial AddTool; never hand the SDK a tool it would panic on
 	}
 	return tools
 }
@@ -189,9 +189,18 @@ func (s *Server) syncTools(ctx context.Context, userID string, u *userServer) {
 		if old, ok := u.tools[name]; ok && reflect.DeepEqual(old, t) {
 			continue
 		}
-		u.server.AddTool(t, s.forward(userID, t))
+		if err := addToolSafely(u.server, t, s.forward(userID, t)); err != nil {
+			s.opts.Logger.Error("Mac tool left out", "user", userID, "tool", name, "err", err)
+			continue
+		}
 		u.tools[name] = t
 	}
+}
+
+// addToolSafely backs up agentproto.ValidateTools: should the SDK still panic on a tool, the
+// tool is left out instead of the panic unwinding through the hub or an MCP request.
+func addToolSafely(srv *mcp.Server, t *mcp.Tool, h mcp.ToolHandler) error {
+	return agentproto.TryAddTool(srv, t, h)
 }
 
 // status gathers what the relay knows about the user's Mac.
