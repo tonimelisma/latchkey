@@ -36,6 +36,13 @@ docker save "latchkey-relay:$TAG" | gzip | gcloud compute ssh "$VM" --project "$
 
 echo "• configuration"
 gcloud compute scp --project "$PROJECT" --zone "$ZONE" --quiet deploy/server/docker-compose.yml "$VM:/tmp/latchkey-compose.yml" >/dev/null
+# Caddy reaches the relay over the docker network "reverse_proxy"; the relay believes the client
+# address Caddy forwards only from that network's own address ranges (FR-082, research.md).
+PROXY_NETS=$(ssh_vm "sudo docker network inspect reverse_proxy --format '{{range .IPAM.Config}}{{.Subnet}},{{end}}'" | tr -d ' \r\n')
+PROXY_NETS=${PROXY_NETS%,}
+case $PROXY_NETS in
+  '' | *[!0-9a-fA-F.:/,]*) echo "FAIL: could not read the reverse_proxy network's address ranges (got '$PROXY_NETS')"; exit 1 ;;
+esac
 umask 077
 ENVFILE=$(mktemp)
 cat > "$ENVFILE" <<ENV
@@ -46,6 +53,7 @@ SMTP_USER=resend
 SMTP_PASSWORD=$RESEND_API_KEY
 SMTP_FROM=Latchkey <no-reply@$HOST>
 ALLOWED_EMAILS=$ALLOWED_EMAILS
+TRUSTED_PROXIES=$PROXY_NETS
 ENV
 gcloud compute scp --project "$PROJECT" --zone "$ZONE" --quiet "$ENVFILE" "$VM:/tmp/latchkey-relay.env" >/dev/null
 rm -f "$ENVFILE"

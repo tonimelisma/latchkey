@@ -12,6 +12,7 @@ import (
 	"github.com/tonimelisma/latchkey/relay/internal/account"
 	"github.com/tonimelisma/latchkey/relay/internal/agentproto"
 	"github.com/tonimelisma/latchkey/relay/internal/hub"
+	"github.com/tonimelisma/latchkey/relay/internal/limit"
 	"github.com/tonimelisma/latchkey/relay/internal/mcpserver"
 	"github.com/tonimelisma/latchkey/relay/internal/oauth"
 	"github.com/tonimelisma/latchkey/relay/internal/store"
@@ -33,6 +34,8 @@ type Options struct {
 	Logger        *slog.Logger
 	Version       string
 	Hub           hub.Config // timing overrides for tests
+	// TrustedProxies whose X-Forwarded-For is believed, besides loopback (FR-082).
+	TrustedProxies limit.TrustedProxies
 }
 
 // New builds the relay: hub, MCP server, OAuth, and account pages on one mux.
@@ -74,7 +77,7 @@ func New(ctx context.Context, o Options) (*Relay, error) {
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte("ok\n")) })
 	oa.Register(mux)
 	acc.Register(mux)
-	return &Relay{Handler: guard(o.PublicURL, mux), Hub: h, Store: o.Store}, nil
+	return &Relay{Handler: guard(o.PublicURL, o.TrustedProxies, mux), Hub: h, Store: o.Store}, nil
 }
 
 // authBridge lets the OAuth server use the account service, which needs the OAuth server.

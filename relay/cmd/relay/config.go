@@ -7,6 +7,8 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+
+	"github.com/tonimelisma/latchkey/relay/internal/limit"
 )
 
 // config is the relay's environment configuration (plan D10).
@@ -22,6 +24,8 @@ type config struct {
 	Port         int
 	// AllowedEmails limits sign-up (FR-046); empty means open.
 	AllowedEmails []string
+	// TrustedProxies whose X-Forwarded-For is believed, besides loopback (FR-082).
+	TrustedProxies limit.TrustedProxies
 }
 
 func loadConfig(getenv func(string) string) (config, error) {
@@ -57,6 +61,9 @@ func loadConfig(getenv func(string) string) (config, error) {
 		if e = strings.TrimSpace(e); e != "" {
 			c.AllowedEmails = append(c.AllowedEmails, e)
 		}
+	}
+	if c.TrustedProxies, err = limit.ParseTrustedProxies(getenv("TRUSTED_PROXIES")); err != nil {
+		errs = append(errs, fmt.Errorf("TRUSTED_PROXIES: %w", err))
 	}
 	if (c.SMTPUser == "") != (c.SMTPPassword == "") {
 		errs = append(errs, errors.New("SMTP_USER and SMTP_PASSWORD must be set together"))

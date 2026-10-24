@@ -152,3 +152,29 @@ Mailgun (already in use) allows one domain on its plan, taken by walkbikewc.com.
 Sources: https://dev.to/northloopworks/i-compared-7-transactional-email-apis-so-you-dont-have-to-2026-pricing-5912,
 https://chatforest.com/reviews/resend-mcp-server/,
 https://developers.cloudflare.com/changelog/post/2026-04-16-email-sending-public-beta/
+
+## Trusted proxies for the hosted relay (2026-10-24, security scan)
+
+FR-082: the relay believes `X-Forwarded-For` only from a loopback peer or a peer listed in
+`TRUSTED_PROXIES` (IP addresses and CIDR ranges). The hosted relay sits behind Caddy in another
+container on the external docker network `reverse_proxy`, so Caddy's address must be listed. Caddy
+replaces a client-supplied `X-Forwarded-For` unless the client is one of its own trusted proxies,
+so the rightmost entry is the real client. How the deploy learns Caddy's address:
+
+- **Read the network's subnets on the VM at deploy time (chosen).** `deploy.sh` runs
+  `docker network inspect reverse_proxy` over SSH and writes every IPAM subnet (IPv4, and IPv6 if
+  the network has it) into `TRUSTED_PROXIES`, refusing to deploy if the answer is empty or not
+  addresses. Survives Caddy restarts and address changes; nothing is hard-coded in the
+  repository. Cost: every container on that network is trusted, not just Caddy; they are the
+  operator's own services on a private bridge, and at worst one could pick its own rate-limit key.
+- Caddy's current container address: narrowest, but docker assigns it at start, so a Caddy
+  restart between deploys would silently break per-client limits (every client sharing Caddy's
+  bucket).
+- A fixed subnet or a static Caddy address in compose: robust, but the network and Caddy belong
+  to `/opt/reverse-proxy`, outside this repository; changing them touches other services.
+- Trust every private address (the old behavior): with `docker run -p` and the userland proxy,
+  internet clients over IPv6 arrive from the bridge gateway's private address and could spoof
+  their address (scan finding).
+
+Sources: https://caddyserver.com/docs/caddyfile/directives/reverse_proxy#defaults,
+https://docs.docker.com/reference/cli/docker/network/inspect/

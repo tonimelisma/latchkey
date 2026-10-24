@@ -69,6 +69,11 @@ sleep, removes its background items and local data, and quits.
 One container with one data volume, behind HTTPS. See
 [docs/self-hosting.md](docs/self-hosting.md).
 
+If a reverse proxy in another container or on another host forwards to the relay, set
+`TRUSTED_PROXIES` to its address or network range (comma-separated IP addresses and CIDR ranges,
+for example `172.18.0.0/16`). The relay believes the client address in `X-Forwarded-For` only from
+those proxies and from a proxy on the same machine.
+
 ## Status
 
 Version 0.8 is in private testing: every capability is built and checked live on a real Mac.

@@ -38,6 +38,7 @@ Then open `https://relay.example.com`, create your account, and continue with "C
 | `SMTP_USER`, `SMTP_PASSWORD` | no | Set both, or neither if the server needs no login. |
 | `ALLOWED_EMAILS` | no | Comma-separated addresses allowed to sign up. Empty means anyone can sign up; set it to your own address on a personal relay. |
 | `ACME_EMAIL` | no | Turns on built-in HTTPS with Let's Encrypt (see below). |
+| `TRUSTED_PROXIES` | no | Comma-separated IP addresses and CIDR ranges (for example `172.18.0.0/16`) of reverse proxies whose `X-Forwarded-For` header the relay believes. A proxy on the same machine (loopback) is always believed; leave this empty unless your proxy reaches the relay from another address, such as another container. |
 | `PORT` | no | Port inside the container, default 8080. |
 | `DATA_DIR` | no | Already `/data` in the image. |
 
@@ -72,11 +73,14 @@ Claude only connects over HTTPS. Pick one:
   consent page, the token endpoint, and Mac connections are limited per client address; sign-in
   emails are limited per address and for the whole relay; MCP calls are limited per account. The
   limits sit far above normal use. A request over a limit gets `429 Too Many Requests`.
-- **Client addresses behind a proxy.** When a request comes from a proxy on the same machine or a
-  private network (as with Caddy, Traefik, nginx, a hosting platform's router, or a tunnel's local
-  connector), the relay takes the client's address from the last `X-Forwarded-For` entry, the one
-  the proxy added. Requests straight from the internet can't set it. Make sure your proxy adds
-  that header (the ones above do by default).
+- **Client addresses behind a proxy.** When a request comes from a proxy on the same machine
+  (loopback) or from an address listed in `TRUSTED_PROXIES`, the relay takes the client's address
+  from the last `X-Forwarded-For` entry, the one the proxy added. Anyone else can't set it, even
+  from a private network. If your proxy runs in another container or on another host (Caddy or
+  Traefik in Docker, a hosting platform's router, a tunnel's connector in its own container), list
+  its address or its network's range in `TRUSTED_PROXIES`; otherwise every client shares the
+  proxy's address for the abuse limits. Make sure your proxy adds that header (the ones above do
+  by default).
 - **Headers.** Every response forbids framing, sniffing, referrers, and caching; over HTTPS it
   also sends `Strict-Transport-Security`.
 - **Container.** The `docker run` flags above make the filesystem read-only except `/data` and a

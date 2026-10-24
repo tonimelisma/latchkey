@@ -55,6 +55,7 @@ func run(ctx context.Context) error {
 
 	r, err := server.New(ctx, server.Options{
 		PublicURL: cfg.PublicURL, Store: db, AllowedEmails: cfg.AllowedEmails, Logger: logger, Version: version,
+		TrustedProxies: cfg.TrustedProxies,
 		Mailer: account.NewSMTPMailer(account.SMTPConfig{
 			Host: cfg.SMTPHost, Port: cfg.SMTPPort, User: cfg.SMTPUser, Password: cfg.SMTPPassword, From: cfg.SMTPFrom,
 		}),
@@ -84,7 +85,7 @@ func run(ctx context.Context) error {
 
 	errc := make(chan error, 1)
 	go func() {
-		logger.Info("relay listening", "port", cfg.Port, "public_url", cfg.PublicURL.String(), "tls", cfg.ACMEEmail != "", "version", version)
+		logger.Info("relay listening", "port", cfg.Port, "public_url", cfg.PublicURL.String(), "tls", cfg.ACMEEmail != "", "trusted_proxies", cfg.TrustedProxies.Strings(), "version", version)
 		if srv.TLSConfig != nil {
 			errc <- srv.ListenAndServeTLS("", "")
 		} else {

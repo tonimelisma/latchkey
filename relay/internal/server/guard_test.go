@@ -6,11 +6,14 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strconv"
 	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/tonimelisma/latchkey/relay/internal/limit"
 )
 
 func TestSecurityHeadersOnEveryResponse(t *testing.T) {
@@ -41,10 +44,34 @@ func TestSecurityHeadersOnEveryResponse(t *testing.T) {
 
 func TestHSTSWhenPublicURLIsHTTPS(t *testing.T) {
 	u, _ := url.Parse("https://relay.example.com")
-	h := guard(u, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
+	h := guard(u, nil, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	w := httptest.NewRecorder()
 	h.ServeHTTP(w, httptest.NewRequestWithContext(t.Context(), "GET", "/healthz", nil))
 	assert.Equal(t, "max-age=63072000", w.Header().Get("Strict-Transport-Security"))
+}
+
+// FR-082: a private-network peer that isn't a listed proxy can't pick its own rate-limit key by
+// sending X-Forwarded-For; a listed one can pass the client's address on.
+func TestForwardedForTrustedOnlyFromListedProxies(t *testing.T) {
+	burst := func(h http.Handler, peer string) int {
+		limited := 0
+		for i := range 30 {
+			r := httptest.NewRequestWithContext(t.Context(), "POST", "/register", strings.NewReader("{}"))
+			r.RemoteAddr = peer
+			r.Header.Set("X-Forwarded-For", "198.51.100."+strconv.Itoa(i))
+			w := httptest.NewRecorder()
+			h.ServeHTTP(w, r)
+			if w.Code == http.StatusTooManyRequests {
+				limited++
+			}
+		}
+		return limited
+	}
+	ok := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {})
+	assert.Positive(t, burst(guard(nil, nil, ok), "172.17.0.1:5000"), "unlisted private peer is limited by its own address")
+	trusted, err := limit.ParseTrustedProxies("172.17.0.0/16")
+	require.NoError(t, err)
+	assert.Zero(t, burst(guard(nil, trusted, ok), "172.17.0.1:5000"), "listed proxy: each client has its own bucket")
 }
 
 func TestStaticFilesMayBeCached(t *testing.T) {
