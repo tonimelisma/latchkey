@@ -157,7 +157,14 @@ func askClaude(ctx context.Context, model, cfg, tool, prompt string) (string, er
 	cmd := exec.CommandContext(ctx, "claude", "-p", prompt, //nolint:gosec // fixed program; arguments are ours
 		"--model", model, "--mcp-config", cfg, "--strict-mcp-config",
 		"--allowedTools", tool, "--output-format", "text")
-	cmd.Dir = os.TempDir()
+	// A fresh private, empty directory: Claude Code loads project settings, hooks, and CLAUDE.md
+	// from its working directory, which in the shared temp directory anyone could plant.
+	work, err := os.MkdirTemp("", "latchkey-claude-")
+	if err != nil {
+		return "", err
+	}
+	defer func() { _ = os.RemoveAll(work) }()
+	cmd.Dir = work
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return "", fmt.Errorf("claude: %w: %s", err, out)
