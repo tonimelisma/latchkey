@@ -29,6 +29,8 @@ rules:
           patterns:
             - pattern-not: literal(...)
             - pattern-not: Self.literal(...)
+            # find(ref) is itself built only with literal(ref).
+            - pattern-not: find(...)
 
   - id: latchkey-sql-bound
     languages: [swift]

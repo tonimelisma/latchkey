@@ -29,6 +29,13 @@ enum PageScripts {
         "(function (t) { return t; })(\(literal(text)))"
     }
 
+    static func find(_ ref: String) -> String { "document.querySelector(\(literal(ref)))" }
+
+    static func click(_ ref: String) -> String {
+        // ok: latchkey-page-script-literal
+        "(function () { var e = \(find(ref)); e.click(); })()"
+    }
+
     static func unsafe(_ text: String) -> String {
         // ruleid: latchkey-page-script-literal
         "(function () { return '\(text)'; })()"

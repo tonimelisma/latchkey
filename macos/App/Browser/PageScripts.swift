@@ -49,6 +49,7 @@ enum PageScripts {
     /// Title, address, visible text from `offset`, and the visible things Claude can act on,
     /// each tagged with a reference that stays on the element.
     static func read(offset: Int) -> String {
+        // nosemgrep: latchkey-page-script-literal -- splices in only two Ints (offset, pageSize).
         """
         (function latchkeyRead(offset, max) {
           var root = document.documentElement;
@@ -96,6 +97,7 @@ enum PageScripts {
     /// Fields take the text as frameworks expect (the native value setter, then input and
     /// change events); choices take an option's text or value; submit uses the field's form.
     static func type(_ ref: String, text: String, submit: Bool) -> String {
+        // nosemgrep: latchkey-page-script-literal -- besides literal() and find(), only a Bool.
         """
         (function (text, submit) { \(find(ref))
           if (e.focus) e.focus();

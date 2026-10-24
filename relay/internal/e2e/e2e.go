@@ -262,6 +262,7 @@ func (b *Browser) PairCode(base, name string) (string, error) {
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	for _, c := range cookies {
+		// nosemgrep: go.lang.security.audit.net.cookie-missing-httponly.cookie-missing-httponly, go.lang.security.audit.net.cookie-missing-secure.cookie-missing-secure -- a request cookie in a test client
 		req.AddCookie(&http.Cookie{Name: c.Name, Value: c.Value}) //nolint:gosec // a request cookie; attributes don't apply
 	}
 	resp, err := noRedirect.Do(req)

@@ -231,6 +231,7 @@ func (s *Service) CurrentUser(r *http.Request) (string, bool) {
 
 // SignIn implements oauth.Authenticator.
 func (s *Service) SignIn(w http.ResponseWriter, r *http.Request) {
+	// nosemgrep: go.lang.security.injection.open-redirect.open-redirect -- fixed local path; next is escaped
 	http.Redirect(w, r, "/signin?next="+url.QueryEscape(r.URL.RequestURI()), http.StatusFound)
 }
 
@@ -240,6 +241,7 @@ func (s *Service) startSession(w http.ResponseWriter, r *http.Request, userID st
 	if err := s.cfg.Store.CreateSession(r.Context(), hash(tok), userID, now, now.Add(sessionLifetime)); err != nil {
 		return err
 	}
+	// nosemgrep: go.lang.security.audit.net.cookie-missing-secure.cookie-missing-secure -- Secure is s.secure
 	http.SetCookie(w, &http.Cookie{ //nolint:gosec // Secure is set whenever the relay runs on https
 		Name: s.cookie, Value: tok, Path: "/", MaxAge: int(sessionLifetime / time.Second),
 		HttpOnly: true, Secure: s.secure, SameSite: http.SameSiteLaxMode,
@@ -248,6 +250,7 @@ func (s *Service) startSession(w http.ResponseWriter, r *http.Request, userID st
 }
 
 func (s *Service) clearSession(w http.ResponseWriter) {
+	// nosemgrep: go.lang.security.audit.net.cookie-missing-secure.cookie-missing-secure -- Secure is s.secure
 	http.SetCookie(w, &http.Cookie{ //nolint:gosec // as above
 		Name: s.cookie, Value: "", Path: "/", MaxAge: -1, HttpOnly: true, Secure: s.secure, SameSite: http.SameSiteLaxMode,
 	})
@@ -335,6 +338,7 @@ func (s *Service) toSignin(recover bool) http.HandlerFunc {
 		if recover {
 			q.Set("recover", "1")
 		}
+		// nosemgrep: go.lang.security.injection.open-redirect.open-redirect -- fixed local path; next passed safeNext
 		http.Redirect(w, r, "/signin?"+q.Encode(), http.StatusFound)
 	}
 }
