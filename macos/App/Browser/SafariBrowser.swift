@@ -18,8 +18,9 @@ actor SafariBrowser {
 
     /// Loads `url` in Claude's window (a new tab if asked), making the window if needed.
     func open(_ url: String, newTab: Bool) async throws -> PageScripts.Page {
+        let address = try Self.normalize(url)
         let before = try? await stamp()
-        let id = try await call(Script.open, [Self.normalize(url), window ?? "", newTab ? "yes" : "no"])
+        let id = try await call(Script.open, [address, window ?? "", newTab ? "yes" : "no"])
         window = id
         try await settle(after: before, expectNavigation: true)
         return try await read(offset: 0)
@@ -77,10 +78,40 @@ actor SafariBrowser {
 
     // MARK: helpers
 
-    static func normalize(_ url: String) -> String {
-        let u = url.trimmingCharacters(in: .whitespaces)
-        if u.contains("://") || u.hasPrefix("about:") { return u }
-        return "https://" + u
+    /// FR-409: the address Claude asks to open, as Safari gets it: http and https only (and
+    /// about:blank); one without a scheme gets https. Everything else is refused: javascript:
+    /// would run script in the signed-in page even at Read only, file: would read local files,
+    /// and data:, blob:, and app schemes have no business here (security scan, 2026-10-24).
+    /// Tabs and line breaks are removed first, as browsers do, so "java\nscript:" can't slip by.
+    static func normalize(_ url: String) throws -> String {
+        let u = url.filter { $0 != "\t" && $0 != "\n" && $0 != "\r" }
+            .trimmingCharacters(in: CharacterSet.whitespaces.union(.controlCharacters))
+        if u.lowercased() == "about:blank" { return "about:blank" }
+        var address = u
+        if !hasScheme(u) { address = "https://" + u }
+        guard let c = URLComponents(string: address), let scheme = c.scheme?.lowercased(),
+            ["http", "https"].contains(scheme), c.host?.isEmpty == false,
+            address.dropFirst(scheme.count).hasPrefix("://")
+        else {
+            let shown = u.count > 80 ? String(u.prefix(79)) + "…" : u
+            throw Failure.failed(
+                "Latchkey's browser opens only web addresses (http:// or https://); \"\(shown)\" wasn't opened.")
+        }
+        return address
+    }
+
+    /// Whether the text starts with a scheme ("name:"), not a host and port ("localhost:3000").
+    private static func hasScheme(_ u: String) -> Bool {
+        guard let colon = u.firstIndex(of: ":") else { return false }
+        let name = u[..<colon]
+        guard let first = name.first, first.isASCII, first.isLetter,
+            name.allSatisfy({ $0.isASCII && ($0.isLetter || $0.isNumber || "+-.".contains($0)) })
+        else { return false }
+        let rest = u[u.index(after: colon)...]
+        let port = rest.prefix { $0.isASCII && $0.isNumber }
+        let afterPort = rest.dropFirst(port.count)
+        let isPort = !port.isEmpty && (afterPort.isEmpty || "/?#".contains(afterPort.first!))
+        return !isPort
     }
 
     private func javaScript(_ code: String) async throws -> String {
