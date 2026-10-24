@@ -114,6 +114,16 @@ Serves FR-041, FR-042, FR-043.
   with no scheme or host, start with a single `/`, and contain no control character or backslash
   (browsers drop the first and read the second as `/`); otherwise `/account`. The page's script
   checks the same origin again before navigating (security scan, 2026-10-24).
+- Wrong codes (FR-042, FR-042a): checking a code, counting a wrong one, and using a right one
+  happen in one `BEGIN IMMEDIATE` transaction, so concurrent guesses cannot get past the
+  5-attempt limit and a code is used once. Each address also counts wrong codes per day on its
+  `users` row (`wrong_codes`, `wrong_codes_since`, migration 5); new codes don't reset it. After
+  20 within a day of the first, every emailed code for the address is refused (HTTP 429, "Too
+  many wrong codes were entered for this email address today. Sign in with your passkey, or try
+  again tomorrow.") and no new code is emailed until 24 hours after that first wrong code;
+  passkey sign-in is unaffected. Options weighed: a separate table of wrong-code times (more
+  rows, sliding window) or carrying the attempt count over to the next code (still unbounded
+  across days); two columns on `users` are the smallest change that bounds a day.
 - Recovery: single-use code, 15 min expiry, stored hashed; completing it removes all old passkeys
   (FR-047); using it is announced by email and in the
   Mac app. The Mac app learns of it through a `notice` message (contracts/agent-protocol.md), sent

@@ -507,6 +507,47 @@ func TestWrongCodesLock(t *testing.T) {
 	assert.Contains(t, r["error"], "get a new code")
 }
 
+// FR-042a: 20 wrong codes within a day stop every emailed code for that address until the day
+// is over, whatever new codes are sent; the passkey still signs in.
+func TestTwentyWrongCodesStopCodesForADay(t *testing.T) {
+	e := setup(t)
+	b := e.browser()
+	b.signUp()
+	attacker := e.browser()
+	for range store.MaxWrongCodesPerDay / store.MaxCodeAttempts {
+		e.clock.advance(11 * time.Minute) // past the per-address email limit
+		status, _ := attacker.startEmail(owner, true)
+		require.Equal(t, http.StatusOK, status)
+		wrong := "000000"
+		if e.lastCode() == wrong {
+			wrong = "111111"
+		}
+		for range store.MaxCodeAttempts {
+			status, r := attacker.confirmCode(wrong, store.PurposeRecover)
+			require.Equal(t, http.StatusBadRequest, status)
+			require.Contains(t, r["error"], "isn't right")
+		}
+	}
+	sent := len(e.mail.Sent())
+	e.clock.advance(11 * time.Minute)
+	status, r := e.browser().startEmail(owner, true)
+	require.Equal(t, http.StatusOK, status, "the answer looks the same")
+	assert.Equal(t, "code", r["step"])
+	assert.Len(t, e.mail.Sent(), sent, "no code is sent while codes are refused")
+
+	status, r = e.browser().confirmCode(e.lastCode(), store.PurposeRecover)
+	assert.Equal(t, http.StatusTooManyRequests, status)
+	assert.Contains(t, r["error"], "passkey")
+	assert.Contains(t, r["error"], "tomorrow")
+
+	status, done := b.signIn("signin", nil)
+	assert.Equal(t, http.StatusOK, status, done)
+
+	e.clock.advance(24 * time.Hour)
+	lost := e.browser()
+	lost.codeFlow(store.PurposeRecover) // a day later, codes work again
+}
+
 func TestCodeExpires(t *testing.T) {
 	e := setup(t)
 	b := e.browser()

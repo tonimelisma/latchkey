@@ -433,9 +433,10 @@ func (s *Service) authEmail(w http.ResponseWriter, r *http.Request) {
 }
 
 // sendCode emails a fresh code, at most once a minute per address. It reports false only when
-// sending failed; a rate-limited request keeps the earlier code valid.
+// sending failed; a rate-limited request keeps the earlier code valid. While codes for the
+// address are refused (FR-042a), none is sent; entering any code then says why.
 func (s *Service) sendCode(ctx context.Context, u store.User, purpose string) bool {
-	if !s.allowEmail(u.Email) {
+	if s.cfg.Store.EmailCodesLocked(ctx, u.ID, s.now()) || !s.allowEmail(u.Email) {
 		return true
 	}
 	code := newCode()
@@ -480,6 +481,10 @@ func (s *Service) authCode(w http.ResponseWriter, r *http.Request) {
 	}
 	code := strings.Join(strings.Fields(req.Code), "")
 	switch err := s.cfg.Store.CheckEmailCode(ctx, u.ID, req.Purpose, codeHash(u.ID, code), s.now()); {
+	case errors.Is(err, store.ErrCodesLocked):
+		jsonError(w, http.StatusTooManyRequests,
+			"Too many wrong codes were entered for this email address today. Sign in with your passkey, or try again tomorrow.")
+		return
 	case errors.Is(err, store.ErrWrongCode):
 		jsonError(w, http.StatusBadRequest, "That code isn't right. Check the email and try again.")
 		return

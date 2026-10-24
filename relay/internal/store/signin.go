@@ -485,6 +485,35 @@ func (s *Store) Consents(ctx context.Context, userID string) ([]Consent, error) 
 // MaxCodeAttempts is how many wrong codes end a code (FR-042).
 const MaxCodeAttempts = 5
 
+// MaxWrongCodesPerDay is how many wrong codes for one address, within a day of the first, refuse
+// every emailed code until that day is over (FR-042a).
+const MaxWrongCodesPerDay = 20
+
+const wrongCodesWindow = 24 * time.Hour
+
+// ErrCodesLocked means too many wrong codes were entered for the address today (FR-042a).
+var ErrCodesLocked = errors.New("too many wrong codes today")
+
+// wrongCodesLocked reads the user's count of wrong codes within the current day.
+func wrongCodesLocked(ctx context.Context, q interface {
+	QueryRowContext(context.Context, string, ...any) *sql.Row
+}, userID string, now time.Time,
+) (bool, error) {
+	var n int
+	var since sql.NullInt64
+	err := q.QueryRowContext(ctx, `SELECT wrong_codes, wrong_codes_since FROM users WHERE id = ?`, userID).Scan(&n, &since)
+	if err != nil {
+		return false, mapErr(err)
+	}
+	return since.Valid && now.Before(fromMS(since).Add(wrongCodesWindow)) && n >= MaxWrongCodesPerDay, nil
+}
+
+// EmailCodesLocked reports whether emailed codes are refused for the user right now (FR-042a).
+func (s *Store) EmailCodesLocked(ctx context.Context, userID string, now time.Time) bool {
+	locked, err := wrongCodesLocked(ctx, s.db, userID, now)
+	return err == nil && locked
+}
+
 // ErrWrongCode means the code did not match; attempts remain.
 var ErrWrongCode = errors.New("wrong code")
 
@@ -498,28 +527,55 @@ func (s *Store) CreateEmailCode(ctx context.Context, userID, purpose string, cod
 }
 
 // CheckEmailCode uses the user's current code if codeHash matches. A wrong code counts an attempt
-// (ErrWrongCode); an expired code, a used one, or one with too many attempts is ErrNotFound.
+// on the code and a wrong code for the day (ErrWrongCode); an expired code, a used one, or one
+// with too many attempts is ErrNotFound; after MaxWrongCodesPerDay wrong codes within a day,
+// every code is ErrCodesLocked until the day is over. The check and the count are one
+// transaction, so concurrent guesses can't get past either limit.
 func (s *Store) CheckEmailCode(ctx context.Context, userID, purpose string, codeHash []byte, now time.Time) error {
-	var stored []byte
-	var attempts int
-	err := s.db.QueryRowContext(ctx, `
-		SELECT token_hash, attempts FROM email_tokens
-		WHERE user_id = ? AND purpose = ? AND used_at IS NULL AND expires_at > ?
-		ORDER BY expires_at DESC LIMIT 1`, userID, purpose, now.UnixMilli()).Scan(&stored, &attempts)
-	if err != nil {
-		return mapErr(err)
-	}
-	if attempts >= MaxCodeAttempts {
-		return ErrNotFound
-	}
-	if subtle.ConstantTimeCompare(stored, codeHash) != 1 {
-		if _, err := s.db.ExecContext(ctx, `UPDATE email_tokens SET attempts = attempts + 1 WHERE token_hash = ?`, stored); err != nil {
+	var result error
+	err := s.immediate(ctx, func(conn *sql.Conn) error {
+		locked, err := wrongCodesLocked(ctx, conn, userID, now)
+		if err != nil {
 			return err
 		}
-		return ErrWrongCode
+		if locked {
+			result = ErrCodesLocked
+			return nil
+		}
+		var stored []byte
+		var attempts int
+		err = conn.QueryRowContext(ctx, `
+			SELECT token_hash, attempts FROM email_tokens
+			WHERE user_id = ? AND purpose = ? AND used_at IS NULL AND expires_at > ?
+			ORDER BY expires_at DESC LIMIT 1`, userID, purpose, now.UnixMilli()).Scan(&stored, &attempts)
+		if errors.Is(err, sql.ErrNoRows) || (err == nil && attempts >= MaxCodeAttempts) {
+			result = ErrNotFound
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		if subtle.ConstantTimeCompare(stored, codeHash) == 1 {
+			_, err = conn.ExecContext(ctx, `UPDATE email_tokens SET used_at = ? WHERE token_hash = ?`, toMS(now), stored)
+			return err
+		}
+		result = ErrWrongCode
+		if _, err := conn.ExecContext(ctx, `UPDATE email_tokens SET attempts = attempts + 1 WHERE token_hash = ?`, stored); err != nil {
+			return err
+		}
+		// A new day starts with the first wrong code after the last day ended.
+		_, err = conn.ExecContext(ctx, `
+			UPDATE users SET
+				wrong_codes = CASE WHEN wrong_codes_since IS NULL OR wrong_codes_since <= ? THEN 1 ELSE wrong_codes + 1 END,
+				wrong_codes_since = CASE WHEN wrong_codes_since IS NULL OR wrong_codes_since <= ? THEN ? ELSE wrong_codes_since END
+			WHERE id = ?`,
+			now.Add(-wrongCodesWindow).UnixMilli(), now.Add(-wrongCodesWindow).UnixMilli(), toMS(now), userID)
+		return err
+	})
+	if err != nil {
+		return err
 	}
-	_, err = s.db.ExecContext(ctx, `UPDATE email_tokens SET used_at = ? WHERE token_hash = ?`, toMS(now), stored)
-	return err
+	return result
 }
 
 // ClientAuthorization is one time a Claude client was given access.

@@ -6,9 +6,9 @@ milliseconds. Device public keys are stored as PKIX DER.
 
 | Entity | Fields | Notes |
 |---|---|---|
-| **users** | id, email, email_verified_at, created_at, deleted_at | Deleting an account hard-deletes all rows below (FR-045) |
+| **users** | id, email, email_verified_at, created_at, deleted_at, wrong_codes, wrong_codes_since | Deleting an account hard-deletes all rows below (FR-045). `wrong_codes` counts wrong emailed codes since `wrong_codes_since`; 20 within a day refuse emailed codes for the rest of that day (FR-042a) |
 | **passkeys** | id, user_id, credential_id, public_key, sign_count, transports, aaguid, created_at, last_used_at | WebAuthn credentials |
-| **email_tokens** | token_hash, user_id, purpose (`verify` or `recover`), expires_at, used_at | Single use, 15 min |
+| **email_tokens** | token_hash, user_id, purpose (`verify` or `recover`), expires_at, used_at, attempts | Single use, 15 min; 5 wrong attempts end a code (FR-042) |
 | **web_sessions** | id_hash, user_id, created_at, expires_at | Browser session for account pages |
 | **devices** | id, user_id, name, public_key (P-256), app_version, os_version, created_at, revoked_at | One active device per user in this spec |
 | **device_state** | device_id, online, connected_at, last_seen_at, offline_reason, state_json, tools_json | Latest state only, no history (FR-020) |

@@ -2,6 +2,10 @@ package store_test
 
 import (
 	"context"
+	"errors"
+	"fmt"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -315,4 +319,69 @@ func TestEmailCodes(t *testing.T) {
 
 	require.NoError(t, s.CreateEmailCode(ctx, u.ID, store.PurposeVerify, []byte("e"), t0.Add(time.Minute)))
 	require.ErrorIs(t, s.CheckEmailCode(ctx, u.ID, store.PurposeVerify, []byte("e"), t0.Add(2*time.Minute)), store.ErrNotFound, "expired")
+}
+
+// Concurrent guesses must not get past the 5-attempt limit, and a right code is used once
+// (security scan: the check and the count were separate statements).
+func TestEmailCodeAttemptsAreAtomic(t *testing.T) {
+	ctx := context.Background()
+	s := open(t)
+	u := newUser(t, s)
+	require.NoError(t, s.CreateEmailCode(ctx, u.ID, store.PurposeRecover, []byte("c"), t0.Add(15*time.Minute)))
+	var wrong, used atomic.Int32
+	var wg sync.WaitGroup
+	for range 40 {
+		wg.Go(func() {
+			if errors.Is(s.CheckEmailCode(ctx, u.ID, store.PurposeRecover, []byte("x"), t0), store.ErrWrongCode) {
+				wrong.Add(1)
+			}
+		})
+	}
+	wg.Wait()
+	assert.LessOrEqual(t, int(wrong.Load()), store.MaxCodeAttempts, "guesses compared against the code")
+
+	require.NoError(t, s.CreateEmailCode(ctx, u.ID, store.PurposeVerify, []byte("v"), t0.Add(15*time.Minute)))
+	for range 20 {
+		wg.Go(func() {
+			if s.CheckEmailCode(ctx, u.ID, store.PurposeVerify, []byte("v"), t0) == nil {
+				used.Add(1)
+			}
+		})
+	}
+	wg.Wait()
+	assert.Equal(t, int32(1), used.Load(), "a code is used once")
+}
+
+// FR-042a: 20 wrong codes for one address within a day refuse every emailed code until the day
+// is over; new codes don't reset the count, and right codes don't add to it.
+func TestTwentyWrongCodesADay(t *testing.T) {
+	ctx := context.Background()
+	s := open(t)
+	u := newUser(t, s)
+	at := t0
+	for i := range store.MaxWrongCodesPerDay {
+		if i%store.MaxCodeAttempts == 0 {
+			right := []byte(fmt.Sprintf("v%d", i))
+			require.NoError(t, s.CreateEmailCode(ctx, u.ID, store.PurposeRecover, []byte("c"), at.Add(15*time.Minute)))
+			require.NoError(t, s.CreateEmailCode(ctx, u.ID, store.PurposeVerify, right, at.Add(15*time.Minute)))
+			require.NoError(t, s.CheckEmailCode(ctx, u.ID, store.PurposeVerify, right, at), "a right code doesn't count")
+		}
+		require.ErrorIs(t, s.CheckEmailCode(ctx, u.ID, store.PurposeRecover, []byte("x"), at), store.ErrWrongCode)
+		at = at.Add(time.Minute)
+	}
+	require.NoError(t, s.CreateEmailCode(ctx, u.ID, store.PurposeRecover, []byte("c"), at.Add(15*time.Minute)))
+	assert.True(t, s.EmailCodesLocked(ctx, u.ID, at))
+	require.ErrorIs(t, s.CheckEmailCode(ctx, u.ID, store.PurposeRecover, []byte("c"), at), store.ErrCodesLocked, "even the right code")
+	require.NoError(t, s.CreateEmailCode(ctx, u.ID, store.PurposeVerify, []byte("v"), at.Add(15*time.Minute)))
+	require.ErrorIs(t, s.CheckEmailCode(ctx, u.ID, store.PurposeVerify, []byte("v"), at), store.ErrCodesLocked, "every purpose")
+
+	other, err := s.CreateUser(ctx, "b@example.com", t0)
+	require.NoError(t, err)
+	assert.False(t, s.EmailCodesLocked(ctx, other.ID, at), "per address")
+
+	dayOver := t0.Add(24 * time.Hour)
+	assert.False(t, s.EmailCodesLocked(ctx, u.ID, dayOver))
+	require.NoError(t, s.CreateEmailCode(ctx, u.ID, store.PurposeRecover, []byte("c"), dayOver.Add(15*time.Minute)))
+	require.ErrorIs(t, s.CheckEmailCode(ctx, u.ID, store.PurposeRecover, []byte("x"), dayOver), store.ErrWrongCode)
+	require.NoError(t, s.CheckEmailCode(ctx, u.ID, store.PurposeRecover, []byte("c"), dayOver), "a new day, a new count")
 }

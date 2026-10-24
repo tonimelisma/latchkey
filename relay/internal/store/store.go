@@ -66,6 +66,31 @@ func migrate(ctx context.Context, db *sql.DB) error {
 // Close closes the database.
 func (s *Store) Close() error { return s.db.Close() }
 
+// immediate runs fn in a BEGIN IMMEDIATE transaction: it takes the write lock before its first
+// read, so concurrent callers run one after another and a check and the write that depends on
+// it cannot be interleaved. fn's error rolls back.
+func (s *Store) immediate(ctx context.Context, fn func(conn *sql.Conn) error) (err error) {
+	conn, err := s.db.Conn(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = conn.Close() }()
+	if _, err := conn.ExecContext(ctx, `BEGIN IMMEDIATE`); err != nil {
+		return err
+	}
+	defer func() {
+		if err != nil {
+			// A fresh context: a cancelled request must not leave the transaction open.
+			_, _ = conn.ExecContext(context.WithoutCancel(ctx), `ROLLBACK`)
+		}
+	}()
+	if err = fn(conn); err != nil {
+		return err
+	}
+	_, err = conn.ExecContext(ctx, `COMMIT`)
+	return err
+}
+
 func newID(prefix string) string {
 	b := make([]byte, 16)
 	_, _ = rand.Read(b) // never fails (crypto/rand)
