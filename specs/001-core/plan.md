@@ -108,6 +108,10 @@ Serves FR-041, FR-042, FR-043.
 - Web sessions: an HTTP-only, Secure, SameSite=Lax cookie holding a random ID stored hashed;
   30 days (FR-048). Account deletion requires a fresh passkey assertion. Forms carry a CSRF token
   tied to the session.
+- After sign-in the page returns only to a path on the relay itself: the `next` value must parse
+  with no scheme or host, start with a single `/`, and contain no control character or backslash
+  (browsers drop the first and read the second as `/`); otherwise `/account`. The page's script
+  checks the same origin again before navigating (security scan, 2026-10-24).
 - Recovery: single-use code, 15 min expiry, stored hashed; completing it removes all old passkeys
   (FR-047); using it is announced by email and in the
   Mac app. The Mac app learns of it through a `notice` message (contracts/agent-protocol.md), sent

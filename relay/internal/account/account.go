@@ -184,10 +184,18 @@ func validEmail(e string) bool {
 	return err == nil && a.Address == e && strings.Contains(e, "@")
 }
 
-// safeNext keeps redirects on this site.
+// safeNext keeps redirects on this site: a path on this origin, or /account. Browsers drop tab
+// and newline from a URL and read a backslash as a slash, so a value with either, or any other
+// control character, is refused before parsing (security scan, CWE-601).
 func safeNext(next string) string {
-	if next == "" || !strings.HasPrefix(next, "/") || strings.HasPrefix(next, "//") || strings.HasPrefix(next, "/\\") {
-		return "/account"
+	const fallback = "/account"
+	if strings.ContainsFunc(next, func(r rune) bool { return r < 0x20 || r == 0x7f || r == '\\' }) {
+		return fallback
+	}
+	u, err := url.Parse(next)
+	if err != nil || u.Scheme != "" || u.Host != "" || u.User != nil || u.Opaque != "" ||
+		!strings.HasPrefix(next, "/") || strings.HasPrefix(next, "//") {
+		return fallback
 	}
 	return next
 }
