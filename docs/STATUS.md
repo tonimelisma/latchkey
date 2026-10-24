@@ -57,12 +57,9 @@ The Mac state line appears in every result (it reported the battery warning at 1
    high) that merge into about 25 issues, each fixed with a failing test first (app 0.8.6).
    Semgrep (with Latchkey's own rules), ShellCheck, OSV-Scanner, and a Sparkle advisory check
    now gate every deploy. Choices Toni made are in docs/decisions.md (2026-10-24).
-   Still open from the scan, both Toni's call:
-   - The pairing and the activity log's key live in the login keychain: another program of
-     Toni's gets a macOS prompt, not a hard refusal. A hard refusal needs the app-only keychain,
-     which needs a keychain-access-groups entitlement and a provisioning profile.
-   - `golang.org/x/net` became a direct dependency of the relay (it was already used
-     indirectly), to show look-alike Unicode client addresses in plain ASCII.
+   Toni decided (2026-10-24): `golang.org/x/net` stays a direct relay dependency; the pairing
+   and the activity log's key move to the app-only keychain together with notarized releases
+   (until then another program gets a macOS prompt, not a hard refusal).
 2. Known limit: macOS shows its own "allow Latchkey to access the screen directly" alert from
    time to time for screen capture; it needs Toni at the Mac (computer control only).
 

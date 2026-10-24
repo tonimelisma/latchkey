@@ -112,3 +112,5 @@ Add a row when a decision is made; never delete one, mark it "superseded by" ins
 | 2026-10-24 | The activity log on the Mac is encrypted with a key in the Keychain | Toni, spec 001 FR-026a |
 | 2026-10-24 | Forwarded client addresses are trusted only from a proxy on the same machine, or from addresses listed in a new setting (TRUSTED_PROXIES); the hosted relay lists its Caddy network | Toni, spec 001 FR-082 |
 | 2026-10-24 | At most 20 wrong emailed codes per email address per day; then emailed codes stop working for that address until the day is over | Toni, spec 001 FR-042a |
+| 2026-10-24 | The relay uses golang.org/x/net directly (it was already an indirect dependency) to show client hosts in ASCII, so look-alike Unicode hosts can't pass for claude.ai | Toni, plan 001 D4 |
+| 2026-10-24 | The pairing and the activity log's key stay in the login keychain (another program gets a macOS prompt); the app-only keychain, which needs a provisioning profile, comes with notarized releases | Toni, plan 001 |
