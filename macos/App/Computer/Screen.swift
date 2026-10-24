@@ -30,12 +30,16 @@ enum ScreenGeometry {
             x: d.bounds.minX + x * d.bounds.width / Double(w), y: d.bounds.minY + y * d.bounds.height / Double(h))
     }
 
-    static func pixel(of p: CGPoint, on d: DisplayInfo) -> (Int, Int) {
+    /// The screenshot pixel of a screen point, or nil when the point is no real position (NaN,
+    /// infinite, or far off any screen). Points come from other apps' Accessibility frames, which
+    /// they choose; converting such values with Int(_:) crashed the app (security scan, 2026-10-24).
+    static func pixel(of p: CGPoint, on d: DisplayInfo) -> (Int, Int)? {
         let (w, h) = imageSize(d)
-        return (
-            Int(((p.x - d.bounds.minX) * Double(w) / d.bounds.width).rounded()),
-            Int(((p.y - d.bounds.minY) * Double(h) / d.bounds.height).rounded())
-        )
+        let x = ((p.x - d.bounds.minX) * Double(w) / d.bounds.width).rounded()
+        let y = ((p.y - d.bounds.minY) * Double(h) / d.bounds.height).rounded()
+        let far = 1_000_000.0
+        guard x.isFinite, y.isFinite, abs(x) <= far, abs(y) <= far else { return nil }
+        return (Int(x), Int(y))
     }
 }
 

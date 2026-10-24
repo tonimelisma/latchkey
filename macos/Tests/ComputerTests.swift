@@ -46,12 +46,12 @@ final class FakePoster: InputPoster, @unchecked Sendable {
         #expect(ScreenGeometry.imageSize(small) == (800, 600), "never enlarged")
     }
 
-    @Test func mapsImagePixelsToScreenPoints() {
+    @Test func mapsImagePixelsToScreenPoints() throws {
         let p = ScreenGeometry.point(x: 784, y: 509, on: Displays.main)
         #expect(abs(p.x - 756) < 1 && abs(p.y - 491) < 1)
         let q = ScreenGeometry.point(x: 0, y: 0, on: Displays.side)
         #expect(q == CGPoint(x: 1512, y: -200), "a second display keeps its place")
-        let (x, y) = ScreenGeometry.pixel(of: CGPoint(x: 756, y: 491), on: Displays.main)
+        let (x, y) = try #require(ScreenGeometry.pixel(of: CGPoint(x: 756, y: 491), on: Displays.main))
         #expect(abs(x - 784) <= 1 && abs(y - 509) <= 1)
     }
 }
@@ -218,5 +218,31 @@ final class FakePoster: InputPoster, @unchecked Sendable {
     @Test func readsTheFrontWindow() async {
         let r = await tools(env(FakeScreen(), FakePoster()))["computer_ui"]!.handler(.object([:]))
         #expect(r.content.jsonText.contains("AXButton") && r.content.jsonText.contains("OK"))
+    }
+
+    /// The front app reports its own frames; NaN or huge ones crashed the app (scan 2026-10-24).
+    @Test func impossibleFramesFromTheFrontAppAreSkipped() async {
+        var e = env(FakeScreen(), FakePoster())
+        e.ui = {
+            [
+                UIElementInfo(
+                    role: "AXButton", label: "NaN", value: nil,
+                    frame: CGRect(x: CGFloat.nan, y: CGFloat.nan, width: 10, height: 10)),
+                UIElementInfo(
+                    role: "AXButton", label: "Huge", value: nil, frame: CGRect(x: 1e300, y: 0, width: 10, height: 10)),
+                UIElementInfo(
+                    role: "AXButton", label: "Infinite", value: nil,
+                    frame: CGRect(x: 0, y: -CGFloat.infinity, width: 10, height: 10)),
+                UIElementInfo(
+                    role: "AXButton", label: "OK", value: nil, frame: CGRect(x: 10, y: 10, width: 50, height: 20)),
+            ]
+        }
+        let r = await tools(e)["computer_ui"]!.handler(.object([:]))
+        #expect(!r.isError)
+        let text = r.content.jsonText
+        #expect(text.contains("\\\"OK\\\" at ("))
+        for label in ["NaN", "Huge", "Infinite"] {
+            #expect(text.contains("\\\"\(label)\\\" (no position)"), "\(label)")
+        }
     }
 }

@@ -117,10 +117,14 @@ enum FrontWindow {
         guard AXUIElementCopyAttributeValue(e, kAXPositionAttribute as CFString, &pos) == .success,
             AXUIElementCopyAttributeValue(e, kAXSizeAttribute as CFString, &size) == .success
         else { return nil }
+        // The front app answers these; anything but a point and a size is no frame (no force casts).
+        guard let pos, let size, CFGetTypeID(pos) == AXValueGetTypeID(), CFGetTypeID(size) == AXValueGetTypeID()
+        else { return nil }
         var p = CGPoint.zero
         var s = CGSize.zero
-        AXValueGetValue(pos as! AXValue, .cgPoint, &p)
-        AXValueGetValue(size as! AXValue, .cgSize, &s)
+        guard AXValueGetValue(pos as! AXValue, .cgPoint, &p), AXValueGetValue(size as! AXValue, .cgSize, &s) else {
+            return nil
+        }
         return CGRect(origin: p, size: s)
     }
 }
