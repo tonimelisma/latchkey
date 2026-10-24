@@ -174,6 +174,39 @@ final class FakeSafari: ScriptRunner, @unchecked Sendable {
         #expect(second?.args.contains("77") == true, "the same window the second time")
     }
 
+    /// FR-409: only web addresses open; a javascript: address would run script in the signed-in
+    /// page even at Read only, and file: would read local files (security scan, 2026-10-24).
+    @Test(arguments: [
+        "javascript:alert(document.cookie)", "JavaScript://%0Aalert(1)", " \tjava\nscript:alert(1)",
+        "file:///etc/passwd", "FILE://localhost/Users", "data:text/html,<script>alert(1)</script>",
+        "blob:https://example.com/1", "x-apple.systempreferences:com.apple.preference.security", "ftp://example.com/",
+        "about:config", "vbscript:msgbox(1)", "http:example.com", "-e https://example.com",
+    ])
+    func refusesAddressesThatArentWebPages(_ url: String) async {
+        let fake = FakeSafari()
+        let r = await tools(fake)["browser_open"]!.handler(.object(["url": .string(url)]))
+        #expect(r.isError, "\(url)")
+        #expect(r.content.jsonText.contains("http"))
+        #expect(!fake.scripts.contains { $0.contains("make new document") }, "nothing was sent to Safari")
+        let consolidated = Dictionary(
+            uniqueKeysWithValues: BrowserCapability.readTools(browser: SafariBrowser(scripts: fake)).map {
+                ($0.tool.name, $0)
+            })
+        let viaRead = await consolidated["browser_read"]!.handler(.object(["url": .string(url)]))
+        #expect(viaRead.isError, "browser_read with a url: \(url)")
+        #expect(!fake.scripts.contains { $0.contains("make new document") })
+    }
+
+    @Test func webAddressesOpen() throws {
+        #expect(try SafariBrowser.normalize("example.com/a?b=1") == "https://example.com/a?b=1")
+        #expect(try SafariBrowser.normalize("localhost:3000/x") == "https://localhost:3000/x")
+        #expect(try SafariBrowser.normalize("HTTP://Example.com") == "HTTP://Example.com")
+        #expect(try SafariBrowser.normalize("  https://example.com/\n") == "https://example.com/")
+        #expect(try SafariBrowser.normalize("about:blank") == "about:blank")
+        #expect(try SafariBrowser.normalize("https://bücher.example/straße") != "")
+        #expect(try SafariBrowser.normalize("http://127.0.0.1:8080/") == "http://127.0.0.1:8080/")
+    }
+
     @Test func clicksAndTypes() async {
         let fake = FakeSafari()
         let t = tools(fake)

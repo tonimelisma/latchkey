@@ -15,7 +15,7 @@ Operations:
 
 | Tool | Level | readOnly | destructive | Serves |
 |---|---|---|---|---|
-| `browser_open` (url, new_tab?) | Read only | yes | no | FR-401 |
+| `browser_open` (url, new_tab?) | Read only | yes | no | FR-401, FR-409 |
 | `browser_read` (offset?) | Read only | yes | no | FR-401, FR-404, FR-405 |
 | `browser_tabs` (select?) | Read only | yes | no | FR-401 |
 | `browser_back` | Read only | yes | no | FR-401 |
@@ -33,6 +33,14 @@ first time (its id is remembered) and later loads pages or adds tabs in that win
 (FR-403). `do JavaScript` runs in that window's current tab. Claude's text, URLs, and scripts
 travel as arguments, and values put into page scripts are JSON-encoded. A closed window is
 noticed and replaced on the next open.
+
+The address Claude asks to open is checked before anything goes to Safari (FR-409): tabs and
+line breaks are removed and the ends trimmed (as browsers do), an address without a scheme gets
+`https://` (a host and port like `localhost:3000` counts as no scheme), and the result must parse
+as `http://` or `https://` with a host; `about:blank` is the one other address. Anything else
+(javascript:, file:, data:, blob:, app schemes, text that isn't an address) is refused with a
+tool error naming what is allowed. FR-409 covers only that address: where a page goes after a
+click, typing, or Claude's own script is Read & write, which may run script in the page anyway.
 
 ## D3. Reading and acting
 
@@ -61,7 +69,8 @@ notify, as one task can mean dozens of clicks.
 ## Testing
 
 A stand-in script runner answers like Safari: open, read (page JSON), click, type, missing
-element, closed window, the JavaScript setting off. Tool list per level. The page script
+element, closed window, the JavaScript setting off, refused addresses (FR-409) both through
+`browser_open` and through `browser_read` with a url. Tool list per level. The page script
 itself is checked by running it in a WebKit view (`WKWebView`) on a fixed page in the tests.
 
 ## Constitution check
