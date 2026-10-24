@@ -4,6 +4,15 @@ Derived from `spec.md`; evidence and low-level choices in `research.md`.
 
 ## D1. Tools
 
+Claude sees consolidated tools (Toni, 2026-10-23: 15 tools in all, from 45): the table below. The operations listed after it are their internals, each reached by an `action` or by which arguments are given.
+
+| Tool | Level | readOnly | destructive | Operations behind it |
+|---|---|---|---|---|
+| `browser_read` (url?, new_tab?, back?, tab?, tabs?, screenshot?, offset?) | Read only | yes | no | open, back, switch tab, tabs, screenshot, read |
+| `browser_act` (action: click, type, script; …) | Read & write | no | yes | click, type, script |
+
+Operations:
+
 | Tool | Level | readOnly | destructive | Serves |
 |---|---|---|---|---|
 | `browser_open` (url, new_tab?) | Read only | yes | no | FR-401 |

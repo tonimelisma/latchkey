@@ -31,7 +31,20 @@ enum PageScripts {
         return String(decoding: data, as: UTF8.self).dropFirst().dropLast().description
     }
 
-    static let readyState = "document.readyState"
+    static let stamp = "String(performance.timeOrigin) + '|' + document.readyState + '|' + location.href"
+
+    struct Stamp: Sendable, Equatable {
+        var origin: String
+        var complete: Bool
+        var address: String
+
+        init(_ answer: String) {
+            let parts = answer.split(separator: "|", maxSplits: 2, omittingEmptySubsequences: false).map(String.init)
+            origin = parts.first ?? ""
+            complete = parts.count > 1 && parts[1] == "complete"
+            address = parts.count > 2 ? parts[2] : ""
+        }
+    }
 
     /// Title, address, visible text from `offset`, and the visible things Claude can act on,
     /// each tagged with a reference that stays on the element.

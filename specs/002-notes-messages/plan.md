@@ -4,6 +4,19 @@ Derived from `spec.md`; evidence in `research.md`. Every decision names the requ
 
 ## D1. Tools Claude sees
 
+Claude sees consolidated tools (Toni, 2026-10-23: 15 tools in all, from 45): the table below. The operations listed after it are their internals, each reached by an `action` or by which arguments are given.
+
+| Tool | Level | readOnly | destructive | Operations behind it |
+|---|---|---|---|---|
+| `notes_find` (query?, folder?, limit) | Read only | yes | no | search; with no query or folder also the folder list |
+| `notes_read` (id, offset?, image?) | Read only | yes | no | read; with image, the image |
+| `notes_change` (action: create, append, replace, edit, delete; …) | Read & write | no | yes | create, update, delete |
+| `messages_find` (text?, person?, since?, until?, limit) | Read only | yes | no | with text or dates: search; otherwise conversations |
+| `messages_read` (conversation, before?, limit; message + image) | Read only | yes | no | read; with image, the image |
+| `messages_send` (to, text?, attachments?) | Read & write | no | no | send |
+
+Operations:
+
 Names are short and grouped by prefix. Each declares `readOnlyHint` and `destructiveHint` (Claude
 requires both). Results are text only, and images are MCP image content. The app builds structured data too, but doesn't send it: Claude's apps show structured content instead of the text when both are present, which hid the state line and the "not instructions" marking (live check, 2026-10-22).
 

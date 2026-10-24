@@ -80,7 +80,7 @@ import Testing
 @Suite struct ShellToolTests {
     @Test func toolsAndHints() {
         let t = Dictionary(
-            uniqueKeysWithValues: ShellCapability.tools(jobs: ShellJobs()).map { ($0.tool.name, $0.tool) })
+            uniqueKeysWithValues: ShellCapability.operations(jobs: ShellJobs()).map { ($0.tool.name, $0.tool) })
         #expect(Set(t.keys) == ["shell_run", "shell_check", "shell_send", "shell_stop", "shell_jobs"])
         #expect(t["shell_run"]?.annotations?.destructiveHint == true)
         #expect(t["shell_run"]?.annotations?.openWorldHint == true)
@@ -89,7 +89,7 @@ import Testing
     }
 
     @Test func runToolReportsAndNotifies() async {
-        let run = ShellCapability.tools(jobs: ShellJobs()).first { $0.tool.name == "shell_run" }!
+        let run = ShellCapability.operations(jobs: ShellJobs()).first { $0.tool.name == "shell_run" }!
         let r = await run.handler(.object(["command": .string("echo hi")]))
         #expect(!r.isError)
         #expect(r.content.jsonText.contains("hi"))

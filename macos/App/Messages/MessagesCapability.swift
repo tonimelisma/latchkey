@@ -27,7 +27,7 @@ enum MessagesCapability {
 
     static let maxText = ResultLimit.characters
 
-    static func readTools(store: @escaping StoreSource) -> [ToolEntry] {
+    static func readOperations(store: @escaping StoreSource) -> [ToolEntry] {
         [
             ToolEntry(
                 tool: .make(
@@ -130,7 +130,7 @@ enum MessagesCapability {
     /// folder, 2026-10-22).
     static let staging = URL.homeDirectory.appending(path: "Pictures/Latchkey")
 
-    static func writeTools(
+    static func writeOperations(
         store: @escaping StoreSource, contacts: any ContactsLookup, scripts: any ScriptRunner, staging: URL,
         confirmWait: Duration = .seconds(5)
     ) -> [ToolEntry] {
@@ -139,7 +139,7 @@ enum MessagesCapability {
                 tool: .make(
                     "messages_send", title: "Send a Message",
                     description:
-                        "Sends a message from the Mac's Messages app: text, files, or both. to is a name from Contacts, a phone number, an email address, a group's name, or a conversation id from messages_conversations. Attachments are paths of files on the Mac. If a name matches several people or numbers, nothing is sent and the choices are returned.",
+                        "Sends a message from the Mac's Messages app: text, files, or both. to is a name from Contacts, a phone number, an email address, a group's name, or a conversation id from messages_find. Attachments are paths of files on the Mac. If a name matches several people or numbers, nothing is sent and the choices are returned.",
                     input: [
                         "to": .stringParam("Who or which conversation to send to"),
                         "text": .stringParam("The message text"),
@@ -248,7 +248,7 @@ enum MessagesCapability {
             return .failure(
                 Unclear(
                     message:
-                        "Nothing was sent: no one in Contacts is called \(to). Give a phone number or email address, or a conversation id from messages_conversations."
+                        "Nothing was sent: no one in Contacts is called \(to). Give a phone number or email address, or a conversation id from messages_find."
                 ))
         case 1:
             let p = people[0]
@@ -454,7 +454,7 @@ enum MessagesCapability {
         case .unknownLayout(let why):
             "This version of Messages stores messages in a way Latchkey doesn't know yet (\(why))."
         case .noSuchConversation(let id):
-            "There is no conversation with id \(id). Find it with messages_conversations."
+            "There is no conversation with id \(id). Find it with messages_find."
         case .noSuchAttachment(let id): "That message has no attachment with id \(id)."
         case .notAnImage(let id): "The attachment \(id) isn't an image Latchkey can show."
         }

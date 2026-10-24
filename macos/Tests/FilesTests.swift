@@ -128,7 +128,9 @@ final class FakeCommands: CommandRunner, @unchecked Sendable {
 
 @Suite struct FilesToolTests {
     func tools(_ f: FilesFixture, commands: any CommandRunner = FakeCommands()) -> [String: ToolEntry] {
-        let all = FilesCapability.readTools(home: f.root, commands: commands) + FilesCapability.writeTools(home: f.root)
+        let all =
+            FilesCapability.readOperations(home: f.root, commands: commands)
+            + FilesCapability.writeOperations(home: f.root)
         return Dictionary(uniqueKeysWithValues: all.map { ($0.tool.name, $0) })
     }
 

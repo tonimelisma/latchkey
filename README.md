@@ -3,9 +3,10 @@
 **Your Mac, at Claude's fingertips from anywhere.**
 
 Latchkey lets Claude on the web, Claude Desktop, and the Claude phone apps use your Mac, even
-when it sits at home behind a router with the lid closed. Ask Claude on your phone "what's my
-laptop's battery?" and it asks your Mac. When the Mac is asleep or offline, Claude says so right
-away, and why, instead of hanging.
+when it sits at home behind a router with the lid closed. From your phone, ask Claude to add eggs
+to your grocery note, find what Sarah said about Saturday, send a text, read a PDF in Downloads,
+run a command, check a site you're signed in to in Safari, or look at your screen. When the Mac is
+asleep or offline, Claude says so right away, and why, instead of hanging.
 
 Free and open source (Apache-2.0). Apple silicon Macs, macOS 26 or later.
 
@@ -21,25 +22,42 @@ Claude (web, Desktop, phone)  ──HTTPS──▶  Latchkey relay  ◀──out
 - The **relay** is the MCP server Claude connects to as a custom connector. It handles sign-in
   (passkeys, no passwords), remembers your Mac's last state, and answers instantly when the Mac
   is away.
-- **You choose what Claude can do.** Each capability is a switch in the app; a capability that's
-  off doesn't exist as far as Claude knows: Notes, Messages, Files, Shell, Browser (your Safari,
-  with your logins), and Computer control (the screen, mouse, and keyboard, while the Mac is
-  unlocked). Most have Off, Read only, and Read & write; Shell is Off or On.
+- **You choose what Claude can do.** Each capability has a level in the menu; a capability that's
+  off doesn't exist as far as Claude knows. Most have Off, Read only, and Read & write; Shell is
+  Off or On. Claude sees 15 tools:
+
+  | Capability | Read only | Read & write adds |
+  |---|---|---|
+  | Notes | `notes_find`, `notes_read` | `notes_change` (create, append, replace, edit, delete to Recently Deleted) |
+  | Messages | `messages_find`, `messages_read` | `messages_send` (text and files) |
+  | Files | `files_find`, `files_read` (text, PDFs, documents, images) | `files_change` (write, edit, folders, move, copy, Trash) |
+  | Shell | | `shell_run`, `shell_check` (long and interactive commands) |
+  | Browser (your Safari, your logins) | `browser_read` | `browser_act` (click, type, script) |
+  | Computer control (while unlocked) | `computer_look` | `computer_act` (mouse, keyboard, apps) |
+
+- **You see what Claude did:** a notification for every change and every new Claude connection,
+  a busy dot while it works, and recent activity in the menu.
+- **Every answer carries the Mac's state** (battery, power, keep-awake), so Claude can warn you
+  before the Mac sleeps.
 - **Keep-awake:** while connected, the app keeps the Mac awake, lid closed included, and lets it
   sleep when the battery reaches 15% or it gets too hot.
 - **Privacy:** the relay never stores what tools return. It keeps a 30-day list of which tools ran
-  and when; the full log, with arguments and results, stays on your Mac for 90 days.
+  and when; the full log, with arguments and results, stays on your Mac for 90 days. Text written
+  by others (messages, web pages, files) is marked as content, not instructions.
 
 ## Get started
 
 1. **Install the Mac app.** Open `Latchkey.dmg`, drag Latchkey to Applications, and open it. The
-   setup window walks you through two steps: allow keep-awake in System Settings, and connect to
-   a relay (you create your account there with a passkey).
+   setup window walks you through each step, one at a time: allow keep-awake, connect to a relay
+   (you create your account there with a passkey), and the macOS permissions the capabilities
+   you turn on need (Full Disk Access; control of Notes, Messages, and Safari; Contacts; Screen
+   Recording; Accessibility; and Safari's "Allow JavaScript from Apple Events").
 2. **Connect Claude.** On claude.ai, open Settings → Connectors → Add custom connector, and enter
    your relay's address followed by `/mcp`, for example `https://relay.example.com/mcp`. Sign
    in with your passkey and click Allow. The connector then appears in Claude Desktop and the
    phone apps too.
-3. **Ask Claude** about your Mac: "Is my laptop online?", "What's my battery?".
+3. **Ask Claude:** "What's in my grocery note?", "What did Sarah say about dinner?", "How much
+   disk space is free?".
 
 The full checklist is in [specs/001-core/quickstart.md](specs/001-core/quickstart.md).
 
@@ -53,8 +71,14 @@ One container with one data volume, behind HTTPS. See
 
 ## Status
 
-Version 0.1 is in private testing. Releases are not notarized yet, so the app installs on the
-developer's own Macs only. See [docs/STATUS.md](docs/STATUS.md).
+Version 0.8 is in private testing: every capability is built and checked live on a real Mac.
+Releases are not notarized yet, so the app installs on the developer's own Macs only. See
+[docs/STATUS.md](docs/STATUS.md).
+
+## Security
+
+Report vulnerabilities privately; see [SECURITY.md](SECURITY.md). The threat model and how
+Latchkey follows current best practice are in [docs/best-practices.md](docs/best-practices.md).
 
 ## Development
 
@@ -62,7 +86,7 @@ developer's own Macs only. See [docs/STATUS.md](docs/STATUS.md).
 |---|---|---|
 | Relay (Go) | `relay/` | `make test`, `make lint`, `make run`, `make claude-check`, `make mac-check` |
 | Mac app and helper (Swift) | `macos/` | `make test`, `make lint`, `make run`, `make dmg` |
-| Hosted relay deployment | `deploy/` | `deploy/deploy-vps.sh` |
+| Hosted relay deployment | `deploy/` | `deploy/deploy.sh` |
 
 ### How this repo is organized (spec-driven)
 
@@ -84,8 +108,15 @@ specs/001-core/
   tasks.md                      Ordered, testable tasks generated from plan + contracts.
 relay/                          The relay (Go). `make test`, `make run`; see CLAUDE.md for commands.
 macos/                          The Mac app and its helper (Swift, XcodeGen). `make test`, `make run`.
+specs/002-notes-messages/       Notes and Messages (same structure for each capability).
+specs/003-files/                Files.
+specs/004-shell/                Shell.
+specs/005-browser/              Browser control (Safari).
+specs/006-computer-control/     Computer control.
+docs/best-practices.md          Research on best practices, checked against Latchkey.
 docs/self-hosting.md            Run your own relay.
+SECURITY.md                     How to report vulnerabilities.
 ```
 
-Later capabilities (files, Notes and iMessage, shell, browser and computer control) each get their
-own `specs/NNN-name/` folder with the same structure.
+Personal deployment details (the hosted relay's address, server, signing team) live only in
+gitignored files: `.env`, `macos/Config/Local.xcconfig`, and `CLAUDE.local.md`.

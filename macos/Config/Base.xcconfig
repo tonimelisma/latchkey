@@ -4,4 +4,7 @@
 // Set it here once the key exists (scripts/release.sh explains how); the public key is not secret.
 SPARKLE_PUBLIC_ED_KEY =
 
+// The relay address offered in setup (host only); empty unless Local.xcconfig sets it.
+LATCHKEY_DEFAULT_RELAY_HOST =
+
 #include? "Local.xcconfig"

@@ -44,8 +44,9 @@ step is done or needs a decision from Toni.
    (existing MCP servers, macOS APIs, permissions, risks) and an interview of Toni; stop for
    Toni's review before writing tasks or code.
 
-IMPORTANT: specs, `docs/STATUS.md`, and `docs/decisions.md` are updated in the same commit as the
-code or decision that changes them. Never let them drift.
+IMPORTANT: specs, `docs/STATUS.md`, `docs/decisions.md`, and `README.md` are updated in the same
+commit as the code or decision that changes them. Never let them drift (README added by Toni,
+2026-10-23).
 
 ## Working with Toni
 
@@ -86,7 +87,10 @@ IMPORTANT: Toni makes every product and engineering choice. Claude proposes; Ton
 - Private remote `github.com/tonimelisma/latchkey`, default branch `main`.
 - Branch per spec or task: `NNN-short-name`. Small commits. Open PRs only when asked.
 - Push the branch after every finished step, and fast-forward `main` to it (Toni, 2026-10-20).
-  Never force-push.
+  Never force-push (one exception, approved by Toni 2026-10-23: rewriting history to remove the
+  relay's address).
+- Never commit the hosted relay's address, its server details, or the Apple team ID; they live in
+  the gitignored `.env`, `macos/Config/Local.xcconfig`, and `CLAUDE.local.md` (Toni, 2026-10-23).
 
 ## Gotchas
 
@@ -108,8 +112,8 @@ Relay (run in `relay/`):
 - `make mac-check`: the Mac app's real connection code against a private relay (battery vs
   pmset, tool off, silent network cut, reconnect)
 
-Hosted relay: `deploy/deploy-vps.sh` deploys to https://relay.example.com on GCP `my-vm`
-(project my-gcp-project) behind its Caddy; needs `CLOUDFLARE_API_TOKEN` and `RESEND_API_KEY`
+Hosted relay: `deploy/deploy.sh` deploys to the host and Google Cloud VM named in the gitignored
+`.env` (see the script's header), behind that VM's Caddy; needs `CLOUDFLARE_API_TOKEN` and `RESEND_API_KEY`
 (send-only) in the gitignored `.env`, plus `RESEND_ADMIN_KEY` (full access) for the first run that
 sets up the sending domain.
 

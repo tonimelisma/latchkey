@@ -18,9 +18,10 @@ actor SafariBrowser {
 
     /// Loads `url` in Claude's window (a new tab if asked), making the window if needed.
     func open(_ url: String, newTab: Bool) async throws -> PageScripts.Page {
+        let before = try? await stamp()
         let id = try await call(Script.open, [Self.normalize(url), window ?? "", newTab ? "yes" : "no"])
         window = id
-        try await settle()
+        try await settle(after: before, expectNavigation: true)
         return try await read(offset: 0)
     }
 
@@ -33,20 +34,23 @@ actor SafariBrowser {
     }
 
     func click(_ ref: String) async throws -> PageScripts.Page {
+        let before = try? await stamp()
         try check(try await javaScript(PageScripts.click(ref)), ref: ref)
-        try await settle()
+        try await settle(after: before, expectNavigation: false)
         return try await read(offset: 0)
     }
 
     func type(_ ref: String, text: String, submit: Bool) async throws -> PageScripts.Page {
+        let before = try? await stamp()
         try check(try await javaScript(PageScripts.type(ref, text: text, submit: submit)), ref: ref, option: text)
-        if submit { try await settle() }
+        if submit { try await settle(after: before, expectNavigation: false) }
         return try await read(offset: 0)
     }
 
     func back() async throws -> PageScripts.Page {
+        let before = try? await stamp()
         _ = try await javaScript(PageScripts.back)
-        try await settle()
+        try await settle(after: before, expectNavigation: true)
         return try await read(offset: 0)
     }
 
@@ -84,13 +88,24 @@ actor SafariBrowser {
         return try await call(Script.javaScript, [window, code])
     }
 
-    /// Waits for the page to finish loading, at most 15 s (plan D3).
-    private func settle() async throws {
-        try await Task.sleep(for: .milliseconds(300))
-        let deadline = ContinuousClock.now + .seconds(15)
-        while ContinuousClock.now < deadline {
-            if try await javaScript(PageScripts.readyState) == "complete" { return }
+    /// The current document's identity: each page load has its own start time, even at the same
+    /// address. Answers "origin|readyState|address".
+    private func stamp() async throws -> PageScripts.Stamp {
+        PageScripts.Stamp(try await javaScript(PageScripts.stamp))
+    }
+
+    /// Waits until a new page has finished loading, at most 15 s (plan D3). The old page (or a new
+    /// window's blank page) also reads "complete", so finished means a different document. An
+    /// action that may not navigate (a click that only changes the page) counts as finished when
+    /// no new page has started after 1.5 s.
+    private func settle(after before: PageScripts.Stamp?, expectNavigation: Bool) async throws {
+        let start = ContinuousClock.now
+        while ContinuousClock.now < start + .seconds(15) {
             try await Task.sleep(for: .milliseconds(250))
+            guard let now = try? await stamp() else { continue }
+            let newDocument = before.map { $0.origin != now.origin } ?? (now.address != "about:blank")
+            if now.complete, newDocument { return }
+            if now.complete, !expectNavigation, ContinuousClock.now > start + .milliseconds(1500) { return }
         }
     }
 

@@ -4,6 +4,15 @@ Derived from `spec.md`; evidence and low-level choices in `research.md`.
 
 ## D1. Tools
 
+Claude sees consolidated tools (Toni, 2026-10-23: 15 tools in all, from 45): the table below. The operations listed after it are their internals, each reached by an `action` or by which arguments are given.
+
+| Tool | Level | readOnly | destructive | Operations behind it |
+|---|---|---|---|---|
+| `computer_look` (show: screenshot, ui, apps; display?) | Read only | yes | no | screenshot, front window, apps |
+| `computer_act` (action: click, move, drag, scroll, type, key, open_app; …) | Read & write | no | yes | the matching action |
+
+Operations:
+
 | Tool | Level | readOnly | destructive | Serves |
 |---|---|---|---|---|
 | `computer_screenshot` (display?) | Read only | yes | no | FR-501, FR-503 |

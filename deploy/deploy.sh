@@ -1,17 +1,23 @@
 #!/bin/sh
-# Deploys the relay to https://relay.example.com on my-vm (GCP project my-gcp-project).
-# Needs in the repository's .env (gitignored): CLOUDFLARE_API_TOKEN (Zone DNS edit on
-# example.com), RESEND_API_KEY (send-only; the relay sends with it), and RESEND_ADMIN_KEY (full
-# access; used here only to set up the sending domain, never copied to the server; can be deleted
-# once the domain is verified). Safe to rerun: every step is idempotent.
+# Deploys the relay to a Google Cloud VM that already runs Caddy as its reverse proxy (in
+# /opt/reverse-proxy, container "caddy", on the docker network "reverse_proxy").
+# Everything about the deployment comes from the repository's .env (gitignored):
+#   DEPLOY_HOST       the relay's public host name, e.g. relay.example.com
+#   DEPLOY_DNS_ZONE   the Cloudflare zone it lives in, e.g. example.com
+#   DEPLOY_VM, DEPLOY_PROJECT, DEPLOY_ZONE   the VM, its Google Cloud project, and its zone
+#   ALLOWED_EMAILS    who may sign up (comma-separated)
+#   CLOUDFLARE_API_TOKEN (Zone DNS edit), RESEND_API_KEY (send-only; the relay sends with it), and
+#   RESEND_ADMIN_KEY (full access; only to set up the sending domain, never copied to the server).
+# Safe to rerun: every step is idempotent.
 set -eu
 cd "$(dirname "$0")/.."
 set -a; . ./.env; set +a
 : "${CLOUDFLARE_API_TOKEN:?missing in .env}" "${RESEND_API_KEY:?missing in .env}"
-HOST=relay.example.com
-ZONE_NAME=example.com
-VM=my-vm; PROJECT=my-gcp-project; ZONE=my-zone
-ALLOWED_EMAILS=${ALLOWED_EMAILS:-owner@example.com}
+: "${DEPLOY_HOST:?missing in .env}" "${DEPLOY_DNS_ZONE:?missing in .env}" "${ALLOWED_EMAILS:?missing in .env}"
+: "${DEPLOY_VM:?missing in .env}" "${DEPLOY_PROJECT:?missing in .env}" "${DEPLOY_ZONE:?missing in .env}"
+HOST=$DEPLOY_HOST
+ZONE_NAME=$DEPLOY_DNS_ZONE
+VM=$DEPLOY_VM; PROJECT=$DEPLOY_PROJECT; ZONE=$DEPLOY_ZONE
 TAG=$(git rev-parse --short HEAD)
 ssh_vm() { gcloud compute ssh "$VM" --project "$PROJECT" --zone "$ZONE" --quiet --command "$1"; }
 
@@ -25,7 +31,7 @@ docker save "latchkey-relay:$TAG" | gzip | gcloud compute ssh "$VM" --project "$
   --command 'gunzip | sudo docker load -q'
 
 echo "• configuration"
-gcloud compute scp --project "$PROJECT" --zone "$ZONE" --quiet deploy/my-vm/docker-compose.yml "$VM:/tmp/latchkey-compose.yml" >/dev/null
+gcloud compute scp --project "$PROJECT" --zone "$ZONE" --quiet deploy/server/docker-compose.yml "$VM:/tmp/latchkey-compose.yml" >/dev/null
 umask 077
 ENVFILE=$(mktemp)
 cat > "$ENVFILE" <<ENV
@@ -39,7 +45,7 @@ ALLOWED_EMAILS=$ALLOWED_EMAILS
 ENV
 gcloud compute scp --project "$PROJECT" --zone "$ZONE" --quiet "$ENVFILE" "$VM:/tmp/latchkey-relay.env" >/dev/null
 rm -f "$ENVFILE"
-SNIPPET=$(cat deploy/my-vm/Caddyfile.snippet)
+SNIPPET=$(sed "s/{{HOST}}/$HOST/" deploy/server/Caddyfile.snippet)
 ssh_vm "set -e
 sudo mkdir -p /opt/latchkey
 sudo mv /tmp/latchkey-compose.yml /opt/latchkey/docker-compose.yml

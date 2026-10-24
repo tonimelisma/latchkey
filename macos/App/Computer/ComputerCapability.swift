@@ -48,7 +48,7 @@ enum ComputerCapability {
 
     // MARK: looking (FR-501)
 
-    static func readTools(env: ComputerEnvironment) -> [ToolEntry] {
+    static func readOperations(env: ComputerEnvironment) -> [ToolEntry] {
         [
             ToolEntry(
                 tool: .make(
@@ -100,7 +100,7 @@ enum ComputerCapability {
 
     // MARK: acting (FR-502)
 
-    static func writeTools(env: ComputerEnvironment) -> [ToolEntry] {
+    static func writeOperations(env: ComputerEnvironment) -> [ToolEntry] {
         let point: [String: JSONValue] = [
             "x": .integerParam("Horizontal pixel in the screenshot"),
             "y": .integerParam("Vertical pixel in the screenshot"),

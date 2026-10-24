@@ -417,7 +417,12 @@ final class AppModel {
     }
 
     /// The hosted relay, offered by default in setup; self-hosters type their own.
-    static let hostedRelay = "https://relay.example.com"
+    /// From the build setting LATCHKEY_DEFAULT_RELAY_HOST (set in the gitignored Local.xcconfig);
+    /// empty in a build without one, so no relay address lives in the repository.
+    static let hostedRelay: String = {
+        let host = Bundle.main.object(forInfoDictionaryKey: "LatchkeyDefaultRelayHost") as? String ?? ""
+        return host.isEmpty ? "" : "https://\(host)"
+    }()
 
     /// Disconnect This Mac: the relay revokes it (goodbye user_disconnected) and the key is deleted.
     func disconnect() async {

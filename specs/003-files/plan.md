@@ -4,6 +4,16 @@ Derived from `spec.md`; evidence and low-level choices in `research.md`.
 
 ## D1. Tools
 
+Claude sees consolidated tools (Toni, 2026-10-23: 15 tools in all, from 45): the table below. The operations listed after it are their internals, each reached by an `action` or by which arguments are given.
+
+| Tool | Level | readOnly | destructive | Operations behind it |
+|---|---|---|---|---|
+| `files_find` (query?, path?, hidden?, limit) | Read only | yes | no | with query: search; a folder: list; a file: info |
+| `files_read` (path, offset?) | Read only | yes | no | read |
+| `files_change` (action: write, append, edit, create_folder, move, copy, trash; …) | Read & write | no | yes | write, edit, create folder, move, copy, trash |
+
+Operations:
+
 | Tool | Level | readOnly | destructive | Serves |
 |---|---|---|---|---|
 | `files_search` (query, folder?, limit) | Read only | yes | no | FR-201 |

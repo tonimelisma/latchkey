@@ -114,7 +114,7 @@ Serves FR-041, FR-042, FR-043.
   at once if the Mac is online, otherwise on its next connection (the relay compares the
   recovery's `used_at` with the device's last connection; nothing new is stored).
 - Email: SMTP via `github.com/wneessen/go-mail`; configured by environment variables (FR-080).
-  The hosted relay sends through Resend's SMTP from `no-reply@relay.example.com`.
+  The hosted relay sends through Resend's SMTP from `no-reply@` its own host name.
 - Web pages: server-rendered `html/template` with a small script for WebAuthn calls, and one small
   hand-written stylesheet (system font, light and dark) embedded in the binary. No frontend
   framework, no CSS library.
@@ -235,9 +235,9 @@ Serves FR-080, Constitution V, VIII.
   a hosting platform that terminates HTTPS itself (relay serves plain HTTP on `PORT`); a reverse
   proxy such as Caddy in front; the built-in ACME above; or a tunnel such as Cloudflare Tunnel
   for a home server. Plain HTTP without any of these is accepted only on localhost.
-- Hosted instance: `https://relay.example.com`, on the GCP e2-micro `my-vm` (my-gcp-project)
-  behind its existing Caddy, deployed by `deploy/deploy-vps.sh`. Sign-up is limited to
-  `owner@example.com` (`ALLOWED_EMAILS`) until the terms and abuse handling exist.
+- Hosted instance: on Toni's existing Google Cloud VM (an e2-micro) behind its Caddy, deployed by
+  `deploy/deploy.sh`; the address and server details are only in the gitignored `.env`. Sign-up
+  is limited to Toni (`ALLOWED_EMAILS`) until the terms and abuse handling exist.
 - Scaling: one server. The hub interface is written so a later version can route across servers;
   nothing more is built now.
 

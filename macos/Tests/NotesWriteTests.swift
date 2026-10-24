@@ -46,7 +46,7 @@ final class FakeScripts: ScriptRunner, @unchecked Sendable {
     func setup() throws -> (NotesStore, FakeScripts, [String: ToolEntry]) {
         let store = try NotesStore(url: NotesFixture.make())
         let fake = FakeScripts()
-        let tools = NotesCapability.writeTools(store: { store }, scripts: fake)
+        let tools = NotesCapability.writeOperations(store: { store }, scripts: fake)
         return (store, fake, Dictionary(uniqueKeysWithValues: tools.map { ($0.tool.name, $0) }))
     }
 
@@ -158,7 +158,9 @@ final class FakeScripts: ScriptRunner, @unchecked Sendable {
             return "Groceries\tNotes\t2026-10-22T09:30:00\tfalse\nMilk\nBread"
         }
         let tools = Dictionary(
-            uniqueKeysWithValues: NotesCapability.readTools(store: unknown, scripts: fake).map { ($0.tool.name, $0) })
+            uniqueKeysWithValues: NotesCapability.readOperations(store: unknown, scripts: fake).map {
+                ($0.tool.name, $0)
+            })
         let folders = await tools["notes_folders"]!.handler(.object([:]))
         #expect(folders.content.jsonText.contains("Trips: 1 notes"))
         let note = await tools["notes_read"]!.handler(.object(["id": .string("x-coredata://S/ICNote/p1")]))
@@ -169,7 +171,7 @@ final class FakeScripts: ScriptRunner, @unchecked Sendable {
     @Test func refusesChangesItCannotCheck() async throws {
         let fake = FakeScripts()
         fake.answer = { _, _ in "Ideas\tNotes\t2026-10-22T09:30:00\tfalse\nText" }
-        let tools = NotesCapability.writeTools(store: unknown, scripts: fake)
+        let tools = NotesCapability.writeOperations(store: unknown, scripts: fake)
         let update = tools.first { $0.tool.name == "notes_update" }!
         let result = await update.handler(
             .object(["id": .string("x-coredata://S/ICNote/p1"), "mode": .string("append"), "text": .string("x")]))

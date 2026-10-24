@@ -1,2 +1,4 @@
 // Copy to Local.xcconfig (gitignored) and set your Apple team ID.
 DEVELOPMENT_TEAM = ABCDE12345
+// Optional: the relay offered in the setup window (host only, no https://).
+// LATCHKEY_DEFAULT_RELAY_HOST = relay.example.com

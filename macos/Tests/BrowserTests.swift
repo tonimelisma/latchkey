@@ -68,6 +68,15 @@ final class TestPage {
         #expect(try await page.run(PageScripts.click("e999")) == "missing")
     }
 
+    @MainActor @Test func pageIdentityScriptRuns() async throws {
+        let page = TestPage()
+        try await page.load()
+        let stamp = PageScripts.Stamp(try await page.run(PageScripts.stamp))
+        #expect(stamp.complete)
+        #expect(stamp.address == "https://shop.example.com/")
+        #expect(Double(stamp.origin) != nil)
+    }
+
     @MainActor @Test func pagesLongText() async throws {
         let page = TestPage()
         try await page.load()
@@ -85,10 +94,18 @@ final class FakeSafari: ScriptRunner, @unchecked Sendable {
     var windowOpen = true
     var javaScriptAllowed = true
     var actionAnswer = "ok"
+    /// Changes with each page load, like performance.timeOrigin.
+    private(set) var loads = 0
+    /// How many identity checks after a load still see the old page (a slow start).
+    var lag = 0
+    private var stale = 0
+    private(set) var stampChecks = 0
 
     func run(_ script: String, _ args: [String]) async throws -> String {
         lock.withLock { calls.append((script, args)) }
         if script.contains("make new document") {
+            stale = lag
+            loads += 1
             if args.count > 1, !args[1].isEmpty, windowOpen { return args[1] }
             windowOpen = true
             return "77"
@@ -101,7 +118,14 @@ final class FakeSafari: ScriptRunner, @unchecked Sendable {
                 )
             }
             let js = args.last ?? ""
-            if js.contains("readyState") { return "complete" }
+            if js.contains("timeOrigin") {
+                stampChecks += 1
+                if stale > 0 {
+                    stale -= 1
+                    return "\(loads - 1)|complete|https://old.example.com/"
+                }
+                return "\(loads)|complete|https://shop.example.com/"
+            }
             if js.contains("latchkeyRead") { return page }
             return actionAnswer
         }
@@ -115,7 +139,7 @@ final class FakeSafari: ScriptRunner, @unchecked Sendable {
 @Suite struct BrowserToolTests {
     func tools(_ fake: FakeSafari) -> [String: ToolEntry] {
         let b = SafariBrowser(scripts: fake)
-        let all = BrowserCapability.readTools(browser: b) + BrowserCapability.writeTools(browser: b)
+        let all = BrowserCapability.readOperations(browser: b) + BrowserCapability.writeOperations(browser: b)
         return Dictionary(uniqueKeysWithValues: all.map { ($0.tool.name, $0) })
     }
 
@@ -163,6 +187,16 @@ final class FakeSafari: ScriptRunner, @unchecked Sendable {
         #expect(gone.content.jsonText.contains("browser_read"))
     }
 
+    @Test func waitsForTheNewPageNotTheOldOne() async {
+        let fake = FakeSafari()
+        let t = tools(fake)
+        _ = await t["browser_open"]!.handler(.object(["url": .string("https://a.example.com")]))
+        fake.lag = 3
+        let checksBefore = fake.stampChecks
+        _ = await t["browser_open"]!.handler(.object(["url": .string("https://shop.example.com")]))
+        #expect(fake.stampChecks - checksBefore >= 4, "kept waiting while the old page answered")
+    }
+
     @Test func explainsTheSafariSetting() async {
         let fake = FakeSafari()
         fake.javaScriptAllowed = false
@@ -178,7 +212,7 @@ final class FakeSafari: ScriptRunner, @unchecked Sendable {
         fake.windowOpen = false
         let read = await t["browser_read"]!.handler(.object([:]))
         #expect(read.isError)
-        #expect(read.content.jsonText.contains("browser_open"))
+        #expect(read.content.jsonText.contains("browser_read"))
         let reopen = await t["browser_open"]!.handler(.object(["url": .string("https://a.example.com")]))
         #expect(!reopen.isError)
     }

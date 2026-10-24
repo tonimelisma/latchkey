@@ -19,5 +19,10 @@ DerivedData/
 *.xcuserstate
 build/
 
-# Per-developer signing (DEVELOPMENT_TEAM)
-macos/Local.xcconfig
+# Per-developer signing and defaults (DEVELOPMENT_TEAM, LATCHKEY_DEFAULT_RELAY_HOST)
+macos/Config/Local.xcconfig
+
+# Personal notes for Claude Code (deployment details stay out of the repository)
+CLAUDE.local.md
+
+__pycache__/

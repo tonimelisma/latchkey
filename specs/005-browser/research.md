@@ -34,11 +34,14 @@ Done 2026-10-22 with 003, 004, 006.
 - **Claude's window**: Latchkey opens a Safari window of its own and remembers its id; tools
   act on that window's tabs only, never on the Owner's other windows. If the Owner closes it,
   the next call opens a new one.
-- **Reading a page**: one script returns title, URL, visible text (at most 100,000 characters,
+- **Reading a page**: one script returns title, URL, visible text (at most 40,000 characters,
   with `offset` to continue), and the page's links, buttons, and fields, each tagged with a
   short reference (`e12`) stored as a `data-latchkey` attribute so clicks find the same element.
-- **Waiting**: after opening or clicking, wait until `document.readyState` is complete and the
-  page stops changing for 0.5 s, at most 15 s.
+- **Waiting**: after opening, going back, clicking, or submitting, wait until a *different*
+  document has finished loading (its `performance.timeOrigin` changed and `readyState` is
+  complete), at most 15 s; a click that doesn't navigate counts as done after 1.5 s. Waiting for
+  `readyState` alone answered with the old page (live check 2026-10-23): the old page, or a new
+  window's blank page, is already "complete".
 - **Typing**: sets the field's value and fires `input` and `change` events, the way frameworks
   expect; `submit` presses Enter by submitting the field's form.
 - **Scripts from Claude** (`browser_script`, Read & write level): runs Claude's own JavaScript in

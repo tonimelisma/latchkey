@@ -4,6 +4,15 @@ Derived from `spec.md`; evidence and low-level choices in `research.md`.
 
 ## D1. Tools (level On)
 
+Claude sees consolidated tools (Toni, 2026-10-23: 15 tools in all, from 45): the table below. The operations listed after it are their internals, each reached by an `action` or by which arguments are given.
+
+| Tool | readOnly | destructive | Operations behind it |
+|---|---|---|---|
+| `shell_run` (command, folder?, wait?; or job + input / stop) | no | yes | run, send, stop |
+| `shell_check` (job?, wait?) | yes | no | check; without job, list jobs |
+
+Operations:
+
 | Tool | readOnly | destructive | Serves |
 |---|---|---|---|
 | `shell_run` (command, folder?, wait?) | no | yes | FR-301, FR-302, FR-307 |

@@ -154,7 +154,7 @@ actor ShellJobs {
     private func job(_ id: String) throws -> Job {
         guard let job = jobs[id] else {
             throw Failure(
-                message: "There's no job \(id). Jobs are kept for 10 minutes after they finish; see shell_jobs.")
+                message: "There's no job \(id). Jobs are kept for 10 minutes after they finish; see shell_check.")
         }
         return job
     }

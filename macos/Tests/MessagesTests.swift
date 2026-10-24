@@ -114,7 +114,8 @@ import Testing
 @Suite struct MessagesToolTests {
     func tools() throws -> [String: ToolEntry] {
         let s = try MessagesStore(url: MessagesFixture.make(), contacts: MessagesFixture.FakeContacts())
-        return Dictionary(uniqueKeysWithValues: MessagesCapability.readTools(store: { s }).map { ($0.tool.name, $0) })
+        return Dictionary(
+            uniqueKeysWithValues: MessagesCapability.readOperations(store: { s }).map { ($0.tool.name, $0) })
     }
 
     @Test func toolsDeclareTheirHints() throws {
@@ -149,7 +150,7 @@ import Testing
     }
 
     @Test func missingFullDiskAccessIsExplained() async {
-        let result = await MessagesCapability.readTools(store: { nil })[0].handler(.object([:]))
+        let result = await MessagesCapability.readOperations(store: { nil })[0].handler(.object([:]))
         #expect(result.isError)
         #expect(result.content.jsonText.contains("Full Disk Access"))
     }

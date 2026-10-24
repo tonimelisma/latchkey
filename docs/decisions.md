@@ -60,8 +60,8 @@ Add a row when a decision is made; never delete one, mark it "superseded by" ins
 | 2026-10-20 | Moving the app to the Trash uninstalls cleanly: disconnects, restores sleep, removes items and data | FR-077, plan D9 |
 | 2026-10-20 | Lid-open: public power assertion (as Claude does); lid-closed: Apple's pmset via the helper | research.md, plan D7 |
 | 2026-10-20 | Push after every finished step and fast-forward main | CLAUDE.md |
-| 2026-10-20 | Hosted relay at relay.example.com on GCP my-vm behind its Caddy | plan D10, deploy/ |
-| 2026-10-20 | Email through Resend (SMTP), sending domain relay.example.com | plan D5, research.md |
+| 2026-10-20 | Hosted relay on Toni's existing Google Cloud VM behind its Caddy; its address and server details live only in the gitignored .env (2026-10-23) | plan D10, deploy/ |
+| 2026-10-20 | Email through Resend (SMTP), sending from the relay's own host name | plan D5, research.md |
 | 2026-10-21 | One email-first sign-in page; 6-digit email codes instead of links | FR-042, FR-043, FR-043a |
 | 2026-10-21 | Mac app signs in through Apple's sign-in window (ASWebAuthenticationSession), not a browser tab | plan D6 |
 | 2026-10-22 | No status tool; the Mac's state is a short line in every Mac tool result | spec 001 FR-021 (withdrawn), FR-065 |
@@ -78,7 +78,7 @@ Add a row when a decision is made; never delete one, mark it "superseded by" ins
 | 2026-10-22 | Claude can also edit a passage of a note; any change that would lose checklists, images, or tables is refused with the reason | spec 002 FR-102, FR-106 |
 | 2026-10-22 | Automation (Notes) and Contacts are asked for in the setup window, never when a request arrives (a prompt would wait on an unattended Mac) | spec 002 FR-140, plan D4, D5 |
 | 2026-10-22 | Message attachments are copied to a visible Pictures/Latchkey folder and sent from there (Messages delivers scripted attachments reliably only from Pictures); copies older than a day are removed | spec 002 FR-112, plan D3 |
-| 2026-10-22 | Live check of sending: one test message with a tiny image to Toni's own address (owner@example.com) after the new app is installed | spec 002 tasks T140 |
+| 2026-10-22 | Live check of sending: one test message with a tiny image to Toni's own address after the new app is installed | spec 002 tasks T140 |
 | 2026-10-22 | No dedicated tools for Calendar, Reminders, Shortcuts, Mail, Photos, or system controls; the remaining scope is files, shell, browser control, computer control | roadmap |
 | 2026-10-22 | Research all four remaining capabilities first, ask all questions in one round, then build them straight through without per-spec review stops; Toni reviews at the end | CLAUDE.md process step 6 (exception for this run) |
 | 2026-10-22 | Files: everything the Owner can open (home, iCloud Drive, connected drives); deletes go to the Trash | spec 003 |
@@ -89,3 +89,7 @@ Add a row when a decision is made; never delete one, mark it "superseded by" ins
 | 2026-10-22 | Shell has full sessions: start, check later, send input, stop | spec 004 |
 | 2026-10-23 | After the best-practices review: opening pages in Safari stays automatic (read-only); sending messages unchanged (no Latchkey-side stop); Shell and Computer control stay on by default | docs/best-practices.md |
 | 2026-10-23 | The Mac shows a notification each time a Claude client is given access | agent-protocol notice `client_authorized`, docs/best-practices.md |
+| 2026-10-23 | The Mac's activity log stays thorough (full arguments and results, 90 days, on the Mac) | docs/best-practices.md |
+| 2026-10-23 | Tools consolidated from 45 to 15: find/read/change (Notes, Messages, Files), run/check (Shell), read/act (Browser), look/act (Computer control) | plans 002–006 D1 |
+| 2026-10-23 | SECURITY.md with GitHub private vulnerability reporting (switched on when the repository is public) | SECURITY.md |
+| 2026-10-23 | The relay's address, server details, and Apple team ID stay out of the repository (gitignored .env, Local.xcconfig, CLAUDE.local.md); history rewritten once and force-pushed to remove them | Toni, CLAUDE.md Git |

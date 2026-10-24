@@ -22,7 +22,7 @@ enum NotesCapability {
     /// FR-151: results stay well within Claude's limit.
 
     /// `scripts`, when given, reads through Notes if the database layout is unknown (plan D2).
-    static func readTools(store: @escaping StoreSource, scripts: (any ScriptRunner)? = nil) -> [ToolEntry] {
+    static func readOperations(store: @escaping StoreSource, scripts: (any ScriptRunner)? = nil) -> [ToolEntry] {
         [
             ToolEntry(
                 tool: .make(
@@ -160,7 +160,7 @@ enum NotesCapability {
         switch f {
         case .cannotOpen: noAccess
         case .unknownLayout(let why): "This version of Notes stores notes in a way Latchkey doesn't know yet (\(why))."
-        case .noSuchNote(let id): "There is no note with id \(id). Search again with notes_search."
+        case .noSuchNote(let id): "There is no note with id \(id). Search again with notes_find."
         case .noSuchAttachment(let id): "That note has no attachment with id \(id)."
         case .notAnImage(let id): "The attachment \(id) isn't an image Latchkey can show."
         }
@@ -189,7 +189,7 @@ enum NotesCapability {
 
     // MARK: changing notes (plan D3)
 
-    static func writeTools(store: @escaping StoreSource, scripts: any ScriptRunner) -> [ToolEntry] {
+    static func writeOperations(store: @escaping StoreSource, scripts: any ScriptRunner) -> [ToolEntry] {
         [
             ToolEntry(
                 tool: .make(
@@ -232,7 +232,7 @@ enum NotesCapability {
                         var result = ToolResult.data(
                             .object(["id": id.map(JSONValue.string) ?? .null, "title": .string(title)]),
                             text: id.map { "Created “\(title)” (id \($0))." }
-                                ?? "Created “\(title)”. It will show up in notes_search in a moment.")
+                                ?? "Created “\(title)”. It will show up in notes_find in a moment.")
                         result.activity = "Claude created the note “\(title)”"
                         return result
                     }

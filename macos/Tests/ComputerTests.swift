@@ -158,9 +158,10 @@ final class FakePoster: InputPoster, @unchecked Sendable {
 
     func tools(_ e: ComputerEnvironment) -> [String: ToolEntry] {
         Dictionary(
-            uniqueKeysWithValues: (ComputerCapability.readTools(env: e) + ComputerCapability.writeTools(env: e)).map {
-                ($0.tool.name, $0)
-            })
+            uniqueKeysWithValues: (ComputerCapability.readOperations(env: e)
+                + ComputerCapability.writeOperations(env: e)).map {
+                    ($0.tool.name, $0)
+                })
     }
 
     @Test func toolsAndHints() {

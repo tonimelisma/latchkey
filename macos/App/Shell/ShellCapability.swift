@@ -10,7 +10,7 @@ enum ShellCapability {
             readTools: [], writeTools: tools(jobs: jobs), levels: [.off, .readWrite], onTitle: "On")
     }
 
-    static func tools(jobs: ShellJobs) -> [ToolEntry] {
+    static func operations(jobs: ShellJobs) -> [ToolEntry] {
         [
             ToolEntry(
                 tool: .make(
@@ -112,7 +112,7 @@ enum ShellCapability {
             text += "\n[\(s.job) finished, exit status \(s.exitCode ?? -1)]"
         } else {
             text +=
-                "\n[\(s.job) is still running. If it's waiting for input, answer with shell_send; check again with shell_check; stop with shell_stop.]"
+                "\n[\(s.job) is still running. If it's waiting for input, answer with shell_run (job and input); check again with shell_check; stop with shell_run (job and stop).]"
         }
         var structured: [String: JSONValue] = ["job": .string(s.job), "finished": .bool(s.finished)]
         if let code = s.exitCode { structured["exitCode"] = .number(Double(code)) }

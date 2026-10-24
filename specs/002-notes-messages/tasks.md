@@ -59,5 +59,5 @@ deployed if it changed, a commit, and a push (Toni, 2026-10-22). `[P]` = paralle
 
 ## Each increment ends with
 
-- Relay and Mac tests and lint pass; `make -C macos dmg`; `deploy/deploy-vps.sh` if the relay
+- Relay and Mac tests and lint pass; `make -C macos dmg`; `deploy/deploy.sh` if the relay
   changed; status, decisions, and tasks updated; commit; push the branch and fast-forward `main`.

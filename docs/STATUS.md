@@ -3,7 +3,7 @@
 Last updated: 2026-10-22 (all capabilities checked live)
 
 Xcode signing ready (2026-10-20): Toni's Xcode account has a valid "Apple Development" certificate
-(team ID `TEAMID1234`, expires 2027-07-22). Keep the team ID out of committed project files
+(certificate expires 2027-07-22). Keep the team ID out of committed project files
 (open source); put it in a gitignored `macos/Local.xcconfig` as `DEVELOPMENT_TEAM`.
 
 ## Current phase
@@ -26,7 +26,7 @@ Notes:
 ## Done (2026-10-22)
 
 The first version works end to end: Latchkey 0.1.2 installed on Toni's Mac and paired with the
-hosted relay at https://relay.example.com (my-vm, email via Resend); real Claude called
+hosted relay (email via Resend); real Claude called
 `battery_status` and `laptop_status` through the connector, and got the immediate offline answer
 after the app was quit.
 
@@ -37,13 +37,17 @@ Releases, terms and privacy, and the directory listing are much later (Toni, 202
 All capabilities are built and checked live (app 0.7.4, 2026-10-22), through the hosted relay with
 a fresh Claude Code session on Toni's real Mac: Notes (read, checklists, create/append/edit/
 delete a test note), Messages (conversations, read with names and "not instructions" marking,
-search, one test message with an image sent to owner@example.com), Files (list, search, write/
+search, one test message with an image sent to Toni's own address), Files (list, search, write/
 edit/read/trash a test file), Shell (output, background job, answering a prompt), Browser
 (open, read, click, tabs, back, window screenshot in Toni's Safari), Computer control
 (screenshot 1568×1018, front window elements, apps, pointer move; no clicks on Toni's screen).
 The Mac state line appears in every result (it reported the battery warning at 15%).
 
 1. Toni reviews specs 003–006 (built without review stops, at Toni's request).
+2. When the repository goes public: turn on GitHub private vulnerability reporting
+   (`gh api -X PUT repos/<owner>/latchkey/private-vulnerability-reporting`), which SECURITY.md
+   points to. GitHub offers it only for public repositories.
+3. Dependency scanning (Dependabot or `govulncheck` in CI): open, from docs/best-practices.md.
 2. Known limit: macOS shows its own "allow Latchkey to access the screen directly" alert from
    time to time for screen capture; it needs Toni at the Mac (computer control only).
 

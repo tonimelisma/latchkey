@@ -1,5 +1,5 @@
-# The hosted Latchkey relay on my-vm (GCP my-gcp-project). Caddy (/opt/reverse-proxy) serves
-# HTTPS for relay.example.com and proxies to this container on the shared network.
+# The hosted Latchkey relay. Caddy (/opt/reverse-proxy) serves HTTPS for the relay's host and
+# proxies to this container on the shared network.
 services:
   relay:
     image: latchkey-relay:${TAG:?set TAG}

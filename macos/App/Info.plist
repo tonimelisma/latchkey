@@ -36,6 +36,8 @@
 	<string>https://github.com/tonimelisma/latchkey/releases/latest/download/appcast.xml</string>
 	<key>SUPublicEDKey</key>
 	<string>$(SPARKLE_PUBLIC_ED_KEY)</string>
+	<key>LatchkeyDefaultRelayHost</key>
+	<string>$(LATCHKEY_DEFAULT_RELAY_HOST)</string>
 	<key>SUEnableAutomaticChecks</key>
 	<true/>
 	<key>CFBundleURLTypes</key>

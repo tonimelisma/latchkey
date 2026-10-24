@@ -102,7 +102,7 @@ import Testing
 
 @Suite struct NotesToolTests {
     @Test func toolsDeclareTheirHints() {
-        for tool in NotesCapability.readTools(store: { nil }).map(\.tool) {
+        for tool in NotesCapability.readOperations(store: { nil }).map(\.tool) {
             #expect(tool.annotations?.readOnlyHint == true, "\(tool.name)")
             #expect(tool.annotations?.destructiveHint == false)
         }
@@ -110,7 +110,7 @@ import Testing
 
     @Test func searchToolAnswersWithStructuredResults() async throws {
         let s = try NotesStore(url: NotesFixture.make())
-        let tools = NotesCapability.readTools(store: { s })
+        let tools = NotesCapability.readOperations(store: { s })
         let search = try #require(tools.first { $0.tool.name == "notes_search" })
         let result = await search.handler(.object(["query": .string("lisbon")]))
         #expect(!result.isError)
@@ -119,7 +119,7 @@ import Testing
     }
 
     @Test func missingFullDiskAccessIsExplained() async {
-        let tools = NotesCapability.readTools(store: { nil })
+        let tools = NotesCapability.readOperations(store: { nil })
         let result = await tools[0].handler(.object([:]))
         #expect(result.isError)
         #expect(result.content.jsonText.contains("Full Disk Access"))
