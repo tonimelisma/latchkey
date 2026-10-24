@@ -57,6 +57,49 @@ final class FakeCommands: CommandRunner, @unchecked Sendable {
     }
 }
 
+/// A TCP listener on 127.0.0.1 that counts connection attempts (HTTP or TLS alike) and closes
+/// each one.
+final class ConnectionCounter: @unchecked Sendable {
+    let port: UInt16
+    private let fd: Int32
+    private let lock = NSLock()
+    private var count = 0
+
+    init() throws {
+        let fd = socket(AF_INET, SOCK_STREAM, 0)
+        self.fd = fd
+        var addr = sockaddr_in()
+        addr.sin_family = sa_family_t(AF_INET)
+        addr.sin_addr.s_addr = inet_addr("127.0.0.1")
+        addr.sin_port = 0
+        var len = socklen_t(MemoryLayout<sockaddr_in>.size)
+        let bound = withUnsafeMutablePointer(to: &addr) {
+            $0.withMemoryRebound(to: sockaddr.self, capacity: 1) {
+                bind(fd, $0, len) == 0 && listen(fd, 32) == 0 && getsockname(fd, $0, &len) == 0
+            }
+        }
+        guard bound else { throw POSIXError(.EADDRNOTAVAIL) }
+        port = UInt16(bigEndian: addr.sin_port)
+        Thread.detachNewThread { [self] in
+            while true {
+                let c = accept(fd, nil, nil)
+                if c < 0 { return }
+                lock.withLock { count += 1 }
+                let reply = "HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+                _ = reply.withCString { write(c, $0, strlen($0)) }
+                close(c)
+            }
+        }
+    }
+
+    var connections: Int { lock.withLock { count } }
+
+    func stop() {
+        shutdown(fd, SHUT_RDWR)
+        close(fd)
+    }
+}
+
 @Suite struct FileReaderTests {
     @Test func readsTextAndMarksIt() throws {
         let f = try FilesFixture()
@@ -126,6 +169,63 @@ final class FakeCommands: CommandRunner, @unchecked Sendable {
             return
         }
         #expect(why.contains("100 MB"), "\(why)")
+    }
+
+    /// HTML and web archives are someone else's pages: reading one must not make the Mac fetch
+    /// what it links to (scan 2026-10-24). A local server counts every connection attempt.
+    @Test func htmlIsReadWithoutNetworkLoads() async throws {
+        let server = try ConnectionCounter()
+        defer { server.stop() }
+        let base = "127.0.0.1:\(server.port)"
+        let html = """
+            <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://\(base)/dtd">
+            <html><head><title>Hidden title</title>
+            <link rel="stylesheet" href="https://\(base)/style.css">
+            <style>body { background: url(http://\(base)/bg.png) }</style>
+            <script src="http://\(base)/s.js"></script><script>var x = "script text";</script>
+            </head><body>
+            <h1>Lease</h1><p>Pets &amp; plants are allowed.</p><p>Second&nbsp;paragraph</p>
+            <img src="http://\(base)/beacon.png"><img src="https://\(base)/beacon2.png">
+            <iframe src="http://\(base)/frame"></iframe>
+            <ul><li>One</li><li>Two</li></ul>
+            </body></html>
+            """
+        let f = try FilesFixture()
+        let file = f.root.appending(path: "page.html")
+        try html.write(to: file, atomically: true, encoding: .utf8)
+        let archive = f.root.appending(path: "page.webarchive")
+        let plist: [String: Any] = [
+            "WebMainResource": [
+                "WebResourceData": Data(html.utf8), "WebResourceMIMEType": "text/html",
+                "WebResourceTextEncodingName": "UTF-8", "WebResourceURL": "http://\(base)/",
+                "WebResourceFrameName": "",
+            ]
+        ]
+        try PropertyListSerialization.data(fromPropertyList: plist, format: .binary, options: 0).write(to: archive)
+        for url in [file, archive] {
+            guard case .text(let text, _, _) = try FileReader.read(url, offset: 0) else {
+                Issue.record("\(url.lastPathComponent) not read")
+                continue
+            }
+            #expect(text.contains("Lease"), "\(text)")
+            #expect(text.contains("Pets & plants are allowed."))
+            #expect(text.contains("Second\u{A0}paragraph") || text.contains("Second paragraph"))
+            #expect(text.contains("One") && text.contains("Two"))
+            #expect(!text.contains("script text"))
+            #expect(!text.contains("Lease Pets"), "paragraphs stay apart: \(text)")
+        }
+        let entity = f.root.appending(path: "entity.html")
+        try """
+        <!DOCTYPE html [<!ENTITY ext SYSTEM "http://\(base)/entity">]>
+        <html><body><p>Before &ext; after</p></body></html>
+        """.write(to: entity, atomically: true, encoding: .utf8)
+        guard case .text(let text, _, _) = try FileReader.read(entity, offset: 0) else {
+            Issue.record("entity.html not read")
+            return
+        }
+        #expect(text.contains("Before"))
+        try await Task.sleep(for: .seconds(1))
+        #expect(server.connections == 0, "the reader fetched \(server.connections) resources")
     }
 
     @Test func pagesLongText() throws {
