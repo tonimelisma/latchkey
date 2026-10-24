@@ -404,11 +404,12 @@ func TestConsentPageViaAuthorize(t *testing.T) {
 	}
 	page := b.get("/authorize?" + q.Encode())
 	require.Equal(t, http.StatusOK, page.status)
-	assert.Contains(t, page.body, "Allow Claude to use your Mac?")
+	assert.Contains(t, page.body, "Allow Claude (claude.ai) to use your Mac?", "the name and the host the relay checked")
 	assert.Contains(t, page.body, "claude.ai")
 	r := b.form("/authorize?"+q.Encode(), url.Values{"csrf": {csrf(t, page.body)}, "decision": {"allow"}})
 	require.Contains(t, []int{http.StatusFound, http.StatusSeeOther}, r.status, r.body)
 	assert.True(t, strings.HasPrefix(r.header.Get("Location"), "https://claude.ai/api/mcp/auth_callback?code="))
+	assert.Contains(t, b.get("/account").body, "<strong>Claude (claude.ai)</strong>", "the account page names it the same way")
 }
 
 const owner = "owner@example.com"

@@ -117,7 +117,8 @@ Sent in `hello`, in every `state` message, and in `goodbye`.
 | `notice` | Something the Owner must be told on the Mac | `kind`, `at`, `client` (optional) |
 
 `notice.kind`: `account_recovered` (a recovery link was used, FR-042); `client_authorized` (a
-Claude client was given access; `client` is its name, as on the consent page; added 2026-10-23).
+Claude client was given access; `client` is its name with the host the relay checked, as on the
+consent page, e.g. "Claude (claude.ai)"; added 2026-10-23, host added 2026-10-24).
 Sent immediately if the device is online, otherwise right after `welcome` on its next connection;
 each `client_authorized` is sent once. The app shows a macOS notification.
 

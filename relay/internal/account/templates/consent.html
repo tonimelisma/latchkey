@@ -1,6 +1,6 @@
 {{template "head" .}}
-<h1>Allow {{.Data.ClientName}} to use your Mac?</h1>
-<p class="lead">{{.Data.ClientName}} will see whether your Mac is online and can use the tools you've turned on in the Latchkey app.</p>
+<h1>Allow {{.Data.Label}} to use your Mac?</h1>
+<p class="lead">It will see whether your Mac is online and can use the tools you've turned on in the Latchkey app.</p>
 <form method="post">
   <input type="hidden" name="csrf" value="{{.CSRF}}">
   <button class="primary wide" type="submit" name="decision" value="allow">Allow</button>

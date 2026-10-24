@@ -271,7 +271,8 @@ func TestDCRFlowWithRealClient(t *testing.T) {
 	require.NoError(t, err)
 	assert.Empty(t, res.Tools, "signed in; no Mac paired yet")
 	require.Equal(t, 1, e.auth.consentCount())
-	assert.Equal(t, oauth.ConsentRequest{ClientName: "Claude Code", RedirectHost: "localhost:51234"}, e.auth.consents[0])
+	assert.Equal(t, oauth.ConsentRequest{ClientName: "Claude Code", ClientHost: "localhost", RedirectHost: "localhost:51234"}, e.auth.consents[0])
+	assert.Equal(t, "Claude Code (localhost)", e.auth.consents[0].Label())
 }
 
 func TestCIMDFlowWithRealClient(t *testing.T) {
@@ -284,6 +285,25 @@ func TestCIMDFlowWithRealClient(t *testing.T) {
 	require.NoError(t, err, "signed in through the metadata document")
 	require.Equal(t, 1, e.auth.consentCount())
 	assert.Equal(t, "Claude", e.auth.consents[0].ClientName)
+	assert.Equal(t, "127.0.0.1", e.auth.consents[0].ClientHost, "the metadata document's host, which the relay fetched")
+}
+
+// A client's name is its own claim; the host shown next to it is what the relay checked: the
+// metadata document's host, or for a registered client the host Claude's code goes to. A
+// look-alike "Claude" can be told apart everywhere the name appears (security scan).
+func TestClientNameShowsVerifiedHost(t *testing.T) {
+	e := setup(t)
+	id := e.register("https://claude-auth.attacker.example/cb")
+	p := newPKCE()
+	resp := e.do(http.MethodGet, authorizeURL(id, "https://claude-auth.attacker.example/cb", &p, nil), nil, "", true)
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	require.Equal(t, 1, e.auth.consentCount())
+	assert.Equal(t, "Claude (claude-auth.attacker.example)", e.auth.consents[0].Label())
+	assert.Equal(t, "Claude (claude-auth.attacker.example)", e.oauth.ClientName(ctxT(t), id), "account page")
+	e.approve(authorizeURL(id, "https://claude-auth.attacker.example/cb", &p, nil))
+	e.authorizedMu.Lock()
+	defer e.authorizedMu.Unlock()
+	assert.Equal(t, []string{"Claude (claude-auth.attacker.example)"}, e.authorized, "the Mac's notice")
 }
 
 // manual flow helpers
@@ -463,7 +483,7 @@ func TestEveryAuthorizationIsAnnounced(t *testing.T) {
 	e.tokens(id)
 	e.authorizedMu.Lock()
 	defer e.authorizedMu.Unlock()
-	assert.Equal(t, []string{"Claude", "Claude"}, e.authorized, "each grant, even with consent remembered")
+	assert.Equal(t, []string{"Claude (claude.ai)", "Claude (claude.ai)"}, e.authorized, "each grant, even with consent remembered")
 }
 
 func TestResourceIndicator(t *testing.T) {

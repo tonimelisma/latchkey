@@ -37,8 +37,51 @@ type Authenticator interface {
 
 // ConsentRequest is what the consent page shows.
 type ConsentRequest struct {
-	ClientName   string
+	ClientName   string // the client's own claim, unverified
+	ClientHost   string // what the relay checked: see verifiedHost
 	RedirectHost string
+}
+
+// Label is the client's name with the host the relay checked, e.g. "Claude (claude.ai)".
+func (c ConsentRequest) Label() string { return clientLabel(c.ClientName, c.ClientHost) }
+
+// clientLabel names a client wherever the Owner sees it (consent page, account page, the Mac's
+// notice). Anyone can register a client called "Claude"; the host beside the name can't be
+// chosen freely, so a look-alike shows a different one (security scan).
+func clientLabel(name, host string) string {
+	if host == "" || strings.EqualFold(name, host) {
+		return name
+	}
+	return name + " (" + host + ")"
+}
+
+// verifiedHost is the part of a client's identity the relay checked: for a metadata-document
+// client, the host it fetched the document from (its client ID); otherwise the host its codes
+// are sent to, the given redirect URI's or else the first registered one's.
+func verifiedHost(cl fosite.Client, redirect *url.URL) string {
+	if isCIMD(cl.GetID()) {
+		if u, err := url.Parse(cl.GetID()); err == nil {
+			return u.Hostname()
+		}
+	}
+	if redirect != nil && redirect.Hostname() != "" {
+		return redirect.Hostname()
+	}
+	for _, raw := range cl.GetRedirectURIs() {
+		if u, err := url.Parse(raw); err == nil && u.Hostname() != "" {
+			return u.Hostname()
+		}
+	}
+	return ""
+}
+
+// label names an approved client for the Owner.
+func label(cl fosite.Client, redirect *url.URL) string {
+	name := cl.GetID()
+	if c, ok := cl.(*client); ok && c.Name != "" {
+		name = c.Name
+	}
+	return clientLabel(name, verifiedHost(cl, redirect))
 }
 
 // Config configures the server.
@@ -49,7 +92,8 @@ type Config struct {
 	// HTTPClient fetches client metadata documents. Default: refuses private addresses.
 	HTTPClient *http.Client
 	Now        func() time.Time
-	// OnAuthorized runs after each grant, with the client's name, so the Owner can be told.
+	// OnAuthorized runs after each grant, with the client's name and checked host (as on the
+	// consent page), so the Owner can be told.
 	OnAuthorized func(ctx context.Context, userID, clientName string)
 }
 
@@ -193,7 +237,7 @@ func (s *Server) authorize(w http.ResponseWriter, r *http.Request) {
 		approved = true // FR-049
 	}
 	if !approved {
-		c := ConsentRequest{RedirectHost: ar.GetRedirectURI().Host}
+		c := ConsentRequest{RedirectHost: ar.GetRedirectURI().Host, ClientHost: verifiedHost(ar.GetClient(), ar.GetRedirectURI())}
 		if cl, ok := ar.GetClient().(*client); ok {
 			c.ClientName = cl.Name
 		}
@@ -213,11 +257,7 @@ func (s *Server) authorize(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if s.cfg.OnAuthorized != nil {
-		name := ar.GetClient().GetID()
-		if cl, ok := ar.GetClient().(*client); ok && cl.Name != "" {
-			name = cl.Name
-		}
-		s.cfg.OnAuthorized(ctx, userID, name)
+		s.cfg.OnAuthorized(ctx, userID, label(ar.GetClient(), ar.GetRedirectURI()))
 	}
 	s.provider.WriteAuthorizeResponse(ctx, w, ar, resp)
 }
@@ -334,10 +374,11 @@ func (s *Server) RevokeUser(ctx context.Context, userID string) error {
 	return s.cfg.Store.DeleteUserOAuth(ctx, userID)
 }
 
-// ClientName is the display name of a client the Owner approved.
+// ClientName is the display name of a client the Owner approved, with the host the relay
+// checked, e.g. "Claude (claude.ai)".
 func (s *Server) ClientName(ctx context.Context, clientID string) string {
 	if c, err := s.clients.get(ctx, clientID); err == nil {
-		return c.Name
+		return label(c, nil)
 	}
 	return clientID
 }
