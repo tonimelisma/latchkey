@@ -35,6 +35,9 @@ Plain text by encoding detection; PDFs with PDFKit; .docx/.doc/.rtf/.rtfd/.odt/.
 with `NSAttributedString`; images with the shared image preparation (spec 002). Other files:
 details only, with "not readable as text". At most 100,000 characters per answer, `offset` to
 continue (FR-207). Each answer starts by saying the content is the file's (FR-206).
+Files over 100 MB aren't read: the size is that of the file a symbolic link points to (a link's
+own size is a few bytes), and the read itself stops past 100 MB; pipes and devices aren't read
+(security scan, 2026-10-24).
 iCloud placeholders are downloaded with `FileManager.startDownloadingUbiquitousItem` and waited
 for up to 20 s.
 
