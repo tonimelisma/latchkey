@@ -58,8 +58,9 @@ func defaultRules() []rule {
 	}
 }
 
-// guard wraps the relay with security headers, body caps, and per-address abuse limits.
-func guard(public *url.URL, next http.Handler) http.Handler {
+// guard wraps the relay with security headers, body caps, and per-address abuse limits. Client
+// addresses come from X-Forwarded-For only when the peer is loopback or in proxies (FR-082).
+func guard(public *url.URL, proxies limit.TrustedProxies, next http.Handler) http.Handler {
 	rules := defaultRules()
 	hsts := public != nil && public.Scheme == "https"
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -78,7 +79,7 @@ func guard(public *url.URL, next http.Handler) http.Handler {
 			h.Set("Strict-Transport-Security", "max-age=63072000")
 		}
 
-		ip := limit.ClientIP(r)
+		ip := proxies.ClientIP(r)
 		for _, rl := range rules {
 			if rl.match(r) && !rl.per.Allow(ip) {
 				tooMany(w)

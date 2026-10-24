@@ -1,9 +1,10 @@
 // Package limit holds the relay's abuse limits: keyed token buckets (per IP address, per email
-// address, per user) and the client IP address behind a local reverse proxy. Limits are in memory:
-// a restart resets them, which is acceptable for limits that only slow abuse down.
+// address, per user) and the client IP address behind a trusted reverse proxy. Limits are in
+// memory: a restart resets them, which is acceptable for limits that only slow abuse down.
 package limit
 
 import (
+	"fmt"
 	"net"
 	"net/http"
 	"net/netip"
@@ -62,11 +63,58 @@ func (k *Keyed) AllowAt(key string, now time.Time) bool {
 	return allowed
 }
 
+// TrustedProxies are the reverse proxies, besides one on this machine, whose X-Forwarded-For
+// header the relay believes (FR-082, the TRUSTED_PROXIES setting). Empty means loopback only.
+type TrustedProxies []netip.Prefix
+
+// ParseTrustedProxies reads a comma-separated list of IP addresses and CIDR ranges.
+func ParseTrustedProxies(s string) (TrustedProxies, error) {
+	var p TrustedProxies
+	for f := range strings.SplitSeq(s, ",") {
+		if f = strings.TrimSpace(f); f == "" {
+			continue
+		}
+		pre, err := netip.ParsePrefix(f)
+		if err != nil {
+			a, aerr := netip.ParseAddr(f)
+			if aerr != nil {
+				return nil, fmt.Errorf("%q is not an IP address or CIDR range", f)
+			}
+			a = a.Unmap()
+			pre = netip.PrefixFrom(a, a.BitLen())
+		}
+		p = append(p, pre.Masked())
+	}
+	return p, nil
+}
+
+// Strings lists the ranges in CIDR form, for logs and tests.
+func (p TrustedProxies) Strings() []string {
+	s := make([]string, len(p))
+	for i, x := range p {
+		s[i] = x.String()
+	}
+	return s
+}
+
+func (p TrustedProxies) trusts(peer netip.Addr) bool {
+	if peer.IsLoopback() {
+		return true
+	}
+	for _, pre := range p {
+		if pre.Contains(peer) {
+			return true
+		}
+	}
+	return false
+}
+
 // ClientIP is the address the request came from. When the direct peer is a proxy on this machine
-// or a private network (Caddy, Traefik, nginx, a hosting platform's router), the client is the
-// rightmost X-Forwarded-For entry, the one that proxy added. A direct public peer can't spoof it:
-// its X-Forwarded-For is ignored.
-func ClientIP(r *http.Request) string {
+// or one listed in p, the client is the rightmost X-Forwarded-For entry, the one that proxy added.
+// Any other peer can't spoof its address: its X-Forwarded-For is ignored. Being on a private
+// network is not enough: with `docker run -p`, internet clients can arrive from the Docker bridge
+// gateway's private address.
+func (p TrustedProxies) ClientIP(r *http.Request) string {
 	host, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err != nil {
 		host = r.RemoteAddr
@@ -76,7 +124,7 @@ func ClientIP(r *http.Request) string {
 		return host
 	}
 	peer = peer.Unmap()
-	if peer.IsLoopback() || peer.IsPrivate() {
+	if p.trusts(peer) {
 		if xff := r.Header.Values("X-Forwarded-For"); len(xff) > 0 {
 			parts := strings.Split(xff[len(xff)-1], ",")
 			if a, err := netip.ParseAddr(strings.TrimSpace(parts[len(parts)-1])); err == nil {

@@ -98,9 +98,9 @@ updates, minimal server-side data.
   changes: 20 at once then one every 3 s; client registration: 10 then one a minute; consent
   page; token endpoint; Mac connections), sign-in emails capped per address (one a minute, and
   five at once then one every 10 minutes) and for the whole relay (100 at once, then one every
-  30 s), MCP calls per account (120 at once, then ten a second). Behind a local or private-network
-  proxy, the client address is the last `X-Forwarded-For` entry; a direct public peer can't set
-  it. Request bodies capped (16 MiB for MCP, 1 MiB otherwise), 64 KiB headers, idle connections
+  30 s), MCP calls per account (120 at once, then ten a second). Behind a proxy on loopback or one
+  listed in `TRUSTED_PROXIES`, the client address is the last `X-Forwarded-For` entry; any other
+  peer, private-network ones included, can't set it (FR-082). Request bodies capped (16 MiB for MCP, 1 MiB otherwise), 64 KiB headers, idle connections
   closed after 2 minutes. Security headers on every response (CSP `default-src 'none'` except the
   pages' own, `nosniff`, `DENY`, `no-referrer`, COOP, Permissions-Policy, `no-store`, HSTS over
   HTTPS). Registered clients with no live grant deleted after 7 days. Hosted container read-only

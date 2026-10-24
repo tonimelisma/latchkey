@@ -35,6 +35,11 @@ func TestLoadConfig(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, 9000, c.Port)
 	assert.Equal(t, []string{"toni@example.com", "b@example.com"}, c.AllowedEmails)
+	assert.Empty(t, c.TrustedProxies, "loopback only by default")
+
+	c, err = loadConfig(env(map[string]string{"TRUSTED_PROXIES": "172.18.0.0/16, 192.0.2.7"}))
+	require.NoError(t, err)
+	assert.Equal(t, []string{"172.18.0.0/16", "192.0.2.7/32"}, c.TrustedProxies.Strings())
 }
 
 func TestLoadConfigRejects(t *testing.T) {
@@ -50,6 +55,7 @@ func TestLoadConfigRejects(t *testing.T) {
 		"user without password": {"SMTP_USER": "u"},
 		"password without user": {"SMTP_PASSWORD": "p"},
 		"bad PORT":              {"PORT": "http"},
+		"bad TRUSTED_PROXIES":   {"TRUSTED_PROXIES": "caddy"},
 	}
 	for name, o := range cases {
 		t.Run(name, func(t *testing.T) {
