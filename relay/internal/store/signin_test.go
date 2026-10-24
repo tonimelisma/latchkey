@@ -240,6 +240,35 @@ func TestOAuthRequests(t *testing.T) {
 	require.ErrorIs(t, err, store.ErrNotFound)
 }
 
+// A token is written only while its grant's code or refresh token exists, so none can be issued
+// after "Remove Claude's access" deleted them (security scan).
+func TestTokensNeedTheirGrant(t *testing.T) {
+	ctx := context.Background()
+	s := open(t)
+	u := newUser(t, s)
+	code := store.OAuthRequest{
+		Signature: "code1", Kind: store.KindCode, RequestID: "req1", ClientID: "cl_1", UserID: u.ID,
+		RequestedAt: t0, SessionJSON: []byte(`{}`), ExpiresAt: t0.Add(time.Minute),
+	}
+	require.NoError(t, s.PutOAuthRequest(ctx, code))
+	tok := code
+	tok.Signature, tok.Kind = "acc1", store.KindAccess
+	require.NoError(t, s.PutOAuthToken(ctx, tok))
+	tok.Signature, tok.Kind = "ref1", store.KindRefresh
+	require.NoError(t, s.PutOAuthToken(ctx, tok))
+
+	other := tok
+	other.Signature, other.RequestID = "ref2", "req-unknown"
+	require.ErrorIs(t, s.PutOAuthToken(ctx, other), store.ErrNotFound, "no grant")
+	other.RequestID, other.UserID = "req1", "usr_someone_else"
+	require.ErrorIs(t, s.PutOAuthToken(ctx, other), store.ErrNotFound, "another user's grant")
+
+	require.NoError(t, s.DeleteUserOAuth(ctx, u.ID))
+	tok.Signature = "ref3"
+	require.ErrorIs(t, s.PutOAuthToken(ctx, tok), store.ErrNotFound, "after revocation")
+	require.Error(t, s.PutOAuthToken(ctx, code), "codes go through PutOAuthRequest")
+}
+
 func TestPurgeExpired(t *testing.T) {
 	ctx := context.Background()
 	s := open(t)

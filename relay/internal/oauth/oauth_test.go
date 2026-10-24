@@ -89,6 +89,11 @@ type env struct {
 
 	authorizedMu sync.Mutex
 	authorized   []string // client names, in order
+
+	// cimdFetched, if set, runs on every fetch of the metadata document, which is then served
+	// uncached; the relay fetches it in the middle of a token request.
+	cimdMu      sync.Mutex
+	cimdFetched func()
 }
 
 func setup(t *testing.T) *env {
@@ -101,6 +106,13 @@ func setup(t *testing.T) *env {
 
 	// A client metadata document server, as Claude hosts one (served over TLS).
 	e.cimd = httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		e.cimdMu.Lock()
+		hook := e.cimdFetched
+		e.cimdMu.Unlock()
+		if hook != nil {
+			w.Header().Set("Cache-Control", "no-store")
+			hook()
+		}
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]any{
 			"client_id":                  "https://" + r.Host + r.URL.Path,
@@ -567,6 +579,53 @@ func TestRevokeUserAndDeletedUser(t *testing.T) {
 	access, _ = e.tokens(id)
 	require.NoError(t, e.store.DeleteUser(ctxT(t), e.userID))
 	assert.Equal(t, http.StatusUnauthorized, e.mcpStatus(access))
+}
+
+// "Remove Claude's access" while a refresh is between reading its token and writing the new
+// ones: the refresh must fail, and nothing it wrote may work (security scan).
+func TestRevokeUserDuringRefresh(t *testing.T) {
+	e := setup(t)
+	clientID := e.cimd.URL + "/oauth/client.json"
+	const redirect = "http://localhost:7777/callback"
+	e.cimdMu.Lock()
+	e.cimdFetched = func() {} // uncached from the start
+	e.cimdMu.Unlock()
+	p := newPKCE()
+	code := e.approve(authorizeURL(clientID, redirect, &p, nil)).Query().Get("code")
+	resp, m := e.tokenRequest(url.Values{
+		"grant_type": {"authorization_code"}, "code": {code}, "redirect_uri": {redirect},
+		"client_id": {clientID}, "code_verifier": {p.verifier},
+	})
+	require.Equal(t, http.StatusOK, resp.StatusCode, m)
+	refresh, _ := m["refresh_token"].(string)
+
+	// The token endpoint looks the client up to authenticate it (fetch 1), then again after
+	// reading the refresh token's row (fetch 2): revoke there.
+	var mu sync.Mutex
+	fetches := 0
+	e.cimdMu.Lock()
+	e.cimdFetched = func() {
+		mu.Lock()
+		fetches++
+		n := fetches
+		mu.Unlock()
+		if n == 2 {
+			assert.NoError(t, e.oauth.RevokeUser(context.Background(), e.userID))
+		}
+	}
+	e.cimdMu.Unlock()
+	resp, m = e.tokenRequest(url.Values{"grant_type": {"refresh_token"}, "refresh_token": {refresh}, "client_id": {clientID}})
+	mu.Lock()
+	require.GreaterOrEqual(t, fetches, 2, "the revocation ran inside the refresh")
+	mu.Unlock()
+	assert.Equal(t, http.StatusBadRequest, resp.StatusCode, m)
+	if access, ok := m["access_token"].(string); ok {
+		assert.Equal(t, http.StatusUnauthorized, e.mcpStatus(access), "a token minted across the revocation must not work")
+	}
+	if newRefresh, ok := m["refresh_token"].(string); ok {
+		resp, m = e.tokenRequest(url.Values{"grant_type": {"refresh_token"}, "refresh_token": {newRefresh}, "client_id": {clientID}})
+		assert.Equal(t, http.StatusBadRequest, resp.StatusCode, m)
+	}
 }
 
 func TestTokenEndpointNeedsFormEncoding(t *testing.T) {

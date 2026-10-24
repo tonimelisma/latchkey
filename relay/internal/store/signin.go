@@ -5,6 +5,7 @@ import (
 	"crypto/subtle"
 	"database/sql"
 	"errors"
+	"fmt"
 	"time"
 )
 
@@ -310,15 +311,41 @@ type OAuthRequest struct {
 	RevokedAt     time.Time
 }
 
+const oauthRequestColumns = `signature, kind, request_id, client_id, user_id, requested_at, scopes,
+	granted_scopes, form, session_json, expires_at`
+
+func (r OAuthRequest) values() []any {
+	return []any{
+		r.Signature, r.Kind, r.RequestID, r.ClientID, nullString(r.UserID), toMS(r.RequestedAt), r.Scopes,
+		r.GrantedScopes, r.Form, string(r.SessionJSON), toMS(r.ExpiresAt),
+	}
+}
+
 // PutOAuthRequest stores a request.
 func (s *Store) PutOAuthRequest(ctx context.Context, r OAuthRequest) error {
 	_, err := s.db.ExecContext(ctx, `
-		INSERT INTO oauth_requests (signature, kind, request_id, client_id, user_id, requested_at, scopes,
-			granted_scopes, form, session_json, expires_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		r.Signature, r.Kind, r.RequestID, r.ClientID, nullString(r.UserID), toMS(r.RequestedAt), r.Scopes,
-		r.GrantedScopes, r.Form, string(r.SessionJSON), toMS(r.ExpiresAt))
+		INSERT INTO oauth_requests (`+oauthRequestColumns+`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, r.values()...)
 	return mapErr(err)
+}
+
+// PutOAuthToken stores an access or refresh token only while its grant still exists: the
+// authorization code or a refresh token of the same request ID and user. The check and the
+// insert are one statement, so a token issued in the middle of "Remove Claude's access" (which
+// deletes them all at once) is never written; the caller gets ErrNotFound (security scan).
+func (s *Store) PutOAuthToken(ctx context.Context, r OAuthRequest) error {
+	if r.Kind != KindAccess && r.Kind != KindRefresh {
+		return fmt.Errorf("PutOAuthToken: kind %q is not a token", r.Kind)
+	}
+	res, err := s.db.ExecContext(ctx, `
+		INSERT INTO oauth_requests (`+oauthRequestColumns+`)
+		SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+		WHERE EXISTS (SELECT 1 FROM oauth_requests
+			WHERE request_id = ? AND user_id = ? AND kind IN ('code', 'refresh'))`,
+		append(r.values(), r.RequestID, r.UserID)...)
+	if err != nil {
+		return mapErr(err)
+	}
+	return requireOneRow(res)
 }
 
 // OAuthRequest returns a stored request, whatever its state.
@@ -375,13 +402,17 @@ func (s *Store) DeleteOAuthRequest(ctx context.Context, kind, signature string) 
 	return err
 }
 
-// DeleteUserOAuth removes all of the user's tokens and remembered approvals (FR-044).
+// DeleteUserOAuth removes all of the user's tokens and remembered approvals (FR-044), in one
+// transaction. Tokens are written only while their grant's rows exist (PutOAuthToken), so none
+// can be issued for the user after this.
 func (s *Store) DeleteUserOAuth(ctx context.Context, userID string) error {
-	if _, err := s.db.ExecContext(ctx, `DELETE FROM oauth_requests WHERE user_id = ?`, userID); err != nil {
+	return s.immediate(ctx, func(conn *sql.Conn) error {
+		if _, err := conn.ExecContext(ctx, `DELETE FROM oauth_requests WHERE user_id = ?`, userID); err != nil {
+			return err
+		}
+		_, err := conn.ExecContext(ctx, `DELETE FROM oauth_consents WHERE user_id = ?`, userID)
 		return err
-	}
-	_, err := s.db.ExecContext(ctx, `DELETE FROM oauth_consents WHERE user_id = ?`, userID)
-	return err
+	})
 }
 
 // Consent returns the scopes the user approved for a client.
