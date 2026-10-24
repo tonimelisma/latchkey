@@ -65,8 +65,8 @@ Sources: [MCP security best practices](https://modelcontextprotocol.io/specifica
 
 **Latchkey.**
 - **Done:** own tokens, audience-checked; consent page with client name and redirect host, CSRF;
-  PKCE S256; redirect checks; CIMD fetches refuse private, loopback, and link-local addresses at
-  connect time (which also defeats DNS rebinding); shell job ids are only usable by the same
+  PKCE S256; redirect checks; CIMD fetches refuse every address that isn't global unicast (all IANA
+  special-purpose ranges, IPv4 inside IPv6 and NAT64 included) at connect time (which also defeats DNS rebinding); shell job ids are only usable by the same
   account's Mac; refresh rotation with reuse detection; passkeys, no passwords.
 - **Done (2026-10-23):** the Mac shows a notification each time a Claude client is given
   access (notice `client_authorized`). Was a gap: the owner wasn't told when a new Claude client
