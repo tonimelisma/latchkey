@@ -404,7 +404,8 @@ func TestConsentPageViaAuthorize(t *testing.T) {
 	}
 	page := b.get("/authorize?" + q.Encode())
 	require.Equal(t, http.StatusOK, page.status)
-	assert.Contains(t, page.body, "Allow Claude (claude.ai) to use your Mac?", "the name and the host the relay checked")
+	assert.Contains(t, page.body, "<h1>Allow Claude to use your Mac?</h1>", "the name the client gave")
+	assert.Contains(t, page.body, `<p class="host">This app is at <strong>claude.ai</strong>.`, "the host the relay checked, on its own")
 	assert.Contains(t, page.body, "claude.ai")
 	r := b.form("/authorize?"+q.Encode(), url.Values{"csrf": {csrf(t, page.body)}, "decision": {"allow"}})
 	require.Contains(t, []int{http.StatusFound, http.StatusSeeOther}, r.status, r.body)

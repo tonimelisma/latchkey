@@ -11,13 +11,17 @@ import (
 	"net/http"
 	"net/url"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/modelcontextprotocol/go-sdk/auth"
 	"github.com/modelcontextprotocol/go-sdk/oauthex"
 	"github.com/ory/fosite"
 	"github.com/ory/fosite/compose"
+	"golang.org/x/net/idna"
 
 	"github.com/tonimelisma/latchkey/relay/internal/store"
 )
@@ -37,51 +41,93 @@ type Authenticator interface {
 
 // ConsentRequest is what the consent page shows.
 type ConsentRequest struct {
-	ClientName   string // the client's own claim, unverified
-	ClientHost   string // what the relay checked: see verifiedHost
+	ClientName   string // the client's own claim, unverified; cleaned by cleanName
+	ClientHost   string // what the relay checked (see verifiedHosts), in ASCII
 	RedirectHost string
 }
 
 // Label is the client's name with the host the relay checked, e.g. "Claude (claude.ai)".
 func (c ConsentRequest) Label() string { return clientLabel(c.ClientName, c.ClientHost) }
 
+// maxNameRunes caps a client's name where the Owner sees it.
+const maxNameRunes = 60
+
+// cleanName makes a client's free-text name safe to show next to a host: no control or
+// formatting characters (newlines, direction overrides, zero-width marks), no parentheses (a
+// name can't carry a "(host)" of its own), runs of spaces collapsed, at most maxNameRunes.
+func cleanName(name string) string {
+	name = strings.Map(func(r rune) rune {
+		switch {
+		case unicode.IsSpace(r):
+			return ' '
+		case unicode.IsControl(r), unicode.Is(unicode.Cf, r), r == '(' || r == ')', r == utf8.RuneError:
+			return -1
+		}
+		return r
+	}, name)
+	name = strings.Join(strings.Fields(name), " ")
+	if r := []rune(name); len(r) > maxNameRunes {
+		name = strings.TrimSpace(string(r[:maxNameRunes-1])) + "\u2026"
+	}
+	return name
+}
+
+// displayHost shows a host in ASCII: an internationalized name appears in its xn-- form, so a
+// look-alike such as a Cyrillic "с" in "сlaude.ai" can't pass for the real one.
+func displayHost(host string) string {
+	host = strings.ToLower(host)
+	if a, err := idna.Punycode.ToASCII(host); err == nil {
+		host = a
+	}
+	q := strconv.QuoteToASCII(host) // anything idna couldn't convert stays visibly escaped
+	return q[1 : len(q)-1]
+}
+
 // clientLabel names a client wherever the Owner sees it (consent page, account page, the Mac's
 // notice). Anyone can register a client called "Claude"; the host beside the name can't be
 // chosen freely, so a look-alike shows a different one (security scan).
 func clientLabel(name, host string) string {
-	if host == "" || strings.EqualFold(name, host) {
+	name = cleanName(name)
+	switch {
+	case name == "" && host == "":
+		return "An unnamed app"
+	case name == "":
+		return host
+	case host == "" || strings.EqualFold(name, host):
 		return name
 	}
 	return name + " (" + host + ")"
 }
 
-// verifiedHost is the part of a client's identity the relay checked: for a metadata-document
-// client, the host it fetched the document from (its client ID); otherwise the host its codes
-// are sent to, the given redirect URI's or else the first registered one's.
-func verifiedHost(cl fosite.Client, redirect *url.URL) string {
+// verifiedHosts is the part of a client's identity the relay checked, in ASCII: for a
+// metadata-document client, the host it fetched the document from (its client ID); otherwise
+// the hosts its codes are sent to: the given redirect URI's, or with none given, every
+// registered one's, since a remembered approval covers them all (FR-049).
+func verifiedHosts(cl fosite.Client, redirect *url.URL) []string {
 	if isCIMD(cl.GetID()) {
 		if u, err := url.Parse(cl.GetID()); err == nil {
-			return u.Hostname()
+			return []string{displayHost(u.Hostname())}
 		}
 	}
 	if redirect != nil && redirect.Hostname() != "" {
-		return redirect.Hostname()
+		return []string{displayHost(redirect.Hostname())}
 	}
+	var out []string
 	for _, raw := range cl.GetRedirectURIs() {
-		if u, err := url.Parse(raw); err == nil && u.Hostname() != "" {
-			return u.Hostname()
+		if u, err := url.Parse(raw); err == nil && u.Hostname() != "" && !slices.Contains(out, displayHost(u.Hostname())) {
+			out = append(out, displayHost(u.Hostname()))
 		}
 	}
-	return ""
+	return out
 }
 
 // label names an approved client for the Owner.
 func label(cl fosite.Client, redirect *url.URL) string {
-	name := cl.GetID()
-	if c, ok := cl.(*client); ok && c.Name != "" {
+	name := ""
+	if c, ok := cl.(*client); ok {
 		name = c.Name
 	}
-	return clientLabel(name, verifiedHost(cl, redirect))
+	return clientLabel(name, strings.Join(verifiedHosts(cl, redirect), ", "))
 }
 
 // Config configures the server.
@@ -237,9 +283,12 @@ func (s *Server) authorize(w http.ResponseWriter, r *http.Request) {
 		approved = true // FR-049
 	}
 	if !approved {
-		c := ConsentRequest{RedirectHost: ar.GetRedirectURI().Host, ClientHost: verifiedHost(ar.GetClient(), ar.GetRedirectURI())}
+		c := ConsentRequest{
+			RedirectHost: displayHost(ar.GetRedirectURI().Host),
+			ClientHost:   strings.Join(verifiedHosts(ar.GetClient(), ar.GetRedirectURI()), ", "),
+		}
 		if cl, ok := ar.GetClient().(*client); ok {
-			c.ClientName = cl.Name
+			c.ClientName = cleanName(cl.Name)
 		}
 		s.cfg.Auth.Consent(w, r, c)
 		return

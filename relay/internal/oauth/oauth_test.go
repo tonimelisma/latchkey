@@ -308,6 +308,60 @@ func TestClientNameShowsVerifiedHost(t *testing.T) {
 
 // manual flow helpers
 
+// registerNamed registers a client with any name and returns its ID.
+func (e *env) registerNamed(name string, redirects ...string) string {
+	e.t.Helper()
+	body, _ := json.Marshal(map[string]any{"client_name": name, "redirect_uris": redirects, "token_endpoint_auth_method": "none"})
+	resp := e.do(http.MethodPost, "/register", strings.NewReader(string(body)), "application/json", false)
+	require.Equal(e.t, http.StatusCreated, resp.StatusCode)
+	id, _ := decode(e.t, resp)["client_id"].(string)
+	require.NotEmpty(e.t, id)
+	return id
+}
+
+// consentFor opens the consent page for a client and returns what it was asked to show.
+func (e *env) consentFor(id, redirect string) oauth.ConsentRequest {
+	e.t.Helper()
+	p := newPKCE()
+	before := e.auth.consentCount()
+	resp := e.do(http.MethodGet, authorizeURL(id, redirect, &p, nil), nil, "", true)
+	require.Equal(e.t, http.StatusOK, resp.StatusCode)
+	require.Equal(e.t, before+1, e.auth.consentCount())
+	e.auth.mu.Lock()
+	defer e.auth.mu.Unlock()
+	return e.auth.consents[len(e.auth.consents)-1]
+}
+
+// The name and host the Owner sees can't be made to look like another client's (review of the
+// client-name fix): look-alike Unicode hosts appear in their xn-- form, a name can't carry its
+// own "(host)" or control and direction characters, and it has a length limit.
+func TestClientLabelResistsSpoofing(t *testing.T) {
+	e := setup(t)
+
+	homoglyph := "https://\u0441laude.ai/cb" // a Cyrillic "es" in place of the c
+	c := e.consentFor(e.registerNamed("Claude", homoglyph), homoglyph)
+	assert.Equal(t, "xn--laude-0ye.ai", c.ClientHost, "shown in ASCII")
+	assert.NotContains(t, c.Label(), "\u0441")
+
+	c = e.consentFor(e.registerNamed("Claude (claude.ai)\n\u202eia.edualc", "https://evil.example/cb"), "https://evil.example/cb")
+	assert.Equal(t, "Claude claude.ai ia.edualc", c.ClientName, "no parentheses, newlines or direction overrides")
+	assert.Equal(t, "Claude claude.ai ia.edualc (evil.example)", c.Label())
+
+	c = e.consentFor(e.registerNamed(strings.Repeat("A", 200), "https://evil.example/cb"), "https://evil.example/cb")
+	assert.LessOrEqual(t, len([]rune(c.ClientName)), 60, "a name has a length limit")
+
+	c = e.consentFor(e.registerNamed("\u200b ()", "https://evil.example/cb"), "https://evil.example/cb")
+	assert.Equal(t, "evil.example", c.Label(), "a name with nothing left shows the host alone")
+}
+
+// The account page lists every host a registered client can send codes to, since a remembered
+// approval covers all of its redirect URIs (review of the client-name fix).
+func TestAccountNameListsEveryRedirectHost(t *testing.T) {
+	e := setup(t)
+	id := e.registerNamed("Claude", "https://claude.ai/cb", "https://evil.example/cb", "https://claude.ai/other")
+	assert.Equal(t, "Claude (claude.ai, evil.example)", e.oauth.ClientName(ctxT(t), id))
+}
+
 type pkce struct{ verifier, challenge string }
 
 func newPKCE() pkce {

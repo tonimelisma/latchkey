@@ -31,6 +31,7 @@ h1 { font-size: 24px; line-height: 1.2; letter-spacing: -0.01em; margin: 0 0 8px
 h2 { font-size: 17px; margin: 0 0 6px; }
 p { margin: 0 0 16px; }
 .lead { color: var(--muted); text-align: center; }
+.host { text-align: center; }
 .card.wide .lead { text-align: left; }
 .small { font-size: 13px; color: var(--muted); }
 .center { text-align: center; }

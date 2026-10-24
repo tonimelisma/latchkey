@@ -76,7 +76,9 @@ Registered redirect URIs must be `https`, or `http` on a loopback host. The cons
 the redirect URI's host, and names the client by its `client_name` followed by the host the relay
 checked: the metadata document's host for a CIMD client (its client ID), otherwise the redirect
 URI's host, e.g. "Claude (claude.ai)". A client's name alone is never shown, since anyone can
-register one called "Claude".
+register one called "Claude". Hosts are shown in ASCII (`xn--` form for internationalized
+names); the name loses control and formatting characters and parentheses and is cut to 60
+characters.
 
 ## Token endpoint behavior
 

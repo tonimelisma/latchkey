@@ -1,5 +1,6 @@
 {{template "head" .}}
-<h1>Allow {{.Data.Label}} to use your Mac?</h1>
+<h1>Allow {{or .Data.ClientName "this app"}} to use your Mac?</h1>
+{{if .Data.ClientHost}}<p class="host">This app is at <strong>{{.Data.ClientHost}}</strong>. Allow it only if that's the app you expect.</p>{{end}}
 <p class="lead">It will see whether your Mac is online and can use the tools you've turned on in the Latchkey app.</p>
 <form method="post">
   <input type="hidden" name="csrf" value="{{.CSRF}}">
