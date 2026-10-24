@@ -101,7 +101,7 @@ IMPORTANT: every session or task that changes files works in its own git worktre
 - When the task is merged, leave with `ExitWorktree` (`remove`). `scripts/tidy.sh` also removes
   any worktree that is merged, clean, and untouched for a day.
 - Stage files by name, never `git add -A` or `git add .` (unfinished work of others was committed
-  that way on 2026-10-23). Never use bare `git stash` (the stash is shared between worktrees).
+  that way on 2026-10-23). Never stash (the stash is shared between worktrees; see below).
 - Private remote `github.com/tonimelisma/latchkey`, default branch `main`. Small commits. Open
   PRs only when asked.
 
@@ -122,8 +122,29 @@ IMPORTANT: every working increment, however small, is published and installed. I
    (`claude -p --allowedTools mcp__claude_ai_Latchkey`); this session's own connector keeps the
    tool list it started with.
 
-## Nothing left behind (Toni, 2026-10-23)
+## Nothing left behind (Toni, 2026-10-23 and 2026-10-24)
 
+IMPORTANT: Toni never hears about loose branches, stashes, or leftovers, and never asks for a
+cleanup. No work is ever lost. At the end of every turn:
+
+- Finished work is merged into `main` and pushed to GitHub.
+- Unfinished work is committed and pushed to its own branch (WIP commits are fine), and the reply
+  says in a line what is still open. Nothing lives only on this Mac.
+- Leftovers found from earlier sessions (unmerged branches, stashes, abandoned worktrees, Dependabot
+  updates) are integrated: tested and merged into main if they work, otherwise reported to Toni
+  with what they contain. Delete a branch or stash only after its work is on main.
+- No stashes at all: set work aside with a commit on your branch.
+
+Enforced by hooks in `.claude/settings.json` (`scripts/hooks.sh`):
+- `scripts/loose-ends.sh` lists anything not safely on main: this worktree's uncommitted,
+  unpushed, or unmerged work; stashes; branches (local or GitHub) not on main and not checked out
+  anywhere; unpushed branches; worktrees with uncommitted work untouched for a day; the main
+  checkout off `main` or dirty. It runs when a session starts (Claude is told) and before Claude
+  ends a turn (Claude is sent back once to resolve it).
+- Commands that can lose work are refused: `git stash` (except `list`/`show`), force-push,
+  `git reset --hard`, `git clean -f`, `git branch -D`, `git checkout -- .`. Delete merged branches
+  with `git branch -d`; never remove a worktree with `discard_changes` unless its commits are on
+  main.
 - After every push, `scripts/tidy.sh` runs automatically (Claude Code hook in
   `.claude/settings.json`): branches merged into main (local and GitHub; never main, the current
   branch, or a branch checked out in a worktree), finished worktrees, stale refs, all but the

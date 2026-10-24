@@ -1,14 +1,50 @@
 {
   "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/scripts/hooks.sh session-start || true",
+            "timeout": 60,
+            "statusMessage": "Checking for unfinished or unpushed work"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/scripts/hooks.sh guard || true",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
     "PostToolUse": [
       {
         "matcher": "Bash",
         "hooks": [
           {
             "type": "command",
-            "command": "jq -r '.tool_input.command // empty' | grep -q 'git push' && \"$CLAUDE_PROJECT_DIR\"/scripts/tidy.sh || true",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/scripts/hooks.sh after-bash || true",
             "timeout": 120,
             "statusMessage": "Cleaning up merged branches and old builds"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/scripts/hooks.sh stop || true",
+            "timeout": 60,
+            "statusMessage": "Checking that all work is on main and pushed"
           }
         ]
       }
