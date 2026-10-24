@@ -673,6 +673,15 @@ func TestGrantRevokedDuringRefresh(t *testing.T) {
 	}
 }
 
+// A refresh token is for the token endpoint only; /mcp takes access tokens (security scan).
+func TestRefreshTokenIsNotAnAccessToken(t *testing.T) {
+	e := setup(t)
+	id := e.register("https://claude.ai/api/mcp/auth_callback")
+	access, refresh := e.tokens(id)
+	assert.Equal(t, http.StatusOK, e.mcpStatus(access))
+	assert.Equal(t, http.StatusUnauthorized, e.mcpStatus(refresh))
+}
+
 func TestTokenEndpointNeedsFormEncoding(t *testing.T) {
 	e := setup(t)
 	resp := e.do(http.MethodPost, "/token", strings.NewReader(`{"grant_type":"refresh_token"}`), "application/json", false)

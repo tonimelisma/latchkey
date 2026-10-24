@@ -28,7 +28,9 @@ HTTP/1.1 401 Unauthorized
 WWW-Authenticate: Bearer resource_metadata="https://<relay>/.well-known/oauth-protected-resource/mcp", scope="mcp offline_access"
 ```
 
-The status must be 401; Claude ignores `WWW-Authenticate` on other statuses.
+The status must be 401; Claude ignores `WWW-Authenticate` on other statuses. The same 401 answers
+a bearer value that is not a live access token, a refresh token included (refresh tokens are for
+`POST /token` only; security scan, 2026-10-24).
 
 ## Protected resource metadata
 

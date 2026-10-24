@@ -260,13 +260,17 @@ func (s *Server) revoke(w http.ResponseWriter, r *http.Request) {
 	s.provider.WriteRevocationResponse(ctx, w, s.provider.NewRevocationRequest(ctx, r))
 }
 
-// verify maps an access token to its Owner for the MCP SDK.
+// verify maps an access token to its Owner for the MCP SDK. fosite's introspection falls back
+// to refresh tokens when the value isn't an access token; those are refused here.
 func (s *Server) verify(ctx context.Context, token string, _ *http.Request) (*auth.TokenInfo, error) {
-	_, ar, err := s.provider.IntrospectToken(ctx, token, fosite.AccessToken, newSession(""))
+	use, ar, err := s.provider.IntrospectToken(ctx, token, fosite.AccessToken, newSession(""))
 	if err != nil {
 		if errors.Is(err, fosite.ErrServerError) {
 			return nil, err
 		}
+		return nil, auth.ErrInvalidToken
+	}
+	if use != fosite.AccessToken {
 		return nil, auth.ErrInvalidToken
 	}
 	sess, ok := ar.GetSession().(*fosite.DefaultSession)
