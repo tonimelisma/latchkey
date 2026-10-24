@@ -187,6 +187,22 @@ final class FakeScripts: ScriptRunner, @unchecked Sendable {
         #expect(out == "a \" & quit|β")
     }
 
+    static let echo = """
+        on run argv
+        set AppleScript's text item delimiters to linefeed
+        return argv as text
+        end run
+        """
+
+    /// Claude's text reaches osascript as arguments; none may be read as an option such as -e,
+    /// which would add AppleScript lines (security scan, 2026-10-24).
+    @Test func argumentsThatLookLikeOptionsStayData() async throws {
+        let args = ["-e", "do shell script \"echo injected\"", "-l", "JavaScript", "--", "-s", "plain"]
+        let out = try await OSAScriptRunner().run(Self.echo, args)
+        #expect(out.components(separatedBy: "\n") == args)
+        #expect(try await OSAScriptRunner().run(Self.echo, ["-e"]) == "-e")
+    }
+
     @Test func endsAScriptPastItsDeadline() async throws {
         let runner = OSAScriptRunner(timeout: .milliseconds(500))
         await #expect(throws: ScriptError.timedOut) { try await runner.run("delay 5", []) }

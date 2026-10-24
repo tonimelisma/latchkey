@@ -34,7 +34,10 @@ enum FilesCapability {
                         if let folder = args["folder"]?.stringValue, !folder.isEmpty {
                             arguments += ["-onlyin", resolve(folder, home: home).path]
                         }
-                        let out = try await commands.run("/usr/bin/mdfind", arguments + [query], timeout: .seconds(20))
+                        // mdfind has no "--": a leading space keeps a query like "-live" from being
+                        // read as an option (Spotlight ignores the space).
+                        let words = query.hasPrefix("-") ? " " + query : query
+                        let out = try await commands.run("/usr/bin/mdfind", arguments + [words], timeout: .seconds(20))
                         let limit = min(max(Int(args["limit"]?.numberValue ?? 30), 1), 200)
                         let hits = out.split(separator: "\n").map { URL(filePath: String($0)) }
                             .map { ($0, modified($0) ?? .distantPast) }

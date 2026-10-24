@@ -15,14 +15,16 @@ enum ScriptError: Error, Equatable {
 
 /// Runs scripts in `osascript`, so a stuck app can be abandoned at the deadline (an in-process
 /// NSAppleScript can't be stopped and must stay on the main thread). The user's text travels as
-/// arguments, never inside the script.
+/// arguments, never inside the script, after "--" so that none of it is read as an option (an
+/// argument "-e" would otherwise add a line of AppleScript; security scan 2026-10-24).
 struct OSAScriptRunner: ScriptRunner {
     var timeout: Duration = .seconds(25)
 
     func run(_ script: String, _ args: [String]) async throws -> String {
         let lines = script.split(separator: "\n", omittingEmptySubsequences: false).flatMap { ["-e", String($0)] }
         let r: ProcessResult
-        do { r = try await ProcessCommands.launch("/usr/bin/osascript", lines + args, timeout: timeout) } catch {
+        do { r = try await ProcessCommands.launch("/usr/bin/osascript", lines + ["--"] + args, timeout: timeout) } catch
+        {
             throw ScriptError.failed(error.localizedDescription)
         }
         if r.timedOut { throw ScriptError.timedOut }
