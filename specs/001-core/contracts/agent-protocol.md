@@ -17,7 +17,10 @@ The app pairs once, through the Owner's browser (plan D6):
    to the app, which goes on to step 4. A link that reaches the app any other way (opened by the
    system from another browser, while a pairing is in progress or not) is used only after the
    Owner confirms a dialog naming the relay and the email of the code's account, and saying that
-   it replaces the current pairing if there is one (FR-054). To get the email, the app first asks
+   it replaces the current pairing if there is one (FR-054). The link controls the relay, and the
+   email is only what that relay answers, so the dialog's title names the relay and its text says
+   "<relay> says this is the account <email>"; it also says when the relay differs from the one
+   the Mac is paired with (or, unpaired, the one the app suggests). To get the email, the app first asks
    the relay, without using the code:
 
 ```http
