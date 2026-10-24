@@ -100,7 +100,8 @@ func jsonError(w http.ResponseWriter, status int, msg string) {
 	writeJSON(w, status, map[string]string{"error": msg})
 }
 
-// requireJSON rejects cross-site form posts: a JSON content type forces a CORS preflight.
+// requireJSON rejects cross-site form posts: a JSON content type forces a CORS preflight. Every
+// JSON endpoint here calls it first, the passkey finish steps included (they set the session).
 func requireJSON(w http.ResponseWriter, r *http.Request) bool {
 	if r.Header.Get("Content-Type") != "application/json" {
 		jsonError(w, http.StatusUnsupportedMediaType, "Expected JSON.")
@@ -185,6 +186,9 @@ func (s *Service) registerBegin(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Service) registerFinish(w http.ResponseWriter, r *http.Request) {
+	if !requireJSON(w, r) { // it starts a session: no cross-site form may reach it
+		return
+	}
 	c, ok := s.takeCeremony(r.URL.Query().Get("ceremony"))
 	if !ok || (c.purpose != store.PurposeVerify && c.purpose != store.PurposeRecover) {
 		jsonError(w, http.StatusBadRequest, "This took too long. Try again.")
@@ -285,6 +289,9 @@ func (s *Service) loginBegin(w http.ResponseWriter, r *http.Request) {
 var errUnknownPasskey = errors.New("unknown passkey")
 
 func (s *Service) loginFinish(w http.ResponseWriter, r *http.Request) {
+	if !requireJSON(w, r) { // it starts a session: no cross-site form may reach it
+		return
+	}
 	c, ok := s.takeCeremony(r.URL.Query().Get("ceremony"))
 	if !ok || (c.purpose != purposeSignIn && c.purpose != purposeReauth) {
 		jsonError(w, http.StatusBadRequest, "This took too long. Reload the page and try again.")

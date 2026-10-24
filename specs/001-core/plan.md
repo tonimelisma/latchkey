@@ -107,7 +107,9 @@ Serves FR-041, FR-042, FR-043.
   another tab. Sign-up is open unless `ALLOWED_EMAILS` is set (FR-046).
 - Web sessions: an HTTP-only, Secure, SameSite=Lax cookie holding a random ID stored hashed;
   30 days (FR-048). Account deletion requires a fresh passkey assertion. Forms carry a CSRF token
-  tied to the session.
+  tied to the session. Every JSON endpoint of the sign-in page, including the passkey finish
+  steps that start a session, accepts only `Content-Type: application/json`, which a cross-site
+  page cannot send without a CORS preflight the relay never answers (no login CSRF).
 - After sign-in the page returns only to a path on the relay itself: the `next` value must parse
   with no scheme or host, start with a single `/`, and contain no control character or backslash
   (browsers drop the first and read the second as `/`); otherwise `/account`. The page's script

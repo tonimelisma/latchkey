@@ -369,6 +369,29 @@ func TestPasskeyEndpointsNeedJSON(t *testing.T) {
 	assert.Equal(t, http.StatusUnsupportedMediaType, r.status)
 }
 
+// A cross-site page can post text/plain without a CORS preflight. It must not be able to finish
+// a passkey ceremony the attacker started, which would sign the victim's browser in to the
+// attacker's account (login CSRF, security scan).
+func TestPasskeyFinishRefusesCrossSiteForms(t *testing.T) {
+	e := setup(t)
+	attacker := e.browser()
+	attacker.signUp()
+	status, begin := attacker.json("/passkey/login/begin", map[string]string{"purpose": "signin"})
+	require.Equal(t, http.StatusOK, status)
+	assertion := attacker.authn.get(t, begin["options"].(map[string]any), e.base, attacker.authn.only(t))
+	body, _ := json.Marshal(assertion)
+
+	victim := e.browser()
+	r := victim.do(http.MethodPost, "/passkey/login/finish?ceremony="+begin["ceremony"].(string)+"&next=/account",
+		"text/plain", strings.NewReader(string(body)))
+	assert.Equal(t, http.StatusUnsupportedMediaType, r.status, r.body)
+	assert.Empty(t, r.header.Values("Set-Cookie"), "no session for the victim's browser")
+	assert.Equal(t, http.StatusFound, victim.get("/account").status, "the victim is not signed in")
+
+	r = victim.do(http.MethodPost, "/passkey/register/finish?ceremony=x", "text/plain", strings.NewReader("{}"))
+	assert.Equal(t, http.StatusUnsupportedMediaType, r.status, r.body)
+}
+
 func TestConsentPageViaAuthorize(t *testing.T) {
 	e := setup(t)
 	b := e.browser()
