@@ -1,0 +1,22 @@
+# Weekly update proposals for the relay's Go modules, its base images (pinned by digest), and the
+# workflows' actions (pinned by commit SHA). Security updates open right away regardless.
+version: 2
+updates:
+  - package-ecosystem: gomod
+    directory: /relay
+    schedule:
+      interval: weekly
+    groups:
+      go-modules:
+        patterns: ["*"]
+  - package-ecosystem: docker
+    directory: /relay
+    schedule:
+      interval: weekly
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]

@@ -1,0 +1,37 @@
+# Every push and pull request: the relay's tests, lint, and security checks (known vulnerabilities,
+# committed secrets, untidy modules). Actions are pinned to commit SHAs; Dependabot updates them.
+name: ci
+on:
+  push:
+  pull_request:
+  schedule:
+    - cron: "17 6 * * *" # daily, so a newly published vulnerability fails CI without a push
+permissions:
+  contents: read
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  relay:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: relay
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # the secret scan reads the whole history
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: relay/go.mod
+          cache-dependency-path: relay/go.sum
+      - name: Security checks
+        run: make security
+      - name: Build
+        run: make build
+      - name: Lint
+        run: make lint
+      - name: Test (race detector, headless Chrome)
+        run: make test

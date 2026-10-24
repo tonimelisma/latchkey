@@ -93,3 +93,4 @@ Add a row when a decision is made; never delete one, mark it "superseded by" ins
 | 2026-10-23 | Tools consolidated from 45 to 15: find/read/change (Notes, Messages, Files), run/check (Shell), read/act (Browser), look/act (Computer control) | plans 002–006 D1 |
 | 2026-10-23 | SECURITY.md with GitHub private vulnerability reporting (switched on when the repository is public) | SECURITY.md |
 | 2026-10-23 | The relay's address, server details, and Apple team ID stay out of the repository (gitignored .env, Local.xcconfig, CLAUDE.local.md); history rewritten once and force-pushed to remove them | Toni, CLAUDE.md Git |
+| 2026-10-23 | After every push, merged branches (local and remote), stale worktrees, old disk images, and old relay images are removed automatically (scripts/tidy.sh via a Claude Code hook) | CLAUDE.md Git |

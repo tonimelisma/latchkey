@@ -11,6 +11,13 @@ services:
     networks:
       - reverse_proxy
     mem_limit: 160m
+    pids_limit: 200
+    read_only: true # only the data volume (and a small /tmp for SQLite) is writable
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
 networks:
   reverse_proxy:
     external: true

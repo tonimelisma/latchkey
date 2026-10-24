@@ -1,7 +1,9 @@
-.PHONY: build test test-short lint fmt run tidy claude-check mac-check
+.PHONY: build test test-short lint fmt run tidy tidy-check vuln secrets security claude-check mac-check
 
 # Pinned and built with the installed Go, so every contributor lints the same way.
 GOLANGCI_LINT = go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.15.0
+GOVULNCHECK = go run golang.org/x/vuln/cmd/govulncheck@v1.9.0
+GITLEAKS = go run github.com/zricethezav/gitleaks/v8@v8.30.1
 
 build:
 	go build -o bin/relay ./cmd/relay
@@ -30,6 +32,21 @@ fmt:
 
 tidy:
 	go mod tidy
+
+# Fails if go.mod or go.sum aren't tidy.
+tidy-check:
+	go mod tidy -diff
+
+# Known vulnerabilities the relay's code can reach (Go itself and every module). Fails on any.
+vuln:
+	$(GOVULNCHECK) ./...
+
+# Secrets committed anywhere in the repository's history. Fails on any.
+secrets:
+	cd .. && $(GITLEAKS) git --redact --no-banner .
+
+# Every security check; the deploy script and CI run it.
+security: tidy-check vuln secrets
 
 # Local run with development defaults; override any variable on the command line.
 run: export PUBLIC_URL ?= http://localhost:8080

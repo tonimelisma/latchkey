@@ -1,0 +1,17 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "jq -r '.tool_input.command // empty' | grep -q 'git push' && \"$CLAUDE_PROJECT_DIR\"/scripts/tidy.sh || true",
+            "timeout": 120,
+            "statusMessage": "Cleaning up merged branches and old builds"
+          }
+        ]
+      }
+    ]
+  }
+}

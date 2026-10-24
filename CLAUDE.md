@@ -89,6 +89,13 @@ IMPORTANT: Toni makes every product and engineering choice. Claude proposes; Ton
 - Push the branch after every finished step, and fast-forward `main` to it (Toni, 2026-10-20).
   Never force-push (one exception, approved by Toni 2026-10-23: rewriting history to remove the
   relay's address).
+- After every push, `scripts/tidy.sh` runs automatically (Claude Code hook in
+  `.claude/settings.json`): it deletes branches merged into main, locally and on GitHub (except
+  main and the current branch), prunes worktrees and remote refs, and keeps only the newest disk
+  image and relay Docker image. Never work around it; run it by hand if a push happened outside
+  Claude Code (Toni, 2026-10-23).
+- Delete temporary files (scratch scripts, copies of databases, old app copies) as soon as the
+  task that needed them is done.
 - Never commit the hosted relay's address, its server details, or the Apple team ID; they live in
   the gitignored `.env`, `macos/Config/Local.xcconfig`, and `CLAUDE.local.md` (Toni, 2026-10-23).
 

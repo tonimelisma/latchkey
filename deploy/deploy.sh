@@ -21,6 +21,9 @@ VM=$DEPLOY_VM; PROJECT=$DEPLOY_PROJECT; ZONE=$DEPLOY_ZONE
 TAG=$(git rev-parse --short HEAD)
 ssh_vm() { gcloud compute ssh "$VM" --project "$PROJECT" --zone "$ZONE" --quiet --command "$1"; }
 
+echo "• security checks (known vulnerabilities, committed secrets, tidy modules)"
+make -C relay security >/dev/null
+
 echo "• DNS and email domain"
 IP=$(gcloud compute instances describe "$VM" --project "$PROJECT" --zone "$ZONE" --format='value(networkInterfaces[0].accessConfigs[0].natIP)')
 HOST="$HOST" ZONE_NAME="$ZONE_NAME" IP="$IP" python3 deploy/dns_and_email.py
