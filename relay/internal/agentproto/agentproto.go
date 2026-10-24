@@ -118,7 +118,11 @@ const (
 )
 
 // Values of Notice.Kind.
-const NoticeAccountRecovered = "account_recovered"
+const (
+	NoticeAccountRecovered = "account_recovered"
+	// NoticeClientAuthorized: a Claude client was given access; Client names it.
+	NoticeClientAuthorized = "client_authorized"
+)
 
 // Challenge is the relay's first message.
 type Challenge struct {
@@ -190,8 +194,9 @@ type Cancel struct {
 
 // Notice tells the Owner something on the Mac.
 type Notice struct {
-	Kind string    `json:"kind"`
-	At   time.Time `json:"at"`
+	Kind   string    `json:"kind"`
+	At     time.Time `json:"at"`
+	Client string    `json:"client,omitempty"`
 }
 
 func (*Challenge) MessageType() Type   { return TypeChallenge }

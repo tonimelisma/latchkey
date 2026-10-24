@@ -20,7 +20,6 @@ enum NotesCapability {
         """
 
     /// FR-151: results stay well within Claude's limit.
-    static let maxText = 100_000
 
     /// `scripts`, when given, reads through Notes if the database layout is unknown (plan D2).
     static func readTools(store: @escaping StoreSource, scripts: (any ScriptRunner)? = nil) -> [ToolEntry] {
@@ -75,24 +74,25 @@ enum NotesCapability {
                 tool: .make(
                     "notes_read", title: "Read a Note",
                     description:
-                        "Reads one note: title, folder, dates, and text as Markdown (checklists as - [ ] and - [x]). Attached images appear as [image <id>]; view them with notes_image.",
-                    input: ["id": .stringParam("The note's id, from notes_search")], required: ["id"], readOnly: true),
+                        "Reads one note: title, folder, dates, and text as Markdown (checklists as - [ ] and - [x]). Attached images appear as [image <id>]; view them with notes_image. Long notes come in parts; pass offset to read on.",
+                    input: [
+                        "id": .stringParam("The note's id, from notes_search"),
+                        "offset": .integerParam("Start at this character, from a previous answer"),
+                    ], required: ["id"], readOnly: true),
                 handler: { args in
                     await run(store, scripts) { s in
                         guard let id = args["id"]?.stringValue else {
                             return .text("Give the note's id.", isError: true)
                         }
                         let n = try await s.read(id: id)
-                        var text = n.text
-                        var shortened = false
-                        if text.count > maxText {
-                            text = String(text.prefix(maxText))
-                            shortened = true
-                        }
+                        let (text, next) = ResultLimit.page(n.text, offset: Int(args["offset"]?.numberValue ?? 0))
+                        let shortened = next != nil
                         var header =
                             "\(n.title) (id \(n.id); folder \(n.folder); changed \(n.modified.formatted(.iso8601)))"
                         if n.locked { header += "\nThis note is locked with a password; its content can't be read." }
-                        if shortened { header += "\nThe note is long; this is its first \(maxText) characters." }
+                        if let next {
+                            header += "\nThe note has \(n.text.count) characters; read on with offset \(next)."
+                        }
                         var value = json(n)
                         if case .object(var o) = value {
                             o["text"] = .string(text)

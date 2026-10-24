@@ -478,17 +478,26 @@ final class AppModel {
 
     func loadRecentActivity() { recentActivity = (try? trace?.recent(limit: 10)) ?? [] }
 
-    /// Account recovered: tell the Owner on this Mac (plan D5).
+    /// Account recovered (plan D5) or a Claude client given access: tell the Owner on this Mac.
     private func show(_ n: Notice) async {
-        guard n.kind == "account_recovered" else { return }
+        let content = UNMutableNotificationContent()
+        let when = n.at.formatted(date: .abbreviated, time: .shortened)
+        switch n.kind {
+        case "account_recovered":
+            content.title = "Your Latchkey account was recovered"
+            content.body =
+                "A new passkey was created on \(when). If this wasn't you, recover your account again and check your account page."
+        case "client_authorized":
+            content.title = "\(n.client ?? "Claude") can now use this Mac"
+            content.body =
+                "It was given access through Latchkey on \(when). If this wasn't you, remove it on your Latchkey account page."
+        default:
+            return
+        }
         let center = UNUserNotificationCenter.current()
         _ = try? await center.requestAuthorization(options: [.alert, .sound])
-        let content = UNMutableNotificationContent()
-        content.title = "Your Latchkey account was recovered"
-        content.body =
-            "A new passkey was created on \(n.at.formatted(date: .abbreviated, time: .shortened)). If this wasn't you, recover your account again and check your account page."
         try? await center.add(
-            UNNotificationRequest(identifier: "recovered-\(n.at.timeIntervalSince1970)", content: content, trigger: nil)
+            UNNotificationRequest(identifier: "\(n.kind)-\(n.at.timeIntervalSince1970)", content: content, trigger: nil)
         )
     }
 

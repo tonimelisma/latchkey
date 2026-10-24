@@ -119,8 +119,9 @@ final class FakeCommands: CommandRunner, @unchecked Sendable {
         #expect(first.count == FileReader.pageSize)
         #expect(total == 250_000)
         #expect(next == FileReader.pageSize)
-        guard case .text(let last, _, let end) = try FileReader.read(long, offset: 200_000) else { return }
-        #expect(last.count == 50_000)
+        let lastStart = 250_000 - 1_000
+        guard case .text(let last, _, let end) = try FileReader.read(long, offset: lastStart) else { return }
+        #expect(last.count == 1_000)
         #expect(end == nil)
     }
 }

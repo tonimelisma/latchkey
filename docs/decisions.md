@@ -87,3 +87,5 @@ Add a row when a decision is made; never delete one, mark it "superseded by" ins
 | 2026-10-22 | New capabilities start fully on after the update | specs 003–006 |
 | 2026-10-22 | Levels: Files, Browser, Computer control Off / Read only / Read & write; Shell Off / On | specs 003–006 |
 | 2026-10-22 | Shell has full sessions: start, check later, send input, stop | spec 004 |
+| 2026-10-23 | After the best-practices review: opening pages in Safari stays automatic (read-only); sending messages unchanged (no Latchkey-side stop); Shell and Computer control stay on by default | docs/best-practices.md |
+| 2026-10-23 | The Mac shows a notification each time a Claude client is given access | agent-protocol notice `client_authorized`, docs/best-practices.md |

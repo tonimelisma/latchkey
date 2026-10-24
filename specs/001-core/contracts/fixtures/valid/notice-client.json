@@ -1,0 +1,6 @@
+{
+  "type": "notice",
+  "kind": "client_authorized",
+  "at": "2026-10-19T18:30:00Z",
+  "client": "Claude"
+}

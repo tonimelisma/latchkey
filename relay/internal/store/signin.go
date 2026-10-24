@@ -512,3 +512,59 @@ func (s *Store) CheckEmailCode(ctx context.Context, userID, purpose string, code
 	_, err = s.db.ExecContext(ctx, `UPDATE email_tokens SET used_at = ? WHERE token_hash = ?`, toMS(now), stored)
 	return err
 }
+
+// ClientAuthorization is one time a Claude client was given access.
+type ClientAuthorization struct {
+	ID         int64
+	ClientName string
+	At         time.Time
+}
+
+// AddClientAuthorization records a grant; notified says the Mac was already told.
+func (s *Store) AddClientAuthorization(ctx context.Context, userID, clientName string, at time.Time, notified bool) error {
+	var n any
+	if notified {
+		n = toMS(at)
+	}
+	_, err := s.db.ExecContext(ctx,
+		`INSERT INTO client_authorizations (user_id, client_name, at, notified_at) VALUES (?, ?, ?, ?)`,
+		userID, clientName, toMS(at), n)
+	return mapErr(err)
+}
+
+// TakeClientAuthorizations returns grants since `since` the Mac hasn't been told about, and marks
+// them told.
+func (s *Store) TakeClientAuthorizations(ctx context.Context, userID string, since, now time.Time) ([]ClientAuthorization, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT id, client_name, at FROM client_authorizations
+		WHERE user_id = ? AND notified_at IS NULL AND at >= ? ORDER BY at`, userID, toMS(since))
+	if err != nil {
+		return nil, err
+	}
+	var out []ClientAuthorization
+	for rows.Next() {
+		var a ClientAuthorization
+		var at sql.NullInt64
+		if err := rows.Scan(&a.ID, &a.ClientName, &at); err != nil {
+			_ = rows.Close()
+			return nil, err
+		}
+		a.At = fromMS(at)
+		out = append(out, a)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if _, err := s.db.ExecContext(ctx,
+		`UPDATE client_authorizations SET notified_at = ? WHERE user_id = ? AND notified_at IS NULL AND at >= ?`,
+		toMS(now), userID, toMS(since)); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// PurgeClientAuthorizations deletes grants recorded before `before`.
+func (s *Store) PurgeClientAuthorizations(ctx context.Context, before time.Time) error {
+	_, err := s.db.ExecContext(ctx, `DELETE FROM client_authorizations WHERE at < ?`, toMS(before))
+	return err
+}

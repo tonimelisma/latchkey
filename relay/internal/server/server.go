@@ -51,7 +51,10 @@ func New(ctx context.Context, o Options) (*Relay, error) {
 	ms = mcpserver.New(o.Store, h, mcpserver.Options{Logger: o.Logger, Version: o.Version})
 
 	auth := &authBridge{}
-	oa, err := oauth.New(ctx, oauth.Config{Issuer: o.PublicURL, Store: o.Store, Auth: auth})
+	oa, err := oauth.New(ctx, oauth.Config{
+		Issuer: o.PublicURL, Store: o.Store, Auth: auth,
+		OnAuthorized: func(ctx context.Context, userID, clientName string) { acc.ClientAuthorized(ctx, userID, clientName) },
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -90,6 +93,9 @@ func Purge(ctx context.Context, db *store.Store, logger *slog.Logger) {
 			logger.Error("purge audit log", "err", err)
 		} else if n > 0 {
 			logger.Info("purged audit log", "rows", n)
+		}
+		if err := db.PurgeClientAuthorizations(ctx, now.Add(-AuditRetention)); err != nil {
+			logger.Error("purge client authorizations", "err", err)
 		}
 		if err := db.PurgeExpired(ctx, now); err != nil {
 			logger.Error("purge expired sign-in data", "err", err)

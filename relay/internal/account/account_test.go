@@ -627,6 +627,35 @@ func TestNoticesOnConnect(t *testing.T) {
 	assert.Empty(t, svc.NoticesOnConnect(context.Background(), d, e.clock.now()), "only once")
 }
 
+func TestNewClientAccessIsAnnouncedOnce(t *testing.T) {
+	e := setup(t)
+	e.browser().signUp()
+	ctx := context.Background()
+	u, _ := e.store.UserByEmail(ctx, owner)
+	d, err := e.store.CreateDevice(ctx, store.NewDevice{UserID: u.ID, Name: "Mac", PublicKey: []byte("k")}, e.clock.now())
+	require.NoError(t, err)
+	svc := e.service(t)
+
+	// Offline: kept for the next connection, told once.
+	e.clock.advance(time.Minute)
+	svc.ClientAuthorized(ctx, u.ID, "Claude")
+	assert.Empty(t, e.macs.notices)
+	notices := svc.NoticesOnConnect(ctx, d, time.Time{})
+	require.Len(t, notices, 1)
+	assert.Equal(t, agentproto.NoticeClientAuthorized, notices[0].Kind)
+	assert.Equal(t, "Claude", notices[0].Client)
+	assert.Empty(t, svc.NoticesOnConnect(ctx, d, time.Time{}), "only once")
+
+	// Online: told right away, and not again on the next connection.
+	e.macs.mu.Lock()
+	e.macs.online[d.ID] = true
+	e.macs.mu.Unlock()
+	svc.ClientAuthorized(ctx, u.ID, "Claude Code")
+	require.Len(t, e.macs.notices, 1)
+	assert.Equal(t, "Claude Code", e.macs.notices[0].Client)
+	assert.Empty(t, svc.NoticesOnConnect(ctx, d, time.Time{}))
+}
+
 func TestNextIsAlwaysLocal(t *testing.T) {
 	e := setup(t)
 	page := e.browser().get("/signin?next=//evil.example/x")

@@ -67,7 +67,9 @@ Sources: [MCP security best practices](https://modelcontextprotocol.io/specifica
   PKCE S256; redirect checks; CIMD fetches refuse private, loopback, and link-local addresses at
   connect time (which also defeats DNS rebinding); shell job ids are only usable by the same
   account's Mac; refresh rotation with reuse detection; passkeys, no passwords.
-- **Gap:** the owner isn't told when a new Claude client is granted access. TeamViewer-style
+- **Done (2026-10-23):** the Mac shows a notification each time a Claude client is given
+  access (notice `client_authorized`). Was a gap: the owner wasn't told when a new Claude client
+  was granted access. TeamViewer-style
   practice is to notify or require approval for each new connection
   ([TeamViewer](https://www.teamviewer.com/en/insights/unattended-access-security/)). A Mac
   notification "Claude (claude.ai) was given access to this Mac" on each new grant is cheap.
@@ -107,7 +109,8 @@ Sources: [Writing effective tools for agents](https://www.anthropic.com/engineer
 **Latchkey.**
 - **Done:** prefixes per capability; read and write split; actionable errors; names resolved
   from Contacts; "read on with offset"; tested with real Claude Code against the real relay.
-- **Gap:** pages are up to 100,000 characters (about 25–30k tokens), at or over Claude Code's
+- **Done (2026-10-23):** pages are now 40,000 characters, and `notes_read` pages too. Was a
+  gap: pages were up to 100,000 characters (about 25–30k tokens), at or over Claude Code's
   25k-token cap, so long notes, files, and pages can be cut off by Claude rather than by
   Latchkey. A 40,000-character page leaves room.
 - **Gap:** 45 tools is a lot of context in every conversation (no maximum exists). Consolidation
@@ -149,6 +152,14 @@ for local connectors and expected for remote ones); documented incident response
 **Latchkey.**
 - **Gap:** no `SECURITY.md`, no dependency scanning (Dependabot or `govulncheck` in CI).
 - **Later:** privacy policy and terms (with the directory listing).
+
+## Decisions after this review (Toni, 2026-10-23)
+
+- Opening pages in Safari stays automatic (gap 1 accepted).
+- Sending messages unchanged: no Latchkey-side stop (gap 2 accepted).
+- Notification on new access: built (gap 3).
+- Page size: lowered to 40,000 characters (gap 4, Claude's call).
+- Shell and Computer control stay on by default (gap 5 accepted).
 
 ## Summary of gaps, most important first
 

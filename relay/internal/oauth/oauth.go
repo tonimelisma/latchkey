@@ -49,6 +49,8 @@ type Config struct {
 	// HTTPClient fetches client metadata documents. Default: refuses private addresses.
 	HTTPClient *http.Client
 	Now        func() time.Time
+	// OnAuthorized runs after each grant, with the client's name, so the Owner can be told.
+	OnAuthorized func(ctx context.Context, userID, clientName string)
 }
 
 // Server is the authorization server.
@@ -209,6 +211,13 @@ func (s *Server) authorize(w http.ResponseWriter, r *http.Request) {
 	if err := s.cfg.Store.PutConsent(ctx, userID, ar.GetClient().GetID(), strings.Join(scopes, " "), s.cfg.Now()); err != nil {
 		http.Error(w, "server error", http.StatusInternalServerError)
 		return
+	}
+	if s.cfg.OnAuthorized != nil {
+		name := ar.GetClient().GetID()
+		if cl, ok := ar.GetClient().(*client); ok && cl.Name != "" {
+			name = cl.Name
+		}
+		s.cfg.OnAuthorized(ctx, userID, name)
 	}
 	s.provider.WriteAuthorizeResponse(ctx, w, ar, resp)
 }

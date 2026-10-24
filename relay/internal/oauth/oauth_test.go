@@ -86,6 +86,9 @@ type env struct {
 	srv    *httptest.Server
 	cimd   *httptest.Server
 	userID string
+
+	authorizedMu sync.Mutex
+	authorized   []string // client names, in order
 }
 
 func setup(t *testing.T) *env {
@@ -114,6 +117,13 @@ func setup(t *testing.T) *env {
 	issuer, _ := url.Parse(e.srv.URL)
 	e.oauth, err = oauth.New(ctx, oauth.Config{
 		Issuer: issuer, Store: st, Auth: e.auth, HTTPClient: e.cimd.Client(), Now: e.clock.now,
+		OnAuthorized: func(_ context.Context, userID, clientName string) {
+			e.authorizedMu.Lock()
+			defer e.authorizedMu.Unlock()
+			if userID == e.userID {
+				e.authorized = append(e.authorized, clientName)
+			}
+		},
 	})
 	require.NoError(t, err)
 	e.oauth.Register(mux)
@@ -432,6 +442,16 @@ func TestConsentRemembered(t *testing.T) {
 	e.tokens(id)
 	e.tokens(id)
 	assert.Equal(t, 1, e.auth.consentCount(), "FR-049: asked once per client")
+}
+
+func TestEveryAuthorizationIsAnnounced(t *testing.T) {
+	e := setup(t)
+	id := e.register("https://claude.ai/api/mcp/auth_callback")
+	e.tokens(id)
+	e.tokens(id)
+	e.authorizedMu.Lock()
+	defer e.authorizedMu.Unlock()
+	assert.Equal(t, []string{"Claude", "Claude"}, e.authorized, "each grant, even with consent remembered")
 }
 
 func TestResourceIndicator(t *testing.T) {

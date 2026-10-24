@@ -20,7 +20,7 @@ enum PageScripts {
         var checked: Bool?
     }
 
-    static let pageSize = 100_000
+    static let pageSize = ResultLimit.characters
 
     static func decode(_ json: String) throws -> Page {
         try JSONDecoder().decode(Page.self, from: Data(json.utf8))

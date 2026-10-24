@@ -483,14 +483,36 @@ func (s *Service) signout(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
-// NoticesOnConnect tells a Mac about recoveries since it last connected (plan D5).
+// NoticesOnConnect tells a Mac about recoveries since it last connected (plan D5), and about
+// Claude clients given access that it hasn't been told about.
 func (s *Service) NoticesOnConnect(ctx context.Context, d store.Device, previous time.Time) []*agentproto.Notice {
+	var out []*agentproto.Notice
 	if previous.IsZero() {
 		previous = d.CreatedAt
 	}
-	times, err := s.cfg.Store.RecoveriesSince(ctx, d.UserID, previous)
-	if err != nil || len(times) == 0 {
-		return nil
+	if times, err := s.cfg.Store.RecoveriesSince(ctx, d.UserID, previous); err == nil && len(times) > 0 {
+		out = append(out, &agentproto.Notice{Kind: agentproto.NoticeAccountRecovered, At: times[len(times)-1].Truncate(time.Second)})
 	}
-	return []*agentproto.Notice{{Kind: agentproto.NoticeAccountRecovered, At: times[len(times)-1].Truncate(time.Second)}}
+	grants, err := s.cfg.Store.TakeClientAuthorizations(ctx, d.UserID, d.CreatedAt, s.now())
+	if err != nil {
+		s.cfg.Logger.Error("client authorizations", "err", err)
+	}
+	for _, g := range grants {
+		out = append(out, &agentproto.Notice{Kind: agentproto.NoticeClientAuthorized, At: g.At.Truncate(time.Second), Client: g.ClientName})
+	}
+	return out
+}
+
+// ClientAuthorized tells the Owner's Mac that a Claude client was given access: now if it's
+// online, otherwise on its next connection.
+func (s *Service) ClientAuthorized(ctx context.Context, userID, clientName string) {
+	now := s.now()
+	told := false
+	if d, err := s.cfg.Store.ActiveDevice(ctx, userID); err == nil && s.cfg.Macs.Online(d.ID) {
+		n := &agentproto.Notice{Kind: agentproto.NoticeClientAuthorized, At: now.Truncate(time.Second), Client: clientName}
+		told = s.cfg.Macs.SendNotice(ctx, d.ID, n) == nil
+	}
+	if err := s.cfg.Store.AddClientAuthorization(ctx, userID, clientName, now, told); err != nil {
+		s.cfg.Logger.Error("record client authorization", "err", err)
+	}
 }

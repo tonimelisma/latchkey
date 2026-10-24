@@ -144,7 +144,12 @@ struct Call: Codable, Sendable {
 }
 
 struct Cancel: Codable, Sendable { var id: String; var reason: String }
-struct Notice: Codable, Sendable { var kind: String; var at: Date }
+struct Notice: Codable, Sendable {
+    var kind: String
+    var at: Date
+    /// For `client_authorized`: the client's name.
+    var client: String?
+}
 
 enum AgentMessage: Sendable {
     case challenge(Challenge), hello(Hello), welcome(Welcome), state(StateUpdate), tools(ToolsUpdate)

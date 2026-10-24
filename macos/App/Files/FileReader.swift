@@ -14,7 +14,7 @@ enum FileReader {
     }
 
     /// FR-207: at most this many characters per answer.
-    static let pageSize = 100_000
+    static let pageSize = ResultLimit.characters
     static let maxBytes = 100_000_000
 
     static func read(_ url: URL, offset: Int) throws -> Content {
@@ -28,11 +28,8 @@ enum FileReader {
             return .notReadable(
                 "not text, a PDF, a document, or an image (\(type.localizedDescription ?? type.identifier))")
         }
-        let total = text.count
-        let start = text.index(text.startIndex, offsetBy: min(max(offset, 0), total))
-        let end = text.index(start, offsetBy: pageSize, limitedBy: text.endIndex) ?? text.endIndex
-        let next = end < text.endIndex ? text.distance(from: text.startIndex, to: end) : nil
-        return .text(String(text[start..<end]), total: total, next: next)
+        let (page, next) = ResultLimit.page(text, offset: offset)
+        return .text(page, total: text.count, next: next)
     }
 
     private static let documentTypes: [UTType] = [
