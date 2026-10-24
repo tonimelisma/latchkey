@@ -34,7 +34,7 @@ Then open `https://relay.example.com`, create your account, and continue with "C
 | Variable | Required | Meaning |
 |---|---|---|
 | `PUBLIC_URL` | yes | The relay's public address, `https://` with no path. Claude's connector URL is this plus `/mcp`. |
-| `SMTP_HOST`, `SMTP_PORT`, `SMTP_FROM` | yes | Outgoing mail server. Port 465 uses TLS directly; other ports use STARTTLS when offered. |
+| `SMTP_HOST`, `SMTP_PORT`, `SMTP_FROM` | yes | Outgoing mail server. Port 465 uses TLS directly; other ports require STARTTLS, and the relay refuses to send to a server that doesn't offer it. Only a mail server on the same machine (`localhost`, for testing) may be reached without encryption. |
 | `SMTP_USER`, `SMTP_PASSWORD` | no | Set both, or neither if the server needs no login. |
 | `ALLOWED_EMAILS` | no | Comma-separated addresses allowed to sign up. Empty means anyone can sign up; set it to your own address on a personal relay. |
 | `ACME_EMAIL` | no | Turns on built-in HTTPS with Let's Encrypt (see below). |

@@ -146,7 +146,10 @@ Serves FR-041, FR-042, FR-043.
   at once if the Mac is online, otherwise on its next connection (the relay compares the
   recovery's `used_at` with the device's last connection; nothing new is stored).
 - Email: SMTP via `github.com/wneessen/go-mail`; configured by environment variables (FR-080).
-  The hosted relay sends through Resend's SMTP from `no-reply@` its own host name.
+  The hosted relay sends through Resend's SMTP from `no-reply@` its own host name. Mail is always
+  encrypted: TLS from the start on port 465, required STARTTLS on other ports (a server that
+  doesn't offer it gets nothing, so an on-path attacker can't strip it and read codes); only a
+  server on loopback (a local test mail catcher) may be plain (security scan, 2026-10-24).
 - Web pages: server-rendered `html/template` with a small script for WebAuthn calls, and one small
   hand-written stylesheet (system font, light and dark) embedded in the binary. No frontend
   framework, no CSS library.
