@@ -40,7 +40,7 @@ enum BrowserCapability {
                     input: ["offset": .integerParam("Start at this character, from a previous answer")], readOnly: true,
                     openWorld: true, deadlineMS: 30_000),
                 handler: { args in
-                    await run { page(try await browser.read(offset: Int(args["offset"]?.numberValue ?? 0))) }
+                    await run { page(try await browser.read(offset: try args.integer("offset", in: 0...Int.max) ?? 0)) }
                 }),
             ToolEntry(
                 tool: .make(
@@ -50,7 +50,7 @@ enum BrowserCapability {
                     deadlineMS: 30_000),
                 handler: { args in
                     await run {
-                        let t = try await browser.tabs(select: args["select"]?.numberValue.map { Int($0) })
+                        let t = try await browser.tabs(select: try args.integer("select", in: 1...Int.max))
                         return .text(
                             t.tabs.map { "\($0.0 == t.current ? "*" : "-") \($0.0). \($0.1) (\($0.2))" }.joined(
                                 separator: "\n"))
@@ -183,6 +183,8 @@ enum BrowserCapability {
     private static func run(_ body: () async throws -> ToolResult) async -> ToolResult {
         do { return try await body() } catch let f as Failure {
             return .text(explain(f), isError: true)
+        } catch let a as ArgumentError {
+            return .text(a.message, isError: true)
         } catch ScriptError.notAllowed {
             return .text(
                 "Latchkey isn't allowed to control Safari. The Mac's owner can allow it in System Settings → Privacy & Security → Automation → Latchkey.",

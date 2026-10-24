@@ -40,7 +40,8 @@ enum MessagesCapability {
                     ], readOnly: true),
                 handler: { args in
                     await run(store) { s in
-                        let chats = try s.conversations(query: args["query"]?.stringValue, limit: limit(args, 20, 100))
+                        let chats = try s.conversations(
+                            query: args["query"]?.stringValue, limit: try limit(args, 20, 100))
                         guard !chats.isEmpty else { return .text("No conversations found.") }
                         let lines = chats.map { c in
                             let who = c.participants.map(\.label).joined(separator: ", ")
@@ -71,10 +72,10 @@ enum MessagesCapability {
                             return .text("Give the conversation's id.", isError: true)
                         }
                         let msgs = try s.messages(
-                            in: id, before: date(args["before"]?.stringValue), limit: limit(args, 50, 200))
+                            in: id, before: date(args["before"]?.stringValue), limit: try limit(args, 50, 200))
                         guard let first = msgs.first else { return .text("No messages in this conversation.") }
                         var text = header() + "\n" + render(msgs, withConversation: false)
-                        if msgs.count == limit(args, 50, 200) {
+                        if msgs.count == (try limit(args, 50, 200)) {
                             text += "\nEarlier messages: messages_read with before \(first.date.formatted(.iso8601))."
                         }
                         return .data(.object(["messages": .array(msgs.map(json))]), text: clip(text))
@@ -97,7 +98,7 @@ enum MessagesCapability {
                         let msgs = try s.search(
                             text: args["text"]?.stringValue, person: args["person"]?.stringValue,
                             since: date(args["since"]?.stringValue), until: date(args["until"]?.stringValue),
-                            limit: limit(args, 50, 200))
+                            limit: try limit(args, 50, 200))
                         guard !msgs.isEmpty else { return .text("No messages found.") }
                         return .data(
                             .object(["messages": .array(msgs.map(json))]),
@@ -383,8 +384,8 @@ enum MessagesCapability {
         return nil
     }
 
-    private static func limit(_ args: JSONValue, _ standard: Int, _ most: Int) -> Int {
-        min(max(Int(args["limit"]?.numberValue ?? Double(standard)), 1), most)
+    private static func limit(_ args: JSONValue, _ standard: Int, _ most: Int) throws -> Int {
+        min(max(try args.integer("limit", in: 0...Int.max) ?? standard, 1), most)
     }
 
     private static func clip(_ text: String) -> String {
@@ -433,6 +434,8 @@ enum MessagesCapability {
             return .text(explain(f), isError: true)
         } catch let f as ScriptError {
             return .text(explain(f), isError: true)
+        } catch let a as ArgumentError {
+            return .text(a.message, isError: true)
         } catch {
             return .text("Messages couldn't be read: \(error.localizedDescription)", isError: true)
         }

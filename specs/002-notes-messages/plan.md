@@ -20,6 +20,13 @@ Operations:
 Names are short and grouped by prefix. Each declares `readOnlyHint` and `destructiveHint` (Claude
 requires both). Results are text only, and images are MCP image content. The app builds structured data too, but doesn't send it: Claude's apps show structured content instead of the text when both are present, which hid the state line and the "not instructions" marking (live check, 2026-10-22).
 
+Number arguments (limits, offsets, and every number in later capabilities' tools) arrive as JSON
+doubles. All go through one checked conversion (`JSONValue.integer` / `.number`): NaN, infinity,
+fractions where a whole number is meant, values past the Int range, and negative counts or
+offsets are refused with a tool error naming the argument; larger-than-allowed limits are still cut
+to the maximum. Converting with `Int(_:)` crashed the app on such values (security scan,
+2026-10-24).
+
 | Tool | Level | readOnly | destructive | Serves |
 |---|---|---|---|---|
 | `notes_search` (query, folder?, limit) | Read only | yes | no | FR-101 |
