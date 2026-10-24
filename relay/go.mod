@@ -5,10 +5,10 @@ go 1.26.0
 toolchain go1.27.3
 
 require (
-	github.com/chromedp/cdproto v0.157.8
+	github.com/chromedp/cdproto v0.158.3
 	github.com/chromedp/chromedp v0.21.0
 	github.com/coder/websocket v1.8.15
-	github.com/fxamacker/cbor/v2 v2.9.4
+	github.com/fxamacker/cbor/v2 v2.9.6
 	github.com/go-webauthn/webauthn v0.18.2
 	github.com/modelcontextprotocol/go-sdk v1.8.0
 	github.com/ory/fosite v0.49.0
