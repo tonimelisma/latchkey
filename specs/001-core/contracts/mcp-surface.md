@@ -73,7 +73,10 @@ Code picks a new port each time. In practice:
 - `http://localhost:<any>/callback` and `http://127.0.0.1:<any>/callback` (Claude Code)
 
 Registered redirect URIs must be `https`, or `http` on a loopback host. The consent screen shows
-the redirect URI's host.
+the redirect URI's host, and names the client by its `client_name` followed by the host the relay
+checked: the metadata document's host for a CIMD client (its client ID), otherwise the redirect
+URI's host, e.g. "Claude (claude.ai)". A client's name alone is never shown, since anyone can
+register one called "Claude".
 
 ## Token endpoint behavior
 

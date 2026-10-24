@@ -85,7 +85,11 @@ Serves FR-040, FR-014.
   window for the previous token (network retries). SC-07 needs at least 7 days.
 - Endpoint latency: discovery, registration, and token endpoints respond well under 10 s (Claude's
   limit); no outbound calls on the token path except a cached CIMD fetch.
-- Consent screen shows the client name and the redirect URI's host. An approval is remembered per
+- Consent screen shows the client name and the redirect URI's host. The name is the client's own
+  claim, so wherever it appears (consent page, account page, the Mac's `client_authorized`
+  notice) it is followed by the host the relay checked: the client ID's host for a CIMD client
+  (the relay fetched the document there), else the redirect host, as "Claude (claude.ai)"
+  (security scan, 2026-10-24). An approval is remembered per
   Owner, client, and scope set (FR-049), and forgotten when the Owner revokes Claude's access.
 - Redirect URIs must be registered by the client (CIMD document or DCR); for loopback URIs
   (`localhost`, `127.0.0.1`, `[::1]`) the port is ignored. fosite ignores the port only for IP
