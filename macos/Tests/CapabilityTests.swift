@@ -48,7 +48,7 @@ import Testing
     }
 
     @Test func activityTitles() {
-        let e = TraceEntry(
+        let e = Activity(
             at: Date(), tool: "notes_create", arguments: "{}", result: "{}", isError: true, durationMS: 3)
         #expect(ActivityFormat.title(e).hasSuffix("notes create (failed)"))
         #expect(ActivityFormat.clip(String(repeating: "x", count: 200)).count == 80)

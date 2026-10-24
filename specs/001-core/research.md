@@ -169,3 +169,22 @@ secret. Implementation details decided here:
   just delivered is ignored, so a browser that also hands it to the app shows no "expired" alert.
 - The email shown must be one plain address (no spaces or line breaks, at most 254 characters);
   anything else counts as a failed lookup, so a relay can't put misleading text in the dialog.
+
+## Encrypting the activity log (FR-026a, 2026-10-24)
+
+- Cipher: CryptoKit AES-256-GCM with one random key (chosen: Apple's own, authenticated, no
+  dependency), versus SQLCipher for the whole database (rejected: a C library and a SwiftData
+  replacement), versus a key derived from the Secure Enclave device key (rejected: the device key
+  is deleted on Disconnect, which would lose the log, and it is out of this change's scope).
+- What is sealed: everything but the entry's time and a random ID (tool name, arguments, result,
+  outcome, duration as one JSON blob). The time stays plain so the 90-day purge is one query.
+- Key storage: a generic-password item in the login Keychain through the existing `Keychain`
+  helper (`kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly`). The app isn't sandboxed and has no
+  keychain-access-group entitlement, so the item lives in the file-based login keychain, whose
+  default access list trusts only the creating app: another program asking for it makes macOS
+  prompt the Owner. The data-protection keychain would bind it to the app's signature without a
+  prompt option, but needs an access-group entitlement (signing settings, not changed here).
+- Existing plaintext entries: encrypted into a new file once, then the old file deleted (chosen),
+  versus deleting them (loses up to 90 days of the Owner's history), versus encrypting them in
+  place (rejected: SQLite keeps old plaintext in free pages and its write-ahead log, so the old
+  file must go anyway). If the old file can't be read it is deleted all the same.

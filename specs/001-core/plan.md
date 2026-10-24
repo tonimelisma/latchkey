@@ -240,7 +240,7 @@ Serves FR-070, FR-071, FR-072; Constitution IV.
 - Uninstall: deleting the app removes the helper's launchd plist and the login item with it,
   because `SMAppService` keeps both inside the bundle. A running app also watches its bundle; when
   it lands in the Trash it disconnects (goodbye `user_disconnected`), restores sleep, unregisters
-  both items, deletes the Keychain key, settings, activity log, caches, and saved state, and quits
+  both items, deletes the Keychain keys (device and activity log), settings, activity log, caches, and saved state, and quits
   (FR-077). If the app was quit before being deleted, its small settings file and activity log
   remain, as with most Mac apps; sleep and background items are clean either way. Replacing the
   app with a newer copy is not an uninstall: the trashed copy waits up to 5 s for a Latchkey to
@@ -280,12 +280,20 @@ Serves FR-080, Constitution V, VIII.
   nothing more is built now.
 
 ### D11. Audit log and local trace
-Serves FR-022, FR-023, FR-024, FR-026, Constitution VI.
+Serves FR-022, FR-023, FR-024, FR-026, FR-026a, Constitution VI.
 - Relay: one row per tool call, metadata only (no arguments, no results); daily purge after 30 days.
   "Surface" (FR-022) is the MCP `clientInfo.name` from the session's `initialize`, when sent.
 - Mac app: full trace (arguments, results, errors, timings) in a local SQLite file in the app's
-  Application Support folder (SwiftData), shown in a log window from the menu bar. Never sent to the relay.
+  Application Support folder (SwiftData, `activity.store`), shown in a log window from the menu bar. Never sent to the relay.
   Purged after 90 days by default.
+- Each entry is stored as its time (for the purge) plus one AES-256-GCM sealed box (CryptoKit)
+  holding tool, arguments, result, outcome, and duration (FR-026a). The key is 256 random bits,
+  made on first use and kept as a generic password in the login Keychain (this Mac only,
+  readable after first unlock); its access list trusts only the app that created it, so another
+  program asking for it makes macOS ask the Owner. Entries are decrypted only to show them; one
+  whose key is gone shows as unreadable. The plaintext log of earlier versions (`trace.store`) is
+  encrypted into the new file once at start, then its files are deleted. Uninstall (FR-077)
+  deletes the key too. Tests use an in-memory key, never the Keychain.
 
 ## Repository layout
 

@@ -63,11 +63,13 @@ import Testing
 
         // Never the real pairing: the test app shares the installed app's Keychain and settings.
         var forgot = false
+        var forgotTraceKey = false
         LocalData(
             supportDirectory: support, defaultsDomain: suite, defaults: defaults, forgetIdentity: { forgot = true },
-            systemFolders: [cache]
+            forgetTraceKey: { forgotTraceKey = true }, systemFolders: [cache]
         ).remove()
         #expect(forgot)
+        #expect(forgotTraceKey, "the activity log's key goes too (FR-077, FR-026a)")
         #expect(!FileManager.default.fileExists(atPath: support.path))
         #expect(!FileManager.default.fileExists(atPath: cache.path))
         #expect(UserDefaults(suiteName: suite)?.object(forKey: "keepAwakeEnabled") == nil)

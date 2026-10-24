@@ -50,7 +50,7 @@ Boundaries, each a place where input must be treated as hostile:
   still reachable).
 - **B5 Other local processes → the app and helper.** The helper's Mach service, the
   `latchkey://` URL scheme, the app's files in Application Support (activity log with full
-  tool arguments and results), user defaults, Keychain items.
+  tool arguments and results, AES-GCM encrypted with a key in the Keychain, FR-026a), user defaults, Keychain items.
 - **B6 Supply chain.** Go modules, Sparkle, Docker base images, Homebrew-installed tools, the
   deploy and install scripts, the update feed.
 

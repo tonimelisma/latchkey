@@ -303,8 +303,8 @@ final class SetupWindow {
 
 struct ActivityView: View {
     let model: AppModel
-    @State private var entries: [TraceEntry] = []
-    @State private var selection: TraceEntry.ID?
+    @State private var entries: [Activity] = []
+    @State private var selection: Activity.ID?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -336,7 +336,7 @@ struct ActivityView: View {
 
 /// How an activity appears in the menu.
 enum ActivityFormat {
-    static func title(_ e: TraceEntry) -> String {
+    static func title(_ e: Activity) -> String {
         let time = e.at.formatted(date: .omitted, time: .shortened)
         let name = e.tool.replacingOccurrences(of: "_", with: " ")
         return "\(time)  \(name)\(e.isError ? " (failed)" : "")"
