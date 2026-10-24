@@ -150,7 +150,7 @@ final class AppModel {
     func uninstall() async {
         guard !uninstalling else { return }
         uninstalling = true
-        await connection?.stop(goodbye: .userDisconnected)
+        await connection?.stop(goodbye: .userDisconnected, state: agentState)
         connection = nil
         await keepAwakeController.restore()
         await BackgroundItems.unregisterAll()
@@ -161,7 +161,7 @@ final class AppModel {
     /// Quit: tell the relay, restore sleep (FR-035).
     func shutdown() async {
         if uninstalling { return }
-        await connection?.stop(goodbye: .userQuit)
+        await connection?.stop(goodbye: .userQuit, state: agentState)
         await ShellCapability.jobs.stopAll()  // spec 004 FR-309
         await keepAwakeController.restore()
     }
@@ -426,7 +426,7 @@ final class AppModel {
 
     /// Disconnect This Mac: the relay revokes it (goodbye user_disconnected) and the key is deleted.
     func disconnect() async {
-        await connection?.stop(goodbye: .userDisconnected)
+        await connection?.stop(goodbye: .userDisconnected, state: agentState)
         connection = nil
         Self.log.notice("Disconnect This Mac: forgetting the pairing")
         DeviceIdentity.delete()

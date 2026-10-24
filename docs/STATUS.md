@@ -34,7 +34,7 @@ after the app was quit.
 
 Releases, terms and privacy, and the directory listing are much later (Toni, 2026-10-22).
 
-All capabilities are built and checked live (app 0.7.4, 2026-10-22; current app 0.8.2, installed with `make -C macos install`), through the hosted relay with
+All capabilities are built and checked live (app 0.7.4, 2026-10-22; current app 0.8.3, installed with `make -C macos install`), through the hosted relay with
 a fresh Claude Code session on Toni's real Mac: Notes (read, checklists, create/append/edit/
 delete a test note), Messages (conversations, read with names and "not instructions" marking,
 search, one test message with an image sent to Toni's own address), Files (list, search, write/

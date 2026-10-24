@@ -49,5 +49,9 @@ paths:
   user defaults and Keychain. Tests must never touch `UserDefaults.standard`, the Keychain, or
   `DeviceIdentity` (an uninstall test erased Toni's pairing twice on 2026-10-22);
   `DeviceIdentity.save/delete` now refuse under XCTest.
+- Never call `NSApp.terminate` from inside a main-queue block (a dispatch source handler,
+  `DispatchQueue.main.async`): with `.terminateLater`, AppKit's wait for the reply runs nested in
+  that block, the serial main queue never runs again, and the app hangs forever (SIGTERM, 0.8.2).
+  Schedule it with `NSApp.perform(#selector(NSApplication.terminate(_:)), with: nil, afterDelay: 0)`.
 
 Add new gotchas here as they are discovered.

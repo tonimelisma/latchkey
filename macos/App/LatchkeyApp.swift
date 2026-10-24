@@ -41,7 +41,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func quitCleanlyOnSIGTERM() {
         signal(SIGTERM, SIG_IGN)
         let source = DispatchSource.makeSignalSource(signal: SIGTERM, queue: .main)
-        source.setEventHandler { NSApp.terminate(nil) }
+        source.setEventHandler {
+            AppModel.log.notice("SIGTERM: quitting")
+            // Not from inside this main-queue block: terminate's wait for the shutdown would run
+            // nested in it, and the main queue (which the shutdown needs) would never run again.
+            NSApp.perform(#selector(NSApplication.terminate(_:)), with: nil, afterDelay: 0)
+        }
         source.resume()
         terminateSignal = source
     }
@@ -51,11 +56,31 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        AppModel.log.notice("Quitting")
+        // Quit within 6 s even if a step hangs (Constitution II); the helper restores sleep by
+        // itself when the app goes away.
+        let done = QuitOnce { sender.reply(toApplicationShouldTerminate: true) }
         Task {
             await model.shutdown()
-            sender.reply(toApplicationShouldTerminate: true)
+            done.fire()
+        }
+        Task {
+            try? await Task.sleep(for: .seconds(6))
+            AppModel.log.notice("Quit: shutdown took too long; quitting anyway")
+            done.fire()
         }
         return .terminateLater
+    }
+}
+
+/// Runs its action once, whichever caller comes first (quit finished, or the deadline).
+@MainActor
+final class QuitOnce {
+    private var action: (() -> Void)?
+    init(_ action: @escaping () -> Void) { self.action = action }
+    func fire() {
+        action?()
+        action = nil
     }
 }
 

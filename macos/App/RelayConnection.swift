@@ -58,10 +58,13 @@ actor RelayConnection {
     }
 
     /// Ends the connection, sending goodbye first when a reason is given.
-    func stop(goodbye reason: GoodbyeReason?) async {
+    /// Ends the connection, saying goodbye with `state` when given (callers on the main actor pass
+    /// it, so quitting doesn't wait on another trip to the main actor).
+    func stop(goodbye reason: GoodbyeReason?, state: AgentState? = nil) async {
         if let reason, let task {
-            let msg = AgentMessage.goodbye(Goodbye(reason: reason, state: await hooks.state()))
-            try? await send(msg, on: task)
+            let now: AgentState
+            if let state { now = state } else { now = await hooks.state() }
+            try? await send(.goodbye(Goodbye(reason: reason, state: now)), on: task)
         }
         loop?.cancel()
         loop = nil
