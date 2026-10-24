@@ -189,9 +189,11 @@ Serves FR-050, FR-051, FR-052, FR-053, FR-054; Constitution IV.
   and its privacy permissions at another relay (security scan, 2026-10-24). Reads look only in
   the login keychain (opened by its path), never prompt, and refuse more than one match; the
   address must still be https (http only for localhost). An older version's pairing (address and
-  ID in user defaults, key in its own item) moves into the record once, after which the old
-  settings are removed and never read again. Capability levels stay in user defaults: they only
-  limit what the paired Claude can use.
+  ID in user defaults, key in its own item) is never used, only removed: the Owner pairs again.
+  0.8.4 moved it instead and lost the only one (Toni's) when its stricter read couldn't see the
+  old key; a review then found that any retried move leaves a window for planted settings, and
+  no other installs exist, so the move was dropped (2026-10-24). Capability levels stay in user
+  defaults: they only limit what the paired Claude can use.
 - WebSocket authentication: the relay sends a nonce; the app signs it with the device key
   (contracts/agent-protocol.md).
 - Pairing while a Mac is paired shows the current Mac's name and asks to replace it (FR-053);

@@ -57,6 +57,7 @@ paths:
   new one is written and read back, and never count a move done when the old data exists but
   couldn't be read. 0.8.4 read the old pairing key with a stricter, prompt-less Keychain query,
   got nothing, marked the move done, and deleted the old settings: Toni had to pair again
-  (2026-10-24). Read old items the way the old version read them.
+  (2026-10-24). Read old items the way the old version read them, or, when old data can be
+  forged by other programs (user defaults), don't move it at all.
 
 Add new gotchas here as they are discovered.

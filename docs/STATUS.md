@@ -1,6 +1,6 @@
 # Status
 
-Last updated: 2026-10-24 (whole-repository security scan done; app 0.8.5)
+Last updated: 2026-10-24 (whole-repository security scan done; app 0.8.6)
 
 Xcode signing ready (2026-10-20): Toni's Xcode account has a valid "Apple Development" certificate
 (certificate expires 2027-07-22). Keep the team ID out of committed project files
@@ -34,7 +34,7 @@ after the app was quit.
 
 Releases, terms and privacy, and the directory listing are much later (Toni, 2026-10-22).
 
-All capabilities are built and checked live (app 0.7.4, 2026-10-22; current app 0.8.5, installed with `make -C macos install`), through the hosted relay with
+All capabilities are built and checked live (app 0.7.4, 2026-10-22; current app 0.8.6, installed with `make -C macos install`), through the hosted relay with
 a fresh Claude Code session on Toni's real Mac: Notes (read, checklists, create/append/edit/
 delete a test note), Messages (conversations, read with names and "not instructions" marking,
 search, one test message with an image sent to Toni's own address), Files (list, search, write/
@@ -54,7 +54,7 @@ The Mac state line appears in every result (it reported the battery warning at 1
    docs/best-practices.md §4).
 5. ~~Whole-repository security scan~~: done 2026-10-24. Threat model (docs/threat-model.md),
    then Anthropic's Claude Security scan twice at high effort: 57 findings (none critical or
-   high) that merge into about 25 issues, each fixed with a failing test first (app 0.8.5).
+   high) that merge into about 25 issues, each fixed with a failing test first (app 0.8.6).
    Semgrep (with Latchkey's own rules), ShellCheck, OSV-Scanner, and a Sparkle advisory check
    now gate every deploy. Choices Toni made are in docs/decisions.md (2026-10-24).
    Still open from the scan, both Toni's call:

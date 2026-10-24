@@ -10,24 +10,15 @@ final class MemoryVault: PairingVault, @unchecked Sendable {
     var items: [String: Data] = [:]
     var defaults: [String: String] = [:]
     var failWrites = false
-    /// Writes that report success but store nothing (a write that landed somewhere else).
-    var dropWrites = false
-    /// Items the old app made that this app can't read (the old key's access list, for example).
-    var unreadableLegacy: Set<String> = []
 
     func read(_ account: String) -> Data? { lock.withLock { items[account] } }
-    func readLegacy(_ account: String) -> Data? {
-        lock.withLock { unreadableLegacy.contains(account) ? nil : items[account] }
-    }
-    func legacyPresent(_ account: String) -> Bool { lock.withLock { items[account] != nil } }
     func write(_ data: Data, _ account: String) throws {
         try lock.withLock {
             if failWrites { throw POSIXError(.EACCES) }
-            if !dropWrites { items[account] = data }
+            items[account] = data
         }
     }
     func delete(_ account: String) { _ = lock.withLock { items.removeValue(forKey: account) } }
-    func legacyDefault(_ key: String) -> String? { lock.withLock { defaults[key] } }
     func removeLegacyDefault(_ key: String) { _ = lock.withLock { defaults.removeValue(forKey: key) } }
 }
 
@@ -48,22 +39,15 @@ final class MemoryVault: PairingVault, @unchecked Sendable {
         return v
     }
 
-    @Test func theOldPairingMovesIntoTheKeychainOnce() throws {
+    /// Versions up to 0.8.3 kept the relay and device ID in user defaults, which any program
+    /// running as the Owner can change. Such a pairing is never used (it moved nowhere: the only
+    /// one, Toni's, was lost to 0.8.4's move and paired again), and its leftovers are removed.
+    @Test func anOldStylePairingIsNeverUsed() throws {
         let v = oldPairing()
-        let id = try #require(DeviceIdentity.load(vault: v, makeKey: key))
-        #expect(id.relayURL.absoluteString == "https://relay.example.com")
-        #expect(id.deviceID == "dev_1")
-        #expect(v.defaults.isEmpty, "the old settings are gone")
-        #expect(v.items["device-key"] == nil, "the key now lives in the pairing record")
-        #expect(v.items["pairing"] != nil)
-        #expect(DeviceIdentity.load(vault: v, makeKey: key)?.deviceID == "dev_1", "and loads from there")
-
-        // After Disconnect, settings and a key planted the old way are never taken up again.
-        DeviceIdentity.delete(vault: v)
         #expect(DeviceIdentity.load(vault: v, makeKey: key) == nil)
-        v.defaults = ["pairedRelayURL": "https://attacker.example", "pairedDeviceID": "dev_x"]
-        v.items["device-key"] = Self.blob
-        #expect(DeviceIdentity.load(vault: v, makeKey: key) == nil)
+        #expect(v.defaults.isEmpty, "the old settings are removed")
+        #expect(v.items["device-key"] == nil, "and the old key")
+        #expect(v.items["pairing"] == nil, "nothing was taken from them")
     }
 
     @Test func settingsCannotRedirectAPairedMac() throws {
@@ -85,53 +69,6 @@ final class MemoryVault: PairingVault, @unchecked Sendable {
         try DeviceIdentity.save(
             relayURL: URL(string: "http://localhost:8080")!, deviceID: "dev_1", keyData: Self.blob, vault: v)
         #expect(DeviceIdentity.load(vault: v, makeKey: key)?.relayURL.absoluteString == "http://localhost:8080")
-    }
-
-    @Test func aFailedMoveKeepsTheOldPairing() throws {
-        let v = oldPairing()
-        v.failWrites = true
-        #expect(DeviceIdentity.load(vault: v, makeKey: key)?.deviceID == "dev_1", "still works this time")
-        #expect(v.defaults.count == 2 && v.items["device-key"] != nil, "nothing was removed")
-        v.failWrites = false
-        #expect(DeviceIdentity.load(vault: v, makeKey: key)?.deviceID == "dev_1")
-        #expect(v.defaults.isEmpty && v.items["pairing"] != nil, "moved on the next start")
-    }
-
-    /// 0.8.4 lost Toni's pairing on 2026-10-24: the old key couldn't be read, yet the move counted
-    /// itself done and removed the old settings. An old pairing that can't be read in full stays
-    /// untouched and the move is tried again on the next start.
-    @Test func anUnreadableOldKeyLeavesTheOldPairingAlone() throws {
-        let v = oldPairing()
-        v.unreadableLegacy = ["device-key"]
-        #expect(DeviceIdentity.load(vault: v, makeKey: key) == nil)
-        #expect(v.defaults.count == 2, "the old settings are kept")
-        #expect(v.items["device-key"] != nil, "the old key is kept")
-        #expect(v.items["pairing-migrated"] == nil, "not counted as moved")
-        v.unreadableLegacy = []
-        #expect(DeviceIdentity.load(vault: v, makeKey: key)?.deviceID == "dev_1", "moved once it can be read")
-        #expect(v.defaults.isEmpty && v.items["device-key"] == nil)
-    }
-
-    @Test func theOldPairingIsRemovedOnlyAfterTheRecordReadsBack() throws {
-        let v = oldPairing()
-        v.dropWrites = true
-        #expect(DeviceIdentity.load(vault: v, makeKey: key)?.deviceID == "dev_1", "still works this time")
-        #expect(v.defaults.count == 2 && v.items["device-key"] != nil, "nothing was removed")
-        #expect(v.items["pairing-migrated"] == nil)
-    }
-
-    @Test func partOfAnOldPairingIsLeftForTheOwner() throws {
-        let v = oldPairing()
-        v.defaults.removeValue(forKey: "pairedDeviceID")
-        #expect(DeviceIdentity.load(vault: v, makeKey: key) == nil)
-        #expect(v.items["device-key"] != nil && v.defaults.count == 1, "a partial pairing isn't deleted")
-        #expect(v.items["pairing-migrated"] != nil, "and can't be completed later by planting the rest")
-    }
-
-    @Test func noOldPairingIsMarkedMoved() throws {
-        let v = MemoryVault()
-        #expect(DeviceIdentity.load(vault: v, makeKey: key) == nil)
-        #expect(v.items["pairing-migrated"] != nil)
     }
 
     @Test func missingPartsAreNamed() {
