@@ -152,13 +152,19 @@ Serves FR-041, FR-042, FR-043.
   framework, no CSS library.
 
 ### D6. Pairing: browser sign-in, Secure Enclave device key
-Serves FR-050, FR-051, FR-052; Constitution IV.
+Serves FR-050, FR-051, FR-052, FR-053, FR-054; Constitution IV.
 - The app opens `ASWebAuthenticationSession` (Apple's sign-in window; it uses the default browser
   when that browser supports it, else Safari, and closes itself on the callback) to `/pair`; the
   Owner signs in on the one email-first page; the relay redirects to
   `latchkey://paired?code=...&relay=...`; the app exchanges the code. The session's completion
-  handler runs off the main thread. A `latchkey://` link that arrives outside a pairing in
-  progress is used only after the Owner confirms the relay's host.
+  handler runs off the main thread. That callback is trusted and needs no dialog.
+- A `latchkey://paired` link that reaches the app any other way (the system's URL handler, from
+  another browser, with or without a pairing in progress) is used only after the Owner confirms
+  an alert naming the account's email and the relay, and saying it replaces the current pairing
+  if there is one (FR-054). The app gets the email from `POST /pair/preview`, which looks the code
+  up without using it (contracts/agent-protocol.md "Pairing"); if that fails the alert says the
+  link expired and has no Connect button. Confirming cancels a sign-in window that is still open.
+  A link carrying the code the sign-in window just delivered is ignored (already used).
 - During the exchange the app registers a P-256 public key whose private key lives in the Secure
   Enclave (CryptoKit). No bearer secret leaves the Mac.
 - WebSocket authentication: the relay sends a nonce; the app signs it with the device key

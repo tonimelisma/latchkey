@@ -35,7 +35,7 @@ Boundaries, each a place where input must be treated as hostile:
 - **B1 Internet → relay HTTP.** Every route in `relay/internal/oauth/oauth.go`,
   `relay/internal/account/account.go`, and `relay/internal/server/server.go`: OAuth discovery,
   `/register` (DCR), `/authorize` (consent), `/token`, `/revoke`, `/mcp`, sign-in (`/auth/email`,
-  `/auth/code`), passkeys (`/passkey/*`), `/account*`, `/pair`, `/pair/exchange`, `/agent/v1`,
+  `/auth/code`), passkeys (`/passkey/*`), `/account*`, `/pair`, `/pair/preview`, `/pair/exchange`, `/agent/v1`,
   `/static/`, `/healthz`.
 - **B2 Relay → the outside world.** Client ID Metadata Documents: the relay fetches an HTTPS URL
   the client chooses (SSRF risk). Outbound email through SMTP (header injection).
@@ -104,8 +104,9 @@ Boundaries, each a place where input must be treated as hostile:
 8. The CIMD fetch can reach only public HTTPS addresses, with size and time limits.
 9. The root helper does exactly two things (sleep on, sleep off) and only for a caller that
    satisfies the app's code-signing requirement.
-10. A `latchkey://` link outside a pairing the app started is used only after the owner confirms
-    the relay's host.
+10. A `latchkey://` link that doesn't come through the app's own sign-in window is used only
+    after the owner confirms a dialog naming the relay's host and the email of the code's account
+    (from `/pair/preview`, which doesn't use the code); no Connect button if the lookup fails.
 11. Tool arguments stay data: no string from Claude is spliced into AppleScript, JavaScript, SQL,
     or a shell command line except where the tool's purpose is to run it (`shell_run`, the
     JavaScript action in `browser_act`), and read-only tools don't change anything.

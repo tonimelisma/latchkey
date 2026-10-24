@@ -239,6 +239,16 @@ func (s *Store) CreatePairingCode(ctx context.Context, hash []byte, userID strin
 	return mapErr(err)
 }
 
+// PeekPairingCode returns the code's user if it is unused and unexpired, without using it.
+// The Mac app asks whose code a pairing link carries before the Owner confirms (FR-054).
+func (s *Store) PeekPairingCode(ctx context.Context, hash []byte, now time.Time) (string, error) {
+	var userID string
+	err := s.db.QueryRowContext(ctx, `
+		SELECT user_id FROM pairing_codes
+		WHERE code_hash = ? AND used_at IS NULL AND expires_at > ?`, hash, now.UnixMilli()).Scan(&userID)
+	return userID, mapErr(err)
+}
+
 // UsePairingCode consumes the code and returns its user.
 func (s *Store) UsePairingCode(ctx context.Context, hash []byte, now time.Time) (string, error) {
 	var userID string

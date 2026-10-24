@@ -152,3 +152,20 @@ Mailgun (already in use) allows one domain on its plan, taken by walkbikewc.com.
 Sources: https://dev.to/northloopworks/i-compared-7-transactional-email-apis-so-you-dont-have-to-2026-pricing-5912,
 https://chatforest.com/reviews/resend-mcp-server/,
 https://developers.cloudflare.com/changelog/post/2026-04-16-email-sending-public-beta/
+
+## Confirming pairing links from outside the sign-in window (FR-054, 2026-10-24)
+
+Toni chose a confirmation dialog naming the account over binding each pairing to a one-time
+secret. Implementation details decided here:
+- How the app learns the email: a new `POST /pair/preview` that looks the code up without using
+  it (chosen), versus putting the email in the `latchkey://` link (rejected: anyone can write any
+  email into a link they craft; only the relay knows whose code it is), or using the code at
+  `/pair/exchange` first and asking afterwards (rejected: that already replaces the account's
+  current Mac). Same expired-code answer for unknown, used, and expired codes, so the endpoint
+  says nothing beyond what holding a valid code already gives; covered by the pairing endpoints'
+  existing per-address limit (the `/pair` prefix).
+- Links while the sign-in window is open: also confirmed (they may come from another browser);
+  confirming cancels the open sign-in window. A link carrying the code the sign-in window itself
+  just delivered is ignored, so a browser that also hands it to the app shows no "expired" alert.
+- The email shown must be one plain address (no spaces or line breaks, at most 254 characters);
+  anything else counts as a failed lookup, so a relay can't put misleading text in the dialog.

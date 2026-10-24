@@ -337,6 +337,38 @@ func TestPairingRules(t *testing.T) {
 	assert.Equal(t, http.StatusForbidden, r.status)
 }
 
+// The app looks up whose code a pairing link carries before it asks the Owner (FR-054).
+func TestPairingPreview(t *testing.T) {
+	e := setup(t)
+	b := e.browser()
+	b.signUp()
+	code := b.pairCode("Mac")
+	mac := e.browser() // the app calls preview without cookies
+
+	status, m := mac.json("/pair/preview", map[string]string{"code": code})
+	require.Equal(t, http.StatusOK, status, m)
+	assert.Equal(t, "owner@example.com", m["email"], "names the account the code belongs to")
+
+	r := mac.do(http.MethodPost, "/pair/preview", "text/plain", strings.NewReader(`{"code":"`+code+`"}`))
+	assert.Equal(t, http.StatusUnsupportedMediaType, r.status, "JSON only")
+
+	status, m = mac.json("/pair/preview", map[string]string{"code": "unknown"})
+	assert.Equal(t, http.StatusBadRequest, status)
+	assert.Contains(t, m["error"], "expired")
+
+	// Looking up doesn't use the code: the exchange still works, and after it the lookup fails.
+	status, m = mac.json("/pair/exchange", map[string]string{"code": code, "public_key": p256DER(t), "name": "Mac"})
+	require.Equal(t, http.StatusOK, status, m)
+	status, _ = mac.json("/pair/preview", map[string]string{"code": code})
+	assert.Equal(t, http.StatusBadRequest, status, "a used code names no one")
+
+	code = b.pairCode("Mac")
+	e.clock.advance(6 * time.Minute)
+	status, m = mac.json("/pair/preview", map[string]string{"code": code})
+	assert.Equal(t, http.StatusBadRequest, status, "an expired code names no one")
+	assert.Contains(t, m["error"], "expired")
+}
+
 func TestRevokeMacAndClaude(t *testing.T) {
 	e := setup(t)
 	b := e.browser()

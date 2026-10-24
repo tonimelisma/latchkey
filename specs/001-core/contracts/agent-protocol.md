@@ -13,9 +13,30 @@ The app pairs once, through the Owner's browser (plan D6):
 2. The Owner signs in with a passkey if needed and clicks Connect (or Replace and Connect, when
    another Mac is paired, FR-053).
 3. The relay redirects to `latchkey://paired?code=<code>&relay=<relay origin>`. The code is
-   single-use and expires in 5 minutes. If the link reaches the app when it did not start a
-   pairing (for example after a restart), the app asks the Owner to confirm the relay's host before
-   using it, so a link from someone else cannot connect the Mac to their relay.
+   single-use and expires in 5 minutes. The app's own sign-in window delivers the link straight
+   to the app, which goes on to step 4. A link that reaches the app any other way (opened by the
+   system from another browser, while a pairing is in progress or not) is used only after the
+   Owner confirms a dialog naming the relay and the email of the code's account, and saying that
+   it replaces the current pairing if there is one (FR-054). To get the email, the app first asks
+   the relay, without using the code:
+
+```http
+POST /pair/preview
+Content-Type: application/json
+
+{"code": "<code>"}
+```
+
+```json
+{"email": "owner@example.com"}
+```
+
+   Errors are `400` with the same `{"error": …}` as an expired code at `/pair/exchange` (unknown,
+   used, or expired code), and `415` without the JSON content type. The endpoint shares the
+   pairing endpoints' per-address rate limit. If the lookup fails, or the answer isn't one plain
+   email address, the dialog says the link expired and offers no Connect button. If the Owner
+   confirms while the sign-in window's pairing is open, that pairing is cancelled and the link's
+   code is exchanged instead.
 4. The app creates its Secure Enclave P-256 key and calls:
 
 ```http

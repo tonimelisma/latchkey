@@ -194,6 +194,36 @@ func (s *Service) pair(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusSeeOther)
 }
 
+const pairingExpired = "This connection request expired. Click Connect in the Latchkey app again."
+
+// pairPreview tells the Mac app which account a pairing code belongs to, without using the
+// code, so the app can name that account when a link arrives from outside its own sign-in
+// window (FR-054). The code is the secret; the answer is only the account's email.
+func (s *Service) pairPreview(w http.ResponseWriter, r *http.Request) {
+	if !requireJSON(w, r) {
+		return
+	}
+	var req struct {
+		Code string `json:"code"`
+	}
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 8192)).Decode(&req); err != nil {
+		jsonError(w, http.StatusBadRequest, "Bad request.")
+		return
+	}
+	ctx := r.Context()
+	userID, err := s.cfg.Store.PeekPairingCode(ctx, hash(req.Code), s.now())
+	if err != nil {
+		jsonError(w, http.StatusBadRequest, pairingExpired)
+		return
+	}
+	u, err := s.cfg.Store.User(ctx, userID)
+	if err != nil {
+		jsonError(w, http.StatusBadRequest, pairingExpired)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"email": u.Email})
+}
+
 type exchangeRequest struct {
 	Code      string `json:"code"`
 	PublicKey string `json:"public_key"` // PKIX DER, base64url without padding
@@ -218,7 +248,7 @@ func (s *Service) pairExchange(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	userID, err := s.cfg.Store.UsePairingCode(ctx, hash(req.Code), s.now())
 	if err != nil {
-		jsonError(w, http.StatusBadRequest, "This connection request expired. Click Connect in the Latchkey app again.")
+		jsonError(w, http.StatusBadRequest, pairingExpired)
 		return
 	}
 	if err := s.revokeActiveMac(ctx, userID); err != nil { // FR-053: the Owner confirmed on the pair page

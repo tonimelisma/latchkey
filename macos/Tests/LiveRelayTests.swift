@@ -46,6 +46,8 @@ struct LiveRelayTests {
         let code = try #require(env["LATCHKEY_LIVE_CODE"])
         let control = URL(fileURLWithPath: try #require(env["LATCHKEY_LIVE_CONTROL"]))
 
+        let email = try await PairingFlow.preview(relay: relay, code: code)
+        #expect(email.contains("@"), "the relay names the code's account without using the code (FR-054)")
         let identity = try await PairingFlow.exchange(relay: relay, code: code, macName: "Live Test Mac", save: false)
         let registry = Locked(
             CapabilityRegistry(capabilities: [Self.testBattery], levels: ["test": .readOnly]))

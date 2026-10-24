@@ -385,25 +385,33 @@ final class AppModel {
         }
     }
 
-    /// A latchkey:// link opened by the system.
-    /// A latchkey://paired link. During a pairing it completes it. Otherwise (for example after
-    /// the app restarted) it finishes pairing only after the Owner confirms the relay, so a link
-    /// from someone else can't connect this Mac to their relay.
+    /// A latchkey://paired link opened by the system, that is, not through the app's own sign-in
+    /// window (whose callback goes straight to `pair`). Whether or not a pairing is in progress,
+    /// it connects only after the Owner confirms a dialog naming the relay and the email of the
+    /// account the code belongs to (FR-054), so a link from someone else can't quietly connect
+    /// this Mac to their account.
     func open(_ url: URL) {
-        if pairing.receive(url) { return }
         guard let link = PairingFlow.parse(url), let relay = link.relay else {
             lastError = "That connection link is incomplete. Choose Connect to a Relay… again."
             return
         }
-        let alert = NSAlert()
-        alert.messageText = "Connect this Mac to \(relay.host() ?? relay.absoluteString)?"
-        alert.informativeText =
-            "A Latchkey connection link was opened. Continue only if you just clicked Connect on that site yourself."
-        alert.addButton(withTitle: "Connect")
-        alert.addButton(withTitle: "Cancel")
-        NSApp.activate()
-        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        if pairing.isOwn(link.code) { return }  // the sign-in window already delivered it
         Task {
+            let email = try? await PairingFlow.preview(relay: relay, code: link.code)
+            let ask = PairingConfirmation(relay: relay, email: email, current: isPaired ? relayURL : nil)
+            let alert = NSAlert()
+            alert.messageText = ask.title
+            alert.informativeText = ask.message
+            if ask.canConnect {
+                alert.addButton(withTitle: "Connect")
+                alert.addButton(withTitle: "Cancel")
+            } else {
+                alert.addButton(withTitle: "OK")
+            }
+            NSApp.activate()
+            guard alert.runModal() == .alertFirstButtonReturn, ask.canConnect else { return }
+            Self.log.notice("Pairing link confirmed for \(relay.absoluteString, privacy: .public)")
+            pairing.cancelPending()  // the sign-in window's pairing, if one is open, gives way
             do {
                 let identity = try await PairingFlow.exchange(
                     relay: relay, code: link.code, macName: Host.current().localizedName ?? "Mac")
