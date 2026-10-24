@@ -54,7 +54,9 @@ import Testing
         let support = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
         try FileManager.default.createDirectory(at: support, withIntermediateDirectories: true)
         try Data("log".utf8).write(to: support.appending(path: "trace.store"))
-        let suite = "net.melisma.latchkey.tests.\(UUID().uuidString)"
+        // One fixed name: an emptied domain still leaves its file in Preferences, and a new name
+        // per run piled up 60 of them.
+        let suite = "net.melisma.latchkey.tests.uninstall"
         let defaults = try #require(UserDefaults(suiteName: suite))
         defaults.set(true, forKey: "keepAwakeEnabled")
 
