@@ -94,6 +94,15 @@ Serves FR-040, FR-014.
 - Tokens: fosite's HMAC strategy with a 32-byte secret generated on first start and kept in the
   database, so tokens survive restarts (SC-07). Refresh rotation marks the old token rotated; it
   stays valid for 60 s, after which reuse revokes the whole token family (RFC 6819 §5.2.2.3).
+- Revoking Claude's access (FR-044) cannot be outrun by a refresh already in flight: it deletes
+  the Owner's tokens and approvals in one transaction, and a new access or refresh token is
+  written only if a code or refresh token of the same grant and Owner still exists, checked in
+  the same SQL statement as the insert. A refresh whose token vanished mid-exchange fails
+  (`invalid_request`) instead of minting tokens. Options weighed: fosite's transactional
+  storage with `BEGIN IMMEDIATE` (touches every storage call and holds the write lock across
+  the client lookup, which may fetch a CIMD document for seconds), or a per-Owner revocation
+  generation on every token (a new column and a check on every `/mcp` request); the
+  conditional insert closes the gap with neither cost (security scan, 2026-10-24).
 - Resource indicator: an `resource` parameter, if sent, must equal the connector URL.
 
 ### D5. Owner authentication: passkeys only, email recovery

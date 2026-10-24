@@ -46,12 +46,23 @@ func (s *storage) put(ctx context.Context, kind, signature string, req fosite.Re
 	if exp.IsZero() {
 		exp = s.now().Add(time.Hour)
 	}
-	return s.st.PutOAuthRequest(ctx, store.OAuthRequest{
+	row := store.OAuthRequest{
 		Signature: signature, Kind: kind, RequestID: req.GetID(), ClientID: req.GetClient().GetID(),
 		UserID: sess.Subject, RequestedAt: req.GetRequestedAt(),
 		Scopes: strings.Join(req.GetRequestedScopes(), " "), GrantedScopes: strings.Join(req.GetGrantedScopes(), " "),
 		Form: req.GetRequestForm().Encode(), SessionJSON: data, ExpiresAt: exp,
-	})
+	}
+	if kind != store.KindAccess && kind != store.KindRefresh {
+		return s.st.PutOAuthRequest(ctx, row)
+	}
+	// A token is written only while its grant exists, so one issued while the Owner removes
+	// Claude's access is refused rather than outliving the removal.
+	if err := s.st.PutOAuthToken(ctx, row); errors.Is(err, store.ErrNotFound) {
+		return fosite.ErrNotFound
+	} else if err != nil {
+		return err
+	}
+	return nil
 }
 
 func (s *storage) get(ctx context.Context, kind, signature string) (*fosite.Request, store.OAuthRequest, error) {
@@ -156,8 +167,12 @@ func (s *storage) DeleteRefreshTokenSession(ctx context.Context, signature strin
 	return s.st.DeleteOAuthRequest(ctx, store.KindRefresh, signature)
 }
 
+// RotateRefreshToken fails closed: a token row that disappeared during the exchange (the Owner
+// removed Claude's access) ends the refresh.
 func (s *storage) RotateRefreshToken(ctx context.Context, requestID, signature string) error {
-	if err := s.st.RotateOAuthRequest(ctx, store.KindRefresh, signature, s.now()); err != nil && !errors.Is(err, store.ErrNotFound) {
+	if err := s.st.RotateOAuthRequest(ctx, store.KindRefresh, signature, s.now()); errors.Is(err, store.ErrNotFound) {
+		return fosite.ErrNotFound
+	} else if err != nil {
 		return err
 	}
 	return nil
