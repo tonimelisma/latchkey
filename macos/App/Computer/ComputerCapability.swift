@@ -77,9 +77,13 @@ enum ComputerCapability {
                         let lines = items.map { e -> String in
                             let center = CGPoint(x: e.frame.midX, y: e.frame.midY)
                             let index = displays.firstIndex { $0.bounds.contains(center) } ?? 0
-                            let (x, y) = ScreenGeometry.pixel(of: center, on: displays[index])
-                            var line = "- \(e.role) \"\(e.label)\" at (\(x), \(y))"
-                            if displays.count > 1 { line += " on display \(index + 1)" }
+                            var line = "- \(e.role) \"\(e.label)\""
+                            if let (x, y) = ScreenGeometry.pixel(of: center, on: displays[index]) {
+                                line += " at (\(x), \(y))"
+                                if displays.count > 1 { line += " on display \(index + 1)" }
+                            } else {
+                                line += " (no position)"
+                            }
                             if let v = e.value, !v.isEmpty { line += ", value: \(v)" }
                             return line
                         }

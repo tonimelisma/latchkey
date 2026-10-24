@@ -43,7 +43,10 @@ ScreenCaptureKit captures a display at a size whose longest side is at most 1,56
 answer gives the image and its size. Each display's scale (screen points per image pixel) is
 fixed by that rule, so coordinates mean the same with or without a fresh screenshot (FR-503).
 `computer_ui` reads the front app's focused window through the Accessibility API (role, label,
-value, position in screenshot pixels), at most 300 elements, 15 levels deep.
+value, position in screenshot pixels), at most 300 elements, 15 levels deep. The front app
+reports its own frames: one that isn't a point and size, or whose position is NaN, infinite, or
+far off any screen, is listed with "no position" instead of crashing the conversion (security
+scan, 2026-10-24).
 
 ## D4. Acting
 
