@@ -143,8 +143,8 @@ have none today.
    hostname is the only thing a relay can route on before decryption. The relay can no longer
    send a readable offline reply without holding a certificate that would also let it
    intercept.
-3. Without new cryptography: approval on the Mac for new Claude clients and for Shell and
-   Computer control. Limits what a compromised relay can do; doesn't hide traffic.
+Manual approvals on the Mac (for new clients or powerful tools) are not a substitute: Toni,
+2026-10-23, "manual approvals don't improve security".
 
 Not decided; Toni's call.
 
