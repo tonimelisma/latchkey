@@ -20,6 +20,12 @@ settings:
     CURRENT_PROJECT_VERSION: "1"
     ARCHS: arm64
     DEAD_CODE_STRIPPING: YES
+  configs:
+    # Development signing adds the debugging entitlement (get-task-allow), which lets any program
+    # running as the Owner take over the app and use its privacy permissions. The installed app
+    # is a Release build: no debugging entitlement there (security scan, 2026-10-24); Debug keeps it.
+    Release:
+      CODE_SIGN_INJECT_BASE_ENTITLEMENTS: NO
 targets:
   Latchkey:
     type: application
