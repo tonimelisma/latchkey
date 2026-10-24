@@ -11,7 +11,14 @@
 # merged into main and not checked out in any worktree, branches with unpushed commits, worktrees
 # with uncommitted changes nobody has touched for a day, and the main checkout off main or dirty.
 tree=${1:-.}
+# Only inside this repository (its main checkout or a worktree under .claude/worktrees): git run
+# in another folder would obey that folder's .git/config, which can run commands
+# (core.fsmonitor and the like). Checked by path, before any git command runs there.
+repo=$(cd "$(dirname "$0")/.." 2>/dev/null && pwd -P) || exit 0
+repo=${repo%%/.claude/worktrees/*}
+[ -n "$repo" ] || exit 0
 cd "$tree" 2>/dev/null || exit 0
+case "$(pwd -P)/" in "$repo"/*) ;; *) exit 0 ;; esac
 git rev-parse --git-dir >/dev/null 2>&1 || exit 0
 tree=$(git rev-parse --show-toplevel)
 main_checkout=$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")
