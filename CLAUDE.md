@@ -94,6 +94,8 @@ IMPORTANT: Toni makes every product and engineering choice. Claude proposes; Ton
   main and the current branch), prunes worktrees and remote refs, and keeps only the newest disk
   image and relay Docker image. Never work around it; run it by hand if a push happened outside
   Claude Code (Toni, 2026-10-23).
+- Stage files by name, never `git add -A` or `git add .`: other Claude sessions may be working in
+  this same checkout, and `-A` commits their unfinished work (happened 2026-10-23).
 - Delete temporary files (scratch scripts, copies of databases, old app copies) as soon as the
   task that needed them is done.
 - Never commit the hosted relay's address, its server details, or the Apple team ID; they live in
