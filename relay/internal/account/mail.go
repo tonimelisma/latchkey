@@ -3,6 +3,7 @@ package account
 import (
 	"context"
 	"fmt"
+	"net/netip"
 	"sync"
 	"time"
 
@@ -23,8 +24,13 @@ type SMTPConfig struct {
 	From     string
 }
 
-// SMTPMailer sends through an SMTP server, using STARTTLS when the server offers it.
-type SMTPMailer struct{ cfg SMTPConfig }
+// SMTPMailer sends through an SMTP server, always encrypted: TLS from the start on port 465,
+// STARTTLS on any other port, and a server that doesn't offer STARTTLS gets nothing. Only a
+// server on this machine (a local test mail catcher) may be reached without encryption.
+type SMTPMailer struct {
+	cfg  SMTPConfig
+	dial mail.DialContextFunc // tests only: connect somewhere else
+}
 
 // NewSMTPMailer returns a mailer for cfg.
 func NewSMTPMailer(cfg SMTPConfig) *SMTPMailer { return &SMTPMailer{cfg: cfg} }
@@ -40,12 +46,21 @@ func (m *SMTPMailer) Send(ctx context.Context, to, subject, body string) error {
 	}
 	msg.Subject(subject)
 	msg.SetBodyString(mail.TypeTextPlain, body)
-	opts := []mail.Option{mail.WithPort(m.cfg.Port), mail.WithTLSPolicy(mail.TLSOpportunistic), mail.WithTimeout(15 * time.Second)}
+	// Mandatory: an on-path attacker who strips STARTTLS would otherwise read the sign-in and
+	// recovery codes (security scan, 2026-10-24).
+	policy := mail.TLSMandatory
+	if plainSMTPAllowed(m.cfg.Host) {
+		policy = mail.TLSOpportunistic
+	}
+	opts := []mail.Option{mail.WithPort(m.cfg.Port), mail.WithTLSPolicy(policy), mail.WithTimeout(15 * time.Second)}
 	if m.cfg.Port == 465 {
 		opts = append(opts, mail.WithSSL())
 	}
 	if m.cfg.User != "" {
 		opts = append(opts, mail.WithSMTPAuth(mail.SMTPAuthAutoDiscover), mail.WithUsername(m.cfg.User), mail.WithPassword(m.cfg.Password))
+	}
+	if m.dial != nil {
+		opts = append(opts, mail.WithDialContextFunc(m.dial))
 	}
 	c, err := mail.NewClient(m.cfg.Host, opts...)
 	if err != nil {
@@ -78,4 +93,13 @@ func (m *MemoryMailer) Sent() []Message {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return append([]Message(nil), m.sent...)
+}
+
+// plainSMTPAllowed reports whether host is this machine, the only place mail may go unencrypted.
+func plainSMTPAllowed(host string) bool {
+	if host == "localhost" {
+		return true
+	}
+	a, err := netip.ParseAddr(host)
+	return err == nil && a.Unmap().IsLoopback()
 }
