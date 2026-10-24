@@ -96,6 +96,58 @@ updates, minimal server-side data.
 - **Later:** Developer ID signing, notarization, and signed Sparkle updates (EdDSA) before
   anyone else installs it.
 
+### End-to-end encryption between Claude and the Mac (researched 2026-10-23)
+
+**Question.** Can requests be encrypted, or their integrity proven, from Claude's servers to the
+Mac, inside the HTTPS connection that ends at the relay, so the relay can't read, change, or
+invent tool calls?
+
+**Finding.** The technique works, but only if the sender adds the inner layer, and for custom
+connectors Claude's client doesn't, as of 2026-10-23:
+- **Anthropic does it in MCP tunnels.** Claude's backend opens an inner TLS connection to the
+  customer's proxy, inside the outer connection Cloudflare carries; Cloudflare "carries
+  ciphertext and cannot read MCP requests or responses". Claude trusts a CA the customer
+  registers. Enterprise plan only, research preview, depends on Cloudflare
+  ([MCP tunnels](https://claude.com/docs/connectors/mcp-tunnels/overview.md)).
+- **Custom connector sign-in is bearer tokens only:** OAuth (DCR, CIMD, Anthropic-held or
+  user-entered client), static headers (beta, organizations), or none. Nothing signs or encrypts
+  the body ([Authentication for connectors](https://claude.com/docs/connectors/building/authentication.md);
+  [Zuplo compatibility page](https://zuplo.com/learn/mcp/compatibility/clients/claude-connectors.md)).
+- **DPoP** (RFC 9449, per-request proof from the client's key): not in any published MCP
+  revision; SEP-1932 unmerged as of August 2026
+  ([MojoAuth](https://mojoauth.com/blog/dpop-rfc-9449-for-agent-tokens-sender-constrained-auth-explained));
+  the TypeScript SDK 2.1.0 has it ([WorkOS](https://workos.com/blog/mcp-sdk-dpop-and-scope-challenges));
+  an open report says Claude Code doesn't use it
+  ([issue mirror](https://claudeissues.com/issue/96290-bug-dpop-is-not-used-for-a-pre-registered-mcp-oauth-client)).
+  Even if adopted, a DPoP proof covers method, URL, and token, not the body: a relay couldn't
+  invent calls but could rewrite a real one.
+- **HTTP Message Signatures** (RFC 9421, body covered through `Content-Digest`): SEP-1415 closed
+  as dormant in January 2026 without a sponsor
+  ([SEP-1415](https://github.com/modelcontextprotocol/modelcontextprotocol/issues/1415)).
+- **The MCP spec:** neither the 2026-07-28 revision nor any of the 43 final SEPs covers message
+  encryption or signing ([changelog](https://modelcontextprotocol.io/specification/2026-07-28/changelog);
+  [SEP index](https://modelcontextprotocol.io/seps.md)).
+
+**Consequence.** Claude's only per-connection secret is the bearer token, and it's sent to
+whoever terminates HTTPS. So the relay can read, alter, or replay requests, and the Mac can't
+tell. An inner layer needs a key on Claude's side that the relay never sees; custom connectors
+have none today.
+
+**Options.**
+1. Ask Anthropic to offer inner TLS (as in MCP tunnels) or RFC 9421 body signing for custom
+   connectors. The only way to get end-to-end protection on one URL with the relay still
+   answering when the Mac is offline.
+2. Without Anthropic: the relay forwards TLS unopened and the Mac terminates it (as Tailscale
+   Funnel does, "Funnel relay servers do not decrypt the traffic",
+   [Tailscale](https://tailscale.com/kb/1223/funnel)). Needs a hostname per Mac, because the
+   hostname is the only thing a relay can route on before decryption. The relay can no longer
+   send a readable offline reply without holding a certificate that would also let it
+   intercept.
+3. Without new cryptography: approval on the Mac for new Claude clients and for Shell and
+   Computer control. Limits what a compromised relay can do; doesn't hide traffic.
+
+Not decided; Toni's call.
+
 ## 5. Tool design (Anthropic's guidance)
 
 **Guidance.** Few consolidated, high-impact tools rather than one per operation; clear prefixes;
