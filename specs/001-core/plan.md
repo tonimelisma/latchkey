@@ -134,7 +134,9 @@ Serves FR-041, FR-042, FR-043.
   rows, sliding window) or carrying the attempt count over to the next code (still unbounded
   across days); two columns on `users` are the smallest change that bounds a day.
 - Recovery: single-use code, 15 min expiry, stored hashed; completing it removes all old passkeys
-  (FR-047); using it is announced by email and in the
+  (FR-047), signs out every browser, and removes every Claude client's access, tokens and
+  remembered approvals alike, as "Remove Claude's access" does (FR-047a); the recovery page and
+  emails say Claude must connect again. Using it is announced by email and in the
   Mac app. The Mac app learns of it through a `notice` message (contracts/agent-protocol.md), sent
   at once if the Mac is online, otherwise on its next connection (the relay compares the
   recovery's `used_at` with the device's last connection; nothing new is stored).
