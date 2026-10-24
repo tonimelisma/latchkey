@@ -16,29 +16,44 @@ enum PairingError: LocalizedError {
 }
 
 /// What the Owner is asked when a pairing link arrives other than through the app's own sign-in
-/// window (FR-054): the account's email and the relay, and whether it replaces the current
-/// pairing. Without the email (the lookup failed) there is no Connect button.
+/// window (FR-054): the relay, the account's email, whether the relay differs from the one this
+/// Mac uses (or, unpaired, the one the app suggests), and whether it replaces the current
+/// pairing. The link controls only the relay; the email is what that relay says, so the title
+/// names the relay and the text attributes the email to it. Without the email (the lookup
+/// failed) there is no Connect button.
 struct PairingConfirmation: Equatable {
     let title: String
     let message: String
     let canConnect: Bool
 
-    init(relay: URL, email: String?, current: URL?) {
-        let host = relay.host() ?? relay.absoluteString
+    /// `current` is the relay this Mac is paired with, `hosted` the one the app suggests.
+    init(relay: URL, email: String?, current: URL?, hosted: URL?) {
         guard let email else {
             title = "This connection link has expired"
             message = "To connect this Mac, choose Connect to a Relay… in the Latchkey menu again."
             canConnect = false
             return
         }
-        title = "Connect this Mac to \(email)’s account?"
+        let host = Self.name(relay)
+        title = "Connect this Mac to \(host)?"
         var text =
-            "A connection link from the relay \(host) was opened. Claude signed in to that account will be able to use this Mac. Connect only if you just clicked Connect on that page yourself."
+            "\(host) says this is the account \(email). Claude signed in to that account will be able to use this Mac. Connect only if you just clicked Connect on that relay’s page yourself."
+        if let current, Self.name(current) != host {
+            text += " This is a different relay from the one this Mac uses now (\(Self.name(current)))."
+        } else if current == nil, let hosted, Self.name(hosted) != host {
+            text += " This is a different relay from the one this app suggests (\(Self.name(hosted)))."
+        }
         if let current {
-            text += " This replaces this Mac’s current connection to \(current.host() ?? current.absoluteString)."
+            text += " This replaces this Mac’s current connection to \(Self.name(current))."
         }
         message = text
         canConnect = true
+    }
+
+    /// The relay's host, with its port if it has one.
+    static func name(_ url: URL) -> String {
+        let host = url.host() ?? url.absoluteString
+        return url.port.map { "\(host):\($0)" } ?? host
     }
 }
 

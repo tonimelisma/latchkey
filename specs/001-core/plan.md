@@ -128,8 +128,9 @@ Serves FR-050, FR-051, FR-052, FR-053, FR-054; Constitution IV.
   handler runs off the main thread. That callback is trusted and needs no dialog.
 - A `latchkey://paired` link that reaches the app any other way (the system's URL handler, from
   another browser, with or without a pairing in progress) is used only after the Owner confirms
-  an alert naming the account's email and the relay, and saying it replaces the current pairing
-  if there is one (FR-054). The app gets the email from `POST /pair/preview`, which looks the code
+  an alert titled with the relay's host, saying which account email that relay claims, whether
+  the relay differs from the paired one (or, unpaired, the hosted relay the app suggests), and
+  that it replaces the current pairing if there is one (FR-054). The app gets the email from `POST /pair/preview`, which looks the code
   up without using it (contracts/agent-protocol.md "Pairing"); if that fails the alert says the
   link expired and has no Connect button. Confirming cancels a sign-in window that is still open.
   A link carrying the code the sign-in window just delivered is ignored (already used).

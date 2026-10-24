@@ -403,7 +403,9 @@ final class AppModel {
         if pairing.isOwn(link.code) { return }  // the sign-in window already delivered it
         Task {
             let email = try? await PairingFlow.preview(relay: relay, code: link.code)
-            let ask = PairingConfirmation(relay: relay, email: email, current: isPaired ? relayURL : nil)
+            let ask = PairingConfirmation(
+                relay: relay, email: email, current: isPaired ? relayURL : nil,
+                hosted: PairingFlow.normalize(Self.hostedRelay))
             let alert = NSAlert()
             alert.messageText = ask.title
             alert.informativeText = ask.message

@@ -167,6 +167,11 @@ secret. Implementation details decided here:
 - Links while the sign-in window is open: also confirmed (they may come from another browser);
   confirming cancels the open sign-in window. A link carrying the code the sign-in window itself
   just delivered is ignored, so a browser that also hands it to the app shows no "expired" alert.
+- Whose word the email is: the relay's. A link can name any relay, and a relay the attacker runs
+  can claim any email, the Owner's included. So the dialog's title names the relay (what the
+  link controls), the email is shown as "<relay> says this is the account <email>", and a relay
+  other than the paired one (or, unpaired, the suggested hosted one) is called out
+  (automated review of the first version, 2026-10-24).
 - The email shown must be one plain address (no spaces or line breaks, at most 254 characters);
   anything else counts as a failed lookup, so a relay can't put misleading text in the dialog.
 
