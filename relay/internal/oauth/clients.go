@@ -12,6 +12,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/netip"
 	"net/url"
 	"slices"
 	"strconv"
@@ -254,8 +255,8 @@ func isLoopbackHost(h string) bool {
 	return ip != nil && ip.IsLoopback()
 }
 
-// publicOnlyDialer refuses connections to loopback, private, and link-local addresses, so a
-// metadata document URL cannot be used to probe the relay's own network.
+// publicOnlyDialer refuses connections to any address that isn't global unicast (fetchableAddr),
+// so a metadata document URL cannot be used to probe the relay's own or any internal network.
 func publicOnlyDialer() *net.Dialer {
 	return &net.Dialer{
 		Timeout: 5 * time.Second,
@@ -264,14 +265,59 @@ func publicOnlyDialer() *net.Dialer {
 			if err != nil {
 				return err
 			}
-			ip := net.ParseIP(host)
-			if ip == nil || ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() ||
-				ip.IsLinkLocalMulticast() || ip.IsUnspecified() || ip.IsMulticast() {
+			ip, err := netip.ParseAddr(host)
+			if err != nil || !fetchableAddr(ip) {
 				return fmt.Errorf("refusing to fetch client metadata from %s", host)
 			}
 			return nil
 		},
 	}
+}
+
+// Every range in the IANA IPv4 Special-Purpose Address Registry, refused whole (even the few
+// entries marked globally reachable, such as anycast and AS112: no client document lives there).
+var specialIPv4 = prefixes(
+	"0.0.0.0/8", "10.0.0.0/8", "100.64.0.0/10", "127.0.0.0/8", "169.254.0.0/16", "172.16.0.0/12",
+	"192.0.0.0/24", "192.0.2.0/24", "192.31.196.0/24", "192.52.193.0/24", "192.88.99.0/24",
+	"192.168.0.0/16", "192.175.48.0/24", "198.18.0.0/15", "198.51.100.0/24", "203.0.113.0/24",
+	"224.0.0.0/4", "240.0.0.0/4", // multicast; reserved, including 255.255.255.255
+)
+
+var (
+	// Only 2000::/3 is global unicast; this alone refuses ::/8 (loopback, unspecified, IPv4-
+	// compatible and -translated forms), 64:ff9b:1::/48, 100::/64, 5f00::/16, fc00::/7, fe80::/10,
+	// fec0::/10, and ff00::/8.
+	globalIPv6 = netip.MustParsePrefix("2000::/3")
+	// Special-purpose ranges inside 2000::/3: IETF protocol assignments (Teredo, benchmarking,
+	// ORCHID...), documentation, and 6to4 (which embeds any IPv4 address).
+	specialIPv6 = prefixes("2001::/23", "2001:db8::/32", "2002::/16", "3fff::/20")
+	// NAT64's well-known prefix embeds an IPv4 address; that address decides.
+	nat64 = netip.MustParsePrefix("64:ff9b::/96")
+)
+
+func prefixes(s ...string) []netip.Prefix {
+	p := make([]netip.Prefix, len(s))
+	for i, x := range s {
+		p[i] = netip.MustParsePrefix(x)
+	}
+	return p
+}
+
+// fetchableAddr reports whether a is a globally routable unicast address, outside every IANA
+// special-purpose range (threat model: a metadata URL must not reach internal networks).
+func fetchableAddr(a netip.Addr) bool {
+	a = a.WithZone("").Unmap()
+	if a.Is6() && nat64.Contains(a) {
+		b := a.As16()
+		a = netip.AddrFrom4([4]byte{b[12], b[13], b[14], b[15]})
+	}
+	inAny := func(ps []netip.Prefix) bool {
+		return slices.ContainsFunc(ps, func(p netip.Prefix) bool { return p.Contains(a) })
+	}
+	if a.Is4() {
+		return !inAny(specialIPv4)
+	}
+	return globalIPv6.Contains(a) && !inAny(specialIPv6)
 }
 
 // registerRequest is an RFC 7591 registration.
