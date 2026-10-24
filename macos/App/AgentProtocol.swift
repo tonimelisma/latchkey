@@ -86,7 +86,7 @@ struct Tool: Codable, Equatable, Sendable {
     static let deadlineKey = "latchkey/deadline_ms"
 
     var deadlineMS: Int? {
-        if case .number(let n) = meta?[Self.deadlineKey] { return Int(n) }
+        if case .number(let n) = meta?[Self.deadlineKey], n.isFinite { return Int(exactly: n.rounded()) }
         return nil
     }
 }

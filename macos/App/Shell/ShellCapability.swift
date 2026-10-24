@@ -27,7 +27,7 @@ enum ShellCapability {
                         guard let command = args["command"]?.stringValue, !command.isEmpty else {
                             throw ShellJobs.Failure(message: "Give a command.")
                         }
-                        let s = try await jobs.run(command, folder: args["folder"]?.stringValue, wait: wait(args))
+                        let s = try await jobs.run(command, folder: args["folder"]?.stringValue, wait: try wait(args))
                         var r = result(s)
                         r.activity = "Claude ran: \(command.count > 80 ? String(command.prefix(79)) + "…" : command)"
                         return r
@@ -47,7 +47,7 @@ enum ShellCapability {
                         guard let job = args["job"]?.stringValue else {
                             throw ShellJobs.Failure(message: "Give the job id.")
                         }
-                        return result(try await jobs.check(job, wait: wait(args, default: 10)))
+                        return result(try await jobs.check(job, wait: try wait(args, default: 10)))
                     }
                 }),
             ToolEntry(
@@ -101,8 +101,8 @@ enum ShellCapability {
         ]
     }
 
-    private static func wait(_ args: JSONValue, default standard: Double = 30) -> Duration {
-        .milliseconds(Int(min(max(args["wait"]?.numberValue ?? standard, 0), 30) * 1000))
+    private static func wait(_ args: JSONValue, default standard: Double = 30) throws -> Duration {
+        .milliseconds(Int(min(try args.number("wait", in: 0...Double.greatestFiniteMagnitude) ?? standard, 30) * 1000))
     }
 
     private static func result(_ s: ShellJobs.Snapshot) -> ToolResult {
@@ -122,6 +122,8 @@ enum ShellCapability {
     private static func run(_ body: () async throws -> ToolResult) async -> ToolResult {
         do { return try await body() } catch let f as ShellJobs.Failure {
             return .text(f.message, isError: true)
+        } catch let a as ArgumentError {
+            return .text(a.message, isError: true)
         } catch {
             return .text("The command couldn't run: \(error.localizedDescription)", isError: true)
         }

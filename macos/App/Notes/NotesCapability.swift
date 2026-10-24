@@ -36,7 +36,7 @@ enum NotesCapability {
                     ], readOnly: true, deadlineMS: 30_000),
                 handler: { args in
                     await run(store, scripts) { s in
-                        let limit = min(max(Int(args["limit"]?.numberValue ?? 20), 1), 100)
+                        let limit = min(max(try args.integer("limit", in: 0...Int.max) ?? 20, 1), 100)
                         let hits = try await s.search(
                             args["query"]?.stringValue ?? "", folder: args["folder"]?.stringValue, limit: limit)
                         let text =
@@ -85,7 +85,8 @@ enum NotesCapability {
                             return .text("Give the note's id.", isError: true)
                         }
                         let n = try await s.read(id: id)
-                        let (text, next) = ResultLimit.page(n.text, offset: Int(args["offset"]?.numberValue ?? 0))
+                        let (text, next) = ResultLimit.page(
+                            n.text, offset: try args.integer("offset", in: 0...Int.max) ?? 0)
                         let shortened = next != nil
                         var header =
                             "\(n.title) (id \(n.id); folder \(n.folder); changed \(n.modified.formatted(.iso8601)))"
@@ -141,6 +142,8 @@ enum NotesCapability {
             return .text(explain(failure), isError: true)
         } catch let failure as ScriptError {
             return .text(explain(failure), isError: true)
+        } catch let a as ArgumentError {
+            return .text(a.message, isError: true)
         } catch {
             return .text("Notes couldn't be read: \(error.localizedDescription)", isError: true)
         }

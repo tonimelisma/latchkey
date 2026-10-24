@@ -38,7 +38,7 @@ enum FilesCapability {
                         // read as an option (Spotlight ignores the space).
                         let words = query.hasPrefix("-") ? " " + query : query
                         let out = try await commands.run("/usr/bin/mdfind", arguments + [words], timeout: .seconds(20))
-                        let limit = min(max(Int(args["limit"]?.numberValue ?? 30), 1), 200)
+                        let limit = min(max(try args.integer("limit", in: 0...Int.max) ?? 30, 1), 200)
                         let hits = out.split(separator: "\n").map { URL(filePath: String($0)) }
                             .map { ($0, modified($0) ?? .distantPast) }
                             .sorted { $0.1 > $1.1 }.prefix(limit)
@@ -114,7 +114,7 @@ enum FilesCapability {
                     await run {
                         let url = try existing(args["path"]?.stringValue, home: home)
                         try await downloadIfInICloud(url)
-                        switch try FileReader.read(url, offset: Int(args["offset"]?.numberValue ?? 0)) {
+                        switch try FileReader.read(url, offset: try args.integer("offset", in: 0...Int.max) ?? 0) {
                         case .image(let image): return .image(image.data, mimeType: image.mimeType)
                         case .notReadable(let why): throw Failure(message: "\(url.path) can't be read: it's \(why).")
                         case .text(let text, let total, let next):
@@ -340,6 +340,8 @@ enum FilesCapability {
     private static func run(_ body: () async throws -> ToolResult) async -> ToolResult {
         do { return try await body() } catch let f as Failure {
             return .text(f.message, isError: true)
+        } catch let a as ArgumentError {
+            return .text(a.message, isError: true)
         } catch CommandError.timedOut {
             return .text("Spotlight didn't answer within 20 seconds. Try a narrower search or a folder.", isError: true)
         } catch {

@@ -59,7 +59,7 @@ enum ComputerCapability {
                     deadlineMS: 20_000),
                 handler: { args in
                     await run(env, needs: .screen) {
-                        let n = Int(args["display"]?.numberValue ?? 1)
+                        let n = try display(args)
                         return try await look(env, display: n, text: nil)
                     }
                 }),
@@ -118,15 +118,15 @@ enum ComputerCapability {
                 try a.click(
                     x: try number(args, "x"), y: try number(args, "y"),
                     button: args["button"]?.stringValue == "right" ? .right : .left,
-                    count: Int(args["count"]?.numberValue ?? 1),
-                    display: display(args))
-                return "Clicked at (\(Int(try number(args, "x"))), \(Int(try number(args, "y"))))"
+                    count: try args.integer("count", in: 0...Int.max) ?? 1,
+                    display: try display(args))
+                return "Clicked at (\(Int(try number(args, "x").rounded())), \(Int(try number(args, "y").rounded())))"
             },
             action(
                 env, "computer_move", "Move the Pointer", "Moves the pointer to a point, for menus that open on hover.",
                 input: point, required: ["x", "y"]
             ) { a, args in
-                try a.move(x: try number(args, "x"), y: try number(args, "y"), display: display(args))
+                try a.move(x: try number(args, "x"), y: try number(args, "y"), display: try display(args))
                 return "Moved the pointer"
             },
             action(
@@ -140,7 +140,7 @@ enum ComputerCapability {
             ) { a, args in
                 try a.drag(
                     from: (try number(args, "from_x"), try number(args, "from_y")),
-                    to: (try number(args, "to_x"), try number(args, "to_y")), display: display(args))
+                    to: (try number(args, "to_x"), try number(args, "to_y")), display: try display(args))
                 return "Dragged"
             },
             action(
@@ -155,7 +155,7 @@ enum ComputerCapability {
             ) { a, args in
                 try a.scroll(
                     x: try number(args, "x"), y: try number(args, "y"), direction: args["direction"]?.stringValue ?? "",
-                    amount: Int(args["amount"]?.numberValue ?? 5), display: display(args))
+                    amount: try args.integer("amount", in: 0...Int.max) ?? 5, display: try display(args))
                 return "Scrolled"
             },
             action(
@@ -216,7 +216,7 @@ enum ComputerCapability {
                 await run(env, needs: .both) {
                     let done = try body(ComputerActions(poster: env.poster, displays: env.screen.displays()), args)
                     try await Task.sleep(for: env.settle)
-                    var r = try await look(env, display: display(args), text: done + ".")
+                    var r = try await look(env, display: try display(args), text: done + ".")
                     r.activity = activity(env, done)
                     return r
                 }
@@ -244,12 +244,13 @@ enum ComputerCapability {
             ]), isError: false)
     }
 
+    /// A screenshot pixel coordinate; one far past any screen counts as a mistake.
     private static func number(_ args: JSONValue, _ key: String) throws -> Double {
-        guard let n = args[key]?.numberValue else { throw Failure(message: "Give \(key).") }
+        guard let n = try args.number(key, in: -1_000_000...1_000_000) else { throw Failure(message: "Give \(key).") }
         return n
     }
 
-    private static func display(_ args: JSONValue) -> Int { Int(args["display"]?.numberValue ?? 1) }
+    private static func display(_ args: JSONValue) throws -> Int { try args.integer("display", in: 1...Int.max) ?? 1 }
 
     /// FR-507: the first action after 5 minutes idle also notifies.
     private static let idle = IdleClock()
@@ -285,6 +286,8 @@ enum ComputerCapability {
             return .text(f.message, isError: true)
         } catch let f as ScreenCapture.Failure {
             return .text(f.message, isError: true)
+        } catch let a as ArgumentError {
+            return .text(a.message, isError: true)
         } catch {
             return .text("The screen couldn't be used: \(error.localizedDescription)", isError: true)
         }
