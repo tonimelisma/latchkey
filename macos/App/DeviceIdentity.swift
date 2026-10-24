@@ -1,5 +1,6 @@
 import CryptoKit
 import Foundation
+import OSLog
 import Security
 
 /// Signs the relay's challenge. The real key lives in the Secure Enclave (plan D6).
@@ -91,18 +92,33 @@ struct DeviceIdentity: Sendable {
     }
 
     /// One time: the pairing of an app version that kept the relay and device ID in user
-    /// defaults moves into the record, and the old settings and key item are removed. If the
-    /// record can't be written the old pairing is used as it is and the move tried next start.
+    /// defaults moves into the record. All or nothing (0.8.4 lost a pairing by counting a move
+    /// whose old key it couldn't read as done):
+    /// - Old pairing complete and readable: the record is written and read back, and only then
+    ///   is the move marked done and the old settings and key removed. If that fails, the old
+    ///   pairing is used as it is and the move tried next start.
+    /// - Old pairing complete but its key unreadable: nothing changes; tried again next start.
+    /// - No old pairing, or only part of one (which can never connect): marked done, nothing
+    ///   deleted, so the missing parts can't be planted later.
     private static func migrate(_ vault: any PairingVault) -> Record? {
         guard vault.read(migratedAccount) == nil else { return nil }
-        var found: Record?
-        if let relay = vault.legacyDefault(legacyRelay), let device = vault.legacyDefault(legacyDevice),
-            let key = vault.read(legacyKey)
-        {
-            found = Record(relay: relay, device: device, key: key)
+        let relay = vault.legacyDefault(legacyRelay)
+        let device = vault.legacyDefault(legacyDevice)
+        let keyPresent = vault.legacyPresent(legacyKey)
+        guard let relay, let device, keyPresent else {
+            try? vault.write(Data([1]), migratedAccount)
+            return nil
         }
+        guard let key = vault.readLegacy(legacyKey) else {
+            Logger(subsystem: "net.melisma.latchkey", category: "pairing")
+                .error("The old key can't be read yet; keeping the old pairing")
+            return nil
+        }
+        let found = Record(relay: relay, device: device, key: key)
         do {
-            if let found { try vault.write(try PropertyListEncoder().encode(found), recordAccount) }
+            let data = try PropertyListEncoder().encode(found)
+            try vault.write(data, recordAccount)
+            guard vault.read(recordAccount) == data else { return found }
             try vault.write(Data([1]), migratedAccount)
         } catch {
             return found
@@ -152,6 +168,11 @@ protocol PairingVault: Sendable {
     func read(_ account: String) -> Data?
     func write(_ data: Data, _ account: String) throws
     func delete(_ account: String)
+    /// An item an older version made, read the way that version read it (it may not trust this
+    /// version's stricter read); nil when it can't be read.
+    func readLegacy(_ account: String) -> Data?
+    /// Whether an item an older version made exists, without reading it.
+    func legacyPresent(_ account: String) -> Bool
     /// What older versions kept in user defaults.
     func legacyDefault(_ key: String) -> String?
     func removeLegacyDefault(_ key: String)
@@ -173,6 +194,10 @@ struct KeychainVault: PairingVault {
         guard !underTest else { return }
         Keychain.delete(account: account)
     }
+
+    func readLegacy(_ account: String) -> Data? { Keychain.readLegacy(account: account) }
+
+    func legacyPresent(_ account: String) -> Bool { Keychain.exists(account: account) }
 
     func legacyDefault(_ key: String) -> String? { UserDefaults.standard.string(forKey: key) }
 
@@ -217,6 +242,29 @@ enum Keychain {
         guard SecItemCopyMatching(q as CFDictionary, &out) == errSecSuccess, let all = out as? [Data], all.count == 1
         else { return nil }
         return all[0]
+    }
+
+    /// Reads an item the way app versions up to 0.8.3 did: the default search list, and macOS may
+    /// ask the Owner once if the item's access list doesn't list this version. Used only to move
+    /// the old pairing, once.
+    static func readLegacy(account: String) -> Data? {
+        let q: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service,
+            kSecAttrAccount as String: account, kSecReturnData as String: true,
+        ]
+        var out: CFTypeRef?
+        guard SecItemCopyMatching(q as CFDictionary, &out) == errSecSuccess else { return nil }
+        return out as? Data
+    }
+
+    /// Whether the item exists, checked by its attributes only (no data, so no prompt).
+    static func exists(account: String) -> Bool {
+        var q: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service,
+            kSecAttrAccount as String: account,
+        ]
+        q[kSecReturnAttributes as String] = true
+        return SecItemCopyMatching(q as CFDictionary, nil) == errSecSuccess
     }
 
     static func write(_ data: Data, account: String) throws {

@@ -53,5 +53,10 @@ paths:
   `DispatchQueue.main.async`): with `.terminateLater`, AppKit's wait for the reply runs nested in
   that block, the serial main queue never runs again, and the app hangs forever (SIGTERM, 0.8.2).
   Schedule it with `NSApp.perform(#selector(NSApplication.terminate(_:)), with: nil, afterDelay: 0)`.
+- Moving stored data to a new place must be all or nothing: delete the old copy only after the
+  new one is written and read back, and never count a move done when the old data exists but
+  couldn't be read. 0.8.4 read the old pairing key with a stricter, prompt-less Keychain query,
+  got nothing, marked the move done, and deleted the old settings: Toni had to pair again
+  (2026-10-24). Read old items the way the old version read them.
 
 Add new gotchas here as they are discovered.
