@@ -26,7 +26,7 @@ Operations:
 
 ## D2. Running
 
-Each command runs as `/usr/bin/script -q /dev/null /bin/zsh -l -c <command>`: `script` gives it
+Each command runs as `/usr/bin/script -q /dev/null /bin/zsh -l -c -- <command>`: `script` gives it
 a real terminal session (prompts work, Ctrl-C reaches the program), the login shell loads the
 Owner's PATH. Latchkey talks to `script` through pipes; no fork in the app. Environment adds
 `TERM=dumb`, `NO_COLOR=1`, `PAGER=cat`, `GIT_PAGER=cat`. Folder: as given, else home (FR-301).

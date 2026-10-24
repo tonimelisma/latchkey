@@ -29,6 +29,12 @@ import Testing
         #expect(r.output.contains("oops"), "errors are shown too")
     }
 
+    @Test func aCommandStartingWithADashIsTheCommand() async throws {
+        // Without "--", zsh would read "-v; echo hi" as its own options and run nothing.
+        let r = try await jobs.run("-v; echo hi", folder: nil, wait: .seconds(10))
+        #expect(r.output.contains("hi"), "\(r.output)")
+    }
+
     @Test func reportsFailure() async throws {
         let r = try await jobs.run("exit 3", folder: nil, wait: .seconds(10))
         #expect(r.exitCode == 3)

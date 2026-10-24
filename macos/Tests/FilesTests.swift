@@ -180,6 +180,19 @@ final class FakeCommands: CommandRunner, @unchecked Sendable {
         #expect(r.content.jsonText.contains("lease.txt"))
     }
 
+    @Test func searchWordsStartingWithADashAreNotOptions() async throws {
+        // mdfind has no "--"; a query like "-live" or "-s name" would be read as an option.
+        let f = try FilesFixture()
+        let fake = FakeCommands()
+        _ = await call(tools(f, commands: fake), "files_search", ["query": .string("-live")])
+        #expect(fake.calls.first?.last == " -live")
+        let real = await call(
+            tools(f, commands: ProcessCommands()), "files_search",
+            ["query": .string("-s"), "folder": .string("Documents")])
+        #expect(!real.isError, "\(real.content.jsonText)")
+        #expect(real.content.jsonText.contains("No files found"))
+    }
+
     @Test func realSpotlightAnswers() async throws {
         // mdfind runs on this Mac; a query that matches nothing still answers quickly.
         let out = try await ProcessCommands().run(

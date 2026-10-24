@@ -48,7 +48,8 @@ notification and goes in the trace (FR-208).
 ## D4. Search
 
 `mdfind` (Spotlight) as a process, name or content, optional folder, newest first; with a 20 s
-deadline. The answer notes that Spotlight skips hidden and excluded folders.
+deadline. `mdfind` has no `--`, so a query starting with `-` gets a leading space, which Spotlight
+ignores, and is never read as an option such as `-live` (security scan, 2026-10-24). The answer notes that Spotlight skips hidden and excluded folders.
 
 ## D5. Levels and setup
 

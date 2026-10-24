@@ -82,7 +82,8 @@ actor ShellJobs {
         let id = "job\(counter)"
         let p = Process()
         p.executableURL = URL(filePath: "/usr/bin/script")
-        p.arguments = ["-q", "/dev/null", "/bin/zsh", "-l", "-c", command]
+        // "--": a command starting with "-" is the command, not more options for zsh.
+        p.arguments = ["-q", "/dev/null", "/bin/zsh", "-l", "-c", "--", command]
         let dir = folder.map { ($0 as NSString).expandingTildeInPath } ?? URL.homeDirectory.path
         var isDir: ObjCBool = false
         guard FileManager.default.fileExists(atPath: dir, isDirectory: &isDir), isDir.boolValue else {

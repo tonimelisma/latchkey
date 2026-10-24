@@ -58,7 +58,9 @@ Serves FR-101, FR-110, FR-150; research "Apple Notes", "Messages".
 Serves FR-102, FR-103, FR-112.
 - Notes create, update, delete via AppleScript to Notes.app (Toni chose AppleScript only over
   Shortcuts and typing, 2026-10-22). Scripts run in `osascript` with the user's text passed as
-  arguments, never pasted into the script, and a 25 s deadline after which the process is
+  arguments, never pasted into the script, after `--` so that no argument is read as an
+  `osascript` option (an argument `-e` would add script lines; security scan 2026-10-24), and a
+  25 s deadline after which the process is
   ended. Markdown-like text converts to the HTML body Notes accepts; checklists come out as
   ☐/☑ items (FR-107). The title is the note's first line.
 - Append adds HTML to the existing body; replace keeps the title and sets the rest; edit
