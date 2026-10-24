@@ -35,6 +35,18 @@ import Testing
         #expect(r.output.contains("hi"), "\(r.output)")
     }
 
+    @Test func outputOverTheKeptMegabyteIsRead() async throws {
+        // Past 1 MB the oldest output is dropped; reading after that crashed the app (scan 2026-10-24).
+        let r = try await jobs.run(
+            "head -c 2500000 /dev/zero | tr '\\0' a; sleep 1; echo; echo END", folder: nil, wait: .milliseconds(700))
+        #expect(r.output.hasSuffix("a") || r.output.contains("END"))
+        let later = try await jobs.check(r.job, wait: .seconds(10))
+        #expect(later.finished)
+        #expect(later.output.contains("END"))
+        let again = try await jobs.check(r.job, wait: .zero)
+        #expect(again.output.isEmpty, "nothing new")
+    }
+
     @Test func reportsFailure() async throws {
         let r = try await jobs.run("exit 3", folder: nil, wait: .seconds(10))
         #expect(r.exitCode == 3)
