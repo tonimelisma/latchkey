@@ -160,7 +160,16 @@ Tool objects follow the MCP `Tool` shape (`name`, `title`, `description`, `input
 
 `inputSchema` is required and must be a JSON Schema object with `"type": "object"`; `outputSchema`,
 if present, likewise. Names use only letters, digits, `_`, `-`, and `.`, 1 to 128 characters (MCP
-tool name rules). A tool list breaking these rules is a protocol violation (close 4005).
+tool name rules). Anything else the relay's MCP SDK refuses is also a violation; today that is an
+`x-mcp-header` annotation that isn't a non-empty HTTP token on a `string`, `integer`, or `boolean`
+property, or repeats another (case-insensitive, at any depth). A tool list breaking these rules is
+a protocol violation (close 4005).
+
+Implementation choice (security scan, 2026-10-24): the relay checks the SDK's rules by trying
+each tool on a throwaway SDK server and treating its panic as a refusal, rather than copying the
+rules (which would drift when the SDK is updated) or only recovering at registration (which would
+store a list the relay can't serve). Registration also recovers, as a second line, and leaves a
+refused tool out.
 
 The relay caps `deadline_ms` at 60000. Tool names must not collide with relay tools
 (`laptop_status`); the relay rejects a `tools` list that contains one (close 4005).

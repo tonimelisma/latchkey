@@ -177,11 +177,20 @@ func (h *Hub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	c := h.newConn(ws, device)
+	// Whatever happens from here on, even a panic in a callback after the connection was
+	// registered, it ends unregistered and done, so Close never waits on it forever.
+	defer func() {
+		if p := recover(); p != nil {
+			h.cfg.Logger.Error("agent connection failed", "device", c.device.ID, "panic", p)
+			c.closeWith(ErrDisconnected, websocket.StatusInternalError, "relay error")
+		}
+		close(c.done)
+		h.finish(c)
+	}()
 	if !h.start(ctx, c, hello) {
 		return
 	}
 	c.run(ctx)
-	h.finish(c)
 }
 
 var errHandshakeTimedOut = errors.New("handshake timed out")
@@ -400,7 +409,6 @@ func (c *conn) persist(ctx context.Context) {
 
 // run reads frames until the connection ends. Silence longer than OfflineAfter ends it.
 func (c *conn) run(ctx context.Context) {
-	defer close(c.done)
 	pingCtx, stopPing := context.WithCancel(ctx)
 	defer stopPing()
 	go c.ping(pingCtx)

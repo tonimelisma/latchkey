@@ -1,6 +1,7 @@
 package agentproto_test
 
 import (
+	"context"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
@@ -181,6 +182,41 @@ func TestValidateTools(t *testing.T) {
 	require.NoError(t, agentproto.ValidateTools(nil))
 	require.ErrorIs(t, agentproto.ValidateTools([]*mcp.Tool{{Name: agentproto.RelayToolLaptopStatus, InputSchema: obj}}), agentproto.ErrProtocolViolation)
 	require.ErrorIs(t, agentproto.ValidateTools([]*mcp.Tool{nil}), agentproto.ErrProtocolViolation)
+}
+
+// A tool the MCP SDK's AddTool would panic on must be a protocol violation on arrival, never
+// reach the SDK (security scan: x-mcp-header annotations).
+func TestValidateToolsRejectsWhatTheSDKRefuses(t *testing.T) {
+	schema := func(props string) map[string]any {
+		var m map[string]any
+		require.NoError(t, json.Unmarshal([]byte(`{"type":"object","properties":`+props+`}`), &m))
+		return m
+	}
+	bad := map[string]string{
+		"header on an object":         `{"p":{"type":"object","x-mcp-header":"X-A"}}`,
+		"header on an array":          `{"p":{"type":"array","x-mcp-header":"X-A"}}`,
+		"header value not a string":   `{"p":{"type":"string","x-mcp-header":7}}`,
+		"empty header":                `{"p":{"type":"string","x-mcp-header":""}}`,
+		"header with a space":         `{"p":{"type":"string","x-mcp-header":"X A"}}`,
+		"header with a newline":       `{"p":{"type":"string","x-mcp-header":"X\nA"}}`,
+		"duplicate, case-insensitive": `{"a":{"type":"string","x-mcp-header":"X-A"},"b":{"type":"object","properties":{"c":{"type":"integer","x-mcp-header":"x-a"}}}}`,
+		"nested header on an object":  `{"a":{"type":"object","properties":{"b":{"type":"object","x-mcp-header":"X-B"}}}}`,
+	}
+	for name, props := range bad {
+		tool := &mcp.Tool{Name: "t", InputSchema: schema(props)}
+		require.ErrorIs(t, agentproto.ValidateTools([]*mcp.Tool{tool}), agentproto.ErrProtocolViolation, name)
+	}
+	good := []*mcp.Tool{
+		{Name: "a", InputSchema: schema(`{"p":{"type":"string","x-mcp-header":"X-A"},"q":{"type":"boolean","x-mcp-header":"X-B"}}`)},
+		{Name: "b", InputSchema: schema(`{"p":{"type":"object","properties":{"n":{"type":"integer","x-mcp-header":"X-A"}}}}`)},
+	}
+	require.NoError(t, agentproto.ValidateTools(good))
+	srv := mcp.NewServer(&mcp.Implementation{Name: "check", Version: "0"}, nil)
+	for _, tool := range good {
+		assert.NotPanics(t, func() {
+			srv.AddTool(tool, func(context.Context, *mcp.CallToolRequest) (*mcp.CallToolResult, error) { return nil, nil })
+		}, "everything ValidateTools accepts, AddTool accepts")
+	}
 }
 
 type signatureFixture struct {

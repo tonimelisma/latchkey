@@ -472,6 +472,24 @@ func TestNoticesOnConnectAndLive(t *testing.T) {
 	require.ErrorIs(t, e.hub.SendNotice(ctxT(t), "dev_other", &agentproto.Notice{}), hub.ErrOffline)
 }
 
+// A panic while a connection starts (say, the MCP SDK refusing a tool) must not leave the
+// connection registered as online, or make shutdown wait for it forever.
+func TestPanicDuringStartLeavesNothingBehind(t *testing.T) {
+	e := setup(t, func(c *hub.Config) {
+		c.OnToolsChanged = func(string) { panic("tools refused") }
+	})
+	_, _ = e.agent.Dial(ctxT(t))
+	require.Eventually(t, func() bool { return !e.hub.Online(e.device.ID) }, 5*time.Second, 10*time.Millisecond,
+		"connection unregistered")
+	closed := make(chan struct{})
+	go func() { e.hub.Close(); close(closed) }()
+	select {
+	case <-closed:
+	case <-time.After(5 * time.Second):
+		t.Fatal("hub.Close waited forever on a connection that panicked")
+	}
+}
+
 func TestShutdownMarksDevicesOffline(t *testing.T) {
 	e := setup(t, nil)
 	e.dial()
