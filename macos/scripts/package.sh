@@ -16,6 +16,9 @@ rm -rf "$OUT"
 mkdir -p "$OUT/stage"
 
 xcodegen generate --quiet
+# Fresh products: an incremental build once kept a stale, differently signed helper copy inside
+# the app.
+rm -rf build/DerivedData/Build/Products/Release
 xcodebuild -project Latchkey.xcodeproj -scheme Latchkey -configuration Release \
   -destination 'platform=macOS' -derivedDataPath build/DerivedData build -quiet
 APP=build/DerivedData/Build/Products/Release/Latchkey.app
@@ -24,6 +27,15 @@ codesign --verify --deep --strict "$APP"
 test -x "$APP/Contents/MacOS/LatchkeyHelper"
 plutil -lint -s "$APP/Contents/Library/LaunchDaemons/net.melisma.latchkey.helper.plist"
 codesign -d -r- "$APP/Contents/MacOS/LatchkeyHelper" 2>&1 | grep -q 'identifier "net.melisma.latchkey.helper"'
+# No signed code in the app may carry the debugging entitlement: with it, any program running as
+# the Owner can take over the app's process and use its privacy permissions (security scan,
+# 2026-10-24). Release builds don't inject it (project.yml); this keeps it that way.
+find "$APP" -type f -perm -u+x | while read -r bin; do
+  if codesign -d --entitlements - --xml "$bin" 2>/dev/null | grep -q 'com.apple.security.get-task-allow'; then
+    echo "package: $bin is signed with com.apple.security.get-task-allow" >&2
+    exit 1
+  fi
+done
 
 ditto "$APP" "$OUT/stage/Latchkey.app"
 ln -s /Applications "$OUT/stage/Applications"

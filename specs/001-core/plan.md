@@ -187,7 +187,11 @@ Serves FR-070, FR-071, FR-072; Constitution IV.
   (`appcast.xml`) are published on the repository's GitHub Releases by `macos/scripts/release.sh`.
   The updater starts only in builds that carry the public key; the feed needs a public repository.
 - Until the Developer ID exists: local builds with Toni's Apple Development certificate (team ID
-  in gitignored `macos/Local.xcconfig`).
+  in gitignored `macos/Local.xcconfig`). Development signing adds the debugging entitlement
+  (`get-task-allow`), which would let any program running as the Owner take over the app and use
+  its privacy permissions; Release builds don't inject it (`CODE_SIGN_INJECT_BASE_ENTITLEMENTS =
+  NO`), and `package.sh` and `install.sh` refuse an app whose code carries it (security scan,
+  2026-10-24). Debug builds keep it for the debugger.
 - Bundle identifiers: app `net.melisma.latchkey`, helper `net.melisma.latchkey.helper` (also its
   Mach service name). Swift 6 language mode with strict concurrency.
 - The helper's launchd plist sets `RunAtLoad`. Every helper start (at boot or on demand) first

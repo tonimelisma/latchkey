@@ -19,6 +19,13 @@ hdiutil attach -quiet -nobrowse -readonly -mountpoint "$MNT" "$DMG"
 rm -rf "$NEW"
 ditto "$MNT/Latchkey.app" "$NEW"
 codesign --verify --deep --strict "$NEW"
+# Never install code with the debugging entitlement (package.sh checks too; security scan 2026-10-24).
+find "$NEW" -type f -perm -u+x | while read -r bin; do
+  if codesign -d --entitlements - --xml "$bin" 2>/dev/null | grep -q 'com.apple.security.get-task-allow'; then
+    echo "install: $bin is signed with com.apple.security.get-task-allow; not installed" >&2
+    exit 1
+  fi
+done
 
 if pgrep -x Latchkey >/dev/null; then
   pkill -TERM -x Latchkey
