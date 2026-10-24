@@ -52,8 +52,10 @@ actor ShellJobs {
             lock.withLock {
                 bytes.append(d)
                 if bytes.count > ShellJobs.keptBytes {  // keep the last 1 MB
+                    // removeSubrange, not removeFirst: on Data, removeFirst re-slices, so the
+                    // indices stop starting at 0 and the memory is never freed.
                     let cut = bytes.count - ShellJobs.keptBytes
-                    bytes.removeFirst(cut)
+                    bytes.removeSubrange(bytes.startIndex..<bytes.startIndex + cut)
                     trimmed += cut
                 }
             }
@@ -66,7 +68,7 @@ actor ShellJobs {
         func takeNew() -> Data {
             lock.withLock {
                 let start = max(mark - trimmed, 0)
-                let d = bytes.count > start ? bytes.subdata(in: start..<bytes.count) : Data()
+                let d = bytes.count > start ? Data(bytes[(bytes.startIndex + start)...]) : Data()
                 mark = trimmed + bytes.count
                 return d
             }
