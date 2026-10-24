@@ -328,10 +328,12 @@ func (s *Store) PutOAuthRequest(ctx context.Context, r OAuthRequest) error {
 	return mapErr(err)
 }
 
-// PutOAuthToken stores an access or refresh token only while its grant still exists: the
-// authorization code or a refresh token of the same request ID and user. The check and the
-// insert are one statement, so a token issued in the middle of "Remove Claude's access" (which
-// deletes them all at once) is never written; the caller gets ErrNotFound (security scan).
+// PutOAuthToken stores an access or refresh token only while its grant is live: the
+// authorization code or a refresh token of the same request ID and user still exists, and no
+// token of that grant was revoked (revocation is final for a grant). The check and the insert
+// are one statement, so a token issued in the middle of "Remove Claude's access" (which deletes
+// the rows) or of a client's /revoke or reuse detection (which mark them revoked) is never
+// written; the caller gets ErrNotFound (security scan).
 func (s *Store) PutOAuthToken(ctx context.Context, r OAuthRequest) error {
 	if r.Kind != KindAccess && r.Kind != KindRefresh {
 		return fmt.Errorf("PutOAuthToken: kind %q is not a token", r.Kind)
@@ -340,8 +342,10 @@ func (s *Store) PutOAuthToken(ctx context.Context, r OAuthRequest) error {
 		INSERT INTO oauth_requests (`+oauthRequestColumns+`)
 		SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
 		WHERE EXISTS (SELECT 1 FROM oauth_requests
-			WHERE request_id = ? AND user_id = ? AND kind IN ('code', 'refresh'))`,
-		append(r.values(), r.RequestID, r.UserID)...)
+				WHERE request_id = ? AND user_id = ? AND kind IN ('code', 'refresh'))
+			AND NOT EXISTS (SELECT 1 FROM oauth_requests
+				WHERE request_id = ? AND revoked_at IS NOT NULL)`,
+		append(r.values(), r.RequestID, r.UserID, r.RequestID)...)
 	if err != nil {
 		return mapErr(err)
 	}
