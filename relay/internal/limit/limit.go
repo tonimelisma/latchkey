@@ -36,10 +36,12 @@ func NewKeyed(burst int, every time.Duration) *Keyed {
 }
 
 // Allow takes one token from key's bucket and reports whether one was there.
-func (k *Keyed) Allow(key string) bool {
+func (k *Keyed) Allow(key string) bool { return k.AllowAt(key, k.now()) }
+
+// AllowAt is Allow at a given time, for callers with their own clock.
+func (k *Keyed) AllowAt(key string, now time.Time) bool {
 	k.mu.Lock()
 	defer k.mu.Unlock()
-	now := k.now()
 	b, ok := k.buckets[key]
 	if !ok {
 		b = &bucket{lim: rate.NewLimiter(rate.Every(k.every), k.burst)}

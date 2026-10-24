@@ -401,7 +401,8 @@ func (s *Store) PutConsent(ctx context.Context, userID, clientID, scopes string,
 	return mapErr(err)
 }
 
-// PurgeExpired deletes expired sessions, links, pairing codes, and OAuth requests.
+// PurgeExpired deletes expired sessions, links, pairing codes, OAuth requests, and unused
+// registered clients.
 func (s *Store) PurgeExpired(ctx context.Context, now time.Time) error {
 	ms := now.UnixMilli()
 	var errs []error
@@ -414,6 +415,14 @@ func (s *Store) PurgeExpired(ctx context.Context, now time.Time) error {
 		if _, err := s.db.ExecContext(ctx, q, ms); err != nil {
 			errs = append(errs, err)
 		}
+	}
+	// Dynamically registered clients older than a week with no live code or token are never
+	// coming back; without this, anyone could fill the table through /register.
+	if _, err := s.db.ExecContext(ctx, `
+		DELETE FROM oauth_clients WHERE kind = 'dcr' AND created_at <= ?
+			AND NOT EXISTS (SELECT 1 FROM oauth_requests r WHERE r.client_id = oauth_clients.id)`,
+		now.Add(-7*24*time.Hour).UnixMilli()); err != nil {
+		errs = append(errs, err)
 	}
 	// Used recovery links are kept for 30 days so a Mac that was offline still hears of them.
 	if _, err := s.db.ExecContext(ctx,

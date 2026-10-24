@@ -15,6 +15,7 @@ recovery links, and an HTTPS address that Claude can reach.
 
 ```sh
 docker run -d --name latchkey-relay --restart unless-stopped \
+  --read-only --tmpfs /tmp:size=16m --cap-drop ALL --security-opt no-new-privileges \
   -p 443:8080 \
   -v latchkey-data:/data \
   -e PUBLIC_URL=https://relay.example.com \
@@ -64,6 +65,22 @@ Claude only connects over HTTPS. Pick one:
   HTTPS; the relay reads the port from `PORT`. Give it a persistent volume at `/data`.
 - **A home server without a public address.** Use a tunnel such as Cloudflare Tunnel to
   `localhost:8080`. The tunnel is for the relay only; your Mac still just dials out.
+
+## Built-in protections
+
+- **Abuse limits.** Sign-in, passkey, pairing, and account requests, client registration, the
+  consent page, the token endpoint, and Mac connections are limited per client address; sign-in
+  emails are limited per address and for the whole relay; MCP calls are limited per account. The
+  limits sit far above normal use. A request over a limit gets `429 Too Many Requests`.
+- **Client addresses behind a proxy.** When a request comes from a proxy on the same machine or a
+  private network (as with Caddy, Traefik, nginx, a hosting platform's router, or a tunnel's local
+  connector), the relay takes the client's address from the last `X-Forwarded-For` entry, the one
+  the proxy added. Requests straight from the internet can't set it. Make sure your proxy adds
+  that header (the ones above do by default).
+- **Headers.** Every response forbids framing, sniffing, referrers, and caching; over HTTPS it
+  also sends `Strict-Transport-Security`.
+- **Container.** The `docker run` flags above make the filesystem read-only except `/data` and a
+  small `/tmp`, and drop all Linux capabilities; the image runs as a non-root user.
 
 ## Connect
 

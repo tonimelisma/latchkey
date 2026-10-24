@@ -29,6 +29,7 @@ import (
 	"github.com/go-webauthn/webauthn/webauthn"
 
 	"github.com/tonimelisma/latchkey/relay/internal/agentproto"
+	"github.com/tonimelisma/latchkey/relay/internal/limit"
 	"github.com/tonimelisma/latchkey/relay/internal/oauth"
 	"github.com/tonimelisma/latchkey/relay/internal/store"
 )
@@ -39,6 +40,10 @@ const (
 	pairingLifetime = 5 * time.Minute     // pairing codes (data-model.md)
 	reauthWindow    = 5 * time.Minute     // fresh passkey check before deleting the account
 	emailInterval   = time.Minute         // at most one email per address per minute
+	emailBurst      = 5                   // then, per address, at most one more every emailRefill
+	emailRefill     = 10 * time.Minute
+	sendBurst       = 100 // emails the whole relay sends at once, then one every sendRefill
+	sendRefill      = 30 * time.Second
 )
 
 //go:embed templates/*.html
@@ -81,6 +86,8 @@ type Service struct {
 	ceremonies map[string]*ceremony
 	tickets    map[string]*ticket
 	lastEmail  map[string]time.Time
+	perAddress *limit.Keyed // codes per address: guessing and inbox flooding
+	allSends   *limit.Keyed // emails from the relay: the sending service's quota
 }
 
 // New creates the service.
@@ -129,6 +136,7 @@ func New(ctx context.Context, cfg Config) (*Service, error) {
 	return &Service{
 		cfg: cfg, webauthn: wa, pages: pages, csrfKey: key, secure: secure, cookie: cookie,
 		ceremonies: map[string]*ceremony{}, tickets: map[string]*ticket{}, lastEmail: map[string]time.Time{},
+		perAddress: limit.NewKeyed(emailBurst, emailRefill), allSends: limit.NewKeyed(sendBurst, sendRefill),
 	}, nil
 }
 
@@ -328,6 +336,9 @@ func (s *Service) allowEmail(addr string) bool {
 	defer s.mu.Unlock()
 	now := s.now()
 	if last, ok := s.lastEmail[addr]; ok && now.Sub(last) < emailInterval {
+		return false
+	}
+	if !s.perAddress.AllowAt(addr, now) || !s.allSends.AllowAt("", now) {
 		return false
 	}
 	s.lastEmail[addr] = now

@@ -70,11 +70,11 @@ func New(ctx context.Context, o Options) (*Relay, error) {
 
 	mux := http.NewServeMux()
 	mux.Handle("GET /agent/v1", h)
-	mux.Handle("/mcp", oa.Protect(ms))
+	mux.Handle("/mcp", oa.Protect(perUser(ms)))
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte("ok\n")) })
 	oa.Register(mux)
 	acc.Register(mux)
-	return &Relay{Handler: mux, Hub: h, Store: o.Store}, nil
+	return &Relay{Handler: guard(o.PublicURL, mux), Hub: h, Store: o.Store}, nil
 }
 
 // authBridge lets the OAuth server use the account service, which needs the OAuth server.

@@ -553,6 +553,20 @@ func TestEmailRateLimit(t *testing.T) {
 	assert.Len(t, e.mail.Sent(), 2)
 }
 
+func TestEmailHourlyCap(t *testing.T) {
+	e := setup(t)
+	b := e.browser()
+	for range 20 {
+		b.startEmail(owner, false)
+		e.clock.advance(61 * time.Second)
+	}
+	// Five at once (minutes 0–4), then one when the next token refills ten minutes in.
+	assert.Len(t, e.mail.Sent(), 6, "at most six codes in 20 minutes")
+	e.clock.advance(time.Hour)
+	b.startEmail(owner, false)
+	assert.Len(t, e.mail.Sent(), 7, "an hour later, codes flow again")
+}
+
 func TestAllowedEmails(t *testing.T) {
 	e := setup(t, "Toni@example.com")
 	status, r := e.browser().startEmail("stranger@example.com", false)

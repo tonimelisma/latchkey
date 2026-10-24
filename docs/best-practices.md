@@ -49,8 +49,9 @@ ChatGPT agent pauses for logins and runs a "watch mode" on sensitive sites
 - **Gap:** hints to correct (above). Consider also `destructiveHint` on `computer_type`-like
   actions already set; `computer_open_app`, `computer_move`, `computer_scroll`, `files_move`,
   `files_copy`, `notes_create` are non-destructive and will still ask unless the user allows them.
-- **Gap:** no sensitive-site rule for the browser (banking, government, health), unlike Claude in
-  Chrome and ChatGPT agent.
+- **Not pursued:** a sensitive-site rule for the browser (banking, government, health), as in
+  Claude in Chrome and ChatGPT agent. It changes the product, not its security (Toni,
+  2026-10-23).
 
 ## 3. MCP protocol and OAuth
 
@@ -90,9 +91,20 @@ updates, minimal server-side data.
 - **Done:** the Mac enforces levels itself (a compromised relay can't call a tool that's off);
   outbound-only connection; relay stores no tool content; 30-day metadata log; device key in the
   Secure Enclave; passkeys; Disconnect and levels on the Mac as a kill switch; self-hostable.
-- **Gap:** a compromised relay can call any tool that is on. Options: keep powerful
-  capabilities (Shell, Computer control) off by default (Toni chose all on, 2026-10-22), or
-  require a fresh approval on the Mac for them. Worth a decision.
+- **Gap:** a compromised relay can call any tool that is on. Shell and Computer control stay on
+  by default (Toni, 2026-10-22). Fresh approvals on the Mac are not pursued: "manual approvals
+  don't improve security" (Toni, 2026-10-23). The real fix is end-to-end protection, below.
+- **Done (2026-10-23):** abuse limits per client address (sign-in, passkeys, pairing, account
+  changes: 20 at once then one every 3 s; client registration: 10 then one a minute; consent
+  page; token endpoint; Mac connections), sign-in emails capped per address (one a minute, and
+  five at once then one every 10 minutes) and for the whole relay (100 at once, then one every
+  30 s), MCP calls per account (120 at once, then ten a second). Behind a local or private-network
+  proxy, the client address is the last `X-Forwarded-For` entry; a direct public peer can't set
+  it. Request bodies capped (16 MiB for MCP, 1 MiB otherwise), 64 KiB headers, idle connections
+  closed after 2 minutes. Security headers on every response (CSP `default-src 'none'` except the
+  pages' own, `nosniff`, `DENY`, `no-referrer`, COOP, Permissions-Policy, `no-store`, HSTS over
+  HTTPS). Registered clients with no live grant deleted after 7 days. Hosted container read-only
+  except `/data` and a 16 MB `/tmp`, all capabilities dropped, `no-new-privileges`, process limit.
 - **Later:** Developer ID signing, notarization, and signed Sparkle updates (EdDSA) before
   anyone else installs it.
 
@@ -171,8 +183,12 @@ Sources: [Writing effective tools for agents](https://www.anthropic.com/engineer
 - **Gap:** no task evaluations. A small suite of realistic tasks ("add milk to my grocery note",
   "what did Sarah say about Saturday") run with real Claude would catch tool-design problems,
   as the live check did.
-- **Gap:** an automated prompt-injection test: a planted message or page with instructions,
-  checking that Claude doesn't act on it, run before releases.
+- **Not pursued:** prompt-injection tests or Latchkey-side injection defenses. Toni's position
+  (2026-10-23): prompt injection isn't a concern with Anthropic models. For the record,
+  Anthropic reports no successful attack on its current models in its Claude in Chrome tests
+  ([Anthropic](https://claude.com/resources/articles/claude-in-chrome-generally-available)) and
+  also says model-layer protection "will never be 100% effective"
+  ([Anthropic](https://www.anthropic.com/engineering/how-we-contain-claude)).
 
 ## 6. The Mac app
 
@@ -202,8 +218,18 @@ for local connectors and expected for remote ones); documented incident response
 
 **Latchkey.**
 - **Done (2026-10-23):** `SECURITY.md` with GitHub private reporting (GitHub offers the button
-  once the repository is public). **Gap:** no dependency scanning yet (Dependabot or
-  `govulncheck` in CI).
+  once the repository is public).
+- **Done (2026-10-23):** supply chain. `make security` in the relay runs `govulncheck` (known
+  vulnerabilities the code can reach, Go itself included), `gitleaks` over the whole history,
+  and a tidy-modules check; it gates every deploy, CI on every push and daily, and the image
+  release. CI also builds, lints, and runs all tests. Dependabot proposes weekly updates for Go
+  modules, base images, and actions. Base images pinned by digest, actions by commit SHA, Go
+  toolchain pinned (1.27.3); the published image carries an SBOM and build provenance. The
+  first scan found 16 reachable vulnerabilities (Go 1.27.1, go-jose 3.0.3, OpenTelemetry
+  exporters 1.21.0), all fixed; the history has no leaked secrets.
+- **Not covered:** the Mac app's one package (Sparkle, pinned to an exact version) isn't in
+  Dependabot, which can't read an XcodeGen project. GitHub's code scanning and secret push
+  protection need a paid plan on a private repository.
 - **Later:** privacy policy and terms (with the directory listing).
 
 ## Decisions after this review (Toni, 2026-10-23)
@@ -221,8 +247,8 @@ for local connectors and expected for remote ones); documented incident response
 3. Notify the owner when a new Claude client is granted access.
 4. Page size above Claude Code's 25k-token cap; lower to about 40,000 characters.
 5. Defaults for Shell and Computer control given relay compromise (decided all on; revisit?).
-6. Sensitive-site rule for the browser (banking, government, health).
-7. Prompt-injection test and task evaluations with real Claude.
+6. ~~Sensitive-site rule for the browser~~: not pursued, a product change (Toni).
+7. ~~Prompt-injection test~~: not pursued (Toni); task evaluations with real Claude still open.
 8. ~~Local activity log~~: stays thorough (Toni).
-9. ~~`SECURITY.md`~~ done; dependency scanning open.
+9. ~~`SECURITY.md`~~ and ~~dependency scanning~~: done.
 10. ~~Fewer tools~~: 15 now (was 45).

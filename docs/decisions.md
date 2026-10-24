@@ -94,3 +94,8 @@ Add a row when a decision is made; never delete one, mark it "superseded by" ins
 | 2026-10-23 | SECURITY.md with GitHub private vulnerability reporting (switched on when the repository is public) | SECURITY.md |
 | 2026-10-23 | The relay's address, server details, and Apple team ID stay out of the repository (gitignored .env, Local.xcconfig, CLAUDE.local.md); history rewritten once and force-pushed to remove them | Toni, CLAUDE.md Git |
 | 2026-10-23 | After every push, merged branches (local and remote), stale worktrees, old disk images, and old relay images are removed automatically (scripts/tidy.sh via a Claude Code hook) | CLAUDE.md Git |
+| 2026-10-23 | End-to-end encryption between Claude and the Mac researched: not possible on custom connectors today (bearer tokens only); options recorded, not decided | docs/best-practices.md §4 |
+| 2026-10-23 | Manual approvals on the Mac are not a security measure for Latchkey; not pursued | Toni, docs/best-practices.md §4 |
+| 2026-10-23 | No sensitive-site rule for the browser (a product change, not security) | Toni, docs/best-practices.md §2 |
+| 2026-10-23 | No prompt-injection tests or Latchkey-side injection defenses (Toni: not a concern with Anthropic models) | Toni, docs/best-practices.md §5 |
+| 2026-10-23 | Belt-and-suspenders hardening with no change to normal use: relay abuse limits, body and header caps, security headers, unused-client cleanup, hardened container; `make security` (govulncheck, gitleaks, tidy) gates deploys, CI on every push and daily, and releases; Dependabot; images pinned by digest, actions by SHA, Go 1.27.3 | Toni, docs/best-practices.md §4, §7 |

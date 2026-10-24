@@ -258,6 +258,33 @@ func TestPurgeExpired(t *testing.T) {
 	require.ErrorIs(t, err, store.ErrNotFound)
 }
 
+func TestPurgeUnusedRegisteredClients(t *testing.T) {
+	ctx := context.Background()
+	s := open(t)
+	u := newUser(t, s)
+	for _, c := range []store.OAuthClient{
+		{ID: "stale-dcr", Kind: "dcr", CreatedAt: t0},
+		{ID: "fresh-dcr", Kind: "dcr", CreatedAt: t0.Add(7 * 24 * time.Hour)},
+		{ID: "used-dcr", Kind: "dcr", CreatedAt: t0},
+		{ID: "https://claude.ai/cimd", Kind: "cimd", CreatedAt: t0},
+	} {
+		c.MetadataJSON = []byte(`{}`)
+		require.NoError(t, s.PutOAuthClient(ctx, c))
+	}
+	require.NoError(t, s.PutOAuthRequest(ctx, store.OAuthRequest{
+		Signature: "live", Kind: store.KindRefresh, RequestID: "r", ClientID: "used-dcr", UserID: u.ID,
+		RequestedAt: t0, SessionJSON: []byte(`{}`), ExpiresAt: t0.Add(90 * 24 * time.Hour),
+	}))
+
+	require.NoError(t, s.PurgeExpired(ctx, t0.Add(8*24*time.Hour)))
+	_, err := s.OAuthClient(ctx, "stale-dcr")
+	require.ErrorIs(t, err, store.ErrNotFound, "a week-old registration with no live grant goes")
+	for _, id := range []string{"fresh-dcr", "used-dcr", "https://claude.ai/cimd"} {
+		_, err = s.OAuthClient(ctx, id)
+		require.NoError(t, err, id)
+	}
+}
+
 func TestRelayKeys(t *testing.T) {
 	ctx := context.Background()
 	s := open(t)

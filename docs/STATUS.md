@@ -1,6 +1,6 @@
 # Status
 
-Last updated: 2026-10-22 (all capabilities checked live)
+Last updated: 2026-10-23 (security hardening of the relay and its supply chain)
 
 Xcode signing ready (2026-10-20): Toni's Xcode account has a valid "Apple Development" certificate
 (certificate expires 2027-07-22). Keep the team ID out of committed project files
@@ -47,7 +47,11 @@ The Mac state line appears in every result (it reported the battery warning at 1
 2. When the repository goes public: turn on GitHub private vulnerability reporting
    (`gh api -X PUT repos/<owner>/latchkey/private-vulnerability-reporting`), which SECURITY.md
    points to. GitHub offers it only for public repositories.
-3. Dependency scanning (Dependabot or `govulncheck` in CI): open, from docs/best-practices.md.
+3. ~~Dependency scanning~~: done 2026-10-23 with the rest of the hardening (abuse limits,
+   headers, container, `make security` gating deploys, CI, Dependabot, pinning; see
+   docs/best-practices.md §4 and §7). Watch the first CI run and Dependabot's first proposals.
+4. End-to-end encryption between Claude and the Mac: researched, not decided (options in
+   docs/best-practices.md §4).
 2. Known limit: macOS shows its own "allow Latchkey to access the screen directly" alert from
    time to time for screen capture; it needs Toni at the Mac (computer control only).
 
