@@ -89,7 +89,18 @@ Serves FR-040, FR-014.
   claim, so wherever it appears (consent page, account page, the Mac's `client_authorized`
   notice) it is followed by the host the relay checked: the client ID's host for a CIMD client
   (the relay fetched the document there), else the redirect host, as "Claude (claude.ai)"
-  (security scan, 2026-10-24). An approval is remembered per
+  (security scan, 2026-10-24). Hosts are shown in ASCII (`golang.org/x/net/idna`, already in
+  the module graph, now a direct dependency), so a look-alike Unicode host appears as `xn--...`.
+  The name is cleaned before it is shown: control and formatting characters (newlines,
+  direction overrides, zero-width marks) and parentheses removed, spaces collapsed, at most 60
+  characters, so it can't carry a "(claude.ai)" of its own. The consent page shows the host on
+  its own line ("This app is at claude.ai."), not only after the name. The account page names a
+  registered client with every host its redirect URIs point to ("Claude (claude.ai,
+  other.example)"). Options weighed for that: recording the redirect host with each approval
+  (a migration, and still wrong later, because a remembered approval covers every registered
+  redirect URI of the client, FR-049); requiring one host per registered client (refuses
+  clients that list several hosts today); listing every host, chosen as the only one that is
+  never narrower than what the approval allows. An approval is remembered per
   Owner, client, and scope set (FR-049), and forgotten when the Owner revokes Claude's access.
 - Redirect URIs must be registered by the client (CIMD document or DCR); for loopback URIs
   (`localhost`, `127.0.0.1`, `[::1]`) the port is ignored. fosite ignores the port only for IP
