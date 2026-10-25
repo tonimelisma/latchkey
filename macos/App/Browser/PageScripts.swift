@@ -47,7 +47,10 @@ enum PageScripts {
     }
 
     /// Title, address, visible text from `offset`, and the visible things Claude can act on,
-    /// each tagged with a reference that stays on the element.
+    /// each tagged with a reference that stays on the element. A field's current value comes
+    /// along, except for fields that hold a secret (FR-410): password fields, and fields the
+    /// page marks (autocomplete) as a password, a one-time code, or a card number or security
+    /// code. Those say only "(hidden)" when filled in; Claude can still type into them.
     static func read(offset: Int) -> String {
         // nosemgrep: latchkey-page-script-literal -- splices in only two Ints (offset, pageSize).
         """
@@ -68,7 +71,10 @@ enum PageScripts {
             var item = { ref: ref, kind: kind, label: label };
             if (tag === 'a') item.href = e.href;
             if (type === 'checkbox' || type === 'radio') item.checked = e.checked;
-            else if (tag === 'input' || tag === 'textarea') item.value = String(e.value || '').slice(0, 100);
+            else if (tag === 'input' || tag === 'textarea') {
+              var secret = type === 'password' || e.type === 'password' || /(^|\\s)(current-password|new-password|one-time-code|cc-number|cc-csc)(\\s|$)/i.test(e.getAttribute('autocomplete') || '');
+              item.value = secret ? (e.value ? '(hidden)' : '') : String(e.value || '').slice(0, 100);
+            }
             else if (tag === 'select' && e.selectedIndex >= 0) item.value = e.options[e.selectedIndex].text;
             out.push(item);
           }

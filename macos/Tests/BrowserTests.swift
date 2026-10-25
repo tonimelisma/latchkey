@@ -24,8 +24,8 @@ final class TestPage {
         </body></html>
         """
 
-    func load() async throws {
-        view.loadHTMLString(Self.html, baseURL: URL(string: "https://shop.example.com/"))
+    func load(_ html: String = TestPage.html) async throws {
+        view.loadHTMLString(html, baseURL: URL(string: "https://shop.example.com/"))
         for _ in 0..<100 where view.isLoading { try await Task.sleep(for: .milliseconds(50)) }
         try await Task.sleep(for: .milliseconds(100))
     }
@@ -66,6 +66,45 @@ final class TestPage {
         #expect(try await page.run(PageScripts.type(field.ref, text: "milk \"2%\"", submit: true)) == "ok")
         #expect(try await page.run("document.title") == "sent:milk \"2%\"")
         #expect(try await page.run(PageScripts.click("e999")) == "missing")
+    }
+
+    /// Reading a page is a Read only tool: a sign-in form the browser filled in must not hand
+    /// over the password, a one-time code, or a card number (spec 005 FR-410).
+    @MainActor @Test func neverReturnsWhatSecretFieldsHold() async throws {
+        let page = TestPage()
+        try await page.load(
+            """
+            <html><body><form>
+            <input id="u" name="user" value="toni">
+            <input id="p" type="password" name="pw" value="hunter2secret">
+            <input id="p2" type="PASSWORD" name="pw2" value="UPPERsecret">
+            <input id="shown" type="text" name="shown" autocomplete="current-password" value="shownsecret">
+            <input id="n" name="n" autocomplete="section-a NEW-PASSWORD" value="newsecret">
+            <input id="otp" name="otp" autocomplete="one-time-code" value="123456">
+            <input id="cc" name="cc" autocomplete="cc-number" value="4111111111111111">
+            <input id="csc" name="csc" autocomplete="cc-csc" value="987">
+            <textarea id="t" name="t" autocomplete="current-password">areasecret</textarea>
+            <input id="empty" name="empty" type="password">
+            </form></body></html>
+            """)
+        let json = try await page.run(PageScripts.read(offset: 0))
+        for secret in [
+            "hunter2secret", "UPPERsecret", "shownsecret", "newsecret", "123456", "4111111111111111", "987",
+            "areasecret",
+        ] {
+            #expect(!json.contains(secret), "\(secret) was returned")
+        }
+        let r = try PageScripts.decode(json)
+        #expect(r.elements.first { $0.label == "user" }?.value == "toni", "ordinary fields keep their value")
+        let password = try #require(r.elements.first { $0.label == "pw" })
+        #expect(password.kind == "field:password")
+        #expect(password.value == "(hidden)", "filled in, but not shown")
+        #expect(r.elements.first { $0.label == "otp" }?.value == "(hidden)")
+        #expect(r.elements.first { $0.label == "empty" }?.value ?? "" == "", "an empty one says nothing")
+        // Typing into one (Read & write) still works.
+        #expect(try await page.run(PageScripts.type(password.ref, text: "new pass", submit: false)) == "ok")
+        #expect(try await page.run("document.getElementById('p').value") == "new pass")
+        #expect(!(try await page.run(PageScripts.read(offset: 0))).contains("new pass"))
     }
 
     @MainActor @Test func pageIdentityScriptRuns() async throws {
