@@ -25,6 +25,16 @@ main=$(git worktree list --porcelain | sed -n '1s/^worktree //p')
 # pid; a lock whose process is gone is stale. A copy with no commits of its own (just made from
 # main, so it counts as merged) may be a helper agent that hasn't committed yet: it goes once
 # nothing in it changed for an hour.
+# A helper agent's worktree is locked with the pid of the session that started it, and that
+# process lives on long after the helper is done, so the pid says nothing (one stayed behind this
+# way on 2026-10-25). Such a worktree goes when the helper made commits, all of them are on main,
+# nothing is uncommitted, and no program is running in it (a test run, a build).
+running_inside() { # <folder>: some process of this user has its working directory in it
+  command -v lsof >/dev/null 2>&1 || return 0 # can't tell: treat as busy
+  lsof -a -u "$(id -u)" -d cwd -Fn 2>/dev/null | awk -v p="$1" '
+    substr($0, 1, 1) == "n" { d = substr($0, 2); if (d == p || index(d, p "/") == 1) found = 1 }
+    END { exit !found }'
+}
 git worktree list --porcelain | awk '
   /^worktree / { if (wt != "") print wt "\t" lock; wt = substr($0, 10); lock = "" }
   /^locked/ { lock = $0 " " }
@@ -36,17 +46,24 @@ git worktree list --porcelain | awk '
   [ -n "$branch" ] || continue
   git merge-base --is-ancestor "refs/heads/$branch" refs/remotes/origin/main 2>/dev/null || continue
   [ -z "$(git -C "$wt" status --porcelain 2>/dev/null)" ] || continue
+  worked=no
+  git reflog show --format=%gs "refs/heads/$branch" 2>/dev/null | grep -qv '^branch: Created' && worked=yes
   if [ -n "$lock" ]; then
     pid=$(printf '%s' "$lock" | sed -n 's/.*pid \([0-9][0-9]*\).*/\1/p')
     [ -n "$pid" ] || continue
-    ps -p "$pid" >/dev/null 2>&1 && continue # any live process, whoever owns it
+    if ps -p "$pid" >/dev/null 2>&1; then # any live process, whoever owns it
+      case "$lock" in *"claude agent "*) ;; *) continue ;; esac # a session's own worktree is its to leave
+      [ "$worked" = yes ] || continue
+      running_inside "$wt" && continue
+    fi
     git worktree unlock "$wt"
   fi
-  if ! git reflog show --format=%gs "refs/heads/$branch" 2>/dev/null | grep -qv '^branch: Created'; then
+  if [ "$worked" = no ]; then
     [ -z "$(find "$wt" -path "$wt/macos/build" -prune -o -type f -mmin -60 -print 2>/dev/null | head -1)" ] || continue
   fi
   rm -rf "$wt/macos/build/DerivedData/Build/Products" # built apps first, even if the removal fails
-  git worktree remove --force "$wt" && echo "tidy: removed finished worktree $wt"
+  git worktree remove --force "$wt" && echo "tidy: removed finished worktree $wt" &&
+    git branch -q -d -- "$branch" 2>/dev/null && echo "tidy: deleted local branch $branch"
 done
 
 # Ref names are passed as full refs or after "--", so one that starts with "-" is never read as

@@ -78,6 +78,7 @@ script-tests:
 	cd .. && scripts/tests/private_values_test.sh
 	cd .. && scripts/tests/hooks_guard_test.sh
 	cd .. && scripts/tests/tidy_test.sh
+	cd .. && scripts/tests/loose_ends_test.sh
 	cd .. && scripts/tests/install_pairing_test.sh
 
 # Every security check; the deploy script and CI run it.

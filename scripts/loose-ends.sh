@@ -75,6 +75,27 @@ for b in $(git for-each-ref --format='%(refname:short)' refs/heads/); do
   [ "$n" -gt 0 ] && echo "local branch $b: $n commits not pushed"
 done
 
+# A helper agent's worktree whose work is all on main: whoever merged it removes it right away
+# (CLAUDE.md). Claude Code keeps such a worktree locked while the session that started the helper
+# runs, so it is named here until it is gone. One with a program still running in it (a test
+# run) is the helper finishing up, not a leftover.
+git worktree list --porcelain | awk '
+  /^worktree / { if (wt != "") print wt "\t" lock; wt = substr($0, 10); lock = "" }
+  /^locked/ { lock = $0 }
+  END { if (wt != "") print wt "\t" lock }' | while IFS="$(printf '\t')" read -r wt lock; do
+  [ "$wt" = "$tree" ] || [ "$wt" = "$main_checkout" ] || [ ! -d "$wt" ] && continue
+  case "$lock" in *"claude agent "*) ;; *) continue ;; esac
+  b=$(git -C "$wt" symbolic-ref --quiet --short HEAD 2>/dev/null || echo "")
+  [ -n "$b" ] || continue
+  git merge-base --is-ancestor "refs/heads/$b" refs/remotes/origin/main 2>/dev/null || continue
+  [ -z "$(git -C "$wt" status --porcelain 2>/dev/null)" ] || continue
+  git reflog show --format=%gs "refs/heads/$b" 2>/dev/null | grep -qv '^branch: Created' || continue
+  if command -v lsof >/dev/null 2>&1 && lsof -a -u "$(id -u)" -d cwd -Fn 2>/dev/null | awk -v p="$wt" '
+    substr($0, 1, 1) == "n" { d = substr($0, 2); if (d == p || index(d, p "/") == 1) found = 1 }
+    END { exit !found }'; then continue; fi
+  echo "worktree $wt: its work is on main; remove it now (git worktree unlock \"$wt\"; git worktree remove \"$wt\"; git branch -d $b)"
+done
+
 # Worktrees left with uncommitted work.
 git worktree list --porcelain | sed -n 's/^worktree //p' | while read -r wt; do
   [ "$wt" = "$tree" ] || [ "$wt" = "$main_checkout" ] || [ ! -d "$wt" ] && continue

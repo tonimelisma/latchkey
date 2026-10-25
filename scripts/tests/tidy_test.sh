@@ -128,5 +128,39 @@ printf 'settings: {}\n' >"$main/macos/project.yml"
 tidy
 yes "without a readable version no disk image is deleted" test -f "$main/macos/build/Latchkey-0.0.1.dmg"
 
+# --- a helper agent's worktree: locked by the session that started it, which is still running ---
+# Claude Code locks each helper's worktree with the pid of the session, and that process lives on
+# after the helper is done. A helper's worktree stayed behind this way on 2026-10-25.
+helper() { # <name>: a worktree from origin/main, locked by a live process (this test)
+  g -C "$main" fetch -q origin
+  g -C "$main" worktree add -q "$main/.claude/worktrees/$1" -b "$1" refs/remotes/origin/main 2>/dev/null
+  g -C "$main" worktree lock --reason "claude agent $1 (pid $$ start now)" "$main/.claude/worktrees/$1"
+}
+work_and_merge() { # <name>: a commit of its own, merged into origin/main
+  echo "$1" >"$main/.claude/worktrees/$1/$1.txt"
+  g -C "$main/.claude/worktrees/$1" add "$1.txt"
+  g -C "$main/.claude/worktrees/$1" commit -q -m "$1"
+  g -C "$main/.claude/worktrees/$1" push -q origin HEAD:main
+}
+helper agent-done
+work_and_merge agent-done
+helper agent-running
+work_and_merge agent-running
+(cd "$main/.claude/worktrees/agent-running" && exec sleep 60) &
+sleeper=$!
+helper agent-starting
+old=$(date -v-2H +%Y%m%d%H%M 2>/dev/null || date -d '2 hours ago' +%Y%m%d%H%M)
+find "$main/.claude/worktrees/agent-starting" -exec touch -t "$old" {} + 2>/dev/null
+sleep 1 # let the sleeper start in its folder
+tidy
+no "a finished helper's worktree goes although its session still runs" test -e "$main/.claude/worktrees/agent-done"
+no "and so does its branch" g -C "$main" rev-parse --verify -q refs/heads/agent-done
+yes "a helper with a program still running in its worktree is kept" test -d "$main/.claude/worktrees/agent-running"
+yes "a helper that has committed nothing yet is kept while its session runs" test -d "$main/.claude/worktrees/agent-starting"
+kill "$sleeper" 2>/dev/null
+wait "$sleeper" 2>/dev/null
+tidy
+no "the helper's worktree goes once nothing runs in it" test -e "$main/.claude/worktrees/agent-running"
+
 [ "$fails" = 0 ] && echo "all passed" || echo "$fails failed"
 [ "$fails" = 0 ]
