@@ -33,7 +33,7 @@ git worktree list --porcelain | awk '
   if [ -n "$lock" ]; then
     pid=$(printf '%s' "$lock" | sed -n 's/.*pid \([0-9][0-9]*\).*/\1/p')
     [ -n "$pid" ] || continue
-    kill -0 "$pid" 2>/dev/null && continue
+    ps -p "$pid" >/dev/null 2>&1 && continue # any live process, whoever owns it
     git worktree unlock "$wt"
   fi
   if ! git reflog show --format=%gs "refs/heads/$branch" 2>/dev/null | grep -qv '^branch: Created'; then
