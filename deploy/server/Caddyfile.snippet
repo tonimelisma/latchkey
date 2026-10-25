@@ -1,4 +1,4 @@
-
+# BEGIN latchkey relay (written by deploy/deploy.sh)
 {{HOST}} {
 	# Access log for troubleshooting connector checks; kept 30 days (data-model.md).
 	log {
@@ -6,6 +6,19 @@
 			roll_size 10MiB
 			roll_keep_for 720h
 		}
+		# Redirects carry one-time codes (the pairing code in "latchkey://paired?code=…", OAuth
+		# authorization codes), so the Location response header is left out of the log. Cookie and
+		# Authorization are already redacted by Caddy; deleting them too keeps that true if a
+		# global option ever turns the redaction off.
+		format filter {
+			wrap json
+			fields {
+				resp_headers>Location delete
+				request>headers>Cookie delete
+				request>headers>Authorization delete
+			}
+		}
 	}
 	reverse_proxy latchkey-relay:8080
 }
+# END latchkey relay

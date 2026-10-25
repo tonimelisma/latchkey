@@ -1,0 +1,198 @@
+#!/bin/sh
+# Functions of deploy/deploy.sh, kept apart so deploy/tests/lib_test.sh can run them without the
+# server. Sourced, not run. Callers define ssh_vm (runs one command string on the VM).
+
+# Where the relay's files live on the VM.
+REMOTE_DIR=/opt/latchkey
+
+# check_host NAME VALUE: values that end up inside command strings, sed and awk programs, URLs and
+# remote commands (host names, the DNS zone, the VM, project and cloud zone names) may hold only
+# lowercase letters, digits, dots and hyphens, and must start with a letter or digit so none can
+# be read as an option. The value itself is never printed.
+check_host() {
+  case $2 in
+    '' | [!a-z0-9]* | *[!a-z0-9.-]*)
+      echo "FAIL: $1 in .env must be non-empty and hold only lowercase letters, digits, dots and hyphens" >&2
+      return 1
+      ;;
+  esac
+}
+
+# check_emails VALUE: ALLOWED_EMAILS is written as one line of the server's settings file.
+check_emails() {
+  case $1 in
+    '' | *[!A-Za-z0-9@._+,-]*)
+      echo "FAIL: ALLOWED_EMAILS in .env must be addresses separated by commas, with no spaces or quotes" >&2
+      return 1
+      ;;
+  esac
+}
+
+# check_secret NAME VALUE: a key is one word; anything else could add lines to the settings file.
+check_secret() {
+  case $2 in
+    '' | *[!A-Za-z0-9_.~+/=-]*)
+      echo "FAIL: $1 in .env is empty or holds characters a key never has (spaces, quotes, line breaks)" >&2
+      return 1
+      ;;
+  esac
+}
+
+# check_ip VALUE: the VM's public IPv4 address as Google Cloud reports it.
+check_ip() {
+  case $1 in
+    '' | *[!0-9.]*)
+      echo "FAIL: could not read the VM's public address" >&2
+      return 1
+      ;;
+  esac
+}
+
+# check_tag VALUE: an image tag made from a commit hash.
+check_tag() {
+  case $1 in
+    '' | *[!0-9a-f]*)
+      echo "FAIL: unexpected image tag" >&2
+      return 1
+      ;;
+  esac
+}
+
+# load_env FILE: reads the settings as plain shell variables. Nothing is exported, so the tools
+# the deploy runs (scanners, docker, gcloud, curl) don't inherit the keys; each key is handed
+# only to the one command that needs it.
+load_env() {
+  # shellcheck disable=SC1090
+  . "$1"
+  for _name in $(sed -n 's/^[[:space:]]*\(export[[:space:]]\{1,\}\)\{0,1\}\([A-Za-z_][A-Za-z0-9_]*\)=.*/\2/p' "$1"); do
+    eval "_value=\${$_name-}"
+    unset "$_name" # drops the export mark, also one inherited from the caller's environment
+    eval "$_name=\$_value"
+  done
+  unset _name _value
+}
+
+# require_deployable DIR: only what is on GitHub's main is deployed, so the running relay always
+# matches a commit (the image is tagged with it).
+require_deployable() {
+  if [ -n "$(git -C "$1" status --porcelain)" ]; then
+    echo "FAIL: this checkout has uncommitted or untracked files; the deploy would ship them under the last commit's name." >&2
+    echo "      Commit them (or remove them), merge into main and push, then deploy again." >&2
+    return 1
+  fi
+  if ! git -C "$1" fetch --quiet origin main; then
+    echo "FAIL: couldn't reach origin to compare with main." >&2
+    return 1
+  fi
+  if [ "$(git -C "$1" rev-parse HEAD)" != "$(git -C "$1" rev-parse refs/remotes/origin/main)" ]; then
+    echo "FAIL: this checkout is not at origin/main; only main is deployed." >&2
+    echo "      Rebase on origin/main and push (git fetch origin && git rebase origin/main && git push origin HEAD:main), then deploy again." >&2
+    return 1
+  fi
+}
+
+# upload_image TAG TMPDIR: copies the image latchkey-relay:TAG to the VM and loads it there. Each
+# stage is its own command, so a failure of any of them stops the deploy (a pipeline would report
+# only its last stage). The VM checks the upload's SHA-256 before loading it; the upload lives in
+# a root-only folder that is removed whatever happens.
+upload_image() {
+  docker save -o "$2/image.tar" "latchkey-relay:$1" || return 1
+  gzip -f "$2/image.tar" || return 1
+  _sum=$(shasum -a 256 "$2/image.tar.gz") || return 1
+  _sum=${_sum%% *}
+  case $_sum in '' | *[!0-9a-f]*) echo "FAIL: could not checksum the image" >&2; return 1 ;; esac
+  ssh_vm "sudo sh -euc '
+install -d -m 755 $REMOTE_DIR
+d=\$(mktemp -d $REMOTE_DIR/.upload.XXXXXX)
+trap \"rm -rf \$d\" EXIT
+cat > \$d/image.tar.gz
+echo \"$_sum  \$d/image.tar.gz\" | sha256sum -c - >/dev/null
+docker load -q -i \$d/image.tar.gz >/dev/null
+docker image inspect latchkey-relay:$1 >/dev/null
+'" <"$2/image.tar.gz" || { echo "FAIL: the image did not arrive intact on the server" >&2; return 1; }
+  rm -f "$2/image.tar.gz"
+}
+
+# caddyfile_with_block HOST SNIPPET_FILE: prints the Caddyfile on stdin with HOST's site block
+# replaced by the snippet (or added when missing). The block is the lines between the snippet's
+# BEGIN and END markers, or, as written by earlier deploys, from the line "HOST {" to the next
+# line that is just "}".
+caddyfile_with_block() {
+  awk -v start="$1 {" '
+    skip == 0 && $0 == "# BEGIN latchkey relay (written by deploy/deploy.sh)" { skip = 1; next }
+    skip == 1 { if ($0 == "# END latchkey relay") skip = 0; next }
+    skip == 0 && $0 == start { skip = 2; next }
+    skip == 2 { if ($0 == "}") skip = 0; next }
+    { print }' || return 1
+  cat "$2"
+}
+
+# install_caddyfile FILE: writes FILE over the server's Caddyfile in place (it may be mounted into
+# the Caddy container as a single file, which a rename would detach), has Caddy check it, and puts
+# the previous one back if Caddy refuses it. The caller reloads Caddy.
+CADDYFILE=/opt/reverse-proxy/Caddyfile
+install_caddyfile() {
+  # shellcheck disable=SC2016 # the $ signs are for the VM's shell
+  ssh_vm 'sudo sh -euc "
+cf='"$CADDYFILE"'
+cp -p \$cf \$cf.before-latchkey-deploy
+cat > \$cf
+if ! out=\$(docker exec caddy caddy validate --config /etc/caddy/Caddyfile 2>&1); then
+  printf \"%s\n\" \"\$out\" | tail -5
+  cat \$cf.before-latchkey-deploy > \$cf
+  echo \"FAIL: Caddy refused the new configuration; the previous Caddyfile is back in place\"
+  exit 1
+fi
+"' <"$1"
+}
+
+# probe HOST: the relay answers, and says it is the relay for this host.
+probe() {
+  curl -fsS --max-time 10 "https://$1/healthz" >/dev/null 2>&1 || return 1
+  _meta=$(curl -fsS --max-time 10 "https://$1/.well-known/oauth-protected-resource/mcp" 2>/dev/null) || return 1
+  printf '%s' "$_meta" | grep -qF "\"resource\":\"https://$1/mcp\""
+}
+
+# wait_healthy HOST TRIES: probes every two seconds until it passes.
+wait_healthy() {
+  _i=0
+  until probe "$1"; do
+    _i=$((_i + 1))
+    [ "$_i" -ge "$2" ] && return 1
+    sleep "${HEALTH_SLEEP:-2}"
+  done
+}
+
+# finish_or_roll_back HOST NEW_TAG PREVIOUS_TAG [TRIES [ROLLBACK_TRIES]]: waits for the new relay;
+# if it doesn't come up, rolls back and fails.
+finish_or_roll_back() {
+  wait_healthy "$1" "${4:-60}" && return 0
+  echo "FAIL: https://$1 did not come up with version $2."
+  roll_back "$1" "$2" "$3" "${5:-30}"
+}
+
+# roll_back HOST NEW_TAG PREVIOUS_TAG [TRIES]: prints the failed relay's logs, puts the previous
+# settings files back, starts the previous image (PREVIOUS_TAG, empty on a first deploy), and
+# checks that it answers. Always fails, so the deploy does.
+roll_back() {
+  echo "Last log lines of version $2:"
+  ssh_vm 'sudo docker logs --tail 50 latchkey-relay 2>&1' || true
+  if [ -z "$3" ]; then
+    echo "FAIL: no earlier version on the server to go back to; the relay is down."
+    return 1
+  fi
+  echo "• going back to $3"
+  ssh_vm "set -e
+cd $REMOTE_DIR
+for f in docker-compose.yml relay.env; do
+  if sudo test -f \$f.prev; then sudo cp -p \$f.prev \$f; fi
+done
+sudo TAG=$3 docker compose up -d --remove-orphans --quiet-pull" || true
+  if wait_healthy "$1" "${4:-30}"; then
+    echo "FAIL: version $2 was not healthy; rolled back to $3, which is answering again."
+  else
+    echo "FAIL: version $2 was not healthy, and after going back to $3 the relay is still not answering. It is down."
+    ssh_vm 'sudo docker logs --tail 50 latchkey-relay 2>&1' || true
+  fi
+  return 1
+}
