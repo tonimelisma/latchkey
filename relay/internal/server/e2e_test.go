@@ -22,6 +22,7 @@ import (
 
 	"github.com/tonimelisma/latchkey/relay/internal/account"
 	"github.com/tonimelisma/latchkey/relay/internal/e2e"
+	"github.com/tonimelisma/latchkey/relay/internal/oauth"
 	"github.com/tonimelisma/latchkey/relay/internal/store"
 	"github.com/tonimelisma/latchkey/relay/internal/testagent"
 )
@@ -40,7 +41,7 @@ func startRelay(t *testing.T) (base string, mail *account.MemoryMailer) {
 	base = "http://localhost:" + port
 	public, _ := url.Parse(base)
 	mail = &account.MemoryMailer{}
-	r, err := New(ctx, Options{PublicURL: public, Store: db, Mailer: mail, Logger: slog.Default()})
+	r, err := New(ctx, Options{PublicURL: public, Store: db, Mailer: mail, Logger: slog.Default(), AllowedClients: oauth.AnyClientHost()})
 	require.NoError(t, err)
 	srv.Config.Handler = r.Handler
 	srv.Start()

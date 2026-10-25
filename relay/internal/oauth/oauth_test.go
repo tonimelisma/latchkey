@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -97,10 +98,19 @@ type env struct {
 	cimdFetched func()
 }
 
-func setup(t *testing.T) *env {
+// setup accepts clients from any host and dynamic registration, which most tests use.
+func setup(t *testing.T) *env { return setupAllowing(t, oauth.AnyClientHost()) }
+
+func setupAllowing(t *testing.T, allowed oauth.AllowedHosts) *env {
+	t.Helper()
+	return setupAt(t, filepath.Join(t.TempDir(), "relay.db"), allowed)
+}
+
+// setupAt starts a relay on the database at path, which may exist already.
+func setupAt(t *testing.T, path string, allowed oauth.AllowedHosts) *env {
 	t.Helper()
 	ctx := context.Background()
-	st, err := store.Open(ctx, filepath.Join(t.TempDir(), "relay.db"))
+	st, err := store.Open(ctx, path)
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = st.Close() })
 	e := &env{t: t, store: st, auth: &fakeAuth{}, clock: &clock{t: time.Now()}}
@@ -130,6 +140,7 @@ func setup(t *testing.T) *env {
 	issuer, _ := url.Parse(e.srv.URL)
 	e.oauth, err = oauth.New(ctx, oauth.Config{
 		Issuer: issuer, Store: st, Auth: e.auth, HTTPClient: e.cimd.Client(), Now: e.clock.now,
+		AllowedClients: allowed,
 		OnAuthorized: func(_ context.Context, userID, clientName string) {
 			e.authorizedMu.Lock()
 			defer e.authorizedMu.Unlock()
@@ -147,6 +158,9 @@ func setup(t *testing.T) *env {
 	mux.Handle("/mcp", e.oauth.Protect(ms))
 
 	u, err := st.CreateUser(ctx, "owner@example.com", time.Now())
+	if errors.Is(err, store.ErrConflict) { // a database from an earlier start
+		u, err = st.UserByEmail(ctx, "owner@example.com")
+	}
 	require.NoError(t, err)
 	e.userID = u.ID
 	return e

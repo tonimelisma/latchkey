@@ -98,7 +98,7 @@ func setup(t *testing.T, allowed ...string) *env {
 
 	var svc *account.Service
 	auth := &lateAuth{}
-	o, err := oauth.New(ctx, oauth.Config{Issuer: public, Store: st, Auth: auth, Now: e.clock.now})
+	o, err := oauth.New(ctx, oauth.Config{Issuer: public, Store: st, Auth: auth, Now: e.clock.now, AllowedClients: oauth.AnyClientHost()})
 	require.NoError(t, err)
 	svc, err = account.New(ctx, account.Config{
 		PublicURL: public, Store: st, Macs: e.macs, Mailer: e.mailer, OAuth: o, AllowedEmails: allowed,
@@ -217,7 +217,7 @@ func mustKey(t *testing.T) *ecdsa.PrivateKey {
 // service builds a second service over the same store, for calling Go methods directly.
 func (e *env) service(t *testing.T) *account.Service {
 	public, _ := url.Parse(e.base)
-	o, err := oauth.New(context.Background(), oauth.Config{Issuer: public, Store: e.store, Auth: &lateAuth{}})
+	o, err := oauth.New(context.Background(), oauth.Config{Issuer: public, Store: e.store, Auth: &lateAuth{}, AllowedClients: oauth.AnyClientHost()})
 	require.NoError(t, err)
 	svc, err := account.New(context.Background(), account.Config{PublicURL: public, Store: e.store, Macs: e.macs, Mailer: e.mail, OAuth: o, Now: e.clock.now})
 	require.NoError(t, err)

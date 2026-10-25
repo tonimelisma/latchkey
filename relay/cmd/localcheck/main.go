@@ -25,6 +25,7 @@ import (
 	"github.com/tonimelisma/latchkey/relay/internal/account"
 	"github.com/tonimelisma/latchkey/relay/internal/agentproto"
 	"github.com/tonimelisma/latchkey/relay/internal/e2e"
+	"github.com/tonimelisma/latchkey/relay/internal/oauth"
 	"github.com/tonimelisma/latchkey/relay/internal/server"
 	"github.com/tonimelisma/latchkey/relay/internal/store"
 	"github.com/tonimelisma/latchkey/relay/internal/testagent"
@@ -68,7 +69,10 @@ func run(model string) error {
 	public, _ := url.Parse(base)
 	mail := &account.MemoryMailer{}
 	quiet := slog.New(slog.NewTextHandler(io.Discard, nil))
-	r, err := server.New(ctx, server.Options{PublicURL: public, Store: db, Mailer: mail, Logger: quiet})
+	r, err := server.New(ctx, server.Options{
+		PublicURL: public, Store: db, Mailer: mail, Logger: quiet,
+		AllowedClients: oauth.AnyClientHost(), // the check registers its own throwaway client
+	})
 	if err != nil {
 		return err
 	}

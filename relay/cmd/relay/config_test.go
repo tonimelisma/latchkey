@@ -36,6 +36,16 @@ func TestLoadConfig(t *testing.T) {
 	assert.Equal(t, 9000, c.Port)
 	assert.Equal(t, []string{"toni@example.com", "b@example.com"}, c.AllowedEmails)
 	assert.Empty(t, c.TrustedProxies, "loopback only by default")
+	assert.Equal(t, []string{"claude.ai"}, c.AllowedClientHosts.Strings(), "Claude's apps only by default")
+	assert.Equal(t, "/data/relay.key", c.KeyFile, "next to the database by default")
+
+	c, err = loadConfig(env(map[string]string{"ALLOWED_CLIENT_HOSTS": "claude.ai, Example.COM", "KEY_FILE": "/keys/relay.key"}))
+	require.NoError(t, err)
+	assert.Equal(t, []string{"claude.ai", "example.com"}, c.AllowedClientHosts.Strings())
+	assert.Equal(t, "/keys/relay.key", c.KeyFile)
+	c, err = loadConfig(env(map[string]string{"ALLOWED_CLIENT_HOSTS": "*"}))
+	require.NoError(t, err)
+	assert.Equal(t, []string{"*"}, c.AllowedClientHosts.Strings())
 
 	c, err = loadConfig(env(map[string]string{"TRUSTED_PROXIES": "172.18.0.0/16, 192.0.2.7"}))
 	require.NoError(t, err)
@@ -56,6 +66,10 @@ func TestLoadConfigRejects(t *testing.T) {
 		"password without user": {"SMTP_PASSWORD": "p"},
 		"bad PORT":              {"PORT": "http"},
 		"bad TRUSTED_PROXIES":   {"TRUSTED_PROXIES": "caddy"},
+		"client host with URL":  {"ALLOWED_CLIENT_HOSTS": "https://claude.ai"},
+		"client host wildcard":  {"ALLOWED_CLIENT_HOSTS": "*.claude.ai"},
+		"star with a host":      {"ALLOWED_CLIENT_HOSTS": "*,claude.ai"},
+		"only separators":       {"ALLOWED_CLIENT_HOSTS": " , "},
 	}
 	for name, o := range cases {
 		t.Run(name, func(t *testing.T) {

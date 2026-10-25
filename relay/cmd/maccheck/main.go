@@ -28,6 +28,7 @@ import (
 
 	"github.com/tonimelisma/latchkey/relay/internal/account"
 	"github.com/tonimelisma/latchkey/relay/internal/e2e"
+	"github.com/tonimelisma/latchkey/relay/internal/oauth"
 	"github.com/tonimelisma/latchkey/relay/internal/server"
 	"github.com/tonimelisma/latchkey/relay/internal/store"
 )
@@ -68,7 +69,8 @@ func run() error {
 	mail := &account.MemoryMailer{}
 	r, err := server.New(ctx, server.Options{
 		PublicURL: public, Store: db, Mailer: mail,
-		Logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
+		AllowedClients: oauth.AnyClientHost(), // the check registers its own throwaway client
+		Logger:         slog.New(slog.NewTextHandler(io.Discard, nil)),
 	})
 	if err != nil {
 		return err

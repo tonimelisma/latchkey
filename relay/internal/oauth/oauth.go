@@ -147,6 +147,9 @@ type Config struct {
 	OnAuthorized func(ctx context.Context, userID, clientName string)
 	// Logger gets what clients are not told, such as why a metadata document was refused.
 	Logger *slog.Logger
+	// AllowedClients is the hosts whose clients may ask for access (FR-180). The zero value is
+	// the default, Claude's apps only.
+	AllowedClients AllowedHosts
 }
 
 // Server is the authorization server.
@@ -197,7 +200,7 @@ func New(ctx context.Context, cfg Config) (*Server, error) {
 		RefreshTokenScopes:             []string{"offline_access"},
 		SendDebugMessagesToClients:     false,
 	}
-	cl := &clients{st: cfg.Store, http: cfg.HTTPClient, now: cfg.Now, log: cfg.Logger, failed: map[[sha256.Size]byte]time.Time{}}
+	cl := &clients{st: cfg.Store, http: cfg.HTTPClient, now: cfg.Now, log: cfg.Logger, failed: map[[sha256.Size]byte]time.Time{}, allowed: cfg.AllowedClients}
 	st := &storage{st: cfg.Store, clients: cl, now: cfg.Now}
 	provider := compose.Compose(fc, st, compose.NewOAuth2HMACStrategy(fc),
 		compose.OAuth2AuthorizeExplicitFactory,
@@ -206,7 +209,11 @@ func New(ctx context.Context, cfg Config) (*Server, error) {
 		compose.OAuth2TokenIntrospectionFactory,
 		compose.OAuth2PKCEFactory,
 	)
-	return &Server{cfg: cfg, provider: provider, clients: cl, issuer: issuer, resource: issuer + "/mcp"}, nil
+	s := &Server{cfg: cfg, provider: provider, clients: cl, issuer: issuer, resource: issuer + "/mcp"}
+	if _, err := s.PurgeRefusedClients(ctx); err != nil {
+		return nil, err
+	}
+	return s, nil
 }
 
 // ResourceURL is the connector URL Claude is given.
@@ -233,11 +240,10 @@ func (s *Server) Register(mux *http.ServeMux) {
 func (s *Server) metadata(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Access-Control-Allow-Origin", "*")
-	_ = json.NewEncoder(w).Encode(map[string]any{
+	m := map[string]any{
 		"issuer":                                     s.issuer,
 		"authorization_endpoint":                     s.issuer + "/authorize",
 		"token_endpoint":                             s.issuer + "/token",
-		"registration_endpoint":                      s.issuer + "/register",
 		"revocation_endpoint":                        s.issuer + "/revoke",
 		"response_types_supported":                   []string{"code"},
 		"grant_types_supported":                      []string{"authorization_code", "refresh_token"},
@@ -248,7 +254,16 @@ func (s *Server) metadata(w http.ResponseWriter, _ *http.Request) {
 		"scopes_supported":                           supportedScopes,
 		// RFC 9207: every authorization response carries iss (see issWriter).
 		"authorization_response_iss_parameter_supported": true,
-	})
+	}
+	if s.cfg.AllowedClients.any {
+		m["registration_endpoint"] = s.issuer + "/register"
+	} else {
+		// FR-182: no registration, so no client has a secret. "none" and
+		// client_id_metadata_document_supported are what make Claude use a metadata document.
+		m["token_endpoint_auth_methods_supported"] = []string{"none"}
+		m["revocation_endpoint_auth_methods_supported"] = []string{"none"}
+	}
+	_ = json.NewEncoder(w).Encode(m)
 }
 
 // issWriter adds the RFC 9207 "iss" parameter to the redirect fosite writes back to the client,
@@ -300,7 +315,9 @@ func (s *Server) authorize(w http.ResponseWriter, r *http.Request) {
 	ctx = withRequestedRedirect(ctx, r.Form.Get("redirect_uri"))
 	ar, err := s.provider.NewAuthorizeRequest(ctx, r)
 	if err != nil {
-		s.writeAuthorizeError(ctx, w, ar, err)
+		// A client the list refuses is told why, in the browser: no redirect URI was accepted,
+		// so fosite sends the browser nowhere (FR-183).
+		s.writeAuthorizeError(ctx, w, ar, s.clients.allowed.told(err))
 		return
 	}
 	// RFC 8707: a resource indicator, if given, must name this relay's MCP endpoint.
@@ -363,7 +380,7 @@ func (s *Server) token(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	ar, err := s.provider.NewAccessRequest(ctx, r, newSession(""))
 	if err != nil {
-		s.provider.WriteAccessError(ctx, w, ar, err)
+		s.provider.WriteAccessError(ctx, w, ar, s.clients.allowed.told(err))
 		return
 	}
 	resp, err := s.provider.NewAccessResponse(ctx, ar)

@@ -23,6 +23,9 @@ type Relay struct {
 	Handler http.Handler
 	Hub     *hub.Hub
 	Store   *store.Store
+	// PurgeClients deletes stored OAuth clients the operator's list no longer allows (FR-184);
+	// pass it to Purge.
+	PurgeClients func(context.Context) error
 }
 
 // Options configures the relay.
@@ -36,6 +39,9 @@ type Options struct {
 	Hub           hub.Config // timing overrides for tests
 	// TrustedProxies whose X-Forwarded-For is believed, besides loopback (FR-082).
 	TrustedProxies limit.TrustedProxies
+	// AllowedClients is the hosts whose clients may ask for access (FR-180). The zero value is
+	// the default: Claude's apps only.
+	AllowedClients oauth.AllowedHosts
 }
 
 // New builds the relay: hub, MCP server, OAuth, and account pages on one mux.
@@ -55,7 +61,7 @@ func New(ctx context.Context, o Options) (*Relay, error) {
 
 	auth := &authBridge{}
 	oa, err := oauth.New(ctx, oauth.Config{
-		Issuer: o.PublicURL, Store: o.Store, Auth: auth, Logger: o.Logger,
+		Issuer: o.PublicURL, Store: o.Store, Auth: auth, Logger: o.Logger, AllowedClients: o.AllowedClients,
 		OnAuthorized: func(ctx context.Context, userID, clientName string) { acc.ClientAuthorized(ctx, userID, clientName) },
 	})
 	if err != nil {
@@ -78,7 +84,11 @@ func New(ctx context.Context, o Options) (*Relay, error) {
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte("ok\n")) })
 	oa.Register(mux)
 	acc.Register(mux)
-	return &Relay{Handler: guard(o.PublicURL, o.TrustedProxies, mux), Hub: h, Store: o.Store}, nil
+	purgeClients := func(ctx context.Context) error {
+		_, err := oa.PurgeRefusedClients(ctx)
+		return err
+	}
+	return &Relay{Handler: guard(o.PublicURL, o.TrustedProxies, mux), Hub: h, Store: o.Store, PurgeClients: purgeClients}, nil
 }
 
 // authBridge lets the OAuth server use the account service, which needs the OAuth server.
@@ -87,8 +97,9 @@ type authBridge struct{ *account.Service }
 // AuditRetention is how long audit entries are kept (FR-024).
 const AuditRetention = 30 * 24 * time.Hour
 
-// Purge runs the retention jobs at startup and then daily (FR-024, Constitution VI).
-func Purge(ctx context.Context, db *store.Store, logger *slog.Logger) {
+// Purge runs the retention jobs at startup and then daily (FR-024, Constitution VI), and after
+// them each of more, such as Relay.PurgeClients.
+func Purge(ctx context.Context, db *store.Store, logger *slog.Logger, more ...func(context.Context) error) {
 	t := time.NewTicker(24 * time.Hour)
 	defer t.Stop()
 	for {
@@ -106,6 +117,11 @@ func Purge(ctx context.Context, db *store.Store, logger *slog.Logger) {
 		}
 		if _, err := db.PurgeUnverifiedUsers(ctx, now.Add(-24*time.Hour)); err != nil {
 			logger.Error("purge unverified sign-ups", "err", err)
+		}
+		for _, job := range more {
+			if err := job(ctx); err != nil {
+				logger.Error("purge", "err", err)
+			}
 		}
 		select {
 		case <-ctx.Done():

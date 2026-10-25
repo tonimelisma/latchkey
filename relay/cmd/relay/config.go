@@ -5,10 +5,13 @@ import (
 	"fmt"
 	"net"
 	"net/url"
+	"path/filepath"
 	"strconv"
 	"strings"
 
 	"github.com/tonimelisma/latchkey/relay/internal/limit"
+	"github.com/tonimelisma/latchkey/relay/internal/oauth"
+	"github.com/tonimelisma/latchkey/relay/internal/store"
 )
 
 // config is the relay's environment configuration (plan D10).
@@ -26,6 +29,10 @@ type config struct {
 	AllowedEmails []string
 	// TrustedProxies whose X-Forwarded-For is believed, besides loopback (FR-082).
 	TrustedProxies limit.TrustedProxies
+	// AllowedClientHosts whose clients may ask for access (FR-180); default claude.ai, "*" any.
+	AllowedClientHosts oauth.AllowedHosts
+	// KeyFile holds the key the relay's stored signing keys are encrypted under (FR-186).
+	KeyFile string
 }
 
 func loadConfig(getenv func(string) string) (config, error) {
@@ -67,6 +74,12 @@ func loadConfig(getenv func(string) string) (config, error) {
 	}
 	if (c.SMTPUser == "") != (c.SMTPPassword == "") {
 		errs = append(errs, errors.New("SMTP_USER and SMTP_PASSWORD must be set together"))
+	}
+	if c.AllowedClientHosts, err = oauth.ParseAllowedHosts(getenv("ALLOWED_CLIENT_HOSTS")); err != nil {
+		errs = append(errs, fmt.Errorf("ALLOWED_CLIENT_HOSTS: %w", err))
+	}
+	if c.KeyFile = getenv("KEY_FILE"); c.KeyFile == "" && c.DataDir != "" {
+		c.KeyFile = filepath.Join(c.DataDir, store.DefaultKeyFileName)
 	}
 	return c, errors.Join(errs...)
 }
