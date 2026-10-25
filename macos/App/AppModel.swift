@@ -40,9 +40,10 @@ final class AppModel {
     private let setupWindow = SetupWindow()
     private let links = OneAtATime()
 
-    /// Pairing and uninstall events, readable with `log show --predicate 'subsystem == "net.melisma.latchkey"'`.
+    /// Pairing and uninstall events, readable with `log show --predicate 'subsystem == "net.melisma.latchkey"'`
+    /// (a Debug build logs as "net.melisma.latchkey.dev").
     /// Events only, never arguments or results.
-    static let log = Logger(subsystem: "net.melisma.latchkey", category: "lifecycle")
+    static let log = Logger(subsystem: AppIdentity.current.logSubsystem, category: "lifecycle")
     static let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?"
 
     /// Every capability, in menu order.

@@ -51,7 +51,7 @@ final class TraceEntry {
 }
 
 /// Where the activity log's key lives. The app uses the Keychain; tests use memory, never the
-/// real Keychain (the test app shares the installed app's Keychain).
+/// real Keychain (the test app has its own identity, `AppIdentity`, but still keeps no real data).
 protocol TraceKeyStore: Sendable {
     /// The key, made (256 random bits) and saved the first time.
     func loadOrCreate() throws -> SymmetricKey
@@ -107,8 +107,7 @@ final class MemoryTraceKey: TraceKeyStore, @unchecked Sendable {
 @MainActor
 final class TraceStore {
     static let retention: TimeInterval = 90 * 86_400  // FR-026 default
-    static let defaultDirectory = URL.applicationSupportDirectory.appending(
-        path: "Latchkey", directoryHint: .isDirectory)
+    static let defaultDirectory = AppIdentity.current.supportDirectory
     static let fileName = "activity.store"
     static let legacyFileName = "trace.store"
 

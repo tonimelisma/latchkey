@@ -39,9 +39,9 @@ import Testing
     @Test(.enabled(if: CodeSigning.ownTeamID() != nil)) func aDebuggableCallerIsRefusedByAReleaseHelper() throws {
         let team = try #require(CodeSigning.ownTeamID())
         let release = CodeSigning.requirement(
-            identifier: HelperIdentity.appBundleID, team: team, allowDebuggable: false)
+            identifier: AppIdentity.current.bundleID, team: team, allowDebuggable: false)
         let development = CodeSigning.requirement(
-            identifier: HelperIdentity.appBundleID, team: team, allowDebuggable: true)
+            identifier: AppIdentity.current.bundleID, team: team, allowDebuggable: true)
         #expect(Self.satisfiesSelf(development) == errSecSuccess, "a development pair still works together")
         #expect(Self.satisfiesSelf(release) == errSecCSReqFailed, "this debuggable app passed the release check")
     }

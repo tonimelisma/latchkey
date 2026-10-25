@@ -9,10 +9,3 @@ protocol HelperProtocol {
     /// Replies with the current SleepDisabled value.
     func readSleepDisabled(reply: @escaping @Sendable (_ disabled: Bool) -> Void)
 }
-
-enum HelperIdentity {
-    static let machService = "net.melisma.latchkey.helper"
-    static let plistName = "net.melisma.latchkey.helper.plist"
-    static let appBundleID = "net.melisma.latchkey"
-    static let helperBundleID = "net.melisma.latchkey.helper"
-}
