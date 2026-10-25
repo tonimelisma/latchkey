@@ -143,9 +143,14 @@ func (s *storage) GetPKCERequestSession(ctx context.Context, signature string, _
 	return req, err
 }
 
-func (s *storage) DeletePKCERequestSession(ctx context.Context, signature string) error {
-	return s.st.DeleteOAuthRequest(ctx, store.KindPKCE, signature)
-}
+// DeletePKCERequestSession keeps the row: it expires with its code, a minute after it was made,
+// and the purge removes it. fosite calls this in the middle of an exchange, before the code is
+// marked used. Deleting here let a second exchange of the same code, one that had read the code
+// while it was still unused, stop at "no PKCE data" and never reach the step that notices the
+// double use and ends the grant (FR-096). The row guards nothing by being gone: a code is
+// single-use because of its own used mark (InvalidateAuthorizeCodeSession), which fosite checks
+// before it looks at PKCE.
+func (s *storage) DeletePKCERequestSession(context.Context, string) error { return nil }
 
 func (s *storage) CreateAccessTokenSession(ctx context.Context, signature string, req fosite.Requester) error {
 	return s.put(ctx, store.KindAccess, signature, req, fosite.AccessToken)

@@ -219,7 +219,15 @@ Serves FR-040, FR-014, FR-180 to FR-185.
   revoked, which revokes tokens already written and (through the conditional insert below)
   refuses any written later, exactly as for a later replay. A replay found on read marks the
   grant the same way. The token endpoint answers these with `invalid_grant`, not fosite's
-  `server_error`. Options weighed: a transaction around fosite's whole exchange (fosite's
+  `server_error`. One order still slipped through until 2026-10-25: fosite checks PKCE between
+  reading the code and marking it, and deletes the PKCE row on first use, so a second exchange
+  that had read the code unused found no PKCE row and stopped with `invalid_grant` before the
+  marking, leaving the first exchange's tokens alive. The PKCE row is now kept until it
+  expires with its code (one minute; the purge removes it), so every exchange of a code
+  reaches the marking. Weighed: revoking the grant when the PKCE row is missing but the code
+  row exists (an inference from a missing row, and a second place that decides "used twice"),
+  or keeping the row (chosen: the decision stays in the one conditional update; the row
+  guarded nothing, since fosite checks the code's used mark before it looks at PKCE). Options weighed: a transaction around fosite's whole exchange (fosite's
   transactional storage; holds SQLite's write lock across the client lookup) or the
   conditional update, chosen as one statement with no lock held.
 - RFC 9207 (FR-097): the metadata advertises `authorization_response_iss_parameter_supported`
