@@ -21,6 +21,9 @@ struct LatchkeyApp: App {
         Window("Latchkey Activity", id: "activity") {
             ActivityView(model: delegate.model)
         }
+        Window("Claude Apps With Access", id: "access") {
+            AccessView(model: delegate.model)
+        }
     }
 }
 

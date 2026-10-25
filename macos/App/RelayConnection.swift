@@ -18,6 +18,8 @@ struct ConnectionHooks: Sendable {
     var call: @Sendable (Call) async -> ToolResult
     var status: @Sendable (ConnectionStatus) async -> Void
     var notice: @Sendable (Notice) async -> Void
+    /// The Claude apps with access, each time the relay sends the list (FR-192).
+    var clients: @Sendable ([ClientEntry]) async -> Void = { _ in }
 }
 
 /// The one outbound WebSocket to the relay (plan D1, agent-protocol.md). Reconnects by itself
@@ -119,6 +121,18 @@ actor RelayConnection {
         try? await send(.tools(ToolsUpdate(tools: await hooks.tools())), on: task)
     }
 
+    /// Asks the relay to remove one approval (FR-191): one frame per call. False when there is no
+    /// connection or the frame couldn't be sent.
+    func revokeClient(_ revoke: RevokeClient) async -> Bool {
+        guard let task else { return false }
+        do {
+            try await send(.revokeClient(revoke), on: task)
+            return true
+        } catch {
+            return false
+        }
+    }
+
     private func send(_ m: AgentMessage, on t: URLSessionWebSocketTask) async throws {
         try await t.send(.string(String(decoding: try m.encode(), as: UTF8.self)))
     }
@@ -195,7 +209,7 @@ actor RelayConnection {
         let signature = try identity.key.sign(
             DeviceIdentity.signatureInput(nonce: challenge.nonce, deviceID: identity.deviceID))
         let v = ProcessInfo.processInfo.operatingSystemVersion
-        let hello = Hello(
+        let hello = Hello.make(
             deviceID: identity.deviceID, signature: signature,
             appVersion: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0",
             osVersion: v.patchVersion > 0
@@ -223,6 +237,7 @@ actor RelayConnection {
             case .call(let call): await startCall(call, on: t)
             case .cancel(let c): await calls.cancel(c.id)
             case .notice(let n): await hooks.notice(n)
+            case .clients(let c): await hooks.clients(c.clients)
             default: throw ProtocolError.violation("unexpected message")
             }
         }

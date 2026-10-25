@@ -10,12 +10,30 @@ enum Fixtures {
         .appendingPathComponent("../../specs/001-core/contracts/fixtures")
         .standardizedFileURL
 
+    /// The app's own copies of fixtures not yet in the shared folder (FR-190 to FR-192: `clients`,
+    /// `revoke_client`, hello with `features`). A file of the same name in the shared folder wins,
+    /// so these can be deleted once the shared ones exist.
+    static let localDir = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent()
+        .appendingPathComponent("Fixtures")
+        .standardizedFileURL
+
     static func files(_ kind: String) throws -> [URL] {
-        try FileManager.default.contentsOfDirectory(
-            at: dir.appendingPathComponent(kind), includingPropertiesForKeys: nil
-        )
-        .filter { $0.pathExtension == "json" }
-        .sorted { $0.lastPathComponent < $1.lastPathComponent }
+        var byName: [String: URL] = [:]
+        for base in [localDir, dir] {
+            let folder = base.appendingPathComponent(kind)
+            guard FileManager.default.fileExists(atPath: folder.path) else { continue }
+            for file in try FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil)
+            where file.pathExtension == "json" {
+                byName[file.lastPathComponent] = file
+            }
+        }
+        return byName.values.sorted { $0.lastPathComponent < $1.lastPathComponent }
+    }
+
+    static func file(_ path: String) -> URL {
+        let shared = dir.appendingPathComponent(path)
+        return FileManager.default.fileExists(atPath: shared.path) ? shared : localDir.appendingPathComponent(path)
     }
 }
 
