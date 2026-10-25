@@ -68,6 +68,14 @@ Sources: [MCP security best practices](https://modelcontextprotocol.io/specifica
   PKCE S256; redirect checks; CIMD fetches refuse every address that isn't global unicast (all IANA
   special-purpose ranges, IPv4 inside IPv6 and NAT64 included) at connect time (which also defeats DNS rebinding); shell job ids are only usable by the same
   account's Mac; refresh rotation with reuse detection; passkeys, no passwords.
+- **Done (2026-10-25, second security review):** consent is asked every time (RFC 8252 §8.6: no
+  automatic approval for a client whose identity can't be proven); redirects carry the issuer
+  (RFC 9207); a code presented twice at once ends the grant; MCP sessions expire and are capped;
+  a connected Mac's messages and tool list are bounded. In the Mac app: Sparkle pinned by commit;
+  the helper connection fails closed and refuses peers with the debugging entitlement; Files
+  can't change Latchkey's own files; page reads hide password fields; turning a capability off
+  stops its running work. Deploys: keys reach only the command that needs them, DMARC reject and
+  CAA for the relay's host, automatic rollback.
 - **Done (2026-10-23):** the Mac shows a notification each time a Claude client is given
   access (notice `client_authorized`). Was a gap: the owner wasn't told when a new Claude client
   was granted access. TeamViewer-style

@@ -96,23 +96,32 @@ Boundaries, each a place where input must be treated as hostile:
 1. Every `/mcp` request is tied to one account by a valid, unexpired, unrevoked access token
    with the connector URL as audience; nothing reaches another account's Mac (A1, A2).
 2. Authorization codes need PKCE S256 and a registered redirect URI; codes are single-use;
-   refresh-token reuse after the 60 s grace revokes the family; revoking Claude's access kills
+   refresh-token reuse after the 60 s grace revokes the family; a code presented by two requests
+   at once ends the grant; revoking Claude's access kills
    every token of that grant.
 3. Consent is shown and approved by a signed-in owner (session cookie plus CSRF token) before
    any code is issued, every time: approvals are not remembered (Toni, 2026-10-25; RFC 8252
-   §8.6). The client name and redirect host shown are the ones that will be used.
+   §8.6). The client name and redirect host shown are the ones that will be used. Redirects back to
+   the client name the relay as issuer (RFC 9207).
 4. Only a device holding the registered Secure Enclave key can act as the Mac; pairing codes are
    single-use, short-lived, and bound to the signed-in account; revocation closes the socket at
-   once and the key no longer works.
+   once and the key no longer works. A Mac revoked while connecting is closed as soon as it is
+   registered; its signature is verified before anything else it sent is parsed.
 5. A capability turned off on the Mac is absent from the tool list and refused if called anyway
    (Constitution III), whatever the relay sends. Turning a capability off or down also stops
    its running calls and, for Shell, its commands with everything they started (FR-066, spec 004
    FR-310, FR-311).
 6. Sign-in and recovery codes: 6 digits, hashed, 15 minutes, 5 wrong attempts, rate-limited per
-   address and per email; recovery removes old passkeys and is announced.
+   address and per email; recovery removes old passkeys and is announced. A recovery request
+   answers the same, at the same speed, for known and unknown addresses; completing a recovery
+   ends every other pending one.
 7. The relay never blocks on the Mac without a deadline, and no unauthenticated request can make
-   it hold unbounded memory, goroutines, connections, or rows.
-8. The CIMD fetch can reach only public HTTPS addresses, with size and time limits.
+   it hold unbounded memory, goroutines, connections, or rows. Bounded: MCP sessions (30 minutes
+   idle, 64 per owner), frames from a connected Mac (60 at once, then 5 a second) and its tool
+   list (256 tools, 512 KiB), request bodies (30 s; 2 minutes on `/mcp`), cached client documents
+   (1,000 unused), pending passkey sign-ins and tickets (10,000 each).
+8. The CIMD fetch can reach only public HTTPS addresses, with size and time limits; failures are
+   remembered for 5 minutes, and the reason for a failed fetch is never returned.
 9. The root helper does exactly two things (sleep on, sleep off) and only for a caller that
    satisfies the app's code-signing requirement. The app connects to the helper only with a
    code-signing requirement (none available means no connection), and Release builds refuse

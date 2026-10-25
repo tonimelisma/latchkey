@@ -53,7 +53,7 @@ Add a row when a decision is made; never delete one, mark it "superseded by" ins
 | 2026-10-20 | Pairing a second Mac replaces the first after confirmation | FR-053 |
 | 2026-10-20 | Recovery removes old passkeys | FR-047 |
 | 2026-10-20 | Web sign-in lasts 30 days; account deletion asks for the passkey again | FR-048 |
-| 2026-10-20 | Claude client approval remembered per client after the first time | FR-049 |
+| 2026-10-20 | Claude client approval remembered per client after the first time (superseded 2026-10-25: asked every time) | FR-049 |
 | 2026-10-20 | System info on and start at login on by default | FR-064, FR-076 |
 | 2026-10-20 | No keep-awake test runs of any kind | plan D7, STATUS |
 | 2026-10-20 | Installable disk image; first launch moves to Applications and opens setup | FR-078, plan D9 |
@@ -108,7 +108,7 @@ Add a row when a decision is made; never delete one, mark it "superseded by" ins
 | 2026-10-24 | Anthropic's security-guidance plugin on for every Claude Code session in this repository (checks each edit, turn, and commit); rules in .claude/claude-security-guidance.md | Toni |
 | 2026-10-24 | Pairing links that don't come through the app's own sign-in window connect only after a dialog naming the relay and the link's account email, warning that it replaces the current pairing; not bound by a one-time secret | Toni, spec 001 FR-054 |
 | 2026-10-24 | Browser opens only http and https addresses (and about:blank) | Toni, spec 005 FR-409 |
-| 2026-10-24 | Remembered consent stays per client, Claude Code included (a local program posing as Claude Code is accepted) | Toni, spec 001 FR-049, docs/threat-model.md |
+| 2026-10-24 | Remembered consent stays per client, Claude Code included (superseded 2026-10-25: asked every time) (a local program posing as Claude Code is accepted) | Toni, spec 001 FR-049, docs/threat-model.md |
 | 2026-10-24 | Account recovery also removes every Claude client's access | Toni, spec 001 FR-047a |
 | 2026-10-24 | The activity log on the Mac is encrypted with a key in the Keychain | Toni, spec 001 FR-026a |
 | 2026-10-24 | Forwarded client addresses are trusted only from a proxy on the same machine, or from addresses listed in a new setting (TRUSTED_PROXIES); the hosted relay lists its Caddy network | Toni, spec 001 FR-082 |
@@ -116,7 +116,7 @@ Add a row when a decision is made; never delete one, mark it "superseded by" ins
 | 2026-10-24 | The relay uses golang.org/x/net directly (it was already an indirect dependency) to show client hosts in ASCII, so look-alike Unicode hosts can't pass for claude.ai | Toni, plan 001 D4 |
 | 2026-10-24 | The pairing and the activity log's key stay in the login keychain (another program gets a macOS prompt); the app-only keychain, which needs a provisioning profile, comes with notarized releases | Toni, plan 001 |
 | 2026-10-25 | Second security review (six reviewers, one per trust boundary, checked against the MCP security pages, RFC 9700 and OWASP's MCP Top 10): nothing critical or high open; the remaining medium and low issues fixed test-first | Toni, docs/threat-model.md |
-| 2026-10-25 | The Allow page is shown for every new connection of a Claude client; approvals are no longer remembered (RFC 8252 §8.6: a public client's identity can't be proven). Supersedes the 2026-10-20 and 2026-10-24 rows on remembered consent | Toni, spec 001 FR-049 (superseded) |
+| 2026-10-25 | The Allow page is shown for every new connection of a Claude client; approvals are no longer remembered (RFC 8252 §8.6: a public client's identity can't be proven). Supersedes the 2026-10-20 and 2026-10-24 rows on remembered consent | Toni, spec 001 FR-049a (FR-049 superseded), plan D4 |
 | 2026-10-25 | Emailed codes stay 6 digits with no per-visitor limit: guessing spread over many accounts is an accepted risk (the hosted relay only lets listed emails sign up) | Toni, docs/threat-model.md |
 | 2026-10-25 | The daily lock stays 20 wrong codes per email address: someone can block an address's emailed codes for a day at a time (passkeys still work); accepted | Toni, spec 001 FR-042a, docs/threat-model.md |
 | 2026-10-25 | Turning a capability off or down stops its running work at once: calls the new level no longer allows are cancelled and answered with an error naming the owner's change; Shell going Off stops all its commands and what they started; allowed calls keep running; raising stops nothing | Toni, spec 001 FR-066, spec 004 FR-310, FR-311 |
@@ -131,3 +131,5 @@ Add a row when a decision is made; never delete one, mark it "superseded by" ins
 | 2026-10-25 | The proxy's access log leaves out the Location response header (pairing and authorization codes) and the Cookie and Authorization request headers; container logs are capped at three 10 MB files | deploy/server/ |
 | 2026-10-25 | `scripts/private-values-check.sh` keeps the relay's host, DNS zone, VM, cloud project and Apple team ID out of tracked files and history; it runs in `make secrets` and before every push from Claude Code | scripts/, CLAUDE.md |
 | 2026-10-25 | Tidy also removes built apps under `macos/build` and disk images of other versions, and fast-forwards the main checkout when it is clean and only behind | scripts/tidy.sh, CLAUDE.md |
+| 2026-10-25 | Security review fixes in the relay: Claude connections end after 30 idle minutes and are capped at 64 per owner; a connected Mac may send 60 messages at once, then 5 a second, and at most 256 tools in 512 KiB; a Mac's signature is checked before anything else it sent is read; request bodies have deadlines; client documents are cached with a minimum time, failures remembered 5 minutes, unused ones capped; a code presented twice at once ends the grant; redirects name the relay as issuer (RFC 9207); client names lose every kind of bracket; pending sign-ins are capped; recovery answers before the mail is sent | spec 001 FR-022a, FR-042b, FR-047b, FR-052a, FR-090 to FR-099; plan D1, D2, D4, D5, D10 |
+| 2026-10-25 | The account page lists the Claude clients that hold a live token (the approvals table is gone) | spec 001 FR-049a, data-model.md |

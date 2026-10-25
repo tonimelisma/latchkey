@@ -21,7 +21,8 @@ Claude (web, Desktop, phone)  ──HTTPS──▶  Latchkey relay  ◀──out
   connects in to your Mac: no open ports, no router settings, no tunnels.
 - The **relay** is the MCP server Claude connects to as a custom connector. It handles sign-in
   (passkeys, no passwords), remembers your Mac's last state, and answers instantly when the Mac
-  is away.
+  is away. Claude asks for your approval every time it connects: Latchkey's Allow page appears on
+  each sign-in from a Claude app, and nothing is approved silently.
 - **You choose what Claude can do.** Each capability has a level in the menu; a capability that's
   off doesn't exist as far as Claude knows. Most have Off, Read only, and Read & write; Shell is
   Off or On. Claude sees 15 tools:
