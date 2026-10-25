@@ -118,7 +118,7 @@ Serves FR-011, Constitution II.
   our cap below it.]
 
 ### D4. OAuth authorization server: fosite plus Claude's client registration methods
-Serves FR-040, FR-014.
+Serves FR-040, FR-014, FR-180 to FR-185.
 - `github.com/ory/fosite` (Apache-2.0) for authorization code + PKCE S256, token issuance, refresh
   rotation. Opaque HMAC tokens stored hashed.
 - Client registration, implemented in fosite's client storage:
@@ -138,6 +138,37 @@ Serves FR-040, FR-014.
     only. fosite already kept that reason from clients (it replaces the hint at `/authorize`
     and exposes no debug text); the fixed sentence makes that independent of fosite.
   - DCR (RFC 7591) at `/register` for clients that don't use CIMD.
+  - Which clients are accepted (FR-180 to FR-185; Toni, 2026-10-25: "Claude only" out of the
+    box). `ALLOWED_CLIENT_HOSTS` is a comma-separated list of host names, default `claude.ai`;
+    the single value `*` means any host. Claude's hosted apps identify themselves with
+    `https://claude.ai/oauth/mcp-oauth-client-metadata` and Claude Code with
+    `https://claude.ai/oauth/claude-code-client-metadata` (both fetched and read 2026-10-24),
+    so the default covers every Claude app. With a list:
+    - a CIMD client is looked up only if its client ID's host is on the list (lowercased, IDNA
+      ASCII form, exact match, port ignored). The check is the first thing the client lookup
+      does, before the cache and before any fetch, so the relay makes no outbound request to a
+      host the operator didn't name (FR-183; this also narrows the SSRF surface to the listed
+      hosts);
+    - every redirect URI in its document must be on a listed host or on a loopback host;
+      checked on each lookup, so documents cached before the list changed are covered (FR-181);
+    - DCR is off: `/register` answers `403` with `{"error":"access_denied",
+      "error_description":"This relay only accepts Claude's apps. ..."}`, the metadata has no
+      `registration_endpoint` and lists only `none` under
+      `token_endpoint_auth_methods_supported` (there are no clients with a secret), and stored
+      `dcr` clients are refused. `client_id_metadata_document_supported: true` and `none` stay,
+      which is what makes Claude choose CIMD (FR-182);
+    - a refused client gets `invalid_client` with the sentence "This relay only accepts
+      Claude's apps." (with a non-default list: "This relay only accepts apps from <hosts>.").
+      At `/authorize` fosite shows that error in the browser and redirects nowhere, because no
+      redirect URI was accepted (FR-183);
+    - at start (`oauth.New`) and in the daily purge, every stored client the list refuses is
+      deleted with its codes and tokens in one transaction (`store.DeleteClientsExcept`),
+      including tokens whose client row is already gone (FR-184);
+    - a value that isn't a list of host names fails `loadConfig`, so the relay doesn't start
+      (FR-185).
+    The zero value of the setting inside the code is the default list, so a caller that forgets
+    it gets "Claude only", never "anyone". Tests and the local checks (`internal/e2e`,
+    `cmd/localcheck`, `cmd/maccheck`), which register a throwaway client, set `*`.
 - Metadata: advertise `client_id_metadata_document_supported: true`,
   `token_endpoint_auth_methods_supported` including `none`, `code_challenge_methods_supported:
   ["S256"]`, `offline_access` in `scopes_supported`.
@@ -438,7 +469,7 @@ Serves FR-070, FR-071, FR-072; Constitution IV.
   API needs a newer release, the floor moves up and this line says why.
 
 ### D10. Relay implementation
-Serves FR-080, Constitution V, VIII.
+Serves FR-080, FR-186 to FR-189, Constitution V, VI, VIII.
 - Go, standard library `net/http`.
 - WebSocket: `github.com/coder/websocket`.
 - SQLite: `modernc.org/sqlite` (pure Go, so the binary stays static with no cgo). Schema
@@ -452,6 +483,8 @@ Serves FR-080, Constitution V, VIII.
 - Config (environment): `PUBLIC_URL`, `DATA_DIR`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`,
   `SMTP_PASSWORD`, `SMTP_FROM`, `ACME_EMAIL` (optional), `PORT` (optional, default 8080),
   `ALLOWED_EMAILS` (optional, comma-separated; empty means open sign-up, FR-046),
+  `ALLOWED_CLIENT_HOSTS` (optional, default `claude.ai`; D4), `KEY_FILE` (optional, default
+  `DATA_DIR/relay.key`; below),
   `TRUSTED_PROXIES` (optional, comma-separated IP addresses and CIDR ranges of reverse proxies
   whose `X-Forwarded-For` the relay believes, besides a proxy on loopback; empty means loopback
   only; FR-082). Abuse limits key on the rightmost `X-Forwarded-For` entry from such a peer and on
@@ -476,6 +509,37 @@ Serves FR-080, Constitution V, VIII.
 - Hosted instance: on Toni's existing Google Cloud VM (an e2-micro) behind its Caddy, deployed by
   `deploy/deploy.sh`; the address and server details are only in the gitignored `.env`. Sign-up
   is limited to Toni (`ALLOWED_EMAILS`) until the terms and abuse handling exist.
+- The relay's own keys (FR-186 to FR-189; Toni, 2026-10-25; Constitution VI). `relay_keys`
+  holds the OAuth token HMAC key and the CSRF key. Each value is sealed with AES-256-GCM under
+  a 32-byte key read from `KEY_FILE` (default `DATA_DIR/relay.key`), with a fresh random
+  12-byte nonce per value and the row's name as additional authenticated data (a value can't be
+  moved to another row). The row's `format` column is the version: 0 is the unencrypted form of
+  earlier versions, 1 is nonce followed by ciphertext and tag (migration 8). All of it happens
+  in `store.Open`, before anything reads a key:
+  - no key file and no sealed rows: the file is created (`O_EXCL`, mode 0600, synced; the
+    folder must exist), and the relay logs the path;
+  - the file must be a regular file of exactly 32 bytes with no group or other permission
+    bits, or the relay refuses to start;
+  - every sealed row must open, or the relay refuses to start with a message that names the
+    two ways out; nothing is deleted or regenerated by itself;
+  - rows with format 0 are converted in one `BEGIN IMMEDIATE` transaction with
+    `secure_delete` on: seal, write, read back, open, compare with the old value, and roll
+    everything back on any mismatch; then the database is vacuumed and the write-ahead log
+    truncated so the old bytes don't linger in free pages. The keys' values don't change, so
+    tokens issued before still verify (FR-188).
+  - `relay reset-keys --confirm` (the relay stopped) deletes the stored keys, every OAuth code
+    and token, and every web session, in one transaction, and touches nothing else (FR-189).
+  Hosted deployment: the key file lives outside the data volume, in
+  `/opt/latchkey/keys/relay` on the VM (the folder above it is root-only, mode 0700; the inner
+  one belongs to the container's user, uid 65532, mode 0700), mounted at `/keys`, with
+  `KEY_FILE=/keys/relay.key` set in the compose file. A copy of the database or of the data
+  volume alone is then useless for forging tokens. Rollback across the conversion: a version
+  from before can't read sealed rows, so the first deploy of this version (recognised by the
+  key file not existing on the VM) stops the relay, copies the database files to a root-only
+  folder, and starts the new version; if that version doesn't come up, the rollback puts the
+  copy back, removes the new key file, and starts the previous version. Once the new version
+  answers, the copy (which holds the keys unencrypted) is deleted; from then on going back to
+  a version before this one means `reset-keys` semantics by hand (everyone signs in again).
 - Scaling: one server. The hub interface is written so a later version can route across servers;
   nothing more is built now.
 
