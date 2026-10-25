@@ -20,6 +20,7 @@ a relay uses the same URL; the OAuth token identifies the Owner and therefore th
 | `POST /token` | Code exchange, refresh (`application/x-www-form-urlencoded`) | Anthropic's cloud, Claude Code |
 | `POST /register` | Dynamic client registration (`application/json`) | Anthropic's cloud, Claude Code |
 | `POST /revoke` | Token revocation | Clients |
+| `GET /terms`, `GET /privacy` | Terms of service and privacy policy; `404` unless the operator set `OPERATOR_NAME` and `OPERATOR_CONTACT` (FR-193) | Anyone's browser |
 
 ## Unauthenticated request to /mcp
 
@@ -64,6 +65,16 @@ a bearer value that is not a live access token, a refresh token included (refres
 }
 ```
 
+Where the operator has set `OPERATOR_NAME` and `OPERATOR_CONTACT` (FR-193), the metadata also
+carries the two RFC 8414 fields below; otherwise neither appears.
+
+```json
+{
+  "op_tos_uri": "https://<relay>/terms",
+  "op_policy_uri": "https://<relay>/privacy"
+}
+```
+
 ## Authorization responses
 
 `GET /authorize` always shows the consent page (after sign-in if needed); nothing is approved
@@ -97,6 +108,22 @@ URI's host, e.g. "Claude (claude.ai)". A client's name alone is never shown, sin
 register one called "Claude". Hosts are shown in ASCII (`xn--` form for internationalized
 names); the name loses control and formatting characters and brackets of every kind (ASCII and
 all other Unicode opening and closing punctuation) and is cut to 60 characters.
+
+## One approval, one grant (FR-190, FR-191)
+
+Each Allow on the consent page creates one grant: the code, the access tokens, and the refresh
+tokens that descend from it. The relay keeps, per grant, what the consent page showed (name,
+checked host, where the approval was sent back to), when it was approved, and when it was last
+used (written at most once a minute). The Owner can remove one grant on the account page or in
+the Mac app; its tokens and codes are deleted, so the next request with them gets the `401`
+above and a refresh gets `invalid_grant`, and its open MCP sessions are closed. Other grants,
+also of the same client ID, are not touched.
+
+## Suspended accounts (FR-196)
+
+While the relay's operator has suspended an account, every token of the account is gone and
+`/mcp` answers the `401` above; `/authorize` leads to the sign-in page, which refuses the
+account with a message naming the operator's contact address when one is set.
 
 ## Token endpoint behavior
 

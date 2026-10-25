@@ -1,0 +1,21 @@
+{
+  "type": "clients",
+  "clients": [
+    {
+      "id": "grt_k3v9x2m7q4w8z5n1",
+      "name": "Claude",
+      "host": "claude.ai",
+      "redirect": "claude.ai",
+      "approved_at": "2026-10-25T16:02:11Z",
+      "last_used_at": "2026-10-25T17:40:00Z"
+    },
+    {
+      "id": "grt_p8d2r6t1y7u3s9a4",
+      "name": "Claude Code",
+      "host": "localhost",
+      "redirect": "this computer",
+      "approved_at": "2026-10-24T09:15:00Z",
+      "last_used_at": null
+    }
+  ]
+}

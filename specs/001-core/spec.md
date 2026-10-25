@@ -317,6 +317,51 @@ Format: EARS ("When <trigger>, the <system> shall <response>"). IDs are stable; 
   with "Too many sign-ins are in progress right now. Try again in a minute." instead of holding
   more in memory.
 
+### Apps with access, shown on the Mac (Toni, 2026-10-25)
+- **FR-190** When a Mac connects, and whenever the list changes, the relay shall tell the Mac
+  app which Claude apps have access to the Owner's Mac: for each approval the Owner gave that
+  still works, the app's name and the checked host as the consent page showed them, where the
+  approval was sent back to, when it was given, and when it was last used. The relay shall send
+  this only to an app that said it understands it.
+- **FR-191** When the Owner removes one app's access, in the Mac app or on the account page,
+  the relay shall end that one approval at once (its sign-in codes and tokens stop working and
+  its open sessions are closed) and leave every other approval working. A request naming an
+  approval of another account, or one that doesn't exist, shall change nothing.
+- **FR-192** The relay shall record when an approval was last used at most once a minute per
+  approval.
+
+### Terms and privacy policy (Toni, 2026-10-25)
+- **FR-193** Where the person running a relay has set their name and a contact email address,
+  the relay shall publish terms of service and a privacy policy, link both from every page it
+  shows, say "By continuing, you agree to the Terms and the Privacy Policy" where an account is
+  created, and announce both documents to Claude clients. Where they aren't set, the relay shall
+  publish neither document and show no links. The relay shall refuse to start when only one of
+  the two is set or the contact isn't an email address.
+- **FR-194** The privacy policy shall name every kind of data the relay stores, how long it is
+  kept, and what the relay never stores; each document shall show the date it took effect; and
+  everything about the person running the relay shall come from their settings, never from the
+  software.
+
+### Dealing with abuse (Toni, 2026-10-25)
+- **FR-195** The person running a relay shall be able, on the relay's own server, to list the
+  accounts (without secrets), suspend an account with a reason, lift a suspension, delete an
+  account (with the same effect as the Owner's Delete account), and block or unblock an email
+  address and list the blocked ones. Each command shall say in one line what it did, shall
+  report failure to the program that ran it, and shall be recorded with who ran it, what it did,
+  and when.
+- **FR-196** When an account is suspended, the relay shall end every browser sign-in of the
+  account, refuse sign-in and recovery for it with a plain message (naming the contact address
+  when one is set), remove every Claude app's access and refuse the connector, and close the
+  Mac's connection and refuse new ones without making the Mac app forget its pairing. Nothing
+  else shall be deleted. When the suspension is lifted, the Owner shall be able to sign in again
+  and approve Claude again.
+- **FR-197** When an email address is blocked, the relay shall refuse sign-up and sign-in for
+  it, and shall suspend its account if it has one.
+- **FR-198** While the relay is running, a suspension, block, or deletion made by its operator
+  shall take effect on every new request at once, and on connections that are already open (the
+  Mac's, and Claude's open sessions) within 5 seconds.
+- **FR-199** The relay shall delete the record of an operator's action after one year.
+
 ## Success criteria
 
 Measurable, technology-free. Each one has a test.
@@ -355,5 +400,7 @@ Measurable, technology-free. Each one has a test.
 ## Open questions
 
 - [NEEDS CLARIFICATION] Domain for the hosted relay. (Product name decided: Latchkey.)
-- [LAUNCH BLOCKER, deferred] Terms of service, privacy policy, and abuse handling for the hosted
-  relay. Not needed for development or private testing; required before public launch.
+- [LAUNCH BLOCKER, built 2026-10-25, wording not yet reviewed] Terms of service, privacy policy
+  (FR-193, FR-194), and abuse handling (FR-195 to FR-199) for the hosted relay. The two
+  documents are plain-language drafts, not legal advice: the owner has them reviewed before
+  opening sign-up to the public.

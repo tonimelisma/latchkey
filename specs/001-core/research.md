@@ -219,3 +219,75 @@ so the rightmost entry is the real client. How the deploy learns Caddy's address
 
 Sources: https://caddyserver.com/docs/caddyfile/directives/reverse_proxy#defaults,
 https://docs.docker.com/reference/cli/docker/network/inspect/
+
+## Apps with access: what a grant is and how it is named (FR-190 to FR-192, 2026-10-25)
+
+- **Where a grant's label lives.** A new `oauth_grants` row written at approval (chosen): the
+  list shows exactly what the consent page showed, even if the client's document changes later,
+  and there is a place for the public ID and the last-used time. Versus deriving everything from
+  `oauth_requests` (no schema change, but the redirect host is lost after the first refresh,
+  the approval time would be a guess, and last-used needs a column anyway), versus columns on
+  every `oauth_requests` row (repeated on each rotation).
+- **The public ID.** 16 random bytes generated at approval (chosen); versus a hash of the
+  request ID (stable without storage, but one leaked request ID would name the grant, and a
+  keyed hash adds a key to manage); versus the request ID itself (it is fosite's internal handle
+  and appears in logs). Never a token signature.
+- **What "live" means.** An unrevoked, unexpired access or refresh token (chosen, and what the
+  account page meant already); an approval whose code was never redeemed is not access.
+  Therefore "a new approval" reaches the Mac when the code is redeemed, seconds after Allow.
+- **Finding out that a client revoked, or that a token was reused.** fosite calls the storage
+  (`RevokeRefreshToken`, `RevokeAccessToken`) for both; the adapter then checks whether the
+  grant is still live and reports the change if not (chosen). Versus wrapping the `/revoke`
+  handler (misses reuse detection, which happens inside the token endpoint).
+- **Closing one grant's MCP sessions.** The SDK binds a session to a user, not a token. Chosen:
+  remember, per session ID, the grant that opened it (read from the response header of the
+  request that created the session) and close those. Versus closing all of the Owner's sessions
+  (disturbs the other apps, which the requirement forbids), versus one MCP server per grant
+  (multiplies the tool-list bookkeeping).
+- **Last used at most once a minute.** An in-memory map of grant → last write, checked before
+  the write (chosen: no database write, or even statement, on most requests); the map is
+  emptied of entries older than a minute whenever it passes 10,000. Versus a conditional
+  `UPDATE` per request (a statement per request).
+- **Old grants.** Migration 10 gives every existing grant a row with an empty label; the list
+  reads the name and hosts from the client instead (its first redirect host stands in for
+  where the approval went).
+- **A client with no name.** Listed as "An unnamed app" (the relay's existing words for it),
+  so the Mac never shows an empty row.
+
+## Terms and privacy pages (FR-193, FR-194, 2026-10-25)
+
+- Anthropic's Software Directory Policy asks for a privacy policy link and contact information
+  (§3A, §3B); RFC 8414 §2 defines `op_policy_uri` and `op_tos_uri` for exactly this.
+- **Texts in templates, operator details from settings** (chosen), versus a file the operator
+  mounts (every self-hoster would have to write one; most would have none), versus fixed text
+  naming the hosted relay's operator (a self-hosted relay would publish someone else's name).
+- **Keeping the policy true.** A test with one required phrase per stored table, checked
+  against `data-model.md` and against the migrated database (chosen); versus generating the
+  policy from the data model (unreadable prose).
+- **Where the agreement sentence goes.** The email step of the one sign-in page (chosen: it is
+  where an account is created, FR-043a); it also shows to people signing in, which is harmless.
+- The governing-law sentence, the list of providers, and the backup sentence appear only when
+  their settings are given, so a relay never claims something its operator didn't state.
+
+## Operator commands and suspension (FR-195 to FR-199, 2026-10-25)
+
+- **How the running relay learns of a command.** Options: (a) the relay polls the operator log
+  for new entries every 2 s (chosen: one indexed query, works with any way of running the
+  command, and the log is needed anyway); (b) the command calls the relay over loopback HTTP
+  (instant, but adds an unauthenticated control endpoint inside the container and fails when
+  the port or TLS mode differs); (c) SQLite's `data_version` pragma (changes on every commit of
+  any other connection, the relay's own pool included). Everything checked per request reads
+  the database and needs no notice at all; the poll only reaches open connections.
+- **Close code for a suspended Mac.** 4001 (chosen): the app shows "Sign in again" and keeps
+  its key. 4002 would make it delete the key, turning a suspension into an unpairing; a new code
+  would be a protocol violation to the installed app.
+- **Who ran a command.** The operating-system user of the process (`nonroot` in the image),
+  or `LATCHKEY_OPERATOR` when set, so several people sharing a server can say who they are.
+- **Last sign-in in `account list`.** The newest of the account's passkey uses and browser
+  sessions, both already stored; no new column.
+- **Recovery for a suspended account** says so plainly, although recovery otherwise answers the
+  same for known and unknown addresses (FR-042b): only an account the operator suspended is
+  revealed, and the ordinary sign-in step already tells a known address from an unknown one.
+- **How long the operator log is kept.** One year (chosen: long enough to answer "why was my
+  account suspended" and to see a pattern of abuse, short enough not to keep addresses of
+  deleted accounts forever). [Toni to confirm.]

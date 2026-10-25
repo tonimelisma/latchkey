@@ -1,0 +1,74 @@
+{
+  "type": "hello",
+  "device_id": "dev_8f3kq2m7xz",
+  "signature": "MEUCIQDexampleexampleexampleexampleexampleexampleexAIgexampleexampleexampleexampleexampleexample",
+  "app_version": "0.1.0",
+  "os_version": "26.1",
+  "tools": [
+    {
+      "name": "battery_status",
+      "title": "Battery status",
+      "description": "Live battery level and power state of the user's Mac.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "battery_percent": {
+            "type": "integer"
+          },
+          "charging": {
+            "type": "boolean"
+          },
+          "power_source": {
+            "type": "string",
+            "enum": [
+              "battery",
+              "ac",
+              "ups",
+              "unknown"
+            ]
+          },
+          "time_remaining_min": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "battery_percent",
+          "charging",
+          "power_source"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "idempotentHint": false,
+        "openWorldHint": false
+      },
+      "_meta": {
+        "latchkey/deadline_ms": 5000
+      }
+    }
+  ],
+  "state": {
+    "battery_percent": 82,
+    "power_source": "battery",
+    "charging": false,
+    "time_remaining_min": 312,
+    "thermal_state": "nominal",
+    "low_power_mode": false,
+    "lid_closed": true,
+    "time_zone": "America/Los_Angeles",
+    "keep_awake": "on",
+    "observed_at": "2026-10-19T17:02:10Z"
+  },
+  "features": [
+    "clients",
+    "something_newer"
+  ]
+}

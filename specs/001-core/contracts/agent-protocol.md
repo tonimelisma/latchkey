@@ -91,9 +91,16 @@ it.
   "app_version": "0.1.0",
   "os_version": "26.1",
   "tools": [ /* MCP Tool objects, see below */ ],
-  "state": { /* State object */ }
+  "state": { /* State object */ },
+  "features": ["clients"]
 }
 ```
+
+`features` (optional, added 2026-10-25, FR-190) is an array of strings naming the later
+additions to this protocol that the app understands. The app sends `["clients"]` when it
+understands the `clients` and `revoke_client` messages below. Unknown strings are ignored, and
+a missing `features` means none. The relay sends `clients` messages ONLY to an agent that listed
+`"clients"`: the app up to 0.8.9 treats an unknown message type as a protocol violation.
 
 Signature: ECDSA P-256 with SHA-256 over the UTF-8 bytes of
 `"latchkey-agent-v1\n" + nonce + "\n" + device_id`, where `nonce` is the base64url string exactly
@@ -145,6 +152,7 @@ Sent in `hello`, in every `state` message, and in `goodbye`.
 | `progress` | Optional, during a long call | `id`, `progress`, `total` (optional), `message` (optional) |
 | `result` | A call finished, or the Owner stopped it by turning its capability off or down (then `is_error` with the reason, FR-066) | `id`, `content` (MCP content array), `structured_content` (optional), `is_error` |
 | `goodbye` | Before an intentional disconnect | `reason`, `state` |
+| `revoke_client` | The Owner removed one app's access in the Mac app (FR-191) | `id` (from the `clients` list) |
 
 `goodbye.reason`: `low_battery`, `too_hot`, `user_quit`, `system_sleep`, `system_shutdown`,
 `user_disconnected`.
@@ -159,6 +167,7 @@ Sent in `hello`, in every `state` message, and in `goodbye`.
 | `call` | Claude called a Mac tool | `id`, `tool`, `arguments`, `deadline_ms` |
 | `cancel` | Deadline passed or Claude cancelled | `id`, `reason` (`deadline` or `client_cancelled`) |
 | `notice` | Something the Owner must be told on the Mac | `kind`, `at`, `client` (optional) |
+| `clients` | Right after `welcome`, and whenever the list changes; only to an agent that announced the `clients` feature (FR-190) | `clients` (full list, replaces the previous one) |
 
 `notice.kind`: `account_recovered` (a recovery link was used, FR-042); `client_authorized` (a
 Claude client was given access; `client` is its name with the host the relay checked, as on the
@@ -168,6 +177,60 @@ each `client_authorized` is sent once. The app shows a macOS notification.
 
 `id` is an opaque string unique per connection. The agent may run calls concurrently. A `result`
 for an unknown or cancelled `id` is ignored.
+
+## Apps with access (`clients`, `revoke_client`; added 2026-10-25, FR-190 to FR-192)
+
+An "app with access" is one approval the Owner gave on the relay's Allow page that still has a
+live access or refresh token (a grant). All of Claude's hosted apps share one client ID, so two
+entries can name the same client; the unit that is listed and removed is the grant.
+
+relay → agent:
+
+```json
+{"type": "clients", "clients": [
+  {"id": "grt_k3v9x2m7q4w8z5n1", "name": "Claude", "host": "claude.ai", "redirect": "claude.ai",
+   "approved_at": "2026-10-25T16:02:11Z", "last_used_at": "2026-10-25T17:40:00Z"},
+  {"id": "grt_p8d2r6t1y7u3s9a4", "name": "Claude Code", "host": "localhost", "redirect": "this computer",
+   "approved_at": "2026-10-24T09:15:00Z", "last_used_at": null}
+]}
+```
+
+- The full list every time (it replaces the previous one), sorted newest approval first, at
+  most 50 entries.
+- `id`: opaque, stable for the grant, 1 to 64 characters of `[A-Za-z0-9_-]`. It is a public
+  handle of the grant: not a token, not a token hash usable as a credential, not the client ID.
+- `name` and `host` are exactly what the consent page showed, already cleaned: the client's own
+  name, and the host the relay checked. A client that gave no name is listed as
+  "An unnamed app".
+- `redirect` is the host the approval was sent back to, or the literal `"this computer"` for a
+  loopback redirect (`localhost`, `127.0.0.1`, `[::1]`).
+- `approved_at` and `last_used_at` are RFC 3339 UTC; `last_used_at` is `null` until the grant is
+  first used, and is updated at most once a minute (FR-192).
+- Sent right after `welcome` (before any notices), and again whenever the list changes: a new
+  approval (when its first token is issued), a removal (from the Mac, the account page, a
+  recovery, revocation by the client, reuse detection), and when a grant is found expired by
+  the relay's periodic purge. A change of `last_used_at` alone does not trigger a send. Account
+  deletion and the Mac's own revocation close the connection (4002) instead.
+
+agent → relay:
+
+```json
+{"type": "revoke_client", "id": "grt_k3v9x2m7q4w8z5n1"}
+```
+
+The relay removes that grant's tokens and codes if, and only if, the grant belongs to this
+Mac's account; an `id` of another account, or an unknown one, changes nothing and is not an
+error. Either way the relay then sends the new `clients` list (to an agent that announced the
+feature). `revoke_client` is counted by the per-connection message allowance, like `state`. The
+relay records it in its audit log as metadata only (time, "revoke_client", outcome), never the
+`id`.
+
+Implementation choices (relay): the grant's public `id` is 16 random bytes, generated when the
+Owner allows the app and stored beside the grant's internal request ID, rather than derived
+from the request ID (which would make every stored ID guessable from one) or from a token
+signature. The list is sent under a per-connection lock that covers reading it and writing it,
+so two changes can't arrive in the wrong order; a list equal to the last one sent on the
+connection (ignoring `last_used_at`) is not sent again, except in answer to `revoke_client`.
 
 ## Tools
 
@@ -212,9 +275,17 @@ list changed.
 | Code | Meaning | Agent should |
 |---|---|---|
 | 1000 | Normal | Reconnect with backoff unless quitting |
-| 4001 | Authentication failed | Show "Sign in again"; do not retry automatically |
+| 4001 | Authentication failed, or the account is suspended by the relay's operator (reason "account suspended"; FR-196) | Show "Sign in again"; do not retry automatically; keep the local key and pairing |
 | 4002 | Device revoked | Delete the local key; show "Disconnected from account" |
 | 4003 | Replaced by a newer connection for this device | Do not reconnect from this connection |
 | 4004 | Protocol version not supported | Show "Update required" |
 | 4005 | Protocol violation (malformed or unknown message, invalid or oversized tool list, too many messages) | Reconnect with backoff; report a bug |
 | 4006 | Handshake timeout | Reconnect with backoff |
+
+Suspension (2026-10-25, FR-196): when the relay's operator suspends an account, the relay
+closes the Mac's connection with 4001 and answers every new connection of that Mac with 4001
+while the suspension lasts. It uses 4001 and never 4002 for this, because the app deletes its
+key on 4002: a suspension must not make the Mac forget its pairing. The device and its key stay
+stored on the relay, so the same pairing connects again once the suspension is lifted. The
+close reason is the text "account suspended" (an ordinary failed authentication has
+"authentication failed").

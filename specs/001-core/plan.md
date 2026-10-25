@@ -496,6 +496,70 @@ Serves FR-022, FR-023, FR-024, FR-026, FR-026a, Constitution VI.
   encrypted into the new file once at start, then its files are deleted. Uninstall (FR-077)
   deletes the key too. Tests use an in-memory key, never the Keychain.
 
+### D12. Apps with access: one row per approval, pushed to the Mac
+Serves FR-190, FR-191, FR-192; Constitution II, VI.
+- A grant is one Allow on the consent page: fosite's request ID, shared by the code and every
+  token that descends from it (refresh keeps the ID). The relay stores one `oauth_grants` row
+  per grant when the Owner allows it, before the code leaves: a public ID (16 random bytes,
+  `grt_…`), and what the consent page showed (cleaned name, checked host, the redirect host or
+  "this computer" for loopback). A grant is live while it has an unrevoked, unexpired access or
+  refresh token; the list is the live grants, newest first, at most 50. Grants from before the
+  table (migration 10 gives each a row) have no stored name: theirs is read from the client.
+- Agent protocol: `hello.features`, `clients`, `revoke_client` (contracts/agent-protocol.md).
+  The hub asks a callback for the Owner's list and sends it after `welcome` and whenever the
+  OAuth server reports a change, only on connections that announced `clients`. A per-connection
+  lock covers reading the list and writing it, so lists arrive in order; a list equal to the
+  last one sent (ignoring last-used times) is skipped. `revoke_client` runs the same removal as
+  the account page, is counted by the frame allowance (FR-091), and is audited as metadata.
+- What reports a change: the token endpoint when a code is redeemed (the grant's first token);
+  `RevokeGrant` (Mac, account page) and `RevokeUser` (remove all, recovery); fosite's storage
+  calls for a client's `/revoke`, refresh-token reuse, and a replayed code, when the grant is no
+  longer live afterwards; and the daily purge, which re-sends to every connected Mac.
+- Removing one grant deletes its rows in one transaction, so no token can be written for it
+  afterwards (`PutOAuthToken` needs a live row of the grant). The MCP layer closes that grant's
+  sessions only: the bearer check puts the grant's public ID into the token info, `/mcp`
+  records it for each session it opens, and `ForgetGrant` closes the sessions recorded for it.
+  Requests with the removed token already fail the bearer check.
+- Last used: the bearer check notes the time per grant in memory and writes `last_used_at` only
+  when a minute has passed since the last write for that grant.
+- Account page: each app has its own Remove button (CSRF-protected POST); "Remove Claude's
+  access" still removes all.
+
+### D13. Terms and privacy policy, from the operator's settings
+Serves FR-193, FR-194; Constitution V, VI.
+- Settings `OPERATOR_NAME` and `OPERATOR_CONTACT` (both or neither; the contact must be one
+  plain email address), and optional `OPERATOR_LAW`, `OPERATOR_PROVIDERS`, `BACKUP_DAYS`. With
+  the two set, `/terms` and `/privacy` are served from `html/template` files, with the pages'
+  style and headers and no script; the footer of every page links them; the email step of the
+  sign-in page says "By continuing, you agree to the Terms and the Privacy Policy"; and the
+  authorization-server metadata carries `op_tos_uri` and `op_policy_uri`. Without them the two
+  paths are 404 and nothing links to them.
+- The texts describe "this relay" and say only what the code does. Each shows its effective
+  date, a constant beside the template that changes with the text. A test renders the policy
+  and requires a phrase for every table in `data-model.md` and in the database, so the policy
+  can't fall behind what is stored; another fails on any address, name, or place written into
+  the templates.
+
+### D14. Operator commands in the relay binary; the running relay follows the database
+Serves FR-195 to FR-199; Constitution II, V.
+- The image has no shell, so the commands are subcommands of the one binary
+  (`/relay account …`, `/relay block …`), run with `docker exec`; `relay` with no arguments
+  still starts the server. They open the same SQLite file (WAL, 5 s busy timeout), need only
+  `DATA_DIR`, print one line, and exit 1 on failure. Emails are normalized as at sign-up.
+- A suspension is one transaction: mark the user, delete their web sessions, emailed codes,
+  OAuth codes, tokens, and grants, and write the operator log. Nothing else is deleted.
+- Everything the relay checks per request reads the database, so it takes effect at once:
+  the session lookup joins the user and ignores a suspended one; the bearer check refuses a
+  suspended user; the sign-in steps refuse a suspended account or a blocked address with a
+  plain message (with the contact address when set); the Mac's handshake answers 4001.
+- What is held in memory (the Mac's open connection, Claude's open sessions) is reached through
+  the operator log: the relay reads entries newer than the last one it handled every 2 seconds
+  and closes the Mac's connection (4001 for a suspension or block, so the app keeps its
+  pairing; 4002 for a deletion, as the Delete account button does) and drops the account's MCP
+  sessions. Worst case 2 s plus the query. A connection that registers just after its account
+  was suspended is caught by re-reading the user after registering, as for revocation.
+- The operator log is purged after a year by the daily job.
+
 ## Repository layout
 
 ```
@@ -576,7 +640,7 @@ Pairing comes before the Mac app, so the app connects the real way from its firs
 | III. Disabled means nonexistent | Pass (FR-061) |
 | IV. Good macOS citizen | Pass with one documented exception: no App Sandbox (D9) |
 | V. Self-hostable | Pass (D10) |
-| VI. Store the minimum | Pass (D11, data-model.md) |
+| VI. Store the minimum | Pass (D11, D12, D14, data-model.md): a grant's label and times, and the operator's own actions for a year |
 | VII. Test-first | Planned (testing strategy) |
 | VIII. Simplicity | Pass: relay, Mac app, specs |
 | IX. Open source | Pass: Apache-2.0; all dependencies MIT, BSD, or Apache |
