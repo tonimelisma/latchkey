@@ -317,6 +317,46 @@ Format: EARS ("When <trigger>, the <system> shall <response>"). IDs are stable; 
   with "Too many sign-ins are in progress right now. Try again in a minute." instead of holding
   more in memory.
 
+### Only Claude's apps, and the relay's own keys (Toni, 2026-10-25)
+- **FR-180** The relay shall accept a client that asks for access only when the address the
+  client identifies itself with is on a host in the operator's list of allowed client hosts.
+  The list holds exact host names (no wildcards, compared in lowercase ASCII form) and is
+  "claude.ai" unless the operator sets it; the single value `*` means any host.
+- **FR-181** While the list is not `*`, the relay shall accept a client's published description
+  only when every address it may send the Owner's browser back to is on an allowed host or on
+  the Owner's own computer (a loopback address, as Claude Code uses).
+- **FR-182** While the list is not `*`, the relay shall not register clients on request: it
+  shall answer a registration with an error that says so, and shall not announce a registration
+  address. It shall keep announcing the two signals that make Claude identify itself by a
+  published description.
+- **FR-183** When the relay refuses a client under FR-180 to FR-182, it shall do so before making
+  any request to that client's host, shall answer with an OAuth error that says in words "This
+  relay only accepts Claude's apps." (or, with an operator's own list, names the allowed hosts),
+  and shall not send the Owner's browser to the refused client.
+- **FR-184** When the relay starts, and once a day after that, it shall delete every stored
+  client the list no longer allows, with all its codes and tokens; until then it shall refuse
+  any use of them.
+- **FR-185** If the list of allowed client hosts is not valid (an entry that is not a host name,
+  `*` mixed with other entries, or only separators), then the relay shall refuse to start and
+  say why.
+- **FR-186** The relay shall keep its own signing keys in its database only in encrypted and
+  tamper-evident form, under a key kept in a separate file (the key file) that is not part of
+  the database. The stored form shall carry a version, so the method can change later.
+- **FR-187** When the relay starts and has no key file and no encrypted keys, it shall create
+  the key file, readable by the relay's own user only, never replacing an existing file, and
+  shall log that it did (never the key). If the key file can be read by other users, or is not
+  the right size, then the relay shall refuse to start and say why.
+- **FR-188** When the relay starts with signing keys stored unencrypted by an earlier version,
+  it shall encrypt them all in one step: each new value is read back and compared before it
+  replaces the old one, and if any step fails nothing is changed. Access given to Claude before
+  the change shall keep working after it.
+- **FR-189** If encrypted keys exist and the key file is missing, unreadable, or does not open
+  every one of them, then the relay shall refuse to start, and say what happened and the two
+  ways out: put the key file back, or delete the stored keys with an explicit operator command.
+  That command shall sign everyone out and end Claude's access, and shall keep accounts,
+  passkeys, and paired Macs. The relay shall never delete its keys by itself, and shall never
+  put key material in a log or an error.
+
 ### Apps with access, shown on the Mac (Toni, 2026-10-25)
 - **FR-190** While the Mac is connected to a relay that reports them, the Mac app shall show
   the Claude apps that have access to the Owner's Mac: for each approval the Owner gave that

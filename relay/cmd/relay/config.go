@@ -5,11 +5,14 @@ import (
 	"fmt"
 	"net"
 	"net/url"
+	"path/filepath"
 	"strconv"
 	"strings"
 
 	"github.com/tonimelisma/latchkey/relay/internal/account"
 	"github.com/tonimelisma/latchkey/relay/internal/limit"
+	"github.com/tonimelisma/latchkey/relay/internal/oauth"
+	"github.com/tonimelisma/latchkey/relay/internal/store"
 )
 
 // config is the relay's environment configuration (plan D10).
@@ -30,6 +33,10 @@ type config struct {
 	// Operator is who runs this relay, for its terms and privacy policy (FR-193): OPERATOR_NAME,
 	// OPERATOR_CONTACT, OPERATOR_LAW, OPERATOR_PROVIDERS, BACKUP_DAYS.
 	Operator account.Operator
+	// AllowedClientHosts whose clients may ask for access (FR-180); default claude.ai, "*" any.
+	AllowedClientHosts oauth.AllowedHosts
+	// KeyFile holds the key the relay's stored signing keys are encrypted under (FR-186).
+	KeyFile string
 }
 
 func loadConfig(getenv func(string) string) (config, error) {
@@ -84,6 +91,12 @@ func loadConfig(getenv func(string) string) (config, error) {
 	}
 	if err := c.Operator.Validate(); err != nil {
 		errs = append(errs, err)
+	}
+	if c.AllowedClientHosts, err = oauth.ParseAllowedHosts(getenv("ALLOWED_CLIENT_HOSTS")); err != nil {
+		errs = append(errs, fmt.Errorf("ALLOWED_CLIENT_HOSTS: %w", err))
+	}
+	if c.KeyFile = getenv("KEY_FILE"); c.KeyFile == "" && c.DataDir != "" {
+		c.KeyFile = filepath.Join(c.DataDir, store.DefaultKeyFileName)
 	}
 	return c, errors.Join(errs...)
 }

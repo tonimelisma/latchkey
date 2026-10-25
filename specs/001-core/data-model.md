@@ -14,7 +14,7 @@ milliseconds. Device public keys are stored as PKIX DER.
 | **device_state** | device_id, online, connected_at, last_seen_at, offline_reason, state_json, tools_json | Latest state only, no history (FR-020) |
 | **pairing_codes** | code_hash, user_id, expires_at, used_at | 5 min, single use |
 | ~~oauth_consents~~ | | Dropped 2026-10-25 (migration 6): approvals are not remembered (FR-049a). The account page lists the clients that hold a live access or refresh token in **oauth_requests** |
-| **relay_keys** | name, value | Server secrets, e.g. the 32-byte HMAC key for OAuth tokens; never leaves the server |
+| **relay_keys** | name, value, format | The relay's own signing keys: the 32-byte HMAC key for OAuth tokens and the CSRF key. Each value is stored encrypted (AES-256-GCM, format 1) under the key in the key file, which is not in the database (FR-186); format 0, the key itself, is what earlier versions wrote and is converted on the first start (FR-188) |
 | **oauth_clients** | id, kind (`dcr` or `cimd`), metadata_json, secret_hash, created_at, fetched_at | CIMD documents cached (with their cache expiry), at most the newest 1,000 that no code or token refers to, and deleted a day after their last fetch if none does (FR-095); DCR clients stored, and deleted after 7 days if no code or token for them is live |
 | **oauth_requests** | signature, kind (`code`, `pkce`, `access`, `refresh`), request_id, client_id, user_id, requested_at, scopes, granted_scopes, form, session_json, expires_at, used_at, rotated_at, revoked_at | fosite's stored requests, keyed by token signature (never raw tokens). `form` keeps the authorize parameters fosite re-checks (redirect URI, PKCE challenge); `session_json` holds subject and expiry times. Codes live 1 min, access tokens 1 h, refresh tokens 90 days |
 | **oauth_grants** | request_id, id, user_id, client_id, client_name, client_host, redirect, approved_at, last_used_at | One row per approval on the Allow page (FR-190): the grant's internal request ID (shared by its rows in **oauth_requests**), its public `id` (16 random bytes, what the Mac app and the account page name it by), and what the consent page showed. `last_used_at` is written at most once a minute (FR-192). Deleted with the grant, and by the daily purge once no code or token of the grant is left |
@@ -24,6 +24,10 @@ milliseconds. Device public keys are stored as PKIX DER.
 | **operator_log** | id, at, actor, action, email, user_id, device_id, detail | Every operator command that changed something (FR-195): who ran it (the server's user name), what, when, the address it was about, and the reason given. `user_id` and `device_id` let the running relay close that account's connections (FR-198). Not tied to the account, so it survives the account's deletion; purged after one year (FR-199) |
 
 ## Outside the database
+
+- The key file (`KEY_FILE`, default `DATA_DIR/relay.key`): 32 random bytes, readable by the
+  relay's user only, made on the first start. It encrypts the values in **relay_keys** and
+  nothing else. The hosted relay keeps it outside the data volume (plan D10).
 
 - With built-in TLS (`ACME_EMAIL` set): TLS certificates and the ACME account key, in
   `DATA_DIR/certs`. Nothing about users.

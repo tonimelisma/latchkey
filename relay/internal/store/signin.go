@@ -505,27 +505,6 @@ func (s *Store) PurgeExpired(ctx context.Context, now time.Time) error {
 	return errors.Join(errs...)
 }
 
-// KeyOrCreate returns a server key, creating it with gen the first time.
-func (s *Store) KeyOrCreate(ctx context.Context, name string, gen func() ([]byte, error)) ([]byte, error) {
-	var v []byte
-	err := s.db.QueryRowContext(ctx, `SELECT value FROM relay_keys WHERE name = ?`, name).Scan(&v)
-	if err == nil {
-		return v, nil
-	}
-	if !errors.Is(err, sql.ErrNoRows) {
-		return nil, err
-	}
-	v, err = gen()
-	if err != nil {
-		return nil, err
-	}
-	if _, err := s.db.ExecContext(ctx, `INSERT OR IGNORE INTO relay_keys (name, value) VALUES (?, ?)`, name, v); err != nil {
-		return nil, err
-	}
-	err = s.db.QueryRowContext(ctx, `SELECT value FROM relay_keys WHERE name = ?`, name).Scan(&v)
-	return v, err
-}
-
 // MaxCodeAttempts is how many wrong codes end a code (FR-042).
 const MaxCodeAttempts = 5
 

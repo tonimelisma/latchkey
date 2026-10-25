@@ -30,6 +30,9 @@ func main() {
 	if len(os.Args) > 1 && os.Args[1] == "healthcheck" { // for the container's HEALTHCHECK (no shell in the image)
 		os.Exit(healthcheck())
 	}
+	if len(os.Args) > 1 && os.Args[1] == "reset-keys" { // the operator's way out when the key file is lost (FR-189)
+		os.Exit(resetKeys(os.Args[2:], os.Getenv, os.Stdout, os.Stderr))
+	}
 	if len(os.Args) > 1 { // the operator's commands (FR-195); anything else is a mistake, not a reason to start a server
 		os.Exit(operatorCommand(os.Args[1:], os.Getenv, os.Stdout, os.Stderr))
 	}
@@ -50,15 +53,18 @@ func run(ctx context.Context) error {
 	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
 	slog.SetDefault(logger)
 
-	db, err := store.Open(ctx, filepath.Join(cfg.DataDir, "relay.db"))
+	db, err := store.OpenWithKeyFile(ctx, filepath.Join(cfg.DataDir, "relay.db"), cfg.KeyFile)
 	if err != nil {
 		return err
+	}
+	if path, created := db.KeyFileCreated(); created {
+		logger.Info("created the key file that encrypts the relay's stored keys; keep a copy of it apart from the database", "key_file", path)
 	}
 	defer func() { _ = db.Close() }()
 
 	r, err := server.New(ctx, server.Options{
 		PublicURL: cfg.PublicURL, Store: db, AllowedEmails: cfg.AllowedEmails, Logger: logger, Version: version,
-		TrustedProxies: cfg.TrustedProxies, Operator: cfg.Operator,
+		TrustedProxies: cfg.TrustedProxies, AllowedClients: cfg.AllowedClientHosts, Operator: cfg.Operator,
 		Mailer: account.NewSMTPMailer(account.SMTPConfig{
 			Host: cfg.SMTPHost, Port: cfg.SMTPPort, User: cfg.SMTPUser, Password: cfg.SMTPPassword, From: cfg.SMTPFrom,
 		}),
@@ -86,12 +92,12 @@ func run(ctx context.Context) error {
 		srv.TLSConfig = &tls.Config{GetCertificate: m.GetCertificate, NextProtos: []string{"h2", "http/1.1", "acme-tls/1"}, MinVersion: tls.VersionTLS12}
 	}
 
-	go server.Purge(ctx, db, logger, r.Housekeeping)
+	go server.Purge(ctx, db, logger, r.PurgeClients, r.Housekeeping)
 	go r.WatchOperator(ctx, server.OperatorPoll)
 
 	errc := make(chan error, 1)
 	go func() {
-		logger.Info("relay listening", "port", cfg.Port, "public_url", cfg.PublicURL.String(), "tls", cfg.ACMEEmail != "", "trusted_proxies", cfg.TrustedProxies.Strings(), "version", version)
+		logger.Info("relay listening", "port", cfg.Port, "public_url", cfg.PublicURL.String(), "tls", cfg.ACMEEmail != "", "trusted_proxies", cfg.TrustedProxies.Strings(), "allowed_client_hosts", cfg.AllowedClientHosts.Strings(), "version", version)
 		if srv.TLSConfig != nil {
 			errc <- srv.ListenAndServeTLS("", "")
 		} else {

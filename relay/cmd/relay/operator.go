@@ -51,7 +51,10 @@ func isCommand(args []string) bool {
 }
 
 // openStore opens the relay's database for a command run beside the server: the one place that
-// decides where the database is and how it is opened, from the same settings the server reads.
+// decides where the database is and how it is opened, from the same settings the server reads
+// (DATA_DIR, and KEY_FILE for the file that opens the relay's sealed keys, FR-186). A command
+// never makes a database; and where the server's key file is missing or is the wrong one, the
+// store refuses with the same words the server would.
 func openStore(ctx context.Context, getenv func(string) string) (*store.Store, error) {
 	dir := getenv("DATA_DIR")
 	if dir == "" {
@@ -61,7 +64,11 @@ func openStore(ctx context.Context, getenv func(string) string) (*store.Store, e
 	if _, err := os.Stat(path); err != nil {
 		return nil, fmt.Errorf("there is no relay database at %s", path)
 	}
-	return store.Open(ctx, path)
+	keyFile := getenv("KEY_FILE")
+	if keyFile == "" {
+		keyFile = filepath.Join(dir, store.DefaultKeyFileName)
+	}
+	return store.OpenWithKeyFile(ctx, path, keyFile)
 }
 
 // operatorActor is who the operator log says ran a command: LATCHKEY_OPERATOR when set (several

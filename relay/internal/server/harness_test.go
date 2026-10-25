@@ -23,6 +23,7 @@ import (
 
 	"github.com/tonimelisma/latchkey/relay/internal/account"
 	"github.com/tonimelisma/latchkey/relay/internal/agentproto"
+	"github.com/tonimelisma/latchkey/relay/internal/oauth"
 	"github.com/tonimelisma/latchkey/relay/internal/store"
 	"github.com/tonimelisma/latchkey/relay/internal/testagent"
 )
@@ -50,7 +51,11 @@ func newHarness(t *testing.T, tweak func(*Options)) *harness {
 	_, port, _ := net.SplitHostPort(srv.Listener.Addr().String())
 	h := &harness{t: t, base: "http://localhost:" + port, dbPath: path, db: db, mail: &account.MemoryMailer{}}
 	public, _ := url.Parse(h.base)
-	o := Options{PublicURL: public, Store: db, Mailer: h.mail, Logger: slog.New(slog.DiscardHandler)}
+	// Any client host: the tests register throwaway clients, which the default list refuses (FR-180).
+	o := Options{
+		PublicURL: public, Store: db, Mailer: h.mail, Logger: slog.New(slog.DiscardHandler),
+		AllowedClients: oauth.AnyClientHost(),
+	}
 	o.Hub.HeartbeatInterval, o.Hub.OfflineAfter = time.Second, 5*time.Second
 	if tweak != nil {
 		tweak(&o)

@@ -4,6 +4,7 @@ package store
 
 import (
 	"context"
+	"crypto/cipher"
 	"crypto/rand"
 	"database/sql"
 	"embed"
@@ -11,6 +12,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -32,10 +34,20 @@ var (
 // Store wraps the database.
 type Store struct {
 	db *sql.DB
+	// The relay's own keys are sealed with aead, made from the key file (sealed.go).
+	aead           cipher.AEAD
+	keyFile        string
+	keyFileCreated bool
 }
 
-// Open opens (creating if needed) the database at path and applies pending migrations.
+// Open opens (creating if needed) the database at path, with its key file next to it (see
+// OpenWithKeyFile), and applies pending migrations.
 func Open(ctx context.Context, path string) (*Store, error) {
+	return OpenWithKeyFile(ctx, path, filepath.Join(filepath.Dir(path), DefaultKeyFileName))
+}
+
+// openDB opens the database and applies pending migrations; the stored keys are not usable yet.
+func openDB(ctx context.Context, path string) (*Store, error) {
 	dsn := "file:" + path + "?_pragma=foreign_keys(1)&_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)"
 	db, err := sql.Open("sqlite", dsn)
 	if err != nil {

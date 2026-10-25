@@ -11,6 +11,12 @@
 #   remove it from .env once the domain is verified).
 # Deploys only a clean checkout at origin/main. If the new relay doesn't answer, the previous
 # version is started again and the deploy fails. Safe to rerun: every step is idempotent.
+# The relay's stored signing keys are encrypted under a key file in /opt/latchkey/keys on the
+# server, outside the data volume (see deploy/lib.sh). The first deploy of a version that does
+# this stops the relay for a moment and copies the database first: a version from before can't
+# read the converted database, so the rollback puts that copy back. Once the new version
+# answers, the copy is deleted, and going back to a version from before it is no longer
+# possible without signing everyone out (docs/self-hosting.md, "The key file").
 # The parts that need no server are tested by deploy/tests/lib_test.sh.
 set -eu
 LC_ALL=C
@@ -108,6 +114,26 @@ fi
 caddyfile_with_block "$HOST" "$tmp/snippet" <"$tmp/Caddyfile.old" >"$tmp/Caddyfile.new"
 cmp -s "$tmp/Caddyfile.old" "$tmp/Caddyfile.new" || install_caddyfile "$tmp/Caddyfile.new"
 
+echo "• key folder"
+prepare_key_dir
+KEY_STATE=$(key_file_state)
+DB_SAVED=''
+case $KEY_STATE in
+  present) ;;
+  absent)
+    if [ -n "$PREV" ]; then
+      echo "• first start of a version that encrypts the relay's stored keys: stopping the relay and copying its database, for the rollback"
+      if ! save_database; then
+        ssh_vm "sudo docker start latchkey-relay >/dev/null" || true
+        echo "FAIL: could not copy the relay's database on the server; version $PREV keeps running."
+        exit 1
+      fi
+      DB_SAVED=1
+    fi
+    ;;
+  *) echo "FAIL: could not tell whether the server has the relay's key file"; exit 1 ;;
+esac
+
 if ! ssh_vm "set -e
 cd $REMOTE_DIR && sudo TAG=$TAG docker compose up -d --remove-orphans --quiet-pull
 sudo docker exec caddy caddy reload --config /etc/caddy/Caddyfile"; then
@@ -117,5 +143,9 @@ fi
 
 echo "• waiting for https://$HOST"
 finish_or_roll_back "$HOST" "$TAG" "$PREV" || exit 1
+if [ -n "$DB_SAVED" ]; then
+  discard_saved_database || echo "WARNING: could not delete the database copy in $REMOTE_DIR/db-before-keys on the server; it holds the keys unencrypted. Delete it by hand."
+fi
+[ "$(key_file_state)" = present ] || echo "WARNING: the relay answers, but its key file is not in $REMOTE_DIR/keys/relay on the server."
 ssh_vm "sudo docker image prune -f --filter 'label!=keep' >/dev/null" || true
 echo "Deployed $TAG: https://$HOST (connector URL https://$HOST/mcp)"

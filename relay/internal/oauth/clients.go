@@ -83,6 +83,8 @@ type clients struct {
 	http *http.Client
 	now  func() time.Time
 	log  *slog.Logger
+	// allowed is the operator's list of client hosts (FR-180); see allowed.go.
+	allowed AllowedHosts
 
 	mu     sync.Mutex
 	failed map[[sha256.Size]byte]time.Time // hash of a document URL → when its fetch last failed
@@ -131,11 +133,20 @@ func withRequestedRedirect(ctx context.Context, uri string) context.Context {
 func (c *clients) get(ctx context.Context, id string) (*client, error) {
 	var md clientMetadata
 	var secretHash []byte
+	// First of all, before the cache and before any fetch: a client the operator's list doesn't
+	// allow is refused without a request to its host (FR-183).
+	if !c.allowed.allowsClient(id) {
+		return nil, c.allowed.refuse()
+	}
 	if isCIMD(id) {
 		doc, err := c.cimd(ctx, id)
 		if err != nil {
 			// A fixed sentence: the Go error can name internal hosts and addresses (logged in cimd).
 			return nil, fosite.ErrInvalidClient.WithHint("The client metadata document could not be fetched or is not valid.")
+		}
+		// Checked on every lookup, so a document cached under a wider list is covered (FR-181).
+		if !c.allowed.allowsRedirects(doc.RedirectURIs) {
+			return nil, c.allowed.refuse()
 		}
 		md = doc
 	} else {
@@ -421,6 +432,18 @@ type registerResponse struct {
 
 // register handles POST /register (RFC 7591).
 func (c *clients) register(w http.ResponseWriter, r *http.Request) {
+	if !c.allowed.any {
+		// FR-182: with a list of client hosts, clients identify themselves with a metadata
+		// document; nothing is registered on request.
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Cache-Control", "no-store")
+		w.WriteHeader(http.StatusForbidden)
+		_ = json.NewEncoder(w).Encode(map[string]string{
+			"error":             "access_denied",
+			"error_description": c.allowed.refusal() + " Registering a client is turned off; identify the client with a client ID metadata document.",
+		})
+		return
+	}
 	var md clientMetadata
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, cimdMaxBytes)).Decode(&md); err != nil {
 		registerError(w, "invalid_client_metadata", "The request body is not valid client metadata.")

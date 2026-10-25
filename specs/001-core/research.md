@@ -220,6 +220,112 @@ so the rightmost entry is the real client. How the deploy learns Caddy's address
 Sources: https://caddyserver.com/docs/caddyfile/directives/reverse_proxy#defaults,
 https://docs.docker.com/reference/cli/docker/network/inspect/
 
+## Which clients may ask for access (FR-180 to FR-185, 2026-10-25)
+
+Toni chose "Claude only" out of the box. What Claude's apps present, checked on 2026-10-24 by
+fetching the documents:
+
+- Web, Desktop, mobile, Cowork: client ID `https://claude.ai/oauth/mcp-oauth-client-metadata`,
+  name "Claude", one redirect URI, `https://claude.ai/api/mcp/auth_callback`.
+- Claude Code: client ID `https://claude.ai/oauth/claude-code-client-metadata`, name "Claude
+  Code", redirect URIs `http://localhost/callback` and `http://127.0.0.1/callback`.
+- Both say `token_endpoint_auth_method: none`. Claude uses the document whenever the relay
+  advertises `client_id_metadata_document_supported: true` and `none`, and falls back to
+  registering itself otherwise.
+
+So one host, `claude.ai`, covers every Claude app, both as the document's host and as the only
+non-loopback redirect host. Choices made (low-level; Toni decided the behaviour):
+
+- **What the list matches.** The client ID's host and every non-loopback redirect URI's host
+  (chosen): a document on a listed host can't hand codes to another site. Claude's own docs allow
+  a server to "require non-loopback redirect_uris to share the client_id URL's origin"; matching
+  the list instead of the origin is the same idea and also lets an operator list two hosts.
+  Rejected: matching only the client ID's host (an allowed host with an open redirect or user
+  content could publish a document pointing elsewhere).
+- **How hosts compare.** Exact, after lowercasing and IDNA ASCII conversion (chosen); no
+  subdomain wildcards, no trailing dot, port ignored, user-info refused. Wildcards were rejected:
+  `*.example.com` trusts every page host of a company, and nobody asked for it.
+- **Where the check runs.** First thing in the client lookup, before the cache and the fetch
+  (chosen), so every path (authorize, token, revoke, the bearer check, the account page) gets it
+  and no request leaves for an unlisted host. Rejected: checking in each HTTP handler (easy to
+  miss one), or after the fetch (keeps the request-forgery surface).
+- **The words a refused client gets.** fosite replaces the hint of a failed client lookup with
+  its own sentence, so the lookup's error carries a marker and the handlers put the sentence
+  back (`invalid_client`, 401). At `/authorize` there is no accepted redirect URI, so fosite
+  shows the error in the browser and redirects nowhere.
+- **Registration off.** RFC 7591 defines error codes only for bad metadata, none for "closed".
+  Chosen: `403` with the RFC's JSON error shape and `access_denied` (RFC 6749's code for a
+  refused request) plus the sentence. Rejected: `404` (reads as a broken relay), `400
+  invalid_client_metadata` (blames the metadata). The endpoint is also left out of the
+  metadata, which is what clients actually read.
+- **`token_endpoint_auth_methods_supported` with a list.** Only `none` (chosen): without
+  registration no client has a secret, so advertising the secret methods would be untrue.
+  `none` is the signal Claude needs.
+- **Clients stored from before.** Deleted with their codes and tokens at start and in the daily
+  purge, in one transaction (chosen), and refused at lookup in between. Rejected: leaving the
+  rows to expire (refresh tokens live 90 days).
+- **Default inside the code.** The zero value means `claude.ai` (chosen), so a new caller that
+  forgets the setting gets the strict behaviour; tests and local checks that register a
+  throwaway client say `*` explicitly.
+
+Sources: https://claude.com/docs/connectors/building/authentication,
+https://claude.com/docs/connectors/building/lazy-authentication,
+https://modelcontextprotocol.io/specification/draft/basic/security_best_practices (allowlists
+of trusted domains for metadata documents), RFC 7591 §3.2.2, RFC 6749 §4.1.2.1.
+
+## Encrypting the relay's own keys (FR-186 to FR-189, 2026-10-25)
+
+`relay_keys` held the OAuth token HMAC key and the CSRF key as plain bytes, against Constitution
+VI. Nothing else in the database is a usable secret: tokens are stored by signature, sessions,
+email codes, pairing codes and client secrets as hashes, passkeys and device keys are public
+keys. (Outside the database, built-in HTTPS keeps its certificate keys unencrypted in
+`DATA_DIR/certs`; the hosted relay doesn't use it. Not changed here.)
+
+Toni chose a key file, made automatically. OWASP's Cryptographic Storage Cheat Sheet: AES with
+an authenticated mode, GCM first; keys stored apart from the data they protect; a protected file
+rather than an environment variable. Choices made:
+
+- **Cipher.** AES-256-GCM from Go's standard library (chosen), a random 12-byte nonce per
+  value, the row's name as additional data so a value can't be swapped between rows. A handful
+  of values are ever sealed under one key, far below GCM's limit for random nonces.
+  XChaCha20-Poly1305 would also do; it adds a dependency for no gain here.
+- **Stored form and its version.** A `format` column (chosen): 0 is the old plain value, 1 is
+  nonce, ciphertext, tag. A version byte inside the value was rejected because an old plain
+  key is 32 random bytes and can start with any byte, so it couldn't be told apart from a
+  sealed one with certainty.
+- **Key file format.** 32 raw random bytes (chosen), mode 0600, made with `O_EXCL` and synced.
+  Text encodings invite trailing-newline mistakes; a passphrase with a KDF would need someone
+  to type it at every start.
+- **Where it is handled.** In `store.Open` (chosen), so no code path can read a key before the
+  file is checked and old rows are converted; `Open` uses `relay.key` next to the database,
+  which is also the default `KEY_FILE`.
+- **Conversion.** One transaction: seal, write, read back, open, compare, roll back on any
+  difference (the "moving stored data" gotcha in `.claude/rules/macos.md`). The key values
+  don't change, so tokens stay valid. `secure_delete`, `VACUUM` and a truncated write-ahead
+  log remove the old bytes from the file.
+- **When the key file doesn't fit.** Refuse to start and say what to do (chosen). Making a new
+  key and new signing keys by itself would silently sign everyone out and hide a lost or
+  swapped file. The operator's explicit way out is `relay reset-keys --confirm`.
+- **Permissions.** Any group or other permission bit is refused, as OpenSSH does for private
+  keys. Symbolic links are followed (container secret mounts are links).
+- **Hosted layout.** `/opt/latchkey/keys` root-only, `/opt/latchkey/keys/relay` owned by the
+  container's user (uid 65532) and mounted at `/keys`. The container runs without root and
+  without capabilities, so the folder has to belong to its user; the root-only folder above
+  keeps every other user on the VM out. A named volume was rejected: it would sit next to the
+  data volume and be copied with it.
+- **Rollback across the conversion.** An earlier version reads the stored bytes as the key
+  itself, so on a converted database it would quietly run with wrong keys. Chosen: the first
+  deploy (key file absent on the VM) stops the relay, copies the database files to a root-only
+  folder, and the rollback puts them back and deletes the new key file; the copy is deleted
+  once the new version answers, because it holds the keys unencrypted. Rejected: keeping the
+  copy for later (it defeats the encryption), or a conversion the old version could undo.
+  The nightly disk copies (14 days) still hold the old plain keys until they age out, and hold
+  database and key file together afterwards: a whole-disk copy is a copy of the whole relay.
+
+Sources: https://cheatsheetseries.owasp.org/cheatsheets/Cryptographic_Storage_Cheat_Sheet.html,
+https://pkg.go.dev/crypto/cipher#NewGCM, NIST SP 800-38D §8.3 (random nonces),
+https://www.sqlite.org/pragma.html#pragma_secure_delete.
+
 ## Apps with access: what a grant is and how it is named (FR-190 to FR-192, 2026-10-25)
 
 - **Where a grant's label lives.** A new `oauth_grants` row written at approval (chosen): the

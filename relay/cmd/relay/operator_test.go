@@ -3,6 +3,8 @@ package main
 import (
 	"bytes"
 	"context"
+	"log/slog"
+	"net/url"
 	"path/filepath"
 	"testing"
 	"time"
@@ -10,6 +12,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/tonimelisma/latchkey/relay/internal/account"
+	"github.com/tonimelisma/latchkey/relay/internal/server"
 	"github.com/tonimelisma/latchkey/relay/internal/store"
 )
 
@@ -73,4 +77,43 @@ func operatorCommandWithEnv(t *testing.T, args []string, env map[string]string) 
 func TestOperatorActor(t *testing.T) {
 	assert.Equal(t, "alex", operatorActor(func(k string) string { return map[string]string{"LATCHKEY_OPERATOR": " alex "}[k] }))
 	assert.NotEmpty(t, operatorActor(func(string) string { return "" }), "otherwise the system user running the command")
+}
+
+// The relay's stored keys are sealed under a key file (FR-186). A command run beside a live
+// relay opens the database with the same key file, from KEY_FILE; pointed at no key file, it
+// refuses, changes nothing, and never makes a new key file.
+func TestOperatorCommandBesideARelayWithSealedKeys(t *testing.T) {
+	dir, keyDir := t.TempDir(), t.TempDir()
+	keyFile := filepath.Join(keyDir, "elsewhere.key")
+	ctx := context.Background()
+	st, err := store.OpenWithKeyFile(ctx, filepath.Join(dir, "relay.db"), keyFile)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = st.Close() })
+	public, _ := url.Parse("http://localhost:8080")
+	live, err := server.New(ctx, server.Options{PublicURL: public, Store: st, Mailer: &account.MemoryMailer{}, Logger: slog.New(slog.DiscardHandler)})
+	require.NoError(t, err, "the running relay, which stored its signing keys sealed")
+	t.Cleanup(live.Hub.Close)
+	u, err := st.CreateUser(ctx, "owner@example.com", time.Now())
+	require.NoError(t, err)
+
+	code, out, errOut := operatorCommandWithEnv(t, []string{"account", "suspend", "owner@example.com"},
+		map[string]string{"DATA_DIR": dir, "KEY_FILE": keyFile})
+	assert.Equal(t, 0, code, errOut)
+	assert.Contains(t, out, "Suspended owner@example.com")
+	got, err := st.User(ctx, u.ID)
+	require.NoError(t, err)
+	assert.False(t, got.SuspendedAt.IsZero())
+
+	code, out, errOut = operatorCommandWithEnv(t, []string{"account", "unsuspend", "owner@example.com"},
+		map[string]string{"DATA_DIR": dir}) // KEY_FILE forgotten: the default place holds no key file
+	assert.Equal(t, 1, code)
+	assert.Empty(t, out)
+	assert.Contains(t, errOut, "key file")
+	assert.NoFileExists(t, filepath.Join(dir, store.DefaultKeyFileName), "no second key file appears")
+	got, _ = st.User(ctx, u.ID)
+	assert.False(t, got.SuspendedAt.IsZero(), "nothing changed")
+
+	again, err := store.OpenWithKeyFile(ctx, filepath.Join(dir, "relay.db"), keyFile)
+	require.NoError(t, err, "the relay's keys still open with its key file")
+	require.NoError(t, again.Close())
 }

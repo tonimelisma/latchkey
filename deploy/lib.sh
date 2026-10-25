@@ -173,7 +173,10 @@ finish_or_roll_back() {
 
 # roll_back HOST NEW_TAG PREVIOUS_TAG [TRIES]: prints the failed relay's logs, puts the previous
 # settings files back, starts the previous image (PREVIOUS_TAG, empty on a first deploy), and
-# checks that it answers. Always fails, so the deploy does.
+# checks that it answers. Always fails, so the deploy does. When this deploy copied the database
+# first (DB_SAVED set: the first start of a version that encrypts the stored keys), the copy is
+# put back before the previous version starts; if that fails the relay stays stopped, because
+# the previous version can't read a converted database.
 roll_back() {
   echo "Last log lines of version $2:"
   ssh_vm 'sudo docker logs --tail 50 latchkey-relay 2>&1' || true
@@ -182,6 +185,14 @@ roll_back() {
     return 1
   fi
   echo "• going back to $3"
+  if [ -n "${DB_SAVED-}" ]; then
+    echo "• putting back the database from before this version"
+    if ! restore_database; then
+      echo "FAIL: version $2 was not healthy, and the database copy could not be put back. The relay stays stopped."
+      echo "      The copy is in $REMOTE_DIR/db-before-keys on the server; version $3 can't read the database as it is now."
+      return 1
+    fi
+  fi
   ssh_vm "set -e
 cd $REMOTE_DIR
 for f in docker-compose.yml relay.env; do
@@ -195,4 +206,78 @@ sudo TAG=$3 docker compose up -d --remove-orphans --quiet-pull" || true
     ssh_vm 'sudo docker logs --tail 50 latchkey-relay 2>&1' || true
   fi
   return 1
+}
+
+# --- The key file that encrypts the relay's stored keys (FR-186) ---
+# It lives outside the data volume, so a copy of the database or of the volume alone can't be
+# used to forge tokens: in $REMOTE_DIR/keys/relay, mounted into the container at /keys. The
+# folder above it is root's alone, so nobody else on the VM can reach the file; the inner folder
+# belongs to the container's user (the image's "nonroot"), which creates the file on its first
+# start and reads it afterwards.
+KEY_OWNER=65532:65532
+
+# prepare_key_dir: makes those two folders. Safe to rerun.
+prepare_key_dir() {
+  ssh_vm "sudo sh -euc '
+install -d -m 700 $REMOTE_DIR/keys
+chown root:root $REMOTE_DIR/keys
+install -d -m 700 $REMOTE_DIR/keys/relay
+chown $KEY_OWNER $REMOTE_DIR/keys/relay
+'"
+}
+
+# key_file_state: prints "present" or "absent". Anything else (a failed connection) must stop the
+# deploy: "absent" decides that the database is copied first and, on a rollback, that the key file
+# the failed version made is deleted.
+key_file_state() {
+  ssh_vm "if sudo test -f $REMOTE_DIR/keys/relay/relay.key; then echo present; else echo absent; fi" | tr -d ' \r\n'
+}
+
+# save_database: before the first start of a version that encrypts the stored keys, stops the
+# relay and copies its database files into a root-only folder. A version from before can't read
+# the database once it is converted, so a rollback needs this copy (restore_database). Fails,
+# stopping and changing nothing, when the running relay's database can't be found.
+save_database() {
+  ssh_vm "sudo sh -euc '
+src=
+for m in \$(docker inspect --format \"{{range .Mounts}}{{.Destination}}={{.Source}} {{end}}\" latchkey-relay); do
+  case \$m in /data=*) src=\${m#/data=} ;; esac
+done
+test -n \"\$src\"
+test -f \"\$src/relay.db\"
+d=$REMOTE_DIR/db-before-keys
+rm -rf \$d \$d.new
+install -d -m 700 \$d.new
+docker stop -t 20 latchkey-relay >/dev/null
+for f in relay.db relay.db-wal relay.db-shm; do
+  if [ -f \"\$src/\$f\" ]; then cp -p \"\$src/\$f\" \$d.new/\$f; fi
+done
+printf %s \"\$src\" > \$d.new/source
+mv \$d.new \$d
+'"
+}
+
+# restore_database: puts the copy made by save_database back over the database, deletes the key
+# file the failed version created (nothing is encrypted with it any more), and deletes the copy.
+# The caller starts the previous version afterwards.
+restore_database() {
+  ssh_vm "sudo sh -euc '
+d=$REMOTE_DIR/db-before-keys
+test -f \$d/relay.db
+src=\$(cat \$d/source)
+test -n \"\$src\"
+docker stop -t 20 latchkey-relay >/dev/null 2>&1 || true
+rm -f \"\$src/relay.db-wal\" \"\$src/relay.db-shm\"
+for f in relay.db relay.db-wal relay.db-shm; do
+  if [ -f \$d/\$f ]; then cp -p \$d/\$f \"\$src/\$f\"; fi
+done
+rm -f $REMOTE_DIR/keys/relay/relay.key
+rm -rf \$d
+'"
+}
+
+# discard_saved_database: once the new version answers, the copy (which holds the keys
+# unencrypted) is deleted.
+discard_saved_database() {
+  ssh_vm "sudo rm -rf $REMOTE_DIR/db-before-keys $REMOTE_DIR/db-before-keys.new"
 }

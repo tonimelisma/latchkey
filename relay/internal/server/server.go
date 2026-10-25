@@ -31,6 +31,9 @@ type Relay struct {
 	// WatchOperator makes the running relay follow the operator's commands (see operator.go).
 	// Run it in its own goroutine; it returns when ctx ends.
 	WatchOperator func(ctx context.Context, every time.Duration)
+	// PurgeClients deletes stored OAuth clients the operator's list no longer allows (FR-184);
+	// pass it to Purge.
+	PurgeClients func(context.Context) error
 }
 
 // Options configures the relay.
@@ -47,6 +50,9 @@ type Options struct {
 	// Operator is who runs this relay (OPERATOR_NAME and the rest): with a name and a contact
 	// the relay publishes its terms and privacy policy (FR-193).
 	Operator account.Operator
+	// AllowedClients is the hosts whose clients may ask for access (FR-180). The zero value is
+	// the default: Claude's apps only.
+	AllowedClients oauth.AllowedHosts
 }
 
 // New builds the relay: hub, MCP server, OAuth, and account pages on one mux.
@@ -77,7 +83,7 @@ func New(ctx context.Context, o Options) (*Relay, error) {
 
 	auth := &authBridge{}
 	oc := oauth.Config{
-		Issuer: o.PublicURL, Store: o.Store, Auth: auth, Logger: o.Logger,
+		Issuer: o.PublicURL, Store: o.Store, Auth: auth, Logger: o.Logger, AllowedClients: o.AllowedClients,
 		OnAuthorized: func(ctx context.Context, userID, clientName string) { acc.ClientAuthorized(ctx, userID, clientName) },
 		// The Mac's list of apps with access follows every change (FR-192), and an app whose
 		// access ended loses its open sessions while the others keep theirs (FR-191).
@@ -111,6 +117,10 @@ func New(ctx context.Context, o Options) (*Relay, error) {
 	oa.Register(mux)
 	acc.Register(mux)
 	r := &Relay{Handler: guard(o.PublicURL, o.TrustedProxies, mux), Hub: h, Store: o.Store}
+	r.PurgeClients = func(ctx context.Context) error {
+		_, err := oa.PurgeRefusedClients(ctx)
+		return err
+	}
 	r.Housekeeping = func(ctx context.Context) error {
 		h.RefreshClients(ctx)
 		return o.Store.PurgeOperatorLog(ctx, time.Now().Add(-store.OperatorLogRetention))

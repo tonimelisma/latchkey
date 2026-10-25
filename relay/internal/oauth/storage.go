@@ -149,27 +149,19 @@ func (s *storage) CreatePKCERequestSession(ctx context.Context, signature string
 	return s.put(ctx, store.KindPKCE, signature, req, fosite.AuthorizeCode)
 }
 
-// GetPKCERequestSession also ends the grant of a code whose PKCE record is already gone: the
-// record is deleted by the first exchange of the code, so a request that finds the code but not
-// its PKCE record is presenting the code a second time, at the same moment as the first (which
-// had not marked the code used yet when this one read it). Without this, such a request failed
-// here and the first exchange's tokens lived on (FR-096).
 func (s *storage) GetPKCERequestSession(ctx context.Context, signature string, _ fosite.Session) (fosite.Requester, error) {
 	req, _, err := s.get(ctx, store.KindPKCE, signature)
-	if errors.Is(err, fosite.ErrNotFound) {
-		if row, cerr := s.st.OAuthRequest(ctx, store.KindCode, signature); cerr == nil {
-			if rerr := s.st.RevokeGrant(ctx, row.RequestID, s.now()); rerr != nil {
-				return nil, rerr
-			}
-			s.grantRevoked(ctx, row.RequestID)
-		}
-	}
 	return req, err
 }
 
-func (s *storage) DeletePKCERequestSession(ctx context.Context, signature string) error {
-	return s.st.DeleteOAuthRequest(ctx, store.KindPKCE, signature)
-}
+// DeletePKCERequestSession keeps the row: it expires with its code, a minute after it was made,
+// and the purge removes it. fosite calls this in the middle of an exchange, before the code is
+// marked used. Deleting here let a second exchange of the same code, one that had read the code
+// while it was still unused, stop at "no PKCE data" and never reach the step that notices the
+// double use and ends the grant (FR-096). The row guards nothing by being gone: a code is
+// single-use because of its own used mark (InvalidateAuthorizeCodeSession), which fosite checks
+// before it looks at PKCE.
+func (s *storage) DeletePKCERequestSession(context.Context, string) error { return nil }
 
 func (s *storage) CreateAccessTokenSession(ctx context.Context, signature string, req fosite.Requester) error {
 	return s.put(ctx, store.KindAccess, signature, req, fosite.AccessToken)

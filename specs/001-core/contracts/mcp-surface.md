@@ -18,7 +18,7 @@ a relay uses the same URL; the OAuth token identifies the Owner and therefore th
 | `GET /.well-known/oauth-authorization-server` | RFC 8414 metadata | Anthropic's cloud |
 | `GET /authorize` | Sign-in and consent page | The Owner's browser (any device) |
 | `POST /token` | Code exchange, refresh (`application/x-www-form-urlencoded`) | Anthropic's cloud, Claude Code |
-| `POST /register` | Dynamic client registration (`application/json`) | Anthropic's cloud, Claude Code |
+| `POST /register` | Dynamic client registration (`application/json`); off unless the operator allows every client host (below) | Clients that can't publish a metadata document |
 | `POST /revoke` | Token revocation | Clients |
 | `GET /terms`, `GET /privacy` | Terms of service and privacy policy; `404` unless the operator set `OPERATOR_NAME` and `OPERATOR_CONTACT` (FR-193) | Anyone's browser |
 
@@ -65,6 +65,12 @@ a bearer value that is not a live access token, a refresh token included (refres
 }
 ```
 
+With the default `ALLOWED_CLIENT_HOSTS` (or any list other than `*`) there is no
+`registration_endpoint`, and `token_endpoint_auth_methods_supported` and
+`revocation_endpoint_auth_methods_supported` are `["none"]`. The metadata above is what the relay
+serves with `ALLOWED_CLIENT_HOSTS=*`. `client_id_metadata_document_supported: true` and `none`
+are always there: they make Claude identify itself with a metadata document.
+
 Where the operator has set `OPERATOR_NAME` and `OPERATOR_CONTACT` (FR-193), the metadata also
 carries the two RFC 8414 fields below; otherwise neither appears.
 
@@ -74,6 +80,24 @@ carries the two RFC 8414 fields below; otherwise neither appears.
   "op_policy_uri": "https://<relay>/privacy"
 }
 ```
+
+## Which clients are accepted (FR-180 to FR-185)
+
+`ALLOWED_CLIENT_HOSTS` is a comma-separated list of exact host names, default `claude.ai`; `*`
+alone means any host. With a list:
+
+- `client_id` must be an HTTPS metadata document URL whose host is on the list (lowercase, IDNA
+  ASCII form, exact match, no subdomains; the port is ignored). Claude's are
+  `https://claude.ai/oauth/mcp-oauth-client-metadata` (web, Desktop, mobile, Cowork) and
+  `https://claude.ai/oauth/claude-code-client-metadata` (Claude Code).
+- Every redirect URI in the document must be on a listed host or on a loopback host.
+- A client that fails either rule is answered `401` `invalid_client` with
+  `error_description` ending in "This relay only accepts Claude's apps." (with another list:
+  "This relay only accepts apps from <hosts>."), at `/authorize` as a page in the browser with
+  no redirect, and at `/token` as JSON. The relay makes no request to a host that isn't listed.
+- `POST /register` answers `403`:
+  `{"error":"access_denied","error_description":"This relay only accepts Claude's apps. Registering a client is turned off; identify the client with a client ID metadata document."}`
+- Clients stored under a wider list, with their codes and tokens, are deleted at start and daily.
 
 ## Authorization responses
 
@@ -94,7 +118,8 @@ answered with `invalid_client` and no detail about the fetch.
 
 ## Redirect URIs accepted
 
-A redirect URI must be listed in the client's CIMD document or DCR registration. For loopback
+A redirect URI must be listed in the client's CIMD document or DCR registration (and, with a
+list of allowed client hosts, be on one of them or on a loopback host). For loopback
 URIs (`http://localhost`, `http://127.0.0.1`, `http://[::1]`) the port is ignored, since Claude
 Code picks a new port each time. In practice:
 

@@ -39,6 +39,8 @@ Then open `https://relay.example.com`, create your account, and continue with "C
 | `ALLOWED_EMAILS` | no | Comma-separated addresses allowed to sign up. Empty means anyone can sign up; set it to your own address on a personal relay. |
 | `ACME_EMAIL` | no | Turns on built-in HTTPS with Let's Encrypt (see below). |
 | `TRUSTED_PROXIES` | no | Comma-separated IP addresses and CIDR ranges (for example `172.18.0.0/16`) of reverse proxies whose `X-Forwarded-For` header the relay believes. Set it whenever a proxy sits in front of the relay in Docker: to the Docker bridge gateway for a proxy on the server itself, or to the shared network's range for a proxy in a container (see "HTTPS"). Only connections from the relay's own loopback address are believed without it, and a container never sees the server's proxy as loopback. Empty with a proxy in front means all visitors share one abuse limit. |
+| `ALLOWED_CLIENT_HOSTS` | no | Which apps may ask for access to an account, as a comma-separated list of host names. Default `claude.ai`: only Claude's apps (web, Desktop, phone, Cowork, Claude Code). See "Which apps can connect". |
+| `KEY_FILE` | no | Path of the key file that encrypts the relay's own signing keys. Default `/data/relay.key`. See "The key file". |
 | `OPERATOR_NAME`, `OPERATOR_CONTACT` | no | Who runs this relay, and an email address for questions, privacy requests, and security and abuse reports. Set both, or neither. With both, the relay publishes terms of service at `/terms` and a privacy policy at `/privacy`, links them from every page, and tells Claude's apps where they are. Leave them out on a relay only you use. |
 | `OPERATOR_LAW` | no | The law your terms are under, for example `California, USA`. The terms say so only when this is set. |
 | `OPERATOR_PROVIDERS` | no | The companies that handle your relay's data for you, in your own words, for example `Example Cloud (hosting) and Example Mail (email delivery)`. Shown in the privacy policy; without it the policy says "the operator's hosting and email providers". |
@@ -46,8 +48,69 @@ Then open `https://relay.example.com`, create your account, and continue with "C
 | `PORT` | no | Port inside the container, default 8080. |
 | `DATA_DIR` | no | Already `/data` in the image. |
 
-Everything the relay stores is in the `/data` volume: one SQLite file, plus cached certificates
-when built-in HTTPS is on. Back up that volume to back up the relay.
+Everything the relay stores is in the `/data` volume: one SQLite file, the key file (unless you
+moved it, below), plus cached certificates when built-in HTTPS is on. Back up that volume to
+back up the relay.
+
+## Which apps can connect
+
+Out of the box only Claude's own apps can ask for access. They identify themselves with an
+address on `claude.ai`, and the relay refuses any app that identifies itself from another host,
+before contacting that host. Apps also can't register themselves with the relay. A refused app
+is told "This relay only accepts Claude's apps."
+
+To let another app in, list its host as well, for example
+`ALLOWED_CLIENT_HOSTS=claude.ai,apps.example.com`. Names are exact: no `https://`, no port, no
+wildcards, and a subdomain is a different name. The app must publish a client ID metadata
+document on that host, and every address it sends your browser back to must be on a listed host
+or on your own computer.
+
+`ALLOWED_CLIENT_HOSTS=*` accepts any app and turns self-registration back on. Whatever the
+setting, nobody gets access without you signing in and pressing Allow; the list decides who may
+ask.
+
+When you narrow the list, apps that no longer fit lose their access at the next start. A value
+the relay can't read as a list of host names stops it from starting, with the reason.
+
+## The key file
+
+The relay signs Claude's access tokens with keys of its own. They are stored in the database
+encrypted, and the key that opens them is in a separate file, the key file. Someone who gets a
+copy of the database without the key file can't forge access.
+
+- The relay makes the file on its first start (32 random bytes, readable only by the relay's
+  user) and says so in its log. It never prints the key. Upgrading from a version without a key
+  file needs nothing from you: the first start makes the file and encrypts the stored keys, and
+  everyone stays signed in.
+- By default it is `/data/relay.key`, next to the database. That protects a copy of the database
+  file, but not a copy of the whole volume. For more, keep it somewhere else: mount a folder
+  that only the relay's user can read (in the container that is user 65532) and point `KEY_FILE`
+  at a file in it. The folder must exist; the relay creates the file.
+
+  ```sh
+  sudo install -d -m 700 -o 65532 -g 65532 /srv/latchkey-key
+  # add to the docker run command:
+    -v /srv/latchkey-key:/keys -e KEY_FILE=/keys/relay.key \
+  ```
+
+- **Back it up apart from the database.** A backup that holds both is as good as the relay
+  itself to whoever reads it.
+- The file must stay private: if other users can read it, the relay refuses to start and tells
+  you to `chmod 600` it.
+- **If the key file is lost or doesn't match**, the relay refuses to start and says so. Put the
+  file back from your backup. If you don't have it, delete the stored keys, with the relay
+  stopped:
+
+  ```sh
+  docker run --rm -v latchkey-data:/data ghcr.io/tonimelisma/latchkey-relay:latest reset-keys --confirm
+  ```
+
+  Everyone is signed out and Claude is disconnected: each person signs in again and adds the
+  connector's access again. Accounts, passkeys, and paired Macs are kept. The relay never does
+  this by itself. The next start makes new keys, and a new key file if there is none.
+- Going back to a relay version from before the key file doesn't work on the same database (it
+  can't read the encrypted keys). Keep a copy of the database from before the upgrade if you
+  want that option, or run `reset-keys` after going back.
 
 ## HTTPS
 
@@ -188,4 +251,5 @@ docker rm -f latchkey-relay
 # run the same docker run command again
 ```
 
-The database is migrated automatically on start.
+The database is migrated automatically on start. The first start of a version with the key
+file encrypts the relay's stored keys (see "The key file").
