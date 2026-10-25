@@ -23,6 +23,8 @@ Claude (web, Desktop, phone)  ──HTTPS──▶  Latchkey relay  ◀──out
   (passkeys, no passwords), remembers your Mac's last state, and answers instantly when the Mac
   is away. Claude asks for your approval every time it connects: Latchkey's Allow page appears on
   each sign-in from a Claude app, and nothing is approved silently.
+- **You see who has access.** The menu and your account page list the Claude apps that can use
+  your Mac, and you can remove any one of them.
 - **You choose what Claude can do.** Each capability has a level in the menu; a capability that's
   off doesn't exist as far as Claude knows. Most have Off, Read only, and Read & write; Shell is
   Off or On. Claude sees 15 tools:
@@ -69,6 +71,12 @@ sleep, removes its background items and local data, and quits.
 
 One container with one data volume, behind HTTPS. See
 [docs/self-hosting.md](docs/self-hosting.md).
+
+Out of the box, a relay accepts only Claude's own apps; other apps must be allowed by the person
+running it (`ALLOWED_CLIENT_HOSTS`). The relay's signing keys are encrypted on disk under a key
+file kept apart from the database. If others sign up on your relay, set `OPERATOR_NAME` and
+`OPERATOR_CONTACT`: the relay then publishes its own terms and privacy policy. To deal with
+abuse, the relay has commands to list, suspend, and delete accounts and to block addresses.
 
 If a reverse proxy in another container or on another host forwards to the relay, set
 `TRUSTED_PROXIES` to its address or network range (comma-separated IP addresses and CIDR ranges,

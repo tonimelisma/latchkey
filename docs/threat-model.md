@@ -37,6 +37,16 @@ Boundaries, each a place where input must be treated as hostile:
   `/register` (DCR), `/authorize` (consent), `/token`, `/revoke`, `/mcp`, sign-in (`/auth/email`,
   `/auth/code`), passkeys (`/passkey/*`), `/account*`, `/pair`, `/pair/preview`, `/pair/exchange`, `/agent/v1`,
   `/static/`, `/healthz`.
+- **B1a Which clients.** By default only clients whose metadata document is on `claude.ai` are
+  looked up; any other client ID is refused before any outbound request, and `/register` is off
+  unless `ALLOWED_CLIENT_HOSTS=*`. A document on an allowed host can send codes only to an allowed
+  host or to loopback. Still true: a program on the Owner's own computer can pose as Claude Code
+  (loopback redirect); the Allow page on every sign-in is the control (FR-049a).
+- **B1b Operator commands.** They need a shell on the server and the database, which already
+  means full control of the relay; they add no network surface. Every command that changes
+  something is recorded with who, what, and when. A suspension is enforced in the database,
+  which sign-in, tokens, and the Mac's handshake read on every request; open connections follow
+  within 2 seconds.
 - **B2 Relay → the outside world.** Client ID Metadata Documents: the relay fetches an HTTPS URL
   the client chooses (SSRF risk). Outbound email through SMTP (header injection).
 - **B3 Relay ↔ Mac.** The agent protocol (`specs/001-core/contracts/agent-protocol.md`): nonce
@@ -94,6 +104,14 @@ Boundaries, each a place where input must be treated as hostile:
 - **Pairing links from outside the app's sign-in window** are accepted after a dialog that names
   the relay and the link's account email (Toni, 2026-10-24); not bound by a one-time secret.
 
+- **A whole-disk copy of the server holds the database and its key file together**, so the
+  nightly backups protect against loss, not against someone who obtains a backup. Copies made
+  before 2026-10-25 hold the old keys unencrypted until they age out after 14 days.
+- **The operator's record keeps an account's email address for a year** after the account is
+  deleted (FR-199).
+- **With built-in HTTPS, certificate keys sit unencrypted in `DATA_DIR/certs`** (not used by the
+  hosted relay).
+
 ## Invariants that must hold (what a finding violates)
 
 1. Every `/mcp` request is tied to one account by a valid, unexpired, unrevoked access token
@@ -145,6 +163,11 @@ Boundaries, each a place where input must be treated as hostile:
     (spec 005 FR-410).
 14. The Files tools never change Latchkey's own files: activity log, settings (capability
     levels), app bundle (spec 003 FR-210).
+15. A copy of the database alone yields neither the token signing key nor the CSRF key: both are
+    sealed with AES-256-GCM under a key file kept apart from the database (FR-186 to FR-189).
+16. The Owner can see every live approval on the Mac and the account page and remove one. The Mac
+    names an approval only by a random public id that is neither a token nor the client ID, and
+    the relay removes it only for the Mac's own account (FR-190 to FR-192).
 
 ## Where to look first
 

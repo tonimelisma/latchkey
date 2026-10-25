@@ -81,4 +81,7 @@ paths:
   (2026-10-24). Read old items the way the old version read them, or, when old data can be
   forged by other programs (user defaults), don't move it at all.
 
+- Text that arrives from the network (client names, hosts) goes into SwiftUI with
+  `Text(verbatim:)`, never a string literal with interpolation (those are parsed as Markdown).
+
 Add new gotchas here as they are discovered.

@@ -169,6 +169,14 @@ Enforced by hooks in `.claude/settings.json` (`scripts/hooks.sh`):
 - `~/Development/Relay` is an unrelated project. This repo is `~/Development/latchkey`.
 - The relay must never wait on the Mac without a deadline (Constitution II).
 - A capability the user turned off must not appear to Claude at all (Constitution III).
+- A relay test or local check that registers its own client must set
+  `AllowedClients: oauth.AnyClientHost()`; the default accepts only clients on claude.ai, and
+  `/register` answers 403.
+- Never start a relay version from before the key file (2026-10-25) on a database a newer one
+  has opened: it can't read the encrypted keys. `deploy.sh` handles this for the first deploy only.
+- Changing the text of `relay/internal/account/templates/terms.html` or `privacy.html` means
+  changing `LegalEffectiveDate` in `relay/internal/account/legal.go`. A new table needs a row in
+  `data-model.md` and a phrase in the privacy policy (a test fails otherwise).
 
 ## Commands
 
@@ -191,8 +199,16 @@ Hosted relay: `deploy/deploy.sh` deploys to the host and Google Cloud VM named i
 `.env` (see the script's header), behind that VM's Caddy; needs `CLOUDFLARE_API_TOKEN` and `RESEND_API_KEY`
 (send-only) in the gitignored `.env`, plus `RESEND_ADMIN_KEY` (full access) for the first run that
 sets up the sending domain (removed from `.env` 2026-10-25, once the domain was verified).
-`deploy/backup-schedule.sh` turns on the nightly copy of the server's disk (kept 14 days). It deploys only a clean checkout at origin/main, and goes back to the
-previous version if the new relay doesn't answer.
+It deploys only a clean checkout at origin/main, and goes back to the previous version if the new
+relay doesn't answer. `.env` may also hold `OPERATOR_NAME`, `OPERATOR_CONTACT`, `OPERATOR_LAW`,
+`OPERATOR_PROVIDERS`, and `BACKUP_DAYS` (free text in single quotes): they switch on the relay's
+terms and privacy pages. `deploy/backup-schedule.sh` turns on the nightly copy of the server's
+disk (kept 14 days).
+Operator commands run inside the relay's container: `docker exec latchkey-relay /relay account
+list | account suspend <email> [reason] | account unsuspend <email> | account delete <email> |
+block <email> [reason] | unblock <email> | block list`; `relay reset-keys --confirm` (relay
+stopped) deletes the stored keys when the key file is lost. Any other argument prints the list
+and exits 2; no arguments starts the server.
 
 Mac app (run in `macos/`; `project.yml` is the source, the `.xcodeproj` is generated):
 - `make test`: unit and contract tests (Swift Testing); exit code is the result

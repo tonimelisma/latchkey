@@ -76,6 +76,11 @@ Sources: [MCP security best practices](https://modelcontextprotocol.io/specifica
   can't change Latchkey's own files; page reads hide password fields; turning a capability off
   stops its running work. Deploys: keys reach only the command that needs them, DMARC reject and
   CAA for the relay's host, automatic rollback.
+- **Done (2026-10-25):** MCP's CIMD trust policy (an allowlist of trusted domains): only clients
+  on `claude.ai` by default (`ALLOWED_CLIENT_HOSTS`). OWASP Cryptographic Storage for the relay's
+  own keys: AES-256-GCM, key in a separate protected file. The Owner sees connected apps on the
+  Mac and can remove one (the remote-access practice from §4). Terms, privacy policy, and abuse
+  tools exist (§7). **Gap:** no key rotation other than `reset-keys`.
 - **Done (2026-10-23):** the Mac shows a notification each time a Claude client is given
   access (notice `client_authorized`). Was a gap: the owner wasn't told when a new Claude client
   was granted access. TeamViewer-style
