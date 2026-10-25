@@ -20,6 +20,12 @@ const Subprotocol = "latchkey.v1"
 // MaxFrameBytes is the largest frame either side accepts; larger frames close with 1009.
 const MaxFrameBytes = 4 << 20
 
+// Limits on a tool list (hello and tools messages): larger lists are a protocol violation.
+const (
+	MaxTools      = 256
+	MaxToolsBytes = 512 << 10 // the list's JSON
+)
+
 // RelayToolLaptopStatus is answered by the relay itself; a Mac tool must not use the name.
 const RelayToolLaptopStatus = "laptop_status"
 
@@ -240,11 +246,34 @@ func newMessage(t Type) Message {
 	return nil
 }
 
+// DecodeHelloAuth reads only what proves who sent a hello: the device ID and the signature. The
+// relay checks them before it parses anything else in the frame (Decode builds and validates the
+// whole tool list), so a stranger can't make it do that work. A frame that isn't JSON or isn't a
+// hello is ErrProtocolViolation.
+func DecodeHelloAuth(data []byte) (deviceID, signature string, err error) {
+	var env struct {
+		Type      Type   `json:"type"`
+		DeviceID  string `json:"device_id"`
+		Signature string `json:"signature"`
+	}
+	if err := json.Unmarshal(data, &env); err != nil {
+		return "", "", fmt.Errorf("%w: %w", ErrProtocolViolation, err)
+	}
+	switch {
+	case newMessage(env.Type) == nil:
+		return "", "", fmt.Errorf("%w: unknown message type %q", ErrProtocolViolation, env.Type)
+	case env.Type != TypeHello:
+		return "", "", fmt.Errorf("%w: expected hello, got %s", ErrProtocolViolation, env.Type)
+	}
+	return env.DeviceID, env.Signature, nil
+}
+
 // Decode parses one text frame. Unknown fields are ignored; an unknown or missing type, a
-// malformed body, or an invalid tool list is ErrProtocolViolation.
+// malformed body, or an invalid or oversized tool list is ErrProtocolViolation.
 func Decode(data []byte) (Message, error) {
 	var env struct {
-		Type Type `json:"type"`
+		Type  Type            `json:"type"`
+		Tools json.RawMessage `json:"tools"`
 	}
 	if err := json.Unmarshal(data, &env); err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrProtocolViolation, err)
@@ -252,6 +281,9 @@ func Decode(data []byte) (Message, error) {
 	msg := newMessage(env.Type)
 	if msg == nil {
 		return nil, fmt.Errorf("%w: unknown message type %q", ErrProtocolViolation, env.Type)
+	}
+	if len(env.Tools) > MaxToolsBytes { // refused before the tools are built in memory
+		return nil, fmt.Errorf("%w: tool list larger than %d KiB", ErrProtocolViolation, MaxToolsBytes>>10)
 	}
 	if err := json.Unmarshal(data, msg); err != nil {
 		return nil, fmt.Errorf("%w: %s: %w", ErrProtocolViolation, env.Type, err)
@@ -293,6 +325,9 @@ var toolName = regexp.MustCompile(`^[A-Za-z0-9_.-]{1,128}$`)
 // object input (and output) schemas, and nothing else the MCP SDK's AddTool refuses (it panics,
 // for example on an invalid x-mcp-header annotation), so a Mac can't make the relay panic.
 func ValidateTools(tools []*mcp.Tool) error {
+	if len(tools) > MaxTools {
+		return fmt.Errorf("%w: more than %d tools", ErrProtocolViolation, MaxTools)
+	}
 	seen := make(map[string]bool, len(tools))
 	var trial *mcp.Server
 	for _, t := range tools {

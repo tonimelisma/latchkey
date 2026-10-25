@@ -66,6 +66,13 @@ Sec-WebSocket-Protocol: latchkey.v1
 
 Limits: max frame 4 MiB. The relay closes connections that exceed it (code 1009).
 
+Message rate (added 2026-10-25, FR-091): after `welcome`, the agent may send 60 messages at once
+and then 5 per second on average (a token bucket: 60 tokens, one back every 200 ms). A `result`
+for a call the relay is still waiting on is not counted. A message beyond the allowance is a
+protocol violation (close 4005, reason "too many messages"). The app's own traffic (a `state`
+every 15 s and on change, `tools` when capabilities change, `progress` during a call) stays far
+below it.
+
 ## Handshake
 
 1. relay → agent
@@ -96,6 +103,17 @@ values in this protocol are unpadded.
 {"type": "welcome", "heartbeat_interval_s": 15, "server_time": "..."}
 ```
 or the relay closes with a code from the table below.
+
+Order of the relay's checks on `hello` (2026-10-25, FR-092): the frame must be JSON with `type`
+`hello` (else 4005); then only `device_id` and `signature` are read and verified (else 4001);
+only then are the tool list, state, and the other fields parsed and validated (else 4005). So a
+hello with a wrong signature is answered 4001 whatever else it contains, and the relay does no
+work on a stranger's tool list. Implementation choice: a second, small decode of the same frame
+for the two fields (`agentproto.DecodeHelloAuth`) rather than a streaming parser or a separate
+authentication message (which would change the wire format).
+
+A device revoked while its handshake is in progress may still receive `welcome`; the relay then
+closes with 4002 as soon as the connection is registered (FR-052a).
 
 ## State object
 
@@ -171,8 +189,15 @@ rules (which would drift when the SDK is updated) or only recovering at registra
 store a list the relay can't serve). Registration also recovers, as a second line, and leaves a
 refused tool out.
 
-The relay caps `deadline_ms` at 60000. Tool names must not collide with relay tools
+The relay caps `deadline_ms` at 60000 (a declared deadline below 1 ms counts as 1 ms; one that
+is not a positive number as the default). Tool names must not collide with relay tools
 (`laptop_status`); the relay rejects a `tools` list that contains one (close 4005).
+
+A tool list (in `hello` or `tools`) holds at most 256 tools and at most 512 KiB of JSON (the
+`tools` value as sent); a larger one is a protocol violation (close 4005; added 2026-10-25,
+FR-091). The app's full list today is 15 tools and a few tens of KiB. A `tools` message that
+repeats the current list changes nothing: the relay neither stores it again nor tells Claude the
+list changed.
 
 ## Liveness
 
@@ -189,5 +214,5 @@ The relay caps `deadline_ms` at 60000. Tool names must not collide with relay to
 | 4002 | Device revoked | Delete the local key; show "Disconnected from account" |
 | 4003 | Replaced by a newer connection for this device | Do not reconnect from this connection |
 | 4004 | Protocol version not supported | Show "Update required" |
-| 4005 | Protocol violation | Reconnect with backoff; report a bug |
+| 4005 | Protocol violation (malformed or unknown message, invalid or oversized tool list, too many messages) | Reconnect with backoff; report a bug |
 | 4006 | Handshake timeout | Reconnect with backoff |

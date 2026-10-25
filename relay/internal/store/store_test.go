@@ -154,6 +154,17 @@ func TestDeviceState(t *testing.T) {
 	got, err = s.DeviceState(ctx, d.ID)
 	require.NoError(t, err)
 	assert.Equal(t, offline, got)
+
+	// The status alone: everything but the tool list.
+	status := offline
+	status.Online, status.OfflineReason, status.StateJSON = true, "", []byte(`{"battery_percent":80}`)
+	status.ToolsJSON = []byte(`["not written"]`)
+	require.NoError(t, s.PutDeviceStatus(ctx, status))
+	got, err = s.DeviceState(ctx, d.ID)
+	require.NoError(t, err)
+	status.ToolsJSON = offline.ToolsJSON
+	assert.Equal(t, status, got)
+	require.ErrorIs(t, s.PutDeviceStatus(ctx, store.DeviceState{DeviceID: "dev_without_a_row"}), store.ErrNotFound)
 }
 
 func TestAuditLog(t *testing.T) {

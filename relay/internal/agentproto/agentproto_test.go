@@ -9,9 +9,11 @@ import (
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"math"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -268,5 +270,54 @@ func TestCrossLanguageSignatures(t *testing.T) {
 		ec, ok := pub.(*ecdsa.PublicKey)
 		require.True(t, ok)
 		require.NoError(t, agentproto.VerifySignature(ec, f.Nonce, f.DeviceID, f.Signature), name)
+	}
+}
+
+// A tool list is capped in count and in bytes (FR-091); the byte cap is checked on the raw JSON,
+// before any tool is built.
+func TestToolListCaps(t *testing.T) {
+	obj := map[string]any{"type": "object"}
+	list := func(n int, description string) []*mcp.Tool {
+		tools := make([]*mcp.Tool, n)
+		for i := range tools {
+			tools[i] = &mcp.Tool{Name: fmt.Sprintf("tool_%d", i), Description: description, InputSchema: obj}
+		}
+		return tools
+	}
+	require.NoError(t, agentproto.ValidateTools(list(agentproto.MaxTools, "")))
+	require.ErrorIs(t, agentproto.ValidateTools(list(agentproto.MaxTools+1, "")), agentproto.ErrProtocolViolation)
+
+	frame := func(tools []*mcp.Tool) []byte {
+		data, err := agentproto.Encode(&agentproto.ToolsUpdate{Tools: tools})
+		require.NoError(t, err)
+		return data
+	}
+	_, err := agentproto.Decode(frame(list(agentproto.MaxTools, "")))
+	require.NoError(t, err)
+	_, err = agentproto.Decode(frame(list(agentproto.MaxTools+1, "")))
+	require.ErrorIs(t, err, agentproto.ErrProtocolViolation, "too many")
+	big := frame(list(4, strings.Repeat("d", agentproto.MaxToolsBytes/4)))
+	require.Less(t, len(big), agentproto.MaxFrameBytes)
+	_, err = agentproto.Decode(big)
+	require.ErrorIs(t, err, agentproto.ErrProtocolViolation, "too many bytes")
+	assert.Contains(t, err.Error(), "512 KiB")
+	fits := frame(list(4, strings.Repeat("d", agentproto.MaxToolsBytes/5)))
+	_, err = agentproto.Decode(fits)
+	require.NoError(t, err)
+}
+
+// The relay reads who a hello is from without parsing its tools or state.
+func TestDecodeHelloAuth(t *testing.T) {
+	id, sig, err := agentproto.DecodeHelloAuth([]byte(
+		`{"type":"hello","device_id":"dev_1","signature":"sig","tools":[{"name":"laptop_status"}],"state":"nonsense"}`))
+	require.NoError(t, err, "nothing but the type, the ID and the signature is looked at")
+	assert.Equal(t, "dev_1", id)
+	assert.Equal(t, "sig", sig)
+	for name, raw := range map[string]string{
+		"not json": `hello`, "unknown type": `{"type":"reboot"}`, "another type": `{"type":"state","state":{}}`,
+		"no type": `{"device_id":"dev_1"}`, "id not a string": `{"type":"hello","device_id":7}`,
+	} {
+		_, _, err := agentproto.DecodeHelloAuth([]byte(raw))
+		require.ErrorIs(t, err, agentproto.ErrProtocolViolation, name)
 	}
 }

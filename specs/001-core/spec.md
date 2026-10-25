@@ -207,6 +207,8 @@ Format: EARS ("When <trigger>, the <system> shall <response>"). IDs are stable; 
   without the Owner copying codes or tokens by hand.
 - **FR-051** The Mac app shall store its credential in the macOS Keychain.
 - **FR-052** When a Mac is revoked, the relay shall close its connection and reject its credential.
+- **FR-052a** When a Mac is revoked while it is connecting, the relay shall close that connection
+  as revoked as soon as it is established (2026-10-25, security review).
 - **FR-053** When an Owner pairs a Mac while another Mac is paired, the relay shall name the
   current Mac, ask the Owner to confirm the replacement, and on confirmation revoke the current Mac.
 - **FR-054** When a pairing link reaches the Mac app other than through the app's own sign-in
@@ -261,6 +263,13 @@ Format: EARS ("When <trigger>, the <system> shall <response>"). IDs are stable; 
   it. The relay shall keep at most 64 sessions per Owner, ending the oldest to make room, and
   shall keep nothing in memory for Claude's sessions once the Owner's account is deleted or
   Claude's access is removed.
+- **FR-091** When a connected Mac sends messages faster than 60 at once and 5 per second after
+  that (answers the relay is waiting for not counted), or a tool list of more than 256 tools or
+  512 KiB, the relay shall close the connection as a protocol violation.
+- **FR-092** When a Mac connects, the relay shall verify its signature before it processes
+  anything else the Mac sent.
+- **FR-093** When a request from Claude is cancelled or its client goes away, the Mac's
+  connection shall stay up.
 
 ## Success criteria
 

@@ -2,6 +2,7 @@ package hub_test
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"net/http/httptest"
 	"path/filepath"
@@ -24,6 +25,7 @@ import (
 type env struct {
 	t      *testing.T
 	store  *store.Store
+	dbPath string
 	hub    *hub.Hub
 	url    string
 	user   store.User
@@ -37,11 +39,12 @@ type env struct {
 func setup(t *testing.T, tweak func(*hub.Config)) *env {
 	t.Helper()
 	ctx := context.Background()
-	st, err := store.Open(ctx, filepath.Join(t.TempDir(), "relay.db"))
+	path := filepath.Join(t.TempDir(), "relay.db")
+	st, err := store.Open(ctx, path)
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = st.Close() })
 
-	e := &env{t: t, store: st}
+	e := &env{t: t, store: st, dbPath: path}
 	cfg := hub.Config{
 		HandshakeTimeout:  2 * time.Second,
 		HeartbeatInterval: time.Second,
@@ -152,7 +155,6 @@ func TestHandshakeRejections(t *testing.T) {
 	for name, raw := range map[string]string{
 		"unknown type":   `{"type":"reboot"}`,
 		"wrong type":     `{"type":"state","state":{}}`,
-		"tool collision": `{"type":"hello","device_id":"` + e.device.ID + `","signature":"x","tools":[{"name":"laptop_status","inputSchema":{"type":"object"}}],"state":{}}`,
 		"not json":       `hello`,
 	} {
 		a := *e.agent
@@ -497,4 +499,183 @@ func TestShutdownMarksDevicesOffline(t *testing.T) {
 	e.hub.Close()
 	e.waitOnline(false)
 	require.Eventually(t, func() bool { return !e.state().Online }, 5*time.Second, 10*time.Millisecond)
+}
+
+// The signature is checked before anything else in hello is read: a stranger's hello gets 4001
+// whatever its tool list holds, and the relay never builds or validates that list (FR-092).
+func TestSignatureIsCheckedBeforeTheRestOfHello(t *testing.T) {
+	e := setup(t, nil)
+	collision := []*mcp.Tool{{Name: agentproto.RelayToolLaptopStatus, InputSchema: map[string]any{"type": "object"}}}
+
+	stranger := *e.agent
+	stranger.BadSignature = true
+	stranger.Tools = collision
+	assert.Equal(t, agentproto.CloseAuthFailed, e.dialRejected(&stranger), "bad signature, bad tools")
+
+	for name, raw := range map[string]string{
+		"unknown device, bad tools": `{"type":"hello","device_id":"dev_unknown","signature":"x","tools":[{"name":"laptop_status","inputSchema":{"type":"object"}}],"state":{}}`,
+		"tools not even a list":     `{"type":"hello","device_id":"` + e.device.ID + `","signature":"x","tools":"nonsense","state":7}`,
+	} {
+		a := *e.agent
+		a.RawHello = []byte(raw)
+		assert.Equal(t, agentproto.CloseAuthFailed, e.dialRejected(&a), name)
+	}
+
+	mine := *e.agent
+	mine.Tools = collision
+	assert.Equal(t, agentproto.CloseProtocolViolation, e.dialRejected(&mine), "the paired Mac's bad tools are still a violation")
+	assert.False(t, e.hub.Online(e.device.ID))
+}
+
+// A connected Mac may send a burst of frames and then a steady few per second; more closes the
+// connection (FR-091). Results the relay asked for don't count.
+func TestFrameFloodClosesTheConnection(t *testing.T) {
+	e := setup(t, func(c *hub.Config) { c.FrameBurst, c.FrameInterval = 5, time.Hour })
+	e.agent.NoHeartbeat = true
+	c := e.dial()
+	e.waitOnline(true)
+	for range 20 { // answers to the relay's own calls are free
+		_, err := e.hub.Call(ctxT(t), e.device.ID, "battery_status", nil, time.Second, nil)
+		require.NoError(t, err)
+	}
+	for range 5 {
+		require.NoError(t, c.Send(ctxT(t), &agentproto.StateUpdate{State: e.agent.State}))
+	}
+	time.Sleep(200 * time.Millisecond)
+	assert.True(t, e.hub.Online(e.device.ID), "the burst is allowed")
+	_ = c.Send(ctxT(t), &agentproto.StateUpdate{State: e.agent.State})
+	code, err := c.Wait(ctxT(t))
+	require.NoError(t, err)
+	assert.Equal(t, agentproto.CloseProtocolViolation, code)
+	e.waitOnline(false)
+}
+
+func TestFrameLimitDefaultsFitTheApp(t *testing.T) {
+	// The app sends state every 15 s and on change; unasked results count too.
+	e := setup(t, nil)
+	e.agent.NoHeartbeat = true
+	c := e.dial()
+	for i := range 60 {
+		require.NoError(t, c.Send(ctxT(t), &agentproto.Result{ID: "late_" + string(rune('a'+i%26)), Content: []byte(`[]`)}))
+	}
+	time.Sleep(300 * time.Millisecond)
+	assert.True(t, e.hub.Online(e.device.ID), "60 at once is within the default burst")
+	for range 30 {
+		_ = c.Send(ctxT(t), &agentproto.Result{ID: "late", Content: []byte(`[]`)})
+	}
+	code, err := c.Wait(ctxT(t))
+	require.NoError(t, err)
+	assert.Equal(t, agentproto.CloseProtocolViolation, code, "unasked results are counted")
+}
+
+func TestOversizedToolListIsRefused(t *testing.T) {
+	e := setup(t, nil)
+	c := e.dial()
+	tools := make([]*mcp.Tool, agentproto.MaxTools+1)
+	for i := range tools {
+		tools[i] = &mcp.Tool{Name: "t" + strings.Repeat("x", i), InputSchema: map[string]any{"type": "object"}}
+	}
+	require.NoError(t, c.Send(ctxT(t), &agentproto.ToolsUpdate{Tools: tools[:100]}))
+	time.Sleep(100 * time.Millisecond)
+	assert.True(t, e.hub.Online(e.device.ID))
+	require.NoError(t, c.Send(ctxT(t), &agentproto.ToolsUpdate{Tools: tools}))
+	code, err := c.Wait(ctxT(t))
+	require.NoError(t, err)
+	assert.Equal(t, agentproto.CloseProtocolViolation, code)
+}
+
+// The stored tool list is written when it changes, not with every state frame.
+func TestToolsAreStoredOnlyWhenTheyChange(t *testing.T) {
+	e := setup(t, nil)
+	e.agent.NoHeartbeat = true
+	c := e.dial()
+	require.Eventually(t, func() bool { return e.state().Online }, 5*time.Second, 10*time.Millisecond)
+	e.mu.Lock()
+	notified := len(e.toolsChanged)
+	e.mu.Unlock()
+
+	// A marker in the stored list shows whether a later frame rewrote it.
+	marked := e.state()
+	marked.ToolsJSON = []byte(`[{"name":"marker","inputSchema":{"type":"object"}}]`)
+	require.NoError(t, e.store.PutDeviceState(context.Background(), marked))
+
+	s := e.agent.State
+	s.BatteryPercent = 41
+	require.NoError(t, c.Send(ctxT(t), &agentproto.StateUpdate{State: s}))
+	require.NoError(t, c.Send(ctxT(t), &agentproto.ToolsUpdate{Tools: e.agent.Tools})) // the same list again
+	s.BatteryPercent = 40
+	require.NoError(t, c.Send(ctxT(t), &agentproto.StateUpdate{State: s}))
+	require.Eventually(t, func() bool { return strings.Contains(string(e.state().StateJSON), `"battery_percent":40`) },
+		5*time.Second, 10*time.Millisecond, "state is stored")
+	assert.Contains(t, string(e.state().ToolsJSON), "marker", "an unchanged tool list is not written again")
+	e.mu.Lock()
+	assert.Len(t, e.toolsChanged, notified, "and nobody is told it changed")
+	e.mu.Unlock()
+
+	require.NoError(t, c.Send(ctxT(t), &agentproto.ToolsUpdate{Tools: []*mcp.Tool{}}))
+	require.Eventually(t, func() bool { return string(e.state().ToolsJSON) == `[]` }, 5*time.Second, 10*time.Millisecond,
+		"a changed list is")
+	assert.True(t, e.state().Online)
+}
+
+// A slow database write for one Mac going offline must not stop the hub answering for others:
+// the write happens outside the hub's lock.
+func TestSlowStoreDoesNotBlockTheHub(t *testing.T) {
+	e := setup(t, nil)
+	e.agent.NoHeartbeat = true
+	c := e.dial()
+	require.Eventually(t, func() bool { return e.state().Online }, 5*time.Second, 10*time.Millisecond)
+
+	// Another writer holds the database, so the next write waits (up to SQLite's busy timeout).
+	db, err := sql.Open("sqlite", "file:"+e.dbPath+"?_pragma=busy_timeout(5000)")
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+	conn, err := db.Conn(context.Background())
+	require.NoError(t, err)
+	_, err = conn.ExecContext(context.Background(), `BEGIN IMMEDIATE`)
+	require.NoError(t, err)
+	release := sync.OnceFunc(func() { _, _ = conn.ExecContext(context.Background(), `ROLLBACK`) })
+	defer release()
+
+	require.NoError(t, c.Close()) // the hub records it offline: that write now waits
+	time.Sleep(300 * time.Millisecond)
+	answered := make(chan struct{})
+	go func() {
+		e.hub.Online("dev_someone_else")
+		_, _ = e.hub.Call(context.Background(), "dev_someone_else", "x", nil, time.Second, nil)
+		close(answered)
+	}()
+	select {
+	case <-answered:
+	case <-time.After(2 * time.Second):
+		t.Fatal("the hub was blocked behind a database write")
+	}
+	release()
+	require.Eventually(t, func() bool { return !e.state().Online }, 10*time.Second, 20*time.Millisecond, "then recorded offline")
+}
+
+// A Claude request that is cancelled must not take the Mac's connection with it: the WebSocket
+// library closes a connection whose write is cancelled, so writes ignore the request's
+// cancellation and keep only their own timeout.
+func TestCancelledRequestsKeepTheMacConnected(t *testing.T) {
+	e := setup(t, nil)
+	e.agent.Handler = func(_ context.Context, call *agentproto.Call) *agentproto.Result {
+		if call.Tool == "hang" {
+			return nil
+		}
+		return &agentproto.Result{ID: call.ID, Content: []byte(`[]`)}
+	}
+	c := e.dial()
+	e.waitOnline(true)
+	gone, cancel := context.WithCancel(context.Background())
+	cancel()
+	for range 40 {
+		_, err := e.hub.Call(gone, e.device.ID, "hang", nil, 5*time.Second, nil)
+		require.ErrorIs(t, err, context.Canceled, "the caller left; the Mac did not")
+		require.NoError(t, e.hub.SendNotice(gone, e.device.ID, &agentproto.Notice{Kind: agentproto.NoticeClientAuthorized, Client: "Claude"}))
+	}
+	assert.True(t, e.hub.Online(e.device.ID))
+	_, err := e.hub.Call(ctxT(t), e.device.ID, "ok", nil, 2*time.Second, nil)
+	require.NoError(t, err, "the same connection still answers")
+	assert.Len(t, c.Notices, 40, "every notice was delivered")
 }
