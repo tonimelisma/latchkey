@@ -534,10 +534,18 @@ func TestFrameFloodClosesTheConnection(t *testing.T) {
 	e.agent.NoHeartbeat = true
 	c := e.dial()
 	e.waitOnline(true)
-	for range 20 { // answers to the relay's own calls are free
+	for range 20 { // answers to the relay's own calls are free, and so is their progress
 		_, err := e.hub.Call(ctxT(t), e.device.ID, "battery_status", nil, time.Second, nil)
 		require.NoError(t, err)
 	}
+	e.agent.Handler = func(_ context.Context, call *agentproto.Call) *agentproto.Result {
+		for i := range 20 {
+			_ = c.Send(context.Background(), &agentproto.Progress{ID: call.ID, Progress: float64(i)})
+		}
+		return &agentproto.Result{ID: call.ID, Content: []byte(`[]`)}
+	}
+	_, err := e.hub.Call(ctxT(t), e.device.ID, "slow", nil, 2*time.Second, func(*agentproto.Progress) {})
+	require.NoError(t, err)
 	for range 5 {
 		require.NoError(t, c.Send(ctxT(t), &agentproto.StateUpdate{State: e.agent.State}))
 	}

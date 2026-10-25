@@ -508,12 +508,22 @@ func (c *conn) save(ctx context.Context) {
 	}
 }
 
-// allow counts a frame against the connection's allowance. A result for a call the relay is
-// waiting on is free: the relay asked for it, and /mcp's own limits bound how many there are.
+// allow counts a frame against the connection's allowance. A result or progress for a call the
+// relay is waiting on is free: the relay asked for it, /mcp's own limits bound how many calls
+// there are, and the app may answer all its running calls at once (when the Owner turns a
+// capability down). What is counted is what the Mac sends unasked: state, tools, goodbye, and
+// results or progress for calls the relay isn't waiting on.
 func (c *conn) allow(msg agentproto.Message) bool {
-	if res, ok := msg.(*agentproto.Result); ok {
+	var id string
+	switch m := msg.(type) {
+	case *agentproto.Result:
+		id = m.ID
+	case *agentproto.Progress:
+		id = m.ID
+	}
+	if id != "" {
 		c.mu.Lock()
-		_, asked := c.pending[res.ID]
+		_, asked := c.pending[id]
 		c.mu.Unlock()
 		if asked {
 			return true

@@ -68,10 +68,12 @@ Limits: max frame 4 MiB. The relay closes connections that exceed it (code 1009)
 
 Message rate (added 2026-10-25, FR-091): after `welcome`, the agent may send 60 messages at once
 and then 5 per second on average (a token bucket: 60 tokens, one back every 200 ms). A `result`
-for a call the relay is still waiting on is not counted. A message beyond the allowance is a
-protocol violation (close 4005, reason "too many messages"). The app's own traffic (a `state`
-every 15 s and on change, `tools` when capabilities change, `progress` during a call) stays far
-below it.
+or `progress` for a call the relay is still waiting on is not counted, so answering every
+running call at once is always fine. Counted are `state`, `tools`, `goodbye`, and a `result` or
+`progress` whose call the relay no longer waits on (timed out or cancelled). A message beyond
+the allowance is a protocol violation (close 4005, reason "too many messages"). The app's own
+traffic (a `state` every 15 s and on change, `tools` when capabilities change) stays far below
+it.
 
 ## Handshake
 
