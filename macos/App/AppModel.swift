@@ -103,6 +103,9 @@ final class AppModel {
                 "Started \(Self.version, privacy: .public), paired with \(identity.relayURL.absoluteString, privacy: .private(mask: .hash))"
             )
             relayURL = identity.relayURL
+            // Paired from this moment, not from the connection's first report a moment later:
+            // otherwise the setup check below opens its window on every start (FR-205).
+            status = .atStart(paired: true)
             connect(identity)
         } else {
             Self.log.notice(
@@ -620,7 +623,7 @@ final class AppModel {
         }
     }
 
-    var isPaired: Bool { status != .notPaired && status != .revoked }
+    var isPaired: Bool { status.isPaired }
 
     var menuIcon: String { status == .connected ? "key.fill" : "key" }
 }

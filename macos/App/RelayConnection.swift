@@ -11,6 +11,14 @@ enum ConnectionStatus: Equatable, Sendable {
     case updateRequired  // 4004
     /// 4001 "account suspended": still paired; retried every 5 minutes (FR-204).
     case suspended
+
+    /// The status before the connection has reported anything: a Mac with a stored pairing is
+    /// paired from the first moment, so a fully set up Mac starts with no window (FR-205).
+    static func atStart(paired: Bool) -> ConnectionStatus { paired ? .connecting : .notPaired }
+
+    /// Whether this Mac belongs to an account. Only "not paired" and "revoked" send the Owner
+    /// back to the Connect step of setup.
+    var isPaired: Bool { self != .notPaired && self != .revoked }
 }
 
 /// What the connection needs from the rest of the app.

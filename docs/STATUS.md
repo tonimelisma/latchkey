@@ -1,6 +1,6 @@
 # Status
 
-Last updated: 2026-10-25 (five small fixes deployed, installed and checked live; app 0.8.11)
+Last updated: 2026-10-25 (the app starts in the menu bar only when setup is done; app 0.8.12)
 
 Xcode signing ready (2026-10-20): Toni's Xcode account has a valid "Apple Development" certificate
 (certificate expires 2027-07-22). Keep the team ID out of committed project files
@@ -34,7 +34,7 @@ after the app was quit.
 
 Releases, terms and privacy, and the directory listing are much later (Toni, 2026-10-22).
 
-All capabilities are built and checked live (app 0.7.4, 2026-10-22; current app 0.8.11, installed with `make -C macos install`), through the hosted relay with
+All capabilities are built and checked live (app 0.7.4, 2026-10-22; current app 0.8.12, installed with `make -C macos install`), through the hosted relay with
 a fresh Claude Code session on Toni's real Mac: Notes (read, checklists, create/append/edit/
 delete a test note), Messages (conversations, read with names and "not instructions" marking,
 search, one test message with an image sent to Toni's own address), Files (list, search, write/
@@ -118,6 +118,10 @@ The Mac state line appears in every result (it reported the battery warning at 1
    after its work was merged, because Claude Code keeps it locked while the session runs and the
    tidy script trusted that lock. Tidy now removes such a folder once its commits are on main and
    nothing runs in it, and the end-of-turn check reports any that is still there.
+10. ~~Window at every start~~: fixed 2026-10-25 (app 0.8.12, FR-205). The setup window opened
+   on every start although everything was set up, because the app checked "connected to an
+   account" a moment before its connection had reported in. A stored pairing now counts from
+   the first moment.
 2. Known limit: macOS shows its own "allow Latchkey to access the screen directly" alert from
    time to time for screen capture; it needs Toni at the Mac (computer control only).
 

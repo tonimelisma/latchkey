@@ -282,6 +282,9 @@ Format: EARS ("When <trigger>, the <system> shall <response>"). IDs are stable; 
 - **FR-078** On first launch, the app shall offer to move itself into the Applications folder,
   and shall show a setup window listing the remaining steps (approve keep-awake, connect to an
   account) until they are done.
+- **FR-205** When the app starts and every setup step is already done, it shall open no window
+  and shall appear only in the menu bar (not in the Dock or the app switcher). It shall show the
+  setup window at start only while a step is really unfinished.
 - **FR-072** The app shall update itself through signed updates.
 - **FR-074** A development or test build of the app shall be a different app from the installed
   one in macOS's eyes: it shall not share the installed app's settings, stored pairing and keys,

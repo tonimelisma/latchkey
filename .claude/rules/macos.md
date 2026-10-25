@@ -88,5 +88,10 @@ paths:
 
 - Text that arrives from the network (client names, hosts) goes into SwiftUI with
   `Text(verbatim:)`, never a string literal with interpolation (those are parsed as Markdown).
+- Anything decided at start must not read state that only arrives a moment later. The setup
+  window opened on every start until 0.8.12, because "is this Mac paired?" was read from the
+  connection's status before the connection had reported (FR-205). Set such state from what is
+  stored, then start the asynchronous work. After an install, check that a set-up Mac shows no
+  window: `osascript -e 'tell application "System Events" to tell process "Latchkey" to count windows'` is 0.
 
 Add new gotchas here as they are discovered.
