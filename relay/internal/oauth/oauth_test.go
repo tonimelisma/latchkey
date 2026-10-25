@@ -354,8 +354,8 @@ func TestClientLabelResistsSpoofing(t *testing.T) {
 	assert.Equal(t, "evil.example", c.Label(), "a name with nothing left shows the host alone")
 }
 
-// The account page lists every host a registered client can send codes to, since a remembered
-// approval covers all of its redirect URIs (review of the client-name fix).
+// The account page lists every host a registered client can send codes to: it names the client,
+// not one sign-in (review of the client-name fix).
 func TestAccountNameListsEveryRedirectHost(t *testing.T) {
 	e := setup(t)
 	id := e.registerNamed("Claude", "https://claude.ai/cb", "https://evil.example/cb", "https://claude.ai/other")
@@ -522,12 +522,30 @@ func TestDenyAndCSRF(t *testing.T) {
 	assert.Equal(t, "access_denied", loc.Query().Get("error"))
 }
 
-func TestConsentRemembered(t *testing.T) {
+// Consent is asked every time, for every client (FR-049a, RFC 8252 §8.6): a GET to /authorize
+// never issues a code, however often the Owner approved that client before.
+func TestConsentAskedEveryTime(t *testing.T) {
 	e := setup(t)
 	id := e.register("https://claude.ai/api/mcp/auth_callback")
 	e.tokens(id)
 	e.tokens(id)
-	assert.Equal(t, 1, e.auth.consentCount(), "FR-049: asked once per client")
+	assert.Equal(t, 2, e.auth.consentCount(), "asked again for a client approved before")
+
+	p := newPKCE()
+	resp := e.do(http.MethodGet, authorizeURL(id, "https://claude.ai/api/mcp/auth_callback", &p, nil), nil, "", true)
+	assert.Equal(t, http.StatusOK, resp.StatusCode, "the consent page, not a redirect with a code")
+	assert.Empty(t, resp.Header.Get("Location"))
+
+	// A loopback client (Claude Code) is asked again too, on any port.
+	local := e.register("http://localhost:7777/callback")
+	for _, port := range []string{"7777", "8123", "8123"} {
+		p := newPKCE()
+		resp := e.do(http.MethodGet, authorizeURL(local, "http://localhost:"+port+"/callback", &p, nil), nil, "", true)
+		assert.Equal(t, http.StatusOK, resp.StatusCode, port)
+		assert.Empty(t, resp.Header.Get("Location"), port)
+		loc := e.approve(authorizeURL(local, "http://localhost:"+port+"/callback", &p, nil))
+		assert.NotEmpty(t, loc.Query().Get("code"), port)
+	}
 }
 
 func TestEveryAuthorizationIsAnnounced(t *testing.T) {
@@ -537,7 +555,7 @@ func TestEveryAuthorizationIsAnnounced(t *testing.T) {
 	e.tokens(id)
 	e.authorizedMu.Lock()
 	defer e.authorizedMu.Unlock()
-	assert.Equal(t, []string{"Claude (claude.ai)", "Claude (claude.ai)"}, e.authorized, "each grant, even with consent remembered")
+	assert.Equal(t, []string{"Claude (claude.ai)", "Claude (claude.ai)"}, e.authorized, "each grant")
 }
 
 func TestResourceIndicator(t *testing.T) {

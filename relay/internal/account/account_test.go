@@ -376,7 +376,10 @@ func TestRevokeMacAndClaude(t *testing.T) {
 	u, _ := e.store.UserByEmail(context.Background(), "owner@example.com")
 	d, err := e.store.CreateDevice(context.Background(), store.NewDevice{UserID: u.ID, Name: "Mac", PublicKey: []byte("k")}, e.clock.now())
 	require.NoError(t, err)
-	require.NoError(t, e.store.PutConsent(context.Background(), u.ID, "cl_x", "mcp", e.clock.now()))
+	require.NoError(t, e.store.PutOAuthRequest(context.Background(), store.OAuthRequest{
+		Signature: "sig-refresh", Kind: store.KindRefresh, RequestID: "req1", ClientID: "cl_x", UserID: u.ID,
+		RequestedAt: e.clock.now(), SessionJSON: []byte(`{}`), ExpiresAt: e.clock.now().Add(time.Hour),
+	}))
 
 	page := b.get("/account")
 	assert.Contains(t, page.body, "Disconnect Mac")
@@ -391,8 +394,9 @@ func TestRevokeMacAndClaude(t *testing.T) {
 
 	r = b.form("/account/revoke-claude", url.Values{"csrf": {token}})
 	assert.Equal(t, http.StatusSeeOther, r.status)
-	_, err = e.store.Consent(context.Background(), u.ID, "cl_x")
+	_, err = e.store.OAuthRequest(context.Background(), store.KindRefresh, "sig-refresh")
 	require.ErrorIs(t, err, store.ErrNotFound)
+	assert.NotContains(t, b.get("/account").body, "Remove Claude", "no client is listed any more")
 }
 
 func TestPasskeyEndpointsNeedJSON(t *testing.T) {
@@ -442,7 +446,22 @@ func TestConsentPageViaAuthorize(t *testing.T) {
 	r := b.form("/authorize?"+q.Encode(), url.Values{"csrf": {csrf(t, page.body)}, "decision": {"allow"}})
 	require.Contains(t, []int{http.StatusFound, http.StatusSeeOther}, r.status, r.body)
 	assert.True(t, strings.HasPrefix(r.header.Get("Location"), "https://claude.ai/api/mcp/auth_callback?code="))
+	assert.NotContains(t, b.get("/account").body, "Remove Claude", "approved, but no token yet: nothing has access")
+
+	// The client redeems its code (the RFC 7636 example verifier); from then on it has access.
+	loc, err := url.Parse(r.header.Get("Location"))
+	require.NoError(t, err)
+	tok := b.form("/token", url.Values{
+		"grant_type": {"authorization_code"}, "code": {loc.Query().Get("code")}, "client_id": {reg["client_id"].(string)},
+		"redirect_uri": {"https://claude.ai/api/mcp/auth_callback"}, "code_verifier": {"dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk"},
+	})
+	require.Equal(t, http.StatusOK, tok.status, tok.body)
 	assert.Contains(t, b.get("/account").body, "<strong>Claude (claude.ai)</strong>", "the account page names it the same way")
+
+	// Asked again the next time, although this client was approved (FR-049a).
+	again := b.get("/authorize?" + q.Encode())
+	assert.Equal(t, http.StatusOK, again.status)
+	assert.Contains(t, again.body, "<h1>Allow Claude to use your Mac?</h1>")
 }
 
 const owner = "owner@example.com"
@@ -695,7 +714,6 @@ func TestRecovery(t *testing.T) {
 	e.macs.online[d.ID] = true
 	// A Claude client approved before the recovery (perhaps by whoever took the passkeys).
 	ctx := context.Background()
-	require.NoError(t, e.store.PutConsent(ctx, u.ID, "cl_x", "mcp offline_access", e.clock.now()))
 	for _, kind := range []string{store.KindCode, store.KindRefresh} {
 		require.NoError(t, e.store.PutOAuthRequest(ctx, store.OAuthRequest{
 			Signature: "sig-" + kind, Kind: kind, RequestID: "req1", ClientID: "cl_x", UserID: u.ID,
@@ -715,8 +733,6 @@ func TestRecovery(t *testing.T) {
 	assert.Equal(t, http.StatusFound, b.get("/account").status, "old sessions signed out")
 	status, _ := b.signIn("signin", oldCred)
 	assert.Equal(t, http.StatusUnauthorized, status, "the old passkey no longer works")
-	_, err = e.store.Consent(ctx, u.ID, "cl_x")
-	require.ErrorIs(t, err, store.ErrNotFound, "every Claude client must be approved again (FR-047a)")
 	_, err = e.store.OAuthRequest(ctx, store.KindRefresh, "sig-refresh")
 	require.ErrorIs(t, err, store.ErrNotFound, "Claude's tokens are removed (FR-047a)")
 

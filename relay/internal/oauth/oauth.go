@@ -101,8 +101,8 @@ func clientLabel(name, host string) string {
 
 // verifiedHosts is the part of a client's identity the relay checked, in ASCII: for a
 // metadata-document client, the host it fetched the document from (its client ID); otherwise
-// the hosts its codes are sent to: the given redirect URI's, or with none given, every
-// registered one's, since a remembered approval covers them all (FR-049).
+// the hosts its codes are sent to: the given redirect URI's, or with none given (the account
+// page, which names a client rather than one sign-in), every registered one's.
 func verifiedHosts(cl fosite.Client, redirect *url.URL) []string {
 	if isCIMD(cl.GetID()) {
 		if u, err := url.Parse(cl.GetID()); err == nil {
@@ -266,23 +266,11 @@ func (s *Server) authorize(w http.ResponseWriter, r *http.Request) {
 		s.cfg.Auth.SignIn(w, r)
 		return
 	}
-	scopes := grantable(ar.GetRequestedScopes())
-	approved := false
-	if r.Method == http.MethodPost {
-		if !s.cfg.Auth.ValidCSRF(r) {
-			http.Error(w, "This form expired. Go back and try again.", http.StatusForbidden)
-			return
-		}
-		if r.PostForm.Get("decision") != "allow" {
-			s.provider.WriteAuthorizeError(ctx, w, ar, fosite.ErrAccessDenied.WithHint("The Owner declined."))
-			return
-		}
-		approved = true
-	} else if prior, err := s.cfg.Store.Consent(ctx, userID, ar.GetClient().GetID()); err == nil &&
-		covers(strings.Fields(prior), scopes) {
-		approved = true // FR-049
-	}
-	if !approved {
+	// Consent is asked every time (FR-049a): only the Owner's Allow, posted from the consent page
+	// with its CSRF token, issues a code. Nothing is remembered, so a program on the Owner's
+	// computer posing as an approved client (a loopback redirect on any port) gets no code
+	// without the Owner seeing the page (RFC 8252 §8.6).
+	if r.Method != http.MethodPost {
 		c := ConsentRequest{
 			RedirectHost: displayHost(ar.GetRedirectURI().Host),
 			ClientHost:   strings.Join(verifiedHosts(ar.GetClient(), ar.GetRedirectURI()), ", "),
@@ -293,16 +281,20 @@ func (s *Server) authorize(w http.ResponseWriter, r *http.Request) {
 		s.cfg.Auth.Consent(w, r, c)
 		return
 	}
-	for _, sc := range scopes {
+	if !s.cfg.Auth.ValidCSRF(r) {
+		http.Error(w, "This form expired. Go back and try again.", http.StatusForbidden)
+		return
+	}
+	if r.PostForm.Get("decision") != "allow" {
+		s.provider.WriteAuthorizeError(ctx, w, ar, fosite.ErrAccessDenied.WithHint("The Owner declined."))
+		return
+	}
+	for _, sc := range grantable(ar.GetRequestedScopes()) {
 		ar.GrantScope(sc)
 	}
 	resp, err := s.provider.NewAuthorizeResponse(ctx, ar, newSession(userID))
 	if err != nil {
 		s.provider.WriteAuthorizeError(ctx, w, ar, err)
-		return
-	}
-	if err := s.cfg.Store.PutConsent(ctx, userID, ar.GetClient().GetID(), strings.Join(scopes, " "), s.cfg.Now()); err != nil {
-		http.Error(w, "server error", http.StatusInternalServerError)
 		return
 	}
 	if s.cfg.OnAuthorized != nil {
@@ -318,15 +310,6 @@ func grantable(requested []string) []string {
 		out = append(out, "offline_access")
 	}
 	return out
-}
-
-func covers(have, want []string) bool {
-	for _, w := range want {
-		if !slices.Contains(have, w) {
-			return false
-		}
-	}
-	return true
 }
 
 func (s *Server) token(w http.ResponseWriter, r *http.Request) {
@@ -418,7 +401,7 @@ func (c *challengeWriter) Flush() {
 
 func (c *challengeWriter) Unwrap() http.ResponseWriter { return c.ResponseWriter }
 
-// RevokeUser deletes all of the Owner's tokens and remembered approvals (FR-044).
+// RevokeUser deletes all of the Owner's codes and tokens, for every client (FR-044).
 func (s *Server) RevokeUser(ctx context.Context, userID string) error {
 	return s.cfg.Store.DeleteUserOAuth(ctx, userID)
 }

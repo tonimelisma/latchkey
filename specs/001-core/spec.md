@@ -191,8 +191,13 @@ Format: EARS ("When <trigger>, the <system> shall <response>"). IDs are stable; 
   client's access, so each must be approved again (Toni, 2026-10-24, security scan).
 - **FR-048** The relay shall keep an Owner signed in to its web pages for 30 days, and shall ask
   for the passkey again before deleting the account.
-- **FR-049** When an Owner has approved a Claude client once, the relay shall not ask again for the
-  same client and scopes.
+- **FR-049** *Superseded 2026-10-25 by FR-049a (Toni): approvals are no longer remembered.* When
+  an Owner has approved a Claude client once, the relay shall not ask again for the same client
+  and scopes.
+- **FR-049a** When a Claude client asks for access to the Owner's Mac, the relay shall show the
+  Owner the consent page and give access only after the Owner allows it there, every time and
+  for every client, including one the Owner allowed before and one on the Owner's own computer
+  (Toni, 2026-10-25, security review).
 
 ### Pairing
 - **FR-050** The Mac app shall pair with an account through a browser sign-in started from the app,

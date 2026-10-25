@@ -97,11 +97,20 @@ Serves FR-040, FR-014.
   its own line ("This app is at claude.ai."), not only after the name. The account page names a
   registered client with every host its redirect URIs point to ("Claude (claude.ai,
   other.example)"). Options weighed for that: recording the redirect host with each approval
-  (a migration, and still wrong later, because a remembered approval covers every registered
-  redirect URI of the client, FR-049); requiring one host per registered client (refuses
+  (a migration, and one more thing stored); requiring one host per registered client (refuses
   clients that list several hosts today); listing every host, chosen as the only one that is
-  never narrower than what the approval allows. An approval is remembered per
-  Owner, client, and scope set (FR-049), and forgotten when the Owner revokes Claude's access.
+  never narrower than where the client's codes can go.
+- Consent is asked every time (FR-049a; Toni, 2026-10-25, replacing the remembered approval of
+  FR-049): a `GET /authorize` only ever renders the consent page, and a code is issued only by
+  the `POST` of its Allow button with the session's CSRF token, for every client, loopback ones
+  included (RFC 8252 §8.6: a program on the Owner's computer can pose as a native client, so a
+  remembered approval would hand it a code unseen). Nothing about an approval is stored: the
+  `oauth_consents` table is dropped (migration 6), and the account page lists the clients that
+  hold a live (unexpired, unrevoked) access or refresh token, with the time of the oldest one.
+  A client that was approved but never redeemed its code is not listed, since it has no access.
+  Options weighed for the list: keeping the table as a plain record of approvals (stores more
+  than needed, and goes stale when tokens expire or are revoked by the client), or reading the
+  tokens, chosen because it is exactly "who can reach the Mac now" and stores nothing new.
 - Redirect URIs must be registered by the client (CIMD document or DCR); for loopback URIs
   (`localhost`, `127.0.0.1`, `[::1]`) the port is ignored. fosite ignores the port only for IP
   literals, so the client lookup adds the requested `localhost` URI when it matches a registered
@@ -110,7 +119,7 @@ Serves FR-040, FR-014.
   database, so tokens survive restarts (SC-07). Refresh rotation marks the old token rotated; it
   stays valid for 60 s, after which reuse revokes the whole token family (RFC 6819 §5.2.2.3).
 - Revoking Claude's access (FR-044) cannot be outrun by a refresh already in flight: it deletes
-  the Owner's tokens and approvals in one transaction, and a new access or refresh token is
+  the Owner's codes and tokens, and a new access or refresh token is
   written only if a code or refresh token of the same grant and Owner still exists and no token
   of that grant has been revoked (a client's `/revoke` and reuse detection mark tokens revoked
   rather than deleting them), checked in the same SQL statement as the insert. A refresh whose token vanished mid-exchange fails
@@ -150,8 +159,8 @@ Serves FR-041, FR-042, FR-043.
   rows, sliding window) or carrying the attempt count over to the next code (still unbounded
   across days); two columns on `users` are the smallest change that bounds a day.
 - Recovery: single-use code, 15 min expiry, stored hashed; completing it removes all old passkeys
-  (FR-047), signs out every browser, and removes every Claude client's access, tokens and
-  remembered approvals alike, as "Remove Claude's access" does (FR-047a); the recovery page and
+  (FR-047), signs out every browser, and removes every Claude client's access (its codes and
+  tokens), as "Remove Claude's access" does (FR-047a); the recovery page and
   emails say Claude must connect again. Using it is announced by email and in the
   Mac app. The Mac app learns of it through a `notice` message (contracts/agent-protocol.md), sent
   at once if the Mac is online, otherwise on its next connection (the relay compares the

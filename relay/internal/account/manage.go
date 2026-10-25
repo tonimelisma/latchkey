@@ -52,9 +52,9 @@ func (s *Service) accountPage(w http.ResponseWriter, r *http.Request) {
 		}
 		v.Mac = mv
 	}
-	if consents, err := s.cfg.Store.Consents(ctx, u.ID); err == nil {
-		for _, c := range consents {
-			v.Clients = append(v.Clients, clientView{Name: s.cfg.OAuth.ClientName(ctx, c.ClientID), Approved: c.CreatedAt})
+	if clients, err := s.cfg.Store.ClientsWithAccess(ctx, u.ID, s.now()); err == nil {
+		for _, c := range clients {
+			v.Clients = append(v.Clients, clientView{Name: s.cfg.OAuth.ClientName(ctx, c.ClientID), Approved: c.Since})
 		}
 	}
 	v.Audit, _ = s.cfg.Store.AuditForUser(ctx, u.ID, 100)
