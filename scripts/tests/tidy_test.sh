@@ -133,7 +133,9 @@ yes "without a readable version no disk image is deleted" test -f "$main/macos/b
 # after the helper is done. A helper's worktree stayed behind this way on 2026-10-25.
 helper() { # <name>: a worktree from origin/main, locked by a live process (this test)
   g -C "$main" fetch -q origin
-  g -C "$main" worktree add -q "$main/.claude/worktrees/$1" -b "$1" refs/remotes/origin/main 2>/dev/null
+  # --no-track, as Claude Code makes them: with no upstream, `git branch -d` compares with the
+  # main checkout's HEAD, which is behind origin/main until tidy's last step.
+  g -C "$main" worktree add -q --no-track "$main/.claude/worktrees/$1" -b "$1" refs/remotes/origin/main 2>/dev/null
   g -C "$main" worktree lock --reason "claude agent $1 (pid $$ start now)" "$main/.claude/worktrees/$1"
 }
 work_and_merge() { # <name>: a commit of its own, merged into origin/main

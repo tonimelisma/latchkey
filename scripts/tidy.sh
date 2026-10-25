@@ -35,6 +35,14 @@ running_inside() { # <folder>: some process of this user has its working directo
     substr($0, 1, 1) == "n" { d = substr($0, 2); if (d == p || index(d, p "/") == 1) found = 1 }
     END { exit !found }'
 }
+# drop_branch <name>: deletes a local branch whose commits are all on origin/main. `git branch -d`
+# alone refuses a branch with no upstream while the main checkout is still behind origin/main
+# (it is fast-forwarded last), which left a helper's branch behind on 2026-10-25; the ancestor
+# check is what makes deleting the ref safe.
+drop_branch() {
+  git merge-base --is-ancestor "refs/heads/$1" refs/remotes/origin/main 2>/dev/null || return 1
+  git branch -q -d -- "$1" 2>/dev/null || git update-ref -d "refs/heads/$1"
+}
 git worktree list --porcelain | awk '
   /^worktree / { if (wt != "") print wt "\t" lock; wt = substr($0, 10); lock = "" }
   /^locked/ { lock = $0 " " }
@@ -63,7 +71,7 @@ git worktree list --porcelain | awk '
   fi
   rm -rf "$wt/macos/build/DerivedData/Build/Products" # built apps first, even if the removal fails
   git worktree remove --force "$wt" && echo "tidy: removed finished worktree $wt" &&
-    git branch -q -d -- "$branch" 2>/dev/null && echo "tidy: deleted local branch $branch"
+    drop_branch "$branch" && echo "tidy: deleted local branch $branch"
 done
 
 # Ref names are passed as full refs or after "--", so one that starts with "-" is never read as
@@ -74,7 +82,7 @@ keep() { [ "$1" = main ] || [ "$1" = "$current" ] || printf '%s\n' "$inuse" | gr
 
 for b in $(git for-each-ref --format='%(refname:short)' --merged refs/remotes/origin/main refs/heads/); do
   keep "$b" && continue
-  git branch -q -d -- "$b" && echo "tidy: deleted local branch $b"
+  drop_branch "$b" && echo "tidy: deleted local branch $b"
 done
 
 for b in $(git for-each-ref --format='%(refname:lstrip=3)' --merged refs/remotes/origin/main refs/remotes/origin/); do
