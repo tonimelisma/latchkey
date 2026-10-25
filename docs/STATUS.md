@@ -1,6 +1,6 @@
 # Status
 
-Last updated: 2026-10-25 (Claude-only access, encrypted relay keys, apps with access, terms and privacy, operator commands: deployed and checked live; app 0.8.10)
+Last updated: 2026-10-25 (five small fixes deployed, installed and checked live; app 0.8.11)
 
 Xcode signing ready (2026-10-20): Toni's Xcode account has a valid "Apple Development" certificate
 (certificate expires 2027-07-22). Keep the team ID out of committed project files
@@ -34,7 +34,7 @@ after the app was quit.
 
 Releases, terms and privacy, and the directory listing are much later (Toni, 2026-10-22).
 
-All capabilities are built and checked live (app 0.7.4, 2026-10-22; current app 0.8.10, installed with `make -C macos install`), through the hosted relay with
+All capabilities are built and checked live (app 0.7.4, 2026-10-22; current app 0.8.11, installed with `make -C macos install`), through the hosted relay with
 a fresh Claude Code session on Toni's real Mac: Notes (read, checklists, create/append/edit/
 delete a test note), Messages (conversations, read with names and "not instructions" marking,
 search, one test message with an image sent to Toni's own address), Files (list, search, write/
@@ -104,6 +104,16 @@ The Mac state line appears in every result (it reported the battery warning at 1
    wording); nightly disk copies from before 2026-10-25 still hold the old keys unencrypted
    until they age out (14 days), `relay reset-keys --confirm` would end that at once at the
    price of signing in and connecting Claude again.
+8. ~~Five small fixes~~: done 2026-10-25 (app 0.8.11, spec 001 FR-200 to FR-204). The Mac's
+   state line always starts on its own line; the activity log's key is never replaced when it
+   merely couldn't be read (and an unreadable pairing is never written over); older entries
+   that can't be read no longer show as failed; the installer fails when an update loses the
+   pairing; a suspended account's Mac says so and reconnects by itself.
+   Checked live: a fresh Claude Code session wrote, read, and trashed a file and ran a command,
+   and the state line was on its own line in all four; the installer's new check passed on the
+   real install ("paired"); the menu's Recent Activity has no "unknown (failed)" rows.
+   Not checked live: the suspended state in the menu (covered by the Mac connection check
+   against a private relay), and the Activity window's wording on screen.
 2. Known limit: macOS shows its own "allow Latchkey to access the screen directly" alert from
    time to time for screen capture; it needs Toni at the Mac (computer control only).
 
