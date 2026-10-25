@@ -109,9 +109,11 @@ IMPORTANT: every session or task that changes files works in its own git worktre
   session, and a helper's worktree even while its session runs once its commits are on main and
   no program is running in it; `scripts/loose-ends.sh` names any finished helper worktree still
   on disk before a turn can end. Only a copy with no commits of its own waits an hour, since a
-  helper agent may still be starting in it. If `ExitWorktree` (`remove`) refuses although the
-  commits are on GitHub's main, fast-forward the main checkout first (`git -C <main checkout>
-  merge --ff-only origin/main`) and try again.
+  helper agent may still be starting in it. `ExitWorktree` (`remove`) refuses whenever the session
+  made commits, even when they are already on GitHub's main (it counts from where the branch
+  started). So before leaving: check that nothing is uncommitted and that `git merge-base
+  --is-ancestor HEAD refs/remotes/origin/main` succeeds, then call it with `discard_changes: true`.
+  That check is the only thing that makes the override safe; without it, never use it.
 - Stage files by name, never `git add -A` or `git add .` (unfinished work of others was committed
   that way on 2026-10-23). Never stash (the stash is shared between worktrees; see below).
 - Private remote `github.com/tonimelisma/latchkey`, default branch `main`. Small commits. Open

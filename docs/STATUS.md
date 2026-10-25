@@ -114,6 +114,10 @@ The Mac state line appears in every result (it reported the battery warning at 1
    real install ("paired"); the menu's Recent Activity has no "unknown (failed)" rows.
    Not checked live: the suspended state in the menu (covered by the Mac connection check
    against a private relay), and the Activity window's wording on screen.
+9. ~~Leftover helper folders~~: fixed 2026-10-25. A helper agent's working folder stayed on disk
+   after its work was merged, because Claude Code keeps it locked while the session runs and the
+   tidy script trusted that lock. Tidy now removes such a folder once its commits are on main and
+   nothing runs in it, and the end-of-turn check reports any that is still there.
 2. Known limit: macOS shows its own "allow Latchkey to access the screen directly" alert from
    time to time for screen capture; it needs Toni at the Mac (computer control only).
 
