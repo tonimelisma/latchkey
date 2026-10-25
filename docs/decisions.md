@@ -145,3 +145,9 @@ Add a row when a decision is made; never delete one, mark it "superseded by" ins
 | 2026-10-25 | Abuse handling is rules (the terms), a contact address, and operator commands in the relay binary: account list, suspend, unsuspend, delete; block, unblock, block list. A suspension closes the Mac's connection without unpairing it | Toni, spec 001 FR-195 to FR-198, plan D14 |
 | 2026-10-25 | Claude's choices, open to change: operator actions are recorded for one year (FR-199); a suspended account's recovery attempt is told it is suspended; liability is limited to what the user paid in the last twelve months; `LATCHKEY_OPERATOR` names the person running a command | spec 001 research.md |
 | 2026-10-25 | A sign-in code presented twice at the same moment always ends the access it gave: the PKCE record is kept until the code expires (it was a timing bug behind a test that failed now and then) | spec 001 FR-096, plan D4 |
+| 2026-10-25 | The Mac's state line always starts on its own line in a tool result; the relay adds the line break, the Mac's result is never changed | spec 001 FR-200 |
+| 2026-10-25 | The activity log's key is made only when none exists. A key that can't be read is left alone and the app runs without the log until its next start, saying so in the Activity window | spec 001 FR-201 |
+| 2026-10-25 | A stored pairing that can't be read is never deleted or written over at start | spec 001 FR-202 |
+| 2026-10-25 | Activity entries saved under an earlier key are left out of the menu and counted in one line of the Activity window; never shown as failed | spec 001 FR-203 |
+| 2026-10-25 | `make install` fails loudly when the Mac was paired before and the new app starts not paired | spec 001 plan |
+| 2026-10-25 | A suspended account's Mac shows "This account is suspended on the relay", keeps its pairing, and retries every 5 minutes and on wake or network change | Toni, spec 001 FR-204 |
