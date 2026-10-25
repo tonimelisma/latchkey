@@ -53,6 +53,9 @@ Boundaries, each a place where input must be treated as hostile:
   tool arguments and results, AES-GCM encrypted with a key in the Keychain, FR-026a), user defaults, Keychain items.
   The Files tools refuse changes to the app's own data folder, settings files and bundle
   (spec 003 FR-210); `latchkey://` links are handled one at a time.
+  Debug and test builds are a different app to macOS (`net.melisma.latchkey.dev`, spec 001
+  FR-074), so a test copy or leftover Debug build has none of the installed app's settings,
+  Keychain items, or privacy permissions.
 - **B6 Supply chain.** Go modules, Sparkle (pinned by commit), Docker base images, Homebrew-installed tools, the
   deploy and install scripts, the update feed.
 
