@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/tonimelisma/latchkey/relay/internal/account"
 	"github.com/tonimelisma/latchkey/relay/internal/limit"
 )
 
@@ -26,6 +27,9 @@ type config struct {
 	AllowedEmails []string
 	// TrustedProxies whose X-Forwarded-For is believed, besides loopback (FR-082).
 	TrustedProxies limit.TrustedProxies
+	// Operator is who runs this relay, for its terms and privacy policy (FR-193): OPERATOR_NAME,
+	// OPERATOR_CONTACT, OPERATOR_LAW, OPERATOR_PROVIDERS, BACKUP_DAYS.
+	Operator account.Operator
 }
 
 func loadConfig(getenv func(string) string) (config, error) {
@@ -67,6 +71,19 @@ func loadConfig(getenv func(string) string) (config, error) {
 	}
 	if (c.SMTPUser == "") != (c.SMTPPassword == "") {
 		errs = append(errs, errors.New("SMTP_USER and SMTP_PASSWORD must be set together"))
+	}
+	c.Operator = account.Operator{
+		Name: strings.TrimSpace(getenv("OPERATOR_NAME")), Contact: strings.TrimSpace(getenv("OPERATOR_CONTACT")),
+		Law: strings.TrimSpace(getenv("OPERATOR_LAW")), Providers: strings.TrimSpace(getenv("OPERATOR_PROVIDERS")),
+	}
+	if d := strings.TrimSpace(getenv("BACKUP_DAYS")); d != "" {
+		if c.Operator.BackupDays, err = strconv.Atoi(d); err != nil || c.Operator.BackupDays <= 0 {
+			errs = append(errs, errors.New("BACKUP_DAYS must be a number of days, 1 or more"))
+			c.Operator.BackupDays = 0
+		}
+	}
+	if err := c.Operator.Validate(); err != nil {
+		errs = append(errs, err)
 	}
 	return c, errors.Join(errs...)
 }

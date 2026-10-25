@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 
 	"github.com/tonimelisma/latchkey/relay/internal/account"
@@ -36,6 +37,9 @@ type Options struct {
 	Hub           hub.Config // timing overrides for tests
 	// TrustedProxies whose X-Forwarded-For is believed, besides loopback (FR-082).
 	TrustedProxies limit.TrustedProxies
+	// Operator is who runs this relay (OPERATOR_NAME and the rest): with a name and a contact
+	// the relay publishes its terms and privacy policy (FR-193).
+	Operator account.Operator
 }
 
 // New builds the relay: hub, MCP server, OAuth, and account pages on one mux.
@@ -65,21 +69,26 @@ func New(ctx context.Context, o Options) (*Relay, error) {
 	ms = mcpserver.New(o.Store, h, mcpserver.Options{Logger: o.Logger, Version: o.Version})
 
 	auth := &authBridge{}
-	var err error
-	oa, err = oauth.New(ctx, oauth.Config{
+	oc := oauth.Config{
 		Issuer: o.PublicURL, Store: o.Store, Auth: auth, Logger: o.Logger,
 		OnAuthorized: func(ctx context.Context, userID, clientName string) { acc.ClientAuthorized(ctx, userID, clientName) },
 		// The Mac's list of apps with access follows every change (FR-192), and an app whose
 		// access ended loses its open sessions while the others keep theirs (FR-191).
 		OnGrantsChanged: func(ctx context.Context, userID string) { h.ClientsChanged(ctx, userID) },
 		OnGrantRemoved:  func(userID, grantID string) { ms.ForgetGrant(userID, grantID) },
-	})
+	}
+	if o.Operator.Published() {
+		origin := strings.TrimSuffix(o.PublicURL.String(), "/")
+		oc.TermsURI, oc.PolicyURI = origin+"/terms", origin+"/privacy"
+	}
+	var err error
+	oa, err = oauth.New(ctx, oc)
 	if err != nil {
 		return nil, err
 	}
 	acc, err = account.New(ctx, account.Config{
 		PublicURL: o.PublicURL, Store: o.Store, Macs: h, Mailer: o.Mailer, OAuth: oa,
-		AllowedEmails: o.AllowedEmails, Logger: o.Logger,
+		AllowedEmails: o.AllowedEmails, Logger: o.Logger, Operator: o.Operator,
 		DevicesChanged: func(userID string) { ms.ToolsChanged(userID) },
 		AccessRemoved:  func(userID string) { ms.Forget(userID) },
 	})

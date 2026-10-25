@@ -7,8 +7,8 @@
 <title>{{.Title}}</title>
 <link rel="icon" href="/static/icon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="/static/style.css">
-<script src="/static/passkey.js" defer></script>
-</head>
+{{if not .Plain}}<script src="/static/passkey.js" defer></script>
+{{end}}</head>
 <body>
 <main class="card{{if .Wide}} wide{{end}}">
 <div class="mark" aria-hidden="true"><img src="/static/icon.svg" alt="" width="44" height="44"></div>
@@ -17,6 +17,7 @@
 {{define "foot"}}
 </main>
 {{if .SignedIn}}<p class="footer"><a href="/account">Your account</a></p>{{end}}
+{{if .Legal}}<p class="footer"><a href="/terms">Terms</a> · <a href="/privacy">Privacy</a></p>{{end}}
 </body>
 </html>
 {{end}}

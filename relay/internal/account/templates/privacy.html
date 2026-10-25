@@ -1,0 +1,111 @@
+{{template "head" .}}
+<article class="legal">
+<h1>Privacy Policy</h1>
+<p class="small">Effective {{.Data.Effective}}</p>
+
+<p>This policy says what this Latchkey relay knows about you, what it is used for, and how long it is kept. This relay is run by {{.Data.Name}} ("we", "us"). The policy covers this relay. The Latchkey app on your Mac, and Claude, are mentioned where they matter.</p>
+
+<h2>The short version</h2>
+<ul>
+<li>The relay stores what it needs to sign you in, to find your Mac, and to show you what happened. All of it is listed below.</li>
+<li>What Claude's tools read and do on your Mac (your notes, messages, files, screen contents, commands, and their results) passes through the relay and is never stored on it.</li>
+<li>We do not sell your data. There is no advertising, no tracking, and no analytics.</li>
+<li>Delete account, on your account page, removes what the relay stores about you at once.</li>
+</ul>
+
+<h2>What the relay stores</h2>
+
+<p><strong>About your account</strong></p>
+<ul>
+<li>Your email address, when you signed up and when you confirmed the address, and how many wrong sign-in codes were entered for it today.</li>
+<li>Your passkeys' public keys, with what a passkey check needs: an identifier, a use counter, the kind of authenticator that made it, and when it was created and last used. The private part of a passkey never leaves your devices. There are no passwords.</li>
+<li>A record of each browser you are signed in with: a hashed form of its session cookie, when it was created, when it expires, and when you last confirmed with your passkey. That cookie is the only one this site sets.</li>
+<li>The codes we email you for sign-up and recovery, in hashed form, for 15 minutes. That a recovery code was used is kept for 30 days, so your Mac can tell you about it.</li>
+</ul>
+
+<p><strong>About your Mac</strong></p>
+<ul>
+<li>Your Mac's name, the public key it identifies itself with, the versions of the Latchkey app and of macOS it reported, and when it was connected to your account. Its private key never leaves your Mac.</li>
+<li>Your Mac's last reported state: whether it is connected, when it connected and was last seen, why it went offline if it said so, its battery level, power source, whether it is charging and how long the battery should last, how warm it is running, low power mode, whether the lid is closed, its time zone, and whether keep-awake is on. Only the latest state is kept, not a history.</li>
+<li>The list of tools your Mac offers to Claude (their names and descriptions), which follows what you turned on in the Latchkey app.</li>
+<li>The one-time code that connects your Mac to your account, in hashed form, for 5 minutes.</li>
+</ul>
+
+<p><strong>About Claude's access</strong></p>
+<ul>
+<li>Which Claude apps you approved: for each approval, the app's name and web address as you saw them when you approved it, where the approval was sent, when you gave it, and when it was last used.</li>
+<li>The sign-in codes and access tokens issued for those approvals, kept as signatures that can't be used to sign in, with their expiry times.</li>
+<li>A description of each Claude app that asked to connect: its name and where it sends people back to, as the app published or registered it. This describes the app, not you.</li>
+<li>A note of each approval, for 30 days, so that your Mac can notify you of it once.</li>
+</ul>
+
+<p><strong>About what happened</strong></p>
+<ul>
+<li>An activity log: for each tool call, which tool ran, when, which Claude app made the call (the name it gave), how long it took, and the outcome (worked, failed, timed out, or your Mac was offline). It holds no arguments and no results. Removing an app's access from your Mac is logged the same way. Entries are deleted after 30 days.</li>
+</ul>
+
+<p><strong>For running the relay</strong></p>
+<ul>
+<li>The relay's own secret keys, which sign tokens and protect forms. They are not about you.</li>
+<li>A list of blocked email addresses, if we blocked any because of abuse, with when and why.</li>
+<li>A record of what the operator did to an account (suspending it, lifting a suspension, deleting it, blocking its address): the email address, what was done, the reason given, who did it, and when. Kept for one year, also when the account is gone.</li>
+<li>Counters that limit abuse: how many requests came from a network address, for an account, or for an email address in the last minutes. They are held in memory only and are gone when the relay restarts.</li>
+<li>Error messages for troubleshooting. They can hold the relay's internal identifier of an account or a Mac, and never content.</li>
+<li>If this relay runs behind the web server that Latchkey's own deployment sets up, that web server keeps an access log for 30 days: the network address a request came from, the web address requested (which can include your Mac's name when you connect it), the time, and the kind of browser or app. Cookies, tokens, and one-time codes are left out of it.</li>
+</ul>
+
+<h2>What the relay does not store</h2>
+<ul>
+<li>What tools return and what Claude asks of them. Your notes, messages, files, screenshots, commands, and their results pass through the relay in transit and are never stored on it.</li>
+<li>Your Mac keeps its own detailed activity log, including that content, on your Mac only. It is encrypted there and is not sent to the relay.</li>
+<li>Passwords (there are none), the private part of your passkeys, and your Mac's private key.</li>
+<li>Your conversations with Claude. Those are between you and Anthropic.</li>
+</ul>
+
+<h2>What can be seen in transit</h2>
+<p>Everything between Claude, the relay, and your Mac travels over encrypted connections (HTTPS). The relay is where those connections meet, and tool traffic is not encrypted beyond that. So the server this relay runs on can technically see tool traffic while it passes through, in transit, although the relay does not store it or write it to any log. If that matters for what you let Claude do, you can run your own relay: the software is open source.</p>
+<p>Claude is operated by Anthropic, under Anthropic's own terms and <a href="https://www.anthropic.com/legal/privacy" rel="noopener noreferrer">privacy policy</a>. What you say to Claude, and what your Mac's tools return to Claude, is handled by Anthropic, not by us. With each answer from your Mac, the relay also tells Claude your Mac's status, such as its battery level and whether it is online.</p>
+
+<h2>What we use it for</h2>
+<ul>
+<li>To sign you in and keep your account safe.</li>
+<li>To connect Claude to your Mac, and to tell Claude when your Mac is offline and why.</li>
+<li>To show you your Mac's status, the apps that have access, and the activity log.</li>
+<li>To email you sign-in and recovery codes and notices about your account's security.</li>
+<li>To protect this relay from abuse and to keep it running.</li>
+</ul>
+<p>Nothing else: no advertising, no profiles, no training of AI models.</p>
+
+<h2>Who else handles it</h2>
+<p>We do not sell your data, and we do not share it for advertising. It is handled only by {{if .Data.Providers}}the companies we need in order to run this relay: {{.Data.Providers}}{{else}}the operator's hosting and email providers{{end}}. They process it for us, to host the relay and to deliver its emails, so your email address and the emails we send you pass through the email provider. We may also have to disclose what the relay stores when the law requires it.</p>
+<p>The server may be in a different country from the one you live in.</p>
+
+<h2>How long it is kept</h2>
+<ul>
+<li>Your account, passkeys, Mac details, and approvals: until you remove them or delete your account.</li>
+<li>Browser sign-ins: 30 days, or until you sign out.</li>
+<li>Emailed codes: 15 minutes. The code that connects your Mac: 5 minutes. A sign-up that was never finished: one day.</li>
+<li>Access tokens: one hour. The tokens that renew them: 90 days from their last renewal. Both are removed at once when you remove an app's access.</li>
+<li>The activity log, the notes of approvals, and the web server's access log: 30 days.</li>
+<li>The record of what the operator did: one year. A blocked address: until it is unblocked.</li>
+</ul>
+<p>Delete account removes all of this at once and disconnects your Mac. Only a blocked address and the operator's record stay, if there are any.{{if .Data.BackupDays}} Copies of the server made for recovery are kept for {{.Data.BackupDays}} days, so deleted data can remain in such a backup for up to that long. Backups are used only to restore the relay after a failure.{{end}}</p>
+
+<h2>Security</h2>
+<p>You sign in with a passkey, never a password. Secrets are stored hashed. Connections are encrypted. Your Mac only ever connects outward to the relay, and proves who it is with a key kept in its secure hardware. No system is perfectly secure. If we learn that your data was exposed, we will tell you by email.</p>
+
+<h2>Children</h2>
+<p>This relay is not for anyone under 18, and we don't knowingly collect data from children.</p>
+
+<h2>Your choices and rights</h2>
+<p>Your account page shows your Mac, the apps that have access, and the activity log. There you can remove an app's access, disconnect your Mac, and delete everything with Delete account.</p>
+<p>You can also ask us for a copy of what the relay stores about you, to correct it, or to delete it. Write to <a href="mailto:{{.Data.Contact}}">{{.Data.Contact}}</a>. Depending on where you live, the law gives you such rights: residents of California, of the European Union and the European Economic Area, and of the United Kingdom, among others, can ask for access to their data, for its correction, and for its deletion. We will not treat you differently for asking, and we will answer as soon as we reasonably can and within the time the law sets.</p>
+<p>If European or UK data protection law applies to you: we handle your data because it is needed to provide the service you asked for and to keep it secure, and you can also complain to your data protection authority.</p>
+
+<h2>Changes</h2>
+<p>We may change this policy. When we do, we will change the date at the top, and we will tell you about changes that matter, by email or on this site, before they take effect.</p>
+
+<h2>Contact</h2>
+<p>Questions, privacy requests, security reports, and reports of abuse: <a href="mailto:{{.Data.Contact}}">{{.Data.Contact}}</a>.</p>
+</article>
+{{template "foot" .}}

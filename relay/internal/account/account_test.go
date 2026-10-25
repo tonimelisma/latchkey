@@ -82,6 +82,12 @@ type env struct {
 
 func setup(t *testing.T, allowed ...string) *env {
 	t.Helper()
+	return setupWith(t, func(c *account.Config) { c.AllowedEmails = allowed })
+}
+
+// setupWith is setup with any other settings of the account service.
+func setupWith(t *testing.T, tweak func(*account.Config)) *env {
+	t.Helper()
 	ctx := context.Background()
 	st, err := store.Open(ctx, filepath.Join(t.TempDir(), "relay.db"))
 	require.NoError(t, err)
@@ -100,11 +106,13 @@ func setup(t *testing.T, allowed ...string) *env {
 	auth := &lateAuth{}
 	o, err := oauth.New(ctx, oauth.Config{Issuer: public, Store: st, Auth: auth, Now: e.clock.now})
 	require.NoError(t, err)
-	svc, err = account.New(ctx, account.Config{
-		PublicURL: public, Store: st, Macs: e.macs, Mailer: e.mailer, OAuth: o, AllowedEmails: allowed,
+	cfg := account.Config{
+		PublicURL: public, Store: st, Macs: e.macs, Mailer: e.mailer, OAuth: o,
 		Now: e.clock.now, DevicesChanged: func(id string) { e.changed = append(e.changed, id) },
 		AccessRemoved: func(id string) { e.removed = append(e.removed, id) },
-	})
+	}
+	tweak(&cfg)
+	svc, err = account.New(ctx, cfg)
 	require.NoError(t, err)
 	auth.svc = svc
 	e.svc = svc

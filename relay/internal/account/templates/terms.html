@@ -1,0 +1,61 @@
+{{template "head" .}}
+<article class="legal">
+<h1>Terms of Service</h1>
+<p class="small">Effective {{.Data.Effective}}</p>
+
+<p>These terms are an agreement between you and {{.Data.Name}} ("we", "us"), who runs this Latchkey relay. By creating an account or using this relay, you agree to them. If you don't agree, don't use this relay.</p>
+
+<h2>What this service is</h2>
+<p>Latchkey lets Claude, the AI assistant made by Anthropic, use your own Mac from wherever you use Claude. It has two parts: the Latchkey app on your Mac, and a relay that passes requests between Claude and that app. These terms cover this relay: the website you are reading and the service behind it. It is offered free of charge.</p>
+<p>Claude is operated by Anthropic under Anthropic's own terms and privacy policy. We are not Anthropic, and this service is not made or endorsed by Anthropic or by Apple.</p>
+
+<h2>Who may use it</h2>
+<ul>
+<li>You must be at least 18 years old.</li>
+<li>You may connect only your own Mac. Don't connect a Mac that belongs to someone else, such as an employer, unless they have clearly allowed it.</li>
+<li>An account is for one person. Don't share it.</li>
+</ul>
+
+<h2>Your responsibilities</h2>
+<ul>
+<li><strong>You choose what Claude may do.</strong> In the Latchkey app you turn each ability on or off, for example reading files, sending messages, or running commands. Turn on only what you are comfortable with. Claude can make mistakes and can be misled by what it reads, so check what it does.</li>
+<li><strong>You are responsible for what is done through your account,</strong> including what Claude does on your Mac because you allowed it.</li>
+<li><strong>Keep your passkey safe,</strong> and the devices it is on. Anyone who can sign in as you can give an app access to your Mac. Tell us at once if you think someone else got into your account.</li>
+<li>Keep your email address working. We use it for sign-in codes, account recovery, and notices about your account.</li>
+</ul>
+
+<h2>Acceptable use</h2>
+<p>You must not:</p>
+<ul>
+<li>use this relay to reach a Mac or an account that isn't yours;</li>
+<li>attack, probe, or overload this relay, or get in the way of other people using it;</li>
+<li>use it for anything unlawful, or to harm or harass anyone;</li>
+<li>try to get around its limits or protections, such as rate limits, sign-in checks, or a suspension;</li>
+<li>send it bulk or automated traffic that has nothing to do with using Claude with your own Mac.</li>
+</ul>
+
+<h2>Suspension and ending</h2>
+<p>You can stop at any time. Delete account, on your account page, removes your account and what this relay stores about you, as the <a href="/privacy">Privacy Policy</a> describes.</p>
+<p>We may suspend or remove an account that breaks these terms or that puts this relay or other people at risk. While an account is suspended, you can't sign in, Claude's access is removed, and your Mac is disconnected from this relay; nothing on your Mac is changed. If you think we got it wrong, write to us.</p>
+<p>We may also change, limit, or end this service. Where practical, we will give notice first, by email or on this site.</p>
+
+<h2>No warranty</h2>
+<p>This relay is provided "as is" and "as available", free of charge, without warranties of any kind, express or implied, including the implied warranties of merchantability, fitness for a particular purpose, and non-infringement. We don't promise that it will be available, uninterrupted, secure, or free of errors, or that what Claude does through it will be correct. It may be unavailable, it may lose what it stores, and it may end.</p>
+
+<h2>Limit of liability</h2>
+<p>To the fullest extent the law allows, we are not liable for indirect, incidental, special, consequential, or punitive damages, or for lost data, lost profits, or harm to your Mac, your files, or your accounts, that come from your use of this relay or from what Claude does through it. Our total liability for any claim about this relay is limited to what you paid us to use it in the twelve months before the claim. The service is free, so that is normally nothing.</p>
+<p>Some places don't allow some of these limits. Where that is so, they apply only as far as the law allows, and nothing in these terms limits liability that by law can't be limited.</p>
+
+<h2>The software</h2>
+<p>The Latchkey software, both the Mac app and the relay, is open source under the <a href="https://www.apache.org/licenses/LICENSE-2.0" rel="noopener noreferrer">Apache License 2.0</a>. That licence covers the software. These terms cover your use of this relay as a hosted service. You are free to run your own relay instead.</p>
+{{if .Data.Law}}
+<h2>Governing law</h2>
+<p>These terms are governed by the laws of {{.Data.Law}}, apart from its rules on conflicts of law. If you use this relay as a consumer, you keep every protection that the law of the place where you live says can't be given up.</p>
+{{end}}
+<h2>Changes</h2>
+<p>We may change these terms. When we do, we will change the date at the top, and we will tell you about changes that matter, by email or on this site, before they take effect. If you keep using this relay after a change takes effect, you accept the new terms.</p>
+
+<h2>Contact</h2>
+<p>Questions, security reports, and reports of abuse: <a href="mailto:{{.Data.Contact}}">{{.Data.Contact}}</a>.</p>
+</article>
+{{template "foot" .}}

@@ -153,6 +153,9 @@ type Config struct {
 	// OnGrantRemoved runs when one grant ended while others may live on, with its public ID, so
 	// its open MCP sessions can be closed.
 	OnGrantRemoved func(userID, grantID string)
+	// TermsURI and PolicyURI, when set, are advertised as op_tos_uri and op_policy_uri in the
+	// authorization-server metadata (RFC 8414; FR-193).
+	TermsURI, PolicyURI string
 }
 
 // Server is the authorization server.
@@ -242,7 +245,7 @@ func (s *Server) Register(mux *http.ServeMux) {
 func (s *Server) metadata(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Access-Control-Allow-Origin", "*")
-	_ = json.NewEncoder(w).Encode(map[string]any{
+	md := map[string]any{
 		"issuer":                                     s.issuer,
 		"authorization_endpoint":                     s.issuer + "/authorize",
 		"token_endpoint":                             s.issuer + "/token",
@@ -257,7 +260,14 @@ func (s *Server) metadata(w http.ResponseWriter, _ *http.Request) {
 		"scopes_supported":                           supportedScopes,
 		// RFC 9207: every authorization response carries iss (see issWriter).
 		"authorization_response_iss_parameter_supported": true,
-	})
+	}
+	if s.cfg.TermsURI != "" {
+		md["op_tos_uri"] = s.cfg.TermsURI
+	}
+	if s.cfg.PolicyURI != "" {
+		md["op_policy_uri"] = s.cfg.PolicyURI
+	}
+	_ = json.NewEncoder(w).Encode(md)
 }
 
 // issWriter adds the RFC 9207 "iss" parameter to the redirect fosite writes back to the client,

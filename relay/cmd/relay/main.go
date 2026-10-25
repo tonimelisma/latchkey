@@ -55,7 +55,7 @@ func run(ctx context.Context) error {
 
 	r, err := server.New(ctx, server.Options{
 		PublicURL: cfg.PublicURL, Store: db, AllowedEmails: cfg.AllowedEmails, Logger: logger, Version: version,
-		TrustedProxies: cfg.TrustedProxies,
+		TrustedProxies: cfg.TrustedProxies, Operator: cfg.Operator,
 		Mailer: account.NewSMTPMailer(account.SMTPConfig{
 			Host: cfg.SMTPHost, Port: cfg.SMTPPort, User: cfg.SMTPUser, Password: cfg.SMTPPassword, From: cfg.SMTPFrom,
 		}),

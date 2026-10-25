@@ -78,6 +78,9 @@ type Config struct {
 	// by the Owner, by a recovery, or with the account), so what the relay holds in memory for
 	// Claude's sessions can go too.
 	AccessRemoved func(userID string)
+	// Operator is who runs this relay; with a name and a contact, the terms and the privacy
+	// policy are published (FR-193).
+	Operator Operator
 }
 
 // Service serves the account pages and implements oauth.Authenticator.
@@ -163,6 +166,8 @@ func (s *Service) Register(mux *http.ServeMux) {
 	mux.Handle("GET /static/", http.StripPrefix("/static/", http.FileServerFS(static)))
 	mux.HandleFunc("GET /{$}", s.home)
 	mux.HandleFunc("GET /signin", s.signinPage)
+	mux.HandleFunc("GET /terms", s.legalPage("terms.html", "Terms of Service"))
+	mux.HandleFunc("GET /privacy", s.legalPage("privacy.html", "Privacy Policy"))
 	mux.HandleFunc("GET /signup", s.toSignin(false))
 	mux.HandleFunc("GET /recover", s.toSignin(true))
 	mux.HandleFunc("POST /auth/email", s.authEmail)
@@ -314,6 +319,8 @@ type page struct {
 	Data     any
 	SignedIn bool
 	Wide     bool // the account page needs room for its table
+	Legal    bool // the footer links the terms and the privacy policy (set by render)
+	Plain    bool // a document: no script is loaded
 }
 
 func (s *Service) render(w http.ResponseWriter, status int, name string, p page) {
@@ -323,6 +330,7 @@ func (s *Service) render(w http.ResponseWriter, status int, name string, p page)
 	w.Header().Set("Content-Security-Policy", "default-src 'self'; frame-ancestors 'none'; form-action 'self' https: http://localhost:* http://127.0.0.1:* latchkey:")
 	w.Header().Set("Referrer-Policy", "no-referrer")
 	w.WriteHeader(status)
+	p.Legal = s.cfg.Operator.Published()
 	if err := s.pages.ExecuteTemplate(w, name, p); err != nil {
 		s.cfg.Logger.Error("render page", "page", name, "err", err)
 	}

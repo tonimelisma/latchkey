@@ -12,6 +12,7 @@
       {{template "error" .}}
       <button class="primary wide" type="submit">Continue</button>
     </form>
+    {{if .Legal}}<p class="small center">By continuing, you agree to the <a href="/terms">Terms</a> and the <a href="/privacy">Privacy Policy</a>.</p>{{end}}
     <p class="small center" data-text-normal><a href="/signin?recover=1&amp;next={{.Next}}">Lost your passkey?</a></p>
     <p class="small center" data-text-recover hidden><a href="/signin?next={{.Next}}">Back to sign in</a></p>
   </section>
