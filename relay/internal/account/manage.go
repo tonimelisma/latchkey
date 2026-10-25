@@ -52,9 +52,9 @@ func (s *Service) accountPage(w http.ResponseWriter, r *http.Request) {
 		}
 		v.Mac = mv
 	}
-	if consents, err := s.cfg.Store.Consents(ctx, u.ID); err == nil {
-		for _, c := range consents {
-			v.Clients = append(v.Clients, clientView{Name: s.cfg.OAuth.ClientName(ctx, c.ClientID), Approved: c.CreatedAt})
+	if clients, err := s.cfg.Store.ClientsWithAccess(ctx, u.ID, s.now()); err == nil {
+		for _, c := range clients {
+			v.Clients = append(v.Clients, clientView{Name: s.cfg.OAuth.ClientName(ctx, c.ClientID), Approved: c.Since})
 		}
 	}
 	v.Audit, _ = s.cfg.Store.AuditForUser(ctx, u.ID, 100)
@@ -123,6 +123,7 @@ func (s *Service) revokeClaude(w http.ResponseWriter, r *http.Request) {
 		s.errorPage(w, http.StatusInternalServerError, "Something went wrong", "Try again.")
 		return
 	}
+	s.cfg.AccessRemoved(sess.UserID)
 	http.Redirect(w, r, "/account?done=claude", http.StatusSeeOther)
 }
 
@@ -146,6 +147,7 @@ func (s *Service) deleteAccount(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.cfg.DevicesChanged(sess.UserID)
+	s.cfg.AccessRemoved(sess.UserID)
 	s.clearSession(w)
 	s.errorPage(w, http.StatusOK, "Your account was deleted",
 		"Everything this relay stored about you is gone, and your Mac was disconnected. You can remove the Latchkey connector from Claude's settings.")

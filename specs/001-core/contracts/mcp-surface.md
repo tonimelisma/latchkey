@@ -59,9 +59,27 @@ a bearer value that is not a live access token, a refresh token included (refres
   "code_challenge_methods_supported": ["S256"],
   "token_endpoint_auth_methods_supported": ["none", "client_secret_post", "client_secret_basic"],
   "client_id_metadata_document_supported": true,
-  "scopes_supported": ["mcp", "offline_access"]
+  "scopes_supported": ["mcp", "offline_access"],
+  "authorization_response_iss_parameter_supported": true
 }
 ```
+
+## Authorization responses
+
+`GET /authorize` always shows the consent page (after sign-in if needed); nothing is approved
+without the Owner pressing Allow, however often the same client was allowed before (FR-049a).
+The redirect back to the client carries `code`, `state`, `scope`, and `iss` (RFC 9207, the
+relay's issuer, exactly as in the metadata); an error redirect carries `error`,
+`error_description`, `state`, and `iss`. A client that checks `iss` must find the issuer it
+started with.
+
+## Client metadata documents
+
+A `client_id` that is an HTTPS URL with a path is fetched from public addresses only, at most 64
+KiB, within 5 s. The document is cached for its `Cache-Control: max-age`, at least 5 minutes
+(also with `no-store`) and at most 24 hours. If a refresh fails, the previous copy is used for up
+to 7 more days and the URL is not fetched again for 5 minutes. A document that can't be used is
+answered with `invalid_client` and no detail about the fetch.
 
 ## Redirect URIs accepted
 
@@ -77,13 +95,15 @@ the redirect URI's host, and names the client by its `client_name` followed by t
 checked: the metadata document's host for a CIMD client (its client ID), otherwise the redirect
 URI's host, e.g. "Claude (claude.ai)". A client's name alone is never shown, since anyone can
 register one called "Claude". Hosts are shown in ASCII (`xn--` form for internationalized
-names); the name loses control and formatting characters and parentheses and is cut to 60
-characters.
+names); the name loses control and formatting characters and brackets of every kind (ASCII and
+all other Unicode opening and closing punctuation) and is cut to 60 characters.
 
 ## Token endpoint behavior
 
 - Responds within 2 s in normal operation (Claude allows 10 s, 30 s for refresh).
 - Invalid or expired refresh token: `400` with `{"error": "invalid_grant"}`.
+- An authorization code works once. Presented again, or by two requests at once, it gets
+  `400` `invalid_grant`, and the tokens issued for it stop working (FR-096).
 - Refresh rotates the refresh token and returns the new one in the same response.
 
 ## Tools

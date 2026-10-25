@@ -280,6 +280,27 @@ func (s *Store) PutOAuthClient(ctx context.Context, c OAuthClient) error {
 	return mapErr(err)
 }
 
+// MaxClientDocumentAge is the longest a cached client metadata document counts as fresh; one
+// fetched longer ago, with no code or token of its client left, is purged.
+const MaxClientDocumentAge = 24 * time.Hour
+
+// PutCachedClient stores a fetched client metadata document and keeps the cache bounded: of the
+// cached documents beyond the newest max, those no code or token refers to are deleted. Anyone
+// can make the relay fetch a document by naming its URL, so without this the table could be
+// filled; documents of clients that hold a grant are never dropped.
+func (s *Store) PutCachedClient(ctx context.Context, c OAuthClient, max int) error {
+	if err := s.PutOAuthClient(ctx, c); err != nil {
+		return err
+	}
+	_, err := s.db.ExecContext(ctx, `
+		DELETE FROM oauth_clients
+		WHERE kind = 'cimd' AND id <> ?
+			AND id IN (SELECT id FROM oauth_clients WHERE kind = 'cimd'
+				ORDER BY COALESCE(fetched_at, created_at) DESC, id LIMIT -1 OFFSET ?)
+			AND NOT EXISTS (SELECT 1 FROM oauth_requests r WHERE r.client_id = oauth_clients.id)`, c.ID, max)
+	return err
+}
+
 // OAuthClient returns a client.
 func (s *Store) OAuthClient(ctx context.Context, id string) (OAuthClient, error) {
 	var c OAuthClient
@@ -391,10 +412,20 @@ func (s *Store) updateOAuthRequest(ctx context.Context, query string, args ...an
 	return requireOneRow(res)
 }
 
-// MarkOAuthRequestUsed records that an authorization code was redeemed.
+// MarkOAuthRequestUsed records that an authorization code was redeemed. Only the first caller
+// succeeds: a code that is already used (or doesn't exist) is ErrNotFound, so of two exchanges
+// racing on one code exactly one gets past this statement.
 func (s *Store) MarkOAuthRequestUsed(ctx context.Context, kind, signature string, at time.Time) error {
 	return s.updateOAuthRequest(ctx,
-		`UPDATE oauth_requests SET used_at = COALESCE(used_at, ?) WHERE kind = ? AND signature = ?`, toMS(at), kind, signature)
+		`UPDATE oauth_requests SET used_at = ? WHERE kind = ? AND signature = ? AND used_at IS NULL`, toMS(at), kind, signature)
+}
+
+// RevokeGrant marks every row of a grant revoked: its tokens stop working, and PutOAuthToken
+// writes no more for it.
+func (s *Store) RevokeGrant(ctx context.Context, requestID string, at time.Time) error {
+	_, err := s.db.ExecContext(ctx,
+		`UPDATE oauth_requests SET revoked_at = COALESCE(revoked_at, ?) WHERE request_id = ?`, toMS(at), requestID)
+	return err
 }
 
 // RotateOAuthRequest records that a refresh token was exchanged; the first rotation time counts.
@@ -416,38 +447,15 @@ func (s *Store) DeleteOAuthRequest(ctx context.Context, kind, signature string) 
 	return err
 }
 
-// DeleteUserOAuth removes all of the user's tokens and remembered approvals (FR-044), in one
-// transaction. Tokens are written only while their grant's rows exist (PutOAuthToken), so none
-// can be issued for the user after this.
+// DeleteUserOAuth removes all of the user's codes and tokens (FR-044). Tokens are written only
+// while their grant's rows exist (PutOAuthToken), so none can be issued for the user after this.
 func (s *Store) DeleteUserOAuth(ctx context.Context, userID string) error {
-	return s.immediate(ctx, func(conn *sql.Conn) error {
-		if _, err := conn.ExecContext(ctx, `DELETE FROM oauth_requests WHERE user_id = ?`, userID); err != nil {
-			return err
-		}
-		_, err := conn.ExecContext(ctx, `DELETE FROM oauth_consents WHERE user_id = ?`, userID)
-		return err
-	})
+	_, err := s.db.ExecContext(ctx, `DELETE FROM oauth_requests WHERE user_id = ?`, userID)
+	return err
 }
 
-// Consent returns the scopes the user approved for a client.
-func (s *Store) Consent(ctx context.Context, userID, clientID string) (string, error) {
-	var scopes string
-	err := s.db.QueryRowContext(ctx,
-		`SELECT scopes FROM oauth_consents WHERE user_id = ? AND client_id = ?`, userID, clientID).Scan(&scopes)
-	return scopes, mapErr(err)
-}
-
-// PutConsent remembers an approval (FR-049).
-func (s *Store) PutConsent(ctx context.Context, userID, clientID, scopes string, at time.Time) error {
-	_, err := s.db.ExecContext(ctx, `
-		INSERT INTO oauth_consents (user_id, client_id, scopes, created_at) VALUES (?, ?, ?, ?)
-		ON CONFLICT (user_id, client_id) DO UPDATE SET scopes = excluded.scopes, created_at = excluded.created_at`,
-		userID, clientID, scopes, toMS(at))
-	return mapErr(err)
-}
-
-// PurgeExpired deletes expired sessions, links, pairing codes, OAuth requests, and unused
-// registered clients.
+// PurgeExpired deletes expired sessions, links, pairing codes, OAuth requests, unused
+// registered clients, and unused cached client documents.
 func (s *Store) PurgeExpired(ctx context.Context, now time.Time) error {
 	ms := now.UnixMilli()
 	var errs []error
@@ -467,6 +475,14 @@ func (s *Store) PurgeExpired(ctx context.Context, now time.Time) error {
 		DELETE FROM oauth_clients WHERE kind = 'dcr' AND created_at <= ?
 			AND NOT EXISTS (SELECT 1 FROM oauth_requests r WHERE r.client_id = oauth_clients.id)`,
 		now.Add(-7*24*time.Hour).UnixMilli()); err != nil {
+		errs = append(errs, err)
+	}
+	// Cached client metadata documents that are past any freshness and belong to no live code
+	// or token: fetched again if the client ever returns.
+	if _, err := s.db.ExecContext(ctx, `
+		DELETE FROM oauth_clients WHERE kind = 'cimd' AND COALESCE(fetched_at, created_at) <= ?
+			AND NOT EXISTS (SELECT 1 FROM oauth_requests r WHERE r.client_id = oauth_clients.id)`,
+		now.Add(-MaxClientDocumentAge).UnixMilli()); err != nil {
 		errs = append(errs, err)
 	}
 	// Used recovery links are kept for 30 days so a Mac that was offline still hears of them.
@@ -499,29 +515,32 @@ func (s *Store) KeyOrCreate(ctx context.Context, name string, gen func() ([]byte
 	return v, err
 }
 
-// Consent is a remembered approval.
-type Consent struct {
-	ClientID  string
-	Scopes    string
-	CreatedAt time.Time
+// ClientAccess is a Claude client that holds a live token for the user.
+type ClientAccess struct {
+	ClientID string
+	Since    time.Time // the oldest live token's time
 }
 
-// Consents lists the user's remembered approvals, newest first.
-func (s *Store) Consents(ctx context.Context, userID string) ([]Consent, error) {
-	rows, err := s.db.QueryContext(ctx,
-		`SELECT client_id, scopes, created_at FROM oauth_consents WHERE user_id = ? ORDER BY created_at DESC`, userID)
+// ClientsWithAccess lists the clients holding an unexpired, unrevoked access or refresh token
+// for the user, most recently approved first. This is what "Claude has access" means on the
+// account page; nothing else about an approval is kept (FR-049a).
+func (s *Store) ClientsWithAccess(ctx context.Context, userID string, now time.Time) ([]ClientAccess, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT client_id, MIN(requested_at) FROM oauth_requests
+		WHERE user_id = ? AND kind IN ('access', 'refresh') AND revoked_at IS NULL AND expires_at > ?
+		GROUP BY client_id ORDER BY 2 DESC, client_id`, userID, now.UnixMilli())
 	if err != nil {
 		return nil, err
 	}
 	defer func() { _ = rows.Close() }()
-	var out []Consent
+	var out []ClientAccess
 	for rows.Next() {
-		var c Consent
+		var c ClientAccess
 		var at sql.NullInt64
-		if err := rows.Scan(&c.ClientID, &c.Scopes, &at); err != nil {
+		if err := rows.Scan(&c.ClientID, &at); err != nil {
 			return nil, err
 		}
-		c.CreatedAt = fromMS(at)
+		c.Since = fromMS(at)
 		out = append(out, c)
 	}
 	return out, rows.Err()

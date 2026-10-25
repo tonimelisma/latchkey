@@ -46,11 +46,14 @@ func VerifySignature(pub *ecdsa.PublicKey, nonce, deviceID, signature string) er
 	return nil
 }
 
-// ToolDeadline is the tool's declared deadline, defaulting to 10 s and capped at 60 s.
+// ToolDeadline is the tool's declared deadline, defaulting to 10 s and capped at 60 s. The number
+// comes from the Mac: it is clamped as a float before it becomes a Duration, since a huge value
+// converted first would wrap around to a negative deadline. Less than a millisecond is one.
 func ToolDeadline(t *mcp.Tool) time.Duration {
 	ms, ok := t.Meta[DeadlineMetaKey].(float64)
-	if !ok || ms <= 0 {
+	if !ok || !(ms > 0) { // also refuses NaN
 		return DefaultDeadline
 	}
-	return min(time.Duration(ms)*time.Millisecond, MaxDeadline)
+	ms = min(max(ms, 1), float64(MaxDeadline/time.Millisecond))
+	return time.Duration(ms) * time.Millisecond
 }

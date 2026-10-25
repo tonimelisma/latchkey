@@ -105,13 +105,33 @@ func (s *storage) GetAuthorizeCodeSession(ctx context.Context, code string, _ fo
 		return nil, err
 	}
 	if !row.UsedAt.IsZero() {
+		// A used code presented again ends its grant. fosite then revokes the tokens it finds;
+		// marking the grant's rows here as well covers the exchange that used the code but
+		// hasn't written its tokens yet: it won't be able to (store.PutOAuthToken).
+		if err := s.st.RevokeGrant(ctx, row.RequestID, s.now()); err != nil {
+			return nil, err
+		}
 		return req, fosite.ErrInvalidatedAuthorizeCode
 	}
 	return req, nil
 }
 
+// InvalidateAuthorizeCodeSession marks the code used, once. fosite reads the code's row and
+// marks it in separate steps, so two exchanges of one code can both read it unused; the marking
+// itself decides: only one of them changes the row. The other is told the code was already
+// used, and the whole grant is marked revoked, as fosite does for a code replayed later: the
+// first exchange's tokens stop working, and none can be written after (store.PutOAuthToken).
 func (s *storage) InvalidateAuthorizeCodeSession(ctx context.Context, code string) error {
-	return s.st.MarkOAuthRequestUsed(ctx, store.KindCode, code, s.now())
+	err := s.st.MarkOAuthRequestUsed(ctx, store.KindCode, code, s.now())
+	if !errors.Is(err, store.ErrNotFound) {
+		return err
+	}
+	if row, gerr := s.st.OAuthRequest(ctx, store.KindCode, code); gerr == nil {
+		if rerr := s.st.RevokeGrant(ctx, row.RequestID, s.now()); rerr != nil {
+			return rerr
+		}
+	}
+	return fosite.ErrInvalidatedAuthorizeCode
 }
 
 func (s *storage) CreatePKCERequestSession(ctx context.Context, signature string, req fosite.Requester) error {

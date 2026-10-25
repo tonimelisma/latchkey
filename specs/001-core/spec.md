@@ -138,6 +138,9 @@ Format: EARS ("When <trigger>, the <system> shall <response>"). IDs are stable; 
 - **FR-022** The relay shall record an audit entry for every tool call: time, tool name, Claude
   surface if known, outcome (ok, error, timeout, offline), and duration. It shall not record tool
   arguments.
+- **FR-022a** The relay shall store a Claude surface's name only after removing control and
+  formatting characters from it and cutting it to 64 characters, since the client chooses it
+  (2026-10-25, security review).
 - **FR-023** The relay shall not store tool results.
 - **FR-024** The relay shall delete audit entries older than 30 days.
 - **FR-025** The relay shall not queue tool calls for later delivery.
@@ -180,6 +183,9 @@ Format: EARS ("When <trigger>, the <system> shall <response>"). IDs are stable; 
 - **FR-042a** When 20 wrong codes have been entered for one email address within a day, the
   relay shall refuse every emailed code for that address until the day is over; passkey sign-in
   keeps working (Toni, 2026-10-24, security scan).
+- **FR-042b** When someone asks to recover an account, the relay shall answer with the same
+  words and at the same speed whether or not the address has an account (2026-10-25, security
+  review).
 - **FR-043** The relay shall verify the Owner's email address at sign-up with a code sent by email.
 - **FR-043a** The relay shall offer one sign-in page for every journey: the Owner enters an email
   address and continues with a passkey for a known account, or an emailed code and a new passkey
@@ -193,16 +199,26 @@ Format: EARS ("When <trigger>, the <system> shall <response>"). IDs are stable; 
   previous passkeys.
 - **FR-047a** When an Owner completes account recovery, the relay shall also remove every Claude
   client's access, so each must be approved again (Toni, 2026-10-24, security scan).
+- **FR-047b** When an Owner creates a passkey with an emailed code (sign-up or recovery), the
+  relay shall accept that code's confirmation for one passkey only, and shall end every other
+  sign-up or recovery in progress for the account (2026-10-25, security review).
 - **FR-048** The relay shall keep an Owner signed in to its web pages for 30 days, and shall ask
   for the passkey again before deleting the account.
-- **FR-049** When an Owner has approved a Claude client once, the relay shall not ask again for the
-  same client and scopes.
+- **FR-049** *Superseded 2026-10-25 by FR-049a (Toni): approvals are no longer remembered.* When
+  an Owner has approved a Claude client once, the relay shall not ask again for the same client
+  and scopes.
+- **FR-049a** When a Claude client asks for access to the Owner's Mac, the relay shall show the
+  Owner the consent page and give access only after the Owner allows it there, every time and
+  for every client, including one the Owner allowed before and one on the Owner's own computer
+  (Toni, 2026-10-25, security review).
 
 ### Pairing
 - **FR-050** The Mac app shall pair with an account through a browser sign-in started from the app,
   without the Owner copying codes or tokens by hand.
 - **FR-051** The Mac app shall store its credential in the macOS Keychain.
 - **FR-052** When a Mac is revoked, the relay shall close its connection and reject its credential.
+- **FR-052a** When a Mac is revoked while it is connecting, the relay shall close that connection
+  as revoked as soon as it is established (2026-10-25, security review).
 - **FR-053** When an Owner pairs a Mac while another Mac is paired, the relay shall name the
   current Mac, ask the Owner to confirm the replacement, and on confirmation revoke the current Mac.
 - **FR-054** When a pairing link reaches the Mac app other than through the app's own sign-in
@@ -263,6 +279,39 @@ Format: EARS ("When <trigger>, the <system> shall <response>"). IDs are stable; 
 - **FR-082** The relay shall take a client's address from a proxy's forwarded-for header only when
   the proxy is on the same machine, or at an address the operator has listed as a trusted proxy
   (Toni, 2026-10-24, security scan).
+
+### Limits that keep the relay standing (2026-10-25, security review)
+- **FR-090** When a Claude session has received no request for 30 minutes, the relay shall end
+  it. The relay shall keep at most 64 sessions per Owner, ending the oldest to make room, and
+  shall keep nothing in memory for Claude's sessions once the Owner's account is deleted or
+  Claude's access is removed.
+- **FR-091** When a connected Mac sends messages faster than 60 at once and 5 per second after
+  that (answers the relay is waiting for not counted), or a tool list of more than 256 tools or
+  512 KiB, the relay shall close the connection as a protocol violation.
+- **FR-092** When a Mac connects, the relay shall verify its signature before it processes
+  anything else the Mac sent.
+- **FR-093** When a request from Claude is cancelled or its client goes away, the Mac's
+  connection shall stay up.
+- **FR-094** When a client takes longer than 30 seconds to send a request's body (2 minutes for
+  a request to the connector URL, which may carry a file), the relay shall stop waiting for it.
+  Answers that take long, and the Mac's connection, are not affected.
+- **FR-095** The relay shall keep a Claude client's published description (its metadata
+  document) for at least 5 minutes and at most a day before fetching it again; when a new fetch
+  fails, it shall keep using the last good copy for up to 7 days and shall not fetch that address
+  again for 5 minutes; it shall keep at most 1,000 descriptions of clients that hold no access,
+  deleting those unused for a day; and it shall never tell a client or browser why a fetch
+  failed.
+- **FR-096** When one sign-in code from Claude is presented more than once, even at the same
+  moment, the relay shall give access for it at most once and shall end the access it gave.
+- **FR-097** When the relay sends the Owner's browser back to a Claude client, with a code or
+  with an error, it shall say which relay the answer comes from, and shall announce that it
+  does so (RFC 9207).
+- **FR-098** The relay shall remove every kind of bracket, in any script, from a client's name
+  before showing it, so a name can't imitate the checked host that is shown after it in
+  parentheses.
+- **FR-099** While 10,000 passkey sign-ins are in progress, the relay shall answer a further one
+  with "Too many sign-ins are in progress right now. Try again in a minute." instead of holding
+  more in memory.
 
 ## Success criteria
 

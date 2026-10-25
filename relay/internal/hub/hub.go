@@ -4,12 +4,14 @@
 package hub
 
 import (
+	"bytes"
 	"context"
 	"crypto/ecdsa"
 	"crypto/x509"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"hash/maphash"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -19,6 +21,7 @@ import (
 
 	"github.com/coder/websocket"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"golang.org/x/time/rate"
 
 	"github.com/tonimelisma/latchkey/relay/internal/agentproto"
 	"github.com/tonimelisma/latchkey/relay/internal/store"
@@ -41,8 +44,12 @@ type Config struct {
 	HeartbeatInterval time.Duration // told to the agent in welcome; default 15 s
 	OfflineAfter      time.Duration // silence that means offline; default 2 × heartbeat + 5 s
 	PingInterval      time.Duration // WebSocket pings; default 15 s
-	Now               func() time.Time
-	Logger            *slog.Logger
+	// A connection may send FrameBurst frames at once, then one every FrameInterval; more closes
+	// it with 4005 (FR-091). Defaults 60 and 200 ms: the app sends state every 15 s and on change.
+	FrameBurst    int
+	FrameInterval time.Duration
+	Now           func() time.Time
+	Logger        *slog.Logger
 
 	// OnToolsChanged is called when a user's Mac tool list may have changed.
 	OnToolsChanged func(userID string)
@@ -59,7 +66,21 @@ type Hub struct {
 	mu     sync.Mutex
 	conns  map[string]*conn // device ID → live connection
 	closed bool
+
+	// persistLocks order the store writes of one device's connections without holding mu (which
+	// every Online and Call takes) across a database write. A fixed set shared by all devices.
+	persistLocks [64]sync.Mutex
+
+	// beforeRegister, if set by a test, runs between a connection's authentication and its
+	// registration.
+	beforeRegister func()
 }
+
+func (h *Hub) persistLock(deviceID string) *sync.Mutex {
+	return &h.persistLocks[maphash.String(persistSeed, deviceID)%uint64(len(h.persistLocks))]
+}
+
+var persistSeed = maphash.MakeSeed()
 
 // New creates a hub. Devices still marked online from before a restart are marked offline.
 func New(st *store.Store, cfg Config) *Hub {
@@ -74,6 +95,12 @@ func New(st *store.Store, cfg Config) *Hub {
 	}
 	if cfg.PingInterval == 0 {
 		cfg.PingInterval = 15 * time.Second
+	}
+	if cfg.FrameBurst == 0 {
+		cfg.FrameBurst = 60
+	}
+	if cfg.FrameInterval == 0 {
+		cfg.FrameInterval = 200 * time.Millisecond
 	}
 	if cfg.Now == nil {
 		cfg.Now = time.Now
@@ -236,16 +263,14 @@ func (h *Hub) handshake(ctx context.Context, ws *websocket.Conn) (store.Device, 
 	case typ != websocket.MessageText:
 		return store.Device{}, nil, violation(errors.New("text frames only"))
 	}
-	msg, err := agentproto.Decode(data)
+	// Who is this? Only the device ID and the signature are read until the signature verifies;
+	// the tool list and state of a stranger's hello are never parsed (FR-092).
+	deviceID, signature, err := agentproto.DecodeHelloAuth(data)
 	if err != nil {
 		return store.Device{}, nil, violation(err)
 	}
-	hello, ok := msg.(*agentproto.Hello)
-	if !ok {
-		return store.Device{}, nil, violation(fmt.Errorf("expected hello, got %s", msg.MessageType()))
-	}
 	authFailed := closeError{agentproto.CloseAuthFailed, "authentication failed"}
-	device, err := h.store.Device(ctx, hello.DeviceID)
+	device, err := h.store.Device(ctx, deviceID)
 	if err != nil || device.PublicKey == nil {
 		return store.Device{}, nil, authFailed
 	}
@@ -254,8 +279,16 @@ func (h *Hub) handshake(ctx context.Context, ws *websocket.Conn) (store.Device, 
 		return store.Device{}, nil, authFailed
 	}
 	ecPub, ok := pub.(*ecdsa.PublicKey)
-	if !ok || agentproto.VerifySignature(ecPub, nonce, hello.DeviceID, hello.Signature) != nil {
+	if !ok || agentproto.VerifySignature(ecPub, nonce, deviceID, signature) != nil {
 		return store.Device{}, nil, authFailed
+	}
+	msg, err := agentproto.Decode(data)
+	if err != nil {
+		return store.Device{}, nil, violation(err)
+	}
+	hello, ok := msg.(*agentproto.Hello)
+	if !ok {
+		return store.Device{}, nil, violation(fmt.Errorf("expected hello, got %s", msg.MessageType()))
 	}
 	return device, hello, nil
 }
@@ -270,7 +303,11 @@ func (h *Hub) start(ctx context.Context, c *conn, hello *agentproto.Hello) bool 
 		h.cfg.Logger.Error("update device versions", "device", c.device.ID, "err", err)
 	}
 	now := h.now()
-	c.state = store.DeviceState{DeviceID: c.device.ID, Online: true, ConnectedAt: now, LastSeenAt: now}
+	// The tool list already stored is kept unless hello's differs (see conn.save).
+	c.state = store.DeviceState{
+		DeviceID: c.device.ID, Online: true, ConnectedAt: now, LastSeenAt: now, ToolsJSON: previous.ToolsJSON,
+	}
+	c.toolsStored = err == nil
 	c.setState(hello.State)
 	c.setTools(hello.Tools)
 
@@ -282,6 +319,9 @@ func (h *Hub) start(ctx context.Context, c *conn, hello *agentproto.Hello) bool 
 		return false
 	}
 
+	if h.beforeRegister != nil {
+		h.beforeRegister()
+	}
 	h.mu.Lock()
 	if h.closed {
 		h.mu.Unlock()
@@ -293,6 +333,17 @@ func (h *Hub) start(ctx context.Context, c *conn, hello *agentproto.Hello) bool 
 	h.mu.Unlock()
 	if old != nil {
 		old.closeWith(ErrDisconnected, agentproto.CloseReplaced, "replaced by a newer connection")
+	}
+	// The device may have been revoked between the signature check and the registration above;
+	// Revoke found no connection to close then, so look again now that there is one (FR-052a).
+	switch d, err := h.store.Device(ctx, c.device.ID); {
+	case errors.Is(err, store.ErrNotFound), err == nil && d.PublicKey == nil:
+		c.closeWith(ErrRevoked, agentproto.CloseRevoked, "device revoked")
+		return false
+	case err != nil:
+		h.cfg.Logger.Error("re-read device", "device", c.device.ID, "err", err)
+		c.closeWith(ErrDisconnected, websocket.StatusInternalError, "relay error")
+		return false
 	}
 
 	c.persist(ctx)
@@ -308,7 +359,10 @@ func (h *Hub) start(ctx context.Context, c *conn, hello *agentproto.Hello) bool 
 }
 
 // finish records the connection offline and unregisters it, unless a newer one replaced it.
-// The store is written under the hub lock so it never shows an older connection's state.
+// The store is written outside the hub lock, so a slow write never stalls Online and Call for
+// every other Mac; the device's persist lock, held from the unregistering to the write, keeps
+// the order: a newer connection's "online" is always written after this "offline", and a
+// replaced connection writes nothing.
 func (h *Hub) finish(c *conn) {
 	c.failPending()
 	c.mu.Lock()
@@ -316,26 +370,33 @@ func (h *Hub) finish(c *conn) {
 	revoked := errors.Is(c.closeErr, ErrRevoked)
 	c.mu.Unlock()
 
+	l := h.persistLock(c.device.ID)
+	l.Lock()
 	h.mu.Lock()
 	current := h.conns[c.device.ID] == c
 	if current {
-		if !revoked { // a revoked device's state no longer matters
-			c.persist(context.Background())
-		}
 		delete(h.conns, c.device.ID)
 	}
 	h.mu.Unlock()
+	if current && !revoked { // a revoked device's state no longer matters
+		c.save(context.Background())
+	}
+	l.Unlock()
 	if current && revoked {
 		h.cfg.OnToolsChanged(c.device.UserID)
 	}
 }
 
+// write sends one frame, bounded by writeTimeout only. The caller's cancellation is dropped on
+// purpose: the WebSocket library closes the whole connection when a write's context ends, so a
+// Claude request that is cancelled (or an OAuth request that finishes) while its frame is being
+// written would disconnect the Owner's Mac.
 func write(ctx context.Context, ws *websocket.Conn, m agentproto.Message) error {
 	data, err := agentproto.Encode(m)
 	if err != nil {
 		return err
 	}
-	ctx, cancel := context.WithTimeout(ctx, writeTimeout)
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), writeTimeout)
 	defer cancel()
 	return ws.Write(ctx, websocket.MessageText, data)
 }
@@ -352,15 +413,21 @@ type conn struct {
 	nextID atomic.Uint64
 	done   chan struct{}
 
-	mu       sync.Mutex
-	pending  map[string]*pendingCall
-	state    store.DeviceState
-	closeErr error // why calls fail once closed
-	finished bool
+	frames *rate.Limiter // frames the Mac may send (FR-091)
+
+	mu          sync.Mutex
+	pending     map[string]*pendingCall
+	state       store.DeviceState
+	toolsStored bool  // the store's row holds state.ToolsJSON
+	closeErr    error // why calls fail once closed
+	finished    bool
 }
 
 func (h *Hub) newConn(ws *websocket.Conn, d store.Device) *conn {
-	return &conn{hub: h, ws: ws, device: d, done: make(chan struct{}), pending: map[string]*pendingCall{}}
+	return &conn{
+		hub: h, ws: ws, device: d, done: make(chan struct{}), pending: map[string]*pendingCall{},
+		frames: rate.NewLimiter(rate.Every(h.cfg.FrameInterval), h.cfg.FrameBurst),
+	}
 }
 
 func (c *conn) send(ctx context.Context, m agentproto.Message) error { return write(ctx, c.ws, m) }
@@ -385,26 +452,84 @@ func (c *conn) setState(s agentproto.State) {
 	c.mu.Unlock()
 }
 
-func (c *conn) setTools(tools []*mcp.Tool) {
+// setTools takes the Mac's tool list and reports whether it differs from the one held.
+func (c *conn) setTools(tools []*mcp.Tool) bool {
 	if tools == nil {
 		tools = []*mcp.Tool{}
 	}
 	data, err := json.Marshal(tools)
 	if err != nil {
-		return
+		return false
 	}
 	c.mu.Lock()
+	defer c.mu.Unlock()
+	if bytes.Equal(data, c.state.ToolsJSON) {
+		return false
+	}
 	c.state.ToolsJSON = data
-	c.mu.Unlock()
+	c.toolsStored = false
+	return true
 }
 
+// persist stores the connection's state if it is still the device's registered connection; a
+// replaced or finished connection's state is not what the store should show.
 func (c *conn) persist(ctx context.Context) {
+	l := c.hub.persistLock(c.device.ID)
+	l.Lock()
+	defer l.Unlock()
+	if c.hub.conn(c.device.ID) == c {
+		c.save(ctx)
+	}
+}
+
+// save writes the state row. The tool list (up to 512 KiB) is written only when it changed since
+// this connection last stored it; every other frame updates the small columns alone.
+func (c *conn) save(ctx context.Context) {
 	c.mu.Lock()
 	st := c.state
+	withTools := !c.toolsStored
+	c.toolsStored = true
 	c.mu.Unlock()
-	if err := c.hub.store.PutDeviceState(ctx, st); err != nil {
-		c.hub.cfg.Logger.Error("store device state", "device", c.device.ID, "err", err)
+	var err error
+	if !withTools {
+		err = c.hub.store.PutDeviceStatus(ctx, st)
 	}
+	if withTools || errors.Is(err, store.ErrNotFound) { // no row yet: write all of it
+		withTools = true
+		err = c.hub.store.PutDeviceState(ctx, st)
+	}
+	if err != nil {
+		c.hub.cfg.Logger.Error("store device state", "device", c.device.ID, "err", err)
+		if withTools {
+			c.mu.Lock()
+			c.toolsStored = false
+			c.mu.Unlock()
+		}
+	}
+}
+
+// allow counts a frame against the connection's allowance. A result or progress for a call the
+// relay is waiting on is free: the relay asked for it, /mcp's own limits bound how many calls
+// there are, and the app may answer all its running calls at once (when the Owner turns a
+// capability down). What is counted is what the Mac sends unasked: state, tools, goodbye, and
+// results or progress for calls the relay isn't waiting on.
+func (c *conn) allow(msg agentproto.Message) bool {
+	var id string
+	switch m := msg.(type) {
+	case *agentproto.Result:
+		id = m.ID
+	case *agentproto.Progress:
+		id = m.ID
+	}
+	if id != "" {
+		c.mu.Lock()
+		_, asked := c.pending[id]
+		c.mu.Unlock()
+		if asked {
+			return true
+		}
+	}
+	return c.frames.Allow()
 }
 
 // run reads frames until the connection ends. Silence longer than OfflineAfter ends it.
@@ -432,6 +557,10 @@ func (c *conn) run(ctx context.Context) {
 			c.closeWith(ErrDisconnected, agentproto.CloseProtocolViolation, truncate(err.Error()))
 			return
 		}
+		if !c.allow(msg) {
+			c.closeWith(ErrDisconnected, agentproto.CloseProtocolViolation, "too many messages")
+			return
+		}
 		if !c.handle(ctx, msg) {
 			return
 		}
@@ -444,9 +573,10 @@ func (c *conn) handle(ctx context.Context, msg agentproto.Message) bool {
 		c.setState(m.State)
 		c.persist(ctx)
 	case *agentproto.ToolsUpdate:
-		c.setTools(m.Tools)
-		c.persist(ctx)
-		c.hub.cfg.OnToolsChanged(c.device.UserID)
+		if c.setTools(m.Tools) { // the same list again changes nothing
+			c.persist(ctx)
+			c.hub.cfg.OnToolsChanged(c.device.UserID)
+		}
 	case *agentproto.Progress:
 		c.mu.Lock()
 		p := c.pending[m.ID]

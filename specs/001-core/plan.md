@@ -47,6 +47,30 @@ second hop and a per-user provisioning step. A closed socket means "offline" ins
   (`NSWorkspace.didWakeNotification`); otherwise exponential backoff with jitter, 1 s to 30 s cap
   (SC-05).
 - Newest connection for a device wins; the old one is closed with code 4003.
+- What a connected Mac can cost the relay is bounded (FR-091, FR-092; security review,
+  2026-10-25). Each connection has a token bucket (`golang.org/x/time/rate`, already used for the
+  HTTP limits): 60 frames at once, one back every 200 ms; a `result` or `progress` for a pending call is free,
+  because `/mcp`'s per-Owner limit already bounds the calls and the app may answer all running
+  calls at once; over the allowance the connection is
+  closed with 4005. Tool lists are capped at 256 tools and 512 KiB, the byte cap checked on the
+  raw JSON before any tool is built. The hello's signature is verified from a small decode of
+  `device_id` and `signature` before the full decode, which builds and trial-registers the tool
+  list. The stored `tools_json` is written only when the list differs from the stored one
+  (`PutDeviceStatus` updates the other columns); a repeated list is not stored and not announced.
+- Store writes and the hub lock: the "offline" write at the end of a connection used to run
+  inside the hub's one lock, which every `Online` and `Call` takes. It now runs outside it, under
+  one of 64 per-device persist locks (picked by a hash of the device ID). A connection writes
+  only while it is the device's registered connection, checked under that lock, and the ending
+  connection unregisters and writes under it, so the store never ends up showing an older
+  connection's state. Options weighed: a lock per device in a map (grows with every device ever
+  seen) or a version column checked in SQL (a schema change); the fixed set needs neither.
+- A device revoked between its signature check and its registration (when the revocation finds
+  no connection to close) is caught by reading the device again right after registering; the
+  connection is closed with 4002 (FR-052a).
+- Frames to the Mac are written with the request's cancellation removed and a 5 s timeout
+  (FR-093): `coder/websocket` closes the whole connection when a write's context ends, so a
+  cancelled Claude request, or the OAuth request that triggers a `client_authorized` notice,
+  could otherwise disconnect the Mac.
 
 ### D2. The relay is the MCP server, not a pass-through
 Serves FR-010, FR-013, FR-014, FR-021, SC-03, SC-07; Constitution II.
@@ -60,7 +84,10 @@ Serves FR-010, FR-013, FR-014, FR-021, SC-03, SC-07; Constitution II.
 - `tools/list` returns `laptop_status` plus the last tool list the Mac reported, even when offline.
 - `tools/call` for a Mac tool goes to the hub. Offline: immediate `isError: true` result with the
   offline message (FR-010). Online: forwarded with a deadline (D3).
-- Tool-list changes: `notifications/tools/list_changed` to stateful sessions (FR-062).
+- Tool-list changes: `notifications/tools/list_changed` to stateful sessions (FR-062). A sync
+  takes the Owner's server lock before it reads the stored list, so two syncs apply their lists
+  in the order they read them and an older list can't overwrite a newer one (security review,
+  2026-10-25).
 - A level turned off or down stops running work on the Mac (FR-066): after sending the new tool
   list, the app looks at each running call; one whose tool is no longer in the list is cancelled
   (its task, and with it the AppleScript, Spotlight, or other program it waits on) and answered
@@ -69,11 +96,22 @@ Serves FR-010, FR-013, FR-014, FR-021, SC-03, SC-07; Constitution II.
   The call's own late result is dropped, and the activity log records what Claude was told.
   Calls whose tool is still listed are not touched, so raising a level stops nothing. No new
   protocol message: the relay sees a normal answer. Shell's jobs: spec 004 FR-310.
+- Session limits (FR-090; security review, 2026-10-25): the stateful handler runs with the SDK's
+  `SessionTimeout` of 30 minutes, counted from the last request of the session; the next request
+  of a closed session gets `404` and the client starts a new one, as the MCP transport
+  specifies. Before a request that opens a session, the relay closes the Owner's oldest sessions
+  beyond 64 (the SDK has no cap of its own; it lists a server's sessions oldest first).
+  Options weighed for the cap: refusing the new session (locks the Owner out when a leaked token
+  fills the quota) or closing the oldest (chosen: the Owner's newest conversation always works).
+  The Owner's server and its sessions are dropped from memory when the account is deleted, when
+  Claude's access is removed, and on recovery (`mcpserver.Forget`).
 
 ### D3. Deadlines
 Serves FR-011, Constitution II.
 - Default deadline 10 s per call. A tool may declare a longer one in its metadata, capped at 60 s.
-  `battery_status` uses 5 s.
+  `battery_status` uses 5 s. The declared number is clamped to 1 ms to 60 s before it becomes a
+  duration, so a huge or non-finite value from the Mac can't wrap around to a negative deadline
+  (security review, 2026-10-25).
 - On deadline: the relay returns a timeout error, sends `cancel` to the Mac, and drops any late
   result.
 - [NEEDS CLARIFICATION: Claude's hosted client timeout is undocumented. Measure it in M4 and keep
@@ -85,7 +123,20 @@ Serves FR-040, FR-014.
   rotation. Opaque HMAC tokens stored hashed.
 - Client registration, implemented in fosite's client storage:
   - CIMD: when `client_id` is an HTTPS URL, fetch and validate the metadata document, cache it
-    (respect HTTP caching, max 24 h).
+    (respect HTTP caching, at least 5 minutes, at most 24 h). Hardening (FR-095; security
+    review, 2026-10-25): the minimum exists because the client is looked up on every token and
+    `/mcp` request, so a `no-store` document meant a fetch each time, and its host's outage cut
+    every user of that client off. When a fetch fails, the last good copy serves for up to 7
+    days past its freshness, and the URL is not fetched again for 5 minutes (failures are kept
+    in memory by the URL's SHA-256, at most 4,096 of them), so the relay can't be made to
+    hammer a host. The fetch runs detached from the request (5 s limit), so a caller that
+    leaves can't plant a failure. Cached documents that no code or token refers to are capped
+    at the newest 1,000 (checked at each insert) and purged daily once fetched more than a day
+    ago; documents of clients holding a grant always stay. `oauth_requests` gets an index on
+    `client_id` for those checks (migration 7). A failed lookup's error carries one fixed
+    sentence; the reason (which can name internal hosts and addresses) goes to the relay's log
+    only. fosite already kept that reason from clients (it replaces the hint at `/authorize`
+    and exposes no debug text); the fixed sentence makes that independent of fosite.
   - DCR (RFC 7591) at `/register` for clients that don't use CIMD.
 - Metadata: advertise `client_id_metadata_document_supported: true`,
   `token_endpoint_auth_methods_supported` including `none`, `code_challenge_methods_supported:
@@ -105,25 +156,51 @@ Serves FR-040, FR-014.
   (security scan, 2026-10-24). Hosts are shown in ASCII (`golang.org/x/net/idna`, already in
   the module graph, now a direct dependency), so a look-alike Unicode host appears as `xn--...`.
   The name is cleaned before it is shown: control and formatting characters (newlines,
-  direction overrides, zero-width marks) and parentheses removed, spaces collapsed, at most 60
+  direction overrides, zero-width marks) and every bracket (Unicode categories Ps and Pe:
+  ASCII, fullwidth, small, ornamental and all other opening and closing punctuation, FR-098)
+  removed, spaces collapsed, at most 60
   characters, so it can't carry a "(claude.ai)" of its own. The consent page shows the host on
   its own line ("This app is at claude.ai."), not only after the name. The account page names a
   registered client with every host its redirect URIs point to ("Claude (claude.ai,
   other.example)"). Options weighed for that: recording the redirect host with each approval
-  (a migration, and still wrong later, because a remembered approval covers every registered
-  redirect URI of the client, FR-049); requiring one host per registered client (refuses
+  (a migration, and one more thing stored); requiring one host per registered client (refuses
   clients that list several hosts today); listing every host, chosen as the only one that is
-  never narrower than what the approval allows. An approval is remembered per
-  Owner, client, and scope set (FR-049), and forgotten when the Owner revokes Claude's access.
+  never narrower than where the client's codes can go.
+- Consent is asked every time (FR-049a; Toni, 2026-10-25, replacing the remembered approval of
+  FR-049): a `GET /authorize` only ever renders the consent page, and a code is issued only by
+  the `POST` of its Allow button with the session's CSRF token, for every client, loopback ones
+  included (RFC 8252 §8.6: a program on the Owner's computer can pose as a native client, so a
+  remembered approval would hand it a code unseen). Nothing about an approval is stored: the
+  `oauth_consents` table is dropped (migration 6), and the account page lists the clients that
+  hold a live (unexpired, unrevoked) access or refresh token, with the time of the oldest one.
+  A client that was approved but never redeemed its code is not listed, since it has no access.
+  Options weighed for the list: keeping the table as a plain record of approvals (stores more
+  than needed, and goes stale when tokens expire or are revoked by the client), or reading the
+  tokens, chosen because it is exactly "who can reach the Mac now" and stores nothing new.
 - Redirect URIs must be registered by the client (CIMD document or DCR); for loopback URIs
   (`localhost`, `127.0.0.1`, `[::1]`) the port is ignored. fosite ignores the port only for IP
   literals, so the client lookup adds the requested `localhost` URI when it matches a registered
   one on everything but the port.
+- Codes are redeemed once, also under concurrency (FR-096; security review, 2026-10-25): fosite
+  reads a code's row and marks it used in separate steps, so two exchanges could both read it
+  unused. The marking is now `UPDATE … WHERE used_at IS NULL`; the exchange that changes no row
+  fails with fosite's `ErrInvalidatedAuthorizeCode`, and the grant's rows are all marked
+  revoked, which revokes tokens already written and (through the conditional insert below)
+  refuses any written later, exactly as for a later replay. A replay found on read marks the
+  grant the same way. The token endpoint answers these with `invalid_grant`, not fosite's
+  `server_error`. Options weighed: a transaction around fosite's whole exchange (fosite's
+  transactional storage; holds SQLite's write lock across the client lookup) or the
+  conditional update, chosen as one statement with no lock held.
+- RFC 9207 (FR-097): the metadata advertises `authorization_response_iss_parameter_supported`
+  and every redirect back to the client (code or error) carries `iss=<issuer>`. fosite 0.49
+  doesn't support it, so the response writer handed to fosite's two redirect writers adds the
+  parameter to the `Location` header. Errors shown in the browser (unknown client or redirect
+  URI) aren't redirects and carry none.
 - Tokens: fosite's HMAC strategy with a 32-byte secret generated on first start and kept in the
   database, so tokens survive restarts (SC-07). Refresh rotation marks the old token rotated; it
   stays valid for 60 s, after which reuse revokes the whole token family (RFC 6819 §5.2.2.3).
 - Revoking Claude's access (FR-044) cannot be outrun by a refresh already in flight: it deletes
-  the Owner's tokens and approvals in one transaction, and a new access or refresh token is
+  the Owner's codes and tokens, and a new access or refresh token is
   written only if a code or refresh token of the same grant and Owner still exists and no token
   of that grant has been revoked (a client's `/revoke` and reuse detection mark tokens revoked
   rather than deleting them), checked in the same SQL statement as the insert. A refresh whose token vanished mid-exchange fails
@@ -163,12 +240,31 @@ Serves FR-041, FR-042, FR-043.
   rows, sliding window) or carrying the attempt count over to the next code (still unbounded
   across days); two columns on `users` are the smallest change that bounds a day.
 - Recovery: single-use code, 15 min expiry, stored hashed; completing it removes all old passkeys
-  (FR-047), signs out every browser, and removes every Claude client's access, tokens and
-  remembered approvals alike, as "Remove Claude's access" does (FR-047a); the recovery page and
+  (FR-047), signs out every browser, and removes every Claude client's access (its codes and
+  tokens), as "Remove Claude's access" does (FR-047a); the recovery page and
   emails say Claude must connect again. Using it is announced by email and in the
   Mac app. The Mac app learns of it through a `notice` message (contracts/agent-protocol.md), sent
   at once if the Mac is online, otherwise on its next connection (the relay compares the
   recovery's `used_at` with the device's last connection; nothing new is stored).
+- Sign-ins in progress (security review, 2026-10-25). A passkey exchange (5 minutes) and the
+  ticket a confirmed code gives (10 minutes) live in memory between two requests. Each table is
+  capped at 10,000 entries (FR-099): a further one gets HTTP 503 with `Retry-After: 60` and "Too
+  many sign-ins are in progress right now. Try again in a minute." Expired entries are swept at
+  most once a minute, and whenever a table is full, instead of on every insert. A ticket is
+  taken in the same step that checks it, when the passkey registration finishes, so two
+  registrations started from one ticket can't both complete; it is put back if that attempt
+  fails before a passkey is saved, so the Owner can retry without a new code. When a
+  registration completes, every other ticket and pending registration of the account is
+  dropped (FR-047b), so a ticket from an earlier recovery code can't add a passkey afterwards
+  and, by completing a second recovery, remove the Owner's new one. Options weighed for the
+  cap: evicting the oldest entry when full (lets a flood cancel real sign-ins in progress) or
+  refusing new ones (chosen: a flood only delays new sign-ins for up to five minutes).
+- Recovery requests answer before the email is sent (FR-042b): for a known account the code is
+  stored and mailed in a background task (at most 16 at once, 30 s each, failures logged), so
+  the answer takes the same time as for an unknown address, where nothing is sent. Before, the
+  request waited on the mail server only when the account existed. A send that fails can't be
+  reported to the page without revealing the account; the page already tells the Owner to ask
+  again if no email arrives.
 - Email: SMTP via `github.com/wneessen/go-mail`; configured by environment variables (FR-080).
   The hosted relay sends through Resend's SMTP from `no-reply@` its own host name. Mail is always
   encrypted: TLS from the start on port 465, required STARTTLS on other ports (a server that
@@ -331,6 +427,14 @@ Serves FR-080, Constitution V, VIII.
   only; FR-082). Abuse limits key on the rightmost `X-Forwarded-For` entry from such a peer and on
   the peer's own address otherwise. The hosted deploy sets it to the subnets of the docker network
   Caddy shares with the relay (research.md).
+- Slow requests (FR-094; security review, 2026-10-25): headers must arrive within 10 s
+  (`ReadHeaderTimeout`). A request with a body gets a read deadline when it arrives (30 s; 2
+  minutes on `/mcp`, whose bodies may be 16 MiB), set per request with
+  `http.ResponseController` and cleared the moment the body has been read to its end. Options
+  weighed: the server-wide `ReadTimeout` (stays armed after the body and cancels the request when
+  it fires, which would end tool calls and MCP event streams, and it can't differ per route), or
+  a deadline per request that ends with the body (chosen). Requests without a body (event
+  streams, the Mac's WebSocket upgrade) get none.
 - Listening: one port, `PORT`, on all network interfaces, IPv4 and IPv6 (research.md). Plain HTTP
   behind a proxy; with `ACME_EMAIL` set, HTTPS on the same port, and the self-hoster maps public
   port 443 to it (Let's Encrypt checks port 443). Certificates and the ACME account key are cached
@@ -348,7 +452,8 @@ Serves FR-080, Constitution V, VIII.
 ### D11. Audit log and local trace
 Serves FR-022, FR-023, FR-024, FR-026, FR-026a, Constitution VI.
 - Relay: one row per tool call, metadata only (no arguments, no results); daily purge after 30 days.
-  "Surface" (FR-022) is the MCP `clientInfo.name` from the session's `initialize`, when sent.
+  "Surface" (FR-022) is the MCP `clientInfo.name` from the session's `initialize`, when sent,
+  without control or formatting characters and cut to 64 characters (FR-022a).
 - Mac app: full trace (arguments, results, errors, timings) in a local SQLite file in the app's
   Application Support folder (SwiftData, `activity.store`), shown in a log window from the menu bar. Never sent to the relay.
   Purged after 90 days by default.

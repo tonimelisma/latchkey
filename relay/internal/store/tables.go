@@ -144,6 +144,19 @@ func (s *Store) PutDeviceState(ctx context.Context, st DeviceState) error {
 	return mapErr(err)
 }
 
+// PutDeviceStatus updates the device's state row except its tool list, which is large and
+// changes rarely. ErrNotFound if the device has no row yet.
+func (s *Store) PutDeviceStatus(ctx context.Context, st DeviceState) error {
+	res, err := s.db.ExecContext(ctx, `
+		UPDATE device_state SET online = ?, connected_at = ?, last_seen_at = ?, offline_reason = ?, state_json = ?
+		WHERE device_id = ?`,
+		st.Online, toMS(st.ConnectedAt), toMS(st.LastSeenAt), st.OfflineReason, nullBytes(st.StateJSON), st.DeviceID)
+	if err != nil {
+		return mapErr(err)
+	}
+	return requireOneRow(res)
+}
+
 // DeviceState returns the device's state row.
 func (s *Store) DeviceState(ctx context.Context, deviceID string) (DeviceState, error) {
 	var st DeviceState

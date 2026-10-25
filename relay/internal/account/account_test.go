@@ -71,10 +71,13 @@ type env struct {
 	t       *testing.T
 	store   *store.Store
 	mail    *account.MemoryMailer
+	mailer  *gatedMailer // wraps mail
+	svc     *account.Service
 	macs    *fakeMacs
 	clock   *clock
 	base    string // http://localhost:<port>
 	changed []string
+	removed []string // user IDs whose Claude access was removed
 }
 
 func setup(t *testing.T, allowed ...string) *env {
@@ -84,6 +87,7 @@ func setup(t *testing.T, allowed ...string) *env {
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = st.Close() })
 	e := &env{t: t, store: st, mail: &account.MemoryMailer{}, macs: &fakeMacs{online: map[string]bool{}}, clock: &clock{t: time.Now()}}
+	e.mailer = &gatedMailer{MemoryMailer: e.mail}
 
 	mux := http.NewServeMux()
 	srv := httptest.NewServer(mux)
@@ -97,11 +101,13 @@ func setup(t *testing.T, allowed ...string) *env {
 	o, err := oauth.New(ctx, oauth.Config{Issuer: public, Store: st, Auth: auth, Now: e.clock.now})
 	require.NoError(t, err)
 	svc, err = account.New(ctx, account.Config{
-		PublicURL: public, Store: st, Macs: e.macs, Mailer: e.mail, OAuth: o, AllowedEmails: allowed,
+		PublicURL: public, Store: st, Macs: e.macs, Mailer: e.mailer, OAuth: o, AllowedEmails: allowed,
 		Now: e.clock.now, DevicesChanged: func(id string) { e.changed = append(e.changed, id) },
+		AccessRemoved: func(id string) { e.removed = append(e.removed, id) },
 	})
 	require.NoError(t, err)
 	auth.svc = svc
+	e.svc = svc
 	o.Register(mux)
 	svc.Register(mux)
 	return e
@@ -242,6 +248,7 @@ func TestDeleteAccountNeedsFreshPasskey(t *testing.T) {
 	require.ErrorIs(t, err, store.ErrNotFound, "FR-045")
 	assert.Contains(t, e.macs.revoked, d.ID, "the Mac is disconnected")
 	assert.Equal(t, http.StatusFound, b.get("/account").status, "signed out")
+	assert.Equal(t, []string{u.ID}, e.removed, "nothing of the account stays in memory")
 }
 
 func TestReauthExpires(t *testing.T) {
@@ -376,7 +383,10 @@ func TestRevokeMacAndClaude(t *testing.T) {
 	u, _ := e.store.UserByEmail(context.Background(), "owner@example.com")
 	d, err := e.store.CreateDevice(context.Background(), store.NewDevice{UserID: u.ID, Name: "Mac", PublicKey: []byte("k")}, e.clock.now())
 	require.NoError(t, err)
-	require.NoError(t, e.store.PutConsent(context.Background(), u.ID, "cl_x", "mcp", e.clock.now()))
+	require.NoError(t, e.store.PutOAuthRequest(context.Background(), store.OAuthRequest{
+		Signature: "sig-refresh", Kind: store.KindRefresh, RequestID: "req1", ClientID: "cl_x", UserID: u.ID,
+		RequestedAt: e.clock.now(), SessionJSON: []byte(`{}`), ExpiresAt: e.clock.now().Add(time.Hour),
+	}))
 
 	page := b.get("/account")
 	assert.Contains(t, page.body, "Disconnect Mac")
@@ -391,8 +401,10 @@ func TestRevokeMacAndClaude(t *testing.T) {
 
 	r = b.form("/account/revoke-claude", url.Values{"csrf": {token}})
 	assert.Equal(t, http.StatusSeeOther, r.status)
-	_, err = e.store.Consent(context.Background(), u.ID, "cl_x")
+	_, err = e.store.OAuthRequest(context.Background(), store.KindRefresh, "sig-refresh")
 	require.ErrorIs(t, err, store.ErrNotFound)
+	assert.NotContains(t, b.get("/account").body, "Remove Claude", "no client is listed any more")
+	assert.Equal(t, []string{u.ID}, e.removed, "Claude's sessions in memory are dropped too")
 }
 
 func TestPasskeyEndpointsNeedJSON(t *testing.T) {
@@ -442,7 +454,22 @@ func TestConsentPageViaAuthorize(t *testing.T) {
 	r := b.form("/authorize?"+q.Encode(), url.Values{"csrf": {csrf(t, page.body)}, "decision": {"allow"}})
 	require.Contains(t, []int{http.StatusFound, http.StatusSeeOther}, r.status, r.body)
 	assert.True(t, strings.HasPrefix(r.header.Get("Location"), "https://claude.ai/api/mcp/auth_callback?code="))
+	assert.NotContains(t, b.get("/account").body, "Remove Claude", "approved, but no token yet: nothing has access")
+
+	// The client redeems its code (the RFC 7636 example verifier); from then on it has access.
+	loc, err := url.Parse(r.header.Get("Location"))
+	require.NoError(t, err)
+	tok := b.form("/token", url.Values{
+		"grant_type": {"authorization_code"}, "code": {loc.Query().Get("code")}, "client_id": {reg["client_id"].(string)},
+		"redirect_uri": {"https://claude.ai/api/mcp/auth_callback"}, "code_verifier": {"dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk"},
+	})
+	require.Equal(t, http.StatusOK, tok.status, tok.body)
 	assert.Contains(t, b.get("/account").body, "<strong>Claude (claude.ai)</strong>", "the account page names it the same way")
+
+	// Asked again the next time, although this client was approved (FR-049a).
+	again := b.get("/authorize?" + q.Encode())
+	assert.Equal(t, http.StatusOK, again.status)
+	assert.Contains(t, again.body, "<h1>Allow Claude to use your Mac?</h1>")
 }
 
 const owner = "owner@example.com"
@@ -460,9 +487,12 @@ func (e *env) lastCode() string {
 	return ""
 }
 
-// startEmail is the first step of the sign-in page.
+// startEmail is the first step of the sign-in page. A recovery code is emailed in the
+// background; this waits for it, so the test can read it.
 func (b *browser) startEmail(email string, recover bool) (int, map[string]any) {
-	return b.json("/auth/email", map[string]any{"email": email, "recover": recover})
+	status, r := b.json("/auth/email", map[string]any{"email": email, "recover": recover})
+	b.e.svc.WaitForMail()
+	return status, r
 }
 
 // confirmCode enters a code and returns the ticket for creating a passkey.
@@ -695,7 +725,6 @@ func TestRecovery(t *testing.T) {
 	e.macs.online[d.ID] = true
 	// A Claude client approved before the recovery (perhaps by whoever took the passkeys).
 	ctx := context.Background()
-	require.NoError(t, e.store.PutConsent(ctx, u.ID, "cl_x", "mcp offline_access", e.clock.now()))
 	for _, kind := range []string{store.KindCode, store.KindRefresh} {
 		require.NoError(t, e.store.PutOAuthRequest(ctx, store.OAuthRequest{
 			Signature: "sig-" + kind, Kind: kind, RequestID: "req1", ClientID: "cl_x", UserID: u.ID,
@@ -715,10 +744,9 @@ func TestRecovery(t *testing.T) {
 	assert.Equal(t, http.StatusFound, b.get("/account").status, "old sessions signed out")
 	status, _ := b.signIn("signin", oldCred)
 	assert.Equal(t, http.StatusUnauthorized, status, "the old passkey no longer works")
-	_, err = e.store.Consent(ctx, u.ID, "cl_x")
-	require.ErrorIs(t, err, store.ErrNotFound, "every Claude client must be approved again (FR-047a)")
 	_, err = e.store.OAuthRequest(ctx, store.KindRefresh, "sig-refresh")
 	require.ErrorIs(t, err, store.ErrNotFound, "Claude's tokens are removed (FR-047a)")
+	assert.Equal(t, []string{u.ID}, e.removed, "and Claude's sessions in memory")
 
 	msgs := e.mail.Sent()
 	assert.Equal(t, "Your Latchkey account was recovered", msgs[len(msgs)-1].Subject, "announced by email")
@@ -808,4 +836,218 @@ func TestNextIsAlwaysLocal(t *testing.T) {
 	}.Encode(), assertion)
 	require.Equal(t, http.StatusOK, status, done)
 	assert.Equal(t, "/account", done["next"])
+}
+
+// gatedMailer is the tests' mailer: it records like MemoryMailer, and can be made to hang like
+// a slow mail server.
+type gatedMailer struct {
+	*account.MemoryMailer
+	mu   sync.Mutex
+	gate chan struct{} // non-nil: Send waits until it is closed
+}
+
+func (g *gatedMailer) Send(ctx context.Context, to, subject, body string) error {
+	g.mu.Lock()
+	gate := g.gate
+	g.mu.Unlock()
+	if gate != nil {
+		select {
+		case <-gate:
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+	return g.MemoryMailer.Send(ctx, to, subject, body)
+}
+
+func (g *gatedMailer) hold() (release func()) {
+	gate := make(chan struct{})
+	g.mu.Lock()
+	g.gate = gate
+	g.mu.Unlock()
+	return sync.OnceFunc(func() {
+		g.mu.Lock()
+		g.gate = nil
+		g.mu.Unlock()
+		close(gate)
+	})
+}
+
+// A recovery request answers at once, the same for an address with an account and one without:
+// the email is sent in the background, so how long the mail server takes tells a stranger
+// nothing about who has an account (FR-042b).
+func TestRecoveryAnswersBeforeTheMailIsSent(t *testing.T) {
+	e := setup(t)
+	e.browser().signUp()
+	e.clock.advance(2 * time.Minute)
+	release := e.mailer.hold() // the mail server is slow
+	defer release()
+	before := len(e.mail.Sent())
+
+	answered := make(chan map[string]any, 2)
+	for _, addr := range []string{owner, "nobody@example.com"} {
+		go func() {
+			data, _ := json.Marshal(map[string]any{"email": addr, "recover": true})
+			req, _ := http.NewRequestWithContext(context.Background(), http.MethodPost, e.base+"/auth/email", strings.NewReader(string(data)))
+			req.Header.Set("Content-Type", "application/json")
+			resp, err := http.DefaultClient.Do(req)
+			if err != nil {
+				return
+			}
+			defer func() { _ = resp.Body.Close() }()
+			var m map[string]any
+			_ = json.NewDecoder(resp.Body).Decode(&m)
+			answered <- m
+		}()
+	}
+	for range 2 {
+		select {
+		case m := <-answered:
+			assert.Equal(t, map[string]any{"step": "code", "purpose": "recover"}, m, "the same answer for both")
+		case <-time.After(2 * time.Second):
+			t.Fatal("the answer waited for the mail server, which only happens for a real account")
+		}
+	}
+	assert.Len(t, e.mail.Sent(), before, "nothing sent yet")
+	release()
+	e.svc.WaitForMail()
+	msgs := e.mail.Sent()
+	require.Len(t, msgs, before+1, "the account's code goes out in the background")
+	assert.Contains(t, msgs[len(msgs)-1].Subject, "recovery code")
+	assert.Equal(t, owner, msgs[len(msgs)-1].To)
+}
+
+// One ticket makes one passkey, even when two registrations started from it finish at the same
+// moment.
+func TestTicketIsTakenOnce(t *testing.T) {
+	e := setup(t)
+	for range 5 {
+		b := e.browser()
+		e.clock.advance(11 * time.Minute)
+		status, r := b.startEmail(owner, false)
+		require.Equal(t, http.StatusOK, status, r)
+		if r["step"] != "code" { // signed up in an earlier round: recover instead
+			status, r = b.startEmail(owner, true)
+			require.Equal(t, http.StatusOK, status, r)
+		}
+		purpose := r["purpose"].(string)
+		status, tk := b.confirmCode(e.lastCode(), purpose)
+		require.Equal(t, http.StatusOK, status, tk)
+		ticket := tk["ticket"].(string)
+
+		type started struct {
+			ceremony string
+			cred     any
+		}
+		var both []started
+		for range 2 {
+			status, begin := b.json("/passkey/register/begin", map[string]string{"ticket": ticket})
+			require.Equal(t, http.StatusOK, status, begin)
+			both = append(both, started{begin["ceremony"].(string), b.authn.create(t, begin["options"].(map[string]any), e.base)})
+		}
+		u, err := e.store.UserByEmail(context.Background(), owner)
+		require.NoError(t, err)
+		before, err := e.store.Passkeys(context.Background(), u.ID)
+		require.NoError(t, err)
+
+		statuses := make(chan int, 2)
+		for _, s := range both {
+			go func() {
+				status, _ := e.browser().json("/passkey/register/finish?ceremony="+s.ceremony+"&next=/account", s.cred)
+				statuses <- status
+			}()
+		}
+		ok := 0
+		for range 2 {
+			if <-statuses == http.StatusOK {
+				ok++
+			}
+		}
+		assert.Equal(t, 1, ok, "one of the two finishes")
+		after, err := e.store.Passkeys(context.Background(), u.ID)
+		require.NoError(t, err)
+		if purpose == store.PurposeRecover {
+			assert.Len(t, after, 1, "recovery leaves exactly the one new passkey")
+		} else {
+			assert.Len(t, after, len(before)+1, "one passkey per ticket")
+		}
+	}
+}
+
+// A ticket survives a failed attempt to create the passkey (the Owner can try again), and is
+// gone after a successful one.
+func TestTicketSurvivesAFailedAttempt(t *testing.T) {
+	e := setup(t)
+	b := e.browser()
+	b.startEmail(owner, false)
+	_, tk := b.confirmCode(e.lastCode(), store.PurposeVerify)
+	ticket := tk["ticket"].(string)
+
+	status, begin := b.json("/passkey/register/begin", map[string]string{"ticket": ticket})
+	require.Equal(t, http.StatusOK, status)
+	status, _ = b.json("/passkey/register/finish?ceremony="+begin["ceremony"].(string), map[string]string{"not": "a credential"})
+	assert.Equal(t, http.StatusBadRequest, status)
+	status, done := b.createPasskey(ticket)
+	require.Equal(t, http.StatusOK, status, done)
+	status, _ = b.json("/passkey/register/begin", map[string]string{"ticket": ticket})
+	assert.Equal(t, http.StatusBadRequest, status, "used")
+}
+
+// When a recovery completes, every other pending recovery of the account ends: a ticket from an
+// earlier code (in someone else's hands, perhaps) can no longer add a passkey and throw the
+// Owner's new one out.
+func TestCompletedRecoveryEndsOtherPendingOnes(t *testing.T) {
+	e := setup(t)
+	e.browser().signUp()
+	u, err := e.store.UserByEmail(context.Background(), owner)
+	require.NoError(t, err)
+
+	// Someone reads a recovery code from the Owner's mailbox and gets as far as a ticket, and
+	// even starts creating a passkey.
+	e.clock.advance(2 * time.Minute)
+	intruder := e.browser()
+	intruder.startEmail(owner, true)
+	e.svc.WaitForMail()
+	status, tk := intruder.confirmCode(e.lastCode(), store.PurposeRecover)
+	require.Equal(t, http.StatusOK, status, tk)
+	stolen := tk["ticket"].(string)
+	status, begin := intruder.json("/passkey/register/begin", map[string]string{"ticket": stolen})
+	require.Equal(t, http.StatusOK, status)
+	cred := intruder.authn.create(t, begin["options"].(map[string]any), e.base)
+
+	// The Owner recovers the account.
+	e.clock.advance(2 * time.Minute)
+	e.browser().codeFlow(store.PurposeRecover)
+	keys, err := e.store.Passkeys(context.Background(), u.ID)
+	require.NoError(t, err)
+	require.Len(t, keys, 1)
+
+	status, _ = intruder.json("/passkey/register/finish?ceremony="+begin["ceremony"].(string)+"&next=/account", cred)
+	assert.Equal(t, http.StatusBadRequest, status, "the registration already started is void")
+	status, _ = intruder.json("/passkey/register/begin", map[string]string{"ticket": stolen})
+	assert.Equal(t, http.StatusBadRequest, status, "and so is the ticket")
+	after, err := e.store.Passkeys(context.Background(), u.ID)
+	require.NoError(t, err)
+	assert.Equal(t, keys, after, "the Owner's new passkey is the only one")
+}
+
+// Passkey sign-ins in progress are kept in memory; their number is capped, and a full table
+// answers "try again" rather than growing (FR-099).
+func TestCeremoniesAreCapped(t *testing.T) {
+	account.SetPendingCap(t, 5)
+	e := setup(t)
+	b := e.browser()
+	for range 5 {
+		status, _ := b.json("/passkey/login/begin", map[string]string{"purpose": "signin"})
+		require.Equal(t, http.StatusOK, status)
+	}
+	status, r := b.json("/passkey/login/begin", map[string]string{"purpose": "signin"})
+	assert.Equal(t, http.StatusServiceUnavailable, status)
+	assert.Equal(t, "Too many sign-ins are in progress right now. Try again in a minute.", r["error"])
+	assert.Equal(t, 5, e.svc.PendingCeremonies())
+
+	e.clock.advance(6 * time.Minute) // they expire
+	status, _ = b.json("/passkey/login/begin", map[string]string{"purpose": "signin"})
+	assert.Equal(t, http.StatusOK, status, "room again once the old ones expired")
+	assert.Equal(t, 1, e.svc.PendingCeremonies(), "expired ones are swept, not kept")
 }

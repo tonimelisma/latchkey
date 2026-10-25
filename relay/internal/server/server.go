@@ -55,7 +55,7 @@ func New(ctx context.Context, o Options) (*Relay, error) {
 
 	auth := &authBridge{}
 	oa, err := oauth.New(ctx, oauth.Config{
-		Issuer: o.PublicURL, Store: o.Store, Auth: auth,
+		Issuer: o.PublicURL, Store: o.Store, Auth: auth, Logger: o.Logger,
 		OnAuthorized: func(ctx context.Context, userID, clientName string) { acc.ClientAuthorized(ctx, userID, clientName) },
 	})
 	if err != nil {
@@ -65,6 +65,7 @@ func New(ctx context.Context, o Options) (*Relay, error) {
 		PublicURL: o.PublicURL, Store: o.Store, Macs: h, Mailer: o.Mailer, OAuth: oa,
 		AllowedEmails: o.AllowedEmails, Logger: o.Logger,
 		DevicesChanged: func(userID string) { ms.ToolsChanged(userID) },
+		AccessRemoved:  func(userID string) { ms.Forget(userID) },
 	})
 	if err != nil {
 		return nil, err

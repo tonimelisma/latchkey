@@ -6,8 +6,10 @@ package oauth
 import (
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"slices"
@@ -53,14 +55,16 @@ func (c ConsentRequest) Label() string { return clientLabel(c.ClientName, c.Clie
 const maxNameRunes = 60
 
 // cleanName makes a client's free-text name safe to show next to a host: no control or
-// formatting characters (newlines, direction overrides, zero-width marks), no parentheses (a
-// name can't carry a "(host)" of its own), runs of spaces collapsed, at most maxNameRunes.
+// formatting characters (newlines, direction overrides, zero-width marks), no brackets of any
+// kind in any script (Unicode's open and close punctuation: a name can't carry a "(host)" of its
+// own, in ASCII or as fullwidth, small, or ornamental parentheses), runs of spaces collapsed, at
+// most maxNameRunes.
 func cleanName(name string) string {
 	name = strings.Map(func(r rune) rune {
 		switch {
 		case unicode.IsSpace(r):
 			return ' '
-		case unicode.IsControl(r), unicode.Is(unicode.Cf, r), r == '(' || r == ')', r == utf8.RuneError:
+		case unicode.IsControl(r), unicode.Is(unicode.Cf, r), unicode.In(r, unicode.Ps, unicode.Pe), r == utf8.RuneError:
 			return -1
 		}
 		return r
@@ -101,8 +105,8 @@ func clientLabel(name, host string) string {
 
 // verifiedHosts is the part of a client's identity the relay checked, in ASCII: for a
 // metadata-document client, the host it fetched the document from (its client ID); otherwise
-// the hosts its codes are sent to: the given redirect URI's, or with none given, every
-// registered one's, since a remembered approval covers them all (FR-049).
+// the hosts its codes are sent to: the given redirect URI's, or with none given (the account
+// page, which names a client rather than one sign-in), every registered one's.
 func verifiedHosts(cl fosite.Client, redirect *url.URL) []string {
 	if isCIMD(cl.GetID()) {
 		if u, err := url.Parse(cl.GetID()); err == nil {
@@ -141,6 +145,8 @@ type Config struct {
 	// OnAuthorized runs after each grant, with the client's name and checked host (as on the
 	// consent page), so the Owner can be told.
 	OnAuthorized func(ctx context.Context, userID, clientName string)
+	// Logger gets what clients are not told, such as why a metadata document was refused.
+	Logger *slog.Logger
 }
 
 // Server is the authorization server.
@@ -156,6 +162,9 @@ type Server struct {
 func New(ctx context.Context, cfg Config) (*Server, error) {
 	if cfg.Now == nil {
 		cfg.Now = time.Now
+	}
+	if cfg.Logger == nil {
+		cfg.Logger = slog.Default()
 	}
 	if cfg.HTTPClient == nil {
 		cfg.HTTPClient = &http.Client{
@@ -188,7 +197,7 @@ func New(ctx context.Context, cfg Config) (*Server, error) {
 		RefreshTokenScopes:             []string{"offline_access"},
 		SendDebugMessagesToClients:     false,
 	}
-	cl := &clients{st: cfg.Store, http: cfg.HTTPClient, now: cfg.Now}
+	cl := &clients{st: cfg.Store, http: cfg.HTTPClient, now: cfg.Now, log: cfg.Logger, failed: map[[sha256.Size]byte]time.Time{}}
 	st := &storage{st: cfg.Store, clients: cl, now: cfg.Now}
 	provider := compose.Compose(fc, st, compose.NewOAuth2HMACStrategy(fc),
 		compose.OAuth2AuthorizeExplicitFactory,
@@ -237,7 +246,45 @@ func (s *Server) metadata(w http.ResponseWriter, _ *http.Request) {
 		"revocation_endpoint_auth_methods_supported": []string{"none", "client_secret_post", "client_secret_basic"},
 		"client_id_metadata_document_supported":      true,
 		"scopes_supported":                           supportedScopes,
+		// RFC 9207: every authorization response carries iss (see issWriter).
+		"authorization_response_iss_parameter_supported": true,
 	})
+}
+
+// issWriter adds the RFC 9207 "iss" parameter to the redirect fosite writes back to the client,
+// for codes and errors alike (fosite 0.49 has no support for it). A response that isn't a
+// redirect (an error shown in the browser because the client or redirect URI is unknown) is left
+// as it is.
+type issWriter struct {
+	http.ResponseWriter
+	issuer string
+	wrote  bool
+}
+
+func (w *issWriter) WriteHeader(code int) {
+	if !w.wrote {
+		w.wrote = true
+		if loc := w.Header().Get("Location"); loc != "" && code >= 300 && code < 400 {
+			if u, err := url.Parse(loc); err == nil {
+				q := u.Query()
+				q.Set("iss", w.issuer)
+				u.RawQuery = q.Encode()
+				w.Header().Set("Location", u.String())
+			}
+		}
+	}
+	w.ResponseWriter.WriteHeader(code)
+}
+
+func (w *issWriter) Write(b []byte) (int, error) {
+	if !w.wrote {
+		w.WriteHeader(http.StatusOK)
+	}
+	return w.ResponseWriter.Write(b)
+}
+
+func (s *Server) writeAuthorizeError(ctx context.Context, w http.ResponseWriter, ar fosite.AuthorizeRequester, err error) {
+	s.provider.WriteAuthorizeError(ctx, &issWriter{ResponseWriter: w, issuer: s.issuer}, ar, err)
 }
 
 func newSession(subject string) *fosite.DefaultSession {
@@ -253,12 +300,12 @@ func (s *Server) authorize(w http.ResponseWriter, r *http.Request) {
 	ctx = withRequestedRedirect(ctx, r.Form.Get("redirect_uri"))
 	ar, err := s.provider.NewAuthorizeRequest(ctx, r)
 	if err != nil {
-		s.provider.WriteAuthorizeError(ctx, w, ar, err)
+		s.writeAuthorizeError(ctx, w, ar, err)
 		return
 	}
 	// RFC 8707: a resource indicator, if given, must name this relay's MCP endpoint.
 	if res := r.Form.Get("resource"); res != "" && strings.TrimSuffix(res, "/") != s.resource {
-		s.provider.WriteAuthorizeError(ctx, w, ar, fosite.ErrInvalidRequest.WithHint("Unknown resource."))
+		s.writeAuthorizeError(ctx, w, ar, fosite.ErrInvalidRequest.WithHint("Unknown resource."))
 		return
 	}
 	userID, ok := s.cfg.Auth.CurrentUser(r)
@@ -266,23 +313,11 @@ func (s *Server) authorize(w http.ResponseWriter, r *http.Request) {
 		s.cfg.Auth.SignIn(w, r)
 		return
 	}
-	scopes := grantable(ar.GetRequestedScopes())
-	approved := false
-	if r.Method == http.MethodPost {
-		if !s.cfg.Auth.ValidCSRF(r) {
-			http.Error(w, "This form expired. Go back and try again.", http.StatusForbidden)
-			return
-		}
-		if r.PostForm.Get("decision") != "allow" {
-			s.provider.WriteAuthorizeError(ctx, w, ar, fosite.ErrAccessDenied.WithHint("The Owner declined."))
-			return
-		}
-		approved = true
-	} else if prior, err := s.cfg.Store.Consent(ctx, userID, ar.GetClient().GetID()); err == nil &&
-		covers(strings.Fields(prior), scopes) {
-		approved = true // FR-049
-	}
-	if !approved {
+	// Consent is asked every time (FR-049a): only the Owner's Allow, posted from the consent page
+	// with its CSRF token, issues a code. Nothing is remembered, so a program on the Owner's
+	// computer posing as an approved client (a loopback redirect on any port) gets no code
+	// without the Owner seeing the page (RFC 8252 §8.6).
+	if r.Method != http.MethodPost {
 		c := ConsentRequest{
 			RedirectHost: displayHost(ar.GetRedirectURI().Host),
 			ClientHost:   strings.Join(verifiedHosts(ar.GetClient(), ar.GetRedirectURI()), ", "),
@@ -293,22 +328,26 @@ func (s *Server) authorize(w http.ResponseWriter, r *http.Request) {
 		s.cfg.Auth.Consent(w, r, c)
 		return
 	}
-	for _, sc := range scopes {
+	if !s.cfg.Auth.ValidCSRF(r) {
+		http.Error(w, "This form expired. Go back and try again.", http.StatusForbidden)
+		return
+	}
+	if r.PostForm.Get("decision") != "allow" {
+		s.writeAuthorizeError(ctx, w, ar, fosite.ErrAccessDenied.WithHint("The Owner declined."))
+		return
+	}
+	for _, sc := range grantable(ar.GetRequestedScopes()) {
 		ar.GrantScope(sc)
 	}
 	resp, err := s.provider.NewAuthorizeResponse(ctx, ar, newSession(userID))
 	if err != nil {
-		s.provider.WriteAuthorizeError(ctx, w, ar, err)
-		return
-	}
-	if err := s.cfg.Store.PutConsent(ctx, userID, ar.GetClient().GetID(), strings.Join(scopes, " "), s.cfg.Now()); err != nil {
-		http.Error(w, "server error", http.StatusInternalServerError)
+		s.writeAuthorizeError(ctx, w, ar, err)
 		return
 	}
 	if s.cfg.OnAuthorized != nil {
 		s.cfg.OnAuthorized(ctx, userID, label(ar.GetClient(), ar.GetRedirectURI()))
 	}
-	s.provider.WriteAuthorizeResponse(ctx, w, ar, resp)
+	s.provider.WriteAuthorizeResponse(ctx, &issWriter{ResponseWriter: w, issuer: s.issuer}, ar, resp)
 }
 
 // grantable returns the requested scopes the relay grants; "mcp" is always granted.
@@ -320,15 +359,6 @@ func grantable(requested []string) []string {
 	return out
 }
 
-func covers(have, want []string) bool {
-	for _, w := range want {
-		if !slices.Contains(have, w) {
-			return false
-		}
-	}
-	return true
-}
-
 func (s *Server) token(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	ar, err := s.provider.NewAccessRequest(ctx, r, newSession(""))
@@ -338,10 +368,25 @@ func (s *Server) token(w http.ResponseWriter, r *http.Request) {
 	}
 	resp, err := s.provider.NewAccessResponse(ctx, ar)
 	if err != nil {
+		// The grant ended while its tokens were being written: another exchange used the same
+		// code (storage.InvalidateAuthorizeCodeSession), or the grant was revoked or removed
+		// (the store refuses the token). That is the client's grant being invalid, not a server
+		// error, which is what fosite makes of any storage failure.
+		if grantEnded(err) {
+			err = fosite.ErrInvalidGrant.WithHint("The authorization code or token is no longer valid.")
+		}
 		s.provider.WriteAccessError(ctx, w, ar, err)
 		return
 	}
 	s.provider.WriteAccessResponse(ctx, w, ar, resp)
+}
+
+func grantEnded(err error) bool {
+	if errors.Is(err, fosite.ErrInvalidatedAuthorizeCode) {
+		return true
+	}
+	var rfc *fosite.RFC6749Error
+	return errors.As(err, &rfc) && rfc.ErrorField == fosite.ErrServerError.ErrorField && errors.Is(rfc.Unwrap(), fosite.ErrNotFound)
 }
 
 func (s *Server) revoke(w http.ResponseWriter, r *http.Request) {
@@ -418,7 +463,7 @@ func (c *challengeWriter) Flush() {
 
 func (c *challengeWriter) Unwrap() http.ResponseWriter { return c.ResponseWriter }
 
-// RevokeUser deletes all of the Owner's tokens and remembered approvals (FR-044).
+// RevokeUser deletes all of the Owner's codes and tokens, for every client (FR-044).
 func (s *Server) RevokeUser(ctx context.Context, userID string) error {
 	return s.cfg.Store.DeleteUserOAuth(ctx, userID)
 }

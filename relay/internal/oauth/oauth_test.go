@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -354,8 +355,8 @@ func TestClientLabelResistsSpoofing(t *testing.T) {
 	assert.Equal(t, "evil.example", c.Label(), "a name with nothing left shows the host alone")
 }
 
-// The account page lists every host a registered client can send codes to, since a remembered
-// approval covers all of its redirect URIs (review of the client-name fix).
+// The account page lists every host a registered client can send codes to: it names the client,
+// not one sign-in (review of the client-name fix).
 func TestAccountNameListsEveryRedirectHost(t *testing.T) {
 	e := setup(t)
 	id := e.registerNamed("Claude", "https://claude.ai/cb", "https://evil.example/cb", "https://claude.ai/other")
@@ -522,12 +523,30 @@ func TestDenyAndCSRF(t *testing.T) {
 	assert.Equal(t, "access_denied", loc.Query().Get("error"))
 }
 
-func TestConsentRemembered(t *testing.T) {
+// Consent is asked every time, for every client (FR-049a, RFC 8252 §8.6): a GET to /authorize
+// never issues a code, however often the Owner approved that client before.
+func TestConsentAskedEveryTime(t *testing.T) {
 	e := setup(t)
 	id := e.register("https://claude.ai/api/mcp/auth_callback")
 	e.tokens(id)
 	e.tokens(id)
-	assert.Equal(t, 1, e.auth.consentCount(), "FR-049: asked once per client")
+	assert.Equal(t, 2, e.auth.consentCount(), "asked again for a client approved before")
+
+	p := newPKCE()
+	resp := e.do(http.MethodGet, authorizeURL(id, "https://claude.ai/api/mcp/auth_callback", &p, nil), nil, "", true)
+	assert.Equal(t, http.StatusOK, resp.StatusCode, "the consent page, not a redirect with a code")
+	assert.Empty(t, resp.Header.Get("Location"))
+
+	// A loopback client (Claude Code) is asked again too, on any port.
+	local := e.register("http://localhost:7777/callback")
+	for _, port := range []string{"7777", "8123", "8123"} {
+		p := newPKCE()
+		resp := e.do(http.MethodGet, authorizeURL(local, "http://localhost:"+port+"/callback", &p, nil), nil, "", true)
+		assert.Equal(t, http.StatusOK, resp.StatusCode, port)
+		assert.Empty(t, resp.Header.Get("Location"), port)
+		loc := e.approve(authorizeURL(local, "http://localhost:"+port+"/callback", &p, nil))
+		assert.NotEmpty(t, loc.Query().Get("code"), port)
+	}
 }
 
 func TestEveryAuthorizationIsAnnounced(t *testing.T) {
@@ -537,7 +556,7 @@ func TestEveryAuthorizationIsAnnounced(t *testing.T) {
 	e.tokens(id)
 	e.authorizedMu.Lock()
 	defer e.authorizedMu.Unlock()
-	assert.Equal(t, []string{"Claude (claude.ai)", "Claude (claude.ai)"}, e.authorized, "each grant, even with consent remembered")
+	assert.Equal(t, []string{"Claude (claude.ai)", "Claude (claude.ai)"}, e.authorized, "each grant")
 }
 
 func TestResourceIndicator(t *testing.T) {
@@ -658,6 +677,7 @@ func TestRevokeUserAndDeletedUser(t *testing.T) {
 // "Remove Claude's access" while a refresh is between reading its token and writing the new
 // ones: the refresh must fail, and nothing it wrote may work (security scan).
 func TestRevokeUserDuringRefresh(t *testing.T) {
+	oauth.SetCIMDMinAge(t, 0) // every client lookup fetches the document: the test's way in
 	e := setup(t)
 	clientID := e.cimd.URL + "/oauth/client.json"
 	const redirect = "http://localhost:7777/callback"
@@ -705,6 +725,7 @@ func TestRevokeUserDuringRefresh(t *testing.T) {
 // A grant revoked by marking its tokens (POST /revoke, or reuse detection) while a refresh is in
 // flight: the refresh must not write fresh, unrevoked tokens for it (security review).
 func TestGrantRevokedDuringRefresh(t *testing.T) {
+	oauth.SetCIMDMinAge(t, 0)
 	e := setup(t)
 	clientID := e.cimd.URL + "/oauth/client.json"
 	const redirect = "http://localhost:7777/callback"
@@ -802,4 +823,246 @@ func TestCIMDFetchRefusesPrivateAddresses(t *testing.T) {
 	_ = resp.Body.Close()
 	assert.Equal(t, http.StatusUnauthorized, resp.StatusCode, "invalid_client")
 	assert.Empty(t, resp.Header.Get("Location"))
+}
+
+// RFC 9207: every redirect back to the client, with a code or with an error, names this relay
+// as the issuer, and the metadata says so, so a client talking to several servers can't be fed
+// another server's code (FR-097).
+func TestAuthorizationResponsesNameTheIssuer(t *testing.T) {
+	e := setup(t)
+	m := decode(t, e.do(http.MethodGet, "/.well-known/oauth-authorization-server", nil, "", false))
+	assert.Equal(t, true, m["authorization_response_iss_parameter_supported"])
+
+	const redirect = "https://claude.ai/api/mcp/auth_callback"
+	id := e.register(redirect)
+	p := newPKCE()
+	loc := e.approve(authorizeURL(id, redirect, &p, nil))
+	require.NotEmpty(t, loc.Query().Get("code"))
+	assert.Equal(t, e.srv.URL, loc.Query().Get("iss"), "with a code")
+	assert.Equal(t, "state-123456789", loc.Query().Get("state"))
+
+	resp := e.do(http.MethodPost, authorizeURL(id, redirect, &p, nil), strings.NewReader("decision=deny&csrf=ok"), "application/x-www-form-urlencoded", true)
+	loc = mustParse(resp.Header.Get("Location"))
+	assert.Equal(t, "access_denied", loc.Query().Get("error"))
+	assert.Equal(t, e.srv.URL, loc.Query().Get("iss"), "with the Owner's no")
+
+	loc = e.approve(authorizeURL(id, redirect, nil, nil)) // no PKCE
+	assert.Equal(t, "invalid_request", loc.Query().Get("error"))
+	assert.Equal(t, e.srv.URL, loc.Query().Get("iss"), "with an error")
+
+	loc = e.approve(authorizeURL(id, redirect, &p, url.Values{"resource": {"https://other.example/mcp"}}))
+	assert.Equal(t, e.srv.URL, loc.Query().Get("iss"), "with the relay's own error")
+
+	// The sign-in redirect is the relay's own page, not an authorization response.
+	resp = e.do(http.MethodGet, authorizeURL(id, redirect, &p, nil), nil, "", false)
+	assert.NotContains(t, resp.Header.Get("Location"), "iss=")
+}
+
+// One code, redeemed by several requests at the same moment: at most one gets tokens, the others
+// are told the code is used, and the grant ends as it does for a replay (FR-096).
+func TestCodeRedeemedConcurrently(t *testing.T) {
+	e := setup(t)
+	const redirect = "https://claude.ai/api/mcp/auth_callback"
+	id := e.register(redirect)
+	for range 5 {
+		p := newPKCE()
+		code := e.approve(authorizeURL(id, redirect, &p, nil)).Query().Get("code")
+		form := url.Values{
+			"grant_type": {"authorization_code"}, "code": {code}, "redirect_uri": {redirect},
+			"client_id": {id}, "code_verifier": {p.verifier},
+		}
+		type result struct {
+			status int
+			body   map[string]any
+		}
+		results := make(chan result, 8)
+		var wg sync.WaitGroup
+		for range 8 {
+			wg.Go(func() {
+				req, err := http.NewRequestWithContext(ctxT(t), http.MethodPost, e.srv.URL+"/token", strings.NewReader(form.Encode()))
+				if err != nil {
+					t.Error(err)
+					return
+				}
+				req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+				resp, err := http.DefaultClient.Do(req)
+				if err != nil {
+					t.Error(err)
+					return
+				}
+				defer func() { _ = resp.Body.Close() }()
+				var m map[string]any
+				_ = json.NewDecoder(resp.Body).Decode(&m)
+				results <- result{resp.StatusCode, m}
+			})
+		}
+		wg.Wait()
+		close(results)
+		ok := 0
+		for r := range results {
+			if r.status == http.StatusOK {
+				ok++
+				access, _ := r.body["access_token"].(string)
+				assert.Equal(t, http.StatusUnauthorized, e.mcpStatus(access), "a code used twice ends its grant")
+				continue
+			}
+			assert.NotContains(t, r.body, "access_token")
+			assert.Equal(t, http.StatusBadRequest, r.status, r.body)
+			assert.Equal(t, "invalid_grant", r.body["error"], "never a server error")
+		}
+		assert.LessOrEqual(t, ok, 1, "a code is redeemed once")
+	}
+}
+
+// A name can't carry a "(host)" of its own in any script: every kind of bracket is removed, not
+// only the ASCII parentheses (FR-098).
+func TestClientNameLosesEveryKindOfBracket(t *testing.T) {
+	e := setup(t)
+	for _, name := range []string{
+		"Claude \uff08claude.ai\uff09", // fullwidth parentheses
+		"Claude \ufe59claude.ai\ufe5a", // small parentheses
+		"Claude \u2768claude.ai\u2769", // ornament parentheses
+		"Claude [claude.ai]", "Claude {claude.ai}", "Claude \u27e8claude.ai\u27e9", "Claude \u300cclaude.ai\u300d",
+		"Claude \u207dclaude.ai\u207e", // superscript parentheses
+		"Claude \ufd3eclaude.ai\ufd3f", // ornate parentheses (the open one is a close, and the reverse)
+	} {
+		c := e.consentFor(e.registerNamed(name, "https://evil.example/cb"), "https://evil.example/cb")
+		assert.Equal(t, "Claude claude.ai", c.ClientName, "%q", name)
+		assert.Equal(t, "Claude claude.ai (evil.example)", c.Label(), "%q", name)
+	}
+}
+
+// cimdServer is a client metadata document host whose behavior a test can change.
+type cimdServer struct {
+	*httptest.Server
+	mu           sync.Mutex
+	hits         int
+	fail         bool
+	cacheControl string
+}
+
+func newCIMDServer(t *testing.T) *cimdServer {
+	t.Helper()
+	c := &cimdServer{}
+	c.Server = httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		c.mu.Lock()
+		c.hits++
+		fail, cc := c.fail, c.cacheControl
+		c.mu.Unlock()
+		if fail {
+			http.Error(w, "down", http.StatusServiceUnavailable)
+			return
+		}
+		if cc != "" {
+			w.Header().Set("Cache-Control", cc)
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"client_id": "https://" + r.Host + r.URL.Path, "client_name": "Claude",
+			"redirect_uris": []string{"https://claude.ai/api/mcp/auth_callback"}, "token_endpoint_auth_method": "none",
+		})
+	}))
+	t.Cleanup(c.Close)
+	return c
+}
+
+func (c *cimdServer) set(fail bool, cacheControl string) {
+	c.mu.Lock()
+	c.fail, c.cacheControl = fail, cacheControl
+	c.mu.Unlock()
+}
+
+func (c *cimdServer) fetched() int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.hits
+}
+
+// authorizeStatus opens the consent page for a metadata-document client.
+func (e *env) authorizeStatus(clientID string) *http.Response {
+	e.t.Helper()
+	p := newPKCE()
+	return e.do(http.MethodGet, authorizeURL(clientID, "https://claude.ai/api/mcp/auth_callback", &p, nil), nil, "", true)
+}
+
+// A document is cached for at least five minutes whatever its host says, and when a refresh
+// fails the last good copy keeps working for a week, so the outage of a client's metadata host
+// doesn't cut its users off (FR-095).
+func TestCIMDMinimumCacheAndStaleCopy(t *testing.T) {
+	e := setup(t)
+	doc := newCIMDServer(t)
+	doc.set(false, "no-store, max-age=0")
+	id := doc.URL + "/client.json"
+
+	require.Equal(t, http.StatusOK, e.authorizeStatus(id).StatusCode)
+	require.Equal(t, http.StatusOK, e.authorizeStatus(id).StatusCode)
+	e.clock.advance(4 * time.Minute)
+	require.Equal(t, http.StatusOK, e.authorizeStatus(id).StatusCode)
+	assert.Equal(t, 1, doc.fetched(), "no-store still means five minutes")
+
+	e.clock.advance(2 * time.Minute)
+	require.Equal(t, http.StatusOK, e.authorizeStatus(id).StatusCode)
+	assert.Equal(t, 2, doc.fetched(), "refreshed after the minimum")
+
+	doc.set(true, "")
+	e.clock.advance(6 * time.Minute)
+	assert.Equal(t, http.StatusOK, e.authorizeStatus(id).StatusCode, "the host is down: the last good copy is used")
+	assert.Equal(t, 3, doc.fetched())
+	assert.Equal(t, http.StatusOK, e.authorizeStatus(id).StatusCode)
+	assert.Equal(t, 3, doc.fetched(), "and the failing host is left alone for a few minutes")
+
+	e.clock.advance(6 * time.Minute)
+	assert.Equal(t, http.StatusOK, e.authorizeStatus(id).StatusCode)
+	assert.Equal(t, 4, doc.fetched(), "then tried again")
+
+	e.clock.advance(8 * 24 * time.Hour)
+	assert.Equal(t, http.StatusUnauthorized, e.authorizeStatus(id).StatusCode, "a copy more than a week stale is not used")
+
+	doc.set(false, "")
+	e.clock.advance(6 * time.Minute)
+	assert.Equal(t, http.StatusOK, e.authorizeStatus(id).StatusCode, "back again")
+}
+
+// A document that can't be fetched is not fetched again for a few minutes, and the error the
+// client and browser see says nothing about the relay's network (FR-095).
+func TestCIMDFailuresAreCachedAndSayNothing(t *testing.T) {
+	e := setup(t)
+	doc := newCIMDServer(t)
+	doc.set(true, "")
+	id := doc.URL + "/client.json"
+	for range 3 {
+		resp := e.authorizeStatus(id)
+		assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
+	}
+	assert.Equal(t, 1, doc.fetched(), "one fetch, then the failure is remembered")
+	e.clock.advance(6 * time.Minute)
+	e.authorizeStatus(id)
+	assert.Equal(t, 2, doc.fetched(), "for five minutes")
+
+	// A host nothing listens on: the Go error names the address and the failure; none of it may
+	// reach the caller.
+	gone := httptest.NewTLSServer(http.NotFoundHandler())
+	addr := strings.TrimPrefix(gone.URL, "https://")
+	gone.Close()
+	for _, target := range []string{gone.URL + "/client.json", doc.URL + "/client.json"} {
+		resp := e.authorizeStatus(target)
+		body, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+		assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
+		tokenResp, m := e.tokenRequest(url.Values{"grant_type": {"refresh_token"}, "refresh_token": {"x"}, "client_id": {target}})
+		assert.Equal(t, http.StatusUnauthorized, tokenResp.StatusCode)
+		for _, leak := range []string{addr, "127.0.0.1", "dial", "refused", "503", "connect"} {
+			assert.NotContains(t, string(body), leak, target)
+			assert.NotContains(t, fmt.Sprint(m), leak, target)
+		}
+	}
+}
+
+// What the client-lookup error itself carries is one fixed sentence (fosite hides hints of
+// wrapped errors today; this holds even if that changes).
+func TestCIMDErrorHintIsFixed(t *testing.T) {
+	e := setup(t)
+	gone := httptest.NewTLSServer(http.NotFoundHandler())
+	gone.Close()
+	hint := e.oauth.ClientLookupHint(ctxT(t), gone.URL+"/client.json")
+	assert.Equal(t, "The client metadata document could not be fetched or is not valid.", hint)
 }

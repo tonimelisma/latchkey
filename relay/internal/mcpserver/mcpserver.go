@@ -11,8 +11,11 @@ import (
 	"log/slog"
 	"net/http"
 	"reflect"
+	"strings"
 	"sync"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/modelcontextprotocol/go-sdk/auth"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -27,6 +30,60 @@ type Options struct {
 	Now     func() time.Time
 	Logger  *slog.Logger
 	Version string // reported in serverInfo
+	// SessionTimeout closes a 2025-11-25 session that received no request for this long.
+	// Default DefaultSessionTimeout.
+	SessionTimeout time.Duration
+}
+
+// DefaultSessionTimeout is how long an unused session lives (FR-090).
+const DefaultSessionTimeout = 30 * time.Minute
+
+// MaxSessionsPerUser is how many sessions one Owner may hold; one more closes the oldest
+// (FR-090). Claude opens a session per conversation at most, and they expire when idle.
+const MaxSessionsPerUser = 64
+
+// Users is how many Owners have a server in memory.
+func (s *Server) Users() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return len(s.users)
+}
+
+// Forget drops the Owner's server and closes its sessions: called when the account is deleted or
+// Claude's access is removed, so neither leaves anything in memory (FR-090). A later sign-in
+// simply builds a new server.
+func (s *Server) Forget(userID string) {
+	s.mu.Lock()
+	u := s.users[userID]
+	delete(s.users, userID)
+	s.mu.Unlock()
+	if u == nil {
+		return
+	}
+	for ss := range u.server.Sessions() {
+		_ = ss.Close()
+	}
+}
+
+// makeRoom closes the Owner's oldest sessions when a new one would exceed MaxSessionsPerUser.
+// The SDK lists a server's sessions oldest first; the per-request sessions of the stateless
+// protocol have no ID and are left alone.
+func (s *Server) makeRoom(userID string) {
+	s.mu.Lock()
+	u := s.users[userID]
+	s.mu.Unlock()
+	if u == nil {
+		return
+	}
+	var live []*mcp.ServerSession
+	for ss := range u.server.Sessions() {
+		if ss.ID() != "" {
+			live = append(live, ss)
+		}
+	}
+	for i := 0; i <= len(live)-MaxSessionsPerUser; i++ {
+		_ = live[i].Close()
+	}
 }
 
 // Server is an http.Handler for /mcp. It must sit behind auth.RequireBearerToken, whose
@@ -40,6 +97,10 @@ type Server struct {
 
 	mu    sync.Mutex
 	users map[string]*userServer
+
+	// loadTools reads an Owner's current Mac tools (macTools); a field so a test can interleave
+	// two syncs.
+	loadTools func(ctx context.Context, userID string) []*mcp.Tool
 }
 
 // userServer is one Owner's MCP server; its tool list is that Owner's Mac tools.
@@ -60,9 +121,17 @@ func New(st *store.Store, h *hub.Hub, opts Options) *Server {
 	if opts.Version == "" {
 		opts.Version = "dev"
 	}
+	if opts.SessionTimeout <= 0 {
+		opts.SessionTimeout = DefaultSessionTimeout
+	}
 	s := &Server{store: st, hub: h, opts: opts, users: map[string]*userServer{}}
+	s.loadTools = s.macTools
 	sdkLog := sdkLogger(opts.Logger)
-	s.stateful = mcp.NewStreamableHTTPHandler(s.serverFor, &mcp.StreamableHTTPOptions{Logger: sdkLog})
+	// An idle session is closed by the SDK (its next request gets 404 and the client starts a new
+	// one, as the MCP transport specifies); without this, sessions lived until restart.
+	s.stateful = mcp.NewStreamableHTTPHandler(s.serverFor, &mcp.StreamableHTTPOptions{
+		Logger: sdkLog, SessionTimeout: opts.SessionTimeout,
+	})
 	s.stateless = mcp.NewStreamableHTTPHandler(s.serverFor, &mcp.StreamableHTTPOptions{Logger: sdkLog, Stateless: true})
 	return s
 }
@@ -76,6 +145,9 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if v := r.Header.Get("MCP-Protocol-Version"); v >= firstStatelessVersion {
 		s.stateless.ServeHTTP(w, r)
 		return
+	}
+	if r.Method == http.MethodPost && r.Header.Get("Mcp-Session-Id") == "" {
+		s.makeRoom(userID(r)) // this request opens a session
 	}
 	s.stateful.ServeHTTP(w, r)
 }
@@ -166,13 +238,16 @@ func (s *Server) macTools(ctx context.Context, userID string) []*mcp.Tool {
 	return tools
 }
 
+// syncTools makes the Owner's server offer exactly the Mac's stored tool list. The lock is taken
+// before the list is read: two syncs then apply their lists in the order they read them, so an
+// older list can never overwrite a newer one.
 func (s *Server) syncTools(ctx context.Context, userID string, u *userServer) {
-	want := map[string]*mcp.Tool{}
-	for _, t := range s.macTools(ctx, userID) {
-		want[t.Name] = t
-	}
 	u.mu.Lock()
 	defer u.mu.Unlock()
+	want := map[string]*mcp.Tool{}
+	for _, t := range s.loadTools(ctx, userID) {
+		want[t.Name] = t
+	}
 	var gone []string
 	for name := range u.tools {
 		if _, ok := want[name]; !ok {
@@ -299,10 +374,31 @@ func progressFunc(ctx context.Context, req *mcp.CallToolRequest) func(*agentprot
 	}
 }
 
+// maxSurfaceRunes caps the audit log's "surface" (FR-022a).
+const maxSurfaceRunes = 64
+
+// cleanSurface makes a client's self-chosen name safe to store and show: no control or
+// formatting characters (newlines, escapes, direction overrides), at most maxSurfaceRunes.
+func cleanSurface(name string) string {
+	var b strings.Builder
+	n := 0
+	for _, r := range name {
+		if n == maxSurfaceRunes {
+			break
+		}
+		if unicode.IsControl(r) || unicode.Is(unicode.Cf, r) || r == utf8.RuneError {
+			continue
+		}
+		b.WriteRune(r)
+		n++
+	}
+	return b.String()
+}
+
 func (s *Server) audit(ctx context.Context, req *mcp.CallToolRequest, userID, deviceID, tool, outcome string, start time.Time) {
 	surface := ""
 	if info := req.ClientInfo(); info != nil {
-		surface = info.Name
+		surface = cleanSurface(info.Name)
 	}
 	err := s.store.AddAudit(ctx, store.AuditEntry{
 		UserID: userID, DeviceID: deviceID, At: start.UTC(), Tool: tool, Surface: surface,
