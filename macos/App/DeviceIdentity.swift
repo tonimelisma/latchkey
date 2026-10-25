@@ -75,6 +75,8 @@ struct DeviceIdentity: Sendable {
     typealias KeyMaker = @Sendable (Data) throws -> any SigningKey
     static let secureEnclaveKey: KeyMaker = { try SecureEnclaveSigningKey(dataRepresentation: $0) }
 
+    /// Only reads the record. A record that is there but can't be read or used is left exactly
+    /// as it is (FR-202): the app starts unpaired and tries again at its next launch.
     static func load(vault: any PairingVault = KeychainVault(), makeKey: KeyMaker = secureEnclaveKey)
         -> DeviceIdentity?
     {
@@ -103,7 +105,12 @@ struct DeviceIdentity: Sendable {
 
     /// Which parts of a pairing are missing, for the log.
     static func missing(vault: any PairingVault = KeychainVault()) -> String {
-        guard let r = record(vault) else { return "missing pairing record" }
+        switch vault.lookup(recordAccount) {
+        case .absent: return "missing pairing record"
+        case .unreadable(let why): return "pairing record present but unreadable: \(why)"
+        case .found: break
+        }
+        guard let r = record(vault) else { return "pairing record present but not understood" }
         if PairingFlow.normalize(r.relay) == nil {
             return "relay address not https"
         }
@@ -135,10 +142,18 @@ struct DeviceIdentity: Sendable {
 protocol PairingVault: Sendable {
     /// An item of this app's in the Keychain; nil when there's none (or more than one).
     func read(_ account: String) -> Data?
+    /// The same look, telling "no item" from "an item that can't be read".
+    func lookup(_ account: String) -> StoredItem
     func write(_ data: Data, _ account: String) throws
     func delete(_ account: String)
     /// Removes what versions up to 0.8.3 kept in user defaults.
     func removeLegacyDefault(_ key: String)
+}
+
+extension PairingVault {
+    func read(_ account: String) -> Data? {
+        if case .found(let data) = lookup(account) { data } else { nil }
+    }
 }
 
 /// The real storage. Under XCTest it changes nothing: while the test app still shared the
@@ -146,7 +161,7 @@ protocol PairingVault: Sendable {
 struct KeychainVault: PairingVault {
     private var underTest: Bool { ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil }
 
-    func read(_ account: String) -> Data? { Keychain.read(account: account) }
+    func lookup(_ account: String) -> StoredItem { Keychain.lookup(account: account) }
 
     func write(_ data: Data, _ account: String) throws {
         guard !underTest else { return }
@@ -192,7 +207,9 @@ enum Keychain {
         return q
     }
 
-    static func read(account: String, service: String = service) -> Data? {
+    /// Tells "no item" from "an item that can't be read" (FR-201): only the first may ever lead
+    /// to writing a new one.
+    static func lookup(account: String, service: String = service) -> StoredItem {
         // Two steps: the Keychain refuses "all matches, with their data" for passwords
         // (errSecParam), which made every read of 0.8.4–0.8.7 fail. First count the matches
         // without their data, then read the one.
@@ -201,21 +218,41 @@ enum Keychain {
         count[kSecMatchLimit as String] = kSecMatchLimitAll
         count[kSecUseAuthenticationUI as String] = kSecUseAuthenticationUIFail
         var found: CFTypeRef?
-        guard SecItemCopyMatching(count as CFDictionary, &found) == errSecSuccess,
-            let all = found as? [Any], all.count == 1
-        else { return nil }
+        let matches = SecItemCopyMatching(count as CFDictionary, &found)
+        let number = (found as? [Any])?.count ?? 0
+        guard matches == errSecSuccess, number == 1 else {
+            return outcome(matches: matches, count: number, read: errSecSuccess, data: nil)
+        }
 
         var q = query(account, service)
         q[kSecReturnData as String] = true
         q[kSecMatchLimit as String] = kSecMatchLimitOne
         q[kSecUseAuthenticationUI as String] = kSecUseAuthenticationUIFail
         var out: CFTypeRef?
-        guard SecItemCopyMatching(q as CFDictionary, &out) == errSecSuccess else { return nil }
-        return out as? Data
+        let read = SecItemCopyMatching(q as CFDictionary, &out)
+        return outcome(matches: matches, count: number, read: read, data: out as? Data)
     }
 
-    static func write(_ data: Data, account: String, service: String = service) throws {
-        delete(account: account, service: service)
+    /// What the two steps' answers mean. Only "not found" on the first step says there is no
+    /// item; any other failure leaves the question open, and is answered "there is one".
+    static func outcome(matches: OSStatus, count: Int, read: OSStatus, data: Data?) -> StoredItem {
+        if matches == errSecItemNotFound { return .absent }
+        guard matches == errSecSuccess else { return .unreadable("Keychain error \(matches)") }
+        guard count == 1 else { return .unreadable("\(count) items match") }
+        guard read == errSecSuccess else { return .unreadable("Keychain error \(read)") }
+        guard let data else { return .unreadable("the item has no data") }
+        return .found(data)
+    }
+
+    /// The item's data; nil when there is none or it can't be read (`lookup` tells which).
+    static func read(account: String, service: String = service) -> Data? {
+        if case .found(let data) = lookup(account: account, service: service) { data } else { nil }
+    }
+
+    /// Saves an item. With `replacing` false an item already there is left alone and the write
+    /// fails (errSecDuplicateItem).
+    static func write(_ data: Data, account: String, service: String = service, replacing: Bool = true) throws {
+        if replacing { delete(account: account, service: service) }
         var q = query(account, service)
         q.removeValue(forKey: kSecMatchSearchList as String)
         if let login { q[kSecUseKeychain as String] = login }

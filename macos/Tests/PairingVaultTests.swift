@@ -10,15 +10,30 @@ final class MemoryVault: PairingVault, @unchecked Sendable {
     var items: [String: Data] = [:]
     var defaults: [String: String] = [:]
     var failWrites = false
+    /// Accounts whose item is there but can't be read, as when a Keychain read fails.
+    var unreadable: Set<String> = []
+    /// Every write and delete, to show what was left alone.
+    var changes: [String] = []
 
-    func read(_ account: String) -> Data? { lock.withLock { items[account] } }
+    func lookup(_ account: String) -> StoredItem {
+        lock.withLock {
+            guard let data = items[account] else { return .absent }
+            return unreadable.contains(account) ? .unreadable("stand-in failure") : .found(data)
+        }
+    }
     func write(_ data: Data, _ account: String) throws {
         try lock.withLock {
             if failWrites { throw POSIXError(.EACCES) }
+            changes.append("write \(account)")
             items[account] = data
         }
     }
-    func delete(_ account: String) { _ = lock.withLock { items.removeValue(forKey: account) } }
+    func delete(_ account: String) {
+        lock.withLock {
+            changes.append("delete \(account)")
+            _ = items.removeValue(forKey: account)
+        }
+    }
     func removeLegacyDefault(_ key: String) { _ = lock.withLock { defaults.removeValue(forKey: key) } }
 }
 

@@ -25,7 +25,9 @@ final class AppModel {
     private(set) var capabilities: CapabilityRegistry
     private(set) var startsAtLogin = SMAppService.mainApp.status == .enabled
 
-    let trace: TraceStore?
+    /// The activity log, or why there is none for this launch (FR-201).
+    let activityLog: ActivityLog
+    var trace: TraceStore? { activityLog.store }
     let updates = Updates()
     private let keepAwakeController = KeepAwakeController()
     private var connection: RelayConnection?
@@ -71,12 +73,7 @@ final class AppModel {
         }
         capabilities = CapabilityRegistry(
             capabilities: Self.makeCapabilities(), levels: levels)
-        do {
-            trace = try TraceStore()
-        } catch {
-            trace = nil
-            Self.log.error("Activity log unavailable: \(error.localizedDescription, privacy: .public)")
-        }
+        activityLog = ActivityLog.open()
     }
 
     // MARK: lifecycle

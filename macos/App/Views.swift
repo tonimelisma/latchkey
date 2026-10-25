@@ -32,7 +32,9 @@ struct MenuContent: View {
         }
         Divider()
         Section("Recent Activity") {
-            if model.recentActivity.isEmpty {
+            if model.activityLog.problem != nil {
+                Text("Activity Log Unavailable")
+            } else if model.recentActivity.isEmpty {
                 Text("Nothing yet")
             }
             ForEach(model.recentActivity) { entry in
@@ -402,6 +404,7 @@ final class SetupWindow {
 struct ActivityView: View {
     let model: AppModel
     @State private var entries: [Activity] = []
+    @State private var unreadable = 0
     @State private var selection: Activity.ID?
 
     var body: some View {
@@ -422,6 +425,13 @@ struct ActivityView: View {
                 }
                 .padding(12)
             }
+            if let problem = model.activityLog.problem {
+                Label(problem, systemImage: "exclamationmark.triangle")
+                    .padding(.horizontal, 8).padding(.top, 8)
+            }
+            if let note = ActivityFormat.unreadableNote(unreadable) {
+                Text(note).font(.footnote).foregroundStyle(.secondary).padding(.horizontal, 8).padding(.top, 8)
+            }
             Text(
                 "Every tool Claude ran on this Mac in the last 90 days, and each app you removed from the menu. This log stays on this Mac."
             )
@@ -431,7 +441,11 @@ struct ActivityView: View {
         .onAppear(perform: load)
     }
 
-    private func load() { entries = (try? model.trace?.recent(limit: 500)) ?? [] }
+    private func load() {
+        let page = (try? model.trace?.page(limit: 500)) ?? ActivityPage()
+        entries = page.entries
+        unreadable = page.unreadable
+    }
 }
 
 /// How an activity appears in the menu.
@@ -440,6 +454,17 @@ enum ActivityFormat {
         let time = e.at.formatted(date: .omitted, time: .shortened)
         let name = e.tool.replacingOccurrences(of: "_", with: " ")
         return "\(time)  \(name)\(e.isError ? " (failed)" : "")"
+    }
+
+    /// The Activity window's line about stored entries that can't be read (FR-203).
+    static func unreadableNote(_ count: Int) -> String? {
+        switch count {
+        case ..<1: nil
+        case 1:
+            "1 older entry can’t be read because its key is no longer in the Keychain. It will be removed when it is 90 days old."
+        default:
+            "\(count) older entries can’t be read because their key is no longer in the Keychain. They will be removed when they are 90 days old."
+        }
     }
 
     /// One line, at most 80 characters, for a menu item.

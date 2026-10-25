@@ -90,20 +90,78 @@ import Testing
         for data in try Self.bytesOnDisk(dir) { #expect(data.range(of: Data(marker.utf8)) == nil) }
     }
 
-    /// With the key gone (another key in the Keychain), old entries show as unreadable instead of
-    /// breaking the log.
-    @MainActor @Test func aLostKeyLeavesEntriesUnreadable() throws {
+    /// FR-203: entries saved under a key that is gone (another key in the Keychain) are not
+    /// tool runs that failed. The menu and the window list only what can be read; the window
+    /// says how many can't.
+    @MainActor @Test func entriesThatCannotBeReadAreNotFailures() throws {
         let dir = try Self.scratch()
         defer { try? FileManager.default.removeItem(at: dir) }
+        let now = Date()
         do {
             let trace = try TraceStore(directory: dir, keys: MemoryTraceKey())
-            try trace.record(
-                Activity(at: Date(), tool: "shell_run", arguments: "{}", result: "ok", isError: false, durationMS: 1))
+            for age in [10.0, 20, 30] {
+                try trace.record(
+                    Activity(
+                        at: now.addingTimeInterval(-age), tool: "shell_run", arguments: "{}", result: "ok",
+                        isError: false, durationMS: 1))
+            }
         }
         let trace = try TraceStore(directory: dir, keys: MemoryTraceKey())
-        let e = try #require(try trace.recent(limit: 1).first)
-        #expect(e.result != "ok")
-        #expect(e.result.contains("can’t be read"))
+        #expect(try trace.recent(limit: 10).isEmpty, "the menu lists none of them")
+        #expect(try trace.page(limit: 500).unreadable == 3)
+
+        try trace.record(
+            Activity(
+                at: now.addingTimeInterval(-60), tool: "notes_read", arguments: "{}", result: "older but readable",
+                isError: false, durationMS: 2))
+        try trace.record(
+            Activity(
+                at: now, tool: "files_read", arguments: "{}", result: "No such file.", isError: true, durationMS: 4)
+        )
+        // Only one entry asked for: the three unreadable ones between the two don't use up the limit.
+        #expect(try trace.recent(limit: 1).map(\.tool) == ["files_read"])
+        let menu = try trace.recent(limit: 10)
+        #expect(menu.map(\.tool) == ["files_read", "notes_read"], "newest first, unreadable ones skipped")
+        #expect(menu.map { ActivityFormat.title($0).hasSuffix("(failed)") } == [true, false], "only real failures")
+        #expect(!menu.contains { $0.tool == "unknown" })
+
+        let page = try trace.page(limit: 500)
+        #expect(page.entries.map(\.tool) == ["files_read", "notes_read"])
+        #expect(page.unreadable == 3)
+        #expect(try trace.page(limit: 1).unreadable == 3, "counted whatever the limit")
+    }
+
+    /// Unreadable entries still age out after 90 days (FR-026).
+    @MainActor @Test func entriesThatCannotBeReadStillAgeOut() throws {
+        let dir = try Self.scratch()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let now = Date()
+        do {
+            let trace = try TraceStore(directory: dir, keys: MemoryTraceKey())
+            for days in [91.0, 1] {
+                try trace.record(
+                    Activity(
+                        at: now.addingTimeInterval(-days * 86_400), tool: "shell_run", arguments: "{}", result: "ok",
+                        isError: false, durationMS: 1))
+            }
+        }
+        let trace = try TraceStore(directory: dir, keys: MemoryTraceKey())
+        #expect(try trace.page(limit: 10).unreadable == 2)
+        #expect(try trace.purge(olderThan: now.addingTimeInterval(-TraceStore.retention)) == 1)
+        #expect(try trace.page(limit: 10).unreadable == 1)
+    }
+
+    /// The one line the Activity window shows about them.
+    @Test func theWindowSaysHowManyCannotBeRead() {
+        #expect(ActivityFormat.unreadableNote(0) == nil)
+        #expect(
+            ActivityFormat.unreadableNote(1)
+                == "1 older entry can’t be read because its key is no longer in the Keychain. It will be removed when it is 90 days old."
+        )
+        #expect(
+            ActivityFormat.unreadableNote(12)
+                == "12 older entries can’t be read because their key is no longer in the Keychain. They will be removed when they are 90 days old."
+        )
     }
 
     @Test func theKeyIsMadeOnceAndKept() throws {

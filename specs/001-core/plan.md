@@ -564,9 +564,20 @@ Serves FR-022, FR-023, FR-024, FR-026, FR-026a, Constitution VI.
   made on first use and kept as a generic password in the login Keychain (this Mac only,
   readable after first unlock); its access list trusts only the app that created it, so another
   program asking for it makes macOS ask the Owner. Entries are decrypted only to show them; one
-  whose key is gone shows as unreadable. The plaintext log of earlier versions (`trace.store`) is
+  whose key is gone is left out of the menu and the window's table, and the window says how many
+  such entries there are (FR-203; the count decrypts the whole log, a batch at a time, when the
+  window opens; the menu stops at ten readable entries). The plaintext log of earlier versions (`trace.store`) is
   encrypted into the new file once at start, then its files are deleted. Uninstall (FR-077)
   deletes the key too. Tests use an in-memory key, never the Keychain.
+- The Keychain look (`Keychain.lookup`) answers one of three things: no item (only when the
+  search itself says "not found"), the item's data, or "there is an item that can't be read"
+  (every other failure: a Keychain error, more than one match, no data). A new log key is made
+  only on "no item", and saved with a write that refuses to replace; on "can't be read", or a key
+  that isn't 32 bytes, the log is unavailable for the launch (`ActivityLog.unavailable` with the
+  sentence shown in the Activity window; the menu says "Activity Log Unavailable"), the reason is
+  logged at error level, and nothing is written (FR-201). The pairing record is read with the
+  same look; no code path at start writes or deletes it, and the start line in the log says
+  "pairing record present but unreadable" instead of "missing pairing record" (FR-202).
 
 ### D12. Apps with access: one row per approval, pushed to the Mac
 Serves FR-190, FR-191, FR-192; Constitution II, VI.

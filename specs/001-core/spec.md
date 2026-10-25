@@ -153,6 +153,20 @@ Format: EARS ("When <trigger>, the <system> shall <response>"). IDs are stable; 
   The app shall delete trace entries older than 90 days by default.
 - **FR-026a** The Mac app shall store the trace encrypted, with a key only the app can read, so
   other programs on the Mac can't read it (Toni, 2026-10-24, security scan).
+- **FR-201** The Mac app shall make a new key for the trace only when no key exists at all. If a
+  key exists but cannot be read or is not a usable key, the app shall leave it as it is, write
+  nothing in its place, and run without the trace until its next start: it shall keep working
+  and answering Claude, say in the Activity window in one plain sentence that activity can't be
+  shown or recorded and why, and try again each time it starts (Toni, 2026-10-25, after a read
+  that always failed made the app replace the key on 2026-10-24).
+- **FR-202** If the stored pairing exists but cannot be read, the Mac app shall not delete it or
+  write over it: it shall start as not paired, record that the pairing is present but unreadable,
+  and try again at its next start. Only the Owner disconnecting, uninstalling, or pairing again,
+  or the relay revoking the Mac, removes or replaces a stored pairing.
+- **FR-203** Trace entries that can no longer be read (saved with an earlier key) shall never be
+  shown as tool calls or counted as failures: the menu's recent activity shall leave them out, and
+  the Activity window shall say in one line how many older entries can't be read. They are still
+  deleted after 90 days (FR-026).
 
 ### Keep-awake and power
 - **FR-030** While keep-awake is on, the Mac shall not sleep, on battery or power, with the lid

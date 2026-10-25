@@ -193,6 +193,19 @@ secret. Implementation details decided here:
   versus deleting them (loses up to 90 days of the Owner's history), versus encrypting them in
   place (rejected: SQLite keeps old plaintext in free pages and its write-ahead log, so the old
   file must go anyway). If the old file can't be read it is deleted all the same.
+- A key that can't be read (2026-10-25): leave it and run without the log for the launch
+  (chosen: nothing is lost, and the next launch may read it), versus making a new key beside it
+  under another name (rejected: two keys and a log readable in halves, for a fault that should
+  not last), versus replacing it (what 0.8.4–0.8.7 did: the log under the old key is lost for
+  good). Calls made during such a launch are not recorded.
+- Entries whose key is gone (2026-10-25): left out of the menu and counted in one line of the
+  Activity window (chosen: the menu is for what Claude just did, and an entry nobody can read is
+  not something to act on), versus listing each as "can’t be read" (rejected: up to hundreds of
+  identical rows pushing real entries out of sight). Returning "no entry" instead of a made-up
+  failed "unknown" entry is what keeps them from ever counting as failures.
+- Testing "exists but unreadable" against the real Keychain was tried and dropped: an item whose
+  access list trusts no program makes macOS ask the Owner on screen and blocks the test run. The
+  meaning of the Keychain's answers is a pure function with its own test instead.
 
 ## Trusted proxies for the hosted relay (2026-10-24, security scan)
 

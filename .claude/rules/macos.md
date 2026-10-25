@@ -80,6 +80,11 @@ paths:
   got nothing, marked the move done, and deleted the old settings: Toni had to pair again
   (2026-10-24). Read old items the way the old version read them, or, when old data can be
   forged by other programs (user defaults), don't move it at all.
+- "Couldn't read it" is not "isn't there" (2026-10-25): never write a Keychain item because a read
+  returned nothing. `Keychain.lookup` tells no item from an unreadable one; only "no item" may
+  lead to a write (the activity-log key was replaced that way on 2026-10-24). And don't test
+  unreadable items against the real Keychain: an item with an access list that trusts no program
+  makes macOS show a password prompt on Toni's screen and hangs the test run.
 
 - Text that arrives from the network (client names, hosts) goes into SwiftUI with
   `Text(verbatim:)`, never a string literal with interpolation (those are parsed as Markdown).
