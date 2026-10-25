@@ -94,6 +94,7 @@ Add a row when a decision is made; never delete one, mark it "superseded by" ins
 | 2026-10-23 | SECURITY.md with GitHub private vulnerability reporting (switched on when the repository is public) | SECURITY.md |
 | 2026-10-23 | The relay's address, server details, and Apple team ID stay out of the repository (gitignored .env, Local.xcconfig, CLAUDE.local.md); history rewritten once and force-pushed to remove them | Toni, CLAUDE.md Git |
 | 2026-10-23 | After every push, merged branches (local and remote), stale worktrees, old disk images, and old relay images are removed automatically (scripts/tidy.sh via a Claude Code hook) | CLAUDE.md Git |
+| 2026-10-24 | Worktrees are removed as soon as their work is on main, with no day's wait: sessions leave with ExitWorktree remove, helper agents' worktrees go when merged, and tidy (after every push and at session start) removes any merged, clean worktree no live session holds; only a copy with no commits of its own waits an hour | Toni, CLAUDE.md Git |
 | 2026-10-23 | End-to-end encryption between Claude and the Mac researched: not possible on custom connectors today (bearer tokens only); options recorded, not decided | docs/best-practices.md §4 |
 | 2026-10-23 | Manual approvals on the Mac are not a security measure for Latchkey; not pursued | Toni, docs/best-practices.md §4 |
 | 2026-10-23 | No sensitive-site rule for the browser (a product change, not security) | Toni, docs/best-practices.md §2 |

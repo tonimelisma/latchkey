@@ -4,7 +4,7 @@
 #
 # - Branches merged into origin/main, locally and on GitHub, except main, the current branch, and
 #   any branch checked out in a worktree. Unmerged branches are never touched.
-# - Finished worktrees under .claude/worktrees (merged, clean, untouched for a day), worktree
+# - Finished worktrees under .claude/worktrees (merged, clean, no live session), worktree
 #   records whose folder no longer exists, and remote-tracking refs gone from GitHub.
 # - Old disk images in macos/build (only the newest is kept) and stray build folders.
 # - Old local Docker images of the relay (only the newest is kept).
@@ -14,9 +14,15 @@ cd "$(dirname "$0")/.." || exit 0
 git fetch --quiet --prune origin 2>/dev/null || echo "tidy: couldn't reach origin; skipping remote cleanup"
 here=$(git rev-parse --show-toplevel)
 
-# Finished worktrees: branch merged into origin/main, nothing uncommitted, nothing changed for a
-# day (a worktree just made from main also counts as merged, so recency protects it).
-git worktree list --porcelain | sed -n 's/^worktree //p' | while read -r wt; do
+# Finished worktrees go at once (Toni, 2026-10-24): branch merged into origin/main, nothing
+# uncommitted, and no live Claude session in it. Claude Code locks a session's worktree with its
+# pid; a lock whose process is gone is stale. A copy with no commits of its own (just made from
+# main, so it counts as merged) may be a helper agent that hasn't committed yet: it goes once
+# nothing in it changed for an hour.
+git worktree list --porcelain | awk '
+  /^worktree / { if (wt != "") print wt "\t" lock; wt = substr($0, 10); lock = "" }
+  /^locked/ { lock = $0 " " }
+  END { if (wt != "") print wt "\t" lock }' | while IFS="$(printf '\t')" read -r wt lock; do
   case "$wt" in */.claude/worktrees/*) ;; *) continue ;; esac
   [ "$wt" = "$here" ] && continue
   [ -d "$wt" ] || continue
@@ -24,7 +30,15 @@ git worktree list --porcelain | sed -n 's/^worktree //p' | while read -r wt; do
   [ -n "$branch" ] || continue
   git merge-base --is-ancestor "$branch" origin/main 2>/dev/null || continue
   [ -z "$(git -C "$wt" status --porcelain 2>/dev/null)" ] || continue
-  [ -z "$(find "$wt" -path "$wt/macos/build" -prune -o -type f -mmin -1440 -print 2>/dev/null | head -1)" ] || continue
+  if [ -n "$lock" ]; then
+    pid=$(printf '%s' "$lock" | sed -n 's/.*pid \([0-9][0-9]*\).*/\1/p')
+    [ -n "$pid" ] || continue
+    kill -0 "$pid" 2>/dev/null && continue
+    git worktree unlock "$wt"
+  fi
+  if ! git reflog show --format=%gs "refs/heads/$branch" 2>/dev/null | grep -qv '^branch: Created'; then
+    [ -z "$(find "$wt" -path "$wt/macos/build" -prune -o -type f -mmin -60 -print 2>/dev/null | head -1)" ] || continue
+  fi
   git worktree remove --force "$wt" && echo "tidy: removed finished worktree $wt"
 done
 

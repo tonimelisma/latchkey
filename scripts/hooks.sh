@@ -3,7 +3,7 @@
 # stdin. Toni, 2026-10-24: all work integrated into main and pushed, no work ever lost, never a
 # cleanup he has to ask for.
 #
-#   hooks.sh session-start  Tells Claude about any loose ends before it starts.
+#   hooks.sh session-start  Runs scripts/tidy.sh, then tells Claude about any loose ends.
 #   hooks.sh stop           Before Claude ends a turn: if loose ends remain, sends it back once
 #                           to resolve them (the second stop always goes through).
 #   hooks.sh guard          Before a shell command: refuses git commands that can lose work.
@@ -14,6 +14,7 @@ field() { printf '%s' "$input" | jq -r "$1 // empty"; }
 
 case "$1" in
 session-start)
+  "$here/tidy.sh" >/dev/null 2>&1
   ends=$("$here/loose-ends.sh" "$(field .cwd)")
   [ -n "$ends" ] || exit 0
   jq -n --arg c "Loose ends in this repository (CLAUDE.md, \"Nothing left behind\"). Resolve them before or alongside the user's request, without being asked:

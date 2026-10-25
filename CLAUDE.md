@@ -98,8 +98,12 @@ IMPORTANT: every session or task that changes files works in its own git worktre
   HEAD:<branch>` and `git push origin HEAD:main`. If main moved meanwhile (another session),
   rebase again and retest. Never force-push (one exception, approved by Toni 2026-10-23:
   rewriting history to remove the relay's address).
-- When the task is merged, leave with `ExitWorktree` (`remove`). `scripts/tidy.sh` also removes
-  any worktree that is merged, clean, and untouched for a day.
+- A worktree is removed the moment its work is on main (Toni, 2026-10-24): no stale copies on
+  disk or branches in git. A session leaves with `ExitWorktree` (`remove`) as soon as its task is
+  merged; whoever merges a helper agent's branch removes that agent's worktree right away. As a
+  backstop, `scripts/tidy.sh` (after every push and at every session start) removes any worktree
+  that is merged, clean, and not held by a live session, with its branch. Only a copy with no
+  commits of its own waits an hour, since a helper agent may still be starting in it.
 - Stage files by name, never `git add -A` or `git add .` (unfinished work of others was committed
   that way on 2026-10-23). Never stash (the stash is shared between worktrees; see below).
 - Private remote `github.com/tonimelisma/latchkey`, default branch `main`. Small commits. Open
@@ -145,9 +149,10 @@ Enforced by hooks in `.claude/settings.json` (`scripts/hooks.sh`):
   `git reset --hard`, `git clean -f`, `git branch -D`, `git checkout -- .`. Delete merged branches
   with `git branch -d`; never remove a worktree with `discard_changes` unless its commits are on
   main.
-- After every push, `scripts/tidy.sh` runs automatically (Claude Code hook in
-  `.claude/settings.json`): branches merged into main (local and GitHub; never main, the current
-  branch, or a branch checked out in a worktree), finished worktrees, stale refs, all but the
+- After every push and at every session start, `scripts/tidy.sh` runs automatically (Claude Code
+  hook in `.claude/settings.json`): branches merged into main (local and GitHub; never main, the
+  current branch, or a branch checked out in a worktree), finished worktrees (as soon as merged),
+  stale refs, all but the
   newest disk image, and all but the newest relay Docker image. Run it by hand after a push made
   outside Claude Code.
 - Delete temporary files (scratch scripts, copies of databases, old app copies, servers' `/tmp`
