@@ -246,7 +246,13 @@ final class AppModel {
     func setLevel(_ id: String, _ level: AccessLevel) {
         capabilities.setLevel(id, level)
         defaults.set(capabilities.levels.mapValues(\.rawValue), forKey: Keys.levels)
-        Task { await connection?.sendTools() }  // FR-062
+        let registry = capabilities
+        Task { [connection] in
+            await connection?.sendTools()  // FR-062
+            // FR-066, spec 004 FR-310: what the new levels no longer allow stops now.
+            await LevelChange.stopWork(
+                registry, calls: { reason in await connection?.stopCalls(reason) }, shell: ShellCapability.jobs)
+        }
         if needsSetup { showSetup() }
     }
 
@@ -489,9 +495,11 @@ final class AppModel {
         defer { busy -= 1 }
         let registry = capabilities
         let result = await registry.call(tool: call.tool, arguments: call.arguments)
+        // A call the Owner stopped by lowering the level is logged with what Claude was told.
+        let told = LevelChange.recorded(result, tool: call.tool, before: registry, now: capabilities)
         let entry = Activity(
             at: started, tool: call.tool, arguments: call.arguments.jsonText,
-            result: result.content.jsonText, isError: result.isError,
+            result: told.content.jsonText, isError: told.isError,
             durationMS: Int(Date().timeIntervalSince(started) * 1000))
         try? trace?.record(entry)
         loadRecentActivity()

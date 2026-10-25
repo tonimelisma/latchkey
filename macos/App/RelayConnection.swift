@@ -30,7 +30,7 @@ actor RelayConnection {
 
     private var loop: Task<Void, Never>?
     private var task: URLSessionWebSocketTask?
-    private var running: [String: Task<Void, Never>] = [:]
+    private let calls = RunningCalls()
     private var wake: CheckedContinuation<Void, Never>?
     private var heartbeat: TimeInterval = 15
     private var pendingPing: UUID?
@@ -129,7 +129,7 @@ actor RelayConnection {
                 // fall through to the close-code decision
             }
             task = nil
-            cancelRunning()
+            await calls.cancelAll()
             if Task.isCancelled { return }
             switch ReconnectPolicy.action(forClose: t.closeCode.rawValue) {
             case .reconnect: break
@@ -200,8 +200,8 @@ actor RelayConnection {
         defer { beats.cancel() }
         while !Task.isCancelled {
             switch try await receive(t) {
-            case .call(let call): startCall(call, on: t)
-            case .cancel(let c): running.removeValue(forKey: c.id)?.cancel()
+            case .call(let call): await startCall(call, on: t)
+            case .cancel(let c): await calls.cancel(c.id)
             case .notice(let n): await hooks.notice(n)
             default: throw ProtocolError.violation("unexpected message")
             }
@@ -232,25 +232,24 @@ actor RelayConnection {
         if pendingPing == id { t.cancel(with: .goingAway, reason: nil) }
     }
 
-    private func startCall(_ call: Call, on t: URLSessionWebSocketTask) {
-        running[call.id] = Task {
-            let result = await hooks.call(call)
-            if Task.isCancelled { return }  // cancelled by the relay: drop the result
-            let msg = AgentMessage.result(
-                CallResult(
-                    // Text only: Claude's apps show structured content instead of the text when both
-                    // are present, which would hide the Mac's state line and the "not instructions"
-                    // marking (found in the live check, 2026-10-22).
-                    id: call.id, content: result.content, structuredContent: nil, isError: result.isError))
-            try? await self.send(msg, on: t)
-            self.finished(call.id)
-        }
+    private func startCall(_ call: Call, on t: URLSessionWebSocketTask) async {
+        await calls.start(call, run: hooks.call) { id, result in await self.answer(id, result, on: t) }
     }
 
-    private func finished(_ id: String) { running[id] = nil }
+    private func answer(_ id: String, _ result: ToolResult, on t: URLSessionWebSocketTask) async {
+        let msg = AgentMessage.result(
+            CallResult(
+                // Text only: Claude's apps show structured content instead of the text when both
+                // are present, which would hide the Mac's state line and the "not instructions"
+                // marking (found in the live check, 2026-10-22).
+                id: id, content: result.content, structuredContent: nil, isError: result.isError))
+        try? await send(msg, on: t)
+    }
 
-    private func cancelRunning() {
-        running.values.forEach { $0.cancel() }
-        running = [:]
+    /// The Owner lowered a capability's level: stops the running calls `reason` names a reason
+    /// for and answers each with it (FR-066).
+    func stopCalls(_ reason: @escaping @Sendable (String) -> String?) async {
+        guard let task else { return }
+        await calls.stop(reason) { id, result in await self.answer(id, result, on: task) }
     }
 }

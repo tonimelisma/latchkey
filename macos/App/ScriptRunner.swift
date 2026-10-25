@@ -75,8 +75,42 @@ struct ProcessCommands: CommandRunner {
     }
 
     /// Runs a program off the main thread, reading its output as it comes so a large output
-    /// can't stall it, and ends it at the deadline.
+    /// can't stall it, and ends it at the deadline, or at once when the call it serves is
+    /// cancelled (the relay gave up, or the Owner turned the capability off: FR-066).
     static func launch(_ executable: String, _ args: [String], timeout: Duration) async throws -> ProcessResult {
+        let running = Running()
+        return try await withTaskCancellationHandler {
+            try await launch(executable, args, timeout: timeout, running: running)
+        } onCancel: {
+            running.cancel()
+        }
+    }
+
+    /// The program of one launch, so a cancellation can end it whether it comes before or after
+    /// the program starts.
+    private final class Running: @unchecked Sendable {
+        private let lock = NSLock()
+        private var process: Process?
+        private var cancelled = false
+
+        func started(_ p: Process) {
+            lock.withLock {
+                process = p
+                if cancelled { p.terminate() }
+            }
+        }
+
+        func cancel() {
+            lock.withLock {
+                cancelled = true
+                if let process, process.isRunning { process.terminate() }
+            }
+        }
+    }
+
+    private static func launch(_ executable: String, _ args: [String], timeout: Duration, running: Running)
+        async throws -> ProcessResult
+    {
         try await withCheckedThrowingContinuation { cont in
             DispatchQueue.global().async {
                 let p = Process()
@@ -91,6 +125,7 @@ struct ProcessCommands: CommandRunner {
                     cont.resume(throwing: error)
                     return
                 }
+                running.started(p)
                 let timedOut = Flag()
                 let timer = DispatchWorkItem {
                     timedOut.set()

@@ -56,6 +56,14 @@ Serves FR-010, FR-013, FR-014, FR-021, SC-03, SC-07; Constitution II.
 - `tools/call` for a Mac tool goes to the hub. Offline: immediate `isError: true` result with the
   offline message (FR-010). Online: forwarded with a deadline (D3).
 - Tool-list changes: `notifications/tools/list_changed` to stateful sessions (FR-062).
+- A level turned off or down stops running work on the Mac (FR-066): after sending the new tool
+  list, the app looks at each running call; one whose tool is no longer in the list is cancelled
+  (its task, and with it the AppleScript, Spotlight, or other program it waits on) and answered
+  at once with an ordinary `result` with `is_error` and the reason ("The Mac's owner turned Files
+  off in the Latchkey app while this was running, so it was stopped. It may not have finished.").
+  The call's own late result is dropped, and the activity log records what Claude was told.
+  Calls whose tool is still listed are not touched, so raising a level stops nothing. No new
+  protocol message: the relay sees a normal answer. Shell's jobs: spec 004 FR-310.
 
 ### D3. Deadlines
 Serves FR-011, Constitution II.
@@ -386,6 +394,12 @@ latchkey/
   both the Go and the Swift tests so the two sides cannot drift.
 - Mac app: unit tests for the keep-awake state machine (inputs: power source, battery %,
   thermal state, user setting; output: on/off plus reason).
+- Mac app, level changes (FR-066): slow stand-in tools running as calls; lowering the level
+  answers the write with the reason and leaves the read running; raising stops nothing; the
+  program a cancelled call waits on ends. State reports (FR-036a): the decision function on
+  fixed times. Pairing links (FR-054a, FR-054b): the one-at-a-time gate and link parsing with
+  and without local addresses. Helper (D7): no connection without a requirement, and the test
+  app itself (a Debug build) fails the Release requirement.
 - Browser sign-in: an automated test drives headless Chrome with a virtual passkey through the
   real sign-up, sign-in, consent, and pairing pages, using `github.com/chromedp/chromedp` (MIT).
   Runs in any container with Chrome.

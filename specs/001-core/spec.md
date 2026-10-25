@@ -220,6 +220,11 @@ Format: EARS ("When <trigger>, the <system> shall <response>"). IDs are stable; 
 - **FR-062** When the enabled set changes, the Mac app shall send the new tool list to the relay
   and the relay shall notify connected Claude sessions that the list changed, where the protocol
   supports it.
+- **FR-066** When the Owner turns a capability off or lowers its level, the Mac app shall at once
+  stop every running call that the new level no longer allows and answer each with an error
+  saying that the Mac's owner turned that capability off, or down, in the app. Calls the new
+  level still allows shall keep running, and raising a level shall stop nothing (Toni,
+  2026-10-25).
 - **FR-064** *Withdrawn 2026-10-22 with FR-063.*
 - **FR-063** *Withdrawn 2026-10-22 (Toni): the "System info" capability and `battery_status` are
   removed; the first real capability is Notes and Messages (spec 002).*
@@ -287,6 +292,8 @@ Measurable, technology-free. Each one has a test.
 - Recovery email is intercepted: links are single-use, short-lived, and recovery is announced to
   the account email and in the Mac app.
 - The Owner revokes the Mac while a call is in flight: the call fails with "Mac disconnected".
+- The Owner turns a capability off or down while one of its calls is in flight: the call is
+  stopped and answered with the reason (FR-066). A change it had already made stays made.
 
 ## Open questions
 

@@ -123,7 +123,7 @@ Sent in `hello`, in every `state` message, and in `goodbye`.
 | `state` | Every `heartbeat_interval_s` and immediately on any change | `state` |
 | `tools` | Enabled capabilities changed | `tools` (full list, replaces the previous one) |
 | `progress` | Optional, during a long call | `id`, `progress`, `total` (optional), `message` (optional) |
-| `result` | A call finished | `id`, `content` (MCP content array), `structured_content` (optional), `is_error` |
+| `result` | A call finished, or the Owner stopped it by turning its capability off or down (then `is_error` with the reason, FR-066) | `id`, `content` (MCP content array), `structured_content` (optional), `is_error` |
 | `goodbye` | Before an intentional disconnect | `reason`, `state` |
 
 `goodbye.reason`: `low_battery`, `too_hot`, `user_quit`, `system_sleep`, `system_shutdown`,
