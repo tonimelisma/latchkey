@@ -6,13 +6,19 @@
 #   any branch checked out in a worktree. Unmerged branches are never touched.
 # - Finished worktrees under .claude/worktrees (merged, clean, no live session), worktree
 #   records whose folder no longer exists, and remote-tracking refs gone from GitHub.
-# - Old disk images in macos/build (only the newest is kept) and stray build folders.
+# - Mac build leftovers that could stand in for the installed app: every disk image in macos/build
+#   except the one for the version in macos/project.yml (here and in the main checkout), built
+#   apps under macos/build/DerivedData/Build/Products in the main checkout (nothing is built
+#   there) and in every worktree it removes, and stray build folders.
 # - Old local Docker images of the relay (only the newest is kept).
-# Never fails the push: problems are reported and skipped.
+# - Last, the main checkout is fast-forwarded to origin/main when it is on main, clean, and only
+#   behind, so a session started there reads current code and docs.
+# Never fails the push: problems are reported and skipped. Tested by scripts/tests/tidy_test.sh.
 cd "$(dirname "$0")/.." || exit 0
 
 git fetch --quiet --prune origin 2>/dev/null || echo "tidy: couldn't reach origin; skipping remote cleanup"
 here=$(git rev-parse --show-toplevel)
+main=$(git worktree list --porcelain | sed -n '1s/^worktree //p')
 
 # Finished worktrees go at once (Toni, 2026-10-24): branch merged into origin/main, nothing
 # uncommitted, and no live Claude session in it. Claude Code locks a session's worktree with its
@@ -28,7 +34,7 @@ git worktree list --porcelain | awk '
   [ -d "$wt" ] || continue
   branch=$(git -C "$wt" symbolic-ref --quiet --short HEAD 2>/dev/null || echo "")
   [ -n "$branch" ] || continue
-  git merge-base --is-ancestor "$branch" origin/main 2>/dev/null || continue
+  git merge-base --is-ancestor "refs/heads/$branch" refs/remotes/origin/main 2>/dev/null || continue
   [ -z "$(git -C "$wt" status --porcelain 2>/dev/null)" ] || continue
   if [ -n "$lock" ]; then
     pid=$(printf '%s' "$lock" | sed -n 's/.*pid \([0-9][0-9]*\).*/\1/p')
@@ -39,35 +45,52 @@ git worktree list --porcelain | awk '
   if ! git reflog show --format=%gs "refs/heads/$branch" 2>/dev/null | grep -qv '^branch: Created'; then
     [ -z "$(find "$wt" -path "$wt/macos/build" -prune -o -type f -mmin -60 -print 2>/dev/null | head -1)" ] || continue
   fi
+  rm -rf "$wt/macos/build/DerivedData/Build/Products" # built apps first, even if the removal fails
   git worktree remove --force "$wt" && echo "tidy: removed finished worktree $wt"
 done
 
+# Ref names are passed as full refs or after "--", so one that starts with "-" is never read as
+# an option.
 current=$(git symbolic-ref --quiet --short HEAD 2>/dev/null || echo "")
 inuse=$(git worktree list --porcelain | sed -n 's|^branch refs/heads/||p')
-keep() { [ "$1" = main ] || [ "$1" = "$current" ] || printf '%s\n' "$inuse" | grep -qx "$1"; }
+keep() { [ "$1" = main ] || [ "$1" = "$current" ] || printf '%s\n' "$inuse" | grep -qxF -e "$1"; }
 
-for b in $(git for-each-ref --format='%(refname:short)' --merged origin/main refs/heads/); do
+for b in $(git for-each-ref --format='%(refname:short)' --merged refs/remotes/origin/main refs/heads/); do
   keep "$b" && continue
-  git branch -q -d "$b" && echo "tidy: deleted local branch $b"
+  git branch -q -d -- "$b" && echo "tidy: deleted local branch $b"
 done
 
-for b in $(git for-each-ref --format='%(refname:lstrip=3)' --merged origin/main refs/remotes/origin/); do
+for b in $(git for-each-ref --format='%(refname:lstrip=3)' --merged refs/remotes/origin/main refs/remotes/origin/); do
   [ "$b" = HEAD ] && continue
   keep "$b" && continue
-  git push --quiet origin --delete "$b" 2>/dev/null && echo "tidy: deleted remote branch $b"
+  git push --quiet --delete origin "refs/heads/$b" 2>/dev/null && echo "tidy: deleted remote branch $b"
 done
 
 git worktree prune
 git remote prune origin >/dev/null 2>&1
 
-# Disk images: keep the newest version only.
-if ls macos/build/Latchkey-*.dmg >/dev/null 2>&1; then
-  newest=$(ls macos/build/Latchkey-*.dmg | sort -V | tail -1)
-  for f in macos/build/Latchkey-*.dmg; do
-    [ "$f" = "$newest" ] || { rm -f "$f" && echo "tidy: removed $f"; }
+# Mac build leftovers. A disk image or built app of another version must never be what gets
+# installed or opened by mistake, so only the image of the version in project.yml stays. When the
+# version can't be read, no image is deleted.
+clean_builds() { # <checkout>
+  [ -d "$1/macos/build" ] || return 0
+  version=$(sed -n 's/^[[:space:]]*MARKETING_VERSION:[[:space:]]*//p' "$1/macos/project.yml" 2>/dev/null | head -1 | tr -d "\"' ")
+  if [ -n "$version" ]; then
+    for f in "$1"/macos/build/*.dmg; do
+      [ -e "$f" ] || continue
+      [ "$f" = "$1/macos/build/Latchkey-$version.dmg" ] || { rm -f "$f" && echo "tidy: removed $f"; }
+    done
+  fi
+  rm -rf "$1/macos/build/DerivedDataRel"
+}
+clean_builds "$here"
+if [ -n "$main" ] && [ -d "$main" ]; then
+  [ "$main" = "$here" ] || clean_builds "$main"
+  for p in "$main"/macos/build/DerivedData/Build/Products/*; do
+    [ -e "$p" ] || continue
+    rm -rf "$p" && echo "tidy: removed $p"
   done
 fi
-rm -rf macos/build/DerivedDataRel
 
 # Relay images built by deploy/deploy.sh: keep the newest only.
 if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
@@ -75,5 +98,15 @@ if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
     cut -d'|' -f2 | while read -r image; do
       docker rmi -f "$image" >/dev/null 2>&1 && echo "tidy: removed image $image"
     done
+fi
+
+# The main checkout follows main: fast-forward only, and only when it is on main with nothing
+# uncommitted or untracked and no commits of its own. Last, because it may replace this script.
+if [ -n "$main" ] && [ "$(git -C "$main" symbolic-ref --quiet --short HEAD 2>/dev/null)" = main ] &&
+  [ -z "$(git -C "$main" status --porcelain 2>/dev/null)" ] &&
+  [ "$(git -C "$main" rev-parse HEAD 2>/dev/null)" != "$(git -C "$main" rev-parse refs/remotes/origin/main 2>/dev/null)" ] &&
+  git -C "$main" merge-base --is-ancestor HEAD refs/remotes/origin/main 2>/dev/null; then
+  git -C "$main" merge --quiet --ff-only refs/remotes/origin/main >/dev/null 2>&1 &&
+    echo "tidy: main checkout fast-forwarded to origin/main"
 fi
 exit 0
