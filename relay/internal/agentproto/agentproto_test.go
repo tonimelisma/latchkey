@@ -9,6 +9,7 @@ import (
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
+	"math"
 	"os"
 	"path/filepath"
 	"testing"
@@ -109,6 +110,12 @@ func TestToolDeadline(t *testing.T) {
 		{"zero", mcp.Meta{agentproto.DeadlineMetaKey: float64(0)}, 10 * time.Second},
 		{"negative", mcp.Meta{agentproto.DeadlineMetaKey: float64(-5)}, 10 * time.Second},
 		{"not a number", mcp.Meta{agentproto.DeadlineMetaKey: "5000"}, 10 * time.Second},
+		// Too large for a Duration: converted first, these wrapped around to a negative deadline.
+		{"overflows nanoseconds", mcp.Meta{agentproto.DeadlineMetaKey: float64(1 << 62)}, 60 * time.Second},
+		{"overflows int64", mcp.Meta{agentproto.DeadlineMetaKey: 1e300}, 60 * time.Second},
+		{"infinite", mcp.Meta{agentproto.DeadlineMetaKey: math.Inf(1)}, 60 * time.Second},
+		{"not a number at all", mcp.Meta{agentproto.DeadlineMetaKey: math.NaN()}, 10 * time.Second},
+		{"a fraction of a millisecond", mcp.Meta{agentproto.DeadlineMetaKey: 0.4}, time.Millisecond},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

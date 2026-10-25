@@ -3,6 +3,7 @@ package mcpserver_test
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -32,6 +33,7 @@ type env struct {
 	t      *testing.T
 	store  *store.Store
 	hub    *hub.Hub
+	ms     *mcpserver.Server
 	srv    *httptest.Server
 	user   store.User
 	device store.Device
@@ -40,7 +42,9 @@ type env struct {
 
 // setup runs the relay's hub and MCP server. Bearer tokens are "token-<user ID>"; the real
 // OAuth verifier replaces this in M2.
-func setup(t *testing.T) *env {
+func setup(t *testing.T) *env { return setupWith(t, mcpserver.Options{}) }
+
+func setupWith(t *testing.T, opts mcpserver.Options) *env {
 	t.Helper()
 	ctx := context.Background()
 	st, err := store.Open(ctx, filepath.Join(t.TempDir(), "relay.db"))
@@ -52,7 +56,7 @@ func setup(t *testing.T) *env {
 		HeartbeatInterval: time.Second, OfflineAfter: 3 * time.Second, PingInterval: time.Hour,
 		OnToolsChanged: func(userID string) { ms.ToolsChanged(userID) },
 	})
-	ms = mcpserver.New(st, h, mcpserver.Options{})
+	ms = mcpserver.New(st, h, opts)
 	verifier := func(_ context.Context, token string, _ *http.Request) (*auth.TokenInfo, error) {
 		userID, ok := strings.CutPrefix(token, "token-")
 		if !ok {
@@ -66,7 +70,7 @@ func setup(t *testing.T) *env {
 	srv := httptest.NewServer(mux)
 	t.Cleanup(srv.Close)
 
-	e := &env{t: t, store: st, hub: h, srv: srv}
+	e := &env{t: t, store: st, hub: h, ms: ms, srv: srv}
 	e.user, err = st.CreateUser(ctx, "owner@example.com", time.Now())
 	require.NoError(t, err)
 	return e
@@ -386,4 +390,101 @@ func TestMalformedMacResult(t *testing.T) {
 	require.Len(t, res.Content, 2)
 	first, _ := res.Content[0].(*mcp.TextContent)
 	assert.Contains(t, first.Text, "couldn't read")
+}
+
+// rawInit starts a 2025-11-25 session over plain HTTP and returns its session ID.
+func (e *env) rawInit(clientName string) string {
+	e.t.Helper()
+	name, _ := json.Marshal(clientName)
+	resp := e.rawPost("", `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":`+string(name)+`,"version":"1"}}}`)
+	require.Equal(e.t, http.StatusOK, resp.StatusCode)
+	id := resp.Header.Get("Mcp-Session-Id")
+	require.NotEmpty(e.t, id)
+	return id
+}
+
+// rawPost sends one JSON-RPC message, in the given session if any, and returns the response
+// with its body already read and closed.
+func (e *env) rawPost(session, body string) *http.Response {
+	e.t.Helper()
+	req, err := http.NewRequestWithContext(ctx(e.t), http.MethodPost, e.srv.URL+"/mcp", strings.NewReader(body))
+	require.NoError(e.t, err)
+	req.Header.Set("Authorization", "Bearer token-"+e.user.ID)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json, text/event-stream")
+	if session != "" {
+		req.Header.Set("Mcp-Session-Id", session)
+		req.Header.Set("MCP-Protocol-Version", stateful)
+	}
+	resp, err := http.DefaultClient.Do(req)
+	require.NoError(e.t, err)
+	_, _ = io.Copy(io.Discard, resp.Body)
+	_ = resp.Body.Close()
+	return resp
+}
+
+const pingBody = `{"jsonrpc":"2.0","id":2,"method":"ping"}`
+
+// A session nobody uses is closed after the idle timeout, so sessions can't pile up (FR-090).
+func TestIdleSessionsExpire(t *testing.T) {
+	e := setupWith(t, mcpserver.Options{SessionTimeout: 300 * time.Millisecond})
+	id := e.rawInit("idle")
+	assert.Equal(t, http.StatusOK, e.rawPost(id, pingBody).StatusCode, "a live session answers")
+	require.Eventually(t, func() bool {
+		time.Sleep(400 * time.Millisecond)
+		return e.rawPost(id, pingBody).StatusCode == http.StatusNotFound
+	}, 5*time.Second, 10*time.Millisecond, "an idle session is gone; the client starts a new one")
+}
+
+func TestSessionTimeoutDefault(t *testing.T) {
+	assert.Equal(t, 30*time.Minute, mcpserver.DefaultSessionTimeout)
+}
+
+// One Owner holds at most MaxSessionsPerUser sessions; a new one closes the oldest (FR-090).
+func TestSessionsPerUserAreCapped(t *testing.T) {
+	e := setup(t)
+	first := e.rawInit("first")
+	second := e.rawInit("second")
+	for range mcpserver.MaxSessionsPerUser - 2 {
+		e.rawInit("more")
+	}
+	assert.Equal(t, http.StatusOK, e.rawPost(first, pingBody).StatusCode, "at the cap, nothing is closed")
+	newest := e.rawInit("one too many")
+	require.Eventually(t, func() bool { return e.rawPost(first, pingBody).StatusCode == http.StatusNotFound },
+		5*time.Second, 10*time.Millisecond, "the oldest session made room")
+	assert.Equal(t, http.StatusOK, e.rawPost(second, pingBody).StatusCode)
+	assert.Equal(t, http.StatusOK, e.rawPost(newest, pingBody).StatusCode)
+}
+
+// When an account is deleted or Claude's access removed, the Owner's in-memory server and its
+// sessions go too (FR-090).
+func TestForgetDropsTheUsersServerAndSessions(t *testing.T) {
+	e := setup(t)
+	id := e.rawInit("claude")
+	require.Equal(t, 1, e.ms.Users())
+	e.ms.Forget(e.user.ID)
+	assert.Equal(t, 0, e.ms.Users())
+	require.Eventually(t, func() bool { return e.rawPost(id, pingBody).StatusCode == http.StatusNotFound },
+		5*time.Second, 10*time.Millisecond)
+	e.ms.Forget("usr_unknown") // harmless
+}
+
+// The audit log's "surface" is the client's own claim: it is cut to 64 characters and loses
+// control characters before it is stored (FR-022a).
+func TestAuditSurfaceIsBounded(t *testing.T) {
+	e := setup(t)
+	e.pair()
+	e.connectMac()
+	c := mcp.NewClient(&mcp.Implementation{Name: "evil\x00\n\x1b[31m‮" + strings.Repeat("é", 5000), Version: "1"}, nil)
+	cs, err := c.Connect(ctx(t), &mcp.StreamableClientTransport{
+		Endpoint: e.srv.URL + "/mcp", HTTPClient: &http.Client{Transport: bearer{"token-" + e.user.ID}}, MaxRetries: -1,
+	}, &mcp.ClientSessionOptions{ProtocolVersion: stateful})
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = cs.Close() })
+	call(t, cs, "battery_status")
+
+	entries, err := e.store.AuditForUser(context.Background(), e.user.ID, 10)
+	require.NoError(t, err)
+	require.Len(t, entries, 1)
+	assert.Equal(t, "evil[31m"+strings.Repeat("é", 64-len("evil[31m")), entries[0].Surface)
 }

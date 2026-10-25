@@ -65,6 +65,7 @@ func New(ctx context.Context, o Options) (*Relay, error) {
 		PublicURL: o.PublicURL, Store: o.Store, Macs: h, Mailer: o.Mailer, OAuth: oa,
 		AllowedEmails: o.AllowedEmails, Logger: o.Logger,
 		DevicesChanged: func(userID string) { ms.ToolsChanged(userID) },
+		AccessRemoved:  func(userID string) { ms.Forget(userID) },
 	})
 	if err != nil {
 		return nil, err

@@ -75,6 +75,7 @@ type env struct {
 	clock   *clock
 	base    string // http://localhost:<port>
 	changed []string
+	removed []string // user IDs whose Claude access was removed
 }
 
 func setup(t *testing.T, allowed ...string) *env {
@@ -99,6 +100,7 @@ func setup(t *testing.T, allowed ...string) *env {
 	svc, err = account.New(ctx, account.Config{
 		PublicURL: public, Store: st, Macs: e.macs, Mailer: e.mail, OAuth: o, AllowedEmails: allowed,
 		Now: e.clock.now, DevicesChanged: func(id string) { e.changed = append(e.changed, id) },
+		AccessRemoved: func(id string) { e.removed = append(e.removed, id) },
 	})
 	require.NoError(t, err)
 	auth.svc = svc
@@ -242,6 +244,7 @@ func TestDeleteAccountNeedsFreshPasskey(t *testing.T) {
 	require.ErrorIs(t, err, store.ErrNotFound, "FR-045")
 	assert.Contains(t, e.macs.revoked, d.ID, "the Mac is disconnected")
 	assert.Equal(t, http.StatusFound, b.get("/account").status, "signed out")
+	assert.Equal(t, []string{u.ID}, e.removed, "nothing of the account stays in memory")
 }
 
 func TestReauthExpires(t *testing.T) {
@@ -397,6 +400,7 @@ func TestRevokeMacAndClaude(t *testing.T) {
 	_, err = e.store.OAuthRequest(context.Background(), store.KindRefresh, "sig-refresh")
 	require.ErrorIs(t, err, store.ErrNotFound)
 	assert.NotContains(t, b.get("/account").body, "Remove Claude", "no client is listed any more")
+	assert.Equal(t, []string{u.ID}, e.removed, "Claude's sessions in memory are dropped too")
 }
 
 func TestPasskeyEndpointsNeedJSON(t *testing.T) {
@@ -735,6 +739,7 @@ func TestRecovery(t *testing.T) {
 	assert.Equal(t, http.StatusUnauthorized, status, "the old passkey no longer works")
 	_, err = e.store.OAuthRequest(ctx, store.KindRefresh, "sig-refresh")
 	require.ErrorIs(t, err, store.ErrNotFound, "Claude's tokens are removed (FR-047a)")
+	assert.Equal(t, []string{u.ID}, e.removed, "and Claude's sessions in memory")
 
 	msgs := e.mail.Sent()
 	assert.Equal(t, "Your Latchkey account was recovered", msgs[len(msgs)-1].Subject, "announced by email")

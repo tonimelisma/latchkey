@@ -123,6 +123,7 @@ func (s *Service) revokeClaude(w http.ResponseWriter, r *http.Request) {
 		s.errorPage(w, http.StatusInternalServerError, "Something went wrong", "Try again.")
 		return
 	}
+	s.cfg.AccessRemoved(sess.UserID)
 	http.Redirect(w, r, "/account?done=claude", http.StatusSeeOther)
 }
 
@@ -146,6 +147,7 @@ func (s *Service) deleteAccount(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.cfg.DevicesChanged(sess.UserID)
+	s.cfg.AccessRemoved(sess.UserID)
 	s.clearSession(w)
 	s.errorPage(w, http.StatusOK, "Your account was deleted",
 		"Everything this relay stored about you is gone, and your Mac was disconnected. You can remove the Latchkey connector from Claude's settings.")

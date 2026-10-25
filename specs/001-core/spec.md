@@ -138,6 +138,9 @@ Format: EARS ("When <trigger>, the <system> shall <response>"). IDs are stable; 
 - **FR-022** The relay shall record an audit entry for every tool call: time, tool name, Claude
   surface if known, outcome (ok, error, timeout, offline), and duration. It shall not record tool
   arguments.
+- **FR-022a** The relay shall store a Claude surface's name only after removing control and
+  formatting characters from it and cutting it to 64 characters, since the client chooses it
+  (2026-10-25, security review).
 - **FR-023** The relay shall not store tool results.
 - **FR-024** The relay shall delete audit entries older than 30 days.
 - **FR-025** The relay shall not queue tool calls for later delivery.
@@ -252,6 +255,12 @@ Format: EARS ("When <trigger>, the <system> shall <response>"). IDs are stable; 
 - **FR-082** The relay shall take a client's address from a proxy's forwarded-for header only when
   the proxy is on the same machine, or at an address the operator has listed as a trusted proxy
   (Toni, 2026-10-24, security scan).
+
+### Limits that keep the relay standing (2026-10-25, security review)
+- **FR-090** When a Claude session has received no request for 30 minutes, the relay shall end
+  it. The relay shall keep at most 64 sessions per Owner, ending the oldest to make room, and
+  shall keep nothing in memory for Claude's sessions once the Owner's account is deleted or
+  Claude's access is removed.
 
 ## Success criteria
 

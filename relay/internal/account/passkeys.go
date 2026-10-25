@@ -248,6 +248,7 @@ func (s *Service) completeRecovery(ctx context.Context, u store.User, keep []byt
 	if err := s.cfg.OAuth.RevokeUser(ctx, u.ID); err != nil {
 		return err
 	}
+	s.cfg.AccessRemoved(u.ID)
 	if err := s.cfg.Mailer.Send(ctx, u.Email, "Your Latchkey account was recovered",
 		emailRecovered(now, s.link("/recover", nil), s.link("/account", nil))); err != nil {
 		s.cfg.Logger.Error("recovery notice email", "err", err)

@@ -71,6 +71,10 @@ type Config struct {
 	Logger        *slog.Logger
 	// DevicesChanged is called after a Mac is revoked or replaced, so Claude's tool list updates.
 	DevicesChanged func(userID string)
+	// AccessRemoved is called after every Claude client's access to the account ended (removed
+	// by the Owner, by a recovery, or with the account), so what the relay holds in memory for
+	// Claude's sessions can go too.
+	AccessRemoved func(userID string)
 }
 
 // Service serves the account pages and implements oauth.Authenticator.
@@ -100,6 +104,9 @@ func New(ctx context.Context, cfg Config) (*Service, error) {
 	}
 	if cfg.DevicesChanged == nil {
 		cfg.DevicesChanged = func(string) {}
+	}
+	if cfg.AccessRemoved == nil {
+		cfg.AccessRemoved = func(string) {}
 	}
 	origin := strings.TrimSuffix(cfg.PublicURL.String(), "/")
 	wa, err := webauthn.New(&webauthn.Config{

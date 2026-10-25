@@ -55,12 +55,26 @@ Serves FR-010, FR-013, FR-014, FR-021, SC-03, SC-07; Constitution II.
 - `tools/list` returns `laptop_status` plus the last tool list the Mac reported, even when offline.
 - `tools/call` for a Mac tool goes to the hub. Offline: immediate `isError: true` result with the
   offline message (FR-010). Online: forwarded with a deadline (D3).
-- Tool-list changes: `notifications/tools/list_changed` to stateful sessions (FR-062).
+- Tool-list changes: `notifications/tools/list_changed` to stateful sessions (FR-062). A sync
+  takes the Owner's server lock before it reads the stored list, so two syncs apply their lists
+  in the order they read them and an older list can't overwrite a newer one (security review,
+  2026-10-25).
+- Session limits (FR-090; security review, 2026-10-25): the stateful handler runs with the SDK's
+  `SessionTimeout` of 30 minutes, counted from the last request of the session; the next request
+  of a closed session gets `404` and the client starts a new one, as the MCP transport
+  specifies. Before a request that opens a session, the relay closes the Owner's oldest sessions
+  beyond 64 (the SDK has no cap of its own; it lists a server's sessions oldest first).
+  Options weighed for the cap: refusing the new session (locks the Owner out when a leaked token
+  fills the quota) or closing the oldest (chosen: the Owner's newest conversation always works).
+  The Owner's server and its sessions are dropped from memory when the account is deleted, when
+  Claude's access is removed, and on recovery (`mcpserver.Forget`).
 
 ### D3. Deadlines
 Serves FR-011, Constitution II.
 - Default deadline 10 s per call. A tool may declare a longer one in its metadata, capped at 60 s.
-  `battery_status` uses 5 s.
+  `battery_status` uses 5 s. The declared number is clamped to 1 ms to 60 s before it becomes a
+  duration, so a huge or non-finite value from the Mac can't wrap around to a negative deadline
+  (security review, 2026-10-25).
 - On deadline: the relay returns a timeout error, sends `cancel` to the Mac, and drops any late
   result.
 - [NEEDS CLARIFICATION: Claude's hosted client timeout is undocumented. Measure it in M4 and keep
@@ -327,7 +341,8 @@ Serves FR-080, Constitution V, VIII.
 ### D11. Audit log and local trace
 Serves FR-022, FR-023, FR-024, FR-026, FR-026a, Constitution VI.
 - Relay: one row per tool call, metadata only (no arguments, no results); daily purge after 30 days.
-  "Surface" (FR-022) is the MCP `clientInfo.name` from the session's `initialize`, when sent.
+  "Surface" (FR-022) is the MCP `clientInfo.name` from the session's `initialize`, when sent,
+  without control or formatting characters and cut to 64 characters (FR-022a).
 - Mac app: full trace (arguments, results, errors, timings) in a local SQLite file in the app's
   Application Support folder (SwiftData, `activity.store`), shown in a log window from the menu bar. Never sent to the relay.
   Purged after 90 days by default.
