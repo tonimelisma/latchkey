@@ -51,7 +51,9 @@ Boundaries, each a place where input must be treated as hostile:
 - **B5 Other local processes → the app and helper.** The helper's Mach service, the
   `latchkey://` URL scheme, the app's files in Application Support (activity log with full
   tool arguments and results, AES-GCM encrypted with a key in the Keychain, FR-026a), user defaults, Keychain items.
-- **B6 Supply chain.** Go modules, Sparkle, Docker base images, Homebrew-installed tools, the
+  The Files tools refuse changes to the app's own data folder, settings files and bundle
+  (spec 003 FR-210); `latchkey://` links are handled one at a time.
+- **B6 Supply chain.** Go modules, Sparkle (pinned by commit), Docker base images, Homebrew-installed tools, the
   deploy and install scripts, the update feed.
 
 ## Attackers in scope
@@ -77,9 +79,15 @@ Boundaries, each a place where input must be treated as hostile:
   Latchkey-side stop when Claude was asked to.
 - **Tools act with the owner's full rights when on.** Shell runs any command; Files reads and
   writes anywhere the owner can. That is the feature, not a bug.
-- **Remembered consent covers Claude Code too** (Toni, 2026-10-24): once the owner approved a
-  client, a later sign-in with the same client and a loopback redirect on any port is approved
-  without asking, so a program on the owner's computer posing as that client gets a token.
+- **Emailed codes are 6 digits with no per-visitor limit** (Toni, 2026-10-25): one account is
+  protected by 5 tries per code and 20 wrong codes a day, but guesses spread over many known
+  addresses are bounded only by the relay-wide email limit.
+- **The daily lock is per email address** (Toni, 2026-10-25): anyone can enter 20 wrong codes for
+  an address and block its emailed codes for a day at a time; passkeys still sign in.
+- **Shell, when on, can change Latchkey's own files**; only the Files tools refuse that.
+- **Each handled pairing link sends one lookup** to the relay it names before the dialog.
+- **Processes a command deliberately detaches from its terminal** are not stopped with it.
+- **A page that shows a password as plain text** without marking the field is read as text.
 - **Pairing links from outside the app's sign-in window** are accepted after a dialog that names
   the relay and the link's account email (Toni, 2026-10-24); not bound by a one-time secret.
 
@@ -91,27 +99,40 @@ Boundaries, each a place where input must be treated as hostile:
    refresh-token reuse after the 60 s grace revokes the family; revoking Claude's access kills
    every token of that grant.
 3. Consent is shown and approved by a signed-in owner (session cookie plus CSRF token) before
-   any code is issued; the client name and redirect host shown are the ones that will be used.
+   any code is issued, every time: approvals are not remembered (Toni, 2026-10-25; RFC 8252
+   §8.6). The client name and redirect host shown are the ones that will be used.
 4. Only a device holding the registered Secure Enclave key can act as the Mac; pairing codes are
    single-use, short-lived, and bound to the signed-in account; revocation closes the socket at
    once and the key no longer works.
 5. A capability turned off on the Mac is absent from the tool list and refused if called anyway
-   (Constitution III), whatever the relay sends.
+   (Constitution III), whatever the relay sends. Turning a capability off or down also stops
+   its running calls and, for Shell, its commands with everything they started (FR-066, spec 004
+   FR-310, FR-311).
 6. Sign-in and recovery codes: 6 digits, hashed, 15 minutes, 5 wrong attempts, rate-limited per
    address and per email; recovery removes old passkeys and is announced.
 7. The relay never blocks on the Mac without a deadline, and no unauthenticated request can make
    it hold unbounded memory, goroutines, connections, or rows.
 8. The CIMD fetch can reach only public HTTPS addresses, with size and time limits.
 9. The root helper does exactly two things (sleep on, sleep off) and only for a caller that
-   satisfies the app's code-signing requirement.
+   satisfies the app's code-signing requirement. The app connects to the helper only with a
+   code-signing requirement (none available means no connection), and Release builds refuse
+   peers carrying the debugging entitlement.
 10. A `latchkey://` link that doesn't come through the app's own sign-in window is used only
     after the owner confirms a dialog naming the relay's host and the email of the code's account
     (from `/pair/preview`, which doesn't use the code); no Connect button if the lookup fails.
+    One link is handled at a time; a link naming an unencrypted relay (http on localhost) is
+    accepted only in Debug builds.
 11. Tool arguments stay data: no string from Claude is spliced into AppleScript, JavaScript, SQL,
     or a shell command line except where the tool's purpose is to run it (`shell_run`, the
     JavaScript action in `browser_act`), and read-only tools don't change anything.
 12. No secret (relay address, server details, team ID, API keys, tokens) is committed, logged, or
-    returned in an error.
+    returned in an error. `scripts/private-values-check.sh` enforces the first part (`make
+    secrets` and the push guard); the proxy's access log leaves out redirect targets; the app's
+    log carries the relay address only as private data.
+13. A Read only browser read never returns what password, one-time-code or card fields hold
+    (spec 005 FR-410).
+14. The Files tools never change Latchkey's own files: activity log, settings (capability
+    levels), app bundle (spec 003 FR-210).
 
 ## Where to look first
 
