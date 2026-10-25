@@ -145,16 +145,20 @@ Enforced by hooks in `.claude/settings.json` (`scripts/hooks.sh`):
   anywhere; unpushed branches; worktrees with uncommitted work untouched for a day; the main
   checkout off `main` or dirty. It runs when a session starts (Claude is told) and before Claude
   ends a turn (Claude is sent back once to resolve it).
-- Commands that can lose work are refused: `git stash` (except `list`/`show`), force-push,
-  `git reset --hard`, `git clean -f`, `git branch -D`, `git checkout -- .`. Delete merged branches
+- Commands that can lose work are refused: `git stash` in any spelling (only `list` and `show`
+  are allowed), force-push (`-f`, `--force…`, or a `+refspec`), `git reset --hard`,
+  `git clean -f`, `git branch -D`, `git checkout -- .`. A `git push` is also refused while
+  `scripts/private-values-check.sh` finds one of the deployment's private values in a tracked
+  file or any commit. Without `jq`, every command that mentions git is refused. Delete merged branches
   with `git branch -d`; never remove a worktree with `discard_changes` unless its commits are on
   main.
 - After every push and at every session start, `scripts/tidy.sh` runs automatically (Claude Code
   hook in `.claude/settings.json`): branches merged into main (local and GitHub; never main, the
   current branch, or a branch checked out in a worktree), finished worktrees (as soon as merged),
-  stale refs, all but the
-  newest disk image, and all but the newest relay Docker image. Run it by hand after a push made
-  outside Claude Code.
+  stale refs, every disk image except the one for the version in `macos/project.yml`, built apps
+  under `macos/build/DerivedData/Build/Products` (in the main checkout and in removed worktrees),
+  and all but the newest relay Docker image. Last, it fast-forwards the main checkout when it is
+  on `main`, clean, and only behind. Run it by hand after a push made outside Claude Code.
 - Delete temporary files (scratch scripts, copies of databases, old app copies, servers' `/tmp`
   files) as soon as the task that needed them is done; scratchpad folders end empty.
 - Never commit the hosted relay's address, its server details, or the Apple team ID; they live in
@@ -176,6 +180,9 @@ Relay (run in `relay/`):
 - `make lint`: golangci-lint (pinned in the Makefile) with gofumpt; must report 0 issues
 - `make fmt`: format
 - `make run`: run locally with development defaults (data in `relay/.data/`)
+- `make security`: every security check (known vulnerabilities, committed secrets and private
+  values, Semgrep, ShellCheck, tidy modules); the deploy runs it first
+- `make script-tests`: tests of the deploy and repository scripts (no server, no network)
 
 - `make mac-check`: the Mac app's real connection code against a private relay (battery vs
   pmset, tool off, silent network cut, reconnect)
@@ -183,7 +190,8 @@ Relay (run in `relay/`):
 Hosted relay: `deploy/deploy.sh` deploys to the host and Google Cloud VM named in the gitignored
 `.env` (see the script's header), behind that VM's Caddy; needs `CLOUDFLARE_API_TOKEN` and `RESEND_API_KEY`
 (send-only) in the gitignored `.env`, plus `RESEND_ADMIN_KEY` (full access) for the first run that
-sets up the sending domain.
+sets up the sending domain. It deploys only a clean checkout at origin/main, and goes back to the
+previous version if the new relay doesn't answer.
 
 Mac app (run in `macos/`; `project.yml` is the source, the `.xcodeproj` is generated):
 - `make test`: unit and contract tests (Swift Testing); exit code is the result

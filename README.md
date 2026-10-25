@@ -72,7 +72,8 @@ One container with one data volume, behind HTTPS. See
 If a reverse proxy in another container or on another host forwards to the relay, set
 `TRUSTED_PROXIES` to its address or network range (comma-separated IP addresses and CIDR ranges,
 for example `172.18.0.0/16`). The relay believes the client address in `X-Forwarded-For` only from
-those proxies and from a proxy on the same machine.
+those proxies and from a proxy on the same machine. Behind a reverse proxy, publish the relay's
+port on `127.0.0.1` only (or use a private Docker network), so nothing reaches it around the proxy.
 
 ## Status
 
