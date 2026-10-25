@@ -1,4 +1,4 @@
-.PHONY: build test test-short lint fmt run tidy tidy-check vuln secrets semgrep shellcheck deps security claude-check mac-check
+.PHONY: build test test-short lint fmt run tidy tidy-check vuln secrets semgrep shellcheck deps security script-tests claude-check mac-check
 
 # Pinned and built with the installed Go, so every contributor lints the same way.
 GOLANGCI_LINT = go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.15.0
@@ -44,8 +44,11 @@ tidy-check:
 vuln:
 	$(GOVULNCHECK) ./...
 
-# Secrets committed anywhere in the repository's history. Fails on any.
+# Secrets committed anywhere in the repository's history, and this deployment's private values
+# (relay host, DNS zone, VM, cloud project, Apple team ID: read from the gitignored .env and
+# macos/Config/Local.xcconfig) in tracked files or history. Fails on any.
 secrets:
+	cd .. && scripts/private-values-check.sh
 	cd .. && $(GITLEAKS) git --redact --no-banner .
 
 # Static analysis of the Go relay and the Swift app: Semgrep's public Go, Swift, secrets, and
@@ -67,6 +70,14 @@ shellcheck:
 deps:
 	$(OSV_SCANNER) -L go.mod
 	../scripts/sparkle-advisories.sh
+
+# Tests of the deploy and repository scripts, in temporary folders: no server, no network.
+script-tests:
+	cd .. && deploy/tests/lib_test.sh
+	cd .. && python3 -m unittest discover -q -s deploy/tests -p 'test_*.py'
+	cd .. && scripts/tests/private_values_test.sh
+	cd .. && scripts/tests/hooks_guard_test.sh
+	cd .. && scripts/tests/tidy_test.sh
 
 # Every security check; the deploy script and CI run it.
 security: tidy-check vuln secrets semgrep shellcheck deps
