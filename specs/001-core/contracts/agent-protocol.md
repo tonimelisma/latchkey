@@ -120,7 +120,7 @@ Sent in `hello`, in every `state` message, and in `goodbye`.
 
 | type | When | Fields |
 |---|---|---|
-| `state` | Every `heartbeat_interval_s` and immediately on any change | `state` |
+| `state` | Every `heartbeat_interval_s` and on any change: the first at once, further changes within the same second as one message when the second is over (FR-036a) | `state` |
 | `tools` | Enabled capabilities changed | `tools` (full list, replaces the previous one) |
 | `progress` | Optional, during a long call | `id`, `progress`, `total` (optional), `message` (optional) |
 | `result` | A call finished, or the Owner stopped it by turning its capability off or down (then `is_error` with the reason, FR-066) | `id`, `content` (MCP content array), `structured_content` (optional), `is_error` |

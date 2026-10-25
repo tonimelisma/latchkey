@@ -34,6 +34,8 @@ actor RelayConnection {
     private var wake: CheckedContinuation<Void, Never>?
     private var heartbeat: TimeInterval = 15
     private var pendingPing: UUID?
+    private var stateFrames = StateFrames()
+    private var stateFlush: Task<Void, Never>?
 
     init(identity: DeviceIdentity, hooks: ConnectionHooks) {
         self.identity = identity
@@ -90,9 +92,26 @@ actor RelayConnection {
         }
     }
 
-    func sendState() async {
+    /// Reports a change of the Mac's state (FR-036): at once, unless nothing changed or a
+    /// change went out within the last second, in which case the latest state follows when the
+    /// second is over (`StateFrames`). `heartbeat` sends regardless.
+    func sendState(heartbeat: Bool = false) async {
         guard let task else { return }
-        try? await send(.state(StateUpdate(state: await hooks.state())), on: task)
+        let state = await hooks.state()
+        let now = ContinuousClock.now
+        switch heartbeat ? .send : stateFrames.decide(state, at: now) {
+        case .skip: return
+        case .later(let wait):
+            guard stateFlush == nil else { return }
+            stateFlush = Task {
+                try? await Task.sleep(for: wait)
+                self.stateFlush = nil
+                if !Task.isCancelled { await self.sendState() }
+            }
+        case .send:
+            stateFrames.sent(state, at: now)
+            try? await send(.state(StateUpdate(state: state)), on: task)
+        }
     }
 
     func sendTools() async {
@@ -122,6 +141,7 @@ actor RelayConnection {
             t.resume()
             do {
                 try await handshake(t)
+                stateFrames.reset()
                 attempt = 0
                 await hooks.status(.connected)
                 try await serve(t)
@@ -193,7 +213,7 @@ actor RelayConnection {
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(heartbeat))
                 if Task.isCancelled { return }
-                await self.sendState()
+                await self.sendState(heartbeat: true)
                 self.ping(t)
             }
         }

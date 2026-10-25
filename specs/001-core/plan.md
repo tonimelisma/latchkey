@@ -38,6 +38,11 @@ second hop and a per-user provisioning step. A closed socket means "offline" ins
 - Transport: WSS on 443 (passes through home routers, hotel Wi-Fi, and most corporate proxies).
 - Liveness: the app sends a `state` message every 15 s; the relay also sends WebSocket pings.
   Offline after 35 s of silence (SC-04 requires 45 s).
+- What the app sends stays far inside the relay's limits on a Mac's connection (FR-036a): a
+  `state` on change goes out at most once a second (the first change at once, the latest state
+  when the second is over; a state equal to the last one sent, apart from the time it was read,
+  is not sent), plus one per heartbeat; a `tools` list per level change the Owner makes (15
+  tools, about 15 KiB; a test keeps it under 64 KiB); one `result` per call the relay sent.
 - Reconnect: immediately on network path change (`NWPathMonitor`) and on wake
   (`NSWorkspace.didWakeNotification`); otherwise exponential backoff with jitter, 1 s to 30 s cap
   (SC-05).

@@ -164,6 +164,10 @@ Format: EARS ("When <trigger>, the <system> shall <response>"). IDs are stable; 
   behavior shall be restored.
 - **FR-036** The Mac app shall report battery, power, thermal, and keep-awake state to the relay at
   least once per heartbeat interval and immediately on any change.
+- **FR-036a** When the Mac's state changes several times within a second, the Mac app shall
+  report the first change at once and the latest state when the second is over, and shall not
+  report again a state that hasn't changed, so a burst of changes can't flood the relay
+  (security review, 2026-10-25).
 - **FR-037** The Mac app shall report its IANA time zone in its state, and the relay shall render
   times in offline messages in that time zone, falling back to UTC when unknown.
 
