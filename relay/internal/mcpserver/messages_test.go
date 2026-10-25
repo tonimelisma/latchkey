@@ -1,10 +1,13 @@
 package mcpserver
 
 import (
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/tonimelisma/latchkey/relay/internal/agentproto"
 )
@@ -152,4 +155,62 @@ func TestStatusLine(t *testing.T) {
 	assert.Equal(t, "Mac: online · 90% battery, plugged in · keep-awake off (not approved in System Settings)", statusLine(s))
 
 	assert.Equal(t, "Mac: online", statusLine(nil))
+}
+
+// FR-200: whatever a result ends with, the state line starts on its own line, the result's own
+// blocks are untouched, and no blank line is added where the text already ends with a line break.
+func TestStatusLineStartsOnItsOwnLine(t *testing.T) {
+	const line = "Mac: online"
+	text := func(s string) mcp.Content { return &mcp.TextContent{Text: s} }
+	image := &mcp.ImageContent{MIMEType: "image/png", Data: []byte{1}}
+	for name, tc := range map[string]struct {
+		content []mcp.Content
+		isError bool
+		want    string // everything Claude reads: the text blocks joined with nothing between them
+	}{
+		"text without a line break":       {content: []mcp.Content{text("live check")}, want: "live check\nMac: online"},
+		"text ending with a line break":   {content: []mcp.Content{text("done\n")}, want: "done\nMac: online"},
+		"text ending with a blank line":   {content: []mcp.Content{text("done\n\n")}, want: "done\n\nMac: online"},
+		"text ending with CR LF":          {content: []mcp.Content{text("done\r\n")}, want: "done\r\nMac: online"},
+		"empty text":                      {content: []mcp.Content{text("")}, want: "Mac: online"},
+		"no blocks":                       {content: nil, want: "Mac: online"},
+		"text then empty text":            {content: []mcp.Content{text("abc"), text("")}, want: "abc\nMac: online"},
+		"line break then empty text":      {content: []mcp.Content{text("abc\n"), text("")}, want: "abc\nMac: online"},
+		"several text blocks":             {content: []mcp.Content{text("a\n"), text("b")}, want: "a\nb\nMac: online"},
+		"an image last":                   {content: []mcp.Content{text("shot\n"), image}, want: "shot\n\nMac: online"},
+		"only an image":                   {content: []mcp.Content{image}, want: "\nMac: online"},
+		"image then text":                 {content: []mcp.Content{image, text("caption")}, want: "caption\nMac: online"},
+		"an error result":                 {content: []mcp.Content{text("It can be put back from there.")}, isError: true, want: "It can be put back from there.\nMac: online"},
+		"an error ending with line break": {content: []mcp.Content{text("No such file.\n")}, isError: true, want: "No such file.\nMac: online"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			before := make([]string, len(tc.content))
+			for i, c := range tc.content {
+				if tx, ok := c.(*mcp.TextContent); ok {
+					before[i] = tx.Text
+				}
+			}
+			res := &mcp.CallToolResult{Content: tc.content, IsError: tc.isError}
+			appendStatusLine(res, line)
+
+			require.Len(t, res.Content, len(tc.content)+1, "one block added, none removed")
+			joined := ""
+			for i, c := range res.Content {
+				tx, ok := c.(*mcp.TextContent)
+				if !ok {
+					assert.Same(t, tc.content[i], c, "other blocks are passed through")
+					continue
+				}
+				if i < len(tc.content) {
+					assert.Equal(t, before[i], tx.Text, "the result's own text is unchanged")
+				}
+				joined += tx.Text
+			}
+			assert.Equal(t, tc.want, joined)
+			assert.Equal(t, tc.isError, res.IsError)
+			last, ok := res.Content[len(res.Content)-1].(*mcp.TextContent)
+			require.True(t, ok)
+			assert.Equal(t, line, strings.TrimLeft(last.Text, "\n"), "the last block is the state line")
+		})
+	}
 }

@@ -134,6 +134,9 @@ The relay appends one text block to every Mac tool result, built from the state 
 stores, for example `Mac: online · 64% battery, on battery · keep-awake on`. It adds a warning when
 the battery is within 10 points of the sleep threshold or the Mac is too hot. `battery_status` and
 `laptop_status` and the "System info" capability are removed (spec 001 FR-021, FR-063 withdrawn).
+The block starts with a line break unless the result already ends with one, so the line is
+always on its own line (spec 001 FR-200; rule in contracts/mcp-surface.md); the Mac's own blocks
+are not changed.
 
 ## D8. Visibility on the Mac
 

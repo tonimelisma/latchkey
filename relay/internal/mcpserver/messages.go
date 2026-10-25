@@ -4,10 +4,40 @@ import (
 	"fmt"
 	"math"
 	"strconv"
+	"strings"
 	"time"
+
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/tonimelisma/latchkey/relay/internal/agentproto"
 )
+
+// appendStatusLine adds the state line as the result's last block (FR-065), starting on its own
+// line (FR-200): Claude's apps join a result's text blocks with nothing between them, so a
+// result not ending in a line break ran straight into it ("live checkMac: online", live check
+// 2026-10-25). The line break goes in the added block; the Mac's own blocks are never changed.
+func appendStatusLine(res *mcp.CallToolResult, line string) {
+	if needsLineBreak(res.Content) {
+		line = "\n" + line
+	}
+	res.Content = append(res.Content, &mcp.TextContent{Text: line})
+}
+
+// needsLineBreak reports whether text added after these blocks would not start on its own line:
+// the last block that shows something is not text, or is text not ending in a line break.
+// Empty text blocks show nothing and are skipped; after nothing at all no break is needed.
+func needsLineBreak(content []mcp.Content) bool {
+	for i := len(content) - 1; i >= 0; i-- {
+		text, ok := content[i].(*mcp.TextContent)
+		if !ok {
+			return true
+		}
+		if text.Text != "" {
+			return !strings.HasSuffix(text.Text, "\n")
+		}
+	}
+	return false
+}
 
 // status is what the relay knows about a user's Mac (FR-020).
 type status struct {

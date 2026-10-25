@@ -208,7 +208,8 @@ func TestOnline(t *testing.T) {
 			require.Len(t, res.Content, 2)
 			last, ok := res.Content[1].(*mcp.TextContent)
 			require.True(t, ok)
-			assert.Equal(t, "Mac: online · 82% battery, on battery power · keep-awake on", last.Text)
+			// FR-200: the Mac's text has no line break at its end, so the line brings its own.
+			assert.Equal(t, "\nMac: online · 82% battery, on battery power · keep-awake on", last.Text)
 		})
 	}
 }

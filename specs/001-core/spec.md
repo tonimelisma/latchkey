@@ -135,6 +135,10 @@ Format: EARS ("When <trigger>, the <system> shall <response>"). IDs are stable; 
   state (online, battery, power source, keep-awake, and a warning when the Mac may soon sleep),
   and every answer for a Mac that is away shall say since when and why, so Claude knows the
   laptop's condition as a byproduct of real work.
+- **FR-200** The line of the Mac's state (FR-065) shall always start on a line of its own,
+  whatever the result ends with (text with or without a line break at its end, empty text, an
+  image, several parts, an error), without a blank line added where the text already ends with
+  a line break, and without any change to the result itself.
 - **FR-022** The relay shall record an audit entry for every tool call: time, tool name, Claude
   surface if known, outcome (ok, error, timeout, offline), and duration. It shall not record tool
   arguments.

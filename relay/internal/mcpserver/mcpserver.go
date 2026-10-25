@@ -440,7 +440,7 @@ func (s *Server) forward(userID string, tool *mcp.Tool) mcp.ToolHandler {
 			}
 			// The Mac answered: add its state, read after the call so it is current (FR-065).
 			now, _ := s.status(ctx, userID)
-			result.Content = append(result.Content, &mcp.TextContent{Text: statusLine(now.State)})
+			appendStatusLine(result, statusLine(now.State))
 		}
 		s.audit(ctx, req, userID, d.ID, tool.Name, outcome, start)
 		return result, nil

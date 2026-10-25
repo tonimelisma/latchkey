@@ -173,6 +173,12 @@ built by the relay from the state it holds:
 Mac: online · 64% battery, on battery power · keep-awake on
 ```
 
+The line always starts on a line of its own (FR-200). Claude's apps join a result's text blocks
+with nothing between them, so the relay puts one line break at the start of the added block
+unless the result's last block that shows something is text already ending in a line break
+(empty text blocks are skipped; a result with nothing in it needs none). After an image or any
+other non-text block the line break is always added. The Mac's own blocks are never changed.
+
 - Power: "on battery power", "plugged in", "charging", or "on UPS power".
 - Keep-awake: "keep-awake on", "keep-awake off", "keep-awake off (battery low)", "keep-awake off
   (too hot)", "keep-awake off (not approved in System Settings)".
