@@ -315,5 +315,117 @@ grep -q 'stays stopped' "$work/out" && ok "that the relay is down is said" || ba
 grep -q '^restore$' "$work/ssh.log" && bad "ordinary rollback leaves the database alone" || ok "ordinary rollback leaves the database alone"
 grep -q 'compose up' "$work/ssh.log" && ok "ordinary rollback still starts the previous version" || bad "ordinary rollback still starts the previous version"
 
+# --- the operator's details for the terms and the privacy policy (FR-193): free text from .env
+# --- that must reach the relay exactly, through the server's relay.env and docker compose ---
+NAME_OK='Sample O. Person-Example'
+LAW_OK='California, USA'
+PROV_OK='Google Cloud (hosting), Resend (email delivery), Cloudflare (DNS)'
+expect 0 "a person's name accepted" check_text OPERATOR_NAME "$NAME_OK" 100
+expect 0 "a place with a comma accepted" check_text OPERATOR_LAW "$LAW_OK" 100
+expect 0 "providers with commas and parentheses accepted" check_text OPERATOR_PROVIDERS "$PROV_OK" 300
+expect 0 "accented letters accepted" check_text OPERATOR_NAME "Zoë Müller" 100
+expect 0 "a hash sign accepted (it is no comment inside quotes)" check_text OPERATOR_PROVIDERS "Example #1 Hosting" 300
+expect 1 "empty text refused" check_text OPERATOR_NAME "" 100
+expect 1 "single quote refused" check_text OPERATOR_NAME "O'Brien" 100
+expect 1 "double quote refused" check_text OPERATOR_NAME 'Sam "the" Op' 100
+expect 1 "backslash refused" check_text OPERATOR_NAME 'a\b' 100
+expect 1 "dollar sign refused" check_text OPERATOR_PROVIDERS 'Cloud ${SMTP_PASSWORD}' 300
+expect 1 "backtick refused" check_text OPERATOR_PROVIDERS 'Cloud `id`' 300
+expect 1 "line break refused (it would add a setting)" check_text OPERATOR_LAW "California
+SMTP_PASSWORD=x" 100
+expect 1 "tab refused" check_text OPERATOR_LAW "California	USA" 100
+expect 1 "leading space refused" check_text OPERATOR_LAW " California" 100
+expect 1 "trailing space refused" check_text OPERATOR_LAW "California " 100
+expect 1 "too long refused" check_text OPERATOR_NAME "$(printf '%0101d' 0)" 100
+(check_text OPERATOR_NAME "Se'cret Name" 100 >"$work/out" 2>&1)
+grep -q "Se'cret" "$work/out" && bad "text refusal doesn't echo the value" || ok "text refusal doesn't echo the value"
+grep -q OPERATOR_NAME "$work/out" && ok "text refusal names the variable" || bad "text refusal names the variable"
+
+expect 0 "contact address accepted" check_contact "relay.owner+abuse@example-mail.org"
+expect 1 "contact with a name refused" check_contact "Sample <owner@example.org>"
+expect 1 "contact without a domain refused" check_contact "owner@"
+expect 1 "contact without a dot in the domain refused" check_contact "owner@localhost"
+expect 1 "two addresses refused" check_contact "a@example.org,b@example.org"
+expect 1 "two at signs refused" check_contact "a@b@example.org"
+expect 1 "contact with a space refused" check_contact "owner @example.org"
+expect 1 "empty contact refused" check_contact ""
+expect 0 "backup days accepted" check_days 14
+expect 1 "zero days refused" check_days 0
+expect 1 "days with text refused" check_days "14 days"
+expect 1 "negative days refused" check_days -3
+expect 1 "absurd days refused" check_days 99999
+expect 1 "empty days refused" check_days ""
+
+expect 0 "no operator settings at all is fine" check_operator "" "" "" "" ""
+expect 0 "name and contact alone are fine" check_operator "$NAME_OK" owner@example.org "" "" ""
+expect 0 "all five accepted" check_operator "$NAME_OK" owner@example.org "$LAW_OK" "$PROV_OK" 14
+expect 1 "name without contact refused" check_operator "$NAME_OK" "" "" "" ""
+expect 1 "contact without name refused" check_operator "" owner@example.org "" "" ""
+expect 1 "a bad optional value refused" check_operator "$NAME_OK" owner@example.org 'Cali"fornia' "" ""
+expect 1 "bad backup days refused" check_operator "$NAME_OK" owner@example.org "" "" soon
+expect 0 "law, providers and days without a name are passed along (the relay ignores them)" check_operator "" "" "$LAW_OK" "" 14
+
+# .env is read as shell: the values are written there in single quotes.
+cat >"$work/env-operator" <<'EOF'
+OPERATOR_NAME='Sample O. Person-Example'
+OPERATOR_CONTACT=owner@example.org
+OPERATOR_LAW='California, USA'
+OPERATOR_PROVIDERS='Google Cloud (hosting), Resend (email delivery), Cloudflare (DNS)'
+BACKUP_DAYS=14
+EOF
+got=$(
+  load_env "$work/env-operator"
+  printf '%s|%s|%s|%s|%s' "$OPERATOR_NAME" "$OPERATOR_CONTACT" "$OPERATOR_LAW" "$OPERATOR_PROVIDERS" "$BACKUP_DAYS"
+)
+[ "$got" = "$NAME_OK|owner@example.org|$LAW_OK|$PROV_OK|14" ] && ok ".env values with spaces, commas and parentheses are read whole" || bad ".env values with spaces, commas and parentheses are read whole"
+
+# The lines for the server's relay.env: only the settings that are set, each value in single quotes.
+lines=$(operator_env_lines "$NAME_OK" owner@example.org "$LAW_OK" "$PROV_OK" 14)
+want="OPERATOR_NAME='$NAME_OK'
+OPERATOR_CONTACT='owner@example.org'
+OPERATOR_LAW='$LAW_OK'
+OPERATOR_PROVIDERS='$PROV_OK'
+BACKUP_DAYS='14'"
+[ "$lines" = "$want" ] && ok "relay.env lines are the settings in single quotes" || { bad "relay.env lines are the settings in single quotes"; printf '%s\n' "$lines" | sed 's/^/     /'; }
+[ -z "$(operator_env_lines "" "" "" "" "")" ] && ok "no lines when nothing is set" || bad "no lines when nothing is set"
+[ "$(operator_env_lines "$NAME_OK" owner@example.org "" "" "")" = "OPERATOR_NAME='$NAME_OK'
+OPERATOR_CONTACT='owner@example.org'" ] && ok "unset settings get no line" || bad "unset settings get no line"
+
+# What the relay receives: docker compose reads relay.env as deploy/server/docker-compose.yml
+# names it (env_file). Checked with docker compose itself when it is installed.
+if docker compose version >/dev/null 2>&1; then
+  mkdir -p "$work/compose"
+  {
+    printf '%s\n' "PUBLIC_URL=https://relay.example.com" "SMTP_FROM=Latchkey <no-reply@relay.example.com>" "SMTP_PASSWORD=re_test_key"
+    operator_env_lines "$NAME_OK" owner@example.org "$LAW_OK" "Example #1 (hosting), Resend (email delivery), Cloudflare (DNS)" 14
+  } >"$work/compose/relay.env"
+  cat >"$work/compose/docker-compose.yml" <<'EOF'
+services:
+  relay:
+    image: example
+    env_file: relay.env
+EOF
+  if (cd "$work/compose" && SMTP_PASSWORD=from-the-shell docker compose config --format json) >"$work/compose/config.json" 2>"$work/out"; then
+    seen=$(python3 -c '
+import json, sys
+e = json.load(open(sys.argv[1]))["services"]["relay"]["environment"]
+print("|".join(e.get(k, "<missing>") for k in ("OPERATOR_NAME", "OPERATOR_CONTACT", "OPERATOR_LAW", "OPERATOR_PROVIDERS", "BACKUP_DAYS", "SMTP_FROM")))
+' "$work/compose/config.json")
+    [ "$seen" = "$NAME_OK|owner@example.org|$LAW_OK|Example #1 (hosting), Resend (email delivery), Cloudflare (DNS)|14|Latchkey <no-reply@relay.example.com>" ] &&
+      ok "docker compose hands the relay exactly the text" || { bad "docker compose hands the relay exactly the text"; echo "     $seen"; }
+  else
+    bad "docker compose reads the sample relay.env"
+    sed 's/^/     /' "$work/out"
+  fi
+else
+  echo "skip docker compose is not installed: what it makes of relay.env is not checked here"
+fi
+
+# The compose file hands the settings file to the relay.
+grep -q '^    env_file: relay.env$' "$root/deploy/server/docker-compose.yml" && ok "compose file reads relay.env" || bad "compose file reads relay.env"
+# deploy.sh checks the operator settings and writes their lines.
+grep -q 'check_operator ' "$root/deploy/deploy.sh" && grep -q 'operator_env_lines ' "$root/deploy/deploy.sh" &&
+  ok "deploy.sh checks and writes the operator settings" || bad "deploy.sh checks and writes the operator settings"
+
 [ "$fails" = 0 ] && echo "all passed" || echo "$fails failed"
 [ "$fails" = 0 ]

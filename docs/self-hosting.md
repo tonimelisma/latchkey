@@ -233,6 +233,9 @@ docker exec latchkey-relay /relay account list
   `docker exec -e LATCHKEY_OPERATOR=alex latchkey-relay /relay account suspend …`.
 - A mistyped command prints the list of commands and does nothing. `relay` with no command
   starts the server, as before.
+- The commands read the same settings as the server (`DATA_DIR`, `KEY_FILE`), which
+  `docker exec` passes along by itself. They need the key file the server uses (see "The key
+  file"); without it they stop and change nothing.
 
 ## Connect
 

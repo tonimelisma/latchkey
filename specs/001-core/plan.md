@@ -596,6 +596,20 @@ Serves FR-190, FR-191, FR-192; Constitution II, VI.
   when a minute has passed since the last write for that grant.
 - Account page: each app has its own Remove button (CSRF-protected POST); "Remove Claude's
   access" still removes all.
+- Mac app (0.8.10): `hello` asks for the list with `features: ["clients"]`. The menu lists the
+  Claude apps with access while the Mac is connected to a relay that sends the list, and shows
+  nothing about them for a relay that doesn't (FR-190). Every list is checked as the contract
+  says (a malformed one is a protocol violation) and replaces the one shown (FR-192). Remove
+  Access… asks first, because it can't be undone from the Mac; it then sends one
+  `revoke_client` and takes the entry out of the menu. If no list without the entry arrives
+  within 5 seconds, or the connection drops, the entry is put back and the Owner is told
+  (FR-191). Every removal is written to the Mac's activity log. The relay's names are never
+  empty ("An unnamed app" stands in) and its IDs look like `grt_…`; the app treats both as
+  opaque text.
+- With the default list of allowed client hosts (D4, FR-180) every entry is one of Claude's
+  apps: host `claude.ai`, sent back to `claude.ai` (web, Desktop, phone) or "this computer"
+  (Claude Code). Clients the list no longer allows lose their tokens at start and in the daily
+  purge (FR-184); the purge then re-sends the list to connected Macs.
 
 ### D13. Terms and privacy policy, from the operator's settings
 Serves FR-193, FR-194; Constitution V, VI.
@@ -631,6 +645,10 @@ Serves FR-195 to FR-199; Constitution II, V.
   sessions. Worst case 2 s plus the query. A connection that registers just after its account
   was suspended is caught by re-reading the user after registering, as for revocation.
 - The operator log is purged after a year by the daily job.
+- The commands open the database exactly as the server does, key file included (D10, FR-186):
+  `DATA_DIR` and `KEY_FILE` from the container's environment. With the key file missing or
+  wrong, a command refuses as the server would, changes nothing, and never makes a key file of
+  its own beside sealed keys. `reset-keys` (FR-189) is a command of its own, for a stopped relay.
 
 ## Repository layout
 

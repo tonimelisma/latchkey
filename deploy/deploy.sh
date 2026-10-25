@@ -6,6 +6,12 @@
 #   DEPLOY_DNS_ZONE   the Cloudflare zone it lives in, e.g. example.com
 #   DEPLOY_VM, DEPLOY_PROJECT, DEPLOY_ZONE   the VM, its Google Cloud project, and its zone
 #   ALLOWED_EMAILS    who may sign up (comma-separated)
+#   OPERATOR_NAME, OPERATOR_CONTACT   optional, both or neither: who runs the relay and the email
+#                     address for questions; with them the relay publishes its terms of service
+#                     and privacy policy (docs/self-hosting.md)
+#   OPERATOR_LAW, OPERATOR_PROVIDERS, BACKUP_DAYS   optional: the law the terms are under, the
+#                     companies that handle the relay's data, and how many days backups are kept.
+#                     Free text goes in single quotes: OPERATOR_LAW='California, USA'
 #   CLOUDFLARE_API_TOKEN (Zone DNS edit), RESEND_API_KEY (send-only; the relay sends with it), and
 #   RESEND_ADMIN_KEY (full access; only to set up the sending domain, never copied to the server;
 #   remove it from .env once the domain is verified).
@@ -48,6 +54,7 @@ check_emails "$ALLOWED_EMAILS"
 check_secret CLOUDFLARE_API_TOKEN "$CLOUDFLARE_API_TOKEN"
 check_secret RESEND_API_KEY "$RESEND_API_KEY"
 [ -z "${RESEND_ADMIN_KEY-}" ] || check_secret RESEND_ADMIN_KEY "$RESEND_ADMIN_KEY"
+check_operator "${OPERATOR_NAME-}" "${OPERATOR_CONTACT-}" "${OPERATOR_LAW-}" "${OPERATOR_PROVIDERS-}" "${BACKUP_DAYS-}"
 HOST=$DEPLOY_HOST
 ZONE_NAME=$DEPLOY_DNS_ZONE
 VM=$DEPLOY_VM PROJECT=$DEPLOY_PROJECT ZONE=$DEPLOY_ZONE
@@ -90,15 +97,19 @@ esac
 # printf is a shell builtin, so the secret is in no process's arguments; a here-document would
 # go through a temp file in some shells. A failure on the VM fails the deploy (the pipeline's
 # status is its last command's; printf can't fail).
-printf '%s\n' \
-  "PUBLIC_URL=https://$HOST" \
-  "SMTP_HOST=smtp.resend.com" \
-  "SMTP_PORT=465" \
-  "SMTP_USER=resend" \
-  "SMTP_PASSWORD=$RESEND_API_KEY" \
-  "SMTP_FROM=Latchkey <no-reply@$HOST>" \
-  "ALLOWED_EMAILS=$ALLOWED_EMAILS" \
-  "TRUSTED_PROXIES=$PROXY_NETS" |
+# The operator's details (checked above) follow, each only when set.
+{
+  printf '%s\n' \
+    "PUBLIC_URL=https://$HOST" \
+    "SMTP_HOST=smtp.resend.com" \
+    "SMTP_PORT=465" \
+    "SMTP_USER=resend" \
+    "SMTP_PASSWORD=$RESEND_API_KEY" \
+    "SMTP_FROM=Latchkey <no-reply@$HOST>" \
+    "ALLOWED_EMAILS=$ALLOWED_EMAILS" \
+    "TRUSTED_PROXIES=$PROXY_NETS"
+  operator_env_lines "${OPERATOR_NAME-}" "${OPERATOR_CONTACT-}" "${OPERATOR_LAW-}" "${OPERATOR_PROVIDERS-}" "${BACKUP_DAYS-}"
+} |
   ssh_vm "sudo sh -ec 'umask 077; cd $REMOTE_DIR; if [ -f relay.env ]; then cp -p relay.env relay.env.prev; fi
 cat > relay.env.new && chmod 600 relay.env.new && mv relay.env.new relay.env'"
 

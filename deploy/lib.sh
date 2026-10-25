@@ -38,6 +38,84 @@ check_secret() {
   esac
 }
 
+# --- The operator's details for the relay's terms and privacy policy (FR-193) ---
+# OPERATOR_NAME, OPERATOR_LAW and OPERATOR_PROVIDERS are free text ("California, USA",
+# "Google Cloud (hosting), Resend (email delivery)"). In .env, which is read as shell, they are
+# written in single quotes. They travel into the server's relay.env, which docker compose reads
+# (env_file): operator_env_lines writes each value in single quotes there too, the one form
+# compose takes literally (no ${...} substitution, no escapes, "#" is no comment). So a value may
+# hold anything printable on one line except what could end the quoting or mean something to a
+# shell: quotes, backslashes, dollar signs, backticks.
+
+# check_text NAME VALUE MAXLENGTH. The value itself is never printed.
+check_text() {
+  _bad=''
+  case $2 in
+    '') _bad='is empty' ;;
+    *\'* | *\"* | *\\* | *\$* | *\`*) _bad='holds a quote, a backslash, a dollar sign or a backtick' ;;
+    ' '* | *' ') _bad='starts or ends with a space' ;;
+  esac
+  # Control characters (line breaks, tabs, escapes): a line break would add a setting of its own.
+  if [ -z "$_bad" ] && [ "$(printf '%s' "$2" | LC_ALL=C tr -d '[:cntrl:]')" != "$2" ]; then
+    _bad='holds a line break, a tab or another control character'
+  fi
+  if [ -z "$_bad" ] && [ "${#2}" -gt "$3" ]; then
+    _bad="is longer than $3 characters"
+  fi
+  if [ -n "$_bad" ]; then
+    echo "FAIL: $1 in .env $_bad. Write plain text on one line, in single quotes." >&2
+    return 1
+  fi
+}
+
+# check_contact VALUE: OPERATOR_CONTACT is one plain email address.
+check_contact() {
+  case $1 in
+    '' | *[!A-Za-z0-9@._%+-]* | *@*@* | @* | *@ | *@.* | *.) _ok=0 ;;
+    ?*@?*.?*) _ok=1 ;;
+    *) _ok=0 ;;
+  esac
+  if [ "$_ok" = 0 ]; then
+    echo "FAIL: OPERATOR_CONTACT in .env must be one email address, without a name" >&2
+    return 1
+  fi
+}
+
+# check_days VALUE: BACKUP_DAYS is a whole number of days, 1 to 9999.
+check_days() {
+  case $1 in
+    '' | *[!0-9]* | 0* | ?????*)
+      echo "FAIL: BACKUP_DAYS in .env must be a number of days, such as 14" >&2
+      return 1
+      ;;
+  esac
+}
+
+# check_operator NAME CONTACT LAW PROVIDERS BACKUP_DAYS: all optional; name and contact come
+# together (the relay refuses to start with only one, so the deploy refuses first).
+check_operator() {
+  if { [ -n "$1" ] && [ -z "$2" ]; } || { [ -z "$1" ] && [ -n "$2" ]; }; then
+    echo "FAIL: OPERATOR_NAME and OPERATOR_CONTACT in .env must be set together, or neither" >&2
+    return 1
+  fi
+  [ -z "$1" ] || check_text OPERATOR_NAME "$1" 100 || return 1
+  [ -z "$2" ] || check_contact "$2" || return 1
+  [ -z "$3" ] || check_text OPERATOR_LAW "$3" 100 || return 1
+  [ -z "$4" ] || check_text OPERATOR_PROVIDERS "$4" 300 || return 1
+  [ -z "$5" ] || check_days "$5" || return 1
+}
+
+# operator_env_lines NAME CONTACT LAW PROVIDERS BACKUP_DAYS: the lines for relay.env, one per
+# setting that is set, each value in single quotes. Call check_operator first: a value with a
+# single quote in it would break out of the quoting.
+operator_env_lines() {
+  [ -z "$1" ] || printf "OPERATOR_NAME='%s'\n" "$1"
+  [ -z "$2" ] || printf "OPERATOR_CONTACT='%s'\n" "$2"
+  [ -z "$3" ] || printf "OPERATOR_LAW='%s'\n" "$3"
+  [ -z "$4" ] || printf "OPERATOR_PROVIDERS='%s'\n" "$4"
+  [ -z "$5" ] || printf "BACKUP_DAYS='%s'\n" "$5"
+}
+
 # check_ip VALUE: the VM's public IPv4 address as Google Cloud reports it.
 check_ip() {
   case $1 in
