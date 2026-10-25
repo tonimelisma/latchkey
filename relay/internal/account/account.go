@@ -44,6 +44,9 @@ const (
 	emailRefill     = 10 * time.Minute
 	sendBurst       = 100 // emails the whole relay sends at once, then one every sendRefill
 	sendRefill      = 30 * time.Second
+	// Recovery codes are sent in the background: at most this many at once, each given this long.
+	maxBackgroundSends    = 16
+	backgroundSendTimeout = 30 * time.Second
 )
 
 //go:embed templates/*.html
@@ -86,7 +89,13 @@ type Service struct {
 	secure   bool
 	cookie   string
 
+	// Recovery codes are emailed in the background (FR-042b): background counts the sends in
+	// flight, sending bounds them.
+	background sync.WaitGroup
+	sending    chan struct{}
+
 	mu         sync.Mutex
+	swept      time.Time // last sweep of ceremonies and tickets
 	ceremonies map[string]*ceremony
 	tickets    map[string]*ticket
 	lastEmail  map[string]time.Time
@@ -142,6 +151,7 @@ func New(ctx context.Context, cfg Config) (*Service, error) {
 	}
 	return &Service{
 		cfg: cfg, webauthn: wa, pages: pages, csrfKey: key, secure: secure, cookie: cookie,
+		sending:    make(chan struct{}, maxBackgroundSends),
 		ceremonies: map[string]*ceremony{}, tickets: map[string]*ticket{}, lastEmail: map[string]time.Time{},
 		perAddress: limit.NewKeyed(emailBurst, emailRefill), allSends: limit.NewKeyed(sendBurst, sendRefill),
 	}, nil
@@ -413,9 +423,11 @@ func (s *Service) authEmail(w http.ResponseWriter, r *http.Request) {
 	u, err := s.cfg.Store.UserByEmail(ctx, email)
 	known := err == nil && !u.EmailVerifiedAt.IsZero()
 	if req.Recover {
-		// The answer never reveals whether the account exists.
+		// The answer never reveals whether the account exists: the same words, and the same
+		// speed, because the code is stored and emailed after the answer, not before it
+		// (talking to the mail server takes far longer than finding no account).
 		if known {
-			s.sendCode(ctx, u, store.PurposeRecover)
+			s.sendCodeInBackground(ctx, u, store.PurposeRecover)
 		}
 		writeJSON(w, http.StatusOK, map[string]string{"step": "code", "purpose": store.PurposeRecover})
 		return
@@ -442,6 +454,25 @@ func (s *Service) authEmail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"step": "code", "purpose": store.PurposeVerify})
+}
+
+// sendCodeInBackground runs sendCode after the request has been answered, with its own time
+// limit; a failure is only logged (sendCode logs it), as the request can't report it without
+// revealing that the account exists. At most maxBackgroundSends run at once; beyond that the
+// code is not sent, and the Owner asks again.
+func (s *Service) sendCodeInBackground(ctx context.Context, u store.User, purpose string) {
+	select {
+	case s.sending <- struct{}{}:
+	default:
+		s.cfg.Logger.Warn("recovery code not sent: too many emails in progress")
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), backgroundSendTimeout)
+	s.background.Go(func() {
+		defer cancel()
+		defer func() { <-s.sending }()
+		s.sendCode(ctx, u, purpose)
+	})
 }
 
 // sendCode emails a fresh code, at most once a minute per address. It reports false only when
@@ -504,7 +535,12 @@ func (s *Service) authCode(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, http.StatusBadRequest, expired)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]string{"ticket": s.putTicket(u.ID, req.Purpose)})
+	ticket, ok := s.putTicket(u.ID, req.Purpose)
+	if !ok {
+		busy(w)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"ticket": ticket})
 }
 
 func (s *Service) signout(w http.ResponseWriter, r *http.Request) {

@@ -16,6 +16,59 @@ import (
 
 const ceremonyLifetime = 5 * time.Minute
 
+// maxPending caps the passkey exchanges, and separately the tickets, held in memory (FR-099):
+// anyone can start a sign-in, so without a cap the table grows as fast as requests arrive. A
+// variable so a test can lower it.
+var maxPending = 10000
+
+// sweepEvery is how often expired exchanges and tickets are cleared out (and whenever a table
+// is full), instead of scanning both tables on every insert.
+const sweepEvery = time.Minute
+
+const tooManyPending = "Too many sign-ins are in progress right now. Try again in a minute."
+
+func busy(w http.ResponseWriter) {
+	w.Header().Set("Retry-After", "60")
+	jsonError(w, http.StatusServiceUnavailable, tooManyPending)
+}
+
+// sweep drops expired ceremonies and tickets, at most once per sweepEvery unless forced. The
+// caller holds s.mu.
+func (s *Service) sweep(now time.Time, force bool) {
+	if !force && now.Sub(s.swept) < sweepEvery {
+		return
+	}
+	s.swept = now
+	for k, c := range s.ceremonies {
+		if now.After(c.expires) {
+			delete(s.ceremonies, k)
+		}
+	}
+	for k, t := range s.tickets {
+		if now.After(t.expires) {
+			delete(s.tickets, k)
+		}
+	}
+}
+
+// dropPending ends every pending ticket and passkey registration of the user. Called when one
+// of them completed: a second ticket for the same account, perhaps in other hands, must not add
+// another passkey afterwards (and, for a recovery, throw the new one out).
+func (s *Service) dropPending(userID string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for k, t := range s.tickets {
+		if t.userID == userID {
+			delete(s.tickets, k)
+		}
+	}
+	for k, c := range s.ceremonies {
+		if c.userID == userID && c.ticket != "" {
+			delete(s.ceremonies, k)
+		}
+	}
+}
+
 // Ceremony purposes.
 const (
 	purposeSignIn = "signin"
@@ -32,19 +85,19 @@ type ceremony struct {
 	expires time.Time
 }
 
-func (s *Service) putCeremony(c *ceremony) string {
+// putCeremony keeps c until its finish step; false when maxPending are already in progress.
+func (s *Service) putCeremony(c *ceremony) (string, bool) {
 	id := randomToken()
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	now := s.now()
-	for k, v := range s.ceremonies {
-		if now.After(v.expires) {
-			delete(s.ceremonies, k)
-		}
+	s.sweep(now, len(s.ceremonies) >= maxPending)
+	if len(s.ceremonies) >= maxPending {
+		return "", false
 	}
 	c.expires = now.Add(ceremonyLifetime)
 	s.ceremonies[id] = c
-	return id
+	return id, true
 }
 
 func (s *Service) takeCeremony(id string) (*ceremony, bool) {
@@ -124,21 +177,22 @@ type ticket struct {
 	expires time.Time
 }
 
-func (s *Service) putTicket(userID, purpose string) string {
+// putTicket issues a ticket; false when maxPending are already out.
+func (s *Service) putTicket(userID, purpose string) (string, bool) {
 	id := randomToken()
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	now := s.now()
-	for k, t := range s.tickets {
-		if now.After(t.expires) {
-			delete(s.tickets, k)
-		}
+	s.sweep(now, len(s.tickets) >= maxPending)
+	if len(s.tickets) >= maxPending {
+		return "", false
 	}
 	s.tickets[id] = &ticket{userID: userID, purpose: purpose, expires: now.Add(ticketLifetime)}
-	return id
+	return id, true
 }
 
-// ticketFor returns a live ticket; take removes it (after the passkey is saved).
+// ticketFor returns a live ticket. With take it is removed in the same step, so of two requests
+// holding one ticket only one gets it.
 func (s *Service) ticketFor(id string, take bool) (*ticket, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -150,6 +204,16 @@ func (s *Service) ticketFor(id string, take bool) (*ticket, bool) {
 		delete(s.tickets, id)
 	}
 	return t, true
+}
+
+// returnTicket puts back a ticket taken by a registration that then failed, so the Owner can
+// try again without a new code.
+func (s *Service) returnTicket(id string, t *ticket) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if !s.now().After(t.expires) {
+		s.tickets[id] = t
+	}
 }
 
 func (s *Service) registerBegin(w http.ResponseWriter, r *http.Request) {
@@ -181,7 +245,11 @@ func (s *Service) registerBegin(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, http.StatusInternalServerError, "Something went wrong. Try again.")
 		return
 	}
-	id := s.putCeremony(&ceremony{data: *data, purpose: t.purpose, userID: t.userID, ticket: req.Ticket})
+	id, ok := s.putCeremony(&ceremony{data: *data, purpose: t.purpose, userID: t.userID, ticket: req.Ticket})
+	if !ok {
+		busy(w)
+		return
+	}
 	writeJSON(w, http.StatusOK, map[string]any{"ceremony": id, "options": creation})
 }
 
@@ -194,7 +262,11 @@ func (s *Service) registerFinish(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, http.StatusBadRequest, "This took too long. Try again.")
 		return
 	}
-	if _, ok := s.ticketFor(c.ticket, false); !ok {
+	// The ticket is taken here, in one step with the check: two registrations started from one
+	// ticket can't both get past this point. It goes back if this attempt fails before a passkey
+	// is saved.
+	tk, ok := s.ticketFor(c.ticket, true)
+	if !ok || tk.userID != c.userID {
 		jsonError(w, http.StatusBadRequest, "This took too long. Start again to get a new code.")
 		return
 	}
@@ -206,6 +278,7 @@ func (s *Service) registerFinish(w http.ResponseWriter, r *http.Request) {
 	}
 	cred, err := s.webauthn.FinishRegistration(user, c.data, r)
 	if err != nil {
+		s.returnTicket(c.ticket, tk)
 		jsonError(w, http.StatusBadRequest, "The passkey couldn't be created. Try again.")
 		return
 	}
@@ -215,10 +288,11 @@ func (s *Service) registerFinish(w http.ResponseWriter, r *http.Request) {
 		err = s.cfg.Store.AddPasskey(ctx, c.userID, cred.ID, data, now)
 	}
 	if err != nil {
+		s.returnTicket(c.ticket, tk)
 		jsonError(w, http.StatusInternalServerError, "The passkey couldn't be saved. Try again.")
 		return
 	}
-	s.ticketFor(c.ticket, true)
+	s.dropPending(c.userID)
 	switch c.purpose {
 	case store.PurposeVerify:
 		err = s.cfg.Store.VerifyEmail(ctx, c.userID, now)
@@ -287,7 +361,12 @@ func (s *Service) loginBegin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	c.data = *data
-	writeJSON(w, http.StatusOK, map[string]any{"ceremony": s.putCeremony(c), "options": assertion})
+	id, ok := s.putCeremony(c)
+	if !ok {
+		busy(w)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ceremony": id, "options": assertion})
 }
 
 var errUnknownPasskey = errors.New("unknown passkey")

@@ -55,7 +55,7 @@ func New(ctx context.Context, o Options) (*Relay, error) {
 
 	auth := &authBridge{}
 	oa, err := oauth.New(ctx, oauth.Config{
-		Issuer: o.PublicURL, Store: o.Store, Auth: auth,
+		Issuer: o.PublicURL, Store: o.Store, Auth: auth, Logger: o.Logger,
 		OnAuthorized: func(ctx context.Context, userID, clientName string) { acc.ClientAuthorized(ctx, userID, clientName) },
 	})
 	if err != nil {

@@ -71,6 +71,8 @@ type env struct {
 	t       *testing.T
 	store   *store.Store
 	mail    *account.MemoryMailer
+	mailer  *gatedMailer // wraps mail
+	svc     *account.Service
 	macs    *fakeMacs
 	clock   *clock
 	base    string // http://localhost:<port>
@@ -85,6 +87,7 @@ func setup(t *testing.T, allowed ...string) *env {
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = st.Close() })
 	e := &env{t: t, store: st, mail: &account.MemoryMailer{}, macs: &fakeMacs{online: map[string]bool{}}, clock: &clock{t: time.Now()}}
+	e.mailer = &gatedMailer{MemoryMailer: e.mail}
 
 	mux := http.NewServeMux()
 	srv := httptest.NewServer(mux)
@@ -98,12 +101,13 @@ func setup(t *testing.T, allowed ...string) *env {
 	o, err := oauth.New(ctx, oauth.Config{Issuer: public, Store: st, Auth: auth, Now: e.clock.now})
 	require.NoError(t, err)
 	svc, err = account.New(ctx, account.Config{
-		PublicURL: public, Store: st, Macs: e.macs, Mailer: e.mail, OAuth: o, AllowedEmails: allowed,
+		PublicURL: public, Store: st, Macs: e.macs, Mailer: e.mailer, OAuth: o, AllowedEmails: allowed,
 		Now: e.clock.now, DevicesChanged: func(id string) { e.changed = append(e.changed, id) },
 		AccessRemoved: func(id string) { e.removed = append(e.removed, id) },
 	})
 	require.NoError(t, err)
 	auth.svc = svc
+	e.svc = svc
 	o.Register(mux)
 	svc.Register(mux)
 	return e
@@ -483,9 +487,12 @@ func (e *env) lastCode() string {
 	return ""
 }
 
-// startEmail is the first step of the sign-in page.
+// startEmail is the first step of the sign-in page. A recovery code is emailed in the
+// background; this waits for it, so the test can read it.
 func (b *browser) startEmail(email string, recover bool) (int, map[string]any) {
-	return b.json("/auth/email", map[string]any{"email": email, "recover": recover})
+	status, r := b.json("/auth/email", map[string]any{"email": email, "recover": recover})
+	b.e.svc.WaitForMail()
+	return status, r
 }
 
 // confirmCode enters a code and returns the ticket for creating a passkey.
@@ -829,4 +836,219 @@ func TestNextIsAlwaysLocal(t *testing.T) {
 	}.Encode(), assertion)
 	require.Equal(t, http.StatusOK, status, done)
 	assert.Equal(t, "/account", done["next"])
+}
+
+// gatedMailer is the tests' mailer: it records like MemoryMailer, and can be made to hang like
+// a slow mail server.
+type gatedMailer struct {
+	*account.MemoryMailer
+	mu   sync.Mutex
+	gate chan struct{} // non-nil: Send waits until it is closed
+}
+
+func (g *gatedMailer) Send(ctx context.Context, to, subject, body string) error {
+	g.mu.Lock()
+	gate := g.gate
+	g.mu.Unlock()
+	if gate != nil {
+		select {
+		case <-gate:
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+	return g.MemoryMailer.Send(ctx, to, subject, body)
+}
+
+func (g *gatedMailer) hold() (release func()) {
+	gate := make(chan struct{})
+	g.mu.Lock()
+	g.gate = gate
+	g.mu.Unlock()
+	return sync.OnceFunc(func() {
+		g.mu.Lock()
+		g.gate = nil
+		g.mu.Unlock()
+		close(gate)
+	})
+}
+
+// A recovery request answers at once, the same for an address with an account and one without:
+// the email is sent in the background, so how long the mail server takes tells a stranger
+// nothing about who has an account (FR-042b).
+func TestRecoveryAnswersBeforeTheMailIsSent(t *testing.T) {
+	e := setup(t)
+	e.browser().signUp()
+	e.clock.advance(2 * time.Minute)
+	release := e.mailer.hold() // the mail server is slow
+	defer release()
+	before := len(e.mail.Sent())
+
+	answered := make(chan map[string]any, 2)
+	for _, addr := range []string{owner, "nobody@example.com"} {
+		go func() {
+			data, _ := json.Marshal(map[string]any{"email": addr, "recover": true})
+			req, _ := http.NewRequestWithContext(context.Background(), http.MethodPost, e.base+"/auth/email", strings.NewReader(string(data)))
+			req.Header.Set("Content-Type", "application/json")
+			resp, err := http.DefaultClient.Do(req)
+			if err != nil {
+				return
+			}
+			defer func() { _ = resp.Body.Close() }()
+			var m map[string]any
+			_ = json.NewDecoder(resp.Body).Decode(&m)
+			answered <- m
+		}()
+	}
+	for range 2 {
+		select {
+		case m := <-answered:
+			assert.Equal(t, map[string]any{"step": "code", "purpose": "recover"}, m, "the same answer for both")
+		case <-time.After(2 * time.Second):
+			t.Fatal("the answer waited for the mail server, which only happens for a real account")
+		}
+	}
+	assert.Len(t, e.mail.Sent(), before, "nothing sent yet")
+	release()
+	e.svc.WaitForMail()
+	msgs := e.mail.Sent()
+	require.Len(t, msgs, before+1, "the account's code goes out in the background")
+	assert.Contains(t, msgs[len(msgs)-1].Subject, "recovery code")
+	assert.Equal(t, owner, msgs[len(msgs)-1].To)
+}
+
+// One ticket makes one passkey, even when two registrations started from it finish at the same
+// moment.
+func TestTicketIsTakenOnce(t *testing.T) {
+	e := setup(t)
+	for range 5 {
+		b := e.browser()
+		e.clock.advance(11 * time.Minute)
+		status, r := b.startEmail(owner, false)
+		require.Equal(t, http.StatusOK, status, r)
+		if r["step"] != "code" { // signed up in an earlier round: recover instead
+			status, r = b.startEmail(owner, true)
+			require.Equal(t, http.StatusOK, status, r)
+		}
+		purpose := r["purpose"].(string)
+		status, tk := b.confirmCode(e.lastCode(), purpose)
+		require.Equal(t, http.StatusOK, status, tk)
+		ticket := tk["ticket"].(string)
+
+		type started struct {
+			ceremony string
+			cred     any
+		}
+		var both []started
+		for range 2 {
+			status, begin := b.json("/passkey/register/begin", map[string]string{"ticket": ticket})
+			require.Equal(t, http.StatusOK, status, begin)
+			both = append(both, started{begin["ceremony"].(string), b.authn.create(t, begin["options"].(map[string]any), e.base)})
+		}
+		u, err := e.store.UserByEmail(context.Background(), owner)
+		require.NoError(t, err)
+		before, err := e.store.Passkeys(context.Background(), u.ID)
+		require.NoError(t, err)
+
+		statuses := make(chan int, 2)
+		for _, s := range both {
+			go func() {
+				status, _ := e.browser().json("/passkey/register/finish?ceremony="+s.ceremony+"&next=/account", s.cred)
+				statuses <- status
+			}()
+		}
+		ok := 0
+		for range 2 {
+			if <-statuses == http.StatusOK {
+				ok++
+			}
+		}
+		assert.Equal(t, 1, ok, "one of the two finishes")
+		after, err := e.store.Passkeys(context.Background(), u.ID)
+		require.NoError(t, err)
+		if purpose == store.PurposeRecover {
+			assert.Len(t, after, 1, "recovery leaves exactly the one new passkey")
+		} else {
+			assert.Len(t, after, len(before)+1, "one passkey per ticket")
+		}
+	}
+}
+
+// A ticket survives a failed attempt to create the passkey (the Owner can try again), and is
+// gone after a successful one.
+func TestTicketSurvivesAFailedAttempt(t *testing.T) {
+	e := setup(t)
+	b := e.browser()
+	b.startEmail(owner, false)
+	_, tk := b.confirmCode(e.lastCode(), store.PurposeVerify)
+	ticket := tk["ticket"].(string)
+
+	status, begin := b.json("/passkey/register/begin", map[string]string{"ticket": ticket})
+	require.Equal(t, http.StatusOK, status)
+	status, _ = b.json("/passkey/register/finish?ceremony="+begin["ceremony"].(string), map[string]string{"not": "a credential"})
+	assert.Equal(t, http.StatusBadRequest, status)
+	status, done := b.createPasskey(ticket)
+	require.Equal(t, http.StatusOK, status, done)
+	status, _ = b.json("/passkey/register/begin", map[string]string{"ticket": ticket})
+	assert.Equal(t, http.StatusBadRequest, status, "used")
+}
+
+// When a recovery completes, every other pending recovery of the account ends: a ticket from an
+// earlier code (in someone else's hands, perhaps) can no longer add a passkey and throw the
+// Owner's new one out.
+func TestCompletedRecoveryEndsOtherPendingOnes(t *testing.T) {
+	e := setup(t)
+	e.browser().signUp()
+	u, err := e.store.UserByEmail(context.Background(), owner)
+	require.NoError(t, err)
+
+	// Someone reads a recovery code from the Owner's mailbox and gets as far as a ticket, and
+	// even starts creating a passkey.
+	e.clock.advance(2 * time.Minute)
+	intruder := e.browser()
+	intruder.startEmail(owner, true)
+	e.svc.WaitForMail()
+	status, tk := intruder.confirmCode(e.lastCode(), store.PurposeRecover)
+	require.Equal(t, http.StatusOK, status, tk)
+	stolen := tk["ticket"].(string)
+	status, begin := intruder.json("/passkey/register/begin", map[string]string{"ticket": stolen})
+	require.Equal(t, http.StatusOK, status)
+	cred := intruder.authn.create(t, begin["options"].(map[string]any), e.base)
+
+	// The Owner recovers the account.
+	e.clock.advance(2 * time.Minute)
+	e.browser().codeFlow(store.PurposeRecover)
+	keys, err := e.store.Passkeys(context.Background(), u.ID)
+	require.NoError(t, err)
+	require.Len(t, keys, 1)
+
+	status, _ = intruder.json("/passkey/register/finish?ceremony="+begin["ceremony"].(string)+"&next=/account", cred)
+	assert.Equal(t, http.StatusBadRequest, status, "the registration already started is void")
+	status, _ = intruder.json("/passkey/register/begin", map[string]string{"ticket": stolen})
+	assert.Equal(t, http.StatusBadRequest, status, "and so is the ticket")
+	after, err := e.store.Passkeys(context.Background(), u.ID)
+	require.NoError(t, err)
+	assert.Equal(t, keys, after, "the Owner's new passkey is the only one")
+}
+
+// Passkey sign-ins in progress are kept in memory; their number is capped, and a full table
+// answers "try again" rather than growing (FR-099).
+func TestCeremoniesAreCapped(t *testing.T) {
+	account.SetPendingCap(t, 5)
+	e := setup(t)
+	b := e.browser()
+	for range 5 {
+		status, _ := b.json("/passkey/login/begin", map[string]string{"purpose": "signin"})
+		require.Equal(t, http.StatusOK, status)
+	}
+	status, r := b.json("/passkey/login/begin", map[string]string{"purpose": "signin"})
+	assert.Equal(t, http.StatusServiceUnavailable, status)
+	assert.Equal(t, "Too many sign-ins are in progress right now. Try again in a minute.", r["error"])
+	assert.Equal(t, 5, e.svc.PendingCeremonies())
+
+	e.clock.advance(6 * time.Minute) // they expire
+	status, _ = b.json("/passkey/login/begin", map[string]string{"purpose": "signin"})
+	assert.Equal(t, http.StatusOK, status, "room again once the old ones expired")
+	assert.Equal(t, 1, e.svc.PendingCeremonies(), "expired ones are swept, not kept")
+
 }

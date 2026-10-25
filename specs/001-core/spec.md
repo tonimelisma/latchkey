@@ -179,6 +179,9 @@ Format: EARS ("When <trigger>, the <system> shall <response>"). IDs are stable; 
 - **FR-042a** When 20 wrong codes have been entered for one email address within a day, the
   relay shall refuse every emailed code for that address until the day is over; passkey sign-in
   keeps working (Toni, 2026-10-24, security scan).
+- **FR-042b** When someone asks to recover an account, the relay shall answer with the same
+  words and at the same speed whether or not the address has an account (2026-10-25, security
+  review).
 - **FR-043** The relay shall verify the Owner's email address at sign-up with a code sent by email.
 - **FR-043a** The relay shall offer one sign-in page for every journey: the Owner enters an email
   address and continues with a passkey for a known account, or an emailed code and a new passkey
@@ -192,6 +195,9 @@ Format: EARS ("When <trigger>, the <system> shall <response>"). IDs are stable; 
   previous passkeys.
 - **FR-047a** When an Owner completes account recovery, the relay shall also remove every Claude
   client's access, so each must be approved again (Toni, 2026-10-24, security scan).
+- **FR-047b** When an Owner creates a passkey with an emailed code (sign-up or recovery), the
+  relay shall accept that code's confirmation for one passkey only, and shall end every other
+  sign-up or recovery in progress for the account (2026-10-25, security review).
 - **FR-048** The relay shall keep an Owner signed in to its web pages for 30 days, and shall ask
   for the passkey again before deleting the account.
 - **FR-049** *Superseded 2026-10-25 by FR-049a (Toni): approvals are no longer remembered.* When
@@ -287,6 +293,9 @@ Format: EARS ("When <trigger>, the <system> shall <response>"). IDs are stable; 
 - **FR-098** The relay shall remove every kind of bracket, in any script, from a client's name
   before showing it, so a name can't imitate the checked host that is shown after it in
   parentheses.
+- **FR-099** While 10,000 passkey sign-ins are in progress, the relay shall answer a further one
+  with "Too many sign-ins are in progress right now. Try again in a minute." instead of holding
+  more in memory.
 
 ## Success criteria
 

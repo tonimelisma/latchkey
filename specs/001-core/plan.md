@@ -232,6 +232,25 @@ Serves FR-041, FR-042, FR-043.
   Mac app. The Mac app learns of it through a `notice` message (contracts/agent-protocol.md), sent
   at once if the Mac is online, otherwise on its next connection (the relay compares the
   recovery's `used_at` with the device's last connection; nothing new is stored).
+- Sign-ins in progress (security review, 2026-10-25). A passkey exchange (5 minutes) and the
+  ticket a confirmed code gives (10 minutes) live in memory between two requests. Each table is
+  capped at 10,000 entries (FR-099): a further one gets HTTP 503 with `Retry-After: 60` and "Too
+  many sign-ins are in progress right now. Try again in a minute." Expired entries are swept at
+  most once a minute, and whenever a table is full, instead of on every insert. A ticket is
+  taken in the same step that checks it, when the passkey registration finishes, so two
+  registrations started from one ticket can't both complete; it is put back if that attempt
+  fails before a passkey is saved, so the Owner can retry without a new code. When a
+  registration completes, every other ticket and pending registration of the account is
+  dropped (FR-047b), so a ticket from an earlier recovery code can't add a passkey afterwards
+  and, by completing a second recovery, remove the Owner's new one. Options weighed for the
+  cap: evicting the oldest entry when full (lets a flood cancel real sign-ins in progress) or
+  refusing new ones (chosen: a flood only delays new sign-ins for up to five minutes).
+- Recovery requests answer before the email is sent (FR-042b): for a known account the code is
+  stored and mailed in a background task (at most 16 at once, 30 s each, failures logged), so
+  the answer takes the same time as for an unknown address, where nothing is sent. Before, the
+  request waited on the mail server only when the account existed. A send that fails can't be
+  reported to the page without revealing the account; the page already tells the Owner to ask
+  again if no email arrives.
 - Email: SMTP via `github.com/wneessen/go-mail`; configured by environment variables (FR-080).
   The hosted relay sends through Resend's SMTP from `no-reply@` its own host name. Mail is always
   encrypted: TLS from the start on port 465, required STARTTLS on other ports (a server that
