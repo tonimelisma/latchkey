@@ -219,7 +219,8 @@ import Testing
         #expect(!access.isRemoving("a"))
         #expect(
             access.failure
-                == "Couldn’t remove “Claude”. This Mac lost its connection to the relay. Try again when it’s connected.")
+                == "Couldn’t remove “Claude”. This Mac lost its connection to the relay. Try again when it’s connected."
+        )
         // The next connection's list is the truth again, and the entry is back in it.
         #expect(access.received([a, Self.entry("b")], now: Self.t0.addingTimeInterval(30)).isEmpty)
         #expect(access.entries?.map(\.id) == ["a", "b"])
@@ -282,7 +283,10 @@ import Testing
     @Test func timesAreInTheUsersLocale() {
         let approved = ISO8601DateFormatter().date(from: "2026-10-24T18:30:00Z")!
         let e = Self.entry("a", approved: approved, lastUsed: approved.addingTimeInterval(3600))
-        #expect(e.approvedLine(locale: Self.english, timeZone: Self.utc) == "Approved Oct 24, 2026 at 6:30 PM")
+        // macOS puts a narrow no-break space before "PM".
+        let approvedLine = e.approvedLine(locale: Self.english, timeZone: Self.utc)
+            .replacingOccurrences(of: "\u{202F}", with: " ")
+        #expect(approvedLine == "Approved Oct 24, 2026 at 6:30 PM")
         let now = approved.addingTimeInterval(3 * 3600)
         #expect(e.lastUsedLine(now: now, locale: Self.english) == "Last used 2 hours ago")
         #expect(Self.entry("b").lastUsedLine(now: now, locale: Self.english) == "Not used yet")

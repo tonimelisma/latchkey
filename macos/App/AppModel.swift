@@ -459,6 +459,7 @@ final class AppModel {
     func disconnect() async {
         await connection?.stop(goodbye: .userDisconnected, state: agentState)
         connection = nil
+        finishRemovals(access.disconnected())
         Self.log.notice("Disconnect This Mac: forgetting the pairing")
         DeviceIdentity.delete()
         status = .notPaired
@@ -474,7 +475,8 @@ final class AppModel {
             tools: { [weak self] in await MainActor.run { self?.capabilities.tools } ?? [] },
             call: { [weak self] call in await self?.handle(call) ?? .text("The app is shutting down.", isError: true) },
             status: { [weak self] s in await self?.connectionChanged(s) },
-            notice: { [weak self] n in await self?.show(n) })
+            notice: { [weak self] n in await self?.show(n) },
+            clients: { [weak self] list in await self?.clientsChanged(list) })
         let c = RelayConnection(identity: identity, hooks: hooks)
         connection = c
         Task { await c.start() }
@@ -482,6 +484,8 @@ final class AppModel {
 
     private func connectionChanged(_ s: ConnectionStatus) {
         status = s
+        // The list is shown only while connected: after a drop it may have changed elsewhere.
+        if s != .connected { finishRemovals(access.disconnected()) }
         if s == .revoked {  // 4002: delete the local key (agent-protocol.md)
             Self.log.notice("The relay revoked this Mac: forgetting the pairing")
             DeviceIdentity.delete()
@@ -506,6 +510,65 @@ final class AppModel {
         loadRecentActivity()
         if let activity = result.activity, !result.isError { Notifier.post(activity) }  // FR-130
         return result
+    }
+
+    // MARK: Claude apps with access (FR-190 to FR-192)
+
+    /// The list from the relay and the removals in flight; the rules are in `ClientAccess`.
+    private(set) var access = ClientAccess()
+
+    private func clientsChanged(_ list: [ClientEntry]) {
+        finishRemovals(access.received(list, now: Date()))
+    }
+
+    /// Remove Access…: asks first, because it can't be undone from the Mac (FR-191).
+    func confirmRemoval(of entry: ClientEntry) {
+        let ask = RemovalConfirmation(entry)
+        let alert = NSAlert()
+        alert.alertStyle = .warning
+        alert.messageText = ask.title
+        alert.informativeText = ask.message
+        let remove = alert.addButton(withTitle: RemovalConfirmation.confirm)
+        remove.hasDestructiveAction = true
+        remove.keyEquivalent = ""  // Return must not remove; Escape cancels
+        alert.addButton(withTitle: RemovalConfirmation.cancel)
+        NSApp.activate()
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        removeAccess(entry.id)
+    }
+
+    /// Sends one revoke_client and waits for the relay's new list; without one in time, or when
+    /// the connection drops, the entry is restored and the Owner is told (FR-191).
+    private func removeAccess(_ id: String) {
+        guard let revoke = access.beginRemoval(id, now: Date()) else { return }
+        Task { [connection] in
+            guard await connection?.revokeClient(revoke) == true else {
+                finishRemovals(access.notSent(id))
+                return
+            }
+            try? await Task.sleep(for: .seconds(ClientAccess.removalTimeout))
+            finishRemovals(access.expire(now: Date()))
+        }
+    }
+
+    /// Writes each ended removal to the activity log, and says so when one didn't happen. No
+    /// notification for a removal that worked: the Owner just clicked it.
+    private func finishRemovals(_ outcomes: [RemovalOutcome]) {
+        guard !outcomes.isEmpty else { return }
+        for outcome in outcomes { try? trace?.record(outcome.activity(at: Date())) }
+        loadRecentActivity()
+        let failures = outcomes.compactMap { outcome -> String? in
+            if case .failed(let entry, let why) = outcome { return why.message(for: entry) }
+            return nil
+        }
+        guard !failures.isEmpty, !uninstalling else { return }
+        Task {  // not inside the caller: a modal alert must not hold up the connection's callback
+            let alert = NSAlert()
+            alert.messageText = "Access wasn’t removed"
+            alert.informativeText = failures.joined(separator: "\n")
+            NSApp.activate()
+            alert.runModal()
+        }
     }
 
     // MARK: activity (FR-131, FR-132)

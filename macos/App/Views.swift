@@ -26,6 +26,10 @@ struct MenuContent: View {
                 }
             }
         }
+        if model.status == .connected, model.access.isKnown {
+            Divider()
+            AccessMenu(model: model)
+        }
         Divider()
         Section("Recent Activity") {
             if model.recentActivity.isEmpty {
@@ -57,6 +61,100 @@ struct MenuContent: View {
         Divider()
         Button("Quit Latchkey") { NSApp.terminate(nil) }
             .keyboardShortcut("q")
+    }
+}
+
+/// The Claude apps that have access to this Mac, in the menu (FR-190 to FR-192). Shown only while
+/// connected to a relay that sent the list. Names and hosts come from the network: `verbatim`
+/// everywhere, never Markdown or links.
+struct AccessMenu: View {
+    let model: AppModel
+    @Environment(\.openWindow) private var openWindow
+
+    var body: some View {
+        Section("Claude Apps With Access") {
+            if model.access.entries?.isEmpty == true {
+                Text("No Claude app has access")
+            }
+            ForEach(model.access.menuEntries) { entry in
+                if model.access.isRemoving(entry.id) {
+                    Text(verbatim: "Removing \(entry.title)…")
+                } else {
+                    Menu {
+                        Text(verbatim: entry.originLine)
+                        if let scope = entry.scopeLine { Text(verbatim: scope) }
+                        Text(verbatim: entry.approvedLine())
+                        Text(verbatim: entry.lastUsedLine(now: Date()))
+                        Divider()
+                        Button("Remove Access…") { model.confirmRemoval(of: entry) }
+                            .accessibilityLabel(Text(verbatim: "Remove access for \(entry.title)"))
+                    } label: {
+                        Text(verbatim: entry.title)
+                    }
+                }
+            }
+            if let failure = model.access.failure { Text(verbatim: failure) }
+            if model.access.hasMore {
+                Button("Show All Apps…") {
+                    openWindow(id: "access")
+                    NSApp.activate()
+                }
+            }
+        }
+    }
+}
+
+/// The full list in a window, for when the menu shows only the newest few (FR-190).
+struct AccessView: View {
+    let model: AppModel
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            if let entries = model.access.entries, model.status == .connected {
+                if entries.isEmpty {
+                    Text("No Claude app has access").foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    List(entries) { entry in row(entry) }
+                }
+            } else {
+                Text("The list appears when this Mac is connected.").foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+            if let failure = model.access.failure {
+                Text(verbatim: failure).foregroundStyle(.red).padding([.horizontal, .top], 8)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Text(
+                "Each entry is one approval you gave on Latchkey’s Allow page. Claude on the web, desktop, and phone share one entry; each sign-in from a program such as Claude Code has its own."
+            )
+            .font(.footnote).foregroundStyle(.secondary).padding(8)
+            .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(minWidth: 520, minHeight: 320)
+    }
+
+    private func row(_ entry: ClientEntry) -> some View {
+        let removing = model.access.isRemoving(entry.id)
+        return HStack(alignment: .center, spacing: 12) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(verbatim: entry.title).font(.headline).lineLimit(1)
+                Text(verbatim: entry.scopeLine.map { "\(entry.originLine). \($0)." } ?? entry.originLine)
+                    .foregroundStyle(.secondary).lineLimit(1)
+                Text(verbatim: "\(entry.approvedLine()) · \(entry.lastUsedLine(now: Date()))")
+                    .foregroundStyle(.secondary).lineLimit(1)
+            }
+            .accessibilityElement(children: .combine)
+            Spacer()
+            if removing {
+                ProgressView().controlSize(.small).accessibilityHidden(true)
+                Text("Removing…").foregroundStyle(.secondary)
+            } else {
+                Button("Remove…") { model.confirmRemoval(of: entry) }
+                    .accessibilityLabel(Text(verbatim: "Remove access for \(entry.title)"))
+            }
+        }
+        .padding(.vertical, 4)
     }
 }
 
@@ -324,8 +422,10 @@ struct ActivityView: View {
                 }
                 .padding(12)
             }
-            Text("Every tool Claude ran on this Mac in the last 90 days. This log stays on this Mac.")
-                .font(.footnote).foregroundStyle(.secondary).padding(8)
+            Text(
+                "Every tool Claude ran on this Mac in the last 90 days, and each app you removed from the menu. This log stays on this Mac."
+            )
+            .font(.footnote).foregroundStyle(.secondary).padding(8)
         }
         .frame(minWidth: 560, minHeight: 320)
         .onAppear(perform: load)

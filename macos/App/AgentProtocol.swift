@@ -103,8 +103,23 @@ struct Hello: Codable, Sendable {
     var osVersion: String
     var tools: [Tool]
     var state: AgentState
+    /// Optional things this app understands; a relay that doesn't know the field ignores it.
+    var features: [String]?
     enum CodingKeys: String, CodingKey {
         case deviceID = "device_id", signature, appVersion = "app_version", osVersion = "os_version", tools, state
+        case features
+    }
+
+    /// `clients`: send the list of Claude apps with access, and keep it current (FR-190, FR-192).
+    static let supportedFeatures = ["clients"]
+
+    /// The hello this app sends: always with the features it supports.
+    static func make(
+        deviceID: String, signature: String, appVersion: String, osVersion: String, tools: [Tool], state: AgentState
+    ) -> Hello {
+        Hello(
+            deviceID: deviceID, signature: signature, appVersion: appVersion, osVersion: osVersion, tools: tools,
+            state: state, features: supportedFeatures)
     }
 }
 
@@ -151,12 +166,56 @@ struct Notice: Codable, Sendable {
     var client: String?
 }
 
+/// One approval the Owner gave on the relay's Allow page that still works (FR-190). `name` and
+/// `host` are text from the network: shown as plain text only (see `ClientAccess.swift`).
+struct ClientEntry: Codable, Equatable, Sendable, Identifiable {
+    var id: String
+    var name: String
+    var host: String
+    /// A host, or `thisComputer` for a program that signed in on a computer (Claude Code).
+    var redirect: String
+    var approvedAt: Date
+    var lastUsedAt: Date?
+
+    static let thisComputer = "this computer"
+    static let maxIDLength = 64
+    static let maxEntries = 50
+
+    enum CodingKeys: String, CodingKey {
+        case id, name, host, redirect, approvedAt = "approved_at", lastUsedAt = "last_used_at"
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(id, forKey: .id)
+        try c.encode(name, forKey: .name)
+        try c.encode(host, forKey: .host)
+        try c.encode(redirect, forKey: .redirect)
+        try c.encode(approvedAt, forKey: .approvedAt)
+        try c.encode(lastUsedAt, forKey: .lastUsedAt)  // null when never used
+    }
+
+    /// 1 to 64 characters of A-Z, a-z, 0-9, "_" and "-".
+    static func isValid(id: String) -> Bool {
+        let allowed = CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-")
+        return !id.isEmpty && id.unicodeScalars.count <= maxIDLength && id.unicodeScalars.allSatisfy(allowed.contains)
+    }
+}
+
+/// Relay → app: the full list, newest approval first; replaces the one before (FR-192).
+struct ClientsUpdate: Codable, Equatable, Sendable { var clients: [ClientEntry] }
+
+/// App → relay: remove this approval (FR-191). The relay answers with the new `clients` list.
+struct RevokeClient: Codable, Equatable, Sendable { var id: String }
+
 enum AgentMessage: Sendable {
     case challenge(Challenge), hello(Hello), welcome(Welcome), state(StateUpdate), tools(ToolsUpdate)
     case progress(Progress), result(CallResult), goodbye(Goodbye), call(Call), cancel(Cancel), notice(Notice)
+    case clients(ClientsUpdate), revokeClient(RevokeClient)
 
     static let allTypes = [
         "challenge", "hello", "welcome", "state", "tools", "progress", "result", "goodbye", "call", "cancel", "notice",
+        "clients", "revoke_client",
     ]
 
     var type: String {
@@ -172,6 +231,8 @@ enum AgentMessage: Sendable {
         case .call: "call"
         case .cancel: "cancel"
         case .notice: "notice"
+        case .clients: "clients"
+        case .revokeClient: "revoke_client"
         }
     }
 
@@ -202,6 +263,14 @@ enum AgentMessage: Sendable {
             case "call": return .call(try dec.decode(Call.self, from: data))
             case "cancel": return .cancel(try dec.decode(Cancel.self, from: data))
             case "notice": return .notice(try dec.decode(Notice.self, from: data))
+            case "clients":
+                let c = try dec.decode(ClientsUpdate.self, from: data)
+                try validate(clients: c.clients)
+                return .clients(c)
+            case "revoke_client":
+                let r = try dec.decode(RevokeClient.self, from: data)
+                guard ClientEntry.isValid(id: r.id) else { throw ProtocolError.violation("invalid client id") }
+                return .revokeClient(r)
             default: throw ProtocolError.violation("unknown message type \(type)")
             }
         } catch let e as ProtocolError {
@@ -226,6 +295,8 @@ enum AgentMessage: Sendable {
         case .call(let m): body = try enc.encode(m)
         case .cancel(let m): body = try enc.encode(m)
         case .notice(let m): body = try enc.encode(m)
+        case .clients(let m): body = try enc.encode(m)
+        case .revokeClient(let m): body = try enc.encode(m)
         }
         guard var object = try JSONSerialization.jsonObject(with: body) as? [String: Any] else {
             throw ProtocolError.violation("message did not encode as an object")
@@ -250,6 +321,17 @@ enum AgentMessage: Sendable {
             if let out = t.outputSchema, out["type"] != .string("object") {
                 throw ProtocolError.violation("outputSchema must be an object")
             }
+        }
+    }
+
+    /// At most 50 entries, each with a well-formed id that appears once. Missing fields already
+    /// failed to decode.
+    static func validate(clients: [ClientEntry]) throws {
+        guard clients.count <= ClientEntry.maxEntries else { throw ProtocolError.violation("too many clients") }
+        var seen = Set<String>()
+        for c in clients {
+            guard ClientEntry.isValid(id: c.id) else { throw ProtocolError.violation("invalid client id") }
+            guard seen.insert(c.id).inserted else { throw ProtocolError.violation("duplicate client id") }
         }
     }
 
