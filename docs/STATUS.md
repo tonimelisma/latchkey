@@ -1,6 +1,6 @@
 # Status
 
-Last updated: 2026-10-24 (whole-repository security scan done; app 0.8.6)
+Last updated: 2026-10-24 (security scan done and checked live; app 0.8.6)
 
 Xcode signing ready (2026-10-20): Toni's Xcode account has a valid "Apple Development" certificate
 (certificate expires 2027-07-22). Keep the team ID out of committed project files
@@ -60,14 +60,16 @@ The Mac state line appears in every result (it reported the battery warning at 1
    Toni decided (2026-10-24): `golang.org/x/net` stays a direct relay dependency; the pairing
    and the activity log's key move to the app-only keychain together with notarized releases
    (until then another program gets a macOS prompt, not a hard refusal).
+   Live check passed 2026-10-24 after Toni paired again: a fresh Claude Code session through the
+   hosted relay saw all 15 tools and the Mac state line, Browser refused `javascript:` and
+   `file:` with the http/https message, and Files listed the home folder. On the Mac, the old
+   activity log file is gone and the new one is updated and holds no readable text.
 2. Known limit: macOS shows its own "allow Latchkey to access the screen directly" alert from
    time to time for screen capture; it needs Toni at the Mac (computer control only).
 
 ## Waiting on Toni
 
-1. Connect the Mac again (app 0.8.4 lost the pairing on 2026-10-24): Latchkey menu → Connect to
-   a Relay… → sign in with the passkey. Then Claude runs the live check of the security fixes.
-2. Answer the macOS alert about Latchkey accessing the screen (Allow), if it's still showing.
+1. Answer the macOS alert about Latchkey accessing the screen (Allow), if it's still showing.
 
 ## Milestones (from `specs/001-core/plan.md`)
 
