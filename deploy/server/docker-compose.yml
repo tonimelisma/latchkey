@@ -15,6 +15,11 @@ services:
     read_only: true # only the data volume (and a small /tmp for SQLite) is writable
     tmpfs:
       - /tmp:size=16m,mode=1777
+    logging: # at most 30 MB of container logs, so they can't fill the disk
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
     cap_drop: [ALL]
     security_opt:
       - no-new-privileges:true
