@@ -36,6 +36,16 @@ video) needs a terminal. From a phone, there is none.
   activity.
 - **FR-308** Shell shall have the levels Off and On, and start On (Toni, 2026-10-22).
 - **FR-309** When Latchkey quits, its running commands shall be stopped.
+- **FR-310** When the Owner turns Shell off, the Mac shall at once stop every running command,
+  including those that kept running after their answer was given, and answer a command Claude
+  is waiting on with an error saying the Mac's owner turned Shell off (spec 001 FR-066; Toni,
+  2026-10-25).
+- **FR-311** When a command is stopped (by Claude, by turning Shell off, or by quitting
+  Latchkey), everything it started that is still running in its terminal shall be stopped with
+  it (security review, 2026-10-25).
+- **FR-312** The Mac shall run at most 32 commands at once; a further one shall be refused with
+  an error telling Claude to wait for one to finish or to stop one (security review,
+  2026-10-25).
 
 ## Success criteria
 
@@ -49,3 +59,5 @@ video) needs a terminal. From a phone, there is none.
   can't give; it can stop it.
 - Huge output; output with progress bars; commands that never end; many jobs at once.
 - The Mac going to sleep or Latchkey quitting mid-command.
+- A command that deliberately detaches something from its terminal (a new session, a launchd
+  job) or that already ended leaving something behind with `nohup`: not tracked, keeps running.
