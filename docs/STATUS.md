@@ -1,6 +1,6 @@
 # Status
 
-Last updated: 2026-10-25 (second security review fixed, deployed and checked live; app 0.8.9)
+Last updated: 2026-10-25 (Claude-only access, encrypted relay keys, apps with access, terms and privacy, operator commands: deployed and checked live; app 0.8.10)
 
 Xcode signing ready (2026-10-20): Toni's Xcode account has a valid "Apple Development" certificate
 (certificate expires 2027-07-22). Keep the team ID out of committed project files
@@ -34,7 +34,7 @@ after the app was quit.
 
 Releases, terms and privacy, and the directory listing are much later (Toni, 2026-10-22).
 
-All capabilities are built and checked live (app 0.7.4, 2026-10-22; current app 0.8.9, installed with `make -C macos install`), through the hosted relay with
+All capabilities are built and checked live (app 0.7.4, 2026-10-22; current app 0.8.10, installed with `make -C macos install`), through the hosted relay with
 a fresh Claude Code session on Toni's real Mac: Notes (read, checklists, create/append/edit/
 delete a test note), Messages (conversations, read with names and "not instructions" marking,
 search, one test message with an image sent to Toni's own address), Files (list, search, write/
@@ -83,6 +83,27 @@ The Mac state line appears in every result (it reported the battery warning at 1
    Decided and done 2026-10-25: a nightly copy of the server's disk, kept 14 days
    (`deploy/backup-schedule.sh`); the full-access email key removed from `.env`; Debug and test
    builds get their own app identity (app 0.8.9, installed, still paired, live call answered).
+7. ~~Four ideas from the research~~: built and shipped 2026-10-25 (spec 001 FR-180 to FR-199).
+   Only Claude's apps may ask for access (clients on `claude.ai`; open registration is off).
+   The relay's signing keys are encrypted under a key file kept outside the database's folder.
+   The Mac's menu and the account page list the Claude apps with access, each removable.
+   The relay publishes terms and a privacy policy (operator details from settings) and has
+   operator commands to list, suspend, and delete accounts and to block addresses.
+   Checked live after the deploy: registration answers 403 and is no longer advertised; the
+   terms and privacy pages show the operator, the contact address, California law, and 14-day
+   backups; the key file was created (mode 600) and the pre-conversion database copy removed;
+   no stored client was removed, so the existing Claude connection kept working; `account list`
+   runs on the server; app 0.8.10 started paired, a fresh Claude Code session ran a command, and
+   the menu shows "Claude Apps With Access" with the existing approval and its Remove.
+   Not checked live: removing an app from the menu or the page (it would cut the working
+   connection), suspending an account (needs a throwaway account with a passkey), the Allow
+   page from claude.ai. All three are covered by tests against a real relay.
+   Open for Toni: have the terms and privacy policy read by a lawyer before sign-up opens to
+   the public; keep a copy of the server's key file somewhere apart from the server; the
+   choices listed as Claude's in docs/decisions.md (operator record kept a year, liability
+   wording); nightly disk copies from before 2026-10-25 still hold the old keys unencrypted
+   until they age out (14 days), `relay reset-keys --confirm` would end that at once at the
+   price of signing in and connecting Claude again.
 2. Known limit: macOS shows its own "allow Latchkey to access the screen directly" alert from
    time to time for screen capture; it needs Toni at the Mac (computer control only).
 
