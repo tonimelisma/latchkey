@@ -1,6 +1,6 @@
 # Status
 
-Last updated: 2026-10-25 (second security review fixed, deployed and checked live; app 0.8.8)
+Last updated: 2026-10-25 (second security review fixed, deployed and checked live; app 0.8.9)
 
 Xcode signing ready (2026-10-20): Toni's Xcode account has a valid "Apple Development" certificate
 (certificate expires 2027-07-22). Keep the team ID out of committed project files
@@ -34,7 +34,7 @@ after the app was quit.
 
 Releases, terms and privacy, and the directory listing are much later (Toni, 2026-10-22).
 
-All capabilities are built and checked live (app 0.7.4, 2026-10-22; current app 0.8.8, installed with `make -C macos install`), through the hosted relay with
+All capabilities are built and checked live (app 0.7.4, 2026-10-22; current app 0.8.9, installed with `make -C macos install`), through the hosted relay with
 a fresh Claude Code session on Toni's real Mac: Notes (read, checklists, create/append/edit/
 delete a test note), Messages (conversations, read with names and "not instructions" marking,
 search, one test message with an image sent to Toni's own address), Files (list, search, write/
@@ -82,7 +82,7 @@ The Mac state line appears in every result (it reported the battery warning at 1
    switched off while a command runs, a page with a filled password field.
    Decided and done 2026-10-25: a nightly copy of the server's disk, kept 14 days
    (`deploy/backup-schedule.sh`); the full-access email key removed from `.env`; Debug and test
-   builds get their own app identity.
+   builds get their own app identity (app 0.8.9, installed, still paired, live call answered).
 2. Known limit: macOS shows its own "allow Latchkey to access the screen directly" alert from
    time to time for screen capture; it needs Toni at the Mac (computer control only).
 
