@@ -215,5 +215,105 @@ expect 0 "valid Caddyfile is installed" run_caddy
 cmp -s "$work/Caddyfile.1" "$work/live/Caddyfile" && ok "new Caddyfile is in place" || bad "new Caddyfile is in place"
 cmp -s "$work/Caddyfile" "$work/live/Caddyfile.before-latchkey-deploy" && ok "previous Caddyfile kept as a backup" || bad "previous Caddyfile kept as a backup"
 
+# --- the key file's folder, and the database copy kept across the first start of a version that
+# --- encrypts the relay's stored keys (an earlier version can't read them afterwards) ---
+cat >"$work/bin/docker" <<'EOF'
+#!/bin/sh
+echo "docker $*" >>"$DOCKER_LOG"
+case "$1" in
+inspect)
+  [ -z "${NO_CONTAINER-}" ] || exit 1
+  printf '/tmp= /data=%s ' "$VOLUME_DIR"
+  ;;
+esac
+exit 0
+EOF
+cat >"$work/bin/chown" <<'EOF'
+#!/bin/sh
+echo "chown $*" >>"$DOCKER_LOG"
+EOF
+chmod +x "$work/bin/"*
+on_server() { # runs a deploy function against folders in $work instead of the server
+  (
+    PATH="$work/bin:$PATH"
+    DOCKER_LOG="$work/docker.log" VOLUME_DIR="$work/vol"
+    export DOCKER_LOG VOLUME_DIR NO_CONTAINER
+    REMOTE_DIR="$work/srv"
+    ssh_vm() { sh -c "$1"; }
+    "$@"
+  )
+}
+mode() { ls -ld "$1" | cut -c1-10; }
+NO_CONTAINER=''
+: >"$work/docker.log"
+mkdir "$work/srv" "$work/vol"
+expect 0 "key folder is prepared" on_server prepare_key_dir
+[ "$(mode "$work/srv/keys")" = drwx------ ] && ok "outer key folder is for root only" || bad "outer key folder is for root only"
+[ "$(mode "$work/srv/keys/relay")" = drwx------ ] && ok "inner key folder is for one user only" || bad "inner key folder is for one user only"
+grep -q "chown root:root $work/srv/keys\$" "$work/docker.log" && ok "outer key folder belongs to root" || bad "outer key folder belongs to root"
+grep -q "chown 65532:65532 $work/srv/keys/relay\$" "$work/docker.log" && ok "inner key folder belongs to the container's user" || bad "inner key folder belongs to the container's user"
+expect 0 "preparing the key folder again changes nothing" on_server prepare_key_dir
+
+[ "$(on_server key_file_state)" = absent ] && ok "no key file yet is reported" || bad "no key file yet is reported"
+printf 'plain-db' >"$work/vol/relay.db"
+printf 'plain-wal' >"$work/vol/relay.db-wal"
+: >"$work/docker.log"
+expect 0 "database is copied before the first start" on_server save_database
+grep -q 'docker stop' "$work/docker.log" && ok "relay is stopped before the copy" || bad "relay is stopped before the copy"
+[ "$(cat "$work/srv/db-before-keys/relay.db" 2>/dev/null)" = plain-db ] && ok "database file is in the copy" || bad "database file is in the copy"
+[ "$(cat "$work/srv/db-before-keys/relay.db-wal" 2>/dev/null)" = plain-wal ] && ok "its write-ahead log is in the copy" || bad "its write-ahead log is in the copy"
+[ "$(mode "$work/srv/db-before-keys")" = drwx------ ] && ok "the copy is for root only" || bad "the copy is for root only"
+
+# The new version started, made its key file and converted the database; then it has to go.
+printf 'sealed-db' >"$work/vol/relay.db"
+rm -f "$work/vol/relay.db-wal"
+printf 'sealed-shm' >"$work/vol/relay.db-shm"
+printf 'key' >"$work/srv/keys/relay/relay.key"
+[ "$(on_server key_file_state)" = present ] && ok "an existing key file is reported" || bad "an existing key file is reported"
+expect 0 "database copy is put back" on_server restore_database
+[ "$(cat "$work/vol/relay.db")" = plain-db ] && ok "the database is the one from before" || bad "the database is the one from before"
+[ "$(cat "$work/vol/relay.db-wal" 2>/dev/null)" = plain-wal ] && ok "with its write-ahead log" || bad "with its write-ahead log"
+[ ! -e "$work/vol/relay.db-shm" ] && ok "the newer version's leftovers are gone" || bad "the newer version's leftovers are gone"
+[ ! -e "$work/srv/keys/relay/relay.key" ] && ok "the failed version's key file is gone" || bad "the failed version's key file is gone"
+[ ! -e "$work/srv/db-before-keys" ] && ok "no copy with unencrypted keys is left" || bad "no copy with unencrypted keys is left"
+expect 1 "nothing to put back fails" on_server restore_database
+
+expect 0 "database is copied again" on_server save_database
+expect 0 "the copy is deleted after a healthy start" on_server discard_saved_database
+[ ! -e "$work/srv/db-before-keys" ] && ok "no copy is left after a healthy start" || bad "no copy is left after a healthy start"
+NO_CONTAINER=1
+: >"$work/docker.log"
+expect 1 "no running relay to copy from fails" on_server save_database
+grep -q 'docker stop' "$work/docker.log" && bad "nothing is stopped when the copy can't be made" || ok "nothing is stopped when the copy can't be made"
+[ ! -e "$work/srv/db-before-keys" ] && ok "a failed copy leaves nothing" || bad "a failed copy leaves nothing"
+NO_CONTAINER=''
+
+# A rollback across that first start puts the database back before the previous version starts.
+run_keys_rollback() { # <restore result: 0 or 1>
+  : >"$work/ssh.log"
+  (
+    ssh_vm() { printf '%s\n' "$1" >>"$work/ssh.log"; }
+    probe() { [ -n "$(grep 'compose up' "$work/ssh.log")" ]; }
+    DB_SAVED=1
+    eval "restore_database() { echo restore >>\"$work/ssh.log\"; return $1; }"
+    roll_back relay.example.com newtag oldtag 2
+  )
+}
+expect 1 "rollback across the first start fails the deploy" run_keys_rollback 0
+[ "$(grep -n '^restore$' "$work/ssh.log" | cut -d: -f1)" -lt "$(grep -n 'compose up' "$work/ssh.log" | cut -d: -f1)" ] 2>/dev/null &&
+  ok "database is put back before the previous version starts" || bad "database is put back before the previous version starts"
+expect 1 "rollback whose database can't be put back fails" run_keys_rollback 1
+grep -q 'compose up' "$work/ssh.log" && bad "previous version isn't started on a database it can't read" || ok "previous version isn't started on a database it can't read"
+grep -q 'stays stopped' "$work/out" && ok "that the relay is down is said" || bad "that the relay is down is said"
+: >"$work/ssh.log"
+(
+  ssh_vm() { printf '%s\n' "$1" >>"$work/ssh.log"; }
+  probe() { true; }
+  restore_database() { echo restore >>"$work/ssh.log"; }
+  roll_back relay.example.com newtag oldtag 2
+) >/dev/null 2>&1
+grep -q '^restore$' "$work/ssh.log" && bad "ordinary rollback leaves the database alone" || ok "ordinary rollback leaves the database alone"
+grep -q 'compose up' "$work/ssh.log" && ok "ordinary rollback still starts the previous version" || bad "ordinary rollback still starts the previous version"
+
 [ "$fails" = 0 ] && echo "all passed" || echo "$fails failed"
 [ "$fails" = 0 ]
