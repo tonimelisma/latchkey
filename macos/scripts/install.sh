@@ -3,9 +3,13 @@
 # would by dragging it there (Toni, 2026-10-23: every increment installs itself). Quits the
 # running app cleanly first (SIGTERM: it says goodbye to the relay and restores sleep), swaps the
 # app in place, removes the old copy, opens the new one, and checks it started. Permissions and the
-# pairing carry over: same signature, same settings and Keychain.
+# pairing carry over: same signature, same settings and Keychain. That is checked, not assumed:
+# if this Mac was paired before and the new app starts "not paired", the install fails loudly
+# (install-lib.sh; on 2026-10-24 it reported success after exactly that).
 set -eu
 cd "$(dirname "$0")/.."
+# shellcheck source=macos/scripts/install-lib.sh
+. scripts/install-lib.sh
 VERSION=$(sed -n 's/^ *MARKETING_VERSION: *"\(.*\)"/\1/p' project.yml)
 DMG=build/Latchkey-$VERSION.dmg
 [ -f "$DMG" ] || { echo "install: $DMG not found; run make dmg" >&2; exit 1; }
@@ -27,6 +31,29 @@ find "$NEW" -type f -perm -u+x | while read -r bin; do
   fi
 done
 
+PREDICATE='subsystem == "net.melisma.latchkey" AND category == "lifecycle"'
+# start_line <from> [<to>]: the app's last "Started …" line in the log between the two times.
+start_line() {
+  if [ -n "${2:-}" ]; then set -- --start "$1" --end "$2"; else set -- --start "$1"; fi
+  /usr/bin/log show "$@" --predicate "$PREDICATE" --style compact 2>/dev/null |
+    grep "lifecycle\] Started " | tail -1 | sed 's/.*lifecycle\] //' || true
+}
+
+# Was this Mac paired before? The running app's start line says (written within moments of the
+# time the process started); the pairing record's presence is the fallback. No secret is read.
+OLD_VERSION=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$DEST/Contents/Info.plist" 2>/dev/null || echo "an earlier version")
+OLD_LINE=""
+if pid=$(pgrep -x Latchkey | head -1) && [ -n "$pid" ]; then
+  if began=$(LC_ALL=C ps -o lstart= -p "$pid" 2>/dev/null) && [ -n "$began" ]; then
+    from=$(LC_ALL=C date -j -v-5S -f "%a %b %d %T %Y" "$began" "+%Y-%m-%d %H:%M:%S" 2>/dev/null || true)
+    to=$(LC_ALL=C date -j -v+2M -f "%a %b %d %T %Y" "$began" "+%Y-%m-%d %H:%M:%S" 2>/dev/null || true)
+    if [ -n "$from" ] && [ -n "$to" ]; then OLD_LINE=$(start_line "$from" "$to"); fi
+  fi
+fi
+PAIRED_BEFORE=$(paired_before "$OLD_LINE" "$(pairing_record)")
+PREVIOUS_DMG=""
+[ "$OLD_VERSION" != "$VERSION" ] && [ -f "build/Latchkey-$OLD_VERSION.dmg" ] && PREVIOUS_DMG="build/Latchkey-$OLD_VERSION.dmg"
+
 if pgrep -x Latchkey >/dev/null; then
   pkill -TERM -x Latchkey
   i=0
@@ -47,11 +74,10 @@ START=$(date "+%Y-%m-%d %H:%M:%S")
 open "$DEST"
 i=0
 while [ $i -lt 30 ]; do
-  line=$(/usr/bin/log show --start "$START" --predicate 'subsystem == "net.melisma.latchkey" AND category == "lifecycle"' \
-    --style compact 2>/dev/null | grep "Started $VERSION" | tail -1 || true)
+  line=$(start_line "$START" | grep "Started $VERSION" || true)
   if [ -n "$line" ]; then
-    echo "install: Latchkey $VERSION installed and running (${line#*lifecycle] })"
-    exit 0
+    install_verdict "$PAIRED_BEFORE" "$OLD_VERSION" "$VERSION" "$line" "$(pairing_record)" "$PREVIOUS_DMG"
+    exit $?
   fi
   sleep 1
   i=$((i + 1))

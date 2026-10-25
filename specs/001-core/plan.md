@@ -422,6 +422,14 @@ Serves FR-070, FR-071, FR-072; Constitution IV.
   its privacy permissions; Release builds don't inject it (`CODE_SIGN_INJECT_BASE_ENTITLEMENTS =
   NO`), and `package.sh` and `install.sh` refuse an app whose code carries it (security scan,
   2026-10-24). Debug builds keep it for the debugger.
+- `install.sh` checks that an update kept the pairing (2026-10-25; on 2026-10-24 it reported
+  success for an app that started "not paired"). Before quitting the old app it notes whether this
+  Mac is paired: from the running app's own start line in the log (found by the process's start
+  time), or, without one, from whether the pairing record exists in the Keychain (attributes
+  only, no secret read). If it was paired and the new app's start line says "not paired", the
+  install exits non-zero and says which versions, whether the record is still there, and not to
+  pair again yet. The decision is in `install-lib.sh`, tested by
+  `scripts/tests/install_pairing_test.sh` without installing anything.
 - Bundle identifiers: app `net.melisma.latchkey`, helper `net.melisma.latchkey.helper` (also its
   Mach service name). Swift 6 language mode with strict concurrency.
 - Debug and test builds have their own identity (FR-074; Toni, 2026-10-25), because macOS files
