@@ -82,8 +82,7 @@ The Mac state line appears in every result (it reported the battery warning at 1
    switched off while a command runs, a page with a filled password field.
    Open choices for Toni: a backup of the relay's database (nightly disk snapshot, nightly
    SQLite copy to a bucket, or none); removing `RESEND_ADMIN_KEY` from `.env` (no longer
-   needed); raising the push guard's hook timeout in `.claude/settings.json` from 10 s to 60 s
-   (a timeout lets a push through unchecked); a separate bundle ID for Debug builds.
+   needed); a separate bundle ID for Debug builds.
 2. Known limit: macOS shows its own "allow Latchkey to access the screen directly" alert from
    time to time for screen capture; it needs Toni at the Mac (computer control only).
 
