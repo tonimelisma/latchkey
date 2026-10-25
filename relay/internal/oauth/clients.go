@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net"
 	"net/http"
 	"net/netip"
@@ -17,6 +18,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -29,9 +31,27 @@ import (
 var supportedScopes = []string{"mcp", "offline_access"}
 
 const (
-	cimdMaxAge   = 24 * time.Hour
+	cimdMaxAge   = store.MaxClientDocumentAge // a cached document is fresh for a day at most
 	cimdMaxBytes = 64 << 10
+	// cimdStaleFor is how long past its freshness a cached document still serves when a new
+	// fetch fails, so an outage of the client's metadata host doesn't cut its users off.
+	cimdStaleFor = 7 * 24 * time.Hour
+	// cimdFailureAge is how long a URL whose fetch failed is not fetched again.
+	cimdFailureAge = 5 * time.Minute
+	// cimdMaxClients caps the cached documents that no code or token refers to.
+	cimdMaxClients = 1000
+	// cimdMaxFailures caps the remembered failures (32 bytes and a time each).
+	cimdMaxFailures = 4096
 )
+
+// cimdMinAge is the least time a fetched document is cached, whatever its host's Cache-Control
+// says: a no-store document would otherwise be fetched on every token and /mcp request. A
+// variable so a test can turn it off.
+var cimdMinAge = 5 * time.Minute
+
+// errDocumentUnavailable is all a caller learns when a metadata document can't be used; the
+// reason (which may name internal hosts and addresses) goes to the log.
+var errDocumentUnavailable = errors.New("client metadata document unavailable")
 
 // clientMetadata is the part of a CIMD document or DCR request the relay uses.
 type clientMetadata struct {
@@ -62,6 +82,42 @@ type clients struct {
 	st   *store.Store
 	http *http.Client
 	now  func() time.Time
+	log  *slog.Logger
+
+	mu     sync.Mutex
+	failed map[[sha256.Size]byte]time.Time // hash of a document URL → when its fetch last failed
+}
+
+// failedRecently reports whether the URL's last fetch failed within cimdFailureAge.
+func (c *clients) failedRecently(id string, now time.Time) bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	at, ok := c.failed[sha256.Sum256([]byte(id))]
+	return ok && now.Sub(at) < cimdFailureAge
+}
+
+// noteFailure remembers a failed fetch. The table is bounded: when full, expired entries go; if
+// none has expired, this failure is simply not remembered.
+func (c *clients) noteFailure(id string, now time.Time) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if len(c.failed) >= cimdMaxFailures {
+		for k, at := range c.failed {
+			if now.Sub(at) >= cimdFailureAge {
+				delete(c.failed, k)
+			}
+		}
+		if len(c.failed) >= cimdMaxFailures {
+			return
+		}
+	}
+	c.failed[sha256.Sum256([]byte(id))] = now
+}
+
+func (c *clients) clearFailure(id string) {
+	c.mu.Lock()
+	delete(c.failed, sha256.Sum256([]byte(id)))
+	c.mu.Unlock()
 }
 
 // requestedRedirectKey carries the redirect_uri of the authorize request into client lookup,
@@ -78,7 +134,8 @@ func (c *clients) get(ctx context.Context, id string) (*client, error) {
 	if isCIMD(id) {
 		doc, err := c.cimd(ctx, id)
 		if err != nil {
-			return nil, fosite.ErrInvalidClient.WithHintf("Client metadata document could not be used: %v", err)
+			// A fixed sentence: the Go error can name internal hosts and addresses (logged in cimd).
+			return nil, fosite.ErrInvalidClient.WithHint("The client metadata document could not be fetched or is not valid.")
 		}
 		md = doc
 	} else {
@@ -151,29 +208,60 @@ func isCIMD(id string) bool {
 	return err == nil && u.Scheme == "https" && u.Host != "" && u.Path != "" && u.Path != "/"
 }
 
-// cimd returns a client metadata document, fetching it at most once per cache period.
+// cimd returns a client metadata document: the cached copy while it is fresh (five minutes to a
+// day), otherwise a new fetch. A failed fetch is remembered for cimdFailureAge, during which the
+// URL is not fetched again, and the last good copy keeps serving for cimdStaleFor past its
+// freshness. Any failure is errDocumentUnavailable; the reason is logged.
 func (c *clients) cimd(ctx context.Context, id string) (clientMetadata, error) {
 	now := c.now()
+	var stale *clientMetadata
 	if row, err := c.st.OAuthClient(ctx, id); err == nil && row.Kind == "cimd" {
 		var cached cachedDocument
-		if json.Unmarshal(row.MetadataJSON, &cached) == nil && now.Before(cached.CacheUntil) {
-			return cached.Document, nil
+		if json.Unmarshal(row.MetadataJSON, &cached) == nil {
+			if now.Before(cached.CacheUntil) {
+				return cached.Document, nil
+			}
+			if now.Before(cached.CacheUntil.Add(cimdStaleFor)) {
+				stale = &cached.Document
+			}
 		}
+	}
+	unavailable := func() (clientMetadata, error) {
+		if stale != nil {
+			return *stale, nil
+		}
+		return clientMetadata{}, errDocumentUnavailable
+	}
+	if c.failedRecently(id, now) {
+		return unavailable()
 	}
 	doc, maxAge, err := c.fetch(ctx, id)
 	if err != nil {
-		return clientMetadata{}, err
+		c.noteFailure(id, now)
+		c.log.Warn("client metadata document not usable", "client_id", truncateID(id), "err", err, "stale_copy_used", stale != nil)
+		return unavailable()
 	}
+	c.clearFailure(id)
 	data, err := json.Marshal(cachedDocument{Document: doc, CacheUntil: now.Add(maxAge)})
 	if err != nil {
 		return clientMetadata{}, err
 	}
-	err = c.st.PutOAuthClient(ctx, store.OAuthClient{ID: id, Kind: "cimd", MetadataJSON: data, CreatedAt: now, FetchedAt: now})
+	err = c.st.PutCachedClient(ctx, store.OAuthClient{ID: id, Kind: "cimd", MetadataJSON: data, CreatedAt: now, FetchedAt: now}, cimdMaxClients)
 	return doc, err
 }
 
+// truncateID keeps a client-chosen URL short in the log.
+func truncateID(id string) string {
+	if len(id) > 200 {
+		return id[:200] + "..."
+	}
+	return id
+}
+
 func (c *clients) fetch(ctx context.Context, id string) (clientMetadata, time.Duration, error) {
-	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	// Not tied to the request: a caller that goes away mid-fetch must not make the fetch fail
+	// and be remembered as a failure of the document.
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, id, nil)
 	if err != nil {
@@ -211,16 +299,19 @@ func (c *clients) fetch(ctx context.Context, id string) (clientMetadata, time.Du
 	return doc, cacheMaxAge(resp.Header.Get("Cache-Control")), nil
 }
 
-// cacheMaxAge honors Cache-Control max-age up to 24 hours.
+// cacheMaxAge honors Cache-Control max-age between cimdMinAge and 24 hours; no-store and
+// no-cache mean cimdMinAge.
 func cacheMaxAge(header string) time.Duration {
 	for d := range strings.SplitSeq(header, ",") {
 		d = strings.TrimSpace(strings.ToLower(d))
 		if d == "no-store" || d == "no-cache" {
-			return 0
+			return cimdMinAge
 		}
 		if v, ok := strings.CutPrefix(d, "max-age="); ok {
-			if n, err := strconv.Atoi(v); err == nil && n >= 0 {
-				return min(time.Duration(n)*time.Second, cimdMaxAge)
+			if n, err := strconv.ParseInt(v, 10, 64); err == nil && n >= 0 {
+				// Clamped in seconds, before the number becomes a Duration it could overflow.
+				n = min(max(n, int64(cimdMinAge/time.Second)), int64(cimdMaxAge/time.Second))
+				return time.Duration(n) * time.Second
 			}
 		}
 	}

@@ -273,6 +273,20 @@ Format: EARS ("When <trigger>, the <system> shall <response>"). IDs are stable; 
 - **FR-094** When a client takes longer than 30 seconds to send a request's body (2 minutes for
   a request to the connector URL, which may carry a file), the relay shall stop waiting for it.
   Answers that take long, and the Mac's connection, are not affected.
+- **FR-095** The relay shall keep a Claude client's published description (its metadata
+  document) for at least 5 minutes and at most a day before fetching it again; when a new fetch
+  fails, it shall keep using the last good copy for up to 7 days and shall not fetch that address
+  again for 5 minutes; it shall keep at most 1,000 descriptions of clients that hold no access,
+  deleting those unused for a day; and it shall never tell a client or browser why a fetch
+  failed.
+- **FR-096** When one sign-in code from Claude is presented more than once, even at the same
+  moment, the relay shall give access for it at most once and shall end the access it gave.
+- **FR-097** When the relay sends the Owner's browser back to a Claude client, with a code or
+  with an error, it shall say which relay the answer comes from, and shall announce that it
+  does so (RFC 9207).
+- **FR-098** The relay shall remove every kind of bracket, in any script, from a client's name
+  before showing it, so a name can't imitate the checked host that is shown after it in
+  parentheses.
 
 ## Success criteria
 

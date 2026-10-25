@@ -280,6 +280,27 @@ func (s *Store) PutOAuthClient(ctx context.Context, c OAuthClient) error {
 	return mapErr(err)
 }
 
+// MaxClientDocumentAge is the longest a cached client metadata document counts as fresh; one
+// fetched longer ago, with no code or token of its client left, is purged.
+const MaxClientDocumentAge = 24 * time.Hour
+
+// PutCachedClient stores a fetched client metadata document and keeps the cache bounded: of the
+// cached documents beyond the newest max, those no code or token refers to are deleted. Anyone
+// can make the relay fetch a document by naming its URL, so without this the table could be
+// filled; documents of clients that hold a grant are never dropped.
+func (s *Store) PutCachedClient(ctx context.Context, c OAuthClient, max int) error {
+	if err := s.PutOAuthClient(ctx, c); err != nil {
+		return err
+	}
+	_, err := s.db.ExecContext(ctx, `
+		DELETE FROM oauth_clients
+		WHERE kind = 'cimd' AND id <> ?
+			AND id IN (SELECT id FROM oauth_clients WHERE kind = 'cimd'
+				ORDER BY COALESCE(fetched_at, created_at) DESC, id LIMIT -1 OFFSET ?)
+			AND NOT EXISTS (SELECT 1 FROM oauth_requests r WHERE r.client_id = oauth_clients.id)`, c.ID, max)
+	return err
+}
+
 // OAuthClient returns a client.
 func (s *Store) OAuthClient(ctx context.Context, id string) (OAuthClient, error) {
 	var c OAuthClient
@@ -391,10 +412,20 @@ func (s *Store) updateOAuthRequest(ctx context.Context, query string, args ...an
 	return requireOneRow(res)
 }
 
-// MarkOAuthRequestUsed records that an authorization code was redeemed.
+// MarkOAuthRequestUsed records that an authorization code was redeemed. Only the first caller
+// succeeds: a code that is already used (or doesn't exist) is ErrNotFound, so of two exchanges
+// racing on one code exactly one gets past this statement.
 func (s *Store) MarkOAuthRequestUsed(ctx context.Context, kind, signature string, at time.Time) error {
 	return s.updateOAuthRequest(ctx,
-		`UPDATE oauth_requests SET used_at = COALESCE(used_at, ?) WHERE kind = ? AND signature = ?`, toMS(at), kind, signature)
+		`UPDATE oauth_requests SET used_at = ? WHERE kind = ? AND signature = ? AND used_at IS NULL`, toMS(at), kind, signature)
+}
+
+// RevokeGrant marks every row of a grant revoked: its tokens stop working, and PutOAuthToken
+// writes no more for it.
+func (s *Store) RevokeGrant(ctx context.Context, requestID string, at time.Time) error {
+	_, err := s.db.ExecContext(ctx,
+		`UPDATE oauth_requests SET revoked_at = COALESCE(revoked_at, ?) WHERE request_id = ?`, toMS(at), requestID)
+	return err
 }
 
 // RotateOAuthRequest records that a refresh token was exchanged; the first rotation time counts.
@@ -423,8 +454,8 @@ func (s *Store) DeleteUserOAuth(ctx context.Context, userID string) error {
 	return err
 }
 
-// PurgeExpired deletes expired sessions, links, pairing codes, OAuth requests, and unused
-// registered clients.
+// PurgeExpired deletes expired sessions, links, pairing codes, OAuth requests, unused
+// registered clients, and unused cached client documents.
 func (s *Store) PurgeExpired(ctx context.Context, now time.Time) error {
 	ms := now.UnixMilli()
 	var errs []error
@@ -444,6 +475,14 @@ func (s *Store) PurgeExpired(ctx context.Context, now time.Time) error {
 		DELETE FROM oauth_clients WHERE kind = 'dcr' AND created_at <= ?
 			AND NOT EXISTS (SELECT 1 FROM oauth_requests r WHERE r.client_id = oauth_clients.id)`,
 		now.Add(-7*24*time.Hour).UnixMilli()); err != nil {
+		errs = append(errs, err)
+	}
+	// Cached client metadata documents that are past any freshness and belong to no live code
+	// or token: fetched again if the client ever returns.
+	if _, err := s.db.ExecContext(ctx, `
+		DELETE FROM oauth_clients WHERE kind = 'cimd' AND COALESCE(fetched_at, created_at) <= ?
+			AND NOT EXISTS (SELECT 1 FROM oauth_requests r WHERE r.client_id = oauth_clients.id)`,
+		now.Add(-MaxClientDocumentAge).UnixMilli()); err != nil {
 		errs = append(errs, err)
 	}
 	// Used recovery links are kept for 30 days so a Mac that was offline still hears of them.

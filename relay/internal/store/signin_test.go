@@ -322,7 +322,9 @@ func TestPurgeUnusedRegisteredClients(t *testing.T) {
 		{ID: "stale-dcr", Kind: "dcr", CreatedAt: t0},
 		{ID: "fresh-dcr", Kind: "dcr", CreatedAt: t0.Add(7 * 24 * time.Hour)},
 		{ID: "used-dcr", Kind: "dcr", CreatedAt: t0},
-		{ID: "https://claude.ai/cimd", Kind: "cimd", CreatedAt: t0},
+		{ID: "https://claude.ai/cimd", Kind: "cimd", CreatedAt: t0, FetchedAt: t0},
+		{ID: "https://attacker.example/1", Kind: "cimd", CreatedAt: t0, FetchedAt: t0.Add(6 * 24 * time.Hour)},
+		{ID: "https://fresh.example/c", Kind: "cimd", CreatedAt: t0, FetchedAt: t0.Add(8*24*time.Hour - time.Hour)},
 	} {
 		c.MetadataJSON = []byte(`{}`)
 		require.NoError(t, s.PutOAuthClient(ctx, c))
@@ -331,14 +333,90 @@ func TestPurgeUnusedRegisteredClients(t *testing.T) {
 		Signature: "live", Kind: store.KindRefresh, RequestID: "r", ClientID: "used-dcr", UserID: u.ID,
 		RequestedAt: t0, SessionJSON: []byte(`{}`), ExpiresAt: t0.Add(90 * 24 * time.Hour),
 	}))
+	require.NoError(t, s.PutOAuthRequest(ctx, store.OAuthRequest{
+		Signature: "live2", Kind: store.KindRefresh, RequestID: "r2", ClientID: "https://claude.ai/cimd", UserID: u.ID,
+		RequestedAt: t0, SessionJSON: []byte(`{}`), ExpiresAt: t0.Add(90 * 24 * time.Hour),
+	}))
 
 	require.NoError(t, s.PurgeExpired(ctx, t0.Add(8*24*time.Hour)))
 	_, err := s.OAuthClient(ctx, "stale-dcr")
 	require.ErrorIs(t, err, store.ErrNotFound, "a week-old registration with no live grant goes")
-	for _, id := range []string{"fresh-dcr", "used-dcr", "https://claude.ai/cimd"} {
+	_, err = s.OAuthClient(ctx, "https://attacker.example/1")
+	require.ErrorIs(t, err, store.ErrNotFound, "a cached document fetched over a day ago, with no grant, goes")
+	for _, id := range []string{"fresh-dcr", "used-dcr", "https://claude.ai/cimd", "https://fresh.example/c"} {
 		_, err = s.OAuthClient(ctx, id)
 		require.NoError(t, err, id)
 	}
+}
+
+// The cache of client metadata documents is capped: beyond the newest few, only documents of
+// clients that hold a code or token stay (anyone can make the relay fetch and cache a URL).
+func TestCachedClientsAreCapped(t *testing.T) {
+	ctx := context.Background()
+	s := open(t)
+	u := newUser(t, s)
+	put := func(id string, at time.Time) {
+		t.Helper()
+		require.NoError(t, s.PutCachedClient(ctx, store.OAuthClient{ID: id, Kind: "cimd", MetadataJSON: []byte(`{}`), CreatedAt: at, FetchedAt: at}, 3))
+	}
+	has := func(id string) bool {
+		_, err := s.OAuthClient(ctx, id)
+		return err == nil
+	}
+	require.NoError(t, s.PutOAuthClient(ctx, store.OAuthClient{ID: "cl_registered", Kind: "dcr", MetadataJSON: []byte(`{}`), CreatedAt: t0}))
+	put("https://claude.ai/doc", t0)
+	require.NoError(t, s.PutOAuthRequest(ctx, store.OAuthRequest{
+		Signature: "live", Kind: store.KindRefresh, RequestID: "r", ClientID: "https://claude.ai/doc", UserID: u.ID,
+		RequestedAt: t0, SessionJSON: []byte(`{}`), ExpiresAt: t0.Add(time.Hour),
+	}))
+	for i := range 10 {
+		put(fmt.Sprintf("https://attacker.example/%d", i), t0.Add(time.Duration(i+1)*time.Second))
+	}
+	assert.True(t, has("https://claude.ai/doc"), "a client with a grant is never dropped")
+	assert.True(t, has("cl_registered"), "registered clients are not part of the cache")
+	kept := 0
+	for i := range 10 {
+		if has(fmt.Sprintf("https://attacker.example/%d", i)) {
+			kept++
+		}
+	}
+	assert.Equal(t, 3, kept, "the newest three")
+	assert.True(t, has("https://attacker.example/9"))
+	assert.False(t, has("https://attacker.example/0"))
+
+	put("https://attacker.example/0", t0) // older than everything kept, but it is the one just fetched
+	assert.True(t, has("https://attacker.example/0"), "the document just stored is not dropped by its own cap")
+}
+
+// A code can be marked used once; a second marking finds nothing to mark.
+func TestCodeIsMarkedUsedOnce(t *testing.T) {
+	ctx := context.Background()
+	s := open(t)
+	u := newUser(t, s)
+	require.NoError(t, s.PutOAuthRequest(ctx, store.OAuthRequest{
+		Signature: "code", Kind: store.KindCode, RequestID: "r", ClientID: "c", UserID: u.ID,
+		RequestedAt: t0, SessionJSON: []byte(`{}`), ExpiresAt: t0.Add(time.Minute),
+	}))
+	var wg sync.WaitGroup
+	var marked atomic.Int32
+	for range 8 {
+		wg.Go(func() {
+			switch err := s.MarkOAuthRequestUsed(ctx, store.KindCode, "code", t0.Add(time.Second)); {
+			case err == nil:
+				marked.Add(1)
+			default:
+				assert.ErrorIs(t, err, store.ErrNotFound)
+			}
+		})
+	}
+	wg.Wait()
+	assert.EqualValues(t, 1, marked.Load())
+	require.ErrorIs(t, s.MarkOAuthRequestUsed(ctx, store.KindCode, "missing", t0), store.ErrNotFound)
+
+	require.NoError(t, s.RevokeGrant(ctx, "r", t0.Add(2*time.Second)))
+	got, err := s.OAuthRequest(ctx, store.KindCode, "code")
+	require.NoError(t, err)
+	assert.Equal(t, t0.Add(2*time.Second), got.RevokedAt)
 }
 
 func TestRelayKeys(t *testing.T) {

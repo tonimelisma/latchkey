@@ -15,7 +15,7 @@ milliseconds. Device public keys are stored as PKIX DER.
 | **pairing_codes** | code_hash, user_id, expires_at, used_at | 5 min, single use |
 | ~~oauth_consents~~ | | Dropped 2026-10-25 (migration 6): approvals are not remembered (FR-049a). The account page lists the clients that hold a live access or refresh token in **oauth_requests** |
 | **relay_keys** | name, value | Server secrets, e.g. the 32-byte HMAC key for OAuth tokens; never leaves the server |
-| **oauth_clients** | id, kind (`dcr` or `cimd`), metadata_json, secret_hash, created_at, fetched_at | CIMD documents cached; DCR clients stored, and deleted after 7 days if no code or token for them is live |
+| **oauth_clients** | id, kind (`dcr` or `cimd`), metadata_json, secret_hash, created_at, fetched_at | CIMD documents cached (with their cache expiry), at most the newest 1,000 that no code or token refers to, and deleted a day after their last fetch if none does (FR-095); DCR clients stored, and deleted after 7 days if no code or token for them is live |
 | **oauth_requests** | signature, kind (`code`, `pkce`, `access`, `refresh`), request_id, client_id, user_id, requested_at, scopes, granted_scopes, form, session_json, expires_at, used_at, rotated_at, revoked_at | fosite's stored requests, keyed by token signature (never raw tokens). `form` keeps the authorize parameters fosite re-checks (redirect URI, PKCE challenge); `session_json` holds subject and expiry times. Codes live 1 min, access tokens 1 h, refresh tokens 90 days |
 | **audit_log** | id, user_id, device_id, at, tool, surface, outcome, duration_ms | No arguments, no results (FR-022, FR-023); purged after retention |
 

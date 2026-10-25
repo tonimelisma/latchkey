@@ -109,7 +109,20 @@ Serves FR-040, FR-014.
   rotation. Opaque HMAC tokens stored hashed.
 - Client registration, implemented in fosite's client storage:
   - CIMD: when `client_id` is an HTTPS URL, fetch and validate the metadata document, cache it
-    (respect HTTP caching, max 24 h).
+    (respect HTTP caching, at least 5 minutes, at most 24 h). Hardening (FR-095; security
+    review, 2026-10-25): the minimum exists because the client is looked up on every token and
+    `/mcp` request, so a `no-store` document meant a fetch each time, and its host's outage cut
+    every user of that client off. When a fetch fails, the last good copy serves for up to 7
+    days past its freshness, and the URL is not fetched again for 5 minutes (failures are kept
+    in memory by the URL's SHA-256, at most 4,096 of them), so the relay can't be made to
+    hammer a host. The fetch runs detached from the request (5 s limit), so a caller that
+    leaves can't plant a failure. Cached documents that no code or token refers to are capped
+    at the newest 1,000 (checked at each insert) and purged daily once fetched more than a day
+    ago; documents of clients holding a grant always stay. `oauth_requests` gets an index on
+    `client_id` for those checks (migration 7). A failed lookup's error carries one fixed
+    sentence; the reason (which can name internal hosts and addresses) goes to the relay's log
+    only. fosite already kept that reason from clients (it replaces the hint at `/authorize`
+    and exposes no debug text); the fixed sentence makes that independent of fosite.
   - DCR (RFC 7591) at `/register` for clients that don't use CIMD.
 - Metadata: advertise `client_id_metadata_document_supported: true`,
   `token_endpoint_auth_methods_supported` including `none`, `code_challenge_methods_supported:
@@ -129,7 +142,9 @@ Serves FR-040, FR-014.
   (security scan, 2026-10-24). Hosts are shown in ASCII (`golang.org/x/net/idna`, already in
   the module graph, now a direct dependency), so a look-alike Unicode host appears as `xn--...`.
   The name is cleaned before it is shown: control and formatting characters (newlines,
-  direction overrides, zero-width marks) and parentheses removed, spaces collapsed, at most 60
+  direction overrides, zero-width marks) and every bracket (Unicode categories Ps and Pe:
+  ASCII, fullwidth, small, ornamental and all other opening and closing punctuation, FR-098)
+  removed, spaces collapsed, at most 60
   characters, so it can't carry a "(claude.ai)" of its own. The consent page shows the host on
   its own line ("This app is at claude.ai."), not only after the name. The account page names a
   registered client with every host its redirect URIs point to ("Claude (claude.ai,
@@ -152,6 +167,21 @@ Serves FR-040, FR-014.
   (`localhost`, `127.0.0.1`, `[::1]`) the port is ignored. fosite ignores the port only for IP
   literals, so the client lookup adds the requested `localhost` URI when it matches a registered
   one on everything but the port.
+- Codes are redeemed once, also under concurrency (FR-096; security review, 2026-10-25): fosite
+  reads a code's row and marks it used in separate steps, so two exchanges could both read it
+  unused. The marking is now `UPDATE … WHERE used_at IS NULL`; the exchange that changes no row
+  fails with fosite's `ErrInvalidatedAuthorizeCode`, and the grant's rows are all marked
+  revoked, which revokes tokens already written and (through the conditional insert below)
+  refuses any written later, exactly as for a later replay. A replay found on read marks the
+  grant the same way. The token endpoint answers these with `invalid_grant`, not fosite's
+  `server_error`. Options weighed: a transaction around fosite's whole exchange (fosite's
+  transactional storage; holds SQLite's write lock across the client lookup) or the
+  conditional update, chosen as one statement with no lock held.
+- RFC 9207 (FR-097): the metadata advertises `authorization_response_iss_parameter_supported`
+  and every redirect back to the client (code or error) carries `iss=<issuer>`. fosite 0.49
+  doesn't support it, so the response writer handed to fosite's two redirect writers adds the
+  parameter to the `Location` header. Errors shown in the browser (unknown client or redirect
+  URI) aren't redirects and carry none.
 - Tokens: fosite's HMAC strategy with a 32-byte secret generated on first start and kept in the
   database, so tokens survive restarts (SC-07). Refresh rotation marks the old token rotated; it
   stays valid for 60 s, after which reuse revokes the whole token family (RFC 6819 §5.2.2.3).
