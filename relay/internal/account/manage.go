@@ -274,6 +274,10 @@ func (s *Service) pairExchange(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, http.StatusBadRequest, pairingExpired)
 		return
 	}
+	if u, err := s.cfg.Store.User(ctx, userID); err != nil || !u.SuspendedAt.IsZero() {
+		jsonError(w, http.StatusForbidden, "This account can't connect a Mac right now.")
+		return
+	}
 	if err := s.revokeActiveMac(ctx, userID); err != nil { // FR-053: the Owner confirmed on the pair page
 		jsonError(w, http.StatusInternalServerError, "Something went wrong. Try again.")
 		return

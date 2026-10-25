@@ -203,6 +203,26 @@ func randomToken() string {
 
 func normalizeEmail(e string) string { return strings.ToLower(strings.TrimSpace(e)) }
 
+// NormalizeEmail is how an address is compared everywhere: as sign-up stores it. The
+// operator's commands use it, so `account suspend Owner@Example.com` finds the account.
+func NormalizeEmail(e string) string { return normalizeEmail(e) }
+
+// ValidEmail reports whether e is one plain email address, as sign-up requires.
+func ValidEmail(e string) bool { return validEmail(e) }
+
+// refused says why an address or account can't sign in, sign up, or recover: the relay's
+// operator blocked the address or suspended the account (FR-196, FR-197). Empty means it can.
+// The message names the operator's contact address when one is set.
+func (s *Service) refused(ctx context.Context, email string, u *store.User) string {
+	if blocked, err := s.cfg.Store.EmailBlocked(ctx, email); err == nil && blocked {
+		return "This email address can't be used on this relay." + s.contactSentence()
+	}
+	if u != nil && !u.SuspendedAt.IsZero() {
+		return "This account has been suspended by the person who runs this relay." + s.contactSentence()
+	}
+	return ""
+}
+
 func validEmail(e string) bool {
 	a, err := mail.ParseAddress(e)
 	return err == nil && a.Address == e && strings.Contains(e, "@")
@@ -431,6 +451,17 @@ func (s *Service) authEmail(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	u, err := s.cfg.Store.UserByEmail(ctx, email)
 	known := err == nil && !u.EmailVerifiedAt.IsZero()
+	// A blocked address or a suspended account is told so, for sign-in, sign-up, and recovery
+	// alike. (Recovery otherwise answers the same for every address, FR-042b; this reveals only
+	// an account the operator suspended.)
+	var found *store.User
+	if err == nil {
+		found = &u
+	}
+	if msg := s.refused(ctx, email, found); msg != "" {
+		jsonError(w, http.StatusForbidden, msg)
+		return
+	}
 	if req.Recover {
 		// The answer never reveals whether the account exists: the same words, and the same
 		// speed, because the code is stored and emailed after the answer, not before it
@@ -529,6 +560,10 @@ func (s *Service) authCode(w http.ResponseWriter, r *http.Request) {
 	u, err := s.cfg.Store.UserByEmail(ctx, normalizeEmail(req.Email))
 	if err != nil {
 		jsonError(w, http.StatusBadRequest, expired)
+		return
+	}
+	if msg := s.refused(ctx, u.Email, &u); msg != "" {
+		jsonError(w, http.StatusForbidden, msg)
 		return
 	}
 	code := strings.Join(strings.Fields(req.Code), "")

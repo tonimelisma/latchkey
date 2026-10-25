@@ -71,7 +71,7 @@ func TestOptionalLegalSentencesAppearOnlyWhenSet(t *testing.T) {
 func TestEveryPageLinksTermsAndPrivacy(t *testing.T) {
 	h := newHarness(t, withOperator(sampleOperator))
 	o := h.owner("owner@example.com")
-	client := h.registerClient("Claude", claudeCallback)
+	client := h.registerClient(claudeCallback)
 	q := url.Values{
 		"response_type": {"code"}, "client_id": {client}, "redirect_uri": {claudeCallback}, "scope": {"mcp"},
 		"state": {"state-123456789"}, "code_challenge": {"E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM"}, "code_challenge_method": {"S256"},

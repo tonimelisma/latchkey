@@ -276,6 +276,10 @@ func (s *Service) registerFinish(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, http.StatusBadRequest, "Start again to get a new code.")
 		return
 	}
+	if msg := s.refused(ctx, user.user.Email, &user.user); msg != "" { // suspended since the code was confirmed
+		jsonError(w, http.StatusForbidden, msg)
+		return
+	}
 	cred, err := s.webauthn.FinishRegistration(user, c.data, r)
 	if err != nil {
 		s.returnTicket(c.ticket, tk)
@@ -395,6 +399,11 @@ func (s *Service) loginFinish(w http.ResponseWriter, r *http.Request) {
 	u, ok := found.(*waUser)
 	if !ok {
 		jsonError(w, http.StatusInternalServerError, "Something went wrong. Try again.")
+		return
+	}
+	// A valid passkey of a suspended account, or of a blocked address, signs nobody in.
+	if msg := s.refused(ctx, u.user.Email, &u.user); msg != "" {
+		jsonError(w, http.StatusForbidden, msg)
 		return
 	}
 	now := s.now()

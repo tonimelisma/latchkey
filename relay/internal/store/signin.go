@@ -197,12 +197,14 @@ func (s *Store) CreateSession(ctx context.Context, hash []byte, userID string, c
 	return mapErr(err)
 }
 
-// Session returns an unexpired session.
+// Session returns an unexpired session of an account that isn't suspended: a suspension ends
+// every browser sign-in at once, also one made a moment after it (FR-196).
 func (s *Store) Session(ctx context.Context, hash []byte, now time.Time) (Session, error) {
 	var sess Session
 	var expires, reauth sql.NullInt64
-	err := s.db.QueryRowContext(ctx,
-		`SELECT user_id, expires_at, reauth_at FROM web_sessions WHERE id_hash = ? AND expires_at > ?`,
+	err := s.db.QueryRowContext(ctx, `
+		SELECT w.user_id, w.expires_at, w.reauth_at FROM web_sessions w JOIN users u ON u.id = w.user_id
+		WHERE w.id_hash = ? AND w.expires_at > ? AND u.suspended_at IS NULL`,
 		hash, now.UnixMilli()).Scan(&sess.UserID, &expires, &reauth)
 	if err != nil {
 		return Session{}, mapErr(err)

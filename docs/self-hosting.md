@@ -39,6 +39,10 @@ Then open `https://relay.example.com`, create your account, and continue with "C
 | `ALLOWED_EMAILS` | no | Comma-separated addresses allowed to sign up. Empty means anyone can sign up; set it to your own address on a personal relay. |
 | `ACME_EMAIL` | no | Turns on built-in HTTPS with Let's Encrypt (see below). |
 | `TRUSTED_PROXIES` | no | Comma-separated IP addresses and CIDR ranges (for example `172.18.0.0/16`) of reverse proxies whose `X-Forwarded-For` header the relay believes. Set it whenever a proxy sits in front of the relay in Docker: to the Docker bridge gateway for a proxy on the server itself, or to the shared network's range for a proxy in a container (see "HTTPS"). Only connections from the relay's own loopback address are believed without it, and a container never sees the server's proxy as loopback. Empty with a proxy in front means all visitors share one abuse limit. |
+| `OPERATOR_NAME`, `OPERATOR_CONTACT` | no | Who runs this relay, and an email address for questions, privacy requests, and security and abuse reports. Set both, or neither. With both, the relay publishes terms of service at `/terms` and a privacy policy at `/privacy`, links them from every page, and tells Claude's apps where they are. Leave them out on a relay only you use. |
+| `OPERATOR_LAW` | no | The law your terms are under, for example `California, USA`. The terms say so only when this is set. |
+| `OPERATOR_PROVIDERS` | no | The companies that handle your relay's data for you, in your own words, for example `Example Cloud (hosting) and Example Mail (email delivery)`. Shown in the privacy policy; without it the policy says "the operator's hosting and email providers". |
+| `BACKUP_DAYS` | no | How many days you keep backups of the server. The privacy policy mentions backups only when this is set. |
 | `PORT` | no | Port inside the container, default 8080. |
 | `DATA_DIR` | no | Already `/data` in the image. |
 
@@ -123,6 +127,49 @@ Claude only connects over HTTPS. Pick one:
   also sends `Strict-Transport-Security`.
 - **Container.** The `docker run` flags above make the filesystem read-only except `/data` and a
   small `/tmp`, and drop all Linux capabilities; the image runs as a non-root user.
+
+## Terms and privacy policy
+
+If other people may sign up on your relay, set `OPERATOR_NAME` and `OPERATOR_CONTACT`. The relay
+then shows its own terms of service and privacy policy, filled in with your details; the privacy
+policy lists exactly what the relay stores. Read both before you rely on them: they are
+plain-language texts that come with the software, not legal advice, and what your country
+requires of you may differ. The relay refuses to start if only one of the two is set, or if the
+contact isn't an email address.
+
+## For operators: dealing with abuse
+
+The relay's image has no shell, so these are commands of the relay program itself. Run them on
+the server while the relay is running:
+
+```sh
+docker exec latchkey-relay /relay account list
+```
+
+| Command | What it does |
+|---|---|
+| `account list` | Every account: address, when it was created, last sign-in, whether it is suspended, whether a Mac is connected, and how many Claude apps have access. No secrets. |
+| `account suspend <email> [reason]` | Signs the account out everywhere, removes Claude's access, disconnects its Mac, and refuses its sign-ins and its Mac until you lift it. Nothing is deleted, and the Mac stays paired. |
+| `account unsuspend <email>` | Lifts a suspension. The owner can sign in again and has to approve Claude again. |
+| `account delete <email>` | Deletes the account and everything stored about it, like the Delete account button. |
+| `block <email> [reason]` | The address can no longer sign up or sign in. If it has an account, the account is suspended. |
+| `unblock <email>` | Removes the block. An account that was suspended with it stays suspended until you run `account unsuspend`. |
+| `block list` | The blocked addresses, with when and why. |
+
+- Each command prints one line saying what it did. If it couldn't do it (no such account, not
+  an email address), it says why and exits with an error.
+- Addresses are matched the way sign-up stores them, so capital letters don't matter.
+- A suspended or blocked person who tries to sign in is told so, with your contact address if
+  you set `OPERATOR_CONTACT`.
+- The running relay follows a command right away for everything new (sign-ins, Claude's
+  requests, a Mac connecting). A Mac that is connected at that moment, and Claude's open
+  sessions, are closed within about two seconds.
+- Every command that changed something is recorded in the database: who ran it, what, when, and
+  the reason you gave. The record is kept for a year. "Who" is the system user that ran the
+  command (`nonroot` in the container); to record a person's name, pass it along:
+  `docker exec -e LATCHKEY_OPERATOR=alex latchkey-relay /relay account suspend …`.
+- A mistyped command prints the list of commands and does nothing. `relay` with no command
+  starts the server, as before.
 
 ## Connect
 

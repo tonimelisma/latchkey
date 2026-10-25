@@ -24,6 +24,13 @@ type Relay struct {
 	Handler http.Handler
 	Hub     *hub.Hub
 	Store   *store.Store
+	// Housekeeping runs after the daily purge: the operator log's retention (FR-199), and the
+	// list of apps with access re-sent to every connected Mac, since the purge is where an
+	// expired approval is found (FR-192). Pass it to Purge.
+	Housekeeping func(context.Context) error
+	// WatchOperator makes the running relay follow the operator's commands (see operator.go).
+	// Run it in its own goroutine; it returns when ctx ends.
+	WatchOperator func(ctx context.Context, every time.Duration)
 }
 
 // Options configures the relay.
@@ -103,7 +110,17 @@ func New(ctx context.Context, o Options) (*Relay, error) {
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte("ok\n")) })
 	oa.Register(mux)
 	acc.Register(mux)
-	return &Relay{Handler: guard(o.PublicURL, o.TrustedProxies, mux), Hub: h, Store: o.Store}, nil
+	r := &Relay{Handler: guard(o.PublicURL, o.TrustedProxies, mux), Hub: h, Store: o.Store}
+	r.Housekeeping = func(ctx context.Context) error {
+		h.RefreshClients(ctx)
+		return o.Store.PurgeOperatorLog(ctx, time.Now().Add(-store.OperatorLogRetention))
+	}
+	w, err := newOperatorWatch(ctx, o.Store, h, ms, o.Logger)
+	if err != nil {
+		return nil, err
+	}
+	r.WatchOperator = w.run
+	return r, nil
 }
 
 // clientsFor is the Owner's apps with access as the agent protocol lists them: times in whole
@@ -133,8 +150,9 @@ type authBridge struct{ *account.Service }
 // AuditRetention is how long audit entries are kept (FR-024).
 const AuditRetention = 30 * 24 * time.Hour
 
-// Purge runs the retention jobs at startup and then daily (FR-024, Constitution VI).
-func Purge(ctx context.Context, db *store.Store, logger *slog.Logger) {
+// Purge runs the retention jobs at startup and then daily (FR-024, Constitution VI), and after
+// them each of more, such as Relay.PurgeClients.
+func Purge(ctx context.Context, db *store.Store, logger *slog.Logger, more ...func(context.Context) error) {
 	t := time.NewTicker(24 * time.Hour)
 	defer t.Stop()
 	for {
@@ -152,6 +170,11 @@ func Purge(ctx context.Context, db *store.Store, logger *slog.Logger) {
 		}
 		if _, err := db.PurgeUnverifiedUsers(ctx, now.Add(-24*time.Hour)); err != nil {
 			logger.Error("purge unverified sign-ups", "err", err)
+		}
+		for _, job := range more {
+			if err := job(ctx); err != nil {
+				logger.Error("purge", "err", err)
+			}
 		}
 		select {
 		case <-ctx.Done():

@@ -160,11 +160,11 @@ func (o *owner) csrf(path string) string {
 
 const claudeCallback = "https://claude.ai/api/mcp/auth_callback"
 
-// registerClient registers a Claude-like client (dynamic registration) and returns its ID.
-func (h *harness) registerClient(name string, redirects ...string) string {
+// registerClient registers a client called "Claude" (dynamic registration) and returns its ID.
+func (h *harness) registerClient(redirects ...string) string {
 	h.t.Helper()
 	status, m := h.postJSON("/register", map[string]any{
-		"client_name": name, "redirect_uris": redirects, "token_endpoint_auth_method": "none",
+		"client_name": "Claude", "redirect_uris": redirects, "token_endpoint_auth_method": "none",
 	})
 	require.Equal(h.t, http.StatusCreated, status, m)
 	id, _ := m["client_id"].(string)

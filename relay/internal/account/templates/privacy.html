@@ -51,7 +51,7 @@
 <li>A record of what the operator did to an account (suspending it, lifting a suspension, deleting it, blocking its address): the email address, what was done, the reason given, who did it, and when. Kept for one year, also when the account is gone.</li>
 <li>Counters that limit abuse: how many requests came from a network address, for an account, or for an email address in the last minutes. They are held in memory only and are gone when the relay restarts.</li>
 <li>Error messages for troubleshooting. They can hold the relay's internal identifier of an account or a Mac, and never content.</li>
-<li>If this relay runs behind the web server that Latchkey's own deployment sets up, that web server keeps an access log for 30 days: the network address a request came from, the web address requested (which can include your Mac's name when you connect it), the time, and the kind of browser or app. Cookies, tokens, and one-time codes are left out of it.</li>
+<li>If this relay runs behind the web server that Latchkey's own deployment sets up, that web server keeps an access log for 30 days: the network address a request came from, the web address requested (which can include your Mac's name when you connect it), the time, and technical details of the request such as the kind of browser or app. Cookies, tokens, and one-time codes are left out of it.</li>
 </ul>
 
 <h2>What the relay does not store</h2>
@@ -92,7 +92,7 @@
 <p>Delete account removes all of this at once and disconnects your Mac. Only a blocked address and the operator's record stay, if there are any.{{if .Data.BackupDays}} Copies of the server made for recovery are kept for {{.Data.BackupDays}} days, so deleted data can remain in such a backup for up to that long. Backups are used only to restore the relay after a failure.{{end}}</p>
 
 <h2>Security</h2>
-<p>You sign in with a passkey, never a password. Secrets are stored hashed. Connections are encrypted. Your Mac only ever connects outward to the relay, and proves who it is with a key kept in its secure hardware. No system is perfectly secure. If we learn that your data was exposed, we will tell you by email.</p>
+<p>You sign in with a passkey, never a password. Codes, session cookies, and tokens are stored only as hashes or signatures, never in a form that could be used to sign in. Connections are encrypted. Your Mac only ever connects outward to the relay, and proves who it is with a key kept in its secure hardware. No system is perfectly secure. If we learn that your data was exposed, we will tell you by email.</p>
 
 <h2>Children</h2>
 <p>This relay is not for anyone under 18, and we don't knowingly collect data from children.</p>

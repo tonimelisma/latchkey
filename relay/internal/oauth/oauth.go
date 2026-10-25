@@ -208,8 +208,7 @@ func New(ctx context.Context, cfg Config) (*Server, error) {
 		SendDebugMessagesToClients:     false,
 	}
 	cl := &clients{st: cfg.Store, http: cfg.HTTPClient, now: cfg.Now, log: cfg.Logger, failed: map[[sha256.Size]byte]time.Time{}}
-	srv := &Server{cfg: cfg, clients: cl, issuer: issuer, resource: issuer + "/mcp", touched: &touches{last: map[string]touch{}}}
-	st := &storage{st: cfg.Store, clients: cl, now: cfg.Now, revoked: srv.revoked}
+	st := &storage{st: cfg.Store, clients: cl, now: cfg.Now}
 	provider := compose.Compose(fc, st, compose.NewOAuth2HMACStrategy(fc),
 		compose.OAuth2AuthorizeExplicitFactory,
 		compose.OAuth2RefreshTokenGrantFactory,
@@ -217,7 +216,9 @@ func New(ctx context.Context, cfg Config) (*Server, error) {
 		compose.OAuth2TokenIntrospectionFactory,
 		compose.OAuth2PKCEFactory,
 	)
-	srv.provider = provider
+	srv := &Server{cfg: cfg, provider: provider, clients: cl, issuer: issuer, resource: issuer + "/mcp"}
+	srv.touched = &touches{last: map[string]touch{}}
+	st.revoked = srv.revoked // fosite's revocations report a grant that lost its access (FR-192)
 	return srv, nil
 }
 
@@ -245,7 +246,7 @@ func (s *Server) Register(mux *http.ServeMux) {
 func (s *Server) metadata(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Access-Control-Allow-Origin", "*")
-	md := map[string]any{
+	m := map[string]any{
 		"issuer":                                     s.issuer,
 		"authorization_endpoint":                     s.issuer + "/authorize",
 		"token_endpoint":                             s.issuer + "/token",
@@ -261,13 +262,13 @@ func (s *Server) metadata(w http.ResponseWriter, _ *http.Request) {
 		// RFC 9207: every authorization response carries iss (see issWriter).
 		"authorization_response_iss_parameter_supported": true,
 	}
-	if s.cfg.TermsURI != "" {
-		md["op_tos_uri"] = s.cfg.TermsURI
+	if s.cfg.TermsURI != "" { // FR-193: only where the operator published the documents
+		m["op_tos_uri"] = s.cfg.TermsURI
 	}
 	if s.cfg.PolicyURI != "" {
-		md["op_policy_uri"] = s.cfg.PolicyURI
+		m["op_policy_uri"] = s.cfg.PolicyURI
 	}
-	_ = json.NewEncoder(w).Encode(md)
+	_ = json.NewEncoder(w).Encode(m)
 }
 
 // issWriter adds the RFC 9207 "iss" parameter to the redirect fosite writes back to the client,

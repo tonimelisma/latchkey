@@ -30,6 +30,9 @@ func main() {
 	if len(os.Args) > 1 && os.Args[1] == "healthcheck" { // for the container's HEALTHCHECK (no shell in the image)
 		os.Exit(healthcheck())
 	}
+	if len(os.Args) > 1 { // the operator's commands (FR-195); anything else is a mistake, not a reason to start a server
+		os.Exit(operatorCommand(os.Args[1:], os.Getenv, os.Stdout, os.Stderr))
+	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	err := run(ctx)
 	stop()
@@ -83,7 +86,8 @@ func run(ctx context.Context) error {
 		srv.TLSConfig = &tls.Config{GetCertificate: m.GetCertificate, NextProtos: []string{"h2", "http/1.1", "acme-tls/1"}, MinVersion: tls.VersionTLS12}
 	}
 
-	go server.Purge(ctx, db, logger)
+	go server.Purge(ctx, db, logger, r.Housekeeping)
+	go r.WatchOperator(ctx, server.OperatorPoll)
 
 	errc := make(chan error, 1)
 	go func() {
