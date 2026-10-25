@@ -147,6 +147,12 @@ type Config struct {
 	OnAuthorized func(ctx context.Context, userID, clientName string)
 	// Logger gets what clients are not told, such as why a metadata document was refused.
 	Logger *slog.Logger
+	// OnGrantsChanged runs when the Owner's list of apps with access changed: a first token was
+	// issued for a new approval, or a grant ended (removed, revoked by its client, reused).
+	OnGrantsChanged func(ctx context.Context, userID string)
+	// OnGrantRemoved runs when one grant ended while others may live on, with its public ID, so
+	// its open MCP sessions can be closed.
+	OnGrantRemoved func(userID, grantID string)
 }
 
 // Server is the authorization server.
@@ -156,6 +162,7 @@ type Server struct {
 	clients  *clients
 	issuer   string
 	resource string
+	touched  *touches
 }
 
 // New creates the server, generating the token signing key on first start.
@@ -198,7 +205,8 @@ func New(ctx context.Context, cfg Config) (*Server, error) {
 		SendDebugMessagesToClients:     false,
 	}
 	cl := &clients{st: cfg.Store, http: cfg.HTTPClient, now: cfg.Now, log: cfg.Logger, failed: map[[sha256.Size]byte]time.Time{}}
-	st := &storage{st: cfg.Store, clients: cl, now: cfg.Now}
+	srv := &Server{cfg: cfg, clients: cl, issuer: issuer, resource: issuer + "/mcp", touched: &touches{last: map[string]touch{}}}
+	st := &storage{st: cfg.Store, clients: cl, now: cfg.Now, revoked: srv.revoked}
 	provider := compose.Compose(fc, st, compose.NewOAuth2HMACStrategy(fc),
 		compose.OAuth2AuthorizeExplicitFactory,
 		compose.OAuth2RefreshTokenGrantFactory,
@@ -206,7 +214,8 @@ func New(ctx context.Context, cfg Config) (*Server, error) {
 		compose.OAuth2TokenIntrospectionFactory,
 		compose.OAuth2PKCEFactory,
 	)
-	return &Server{cfg: cfg, provider: provider, clients: cl, issuer: issuer, resource: issuer + "/mcp"}, nil
+	srv.provider = provider
+	return srv, nil
 }
 
 // ResourceURL is the connector URL Claude is given.
@@ -318,14 +327,7 @@ func (s *Server) authorize(w http.ResponseWriter, r *http.Request) {
 	// computer posing as an approved client (a loopback redirect on any port) gets no code
 	// without the Owner seeing the page (RFC 8252 §8.6).
 	if r.Method != http.MethodPost {
-		c := ConsentRequest{
-			RedirectHost: displayHost(ar.GetRedirectURI().Host),
-			ClientHost:   strings.Join(verifiedHosts(ar.GetClient(), ar.GetRedirectURI()), ", "),
-		}
-		if cl, ok := ar.GetClient().(*client); ok {
-			c.ClientName = cleanName(cl.Name)
-		}
-		s.cfg.Auth.Consent(w, r, c)
+		s.cfg.Auth.Consent(w, r, consentFor(ar))
 		return
 	}
 	if !s.cfg.Auth.ValidCSRF(r) {
@@ -342,6 +344,13 @@ func (s *Server) authorize(w http.ResponseWriter, r *http.Request) {
 	resp, err := s.provider.NewAuthorizeResponse(ctx, ar, newSession(userID))
 	if err != nil {
 		s.writeAuthorizeError(ctx, w, ar, err)
+		return
+	}
+	// The approval is recorded before its code leaves, so every token has a grant to be listed
+	// and removed by (FR-190).
+	if err := s.recordGrant(ctx, ar, userID); err != nil {
+		s.cfg.Logger.Error("record grant", "err", err)
+		s.writeAuthorizeError(ctx, w, ar, fosite.ErrServerError)
 		return
 	}
 	if s.cfg.OnAuthorized != nil {
@@ -378,6 +387,12 @@ func (s *Server) token(w http.ResponseWriter, r *http.Request) {
 		s.provider.WriteAccessError(ctx, w, ar, err)
 		return
 	}
+	// A redeemed code is a new app with access: the Owner's Mac gets the new list (FR-192).
+	if ar.GetGrantTypes().ExactOne("authorization_code") {
+		if sess, ok := ar.GetSession().(*fosite.DefaultSession); ok && sess.Subject != "" {
+			s.grantsChanged(ctx, sess.Subject)
+		}
+	}
 	s.provider.WriteAccessResponse(ctx, w, ar, resp)
 }
 
@@ -411,14 +426,20 @@ func (s *Server) verify(ctx context.Context, token string, _ *http.Request) (*au
 	if !ok || sess.Subject == "" {
 		return nil, auth.ErrInvalidToken
 	}
-	if _, err := s.cfg.Store.User(ctx, sess.Subject); err != nil {
+	// A suspended account's tokens are deleted with the suspension; this also covers one that
+	// slipped in beside it (FR-196).
+	if u, err := s.cfg.Store.User(ctx, sess.Subject); err != nil || !u.SuspendedAt.IsZero() {
 		return nil, auth.ErrInvalidToken
 	}
-	return &auth.TokenInfo{
+	info := &auth.TokenInfo{
 		UserID:     sess.Subject,
 		Scopes:     ar.GetGrantedScopes(),
 		Expiration: sess.GetExpiresAt(fosite.AccessToken),
-	}, nil
+	}
+	if grantID := s.used(ctx, ar.GetID()); grantID != "" {
+		info.Extra = map[string]any{GrantExtra: grantID}
+	}
+	return info, nil
 }
 
 // Protect requires a valid access token with scope "mcp". A request without one gets exactly
@@ -465,7 +486,11 @@ func (c *challengeWriter) Unwrap() http.ResponseWriter { return c.ResponseWriter
 
 // RevokeUser deletes all of the Owner's codes and tokens, for every client (FR-044).
 func (s *Server) RevokeUser(ctx context.Context, userID string) error {
-	return s.cfg.Store.DeleteUserOAuth(ctx, userID)
+	if err := s.cfg.Store.DeleteUserOAuth(ctx, userID); err != nil {
+		return err
+	}
+	s.grantsChanged(ctx, userID)
+	return nil
 }
 
 // ClientName is the display name of a client the Owner approved, with the host the relay

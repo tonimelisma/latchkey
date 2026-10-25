@@ -2,19 +2,19 @@
   "type": "clients",
   "clients": [
     {
-      "id": "grt_k3v9x2m7q4w8z5n1",
+      "id": "apr_7Hq2-x_9",
       "name": "Claude",
       "host": "claude.ai",
       "redirect": "claude.ai",
-      "approved_at": "2026-10-25T16:02:11Z",
-      "last_used_at": "2026-10-25T17:40:00Z"
+      "approved_at": "2026-10-24T18:30:00Z",
+      "last_used_at": "2026-10-25T07:15:00Z"
     },
     {
-      "id": "grt_p8d2r6t1y7u3s9a4",
+      "id": "apr_c0de",
       "name": "Claude Code",
-      "host": "localhost",
+      "host": "claude.ai",
       "redirect": "this computer",
-      "approved_at": "2026-10-24T09:15:00Z",
+      "approved_at": "2026-10-20T09:00:00Z",
       "last_used_at": null
     }
   ]

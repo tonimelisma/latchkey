@@ -50,13 +50,29 @@ func New(ctx context.Context, o Options) (*Relay, error) {
 	hc.NoticesOnConnect = func(ctx context.Context, d store.Device, previous time.Time) []*agentproto.Notice {
 		return acc.NoticesOnConnect(ctx, d, previous)
 	}
+	var oa *oauth.Server
+	hc.Clients = func(ctx context.Context, userID string) ([]agentproto.Client, error) {
+		return clientsFor(ctx, oa, userID)
+	}
+	hc.RevokeClient = func(ctx context.Context, userID, id string) bool {
+		removed, err := oa.RevokeGrant(ctx, userID, id)
+		if err != nil {
+			o.Logger.Error("remove app's access", "err", err)
+		}
+		return removed
+	}
 	h := hub.New(o.Store, hc)
 	ms = mcpserver.New(o.Store, h, mcpserver.Options{Logger: o.Logger, Version: o.Version})
 
 	auth := &authBridge{}
-	oa, err := oauth.New(ctx, oauth.Config{
+	var err error
+	oa, err = oauth.New(ctx, oauth.Config{
 		Issuer: o.PublicURL, Store: o.Store, Auth: auth, Logger: o.Logger,
 		OnAuthorized: func(ctx context.Context, userID, clientName string) { acc.ClientAuthorized(ctx, userID, clientName) },
+		// The Mac's list of apps with access follows every change (FR-192), and an app whose
+		// access ended loses its open sessions while the others keep theirs (FR-191).
+		OnGrantsChanged: func(ctx context.Context, userID string) { h.ClientsChanged(ctx, userID) },
+		OnGrantRemoved:  func(userID, grantID string) { ms.ForgetGrant(userID, grantID) },
 	})
 	if err != nil {
 		return nil, err
@@ -79,6 +95,27 @@ func New(ctx context.Context, o Options) (*Relay, error) {
 	oa.Register(mux)
 	acc.Register(mux)
 	return &Relay{Handler: guard(o.PublicURL, o.TrustedProxies, mux), Hub: h, Store: o.Store}, nil
+}
+
+// clientsFor is the Owner's apps with access as the agent protocol lists them: times in whole
+// seconds, last use null until there was one.
+func clientsFor(ctx context.Context, oa *oauth.Server, userID string) ([]agentproto.Client, error) {
+	grants, err := oa.Grants(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]agentproto.Client, 0, len(grants))
+	for _, g := range grants {
+		c := agentproto.Client{
+			ID: g.ID, Name: g.Name, Host: g.Host, Redirect: g.Redirect, ApprovedAt: g.ApprovedAt.UTC().Truncate(time.Second),
+		}
+		if !g.LastUsedAt.IsZero() {
+			at := g.LastUsedAt.UTC().Truncate(time.Second)
+			c.LastUsedAt = &at
+		}
+		out = append(out, c)
+	}
+	return out, nil
 }
 
 // authBridge lets the OAuth server use the account service, which needs the OAuth server.

@@ -20,10 +20,20 @@
 <section>
   <h2>Claude</h2>
   {{if .Data.Clients}}
-    <ul>{{range .Data.Clients}}<li><strong>{{.Name}}</strong> · approved {{when .Approved}}</li>{{end}}</ul>
+    <ul class="apps">{{range .Data.Clients}}
+      <li>
+        <div><strong>{{.Name}}</strong><br><span class="small">Approved {{when .Approved}}{{if eq .Redirect "this computer"}}, on this computer{{end}} · {{if .LastUsed.IsZero}}not used yet{{else}}last used {{when .LastUsed}}{{end}}</span></div>
+        <form method="post" action="/account/revoke-client">
+          <input type="hidden" name="csrf" value="{{$.CSRF}}">
+          <input type="hidden" name="id" value="{{.ID}}">
+          <button type="submit" class="destructive" aria-label="Remove {{.Name}}">Remove</button>
+        </form>
+      </li>{{end}}
+    </ul>
     <form method="post" action="/account/revoke-claude">
       <input type="hidden" name="csrf" value="{{.CSRF}}">
       <button type="submit" class="destructive">Remove Claude's access</button>
+      <p class="small">Removes every app listed above.</p>
     </form>
   {{else}}
     <p>Claude isn't connected yet. In Claude, open Settings → Connectors → Add custom connector, and paste this relay's address followed by <code>/mcp</code>.</p>

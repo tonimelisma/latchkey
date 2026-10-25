@@ -27,8 +27,11 @@ type macView struct {
 }
 
 type clientView struct {
+	ID       string // the grant's public ID, for its Remove button
 	Name     string
+	Redirect string
 	Approved time.Time
+	LastUsed time.Time
 }
 
 type accountView struct {
@@ -52,9 +55,11 @@ func (s *Service) accountPage(w http.ResponseWriter, r *http.Request) {
 		}
 		v.Mac = mv
 	}
-	if clients, err := s.cfg.Store.ClientsWithAccess(ctx, u.ID, s.now()); err == nil {
-		for _, c := range clients {
-			v.Clients = append(v.Clients, clientView{Name: s.cfg.OAuth.ClientName(ctx, c.ClientID), Approved: c.Since})
+	if grants, err := s.cfg.OAuth.Grants(ctx, u.ID); err == nil {
+		for _, g := range grants {
+			v.Clients = append(v.Clients, clientView{
+				ID: g.ID, Name: g.Label(), Redirect: g.Redirect, Approved: g.ApprovedAt, LastUsed: g.LastUsedAt,
+			})
 		}
 	}
 	v.Audit, _ = s.cfg.Store.AuditForUser(ctx, u.ID, 100)
@@ -67,6 +72,8 @@ func doneMessage(code string) string {
 		return "Your Mac was disconnected. Claude can no longer reach it."
 	case "claude":
 		return "Claude's access was removed. Claude will ask you to connect again next time."
+	case "client":
+		return "That app's access was removed. It will ask you to connect again next time."
 	}
 	return ""
 }
@@ -125,6 +132,20 @@ func (s *Service) revokeClaude(w http.ResponseWriter, r *http.Request) {
 	}
 	s.cfg.AccessRemoved(sess.UserID)
 	http.Redirect(w, r, "/account?done=claude", http.StatusSeeOther)
+}
+
+// revokeClient removes one app's access (FR-191): the same removal the Mac app asks for with
+// revoke_client. An ID that isn't one of this account's apps changes nothing.
+func (s *Service) revokeClient(w http.ResponseWriter, r *http.Request) {
+	sess, ok := s.postedUser(w, r)
+	if !ok {
+		return
+	}
+	if _, err := s.cfg.OAuth.RevokeGrant(r.Context(), sess.UserID, r.PostFormValue("id")); err != nil {
+		s.errorPage(w, http.StatusInternalServerError, "Something went wrong", "Try again.")
+		return
+	}
+	http.Redirect(w, r, "/account?done=client", http.StatusSeeOther)
 }
 
 func (s *Service) deleteAccount(w http.ResponseWriter, r *http.Request) {

@@ -12,6 +12,10 @@ type User struct {
 	Email           string
 	EmailVerifiedAt time.Time
 	CreatedAt       time.Time
+	// SuspendedAt is when the relay's operator suspended the account (zero: not suspended), and
+	// SuspendedReason what they gave as the reason (FR-196).
+	SuspendedAt     time.Time
+	SuspendedReason string
 }
 
 // CreateUser adds an unverified user. A taken email is ErrConflict.
@@ -29,14 +33,15 @@ func (s *Store) CreateUser(ctx context.Context, email string, now time.Time) (Us
 // User returns a user by ID.
 func (s *Store) User(ctx context.Context, id string) (User, error) {
 	var u User
-	var verified, created sql.NullInt64
+	var verified, created, suspended sql.NullInt64
 	err := s.db.QueryRowContext(ctx,
-		`SELECT id, email, email_verified_at, created_at FROM users WHERE id = ? AND deleted_at IS NULL`, id,
-	).Scan(&u.ID, &u.Email, &verified, &created)
+		`SELECT id, email, email_verified_at, created_at, suspended_at, suspended_reason
+		FROM users WHERE id = ? AND deleted_at IS NULL`, id,
+	).Scan(&u.ID, &u.Email, &verified, &created, &suspended, &u.SuspendedReason)
 	if err != nil {
 		return User{}, mapErr(err)
 	}
-	u.EmailVerifiedAt, u.CreatedAt = fromMS(verified), fromMS(created)
+	u.EmailVerifiedAt, u.CreatedAt, u.SuspendedAt = fromMS(verified), fromMS(created), fromMS(suspended)
 	return u, nil
 }
 

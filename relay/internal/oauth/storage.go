@@ -22,6 +22,15 @@ type storage struct {
 	st      *store.Store
 	clients *clients
 	now     func() time.Time
+	// revoked is told the request ID of a grant whose tokens were just revoked, so the relay
+	// can see whether the grant still has access.
+	revoked func(ctx context.Context, requestID string)
+}
+
+func (s *storage) grantRevoked(ctx context.Context, requestID string) {
+	if s.revoked != nil {
+		s.revoked(ctx, requestID)
+	}
 }
 
 func (s *storage) GetClient(ctx context.Context, id string) (fosite.Client, error) {
@@ -111,6 +120,7 @@ func (s *storage) GetAuthorizeCodeSession(ctx context.Context, code string, _ fo
 		if err := s.st.RevokeGrant(ctx, row.RequestID, s.now()); err != nil {
 			return nil, err
 		}
+		s.grantRevoked(ctx, row.RequestID)
 		return req, fosite.ErrInvalidatedAuthorizeCode
 	}
 	return req, nil
@@ -130,6 +140,7 @@ func (s *storage) InvalidateAuthorizeCodeSession(ctx context.Context, code strin
 		if rerr := s.st.RevokeGrant(ctx, row.RequestID, s.now()); rerr != nil {
 			return rerr
 		}
+		s.grantRevoked(ctx, row.RequestID)
 	}
 	return fosite.ErrInvalidatedAuthorizeCode
 }
@@ -198,10 +209,21 @@ func (s *storage) RotateRefreshToken(ctx context.Context, requestID, signature s
 	return nil
 }
 
+// RevokeRefreshToken and RevokeAccessToken are what fosite calls for a client's /revoke, for a
+// refresh token used again after its grace, and for a replayed code. A grant left without
+// access is reported.
 func (s *storage) RevokeRefreshToken(ctx context.Context, requestID string) error {
-	return s.st.RevokeOAuthRequests(ctx, store.KindRefresh, requestID, s.now())
+	if err := s.st.RevokeOAuthRequests(ctx, store.KindRefresh, requestID, s.now()); err != nil {
+		return err
+	}
+	s.grantRevoked(ctx, requestID)
+	return nil
 }
 
 func (s *storage) RevokeAccessToken(ctx context.Context, requestID string) error {
-	return s.st.RevokeOAuthRequests(ctx, store.KindAccess, requestID, s.now())
+	if err := s.st.RevokeOAuthRequests(ctx, store.KindAccess, requestID, s.now()); err != nil {
+		return err
+	}
+	s.grantRevoked(ctx, requestID)
+	return nil
 }

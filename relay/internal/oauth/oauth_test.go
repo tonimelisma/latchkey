@@ -88,8 +88,10 @@ type env struct {
 	cimd   *httptest.Server
 	userID string
 
-	authorizedMu sync.Mutex
-	authorized   []string // client names, in order
+	authorizedMu  sync.Mutex
+	authorized    []string // client names, in order
+	grantsChanged []string // user IDs told that their list of apps changed (under authorizedMu)
+	grantsRemoved []string // grant IDs reported removed (under authorizedMu)
 
 	// cimdFetched, if set, runs on every fetch of the metadata document, which is then served
 	// uncached; the relay fetches it in the middle of a token request.
@@ -136,6 +138,16 @@ func setup(t *testing.T) *env {
 			if userID == e.userID {
 				e.authorized = append(e.authorized, clientName)
 			}
+		},
+		OnGrantsChanged: func(_ context.Context, userID string) {
+			e.authorizedMu.Lock()
+			defer e.authorizedMu.Unlock()
+			e.grantsChanged = append(e.grantsChanged, userID)
+		},
+		OnGrantRemoved: func(_, grantID string) {
+			e.authorizedMu.Lock()
+			defer e.authorizedMu.Unlock()
+			e.grantsRemoved = append(e.grantsRemoved, grantID)
 		},
 	})
 	require.NoError(t, err)

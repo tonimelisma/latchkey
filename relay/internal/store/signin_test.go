@@ -229,36 +229,6 @@ func TestOAuthRequests(t *testing.T) {
 	require.ErrorIs(t, err, store.ErrNotFound)
 }
 
-// The account page's list of Claude clients is whoever holds a live token (FR-049a: no approval
-// is remembered beyond the tokens it produced).
-func TestClientsWithAccess(t *testing.T) {
-	ctx := context.Background()
-	s := open(t)
-	u := newUser(t, s)
-	put := func(sig, kind, client string, at time.Time, life time.Duration) {
-		require.NoError(t, s.PutOAuthRequest(ctx, store.OAuthRequest{
-			Signature: sig, Kind: kind, RequestID: "req-" + sig, ClientID: client, UserID: u.ID,
-			RequestedAt: at, SessionJSON: []byte(`{}`), ExpiresAt: at.Add(life),
-		}))
-	}
-	put("a1", store.KindAccess, "cl_old", t0, time.Hour)
-	put("r1", store.KindRefresh, "cl_old", t0.Add(time.Minute), 24*time.Hour)
-	put("r2", store.KindRefresh, "cl_new", t0.Add(time.Hour), 24*time.Hour)
-	put("c1", store.KindCode, "cl_code_only", t0, time.Hour)
-	put("a2", store.KindAccess, "cl_expired", t0, time.Minute)
-	put("a3", store.KindAccess, "cl_revoked", t0, time.Hour)
-	require.NoError(t, s.RevokeOAuthRequests(ctx, store.KindAccess, "req-a3", t0))
-
-	got, err := s.ClientsWithAccess(ctx, u.ID, t0.Add(30*time.Minute))
-	require.NoError(t, err)
-	assert.Equal(t, []store.ClientAccess{{ClientID: "cl_new", Since: t0.Add(time.Hour)}, {ClientID: "cl_old", Since: t0}}, got)
-
-	require.NoError(t, s.DeleteUserOAuth(ctx, u.ID))
-	got, err = s.ClientsWithAccess(ctx, u.ID, t0)
-	require.NoError(t, err)
-	assert.Empty(t, got)
-}
-
 // A token is written only while its grant's code or refresh token exists, so none can be issued
 // after "Remove Claude's access" deleted them (security scan).
 func TestTokensNeedTheirGrant(t *testing.T) {

@@ -387,6 +387,10 @@ func TestRevokeMacAndClaude(t *testing.T) {
 		Signature: "sig-refresh", Kind: store.KindRefresh, RequestID: "req1", ClientID: "cl_x", UserID: u.ID,
 		RequestedAt: e.clock.now(), SessionJSON: []byte(`{}`), ExpiresAt: e.clock.now().Add(time.Hour),
 	}))
+	require.NoError(t, e.store.AddGrant(context.Background(), store.Grant{
+		RequestID: "req1", ID: store.NewGrantID(), UserID: u.ID, ClientID: "cl_x",
+		ClientName: "Claude", ClientHost: "claude.ai", Redirect: "claude.ai", ApprovedAt: e.clock.now(),
+	}))
 
 	page := b.get("/account")
 	assert.Contains(t, page.body, "Disconnect Mac")

@@ -38,6 +38,7 @@ type env struct {
 	user   store.User
 	device store.Device
 	agent  *testagent.Agent
+	grant  string // "#<grant ID>" appended to the raw requests' token, if set
 }
 
 // setup runs the relay's hub and MCP server. Bearer tokens are "token-<user ID>"; the real
@@ -58,11 +59,17 @@ func setupWith(t *testing.T, opts mcpserver.Options) *env {
 	})
 	ms = mcpserver.New(st, h, opts)
 	verifier := func(_ context.Context, token string, _ *http.Request) (*auth.TokenInfo, error) {
-		userID, ok := strings.CutPrefix(token, "token-")
+		rest, ok := strings.CutPrefix(token, "token-")
 		if !ok {
 			return nil, auth.ErrInvalidToken
 		}
-		return &auth.TokenInfo{UserID: userID, Expiration: time.Now().Add(time.Hour)}, nil
+		// "token-<user ID>#<grant ID>" is a token of that grant.
+		userID, grant, _ := strings.Cut(rest, "#")
+		info := &auth.TokenInfo{UserID: userID, Expiration: time.Now().Add(time.Hour)}
+		if grant != "" {
+			info.Extra = map[string]any{mcpserver.GrantExtra: grant}
+		}
+		return info, nil
 	}
 	mux := http.NewServeMux()
 	mux.Handle("/agent/v1", h)
@@ -409,7 +416,7 @@ func (e *env) rawPost(session, body string) *http.Response {
 	e.t.Helper()
 	req, err := http.NewRequestWithContext(ctx(e.t), http.MethodPost, e.srv.URL+"/mcp", strings.NewReader(body))
 	require.NoError(e.t, err)
-	req.Header.Set("Authorization", "Bearer token-"+e.user.ID)
+	req.Header.Set("Authorization", "Bearer token-"+e.user.ID+e.grant)
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json, text/event-stream")
 	if session != "" {
@@ -487,4 +494,28 @@ func TestAuditSurfaceIsBounded(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, entries, 1)
 	assert.Equal(t, "evil[31m"+strings.Repeat("é", 64-len("evil[31m")), entries[0].Surface)
+}
+
+// Removing one app's access closes the sessions that app opened and no others (FR-191).
+func TestForgetGrantClosesOnlyThatGrantsSessions(t *testing.T) {
+	e := setup(t)
+	e.grant = "#grt_a"
+	a1, a2 := e.rawInit("claude"), e.rawInit("claude")
+	e.grant = "#grt_b"
+	b := e.rawInit("claude")
+	e.grant = ""
+	plain := e.rawInit("no grant named")
+
+	e.ms.ForgetGrant(e.user.ID, "grt_a")
+	for _, id := range []string{a1, a2} {
+		require.Eventually(t, func() bool { return e.rawPost(id, pingBody).StatusCode == http.StatusNotFound },
+			5*time.Second, 10*time.Millisecond, "the removed grant's sessions are closed")
+	}
+	assert.Equal(t, http.StatusOK, e.rawPost(b, pingBody).StatusCode, "the other app's session lives")
+	assert.Equal(t, http.StatusOK, e.rawPost(plain, pingBody).StatusCode)
+	assert.Equal(t, 1, e.ms.Users(), "the Owner's server stays")
+
+	e.ms.ForgetGrant(e.user.ID, "grt_unknown") // harmless
+	e.ms.ForgetGrant("usr_unknown", "grt_b")
+	assert.Equal(t, http.StatusOK, e.rawPost(b, pingBody).StatusCode)
 }

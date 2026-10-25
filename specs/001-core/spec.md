@@ -318,17 +318,22 @@ Format: EARS ("When <trigger>, the <system> shall <response>"). IDs are stable; 
   more in memory.
 
 ### Apps with access, shown on the Mac (Toni, 2026-10-25)
-- **FR-190** When a Mac connects, and whenever the list changes, the relay shall tell the Mac
-  app which Claude apps have access to the Owner's Mac: for each approval the Owner gave that
+- **FR-190** While the Mac is connected to a relay that reports them, the Mac app shall show
+  the Claude apps that have access to the Owner's Mac: for each approval the Owner gave that
   still works, the app's name and the checked host as the consent page showed them, where the
-  approval was sent back to, when it was given, and when it was last used. The relay shall send
-  this only to an app that said it understands it.
-- **FR-191** When the Owner removes one app's access, in the Mac app or on the account page,
-  the relay shall end that one approval at once (its sign-in codes and tokens stop working and
-  its open sessions are closed) and leave every other approval working. A request naming an
-  approval of another account, or one that doesn't exist, shall change nothing.
-- **FR-192** The relay shall record when an approval was last used at most once a minute per
-  approval.
+  approval was sent back to, when it was given, and when it was last used. The relay shall
+  report them only to an app that said it understands the report.
+- **FR-191** When the Owner removes one app in the Mac app, that app shall lose its access at
+  once (its sign-in codes and tokens stop working and its open sessions are closed) while every
+  other approval keeps working; the Mac app shall log the removal and report a failure when the
+  relay hasn't confirmed it within 5 seconds. The relay's account page shall offer the same
+  removal of one app. A request naming an approval of another account, or one that doesn't
+  exist, shall change nothing.
+- **FR-192** When access is given or removed anywhere (a new approval, a removal on the Mac or
+  the account page, a recovery, a client giving up its own access, a token found reused, an
+  approval found expired), the relay shall send the Mac app the full current list. The relay
+  shall record when an approval was last used at most once a minute per approval, and a newer
+  last-used time alone shall send nothing.
 
 ### Terms and privacy policy (Toni, 2026-10-25)
 - **FR-193** Where the person running a relay has set their name and a contact email address,

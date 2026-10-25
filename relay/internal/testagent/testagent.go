@@ -14,6 +14,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"sync"
 	"time"
 
@@ -35,6 +36,9 @@ type Agent struct {
 	Tools    []*mcp.Tool
 	State    agentproto.State
 	Handler  Handler
+
+	// Features is announced in hello; nil means an app from before features existed.
+	Features []string
 
 	// Misbehavior for tests.
 	NoSubprotocol bool   // dial without latchkey.v1
@@ -114,9 +118,10 @@ type Conn struct {
 	agent   *Agent
 	ws      *websocket.Conn
 	Welcome *agentproto.Welcome
-	Calls   chan *agentproto.Call   // every call received
-	Cancels chan *agentproto.Cancel // every cancel received
-	Notices chan *agentproto.Notice // every notice received
+	Calls   chan *agentproto.Call    // every call received
+	Cancels chan *agentproto.Cancel  // every cancel received
+	Notices chan *agentproto.Notice  // every notice received
+	Clients chan *agentproto.Clients // every list of apps with access received
 
 	mu      sync.Mutex
 	running map[string]context.CancelFunc
@@ -141,7 +146,7 @@ func (a *Agent) Dial(ctx context.Context) (*Conn, error) {
 	c := &Conn{
 		agent: a, ws: ws,
 		Calls: make(chan *agentproto.Call, 100), Cancels: make(chan *agentproto.Cancel, 100),
-		Notices: make(chan *agentproto.Notice, 100),
+		Notices: make(chan *agentproto.Notice, 100), Clients: make(chan *agentproto.Clients, 100),
 		running: map[string]context.CancelFunc{}, frozen: make(chan struct{}), done: make(chan struct{}),
 	}
 	msg, err := c.read(ctx)
@@ -192,6 +197,7 @@ func (c *Conn) sendHello(ctx context.Context, nonce string) error {
 	return c.Send(ctx, &agentproto.Hello{
 		DeviceID: c.agent.DeviceID, Signature: base64.RawURLEncoding.EncodeToString(der),
 		AppVersion: "0.1.0-test", OSVersion: "26.1", Tools: c.agent.Tools, State: c.agent.State,
+		Features: c.agent.Features,
 	})
 }
 
@@ -229,6 +235,14 @@ func (c *Conn) readLoop() {
 			c.Cancels <- m
 		case *agentproto.Notice:
 			c.Notices <- m
+		case *agentproto.Clients:
+			if !slices.Contains(c.agent.Features, agentproto.FeatureClients) {
+				// What the app up to 0.8.9 does with a message type it doesn't know.
+				_ = c.ws.Close(agentproto.CloseProtocolViolation, "unknown message type")
+				c.err = errors.New("received clients without announcing the feature")
+				return
+			}
+			c.Clients <- m
 		}
 	}
 }
@@ -286,6 +300,9 @@ func (c *Conn) SendRaw(ctx context.Context, typ websocket.MessageType, data []by
 // Freeze simulates a hung Mac: no more heartbeats, results, or handling of incoming frames.
 // The connection stays open.
 func (c *Conn) Freeze() { c.freeze.Do(func() { close(c.frozen) }) }
+
+// Agent is the pretend Mac this connection belongs to.
+func (c *Conn) Agent() *Agent { return c.agent }
 
 // Close closes normally.
 func (c *Conn) Close() error { return c.ws.Close(websocket.StatusNormalClosure, "") }

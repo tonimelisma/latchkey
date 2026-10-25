@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/modelcontextprotocol/go-sdk/auth"
 	"github.com/ory/fosite"
 )
 
@@ -27,4 +28,9 @@ func (s *Server) ClientLookupHint(ctx context.Context, clientID string) string {
 		return rfc.HintField
 	}
 	return ""
+}
+
+// Verify is the bearer check /mcp runs.
+func (s *Server) Verify(ctx context.Context, token string) (*auth.TokenInfo, error) {
+	return s.verify(ctx, token, nil)
 }

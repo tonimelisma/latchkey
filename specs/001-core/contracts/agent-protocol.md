@@ -225,6 +225,16 @@ feature). `revoke_client` is counted by the per-connection message allowance, li
 relay records it in its audit log as metadata only (time, "revoke_client", outcome), never the
 `id`.
 
+The app waits 5 seconds after `revoke_client` for a list without the entry and reports a
+failure otherwise, so the relay answers at once, also when it removed nothing.
+
+Validity (both sides; fixtures under `fixtures/invalid/`): a `clients` message whose `clients`
+is not an array, has more than 50 entries, repeats an `id`, or has an entry with an `id` outside
+`[A-Za-z0-9_-]{1,64}`, an empty or missing `name`, `host`, or `redirect`, or an `approved_at`
+or `last_used_at` that is not an RFC 3339 time (or `null` for `last_used_at`) is a protocol
+violation; so is a `revoke_client` whose `id` is outside that pattern. Times are sent in whole
+seconds, UTC, with `Z`, and `last_used_at` is always present (`null` when never used).
+
 Implementation choices (relay): the grant's public `id` is 16 random bytes, generated when the
 Owner allows the app and stored beside the grant's internal request ID, rather than derived
 from the request ID (which would make every stored ID guessable from one) or from a token

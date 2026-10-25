@@ -11,6 +11,7 @@ import (
 	"log/slog"
 	"net/http"
 	"reflect"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -65,6 +66,105 @@ func (s *Server) Forget(userID string) {
 	}
 }
 
+// GrantExtra is the key in auth.TokenInfo.Extra under which the bearer check names the grant
+// (the Owner's approval of one app) a request belongs to. The same string as oauth.GrantExtra;
+// a test in the server package keeps them equal.
+const GrantExtra = "latchkey_grant"
+
+func grantID(r *http.Request) string {
+	if info := auth.TokenInfoFromContext(r.Context()); info != nil {
+		id, _ := info.Extra[GrantExtra].(string)
+		return id
+	}
+	return ""
+}
+
+// ForgetGrant closes the sessions that one of the Owner's apps opened: called when that app's
+// access is removed while others keep theirs (FR-191). The Owner's server and every other
+// session stay.
+func (s *Server) ForgetGrant(userID, grant string) {
+	s.mu.Lock()
+	u := s.users[userID]
+	s.mu.Unlock()
+	if u == nil || grant == "" {
+		return
+	}
+	u.mu.Lock()
+	var ids []string
+	for id, g := range u.grants {
+		if g == grant {
+			ids = append(ids, id)
+			delete(u.grants, id)
+		}
+	}
+	u.mu.Unlock()
+	for ss := range u.server.Sessions() {
+		if slices.Contains(ids, ss.ID()) {
+			_ = ss.Close()
+		}
+	}
+}
+
+// noteSession remembers which grant opened a session, and forgets sessions that have ended.
+func (s *Server) noteSession(userID, sessionID, grant string) {
+	s.mu.Lock()
+	u := s.users[userID]
+	s.mu.Unlock()
+	if u == nil {
+		return
+	}
+	live := map[string]bool{}
+	for ss := range u.server.Sessions() {
+		live[ss.ID()] = true
+	}
+	u.mu.Lock()
+	defer u.mu.Unlock()
+	for id := range u.grants {
+		if !live[id] {
+			delete(u.grants, id)
+		}
+	}
+	u.grants[sessionID] = grant
+}
+
+// sessionWriter watches for the session ID the SDK assigns in answer to a request that opens a
+// session.
+type sessionWriter struct {
+	http.ResponseWriter
+	seen func(sessionID string)
+	done bool
+}
+
+func (w *sessionWriter) note() {
+	if w.done {
+		return
+	}
+	w.done = true
+	if id := w.Header().Get("Mcp-Session-Id"); id != "" {
+		w.seen(id)
+	}
+}
+
+func (w *sessionWriter) WriteHeader(code int) {
+	w.note()
+	w.ResponseWriter.WriteHeader(code)
+}
+
+func (w *sessionWriter) Write(b []byte) (int, error) {
+	w.note()
+	return w.ResponseWriter.Write(b)
+}
+
+// Flush and Unwrap keep streaming responses working through the wrapper.
+func (w *sessionWriter) Flush() {
+	w.note()
+	if f, ok := w.ResponseWriter.(http.Flusher); ok {
+		f.Flush()
+	}
+}
+
+func (w *sessionWriter) Unwrap() http.ResponseWriter { return w.ResponseWriter }
+
 // makeRoom closes the Owner's oldest sessions when a new one would exceed MaxSessionsPerUser.
 // The SDK lists a server's sessions oldest first; the per-request sessions of the stateless
 // protocol have no ID and are left alone.
@@ -108,6 +208,7 @@ type userServer struct {
 	mu     sync.Mutex
 	server *mcp.Server
 	tools  map[string]*mcp.Tool // Mac tools currently registered
+	grants map[string]string    // session ID → the grant that opened it, where the token named one
 }
 
 // New creates the server.
@@ -147,7 +248,11 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if r.Method == http.MethodPost && r.Header.Get("Mcp-Session-Id") == "" {
-		s.makeRoom(userID(r)) // this request opens a session
+		id := userID(r)
+		s.makeRoom(id) // this request opens a session
+		if grant := grantID(r); grant != "" {
+			w = &sessionWriter{ResponseWriter: w, seen: func(session string) { s.noteSession(id, session, grant) }}
+		}
 	}
 	s.stateful.ServeHTTP(w, r)
 }
@@ -196,7 +301,7 @@ func (s *Server) user(ctx context.Context, id string) *userServer {
 		u = &userServer{
 			server: mcp.NewServer(&mcp.Implementation{Name: "latchkey", Title: "Latchkey", Version: s.opts.Version},
 				&mcp.ServerOptions{Logger: s.opts.Logger}),
-			tools: map[string]*mcp.Tool{},
+			tools: map[string]*mcp.Tool{}, grants: map[string]string{},
 		}
 		s.users[id] = u
 	}

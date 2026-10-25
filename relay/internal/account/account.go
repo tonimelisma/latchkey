@@ -175,6 +175,7 @@ func (s *Service) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /account", s.accountPage)
 	mux.HandleFunc("POST /account/revoke-mac", s.revokeMac)
 	mux.HandleFunc("POST /account/revoke-claude", s.revokeClaude)
+	mux.HandleFunc("POST /account/revoke-client", s.revokeClient)
 	mux.HandleFunc("POST /account/delete", s.deleteAccount)
 	mux.HandleFunc("GET /pair", s.pairPage)
 	mux.HandleFunc("POST /pair", s.pair)

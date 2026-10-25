@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"slices"
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -64,12 +65,25 @@ const (
 	TypeCall      Type = "call"
 	TypeCancel    Type = "cancel"
 	TypeNotice    Type = "notice"
+	// Added 2026-10-25 (FR-190 to FR-192): sent and understood only when the agent's hello
+	// lists FeatureClients.
+	TypeClients      Type = "clients"
+	TypeRevokeClient Type = "revoke_client"
 )
+
+// FeatureClients in Hello.Features says the agent understands clients and revoke_client.
+const FeatureClients = "clients"
+
+// MaxClients is the most entries a clients message holds.
+const MaxClients = 50
+
+// RedirectThisComputer is Client.Redirect for an approval sent back to a loopback address.
+const RedirectThisComputer = "this computer"
 
 // AllTypes lists every message type in the contract.
 var AllTypes = []Type{
 	TypeChallenge, TypeHello, TypeWelcome, TypeState, TypeTools, TypeProgress,
-	TypeResult, TypeGoodbye, TypeCall, TypeCancel, TypeNotice,
+	TypeResult, TypeGoodbye, TypeCall, TypeCancel, TypeNotice, TypeClients, TypeRevokeClient,
 }
 
 // Message is any protocol message.
@@ -145,7 +159,13 @@ type Hello struct {
 	OSVersion  string      `json:"os_version"`
 	Tools      []*mcp.Tool `json:"tools"`
 	State      State       `json:"state"`
+	// Features names the later additions to the protocol the agent understands; unknown names
+	// are ignored.
+	Features []string `json:"features,omitempty"`
 }
+
+// Has reports whether the agent announced the feature.
+func (h *Hello) Has(feature string) bool { return slices.Contains(h.Features, feature) }
 
 // Welcome accepts the agent.
 type Welcome struct {
@@ -206,17 +226,39 @@ type Notice struct {
 	Client string    `json:"client,omitempty"`
 }
 
-func (*Challenge) MessageType() Type   { return TypeChallenge }
-func (*Hello) MessageType() Type       { return TypeHello }
-func (*Welcome) MessageType() Type     { return TypeWelcome }
-func (*StateUpdate) MessageType() Type { return TypeState }
-func (*ToolsUpdate) MessageType() Type { return TypeTools }
-func (*Progress) MessageType() Type    { return TypeProgress }
-func (*Result) MessageType() Type      { return TypeResult }
-func (*Goodbye) MessageType() Type     { return TypeGoodbye }
-func (*Call) MessageType() Type        { return TypeCall }
-func (*Cancel) MessageType() Type      { return TypeCancel }
-func (*Notice) MessageType() Type      { return TypeNotice }
+// Client is one app with access: one approval the Owner gave that still has a live token.
+type Client struct {
+	ID         string     `json:"id"`       // opaque public handle of the grant
+	Name       string     `json:"name"`     // as the consent page showed it
+	Host       string     `json:"host"`     // the host the relay checked
+	Redirect   string     `json:"redirect"` // host the approval went back to, or RedirectThisComputer
+	ApprovedAt time.Time  `json:"approved_at"`
+	LastUsedAt *time.Time `json:"last_used_at"` // null until first used
+}
+
+// Clients is the full list of apps with access; it replaces the previous one.
+type Clients struct {
+	Clients []Client `json:"clients"`
+}
+
+// RevokeClient asks the relay to remove one app's access.
+type RevokeClient struct {
+	ID string `json:"id"`
+}
+
+func (*Clients) MessageType() Type      { return TypeClients }
+func (*RevokeClient) MessageType() Type { return TypeRevokeClient }
+func (*Challenge) MessageType() Type    { return TypeChallenge }
+func (*Hello) MessageType() Type        { return TypeHello }
+func (*Welcome) MessageType() Type      { return TypeWelcome }
+func (*StateUpdate) MessageType() Type  { return TypeState }
+func (*ToolsUpdate) MessageType() Type  { return TypeTools }
+func (*Progress) MessageType() Type     { return TypeProgress }
+func (*Result) MessageType() Type       { return TypeResult }
+func (*Goodbye) MessageType() Type      { return TypeGoodbye }
+func (*Call) MessageType() Type         { return TypeCall }
+func (*Cancel) MessageType() Type       { return TypeCancel }
+func (*Notice) MessageType() Type       { return TypeNotice }
 
 func newMessage(t Type) Message {
 	switch t {
@@ -242,6 +284,10 @@ func newMessage(t Type) Message {
 		return &Cancel{}
 	case TypeNotice:
 		return &Notice{}
+	case TypeClients:
+		return &Clients{}
+	case TypeRevokeClient:
+		return &RevokeClient{}
 	}
 	return nil
 }
@@ -293,8 +339,43 @@ func Decode(data []byte) (Message, error) {
 		return msg, ValidateTools(m.Tools)
 	case *ToolsUpdate:
 		return msg, ValidateTools(m.Tools)
+	case *Clients:
+		return msg, ValidateClients(m.Clients)
+	case *RevokeClient:
+		if !clientID.MatchString(m.ID) {
+			return msg, fmt.Errorf("%w: invalid client id", ErrProtocolViolation)
+		}
 	}
 	return msg, nil
+}
+
+var clientID = regexp.MustCompile(`^[A-Za-z0-9_-]{1,64}$`)
+
+// ValidClientID reports whether id has the shape of a clients entry's ID.
+func ValidClientID(id string) bool { return clientID.MatchString(id) }
+
+// ValidateClients enforces the contract's rules for a clients list: at most MaxClients entries,
+// each with a well-formed, unrepeated ID and a name, host, and redirect.
+func ValidateClients(list []Client) error {
+	if list == nil {
+		return fmt.Errorf("%w: clients must be a list", ErrProtocolViolation)
+	}
+	if len(list) > MaxClients {
+		return fmt.Errorf("%w: more than %d clients", ErrProtocolViolation, MaxClients)
+	}
+	seen := make(map[string]bool, len(list))
+	for _, c := range list {
+		switch {
+		case !clientID.MatchString(c.ID):
+			return fmt.Errorf("%w: invalid client id", ErrProtocolViolation)
+		case seen[c.ID]:
+			return fmt.Errorf("%w: duplicate client id", ErrProtocolViolation)
+		case c.Name == "" || c.Host == "" || c.Redirect == "" || c.ApprovedAt.IsZero():
+			return fmt.Errorf("%w: client %q lacks a name, host, redirect, or approval time", ErrProtocolViolation, c.ID)
+		}
+		seen[c.ID] = true
+	}
+	return nil
 }
 
 // Encode serializes a message with its "type" field first.

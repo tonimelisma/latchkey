@@ -56,6 +56,12 @@ type Config struct {
 	// NoticesOnConnect returns notices to send right after welcome. previous is the device's
 	// previous connection time (zero if none).
 	NoticesOnConnect func(ctx context.Context, d store.Device, previous time.Time) []*agentproto.Notice
+	// Clients returns the user's apps with access, newest approval first (FR-190). Nil: the
+	// relay never sends a clients message.
+	Clients func(ctx context.Context, userID string) ([]agentproto.Client, error)
+	// RevokeClient removes one app's access if it belongs to the user, and reports whether it
+	// removed anything (FR-191).
+	RevokeClient func(ctx context.Context, userID, id string) bool
 }
 
 // Hub is an http.Handler for /agent/v1.
@@ -274,6 +280,9 @@ func (h *Hub) handshake(ctx context.Context, ws *websocket.Conn) (store.Device, 
 	if err != nil || device.PublicKey == nil {
 		return store.Device{}, nil, authFailed
 	}
+	if h.suspended(ctx, device.UserID) { // FR-196: refused, with the pairing left alone
+		return store.Device{}, nil, closeError{agentproto.CloseAuthFailed, suspendedReason}
+	}
 	pub, err := x509.ParsePKIXPublicKey(device.PublicKey)
 	if err != nil {
 		return store.Device{}, nil, authFailed
@@ -310,6 +319,7 @@ func (h *Hub) start(ctx context.Context, c *conn, hello *agentproto.Hello) bool 
 	c.toolsStored = err == nil
 	c.setState(hello.State)
 	c.setTools(hello.Tools)
+	c.clientsFeature = hello.Has(agentproto.FeatureClients)
 
 	err = write(ctx, c.ws, &agentproto.Welcome{
 		HeartbeatIntervalS: int(h.cfg.HeartbeatInterval / time.Second), ServerTime: now.Truncate(time.Second),
@@ -347,7 +357,13 @@ func (h *Hub) start(ctx context.Context, c *conn, hello *agentproto.Hello) bool 
 	}
 
 	c.persist(ctx)
+	// Likewise an account suspended in that gap: the relay's watcher found no connection to close.
+	if h.suspended(ctx, c.device.UserID) {
+		c.closeWith(ErrDisconnected, agentproto.CloseAuthFailed, suspendedReason)
+		return false
+	}
 	h.cfg.OnToolsChanged(c.device.UserID)
+	c.sendClients(ctx, true) // right after welcome, to an agent that announced the feature
 	if h.cfg.NoticesOnConnect != nil {
 		for _, n := range h.cfg.NoticesOnConnect(ctx, c.device, previous.ConnectedAt) {
 			if err := c.send(ctx, n); err != nil {
@@ -414,6 +430,14 @@ type conn struct {
 	done   chan struct{}
 
 	frames *rate.Limiter // frames the Mac may send (FR-091)
+
+	// Apps with access (FR-190): whether the agent announced the feature, and under clientsMu
+	// the last list sent, so lists go out in order and an unchanged one isn't sent again.
+	clientsFeature bool
+	clientsMu      sync.Mutex
+	clientsSent    bool
+	clientsSends   int
+	lastClients    []agentproto.Client
 
 	mu          sync.Mutex
 	pending     map[string]*pendingCall
@@ -605,6 +629,8 @@ func (c *conn) handle(ctx context.Context, msg agentproto.Message) bool {
 			return false
 		}
 		c.persist(ctx)
+	case *agentproto.RevokeClient:
+		c.revokeClient(ctx, m)
 	default:
 		c.closeWith(ErrDisconnected, agentproto.CloseProtocolViolation,
 			fmt.Sprintf("%s is not an agent message", msg.MessageType()))

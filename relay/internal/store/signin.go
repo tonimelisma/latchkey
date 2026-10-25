@@ -450,7 +450,10 @@ func (s *Store) DeleteOAuthRequest(ctx context.Context, kind, signature string) 
 // DeleteUserOAuth removes all of the user's codes and tokens (FR-044). Tokens are written only
 // while their grant's rows exist (PutOAuthToken), so none can be issued for the user after this.
 func (s *Store) DeleteUserOAuth(ctx context.Context, userID string) error {
-	_, err := s.db.ExecContext(ctx, `DELETE FROM oauth_requests WHERE user_id = ?`, userID)
+	if _, err := s.db.ExecContext(ctx, `DELETE FROM oauth_requests WHERE user_id = ?`, userID); err != nil {
+		return err
+	}
+	_, err := s.db.ExecContext(ctx, `DELETE FROM oauth_grants WHERE user_id = ?`, userID)
 	return err
 }
 
@@ -468,6 +471,12 @@ func (s *Store) PurgeExpired(ctx context.Context, now time.Time) error {
 		if _, err := s.db.ExecContext(ctx, q, ms); err != nil {
 			errs = append(errs, err)
 		}
+	}
+	// A grant none of whose codes or tokens is left (expired and deleted above, or removed).
+	if _, err := s.db.ExecContext(ctx, `
+		DELETE FROM oauth_grants WHERE NOT EXISTS
+			(SELECT 1 FROM oauth_requests r WHERE r.request_id = oauth_grants.request_id)`); err != nil {
+		errs = append(errs, err)
 	}
 	// Dynamically registered clients older than a week with no live code or token are never
 	// coming back; without this, anyone could fill the table through /register.
@@ -513,37 +522,6 @@ func (s *Store) KeyOrCreate(ctx context.Context, name string, gen func() ([]byte
 	}
 	err = s.db.QueryRowContext(ctx, `SELECT value FROM relay_keys WHERE name = ?`, name).Scan(&v)
 	return v, err
-}
-
-// ClientAccess is a Claude client that holds a live token for the user.
-type ClientAccess struct {
-	ClientID string
-	Since    time.Time // the oldest live token's time
-}
-
-// ClientsWithAccess lists the clients holding an unexpired, unrevoked access or refresh token
-// for the user, most recently approved first. This is what "Claude has access" means on the
-// account page; nothing else about an approval is kept (FR-049a).
-func (s *Store) ClientsWithAccess(ctx context.Context, userID string, now time.Time) ([]ClientAccess, error) {
-	rows, err := s.db.QueryContext(ctx, `
-		SELECT client_id, MIN(requested_at) FROM oauth_requests
-		WHERE user_id = ? AND kind IN ('access', 'refresh') AND revoked_at IS NULL AND expires_at > ?
-		GROUP BY client_id ORDER BY 2 DESC, client_id`, userID, now.UnixMilli())
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = rows.Close() }()
-	var out []ClientAccess
-	for rows.Next() {
-		var c ClientAccess
-		var at sql.NullInt64
-		if err := rows.Scan(&c.ClientID, &at); err != nil {
-			return nil, err
-		}
-		c.Since = fromMS(at)
-		out = append(out, c)
-	}
-	return out, rows.Err()
 }
 
 // MaxCodeAttempts is how many wrong codes end a code (FR-042).

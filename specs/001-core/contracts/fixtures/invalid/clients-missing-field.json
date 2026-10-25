@@ -1,0 +1,12 @@
+{
+  "type": "clients",
+  "clients": [
+    {
+      "id": "apr_7Hq2-x_9",
+      "name": "Claude",
+      "redirect": "claude.ai",
+      "approved_at": "2026-10-24T18:30:00Z",
+      "last_used_at": "2026-10-25T07:15:00Z"
+    }
+  ]
+}

@@ -65,6 +65,11 @@ table { width: 100%; border-collapse: collapse; font-size: 13px; margin-bottom: 
 th, td { text-align: left; padding: 6px 8px 6px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
 th { color: var(--muted); font-weight: 500; }
 ul { padding-left: 20px; }
+ul.apps { list-style: none; padding: 0; margin: 0 0 16px; }
+ul.apps li { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--line); }
+ul.apps form { margin: 0; flex: none; }
+.legal h2 { margin-top: 22px; }
+.legal li { margin-bottom: 6px; }
 code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .9em; }
 .footer { margin-top: 16px; font-size: 13px; }
 @media (max-width: 600px) { table { display: block; overflow-x: auto; } .card { padding: 24px 18px; } }
