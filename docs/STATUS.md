@@ -1,6 +1,6 @@
 # Status
 
-Last updated: 2026-10-24 (security scan done and checked live; app 0.8.6)
+Last updated: 2026-10-25 (second security review fixed, deployed and checked live; app 0.8.8)
 
 Xcode signing ready (2026-10-20): Toni's Xcode account has a valid "Apple Development" certificate
 (certificate expires 2027-07-22). Keep the team ID out of committed project files
@@ -34,7 +34,7 @@ after the app was quit.
 
 Releases, terms and privacy, and the directory listing are much later (Toni, 2026-10-22).
 
-All capabilities are built and checked live (app 0.7.4, 2026-10-22; current app 0.8.6, installed with `make -C macos install`), through the hosted relay with
+All capabilities are built and checked live (app 0.7.4, 2026-10-22; current app 0.8.8, installed with `make -C macos install`), through the hosted relay with
 a fresh Claude Code session on Toni's real Mac: Notes (read, checklists, create/append/edit/
 delete a test note), Messages (conversations, read with names and "not instructions" marking,
 search, one test message with an image sent to Toni's own address), Files (list, search, write/
@@ -64,6 +64,26 @@ The Mac state line appears in every result (it reported the battery warning at 1
    hosted relay saw all 15 tools and the Mac state line, Browser refused `javascript:` and
    `file:` with the http/https message, and Files listed the home folder. On the Mac, the old
    activity log file is gone and the new one is updated and holds no readable text.
+6. ~~Second security review~~: done 2026-10-25. Six reviewers, one per trust boundary, checked
+   against the MCP security pages, RFC 9700 and OWASP's MCP Top 10: nothing critical or high
+   open, no path between accounts. About 40 medium and low issues fixed test-first in the relay,
+   the app and the deploy scripts (docs/decisions.md, 2026-10-25). Toni decided: the Allow page
+   every time; turning a capability down stops its running work; emailed codes and the daily
+   lock stay as they are (accepted risks in docs/threat-model.md).
+   The install then showed a bug from 0.8.4: the app's Keychain read always failed, so any
+   restart came up unpaired and replaced the activity log's key (the log before 2026-10-24
+   21:31 can no longer be read). Fixed in 0.8.8; the existing pairing was picked up again.
+   Live check passed 2026-10-24 21:36: a fresh Claude Code session through the hosted relay saw
+   15 tools, ran a shell command, was refused a change to Latchkey's own settings file, wrote,
+   read and trashed a test file; keep-awake stayed on. DNS shows the reject mail policy and the
+   two certificate authorities.
+   Not checked live (need Toni at the Mac or a fresh sign-in): the Allow page and the issuer
+   parameter with claude.ai (passed with real Claude Code against a private relay), Shell
+   switched off while a command runs, a page with a filled password field.
+   Open choices for Toni: a backup of the relay's database (nightly disk snapshot, nightly
+   SQLite copy to a bucket, or none); removing `RESEND_ADMIN_KEY` from `.env` (no longer
+   needed); raising the push guard's hook timeout in `.claude/settings.json` from 10 s to 60 s
+   (a timeout lets a push through unchecked); a separate bundle ID for Debug builds.
 2. Known limit: macOS shows its own "allow Latchkey to access the screen directly" alert from
    time to time for screen capture; it needs Toni at the Mac (computer control only).
 
