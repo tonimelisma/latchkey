@@ -129,9 +129,9 @@ enum FilesCapability {
         ]
     }
 
-    // MARK: changing (FR-202 to FR-204, FR-208)
+    // MARK: changing (FR-202 to FR-204, FR-208, FR-210)
 
-    static func writeOperations(home: URL) -> [ToolEntry] {
+    static func writeOperations(home: URL, own: OwnFiles = .standard) -> [ToolEntry] {
         [
             ToolEntry(
                 tool: .make(
@@ -153,6 +153,7 @@ enum FilesCapability {
                             throw Failure(message: "Give the file's path and the text.")
                         }
                         let url = resolve(raw, home: home)
+                        try keepOut(of: own, url)
                         let exists = FileManager.default.fileExists(atPath: url.path)
                         if args["append"] == .bool(true), exists {
                             let handle = try FileHandle(forWritingTo: url)
@@ -187,6 +188,7 @@ enum FilesCapability {
                 handler: { args in
                     await run {
                         let url = try existing(args["path"]?.stringValue, home: home)
+                        try keepOut(of: own, url)
                         guard let find = args["find"]?.stringValue, !find.isEmpty,
                             let replace = args["replace"]?.stringValue
                         else { throw Failure(message: "Give the passage to find and its replacement.") }
@@ -212,6 +214,7 @@ enum FilesCapability {
                 handler: { args in
                     await run {
                         let url = resolve(args["path"]?.stringValue ?? "", home: home)
+                        try keepOut(of: own, url)
                         try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
                         return changed("Created \(url.path).", "Claude created the folder \(url.lastPathComponent)")
                     }
@@ -228,7 +231,7 @@ enum FilesCapability {
                     required: ["from", "to"], readOnly: false),
                 handler: { args in
                     await run {
-                        let (from, to) = try destination(args, home: home)
+                        let (from, to) = try destination(args, home: home, own: own, removesSource: true)
                         try FileManager.default.moveItem(at: from, to: to)
                         return changed("Moved \(from.path) to \(to.path).", "Claude moved \(from.lastPathComponent)")
                     }
@@ -245,7 +248,7 @@ enum FilesCapability {
                     required: ["from", "to"], readOnly: false),
                 handler: { args in
                     await run {
-                        let (from, to) = try destination(args, home: home)
+                        let (from, to) = try destination(args, home: home, own: own, removesSource: false)
                         try FileManager.default.copyItem(at: from, to: to)
                         return changed("Copied \(from.path) to \(to.path).", "Claude copied \(from.lastPathComponent)")
                     }
@@ -259,6 +262,7 @@ enum FilesCapability {
                 handler: { args in
                     await run {
                         let url = try existing(args["path"]?.stringValue, home: home)
+                        try keepOut(of: own, url, removing: true)
                         var trashed: NSURL?
                         try FileManager.default.trashItem(at: url, resultingItemURL: &trashed)
                         var r = ToolResult.data(
@@ -291,13 +295,23 @@ enum FilesCapability {
         return url
     }
 
-    private static func destination(_ args: JSONValue, home: URL) throws -> (URL, URL) {
+    /// FR-210: refuses a change to one of Latchkey's own files; with `removing` (a move away or
+    /// the Trash), also to a folder that holds them.
+    private static func keepOut(of own: OwnFiles, _ url: URL, removing: Bool = false) throws {
+        if own.holds(url) || (removing && own.isAbove(url)) { throw Failure(message: OwnFiles.refusal) }
+    }
+
+    private static func destination(_ args: JSONValue, home: URL, own: OwnFiles, removesSource: Bool) throws
+        -> (URL, URL)
+    {
         let from = try existing(args["from"]?.stringValue, home: home)
+        if removesSource { try keepOut(of: own, from, removing: true) }
         var to = resolve(args["to"]?.stringValue ?? "", home: home)
         var isDir: ObjCBool = false
         if FileManager.default.fileExists(atPath: to.path, isDirectory: &isDir), isDir.boolValue {
             to = to.appending(path: from.lastPathComponent)
         }
+        try keepOut(of: own, to)
         guard !FileManager.default.fileExists(atPath: to.path) else {
             throw Failure(message: "\(to.path) already exists. Nothing was changed; choose another name.")
         }

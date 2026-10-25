@@ -42,8 +42,8 @@ extension FilesCapability {
 
     static let changeActions = ["write", "append", "edit", "create_folder", "move", "copy", "trash"]
 
-    static func writeTools(home: URL) -> [ToolEntry] {
-        let ops = Operations(writeOperations(home: home))
+    static func writeTools(home: URL, own: OwnFiles = .standard) -> [ToolEntry] {
+        let ops = Operations(writeOperations(home: home, own: own))
         return [
             ToolEntry(
                 tool: .make(

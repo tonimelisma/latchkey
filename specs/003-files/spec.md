@@ -34,7 +34,7 @@ Documents, downloads, photos and projects live on the Mac. From a phone, Claude 
 - **FR-204** Moving or copying shall never replace an existing file; writing over an existing
   file shall happen only when Claude asks for it explicitly.
 - **FR-205** Claude shall reach every file the Owner can open: the home folder, iCloud Drive,
-  and connected drives (Toni, 2026-10-22).
+  and connected drives (Toni, 2026-10-22). The one exception is FR-210.
 - **FR-206** File contents shall be marked as the file's content, not instructions (as spec 002
   FR-114).
 - **FR-207** Results shall stay within Claude's result size, saying when shortened and how to
@@ -43,6 +43,10 @@ Documents, downloads, photos and projects live on the Mac. From a phone, Claude 
   notification and list it in the menu's activity (as spec 002 FR-130, FR-131).
 - **FR-209** Files shall have the levels Off, Read only, Read & write, and start at Read & write
   (Toni, 2026-10-22).
+- **FR-210** When Claude asks to create, change, move, rename, copy onto, or delete one of
+  Latchkey's own files (its activity log and other data, its settings, or the app itself), or
+  to move or delete a folder that holds them, Files shall refuse and change nothing. Claude can
+  still read them (security review, 2026-10-25).
 
 ## Success criteria
 
@@ -57,3 +61,5 @@ Documents, downloads, photos and projects live on the Mac. From a phone, Claude 
 - iCloud files not downloaded yet: reading downloads them first, or says it can't within the
   time limit.
 - Very large files and binary files; names with unusual characters; files that change while read.
+- Latchkey's own files reached by another spelling of the path (letter case, `..`, a link): still
+  refused (FR-210).

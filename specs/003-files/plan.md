@@ -50,6 +50,20 @@ FileManager for writes (atomic for new and replaced files), folders, moves, copi
 existing file without `overwrite` (FR-204). Each change returns an `activity`, which posts the
 notification and goes in the trace (FR-208).
 
+Latchkey's own files (FR-210): before any change, the path is compared with a short list: the
+app's folder in Application Support (the activity log), files named `net.melisma.latchkey.*`
+in `~/Library/Preferences` and `~/Library/Preferences/ByHost` (the settings, which hold the
+capability levels: a write there could turn a capability on at the next launch), and the
+running app's bundle (which also holds the keep-awake helper and its launchd file; the login
+item and the helper's registration are kept by macOS, not in files the Owner can write). Write,
+append, edit, and create folder are refused inside them; so is the destination of a move or
+copy; a move's source and the Trash are refused inside them and also for a folder that holds
+one of them (trashing `~/Library` would take them along). The comparison follows symbolic
+links, also on the way to a file that doesn't exist yet, and ignores letter case and accent
+encoding, as the Mac's disk does. The error is "Latchkey doesn't change its own files. Nothing
+was changed." Reading, and copying one of them elsewhere, stay allowed. No other path is
+restricted. Shell, when on, can still change these files: it runs any command by design.
+
 ## D4. Search
 
 `mdfind` (Spotlight) as a process, name or content, optional folder, newest first; with a 20 s
@@ -66,7 +80,9 @@ write (FR-209). Needs Full Disk Access, the step setup already has (spec 002).
 Tests against a temporary folder: read text, PDF (made with PDFKit), RTF, image; offset paging;
 search through a fake runner for `mdfind` and one real `mdfind` call on a temporary file;
 write/overwrite rules; edit exactly-once; move/copy refusals; trash puts the file in the Trash
-(checked, then removed from the Trash by the test); tool list per level.
+(checked, then removed from the Trash by the test); tool list per level. Own files (FR-210): a
+stand-in data folder, settings, and app in the temporary folder; every change refused, also by
+other letter case, `..`, and links; reads and other apps' settings still work.
 
 ## Constitution check
 
