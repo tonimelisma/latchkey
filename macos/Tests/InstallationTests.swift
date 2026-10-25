@@ -63,7 +63,7 @@ import Testing
         let cache = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
         try FileManager.default.createDirectory(at: cache, withIntermediateDirectories: true)
 
-        // Never the real pairing: the test app shares the installed app's Keychain and settings.
+        // Never real storage, even though the test app has its own identity (AppIdentity).
         var forgot = false
         var forgotTraceKey = false
         LocalData(

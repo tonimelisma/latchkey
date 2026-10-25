@@ -45,12 +45,24 @@ paths:
   marking all vanished).
 - AppleScript variables must not be app terms (`kind` in Messages, `before`/`after` everywhere);
   `osacompile` doesn't catch app terms. Prefix variables (`targetKind`, `theText`).
-- Tests run in a debug copy of the app with the same bundle ID: it shares the installed app's
-  user defaults and Keychain. Tests must never touch `UserDefaults.standard`, the Keychain, or
-  `DeviceIdentity` (an uninstall test erased Toni's pairing twice on 2026-10-22);
-  the real `KeychainVault` changes nothing under XCTest; pairing tests inject a `MemoryVault`.
-  The Keychain calls themselves are tested only against a throwaway service name
-  (`KeychainTests`), never the app's own.
+- Debug and test builds are their own app to macOS (Toni, 2026-10-25): bundle ID
+  `net.melisma.latchkey.dev`, helper `net.melisma.latchkey.dev.helper`, link scheme
+  `latchkey-dev`, data folder `Application Support/Latchkey Dev`, shown as "Latchkey Dev". So a
+  test copy has its own user defaults, Keychain items, privacy permissions, and helper, and
+  doesn't claim `latchkey://`. Why: while both were `net.melisma.latchkey`, an uninstall test
+  erased Toni's pairing twice (2026-10-22), and a leftover Debug build, which carries the
+  debugging entitlement, could borrow the installed app's permissions. The names live in
+  `Shared/AppIdentity.swift` and, per configuration, in `project.yml` (`LATCHKEY_APP_ID`,
+  `LATCHKEY_URL_SCHEME`, `LATCHKEY_DISPLAY_NAME`); never write the identifier as a string
+  elsewhere. The Release names (`net.melisma.latchkey`, its `.helper`, `latchkey`, `Latchkey`) must
+  never change: the installed app's pairing, log key, settings, and permissions are filed under
+  them (`IdentityTests` pins them). A Debug app run by hand needs its own pairing, permissions,
+  and helper approval.
+- Tests still must never touch real storage: not `UserDefaults.standard`, the Keychain, or
+  `DeviceIdentity` (the separate identity is a second fence, not a licence, and a Debug app run
+  by hand keeps real data under it). The real `KeychainVault` changes nothing under XCTest;
+  pairing tests inject a `MemoryVault`. The Keychain calls themselves are tested only against a
+  throwaway service name (`KeychainTests`), never the app's own.
 - A password search can't ask for all matches together with their data
   (`kSecMatchLimitAll` + `kSecReturnData` is errSecParam, -50). 0.8.4–0.8.7 read the pairing and
   the activity-log key that way, so every restart found neither: the Mac came up unpaired and a

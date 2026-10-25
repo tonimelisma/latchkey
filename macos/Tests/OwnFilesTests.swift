@@ -34,7 +34,7 @@ import Testing
             settingsFolders: [
                 f.root.appending(path: "Library/Preferences"), f.root.appending(path: "Library/Preferences/ByHost"),
             ],
-            settingsPrefix: "net.melisma.latchkey")
+            settingsPrefixes: ["net.melisma.latchkey"])
         change = FilesCapability.writeTools(home: f.root, own: own)[0]
         read = FilesCapability.readTools(home: f.root, commands: FakeCommands())
     }

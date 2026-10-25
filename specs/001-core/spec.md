@@ -265,6 +265,10 @@ Format: EARS ("When <trigger>, the <system> shall <response>"). IDs are stable; 
   and shall show a setup window listing the remaining steps (approve keep-awake, connect to an
   account) until they are done.
 - **FR-072** The app shall update itself through signed updates.
+- **FR-074** A development or test build of the app shall be a different app from the installed
+  one in macOS's eyes: it shall not share the installed app's settings, stored pairing and keys,
+  privacy permissions, or keep-awake helper, and shall not receive the installed app's links
+  (Toni, 2026-10-25).
 - **FR-073** All privileged operations shall go through Apple-supported mechanisms with standard
   system approval prompts.
 

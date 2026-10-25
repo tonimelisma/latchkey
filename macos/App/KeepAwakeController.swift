@@ -5,7 +5,7 @@ import ServiceManagement
 /// Talks to the privileged helper over XPC (plan D7).
 @MainActor
 final class HelperClient {
-    private let service = SMAppService.daemon(plistName: HelperIdentity.plistName)
+    private let service = SMAppService.daemon(plistName: AppIdentity.current.helperPlistName)
     private var connection: NSXPCConnection?
     /// Called when the helper went away (it restarts with normal sleep), so keep-awake is re-applied.
     var onInterrupted: (@MainActor () -> Void)?
@@ -25,7 +25,7 @@ final class HelperClient {
         if connection == nil {
             guard
                 let c = Self.makeConnection(
-                    requirement: CodeSigning.requirement(identifier: HelperIdentity.helperBundleID))
+                    requirement: CodeSigning.requirement(identifier: AppIdentity.current.helperBundleID))
             else { return nil }
             // XPC calls these on its own queue: @Sendable keeps them free of main-actor isolation.
             c.invalidationHandler = { @Sendable [weak self] in Task { @MainActor in self?.connection = nil } }
@@ -46,7 +46,7 @@ final class HelperClient {
     /// unavailable rather than trusting whatever answers on the service name.
     nonisolated static func makeConnection(requirement: String?) -> NSXPCConnection? {
         guard let requirement else { return nil }
-        let c = NSXPCConnection(machServiceName: HelperIdentity.machService, options: .privileged)
+        let c = NSXPCConnection(machServiceName: AppIdentity.current.machService, options: .privileged)
         c.remoteObjectInterface = NSXPCInterface(with: HelperProtocol.self)
         c.setCodeSigningRequirement(requirement)
         return c

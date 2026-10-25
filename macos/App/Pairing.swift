@@ -105,12 +105,18 @@ final class PairingFlow: NSObject, ASWebAuthenticationPresentationContextProvidi
         return DispatchQueue.main.sync { MainActor.assumeIsolated(anchor) }
     }
 
-    /// The code and relay from a latchkey://paired link. The relay is nil when the link names
-    /// none, or one the app doesn't accept from a link.
-    nonisolated static func parse(_ url: URL, allowLocalHTTP: Bool = PairingFlow.localLinksAllowed) -> (
-        code: String, relay: URL?
-    )? {
-        guard url.scheme == "latchkey", url.host() == "paired",
+    /// The scheme of the relay's redirect after sign-in (agent-protocol.md "Pairing"). The sign-in
+    /// window catches it inside the app, so every build listens for it there; only the installed
+    /// app registers it with macOS (`AppIdentity.urlScheme`).
+    nonisolated static let relayScheme = "latchkey"
+
+    /// The code and relay from a latchkey://paired link (or one under this build's own scheme).
+    /// The relay is nil when the link names none, or one the app doesn't accept from a link.
+    nonisolated static func parse(
+        _ url: URL, allowLocalHTTP: Bool = PairingFlow.localLinksAllowed,
+        ownScheme: String = AppIdentity.current.urlScheme
+    ) -> (code: String, relay: URL?)? {
+        guard let scheme = url.scheme, scheme == relayScheme || scheme == ownScheme, url.host() == "paired",
             let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems,
             let code = items.first(where: { $0.name == "code" })?.value, !code.isEmpty
         else { return nil }
@@ -149,7 +155,7 @@ final class PairingFlow: NSObject, ASWebAuthenticationPresentationContextProvidi
         let callback = try await withCheckedThrowingContinuation { (cont: CheckedContinuation<URL, Error>) in
             pending = cont
             let s = ASWebAuthenticationSession(
-                url: c.url!, callback: .customScheme("latchkey"),
+                url: c.url!, callback: .customScheme(Self.relayScheme),
                 completionHandler: Self.completionHandler { [weak self] result in
                     Task { @MainActor in self?.finish(result) }
                 })

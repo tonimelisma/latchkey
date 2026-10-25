@@ -57,7 +57,7 @@ extension AppLocation {
     /// Quits other running copies of Latchkey (an older version being replaced), waiting up to 5 s.
     @MainActor
     static func quitOtherCopies() {
-        let others = NSRunningApplication.runningApplications(withBundleIdentifier: HelperIdentity.appBundleID)
+        let others = NSRunningApplication.runningApplications(withBundleIdentifier: AppIdentity.current.bundleID)
             .filter { $0 != NSRunningApplication.current }
         others.forEach { $0.terminate() }
         let deadline = Date().addingTimeInterval(5)
@@ -73,7 +73,7 @@ extension AppLocation {
         // (now trashed) bundle.
         let plist = URL(fileURLWithPath: path).appending(path: "Contents/Info.plist")
         let info = NSDictionary(contentsOf: plist)
-        return info?["CFBundleIdentifier"] as? String == HelperIdentity.appBundleID
+        return info?["CFBundleIdentifier"] as? String == AppIdentity.current.bundleID
     }
 }
 
@@ -114,8 +114,8 @@ final class TrashWatcher: @unchecked Sendable {
 
 /// What uninstalling removes. Paths are injectable for tests.
 struct LocalData {
-    var supportDirectory = URL.applicationSupportDirectory.appending(path: "Latchkey", directoryHint: .isDirectory)
-    var defaultsDomain = HelperIdentity.appBundleID
+    var supportDirectory = AppIdentity.current.supportDirectory
+    var defaultsDomain = AppIdentity.current.defaultsDomain
     var defaults = UserDefaults.standard
     /// Forgets the pairing (the device key in the Keychain and the relay in settings).
     var forgetIdentity: () -> Void = { DeviceIdentity.delete() }
@@ -124,7 +124,7 @@ struct LocalData {
     /// Folders macOS creates for the app by itself: network cache, cookies, saved window state.
     var systemFolders: [URL] = {
         let library = URL.libraryDirectory
-        let id = HelperIdentity.appBundleID
+        let id = AppIdentity.current.bundleID
         return [
             library.appending(path: "Caches/\(id)"),
             library.appending(path: "HTTPStorages/\(id)"),
@@ -148,7 +148,7 @@ enum BackgroundItems {
     /// Removes the login item and the helper's launchd registration.
     @MainActor
     static func unregisterAll() async {
-        try? await SMAppService.daemon(plistName: HelperIdentity.plistName).unregister()
+        try? await SMAppService.daemon(plistName: AppIdentity.current.helperPlistName).unregister()
         try? await SMAppService.mainApp.unregister()
     }
 }

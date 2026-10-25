@@ -130,8 +130,8 @@ struct DeviceIdentity: Sendable {
     }
 }
 
-/// Where the pairing is kept. A protocol so tests use memory: they run inside a copy of the app
-/// that shares the installed app's Keychain and settings and must never touch them.
+/// Where the pairing is kept. A protocol so tests use memory: they must never touch real storage
+/// (the test app has had its own identity since 0.8.9, `AppIdentity`; the rule stays).
 protocol PairingVault: Sendable {
     /// An item of this app's in the Keychain; nil when there's none (or more than one).
     func read(_ account: String) -> Data?
@@ -141,8 +141,8 @@ protocol PairingVault: Sendable {
     func removeLegacyDefault(_ key: String)
 }
 
-/// The real storage. Tests run inside a copy of the app that shares the installed app's Keychain
-/// and settings; under XCTest it changes nothing (a test erased the pairing on 2026-10-22).
+/// The real storage. Under XCTest it changes nothing: while the test app still shared the
+/// installed app's Keychain and settings, a test erased the pairing (2026-10-22).
 struct KeychainVault: PairingVault {
     private var underTest: Bool { ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil }
 
@@ -171,7 +171,9 @@ struct KeychainVault: PairingVault {
 /// program made, is treated as absent. Reads look only in the login keychain, not in keychains
 /// another program may add to the search list, and refuse more than one match.
 enum Keychain {
-    static let service = "net.melisma.latchkey"
+    /// This build's own service name: a Debug or test build has its own items and can't reach the
+    /// installed app's (`AppIdentity`).
+    static let service = AppIdentity.current.keychainService
 
     /// The login keychain, opened by its path (the default keychain is a setting anyone can change).
     private static var login: SecKeychain? {

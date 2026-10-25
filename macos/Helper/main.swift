@@ -5,7 +5,7 @@ import Foundation
 // app is gone.
 
 final class SleepSetting: NSObject, HelperProtocol, @unchecked Sendable {
-    private let queue = DispatchQueue(label: "net.melisma.latchkey.helper.pmset")
+    private let queue = DispatchQueue(label: AppIdentity.current.helperBundleID + ".pmset")
 
     func setSleepDisabled(_ disabled: Bool, reply: @escaping @Sendable (Bool, String?) -> Void) {
         queue.async {
@@ -46,7 +46,7 @@ final class Listener: NSObject, NSXPCListenerDelegate, @unchecked Sendable {
 
     func listener(_ listener: NSXPCListener, shouldAcceptNewConnection c: NSXPCConnection) -> Bool {
         // Only the Latchkey app signed by the same team may connect.
-        guard let req = CodeSigning.requirement(identifier: HelperIdentity.appBundleID) else { return false }
+        guard let req = CodeSigning.requirement(identifier: AppIdentity.current.bundleID) else { return false }
         c.setCodeSigningRequirement(req)
         c.exportedInterface = NSXPCInterface(with: HelperProtocol.self)
         c.exportedObject = setting
@@ -74,7 +74,7 @@ final class Listener: NSObject, NSXPCListenerDelegate, @unchecked Sendable {
 // even if the app is deleted before it runs again.
 let delegate = Listener()
 delegate.setting.restore()
-let listener = NSXPCListener(machServiceName: HelperIdentity.machService)
+let listener = NSXPCListener(machServiceName: AppIdentity.current.machService)
 listener.delegate = delegate
 listener.resume()
 RunLoop.main.run()

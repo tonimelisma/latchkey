@@ -5,29 +5,33 @@ import Foundation
 struct OwnFiles: Sendable {
     /// Folders that are Latchkey's, with everything in them.
     var folders: [URL]
-    /// Folders where settings files live, and the start of the names of Latchkey's.
+    /// Folders where settings files live, and the starts of the names of Latchkey's.
     var settingsFolders: [URL]
-    var settingsPrefix: String
+    var settingsPrefixes: [String]
 
     static let refusal = "Latchkey doesn't change its own files. Nothing was changed."
 
+    /// This build's files and the installed app's: a Debug build is a different app to macOS
+    /// (`AppIdentity`), and still never changes the installed app's settings or data.
     static let standard = OwnFiles(
         folders: [
-            URL.applicationSupportDirectory.appending(path: "Latchkey", directoryHint: .isDirectory),
+            AppIdentity.current.supportDirectory,
+            AppIdentity.release.supportDirectory,
             Bundle.main.bundleURL,
         ],
         settingsFolders: [
             URL.libraryDirectory.appending(path: "Preferences", directoryHint: .isDirectory),
             URL.libraryDirectory.appending(path: "Preferences/ByHost", directoryHint: .isDirectory),
         ],
-        settingsPrefix: HelperIdentity.appBundleID)
+        settingsPrefixes: [AppIdentity.current.defaultsDomain, AppIdentity.release.defaultsDomain])
 
     /// True when `url` is one of Latchkey's files or folders, or inside one.
     func holds(_ url: URL) -> Bool {
         let path = Self.parts(url)
         if folders.contains(where: { path.starts(with: Self.parts($0)) }) { return true }
         // A settings file: directly in a settings folder, named "<bundle id>.<anything>".
-        guard let name = path.last, name.hasPrefix(Self.fold(settingsPrefix) + ".") else { return false }
+        guard let name = path.last, settingsPrefixes.contains(where: { name.hasPrefix(Self.fold($0) + ".") })
+        else { return false }
         return settingsFolders.contains { Self.parts($0) == path.dropLast() }
     }
 

@@ -385,6 +385,36 @@ Serves FR-070, FR-071, FR-072; Constitution IV.
   2026-10-24). Debug builds keep it for the debugger.
 - Bundle identifiers: app `net.melisma.latchkey`, helper `net.melisma.latchkey.helper` (also its
   Mach service name). Swift 6 language mode with strict concurrency.
+- Debug and test builds have their own identity (FR-074; Toni, 2026-10-25), because macOS files
+  settings, Keychain access, privacy permissions, background items, and link handlers under the
+  bundle identifier. While a test copy was also `net.melisma.latchkey`, a test erased the Owner's
+  pairing twice, and a leftover Debug build (which carries the debugging entitlement) could
+  borrow the installed app's permissions.
+
+  | | Release (installed) | Debug and tests |
+  |---|---|---|
+  | App identifier, settings domain, Keychain service, log subsystem | `net.melisma.latchkey` | `net.melisma.latchkey.dev` |
+  | Helper identifier, launchd label, Mach service | `net.melisma.latchkey.helper` | `net.melisma.latchkey.dev.helper` |
+  | Helper's launchd plist in the app | `net.melisma.latchkey.helper.plist` | `net.melisma.latchkey.dev.helper.plist` |
+  | Link scheme registered with macOS | `latchkey` | `latchkey-dev` |
+  | Data folder in Application Support | `Latchkey` | `Latchkey Dev` |
+  | Name shown by macOS (permission lists) | Latchkey | Latchkey Dev |
+
+  The Release column is exactly what shipped up to 0.8.8 and must never change: the installed
+  app's pairing, activity-log key, settings, and permissions are filed under it. One mechanism,
+  no duplicated files: `project.yml` sets `LATCHKEY_APP_ID`, `LATCHKEY_URL_SCHEME`, and
+  `LATCHKEY_DISPLAY_NAME` per configuration; both `Info.plist` files take them by substitution,
+  and a build step makes the helper's launchd plist from the one template
+  (`Helper/LaunchDaemon.plist`). The code takes every name from `Shared/AppIdentity.swift`
+  (chosen at compile time by the Debug flag, so nothing on disk can change which identity a
+  build claims), including the code-signing requirements of D7: a Debug app and helper name
+  each other's `.dev` identifiers, so the installed helper refuses a Debug app on its identifier
+  as well as on its debugging entitlement. The relay's sign-in redirect stays
+  `latchkey://paired` for every build: the sign-in window catches it inside the app, which
+  needs no registration; a Debug build reads system-delivered links under `latchkey-dev` too.
+  Files' own-files refusal (spec 003 FR-210) covers the running build's settings and data and
+  the installed app's. Tests still use stand-ins for all stored data. A Debug app run by hand
+  needs its own pairing, permissions, and helper approval.
 - The helper's launchd plist sets `RunAtLoad`. Every helper start (at boot or on demand) first
   restores normal sleep; the app turns keep-awake back on when it connects, and re-applies when
   its XPC connection is interrupted. `SleepDisabled` is kernel runtime state (research.md), so a
@@ -509,7 +539,10 @@ latchkey/
   program a cancelled call waits on ends. State reports (FR-036a): the decision function on
   fixed times. Pairing links (FR-054a, FR-054b): the one-at-a-time gate and link parsing with
   and without local addresses. Helper (D7): no connection without a requirement, and the test
-  app itself (a Debug build) fails the Release requirement.
+  app itself (a Debug build) fails the Release requirement. Identity (FR-074): the Release names
+  are pinned string by string, the development names share none of them, the test app's bundle on
+  disk carries the development identifier, scheme, and helper plist, the helper plist template
+  yields the shipped file for Release, and `project.yml` agrees with the code.
 - Browser sign-in: an automated test drives headless Chrome with a virtual passkey through the
   real sign-up, sign-in, consent, and pairing pages, using `github.com/chromedp/chromedp` (MIT).
   Runs in any container with Chrome.

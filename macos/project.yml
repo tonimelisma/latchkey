@@ -20,7 +20,7 @@ settings:
     SWIFT_VERSION: "6.0"
     SWIFT_STRICT_CONCURRENCY: complete
     ENABLE_HARDENED_RUNTIME: YES
-    MARKETING_VERSION: "0.8.8"
+    MARKETING_VERSION: "0.8.9"
     CURRENT_PROJECT_VERSION: "1"
     ARCHS: arm64
     DEAD_CODE_STRIPPING: YES
@@ -30,6 +30,20 @@ settings:
     # is a Release build: no debugging entitlement there (security scan, 2026-10-24); Debug keeps it.
     Release:
       CODE_SIGN_INJECT_BASE_ENTITLEMENTS: NO
+      LATCHKEY_APP_ID: net.melisma.latchkey
+      LATCHKEY_URL_SCHEME: latchkey
+      LATCHKEY_DISPLAY_NAME: Latchkey
+    # Debug and test builds are their own app in macOS's eyes (Toni, 2026-10-25): their own bundle
+    # identifier, and so their own settings, Keychain items, privacy permissions, and helper, and
+    # no claim on latchkey:// links. A test copy sharing the installed app's identity erased the
+    # Owner's pairing twice, and a leftover Debug build (which carries the debugging entitlement)
+    # could borrow the installed app's permissions. The Release values must never change: the
+    # installed app's pairing and permissions are filed under them. Shared/AppIdentity.swift
+    # holds the same names for the code; IdentityTests checks the two agree.
+    Debug:
+      LATCHKEY_APP_ID: net.melisma.latchkey.dev
+      LATCHKEY_URL_SCHEME: latchkey-dev
+      LATCHKEY_DISPLAY_NAME: Latchkey Dev
 targets:
   Latchkey:
     type: application
@@ -37,20 +51,31 @@ targets:
     sources:
       - App
       - Shared
-      - path: Helper/net.melisma.latchkey.helper.plist
-        buildPhase:
-          copyFiles:
-            destination: wrapper
-            subpath: Contents/Library/LaunchDaemons
     dependencies:
       - target: LatchkeyHelper
         embed: true
         copy:
           destination: executables
       - package: Sparkle
+    # The helper's launchd plist, made from the one template with this configuration's
+    # identifiers and named after the helper (Release: net.melisma.latchkey.helper.plist, exactly
+    # the file that used to be copied in). Runs before the app is signed.
+    postCompileScripts:
+      - name: Helper launchd plist
+        script: |
+          set -eu
+          out="$TARGET_BUILD_DIR/$CONTENTS_FOLDER_PATH/Library/LaunchDaemons"
+          mkdir -p "$out"
+          rm -f "$out"/*.plist
+          sed "s/\$(LATCHKEY_APP_ID)/$LATCHKEY_APP_ID/g" "$SRCROOT/Helper/LaunchDaemon.plist" > "$out/$LATCHKEY_APP_ID.helper.plist"
+          plutil -lint -s "$out/$LATCHKEY_APP_ID.helper.plist"
+        inputFiles:
+          - $(SRCROOT)/Helper/LaunchDaemon.plist
+        outputFiles:
+          - $(TARGET_BUILD_DIR)/$(CONTENTS_FOLDER_PATH)/Library/LaunchDaemons/$(LATCHKEY_APP_ID).helper.plist
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: net.melisma.latchkey
+        PRODUCT_BUNDLE_IDENTIFIER: $(LATCHKEY_APP_ID)
         PRODUCT_NAME: Latchkey
         INFOPLIST_FILE: App/Info.plist
         CODE_SIGN_ENTITLEMENTS: App/Latchkey.entitlements
@@ -63,11 +88,12 @@ targets:
     sources:
       - Helper
       - Shared/HelperProtocol.swift
+      - Shared/AppIdentity.swift
       - Shared/PmsetParser.swift
       - Shared/CodeSigning.swift
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: net.melisma.latchkey.helper
+        PRODUCT_BUNDLE_IDENTIFIER: $(LATCHKEY_APP_ID).helper
         PRODUCT_NAME: LatchkeyHelper
         INFOPLIST_FILE: Helper/Info.plist
         CREATE_INFOPLIST_SECTION_IN_BINARY: YES
@@ -84,7 +110,7 @@ targets:
       - target: Latchkey
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: net.melisma.latchkey.tests
+        PRODUCT_BUNDLE_IDENTIFIER: $(LATCHKEY_APP_ID).tests
         GENERATE_INFOPLIST_FILE: YES
         TEST_HOST: "$(BUILT_PRODUCTS_DIR)/Latchkey.app/Contents/MacOS/Latchkey"
         BUNDLE_LOADER: "$(TEST_HOST)"
