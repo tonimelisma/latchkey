@@ -7,7 +7,11 @@ options:
 packages:
   Sparkle:
     url: https://github.com/sparkle-project/Sparkle
-    exactVersion: 2.10.0
+    # Pinned by commit, not by tag: a tag can be moved to other code, a commit can't. This is the
+    # commit of the tag named after it (git ls-remote <url> refs/tags/<version>). XcodeGen ignores
+    # `revision` when a version is also given, so the version lives in the comment only;
+    # scripts/sparkle-advisories.sh reads it from there.
+    revision: eef1a539a373c1f1a320624b1130fc5de7b2e100  # 2.10.0
 configFiles:
   Debug: Config/Base.xcconfig
   Release: Config/Base.xcconfig

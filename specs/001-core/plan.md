@@ -212,7 +212,14 @@ Serves FR-030, FR-031, FR-035, FR-073; Constitution IV.
   no public API for this setting).
 - The Owner approves the helper once in System Settings → General → Login Items.
 - XPC: Mach service; the helper accepts connections only from our app's code-signing requirement
-  (`setCodeSigningRequirement`).
+  (`setCodeSigningRequirement`): the app's identifier, Apple's anchor, and the team the helper
+  itself is signed with. In Release builds the requirement also refuses a caller that carries
+  the debugging entitlement (`get-task-allow`), since any program running as the Owner can take
+  over such a process; a Debug app and its Debug helper, which both carry it, accept each other,
+  and the installed helper refuses a Debug app. The app checks the helper the same way. A build
+  signed without a team has no requirement to check: the helper accepts nobody and the app
+  doesn't connect at all (keep-awake then shows as needing the helper), rather than connecting
+  unchecked (security review, 2026-10-25).
 - Re-apply and verify on every power-source change (`IOPSNotificationCreateRunLoopSource`) and wake;
   read back the setting to confirm (FR-031).
 - Restore: the app turns it off on quit; the helper turns it off when its client disconnects and on
@@ -248,7 +255,9 @@ Serves FR-070, FR-071, FR-072; Constitution IV.
   Access for Messages, Apple Events, Accessibility) are incompatible with the App Sandbox, and
   changing that later would mean migrating containers. This deviation from "sandboxed where
   possible" is deliberate.
-- Updates: Sparkle 2 (pinned 2.10.0) with EdDSA-signed archives. Downloads and the update feed
+- Updates: Sparkle 2 (pinned to the commit of tag 2.10.0 in `project.yml`, not to the tag, which
+  could be moved; the version is in the comment beside it, where
+  `scripts/sparkle-advisories.sh` reads it) with EdDSA-signed archives. Downloads and the update feed
   (`appcast.xml`) are published on the repository's GitHub Releases by `macos/scripts/release.sh`.
   The updater starts only in builds that carry the public key; the feed needs a public repository.
 - Until the Developer ID exists: local builds with Toni's Apple Development certificate (team ID

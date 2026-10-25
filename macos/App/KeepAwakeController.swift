@@ -23,11 +23,10 @@ final class HelperClient {
 
     private func proxy(onError: @escaping @Sendable (Error) -> Void) -> HelperProtocol? {
         if connection == nil {
-            let c = NSXPCConnection(machServiceName: HelperIdentity.machService, options: .privileged)
-            c.remoteObjectInterface = NSXPCInterface(with: HelperProtocol.self)
-            if let req = CodeSigning.requirement(identifier: HelperIdentity.helperBundleID) {
-                c.setCodeSigningRequirement(req)
-            }
+            guard
+                let c = Self.makeConnection(
+                    requirement: CodeSigning.requirement(identifier: HelperIdentity.helperBundleID))
+            else { return nil }
             // XPC calls these on its own queue: @Sendable keeps them free of main-actor isolation.
             c.invalidationHandler = { @Sendable [weak self] in Task { @MainActor in self?.connection = nil } }
             c.interruptionHandler = { @Sendable [weak self] in
@@ -40,6 +39,17 @@ final class HelperClient {
             connection = c
         }
         return connection?.remoteObjectProxyWithErrorHandler(onError) as? HelperProtocol
+    }
+
+    /// A connection that only the genuine helper can answer. Without a code-signing requirement
+    /// (a build with no team) there is no connection at all: keep-awake reports the helper as
+    /// unavailable rather than trusting whatever answers on the service name.
+    nonisolated static func makeConnection(requirement: String?) -> NSXPCConnection? {
+        guard let requirement else { return nil }
+        let c = NSXPCConnection(machServiceName: HelperIdentity.machService, options: .privileged)
+        c.remoteObjectInterface = NSXPCInterface(with: HelperProtocol.self)
+        c.setCodeSigningRequirement(requirement)
+        return c
     }
 
     /// Sets SleepDisabled and returns the value read back, or nil if the helper didn't answer
