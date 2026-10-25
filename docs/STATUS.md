@@ -80,9 +80,9 @@ The Mac state line appears in every result (it reported the battery warning at 1
    Not checked live (need Toni at the Mac or a fresh sign-in): the Allow page and the issuer
    parameter with claude.ai (passed with real Claude Code against a private relay), Shell
    switched off while a command runs, a page with a filled password field.
-   Open choices for Toni: a backup of the relay's database (nightly disk snapshot, nightly
-   SQLite copy to a bucket, or none); removing `RESEND_ADMIN_KEY` from `.env` (no longer
-   needed); a separate bundle ID for Debug builds.
+   Decided and done 2026-10-25: a nightly copy of the server's disk, kept 14 days
+   (`deploy/backup-schedule.sh`); the full-access email key removed from `.env`; Debug and test
+   builds get their own app identity.
 2. Known limit: macOS shows its own "allow Latchkey to access the screen directly" alert from
    time to time for screen capture; it needs Toni at the Mac (computer control only).
 

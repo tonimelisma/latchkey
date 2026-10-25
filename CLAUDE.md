@@ -190,7 +190,8 @@ Relay (run in `relay/`):
 Hosted relay: `deploy/deploy.sh` deploys to the host and Google Cloud VM named in the gitignored
 `.env` (see the script's header), behind that VM's Caddy; needs `CLOUDFLARE_API_TOKEN` and `RESEND_API_KEY`
 (send-only) in the gitignored `.env`, plus `RESEND_ADMIN_KEY` (full access) for the first run that
-sets up the sending domain. It deploys only a clean checkout at origin/main, and goes back to the
+sets up the sending domain (removed from `.env` 2026-10-25, once the domain was verified).
+`deploy/backup-schedule.sh` turns on the nightly copy of the server's disk (kept 14 days). It deploys only a clean checkout at origin/main, and goes back to the
 previous version if the new relay doesn't answer.
 
 Mac app (run in `macos/`; `project.yml` is the source, the `.xcodeproj` is generated):
