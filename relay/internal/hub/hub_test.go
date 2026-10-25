@@ -102,6 +102,26 @@ func (e *env) state() store.DeviceState {
 	return st
 }
 
+// stored waits until the device's row in the database satisfies ok, and returns it. The hub
+// changes what it holds in memory first and writes the database right after, so a test that
+// goes on to read the row waits for the row, not only for Online().
+func (e *env) stored(ok func(store.DeviceState) bool) store.DeviceState {
+	e.t.Helper()
+	var st store.DeviceState
+	require.Eventually(e.t, func() bool {
+		var err error
+		st, err = e.store.DeviceState(context.Background(), e.device.ID)
+		return err == nil && ok(st)
+	}, 5*time.Second, 10*time.Millisecond, "the stored device state")
+	return st
+}
+
+// connectedAndReported: the row says online and holds the state and the tool list the test
+// agent sends right after connecting (its last frames).
+func connectedAndReported(st store.DeviceState) bool {
+	return st.Online && len(st.StateJSON) > 0 && strings.Contains(string(st.ToolsJSON), "battery_status")
+}
+
 func (e *env) waitOnline(want bool) {
 	e.t.Helper()
 	require.Eventually(e.t, func() bool { return e.hub.Online(e.device.ID) == want }, 5*time.Second, 10*time.Millisecond)
@@ -113,7 +133,7 @@ func TestHandshake(t *testing.T) {
 	assert.Equal(t, 1, c.Welcome.HeartbeatIntervalS)
 	e.waitOnline(true)
 
-	st := e.state()
+	st := e.stored(connectedAndReported)
 	assert.True(t, st.Online)
 	assert.False(t, st.ConnectedAt.IsZero())
 	var s agentproto.State
@@ -216,7 +236,7 @@ func TestNewerConnectionReplacesOlder(t *testing.T) {
 
 	time.Sleep(100 * time.Millisecond)
 	assert.True(t, e.hub.Online(e.device.ID), "the newer connection stays online")
-	assert.True(t, e.state().Online)
+	assert.True(t, e.stored(func(st store.DeviceState) bool { return st.Online }).Online)
 
 	res, err := e.hub.Call(ctxT(t), e.device.ID, "battery_status", nil, time.Second, nil)
 	require.NoError(t, err)
@@ -229,14 +249,14 @@ func TestSilentMacGoesOffline(t *testing.T) {
 	e.agent.NoHeartbeat = true
 	c := e.dial()
 	e.waitOnline(true)
-	connected := e.state()
+	connected := e.stored(connectedAndReported)
 
 	c.Freeze()
 	start := time.Now()
 	e.waitOnline(false)
 	assert.Less(t, time.Since(start), 2*time.Second)
 
-	st := e.state()
+	st := e.stored(func(st store.DeviceState) bool { return !st.Online })
 	assert.False(t, st.Online)
 	assert.Empty(t, st.OfflineReason)
 	assert.Equal(t, connected.LastSeenAt, st.LastSeenAt, "last seen stays at the last frame")
