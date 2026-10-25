@@ -181,7 +181,7 @@ enum Keychain {
         return SecKeychainOpen(path, &keychain) == errSecSuccess ? keychain : nil
     }
 
-    private static func query(_ account: String) -> [String: Any] {
+    private static func query(_ account: String, _ service: String) -> [String: Any] {
         var q: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service,
             kSecAttrAccount as String: account,
@@ -190,20 +190,31 @@ enum Keychain {
         return q
     }
 
-    static func read(account: String) -> Data? {
-        var q = query(account)
+    static func read(account: String, service: String = service) -> Data? {
+        // Two steps: the Keychain refuses "all matches, with their data" for passwords
+        // (errSecParam), which made every read of 0.8.4–0.8.7 fail. First count the matches
+        // without their data, then read the one.
+        var count = query(account, service)
+        count[kSecReturnAttributes as String] = true
+        count[kSecMatchLimit as String] = kSecMatchLimitAll
+        count[kSecUseAuthenticationUI as String] = kSecUseAuthenticationUIFail
+        var found: CFTypeRef?
+        guard SecItemCopyMatching(count as CFDictionary, &found) == errSecSuccess,
+            let all = found as? [Any], all.count == 1
+        else { return nil }
+
+        var q = query(account, service)
         q[kSecReturnData as String] = true
-        q[kSecMatchLimit as String] = kSecMatchLimitAll
+        q[kSecMatchLimit as String] = kSecMatchLimitOne
         q[kSecUseAuthenticationUI as String] = kSecUseAuthenticationUIFail
         var out: CFTypeRef?
-        guard SecItemCopyMatching(q as CFDictionary, &out) == errSecSuccess, let all = out as? [Data], all.count == 1
-        else { return nil }
-        return all[0]
+        guard SecItemCopyMatching(q as CFDictionary, &out) == errSecSuccess else { return nil }
+        return out as? Data
     }
 
-    static func write(_ data: Data, account: String) throws {
-        delete(account: account)
-        var q = query(account)
+    static func write(_ data: Data, account: String, service: String = service) throws {
+        delete(account: account, service: service)
+        var q = query(account, service)
         q.removeValue(forKey: kSecMatchSearchList as String)
         if let login { q[kSecUseKeychain as String] = login }
         q[kSecValueData as String] = data
@@ -214,7 +225,7 @@ enum Keychain {
         }
     }
 
-    static func delete(account: String) {
-        SecItemDelete(query(account) as CFDictionary)
+    static func delete(account: String, service: String = service) {
+        SecItemDelete(query(account, service) as CFDictionary)
     }
 }

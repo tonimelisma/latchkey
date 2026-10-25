@@ -49,6 +49,15 @@ paths:
   user defaults and Keychain. Tests must never touch `UserDefaults.standard`, the Keychain, or
   `DeviceIdentity` (an uninstall test erased Toni's pairing twice on 2026-10-22);
   the real `KeychainVault` changes nothing under XCTest; pairing tests inject a `MemoryVault`.
+  The Keychain calls themselves are tested only against a throwaway service name
+  (`KeychainTests`), never the app's own.
+- A password search can't ask for all matches together with their data
+  (`kSecMatchLimitAll` + `kSecReturnData` is errSecParam, -50). 0.8.4–0.8.7 read the pairing and
+  the activity-log key that way, so every restart found neither: the Mac came up unpaired and a
+  new log key replaced the old one. Nothing caught it because every test used a stand-in vault
+  and the app wasn't restarted after pairing. Count matches without data, then read the one;
+  and after any change to stored data, restart the installed app and check it still starts
+  paired (`install.sh` prints the start line).
 - Never call `NSApp.terminate` from inside a main-queue block (a dispatch source handler,
   `DispatchQueue.main.async`): with `.terminateLater`, AppKit's wait for the reply runs nested in
   that block, the serial main queue never runs again, and the app hangs forever (SIGTERM, 0.8.2).
