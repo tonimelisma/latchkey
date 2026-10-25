@@ -153,9 +153,9 @@ func TestHandshakeRejections(t *testing.T) {
 	assert.Equal(t, agentproto.CloseUnsupportedVersion, e.dialRejected(&noProto), "no subprotocol")
 
 	for name, raw := range map[string]string{
-		"unknown type":   `{"type":"reboot"}`,
-		"wrong type":     `{"type":"state","state":{}}`,
-		"not json":       `hello`,
+		"unknown type": `{"type":"reboot"}`,
+		"wrong type":   `{"type":"state","state":{}}`,
+		"not json":     `hello`,
 	} {
 		a := *e.agent
 		a.RawHello = []byte(raw)

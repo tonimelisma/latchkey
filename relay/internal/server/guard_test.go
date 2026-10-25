@@ -158,7 +158,7 @@ func TestSlowBodiesAreCutOff(t *testing.T) {
 	t.Cleanup(srv.Close)
 
 	for _, path := range []string{"/auth/email", "/mcp"} {
-		conn, err := net.Dial("tcp", strings.TrimPrefix(srv.URL, "http://"))
+		conn, err := (&net.Dialer{}).DialContext(t.Context(), "tcp", strings.TrimPrefix(srv.URL, "http://"))
 		require.NoError(t, err)
 		t.Cleanup(func() { _ = conn.Close() }) // before the server closes, which waits for it
 		_, err = io.WriteString(conn, "POST "+path+" HTTP/1.1\r\nHost: relay\r\nContent-Type: application/json\r\nContent-Length: 100\r\n\r\n{")

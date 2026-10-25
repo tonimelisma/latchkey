@@ -475,7 +475,7 @@ func TestAuditSurfaceIsBounded(t *testing.T) {
 	e := setup(t)
 	e.pair()
 	e.connectMac()
-	c := mcp.NewClient(&mcp.Implementation{Name: "evil\x00\n\x1b[31m‮" + strings.Repeat("é", 5000), Version: "1"}, nil)
+	c := mcp.NewClient(&mcp.Implementation{Name: "evil\x00\n\x1b[31m\u202e" + strings.Repeat("é", 5000), Version: "1"}, nil)
 	cs, err := c.Connect(ctx(t), &mcp.StreamableClientTransport{
 		Endpoint: e.srv.URL + "/mcp", HTTPClient: &http.Client{Transport: bearer{"token-" + e.user.ID}}, MaxRetries: -1,
 	}, &mcp.ClientSessionOptions{ProtocolVersion: stateful})

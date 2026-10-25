@@ -48,8 +48,8 @@ type Config struct {
 	// it with 4005 (FR-091). Defaults 60 and 200 ms: the app sends state every 15 s and on change.
 	FrameBurst    int
 	FrameInterval time.Duration
-	Now               func() time.Time
-	Logger            *slog.Logger
+	Now           func() time.Time
+	Logger        *slog.Logger
 
 	// OnToolsChanged is called when a user's Mac tool list may have changed.
 	OnToolsChanged func(userID string)

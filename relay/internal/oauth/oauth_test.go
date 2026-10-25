@@ -880,12 +880,14 @@ func TestCodeRedeemedConcurrently(t *testing.T) {
 		for range 8 {
 			wg.Go(func() {
 				req, err := http.NewRequestWithContext(ctxT(t), http.MethodPost, e.srv.URL+"/token", strings.NewReader(form.Encode()))
-				if !assert.NoError(t, err) {
+				if err != nil {
+					t.Error(err)
 					return
 				}
 				req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 				resp, err := http.DefaultClient.Do(req)
-				if !assert.NoError(t, err) {
+				if err != nil {
+					t.Error(err)
 					return
 				}
 				defer func() { _ = resp.Body.Close() }()
@@ -917,12 +919,12 @@ func TestCodeRedeemedConcurrently(t *testing.T) {
 func TestClientNameLosesEveryKindOfBracket(t *testing.T) {
 	e := setup(t)
 	for _, name := range []string{
-		"Claude （claude.ai）", // fullwidth parentheses
-		"Claude ﹙claude.ai﹚", // small parentheses
-		"Claude ❨claude.ai❩", // ornament parentheses
-		"Claude [claude.ai]", "Claude {claude.ai}", "Claude ⟨claude.ai⟩", "Claude 「claude.ai」",
-		"Claude ⁽claude.ai⁾", // superscript parentheses
-		"Claude ﴾claude.ai﴿", // ornate parentheses (the open one is a close, and the reverse)
+		"Claude \uff08claude.ai\uff09", // fullwidth parentheses
+		"Claude \ufe59claude.ai\ufe5a", // small parentheses
+		"Claude \u2768claude.ai\u2769", // ornament parentheses
+		"Claude [claude.ai]", "Claude {claude.ai}", "Claude \u27e8claude.ai\u27e9", "Claude \u300cclaude.ai\u300d",
+		"Claude \u207dclaude.ai\u207e", // superscript parentheses
+		"Claude \ufd3eclaude.ai\ufd3f", // ornate parentheses (the open one is a close, and the reverse)
 	} {
 		c := e.consentFor(e.registerNamed(name, "https://evil.example/cb"), "https://evil.example/cb")
 		assert.Equal(t, "Claude claude.ai", c.ClientName, "%q", name)

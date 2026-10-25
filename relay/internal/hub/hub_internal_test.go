@@ -38,8 +38,9 @@ func TestRevokedDuringHandshakeIsClosed(t *testing.T) {
 
 	// The Owner disconnects the Mac on the account page in the middle of its handshake.
 	h.beforeRegister = func() {
-		assert.NoError(t, st.RevokeDevice(ctx, d.ID, time.Now()))
+		err := st.RevokeDevice(ctx, d.ID, time.Now())
 		h.Revoke(d.ID)
+		assert.NoError(t, err)
 	}
 	c, err := agent.Dial(ctx)
 	if err != nil {

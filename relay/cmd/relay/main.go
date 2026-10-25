@@ -70,8 +70,8 @@ func run(ctx context.Context) error {
 		ReadHeaderTimeout: 10 * time.Second,
 		// No ReadTimeout: it would stay armed while a tool call or an MCP event stream answers,
 		// and end it. Request bodies have their own deadline in the server package's guard (FR-094).
-		IdleTimeout:       2 * time.Minute, // idle keep-alive connections; Mac WebSockets are taken over and not affected
-		MaxHeaderBytes:    64 << 10,
+		IdleTimeout:    2 * time.Minute, // idle keep-alive connections; Mac WebSockets are taken over and not affected
+		MaxHeaderBytes: 64 << 10,
 	}
 	if cfg.ACMEEmail != "" {
 		m := &autocert.Manager{

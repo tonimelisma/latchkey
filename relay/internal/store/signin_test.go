@@ -401,12 +401,12 @@ func TestCodeIsMarkedUsedOnce(t *testing.T) {
 	var marked atomic.Int32
 	for range 8 {
 		wg.Go(func() {
-			switch err := s.MarkOAuthRequestUsed(ctx, store.KindCode, "code", t0.Add(time.Second)); {
-			case err == nil:
+			err := s.MarkOAuthRequestUsed(ctx, store.KindCode, "code", t0.Add(time.Second))
+			if err == nil {
 				marked.Add(1)
-			default:
-				assert.ErrorIs(t, err, store.ErrNotFound)
+				return
 			}
+			assert.ErrorIs(t, err, store.ErrNotFound)
 		})
 	}
 	wg.Wait()

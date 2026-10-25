@@ -68,5 +68,5 @@ func TestSyncToolsNeverAppliesAnOlderList(t *testing.T) {
 func TestCleanSurface(t *testing.T) {
 	assert.Equal(t, "claude-ai", cleanSurface("claude-ai"))
 	assert.Empty(t, cleanSurface("\x00\r\n\t"))
-	assert.Equal(t, "ab", cleanSurface("a​b\xff"))
+	assert.Equal(t, "ab", cleanSurface("a\u200bb\xff"))
 }

@@ -1050,5 +1050,4 @@ func TestCeremoniesAreCapped(t *testing.T) {
 	status, _ = b.json("/passkey/login/begin", map[string]string{"purpose": "signin"})
 	assert.Equal(t, http.StatusOK, status, "room again once the old ones expired")
 	assert.Equal(t, 1, e.svc.PendingCeremonies(), "expired ones are swept, not kept")
-
 }
