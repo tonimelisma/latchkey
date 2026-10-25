@@ -149,8 +149,21 @@ func (s *storage) CreatePKCERequestSession(ctx context.Context, signature string
 	return s.put(ctx, store.KindPKCE, signature, req, fosite.AuthorizeCode)
 }
 
+// GetPKCERequestSession also ends the grant of a code whose PKCE record is already gone: the
+// record is deleted by the first exchange of the code, so a request that finds the code but not
+// its PKCE record is presenting the code a second time, at the same moment as the first (which
+// had not marked the code used yet when this one read it). Without this, such a request failed
+// here and the first exchange's tokens lived on (FR-096).
 func (s *storage) GetPKCERequestSession(ctx context.Context, signature string, _ fosite.Session) (fosite.Requester, error) {
 	req, _, err := s.get(ctx, store.KindPKCE, signature)
+	if errors.Is(err, fosite.ErrNotFound) {
+		if row, cerr := s.st.OAuthRequest(ctx, store.KindCode, signature); cerr == nil {
+			if rerr := s.st.RevokeGrant(ctx, row.RequestID, s.now()); rerr != nil {
+				return nil, rerr
+			}
+			s.grantRevoked(ctx, row.RequestID)
+		}
+	}
 	return req, err
 }
 

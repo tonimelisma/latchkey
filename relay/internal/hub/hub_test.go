@@ -229,12 +229,22 @@ func TestSilentMacGoesOffline(t *testing.T) {
 	e.agent.NoHeartbeat = true
 	c := e.dial()
 	e.waitOnline(true)
+	// The hub registers a connection a moment before it stores its state, and unregisters it a
+	// moment before it stores "offline": wait for the store, which is what this test reads.
+	stored := func(online bool) func() bool {
+		return func() bool {
+			st, err := e.store.DeviceState(context.Background(), e.device.ID)
+			return err == nil && st.Online == online
+		}
+	}
+	require.Eventually(t, stored(true), 5*time.Second, 10*time.Millisecond)
 	connected := e.state()
 
 	c.Freeze()
 	start := time.Now()
 	e.waitOnline(false)
 	assert.Less(t, time.Since(start), 2*time.Second)
+	require.Eventually(t, stored(false), 5*time.Second, 10*time.Millisecond)
 
 	st := e.state()
 	assert.False(t, st.Online)
