@@ -68,6 +68,8 @@ func run(ctx context.Context) error {
 		Addr:              ":" + strconv.Itoa(cfg.Port), // all interfaces, IPv4 and IPv6 (plan D10)
 		Handler:           r.Handler,
 		ReadHeaderTimeout: 10 * time.Second,
+		// No ReadTimeout: it would stay armed while a tool call or an MCP event stream answers,
+		// and end it. Request bodies have their own deadline in the server package's guard (FR-094).
 		IdleTimeout:       2 * time.Minute, // idle keep-alive connections; Mac WebSockets are taken over and not affected
 		MaxHeaderBytes:    64 << 10,
 	}

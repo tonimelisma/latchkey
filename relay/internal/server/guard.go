@@ -1,6 +1,7 @@
 package server
 
 import (
+	"io"
 	"net/http"
 	"net/url"
 	"strings"
@@ -17,6 +18,30 @@ const (
 	maxMCPBody   = 16 << 20
 	maxOtherBody = 1 << 20
 )
+
+// How long a client may take to send a request body (FR-094): the small forms and JSON objects
+// of the ordinary routes, and the up to 16 MiB of an MCP request. Variables so tests can shorten
+// them.
+var (
+	otherBodyTimeout = 30 * time.Second
+	mcpBodyTimeout   = 2 * time.Minute
+)
+
+// deadlineBody clears the connection's read deadline once the body has been read to its end, so
+// the deadline covers the body and nothing after it: not a slow tool call's answer, not an MCP
+// event stream. (A server-wide ReadTimeout would stay armed during the response and cancel it.)
+type deadlineBody struct {
+	io.ReadCloser
+	rc *http.ResponseController
+}
+
+func (b *deadlineBody) Read(p []byte) (int, error) {
+	n, err := b.ReadCloser.Read(p)
+	if err == io.EOF {
+		_ = b.rc.SetReadDeadline(time.Time{})
+	}
+	return n, err
+}
 
 // rule is one abuse limit: which requests it covers and its per-key bucket.
 type rule struct {
@@ -88,9 +113,18 @@ func guard(public *url.URL, proxies limit.TrustedProxies, next http.Handler) htt
 		}
 
 		if r.Body != nil {
-			max := int64(maxOtherBody)
+			max, timeout := int64(maxOtherBody), otherBodyTimeout
 			if r.URL.Path == "/mcp" {
-				max = maxMCPBody
+				max, timeout = maxMCPBody, mcpBodyTimeout
+			}
+			// A request that carries a body must deliver it in time. Requests without one (event
+			// streams, the Mac's WebSocket upgrade) get no deadline. Where the connection can't
+			// take a deadline, the request goes on without one.
+			if r.Body != http.NoBody && r.ContentLength != 0 {
+				rc := http.NewResponseController(w)
+				if rc.SetReadDeadline(time.Now().Add(timeout)) == nil {
+					r.Body = &deadlineBody{ReadCloser: r.Body, rc: rc}
+				}
 			}
 			if r.ContentLength > max {
 				http.Error(w, "Request too large.", http.StatusRequestEntityTooLarge)

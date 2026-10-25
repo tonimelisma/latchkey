@@ -3,12 +3,14 @@ package server
 import (
 	"bytes"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -129,4 +131,80 @@ func send(t *testing.T, method, url, contentType string, body io.Reader) (*http.
 		req.Header.Set("Content-Type", contentType)
 	}
 	return http.DefaultClient.Do(req)
+}
+
+// shortBodyTimeouts makes the body deadlines short for a test.
+func shortBodyTimeouts(t *testing.T, d time.Duration) {
+	t.Helper()
+	mcp, other := mcpBodyTimeout, otherBodyTimeout
+	mcpBodyTimeout, otherBodyTimeout = d, d
+	t.Cleanup(func() { mcpBodyTimeout, otherBodyTimeout = mcp, other })
+}
+
+// A client that sends its headers and then trickles (or never sends) the body is cut off after
+// the body deadline instead of holding a connection and a goroutine for as long as it likes
+// (FR-094).
+func TestSlowBodiesAreCutOff(t *testing.T) {
+	shortBodyTimeouts(t, 300*time.Millisecond)
+	read := make(chan error, 4)
+	h := guard(nil, nil, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, err := io.ReadAll(r.Body)
+		read <- err
+		if err != nil {
+			http.Error(w, "body not received", http.StatusBadRequest)
+		}
+	}))
+	srv := httptest.NewServer(h)
+	t.Cleanup(srv.Close)
+
+	for _, path := range []string{"/auth/email", "/mcp"} {
+		conn, err := net.Dial("tcp", strings.TrimPrefix(srv.URL, "http://"))
+		require.NoError(t, err)
+		t.Cleanup(func() { _ = conn.Close() }) // before the server closes, which waits for it
+		_, err = io.WriteString(conn, "POST "+path+" HTTP/1.1\r\nHost: relay\r\nContent-Type: application/json\r\nContent-Length: 100\r\n\r\n{")
+		require.NoError(t, err)
+		select {
+		case err := <-read:
+			require.Error(t, err, "the handler's read ends with a timeout: "+path)
+		case <-time.After(3 * time.Second):
+			t.Fatal("the relay kept waiting for a body that never came: " + path)
+		}
+		_ = conn.Close()
+	}
+}
+
+// The deadline covers the body only: once it is read, a slow answer (a tool call, an MCP event
+// stream) is not cut off, and the next request on the same connection starts fresh.
+func TestBodyDeadlineEndsWithTheBody(t *testing.T) {
+	shortBodyTimeouts(t, 200*time.Millisecond)
+	h := guard(nil, nil, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if _, err := io.ReadAll(r.Body); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		select {
+		case <-r.Context().Done():
+			http.Error(w, "cut off", http.StatusServiceUnavailable)
+		case <-time.After(600 * time.Millisecond): // three body deadlines
+			_, _ = io.WriteString(w, "done")
+		}
+	}))
+	srv := httptest.NewServer(h)
+	t.Cleanup(srv.Close)
+	for range 2 { // the second reuses the connection
+		for _, path := range []string{"/mcp", "/token"} {
+			res, err := send(t, "POST", srv.URL+path, "application/json", strings.NewReader(`{"jsonrpc":"2.0"}`))
+			require.NoError(t, err)
+			body, _ := io.ReadAll(res.Body)
+			_ = res.Body.Close()
+			assert.Equal(t, http.StatusOK, res.StatusCode, path)
+			assert.Equal(t, "done", string(body), path)
+		}
+	}
+	// A request without a body (an event stream, the Mac's WebSocket) gets no deadline at all.
+	res, err := send(t, "GET", srv.URL+"/mcp", "", nil)
+	require.NoError(t, err)
+	body, _ := io.ReadAll(res.Body)
+	_ = res.Body.Close()
+	assert.Equal(t, "done", string(body))
 }

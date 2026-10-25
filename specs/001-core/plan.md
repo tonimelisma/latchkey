@@ -347,6 +347,14 @@ Serves FR-080, Constitution V, VIII.
   only; FR-082). Abuse limits key on the rightmost `X-Forwarded-For` entry from such a peer and on
   the peer's own address otherwise. The hosted deploy sets it to the subnets of the docker network
   Caddy shares with the relay (research.md).
+- Slow requests (FR-094; security review, 2026-10-25): headers must arrive within 10 s
+  (`ReadHeaderTimeout`). A request with a body gets a read deadline when it arrives (30 s; 2
+  minutes on `/mcp`, whose bodies may be 16 MiB), set per request with
+  `http.ResponseController` and cleared the moment the body has been read to its end. Options
+  weighed: the server-wide `ReadTimeout` (stays armed after the body and cancels the request when
+  it fires, which would end tool calls and MCP event streams, and it can't differ per route), or
+  a deadline per request that ends with the body (chosen). Requests without a body (event
+  streams, the Mac's WebSocket upgrade) get none.
 - Listening: one port, `PORT`, on all network interfaces, IPv4 and IPv6 (research.md). Plain HTTP
   behind a proxy; with `ACME_EMAIL` set, HTTPS on the same port, and the self-hoster maps public
   port 443 to it (Let's Encrypt checks port 443). Certificates and the ACME account key are cached

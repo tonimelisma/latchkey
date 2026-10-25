@@ -270,6 +270,9 @@ Format: EARS ("When <trigger>, the <system> shall <response>"). IDs are stable; 
   anything else the Mac sent.
 - **FR-093** When a request from Claude is cancelled or its client goes away, the Mac's
   connection shall stay up.
+- **FR-094** When a client takes longer than 30 seconds to send a request's body (2 minutes for
+  a request to the connector URL, which may carry a file), the relay shall stop waiting for it.
+  Answers that take long, and the Mac's connection, are not affected.
 
 ## Success criteria
 
