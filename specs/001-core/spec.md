@@ -164,6 +164,10 @@ Format: EARS ("When <trigger>, the <system> shall <response>"). IDs are stable; 
   behavior shall be restored.
 - **FR-036** The Mac app shall report battery, power, thermal, and keep-awake state to the relay at
   least once per heartbeat interval and immediately on any change.
+- **FR-036a** When the Mac's state changes several times within a second, the Mac app shall
+  report the first change at once and the latest state when the second is over, and shall not
+  report again a state that hasn't changed, so a burst of changes can't flood the relay
+  (security review, 2026-10-25).
 - **FR-037** The Mac app shall report its IANA time zone in its state, and the relay shall render
   times in offline messages in that time zone, falling back to UTC when unknown.
 
@@ -205,6 +209,13 @@ Format: EARS ("When <trigger>, the <system> shall <response>"). IDs are stable; 
   window, the app shall connect only after the Owner confirms in a dialog that names the relay and
   the email address of the account the link belongs to, and says that it replaces the current
   pairing if there is one (Toni, 2026-10-24, security scan).
+- **FR-054a** While the Mac app is handling one such pairing link (looking up its account, asking
+  the Owner, or connecting), it shall ignore any further pairing link (security review,
+  2026-10-25).
+- **FR-054b** When a pairing link names a relay that isn't reached over an encrypted connection,
+  the Mac app shall not use it; development builds alone accept a link to an unencrypted relay
+  on the same Mac. The relay address the Owner types in is unaffected (security review,
+  2026-10-25).
 
 ### Capabilities
 - **FR-060** The Mac app shall let the Owner enable and disable each capability.
@@ -213,6 +224,11 @@ Format: EARS ("When <trigger>, the <system> shall <response>"). IDs are stable; 
 - **FR-062** When the enabled set changes, the Mac app shall send the new tool list to the relay
   and the relay shall notify connected Claude sessions that the list changed, where the protocol
   supports it.
+- **FR-066** When the Owner turns a capability off or lowers its level, the Mac app shall at once
+  stop every running call that the new level no longer allows and answer each with an error
+  saying that the Mac's owner turned that capability off, or down, in the app. Calls the new
+  level still allows shall keep running, and raising a level shall stop nothing (Toni,
+  2026-10-25).
 - **FR-064** *Withdrawn 2026-10-22 with FR-063.*
 - **FR-063** *Withdrawn 2026-10-22 (Toni): the "System info" capability and `battery_status` are
   removed; the first real capability is Notes and Messages (spec 002).*
@@ -280,6 +296,8 @@ Measurable, technology-free. Each one has a test.
 - Recovery email is intercepted: links are single-use, short-lived, and recovery is announced to
   the account email and in the Mac app.
 - The Owner revokes the Mac while a call is in flight: the call fails with "Mac disconnected".
+- The Owner turns a capability off or down while one of its calls is in flight: the call is
+  stopped and answered with the reason (FR-066). A change it had already made stays made.
 
 ## Open questions
 

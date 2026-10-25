@@ -40,6 +40,7 @@ actor ShellJobs {
         private var trimmed = 0
         private var mark = 0
         private(set) var ended: Date?
+        private var sessionLeader: pid_t?
 
         init(id: String, command: String, process: Process, input: FileHandle) {
             self.id = id
@@ -61,6 +62,30 @@ actor ShellJobs {
             }
         }
 
+        /// The command's terminal session: `script` starts the shell as the leader of a new one,
+        /// and everything the command starts stays in it unless it deliberately leaves. Found
+        /// while `script` runs and remembered, since its child is no longer its child once it
+        /// has exited.
+        func session() -> pid_t? {
+            lock.withLock {
+                if sessionLeader == nil {
+                    sessionLeader = Processes.sessionLeader(under: process.processIdentifier)
+                }
+                return sessionLeader
+            }
+        }
+
+        /// Sends `signal` to every process in the command's session and to `script` itself.
+        func signalAll(_ signal: Int32) {
+            if let leader = session() { Processes.members(ofSession: leader).forEach { kill($0, signal) } }
+            if process.isRunning { kill(process.processIdentifier, signal) }
+        }
+
+        /// True while any process of the command's session is left.
+        var hasProcesses: Bool {
+            process.isRunning || (session().map { !Processes.members(ofSession: $0).isEmpty } ?? false)
+        }
+
         func finish() { lock.withLock { ended = Date() } }
         var isFinished: Bool { lock.withLock { ended != nil } }
 
@@ -75,11 +100,23 @@ actor ShellJobs {
         }
     }
 
+    static let maxRunning = 32
+
     private var jobs: [String: Job] = [:]
     private var counter = 0
+    private let maxRunning: Int
+
+    init(maxRunning: Int = ShellJobs.maxRunning) { self.maxRunning = maxRunning }
 
     func run(_ command: String, folder: String?, wait: Duration) async throws -> Snapshot {
         cleanup()
+        let running = jobs.values.filter { !$0.isFinished }.count
+        guard running < maxRunning else {
+            throw Failure(
+                message:
+                    "\(running) commands are already running, the most Latchkey runs at once. Wait for one to finish or stop one (shell_run with job and stop); shell_check lists them."
+            )
+        }
         counter += 1
         let id = "job\(counter)"
         let p = Process()
@@ -111,6 +148,11 @@ actor ShellJobs {
         }
         try p.run()
         jobs[id] = job
+        Task.detached {  // note the session as soon as `script` has started the shell
+            for _ in 0..<100 where job.session() == nil && !job.isFinished {
+                try? await Task.sleep(for: .milliseconds(20))
+            }
+        }
         return try await snapshot(job, waiting: min(wait, Self.maxWait))
     }
 
@@ -124,18 +166,35 @@ actor ShellJobs {
         try job.input.write(contentsOf: Data((text + (enter ? "\n" : "")).utf8))
     }
 
-    /// Ctrl-C, then the session is ended after 3 s, then killed (plan D3).
+    /// Ctrl-C, then after 3 s everything in the command's terminal session is asked to end, then
+    /// killed (plan D3): the shell, what it started, and what those started, so nothing the
+    /// command left in the background survives it.
     func stop(_ id: String) async throws -> Snapshot {
         let job = try job(id)
         if !job.isFinished {
+            _ = job.session()
             try? job.input.write(contentsOf: Data([0x03]))
-            if !(await waitForEnd(job, .seconds(3))) {
-                job.process.terminate()
-                if !(await waitForEnd(job, .seconds(2))) { kill(job.process.processIdentifier, SIGKILL) }
-            }
-            _ = await waitForEnd(job, .seconds(2))
+            _ = await waitForEnd(job, .seconds(3), evenIfCancelled: true)
+            await end(job)
         }
         return try await snapshot(job, waiting: .zero)
+    }
+
+    /// Ends whatever is left of a job: terminate, then kill after a second.
+    private func end(_ job: Job) async {
+        guard job.hasProcesses else { return }
+        job.signalAll(SIGTERM)
+        if !(await gone(job, within: .seconds(1))) {
+            job.signalAll(SIGKILL)
+            _ = await gone(job, within: .seconds(2))
+        }
+        _ = await waitForEnd(job, .seconds(2), evenIfCancelled: true)
+    }
+
+    private func gone(_ job: Job, within limit: Duration) async -> Bool {
+        let deadline = ContinuousClock.now + limit
+        while job.hasProcesses, ContinuousClock.now < deadline { await Self.pause(.milliseconds(25)) }
+        return !job.hasProcesses
     }
 
     func list() -> [Summary] {
@@ -147,9 +206,13 @@ actor ShellJobs {
         }
     }
 
-    /// FR-309: called when Latchkey quits.
-    func stopAll() {
-        for job in jobs.values where !job.isFinished { job.process.terminate() }
+    /// FR-309, FR-310: called when Latchkey quits and when the Owner turns Shell off. Every
+    /// running command ends with everything it started, all at the same time.
+    func stopAll() async {
+        let running = jobs.values.filter { !$0.isFinished }
+        await withTaskGroup(of: Void.self) { group in
+            for job in running { group.addTask { await self.end(job) } }
+        }
     }
 
     // MARK: helpers
@@ -162,10 +225,24 @@ actor ShellJobs {
         return job
     }
 
-    private func waitForEnd(_ job: Job, _ limit: Duration) async -> Bool {
+    /// Waits for the job to end, at most `limit`. A caller that was cancelled (the relay gave up,
+    /// or the Owner turned Shell off) stops waiting at once; stopping a job waits regardless.
+    private func waitForEnd(_ job: Job, _ limit: Duration, evenIfCancelled: Bool = false) async -> Bool {
         let deadline = ContinuousClock.now + limit
-        while !job.isFinished, ContinuousClock.now < deadline { try? await Task.sleep(for: .milliseconds(50)) }
+        while !job.isFinished, ContinuousClock.now < deadline {
+            if Task.isCancelled {
+                if !evenIfCancelled { break }
+                await Self.pause(.milliseconds(50))
+            } else {
+                try? await Task.sleep(for: .milliseconds(50))
+            }
+        }
         return job.isFinished
+    }
+
+    /// A sleep that a cancelled task still sleeps.
+    private static func pause(_ time: Duration) async {
+        await Task.detached { try? await Task.sleep(for: time) }.value
     }
 
     private func snapshot(_ job: Job, waiting: Duration) async throws -> Snapshot {
@@ -178,12 +255,39 @@ actor ShellJobs {
             exitCode: finished ? job.process.terminationStatus : nil)
     }
 
-    /// Finished jobs stay 10 minutes; at most 20 are kept.
+    /// Finished jobs stay 10 minutes; at most 20 are kept. Running ones are capped in `run`.
     private func cleanup() {
         let now = Date()
         for (id, job) in jobs { if let end = job.ended, now.timeIntervalSince(end) > 600 { jobs[id] = nil } }
         let done = jobs.values.filter(\.isFinished).sorted { $0.started < $1.started }
         for job in done.dropLast(20) { jobs[job.id] = nil }
+    }
+}
+
+/// The processes of a command's terminal session.
+enum Processes {
+    static func all() -> [pid_t] {
+        var pids = [pid_t](repeating: 0, count: Int(proc_listallpids(nil, 0)) + 64)
+        let n = proc_listallpids(&pids, Int32(pids.count * MemoryLayout<pid_t>.size))
+        return Array(pids.prefix(max(Int(n), 0))).filter { $0 > 0 }
+    }
+
+    static func parent(of pid: pid_t) -> pid_t? {
+        var info = proc_bsdinfo()
+        let size = Int32(MemoryLayout<proc_bsdinfo>.size)
+        guard proc_pidinfo(pid, PROC_PIDTBSDINFO, 0, &info, size) == size else { return nil }
+        return pid_t(info.pbi_ppid)
+    }
+
+    /// The child of `script` that leads a session of its own (the shell on the terminal `script`
+    /// made). Nil until `script` has started it. Never this app's own session.
+    static func sessionLeader(under script: pid_t) -> pid_t? {
+        all().first { parent(of: $0) == script && getsid($0) == $0 && $0 != getsid(0) }
+    }
+
+    static func members(ofSession leader: pid_t) -> [pid_t] {
+        guard leader > 1, leader != getsid(0) else { return [] }
+        return all().filter { getsid($0) == leader }
     }
 }
 

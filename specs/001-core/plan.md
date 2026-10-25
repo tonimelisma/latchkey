@@ -38,6 +38,11 @@ second hop and a per-user provisioning step. A closed socket means "offline" ins
 - Transport: WSS on 443 (passes through home routers, hotel Wi-Fi, and most corporate proxies).
 - Liveness: the app sends a `state` message every 15 s; the relay also sends WebSocket pings.
   Offline after 35 s of silence (SC-04 requires 45 s).
+- What the app sends stays far inside the relay's limits on a Mac's connection (FR-036a): a
+  `state` on change goes out at most once a second (the first change at once, the latest state
+  when the second is over; a state equal to the last one sent, apart from the time it was read,
+  is not sent), plus one per heartbeat; a `tools` list per level change the Owner makes (15
+  tools, about 15 KiB; a test keeps it under 64 KiB); one `result` per call the relay sent.
 - Reconnect: immediately on network path change (`NWPathMonitor`) and on wake
   (`NSWorkspace.didWakeNotification`); otherwise exponential backoff with jitter, 1 s to 30 s cap
   (SC-05).
@@ -56,6 +61,14 @@ Serves FR-010, FR-013, FR-014, FR-021, SC-03, SC-07; Constitution II.
 - `tools/call` for a Mac tool goes to the hub. Offline: immediate `isError: true` result with the
   offline message (FR-010). Online: forwarded with a deadline (D3).
 - Tool-list changes: `notifications/tools/list_changed` to stateful sessions (FR-062).
+- A level turned off or down stops running work on the Mac (FR-066): after sending the new tool
+  list, the app looks at each running call; one whose tool is no longer in the list is cancelled
+  (its task, and with it the AppleScript, Spotlight, or other program it waits on) and answered
+  at once with an ordinary `result` with `is_error` and the reason ("The Mac's owner turned Files
+  off in the Latchkey app while this was running, so it was stopped. It may not have finished.").
+  The call's own late result is dropped, and the activity log records what Claude was told.
+  Calls whose tool is still listed are not touched, so raising a level stops nothing. No new
+  protocol message: the relay sees a normal answer. Shell's jobs: spec 004 FR-310.
 
 ### D3. Deadlines
 Serves FR-011, Constitution II.
@@ -180,6 +193,14 @@ Serves FR-050, FR-051, FR-052, FR-053, FR-054; Constitution IV.
   up without using it (contracts/agent-protocol.md "Pairing"); if that fails the alert says the
   link expired and has no Connect button. Confirming cancels a sign-in window that is still open.
   A link carrying the code the sign-in window just delivered is ignored (already used).
+- One such link is handled at a time: while one is being looked up, shown, or exchanged, others
+  are dropped (and noted in the log), so links can't stack dialogs or make the app send a burst
+  of lookups (FR-054a). A link naming `http://localhost` or `http://127.0.0.1` is accepted only
+  in Debug builds; in the installed (Release) app it counts as incomplete, so a link can't make
+  the app talk to whatever listens on a local port. The relay field in setup still takes them
+  (FR-054b, FR-081).
+- The app's log (`log show`) carries relay addresses only as private data (a hash), never in
+  the clear.
 - During the exchange the app registers a P-256 public key whose private key lives in the Secure
   Enclave (CryptoKit). No bearer secret leaves the Mac.
 - The pairing (relay address, device ID, and the key's Secure Enclave blob) is one generic
@@ -212,7 +233,14 @@ Serves FR-030, FR-031, FR-035, FR-073; Constitution IV.
   no public API for this setting).
 - The Owner approves the helper once in System Settings → General → Login Items.
 - XPC: Mach service; the helper accepts connections only from our app's code-signing requirement
-  (`setCodeSigningRequirement`).
+  (`setCodeSigningRequirement`): the app's identifier, Apple's anchor, and the team the helper
+  itself is signed with. In Release builds the requirement also refuses a caller that carries
+  the debugging entitlement (`get-task-allow`), since any program running as the Owner can take
+  over such a process; a Debug app and its Debug helper, which both carry it, accept each other,
+  and the installed helper refuses a Debug app. The app checks the helper the same way. A build
+  signed without a team has no requirement to check: the helper accepts nobody and the app
+  doesn't connect at all (keep-awake then shows as needing the helper), rather than connecting
+  unchecked (security review, 2026-10-25).
 - Re-apply and verify on every power-source change (`IOPSNotificationCreateRunLoopSource`) and wake;
   read back the setting to confirm (FR-031).
 - Restore: the app turns it off on quit; the helper turns it off when its client disconnects and on
@@ -248,7 +276,9 @@ Serves FR-070, FR-071, FR-072; Constitution IV.
   Access for Messages, Apple Events, Accessibility) are incompatible with the App Sandbox, and
   changing that later would mean migrating containers. This deviation from "sandboxed where
   possible" is deliberate.
-- Updates: Sparkle 2 (pinned 2.10.0) with EdDSA-signed archives. Downloads and the update feed
+- Updates: Sparkle 2 (pinned to the commit of tag 2.10.0 in `project.yml`, not to the tag, which
+  could be moved; the version is in the comment beside it, where
+  `scripts/sparkle-advisories.sh` reads it) with EdDSA-signed archives. Downloads and the update feed
   (`appcast.xml`) are published on the repository's GitHub Releases by `macos/scripts/release.sh`.
   The updater starts only in builds that carry the public key; the feed needs a public repository.
 - Until the Developer ID exists: local builds with Toni's Apple Development certificate (team ID
@@ -369,6 +399,12 @@ latchkey/
   both the Go and the Swift tests so the two sides cannot drift.
 - Mac app: unit tests for the keep-awake state machine (inputs: power source, battery %,
   thermal state, user setting; output: on/off plus reason).
+- Mac app, level changes (FR-066): slow stand-in tools running as calls; lowering the level
+  answers the write with the reason and leaves the read running; raising stops nothing; the
+  program a cancelled call waits on ends. State reports (FR-036a): the decision function on
+  fixed times. Pairing links (FR-054a, FR-054b): the one-at-a-time gate and link parsing with
+  and without local addresses. Helper (D7): no connection without a requirement, and the test
+  app itself (a Debug build) fails the Release requirement.
 - Browser sign-in: an automated test drives headless Chrome with a virtual passkey through the
   real sign-up, sign-in, consent, and pairing pages, using `github.com/chromedp/chromedp` (MIT).
   Runs in any container with Chrome.

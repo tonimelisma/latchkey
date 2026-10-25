@@ -90,6 +90,70 @@ import Testing
         #expect(await jobs.list().first { $0.job == r.job }?.finished == true)
     }
 
+    /// Reads "PID:<n>" from a job's output.
+    static func pid(in output: String) throws -> pid_t {
+        let match = try #require(output.firstMatch(of: /PID:(\d+)/))
+        return try #require(pid_t(match.output.1))
+    }
+
+    static func alive(_ pid: pid_t) -> Bool { kill(pid, 0) == 0 }
+
+    /// True once the process is gone. A killed process stays visible for a moment, until the
+    /// system has cleared it away, so this looks for up to a second.
+    static func gone(_ pid: pid_t) async -> Bool {
+        for _ in 0..<50 where alive(pid) { try? await Task.sleep(for: .milliseconds(20)) }
+        return !alive(pid)
+    }
+
+    /// A command that leaves a process in the background that ignores Ctrl-C, hangup and
+    /// terminate, and then waits: only stopping the whole terminal session ends it.
+    static let stubborn = "(trap '' HUP INT TERM; exec sleep 300) & echo PID:$!; sleep 300"
+
+    @Test func stoppingAJobStopsEverythingItStarted() async throws {
+        let r = try await jobs.run(Self.stubborn, folder: nil, wait: .milliseconds(600))
+        let child = try Self.pid(in: r.output)
+        defer { kill(child, SIGKILL) }
+        #expect(Self.alive(child))
+        let stopped = try await jobs.stop(r.job)
+        #expect(stopped.finished)
+        #expect(await Self.gone(child), "a process the command left in the background survived")
+    }
+
+    /// FR-309, FR-310: quitting, or turning Shell off, stops every running command with all it
+    /// started.
+    @Test func stopAllStopsJobsAndEverythingTheyStarted() async throws {
+        let r = try await jobs.run(Self.stubborn, folder: nil, wait: .milliseconds(600))
+        let other = try await jobs.run("sleep 300", folder: nil, wait: .milliseconds(100))
+        let child = try Self.pid(in: r.output)
+        defer { kill(child, SIGKILL) }
+        let start = Date()
+        await jobs.stopAll()
+        #expect(Date().timeIntervalSince(start) < 5)
+        #expect(await Self.gone(child))
+        let list = await jobs.list()
+        #expect(list.first { $0.job == r.job }?.finished == true)
+        #expect(list.first { $0.job == other.job }?.finished == true)
+    }
+
+    /// Finding 6: running commands are capped, so Claude can't pile them up without end.
+    @Test func runningJobsAreCapped() async throws {
+        let few = ShellJobs(maxRunning: 2)
+        let a = try await few.run("sleep 300", folder: nil, wait: .milliseconds(100))
+        _ = try await few.run("sleep 300", folder: nil, wait: .milliseconds(100))
+        do {
+            _ = try await few.run("echo third", folder: nil, wait: .seconds(5))
+            Issue.record("a third command ran")
+        } catch let f as ShellJobs.Failure {
+            #expect(f.message.contains("2 commands are already running"), "\(f.message)")
+            #expect(f.message.contains("stop"), "says what to do")
+        }
+        _ = try await few.stop(a.job)
+        let again = try await few.run("echo fourth", folder: nil, wait: .seconds(10))
+        #expect(again.output.contains("fourth"), "room again after one stopped")
+        await few.stopAll()
+        #expect(ShellJobs.maxRunning == 32)
+    }
+
     @Test func unknownJobIsAnError() async {
         await #expect(throws: ShellJobs.Failure.self) { try await jobs.check("nope", wait: .zero) }
     }

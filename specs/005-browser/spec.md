@@ -41,6 +41,10 @@ phone, Claude can't check a reservation in the Owner's account or fill in a form
 - **FR-408** Each click, typing, and script Claude does shall appear in the menu's activity.
 - **FR-409** Browser shall open only http and https addresses (and about:blank); other kinds,
   such as javascript:, file:, and data:, shall be refused (Toni, 2026-10-24, security scan).
+- **FR-410** When Claude reads a page, Browser shall not give it what a password field holds,
+  nor what a field holds that the page marks as a password, a one-time code, or a card number
+  or security code; it shall say only that the field is filled in. Claude shall still be able
+  to type into such a field while Browser is Read & write (security review, 2026-10-25).
 
 ## Success criteria
 
@@ -54,3 +58,5 @@ phone, Claude can't check a reservation in the Owner's account or fill in a form
 - Sites that ignore script-driven clicks (rare): Claude is told nothing changed and can use
   computer control when the screen is on.
 - Safari not running: Latchkey starts it.
+- A sign-in form the browser filled in: Claude sees the fields, not the password (FR-410). A
+  password a page shows as ordinary text without marking the field is ordinary text.

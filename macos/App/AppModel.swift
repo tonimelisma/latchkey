@@ -38,6 +38,7 @@ final class AppModel {
     private var trashWatcher: TrashWatcher?
     private var uninstalling = false
     private let setupWindow = SetupWindow()
+    private let links = OneAtATime()
 
     /// Pairing and uninstall events, readable with `log show --predicate 'subsystem == "net.melisma.latchkey"'`.
     /// Events only, never arguments or results.
@@ -101,7 +102,7 @@ final class AppModel {
         purgeTrace()
         if let identity = DeviceIdentity.load() {
             Self.log.notice(
-                "Started \(Self.version, privacy: .public), paired with \(identity.relayURL.absoluteString, privacy: .public)"
+                "Started \(Self.version, privacy: .public), paired with \(identity.relayURL.absoluteString, privacy: .private(mask: .hash))"
             )
             relayURL = identity.relayURL
             connect(identity)
@@ -245,7 +246,13 @@ final class AppModel {
     func setLevel(_ id: String, _ level: AccessLevel) {
         capabilities.setLevel(id, level)
         defaults.set(capabilities.levels.mapValues(\.rawValue), forKey: Keys.levels)
-        Task { await connection?.sendTools() }  // FR-062
+        let registry = capabilities
+        Task { [connection] in
+            await connection?.sendTools()  // FR-062
+            // FR-066, spec 004 FR-310: what the new levels no longer allow stops now.
+            await LevelChange.stopWork(
+                registry, calls: { reason in await connection?.stopCalls(reason) }, shell: ShellCapability.jobs)
+        }
         if needsSetup { showSetup() }
     }
 
@@ -394,7 +401,10 @@ final class AppModel {
     /// window (whose callback goes straight to `pair`). Whether or not a pairing is in progress,
     /// it connects only after the Owner confirms a dialog naming the relay and the email of the
     /// account the code belongs to (FR-054), so a link from someone else can't quietly connect
-    /// this Mac to their account.
+    /// this Mac to their account. One link at a time: links that arrive while one is being looked
+    /// up, confirmed, or exchanged are dropped (FR-054a), so links can't pile up dialogs or
+    /// requests. A link naming an unencrypted relay on this Mac is "incomplete" outside
+    /// development builds (FR-054b).
     func open(_ url: URL) {
         guard let link = PairingFlow.parse(url), let relay = link.relay else {
             lastError = "That connection link is incomplete. Choose Connect to a Relay… again."
@@ -402,7 +412,14 @@ final class AppModel {
         }
         if pairing.isOwn(link.code) { return }  // the sign-in window already delivered it
         Task {
-            let email = try? await PairingFlow.preview(relay: relay, code: link.code)
+            let handled = await links.run { await self.confirmAndPair(relay: relay, code: link.code) }
+            if !handled { Self.log.notice("A pairing link arrived while another was being handled: ignored") }
+        }
+    }
+
+    private func confirmAndPair(relay: URL, code: String) async {
+        do {
+            let email = try? await PairingFlow.preview(relay: relay, code: code)
             let ask = PairingConfirmation(
                 relay: relay, email: email, current: isPaired ? relayURL : nil,
                 hosted: PairingFlow.normalize(Self.hostedRelay))
@@ -417,17 +434,15 @@ final class AppModel {
             }
             NSApp.activate()
             guard alert.runModal() == .alertFirstButtonReturn, ask.canConnect else { return }
-            Self.log.notice("Pairing link confirmed for \(relay.absoluteString, privacy: .public)")
+            Self.log.notice("Pairing link confirmed for \(relay.absoluteString, privacy: .private(mask: .hash))")
             pairing.cancelPending()  // the sign-in window's pairing, if one is open, gives way
-            do {
-                let identity = try await PairingFlow.exchange(
-                    relay: relay, code: link.code, macName: Host.current().localizedName ?? "Mac")
-                relayURL = relay
-                connect(identity)
-            } catch {
-                lastError = error.localizedDescription
-                showSetup()
-            }
+            let identity = try await PairingFlow.exchange(
+                relay: relay, code: code, macName: Host.current().localizedName ?? "Mac")
+            relayURL = relay
+            connect(identity)
+        } catch {
+            lastError = error.localizedDescription
+            showSetup()
         }
     }
 
@@ -480,9 +495,11 @@ final class AppModel {
         defer { busy -= 1 }
         let registry = capabilities
         let result = await registry.call(tool: call.tool, arguments: call.arguments)
+        // A call the Owner stopped by lowering the level is logged with what Claude was told.
+        let told = LevelChange.recorded(result, tool: call.tool, before: registry, now: capabilities)
         let entry = Activity(
             at: started, tool: call.tool, arguments: call.arguments.jsonText,
-            result: result.content.jsonText, isError: result.isError,
+            result: told.content.jsonText, isError: told.isError,
             durationMS: Int(Date().timeIntervalSince(started) * 1000))
         try? trace?.record(entry)
         loadRecentActivity()

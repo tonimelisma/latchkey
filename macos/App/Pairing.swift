@@ -105,20 +105,36 @@ final class PairingFlow: NSObject, ASWebAuthenticationPresentationContextProvidi
         return DispatchQueue.main.sync { MainActor.assumeIsolated(anchor) }
     }
 
-    /// The code and relay from a latchkey://paired link.
-    nonisolated static func parse(_ url: URL) -> (code: String, relay: URL?)? {
+    /// The code and relay from a latchkey://paired link. The relay is nil when the link names
+    /// none, or one the app doesn't accept from a link.
+    nonisolated static func parse(_ url: URL, allowLocalHTTP: Bool = PairingFlow.localLinksAllowed) -> (
+        code: String, relay: URL?
+    )? {
         guard url.scheme == "latchkey", url.host() == "paired",
             let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems,
             let code = items.first(where: { $0.name == "code" })?.value, !code.isEmpty
         else { return nil }
-        return (code, items.first(where: { $0.name == "relay" })?.value.flatMap(normalize))
+        return (
+            code,
+            items.first(where: { $0.name == "relay" })?.value.flatMap { normalize($0, allowLocalHTTP: allowLocalHTTP) }
+        )
     }
 
-    nonisolated static func normalize(_ text: String) -> URL? {
+    /// Whether a pairing link may name a relay on this Mac without encryption: development
+    /// builds only (FR-054b).
+    nonisolated static let localLinksAllowed: Bool = {
+        #if DEBUG
+            true
+        #else
+            false
+        #endif
+    }()
+
+    nonisolated static func normalize(_ text: String, allowLocalHTTP: Bool = true) -> URL? {
         var t = text.trimmingCharacters(in: .whitespacesAndNewlines)
         if !t.contains("://") { t = "https://" + t }
         guard var c = URLComponents(string: t), let host = c.host, !host.isEmpty,
-            c.scheme == "https" || (c.scheme == "http" && ["localhost", "127.0.0.1"].contains(host))
+            c.scheme == "https" || (allowLocalHTTP && c.scheme == "http" && ["localhost", "127.0.0.1"].contains(host))
         else { return nil }
         c.path = ""
         c.query = nil
@@ -208,5 +224,20 @@ final class PairingFlow: NSObject, ASWebAuthenticationPresentationContextProvidi
         }
         if save { try DeviceIdentity.save(relayURL: relay, deviceID: deviceID, key: key) }
         return DeviceIdentity(relayURL: relay, deviceID: deviceID, key: key)
+    }
+}
+
+/// Lets one piece of work run at a time and turns the rest away (pairing links, FR-054a).
+@MainActor
+final class OneAtATime {
+    private(set) var busy = false
+
+    /// Runs `work` and returns true, or returns false without running it while another runs.
+    func run(_ work: () async -> Void) async -> Bool {
+        guard !busy else { return false }
+        busy = true
+        defer { busy = false }
+        await work()
+        return true
     }
 }

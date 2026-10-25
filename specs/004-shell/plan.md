@@ -38,7 +38,21 @@ A job keeps its output (last 1 MB) and status in memory. Run waits up to `wait` 
 maximum 30 s) for the end (FR-302). Check returns output since the last check, waiting up to
 `wait` for more or the end. Send writes the text (and Enter unless `enter` is false). Stop sends
 Ctrl-C, then ends the session after 3 s, then kills it. Finished jobs stay readable for 10
-minutes (at most 20 kept). All jobs stop when the app quits (FR-309).
+minutes (at most 20 kept). All jobs stop when the app quits (FR-309) and when the Owner turns
+Shell off (FR-310): the app first answers any `shell_run` or `shell_check` call in flight with
+the reason (spec 001 plan D2), then stops the jobs, all at the same time.
+
+Stopping means the whole terminal session (FR-311): `script` starts the shell as the leader of a
+new session, and everything the command starts stays in that session unless it leaves on
+purpose. The app notes the session when the job starts (the child of `script` that leads a
+session) and, to end a job, signals every process in it and `script` itself: terminate, then
+kill whatever is left after 1 s. So a process the command left in the background, or one that
+ignores Ctrl-C and hangup, doesn't outlive the job. A job that already ended is not swept.
+A call that is cancelled while waiting on a job (deadline, or Shell turned off) stops waiting at
+once.
+
+At most 32 jobs run at once (FR-312); the next `shell_run` is refused with "32 commands are
+already running … Wait for one to finish or stop one".
 
 ## D4. Output
 
@@ -55,14 +69,16 @@ and the trace (FR-307).
 
 Real commands in tests: output and exit status, a non-zero exit, waiting then checking, input to
 a `read` prompt, stopping `sleep 100`, folder, login PATH, the output limit; control-code
-cleaning on fixed strings; tool list per level.
+cleaning on fixed strings; tool list per level. A command that leaves a process in the
+background ignoring Ctrl-C, hangup, and terminate: gone after stop, after stop-all, and after
+Shell goes Off (with the waiting call answered); the cap with a limit of 2.
 
 ## Constitution check
 
 | Article | Status |
 |---|---|
 | I. Outbound only | Pass |
-| II. Fail fast | Pass: every call returns within 30 s plus margin; long work continues as a job |
+| II. Fail fast | Pass: every call returns within 30 s plus margin; long work continues as a job; stopping takes at most 3 s for Ctrl-C plus 3 s to end the session |
 | III. Disabled means nonexistent | Pass |
 | IV. Good macOS citizen | Pass: the Owner's own permissions; no root |
 | V. Self-hostable | Pass: relay unchanged |

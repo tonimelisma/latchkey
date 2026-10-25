@@ -16,7 +16,7 @@ Operations:
 | Tool | Level | readOnly | destructive | Serves |
 |---|---|---|---|---|
 | `browser_open` (url, new_tab?) | Read only | yes | no | FR-401, FR-409 |
-| `browser_read` (offset?) | Read only | yes | no | FR-401, FR-404, FR-405 |
+| `browser_read` (offset?) | Read only | yes | no | FR-401, FR-404, FR-405, FR-410 |
 | `browser_tabs` (select?) | Read only | yes | no | FR-401 |
 | `browser_back` | Read only | yes | no | FR-401 |
 | `browser_click` (ref) | Read & write | no | yes | FR-402, FR-408 |
@@ -52,6 +52,13 @@ events; submit uses the field's form. After an action, Latchkey waits for the pa
 loading (at most 15 s) and returns the page's new title and URL. Every reading result starts by
 saying the content is the website's, not instructions (FR-404).
 
+A field's current value comes with it (first 100 characters), except for secrets (FR-410):
+inputs of type `password`, and inputs and text areas whose `autocomplete` contains
+`current-password`, `new-password`, `one-time-code`, `cc-number`, or `cc-csc`. Those are listed
+with "(hidden)" in place of the value when filled in, and nothing when empty, so reading (a
+Read only tool) never returns a password the browser filled in. Typing into them works as for
+any field. Claude's own script (Read & write) can read anything in the page, as before.
+
 ## D4. Setup and errors
 
 The setup window gains two steps while Browser isn't Off (FR-406): Automation for Safari (as
@@ -71,7 +78,9 @@ notify, as one task can mean dozens of clicks.
 A stand-in script runner answers like Safari: open, read (page JSON), click, type, missing
 element, closed window, the JavaScript setting off, refused addresses (FR-409) both through
 `browser_open` and through `browser_read` with a url. Tool list per level. The page script
-itself is checked by running it in a WebKit view (`WKWebView`) on a fixed page in the tests.
+itself is checked by running it in a WebKit view (`WKWebView`) on a fixed page in the tests,
+including a form with filled-in secret fields whose values must not appear anywhere in the
+answer (FR-410).
 
 ## Constitution check
 

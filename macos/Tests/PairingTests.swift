@@ -61,3 +61,65 @@ import Testing
         }
     }
 }
+
+/// Pairing links from outside the app (security review, 2026-10-25).
+@Suite struct OutsideLinkTests {
+    /// A link can make the app contact the relay it names: one on this Mac without encryption
+    /// is accepted only in development builds (FR-054b). The typed-in relay field keeps it.
+    @Test func linksToAnUnencryptedLocalRelayAreForDevelopmentBuildsOnly() throws {
+        for local in ["http://localhost:8080", "http://127.0.0.1:9"] {
+            let link = try #require(URL(string: "latchkey://paired?code=abc&relay=\(local)"))
+            let release = try #require(PairingFlow.parse(link, allowLocalHTTP: false))
+            #expect(release.code == "abc")
+            #expect(release.relay == nil, "\(local) from a link in a release build")
+            #expect(PairingFlow.parse(link, allowLocalHTTP: true)?.relay?.absoluteString == local)
+            #expect(PairingFlow.normalize(local)?.absoluteString == local, "typed in by the Owner")
+        }
+        let https = try #require(URL(string: "latchkey://paired?code=abc&relay=https://relay.example.com"))
+        #expect(PairingFlow.parse(https, allowLocalHTTP: false)?.relay?.host() == "relay.example.com")
+        #expect(
+            PairingFlow.normalize("http://relay.example.com", allowLocalHTTP: true) == nil, "never plain http elsewhere"
+        )
+    }
+
+    /// While one link is being looked up, confirmed, or exchanged, further links are dropped
+    /// (FR-054a): no pile of dialogs, no burst of lookups.
+    @MainActor @Test func oneLinkAtATime() async {
+        let gate = OneAtATime()
+        let (stream, release) = AsyncStream.makeStream(of: Void.self)
+        let first = Task { @MainActor in
+            await gate.run { for await _ in stream { break } }
+        }
+        for _ in 0..<200 where !gate.busy { try? await Task.sleep(for: .milliseconds(5)) }
+        #expect(gate.busy)
+        var ran = false
+        let second = await gate.run { ran = true }
+        #expect(!second, "dropped while the first is in progress")
+        #expect(!ran)
+        release.yield()
+        #expect(await first.value)
+        #expect(!gate.busy)
+        #expect(await gate.run { ran = true }, "the next link after it is handled")
+        #expect(ran)
+    }
+
+    /// The relay's address is personal (CLAUDE.md: never in a committed file, threat model
+    /// invariant 12): the app's logs carry it only as private data.
+    @Test func noRelayAddressIsLoggedPublicly() throws {
+        let app = URL(fileURLWithPath: #filePath).deletingLastPathComponent().appending(path: "../App")
+        var offending: [String] = []
+        let files = FileManager.default.enumerator(at: app, includingPropertiesForKeys: nil)
+        while let file = files?.nextObject() as? URL {
+            guard file.pathExtension == "swift" else { continue }
+            let text = try String(contentsOf: file, encoding: .utf8)
+            // A log statement may span lines: look at each interpolation with its privacy.
+            for match in text.matches(of: /\\\(([^()]|\([^()]*\))*privacy: \.public\)/) {
+                let piece = String(match.output.0)
+                if piece.lowercased().contains("relay") || piece.contains("absoluteString") || piece.contains("host") {
+                    offending.append("\(file.lastPathComponent): \(piece)")
+                }
+            }
+        }
+        #expect(offending.isEmpty, "\(offending)")
+    }
+}

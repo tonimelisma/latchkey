@@ -123,6 +123,21 @@ struct CapabilityRegistry: Sendable {
     /// True when any capability is on (it then needs the macOS permissions).
     var anyOn: Bool { capabilities.contains { level($0.id) != .off } }
 
+    /// Why a running call of `tool` must stop: its capability is now off, or at a level without
+    /// that tool. Nil while the tool is allowed (spec 001 FR-066).
+    func stopReason(tool: String) -> String? {
+        guard !entries.contains(where: { $0.tool.name == tool }),
+            let capability = capabilities.first(where: { c in
+                (c.readTools + c.writeTools).contains { $0.tool.name == tool }
+            })
+        else { return nil }
+        let now = level(capability.id)
+        let change =
+            now == .off ? "turned \(capability.title) off" : "set \(capability.title) to \(capability.title(for: now))"
+        return
+            "The Mac's owner \(change) in the Latchkey app while this was running, so it was stopped. It may not have finished."
+    }
+
     func call(tool: String, arguments: JSONValue) async -> ToolResult {
         guard let entry = entries.first(where: { $0.tool.name == tool }) else {
             return .text("The tool \(tool) is turned off in the Latchkey app on this Mac.", isError: true)
