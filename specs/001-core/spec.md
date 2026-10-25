@@ -205,6 +205,13 @@ Format: EARS ("When <trigger>, the <system> shall <response>"). IDs are stable; 
   window, the app shall connect only after the Owner confirms in a dialog that names the relay and
   the email address of the account the link belongs to, and says that it replaces the current
   pairing if there is one (Toni, 2026-10-24, security scan).
+- **FR-054a** While the Mac app is handling one such pairing link (looking up its account, asking
+  the Owner, or connecting), it shall ignore any further pairing link (security review,
+  2026-10-25).
+- **FR-054b** When a pairing link names a relay that isn't reached over an encrypted connection,
+  the Mac app shall not use it; development builds alone accept a link to an unencrypted relay
+  on the same Mac. The relay address the Owner types in is unaffected (security review,
+  2026-10-25).
 
 ### Capabilities
 - **FR-060** The Mac app shall let the Owner enable and disable each capability.

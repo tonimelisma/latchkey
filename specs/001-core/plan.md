@@ -180,6 +180,14 @@ Serves FR-050, FR-051, FR-052, FR-053, FR-054; Constitution IV.
   up without using it (contracts/agent-protocol.md "Pairing"); if that fails the alert says the
   link expired and has no Connect button. Confirming cancels a sign-in window that is still open.
   A link carrying the code the sign-in window just delivered is ignored (already used).
+- One such link is handled at a time: while one is being looked up, shown, or exchanged, others
+  are dropped (and noted in the log), so links can't stack dialogs or make the app send a burst
+  of lookups (FR-054a). A link naming `http://localhost` or `http://127.0.0.1` is accepted only
+  in Debug builds; in the installed (Release) app it counts as incomplete, so a link can't make
+  the app talk to whatever listens on a local port. The relay field in setup still takes them
+  (FR-054b, FR-081).
+- The app's log (`log show`) carries relay addresses only as private data (a hash), never in
+  the clear.
 - During the exchange the app registers a P-256 public key whose private key lives in the Secure
   Enclave (CryptoKit). No bearer secret leaves the Mac.
 - The pairing (relay address, device ID, and the key's Secure Enclave blob) is one generic
