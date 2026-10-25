@@ -285,7 +285,8 @@ list changed.
 | Code | Meaning | Agent should |
 |---|---|---|
 | 1000 | Normal | Reconnect with backoff unless quitting |
-| 4001 | Authentication failed, or the account is suspended by the relay's operator (reason "account suspended"; FR-196) | Show "Sign in again"; do not retry automatically; keep the local key and pairing |
+| 4001, any reason but "account suspended" | Authentication failed (reason "authentication failed") | Show "Sign in again"; do not retry automatically; keep the local key and pairing |
+| 4001, reason "account suspended" | The account is suspended by the relay's operator (FR-196) | Show "This account is suspended on the relay" and to contact the relay's operator, never "Sign in again"; keep the local key and pairing; try again every 5 minutes, and at once on wake or a network change (FR-204) |
 | 4002 | Device revoked | Delete the local key; show "Disconnected from account" |
 | 4003 | Replaced by a newer connection for this device | Do not reconnect from this connection |
 | 4004 | Protocol version not supported | Show "Update required" |
@@ -299,3 +300,12 @@ key on 4002: a suspension must not make the Mac forget its pairing. The device a
 stored on the relay, so the same pairing connects again once the suspension is lifted. The
 close reason is the text "account suspended" (an ordinary failed authentication has
 "authentication failed").
+
+The agent tells the two apart by that reason, compared exactly; a 4001 with any other reason,
+or none, is a failed authentication. While suspended it tries again every 5 minutes (no
+backoff, no jitter: one Mac per account), and at once on wake or a network change, the triggers
+of its normal reconnect (FR-204). Each attempt is refused in the handshake, after the signature
+is verified and before anything is registered: one short connection and one database read. The
+relay's per-address limit on `/agent/v1` (30 at once, then one every 2 seconds) is not reached
+even by a Mac whose network changes every 10 seconds
+(`TestASuspendedMacRetryingNeverReachesTheConnectionLimit`).

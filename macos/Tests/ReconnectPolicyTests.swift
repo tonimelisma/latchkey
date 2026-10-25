@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 
 @testable import Latchkey
@@ -35,5 +36,54 @@ import Testing
         #expect(ReconnectPolicy.action(forClose: 4005) == .reconnect)
         #expect(ReconnectPolicy.action(forClose: 4006) == .reconnect)
         #expect(ReconnectPolicy.action(forClose: 1006) == .reconnect, "abnormal closure")
+    }
+
+    /// FR-204: 4001 with the relay's reason "account suspended" is not a failed sign-in.
+    @Test func aSuspensionIsToldFromAFailedSignIn() {
+        #expect(ReconnectPolicy.action(forClose: 4001, reason: "account suspended") == .suspended)
+        #expect(ReconnectPolicy.action(forClose: 4001, reason: "authentication failed") == .signInAgain)
+        #expect(ReconnectPolicy.action(forClose: 4001, reason: nil) == .signInAgain, "any other 4001 is as before")
+        #expect(ReconnectPolicy.action(forClose: 4001, reason: "") == .signInAgain)
+        #expect(ReconnectPolicy.action(forClose: 4001, reason: "Account Suspended") == .signInAgain, "the exact text")
+        #expect(ReconnectPolicy.action(forClose: 4002, reason: "account suspended") == .revoked, "only with 4001")
+        #expect(ReconnectPolicy.action(forClose: 1000, reason: "account suspended") == .reconnect)
+    }
+
+    /// Close code and reason in; what the app shows and when it tries again out.
+    @Test func whatACloseShowsAndWhenItRetries() {
+        let policy = ReconnectPolicy(jitter: { 1.0 })
+        typealias Next = ReconnectPolicy.Next
+        let suspended = policy.next(afterClose: 4001, reason: "account suspended", attempt: 0)
+        #expect(suspended == Next(show: .suspended, retryAfter: 300), "every 5 minutes")
+        #expect(
+            policy.next(afterClose: 4001, reason: "account suspended", attempt: 40) == suspended,
+            "never faster or slower, however long it lasts")
+        #expect(
+            ReconnectPolicy(jitter: { 1.2 }).next(afterClose: 4001, reason: "account suspended", attempt: 3)
+                == suspended)
+
+        #expect(
+            policy.next(afterClose: 4001, reason: "authentication failed", attempt: 0)
+                == Next(show: .signInAgain, retryAfter: nil), "no retry by itself")
+        #expect(policy.next(afterClose: 4001, reason: nil, attempt: 0) == Next(show: .signInAgain, retryAfter: nil))
+        #expect(policy.next(afterClose: 4002, reason: nil, attempt: 0) == Next(show: .revoked, retryAfter: nil))
+        #expect(policy.next(afterClose: 4003, reason: nil, attempt: 0) == Next(show: .replaced, retryAfter: nil))
+        #expect(policy.next(afterClose: 4004, reason: nil, attempt: 0) == Next(show: .updateRequired, retryAfter: nil))
+        #expect(policy.next(afterClose: 1006, reason: nil, attempt: 2) == Next(show: nil, retryAfter: 4), "backoff")
+        #expect(policy.next(afterClose: 4005, reason: nil, attempt: 0) == Next(show: nil, retryAfter: 1))
+    }
+
+    /// What the menu says. A suspended account is not asked to sign in again: that can't help.
+    @Test func whatTheMenuSays() {
+        #expect(ConnectionStatus.suspended.title() == "This account is suspended on the relay")
+        #expect(
+            ConnectionStatus.suspended.advice
+                == "Contact the relay’s operator. Latchkey reconnects by itself when the suspension ends.")
+        #expect(ConnectionStatus.signInAgain.title() == "Sign in again: the relay didn't accept this Mac")
+        #expect(ConnectionStatus.signInAgain.advice == nil)
+        #expect(ConnectionStatus.connected.title() == "Connected")
+        #expect(ConnectionStatus.connected.advice == nil)
+        let now = Date()
+        #expect(ConnectionStatus.waiting(until: now.addingTimeInterval(4)).title(now: now) == "Reconnecting in 4 s")
     }
 }

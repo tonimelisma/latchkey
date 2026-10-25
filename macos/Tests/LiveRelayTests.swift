@@ -71,8 +71,12 @@ struct LiveRelayTests {
                 case "tools-off":
                     registry.mutate { $0.setLevel("test", .off) }
                     await connection.sendTools()
-                case "reconnect-now":
+                case "reconnect-now", "wake", "wake-again":
                     await connection.reconnectNow()
+                case "expect-suspended":
+                    // FR-204: the relay's 4001 "account suspended" as URLSession reports it.
+                    #expect(statuses.value.last == .suspended, "shown as suspended: \(statuses.value.suffix(3))")
+                    #expect(!statuses.value.contains(.signInAgain), "never as a failed sign-in")
                 case "done":
                     await connection.stop(goodbye: .userQuit)
                     #expect(statuses.value.contains(.connected))

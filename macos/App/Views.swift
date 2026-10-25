@@ -6,6 +6,7 @@ struct MenuContent: View {
 
     var body: some View {
         Text(model.statusLine)
+        if let advice = model.statusAdvice { Text(advice) }
         Text(model.batteryLine)
         Text(model.keepAwakeLine)
         if model.keepAwake == .offHelperUnavailable {

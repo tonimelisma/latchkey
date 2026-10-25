@@ -219,6 +219,40 @@ func run() error {
 		return fail(fmt.Errorf("reconnect took %s; SC-05 allows 10 s", back.Round(time.Second)))
 	}
 
+	step("suspending the account, as the relay's operator would")
+	deviceID, err := users()
+	if err != nil {
+		return fail(err)
+	}
+	if _, _, err := db.SuspendUser(ctx, "mac@example.com", "check", "maccheck", time.Now()); err != nil {
+		return fail(err)
+	}
+	r.Hub.Suspend(deviceID)
+	if !waitFor(10*time.Second, func() bool { return !online() }) {
+		return fail(errors.New("the suspended account's Mac stayed connected"))
+	}
+	time.Sleep(2 * time.Second) // the app has seen the close and, if it retried, been refused
+	send("expect-suspended")
+	send("wake") // a wake or a network change tries at once, and is refused while suspended
+	time.Sleep(2 * time.Second)
+	if online() {
+		return fail(errors.New("a suspended account's Mac connected"))
+	}
+	if d, err := db.Device(ctx, deviceID); err != nil || !d.RevokedAt.IsZero() {
+		return fail(fmt.Errorf("the suspension touched the pairing: %v", err))
+	}
+	step("the Mac app shows the suspension, keeps its pairing, and is refused when it tries")
+
+	if _, _, err := db.UnsuspendUser(ctx, "mac@example.com", "maccheck", time.Now()); err != nil {
+		return fail(err)
+	}
+	send("wake-again")
+	start = time.Now()
+	if !waitFor(30*time.Second, online) {
+		return fail(errors.New("the Mac app never came back after the suspension was lifted (FR-204)"))
+	}
+	step("suspension lifted: the Mac app reconnected by itself %s after its next try", time.Since(start).Round(100*time.Millisecond))
+
 	send("done")
 	select {
 	case err := <-testDone:

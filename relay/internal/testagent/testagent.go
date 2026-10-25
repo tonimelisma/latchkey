@@ -329,3 +329,12 @@ func jsonString(s string) (string, error) {
 	b, err := json.Marshal(s)
 	return string(b), err
 }
+
+// CloseReason extracts the WebSocket close reason from an error, or "".
+func CloseReason(err error) string {
+	var ce websocket.CloseError
+	if errors.As(err, &ce) {
+		return ce.Reason
+	}
+	return ""
+}

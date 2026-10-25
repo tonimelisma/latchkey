@@ -418,6 +418,12 @@ Format: EARS ("When <trigger>, the <system> shall <response>"). IDs are stable; 
   Mac's connection and refuse new ones without making the Mac app forget its pairing. Nothing
   else shall be deleted. When the suspension is lifted, the Owner shall be able to sign in again
   and approve Claude again.
+- **FR-204** When the relay refuses or closes the Mac's connection because its account is
+  suspended, the Mac app shall say that the account is suspended on the relay and that the
+  relay's operator is the one to contact (it shall not ask the Owner to sign in again), keep its
+  pairing, and try to connect again every 5 minutes, and at once when the Mac wakes or its
+  network changes, so that it reconnects by itself once the suspension is lifted. Any other
+  failed authentication behaves as before (Toni, 2026-10-25).
 - **FR-197** When an email address is blocked, the relay shall refuse sign-up and sign-in for
   it, and shall suspend its account if it has one.
 - **FR-198** While the relay is running, a suspension, block, or deletion made by its operator

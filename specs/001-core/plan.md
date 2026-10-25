@@ -663,6 +663,14 @@ Serves FR-195 to FR-199; Constitution II, V.
   pairing; 4002 for a deletion, as the Delete account button does) and drops the account's MCP
   sessions. Worst case 2 s plus the query. A connection that registers just after its account
   was suspended is caught by re-reading the user after registering, as for revocation.
+- The Mac app comes back by itself after a suspension (FR-204): it reads the close reason
+  (`URLSessionWebSocketTask.closeReason`), and on 4001 "account suspended" shows "This account
+  is suspended on the relay" with a second line ("Contact the relay’s operator. Latchkey
+  reconnects by itself when the suspension ends."), keeps the pairing, and waits 5 minutes
+  instead of stopping; the wait ends early on wake or a network change, as its normal reconnect
+  wait does. `ReconnectPolicy.next(afterClose:reason:attempt:)` is that decision as a pure
+  function (what to show, when to retry). `make mac-check` suspends the account under the real
+  connection code, checks what it shows, and lifts the suspension.
 - The operator log is purged after a year by the daily job.
 - The commands open the database exactly as the server does, key file included (D10, FR-186):
   `DATA_DIR` and `KEY_FILE` from the container's environment. With the key file missing or

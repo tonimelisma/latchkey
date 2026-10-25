@@ -4,11 +4,25 @@ import Foundation
 struct ReconnectPolicy: Sendable {
     enum Action: Equatable, Sendable {
         case reconnect  // with backoff
-        case signInAgain  // 4001: credential rejected; don't retry automatically
+        case signInAgain  // 4001 (any reason but "account suspended"): credential rejected; don't retry automatically
         case revoked  // 4002: delete the local key, show "Disconnected from account"
         case stop  // 4003: a newer connection replaced this one
         case updateRequired  // 4004
+        /// 4001 with the reason "account suspended": keep the pairing, try again slowly (FR-204).
+        case suspended
     }
+
+    /// What follows a closed connection: what the app shows instead of "Reconnecting…" (nil:
+    /// the usual countdown), and how long until the next attempt (nil: none by itself).
+    struct Next: Equatable, Sendable {
+        var show: ConnectionStatus?
+        var retryAfter: TimeInterval?
+    }
+
+    /// The close reason the relay gives a suspended account's Mac (agent-protocol.md).
+    static let suspendedReason = "account suspended"
+    /// How often a suspended Mac tries again; a wake or a network change tries at once.
+    static let suspendedRetry: TimeInterval = 300
 
     var jitter: @Sendable () -> Double = { Double.random(in: 0.8...1.2) }
 
@@ -18,13 +32,50 @@ struct ReconnectPolicy: Sendable {
         return min(base * jitter(), 30)
     }
 
-    static func action(forClose code: Int) -> Action {
+    static func action(forClose code: Int, reason: String? = nil) -> Action {
         switch code {
-        case 4001: .signInAgain
+        case 4001: reason == suspendedReason ? .suspended : .signInAgain
         case 4002: .revoked
         case 4003: .stop
         case 4004: .updateRequired
         default: .reconnect
+        }
+    }
+
+    func next(afterClose code: Int, reason: String?, attempt: Int) -> Next {
+        switch Self.action(forClose: code, reason: reason) {
+        case .reconnect: Next(show: nil, retryAfter: delay(attempt: attempt))
+        case .suspended: Next(show: .suspended, retryAfter: Self.suspendedRetry)
+        case .signInAgain: Next(show: .signInAgain, retryAfter: nil)
+        case .revoked: Next(show: .revoked, retryAfter: nil)
+        case .stop: Next(show: .replaced, retryAfter: nil)
+        case .updateRequired: Next(show: .updateRequired, retryAfter: nil)
+        }
+    }
+}
+
+extension ConnectionStatus {
+    /// The menu's first line.
+    func title(now: Date = Date()) -> String {
+        switch self {
+        case .notPaired: "Not connected to a relay"
+        case .connecting: "Connecting…"
+        case .connected: "Connected"
+        case .waiting(let until):
+            "Reconnecting in \(max(1, Int(until.timeIntervalSince(now).rounded()))) s"
+        case .signInAgain: "Sign in again: the relay didn't accept this Mac"
+        case .revoked: "Disconnected from your account"
+        case .replaced: "Replaced by another connection from this Mac"
+        case .updateRequired: "Update Latchkey to connect"
+        case .suspended: "This account is suspended on the relay"
+        }
+    }
+
+    /// A second line saying what to do, where there is something to say.
+    var advice: String? {
+        switch self {
+        case .suspended: "Contact the relay’s operator. Latchkey reconnects by itself when the suspension ends."
+        default: nil
         }
     }
 }

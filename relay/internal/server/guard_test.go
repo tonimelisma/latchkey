@@ -208,3 +208,31 @@ func TestBodyDeadlineEndsWithTheBody(t *testing.T) {
 	_ = res.Body.Close()
 	assert.Equal(t, "done", string(body))
 }
+
+// A suspended Mac tries again every 5 minutes, and at once on wake or a network change
+// (FR-204). Even with a network that changes every 10 seconds for a day, its attempts stay far
+// below the per-address limit on Mac connections: none is ever refused by it, and the limit is
+// still there for a flood.
+func TestASuspendedMacRetryingNeverReachesTheConnectionLimit(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/agent/v1", nil)
+	var per *limit.Keyed
+	for _, r := range defaultRules() {
+		if r.match(req) {
+			per = r.per
+		}
+	}
+	require.NotNil(t, per, "Mac connections have a limit")
+
+	start := time.Date(2026, 10, 25, 0, 0, 0, 0, time.UTC)
+	for at := time.Duration(0); at < 24*time.Hour; at += 10 * time.Second {
+		require.True(t, per.AllowAt("203.0.113.7", start.Add(at)), "attempt after %s", at)
+	}
+	flood := start.Add(48 * time.Hour)
+	refused := 0
+	for range 100 {
+		if !per.AllowAt("203.0.113.7", flood) {
+			refused++
+		}
+	}
+	assert.Positive(t, refused, "a flood from the same address is still limited")
+}

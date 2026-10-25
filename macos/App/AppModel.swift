@@ -601,19 +601,8 @@ final class AppModel {
 
     // MARK: menu text
 
-    var statusLine: String {
-        switch status {
-        case .notPaired: "Not connected to a relay"
-        case .connecting: "Connecting…"
-        case .connected: "Connected"
-        case .waiting(let until):
-            "Reconnecting in \(max(1, Int(until.timeIntervalSinceNow.rounded()))) s"
-        case .signInAgain: "Sign in again: the relay didn't accept this Mac"
-        case .revoked: "Disconnected from your account"
-        case .replaced: "Replaced by another connection from this Mac"
-        case .updateRequired: "Update Latchkey to connect"
-        }
-    }
+    var statusLine: String { status.title() }
+    var statusAdvice: String? { status.advice }
 
     var batteryLine: String {
         guard power.hasBattery else { return "Power: plugged in (no battery)" }

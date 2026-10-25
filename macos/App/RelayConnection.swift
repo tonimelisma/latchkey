@@ -9,6 +9,8 @@ enum ConnectionStatus: Equatable, Sendable {
     case revoked  // 4002: this Mac was disconnected from the account
     case replaced  // 4003
     case updateRequired  // 4004
+    /// 4001 "account suspended": still paired; retried every 5 minutes (FR-204).
+    case suspended
 }
 
 /// What the connection needs from the rest of the app.
@@ -147,8 +149,10 @@ actor RelayConnection {
 
     private func run() async {
         var attempt = 0
+        var suspended = false
         while !Task.isCancelled {
-            await hooks.status(.connecting)
+            // A suspended Mac keeps saying so while it tries again (FR-204).
+            if !suspended { await hooks.status(.connecting) }
             let t = session.webSocketTask(with: Self.agentURL(relay: identity.relayURL), protocols: ["latchkey.v1"])
             t.maximumMessageSize = 4 << 20
             task = t
@@ -157,6 +161,7 @@ actor RelayConnection {
                 try await handshake(t)
                 stateFrames.reset()
                 attempt = 0
+                suspended = false
                 await hooks.status(.connected)
                 try await serve(t)
             } catch {
@@ -165,17 +170,17 @@ actor RelayConnection {
             task = nil
             await calls.cancelAll()
             if Task.isCancelled { return }
-            switch ReconnectPolicy.action(forClose: t.closeCode.rawValue) {
-            case .reconnect: break
-            case .signInAgain: await hooks.status(.signInAgain); loop = nil; return
-            case .revoked: await hooks.status(.revoked); loop = nil; return
-            case .stop: await hooks.status(.replaced); loop = nil; return
-            case .updateRequired: await hooks.status(.updateRequired); loop = nil; return
+            let reason = t.closeReason.map { String(decoding: $0, as: UTF8.self) }
+            let next = policy.next(afterClose: t.closeCode.rawValue, reason: reason, attempt: attempt)
+            suspended = next.show == .suspended
+            guard let delay = next.retryAfter else {
+                if let show = next.show { await hooks.status(show) }
+                loop = nil
+                return
             }
-            let delay = policy.delay(attempt: attempt)
             attempt += 1
-            await hooks.status(.waiting(until: Date().addingTimeInterval(delay)))
-            await sleep(delay)
+            await hooks.status(next.show ?? .waiting(until: Date().addingTimeInterval(delay)))
+            await sleep(delay)  // or until a wake or a network change (reconnectNow)
         }
     }
 
