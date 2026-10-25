@@ -238,8 +238,10 @@ func run() error {
 	if online() {
 		return fail(errors.New("a suspended account's Mac connected"))
 	}
-	if d, err := db.Device(ctx, deviceID); err != nil || !d.RevokedAt.IsZero() {
-		return fail(fmt.Errorf("the suspension touched the pairing: %v", err))
+	if d, err := db.Device(ctx, deviceID); err != nil {
+		return fail(err)
+	} else if !d.RevokedAt.IsZero() {
+		return fail(errors.New("the suspension revoked the Mac's pairing"))
 	}
 	step("the Mac app shows the suspension, keeps its pairing, and is refused when it tries")
 

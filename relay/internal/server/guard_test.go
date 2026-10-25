@@ -214,7 +214,7 @@ func TestBodyDeadlineEndsWithTheBody(t *testing.T) {
 // below the per-address limit on Mac connections: none is ever refused by it, and the limit is
 // still there for a flood.
 func TestASuspendedMacRetryingNeverReachesTheConnectionLimit(t *testing.T) {
-	req := httptest.NewRequest(http.MethodGet, "/agent/v1", nil)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/agent/v1", nil)
 	var per *limit.Keyed
 	for _, r := range defaultRules() {
 		if r.match(req) {

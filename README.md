@@ -76,7 +76,8 @@ Out of the box, a relay accepts only Claude's own apps; other apps must be allow
 running it (`ALLOWED_CLIENT_HOSTS`). The relay's signing keys are encrypted on disk under a key
 file kept apart from the database. If others sign up on your relay, set `OPERATOR_NAME` and
 `OPERATOR_CONTACT`: the relay then publishes its own terms and privacy policy. To deal with
-abuse, the relay has commands to list, suspend, and delete accounts and to block addresses.
+abuse, the relay has commands to list, suspend, and delete accounts and to block addresses; a
+suspended account's Mac says so and reconnects by itself once the suspension is lifted.
 
 If a reverse proxy in another container or on another host forwards to the relay, set
 `TRUSTED_PROXIES` to its address or network range (comma-separated IP addresses and CIDR ranges,
@@ -105,7 +106,7 @@ scripts (ShellCheck).
 | Part | Where | Commands |
 |---|---|---|
 | Relay (Go) | `relay/` | `make test`, `make lint`, `make run`, `make claude-check`, `make mac-check` |
-| Mac app and helper (Swift) | `macos/` | `make test`, `make lint`, `make run`, `make dmg`, `make install` (build, install into Applications, start) |
+| Mac app and helper (Swift) | `macos/` | `make test`, `make lint`, `make run`, `make dmg`, `make install` (build, install into Applications, start, and fail if the update lost the pairing) |
 | Hosted relay deployment | `deploy/` | `deploy/deploy.sh` |
 | Cleanup after merging | `scripts/` | `scripts/tidy.sh` (runs automatically after every push and at every session start from Claude Code; removes worktrees as soon as their work is merged); `scripts/loose-ends.sh` lists work not yet on main (checked when a Claude Code session starts and before each turn ends) |
 
