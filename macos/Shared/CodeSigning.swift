@@ -1,6 +1,24 @@
 import Foundation
 import Security
 
+/// Which file is at a path: an install puts a new file there (a new inode), so a long-running
+/// helper can tell that its own program was replaced (2026-10-26: a helper started before
+/// several installs refused every app connection until the Mac restarted).
+struct FileStamp: Equatable, Sendable {
+    var device: UInt64
+    var inode: UInt64
+    var modified: TimeInterval
+
+    /// Nil when nothing is at the path.
+    static func of(_ path: String) -> FileStamp? {
+        var s = stat()
+        guard stat(path, &s) == 0 else { return nil }
+        return FileStamp(
+            device: UInt64(s.st_dev), inode: UInt64(s.st_ino),
+            modified: TimeInterval(s.st_mtimespec.tv_sec) + TimeInterval(s.st_mtimespec.tv_nsec) / 1e9)
+    }
+}
+
 enum CodeSigning {
     /// The team ID this process is signed with, if any.
     static func ownTeamID() -> String? {

@@ -117,7 +117,12 @@ final class KeepAwakeController {
             verified = !on
             return verified
         }
-        _ = await helper.setSleepDisabled(on)
+        // No answer: an old helper may have just ended itself after an install, and launchd
+        // starts the new one on the next connection, so try once more.
+        if await helper.setSleepDisabled(on) == nil {
+            try? await Task.sleep(for: .seconds(1))
+            _ = await helper.setSleepDisabled(on)
+        }
         // Verify from the kernel itself rather than trusting the reply (FR-031).
         verified = PowerReader.sleepDisabled() == on
         return verified

@@ -1,6 +1,6 @@
 # Status
 
-Last updated: 2026-10-26 (Calendar, Reminders, Contacts, Location & Maps, spec 007; activity log kept for good; app 0.8.18)
+Last updated: 2026-10-26 (Calendar, Reminders, Contacts, Location & Maps, spec 007; activity log kept for good; keep-awake helper fix; app 0.8.19)
 
 Xcode signing ready (2026-10-20): Toni's Xcode account has a valid "Apple Development" certificate
 (certificate expires 2027-07-22). Keep the team ID out of committed project files
@@ -57,8 +57,11 @@ The Mac state line appears in every result (it reported the battery warning at 1
    (about 40 m). Nothing was left behind. The new contact's id changed within seconds (iCloud
    sync, apparently), so the first delete answered "search again" and the second worked.
    Open for Toni's review: deleting reminder lists and changing contact groups are not offered
-   (research.md); keep-awake reported "not approved in System Settings" after the 0.8.15 install
-   (SleepDisabled 0, helper loaded), not yet known whether the install caused it; Calendars'
+   (research.md). Keep-awake was off: the helper started 2026-10-25 kept running across later
+   installs, re-read its own replaced file for the signature check (UNIX error 2), and refused
+   every app connection. Fixed in 0.8.19 (read once at start; ends itself when replaced; the app
+   retries); the helper still running from 2026-10-25 needs one Mac restart to pick it up. The
+   state line's "not approved in System Settings" also covers a helper that doesn't answer; Calendars'
    Allow… showed nothing in 0.8.16 (Toni then allowed both in System Settings; since 0.8.17 the
    button logs macOS's answer and opens System Settings when no question appears).
    The activity log kept forever (item 12) is on main and installed with app 0.8.18.

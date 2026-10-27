@@ -70,3 +70,23 @@ import Testing
         #expect(block.firstMatch(of: /(?m)^    (exactVersion|version|from|branch|majorVersion|minorVersion):/) == nil)
     }
 }
+
+/// A helper started before an install must notice that its program was replaced (2026-10-26).
+@Suite struct FileStampTests {
+    @Test func tellsAReplacedFileFromTheSameOne() throws {
+        let dir = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let file = dir.appending(path: "LatchkeyHelper")
+        try Data("old".utf8).write(to: file)
+        let start = try #require(FileStamp.of(file.path))
+        #expect(FileStamp.of(file.path) == start, "untouched")
+        // An install puts a new file in place, as copying a new app bundle does.
+        let new = dir.appending(path: "new")
+        try Data("new".utf8).write(to: new)
+        _ = try FileManager.default.replaceItemAt(file, withItemAt: new)
+        #expect(FileStamp.of(file.path) != start, "replaced")
+        try FileManager.default.removeItem(at: file)
+        #expect(FileStamp.of(file.path) == nil, "gone")
+    }
+}

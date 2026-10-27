@@ -103,4 +103,11 @@ paths:
 - Settings… sets the activation policy to `.regular` and activates before `openSettings()`, the
   usual advice for menu-bar-only apps (otherwise the window may not open or opens behind).
 
+- The keep-awake helper keeps running across installs: launchd doesn't restart it when the app
+  is replaced. Anything it reads from its own file must be read once at start (its team ID for
+  the signature check failed with UNIX error 2 after the next install, so it refused every app
+  connection: keep-awake was silently off from 2026-10-25 until 0.8.19). Since 0.8.19 it ends
+  itself when it sees its program replaced, and the app retries once. After an install, check
+  `pmset -g | grep SleepDisabled` is 1 while keep-awake is on.
+
 Add new gotchas here as they are discovered.

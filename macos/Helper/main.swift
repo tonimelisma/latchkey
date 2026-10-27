@@ -43,10 +43,23 @@ final class Listener: NSObject, NSXPCListenerDelegate, @unchecked Sendable {
     let setting = SleepSetting()
     private let lock = NSLock()
     private var clients = 0
+    /// Read once at start: the team comes from this program's file, and an install replaces that
+    /// file under the running helper, after which reading it fails (UNIX error 2) and every app
+    /// connection was refused (2026-10-26).
+    private let requirement = CodeSigning.requirement(identifier: AppIdentity.current.bundleID)
+    private let program = Bundle.main.executablePath ?? ProcessInfo.processInfo.arguments[0]
+    private let started = FileStamp.of(Bundle.main.executablePath ?? ProcessInfo.processInfo.arguments[0])
 
     func listener(_ listener: NSXPCListener, shouldAcceptNewConnection c: NSXPCConnection) -> Bool {
+        // A newer helper was installed: end this old one so launchd starts the new program for
+        // the app's next try (the app makes a new connection after a failed one).
+        if let started, FileStamp.of(program) != started {
+            setting.restore()
+            DispatchQueue.main.async { exit(0) }
+            return false
+        }
         // Only the Latchkey app signed by the same team may connect.
-        guard let req = CodeSigning.requirement(identifier: AppIdentity.current.bundleID) else { return false }
+        guard let req = requirement else { return false }
         c.setCodeSigningRequirement(req)
         c.exportedInterface = NSXPCInterface(with: HelperProtocol.self)
         c.exportedObject = setting
