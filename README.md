@@ -23,9 +23,9 @@ Claude (web, Desktop, phone)  ──HTTPS──▶  Latchkey relay  ◀──out
   (passkeys, no passwords), remembers your Mac's last state, and answers instantly when the Mac
   is away. Claude asks for your approval every time it connects: Latchkey's Allow page appears on
   each sign-in from a Claude app, and nothing is approved silently.
-- **You see who has access.** The menu and your account page list the Claude apps that can use
+- **You see who has access.** Latchkey's Settings window and your account page list the Claude apps that can use
   your Mac, and you can remove any one of them.
-- **You choose what Claude can do.** Each capability has a level in the menu; a capability that's
+- **You choose what Claude can do.** Each capability has a level in Latchkey's Settings window; a capability that's
   off doesn't exist as far as Claude knows. Most have Off, Read only, and Read & write; Shell is
   Off or On. Claude sees 15 tools:
 
@@ -39,7 +39,12 @@ Claude (web, Desktop, phone)  ──HTTPS──▶  Latchkey relay  ◀──out
   | Computer control (while unlocked) | `computer_look` | `computer_act` (mouse, keyboard, apps) |
 
 - **You see what Claude did:** a notification for every change and every new Claude connection,
-  a busy dot while it works, and recent activity in the menu.
+  a busy dot while it works, and recent activity in the menu (what was run, read, or opened).
+- **You see at a glance whether Claude can reach your Mac:** a solid key in the menu bar when it
+  can, a key with a line through it when it can't, and a small mark when paused or when setup
+  isn't finished.
+- **You can pause Claude in one click:** Pause Claude's Access in the menu stops everything that
+  is running and answers every request with "paused" until you resume, even across restarts.
 - **Every answer carries the Mac's state** (battery, power, keep-awake), so Claude can warn you
   before the Mac sleeps.
 - **Keep-awake:** while connected, the app keeps the Mac awake, lid closed included, and lets it

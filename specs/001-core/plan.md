@@ -677,6 +677,34 @@ Serves FR-195 to FR-199; Constitution II, V.
   wrong, a command refuses as the server would, changes nothing, and never makes a key file of
   its own beside sealed keys. `reset-keys` (FR-189) is a command of its own, for a stopped relay.
 
+### D15. Menu bar: state in the icon's shape, a short menu, a Settings window, Pause
+Serves FR-070, FR-076, FR-190, FR-600 to FR-605, spec 002 FR-131 and FR-132; Constitution II,
+III, IV. Guidance checked against Apple's Human Interface Guidelines (research.md, "Menu bar
+design", 2026-10-26).
+- Icon: SF Symbols `key.fill` (reachable) and `key.slash` (not reachable; Apple's slash variant
+  for "unavailable"), with at most one small mark beside the key: `pause.fill`, `exclamationmark`,
+  or the existing dot. A pure function of (connection status, paused, setup unfinished, calls
+  running) picks it, so a unit test covers every case. Template images only, no color.
+- Menu, top to bottom: status line (and the suspension advice, the keep-awake problem, or the
+  last error when there is one); Keep Mac Awake, Pause/Resume Claude's Access; Recent Activity
+  (three, a "More Activity" submenu of five, Show All Activity…); Settings… (⌘,), Check for
+  Updates… when available; Quit Latchkey (⌘Q). The battery line is gone.
+- Activity titles: "time  Capability: target", the capability from the tool's prefix and the
+  target from the first of `command`, `path`, `url`, `query`, `to`, `title`, `app`, `action` in
+  the arguments, on one line, at most 40 characters; without one, the tool's own title.
+- Settings window: SwiftUI's `Settings` scene with a tab per pane (What Claude Can Do, Claude
+  Apps, Connection, General), which gives the toolbar, the pane title, ⌘, and reopening the last
+  pane. Opened from the menu with `openSettings`, then the app is activated (a menu bar app's
+  window would otherwise open behind others). The Claude Apps pane shows the whole list, so the separate "Show All Apps…" window is gone.
+- Pause is the Mac's own state, stored in user defaults so it survives restarts (FR-604). The
+  relay doesn't change: the tools stay listed, as they do while the Mac is offline, and every
+  call is answered at once with the pause error (FR-602), so nothing waits (II). Capability
+  levels are untouched, so III holds. Pausing stops running calls through the same path as a
+  lowered level (FR-066) and stops every shell job (FR-603). Refused calls are logged in the
+  activity like any other.
+- Disconnect This Mac asks first with an alert: "Disconnect" (destructive style, Return doesn't
+  press it) and "Cancel", as Remove Access… already does (FR-605).
+
 ## Repository layout
 
 ```
@@ -754,7 +782,7 @@ Pairing comes before the Mac app, so the app connects the real way from its firs
 |---|---|
 | I. Outbound only | Pass (D1) |
 | II. Fail fast | Pass (D2, D3); hosted Claude timeout to be measured |
-| III. Disabled means nonexistent | Pass (FR-061) |
+| III. Disabled means nonexistent | Pass (FR-061); Pause leaves levels as they are and answers calls like an offline Mac (D15) |
 | IV. Good macOS citizen | Pass with one documented exception: no App Sandbox (D9) |
 | V. Self-hostable | Pass (D10) |
 | VI. Store the minimum | Pass (D11, D12, D14, data-model.md): a grant's label and times, and the operator's own actions for a year |

@@ -24,6 +24,8 @@ final class AppModel {
     }
     private(set) var capabilities: CapabilityRegistry
     private(set) var startsAtLogin = SMAppService.mainApp.status == .enabled
+    /// Pause Claude's Access (FR-602); read from storage at once, so it holds from the start.
+    private(set) var paused = Pause.isPaused(.standard)
 
     /// The activity log, or why there is none for this launch (FR-201).
     let activityLog: ActivityLog
@@ -257,6 +259,18 @@ final class AppModel {
         if needsSetup { showSetup() }
     }
 
+    // MARK: pause (FR-602 to FR-604)
+
+    func setPaused(_ on: Bool) {
+        paused = on
+        Pause.set(on, defaults)
+        Self.log.notice("\(on ? "Paused" : "Resumed", privacy: .public) Claude's access")
+        guard on else { return }
+        Task { [connection] in
+            await Pause.stopWork(calls: { reason in await connection?.stopCalls(reason) }, shell: ShellCapability.jobs)
+        }
+    }
+
     // MARK: permissions
 
     private(set) var fullDiskAccess = Permissions.hasFullDiskAccess
@@ -455,6 +469,22 @@ final class AppModel {
         return host.isEmpty ? "" : "https://\(host)"
     }()
 
+    /// Disconnect This Mac asks first: only pairing again undoes it (FR-605).
+    func confirmDisconnect() {
+        let alert = NSAlert()
+        alert.alertStyle = .warning
+        alert.messageText = "Disconnect this Mac?"
+        alert.informativeText =
+            "Claude will no longer be able to reach this Mac. To use it again, you’ll need to connect it to your account again."
+        let disconnect = alert.addButton(withTitle: "Disconnect")
+        disconnect.hasDestructiveAction = true
+        disconnect.keyEquivalent = ""  // Return must not disconnect; Escape cancels
+        alert.addButton(withTitle: "Cancel")
+        NSApp.activate()
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        Task { await self.disconnect() }
+    }
+
     /// Disconnect This Mac: the relay revokes it (goodbye user_disconnected) and the key is deleted.
     func disconnect() async {
         await connection?.stop(goodbye: .userDisconnected, state: agentState)
@@ -499,9 +529,13 @@ final class AppModel {
         busy += 1  // FR-132
         defer { busy -= 1 }
         let registry = capabilities
-        let result = await registry.call(tool: call.tool, arguments: call.arguments)
-        // A call the Owner stopped by lowering the level is logged with what Claude was told.
-        let told = LevelChange.recorded(result, tool: call.tool, before: registry, now: capabilities)
+        let wasPaused = paused
+        let result = wasPaused ? Pause.refused : await registry.call(tool: call.tool, arguments: call.arguments)
+        // A call the Owner stopped by pausing or lowering the level is logged with what Claude was told.
+        let told =
+            !wasPaused && paused
+            ? .text(Pause.stopped, isError: true)
+            : LevelChange.recorded(result, tool: call.tool, before: registry, now: capabilities)
         let entry = Activity(
             at: started, tool: call.tool, arguments: call.arguments.jsonText,
             result: told.content.jsonText, isError: told.isError,
@@ -604,26 +638,23 @@ final class AppModel {
 
     // MARK: menu text
 
-    var statusLine: String { status.title() }
+    /// The menu's first line: whether Claude can reach this Mac (FR-070, FR-602).
+    var statusLine: String {
+        paused && status == .connected ? "Paused: Claude can’t use this Mac" : status.title()
+    }
     var statusAdvice: String? { status.advice }
 
-    var batteryLine: String {
-        guard power.hasBattery else { return "Power: plugged in (no battery)" }
-        let source = power.charging ? "charging" : (power.powerSource == .battery ? "on battery" : "plugged in")
-        return "Battery \(power.batteryPercent)%, \(source)"
-    }
-
-    var keepAwakeLine: String {
+    /// Why keep-awake is off when the Owner didn't turn it off; nil otherwise (FR-070). Waiting
+    /// for approval is the setup line's job.
+    var keepAwakeProblem: String? {
         switch keepAwake {
-        case .on: "Keeping this Mac awake"
-        case .offUser: "Keep-awake is off"
+        case .on, .offUser, .offHelperUnavailable: nil
         case .offLowBattery: "Allowing sleep: battery at 15% or less"
         case .offTooHot: "Allowing sleep: Mac is too hot"
-        case .offHelperUnavailable: "Keep-awake needs approval in System Settings"
         }
     }
 
     var isPaired: Bool { status.isPaired }
 
-    var menuIcon: String { status == .connected ? "key.fill" : "key" }
+    var icon: MenuIcon { MenuIcon(status: status, paused: paused, needsSetup: needsSetup, busy: busy > 0) }
 }

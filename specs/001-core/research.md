@@ -410,3 +410,28 @@ https://www.sqlite.org/pragma.html#pragma_secure_delete.
 - **How long the operator log is kept.** One year (chosen: long enough to answer "why was my
   account suspended" and to see a pattern of abuse, short enough not to keep addresses of
   deleted accounts forever). [Toni to confirm.]
+
+## Menu bar design (FR-600 to FR-605, spec 002 FR-131, 2026-10-26)
+
+Apple's Human Interface Guidelines (developer.apple.com/design/human-interface-guidelines):
+- The menu bar: a menu bar extra shows a menu, not a popover; its icon is a template image
+  (black and clear only), 24 pt bar; people may hide it, and the system hides extras when the
+  bar is crowded, so nothing may depend on it being visible (the setup window and the Settings
+  window offer everything).
+- SF Symbols: use a symbol's slash variant to show that something is unavailable (`key.slash`
+  exists on the supported releases); don't bake badges into custom symbols.
+- Color: don't rely on color alone; use shapes or labels.
+- Menus: be mindful of length; submenus sparingly, one level, about five items; "…" when more
+  input is needed; title-style capitalization; a changing label ("Pause…"/"Resume…") or a
+  checkmark for a state.
+- Settings: infrequently changed settings go in a Settings window opened with Command-comma; a
+  non-customizable toolbar of panes; the title names the pane; reopen to the last pane.
+- Alerts: confirm an uncommon destructive action that can't be undone, with a specific verb and
+  Cancel.
+
+Options weighed for Pause reaching Claude:
+1. The Mac answers every call with an error (chosen): no relay or protocol change, the answer is
+   immediate and says exactly why, and the tool list stays stable like an offline Mac's.
+2. The Mac disconnects: the relay answers "offline", which is wrong ("paused" is not "offline")
+   and Keep Mac Awake would be pointless.
+3. The Mac sends an empty tool list: Claude can't tell the Owner why, and its apps cache lists.

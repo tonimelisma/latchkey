@@ -56,6 +56,31 @@ actor RunningCalls {
     }
 }
 
+/// Pause Claude's Access (spec 001 FR-602 to FR-604): every call is answered at once, and
+/// whatever runs stops. Stored in user defaults, so it lasts until the Owner resumes.
+enum Pause {
+    static let key = "paused"
+
+    static let refused = ToolResult.text(
+        "The Mac's owner paused Latchkey on this Mac, so Claude can't use it right now. Nothing was done. They can resume it with Resume Claude's Access in the Latchkey menu.",
+        isError: true)
+
+    static let stopped =
+        "The Mac's owner paused Latchkey on this Mac while this was running, so it was stopped. It may not have finished."
+
+    static func isPaused(_ defaults: UserDefaults) -> Bool { defaults.bool(forKey: key) }
+    static func set(_ paused: Bool, _ defaults: UserDefaults) { defaults.set(paused, forKey: key) }
+
+    /// Stops every running call with `stopped`, then every shell command (FR-603). Calls first,
+    /// as for a level change.
+    static func stopWork(
+        calls: @Sendable (@escaping @Sendable (String) -> String?) async -> Void, shell: ShellJobs
+    ) async {
+        await calls { _ in stopped }
+        await shell.stopAll()
+    }
+}
+
 /// What happens to running work when the Owner changes a capability's level (spec 001 FR-066,
 /// spec 004 FR-310).
 enum LevelChange {

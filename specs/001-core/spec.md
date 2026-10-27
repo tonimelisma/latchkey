@@ -268,11 +268,14 @@ Format: EARS ("When <trigger>, the <system> shall <response>"). IDs are stable; 
   removed; the first real capability is Notes and Messages (spec 002).*
 
 ### Mac app behavior
-- **FR-070** The app shall live in the menu bar and show: connected or not, battery, keep-awake
-  state, and why keep-awake is off if it is.
+- **FR-070** The app shall live in the menu bar. Its menu shall start with whether Claude can
+  reach the Mac and, when it can't, why. It shall show keep-awake's state only when keep-awake is
+  off for a reason the Owner didn't choose, and then say why (as one clickable line when the
+  Owner can fix it). It shall not show the battery: macOS shows it, and Claude sees it in every
+  result (Toni, 2026-10-26).
 - **FR-071** The app shall offer to start at login.
 - **FR-076** On first launch, the app shall be set to start at login; the Owner can turn this off
-  in the menu.
+  in the Settings window (FR-601).
 - **FR-077** When the Owner moves the app to the Trash while it runs, the app shall disconnect the
   Mac from the account, restore normal sleep, remove its login and background items and all its
   local data, and quit. When a newer copy replaces it instead (an update), the app shall hand over
@@ -285,6 +288,28 @@ Format: EARS ("When <trigger>, the <system> shall <response>"). IDs are stable; 
 - **FR-205** When the app starts and every setup step is already done, it shall open no window
   and shall appear only in the menu bar (not in the Dock or the app switcher). It shall show the
   setup window at start only while a step is really unfinished.
+- **FR-600** The menu bar icon shall show the Mac's state by its shape alone, never by color
+  (Toni, 2026-10-26): a solid key while Claude can reach the Mac; a key with a line through it
+  while it can't (offline, connecting, not paired, or refused by the relay); a small pause mark
+  beside the key while paused (FR-602); a small "!" beside the key while a setup step is
+  unfinished; and a small dot beside the key while a request from Claude runs (spec 002
+  FR-132). Only one mark shows at a time, in that order of precedence. Its spoken description
+  shall say the same in words.
+- **FR-601** Settings the Owner changes rarely shall be in a Settings window (opened from the
+  menu with "Settings…" and Command-comma), not in the menu (Toni, 2026-10-26): what Claude can
+  do (each capability's level), the Claude apps with access (FR-190), the connection (the
+  relay's address, Disconnect This Mac), and starting at login. Changes there take effect at
+  once. The menu keeps the status, Keep Mac Awake, Pause, recent activity, Settings, and Quit.
+- **FR-602** The menu shall have a "Pause Claude's Access" item (Toni, 2026-10-26). While paused,
+  every request from Claude shall be answered at once with an error saying the Mac's owner
+  paused Latchkey on this Mac; capability levels, the pairing, and keep-awake stay as they are;
+  the menu's first line says the Mac is paused; and the item reads "Resume Claude's Access".
+- **FR-603** When the Owner pauses, the Mac app shall at once stop every running request and
+  every running shell command, answering each request with the same error as FR-602.
+- **FR-604** Pausing shall last until the Owner resumes, including across quitting, restarts,
+  and updates.
+- **FR-605** Disconnect This Mac shall ask for confirmation first, with the destructive button
+  not the default, since it can only be undone by pairing again.
 - **FR-072** The app shall update itself through signed updates.
 - **FR-074** A development or test build of the app shall be a different app from the installed
   one in macOS's eyes: it shall not share the installed app's settings, stored pairing and keys,
@@ -379,7 +404,8 @@ Format: EARS ("When <trigger>, the <system> shall <response>"). IDs are stable; 
   put key material in a log or an error.
 
 ### Apps with access, shown on the Mac (Toni, 2026-10-25)
-- **FR-190** While the Mac is connected to a relay that reports them, the Mac app shall show
+- **FR-190** While the Mac is connected to a relay that reports them, the Mac app's Settings
+  window (FR-601; the menu until 2026-10-26) shall show
   the Claude apps that have access to the Owner's Mac: for each approval the Owner gave that
   still works, the app's name and the checked host as the consent page showed them, where the
   approval was sent back to, when it was given, and when it was last used. The relay shall

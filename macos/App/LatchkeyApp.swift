@@ -9,20 +9,20 @@ struct LatchkeyApp: App {
         MenuBarExtra {
             MenuContent(model: delegate.model)
         } label: {
+            let icon = delegate.model.icon
             HStack(spacing: 1) {
-                Image(systemName: delegate.model.menuIcon)
-                if delegate.model.busy > 0 {
-                    Image(systemName: "circle.fill").font(.system(size: 5))  // working (FR-132)
+                Image(systemName: icon.symbol)
+                if let mark = icon.mark {  // FR-600; the working dot is spec 002 FR-132
+                    Image(systemName: mark).font(.system(size: mark == "circle.fill" ? 5 : 7, weight: .bold))
                 }
             }
-            .accessibilityLabel(
-                "Latchkey: \(delegate.model.statusLine)\(delegate.model.busy > 0 ? ", working" : "")")
+            .accessibilityLabel(icon.spoken)
         }
         Window("Latchkey Activity", id: "activity") {
             ActivityView(model: delegate.model)
         }
-        Window("Claude Apps With Access", id: "access") {
-            AccessView(model: delegate.model)
+        Settings {
+            SettingsView(model: delegate.model)
         }
     }
 }

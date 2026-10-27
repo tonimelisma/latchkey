@@ -1,48 +1,35 @@
 import SwiftUI
 
+/// The menu bar menu: what the Owner checks or flips often (spec 001 FR-070, FR-601, FR-602).
 struct MenuContent: View {
     @Bindable var model: AppModel
     @Environment(\.openWindow) private var openWindow
+    @Environment(\.openSettings) private var openSettings
 
     var body: some View {
         Text(model.statusLine)
         if let advice = model.statusAdvice { Text(advice) }
-        Text(model.batteryLine)
-        Text(model.keepAwakeLine)
-        if model.keepAwake == .offHelperUnavailable {
+        if !model.isPaired {
+            Button("Connect to a Relay…") { model.showSetup() }
+        } else if model.needsSetup {
             Button("Finish Setting Up…") { model.showSetup() }
         }
+        if let problem = model.keepAwakeProblem { Text(problem) }
         if let error = model.lastError { Text(error) }
         Divider()
         Toggle("Keep Mac Awake", isOn: $model.keepAwakeEnabled)
-        Section("What Claude Can Do") {
-            ForEach(model.capabilities.capabilities) { cap in
-                Picker(
-                    "\(cap.title): \(cap.title(for: model.capabilities.level(cap.id)))",
-                    selection: Binding(
-                        get: { model.capabilities.level(cap.id) },
-                        set: { model.setLevel(cap.id, $0) })
-                ) {
-                    ForEach(cap.levels, id: \.self) { Text(cap.title(for: $0)).tag($0) }
-                }
-            }
-        }
-        if model.status == .connected, model.access.isKnown {
-            Divider()
-            AccessMenu(model: model)
-        }
-        Divider()
-        Section("Recent Activity") {
+        Button(model.paused ? "Resume Claude’s Access" : "Pause Claude’s Access") { model.setPaused(!model.paused) }
+        Section("Recent Activity") {  // a section brings its own separators
             if model.activityLog.problem != nil {
                 Text("Activity Log Unavailable")
             } else if model.recentActivity.isEmpty {
                 Text("Nothing yet")
             }
-            ForEach(model.recentActivity) { entry in
-                Menu(ActivityFormat.title(entry)) {
-                    Text("Asked: \(ActivityFormat.clip(entry.arguments))")
-                    Text("\(entry.isError ? "Failed" : "Result"): \(ActivityFormat.clip(entry.result))")
-                    Text("Took \(entry.durationMS) ms")
+            let split = ActivityFormat.split(model.recentActivity)
+            ForEach(split.shown) { ActivityItem(entry: $0) }
+            if !split.more.isEmpty {
+                Menu("More Activity") {
+                    ForEach(split.more) { ActivityItem(entry: $0) }
                 }
             }
             Button("Show All Activity…") {
@@ -50,14 +37,14 @@ struct MenuContent: View {
                 NSApp.activate()
             }
         }
-        Divider()
-        if model.isPaired {
-            if let relay = model.relayURL { Text("Relay: \(relay.host() ?? relay.absoluteString)") }
-            Button("Disconnect This Mac") { Task { await model.disconnect() } }
-        } else {
-            Button("Connect to a Relay…") { model.showSetup() }
+        Button("Settings…") {
+            // A menu-bar-only app opens no Settings window until it is a regular, active app;
+            // WindowPresence returns it to the menu bar when the window closes.
+            NSApp.setActivationPolicy(.regular)
+            NSApp.activate()
+            openSettings()
         }
-        Toggle("Start at Login", isOn: Binding(get: { model.startsAtLogin }, set: { model.setStartsAtLogin($0) }))
+        .keyboardShortcut(",")
         if model.updates.available {
             Button("Check for Updates…") { model.updates.checkForUpdates() }
         }
@@ -67,47 +54,124 @@ struct MenuContent: View {
     }
 }
 
-/// The Claude apps that have access to this Mac, in the menu (FR-190 to FR-192). Shown only while
-/// connected to a relay that sent the list. Names and hosts come from the network: `verbatim`
-/// everywhere, never Markdown or links.
-struct AccessMenu: View {
-    let model: AppModel
-    @Environment(\.openWindow) private var openWindow
+/// One activity in the menu; it expands to the request and the result (spec 002 FR-131).
+struct ActivityItem: View {
+    let entry: Activity
 
     var body: some View {
-        Section("Claude Apps With Access") {
-            if model.access.entries?.isEmpty == true {
-                Text("No Claude app has access")
-            }
-            ForEach(model.access.menuEntries) { entry in
-                if model.access.isRemoving(entry.id) {
-                    Text(verbatim: "Removing \(entry.title)…")
-                } else {
-                    Menu {
-                        Text(verbatim: entry.originLine)
-                        if let scope = entry.scopeLine { Text(verbatim: scope) }
-                        Text(verbatim: entry.approvedLine())
-                        Text(verbatim: entry.lastUsedLine(now: Date()))
-                        Divider()
-                        Button("Remove Access…") { model.confirmRemoval(of: entry) }
-                            .accessibilityLabel(Text(verbatim: "Remove access for \(entry.title)"))
-                    } label: {
-                        Text(verbatim: entry.title)
-                    }
-                }
-            }
-            if let failure = model.access.failure { Text(verbatim: failure) }
-            if model.access.hasMore {
-                Button("Show All Apps…") {
-                    openWindow(id: "access")
-                    NSApp.activate()
-                }
-            }
+        Menu(ActivityFormat.title(entry)) {
+            Text("Asked: \(ActivityFormat.clip(entry.arguments))")
+            Text("\(entry.isError ? "Failed" : "Result"): \(ActivityFormat.clip(entry.result))")
+            Text("Took \(entry.durationMS) ms")
         }
     }
 }
 
-/// The full list in a window, for when the menu shows only the newest few (FR-190).
+/// The menu bar icon: the key's shape says whether Claude can reach this Mac, and at most one
+/// small mark beside it says paused, setup unfinished, or working (FR-600). Shape, never color.
+struct MenuIcon: Equatable {
+    let symbol: String
+    let mark: String?
+    let spoken: String
+
+    init(status: ConnectionStatus, paused: Bool, needsSetup: Bool, busy: Bool) {
+        let reachable = status == .connected
+        symbol = reachable ? "key.fill" : "key.slash"
+        let base = reachable ? "Claude can reach this Mac" : "Claude can’t reach this Mac"
+        if paused {
+            mark = "pause.fill"
+            spoken = "Latchkey: paused"
+        } else if needsSetup {
+            mark = "exclamationmark"
+            spoken = "Latchkey: \(base), setup unfinished"
+        } else if busy && reachable {
+            mark = "circle.fill"
+            spoken = "Latchkey: \(base), working"
+        } else {
+            mark = nil
+            spoken = "Latchkey: \(base)"
+        }
+    }
+}
+
+/// The Settings window: what the Owner changes rarely (FR-601). Changes apply at once.
+struct SettingsView: View {
+    @Bindable var model: AppModel
+
+    var body: some View {
+        TabView {
+            Tab("What Claude Can Do", systemImage: "checklist") { CapabilitiesPane(model: model) }
+            Tab("Claude Apps", systemImage: "person.2") { AccessView(model: model) }
+            Tab("Connection", systemImage: "network") { ConnectionPane(model: model) }
+            Tab("General", systemImage: "gearshape") { GeneralPane(model: model) }
+        }
+        .frame(width: 560)
+    }
+}
+
+struct CapabilitiesPane: View {
+    let model: AppModel
+
+    var body: some View {
+        Form {
+            ForEach(model.capabilities.capabilities) { cap in
+                Picker(
+                    selection: Binding(
+                        get: { model.capabilities.level(cap.id) },
+                        set: { model.setLevel(cap.id, $0) })
+                ) {
+                    ForEach(cap.levels, id: \.self) { Text(cap.title(for: $0)).tag($0) }
+                } label: {
+                    Text(cap.title)
+                    Text(cap.summary)
+                }
+            }
+        }
+        .formStyle(.grouped)
+    }
+}
+
+struct ConnectionPane: View {
+    let model: AppModel
+
+    var body: some View {
+        Form {
+            LabeledContent("Status", value: model.statusLine)
+            if model.isPaired {
+                if let relay = model.relayURL {
+                    LabeledContent("Relay") { Text(verbatim: relay.host() ?? relay.absoluteString) }
+                }
+                LabeledContent("This Mac") {
+                    Button("Disconnect This Mac") { model.confirmDisconnect() }
+                }
+            } else {
+                LabeledContent("Relay") {
+                    Button("Connect to a Relay…") { model.showSetup() }
+                }
+            }
+        }
+        .formStyle(.grouped)
+    }
+}
+
+struct GeneralPane: View {
+    let model: AppModel
+
+    var body: some View {
+        Form {
+            Toggle("Start at Login", isOn: Binding(get: { model.startsAtLogin }, set: { model.setStartsAtLogin($0) }))
+            LabeledContent("Version", value: AppModel.version)
+            if model.updates.available {
+                LabeledContent("Updates") {
+                    Button("Check for Updates…") { model.updates.checkForUpdates() }
+                }
+            }
+        }
+        .formStyle(.grouped)
+    }
+}
+
+/// The Claude apps with access, in the Settings window (FR-190, FR-601).
 struct AccessView: View {
     let model: AppModel
 
@@ -451,10 +515,32 @@ struct ActivityView: View {
 
 /// How an activity appears in the menu.
 enum ActivityFormat {
+    /// "time  Capability: target": what was acted on, not just the tool (spec 002 FR-131).
     static func title(_ e: Activity) -> String {
         let time = e.at.formatted(date: .omitted, time: .shortened)
-        let name = e.tool.replacingOccurrences(of: "_", with: " ")
-        return "\(time)  \(name)\(e.isError ? " (failed)" : "")"
+        return "\(time)  \(action(e))\(e.isError ? " (failed)" : "")"
+    }
+
+    static let capabilityNames = [
+        "shell": "Shell", "files": "Files", "notes": "Notes", "messages": "Messages", "browser": "Browser",
+        "computer": "Computer",
+    ]
+    /// The argument that names what was acted on, first found wins.
+    static let targetKeys = ["command", "path", "url", "query", "to", "title", "app", "action"]
+
+    private static func action(_ e: Activity) -> String {
+        let parts = e.tool.split(separator: "_", maxSplits: 1).map(String.init)
+        guard parts.count == 2, let capability = capabilityNames[parts[0]] else {
+            return e.tool.replacingOccurrences(of: "_", with: " ")
+        }
+        let args = (try? JSONSerialization.jsonObject(with: Data(e.arguments.utf8))) as? [String: Any] ?? [:]
+        let target = targetKeys.lazy.compactMap { args[$0] as? String }.first { !$0.isEmpty }
+        return "\(capability): \(target.map { clip($0, 40) } ?? parts[1].replacingOccurrences(of: "_", with: " "))"
+    }
+
+    /// The newest three for the menu, and the next five for "More Activity" (spec 002 FR-131).
+    static func split(_ recent: [Activity]) -> (shown: [Activity], more: [Activity]) {
+        (Array(recent.prefix(3)), Array(recent.dropFirst(3).prefix(5)))
     }
 
     /// The Activity window's line about stored entries that can't be read (FR-203).
@@ -468,9 +554,9 @@ enum ActivityFormat {
         }
     }
 
-    /// One line, at most 80 characters, for a menu item.
-    static func clip(_ s: String) -> String {
+    /// One line, at most `limit` characters, for a menu item.
+    static func clip(_ s: String, _ limit: Int = 80) -> String {
         let line = s.replacingOccurrences(of: "\n", with: " ")
-        return line.count > 80 ? String(line.prefix(79)) + "…" : line
+        return line.count > limit ? String(line.prefix(limit - 1)) + "…" : line
     }
 }
