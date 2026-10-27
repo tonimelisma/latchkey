@@ -25,13 +25,7 @@ struct MenuContent: View {
             } else if model.recentActivity.isEmpty {
                 Text("Nothing yet")
             }
-            let split = ActivityFormat.split(model.recentActivity)
-            ForEach(split.shown) { ActivityItem(entry: $0) }
-            if !split.more.isEmpty {
-                Menu("More Activity") {
-                    ForEach(split.more) { ActivityItem(entry: $0) }
-                }
-            }
+            ForEach(ActivityFormat.menuItems(model.recentActivity)) { ActivityItem(entry: $0) }
             Button("Show All Activity…") {
                 openWindow(id: "activity")
                 NSApp.activate()
@@ -101,6 +95,7 @@ struct SettingsView: View {
     var body: some View {
         TabView {
             Tab("What Claude Can Do", systemImage: "checklist") { CapabilitiesPane(model: model) }
+            Tab("Permissions", systemImage: "lock.shield") { PermissionsPane(model: model) }
             Tab("Claude Apps", systemImage: "person.2") { AccessView(model: model) }
             Tab("Connection", systemImage: "network") { ConnectionPane(model: model) }
             Tab("General", systemImage: "gearshape") { GeneralPane(model: model) }
@@ -128,6 +123,83 @@ struct CapabilitiesPane: View {
             }
         }
         .formStyle(.grouped)
+    }
+}
+
+/// Every macOS approval Latchkey uses, with its state and a way to change it (FR-606).
+struct PermissionsPane: View {
+    let model: AppModel
+
+    var body: some View {
+        Form {
+            Section {
+                ForEach(model.approvals) { row($0) }
+            } footer: {
+                Text(
+                    "macOS keeps these in System Settings → Privacy & Security. Changes there show here within a second."
+                )
+                .font(.footnote).foregroundStyle(.secondary)
+            }
+        }
+        .formStyle(.grouped)
+        .task {
+            while !Task.isCancelled {
+                await model.checkApprovals()
+                try? await Task.sleep(for: .seconds(1))
+            }
+        }
+    }
+
+    private func row(_ a: Approval) -> some View {
+        LabeledContent {
+            HStack {
+                switch a.state {
+                case .allowed:
+                    Label("Allowed", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
+                case .missing:
+                    Label("Not Allowed", systemImage: "exclamationmark.circle").foregroundStyle(.orange)
+                case .notNeeded:
+                    Text("Not Needed").foregroundStyle(.secondary)
+                case .optional:
+                    Text("Off").foregroundStyle(.secondary)
+                }
+                if a.state != .allowed { actions(a.id) }
+            }
+            .labelStyle(.titleAndIcon)
+        } label: {
+            Text(a.title)
+            Text(a.purpose)
+        }
+    }
+
+    /// The same actions as the setup window's steps.
+    @ViewBuilder private func actions(_ id: String) -> some View {
+        switch id {
+        case "helper": Button("Allow…") { model.approveHelper() }
+        case "disk": Button("Allow…") { Permissions.openFullDiskAccessSettings() }
+        case "notes": control(Permissions.notesApp)
+        case "messages": control(Permissions.messagesApp)
+        case "safari": control(Permissions.safariApp)
+        case "contacts":
+            if model.contactsStatus == .notDetermined {
+                Button("Allow…") { Task { await model.allowContacts() } }
+            } else {
+                Button("Allow…") { Permissions.openContactsSettings() }
+            }
+        case "safariJS":
+            Button("Check") { Task { await model.checkSafariJavaScript() } }
+        case "screen": Button("Allow…") { model.allowScreenRecording() }
+        case "accessibility": Button("Allow…") { model.allowAccessibility() }
+        default: EmptyView()
+        }
+    }
+
+    @ViewBuilder private func control(_ app: String) -> some View {
+        if model.control(of: app) == .denied {
+            Button("Allow…") { Permissions.openAutomationSettings() }
+        } else {
+            Button("Allow…") { Task { await model.allowControl(of: app) } }
+        }
     }
 }
 
@@ -343,11 +415,7 @@ struct SetupView: View {
         .onAppear { relay = model.relayURL?.absoluteString ?? AppModel.hostedRelay }
         .task {
             while !Task.isCancelled {  // notice the approvals in System Settings
-                await model.checkHelperApproval()
-                model.checkFullDiskAccess()
-                await model.checkAppControl()
-                model.checkContacts()
-                model.checkScreenPermissions()
+                await model.checkApprovals()
                 try? await Task.sleep(for: .seconds(1))
             }
         }
@@ -538,10 +606,8 @@ enum ActivityFormat {
         return "\(capability): \(target.map { clip($0, 40) } ?? parts[1].replacingOccurrences(of: "_", with: " "))"
     }
 
-    /// The newest three for the menu, and the next five for "More Activity" (spec 002 FR-131).
-    static func split(_ recent: [Activity]) -> (shown: [Activity], more: [Activity]) {
-        (Array(recent.prefix(3)), Array(recent.dropFirst(3).prefix(5)))
-    }
+    /// The newest five, for the menu; the rest are in the Activity window (spec 002 FR-131).
+    static func menuItems(_ recent: [Activity]) -> [Activity] { Array(recent.prefix(5)) }
 
     /// The Activity window's line about stored entries that can't be read (FR-203).
     static func unreadableNote(_ count: Int) -> String? {

@@ -297,7 +297,8 @@ Format: EARS ("When <trigger>, the <system> shall <response>"). IDs are stable; 
   shall say the same in words.
 - **FR-601** Settings the Owner changes rarely shall be in a Settings window (opened from the
   menu with "Settings…" and Command-comma), not in the menu (Toni, 2026-10-26): what Claude can
-  do (each capability's level), the Claude apps with access (FR-190), the connection (the
+  do (each capability's level), the macOS permissions (FR-606), the Claude apps with access
+  (FR-190), the connection (the
   relay's address, Disconnect This Mac), and starting at login. Changes there take effect at
   once. The menu keeps the status, Keep Mac Awake, Pause, recent activity, Settings, and Quit.
 - **FR-602** The menu shall have a "Pause Claude's Access" item (Toni, 2026-10-26). While paused,
@@ -310,6 +311,12 @@ Format: EARS ("When <trigger>, the <system> shall <response>"). IDs are stable; 
   and updates.
 - **FR-605** Disconnect This Mac shall ask for confirmation first, with the destructive button
   not the default, since it can only be undone by pairing again.
+- **FR-606** The Settings window shall list every macOS permission Latchkey uses (keep-awake in
+  the background, Full Disk Access, control of Notes, Messages, and Safari, Contacts, Safari's
+  JavaScript setting, Screen Recording, Accessibility) at any time, not only while setup is
+  unfinished (Toni, 2026-10-26). Each shows whether it is allowed, needed by the current levels
+  and missing, not needed, or (Contacts) optional, with a button that does what the setup step
+  does. Changes made in System Settings show within a second while the window is open.
 - **FR-072** The app shall update itself through signed updates.
 - **FR-074** A development or test build of the app shall be a different app from the installed
   one in macOS's eyes: it shall not share the installed app's settings, stored pairing and keys,

@@ -1,6 +1,6 @@
 # Status
 
-Last updated: 2026-10-26 (shorter menu, clear online/offline icon, Settings window, Pause; app 0.8.13)
+Last updated: 2026-10-26 (shorter menu, clear online/offline icon, Settings window with a Permissions tab, Pause; app 0.8.14)
 
 Xcode signing ready (2026-10-20): Toni's Xcode account has a valid "Apple Development" certificate
 (certificate expires 2027-07-22). Keep the team ID out of committed project files
@@ -125,10 +125,11 @@ The Mac state line appears in every result (it reported the battery warning at 1
 11. ~~Menu redesign~~: done 2026-10-26 (app 0.8.13, spec 001 FR-600 to FR-605, spec 002
    FR-131; checked against Apple's guidelines). The menu bar key shows by shape whether Claude can
    reach the Mac (a line through it when not) and marks paused, setup unfinished, and working.
-   The menu is short: status, Keep Mac Awake, Pause Claude's Access, the newest three activities
-   (naming the command or file) with five more under More Activity, Settings…, Quit. Capability
-   levels, Claude apps with access, the relay and Disconnect (now confirmed first), and Start at
-   Login are in a Settings window. The battery line is gone.
+   The menu is short: status, Keep Mac Awake, Pause Claude's Access, the newest five activities
+   (naming the command or file), Show All Activity…, Settings…, Quit. Capability levels, the
+   macOS permissions (each with its state and an Allow button, app 0.8.14), Claude apps with
+   access, the relay and Disconnect (now confirmed first), and Start at Login are in a Settings
+   window. The battery line is gone.
 2. Known limit: macOS shows its own "allow Latchkey to access the screen directly" alert from
    time to time for screen capture; it needs Toni at the Mac (computer control only).
 

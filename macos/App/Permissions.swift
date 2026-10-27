@@ -1,4 +1,5 @@
 import AppKit
+import Contacts
 import CoreServices
 import Foundation
 import UserNotifications
@@ -83,5 +84,86 @@ enum Notifier {
             content.body = body
             try? await center.add(UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil))
         }
+    }
+}
+
+/// What macOS has allowed, from the app's own checks, for the list of approvals (FR-606).
+struct ApprovalFacts {
+    var helper: Bool
+    var fullDiskAccess: Bool
+    var notes: Permissions.Automation
+    var messages: Permissions.Automation
+    var safari: Permissions.Automation
+    var contacts: CNAuthorizationStatus
+    var safariJavaScript: Bool?
+    var screenRecording: Bool
+    var accessibility: Bool
+    var level: (String) -> AccessLevel
+}
+
+/// One macOS approval Latchkey uses, in the Settings window's Permissions tab (FR-606).
+struct Approval: Identifiable, Equatable {
+    enum State: Equatable {
+        case allowed
+        /// The current levels need it and it isn't allowed; setup asks for it too.
+        case missing
+        /// Not allowed, and nothing turned on needs it.
+        case notNeeded
+        /// Not allowed and not required: Messages shows numbers instead of names.
+        case optional
+    }
+
+    let id: String
+    let title: String
+    let purpose: String
+    let state: State
+
+    static func list(_ f: ApprovalFacts) -> [Approval] {
+        let notes = f.level(CapabilityRegistry.notes)
+        let messages = f.level(CapabilityRegistry.messages)
+        let browser = f.level(CapabilityRegistry.browser) != .off
+        let computer = f.level(CapabilityRegistry.computer) != .off
+        let anyOn = CapabilityRegistry.all.contains { f.level($0) != .off }
+        func state(_ allowed: Bool, needed: Bool) -> State { allowed ? .allowed : needed ? .missing : .notNeeded }
+        let contacts: State =
+            switch (f.contacts, messages != .off) {
+            case (.authorized, _): .allowed
+            case (_, false): .notNeeded
+            case (.notDetermined, true): .missing
+            default: .optional
+            }
+        return [
+            Approval(
+                id: "helper", title: "Keep This Mac Awake",
+                purpose: "So Claude can reach this Mac with the lid closed.", state: state(f.helper, needed: true)),
+            Approval(
+                id: "disk", title: "Full Disk Access", purpose: "To read your files, notes, and messages.",
+                state: state(f.fullDiskAccess, needed: anyOn)),
+            Approval(
+                id: "notes", title: "Control Notes", purpose: "To create, edit, and delete notes.",
+                state: state(f.notes == .allowed, needed: notes == .readWrite)),
+            Approval(
+                id: "messages", title: "Control Messages", purpose: "To send messages for you.",
+                state: state(f.messages == .allowed, needed: messages == .readWrite)),
+            Approval(
+                id: "contacts", title: "Contacts",
+                purpose: "To show names in messages instead of phone numbers. Optional.", state: contacts),
+            Approval(
+                id: "safari", title: "Control Safari", purpose: "To open and read web pages, signed in as you.",
+                state: state(f.safari == .allowed, needed: browser)),
+            Approval(
+                id: "safariJS", title: "Safari JavaScript",
+                purpose:
+                    "In Safari’s Developer settings, turn on “Allow JavaScript from Apple Events”, then click Check.",
+                state: state(f.safariJavaScript == true, needed: browser)),
+            Approval(
+                id: "screen", title: "Screen & System Audio Recording",
+                purpose: "To see the screen, for computer control.",
+                state: state(f.screenRecording, needed: computer)),
+            Approval(
+                id: "accessibility", title: "Accessibility",
+                purpose: "To use the mouse and keyboard, for computer control.",
+                state: state(f.accessibility, needed: computer)),
+        ]
     }
 }

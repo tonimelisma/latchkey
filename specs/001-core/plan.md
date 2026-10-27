@@ -687,15 +687,21 @@ design", 2026-10-26).
   running) picks it, so a unit test covers every case. Template images only, no color.
 - Menu, top to bottom: status line (and the suspension advice, the keep-awake problem, or the
   last error when there is one); Keep Mac Awake, Pause/Resume Claude's Access; Recent Activity
-  (three, a "More Activity" submenu of five, Show All Activity…); Settings… (⌘,), Check for
+  (the newest five, then Show All Activity…); Settings… (⌘,), Check for
   Updates… when available; Quit Latchkey (⌘Q). The battery line is gone.
 - Activity titles: "time  Capability: target", the capability from the tool's prefix and the
   target from the first of `command`, `path`, `url`, `query`, `to`, `title`, `app`, `action` in
   the arguments, on one line, at most 40 characters; without one, the tool's own title.
-- Settings window: SwiftUI's `Settings` scene with a tab per pane (What Claude Can Do, Claude
-  Apps, Connection, General), which gives the toolbar, the pane title, ⌘, and reopening the last
+- Settings window: SwiftUI's `Settings` scene with a tab per pane (What Claude Can Do,
+  Permissions, Claude Apps, Connection, General), which gives the toolbar, the pane title, ⌘, and reopening the last
   pane. Opened from the menu with `openSettings`, then the app is activated (a menu bar app's
   window would otherwise open behind others). The Claude Apps pane shows the whole list, so the separate "Show All Apps…" window is gone.
+- Permissions pane (FR-606): a pure function turns what the app's checks found (the same ones
+  setup uses) and the levels into one row per permission: allowed, missing (the levels need it;
+  exactly what makes setup unfinished), not needed, or optional (Contacts after "Don't Allow").
+  Its buttons call the setup steps' actions; while the pane is open it re-checks every second,
+  as the setup window does. Setup stays the first-run walk-through and opens itself only when
+  something is missing.
 - Pause is the Mac's own state, stored in user defaults so it survives restarts (FR-604). The
   relay doesn't change: the tools stay listed, as they do while the Mac is offline, and every
   call is answered at once with the pause error (FR-602), so nothing waits (II). Capability

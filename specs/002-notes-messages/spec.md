@@ -104,8 +104,8 @@ As an Owner, I set Notes and Messages each to Off, Read only, or Read & write in
 - **FR-130** When Claude sends a message, or creates, changes, or deletes a note, the Mac shall show
   a notification naming the action and its target.
 - **FR-131** The menu bar menu shall show recent activity (time, capability, target, result): the
-  newest three, then a "More Activity" item that expands to the next five (Apple keeps submenus to about five items), then "Show All
-  Activity…" (Toni, 2026-10-26). Each item names what was acted on (the command, file, page, or
+  newest five, then "Show All Activity…", which opens the Activity window with the full list
+  (Toni, 2026-10-26: one way to see more, not a submenu as well). Each item names what was acted on (the command, file, page, or
   search), not only the tool, and can be expanded to show the request and the result.
 - **FR-132** While a request from Claude is running on the Mac, the menu bar icon shall show it.
 

@@ -384,6 +384,26 @@ final class AppModel {
         checkContacts()
     }
 
+    /// Every macOS approval and its state, for the Permissions tab (FR-606).
+    var approvals: [Approval] {
+        Approval.list(
+            ApprovalFacts(
+                helper: helperStatus == .enabled, fullDiskAccess: fullDiskAccess,
+                notes: control(of: Permissions.notesApp), messages: control(of: Permissions.messagesApp),
+                safari: control(of: Permissions.safariApp), contacts: contactsStatus,
+                safariJavaScript: safariJavaScript, screenRecording: screenRecording, accessibility: accessibility,
+                level: { [capabilities] in capabilities.level($0) }))
+    }
+
+    /// Re-reads every approval, to notice what the Owner changes in System Settings.
+    func checkApprovals() async {
+        await checkHelperApproval()
+        checkFullDiskAccess()
+        await checkAppControl()
+        checkContacts()
+        checkScreenPermissions()
+    }
+
     func setStartsAtLogin(_ on: Bool) {
         do {
             if on { try SMAppService.mainApp.register() } else { try SMAppService.mainApp.unregister() }

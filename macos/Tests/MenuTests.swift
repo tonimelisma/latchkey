@@ -1,3 +1,4 @@
+import Contacts
 import Foundation
 import Testing
 
@@ -68,13 +69,40 @@ import Testing
         #expect(ActivityFormat.title(Self.entry("revoke_client", "not json")) == "\(time)  revoke client")
     }
 
-    /// Three in the menu, five more in "More Activity" (FR-131).
-    @Test func threeShownAndFiveMore() {
+    /// The newest five in the menu; the rest only in the Activity window (FR-131).
+    @Test func fiveShown() {
         let all = (0..<10).map { Self.entry("shell_run", #"{"command":"c\#($0)"}"#) }
-        let split = ActivityFormat.split(all)
-        #expect(split.shown.count == 3 && split.more.count == 5)
-        #expect(split.shown.first?.arguments == all[0].arguments && split.more.first?.arguments == all[3].arguments)
-        #expect(ActivityFormat.split(Array(all.prefix(2))).more.isEmpty)
+        let shown = ActivityFormat.menuItems(all)
+        #expect(shown.map(\.arguments) == all.prefix(5).map(\.arguments))
+        #expect(ActivityFormat.menuItems(Array(all.prefix(2))).count == 2)
+    }
+
+    /// Every approval is listed, set up or not; only the ones the levels need count as missing,
+    /// and they match what setup asks for (FR-606).
+    @Test func approvalsList() {
+        var facts = ApprovalFacts(
+            helper: false, fullDiskAccess: false, notes: .notAsked, messages: .denied, safari: .notAsked,
+            contacts: .notDetermined, safariJavaScript: nil, screenRecording: false, accessibility: false,
+            level: { _ in .off })
+        let all = Approval.list(facts)
+        #expect(
+            all.map(\.id) == [
+                "helper", "disk", "notes", "messages", "contacts", "safari", "safariJS", "screen", "accessibility",
+            ])
+        #expect(all.filter { $0.state == .missing }.map(\.id) == ["helper"], "everything off needs only keep-awake")
+
+        facts.level = { [CapabilityRegistry.notes: .readWrite, CapabilityRegistry.messages: .readOnly][$0] ?? .off }
+        facts.fullDiskAccess = true
+        let some = Approval.list(facts)
+        #expect(some.filter { $0.state == .missing }.map(\.id) == ["helper", "notes", "contacts"])
+        #expect(some.first { $0.id == "disk" }?.state == .allowed)
+        #expect(some.first { $0.id == "messages" }?.state == .notNeeded, "reading messages needs no control")
+
+        facts.contacts = .denied
+        #expect(Approval.list(facts).first { $0.id == "contacts" }?.state == .optional, "names are optional")
+        facts.level = { _ in .off }
+        facts.screenRecording = true
+        #expect(Approval.list(facts).first { $0.id == "screen" }?.state == .allowed, "allowed shows even if unused")
     }
 
     /// Pausing stops every running call with the pause answer, and every shell command (FR-603).
