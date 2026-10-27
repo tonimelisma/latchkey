@@ -218,6 +218,12 @@ final class FakePlaces: PlacesBackend, @unchecked Sendable {
         #expect(transit.contains("Transit from Oakland, CA to SFO, CA: 1 h") && transit.contains("only the time"))
     }
 
+    @Test func directionsToAPlaceByName() async throws {
+        let t = resultText(try await tool("maps_find").handler(.object(["to": .string("nowhere")])))
+        #expect(
+            t.contains("Driving from the Mac to Philz Coffee"), "a name that isn't an address is searched as a place")
+    }
+
     @Test func geocodesBothWays() async throws {
         let there = resultText(try await tool("maps_find").handler(.object(["address": .string("1 Infinite Loop")])))
         #expect(there.contains("37.60000,-122.40000"))

@@ -1,6 +1,6 @@
 # Status
 
-Last updated: 2026-10-26 (shorter menu, clear online/offline icon, Settings window with a Permissions tab, Pause; app 0.8.14)
+Last updated: 2026-10-26 (Calendar, Reminders, Contacts, Location & Maps, spec 007; app 0.8.16)
 
 Xcode signing ready (2026-10-20): Toni's Xcode account has a valid "Apple Development" certificate
 (certificate expires 2027-07-22). Keep the team ID out of committed project files
@@ -43,6 +43,21 @@ edit/read/trash a test file), Shell (output, background job, answering a prompt)
 (screenshot 1568×1018, front window elements, apps, pointer move; no clicks on Toni's screen).
 The Mac state line appears in every result (it reported the battery warning at 15%).
 
+0. Spec 007 (Calendar, Reminders, Contacts, Location & Maps) is built and installed (app 0.8.16,
+   2026-10-26): 8 new tools, 23 in all, through EventKit, Contacts, Core Location, and MapKit;
+   weather left out (needs a paid developer account). Checked live through the hosted relay: all
+   23 tools listed; Calendar, Reminders, and Location answer at once with what to allow; a
+   coffee search near Walnut Creek and the Contacts overview (280 contacts) worked; directions
+   to a place by name failed in 0.8.15 (Apple's geocoder takes addresses only) and now fall back
+   to a place search (0.8.16).
+   Waiting on Toni: allow Calendars, Reminders, and Location (setup window or Settings →
+   Permissions), then a live check creates, moves, and deletes a test event, a test reminder,
+   and a test contact, and reads the Mac's location. Also for Toni's review: deleting reminder
+   lists and changing contact groups are not offered (research.md), and keep-awake reported
+   "not approved in System Settings" after the 0.8.15 install (SleepDisabled 0, helper loaded);
+   not yet known whether the install caused it.
+   The activity log kept forever (tamper chain, Keychain marker, search, export) is being built
+   on branch `log-forever`.
 1. Toni reviews specs 003–006 (built without review stops, at Toni's request).
 2. When the repository goes public: turn on GitHub private vulnerability reporting
    (`gh api -X PUT repos/<owner>/latchkey/private-vulnerability-reporting`), which SECURITY.md

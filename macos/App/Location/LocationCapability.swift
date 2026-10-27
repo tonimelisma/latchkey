@@ -75,8 +75,13 @@ enum LocationCapability {
         let t = s.trimmingCharacters(in: .whitespaces)
         if t.isEmpty || t.lowercased() == "here" { return ((try await backend.currentFix()).coordinate, "the Mac") }
         if let c = Coordinate.parse(t) { return (c, t) }
-        guard let p = try await backend.geocode(t).first else { throw PlacesFailure.nothingFound(t) }
-        return (p.coordinate, p.address ?? p.name)
+        // An address first; a place's name ("San Francisco International Airport") isn't an
+        // address to Apple's geocoder, so a place search comes next (live check, 2026-10-26).
+        if let p = try? await backend.geocode(t).first { return (p.coordinate, p.address ?? p.name) }
+        guard let p = try await backend.search(t, near: nil, limit: 1).first else {
+            throw PlacesFailure.nothingFound(t)
+        }
+        return (p.coordinate, p.name)
     }
 
     static func find(_ args: JSONValue, _ backend: any PlacesBackend, _ zone: TimeZone) async throws -> ToolResult {
