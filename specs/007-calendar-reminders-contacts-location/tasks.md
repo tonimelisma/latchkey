@@ -1,0 +1,10 @@
+# Tasks 007: Calendar, Reminders, Contacts, Location and Maps
+
+- **T701** Tests first, then dates in and out, event ids, free time. *FR-702, FR-744, D2.*
+- **T702** [P] Tests first (in-memory backend), then the Calendar tools and the EventKit backend. *FR-701, FR-703, FR-704, D1, D2.*
+- **T703** [P] Tests first, then the Reminders tools and backend. *FR-711, FR-712, D2.*
+- **T704** [P] Tests first, then the Contacts tools and backend; Messages' names reload after a change. *FR-721, FR-722, FR-745, D3.*
+- **T705** [P] Tests first, then Location & Maps tools and backend. *FR-731 to FR-734, D4.*
+- **T706** Registry, levels, Settings, Permissions tab, setup steps, Info.plist and entitlements. *FR-741, FR-742, D5.*
+- **T707** Activity text, notifications, others' text marked. *FR-743, FR-746, D6.*
+- **T708** Install and live check through the hosted relay (test event, reminder, contact, location, place, drive time). *SC-701 to SC-704.*

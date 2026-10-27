@@ -159,3 +159,7 @@ Add a row when a decision is made; never delete one, mark it "superseded by" ins
 | 2026-10-26 | A Permissions tab in Settings lists every macOS permission at any time, with its state and an Allow button; setup stays the first-run walk-through | Toni, spec 001 FR-606 |
 | 2026-10-26 | "Pause Claude's Access" in the menu: every call is answered at once with "paused", running calls and shell commands stop, levels and pairing stay; it lasts until resumed, across restarts | Toni, spec 001 FR-602 to FR-604 |
 | 2026-10-26 | Disconnect This Mac asks for confirmation first (Apple: confirm uncommon actions that can't be undone) | spec 001 FR-605 |
+| 2026-10-26 | Calendar, Reminders, Contacts, and Location & Maps added, with macOS's own frameworks only and no developer account; weather left out (WeatherKit needs a paid account). Reverses the 2026-10-22 roadmap line for Calendar, Reminders, and Contacts | Toni, spec 007 |
+| 2026-10-26 | Calendar, Reminders, and Contacts: Claude may create, change, and delete at Read & write (deleted events and reminders can't be recovered; invitations can't be sent, macOS doesn't allow it) | Toni, spec 007 FR-703, FR-712, FR-722 |
+| 2026-10-26 | Four switches: Calendar, Reminders, Contacts (Off / Read only / Read & write), Location & Maps (Off / On); all start on after the update; the Contacts switch doesn't affect names in Messages | Toni, spec 007 FR-741, FR-745 |
+| 2026-10-26 | Spec 007 built straight through without a review stop; Toni reviews at the end | Toni, CLAUDE.md process step 6 (exception for this run) |
