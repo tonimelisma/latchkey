@@ -31,7 +31,15 @@
 	<key>NSAppleEventsUsageDescription</key>
 	<string>Latchkey uses Notes and Messages to create and change notes and send messages when you ask Claude to.</string>
 	<key>NSContactsUsageDescription</key>
-	<string>Latchkey shows Claude your contacts' names instead of phone numbers, and finds who to message.</string>
+	<string>Latchkey lets Claude look up, add, and change your contacts, and shows names in messages instead of phone numbers.</string>
+	<key>NSCalendarsFullAccessUsageDescription</key>
+	<string>Latchkey lets Claude see your events, find free time, and add or change events when you ask.</string>
+	<key>NSRemindersFullAccessUsageDescription</key>
+	<string>Latchkey lets Claude see your reminders and add, complete, or change them when you ask.</string>
+	<key>NSLocationUsageDescription</key>
+	<string>Latchkey tells Claude where this Mac is and finds places nearby when you ask.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Latchkey tells Claude where this Mac is and finds places nearby when you ask.</string>
 	<key>SUFeedURL</key>
 	<string>https://github.com/tonimelisma/latchkey/releases/latest/download/appcast.xml</string>
 	<key>SUPublicEDKey</key>

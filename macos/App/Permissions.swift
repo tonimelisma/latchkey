@@ -95,6 +95,9 @@ struct ApprovalFacts {
     var messages: Permissions.Automation
     var safari: Permissions.Automation
     var contacts: CNAuthorizationStatus
+    var calendars = false
+    var reminders = false
+    var location = LocationAccess.notAsked
     var safariJavaScript: Bool?
     var screenRecording: Bool
     var accessibility: Bool
@@ -125,13 +128,19 @@ struct Approval: Identifiable, Equatable {
         let computer = f.level(CapabilityRegistry.computer) != .off
         let anyOn = CapabilityRegistry.all.contains { f.level($0) != .off }
         func state(_ allowed: Bool, needed: Bool) -> State { allowed ? .allowed : needed ? .missing : .notNeeded }
+        // The Contacts capability needs it; Messages only uses it for names (spec 007 FR-745).
         let contacts: State =
-            switch (f.contacts, messages != .off) {
-            case (.authorized, _): .allowed
-            case (_, false): .notNeeded
-            case (.notDetermined, true): .missing
+            switch (f.contacts, f.level(CapabilityRegistry.contacts) != .off, messages != .off) {
+            case (.authorized, _, _): .allowed
+            case (_, true, _): .missing
+            case (_, false, false): .notNeeded
+            case (.notDetermined, false, true): .missing
             default: .optional
             }
+        let contactsPurpose =
+            f.level(CapabilityRegistry.contacts) != .off
+            ? "To look up, add, and change contacts, and show names in messages."
+            : "To show names in messages instead of phone numbers. Optional."
         return [
             Approval(
                 id: "helper", title: "Keep This Mac Awake",
@@ -145,9 +154,19 @@ struct Approval: Identifiable, Equatable {
             Approval(
                 id: "messages", title: "Control Messages", purpose: "To send messages for you.",
                 state: state(f.messages == .allowed, needed: messages == .readWrite)),
+            Approval(id: "contacts", title: "Contacts", purpose: contactsPurpose, state: contacts),
             Approval(
-                id: "contacts", title: "Contacts",
-                purpose: "To show names in messages instead of phone numbers. Optional.", state: contacts),
+                id: "calendars", title: "Calendars", purpose: "To see your events and add or change them.",
+                state: state(f.calendars, needed: f.level(CapabilityRegistry.calendar) != .off)),
+            Approval(
+                id: "reminders", title: "Reminders", purpose: "To see your reminders and add or change them.",
+                state: state(f.reminders, needed: f.level(CapabilityRegistry.reminders) != .off)),
+            Approval(
+                id: "location", title: "Location",
+                purpose: f.location == .servicesOff
+                    ? "To tell Claude where this Mac is. Location Services are off for the whole Mac."
+                    : "To tell Claude where this Mac is, and find places nearby.",
+                state: state(f.location == .allowed, needed: f.level(CapabilityRegistry.location) != .off)),
             Approval(
                 id: "safari", title: "Control Safari", purpose: "To open and read web pages, signed in as you.",
                 state: state(f.safari == .allowed, needed: browser)),

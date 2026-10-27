@@ -100,8 +100,13 @@ struct CapabilityRegistry: Sendable {
     static let shell = "shell"
     static let browser = "browser"
     static let computer = "computer"
-    static let all = [notes, messages, files, shell, browser, computer]
-    /// Every capability starts fully on (spec 002 FR-121; specs 003–006, Toni 2026-10-22).
+    static let calendar = "calendar"
+    static let reminders = "reminders"
+    static let contacts = "contacts"
+    static let location = "location"
+    static let all = [notes, messages, files, shell, browser, computer, calendar, reminders, contacts, location]
+    /// Every capability starts fully on (spec 002 FR-121; specs 003–006, Toni 2026-10-22; spec 007
+    /// FR-741, Toni 2026-10-26).
     static let defaultLevels = Dictionary(uniqueKeysWithValues: all.map { ($0, AccessLevel.readWrite) })
 
     let capabilities: [Capability]

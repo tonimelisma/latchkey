@@ -1,3 +1,4 @@
+import EventKit
 import SwiftUI
 
 /// The menu bar menu: what the Owner checks or flips often (spec 001 FR-070, FR-601, FR-602).
@@ -186,6 +187,9 @@ struct PermissionsPane: View {
             } else {
                 Button("Allow…") { Permissions.openContactsSettings() }
             }
+        case "calendars": Button("Allow…") { Task { await model.allowEvents(.events) } }
+        case "reminders": Button("Allow…") { Task { await model.allowEvents(.reminders) } }
+        case "location": Button("Allow…") { model.allowLocation() }
         case "safariJS":
             Button("Check") { Task { await model.checkSafariJavaScript() } }
         case "screen": Button("Allow…") { model.allowScreenRecording() }
@@ -353,7 +357,21 @@ struct SetupView: View {
                     "messages", "Let Latchkey send messages", app: Permissions.messagesApp, appName: "Messages",
                     purpose: "So Claude can send messages for you.")
             }
-            if model.capabilities.level(CapabilityRegistry.messages) != .off {
+            if level(CapabilityRegistry.contacts) != .off {
+                step("contacts", "Let Claude see your contacts") {
+                    if model.contactsStatus == .notDetermined {
+                        Text(
+                            "So Claude can look up, add, and change contacts, and show names in messages. When macOS asks about Contacts, click Allow."
+                        )
+                        .foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                        Button("Continue") { Task { await model.allowContacts() } }
+                    } else {
+                        Text("In System Settings, turn on Latchkey under Contacts.")
+                            .foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                        Button("Open System Settings") { Permissions.openContactsSettings() }
+                    }
+                }
+            } else if model.capabilities.level(CapabilityRegistry.messages) != .off {
                 step("contacts", "Show names in Messages") {
                     if model.contactsStatus == .notDetermined {
                         Text(
@@ -367,6 +385,39 @@ struct SetupView: View {
                         )
                         .foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                         Button("Open System Settings") { Permissions.openContactsSettings() }
+                    }
+                }
+            }
+            if level(CapabilityRegistry.calendar) != .off {
+                eventsStep(
+                    "calendars", "Let Claude see your calendars", status: model.calendarStatus, kind: .events,
+                    purpose: "So Claude can tell you what's coming up, find free time, and add or change events.",
+                    pane: "Calendars")
+            }
+            if level(CapabilityRegistry.reminders) != .off {
+                eventsStep(
+                    "reminders", "Let Claude see your reminders", status: model.remindersStatus, kind: .reminders,
+                    purpose: "So Claude can list, add, and complete reminders.", pane: "Reminders")
+            }
+            if level(CapabilityRegistry.location) != .off {
+                step("location", "Let Claude see where this Mac is") {
+                    switch model.locationAccess {
+                    case .servicesOff:
+                        Text(
+                            "Location Services are off on this Mac. In System Settings, turn on Location Services, then turn on Latchkey in the list."
+                        )
+                        .foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                        Button("Open System Settings") { model.allowLocation() }
+                    case .denied:
+                        Text("In System Settings, turn on Latchkey under Location Services.")
+                            .foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                        Button("Open System Settings") { model.allowLocation() }
+                    default:
+                        Text(
+                            "So Claude can tell you where this Mac is and find places nearby. When macOS asks about your location, click Allow."
+                        )
+                        .foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                        Button("Continue") { model.allowLocation() }
                     }
                 }
             }
@@ -429,13 +480,35 @@ struct SetupView: View {
         if model.capabilities.anyOn { steps.append("disk") }
         if level(CapabilityRegistry.notes) == .readWrite { steps.append("notes") }
         if level(CapabilityRegistry.messages) == .readWrite { steps.append("messages") }
-        if level(CapabilityRegistry.messages) != .off { steps.append("contacts") }
+        if level(CapabilityRegistry.messages) != .off || level(CapabilityRegistry.contacts) != .off {
+            steps.append("contacts")
+        }
+        if level(CapabilityRegistry.calendar) != .off { steps.append("calendars") }
+        if level(CapabilityRegistry.reminders) != .off { steps.append("reminders") }
+        if level(CapabilityRegistry.location) != .off { steps.append("location") }
         if level(CapabilityRegistry.browser) != .off { steps += ["safari", "safariJS"] }
         if level(CapabilityRegistry.computer) != .off { steps += ["screen", "accessibility"] }
         return steps
     }
 
     private func n(_ step: String) -> Int { (visibleSteps.firstIndex(of: step) ?? 0) + 1 }
+
+    /// Calendars or Reminders: macOS asks once, then only System Settings can change it.
+    private func eventsStep(
+        _ key: String, _ title: String, status: EKAuthorizationStatus, kind: EventsKind, purpose: String, pane: String
+    ) -> some View {
+        step(key, title) {
+            if status == .notDetermined {
+                Text("\(purpose) When macOS asks about \(pane), click Allow.")
+                    .foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                Button("Continue") { Task { await model.allowEvents(kind) } }
+            } else {
+                Text("In System Settings, open \(pane) and set Latchkey to Full Access.")
+                    .foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                Button("Open System Settings") { Task { await model.allowEvents(kind) } }
+            }
+        }
+    }
 
     private func controlStep(_ key: String, _ title: String, app: String, appName: String, purpose: String) -> some View
     {
@@ -462,6 +535,9 @@ struct SetupView: View {
         case "notes": model.control(of: Permissions.notesApp) == .allowed
         case "messages": model.control(of: Permissions.messagesApp) == .allowed
         case "contacts": model.contactsStatus == .authorized
+        case "calendars": model.calendarStatus == .fullAccess
+        case "reminders": model.remindersStatus == .fullAccess
+        case "location": model.locationAccess == .allowed
         case "safari": model.control(of: Permissions.safariApp) == .allowed
         case "safariJS": model.safariJavaScript == true
         case "screen": model.screenRecording
@@ -591,10 +667,13 @@ enum ActivityFormat {
 
     static let capabilityNames = [
         "shell": "Shell", "files": "Files", "notes": "Notes", "messages": "Messages", "browser": "Browser",
-        "computer": "Computer",
+        "computer": "Computer", "calendar": "Calendar", "reminders": "Reminders", "contacts": "Contacts",
+        "location": "Location", "maps": "Maps",
     ]
     /// The argument that names what was acted on, first found wins.
-    static let targetKeys = ["command", "path", "url", "query", "to", "title", "app", "action"]
+    static let targetKeys = [
+        "command", "path", "url", "query", "to", "title", "given_name", "organization", "address", "app", "action",
+    ]
 
     private static func action(_ e: Activity) -> String {
         let parts = e.tool.split(separator: "_", maxSplits: 1).map(String.init)

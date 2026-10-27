@@ -23,6 +23,17 @@ final class ContactBook: ContactsLookup, @unchecked Sendable {
     private var everyone: [ContactPerson] = []
     private var loaded: Date?
 
+    init() {
+        // A change in Contacts (by Claude, spec 007 plan D3, or anyone) shows in Messages at once.
+        NotificationCenter.default.addObserver(forName: .CNContactStoreDidChange, object: nil, queue: nil) {
+            [weak self] _ in
+            guard let self else { return }
+            self.lock.lock()
+            self.loaded = nil
+            self.lock.unlock()
+        }
+    }
+
     static var allowed: Bool {
         CNContactStore.authorizationStatus(for: .contacts) == .authorized
     }

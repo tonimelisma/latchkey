@@ -87,7 +87,8 @@ import Testing
         let all = Approval.list(facts)
         #expect(
             all.map(\.id) == [
-                "helper", "disk", "notes", "messages", "contacts", "safari", "safariJS", "screen", "accessibility",
+                "helper", "disk", "notes", "messages", "contacts", "calendars", "reminders", "location", "safari",
+                "safariJS", "screen", "accessibility",
             ])
         #expect(all.filter { $0.state == .missing }.map(\.id) == ["helper"], "everything off needs only keep-awake")
 
@@ -103,6 +104,22 @@ import Testing
         facts.level = { _ in .off }
         facts.screenRecording = true
         #expect(Approval.list(facts).first { $0.id == "screen" }?.state == .allowed, "allowed shows even if unused")
+
+        // Spec 007: the Contacts capability needs Contacts; Calendar, Reminders, Location their own.
+        facts.level = {
+            [
+                CapabilityRegistry.contacts: .readOnly, CapabilityRegistry.calendar: .readWrite,
+                CapabilityRegistry.location: .readWrite,
+            ][$0] ?? .off
+        }
+        facts.calendars = true
+        facts.location = .servicesOff
+        let personal = Approval.list(facts)
+        #expect(personal.first { $0.id == "contacts" }?.state == .missing, "denied is no longer optional")
+        #expect(personal.first { $0.id == "calendars" }?.state == .allowed)
+        #expect(personal.first { $0.id == "reminders" }?.state == .notNeeded)
+        #expect(personal.first { $0.id == "location" }?.state == .missing)
+        #expect(personal.first { $0.id == "location" }?.purpose.contains("Location Services are off") == true)
     }
 
     /// Pausing stops every running call with the pause answer, and every shell command (FR-603).

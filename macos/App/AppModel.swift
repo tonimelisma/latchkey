@@ -1,6 +1,7 @@
 import AppKit
 import ApplicationServices
 import Contacts
+import EventKit
 import Foundation
 import Network
 import OSLog
@@ -54,7 +55,8 @@ final class AppModel {
     static func makeCapabilities() -> [Capability] {
         [
             NotesCapability.make(), MessagesCapability.make(), FilesCapability.make(), ShellCapability.make(),
-            BrowserCapability.make(), ComputerCapability.make(),
+            BrowserCapability.make(), ComputerCapability.make(), CalendarCapability.make(),
+            RemindersCapability.make(), ContactsCapability.make(), LocationCapability.make(),
         ]
     }
 
@@ -124,7 +126,7 @@ final class AppModel {
     var needsSetup: Bool {
         !isPaired || helperStatus != .enabled || (capabilities.anyOn && !fullDiskAccess) || needsAppControl
             || needsSafariJavaScript || needsScreenRecording || needsAccessibility
-            || needsContacts
+            || needsContacts || needsCalendar || needsReminders || needsLocation
     }
 
     /// Re-reads whether the Owner approved the helper; applies keep-awake as soon as they do.
@@ -373,11 +375,50 @@ final class AppModel {
     /// Allow", messages show numbers and setup stops asking.
     private(set) var contactsStatus = CNContactStore.authorizationStatus(for: .contacts)
 
+    /// Messages asks once and gets by without it; the Contacts capability needs it (spec 007 FR-745).
     var needsContacts: Bool {
-        capabilities.level(CapabilityRegistry.messages) != .off && contactsStatus == .notDetermined
+        (capabilities.level(CapabilityRegistry.messages) != .off && contactsStatus == .notDetermined)
+            || (capabilities.level(CapabilityRegistry.contacts) != .off && contactsStatus != .authorized)
     }
 
     func checkContacts() { contactsStatus = CNContactStore.authorizationStatus(for: .contacts) }
+
+    // MARK: Calendar, Reminders, Location (spec 007 FR-742)
+
+    private(set) var calendarStatus = EventKitBackend.status(.events)
+    private(set) var remindersStatus = EventKitBackend.status(.reminders)
+    private(set) var locationAccess = AppleMapsBackend.shared.locationAccess()
+
+    var needsCalendar: Bool { capabilities.level(CapabilityRegistry.calendar) != .off && calendarStatus != .fullAccess }
+    var needsReminders: Bool {
+        capabilities.level(CapabilityRegistry.reminders) != .off && remindersStatus != .fullAccess
+    }
+    var needsLocation: Bool { capabilities.level(CapabilityRegistry.location) != .off && locationAccess != .allowed }
+
+    func checkPersonalData() {
+        calendarStatus = EventKitBackend.status(.events)
+        remindersStatus = EventKitBackend.status(.reminders)
+        locationAccess = AppleMapsBackend.shared.locationAccess()
+    }
+
+    /// macOS asks once; after a refusal, its page in System Settings opens instead.
+    func allowEvents(_ kind: EventsKind) async {
+        if EventKitBackend.status(kind) == .notDetermined {
+            _ = await EventKitBackend.requestAccess(kind)
+        } else {
+            Permissions.openPrivacySettings(kind == .events ? "Privacy_Calendars" : "Privacy_Reminders")
+        }
+        checkPersonalData()
+    }
+
+    func allowLocation() {
+        switch locationAccess {
+        case .notAsked: LocationFixer.shared.requestAccess()
+        case .servicesOff, .denied: Permissions.openPrivacySettings("Privacy_LocationServices")
+        case .allowed: break
+        }
+        checkPersonalData()
+    }
 
     func allowContacts() async {
         _ = try? await CNContactStore().requestAccess(for: .contacts)
@@ -391,6 +432,8 @@ final class AppModel {
                 helper: helperStatus == .enabled, fullDiskAccess: fullDiskAccess,
                 notes: control(of: Permissions.notesApp), messages: control(of: Permissions.messagesApp),
                 safari: control(of: Permissions.safariApp), contacts: contactsStatus,
+                calendars: calendarStatus == .fullAccess, reminders: remindersStatus == .fullAccess,
+                location: locationAccess,
                 safariJavaScript: safariJavaScript, screenRecording: screenRecording, accessibility: accessibility,
                 level: { [capabilities] in capabilities.level($0) }))
     }
@@ -401,6 +444,7 @@ final class AppModel {
         checkFullDiskAccess()
         await checkAppControl()
         checkContacts()
+        checkPersonalData()
         checkScreenPermissions()
     }
 
