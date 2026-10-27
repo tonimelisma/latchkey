@@ -26,8 +26,8 @@ Claude (web, Desktop, phone)  ──HTTPS──▶  Latchkey relay  ◀──out
 - **You see who has access.** Latchkey's Settings window and your account page list the Claude apps that can use
   your Mac, and you can remove any one of them.
 - **You choose what Claude can do.** Each capability has a level in Latchkey's Settings window; a capability that's
-  off doesn't exist as far as Claude knows. Most have Off, Read only, and Read & write; Shell is
-  Off or On. Claude sees 15 tools:
+  off doesn't exist as far as Claude knows. Most have Off, Read only, and Read & write; Shell and
+  Location & Maps are Off or On. Claude sees 23 tools:
 
   | Capability | Read only | Read & write adds |
   |---|---|---|
@@ -37,6 +37,10 @@ Claude (web, Desktop, phone)  ──HTTPS──▶  Latchkey relay  ◀──out
   | Shell | | `shell_run`, `shell_check` (long and interactive commands) |
   | Browser (your Safari, your logins) | `browser_read` | `browser_act` (click, type, script) |
   | Computer control (while unlocked) | `computer_look` | `computer_act` (mouse, keyboard, apps) |
+  | Calendar (every account on the Mac) | `calendar_find` (events, free time) | `calendar_change` (create, move, repeat, delete) |
+  | Reminders | `reminders_find` | `reminders_change` (create, complete, change, delete, new list) |
+  | Contacts | `contacts_find` (cards, photos) | `contacts_change` (create, change, delete) |
+  | Location & Maps | `location_read`, `maps_find` (places, directions, travel times) | |
 
 - **You see what Claude did:** a notification for every change and every new Claude connection,
   a busy dot while it works, and recent activity in the menu (what was run, read, or opened).
@@ -58,8 +62,9 @@ Claude (web, Desktop, phone)  ──HTTPS──▶  Latchkey relay  ◀──out
 1. **Install the Mac app.** Open `Latchkey.dmg`, drag Latchkey to Applications, and open it. The
    setup window walks you through each step, one at a time: allow keep-awake, connect to a relay
    (you create your account there with a passkey), and the macOS permissions the capabilities
-   you turn on need (Full Disk Access; control of Notes, Messages, and Safari; Contacts; Screen
-   Recording; Accessibility; and Safari's "Allow JavaScript from Apple Events"). Later, the
+   you turn on need (Full Disk Access; control of Notes, Messages, and Safari; Contacts;
+   Calendars; Reminders; Location; Screen Recording; Accessibility; and Safari's "Allow
+   JavaScript from Apple Events"). Later, the
    Permissions tab in Latchkey's Settings window shows each one and whether it's allowed.
 2. **Connect Claude.** On claude.ai, open Settings → Connectors → Add custom connector, and enter
    your relay's address followed by `/mcp`, for example `https://relay.example.com/mcp`. Sign
@@ -141,6 +146,7 @@ specs/003-files/                Files.
 specs/004-shell/                Shell.
 specs/005-browser/              Browser control (Safari).
 specs/006-computer-control/     Computer control.
+specs/007-calendar-reminders-contacts-location/  Calendar, Reminders, Contacts, Location & Maps.
 docs/best-practices.md          Research on best practices, checked against Latchkey.
 docs/threat-model.md            What is protected, attackers, trust boundaries, accepted risks.
 docs/self-hosting.md            Run your own relay.
