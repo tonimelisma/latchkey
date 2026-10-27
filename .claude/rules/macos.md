@@ -93,5 +93,14 @@ paths:
   connection's status before the connection had reported (FR-205). Set such state from what is
   stored, then start the asynchronous work. After an install, check that a set-up Mac shows no
   window: `osascript -e 'tell application "System Events" to tell process "Latchkey" to count windows'` is 0.
+  (System Events also reports 0 for SwiftUI's Settings and Activity windows when they are open;
+  `CGWindowListCopyWindowInfo` is the reliable check.)
+- Never pause, disconnect, or turn down capabilities on the installed app for a check: Toni's own
+  Claude sessions use it (a live Pause test stalled one of his sessions mid-order, 2026-10-26).
+  Test those in unit tests or with `make mac-check`. Run `claude -p` live checks from outside
+  the repository: inside a worktree the project's end-of-turn hooks make that session commit
+  and push the worktree's work.
+- Settings… sets the activation policy to `.regular` and activates before `openSettings()`, the
+  usual advice for menu-bar-only apps (otherwise the window may not open or opens behind).
 
 Add new gotchas here as they are discovered.
