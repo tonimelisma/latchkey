@@ -50,14 +50,17 @@ The Mac state line appears in every result (it reported the battery warning at 1
    coffee search near Walnut Creek and the Contacts overview (280 contacts) worked; directions
    to a place by name failed in 0.8.15 (Apple's geocoder takes addresses only) and now fall back
    to a place search (0.8.16).
-   Waiting on Toni: allow Calendars, Reminders, and Location (setup window or Settings →
-   Permissions), then a live check creates, moves, and deletes a test event, a test reminder,
-   and a test contact, and reads the Mac's location. Also for Toni's review: deleting reminder
-   lists and changing contact groups are not offered (research.md), and keep-awake reported
-   "not approved in System Settings" after the 0.8.15 install (SleepDisabled 0, helper loaded);
-   not yet known whether the install caused it.
-   Calendars and Reminders: Allow… showed nothing on Toni's Mac (0.8.16). 0.8.17 logs macOS's
-   answer and opens System Settings when no question appears; cause not yet known.
+   After Toni allowed Calendars, Reminders, and Location (app 0.8.18), a fresh Claude Code
+   session through the hosted relay: listed 8 calendars and found free time; created, moved
+   (length kept), and deleted a test event with an alert; created, completed, and deleted a test
+   reminder; created, found by phone digits, and deleted a test contact; read the Mac's address
+   (about 40 m). Nothing was left behind. The new contact's id changed within seconds (iCloud
+   sync, apparently), so the first delete answered "search again" and the second worked.
+   Open for Toni's review: deleting reminder lists and changing contact groups are not offered
+   (research.md); keep-awake reported "not approved in System Settings" after the 0.8.15 install
+   (SleepDisabled 0, helper loaded), not yet known whether the install caused it; Calendars'
+   Allow… showed nothing in 0.8.16 (Toni then allowed both in System Settings; since 0.8.17 the
+   button logs macOS's answer and opens System Settings when no question appears).
    The activity log kept forever (item 12) is on main and installed with app 0.8.18.
 1. Toni reviews specs 003–006 (built without review stops, at Toni's request).
 2. When the repository goes public: turn on GitHub private vulnerability reporting
