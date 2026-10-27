@@ -610,53 +610,6 @@ final class SetupWindow {
     }
 }
 
-struct ActivityView: View {
-    let model: AppModel
-    @State private var entries: [Activity] = []
-    @State private var unreadable = 0
-    @State private var selection: Activity.ID?
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Table(entries, selection: $selection) {
-                TableColumn("When") { Text($0.at.formatted(date: .abbreviated, time: .standard)) }
-                TableColumn("Tool") { Text($0.tool).monospaced() }
-                TableColumn("Result") { Text($0.isError ? "Error" : "OK") }
-                TableColumn("Time taken") { Text("\($0.durationMS) ms") }
-            }
-            if let id = selection, let e = entries.first(where: { $0.id == id }) {
-                Divider()
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("Arguments").font(.headline)
-                    Text(e.arguments).monospaced().textSelection(.enabled)
-                    Text("Result").font(.headline)
-                    Text(e.result).monospaced().textSelection(.enabled)
-                }
-                .padding(12)
-            }
-            if let problem = model.activityLog.problem {
-                Label(problem, systemImage: "exclamationmark.triangle")
-                    .padding(.horizontal, 8).padding(.top, 8)
-            }
-            if let note = ActivityFormat.unreadableNote(unreadable) {
-                Text(note).font(.footnote).foregroundStyle(.secondary).padding(.horizontal, 8).padding(.top, 8)
-            }
-            Text(
-                "Every tool Claude ran on this Mac in the last 90 days, and each app you removed from the menu. This log stays on this Mac."
-            )
-            .font(.footnote).foregroundStyle(.secondary).padding(8)
-        }
-        .frame(minWidth: 560, minHeight: 320)
-        .onAppear(perform: load)
-    }
-
-    private func load() {
-        let page = (try? model.trace?.page(limit: 500)) ?? ActivityPage()
-        entries = page.entries
-        unreadable = page.unreadable
-    }
-}
-
 /// How an activity appears in the menu.
 enum ActivityFormat {
     /// "time  Capability: target": what was acted on, not just the tool (spec 002 FR-131).
@@ -692,10 +645,8 @@ enum ActivityFormat {
     static func unreadableNote(_ count: Int) -> String? {
         switch count {
         case ..<1: nil
-        case 1:
-            "1 older entry can’t be read because its key is no longer in the Keychain. It will be removed when it is 90 days old."
-        default:
-            "\(count) older entries can’t be read because their key is no longer in the Keychain. They will be removed when they are 90 days old."
+        case 1: "1 older entry can’t be read because its key is no longer in the Keychain."
+        default: "\(count) older entries can’t be read because their key is no longer in the Keychain."
         }
     }
 

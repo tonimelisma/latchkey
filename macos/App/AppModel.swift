@@ -101,7 +101,6 @@ final class AppModel {
         }
         powerMonitor = PowerMonitor { [weak self] in Task { await self?.refresh() } }
         watchSystem()
-        purgeTrace()
         if let identity = DeviceIdentity.load() {
             Self.log.notice(
                 "Started \(Self.version, privacy: .public), paired with \(identity.relayURL.absoluteString, privacy: .private(mask: .hash))"
@@ -217,14 +216,6 @@ final class AppModel {
     private func pathChanged(satisfied: Bool) async {
         defer { lastPathSatisfied = satisfied }
         if satisfied, lastPathSatisfied != nil { await connection?.reconnectNow() }
-    }
-
-    private func purgeTrace() {
-        _ = try? trace?.purge(olderThan: Date().addingTimeInterval(-TraceStore.retention))
-        Task {
-            try? await Task.sleep(for: .seconds(86_400))
-            purgeTrace()
-        }
     }
 
     // MARK: power and keep-awake

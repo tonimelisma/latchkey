@@ -119,8 +119,12 @@ struct LocalData {
     var defaults = UserDefaults.standard
     /// Forgets the pairing (the device key in the Keychain and the relay in settings).
     var forgetIdentity: () -> Void = { DeviceIdentity.delete() }
-    /// Deletes the activity log's key from the Keychain (FR-026a).
-    var forgetTraceKey: () -> Void = { KeychainTraceKey().delete() }
+    /// Deletes the activity log's key and its record of the newest entry from the Keychain
+    /// (FR-026a, FR-613).
+    var forgetTraceKey: () -> Void = {
+        KeychainTraceKey().delete()
+        KeychainLatestEntry().delete()
+    }
     /// Folders macOS creates for the app by itself: network cache, cookies, saved window state.
     var systemFolders: [URL] = {
         let library = URL.libraryDirectory

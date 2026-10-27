@@ -182,7 +182,8 @@ secret. Implementation details decided here:
   replacement), versus a key derived from the Secure Enclave device key (rejected: the device key
   is deleted on Disconnect, which would lose the log, and it is out of this change's scope).
 - What is sealed: everything but the entry's time and a random ID (tool name, arguments, result,
-  outcome, duration as one JSON blob). The time stays plain so the 90-day purge is one query.
+  outcome, duration as one JSON blob). The time stays plain so the 90-day purge is one query
+  (the purge is gone since 2026-10-26; the time now serves sorting and the date filter).
 - Key storage: a generic-password item in the login Keychain through the existing `Keychain`
   helper (`kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly`). The app isn't sandboxed and has no
   keychain-access-group entitlement, so the item lives in the file-based login keychain, whose
@@ -435,3 +436,61 @@ Options weighed for Pause reaching Claude:
 2. The Mac disconnects: the relay answers "offline", which is wrong ("paused" is not "offline")
    and Keep Mac Awake would be pointless.
 3. The Mac sends an empty tool list: Claude can't tell the Owner why, and its apps cache lists.
+
+## Tamper-evident activity log, kept for good (FR-610 to FR-615, 2026-10-26)
+
+Toni decided: keep every entry; keep it on Disconnect; a keyed chain; a newest-entry record in
+the Keychain; stay encrypted (a plain-text log was rejected: shell commands Claude runs could
+read it); page, search, filter, export. What was left to Claude:
+
+- Chain fields: a sequence number, a key ID, and an HMAC per row, all with defaults so
+  SwiftData migrates the existing store in place (chosen) versus a versioned schema with a
+  custom migration stage (more code, same result for added fields) versus a second table of
+  checksums (two writes per entry that can disagree).
+- What the HMAC covers: previous mac, seq, ID, stored time, key ID (chosen; only clear fields,
+  so the check reads no sealed data: 100,000 entries in about 4 s in a Debug build) versus also
+  the SHA-256 of the sealed box (catches changed content during the check, but the check would
+  read every byte of the log, images included, each time the window opens). Changed content is
+  caught anyway: the sealed box authenticates seq and ID as AES-GCM additional data, so a box
+  that was changed or moved from another row doesn't open, and a box under the current key that
+  doesn't open is reported as changed when it is loaded.
+- Keys: chain key and key ID derived from the log key with HKDF-SHA256 (chosen; nothing new to
+  store) versus a second Keychain key (one more item that can be lost). Anyone with the log key
+  can forge the chain; the check is against other programs, which can't read the key without a
+  macOS prompt.
+- Counting unreadable entries (FR-203): a query on the key ID (chosen) versus decrypting every
+  entry when the window opens (what 0.8.14 did; seconds at 100,000 entries). Old entries get
+  their key ID in one pass at the upgrade; one that doesn't open gets "-" (a key restored from a
+  backup later would still be shown, only counted wrongly).
+- Where a check break points: the first entry that doesn't follow from the one before it (that
+  entry was changed, or entries before it were removed or moved); every break is listed, by
+  resyncing on the stored mac.
+- The record's write order: entry saved first, record after (chosen). A stop between the two
+  leaves the record one behind, which is never an alarm; the other order would leave a record
+  naming an entry that isn't there. A power cut that loses SQLite's last write can still make
+  the record ahead of the log; the warning says so ("or lost when the Mac shut down
+  unexpectedly") rather than claim tampering.
+- A record that can't be read or isn't understood: left alone and not written for the launch,
+  one line in the window, no alarm (chosen; "couldn't read it" is not "isn't there", and a
+  warning it can't back would teach the Owner to ignore it) versus replacing it (destroys the
+  evidence it might hold). A missing record while checked entries exist: said in one line,
+  started again with the next entry (the Keychain may let other programs delete items even when
+  they can't read them).
+- Continuing after a cut-off end: from the record (chosen), so the gap stays in the chain as a
+  break at the next entry, versus from the last row (the next record update would erase the
+  evidence).
+- Search: decrypt and match in the app, a batch of 1,000 at a time on every core (chosen) versus
+  a search index (tokens or hashes of words on disk would let other programs learn what is in
+  the log). Matching ignores case and accents; ASCII text goes through `strcasestr`, other text
+  through Foundation (`range(of:options:)` alone made a whole-log search take 17 s).
+- Export order: oldest first, like a log file, streamed page by page so a large log isn't held
+  in memory. Arguments and results that are JSON are written as JSON; anything else as a
+  string.
+
+Measured (test `ActivityLogScaleTests`, Debug build, 100,000 entries of about 1 KB, 2026-10-26):
+recording in batches of 1,000 10.8 s; opening the log 0.06 s; first page of 200 0.03 s; next page
+0.02 s; the menu's 10 newest 0.03 s; tamper check of the whole log 4.1 s; text search with one match
+in the whole log 3.1 s; tool filter, first page 0.03 s; last 30 days, first page 0.03 s; export of
+the whole log 8.9 s; the log on disk 163 MB. A Release build is faster; entries with images take
+longer to search and export, in proportion to their size.
+

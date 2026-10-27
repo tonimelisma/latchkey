@@ -560,23 +560,53 @@ Serves FR-080, FR-186 to FR-189, Constitution V, VI, VIII.
   nothing more is built now.
 
 ### D11. Audit log and local trace
-Serves FR-022, FR-023, FR-024, FR-026, FR-026a, Constitution VI.
+Serves FR-022, FR-023, FR-024, FR-026, FR-026a, FR-610 to FR-615, Constitution VI.
 - Relay: one row per tool call, metadata only (no arguments, no results); daily purge after 30 days.
   "Surface" (FR-022) is the MCP `clientInfo.name` from the session's `initialize`, when sent,
   without control or formatting characters and cut to 64 characters (FR-022a).
 - Mac app: full trace (arguments, results, errors, timings) in a local SQLite file in the app's
   Application Support folder (SwiftData, `activity.store`), shown in a log window from the menu bar. Never sent to the relay.
-  Purged after 90 days by default.
-- Each entry is stored as its time (for the purge) plus one AES-256-GCM sealed box (CryptoKit)
+  Kept until uninstall: nothing is deleted by age (FR-026, Toni 2026-10-26; the 90-day purge
+  of earlier versions is gone). The window's footnote gives the store's size on disk, SQLite's
+  side files included (FR-610). Disconnect, revocation, and pairing again touch only the
+  pairing's Keychain items (`pairing`, `device-key`, `pairing-migrated`), never the log, its
+  key, or its record (FR-611).
+- Each entry is stored as its time (for sorting and the date filter) plus one AES-256-GCM sealed box (CryptoKit)
   holding tool, arguments, result, outcome, and duration (FR-026a). The key is 256 random bits,
   made on first use and kept as a generic password in the login Keychain (this Mac only,
   readable after first unlock); its access list trusts only the app that created it, so another
   program asking for it makes macOS ask the Owner. Entries are decrypted only to show them; one
   whose key is gone is left out of the menu and the window's table, and the window says how many
-  such entries there are (FR-203; the count decrypts the whole log, a batch at a time, when the
-  window opens; the menu stops at ten readable entries). The plaintext log of earlier versions (`trace.store`) is
+  such entries there are (FR-203; counted by a query on the entry's key ID, without decrypting). The plaintext log of earlier versions (`trace.store`) is
   encrypted into the new file once at start, then its files are deleted. Uninstall (FR-077)
   deletes the key too. Tests use an in-memory key, never the Keychain.
+- Tamper check (FR-612, research.md "Tamper-evident activity log"): each entry recorded from this change on
+  has a number `seq` (1, 2, … across keys), a key ID (8 bytes HKDF-derived from the log key, as
+  hex), and `mac` = HMAC-SHA256, under a second HKDF-derived key, over the previous entry's mac
+  (32 zero bytes for the first), seq, the entry's ID, its stored time, and the key ID. Its sealed
+  box binds seq and ID as authenticated data, so content can't be swapped between rows. The
+  check walks the entries under the current key in seq order, reading only the clear fields,
+  and lists each entry whose mac doesn't follow (resyncing on its stored mac, so later breaks
+  are found too); a sealed box under the current key that no longer opens counts as changed.
+  The window runs it off the main thread each time it opens. Entries from before (seq 0) are
+  shown with "Before check". The upgrade is SwiftData's in-place migration (the new fields have
+  defaults), then one pass that gives every old entry the ID of the key that opens it (or "-")
+  in a single save; a failed save changes nothing and is retried at the next start.
+- Newest-entry record (FR-613): Keychain item `activity-log-latest` (57 bytes: version, key ID,
+  seq, mac), added when there is none and then replaced with `SecItemUpdate` (no moment without
+  it) after each save, never before. At start: no record → fine, or "missing" when checked
+  entries exist (said in one line; the next entry adds one); a record that can't be read or isn't
+  understood → left alone and not written for the launch, one line said, no alarm; a record of
+  another key → replaced as entries come. The chain continues from the newer of the record and
+  the log, so an end cut off stays visible as a break at the next entry. The check warns
+  "newer entries are missing" when the record's entry is gone with nothing after it, naming the
+  newest entry still there; the wording also allows for a power cut losing the last write.
+- Browsing (FR-614): pages of 200, newest first, continued from the last shown entry (time, seq)
+  with a time-range query the `(at, seq)` index serves; the date filter is part of that query.
+  Text and tool are matched after decrypting, in batches of 1,000, on every core, on a
+  `ModelContext` of its own off the main thread; nothing searchable is stored in the clear.
+  Export… (FR-615) writes the same query oldest first, a page at a time, as JSON Lines to the
+  file chosen in `NSSavePanel`. Timings for 100,000 entries are in research.md.
 - The Keychain look (`Keychain.lookup`) answers one of three things: no item (only when the
   search itself says "not found"), the item's data, or "there is an item that can't be read"
   (every other failure: a Keychain error, more than one match, no data). A new log key is made

@@ -20,23 +20,27 @@ import Testing
         }
     }
 
-    @MainActor @Test func recordsAndPurges() throws {
-        let trace = try TraceStore(inMemory: true, keys: MemoryTraceKey())
+    /// FR-026 (Toni, 2026-10-26): nothing is deleted by age, however old.
+    @MainActor @Test func keepsEveryEntryWhateverItsAge() throws {
+        let dir = try Self.scratch()
+        defer { try? FileManager.default.removeItem(at: dir) }
         let now = Date()
-        try trace.record(
-            Activity(
-                at: now.addingTimeInterval(-91 * 86_400), tool: "battery_status",
-                arguments: "{}", result: "{\"battery_percent\":80}", isError: false, durationMS: 12))
-        try trace.record(
-            Activity(at: now, tool: "battery_status", arguments: "{}", result: "{}", isError: true, durationMS: 3))
-        #expect(try trace.recent(limit: 10).count == 2)
-
-        let removed = try trace.purge(olderThan: now.addingTimeInterval(-90 * 86_400))
-        #expect(removed == 1, "FR-026: 90 days")
+        let keys = MemoryTraceKey()
+        do {
+            let trace = try TraceStore(directory: dir, keys: keys, latest: MemoryLatestEntry())
+            try trace.record(
+                Activity(
+                    at: now.addingTimeInterval(-3 * 365 * 86_400), tool: "battery_status",
+                    arguments: "{}", result: "{\"battery_percent\":80}", isError: false, durationMS: 12))
+            try trace.record(
+                Activity(at: now, tool: "battery_status", arguments: "{}", result: "{}", isError: true, durationMS: 3))
+        }
+        let trace = try TraceStore(directory: dir, keys: keys, latest: MemoryLatestEntry())
         let left = try trace.recent(limit: 10)
-        #expect(left.count == 1)
+        #expect(left.count == 2, "the three-year-old entry is still there")
         #expect(left.first?.isError == true)
         #expect(left.first?.durationMS == 3)
+        #expect(left.last?.result == "{\"battery_percent\":80}")
     }
 
     /// FR-026a: another program reading the activity log's files finds no tool, arguments, or result.
@@ -131,24 +135,24 @@ import Testing
         #expect(try trace.page(limit: 1).unreadable == 3, "counted whatever the limit")
     }
 
-    /// Unreadable entries still age out after 90 days (FR-026).
-    @MainActor @Test func entriesThatCannotBeReadStillAgeOut() throws {
+    /// Unreadable entries are kept like every other entry (FR-026, FR-203).
+    @MainActor @Test func entriesThatCannotBeReadAreKept() throws {
         let dir = try Self.scratch()
         defer { try? FileManager.default.removeItem(at: dir) }
         let now = Date()
         do {
             let trace = try TraceStore(directory: dir, keys: MemoryTraceKey())
-            for days in [91.0, 1] {
+            for days in [400.0, 1] {
                 try trace.record(
                     Activity(
                         at: now.addingTimeInterval(-days * 86_400), tool: "shell_run", arguments: "{}", result: "ok",
                         isError: false, durationMS: 1))
             }
         }
-        let trace = try TraceStore(directory: dir, keys: MemoryTraceKey())
-        #expect(try trace.page(limit: 10).unreadable == 2)
-        #expect(try trace.purge(olderThan: now.addingTimeInterval(-TraceStore.retention)) == 1)
-        #expect(try trace.page(limit: 10).unreadable == 1)
+        for _ in 0..<2 {
+            let trace = try TraceStore(directory: dir, keys: MemoryTraceKey())
+            #expect(try trace.page(limit: 10).unreadable == 2)
+        }
     }
 
     /// The one line the Activity window shows about them.
@@ -156,11 +160,11 @@ import Testing
         #expect(ActivityFormat.unreadableNote(0) == nil)
         #expect(
             ActivityFormat.unreadableNote(1)
-                == "1 older entry can’t be read because its key is no longer in the Keychain. It will be removed when it is 90 days old."
+                == "1 older entry can’t be read because its key is no longer in the Keychain."
         )
         #expect(
             ActivityFormat.unreadableNote(12)
-                == "12 older entries can’t be read because their key is no longer in the Keychain. They will be removed when they are 90 days old."
+                == "12 older entries can’t be read because their key is no longer in the Keychain."
         )
     }
 

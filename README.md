@@ -54,7 +54,8 @@ Claude (web, Desktop, phone)  ──HTTPS──▶  Latchkey relay  ◀──out
 - **Keep-awake:** while connected, the app keeps the Mac awake, lid closed included, and lets it
   sleep when the battery reaches 15% or it gets too hot.
 - **Privacy:** the relay never stores what tools return. It keeps a 30-day list of which tools ran
-  and when; the full log, with arguments and results, stays on your Mac for 90 days. Text written
+  and when; the full log, with arguments and results, stays on your Mac, encrypted and checked
+  for changes, until you uninstall the app. Text written
   by others (messages, web pages, files) is marked as content, not instructions.
 
 ## Get started

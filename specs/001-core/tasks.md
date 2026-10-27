@@ -178,8 +178,12 @@ Package directories are created when they get code, not up front (T010).
   it is off, Connect and Disconnect, capability toggles, relay URL setting, start at login
   (`SMAppService.mainApp`), Quit restores sleep. *Serves FR-070, FR-071, FR-081.*
 - **T064** ✅ Local trace: SQLite in Application Support recording every executed call (arguments,
-  results, errors, timings), a log window, 90-day purge. Never sent to the relay. *Serves D11,
+  results, errors, timings), a log window, 90-day purge (removed 2026-10-26, T085). Never sent to the relay. *Serves D11,
   FR-026.*
+- **T085** ✅ Activity log kept for good: no purge; disk use shown; HMAC chain and Keychain
+  record of the newest entry with warnings in the Activity window; upgrade of existing entries in
+  place; pages, text/tool/date search, Export… as JSON Lines; 100,000-entry timing test
+  (`ActivityLogTests`, `ActivityLogScaleTests`). *Serves FR-026, FR-203, FR-610 to FR-615.*
 - **T065** ✅ (`make mac-check`, passed 2026-10-20: battery 45% = pmset, SC-08, offline in 35 s,
   reconnect in 0.1 s) Integration check with a local relay, run by Claude: pair through the browser; a
   go-sdk client calls `battery_status` and gets live data; network loss simulated by a local proxy
@@ -239,7 +243,8 @@ Claude account and to try it on his phone and Desktop; that is listed in one sho
 | FR-020, FR-021 | T016, T020 |
 | FR-022 to FR-024 | T022 |
 | FR-025 | T017 |
-| FR-026 | T064 |
+| FR-026 | T064, T085 |
+| FR-610 to FR-615 | T085 |
 | FR-030, FR-031 | T054, T056, T061 |
 | FR-032 to FR-034 | T052, T061 |
 | FR-035 | T056, T061, T084 |

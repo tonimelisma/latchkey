@@ -39,6 +39,20 @@ import Testing
         #expect(Keychain.lookup(account: "probe", service: service) == .found(Data("first".utf8)))
     }
 
+    /// FR-613: the record of the newest entry is replaced in one step, and only when it is there.
+    @Test func anUpdateReplacesOnlyAnItemThatIsThere() throws {
+        let service = "net.melisma.latchkey.tests.\(UUID().uuidString)"
+        defer { Keychain.delete(account: "probe", service: service) }
+        #expect(throws: (any Error).self, "no item, nothing to update") {
+            try Keychain.update(Data("first".utf8), account: "probe", service: service)
+        }
+        #expect(Keychain.lookup(account: "probe", service: service) == .absent, "and none made")
+
+        try Keychain.write(Data("first".utf8), account: "probe", service: service, replacing: false)
+        try Keychain.update(Data("second".utf8), account: "probe", service: service)
+        #expect(Keychain.lookup(account: "probe", service: service) == .found(Data("second".utf8)))
+    }
+
     /// What the Keychain's answers mean (FR-201). Only "not found" on the first step means there
     /// is no item; every other failure means there is one that can't be read. (Not tried against
     /// the real Keychain: an item this app may not read makes macOS ask the Owner on screen.)

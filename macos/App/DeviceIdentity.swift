@@ -264,6 +264,16 @@ enum Keychain {
         }
     }
 
+    /// Replaces the data of an item that is there, in one step: there is no moment without the
+    /// item, as there is with delete-then-add (FR-613). Fails when there is no item.
+    static func update(_ data: Data, account: String, service: String = service) throws {
+        let status = SecItemUpdate(
+            query(account, service) as CFDictionary, [kSecValueData as String: data] as CFDictionary)
+        guard status == errSecSuccess else {
+            throw NSError(domain: NSOSStatusErrorDomain, code: Int(status))
+        }
+    }
+
     static func delete(account: String, service: String = service) {
         SecItemDelete(query(account, service) as CFDictionary)
     }

@@ -1,4 +1,4 @@
-# Data model (relay, SQLite)
+# Data model (relay, SQLite; the Mac's activity log at the end)
 
 Everything the relay stores. Anything not listed here is not stored (Constitution VI).
 Secrets are stored as SHA-256 hashes unless noted. All timestamps are UTC, stored as Unix
@@ -42,6 +42,17 @@ milliseconds. Device public keys are stored as PKIX DER.
 
 - Abuse-limit counters per client address and per account, pending passkey exchanges, and the
   time each grant's `last_used_at` was last written. Gone on restart.
+
+## On the Mac (the Mac app's activity log, never sent to the relay)
+
+Kept in the Owner's Application Support folder and Keychain, not on the relay, so the relay's
+privacy policy doesn't list it (the check below reads only the relay's table above).
+
+| Store | Fields | Notes |
+|---|---|---|
+| `SealedActivity` in `activity.store` (SwiftData) | id, at, sealed, seq, mac, keyID | One row per tool call or removal, kept until uninstall (FR-026). `sealed` is AES-256-GCM over the entry's JSON (tool, arguments, result, isError, durationMS, with id and time); since 2026-10-26 seq and id are bound to it as authenticated data. `seq` numbers checked entries 1, 2, … (0 = from before the check); `mac` is the chain's HMAC-SHA256; `keyID` is 8 bytes derived from the log key, as hex ("" = not yet labelled, "-" = under a key already gone). Indexes on (at, seq), seq, keyID (FR-203, FR-612, FR-614) |
+| Keychain `activity-log-key` | 32 bytes | The log key (FR-026a, FR-201) |
+| Keychain `activity-log-latest` | version, keyID, seq, mac (57 bytes) | The newest entry Latchkey wrote (FR-613) |
 
 ## The privacy policy follows this file
 

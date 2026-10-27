@@ -163,3 +163,9 @@ Add a row when a decision is made; never delete one, mark it "superseded by" ins
 | 2026-10-26 | Calendar, Reminders, and Contacts: Claude may create, change, and delete at Read & write (deleted events and reminders can't be recovered; invitations can't be sent, macOS doesn't allow it) | Toni, spec 007 FR-703, FR-712, FR-722 |
 | 2026-10-26 | Four switches: Calendar, Reminders, Contacts (Off / Read only / Read & write), Location & Maps (Off / On); all start on after the update; the Contacts switch doesn't affect names in Messages | Toni, spec 007 FR-741, FR-745 |
 | 2026-10-26 | Spec 007 built straight through without a review stop; Toni reviews at the end | Toni, CLAUDE.md process step 6 (exception for this run) |
+| 2026-10-26 | The Mac's activity log keeps every entry, images included, until uninstall; the 90-day deletion is gone. The Activity window shows how much disk it uses | Toni, spec 001 FR-026, FR-610 |
+| 2026-10-26 | Disconnect, revocation, and pairing again keep the activity log and its key (as before; now pinned by a test) | Toni, spec 001 FR-611 |
+| 2026-10-26 | Each new activity entry carries a keyed checksum (HMAC) over its content and the previous entry's; the Activity window warns from where the chain is broken; older entries stay, marked as from before the check | Toni, spec 001 FR-612 |
+| 2026-10-26 | A record of the newest entry in the Keychain catches entries cut off the end. One that can't be read is never written over and raises no alarm; the window says the check can't be made | Toni (Keychain record), spec 001 FR-613 |
+| 2026-10-26 | The activity log stays encrypted; an unencrypted log was turned down because shell commands Claude runs could read it | Toni, spec 001 FR-026a, FR-614 |
+| 2026-10-26 | The Activity window loads a page at a time and searches by text, tool, and date range, on the decrypted entries inside the app; Export… saves what it selects as JSON Lines | Toni, spec 001 FR-614, FR-615 |

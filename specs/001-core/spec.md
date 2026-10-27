@@ -150,7 +150,9 @@ Format: EARS ("When <trigger>, the <system> shall <response>"). IDs are stable; 
 - **FR-025** The relay shall not queue tool calls for later delivery.
 - **FR-026** The Mac app shall keep a full local trace of every tool call it executes, including
   arguments, results, and errors, viewable in the app, stored only on the Mac.
-  The app shall delete trace entries older than 90 days by default.
+  The app shall keep every entry, images in results included, until the app is uninstalled;
+  nothing is deleted by age (Toni, 2026-10-26; until then entries older than 90 days were
+  deleted).
 - **FR-026a** The Mac app shall store the trace encrypted, with a key only the app can read, so
   other programs on the Mac can't read it (Toni, 2026-10-24, security scan).
 - **FR-201** The Mac app shall make a new key for the trace only when no key exists at all. If a
@@ -165,8 +167,35 @@ Format: EARS ("When <trigger>, the <system> shall <response>"). IDs are stable; 
   or the relay revoking the Mac, removes or replaces a stored pairing.
 - **FR-203** Trace entries that can no longer be read (saved with an earlier key) shall never be
   shown as tool calls or counted as failures: the menu's recent activity shall leave them out, and
-  the Activity window shall say in one line how many older entries can't be read. They are still
-  deleted after 90 days (FR-026).
+  the Activity window shall say in one line how many older entries can't be read. They are kept
+  like every other entry (FR-026; until 2026-10-26 they were deleted after 90 days).
+
+### The activity log, kept for good (Toni, 2026-10-26)
+- **FR-610** The Activity window shall show how much disk space the activity log uses.
+- **FR-611** Disconnect This Mac, the relay revoking the Mac, and pairing again shall keep the
+  activity log and its key; only uninstalling removes them (FR-077).
+- **FR-612** Each entry recorded from this version on shall carry a keyed checksum over its
+  content and the previous entry's checksum, so that removing, changing, or reordering entries
+  breaks the chain. When the chain is broken, the Activity window shall warn, naming the first
+  entry from which it doesn't hold, and mark the entries that don't check out. Entries recorded
+  before this version stay readable and are shown, marked as from before the check. The upgrade
+  to the new format shall change all existing entries or none.
+- **FR-613** The Mac app shall keep a small record of the newest entry (its number and checksum)
+  in the Keychain, updated with each entry, so that entries removed from the end of the log are
+  also detected: the Activity window shall warn that newer entries are missing. A record that
+  exists but can't be read shall not be written over and shall not cause a warning of missing
+  entries; the window shall say in one line that this check can't be made right now, and the
+  app tries again at its next start. A record that is missing while checked entries exist shall
+  be said in one line too, and a new record started with the next entry.
+- **FR-614** The Activity window shall load entries a page at a time, newest first, so years of
+  entries open quickly, and shall let the Owner search the text of entries, choose one tool, and
+  choose a date range. Searching shall work on the decrypted entries inside the app; nothing
+  searchable is stored unencrypted (FR-026a stays as it is: Toni turned down an unencrypted log
+  on 2026-10-26, since shell commands Claude runs could read it).
+- **FR-615** "Export…" in the Activity window shall save the entries the window's search and
+  filters currently select as readable JSON Lines (one entry per line: time in ISO 8601 with its
+  UTC offset, tool, arguments, result, whether it failed, duration in milliseconds), to a place
+  the Owner chooses in the standard save dialog. Entries that can't be read are left out.
 
 ### Keep-awake and power
 - **FR-030** While keep-awake is on, the Mac shall not sleep, on battery or power, with the lid

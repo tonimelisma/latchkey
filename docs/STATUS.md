@@ -145,6 +145,12 @@ The Mac state line appears in every result (it reported the battery warning at 1
    macOS permissions (each with its state and an Allow button, app 0.8.14), Claude apps with
    access, the relay and Disconnect (now confirmed first), and Start at Login are in a Settings
    window. The battery line is gone.
+12. ~~Activity log kept for good~~: built 2026-10-26 on branch `log-forever` (spec 001 FR-026,
+   FR-610 to FR-615), merged and installed by the session that merges it. Nothing is deleted
+   by age; the Activity window shows the log's size, warns when entries were removed, changed,
+   or cut off the end (a keyed checksum chain plus a Keychain record of the newest entry), loads
+   a page at a time, searches by text, tool, and dates, and exports JSON Lines. Not yet checked
+   on Toni's installed app (the upgrade of his existing entries is covered by a test).
 2. Known limit: macOS shows its own "allow Latchkey to access the screen directly" alert from
    time to time for screen capture; it needs Toni at the Mac (computer control only).
 
