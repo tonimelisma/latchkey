@@ -31,12 +31,14 @@ final class EventKitBackend: EventsBackend, @unchecked Sendable {
     func allowed(_ kind: EventsKind) -> Bool { Self.status(kind) == .fullAccess }
 
     /// Asks macOS once (setup only, FR-742); a new store is made afterwards.
-    static func requestAccess(_ kind: EventsKind) async -> Bool {
+    static func requestAccess(_ kind: EventsKind) async -> (granted: Bool, error: String?) {
         let s = EKEventStore()
-        let granted =
-            (try? await (kind == .events ? s.requestFullAccessToEvents() : s.requestFullAccessToReminders())) ?? false
-        shared.locked { shared.cachedStore = nil }
-        return granted
+        defer { shared.locked { shared.cachedStore = nil } }
+        do {
+            return (try await (kind == .events ? s.requestFullAccessToEvents() : s.requestFullAccessToReminders()), nil)
+        } catch {
+            return (false, "\(error)")
+        }
     }
 
     private func check(_ kind: EventsKind) throws {

@@ -403,10 +403,20 @@ final class AppModel {
 
     /// macOS asks once; after a refusal, its page in System Settings opens instead.
     func allowEvents(_ kind: EventsKind) async {
-        if EventKitBackend.status(kind) == .notDetermined {
-            _ = await EventKitBackend.requestAccess(kind)
+        let page = kind == .events ? "Privacy_Calendars" : "Privacy_Reminders"
+        let before = EventKitBackend.status(kind)
+        Self.log.notice(
+            "Asking for \(kind == .events ? "Calendars" : "Reminders", privacy: .public): status \(before.rawValue)")
+        if before == .notDetermined {
+            NSApp.activate()  // macOS shows the question only for an app in front
+            let outcome = await EventKitBackend.requestAccess(kind)
+            Self.log.notice(
+                "Answer: \(outcome.granted), \(outcome.error ?? "no error", privacy: .public), status \(EventKitBackend.status(kind).rawValue)"
+            )
+            // No question appeared or it was refused: System Settings is the only way left.
+            if !outcome.granted { Permissions.openPrivacySettings(page) }
         } else {
-            Permissions.openPrivacySettings(kind == .events ? "Privacy_Calendars" : "Privacy_Reminders")
+            Permissions.openPrivacySettings(page)
         }
         checkPersonalData()
     }
