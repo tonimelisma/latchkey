@@ -1,6 +1,6 @@
 # Status
 
-Last updated: 2026-10-26 (Calendar, Reminders, Contacts, Location & Maps, spec 007; app 0.8.16)
+Last updated: 2026-10-26 (Calendar, Reminders, Contacts, Location & Maps, spec 007; activity log kept for good; app 0.8.18)
 
 Xcode signing ready (2026-10-20): Toni's Xcode account has a valid "Apple Development" certificate
 (certificate expires 2027-07-22). Keep the team ID out of committed project files
@@ -56,8 +56,9 @@ The Mac state line appears in every result (it reported the battery warning at 1
    lists and changing contact groups are not offered (research.md), and keep-awake reported
    "not approved in System Settings" after the 0.8.15 install (SleepDisabled 0, helper loaded);
    not yet known whether the install caused it.
-   The activity log kept forever (tamper chain, Keychain marker, search, export) is being built
-   on branch `log-forever`.
+   Calendars and Reminders: Allow… showed nothing on Toni's Mac (0.8.16). 0.8.17 logs macOS's
+   answer and opens System Settings when no question appears; cause not yet known.
+   The activity log kept forever (item 12) is on main and installed with app 0.8.18.
 1. Toni reviews specs 003–006 (built without review stops, at Toni's request).
 2. When the repository goes public: turn on GitHub private vulnerability reporting
    (`gh api -X PUT repos/<owner>/latchkey/private-vulnerability-reporting`), which SECURITY.md
@@ -145,8 +146,8 @@ The Mac state line appears in every result (it reported the battery warning at 1
    macOS permissions (each with its state and an Allow button, app 0.8.14), Claude apps with
    access, the relay and Disconnect (now confirmed first), and Start at Login are in a Settings
    window. The battery line is gone.
-12. ~~Activity log kept for good~~: built 2026-10-26 on branch `log-forever` (spec 001 FR-026,
-   FR-610 to FR-615), merged and installed by the session that merges it. Nothing is deleted
+12. ~~Activity log kept for good~~: built 2026-10-26 (spec 001 FR-026,
+   FR-610 to FR-615), installed with app 0.8.18. Nothing is deleted
    by age; the Activity window shows the log's size, warns when entries were removed, changed,
    or cut off the end (a keyed checksum chain plus a Keychain record of the newest entry), loads
    a page at a time, searches by text, tool, and dates, and exports JSON Lines. Not yet checked
