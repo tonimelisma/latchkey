@@ -62,6 +62,8 @@ actor ShellJobs {
         var sweep: Task<Void, Never>?
         var swept = false
         var left: String?
+        /// Whether the answer said the leftovers are kept, and what was removed in the end.
+        var keptShown = false
         var leftShown = false
 
         init(
@@ -266,6 +268,14 @@ actor ShellJobs {
     /// still there after that.
     @discardableResult
     private func end(_ job: Job) async -> [pid_t] {
+        // Know the job's shell before anything is signalled: ending `script` first would orphan a
+        // shell still starting, which then waits forever on its closed terminal (a test left one
+        // on 2026-10-27).
+        let deadline = ContinuousClock.now + .seconds(2)
+        while job.session() == nil, job.process.isRunning, ContinuousClock.now < deadline {
+            await Self.pause(.milliseconds(20))
+        }
+        track()
         guard job.hasProcesses else { return [] }
         job.signalAll(SIGTERM)
         if !(await gone(job, within: .seconds(1))) {
@@ -542,13 +552,13 @@ actor ShellJobs {
         let raw = String(decoding: job.takeNew(), as: UTF8.self)
         let (text, dropped) = TerminalText.tail(TerminalText.clean(raw), limit: Self.outputLimit)
         var left: String?
-        if finished, !job.leftShown {
-            if let done = job.left {
+        if finished {
+            if let done = job.left, !job.leftShown {
                 left = done
                 job.leftShown = true
-            } else if let end = job.leaseEnd {
+            } else if job.left == nil, let end = job.leaseEnd, !job.keptShown {
                 left = Leftovers.kept(until: end, job: job.id)
-                job.leftShown = true
+                job.keptShown = true
             }
         }
         return Snapshot(

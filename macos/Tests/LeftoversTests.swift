@@ -14,7 +14,7 @@ final class Reports: @unchecked Sendable {
 /// Spec 004 FR-313 to FR-326: nothing a command leaves stays behind unless Claude asked to keep
 /// it, writes go only where they're meant to, and what's left is reported. Real commands and a
 /// real sandbox; each test has its own home, scratch folder, and record.
-@Suite(.serialized) struct LeftoversTests {
+@Suite(.serialized) final class LeftoversTests {
     let reports = Reports()
     let root = FileManager.default.temporaryDirectory.appending(path: "leftovers-\(UUID().uuidString)")
     let setup: ShellSetup
@@ -25,6 +25,8 @@ final class Reports: @unchecked Sendable {
         setup = .testing(root: root, report: { r.add($0, $1) })
         jobs = ShellJobs(setup: setup)
     }
+
+    deinit { try? FileManager.default.removeItem(at: root) }
 
     var home: URL { setup.home }
 
@@ -239,6 +241,31 @@ final class Reports: @unchecked Sendable {
         #expect(mine.isRunning, "a process id now used by another process is left alone")
         #expect(!FileManager.default.fileExists(atPath: folder.path))
         #expect(reports.all.contains { $0.0.contains("before Latchkey last quit") })
+    }
+
+    /// Live check 2026-10-27: stopping a kept job says what was removed.
+    @Test func stoppingAKeptJobSaysWhatItRemoved() async throws {
+        let r = try await jobs.run(Self.leaver, folder: nil, wait: .seconds(10), keepMinutes: 5)
+        let child = try ShellJobTests.pid(in: r.output)
+        defer { kill(child, SIGKILL) }
+        #expect(r.left?.contains("kept running") == true)
+        let stopped = try await jobs.stop(r.job)
+        #expect(stopped.left?.contains("stopped what it left running") == true, "\(stopped.left ?? "nil")")
+        #expect(await ShellJobTests.gone(child))
+    }
+
+    /// A job stopped the moment it started leaves no shell behind (a test left one waiting on its
+    /// closed terminal, 2026-10-27).
+    @Test func aJobStoppedAtOnceLeavesNoShell() async throws {
+        for _ in 0..<5 {
+            let r = try await jobs.run("sleep 300", folder: nil, wait: .zero)
+            _ = try await jobs.stop(r.job)
+        }
+        try await Task.sleep(for: .milliseconds(300))
+        let strays = Processes.all().filter { pid in
+            Processes.paths(of: pid).contains { $0.hasPrefix(OwnFiles.real(root).path) }
+        }
+        #expect(strays.isEmpty, "\(strays.map(Processes.name(of:)))")
     }
 
     @Test func stopAllRemovesKeptLeftoversToo() async throws {
