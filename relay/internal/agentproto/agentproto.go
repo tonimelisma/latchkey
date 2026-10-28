@@ -84,6 +84,7 @@ const RedirectThisComputer = "this computer"
 var AllTypes = []Type{
 	TypeChallenge, TypeHello, TypeWelcome, TypeState, TypeTools, TypeProgress,
 	TypeResult, TypeGoodbye, TypeCall, TypeCancel, TypeNotice, TypeClients, TypeRevokeClient,
+	TypeAuditRequest, TypeAudit,
 }
 
 // Message is any protocol message.
@@ -288,6 +289,10 @@ func newMessage(t Type) Message {
 		return &Clients{}
 	case TypeRevokeClient:
 		return &RevokeClient{}
+	case TypeAuditRequest:
+		return &AuditRequest{}
+	case TypeAudit:
+		return &Audit{}
 	}
 	return nil
 }
@@ -345,6 +350,10 @@ func Decode(data []byte) (Message, error) {
 		if !clientID.MatchString(m.ID) {
 			return msg, fmt.Errorf("%w: invalid client id", ErrProtocolViolation)
 		}
+	case *AuditRequest:
+		return msg, validateAuditRequest(m)
+	case *Audit:
+		return msg, validateAudit(m)
 	}
 	return msg, nil
 }

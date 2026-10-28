@@ -1,0 +1,8 @@
+{
+  "type": "audit",
+  "id": "a1",
+  "entries": [
+    {"call_id": "call_7Q2MXK4RZB3N8P5TVWYC6DHJ9F", "at": 1793160333843, "tool": "shell_run", "outcome": "maybe", "duration_ms": 733}
+  ],
+  "next_since": null
+}

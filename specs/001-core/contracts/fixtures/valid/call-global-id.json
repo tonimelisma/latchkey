@@ -1,0 +1,7 @@
+{
+  "type": "call",
+  "id": "call_7Q2MXK4RZB3N8P5TVWYC6DHJ9F",
+  "tool": "shell_run",
+  "arguments": {"command": "uptime"},
+  "deadline_ms": 30000
+}
