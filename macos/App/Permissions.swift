@@ -73,6 +73,18 @@ enum Permissions {
     }
 }
 
+/// A setup step: done, certainly not done, or not known yet because macOS hasn't said (FR-621).
+enum SetupStep: Sendable, Equatable { case done, missing, unknown }
+
+/// Whether setup is finished, deciding only on what macOS has said: a step not known yet never
+/// opens the setup window (2026-10-27: it opened over a finished setup when Location read "not
+/// asked" for a moment at launch).
+enum SetupDecision {
+    static func missing(_ steps: [(String, SetupStep)]) -> [String] { steps.filter { $0.1 == .missing }.map(\.0) }
+    static func unknown(_ steps: [(String, SetupStep)]) -> [String] { steps.filter { $0.1 == .unknown }.map(\.0) }
+    static func settled(_ steps: [(String, SetupStep)]) -> Bool { unknown(steps).isEmpty }
+}
+
 /// Notifications for changes Claude makes on the Mac (FR-130).
 enum Notifier {
     static func post(_ body: String) {
@@ -114,6 +126,8 @@ struct Approval: Identifiable, Equatable {
         case notNeeded
         /// Not allowed and not required: Messages shows numbers instead of names.
         case optional
+        /// macOS hasn't said yet (just after launch); never counts as missing.
+        case checking
     }
 
     let id: String
@@ -166,7 +180,8 @@ struct Approval: Identifiable, Equatable {
                 purpose: f.location == .servicesOff
                     ? "To tell Claude where this Mac is. Location Services are off for the whole Mac."
                     : "To tell Claude where this Mac is, and find places nearby.",
-                state: state(f.location == .allowed, needed: f.level(CapabilityRegistry.location) != .off)),
+                state: f.location == .unknown
+                    ? .checking : state(f.location == .allowed, needed: f.level(CapabilityRegistry.location) != .off)),
             Approval(
                 id: "safari", title: "Control Safari", purpose: "To open and read web pages, signed in as you.",
                 state: state(f.safari == .allowed, needed: browser)),

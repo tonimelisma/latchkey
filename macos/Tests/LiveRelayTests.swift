@@ -3,23 +3,6 @@ import Testing
 
 @testable import Latchkey
 
-/// Thread-safe box for test state shared with connection callbacks.
-final class Locked<T: Sendable>: @unchecked Sendable {
-    private let lock = NSLock()
-    private var stored: T
-    init(_ v: T) { stored = v }
-    var value: T {
-        lock.lock()
-        defer { lock.unlock() }
-        return stored
-    }
-    func mutate(_ f: (inout T) -> Void) {
-        lock.lock()
-        f(&stored)
-        lock.unlock()
-    }
-}
-
 /// Runs only under relay/cmd/maccheck, which starts a relay, pairs through headless Chrome, and
 /// drives this test through a control file: the real app connection code against a real relay.
 @Suite(.enabled(if: ProcessInfo.processInfo.environment["LATCHKEY_LIVE_RELAY"] != nil))

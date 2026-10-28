@@ -95,9 +95,11 @@ paths:
   window: `osascript -e 'tell application "System Events" to tell process "Latchkey" to count windows'` is 0.
   (System Events also reports 0 for SwiftUI's Settings and Activity windows when they are open;
   `CGWindowListCopyWindowInfo` is the reliable check.) Permissions can read wrong for a moment at
-  launch too (the window opened over a finished setup on 2026-10-27; Location reports "not
-  asked" until Core Location's first callback): a paired Mac decides on setup only after a
-  second look two seconds later, and logs what looked missing (`permissions` category).
+  launch too (the window opened over a finished setup on 2026-10-27; a new location manager
+  reports "not determined" until its first authorization callback). Every permission state is
+  done, missing, or not known yet (`SetupStep`); only "missing" opens setup, and a paired Mac
+  waits for the unknowns to settle (FR-621). `install.sh` now checks the window count, keep-awake,
+  and the helper's version after every install (FR-622) and fails when one is wrong.
 - Never pause, disconnect, or turn down capabilities on the installed app for a check: Toni's own
   Claude sessions use it (a live Pause test stalled one of his sessions mid-order, 2026-10-26).
   Test those in unit tests or with `make mac-check`. Run `claude -p` live checks from outside

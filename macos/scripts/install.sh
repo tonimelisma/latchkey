@@ -5,7 +5,9 @@
 # app in place, removes the old copy, opens the new one, and checks it started. Permissions and the
 # pairing carry over: same signature, same settings and Keychain. That is checked, not assumed:
 # if this Mac was paired before and the new app starts "not paired", the install fails loudly
-# (install-lib.sh; on 2026-10-24 it reported success after exactly that).
+# (install-lib.sh; on 2026-10-24 it reported success after exactly that). Then it checks the app
+# as the Owner meets it: no setup window over a finished setup, keep-awake as wanted, the new
+# helper running (spec 001 FR-622).
 set -eu
 cd "$(dirname "$0")/.."
 # shellcheck source=macos/scripts/install-lib.sh
@@ -73,14 +75,48 @@ rm -rf "$OLD"
 START=$(date "+%Y-%m-%d %H:%M:%S")
 open "$DEST"
 i=0
+started=""
 while [ $i -lt 30 ]; do
-  line=$(start_line "$START" | grep "Started $VERSION" || true)
-  if [ -n "$line" ]; then
-    install_verdict "$PAIRED_BEFORE" "$OLD_VERSION" "$VERSION" "$line" "$(pairing_record)" "$PREVIOUS_DMG"
-    exit $?
-  fi
+  started=$(start_line "$START" | grep "Started $VERSION" || true)
+  [ -n "$started" ] && break
   sleep 1
   i=$((i + 1))
 done
-echo "install: Latchkey $VERSION is installed but didn't report starting within 30 seconds" >&2
-exit 1
+if [ -z "$started" ]; then
+  echo "install: Latchkey $VERSION is installed but didn't report starting within 30 seconds" >&2
+  exit 1
+fi
+install_verdict "$PAIRED_BEFORE" "$OLD_VERSION" "$VERSION" "$started" "$(pairing_record)" "$PREVIOUS_DMG" || exit 1
+
+# Then the app as the Owner would meet it (spec 001 FR-622): no setup window over a finished
+# setup, keep-awake as the app wants it, and the helper just installed running. Each failed
+# silently once (2026-10-25 to 27) while the install reported success.
+# last_line <category> <text the line starts with>: the app's newest such line since START.
+last_line() {
+  /usr/bin/log show --start "$START" --predicate "subsystem == \"net.melisma.latchkey\" AND category == \"$1\"" \
+    --style compact 2>/dev/null | sed -n "s/.*:$1\] //p" | grep "^$2" | tail -1 || true
+}
+# Keep-awake: the helper may need launchd's 10-second wait and the app's retries every 12 s.
+i=0
+while [ $i -lt 45 ]; do
+  awake=$(last_line keepawake "Keep-awake ")
+  state=$(keepawake_state "$awake")
+  [ -n "$state" ] && [ "${state% *}" = "${state#* }" ] && break
+  sleep 2
+  i=$((i + 1))
+done
+# The setup decision comes within 5 seconds of start.
+i=0
+while [ $i -lt 10 ]; do
+  setup=$(last_line permissions "Opening setup\|Setup is finished")
+  [ -n "$setup" ] && break
+  sleep 1
+  i=$((i + 1))
+done
+windows=$(swift scripts/count-windows.swift 2>/dev/null || echo "?")
+helper=$(last_line helper "Helper ")
+failed=0
+keepawake_verdict "$awake" || failed=1
+helper_verdict "$VERSION" "$awake" "$helper" || failed=1
+window_verdict "$windows" "$setup" || failed=1
+exit $failed

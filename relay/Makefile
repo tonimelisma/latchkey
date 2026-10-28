@@ -80,6 +80,7 @@ script-tests:
 	cd .. && scripts/tests/tidy_test.sh
 	cd .. && scripts/tests/loose_ends_test.sh
 	cd .. && scripts/tests/install_pairing_test.sh
+	cd .. && scripts/tests/install_checks_test.sh
 
 # Every security check; the deploy script and CI run it.
 security: tidy-check vuln secrets semgrep shellcheck deps

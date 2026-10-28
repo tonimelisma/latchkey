@@ -163,8 +163,10 @@ struct PermissionsPane: View {
                     Text("Not Needed").foregroundStyle(.secondary)
                 case .optional:
                     Text("Off").foregroundStyle(.secondary)
+                case .checking:
+                    Text("Checking…").foregroundStyle(.secondary)
                 }
-                if a.state != .allowed { actions(a.id) }
+                if a.state != .allowed && a.state != .checking { actions(a.id) }
             }
             .labelStyle(.titleAndIcon)
         } label: {

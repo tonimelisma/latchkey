@@ -17,6 +17,8 @@ enum LocationCapability {
             "Location Services are turned off on this Mac, so it can't tell where it is. The Mac's owner can turn them on in System Settings → Privacy & Security → Location Services."
         case .notAsked, .denied:
             "Latchkey isn't allowed to see where this Mac is. The Mac's owner can allow Location in Latchkey's Settings → Permissions."
+        case .unknown:
+            "Latchkey started a moment ago and macOS hasn't yet said whether it may see this Mac's location. Try again in a few seconds."
         case .allowed: ""
         }
     }

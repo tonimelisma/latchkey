@@ -741,6 +741,22 @@ design", 2026-10-26).
 - Disconnect This Mac asks first with an alert: "Disconnect" (destructive style, Return doesn't
   press it) and "Cancel", as Remove Access… already does (FR-605).
 
+### D17. Unsettled states, and the installer's checks of the running app
+Serves FR-621, FR-622. Each setup step is a `SetupStep` (done, missing, unknown);
+`SetupDecision` counts only `missing`. Location's state comes from `LocationFixer`'s
+`locationManagerDidChangeAuthorization` (kept in `LocationFixer.known`), never from a fresh
+manager, so it is `unknown` until Core Location's first callback. At start a paired Mac polls
+every 250 ms, up to 5 s, until no step is unknown, then logs "Setup is finished" or "Opening
+setup: missing …" (`permissions` category). `install.sh` then reads the app's own lines (FR-620):
+the last keep-awake line must show the state the app wanted (waiting up to 90 s for launchd's
+restart of the helper and the app's retries), the helper's start line must name the version
+just installed while keep-awake is wanted, and the window count from the window server
+(`scripts/count-windows.swift`) must be 0 unless the app logged why setup opened. The decisions
+are functions in `install-lib.sh`, tested in `scripts/tests/install_checks_test.sh`. Options
+considered: a fixed delay before deciding (rejected: a guess about timing), a UI test of the
+real app (rejected: needs a second Mac or account for first-run states; the installer check
+covers the installed Mac every time).
+
 ### D16. Diagnostic log in macOS's unified log
 Serves FR-620; Constitution VI (nothing new stored by Latchkey: macOS keeps and ages its own
 log). `Shared/Diagnostics.swift` holds one `Logger` per category under the app's subsystem:

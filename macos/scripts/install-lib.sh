@@ -1,6 +1,6 @@
 #!/bin/sh
 # The decisions of install.sh, as functions, so they can be tested without installing anything
-# (scripts/tests/install_pairing_test.sh). Sourced, not run.
+# (scripts/tests/install_pairing_test.sh, install_checks_test.sh). Sourced, not run.
 #
 # Why: on 2026-10-24 an update started as "not paired (missing pairing record)" and the installer
 # still reported success. An install that loses the pairing must fail, loudly.
@@ -59,5 +59,62 @@ install_verdict() {
       echo "install: The previous disk image is no longer in macos/build (only the newest is kept)."
     fi
   } >&2
+  return 1
+}
+
+# The checks after an install (spec 001 FR-622, 2026-10-27). Each takes the app's own diagnostic
+# lines (FR-620), as `log show --style compact` prints them after "] ", and returns 1 with a
+# message when the installed app doesn't behave.
+
+# window_verdict <Latchkey windows on screen> <the app's setup line, or empty>: a window is right
+# only when the app said why ("Opening setup: missing …"); on a set-up Mac there is none.
+window_verdict() {
+  case "$2" in
+    "Opening setup: "*)
+      echo "install: the setup window is open: ${2#Opening setup: }"
+      return 0
+      ;;
+  esac
+  [ "$1" = 0 ] && return 0
+  if [ -z "$2" ]; then
+    echo "install: A WINDOW OPENED ($1) and the app never said whether setup is finished." >&2
+  else
+    echo "install: A WINDOW OPENED ($1) though the app says: $2" >&2
+  fi
+  return 1
+}
+
+# keepawake_state <keep-awake line>: "<state> <wanted>" from
+# "Keep-awake on (wanted on); power adapter; …", or empty.
+keepawake_state() {
+  printf '%s\n' "$1" | sed -n 's/^Keep-awake \([a-z_]*\) (wanted \([a-z_]*\)).*/\1 \2/p'
+}
+
+# keepawake_verdict <the app's last keep-awake line, or empty>: keep-awake is what the app wants.
+keepawake_verdict() {
+  set -- "$1" "$(keepawake_state "$1")"
+  if [ -z "$2" ]; then
+    echo "install: KEEP-AWAKE UNKNOWN: the app logged no keep-awake line." >&2
+    return 1
+  fi
+  if [ "${2% *}" != "${2#* }" ]; then
+    echo "install: KEEP-AWAKE DIDN'T TAKE EFFECT: $1" >&2
+    return 1
+  fi
+  echo "install: keep-awake ${2% *} as wanted"
+}
+
+# helper_verdict <version> <the app's last keep-awake line> <the helper's start line, or empty>:
+# while keep-awake is wanted, the helper now running is the one just installed.
+helper_verdict() {
+  set -- "$1" "$(keepawake_state "$2")" "$3"
+  [ "${2#* }" = on ] || return 0
+  case "$3" in
+    "Helper $1 started"*)
+      echo "install: helper $1 running"
+      return 0
+      ;;
+  esac
+  echo "install: THE OLD HELPER IS STILL RUNNING: no start line from helper $1 (${3:-none})." >&2
   return 1
 }

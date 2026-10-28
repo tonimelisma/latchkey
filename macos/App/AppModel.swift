@@ -100,6 +100,9 @@ final class AppModel {
             Task { await self?.movedToTrash(installedPath: installedPath) }
         }
         powerMonitor = PowerMonitor { [weak self] in Task { await self?.refresh() } }
+        // Core Location reports the permission in a callback just after its manager is made;
+        // until then it is unknown (FR-621).
+        LocationFixer.shared.onAccessChange = { [weak self] _ in self?.checkPersonalData() }
         watchSystem()
         if let identity = DeviceIdentity.load() {
             Self.log.notice(
@@ -119,22 +122,36 @@ final class AppModel {
         decideSetupAtStart()
     }
 
-    /// An unpaired Mac sees setup at once. A paired one only after a second look: some
-    /// permissions read wrong for a moment at launch (Location reports "not asked" until Core
-    /// Location's first callback), and the setup window opened over a finished setup
-    /// (2026-10-27, FR-205).
+    /// An unpaired Mac sees setup at once. A paired one waits until macOS has said what every
+    /// permission is (at most 5 seconds), then opens setup only for steps that are certainly not
+    /// done, and logs them (FR-621; the window opened over a finished setup on 2026-10-27).
     private func decideSetupAtStart() {
-        guard isPaired else { return showSetup() }
-        let first = missingSetup
-        guard !first.isEmpty else { return }
+        guard isPaired else {
+            Diagnostics.permissions.notice("Opening setup: not paired")
+            return showSetup()
+        }
         Task {
-            try? await Task.sleep(for: .seconds(2))
+            var waited = 0
+            while !SetupDecision.settled(setupSteps) && waited < 20 {
+                try? await Task.sleep(for: .milliseconds(250))
+                waited += 1
+            }
             await checkApprovals()
-            let missing = missingSetup
-            Diagnostics.permissions.notice(
-                "At start, setup looked unfinished (\(first.joined(separator: ", "), privacy: .public)); a moment later: \(missing.isEmpty ? "finished" : missing.joined(separator: ", "), privacy: .public)"
-            )
-            if !missing.isEmpty { showSetup() }
+            let steps = setupSteps
+            let missing = SetupDecision.missing(steps)
+            let unknown = SetupDecision.unknown(steps)
+            if !unknown.isEmpty {
+                Diagnostics.permissions.error(
+                    "Still unknown after 5 s, not counted as missing: \(unknown.joined(separator: ", "), privacy: .public)"
+                )
+            }
+            if missing.isEmpty {
+                Diagnostics.permissions.notice("Setup is finished")
+            } else {
+                Diagnostics.permissions.notice(
+                    "Opening setup: missing \(missing.joined(separator: ", "), privacy: .public)")
+                showSetup()
+            }
         }
     }
 
@@ -143,15 +160,22 @@ final class AppModel {
 
     var needsSetup: Bool { !missingSetup.isEmpty }
 
-    /// The setup steps not done, by name, for the window and the diagnostic log.
-    var missingSetup: [String] {
-        [
+    /// The setup steps certainly not done, by name.
+    var missingSetup: [String] { SetupDecision.missing(setupSteps) }
+
+    /// Every setup step and whether it's done, not done, or not known yet (FR-621).
+    var setupSteps: [(String, SetupStep)] {
+        let known: [(String, Bool)] = [
             ("connect", !isPaired), ("keep-awake", helperStatus != .enabled),
             ("full disk access", capabilities.anyOn && !fullDiskAccess), ("app control", needsAppControl),
             ("Safari JavaScript", needsSafariJavaScript), ("screen recording", needsScreenRecording),
             ("accessibility", needsAccessibility), ("contacts", needsContacts), ("calendars", needsCalendar),
-            ("reminders", needsReminders), ("location", needsLocation),
-        ].filter(\.1).map(\.0)
+            ("reminders", needsReminders),
+        ]
+        let location: SetupStep =
+            capabilities.level(CapabilityRegistry.location) == .off
+            ? .done : locationAccess == .unknown ? .unknown : locationAccess == .allowed ? .done : .missing
+        return known.map { ($0.0, $0.1 ? SetupStep.missing : .done) } + [("location", location)]
     }
 
     /// Re-reads whether the Owner approved the helper; applies keep-awake as soon as they do.
@@ -447,7 +471,11 @@ final class AppModel {
     var needsReminders: Bool {
         capabilities.level(CapabilityRegistry.reminders) != .off && remindersStatus != .fullAccess
     }
-    var needsLocation: Bool { capabilities.level(CapabilityRegistry.location) != .off && locationAccess != .allowed }
+    /// Certainly needed: "not known yet" doesn't count (FR-621).
+    var needsLocation: Bool {
+        capabilities.level(CapabilityRegistry.location) != .off && locationAccess != .allowed
+            && locationAccess != .unknown
+    }
 
     func checkPersonalData() {
         calendarStatus = EventKitBackend.status(.events)
@@ -481,7 +509,7 @@ final class AppModel {
         switch locationAccess {
         case .notAsked: LocationFixer.shared.requestAccess()
         case .servicesOff, .denied: Permissions.openPrivacySettings("Privacy_LocationServices")
-        case .allowed: break
+        case .allowed, .unknown: break
         }
         checkPersonalData()
     }

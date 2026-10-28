@@ -206,6 +206,14 @@ Format: EARS ("When <trigger>, the <system> shall <response>"). IDs are stable; 
   shall carry no message text, tool arguments or results, file names, or the relay's address in
   the clear. Why: keep-awake was silently off for two days (2026-10-25 to 2026-10-27) and nothing
   on the Mac said why.
+- **FR-621** Every macOS permission the setup needs shall be known as allowed, missing, or not
+  known yet. The setup window shall open only for steps known to be missing; a paired Mac shall
+  wait up to 5 seconds at start for unknown states to settle, and the Permissions tab shall show
+  an unknown state as "Checking…". Why: the setup window opened over a finished setup on
+  2026-10-27 because Location read "not asked" for a moment at launch.
+- **FR-622** After every install, the installer shall check the running app and fail when the
+  setup window is open on a Mac whose setup is finished, keep-awake isn't what the app wants, or
+  the keep-awake helper running isn't the one just installed.
 
 ### Keep-awake and power
 - **FR-030** While keep-awake is on, the Mac shall not sleep, on battery or power, with the lid

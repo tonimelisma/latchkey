@@ -51,7 +51,10 @@ struct Route: Sendable, Equatable {
     var arrival: Date?
 }
 
-enum LocationAccess: Sendable, Equatable { case allowed, notAsked, denied, servicesOff }
+/// `unknown`: Core Location hasn't said yet. A new location manager reports "not determined"
+/// until its first authorization callback, so nothing is decided on that (2026-10-27: the setup
+/// window opened over a finished setup).
+enum LocationAccess: Sendable, Equatable { case allowed, notAsked, denied, servicesOff, unknown }
 
 enum PlacesFailure: Error, Equatable {
     case location(LocationAccess)
@@ -74,9 +77,13 @@ protocol PlacesBackend: Sendable {
 final class AppleMapsBackend: PlacesBackend, @unchecked Sendable {
     static let shared = AppleMapsBackend()
 
-    func locationAccess() -> LocationAccess {
-        guard CLLocationManager.locationServicesEnabled() else { return .servicesOff }
-        switch CLLocationManager().authorizationStatus {
+    /// What Core Location last told the app's location manager (`LocationFixer`), never a fresh
+    /// manager's first guess.
+    func locationAccess() -> LocationAccess { LocationFixer.known.value }
+
+    static func access(_ status: CLAuthorizationStatus, servicesOn: Bool) -> LocationAccess {
+        guard servicesOn else { return .servicesOff }
+        switch status {
         case .authorizedAlways, .authorized: return .allowed
         case .notDetermined: return .notAsked
         default: return .denied
@@ -174,10 +181,23 @@ final class LocationFixer: NSObject, CLLocationManagerDelegate {
     private var waiting: [CheckedContinuation<Fix?, Never>] = []
     private var last: Fix?
 
+    /// The permission as Core Location last reported it to this manager; `unknown` until its first
+    /// callback, which comes right after the manager is made. Readable from any thread.
+    nonisolated static let known = Locked(LocationAccess.unknown)
+    /// Called on the main actor whenever the permission is reported.
+    var onAccessChange: (@MainActor (LocationAccess) -> Void)?
+
     override init() {
         super.init()
         manager.delegate = self
         manager.desiredAccuracy = kCLLocationAccuracyHundredMeters
+    }
+
+    nonisolated func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
+        let access = AppleMapsBackend.access(
+            manager.authorizationStatus, servicesOn: CLLocationManager.locationServicesEnabled())
+        Self.known.mutate { $0 = access }
+        Task { @MainActor in self.onAccessChange?(access) }
     }
 
     /// Asks macOS once (setup only, FR-742).
