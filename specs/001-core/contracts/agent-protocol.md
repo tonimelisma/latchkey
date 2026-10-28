@@ -98,7 +98,8 @@ it.
 
 `features` (optional, added 2026-10-25, FR-190) is an array of strings naming the later
 additions to this protocol that the app understands. The app sends `["clients"]` when it
-understands the `clients` and `revoke_client` messages below. Unknown strings are ignored, and
+understands the `clients` and `revoke_client` messages below, and `"audit"` (2026-10-27) when it
+understands `audit_request` and `audit`. Unknown strings are ignored, and
 a missing `features` means none. The relay sends `clients` messages ONLY to an agent that listed
 `"clients"`: the app up to 0.8.9 treats an unknown message type as a protocol violation.
 
@@ -153,6 +154,7 @@ Sent in `hello`, in every `state` message, and in `goodbye`.
 | `result` | A call finished, or the Owner stopped it by turning its capability off or down (then `is_error` with the reason, FR-066) | `id`, `content` (MCP content array), `structured_content` (optional), `is_error` |
 | `goodbye` | Before an intentional disconnect | `reason`, `state` |
 | `revoke_client` | The Owner removed one app's access in the Mac app (FR-191) | `id` (from the `clients` list) |
+| `audit_request` | The app compares its log with the relay's audit (FR-634); only with the `audit` feature | `id`, `since`, `limit` |
 
 `goodbye.reason`: `low_battery`, `too_hot`, `user_quit`, `system_sleep`, `system_shutdown`,
 `user_disconnected`.
@@ -168,6 +170,7 @@ Sent in `hello`, in every `state` message, and in `goodbye`.
 | `cancel` | Deadline passed or Claude cancelled | `id`, `reason` (`deadline` or `client_cancelled`) |
 | `notice` | Something the Owner must be told on the Mac | `kind`, `at`, `client` (optional) |
 | `clients` | Right after `welcome`, and whenever the list changes; only to an agent that announced the `clients` feature (FR-190) | `clients` (full list, replaces the previous one) |
+| `audit` | The answer to an `audit_request` (FR-634) | `id`, `entries`, `next_since` |
 
 `notice.kind`: `account_recovered` (a recovery link was used, FR-042); `client_authorized` (a
 Claude client was given access; `client` is its name with the host the relay checked, as on the
@@ -175,8 +178,10 @@ consent page, e.g. "Claude (claude.ai)"; added 2026-10-23, host added 2026-10-24
 Sent immediately if the device is online, otherwise right after `welcome` on its next connection;
 each `client_authorized` is sent once. The app shows a macOS notification.
 
-`id` is an opaque string unique per connection. The agent may run calls concurrently. A `result`
-for an unknown or cancelled `id` is ignored.
+`id` is an opaque string unique for all time (since 2026-10-27, FR-632: `call_` followed by 26
+characters of random base32, 128 bits); the relay stores it in its audit and the Mac in its
+activity log. Older relays sent ids unique per connection only (`c_1`, `c_2`, …). The agent may
+run calls concurrently. A `result` for an unknown or cancelled `id` is ignored.
 
 ## Apps with access (`clients`, `revoke_client`; added 2026-10-25, FR-190 to FR-192)
 
@@ -241,6 +246,35 @@ from the request ID (which would make every stored ID guessable from one) or fro
 signature. The list is sent under a per-connection lock that covers reading it and writing it,
 so two changes can't arrive in the wrong order; a list equal to the last one sent on the
 connection (ignoring `last_used_at`) is not sent again, except in answer to `revoke_client`.
+
+## Audit comparison (`audit_request`, `audit`; added 2026-10-27, FR-634)
+
+Only between an agent that listed `"audit"` in `features` and a relay that knows it (a relay
+that doesn't answers nothing, and the app reports the comparison as not possible).
+
+agent → relay:
+```json
+{"type": "audit_request", "id": "a1", "since": 1793160000000, "limit": 1000}
+```
+`since`: milliseconds since 1970, inclusive. `limit`: 1 to 1000 (larger is cut to 1000).
+
+relay → agent:
+```json
+{"type": "audit", "id": "a1", "entries": [
+  {"call_id": "call_7Q2M…", "at": 1793160333843, "tool": "shell_run", "outcome": "ok", "duration_ms": 733}
+], "next_since": 1793160333844}
+```
+Entries are this Mac's (`device_id` of the connection) audit rows with `at >= since`, oldest
+first, at most `limit`. `next_since` is the `since` for the next page, or `null` when there are
+no more. Rows from before call ids (FR-632) have `call_id` `""`. `outcome` is `ok`, `error`,
+`timeout`, or `offline`; `offline` calls never reached the Mac and aren't expected in its log.
+An `audit_request` with an invalid `since` or `limit` is answered with `entries` `[]` and
+`next_since` `null`.
+
+Comparison on the Mac: over the same period, every relay entry with a `call_id` and an outcome
+other than `offline` must have a log entry with that call id, and every log entry with a call id
+must be among the relay's entries. A call still running (no relay entry yet, at most its
+deadline old) is not counted as missing.
 
 ## Tools
 

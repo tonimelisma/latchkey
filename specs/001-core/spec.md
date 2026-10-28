@@ -146,7 +146,8 @@ Format: EARS ("When <trigger>, the <system> shall <response>"). IDs are stable; 
   formatting characters from it and cutting it to 64 characters, since the client chooses it
   (2026-10-25, security review).
 - **FR-023** The relay shall not store tool results.
-- **FR-024** The relay shall delete audit entries older than 30 days.
+- **FR-024** *Amended 2026-10-27 (Toni):* the relay shall keep audit entries until the account
+  is deleted; nothing is deleted by age (FR-630). Was: deleted after 30 days.
 - **FR-025** The relay shall not queue tool calls for later delivery.
 - **FR-026** The Mac app shall keep a full local trace of every tool call it executes, including
   arguments, results, and errors, viewable in the app, stored only on the Mac.
@@ -214,6 +215,39 @@ Format: EARS ("When <trigger>, the <system> shall <response>"). IDs are stable; 
 - **FR-622** After every install, the installer shall check the running app and fail when the
   setup window is open on a Mac whose setup is finished, keep-awake isn't what the app wants, or
   the keep-awake helper running isn't the one just installed.
+
+### Audit trail without gaps (Toni, 2026-10-27)
+Why: on 2026-10-27 an audit found the Mac's diagnostic lines discarded by macOS within hours,
+the relay's output holding nothing but request noise, and the relay's audit deleted after 30
+days; nothing checked that the two sides agree.
+- **FR-630** The relay shall keep its audit of tool calls and its event record (FR-631) until
+  the account is deleted. No entry shall be deleted by age.
+- **FR-631** The relay shall record, with time, account, and Mac where they apply, and never
+  content, tokens, codes, or keys: each Mac connection and its end (close code and reason, and
+  the goodbye reason when the Mac said one); each change of the Mac's keep-awake state; each
+  sign-in attempt and its outcome (passkey, emailed code, recovery link); each Claude app
+  approved, refused, or removed; each pairing and unpairing; and each request it refused or
+  failed (rejected token, rate limit, malformed request, internal error) with the reason.
+- **FR-632** Every tool call shall carry an id that is unique for all time, made by the relay,
+  stored in the relay's audit and in the Mac's activity log entry for that call.
+- **FR-633** The Mac's activity log (FR-026, FR-610 to FR-615) shall also hold the app's own
+  events: start and quit, the relay connection (connects, closes, retries, network changes),
+  keep-awake decisions and whether they took effect, the helper's failures, sleep, wake, and
+  shutdown, permission requests and changes, setup decisions, pause and resume, pairing changes,
+  and errors. They are kept, encrypted, and chained like Claude's actions, shown in the Activity
+  window (with a filter for events or actions), and exported with them. The lines in macOS's own
+  log (FR-620) stay as well.
+- **FR-634** The Mac app shall compare its log with the relay's audit of this Mac, by call id:
+  every call the relay sent to the Mac must be in the Mac's log, and every call in the Mac's log
+  must be in the relay's audit. It shall do this after each connection to the relay and when
+  the Owner asks in the Activity window, record the result as an event naming every call
+  missing on either side, and show a warning in the Activity window while any is missing.
+  Calls from before call ids existed are left out and counted.
+- **FR-635** The relay's own output shall carry the events of FR-631 as readable lines, and not
+  a line per request.
+- **FR-636** For every kind of event in FR-631 and FR-633 a test shall show that it is recorded,
+  and a test shall show that no log, on the relay or the Mac, deletes entries by age. The
+  installer shall fail when the Mac's comparison (FR-634) reports anything missing.
 
 ### Keep-awake and power
 - **FR-030** While keep-awake is on, the Mac shall not sleep, on battery or power, with the lid
