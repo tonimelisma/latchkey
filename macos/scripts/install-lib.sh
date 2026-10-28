@@ -75,7 +75,10 @@ window_verdict() {
       return 0
       ;;
   esac
-  [ "$1" = 0 ] && return 0
+  if [ "$1" = 0 ]; then
+    echo "install: no window open (${2:-no setup decision logged yet})"
+    return 0
+  fi
   if [ -z "$2" ]; then
     echo "install: A WINDOW OPENED ($1) and the app never said whether setup is finished." >&2
   else
