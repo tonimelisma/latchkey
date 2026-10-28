@@ -10,10 +10,11 @@ struct ToolResult: Sendable, Equatable {
     /// What the call created ("the note “Plan”"), for the Left Behind list (FR-641).
     var made: String?
 
-    /// Adds a line of text at the end of the answer.
+    /// Adds a line of text at the end of the answer, on a line of its own (Claude's apps join
+    /// text parts without a break).
     mutating func appendText(_ s: String) {
         guard case .array(var items) = content else { return }
-        items.append(.object(["type": .string("text"), "text": .string(s)]))
+        items.append(.object(["type": .string("text"), "text": .string("\n" + s)]))
         content = .array(items)
     }
 

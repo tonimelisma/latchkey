@@ -492,7 +492,7 @@ actor ShellJobs {
     /// The line every tool answer ends with while a command runs or its leftovers are kept
     /// (FR-322); nil when there is none.
     func statusLine(now: Date = Date()) -> String? {
-        let time = Date.FormatStyle(date: .omitted, time: .shortened)
+        let time = Leftovers.clock
         let live = jobs.values.sorted { $0.started < $1.started }.compactMap { job -> String? in
             if !job.isFinished { return "\(job.id) running since \(job.started.formatted(time))" }
             if !job.swept, let end = job.leaseEnd {

@@ -361,7 +361,7 @@ final class Reports: @unchecked Sendable {
     @Test func toolResultsCanCarryAJobsLine() {
         var r = ToolResult.text("hi")
         r.appendText("[Shell: job1 running since 10:00]")
-        #expect(r.content.jsonText.contains("job1 running"))
+        #expect(r.content.jsonText.contains("\\n[Shell: job1 running"), "on a line of its own")
         #expect(r.content.jsonText.contains("hi"))
     }
 

@@ -1,6 +1,6 @@
 # Status
 
-Last updated: 2026-10-27 (nothing left behind: Shell fence, leases, Left Behind list; app 0.8.29)
+Last updated: 2026-10-27 (nothing left behind: Shell fence, leases, Left Behind list; app 0.8.30)
 
 Xcode signing ready (2026-10-20): Toni's Xcode account has a valid "Apple Development" certificate
 (certificate expires 2027-07-22). Keep the team ID out of committed project files
@@ -34,7 +34,7 @@ after the app was quit.
 
 Releases, terms and privacy, and the directory listing are much later (Toni, 2026-10-22).
 
-Nothing left behind (Toni, 2026-10-27; app 0.8.29): after headless Chrome ran two days and
+Nothing left behind (Toni, 2026-10-27; app 0.8.30): after headless Chrome ran two days and
 `/tmp` filled with a session's downloads, a Shell command's leftovers are stopped when it
 finishes (its terminal session, its family followed every half second, and programs using its
 scratch folder) unless Claude asks to keep them (`keep_minutes`, renewed by checking, 24 hours

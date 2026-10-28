@@ -193,8 +193,11 @@ enum Leftovers {
     }
 
     static func kept(until end: Date, job: String) -> String {
-        "[Left behind: kept running, with its scratch folder, until \(end.formatted(date: .omitted, time: .shortened)); check \(job) to keep them longer]"
+        "[Left behind: kept running, with its scratch folder, until \(end.formatted(clock)); check \(job) to keep them longer]"
     }
+
+    /// Times in answers name their zone ("23:43 PDT"), as job lists give UTC (live check 2026-10-27).
+    static let clock = Date.FormatStyle().hour().minute().timeZone(.specificName(.short))
 
     static func short(_ url: URL, home: URL) -> String {
         let h = OwnFiles.real(home).path

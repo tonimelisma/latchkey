@@ -97,7 +97,7 @@ enum ShellCapability {
                         list.map { j in
                             var state = j.finished ? "finished, exit status \(j.exitCode ?? -1)" : "running"
                             if let until = j.keptUntil {
-                                state += "; leftovers kept until \(until.formatted(date: .omitted, time: .shortened))"
+                                state += "; leftovers kept until \(until.formatted(Leftovers.clock))"
                             }
                             return "- \(j.job): \(j.command) (\(state), started \(j.started.formatted(.iso8601)))"
                         }.joined(separator: "\n"))
