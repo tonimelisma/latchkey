@@ -13,6 +13,10 @@ struct KeepAwakeInputs: Equatable, Sendable {
 enum KeepAwakePolicy {
     static let lowBatteryThreshold = 15  // FR-032, fixed
 
+    /// What the app reports when it first connects, before it has applied anything: the state it
+    /// is about to apply, not a default "off" that flips a second later (2026-10-27).
+    static func atStart(_ i: KeepAwakeInputs) -> KeepAwake { decide(i) }
+
     static func decide(_ i: KeepAwakeInputs) -> KeepAwake {
         if !i.userEnabled { return .offUser }
         if i.thermal == .serious || i.thermal == .critical { return .offTooHot }

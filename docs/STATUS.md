@@ -1,6 +1,6 @@
 # Status
 
-Last updated: 2026-10-27 (audit trail and OAuth on zitadel/oidc deployed; app 0.8.24)
+Last updated: 2026-10-27 (audit trail and OAuth on zitadel/oidc deployed; app 0.8.25)
 
 Xcode signing ready (2026-10-20): Toni's Xcode account has a valid "Apple Development" certificate
 (certificate expires 2027-07-22). Keep the team ID out of committed project files
@@ -57,10 +57,10 @@ The Mac state line appears in every result (it reported the battery warning at 1
    relay (shell, Maps, Calendar); the relay's output shows connections, keep-awake changes,
    close reasons. Known: the 7 calls between the relay deploy and the app install were run by
    app 0.8.23, which kept no call ids, so the next check reports them missing on the Mac (they
-   are in its log without ids); the new app reports keep-awake off for about a second at start,
-   so each start records two needless keep-awake events at the relay. Also open from the
-   2026-10-27 audit: Messages attachment copies in ~/Pictures/Latchkey weren't removed after a
-   day, not yet fixed. Ideas for keeping Claude's sessions from leaving things behind:
+   are in its log without ids). Fixed in 0.8.25: the app reported keep-awake off for a second at
+   start (two needless keep-awake events at the relay per start); Messages attachment copies in
+   ~/Pictures/Latchkey were cleared only when the next attachment was sent (now at start and
+   hourly). Ideas for keeping Claude's sessions from leaving things behind:
    docs/ideas/leftovers.md (for Toni).
 0. Spec 007 (Calendar, Reminders, Contacts, Location & Maps) is built and installed (app 0.8.16,
    2026-10-26): 8 new tools, 23 in all, through EventKit, Contacts, Core Location, and MapKit;

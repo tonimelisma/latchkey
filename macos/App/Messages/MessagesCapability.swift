@@ -289,6 +289,17 @@ enum MessagesCapability {
         }
     }
 
+    /// Clears day-old copies now and then every `every`, so they don't wait for the next send
+    /// (two from 2026-10-22 were still there five days later).
+    static func sweepCopies(in dir: URL, every: Duration = .seconds(3600)) -> Task<Void, Never> {
+        Task.detached(priority: .utility) {
+            while !Task.isCancelled {
+                removeOldCopies(in: dir)
+                try? await Task.sleep(for: every)
+            }
+        }
+    }
+
     static func removeOldCopies(in dir: URL) {
         let fm = FileManager.default
         let items =

@@ -126,4 +126,20 @@ import Testing
         #expect(!FileManager.default.fileExists(atPath: old.path))
         #expect(FileManager.default.fileExists(atPath: fresh.path))
     }
+
+    /// Copies were only cleared when the next attachment was sent, so two from 2026-10-22 were
+    /// still there five days later: the sweep also runs at start and then on a timer.
+    @Test func sweepsCopiesWithoutWaitingForTheNextSend() async throws {
+        let dir = FileManager.default.temporaryDirectory.appending(path: "staging-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let old = dir.appending(path: "7D0CB0A7")
+        try FileManager.default.createDirectory(at: old, withIntermediateDirectories: true)
+        try FileManager.default.setAttributes(
+            [.modificationDate: Date(timeIntervalSinceNow: -5 * 86_400)], ofItemAtPath: old.path)
+        let sweeper = MessagesCapability.sweepCopies(in: dir, every: .milliseconds(50))
+        defer { sweeper.cancel() }
+        try await Task.sleep(for: .milliseconds(300))
+        #expect(!FileManager.default.fileExists(atPath: old.path), "removed at start, no send needed")
+    }
 }

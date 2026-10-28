@@ -12,6 +12,18 @@ import Testing
         )
     }
 
+    /// The state the app reports when it first connects is what it's about to apply, not the
+    /// default "off": until 0.8.24 every start sent "off" for a second, and the relay recorded
+    /// two needless keep-awake changes (2026-10-27).
+    @MainActor @Test func startsWithTheStateItIsAboutToApply() {
+        let i = KeepAwakeInputs(
+            powerSource: .ac, batteryPercent: 80, thermal: .nominal, userEnabled: true, helperAvailable: true)
+        #expect(KeepAwakePolicy.atStart(i) == .on)
+        let off = KeepAwakeInputs(
+            powerSource: .ac, batteryPercent: 80, thermal: .nominal, userEnabled: false, helperAvailable: true)
+        #expect(KeepAwakePolicy.atStart(off) == .offUser)
+    }
+
     @Test func onWhenEverythingIsFine() {
         #expect(KeepAwakePolicy.decide(inputs()) == .on)
         #expect(KeepAwakePolicy.decide(inputs(power: .ac, percent: 5)) == .on, "plugged in, any level")

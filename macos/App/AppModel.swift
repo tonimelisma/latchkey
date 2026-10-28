@@ -16,6 +16,8 @@ final class AppModel {
     private(set) var status: ConnectionStatus = .notPaired
     private(set) var power = PowerReader.read()
     private(set) var keepAwake: KeepAwake = .offUser
+    /// Clears day-old Messages attachment copies (spec 002 plan D3).
+    private var attachmentSweeper: Task<Void, Never>?
     private(set) var relayURL: URL?
     private(set) var helperStatus: SMAppService.Status = .notRegistered
     /// What went wrong, as the Owner is shown it; each one is an event too (FR-633).
@@ -122,6 +124,13 @@ final class AppModel {
         // until then it is unknown (FR-621).
         LocationFixer.shared.onAccessChange = { [weak self] _ in self?.checkPersonalData() }
         watchSystem()
+        attachmentSweeper = MessagesCapability.sweepCopies(in: MessagesCapability.staging)
+        // The first state the relay hears is the one about to be applied, not the default "off"
+        // (each start used to record two needless keep-awake changes, 2026-10-27).
+        keepAwake = KeepAwakePolicy.atStart(
+            KeepAwakeInputs(
+                powerSource: power.powerSource, batteryPercent: power.batteryPercent, thermal: power.thermal,
+                userEnabled: keepAwakeEnabled, helperAvailable: keepAwakeController.helperApproved))
         if let identity = DeviceIdentity.load() {
             Self.log.notice(
                 "Started \(Self.version, privacy: .public), paired with \(identity.relayURL.absoluteString, privacy: .private(mask: .hash))"
