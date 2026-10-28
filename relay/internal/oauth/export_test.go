@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/auth"
-	"github.com/ory/fosite"
+	"github.com/zitadel/oidc/v3/pkg/oidc"
 )
 
 // SetCIMDMinAge changes the minimum cache time of client metadata documents for one test: with
@@ -20,12 +20,12 @@ func SetCIMDMinAge(t *testing.T, d time.Duration) {
 	t.Cleanup(func() { cimdMinAge = old })
 }
 
-// ClientLookupHint is the hint of the error a failed client lookup returns to fosite.
+// ClientLookupHint is the description of the error a failed client lookup returns to zitadel.
 func (s *Server) ClientLookupHint(ctx context.Context, clientID string) string {
 	_, err := s.clients.get(ctx, clientID)
-	var rfc *fosite.RFC6749Error
-	if errors.As(err, &rfc) {
-		return rfc.HintField
+	var oe *oidc.Error
+	if errors.As(err, &oe) {
+		return oe.Description
 	}
 	return ""
 }

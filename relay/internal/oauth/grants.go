@@ -7,8 +7,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ory/fosite"
-
 	"github.com/tonimelisma/latchkey/relay/internal/events"
 	"github.com/tonimelisma/latchkey/relay/internal/store"
 )
@@ -63,25 +61,22 @@ func redirectLabel(u *url.URL) string {
 }
 
 // recordGrant stores the approval the Owner just gave, with what the consent page showed.
-func (s *Server) recordGrant(ctx context.Context, ar fosite.AuthorizeRequester, userID string) error {
-	c := consentFor(ar)
+func (s *Server) recordGrant(ctx context.Context, requestID, userID string, cl *client, redirect *url.URL) error {
+	c := consentFor(cl, redirect)
 	return s.cfg.Store.AddGrant(ctx, store.Grant{
-		RequestID: ar.GetID(), ID: store.NewGrantID(), UserID: userID, ClientID: ar.GetClient().GetID(),
-		ClientName: c.ClientName, ClientHost: c.ClientHost, Redirect: redirectLabel(ar.GetRedirectURI()),
+		RequestID: requestID, ID: store.NewGrantID(), UserID: userID, ClientID: cl.GetID(),
+		ClientName: c.ClientName, ClientHost: c.ClientHost, Redirect: redirectLabel(redirect),
 		ApprovedAt: s.cfg.Now().UTC(),
 	})
 }
 
 // consentFor is what the consent page shows for an authorization request.
-func consentFor(ar fosite.AuthorizeRequester) ConsentRequest {
-	c := ConsentRequest{
-		RedirectHost: displayHost(ar.GetRedirectURI().Host),
-		ClientHost:   strings.Join(verifiedHosts(ar.GetClient(), ar.GetRedirectURI()), ", "),
+func consentFor(cl *client, redirect *url.URL) ConsentRequest {
+	return ConsentRequest{
+		ClientName:   cleanName(cl.Name),
+		RedirectHost: displayHost(redirect.Host),
+		ClientHost:   strings.Join(verifiedHosts(cl, redirect), ", "),
 	}
-	if cl, ok := ar.GetClient().(*client); ok {
-		c.ClientName = cleanName(cl.Name)
-	}
-	return c
 }
 
 // Grants lists the Owner's apps with access, newest approval first, at most MaxGrants.
@@ -121,7 +116,7 @@ func (s *Server) labelFromClient(ctx context.Context, clientID string, g *Grant)
 		g.Host = unknown
 	}
 	g.Redirect = unknown
-	for _, raw := range cl.GetRedirectURIs() {
+	for _, raw := range cl.RedirectURIs() {
 		if u, err := url.Parse(raw); err == nil && redirectLabel(u) != "" {
 			g.Redirect = redirectLabel(u)
 			break
@@ -175,7 +170,7 @@ func (s *Server) grantsChanged(ctx context.Context, userID string) {
 	}
 }
 
-// revoked runs after fosite revoked tokens of a grant (a client's /revoke, a refresh token used
+// revoked runs after tokens of a grant were revoked (a client's /revoke, a refresh token used
 // again, a code replayed): if the grant has no access left, the relay is told.
 func (s *Server) revoked(ctx context.Context, requestID string) {
 	g, err := s.cfg.Store.GrantByRequest(ctx, requestID)

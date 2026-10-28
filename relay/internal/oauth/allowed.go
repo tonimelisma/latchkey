@@ -10,7 +10,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/ory/fosite"
+	"github.com/zitadel/oidc/v3/pkg/oidc"
 	"golang.org/x/net/idna"
 
 	"github.com/tonimelisma/latchkey/relay/internal/store"
@@ -140,16 +140,17 @@ func (a AllowedHosts) refusal() string {
 	return "This relay only accepts Claude's apps."
 }
 
-// errClientRefused marks a lookup refused by the list. fosite replaces the hint of a failed
-// client lookup with its own text and keeps ours only as the wrapped cause; the handlers find
-// this mark there and answer with the sentence (told).
+// errClientRefused marks a lookup refused by the list. zitadel/oidc wraps some failed client
+// lookups in an invalid_client error of its own, without our description, and keeps ours only
+// as the wrapped cause; the token handler finds this mark there and answers with the sentence
+// (told).
 var errClientRefused = errors.New("client refused by the list of allowed client hosts")
 
-func (a AllowedHosts) refuse() error {
-	return fosite.ErrInvalidClient.WithHint(a.refusal()).WithWrap(errClientRefused)
+func (a AllowedHosts) refuse() *oidc.Error {
+	return oidc.ErrInvalidClient().WithDescription("%s", a.refusal()).WithParent(errClientRefused)
 }
 
-// told puts the refusal sentence back on an error fosite made from a refused lookup.
+// told puts the refusal sentence back on an error made from a refused lookup.
 func (a AllowedHosts) told(err error) error {
 	if errors.Is(err, errClientRefused) {
 		return a.refuse()

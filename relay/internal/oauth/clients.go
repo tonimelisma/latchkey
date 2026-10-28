@@ -22,7 +22,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/ory/fosite"
+	"github.com/zitadel/oidc/v3/pkg/oidc"
+	"github.com/zitadel/oidc/v3/pkg/op"
 
 	"github.com/tonimelisma/latchkey/relay/internal/store"
 )
@@ -72,11 +73,63 @@ type cachedDocument struct {
 	CacheUntil time.Time      `json:"cache_until"`
 }
 
-// client is a fosite client plus what the consent page shows.
+// client is a client as zitadel/oidc sees it (op.Client), plus what the consent page shows.
 type client struct {
-	*fosite.DefaultOpenIDConnectClient
-	Name string
+	id           string
+	redirectURIs []string
+	authMethod   oidc.AuthMethod
+	secretHash   []byte // SHA-256 of a registered client's secret; empty for a public client
+	Name         string
 }
+
+var _ op.Client = (*client)(nil)
+
+func (c *client) GetID() string                    { return c.id }
+func (c *client) RedirectURIs() []string           { return c.redirectURIs }
+func (c *client) PostLogoutRedirectURIs() []string { return nil }
+
+// ApplicationType is web: zitadel then accepts exactly the redirect URIs listed (http ones
+// included, which registration allows only on loopback hosts). The port of a loopback URI is
+// ignored by the lookup instead, which adds the requested URI when it matches (matchesLoopback).
+func (c *client) ApplicationType() op.ApplicationType { return op.ApplicationTypeWeb }
+func (c *client) AuthMethod() oidc.AuthMethod         { return c.authMethod }
+func (c *client) ResponseTypes() []oidc.ResponseType {
+	return []oidc.ResponseType{oidc.ResponseTypeCode}
+}
+
+func (c *client) GrantTypes() []oidc.GrantType {
+	return []oidc.GrantType{oidc.GrantTypeCode, oidc.GrantTypeRefreshToken}
+}
+func (c *client) LoginURL(string) string               { return "" } // /authorize shows its own pages
+func (c *client) AccessTokenType() op.AccessTokenType  { return op.AccessTokenTypeBearer }
+func (c *client) IDTokenLifetime() time.Duration       { return 0 } // no ID tokens: OAuth only
+func (c *client) DevMode() bool                        { return false }
+func (c *client) IDTokenUserinfoClaimsAssertion() bool { return false }
+func (c *client) ClockSkew() time.Duration             { return 0 }
+func (c *client) IsScopeAllowed(scope string) bool     { return slices.Contains(supportedScopes, scope) }
+
+func (c *client) RestrictAdditionalIdTokenScopes() func([]string) []string {
+	return keepScopes
+}
+
+func (c *client) RestrictAdditionalAccessTokenScopes() func([]string) []string {
+	return keepScopes
+}
+
+func keepScopes(s []string) []string { return s }
+
+// secretMatches compares a client secret by SHA-256 (secrets are random, so no slow hash is
+// needed), in constant time.
+func (c *client) secretMatches(secret string) bool {
+	h := sha256.Sum256([]byte(secret))
+	return len(c.secretHash) == sha256.Size && subtle.ConstantTimeCompare(c.secretHash, h[:]) == 1
+}
+
+// What a client that can't be used is told (FR-095): one fixed sentence each.
+const (
+	cimdUnavailable = "The client metadata document could not be fetched or is not valid."
+	unknownClient   = "Client authentication failed: the client is not known."
+)
 
 type clients struct {
 	st   *store.Store
@@ -123,7 +176,7 @@ func (c *clients) clearFailure(id string) {
 }
 
 // requestedRedirectKey carries the redirect_uri of the authorize request into client lookup,
-// so a localhost URI on a different port can match (fosite ignores ports only for IP literals).
+// so a loopback URI on a different port can match (RFC 8252 §7.3).
 type requestedRedirectKey struct{}
 
 func withRequestedRedirect(ctx context.Context, uri string) context.Context {
@@ -142,7 +195,7 @@ func (c *clients) get(ctx context.Context, id string) (*client, error) {
 		doc, err := c.cimd(ctx, id)
 		if err != nil {
 			// A fixed sentence: the Go error can name internal hosts and addresses (logged in cimd).
-			return nil, fosite.ErrInvalidClient.WithHint("The client metadata document could not be fetched or is not valid.")
+			return nil, oidc.ErrInvalidClient().WithDescription(cimdUnavailable)
 		}
 		// Checked on every lookup, so a document cached under a wider list is covered (FR-181).
 		if !c.allowed.allowsRedirects(doc.RedirectURIs) {
@@ -152,13 +205,13 @@ func (c *clients) get(ctx context.Context, id string) (*client, error) {
 	} else {
 		row, err := c.st.OAuthClient(ctx, id)
 		if errors.Is(err, store.ErrNotFound) || (err == nil && row.Kind != "dcr") {
-			return nil, fosite.ErrNotFound
+			return nil, oidc.ErrInvalidClient().WithDescription(unknownClient)
 		}
 		if err != nil {
-			return nil, err
+			return nil, oidc.ErrServerError().WithParent(err)
 		}
 		if err := json.Unmarshal(row.MetadataJSON, &md); err != nil {
-			return nil, err
+			return nil, oidc.ErrServerError().WithParent(err)
 		}
 		secretHash = row.SecretHash
 	}
@@ -167,20 +220,11 @@ func (c *clients) get(ctx context.Context, id string) (*client, error) {
 		method = "none"
 	}
 	redirects := slices.Clone(md.RedirectURIs)
-	if req, ok := ctx.Value(requestedRedirectKey{}).(string); ok && matchesLocalhost(req, redirects) {
+	if req, ok := ctx.Value(requestedRedirectKey{}).(string); ok && matchesLoopback(req, redirects) {
 		redirects = append(redirects, req)
 	}
 	return &client{
-		DefaultOpenIDConnectClient: &fosite.DefaultOpenIDConnectClient{
-			DefaultClient: &fosite.DefaultClient{
-				ID: id, Secret: secretHash, RedirectURIs: redirects,
-				GrantTypes:    []string{"authorization_code", "refresh_token"},
-				ResponseTypes: []string{"code"},
-				Scopes:        supportedScopes,
-				Public:        method == "none",
-			},
-			TokenEndpointAuthMethod: method,
-		},
+		id: id, redirectURIs: redirects, authMethod: oidc.AuthMethod(method), secretHash: secretHash,
 		Name: displayName(md, id),
 	}, nil
 }
@@ -197,16 +241,17 @@ func displayName(md clientMetadata, id string) string {
 	return "An unnamed app"
 }
 
-// matchesLocalhost reports whether uri is http://localhost:<port><path> and a registered URI
-// differs from it only in the port (RFC 8252 §7.3).
-func matchesLocalhost(uri string, registered []string) bool {
+// matchesLoopback reports whether uri is http on a loopback host (localhost, 127.0.0.1, [::1])
+// and a registered URI differs from it only in the port (RFC 8252 §7.3): same host, path and
+// query.
+func matchesLoopback(uri string, registered []string) bool {
 	req, err := url.Parse(uri)
-	if err != nil || req.Scheme != "http" || req.Hostname() != "localhost" {
+	if err != nil || req.Scheme != "http" || !isLoopbackHost(req.Hostname()) || req.User != nil || req.Fragment != "" {
 		return false
 	}
 	for _, r := range registered {
 		reg, err := url.Parse(r)
-		if err == nil && reg.Scheme == "http" && reg.Hostname() == "localhost" &&
+		if err == nil && reg.Scheme == "http" && reg.Hostname() == req.Hostname() &&
 			reg.Path == req.Path && reg.RawQuery == req.RawQuery {
 			return true
 		}
@@ -274,12 +319,15 @@ func (c *clients) fetch(ctx context.Context, id string) (clientMetadata, time.Du
 	// and be remembered as a failure of the document.
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 	defer cancel()
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, id, nil)
+	// The URL is the client ID, chosen by the client: that is what a metadata document is. The
+	// list of allowed hosts was checked first (clients.get), and the default HTTP client dials
+	// public addresses only (publicOnlyDialer).
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, id, nil) //nolint:gosec // see above
 	if err != nil {
 		return clientMetadata{}, 0, err
 	}
 	req.Header.Set("Accept", "application/json")
-	resp, err := c.http.Do(req)
+	resp, err := c.http.Do(req) //nolint:gosec // see above
 	if err != nil {
 		return clientMetadata{}, 0, err
 	}
@@ -509,20 +557,4 @@ func randomString(n int) string {
 	b := make([]byte, n)
 	_, _ = rand.Read(b) // never fails (crypto/rand)
 	return base64.RawURLEncoding.EncodeToString(b)
-}
-
-// sha256Hasher compares client secrets by SHA-256 (they are random, so no slow hash is needed).
-type sha256Hasher struct{}
-
-func (sha256Hasher) Compare(_ context.Context, hash, data []byte) error {
-	h := sha256.Sum256(data)
-	if subtle.ConstantTimeCompare(hash, h[:]) != 1 {
-		return errors.New("secret mismatch")
-	}
-	return nil
-}
-
-func (sha256Hasher) Hash(_ context.Context, data []byte) ([]byte, error) {
-	h := sha256.Sum256(data)
-	return h[:], nil
 }

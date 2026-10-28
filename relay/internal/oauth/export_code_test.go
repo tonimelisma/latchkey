@@ -2,32 +2,19 @@ package oauth
 
 import (
 	"context"
-	"strings"
+
+	"github.com/zitadel/oidc/v3/pkg/op"
 )
 
-// codeSignature is the part of a code that fosite's HMAC strategy stores its rows under.
-func codeSignature(code string) string {
-	if _, sig, ok := strings.Cut(code, "."); ok {
-		return sig
-	}
-	return code
+// ReadCode is the storage call zitadel makes first for a code exchange: it reads the code's
+// row. It returns what the exchange carries on with.
+func (s *Server) ReadCode(ctx context.Context, code string) (op.AuthRequest, error) {
+	return s.storage.AuthRequestByCode(ctx, code)
 }
 
-// testStorage is the adapter fosite uses; it holds no state of its own.
-func (s *Server) testStorage() *storage {
-	return &storage{st: s.cfg.Store, clients: s.clients, now: s.cfg.Now}
-}
-
-// ReadCode is the storage call fosite makes first for a code exchange, and again before it
-// writes tokens: it reads the code's row.
-func (s *Server) ReadCode(ctx context.Context, code string) error {
-	_, err := s.testStorage().GetAuthorizeCodeSession(ctx, codeSignature(code), nil)
-	return err
-}
-
-// ReadPKCE is the storage call fosite makes second: it reads the code's PKCE challenge, and
-// stops the exchange there if it finds none.
-func (s *Server) ReadPKCE(ctx context.Context, code string) error {
-	_, err := s.testStorage().GetPKCERequestSession(ctx, codeSignature(code), nil)
+// IssueFor is the storage call a code exchange makes last, after zitadel checked PKCE, the
+// client and the redirect URI: it uses up the code read by ReadCode and writes the tokens.
+func (s *Server) IssueFor(ctx context.Context, req op.AuthRequest) error {
+	_, _, _, err := s.storage.CreateAccessAndRefreshTokens(ctx, req, "")
 	return err
 }

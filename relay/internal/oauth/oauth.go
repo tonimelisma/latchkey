@@ -21,8 +21,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/auth"
 	"github.com/modelcontextprotocol/go-sdk/oauthex"
-	"github.com/ory/fosite"
-	"github.com/ory/fosite/compose"
+	"github.com/zitadel/oidc/v3/pkg/op"
 	"golang.org/x/net/idna"
 
 	"github.com/tonimelisma/latchkey/relay/internal/events"
@@ -108,7 +107,7 @@ func clientLabel(name, host string) string {
 // metadata-document client, the host it fetched the document from (its client ID); otherwise
 // the hosts its codes are sent to: the given redirect URI's, or with none given (the account
 // page, which names a client rather than one sign-in), every registered one's.
-func verifiedHosts(cl fosite.Client, redirect *url.URL) []string {
+func verifiedHosts(cl *client, redirect *url.URL) []string {
 	if isCIMD(cl.GetID()) {
 		if u, err := url.Parse(cl.GetID()); err == nil {
 			return []string{displayHost(u.Hostname())}
@@ -118,7 +117,7 @@ func verifiedHosts(cl fosite.Client, redirect *url.URL) []string {
 		return []string{displayHost(redirect.Hostname())}
 	}
 	var out []string
-	for _, raw := range cl.GetRedirectURIs() {
+	for _, raw := range cl.RedirectURIs() {
 		if u, err := url.Parse(raw); err == nil && u.Hostname() != "" && !slices.Contains(out, displayHost(u.Hostname())) {
 			out = append(out, displayHost(u.Hostname()))
 		}
@@ -127,12 +126,8 @@ func verifiedHosts(cl fosite.Client, redirect *url.URL) []string {
 }
 
 // label names an approved client for the Owner.
-func label(cl fosite.Client, redirect *url.URL) string {
-	name := ""
-	if c, ok := cl.(*client); ok {
-		name = c.Name
-	}
-	return clientLabel(name, strings.Join(verifiedHosts(cl, redirect), ", "))
+func label(cl *client, redirect *url.URL) string {
+	return clientLabel(cl.Name, strings.Join(verifiedHosts(cl, redirect), ", "))
 }
 
 // Config configures the server.
@@ -164,10 +159,13 @@ type Config struct {
 	Events *events.Recorder
 }
 
-// Server is the authorization server.
+// Server is the authorization server. zitadel/oidc (op) parses and checks the token and
+// revocation requests; the relay's own code shows the sign-in and consent pages, keeps the
+// codes and tokens (storage), and checks access tokens on /mcp.
 type Server struct {
 	cfg      Config
-	provider fosite.OAuth2Provider
+	op       *op.Provider
+	storage  *storage
 	clients  *clients
 	issuer   string
 	resource string
@@ -197,34 +195,29 @@ func New(ctx context.Context, cfg Config) (*Server, error) {
 	if err != nil {
 		return nil, err
 	}
-	issuer := strings.TrimSuffix(cfg.Issuer.String(), "/")
-	fc := &fosite.Config{
-		AccessTokenLifespan:            time.Hour,
-		RefreshTokenLifespan:           90 * 24 * time.Hour,
-		AuthorizeCodeLifespan:          time.Minute,
-		GlobalSecret:                   key,
-		EnforcePKCE:                    true,
-		EnforcePKCEForPublicClients:    true,
-		EnablePKCEPlainChallengeMethod: false,
-		ScopeStrategy:                  fosite.ExactScopeStrategy,
-		AudienceMatchingStrategy:       fosite.DefaultAudienceMatchingStrategy,
-		ClientSecretsHasher:            sha256Hasher{},
-		TokenURL:                       issuer + "/token",
-		RefreshTokenScopes:             []string{"offline_access"},
-		SendDebugMessagesToClients:     false,
+	if len(key) < 32 {
+		return nil, errors.New("oauth: the token signing key is shorter than 32 bytes")
 	}
+	issuer := strings.TrimSuffix(cfg.Issuer.String(), "/")
 	cl := &clients{st: cfg.Store, http: cfg.HTTPClient, now: cfg.Now, log: cfg.Logger, failed: map[[sha256.Size]byte]time.Time{}, allowed: cfg.AllowedClients}
-	st := &storage{st: cfg.Store, clients: cl, now: cfg.Now}
-	provider := compose.Compose(fc, st, compose.NewOAuth2HMACStrategy(fc),
-		compose.OAuth2AuthorizeExplicitFactory,
-		compose.OAuth2RefreshTokenGrantFactory,
-		compose.OAuth2TokenRevocationFactory,
-		compose.OAuth2TokenIntrospectionFactory,
-		compose.OAuth2PKCEFactory,
+	st := &storage{st: cfg.Store, clients: cl, now: cfg.Now, tokens: newHMACTokens(key)}
+	provider, err := op.NewProvider(&op.Config{
+		CodeMethodS256:          true,
+		AuthMethodPost:          true,  // registered clients may send their secret in the form
+		AuthMethodPrivateKeyJWT: false, // client assertions are refused before zitadel sees them
+		GrantTypeRefreshToken:   true,
+		RequestObjectSupported:  false,
+		SupportedScopes:         supportedScopes,
+	}, st, op.StaticIssuer(issuer),
+		op.WithAllowInsecure(), // the issuer is the operator's; local checks run on http://127.0.0.1
+		op.WithCrypto(opaqueCrypto{}),
 	)
-	srv := &Server{cfg: cfg, provider: provider, clients: cl, issuer: issuer, resource: issuer + "/mcp"}
+	if err != nil {
+		return nil, err
+	}
+	srv := &Server{cfg: cfg, op: provider, storage: st, clients: cl, issuer: issuer, resource: issuer + "/mcp"}
 	srv.touched = &touches{last: map[string]touch{}}
-	st.revoked = srv.revoked // fosite's revocations report a grant that lost its access (FR-192)
+	st.revoked = srv.revoked // revocations report a grant that lost its access (FR-192)
 	if _, err := srv.PurgeRefusedClients(ctx); err != nil {
 		return nil, err
 	}
@@ -267,7 +260,7 @@ func (s *Server) metadata(w http.ResponseWriter, _ *http.Request) {
 		"revocation_endpoint_auth_methods_supported": []string{"none", "client_secret_post", "client_secret_basic"},
 		"client_id_metadata_document_supported":      true,
 		"scopes_supported":                           supportedScopes,
-		// RFC 9207: every authorization response carries iss (see issWriter).
+		// RFC 9207: every authorization response carries iss (see redirectBack).
 		"authorization_response_iss_parameter_supported": true,
 	}
 	if s.cfg.TermsURI != "" { // FR-193: only where the operator published the documents
@@ -285,201 +278,6 @@ func (s *Server) metadata(w http.ResponseWriter, _ *http.Request) {
 		m["revocation_endpoint_auth_methods_supported"] = []string{"none"}
 	}
 	_ = json.NewEncoder(w).Encode(m)
-}
-
-// issWriter adds the RFC 9207 "iss" parameter to the redirect fosite writes back to the client,
-// for codes and errors alike (fosite 0.49 has no support for it). A response that isn't a
-// redirect (an error shown in the browser because the client or redirect URI is unknown) is left
-// as it is.
-type issWriter struct {
-	http.ResponseWriter
-	issuer string
-	wrote  bool
-}
-
-func (w *issWriter) WriteHeader(code int) {
-	if !w.wrote {
-		w.wrote = true
-		if loc := w.Header().Get("Location"); loc != "" && code >= 300 && code < 400 {
-			if u, err := url.Parse(loc); err == nil {
-				q := u.Query()
-				q.Set("iss", w.issuer)
-				u.RawQuery = q.Encode()
-				w.Header().Set("Location", u.String())
-			}
-		}
-	}
-	w.ResponseWriter.WriteHeader(code)
-}
-
-func (w *issWriter) Write(b []byte) (int, error) {
-	if !w.wrote {
-		w.WriteHeader(http.StatusOK)
-	}
-	return w.ResponseWriter.Write(b)
-}
-
-func (s *Server) writeAuthorizeError(ctx context.Context, w http.ResponseWriter, ar fosite.AuthorizeRequester, err error) {
-	s.provider.WriteAuthorizeError(ctx, &issWriter{ResponseWriter: w, issuer: s.issuer}, ar, err)
-}
-
-func newSession(subject string) *fosite.DefaultSession {
-	return &fosite.DefaultSession{Subject: subject, ExpiresAt: map[fosite.TokenType]time.Time{}}
-}
-
-func (s *Server) authorize(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-	if err := r.ParseForm(); err != nil {
-		http.Error(w, "bad request", http.StatusBadRequest)
-		return
-	}
-	ctx = withRequestedRedirect(ctx, r.Form.Get("redirect_uri"))
-	ar, err := s.provider.NewAuthorizeRequest(ctx, r)
-	if err != nil {
-		// A client the list refuses is told why, in the browser: no redirect URI was accepted,
-		// so fosite sends the browser nowhere (FR-183).
-		s.writeAuthorizeError(ctx, w, ar, s.clients.allowed.told(err))
-		return
-	}
-	// RFC 8707: a resource indicator, if given, must name this relay's MCP endpoint.
-	if res := r.Form.Get("resource"); res != "" && strings.TrimSuffix(res, "/") != s.resource {
-		s.writeAuthorizeError(ctx, w, ar, fosite.ErrInvalidRequest.WithHint("Unknown resource."))
-		return
-	}
-	userID, ok := s.cfg.Auth.CurrentUser(r)
-	if !ok {
-		s.cfg.Auth.SignIn(w, r)
-		return
-	}
-	// Consent is asked every time (FR-049a): only the Owner's Allow, posted from the consent page
-	// with its CSRF token, issues a code. Nothing is remembered, so a program on the Owner's
-	// computer posing as an approved client (a loopback redirect on any port) gets no code
-	// without the Owner seeing the page (RFC 8252 §8.6).
-	if r.Method != http.MethodPost {
-		s.cfg.Auth.Consent(w, r, consentFor(ar))
-		return
-	}
-	if !s.cfg.Auth.ValidCSRF(r) {
-		http.Error(w, "This form expired. Go back and try again.", http.StatusForbidden)
-		return
-	}
-	if r.PostForm.Get("decision") != "allow" {
-		s.cfg.Events.Record(ctx, store.Event{
-			Kind: events.ClaudeRefused, UserID: userID, Detail: eventLabel(label(ar.GetClient(), ar.GetRedirectURI())),
-		})
-		s.writeAuthorizeError(ctx, w, ar, fosite.ErrAccessDenied.WithHint("The Owner declined."))
-		return
-	}
-	for _, sc := range grantable(ar.GetRequestedScopes()) {
-		ar.GrantScope(sc)
-	}
-	resp, err := s.provider.NewAuthorizeResponse(ctx, ar, newSession(userID))
-	if err != nil {
-		s.writeAuthorizeError(ctx, w, ar, err)
-		return
-	}
-	// The approval is recorded before its code leaves, so every token has a grant to be listed
-	// and removed by (FR-190).
-	if err := s.recordGrant(ctx, ar, userID); err != nil {
-		s.cfg.Logger.Error("record grant", "err", err)
-		s.writeAuthorizeError(ctx, w, ar, fosite.ErrServerError)
-		return
-	}
-	s.cfg.Events.Record(ctx, store.Event{
-		Kind: events.ClaudeApproved, UserID: userID, Detail: eventLabel(label(ar.GetClient(), ar.GetRedirectURI())),
-	})
-	if s.cfg.OnAuthorized != nil {
-		s.cfg.OnAuthorized(ctx, userID, label(ar.GetClient(), ar.GetRedirectURI()))
-	}
-	s.provider.WriteAuthorizeResponse(ctx, &issWriter{ResponseWriter: w, issuer: s.issuer}, ar, resp)
-}
-
-// grantable returns the requested scopes the relay grants; "mcp" is always granted.
-func grantable(requested []string) []string {
-	out := []string{"mcp"}
-	if slices.Contains(requested, "offline_access") {
-		out = append(out, "offline_access")
-	}
-	return out
-}
-
-func (s *Server) token(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-	ar, err := s.provider.NewAccessRequest(ctx, r, newSession(""))
-	if err != nil {
-		s.provider.WriteAccessError(ctx, w, ar, s.clients.allowed.told(err))
-		return
-	}
-	resp, err := s.provider.NewAccessResponse(ctx, ar)
-	if err != nil {
-		// The grant ended while its tokens were being written: another exchange used the same
-		// code (storage.InvalidateAuthorizeCodeSession), or the grant was revoked or removed
-		// (the store refuses the token). That is the client's grant being invalid, not a server
-		// error, which is what fosite makes of any storage failure.
-		if grantEnded(err) {
-			err = fosite.ErrInvalidGrant.WithHint("The authorization code or token is no longer valid.")
-		}
-		s.provider.WriteAccessError(ctx, w, ar, err)
-		return
-	}
-	// A redeemed code is a new app with access: the Owner's Mac gets the new list (FR-192).
-	if ar.GetGrantTypes().ExactOne("authorization_code") {
-		if sess, ok := ar.GetSession().(*fosite.DefaultSession); ok && sess.Subject != "" {
-			s.grantsChanged(ctx, sess.Subject)
-		}
-	}
-	s.provider.WriteAccessResponse(ctx, w, ar, resp)
-}
-
-func grantEnded(err error) bool {
-	if errors.Is(err, fosite.ErrInvalidatedAuthorizeCode) {
-		return true
-	}
-	var rfc *fosite.RFC6749Error
-	return errors.As(err, &rfc) && rfc.ErrorField == fosite.ErrServerError.ErrorField && errors.Is(rfc.Unwrap(), fosite.ErrNotFound)
-}
-
-func (s *Server) revoke(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-	s.provider.WriteRevocationResponse(ctx, w, s.provider.NewRevocationRequest(ctx, r))
-}
-
-// verify maps an access token to its Owner for the MCP SDK. fosite's introspection falls back
-// to refresh tokens when the value isn't an access token; those are refused here.
-func (s *Server) verify(ctx context.Context, token string, _ *http.Request) (*auth.TokenInfo, error) {
-	use, ar, err := s.provider.IntrospectToken(ctx, token, fosite.AccessToken, newSession(""))
-	if err != nil {
-		if errors.Is(err, fosite.ErrServerError) {
-			events.Note(ctx, "token check failed")
-			return nil, err
-		}
-		events.Note(ctx, "token rejected: unknown, expired, or revoked")
-		return nil, auth.ErrInvalidToken
-	}
-	if use != fosite.AccessToken {
-		events.Note(ctx, "token rejected: not an access token")
-		return nil, auth.ErrInvalidToken
-	}
-	sess, ok := ar.GetSession().(*fosite.DefaultSession)
-	if !ok || sess.Subject == "" {
-		return nil, auth.ErrInvalidToken
-	}
-	// A suspended account's tokens are deleted with the suspension; this also covers one that
-	// slipped in beside it (FR-196).
-	if u, err := s.cfg.Store.User(ctx, sess.Subject); err != nil || !u.SuspendedAt.IsZero() {
-		events.Note(ctx, "token rejected: account suspended or gone")
-		return nil, auth.ErrInvalidToken
-	}
-	events.NoteUser(ctx, sess.Subject)
-	info := &auth.TokenInfo{
-		UserID:     sess.Subject,
-		Scopes:     ar.GetGrantedScopes(),
-		Expiration: sess.GetExpiresAt(fosite.AccessToken),
-	}
-	if grantID := s.used(ctx, ar.GetID()); grantID != "" {
-		info.Extra = map[string]any{GrantExtra: grantID}
-	}
-	return info, nil
 }
 
 // Protect requires a valid access token with scope "mcp". A request without one gets exactly
