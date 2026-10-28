@@ -119,16 +119,16 @@ func TestRevokeGrantEndsExactlyThatGrant(t *testing.T) {
 	a, b := got[1], got[0]
 	before := e.changes()
 
-	removed, err := e.oauth.RevokeGrant(ctxT(t), "usr_someone_else", a.ID)
+	removed, err := e.oauth.RevokeGrant(ctxT(t), "usr_someone_else", a.ID, "test")
 	require.NoError(t, err)
 	assert.False(t, removed, "another account can't remove it")
-	removed, err = e.oauth.RevokeGrant(ctxT(t), e.userID, "grt_unknown")
+	removed, err = e.oauth.RevokeGrant(ctxT(t), e.userID, "grt_unknown", "test")
 	require.NoError(t, err)
 	assert.False(t, removed)
 	assert.Equal(t, http.StatusOK, e.mcpStatus(accessA))
 	assert.Empty(t, e.removed())
 
-	removed, err = e.oauth.RevokeGrant(ctxT(t), e.userID, a.ID)
+	removed, err = e.oauth.RevokeGrant(ctxT(t), e.userID, a.ID, "test")
 	require.NoError(t, err)
 	assert.True(t, removed)
 	assert.Equal(t, http.StatusUnauthorized, e.mcpStatus(accessA), "the removed grant is refused at once")
@@ -190,7 +190,7 @@ func TestRevokeUserReportsTheChange(t *testing.T) {
 	id := e.register(claudeRedirect)
 	e.tokens(id)
 	before := e.changes()
-	require.NoError(t, e.oauth.RevokeUser(ctxT(t), e.userID))
+	require.NoError(t, e.oauth.RevokeUser(ctxT(t), e.userID, "test"))
 	assert.Empty(t, e.grants())
 	assert.Equal(t, before+1, e.changes())
 }

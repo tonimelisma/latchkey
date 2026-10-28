@@ -25,6 +25,7 @@ import (
 	"github.com/ory/fosite/compose"
 	"golang.org/x/net/idna"
 
+	"github.com/tonimelisma/latchkey/relay/internal/events"
 	"github.com/tonimelisma/latchkey/relay/internal/store"
 )
 
@@ -159,6 +160,8 @@ type Config struct {
 	// AllowedClients is the hosts whose clients may ask for access (FR-180). The zero value is
 	// the default, Claude's apps only.
 	AllowedClients AllowedHosts
+	// Events records each app approved, refused, or removed (FR-631). Nil records nothing.
+	Events *events.Recorder
 }
 
 // Server is the authorization server.
@@ -361,6 +364,9 @@ func (s *Server) authorize(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if r.PostForm.Get("decision") != "allow" {
+		s.cfg.Events.Record(ctx, store.Event{
+			Kind: events.ClaudeRefused, UserID: userID, Detail: eventLabel(label(ar.GetClient(), ar.GetRedirectURI())),
+		})
 		s.writeAuthorizeError(ctx, w, ar, fosite.ErrAccessDenied.WithHint("The Owner declined."))
 		return
 	}
@@ -379,6 +385,9 @@ func (s *Server) authorize(w http.ResponseWriter, r *http.Request) {
 		s.writeAuthorizeError(ctx, w, ar, fosite.ErrServerError)
 		return
 	}
+	s.cfg.Events.Record(ctx, store.Event{
+		Kind: events.ClaudeApproved, UserID: userID, Detail: eventLabel(label(ar.GetClient(), ar.GetRedirectURI())),
+	})
 	if s.cfg.OnAuthorized != nil {
 		s.cfg.OnAuthorized(ctx, userID, label(ar.GetClient(), ar.GetRedirectURI()))
 	}
@@ -441,11 +450,14 @@ func (s *Server) verify(ctx context.Context, token string, _ *http.Request) (*au
 	use, ar, err := s.provider.IntrospectToken(ctx, token, fosite.AccessToken, newSession(""))
 	if err != nil {
 		if errors.Is(err, fosite.ErrServerError) {
+			events.Note(ctx, "token check failed")
 			return nil, err
 		}
+		events.Note(ctx, "token rejected: unknown, expired, or revoked")
 		return nil, auth.ErrInvalidToken
 	}
 	if use != fosite.AccessToken {
+		events.Note(ctx, "token rejected: not an access token")
 		return nil, auth.ErrInvalidToken
 	}
 	sess, ok := ar.GetSession().(*fosite.DefaultSession)
@@ -455,8 +467,10 @@ func (s *Server) verify(ctx context.Context, token string, _ *http.Request) (*au
 	// A suspended account's tokens are deleted with the suspension; this also covers one that
 	// slipped in beside it (FR-196).
 	if u, err := s.cfg.Store.User(ctx, sess.Subject); err != nil || !u.SuspendedAt.IsZero() {
+		events.Note(ctx, "token rejected: account suspended or gone")
 		return nil, auth.ErrInvalidToken
 	}
+	events.NoteUser(ctx, sess.Subject)
 	info := &auth.TokenInfo{
 		UserID:     sess.Subject,
 		Scopes:     ar.GetGrantedScopes(),
@@ -477,6 +491,9 @@ func (s *Server) Protect(h http.Handler) http.Handler {
 		Scopes:              []string{"mcp"},
 	})(h)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Authorization") == "" {
+			events.Note(r.Context(), "no token")
+		}
 		protected.ServeHTTP(&challengeWriter{ResponseWriter: w, challenge: challenge}, r)
 	})
 }
@@ -510,13 +527,28 @@ func (c *challengeWriter) Flush() {
 
 func (c *challengeWriter) Unwrap() http.ResponseWriter { return c.ResponseWriter }
 
-// RevokeUser deletes all of the Owner's codes and tokens, for every client (FR-044).
-func (s *Server) RevokeUser(ctx context.Context, userID string) error {
+// RevokeUser deletes all of the Owner's codes and tokens, for every client (FR-044). by says
+// who or what removed them, for the event record.
+func (s *Server) RevokeUser(ctx context.Context, userID, by string) error {
+	grants, _ := s.Grants(ctx, userID)
 	if err := s.cfg.Store.DeleteUserOAuth(ctx, userID); err != nil {
 		return err
 	}
+	for _, g := range grants {
+		s.cfg.Events.Record(ctx, store.Event{
+			Kind: events.ClaudeRemoved, UserID: userID, Detail: eventLabel(g.Label()) + ", " + by,
+		})
+	}
 	s.grantsChanged(ctx, userID)
 	return nil
+}
+
+// eventLabel bounds an app's name for the event record.
+func eventLabel(l string) string {
+	if r := []rune(l); len(r) > 128 {
+		return string(r[:128])
+	}
+	return l
 }
 
 // ClientName is the display name of a client the Owner approved, with the host the relay

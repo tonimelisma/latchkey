@@ -41,7 +41,8 @@
 
 <p><strong>About what happened</strong></p>
 <ul>
-<li>An activity log: for each tool call, which tool ran, when, which Claude app made the call (the name it gave), how long it took, and the outcome (worked, failed, timed out, or your Mac was offline). It holds no arguments and no results. Removing an app's access from your Mac is logged the same way. Entries are deleted after 30 days.</li>
+<li>An activity log: for each tool call, an identifier of the call, which tool ran, when, which Claude app made the call (the name it gave), how long it took, and the outcome (worked, failed, timed out, or your Mac was offline). It holds no arguments and no results. Removing an app's access from your Mac is logged the same way. Your Mac can ask for its part of this log, to check it against its own.</li>
+<li>A record of events on your account, with the time and, where it applies, your Mac: each time your Mac connects and disconnects (and why), each change of keep-awake, each sign-in attempt and how it went (passkey, emailed code, or recovery), each Claude app you approved, refused, or that lost its access, each time a Mac was connected to or disconnected from your account, and each request the relay refused or failed, with the reason. Refused requests are counted per hour rather than one by one. The record never holds what Claude did on your Mac, codes, tokens, keys, or network addresses. Requests refused without any account are counted per hour in the same way, without anything that identifies who sent them.</li>
 </ul>
 
 <p><strong>For running the relay</strong></p>
@@ -50,7 +51,7 @@
 <li>A list of blocked email addresses, if we blocked any because of abuse, with when and why.</li>
 <li>A record of what the operator did to an account (suspending it, lifting a suspension, deleting it, blocking its address): the email address, what was done, the reason given, who did it, and when. Kept for one year, also when the account is gone.</li>
 <li>Counters that limit abuse: how many requests came from a network address, for an account, or for an email address in the last minutes. They are held in memory only and are gone when the relay restarts.</li>
-<li>Error messages for troubleshooting. They can hold the relay's internal identifier of an account or a Mac, and never content.</li>
+<li>The relay's own output, for troubleshooting: the events above, one line each (refused requests: the first of each hour), and error messages. They can hold the relay's internal identifier of an account or a Mac, and never content, codes, tokens, or network addresses.</li>
 <li>If this relay runs behind the web server that Latchkey's own deployment sets up, that web server keeps an access log for 30 days: the network address a request came from, the web address requested (which can include your Mac's name when you connect it), the time, and technical details of the request such as the kind of browser or app. Cookies, tokens, and one-time codes are left out of it.</li>
 </ul>
 
@@ -83,10 +84,11 @@
 <h2>How long it is kept</h2>
 <ul>
 <li>Your account, passkeys, Mac details, and approvals: until you remove them or delete your account.</li>
+<li>The activity log and the record of events: until you delete your account. Nothing in them is deleted because of its age.</li>
 <li>Browser sign-ins: 30 days, or until you sign out.</li>
 <li>Emailed codes: 15 minutes. The code that connects your Mac: 5 minutes. A sign-up that was never finished: one day.</li>
 <li>Access tokens: one hour. The tokens that renew them: 90 days from their last renewal. Both are removed at once when you remove an app's access.</li>
-<li>The activity log, the notes of approvals, and the web server's access log: 30 days.</li>
+<li>The notes of approvals and the web server's access log: 30 days.</li>
 <li>The record of what the operator did: one year. A blocked address: until it is unblocked.</li>
 </ul>
 <p>Delete account removes all of this at once and disconnects your Mac. Only a blocked address and the operator's record stay, if there are any.{{if .Data.BackupDays}} Copies of the server made for recovery are kept for {{.Data.BackupDays}} days, so deleted data can remain in such a backup for up to that long. Backups are used only to restore the relay after a failure.{{end}}</p>

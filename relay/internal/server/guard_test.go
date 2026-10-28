@@ -46,7 +46,7 @@ func TestSecurityHeadersOnEveryResponse(t *testing.T) {
 
 func TestHSTSWhenPublicURLIsHTTPS(t *testing.T) {
 	u, _ := url.Parse("https://relay.example.com")
-	h := guard(u, nil, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
+	h := guard(u, nil, nil, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	w := httptest.NewRecorder()
 	h.ServeHTTP(w, httptest.NewRequestWithContext(t.Context(), "GET", "/healthz", nil))
 	assert.Equal(t, "max-age=63072000", w.Header().Get("Strict-Transport-Security"))
@@ -70,10 +70,10 @@ func TestForwardedForTrustedOnlyFromListedProxies(t *testing.T) {
 		return limited
 	}
 	ok := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {})
-	assert.Positive(t, burst(guard(nil, nil, ok), "172.17.0.1:5000"), "unlisted private peer is limited by its own address")
+	assert.Positive(t, burst(guard(nil, nil, nil, ok), "172.17.0.1:5000"), "unlisted private peer is limited by its own address")
 	trusted, err := limit.ParseTrustedProxies("172.17.0.0/16")
 	require.NoError(t, err)
-	assert.Zero(t, burst(guard(nil, trusted, ok), "172.17.0.1:5000"), "listed proxy: each client has its own bucket")
+	assert.Zero(t, burst(guard(nil, trusted, nil, ok), "172.17.0.1:5000"), "listed proxy: each client has its own bucket")
 }
 
 func TestStaticFilesMayBeCached(t *testing.T) {
@@ -147,7 +147,7 @@ func shortBodyTimeouts(t *testing.T, d time.Duration) {
 func TestSlowBodiesAreCutOff(t *testing.T) {
 	shortBodyTimeouts(t, 300*time.Millisecond)
 	read := make(chan error, 4)
-	h := guard(nil, nil, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	h := guard(nil, nil, nil, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, err := io.ReadAll(r.Body)
 		read <- err
 		if err != nil {
@@ -177,7 +177,7 @@ func TestSlowBodiesAreCutOff(t *testing.T) {
 // stream) is not cut off, and the next request on the same connection starts fresh.
 func TestBodyDeadlineEndsWithTheBody(t *testing.T) {
 	shortBodyTimeouts(t, 200*time.Millisecond)
-	h := guard(nil, nil, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	h := guard(nil, nil, nil, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if _, err := io.ReadAll(r.Body); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return

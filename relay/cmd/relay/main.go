@@ -92,7 +92,7 @@ func run(ctx context.Context) error {
 		srv.TLSConfig = &tls.Config{GetCertificate: m.GetCertificate, NextProtos: []string{"h2", "http/1.1", "acme-tls/1"}, MinVersion: tls.VersionTLS12}
 	}
 
-	go server.Purge(ctx, db, logger, r.PurgeClients, r.Housekeeping)
+	go server.Purge(ctx, r, logger)
 	go r.WatchOperator(ctx, server.OperatorPoll)
 
 	errc := make(chan error, 1)

@@ -45,7 +45,7 @@ func TestAuditMessages(t *testing.T) {
 		"entries absent": `{"type":"audit","id":"a","next_since":null}`,
 	} {
 		_, err := agentproto.Decode([]byte(frame))
-		assert.ErrorIs(t, err, agentproto.ErrProtocolViolation, name)
+		require.ErrorIs(t, err, agentproto.ErrProtocolViolation, name)
 	}
 	// An invalid since or limit is not a violation: the relay answers it with an empty page.
 	for _, frame := range []string{

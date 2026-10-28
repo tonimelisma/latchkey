@@ -14,9 +14,7 @@ import (
 	"hash/maphash"
 	"log/slog"
 	"net/http"
-	"strconv"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/coder/websocket"
@@ -24,6 +22,7 @@ import (
 	"golang.org/x/time/rate"
 
 	"github.com/tonimelisma/latchkey/relay/internal/agentproto"
+	"github.com/tonimelisma/latchkey/relay/internal/events"
 	"github.com/tonimelisma/latchkey/relay/internal/store"
 )
 
@@ -50,6 +49,9 @@ type Config struct {
 	FrameInterval time.Duration
 	Now           func() time.Time
 	Logger        *slog.Logger
+	// Events records connections, their ends, keep-awake changes, refused handshakes, and an
+	// unpairing from the Mac (FR-631). Nil records nothing.
+	Events *events.Recorder
 
 	// OnToolsChanged is called when a user's Mac tool list may have changed.
 	OnToolsChanged func(userID string)
@@ -140,16 +142,24 @@ func (h *Hub) conn(deviceID string) *conn {
 	return h.conns[deviceID]
 }
 
-// Call forwards a tool call to the device and waits for its result, at most until deadline.
-// progress, if not nil, receives progress messages.
+// Call forwards a tool call to the device with a new call id and waits for its result, at most
+// until deadline. progress, if not nil, receives progress messages.
 func (h *Hub) Call(ctx context.Context, deviceID, tool string, args json.RawMessage, deadline time.Duration,
+	progress func(*agentproto.Progress),
+) (*agentproto.Result, error) {
+	return h.CallWithID(ctx, deviceID, agentproto.NewCallID(), tool, args, deadline, progress)
+}
+
+// CallWithID is Call with the call's id made by the caller (agentproto.NewCallID), which also
+// stores it in the audit (FR-632).
+func (h *Hub) CallWithID(ctx context.Context, deviceID, callID, tool string, args json.RawMessage, deadline time.Duration,
 	progress func(*agentproto.Progress),
 ) (*agentproto.Result, error) {
 	c := h.conn(deviceID)
 	if c == nil {
 		return nil, ErrOffline
 	}
-	return c.call(ctx, tool, args, deadline, progress)
+	return c.call(ctx, callID, tool, args, deadline, progress)
 }
 
 // Revoke closes the device's connection with 4002; in-flight calls fail with ErrRevoked.
@@ -192,6 +202,7 @@ func (h *Hub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	ws.SetReadLimit(agentproto.MaxFrameBytes)
 	if ws.Subprotocol() != agentproto.Subprotocol {
+		h.refused(r.Context(), store.Device{}, "close 4004: no "+agentproto.Subprotocol+" subprotocol")
 		_ = ws.Close(agentproto.CloseUnsupportedVersion, "subprotocol "+agentproto.Subprotocol+" required")
 		return
 	}
@@ -201,10 +212,12 @@ func (h *Hub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		var ce closeError
 		switch {
 		case errors.As(err, &ce):
+			h.refused(ctx, ce.device, fmt.Sprintf("close %d: %s", ce.code, ce.what()))
 			_ = ws.Close(ce.code, ce.reason)
 		case errors.Is(err, errHandshakeTimedOut):
-			// already closed with 4006
+			h.refused(ctx, store.Device{}, fmt.Sprintf("close %d: no hello in time", agentproto.CloseHandshakeTimeout))
 		default:
+			h.refused(ctx, store.Device{}, "connection lost during the handshake")
 			_ = ws.CloseNow()
 		}
 		return
@@ -231,12 +244,29 @@ var errHandshakeTimedOut = errors.New("handshake timed out")
 type closeError struct {
 	code   websocket.StatusCode
 	reason string
+	// event is the reason in the event record, when it differs from the close reason: fixed
+	// words for what a stranger's frame could otherwise put there.
+	event string
+	// device is the Mac the refused hello named, when it is a paired one.
+	device store.Device
+}
+
+func (e closeError) what() string {
+	if e.event != "" {
+		return e.event
+	}
+	return e.reason
+}
+
+// refused counts a refused handshake (FR-631), per hour, so a stranger adds no row per attempt.
+func (h *Hub) refused(ctx context.Context, d store.Device, detail string) {
+	h.cfg.Events.Count(ctx, store.Event{Kind: events.MacRefused, UserID: d.UserID, DeviceID: d.ID, Detail: detail})
 }
 
 func (e closeError) Error() string { return fmt.Sprintf("close %d: %s", e.code, e.reason) }
 
 func violation(err error) closeError {
-	return closeError{agentproto.CloseProtocolViolation, truncate(err.Error())}
+	return closeError{code: agentproto.CloseProtocolViolation, reason: truncate(err.Error())}
 }
 
 // truncate keeps a close reason within the WebSocket limit of 123 bytes.
@@ -267,37 +297,45 @@ func (h *Hub) handshake(ctx context.Context, ws *websocket.Conn) (store.Device, 
 	case err != nil:
 		return store.Device{}, nil, err
 	case typ != websocket.MessageText:
-		return store.Device{}, nil, violation(errors.New("text frames only"))
+		return store.Device{}, nil, closeError{code: agentproto.CloseProtocolViolation, reason: "text frames only"}
 	}
 	// Who is this? Only the device ID and the signature are read until the signature verifies;
 	// the tool list and state of a stranger's hello are never parsed (FR-092).
 	deviceID, signature, err := agentproto.DecodeHelloAuth(data)
 	if err != nil {
-		return store.Device{}, nil, violation(err)
+		ce := violation(err)
+		ce.event = "protocol violation before authentication"
+		return store.Device{}, nil, ce
 	}
-	authFailed := closeError{agentproto.CloseAuthFailed, "authentication failed"}
+	const failed = "authentication failed"
+	unknown := closeError{code: agentproto.CloseAuthFailed, reason: failed, event: failed + ": no such Mac paired"}
 	device, err := h.store.Device(ctx, deviceID)
 	if err != nil || device.PublicKey == nil {
-		return store.Device{}, nil, authFailed
+		return store.Device{}, nil, unknown
 	}
 	if h.suspended(ctx, device.UserID) { // FR-196: refused, with the pairing left alone
-		return store.Device{}, nil, closeError{agentproto.CloseAuthFailed, suspendedReason}
+		return store.Device{}, nil, closeError{code: agentproto.CloseAuthFailed, reason: suspendedReason, device: device}
 	}
+	badSignature := closeError{code: agentproto.CloseAuthFailed, reason: failed, event: failed + ": wrong signature", device: device}
 	pub, err := x509.ParsePKIXPublicKey(device.PublicKey)
 	if err != nil {
-		return store.Device{}, nil, authFailed
+		return store.Device{}, nil, badSignature
 	}
 	ecPub, ok := pub.(*ecdsa.PublicKey)
 	if !ok || agentproto.VerifySignature(ecPub, nonce, deviceID, signature) != nil {
-		return store.Device{}, nil, authFailed
+		return store.Device{}, nil, badSignature
 	}
 	msg, err := agentproto.Decode(data)
 	if err != nil {
-		return store.Device{}, nil, violation(err)
+		ce := violation(err)
+		ce.device = device
+		return store.Device{}, nil, ce
 	}
 	hello, ok := msg.(*agentproto.Hello)
 	if !ok {
-		return store.Device{}, nil, violation(fmt.Errorf("expected hello, got %s", msg.MessageType()))
+		ce := violation(fmt.Errorf("expected hello, got %s", msg.MessageType()))
+		ce.device = device
+		return store.Device{}, nil, ce
 	}
 	return device, hello, nil
 }
@@ -320,6 +358,8 @@ func (h *Hub) start(ctx context.Context, c *conn, hello *agentproto.Hello) bool 
 	c.setState(hello.State)
 	c.setTools(hello.Tools)
 	c.clientsFeature = hello.Has(agentproto.FeatureClients)
+	c.auditFeature = hello.Has(agentproto.FeatureAudit)
+	c.keepAwake = hello.State.KeepAwake
 
 	err = write(ctx, c.ws, &agentproto.Welcome{
 		HeartbeatIntervalS: int(h.cfg.HeartbeatInterval / time.Second), ServerTime: now.Truncate(time.Second),
@@ -356,12 +396,16 @@ func (h *Hub) start(ctx context.Context, c *conn, hello *agentproto.Hello) bool 
 		return false
 	}
 
+	c.mu.Lock()
+	c.registered = true
+	c.mu.Unlock()
 	c.persist(ctx)
 	// Likewise an account suspended in that gap: the relay's watcher found no connection to close.
 	if h.suspended(ctx, c.device.UserID) {
 		c.closeWith(ErrDisconnected, agentproto.CloseAuthFailed, suspendedReason)
 		return false
 	}
+	c.connectedEvent(ctx, hello, previous.StateJSON)
 	h.cfg.OnToolsChanged(c.device.UserID)
 	c.sendClients(ctx, true) // right after welcome, to an agent that announced the feature
 	if h.cfg.NoticesOnConnect != nil {
@@ -398,6 +442,14 @@ func (h *Hub) finish(c *conn) {
 		c.save(context.Background())
 	}
 	l.Unlock()
+	c.mu.Lock()
+	registered := c.registered
+	c.mu.Unlock()
+	if registered {
+		h.cfg.Events.Record(context.Background(), store.Event{
+			Kind: events.MacDisconnected, UserID: c.device.UserID, DeviceID: c.device.ID, Detail: c.endDetail(),
+		})
+	}
 	if current && revoked {
 		h.cfg.OnToolsChanged(c.device.UserID)
 	}
@@ -426,8 +478,9 @@ type conn struct {
 	hub    *Hub
 	ws     *websocket.Conn
 	device store.Device
-	nextID atomic.Uint64
 	done   chan struct{}
+
+	auditFeature bool // the agent announced audit_request and audit (FR-634)
 
 	frames *rate.Limiter // frames the Mac may send (FR-091)
 
@@ -445,6 +498,16 @@ type conn struct {
 	toolsStored bool  // the store's row holds state.ToolsJSON
 	closeErr    error // why calls fail once closed
 	finished    bool
+
+	// For the event record (FR-631): whether the connection was registered (so its end is an
+	// event), how it ended (the first close code and reason, from either side), the goodbye
+	// reason, and the last keep-awake state reported.
+	registered bool
+	ended      bool
+	endCode    websocket.StatusCode
+	endReason  string
+	goodbye    string
+	keepAwake  string
 }
 
 func (h *Hub) newConn(ws *websocket.Conn, d store.Device) *conn {
@@ -462,6 +525,7 @@ func (c *conn) closeWith(reason error, code websocket.StatusCode, text string) {
 	if c.closeErr == nil {
 		c.closeErr = reason
 	}
+	c.noteEnd(code, text)
 	c.mu.Unlock()
 	go func() { _ = c.ws.Close(code, text) }()
 }
@@ -564,9 +628,11 @@ func (c *conn) run(ctx context.Context) {
 	for {
 		rctx, cancel := context.WithTimeout(ctx, c.hub.cfg.OfflineAfter)
 		typ, data, err := c.ws.Read(rctx)
+		timedOut := rctx.Err() != nil && ctx.Err() == nil
 		cancel()
-		if err != nil {
-			return // closed, timed out (the library closes the socket), or too big (1009)
+		if err != nil { // closed, timed out (the library closes the socket), or too big (1009)
+			c.endedBy(err, timedOut)
+			return
 		}
 		now := c.hub.now()
 		c.mu.Lock()
@@ -596,6 +662,7 @@ func (c *conn) handle(ctx context.Context, msg agentproto.Message) bool {
 	case *agentproto.StateUpdate:
 		c.setState(m.State)
 		c.persist(ctx)
+		c.keepAwakeChanged(ctx, m.State.KeepAwake)
 	case *agentproto.ToolsUpdate:
 		if c.setTools(m.Tools) { // the same list again changes nothing
 			c.persist(ctx)
@@ -620,10 +687,17 @@ func (c *conn) handle(ctx context.Context, msg agentproto.Message) bool {
 		c.setState(m.State)
 		c.mu.Lock()
 		c.state.OfflineReason = m.Reason
+		c.goodbye = m.Reason
 		c.mu.Unlock()
+		c.keepAwakeChanged(ctx, m.State.KeepAwake)
 		if m.Reason == agentproto.ReasonUserDisconnected {
 			if err := c.hub.store.RevokeDevice(ctx, c.device.ID, c.hub.now()); err != nil {
 				c.hub.cfg.Logger.Error("revoke device", "device", c.device.ID, "err", err)
+			} else {
+				c.hub.cfg.Events.Record(ctx, store.Event{
+					Kind: events.MacUnpaired, UserID: c.device.UserID, DeviceID: c.device.ID,
+					Detail: "by Disconnect in the Mac app",
+				})
 			}
 			c.closeWith(ErrRevoked, agentproto.CloseRevoked, "device revoked")
 			return false
@@ -631,6 +705,12 @@ func (c *conn) handle(ctx context.Context, msg agentproto.Message) bool {
 		c.persist(ctx)
 	case *agentproto.RevokeClient:
 		c.revokeClient(ctx, m)
+	case *agentproto.AuditRequest:
+		if !c.auditFeature {
+			c.closeWith(ErrDisconnected, agentproto.CloseProtocolViolation, "audit_request without the audit feature")
+			return false
+		}
+		c.answerAudit(ctx, m)
 	default:
 		c.closeWith(ErrDisconnected, agentproto.CloseProtocolViolation,
 			fmt.Sprintf("%s is not an agent message", msg.MessageType()))
@@ -670,13 +750,12 @@ func (c *conn) failPending() {
 	c.mu.Unlock()
 }
 
-func (c *conn) call(ctx context.Context, tool string, args json.RawMessage, deadline time.Duration,
+func (c *conn) call(ctx context.Context, id, tool string, args json.RawMessage, deadline time.Duration,
 	progress func(*agentproto.Progress),
 ) (*agentproto.Result, error) {
 	if args == nil {
 		args = json.RawMessage(`{}`)
 	}
-	id := "c_" + strconv.FormatUint(c.nextID.Add(1), 10)
 	p := &pendingCall{result: make(chan *agentproto.Result, 1), progress: progress}
 	c.mu.Lock()
 	if c.finished {

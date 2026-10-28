@@ -46,6 +46,7 @@ var storedData = map[string]string{
 	"oauth_grants":          "Which Claude apps you approved",
 	"client_authorizations": "A note of each approval",
 	"audit_log":             "An activity log",
+	"events":                "A record of events on your account",
 	"blocked_emails":        "A list of blocked email addresses",
 	"operator_log":          "A record of what the operator did",
 }
@@ -101,10 +102,11 @@ func TestPrivacyPolicyNamesEveryStoredTable(t *testing.T) {
 func TestPrivacyPolicyCoversWhatItMust(t *testing.T) {
 	policy := legalPage(t, "/privacy")
 	for _, want := range []string{
-		"never stored",              // tool results pass through
-		"in transit",                // and can technically be seen there
-		"Anthropic",                 // Claude is someone else's service
-		"30 days",                   // audit log, access log
+		"never stored", // tool results pass through
+		"in transit",   // and can technically be seen there
+		"Anthropic",    // Claude is someone else's service
+		"30 days",      // notes of approvals, access log
+		"until you delete your account. Nothing in them is deleted because of its age", // FR-630
 		"15 minutes",                // emailed codes
 		"Delete account",            // deletion
 		"do not sell",               // sharing

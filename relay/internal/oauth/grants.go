@@ -9,6 +9,7 @@ import (
 
 	"github.com/ory/fosite"
 
+	"github.com/tonimelisma/latchkey/relay/internal/events"
 	"github.com/tonimelisma/latchkey/relay/internal/store"
 )
 
@@ -130,14 +131,34 @@ func (s *Server) labelFromClient(ctx context.Context, clientID string, g *Grant)
 
 // RevokeGrant removes one app's access: the grant's codes and tokens are deleted, its open
 // sessions are closed, and the Owner's Mac is sent the new list. A grant of another account,
-// or an unknown ID, changes nothing and reports false (FR-191).
-func (s *Server) RevokeGrant(ctx context.Context, userID, grantID string) (bool, error) {
+// or an unknown ID, changes nothing and reports false (FR-191). by says who removed it, for the
+// event record.
+func (s *Server) RevokeGrant(ctx context.Context, userID, grantID, by string) (bool, error) {
+	name := "an app"
+	if grants, err := s.Grants(ctx, userID); err == nil {
+		for _, g := range grants {
+			if g.ID == grantID {
+				name = g.Label()
+			}
+		}
+	}
 	removed, err := s.cfg.Store.DeleteGrant(ctx, userID, grantID)
 	if err != nil || !removed {
 		return false, err
 	}
+	s.cfg.Events.Record(ctx, store.Event{Kind: events.ClaudeRemoved, UserID: userID, Detail: eventLabel(name) + ", " + by})
 	s.grantEnded(ctx, userID, grantID)
 	return true, nil
+}
+
+// GrantExpired records an approval the daily purge removed because none of its tokens was
+// left, and tells the rest of the relay (FR-192).
+func (s *Server) GrantExpired(ctx context.Context, g store.Grant) {
+	s.cfg.Events.Record(ctx, store.Event{
+		Kind: events.ClaudeRemoved, UserID: g.UserID,
+		Detail: eventLabel(clientLabel(g.ClientName, g.ClientHost)) + ", its access expired",
+	})
+	s.grantEnded(ctx, g.UserID, g.ID)
 }
 
 // grantEnded tells the rest of the relay that a grant no longer has access.
@@ -164,6 +185,10 @@ func (s *Server) revoked(ctx context.Context, requestID string) {
 	if live, err := s.cfg.Store.GrantLive(ctx, requestID, s.cfg.Now()); err != nil || live {
 		return
 	}
+	s.cfg.Events.Record(ctx, store.Event{
+		Kind: events.ClaudeRemoved, UserID: g.UserID,
+		Detail: eventLabel(clientLabel(g.ClientName, g.ClientHost)) + ", its tokens were revoked (by the app, or because a used token came back)",
+	})
 	s.grantEnded(ctx, g.UserID, g.ID)
 }
 

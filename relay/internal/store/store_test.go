@@ -176,8 +176,10 @@ func TestAuditLog(t *testing.T) {
 	old := store.AuditEntry{
 		UserID: u.ID, DeviceID: d.ID, At: t0, Tool: "battery_status",
 		Surface: "claude-ai", Outcome: store.OutcomeOK, Duration: 420 * time.Millisecond,
+		CallID: "call_7Q2MXK4RZB3N8P5TVWYC6DHJ9F",
 	}
 	recent := old
+	recent.CallID = "call_0000000000000000000000000A"
 	recent.At = t0.Add(31 * 24 * time.Hour)
 	recent.Outcome = store.OutcomeOffline
 	recent.Duration = 3 * time.Millisecond
@@ -194,12 +196,4 @@ func TestAuditLog(t *testing.T) {
 	assert.Equal(t, recent.At, entries[0].At, "newest first")
 	assert.Equal(t, store.OutcomeOffline, entries[0].Outcome)
 	assert.Equal(t, old.Duration, entries[1].Duration)
-
-	n, err := s.PurgeAudit(ctx, recent.At.Add(-30*24*time.Hour))
-	require.NoError(t, err)
-	assert.Equal(t, int64(1), n)
-	entries, err = s.AuditForUser(ctx, u.ID, 10)
-	require.NoError(t, err)
-	require.Len(t, entries, 1)
-	assert.Equal(t, recent.At, entries[0].At)
 }

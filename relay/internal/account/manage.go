@@ -14,6 +14,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/tonimelisma/latchkey/relay/internal/events"
 	"github.com/tonimelisma/latchkey/relay/internal/oauth"
 	"github.com/tonimelisma/latchkey/relay/internal/store"
 )
@@ -92,8 +93,9 @@ func (s *Service) postedUser(w http.ResponseWriter, r *http.Request) (store.Sess
 	return sess, true
 }
 
-// revokeActiveMac revokes the user's paired Mac, if any, and closes its connection (FR-052).
-func (s *Service) revokeActiveMac(ctx context.Context, userID string) error {
+// revokeActiveMac revokes the user's paired Mac, if any, and closes its connection (FR-052). by
+// says why, for the event record.
+func (s *Service) revokeActiveMac(ctx context.Context, userID, by string) error {
 	d, err := s.cfg.Store.ActiveDevice(ctx, userID)
 	if errors.Is(err, store.ErrNotFound) {
 		return nil
@@ -104,6 +106,7 @@ func (s *Service) revokeActiveMac(ctx context.Context, userID string) error {
 	if err := s.cfg.Store.RevokeDevice(ctx, d.ID, s.now()); err != nil {
 		return err
 	}
+	s.cfg.Events.Record(ctx, store.Event{Kind: events.MacUnpaired, UserID: userID, DeviceID: d.ID, Detail: by})
 	s.cfg.Macs.Revoke(d.ID)
 	return nil
 }
@@ -113,7 +116,7 @@ func (s *Service) revokeMac(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if err := s.revokeActiveMac(r.Context(), sess.UserID); err != nil {
+	if err := s.revokeActiveMac(r.Context(), sess.UserID, "on the account page"); err != nil {
 		s.errorPage(w, http.StatusInternalServerError, "Something went wrong", "Try again.")
 		return
 	}
@@ -126,7 +129,7 @@ func (s *Service) revokeClaude(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if err := s.cfg.OAuth.RevokeUser(r.Context(), sess.UserID); err != nil {
+	if err := s.cfg.OAuth.RevokeUser(r.Context(), sess.UserID, "on the account page"); err != nil {
 		s.errorPage(w, http.StatusInternalServerError, "Something went wrong", "Try again.")
 		return
 	}
@@ -141,7 +144,7 @@ func (s *Service) revokeClient(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if _, err := s.cfg.OAuth.RevokeGrant(r.Context(), sess.UserID, r.PostFormValue("id")); err != nil {
+	if _, err := s.cfg.OAuth.RevokeGrant(r.Context(), sess.UserID, r.PostFormValue("id"), "on the account page"); err != nil {
 		s.errorPage(w, http.StatusInternalServerError, "Something went wrong", "Try again.")
 		return
 	}
@@ -159,7 +162,7 @@ func (s *Service) deleteAccount(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ctx := r.Context()
-	if err := s.revokeActiveMac(ctx, sess.UserID); err != nil {
+	if err := s.revokeActiveMac(ctx, sess.UserID, "with the account's deletion"); err != nil {
 		s.errorPage(w, http.StatusInternalServerError, "Something went wrong", "Try again.")
 		return
 	}
@@ -167,6 +170,8 @@ func (s *Service) deleteAccount(w http.ResponseWriter, r *http.Request) {
 		s.errorPage(w, http.StatusInternalServerError, "Something went wrong", "Try again.")
 		return
 	}
+	// The account's record went with it (FR-630); the relay's output keeps the line.
+	s.cfg.Events.Log(store.Event{Kind: events.AccountDeleted, UserID: sess.UserID, Detail: "by its Owner, with everything the relay held about it"})
 	s.cfg.DevicesChanged(sess.UserID)
 	s.cfg.AccessRemoved(sess.UserID)
 	s.clearSession(w)
@@ -278,7 +283,7 @@ func (s *Service) pairExchange(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, http.StatusForbidden, "This account can't connect a Mac right now.")
 		return
 	}
-	if err := s.revokeActiveMac(ctx, userID); err != nil { // FR-053: the Owner confirmed on the pair page
+	if err := s.revokeActiveMac(ctx, userID, "replaced by a newly paired Mac"); err != nil { // FR-053: the Owner confirmed on the pair page
 		jsonError(w, http.StatusInternalServerError, "Something went wrong. Try again.")
 		return
 	}
@@ -287,6 +292,7 @@ func (s *Service) pairExchange(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, http.StatusInternalServerError, "Something went wrong. Try again.")
 		return
 	}
+	s.cfg.Events.Record(ctx, store.Event{Kind: events.MacPaired, UserID: userID, DeviceID: d.ID})
 	s.cfg.DevicesChanged(userID)
 	writeJSON(w, http.StatusOK, map[string]string{"device_id": d.ID})
 }

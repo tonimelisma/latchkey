@@ -690,7 +690,7 @@ func TestRevokeUserAndDeletedUser(t *testing.T) {
 	e := setup(t)
 	id := e.register("https://claude.ai/api/mcp/auth_callback")
 	access, _ := e.tokens(id)
-	require.NoError(t, e.oauth.RevokeUser(ctxT(t), e.userID))
+	require.NoError(t, e.oauth.RevokeUser(ctxT(t), e.userID, "test"))
 	assert.Equal(t, http.StatusUnauthorized, e.mcpStatus(access))
 	e.tokens(id)
 	assert.Equal(t, 2, e.auth.consentCount(), "revoking forgets the approval")
@@ -730,7 +730,7 @@ func TestRevokeUserDuringRefresh(t *testing.T) {
 		n := fetches
 		mu.Unlock()
 		if n == 2 {
-			assert.NoError(t, e.oauth.RevokeUser(context.Background(), e.userID))
+			assert.NoError(t, e.oauth.RevokeUser(context.Background(), e.userID, "test"))
 		}
 	}
 	e.cimdMu.Unlock()

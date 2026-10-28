@@ -29,6 +29,7 @@ import (
 	"github.com/go-webauthn/webauthn/webauthn"
 
 	"github.com/tonimelisma/latchkey/relay/internal/agentproto"
+	"github.com/tonimelisma/latchkey/relay/internal/events"
 	"github.com/tonimelisma/latchkey/relay/internal/limit"
 	"github.com/tonimelisma/latchkey/relay/internal/oauth"
 	"github.com/tonimelisma/latchkey/relay/internal/store"
@@ -81,6 +82,9 @@ type Config struct {
 	// Operator is who runs this relay; with a name and a contact, the terms and the privacy
 	// policy are published (FR-193).
 	Operator Operator
+	// Events records sign-in attempts and their outcomes, pairings, and unpairings (FR-631).
+	// Nil records nothing.
+	Events *events.Recorder
 }
 
 // Service serves the account pages and implements oauth.Authenticator.
@@ -459,10 +463,22 @@ func (s *Service) authEmail(w http.ResponseWriter, r *http.Request) {
 		found = &u
 	}
 	if msg := s.refused(ctx, email, found); msg != "" {
+		kind := events.SignInCode
+		if req.Recover {
+			kind = events.Recovery
+		} else if known {
+			kind = events.SignInPasskey
+		}
+		s.attempt(ctx, kind, accountOf(found), "refused: address blocked or account suspended")
 		jsonError(w, http.StatusForbidden, msg)
 		return
 	}
 	if req.Recover {
+		if known {
+			s.attempt(ctx, events.Recovery, u.ID, "recovery code requested")
+		} else {
+			s.attempt(ctx, events.Recovery, "", "recovery code requested for an address without an account")
+		}
 		// The answer never reveals whether the account exists: the same words, and the same
 		// speed, because the code is stored and emailed after the answer, not before it
 		// (talking to the mail server takes far longer than finding no account).
@@ -477,6 +493,7 @@ func (s *Service) authEmail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if len(s.cfg.AllowedEmails) > 0 && !slices.Contains(s.cfg.AllowedEmails, email) {
+		s.attempt(ctx, events.SignInCode, "", "refused: sign-up from an address not on the relay's list")
 		jsonError(w, http.StatusForbidden, "This relay only accepts sign-ups from approved email addresses.")
 		return
 	}
@@ -490,9 +507,11 @@ func (s *Service) authEmail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !s.sendCode(ctx, u, store.PurposeVerify) {
+		s.attempt(ctx, events.SignInCode, "", "sign-up code could not be emailed")
 		jsonError(w, http.StatusBadGateway, "The relay couldn't send email right now. Try again in a few minutes.")
 		return
 	}
+	s.attempt(ctx, events.SignInCode, "", "sign-up code emailed")
 	writeJSON(w, http.StatusOK, map[string]string{"step": "code", "purpose": store.PurposeVerify})
 }
 
@@ -557,28 +576,38 @@ func (s *Service) authCode(w http.ResponseWriter, r *http.Request) {
 	}
 	expired := "This code has expired or was tried too many times. Go back and get a new code."
 	ctx := r.Context()
+	kind := events.SignInCode
+	if req.Purpose == store.PurposeRecover {
+		kind = events.Recovery
+	}
 	u, err := s.cfg.Store.UserByEmail(ctx, normalizeEmail(req.Email))
 	if err != nil {
+		s.attempt(ctx, kind, "", "code refused: no such account")
 		jsonError(w, http.StatusBadRequest, expired)
 		return
 	}
 	if msg := s.refused(ctx, u.Email, &u); msg != "" {
+		s.attempt(ctx, kind, accountOf(&u), "code refused: address blocked or account suspended")
 		jsonError(w, http.StatusForbidden, msg)
 		return
 	}
 	code := strings.Join(strings.Fields(req.Code), "")
 	switch err := s.cfg.Store.CheckEmailCode(ctx, u.ID, req.Purpose, codeHash(u.ID, code), s.now()); {
 	case errors.Is(err, store.ErrCodesLocked):
+		s.attempt(ctx, kind, accountOf(&u), "code refused: too many wrong codes today")
 		jsonError(w, http.StatusTooManyRequests,
 			"Too many wrong codes were entered for this email address today. Sign in with your passkey, or try again tomorrow.")
 		return
 	case errors.Is(err, store.ErrWrongCode):
+		s.attempt(ctx, kind, accountOf(&u), "code refused: wrong code")
 		jsonError(w, http.StatusBadRequest, "That code isn't right. Check the email and try again.")
 		return
 	case err != nil:
+		s.attempt(ctx, kind, accountOf(&u), "code refused: expired, used, or tried too often")
 		jsonError(w, http.StatusBadRequest, expired)
 		return
 	}
+	s.attempt(ctx, kind, accountOf(&u), "code accepted")
 	ticket, ok := s.putTicket(u.ID, req.Purpose)
 	if !ok {
 		busy(w)
@@ -631,4 +660,20 @@ func (s *Service) ClientAuthorized(ctx context.Context, userID, clientName strin
 	if err := s.cfg.Store.AddClientAuthorization(ctx, userID, clientName, now, told); err != nil {
 		s.cfg.Logger.Error("record client authorization", "err", err)
 	}
+}
+
+// attempt records a sign-in step that anyone can cause, counted per hour (FR-631): a stranger
+// can't add a row per try, and an Owner's account shows how many there were. userID names the
+// account only when it is a finished one (accountOf); a sign-up that was never finished is
+// counted without an account, since its account is deleted after a day.
+func (s *Service) attempt(ctx context.Context, kind, userID, outcome string) {
+	s.cfg.Events.Count(ctx, store.Event{Kind: kind, UserID: userID, Detail: outcome})
+}
+
+// accountOf is the user's ID when the account is a finished one, else "".
+func accountOf(u *store.User) string {
+	if u == nil || u.EmailVerifiedAt.IsZero() {
+		return ""
+	}
+	return u.ID
 }

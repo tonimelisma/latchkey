@@ -198,6 +198,10 @@ type Server struct {
 	mu    sync.Mutex
 	users map[string]*userServer
 
+	// sdkLog is the relay's logger for the MCP SDK: warnings and errors only, so its lines per
+	// request and session ("server connecting", "session connected") stay out (FR-635).
+	sdkLog *slog.Logger
+
 	// loadTools reads an Owner's current Mac tools (macTools); a field so a test can interleave
 	// two syncs.
 	loadTools func(ctx context.Context, userID string) []*mcp.Tool
@@ -225,9 +229,9 @@ func New(st *store.Store, h *hub.Hub, opts Options) *Server {
 	if opts.SessionTimeout <= 0 {
 		opts.SessionTimeout = DefaultSessionTimeout
 	}
-	s := &Server{store: st, hub: h, opts: opts, users: map[string]*userServer{}}
+	s := &Server{store: st, hub: h, opts: opts, users: map[string]*userServer{}, sdkLog: sdkLogger(opts.Logger)}
 	s.loadTools = s.macTools
-	sdkLog := sdkLogger(opts.Logger)
+	sdkLog := s.sdkLog
 	// An idle session is closed by the SDK (its next request gets 404 and the client starts a new
 	// one, as the MCP transport specifies); without this, sessions lived until restart.
 	s.stateful = mcp.NewStreamableHTTPHandler(s.serverFor, &mcp.StreamableHTTPOptions{
@@ -257,7 +261,8 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	s.stateful.ServeHTTP(w, r)
 }
 
-// sdkLogger keeps the SDK's per-session INFO lines out of the relay log.
+// sdkLogger keeps the SDK's per-request and per-session INFO and DEBUG lines out of the relay
+// log, and its warnings and errors in.
 func sdkLogger(l *slog.Logger) *slog.Logger {
 	return slog.New(levelFilter{l.Handler(), slog.LevelWarn})
 }
@@ -300,7 +305,7 @@ func (s *Server) user(ctx context.Context, id string) *userServer {
 	if !ok {
 		u = &userServer{
 			server: mcp.NewServer(&mcp.Implementation{Name: "latchkey", Title: "Latchkey", Version: s.opts.Version},
-				&mcp.ServerOptions{Logger: s.opts.Logger}),
+				&mcp.ServerOptions{Logger: s.sdkLog}),
 			tools: map[string]*mcp.Tool{}, grants: map[string]string{},
 		}
 		s.users[id] = u
@@ -413,12 +418,13 @@ func (s *Server) forward(userID string, tool *mcp.Tool) mcp.ToolHandler {
 	deadline := agentproto.ToolDeadline(tool)
 	return func(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		start := s.opts.Now()
+		callID := agentproto.NewCallID() // made here, so a call that never reaches the Mac has one too (FR-632)
 		st, d := s.status(ctx, userID)
 		if !st.Paired {
-			s.audit(ctx, req, userID, "", tool.Name, store.OutcomeOffline, start)
+			s.audit(ctx, req, userID, "", callID, tool.Name, store.OutcomeOffline, start)
 			return errorResult(neverPairedText), nil
 		}
-		res, err := s.hub.Call(ctx, d.ID, tool.Name, req.Params.Arguments, deadline, progressFunc(ctx, req))
+		res, err := s.hub.CallWithID(ctx, d.ID, callID, tool.Name, req.Params.Arguments, deadline, progressFunc(ctx, req))
 		var result *mcp.CallToolResult
 		outcome := store.OutcomeOK
 		switch {
@@ -442,7 +448,7 @@ func (s *Server) forward(userID string, tool *mcp.Tool) mcp.ToolHandler {
 			now, _ := s.status(ctx, userID)
 			appendStatusLine(result, statusLine(now.State))
 		}
-		s.audit(ctx, req, userID, d.ID, tool.Name, outcome, start)
+		s.audit(ctx, req, userID, d.ID, callID, tool.Name, outcome, start)
 		return result, nil
 	}
 }
@@ -500,16 +506,18 @@ func cleanSurface(name string) string {
 	return b.String()
 }
 
-func (s *Server) audit(ctx context.Context, req *mcp.CallToolRequest, userID, deviceID, tool, outcome string, start time.Time) {
+// audit records the call, whatever its outcome (FR-022). The write doesn't end with the request:
+// a client that went away still leaves its call in the audit.
+func (s *Server) audit(ctx context.Context, req *mcp.CallToolRequest, userID, deviceID, callID, tool, outcome string, start time.Time) {
 	surface := ""
 	if info := req.ClientInfo(); info != nil {
 		surface = cleanSurface(info.Name)
 	}
-	err := s.store.AddAudit(ctx, store.AuditEntry{
+	err := s.store.AddAudit(context.WithoutCancel(ctx), store.AuditEntry{
 		UserID: userID, DeviceID: deviceID, At: start.UTC(), Tool: tool, Surface: surface,
-		Outcome: outcome, Duration: s.opts.Now().Sub(start),
+		Outcome: outcome, Duration: s.opts.Now().Sub(start), CallID: callID,
 	})
 	if err != nil {
-		s.opts.Logger.Error("audit", "err", err)
+		s.opts.Logger.Error("audit", "user", userID, "call", callID, "err", err)
 	}
 }

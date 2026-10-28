@@ -1,15 +1,20 @@
 package server
 
 import (
+	"bufio"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/auth"
 
+	"github.com/tonimelisma/latchkey/relay/internal/events"
 	"github.com/tonimelisma/latchkey/relay/internal/limit"
+	"github.com/tonimelisma/latchkey/relay/internal/store"
 )
 
 // Request body caps. MCP requests carry tool arguments (a file written through Claude, say);
@@ -85,10 +90,10 @@ func defaultRules() []rule {
 
 // guard wraps the relay with security headers, body caps, and per-address abuse limits. Client
 // addresses come from X-Forwarded-For only when the peer is loopback or in proxies (FR-082).
-func guard(public *url.URL, proxies limit.TrustedProxies, next http.Handler) http.Handler {
+func guard(public *url.URL, proxies limit.TrustedProxies, rec *events.Recorder, next http.Handler) http.Handler {
 	rules := defaultRules()
 	hsts := public != nil && public.Scheme == "https"
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return recordRefusals(rec, next, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		h := w.Header()
 		// Pages set their own Content-Security-Policy; everything else loads nothing.
 		h.Set("Content-Security-Policy", "default-src 'none'; frame-ancestors 'none'")
@@ -107,6 +112,7 @@ func guard(public *url.URL, proxies limit.TrustedProxies, next http.Handler) htt
 		ip := proxies.ClientIP(r)
 		for _, rl := range rules {
 			if rl.match(r) && !rl.per.Allow(ip) {
+				events.Note(r.Context(), "rate limit per address")
 				tooMany(w)
 				return
 			}
@@ -127,14 +133,110 @@ func guard(public *url.URL, proxies limit.TrustedProxies, next http.Handler) htt
 				}
 			}
 			if r.ContentLength > max {
+				events.Note(r.Context(), "request too large")
 				http.Error(w, "Request too large.", http.StatusRequestEntityTooLarge)
 				return
 			}
 			r.Body = http.MaxBytesReader(w, r.Body, max)
 		}
 		next.ServeHTTP(w, r)
+	}))
+}
+
+// recordRefusals counts every request the relay refused (a 4xx answer) or failed (5xx) in the
+// event record, per hour, route, status, and reason (FR-631): the reason is what the handler
+// noted (events.Note) or else what the status means; the route is the pattern that matched,
+// never the path a client made up. Nothing the client sent, and no address, is recorded.
+// routes is the relay's mux, to name the route of a request refused before it was routed.
+func recordRefusals(rec *events.Recorder, routes, guarded http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ctx, note := events.WithNote(r.Context())
+		r = r.WithContext(ctx)
+		sw := &statusWriter{ResponseWriter: w}
+		guarded.ServeHTTP(sw, r)
+		if sw.status < 400 {
+			return
+		}
+		reason, userID := note()
+		if reason == "" {
+			reason = statusReason(sw.status)
+		}
+		route := r.Pattern
+		if mux, ok := routes.(*http.ServeMux); ok && route == "" {
+			// Refused before routing (a rate limit, a body too large): name the route it was for.
+			_, route = mux.Handler(r)
+		}
+		if route == "" {
+			route = "no such page"
+		}
+		kind := events.RequestRefused
+		if sw.status >= 500 {
+			kind = events.RequestFailed
+		}
+		rec.Count(ctx, store.Event{
+			Kind: kind, UserID: userID, Detail: route + ": " + strconv.Itoa(sw.status) + " " + reason,
+		})
 	})
 }
+
+func statusReason(status int) string {
+	switch {
+	case status == http.StatusBadRequest:
+		return "malformed or invalid request"
+	case status == http.StatusUnauthorized:
+		return "not signed in, or the sign-in was rejected"
+	case status == http.StatusForbidden:
+		return "refused"
+	case status == http.StatusNotFound:
+		return "not found"
+	case status == http.StatusMethodNotAllowed:
+		return "method not allowed"
+	case status == http.StatusRequestEntityTooLarge:
+		return "request too large"
+	case status == http.StatusTooManyRequests:
+		return "rate limit"
+	case status >= 500:
+		return "internal error"
+	}
+	return "refused"
+}
+
+// statusWriter notes the response's status. It keeps flushing, hijacking (the Mac's WebSocket),
+// and the other optional interfaces working through http.ResponseController.
+type statusWriter struct {
+	http.ResponseWriter
+	status int
+}
+
+func (w *statusWriter) WriteHeader(code int) {
+	if w.status == 0 {
+		w.status = code
+	}
+	w.ResponseWriter.WriteHeader(code)
+}
+
+func (w *statusWriter) Write(b []byte) (int, error) {
+	if w.status == 0 {
+		w.status = http.StatusOK
+	}
+	return w.ResponseWriter.Write(b)
+}
+
+func (w *statusWriter) Flush() {
+	if w.status == 0 {
+		w.status = http.StatusOK
+	}
+	_ = http.NewResponseController(w.ResponseWriter).Flush()
+}
+
+func (w *statusWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	if w.status == 0 {
+		w.status = http.StatusSwitchingProtocols
+	}
+	return http.NewResponseController(w.ResponseWriter).Hijack()
+}
+
+func (w *statusWriter) Unwrap() http.ResponseWriter { return w.ResponseWriter }
 
 // perUser limits MCP calls per signed-in owner, after the token is checked: 120 at once, then
 // ten a second. A leaked token can't flood the owner's Mac.
@@ -142,6 +244,7 @@ func perUser(next http.Handler) http.Handler {
 	users := limit.NewKeyed(120, 100*time.Millisecond)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if info := auth.TokenInfoFromContext(r.Context()); info != nil && !users.Allow(info.UserID) {
+			events.Note(r.Context(), "rate limit per account")
 			tooMany(w)
 			return
 		}

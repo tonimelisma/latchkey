@@ -146,7 +146,11 @@ func TestTouchGrantAndCleanup(t *testing.T) {
 	// The purge drops a grant once none of its codes or tokens is left.
 	addGrant(t, s, "req-b", u.ID, "Claude", t0)
 	putToken(t, s, "b-access", store.KindAccess, "req-b", u.ID, t0, time.Minute)
-	require.NoError(t, s.PurgeExpired(ctx, t0.Add(time.Hour)))
+	ended, err := s.PurgeExpired(ctx, t0.Add(time.Hour))
+	require.NoError(t, err)
+	require.Len(t, ended, 1, "the purge names the grant it ended")
+	assert.Equal(t, "req-b", ended[0].RequestID)
+	assert.Equal(t, u.ID, ended[0].UserID)
 	_, err = s.GrantByRequest(ctx, "req-b")
 	require.ErrorIs(t, err, store.ErrNotFound)
 

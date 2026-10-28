@@ -11,6 +11,7 @@ import (
 	"github.com/go-webauthn/webauthn/webauthn"
 
 	"github.com/tonimelisma/latchkey/relay/internal/agentproto"
+	"github.com/tonimelisma/latchkey/relay/internal/events"
 	"github.com/tonimelisma/latchkey/relay/internal/store"
 )
 
@@ -297,16 +298,22 @@ func (s *Service) registerFinish(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.dropPending(c.userID)
+	kind, done := events.SignInCode, "signed up: address confirmed and passkey created"
 	switch c.purpose {
 	case store.PurposeVerify:
+		if !user.user.EmailVerifiedAt.IsZero() {
+			done = "new passkey created"
+		}
 		err = s.cfg.Store.VerifyEmail(ctx, c.userID, now)
 	case store.PurposeRecover:
+		kind, done = events.Recovery, "account recovered: new passkey; the old passkeys, sign-ins, and Claude apps removed"
 		err = s.completeRecovery(ctx, user.user, cred.ID, now)
 	}
 	if err != nil {
 		jsonError(w, http.StatusInternalServerError, "Something went wrong. Try again.")
 		return
 	}
+	s.cfg.Events.Record(ctx, store.Event{Kind: kind, UserID: c.userID, Detail: done})
 	if err := s.startSession(w, r, c.userID); err != nil {
 		jsonError(w, http.StatusInternalServerError, "Something went wrong. Try again.")
 		return
@@ -323,7 +330,7 @@ func (s *Service) completeRecovery(ctx context.Context, u store.User, keep []byt
 	if err := s.cfg.Store.DeleteUserSessions(ctx, u.ID); err != nil {
 		return err
 	}
-	if err := s.cfg.OAuth.RevokeUser(ctx, u.ID); err != nil {
+	if err := s.cfg.OAuth.RevokeUser(ctx, u.ID, "by the account's recovery"); err != nil {
 		return err
 	}
 	s.cfg.AccessRemoved(u.ID)
@@ -393,6 +400,7 @@ func (s *Service) loginFinish(w http.ResponseWriter, r *http.Request) {
 		return s.loadUser(ctx, pk.UserID)
 	}, c.data, r)
 	if err != nil || cred.Authenticator.CloneWarning {
+		s.attempt(ctx, events.SignInPasskey, "", "refused: passkey not registered, or its check failed")
 		jsonError(w, http.StatusUnauthorized, "That passkey isn't registered with this relay. If you lost your passkeys, recover your account.")
 		return
 	}
@@ -403,6 +411,7 @@ func (s *Service) loginFinish(w http.ResponseWriter, r *http.Request) {
 	}
 	// A valid passkey of a suspended account, or of a blocked address, signs nobody in.
 	if msg := s.refused(ctx, u.user.Email, &u.user); msg != "" {
+		s.attempt(ctx, events.SignInPasskey, accountOf(&u.user), "refused: address blocked or account suspended")
 		jsonError(w, http.StatusForbidden, msg)
 		return
 	}
@@ -419,10 +428,12 @@ func (s *Service) loginFinish(w http.ResponseWriter, r *http.Request) {
 			jsonError(w, http.StatusUnauthorized, "Sign in again.")
 			return
 		}
+		s.cfg.Events.Record(ctx, store.Event{Kind: events.SignInPasskey, UserID: u.user.ID, Detail: "passkey confirmed again, to delete the account"})
 		writeJSON(w, http.StatusOK, map[string]string{"next": ""})
 		return
 	}
 	if u.user.EmailVerifiedAt.IsZero() {
+		s.attempt(ctx, events.SignInPasskey, "", "refused: sign-up not finished")
 		jsonError(w, http.StatusForbidden, "Finish signing up first: open the link we emailed you.")
 		return
 	}
@@ -430,5 +441,6 @@ func (s *Service) loginFinish(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, http.StatusInternalServerError, "Something went wrong. Try again.")
 		return
 	}
+	s.cfg.Events.Record(ctx, store.Event{Kind: events.SignInPasskey, UserID: u.user.ID, Detail: "signed in"})
 	writeJSON(w, http.StatusOK, map[string]string{"next": safeNext(r.URL.Query().Get("next"))})
 }

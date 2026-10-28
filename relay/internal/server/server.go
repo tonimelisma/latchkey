@@ -12,6 +12,7 @@ import (
 
 	"github.com/tonimelisma/latchkey/relay/internal/account"
 	"github.com/tonimelisma/latchkey/relay/internal/agentproto"
+	"github.com/tonimelisma/latchkey/relay/internal/events"
 	"github.com/tonimelisma/latchkey/relay/internal/hub"
 	"github.com/tonimelisma/latchkey/relay/internal/limit"
 	"github.com/tonimelisma/latchkey/relay/internal/mcpserver"
@@ -34,6 +35,10 @@ type Relay struct {
 	// PurgeClients deletes stored OAuth clients the operator's list no longer allows (FR-184);
 	// pass it to Purge.
 	PurgeClients func(context.Context) error
+	// Events is the relay's event record (FR-631).
+	Events *events.Recorder
+	// grantExpired records an approval the purge removed and tells the rest of the relay.
+	grantExpired func(context.Context, store.Grant)
 }
 
 // Options configures the relay.
@@ -61,8 +66,10 @@ func New(ctx context.Context, o Options) (*Relay, error) {
 		ms  *mcpserver.Server
 		acc *account.Service
 	)
+	rec := events.New(o.Store, o.Logger, nil)
 	hc := o.Hub
 	hc.Logger = o.Logger
+	hc.Events = rec
 	hc.OnToolsChanged = func(userID string) { ms.ToolsChanged(userID) }
 	hc.NoticesOnConnect = func(ctx context.Context, d store.Device, previous time.Time) []*agentproto.Notice {
 		return acc.NoticesOnConnect(ctx, d, previous)
@@ -72,7 +79,7 @@ func New(ctx context.Context, o Options) (*Relay, error) {
 		return clientsFor(ctx, oa, userID)
 	}
 	hc.RevokeClient = func(ctx context.Context, userID, id string) bool {
-		removed, err := oa.RevokeGrant(ctx, userID, id)
+		removed, err := oa.RevokeGrant(ctx, userID, id, "from the Mac app")
 		if err != nil {
 			o.Logger.Error("remove app's access", "err", err)
 		}
@@ -83,7 +90,7 @@ func New(ctx context.Context, o Options) (*Relay, error) {
 
 	auth := &authBridge{}
 	oc := oauth.Config{
-		Issuer: o.PublicURL, Store: o.Store, Auth: auth, Logger: o.Logger, AllowedClients: o.AllowedClients,
+		Issuer: o.PublicURL, Store: o.Store, Auth: auth, Logger: o.Logger, AllowedClients: o.AllowedClients, Events: rec,
 		OnAuthorized: func(ctx context.Context, userID, clientName string) { acc.ClientAuthorized(ctx, userID, clientName) },
 		// The Mac's list of apps with access follows every change (FR-192), and an app whose
 		// access ended loses its open sessions while the others keep theirs (FR-191).
@@ -101,7 +108,7 @@ func New(ctx context.Context, o Options) (*Relay, error) {
 	}
 	acc, err = account.New(ctx, account.Config{
 		PublicURL: o.PublicURL, Store: o.Store, Macs: h, Mailer: o.Mailer, OAuth: oa,
-		AllowedEmails: o.AllowedEmails, Logger: o.Logger, Operator: o.Operator,
+		AllowedEmails: o.AllowedEmails, Logger: o.Logger, Operator: o.Operator, Events: rec,
 		DevicesChanged: func(userID string) { ms.ToolsChanged(userID) },
 		AccessRemoved:  func(userID string) { ms.Forget(userID) },
 	})
@@ -116,7 +123,10 @@ func New(ctx context.Context, o Options) (*Relay, error) {
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte("ok\n")) })
 	oa.Register(mux)
 	acc.Register(mux)
-	r := &Relay{Handler: guard(o.PublicURL, o.TrustedProxies, mux), Hub: h, Store: o.Store}
+	r := &Relay{
+		Handler: guard(o.PublicURL, o.TrustedProxies, rec, mux), Hub: h, Store: o.Store, Events: rec,
+		grantExpired: oa.GrantExpired,
+	}
 	r.PurgeClients = func(ctx context.Context) error {
 		_, err := oa.PurgeRefusedClients(ctx)
 		return err
@@ -157,39 +167,47 @@ func clientsFor(ctx context.Context, oa *oauth.Server, userID string) ([]agentpr
 // authBridge lets the OAuth server use the account service, which needs the OAuth server.
 type authBridge struct{ *account.Service }
 
-// AuditRetention is how long audit entries are kept (FR-024).
-const AuditRetention = 30 * 24 * time.Hour
+// ClientAuthorizationRetention is how long the record of an app given access is kept for telling
+// the Owner's Mac (data-model.md, client_authorizations). The audit and the event record are
+// not purged at all (FR-024, FR-630).
+const ClientAuthorizationRetention = 30 * 24 * time.Hour
 
-// Purge runs the retention jobs at startup and then daily (FR-024, Constitution VI), and after
-// them each of more, such as Relay.PurgeClients.
-func Purge(ctx context.Context, db *store.Store, logger *slog.Logger, more ...func(context.Context) error) {
+// Purge runs the relay's daily housekeeping (Daily) at startup and then once a day.
+func Purge(ctx context.Context, r *Relay, logger *slog.Logger) {
 	t := time.NewTicker(24 * time.Hour)
 	defer t.Stop()
 	for {
-		now := time.Now()
-		if n, err := db.PurgeAudit(ctx, now.Add(-AuditRetention)); err != nil {
-			logger.Error("purge audit log", "err", err)
-		} else if n > 0 {
-			logger.Info("purged audit log", "rows", n)
-		}
-		if err := db.PurgeClientAuthorizations(ctx, now.Add(-AuditRetention)); err != nil {
-			logger.Error("purge client authorizations", "err", err)
-		}
-		if err := db.PurgeExpired(ctx, now); err != nil {
-			logger.Error("purge expired sign-in data", "err", err)
-		}
-		if _, err := db.PurgeUnverifiedUsers(ctx, now.Add(-24*time.Hour)); err != nil {
-			logger.Error("purge unverified sign-ups", "err", err)
-		}
-		for _, job := range more {
-			if err := job(ctx); err != nil {
-				logger.Error("purge", "err", err)
-			}
-		}
+		r.Daily(ctx, time.Now(), logger)
 		select {
 		case <-ctx.Done():
 			return
 		case <-t.C:
+		}
+	}
+}
+
+// Daily deletes what has expired as of now (Constitution VI): sessions, codes, tokens, approvals
+// with no token left, unfinished sign-ups, clients the operator's list refuses, and the operator
+// log's old entries. It deletes nothing from the audit or the event record, whatever their age
+// (FR-024, FR-630).
+func (r *Relay) Daily(ctx context.Context, now time.Time, logger *slog.Logger) {
+	db := r.Store
+	if err := db.PurgeClientAuthorizations(ctx, now.Add(-ClientAuthorizationRetention)); err != nil {
+		logger.Error("purge client authorizations", "err", err)
+	}
+	ended, err := db.PurgeExpired(ctx, now)
+	if err != nil {
+		logger.Error("purge expired sign-in data", "err", err)
+	}
+	for _, g := range ended {
+		r.grantExpired(ctx, g)
+	}
+	if _, err := db.PurgeUnverifiedUsers(ctx, now.Add(-24*time.Hour)); err != nil {
+		logger.Error("purge unverified sign-ups", "err", err)
+	}
+	for _, job := range []func(context.Context) error{r.PurgeClients, r.Housekeeping} {
+		if err := job(ctx); err != nil {
+			logger.Error("purge", "err", err)
 		}
 	}
 }

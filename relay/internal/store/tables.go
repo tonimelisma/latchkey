@@ -194,22 +194,30 @@ type AuditEntry struct {
 	Surface  string
 	Outcome  string
 	Duration time.Duration
+	// CallID is the call's id, unique for all time (FR-632); "" for entries from before call ids
+	// and for removals the Mac app asked for.
+	CallID string
 }
 
-// AddAudit records a tool call.
+// AddAudit records a tool call. Entries are kept until the account is deleted; nothing is
+// deleted by age (FR-024, FR-630).
 func (s *Store) AddAudit(ctx context.Context, e AuditEntry) error {
 	_, err := s.db.ExecContext(ctx, `
-		INSERT INTO audit_log (user_id, device_id, at, tool, surface, outcome, duration_ms)
-		VALUES (?, ?, ?, ?, ?, ?, ?)`,
-		e.UserID, nullString(e.DeviceID), toMS(e.At), e.Tool, e.Surface, e.Outcome, e.Duration.Milliseconds())
+		INSERT INTO audit_log (user_id, device_id, at, tool, surface, outcome, duration_ms, call_id)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+		e.UserID, nullString(e.DeviceID), toMS(e.At), e.Tool, e.Surface, e.Outcome, e.Duration.Milliseconds(), e.CallID)
 	return mapErr(err)
 }
 
 // AuditForUser returns the user's most recent entries, newest first.
 func (s *Store) AuditForUser(ctx context.Context, userID string, limit int) ([]AuditEntry, error) {
-	rows, err := s.db.QueryContext(ctx, `
-		SELECT user_id, device_id, at, tool, surface, outcome, duration_ms
+	return s.queryAudit(ctx, `
+		SELECT user_id, device_id, at, tool, surface, outcome, duration_ms, call_id
 		FROM audit_log WHERE user_id = ? ORDER BY at DESC, id DESC LIMIT ?`, userID, limit)
+}
+
+func (s *Store) queryAudit(ctx context.Context, query string, args ...any) ([]AuditEntry, error) {
+	rows, err := s.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -220,7 +228,7 @@ func (s *Store) AuditForUser(ctx context.Context, userID string, limit int) ([]A
 		var device sql.NullString
 		var at sql.NullInt64
 		var ms int64
-		if err := rows.Scan(&e.UserID, &device, &at, &e.Tool, &e.Surface, &e.Outcome, &ms); err != nil {
+		if err := rows.Scan(&e.UserID, &device, &at, &e.Tool, &e.Surface, &e.Outcome, &ms, &e.CallID); err != nil {
 			return nil, err
 		}
 		e.DeviceID, e.At, e.Duration = device.String, fromMS(at), time.Duration(ms)*time.Millisecond
@@ -229,13 +237,31 @@ func (s *Store) AuditForUser(ctx context.Context, userID string, limit int) ([]A
 	return out, rows.Err()
 }
 
-// PurgeAudit deletes entries older than before and returns how many it deleted (FR-024).
-func (s *Store) PurgeAudit(ctx context.Context, before time.Time) (int64, error) {
-	res, err := s.db.ExecContext(ctx, `DELETE FROM audit_log WHERE at < ?`, before.UnixMilli())
-	if err != nil {
-		return 0, err
+// AuditForDevice returns one page of the Mac's audit for the comparison (FR-634): entries at or
+// after since (Unix milliseconds), oldest first, at most limit, and the since of the next page
+// (nil when there is none). A page never ends inside a millisecond whose entries go on beyond
+// it: those entries start the next page instead, so paging skips nothing. Only when one
+// millisecond alone holds more than limit entries does the page end in it, and the rest of that
+// millisecond is skipped.
+func (s *Store) AuditForDevice(ctx context.Context, deviceID string, since int64, limit int) ([]AuditEntry, *int64, error) {
+	rows, err := s.queryAudit(ctx, `
+		SELECT user_id, device_id, at, tool, surface, outcome, duration_ms, call_id
+		FROM audit_log WHERE device_id = ? AND at >= ? ORDER BY at, id LIMIT ?`, deviceID, since, limit+1)
+	if err != nil || len(rows) <= limit {
+		return rows, nil, err
 	}
-	return res.RowsAffected()
+	page := rows[:limit]
+	boundary := rows[limit].At
+	cut := len(page)
+	for cut > 0 && page[cut-1].At.Equal(boundary) {
+		cut--
+	}
+	if cut == 0 { // one millisecond holds more than a page
+		next := boundary.UnixMilli() + 1
+		return page, &next, nil
+	}
+	next := boundary.UnixMilli()
+	return page[:cut], &next, nil
 }
 
 // MarkAllOffline clears the online flag everywhere. The hub calls it at startup, since no

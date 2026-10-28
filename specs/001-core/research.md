@@ -412,6 +412,47 @@ https://www.sqlite.org/pragma.html#pragma_secure_delete.
   account suspended" and to see a pattern of abuse, short enough not to keep addresses of
   deleted accounts forever). [Toni to confirm.]
 
+## The relay's event record and the audit's call ids (FR-630 to FR-636, 2026-10-27)
+
+Toni decided what is recorded, that nothing is deleted by age, and that the record goes with the
+account. What was left to Claude:
+
+- Where events live: one `events` table for every kind, with a kind, an account, a Mac, and a
+  detail of fixed words (chosen: one query lists an account's history in order, and a new kind
+  needs no migration) versus a table per kind (typed columns, but a join of a dozen tables to
+  read one history) versus only log lines (gone when the container's output is rotated or the
+  container replaced: not a record).
+- Stranger requests, which must not grow the database without bound: counted per hour, kind,
+  account, and detail in one row with `count`, first and last time (chosen) versus a row per
+  request with a cap or a sample (a cap drops exactly the flood one wants to see, and a sample
+  loses the count) versus not recording them (FR-631 asks for every refusal with its reason).
+  Details never hold what the client sent (the route pattern, not the path; fixed reasons, not
+  error text), so the rows without an account are bounded by the number of kinds and reasons
+  per hour. The same counting is used for an account's refusals and for the sign-in steps anyone
+  can cause for a known address (a wrong code, a recovery request): a stranger who knows an
+  address then adds at most one row per reason an hour to that account. Successful sign-ins,
+  connections, approvals, and pairings are rows of their own. Only the first counted event of
+  an hour is logged, so the output is bounded the same way.
+- Unfinished sign-ups: their steps are counted without an account (chosen) rather than with the
+  unverified account, whose rows the daily purge of unfinished sign-ups would delete with it
+  after a day; once the address is confirmed, the sign-up is an event of the account.
+- Call ids: Crockford base32, upper case, of 16 random bytes (chosen; 26 characters as the
+  contract says, no padding, no letters that read as digits) versus RFC 4648 base32 (`=`-free
+  but mixes `0`/`O` and `1`/`I` when a person compares ids) versus a ULID (sortable, but the
+  time in the id adds nothing: the audit has `at`).
+- Paging the audit: by `at` with `next_since`, never ending a page inside a millisecond whose
+  rows go on (chosen: no row is skipped and none is sent twice) versus `last at + 1` always (skips
+  a row that shares the last one's millisecond) versus `last at` always (repeats rows, and loops
+  when one millisecond holds a whole page). Only when one millisecond holds more than a page
+  (1,000 calls of one Mac in one millisecond, which the per-account limits make impossible) does
+  the page end there and skip the rest of it.
+- `since` or `limit` that is a number out of range gets an empty page (the contract); a value of
+  the wrong JSON type, or a missing or longer than 128-byte `id`, is a malformed message (4005),
+  as for every other message. `audit_request` from an app that didn't announce `audit` is a
+  protocol violation (4005), so the relay never sends `audit` to an app that can't read it.
+- The MCP SDK's lines: its servers get the relay's logger filtered to warnings and errors
+  (chosen: its warnings stay) versus a discard logger (would hide its errors too).
+
 ## Menu bar design (FR-600 to FR-605, spec 002 FR-131, 2026-10-26)
 
 Apple's Human Interface Guidelines (developer.apple.com/design/human-interface-guidelines):

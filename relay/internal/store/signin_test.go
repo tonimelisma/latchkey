@@ -275,8 +275,9 @@ func TestPurgeExpired(t *testing.T) {
 		RequestedAt: t0, SessionJSON: []byte(`{}`), ExpiresAt: t0.Add(time.Minute),
 	}))
 
-	require.NoError(t, s.PurgeExpired(ctx, t0.Add(10*time.Minute)))
-	_, err := s.Session(ctx, []byte("new"), t0)
+	_, err := s.PurgeExpired(ctx, t0.Add(10*time.Minute))
+	require.NoError(t, err)
+	_, err = s.Session(ctx, []byte("new"), t0)
 	require.NoError(t, err)
 	_, err = s.Session(ctx, []byte("old"), t0)
 	require.ErrorIs(t, err, store.ErrNotFound)
@@ -308,8 +309,9 @@ func TestPurgeUnusedRegisteredClients(t *testing.T) {
 		RequestedAt: t0, SessionJSON: []byte(`{}`), ExpiresAt: t0.Add(90 * 24 * time.Hour),
 	}))
 
-	require.NoError(t, s.PurgeExpired(ctx, t0.Add(8*24*time.Hour)))
-	_, err := s.OAuthClient(ctx, "stale-dcr")
+	_, err := s.PurgeExpired(ctx, t0.Add(8*24*time.Hour))
+	require.NoError(t, err)
+	_, err = s.OAuthClient(ctx, "stale-dcr")
 	require.ErrorIs(t, err, store.ErrNotFound, "a week-old registration with no live grant goes")
 	_, err = s.OAuthClient(ctx, "https://attacker.example/1")
 	require.ErrorIs(t, err, store.ErrNotFound, "a cached document fetched over a day ago, with no grant, goes")

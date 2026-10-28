@@ -460,8 +460,9 @@ func (s *Store) DeleteUserOAuth(ctx context.Context, userID string) error {
 }
 
 // PurgeExpired deletes expired sessions, links, pairing codes, OAuth requests, unused
-// registered clients, and unused cached client documents.
-func (s *Store) PurgeExpired(ctx context.Context, now time.Time) error {
+// registered clients, and unused cached client documents. It returns the grants it removed
+// because none of their codes or tokens was left, for the event record (FR-631).
+func (s *Store) PurgeExpired(ctx context.Context, now time.Time) ([]Grant, error) {
 	ms := now.UnixMilli()
 	var errs []error
 	for _, q := range []string{
@@ -475,9 +476,8 @@ func (s *Store) PurgeExpired(ctx context.Context, now time.Time) error {
 		}
 	}
 	// A grant none of whose codes or tokens is left (expired and deleted above, or removed).
-	if _, err := s.db.ExecContext(ctx, `
-		DELETE FROM oauth_grants WHERE NOT EXISTS
-			(SELECT 1 FROM oauth_requests r WHERE r.request_id = oauth_grants.request_id)`); err != nil {
+	ended, err := s.purgeEndedGrants(ctx)
+	if err != nil {
 		errs = append(errs, err)
 	}
 	// Dynamically registered clients older than a week with no live code or token are never
@@ -502,7 +502,27 @@ func (s *Store) PurgeExpired(ctx context.Context, now time.Time) error {
 		ms, now.Add(-30*24*time.Hour).UnixMilli()); err != nil {
 		errs = append(errs, err)
 	}
-	return errors.Join(errs...)
+	return ended, errors.Join(errs...)
+}
+
+func (s *Store) purgeEndedGrants(ctx context.Context) ([]Grant, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		DELETE FROM oauth_grants WHERE NOT EXISTS
+			(SELECT 1 FROM oauth_requests r WHERE r.request_id = oauth_grants.request_id)
+		RETURNING `+grantColumns)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	var out []Grant
+	for rows.Next() {
+		g, err := scanGrant(rows.Scan)
+		if err != nil {
+			return out, err
+		}
+		out = append(out, g)
+	}
+	return out, rows.Err()
 }
 
 // MaxCodeAttempts is how many wrong codes end a code (FR-042).
