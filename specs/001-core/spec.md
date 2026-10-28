@@ -197,6 +197,16 @@ Format: EARS ("When <trigger>, the <system> shall <response>"). IDs are stable; 
   UTC offset, tool, arguments, result, whether it failed, duration in milliseconds), to a place
   the Owner chooses in the standard save dialog. Entries that can't be read are left out.
 
+### Diagnostic log (Toni, 2026-10-27)
+- **FR-620** The Mac app and its helper shall write to macOS's log, each time it changes: the
+  keep-awake decision and whether the sleep setting took effect (with power source, lid, and
+  heat), the helper's start, refusals, and errors, the relay connection's connects, closes
+  (code and reason), and retries, network changes, sleep, wake, and shutdown, and each macOS
+  permission request with its answer and every change in the permissions' states. These lines
+  shall carry no message text, tool arguments or results, file names, or the relay's address in
+  the clear. Why: keep-awake was silently off for two days (2026-10-25 to 2026-10-27) and nothing
+  on the Mac said why.
+
 ### Keep-awake and power
 - **FR-030** While keep-awake is on, the Mac shall not sleep, on battery or power, with the lid
   open or closed.

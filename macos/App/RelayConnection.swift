@@ -171,9 +171,11 @@ actor RelayConnection {
                 attempt = 0
                 suspended = false
                 await hooks.status(.connected)
+                Diagnostics.connection.notice("Connected to the relay")
                 try await serve(t)
             } catch {
                 // fall through to the close-code decision
+                Diagnostics.connection.notice("Connection ended: \(error.localizedDescription, privacy: .public)")
             }
             task = nil
             await calls.cancelAll()
@@ -181,6 +183,9 @@ actor RelayConnection {
             let reason = t.closeReason.map { String(decoding: $0, as: UTF8.self) }
             let next = policy.next(afterClose: t.closeCode.rawValue, reason: reason, attempt: attempt)
             suspended = next.show == .suspended
+            Diagnostics.connection.notice(
+                "Closed with code \(t.closeCode.rawValue) \(reason ?? "", privacy: .public); \(next.retryAfter.map { "retrying in \(Int($0)) s" } ?? "not retrying", privacy: .public) (attempt \(attempt + 1))"
+            )
             guard let delay = next.retryAfter else {
                 if let show = next.show { await hooks.status(show) }
                 loop = nil

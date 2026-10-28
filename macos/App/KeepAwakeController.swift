@@ -16,7 +16,9 @@ final class HelperClient {
     /// System Settings → General → Login Items.
     func registerIfNeeded() {
         guard service.status == .notRegistered || service.status == .notFound else { return }
-        do { try service.register() } catch { NSLog("Latchkey: helper registration: \(error)") }
+        do { try service.register() } catch {
+            Diagnostics.helper.error("Couldn't register the helper: \(error.localizedDescription, privacy: .public)")
+        }
     }
 
     func openApprovalSettings() { SMAppService.openSystemSettingsLoginItems() }
@@ -114,17 +116,29 @@ final class KeepAwakeController {
             assertion = 0
         }
         guard helperApproved else {
+            if on {
+                Diagnostics.keepAwake.error(
+                    "Helper not approved (\(String(describing: self.helper.status), privacy: .public))")
+            }
             verified = !on
             return verified
         }
         // No answer: an old helper may have just ended itself after an install, and launchd
         // starts the new one on the next connection, so try once more.
         if await helper.setSleepDisabled(on) == nil {
+            Diagnostics.keepAwake.error("Helper didn't answer setting sleep disabled to \(on); trying once more")
             try? await Task.sleep(for: .seconds(1))
-            _ = await helper.setSleepDisabled(on)
+            if await helper.setSleepDisabled(on) == nil {
+                Diagnostics.keepAwake.error("Helper didn't answer the second time either")
+            }
         }
         // Verify from the kernel itself rather than trusting the reply (FR-031).
-        verified = PowerReader.sleepDisabled() == on
+        let now = PowerReader.sleepDisabled()
+        verified = now == on
+        if !verified {
+            Diagnostics.keepAwake.error(
+                "SleepDisabled is \(now.map { "\($0)" } ?? "unknown", privacy: .public), wanted \(on)")
+        }
         return verified
     }
 

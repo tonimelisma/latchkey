@@ -10,7 +10,14 @@ final class SleepSetting: NSObject, HelperProtocol, @unchecked Sendable {
     func setSleepDisabled(_ disabled: Bool, reply: @escaping @Sendable (Bool, String?) -> Void) {
         queue.async {
             let error = Self.pmset(["-a", "disablesleep", disabled ? "1" : "0"]).error
-            reply(Self.current(), error)
+            let now = Self.current()
+            if let error {
+                Diagnostics.helper.error(
+                    "pmset disablesleep \(disabled ? 1 : 0) failed: \(error, privacy: .public)")
+            } else {
+                Diagnostics.helper.notice("Sleep disabled: \(now) (asked \(disabled))")
+            }
+            reply(now, error)
         }
     }
 
@@ -54,12 +61,17 @@ final class Listener: NSObject, NSXPCListenerDelegate, @unchecked Sendable {
         // A newer helper was installed: end this old one so launchd starts the new program for
         // the app's next try (the app makes a new connection after a failed one).
         if let started, FileStamp.of(program) != started {
+            Diagnostics.helper.notice("A newer helper was installed: restoring sleep and ending this one")
             setting.restore()
             DispatchQueue.main.async { exit(0) }
             return false
         }
         // Only the Latchkey app signed by the same team may connect.
-        guard let req = requirement else { return false }
+        guard let req = requirement else {
+            Diagnostics.helper.error("Refused a connection: this helper's own team couldn't be read at start")
+            return false
+        }
+        Diagnostics.helper.info("Accepted a connection from pid \(c.processIdentifier) (signature checked on use)")
         c.setCodeSigningRequirement(req)
         c.exportedInterface = NSXPCInterface(with: HelperProtocol.self)
         c.exportedObject = setting
@@ -77,7 +89,10 @@ final class Listener: NSObject, NSXPCListenerDelegate, @unchecked Sendable {
         clients -= 1
         let none = clients == 0
         lock.unlock()
-        if none { setting.restore() }
+        if none {
+            Diagnostics.helper.notice("The app disconnected: restoring sleep")
+            setting.restore()
+        }
     }
 
 }
@@ -86,6 +101,9 @@ final class Listener: NSObject, NSXPCListenerDelegate, @unchecked Sendable {
 // when it connects. So a setting left over from a crash or power loss never outlives the app,
 // even if the app is deleted before it runs again.
 let delegate = Listener()
+Diagnostics.helper.notice(
+    "Helper \(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?", privacy: .public) started; restoring sleep"
+)
 delegate.setting.restore()
 let listener = NSXPCListener(machServiceName: AppIdentity.current.machService)
 listener.delegate = delegate

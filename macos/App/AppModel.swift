@@ -183,6 +183,9 @@ final class AppModel {
                 MainActor.assumeIsolated {
                     guard let self else { return }
                     let reason = KeepAwakePolicy.sleepReason(self.keepAwake)
+                    Diagnostics.power.notice(
+                        "Going to sleep: keep-awake \(self.keepAwake.rawValue, privacy: .public), lid \(PowerReader.lidClosed().map { $0 ? "closed" : "open" } ?? "none", privacy: .public), sleep disabled \(PowerReader.sleepDisabled().map { "\($0)" } ?? "unknown", privacy: .public)"
+                    )
                     Task { await self.connection?.sendGoodbye(reason) }
                 }
             })
@@ -190,6 +193,7 @@ final class AppModel {
             ws.addObserver(forName: NSWorkspace.willPowerOffNotification, object: nil, queue: .main) { [weak self] _ in
                 MainActor.assumeIsolated {
                     guard let self else { return }
+                    Diagnostics.power.notice("The Mac is shutting down or restarting")
                     Task { await self.connection?.sendGoodbye(.systemShutdown) }
                 }
             })
@@ -197,6 +201,7 @@ final class AppModel {
             ws.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: .main) { [weak self] _ in
                 MainActor.assumeIsolated {
                     guard let self else { return }
+                    Diagnostics.power.notice("Woke from sleep")
                     Task {
                         await self.refresh()  // re-apply keep-awake after wake (FR-031)
                         await self.connection?.reconnectNow()
@@ -215,6 +220,9 @@ final class AppModel {
     /// A network change reconnects at once instead of waiting for backoff (FR-004, SC-05).
     private func pathChanged(satisfied: Bool) async {
         defer { lastPathSatisfied = satisfied }
+        if satisfied != lastPathSatisfied {
+            Diagnostics.connection.notice("Network \(satisfied ? "available" : "unavailable")")
+        }
         if satisfied, lastPathSatisfied != nil { await connection?.reconnectNow() }
     }
 
@@ -230,8 +238,19 @@ final class AppModel {
                 userEnabled: keepAwakeEnabled, helperAvailable: keepAwakeController.helperApproved))
         let ok = await keepAwakeController.apply(decision)
         keepAwake = (decision == .on && !ok) ? .offHelperUnavailable : decision
+        let source = power.powerSource == .ac ? "power adapter" : "battery"
+        let lid = power.lidClosed.map { $0 ? "closed" : "open" } ?? "none"
+        let line =
+            "Keep-awake \(keepAwake.rawValue) (wanted \(decision.rawValue)); \(source); lid \(lid); thermal \(power.thermal.rawValue); sleep disabled \(PowerReader.sleepDisabled().map { "\($0)" } ?? "unknown")"
+        logApprovals()
+        if keepAwakeChanges.changed(line) {
+            Diagnostics.keepAwake.notice("\(line, privacy: .public); battery \(self.power.batteryPercent)%")
+        }
         await connection?.sendState()
     }
+
+    /// The keep-awake line last logged (FR-620).
+    private let keepAwakeChanges = Changes<String>()
 
     func approveHelper() { keepAwakeController.helper.openApprovalSettings() }
 
@@ -314,15 +333,17 @@ final class AppModel {
 
     /// Asks macOS to show its prompt the first time; after that, opens System Settings.
     func allowScreenRecording() {
-        if !CGRequestScreenCaptureAccess() { Permissions.openPrivacySettings("Privacy_ScreenCapture") }
+        let granted = CGRequestScreenCaptureAccess()
+        Diagnostics.permissions.notice("Asked for Screen Recording: \(granted)")
+        if !granted { Permissions.openPrivacySettings("Privacy_ScreenCapture") }
         checkScreenPermissions()
     }
 
     func allowAccessibility() {
         let prompt = "AXTrustedCheckOptionPrompt"  // kAXTrustedCheckOptionPrompt, which Swift 6 rejects as shared state
-        if !AXIsProcessTrustedWithOptions([prompt: true] as CFDictionary) {
-            Permissions.openPrivacySettings("Privacy_Accessibility")
-        }
+        let trusted = AXIsProcessTrustedWithOptions([prompt: true] as CFDictionary)
+        Diagnostics.permissions.notice("Asked for Accessibility: \(trusted)")
+        if !trusted { Permissions.openPrivacySettings("Privacy_Accessibility") }
         checkScreenPermissions()
     }
 
@@ -354,6 +375,9 @@ final class AppModel {
             _ = try? await NSWorkspace.shared.openApplication(at: url, configuration: config)
         }
         let state = await Task.detached { Permissions.automation(of: app, ask: true) }.value
+        Diagnostics.permissions.notice(
+            "Asked to control \(app, privacy: .public): \(state.map { "\($0)" } ?? "unknown (app not running)", privacy: .public)"
+        )
         if let state { setControl(app, state) }
     }
 
@@ -396,12 +420,12 @@ final class AppModel {
     func allowEvents(_ kind: EventsKind) async {
         let page = kind == .events ? "Privacy_Calendars" : "Privacy_Reminders"
         let before = EventKitBackend.status(kind)
-        Self.log.notice(
+        Diagnostics.permissions.notice(
             "Asking for \(kind == .events ? "Calendars" : "Reminders", privacy: .public): status \(before.rawValue)")
         if before == .notDetermined {
             NSApp.activate()  // macOS shows the question only for an app in front
             let outcome = await EventKitBackend.requestAccess(kind)
-            Self.log.notice(
+            Diagnostics.permissions.notice(
                 "Answer: \(outcome.granted), \(outcome.error ?? "no error", privacy: .public), status \(EventKitBackend.status(kind).rawValue)"
             )
             // No question appeared or it was refused: System Settings is the only way left.
@@ -413,6 +437,8 @@ final class AppModel {
     }
 
     func allowLocation() {
+        Diagnostics.permissions.notice(
+            "Asking for Location: \(String(describing: self.locationAccess), privacy: .public)")
         switch locationAccess {
         case .notAsked: LocationFixer.shared.requestAccess()
         case .servicesOff, .denied: Permissions.openPrivacySettings("Privacy_LocationServices")
@@ -422,7 +448,12 @@ final class AppModel {
     }
 
     func allowContacts() async {
-        _ = try? await CNContactStore().requestAccess(for: .contacts)
+        do {
+            let granted = try await CNContactStore().requestAccess(for: .contacts)
+            Diagnostics.permissions.notice("Asked for Contacts: \(granted)")
+        } catch {
+            Diagnostics.permissions.error("Asked for Contacts: \(error.localizedDescription, privacy: .public)")
+        }
         checkContacts()
     }
 
@@ -447,6 +478,15 @@ final class AppModel {
         checkContacts()
         checkPersonalData()
         checkScreenPermissions()
+        logApprovals()
+    }
+
+    private let approvalChanges = Changes<String>()
+
+    /// One line with every approval's state, whenever one changes (FR-620).
+    func logApprovals() {
+        let line = approvals.map { "\($0.id) \(String(describing: $0.state))" }.joined(separator: ", ")
+        if approvalChanges.changed(line) { Diagnostics.permissions.notice("Approvals: \(line, privacy: .public)") }
     }
 
     func setStartsAtLogin(_ on: Bool) {

@@ -741,6 +741,17 @@ design", 2026-10-26).
 - Disconnect This Mac asks first with an alert: "Disconnect" (destructive style, Return doesn't
   press it) and "Cancel", as Remove Access… already does (FR-605).
 
+### D16. Diagnostic log in macOS's unified log
+Serves FR-620; Constitution VI (nothing new stored by Latchkey: macOS keeps and ages its own
+log). `Shared/Diagnostics.swift` holds one `Logger` per category under the app's subsystem:
+`keepawake`, `helper`, `connection`, `power`, `permissions` (the existing `lifecycle` and
+`activity` stay). States checked every few seconds pass through `Changes`, which lets a line
+through only when it differs from the last. Interpolated values are private by default; only
+fixed states, error descriptions, close codes and reasons, and app bundle IDs are `.public`.
+Read with `log show --predicate 'subsystem == "net.melisma.latchkey"'`. Options considered: a
+file of our own (rejected: another store to protect and age), the activity log (rejected: it
+records Claude's actions, and these are the app's own).
+
 ## Repository layout
 
 ```
