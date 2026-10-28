@@ -1,0 +1,12 @@
+# gitleaks: the default rules, plus the relay's OAuth test fixtures, whose tokens are made under
+# a test key published next to them (not secrets).
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "OAuth test fixture: a grant written by the fosite-era relay under a test key"
+paths = ['''^relay/internal/oauth/testdata/fosite-0\.49-grant\.json$''']
+
+[[allowlists]]
+description = "OAuth token-format test: a token under a test key with key bytes 0 to 31"
+regexes = ['''^ory_rt_AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8\.3RoVBAJ3lVhnYh077jrkVPJQjp987MkRaieXBMg9npQ$''']

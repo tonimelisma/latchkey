@@ -280,6 +280,11 @@ func (s *Server) codeExchange(ctx context.Context, r *http.Request) (*oidc.Acces
 	if err != nil {
 		return nil, err
 	}
+	// Every code carries an S256 challenge (/authorize requires it), so zitadel has checked the
+	// verifier; one without (which storage already refuses) is never exchanged.
+	if ch := codeReq.GetCodeChallenge(); ch == nil || ch.Method != oidc.CodeChallengeMethodS256 {
+		return nil, invalidGrant()
+	}
 	resp, err := s.tokenResponse(ctx, codeReq, cl, "")
 	if err != nil {
 		return nil, err

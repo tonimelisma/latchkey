@@ -160,6 +160,12 @@ Serves FR-040, FR-014, FR-180 to FR-185.
     `GetRefreshTokenInfo` / `RevokeToken`, `GetClientByClientID` (the CIMD/DCR lookup below),
     `AuthorizeClientIDSecret` (SHA-256 of the secret). The OpenID Connect parts (ID tokens,
     userinfo, keys, introspection, end-session) answer "not offered".
+  - Fail closed (security review, 2026-10-27): zitadel checks PKCE only when the stored code
+    has a challenge, so the storage refuses a code with no S256 challenge in its own form or in
+    the `pkce` row fosite wrote beside it (`invalid_grant`), and the code exchange refuses one
+    again; and the bearer check on `/mcp` looks the token's client up as every other read does,
+    so a token of a client the list now refuses, whose registration is gone, or whose metadata
+    document can't be used is refused (FR-180, FR-095), as fosite's storage did.
   - Opaque tokens: zitadel makes a bearer token by "encrypting" a token ID; the relay's
     `op.WithCrypto` returns the ID unchanged, and the ID is the token itself, in the format
     below. The bearer check on `/mcp` is the relay's (the token's HMAC, its row, revoked,

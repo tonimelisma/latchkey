@@ -164,11 +164,37 @@ func (s *storage) AuthRequestByCode(ctx context.Context, code string) (op.AuthRe
 	if err != nil {
 		return nil, oidc.ErrServerError().WithParent(err)
 	}
-	c := &codeRequest{row: row, form: form, granted: strings.Fields(row.GrantedScopes)}
-	if ch := form.Get("code_challenge"); ch != "" {
-		c.verifier = &oidc.CodeChallenge{Challenge: ch, Method: oidc.CodeChallengeMethod(form.Get("code_challenge_method"))}
+	ch, err := s.challenge(ctx, row, form)
+	if err != nil {
+		return nil, err
 	}
-	return c, nil
+	return &codeRequest{row: row, form: form, granted: strings.Fields(row.GrantedScopes), verifier: ch}, nil
+}
+
+// challenge is a code's PKCE challenge, which every code has (/authorize requires S256). It is
+// in the code's own form; a code from before the move to zitadel/oidc may have it only in the
+// pkce row fosite wrote beside it. A code with neither, or with another method, is refused:
+// it is never exchanged without PKCE (security review, 2026-10-27).
+func (s *storage) challenge(ctx context.Context, row store.OAuthRequest, form url.Values) (*oidc.CodeChallenge, error) {
+	if form.Get("code_challenge") == "" {
+		p, err := s.st.OAuthRequest(ctx, store.KindPKCE, row.Signature)
+		if errors.Is(err, store.ErrNotFound) {
+			return nil, invalidGrant()
+		}
+		if err != nil {
+			return nil, oidc.ErrServerError().WithParent(err)
+		}
+		if form, err = url.ParseQuery(p.Form); err != nil {
+			return nil, invalidGrant()
+		}
+	}
+	ch := &oidc.CodeChallenge{
+		Challenge: form.Get("code_challenge"), Method: oidc.CodeChallengeMethod(form.Get("code_challenge_method")),
+	}
+	if ch.Challenge == "" || ch.Method != oidc.CodeChallengeMethodS256 {
+		return nil, invalidGrant()
+	}
+	return ch, nil
 }
 
 // useCode marks a code used, once. Of two exchanges of one code that both read it unused, only
@@ -297,15 +323,19 @@ func (s *storage) issue(ctx context.Context, req op.TokenRequest, current string
 	return access, refresh, accessExp, nil
 }
 
-// activeToken returns the live row of an access token: unrevoked and unexpired.
+// activeToken returns the live row of an access token: unrevoked, unexpired, and of a client
+// that still works. Its client is looked up as for every read of a code or token (read), so a
+// token of a client the list of allowed hosts now refuses, whose registration is gone, or whose
+// metadata document can't be used is refused (FR-180, FR-095; security review, 2026-10-27).
+// Anything refused is store.ErrNotFound; only a failure of the relay itself is another error.
 func (s *storage) activeToken(ctx context.Context, token string) (store.OAuthRequest, error) {
-	sig, ok := s.tokens.signature(prefixAccess, token)
-	if !ok {
-		return store.OAuthRequest{}, store.ErrNotFound
-	}
-	row, err := s.st.OAuthRequest(ctx, store.KindAccess, sig)
+	row, err := s.read(ctx, store.KindAccess, prefixAccess, token)
 	if err != nil {
-		return row, err
+		var oe *oidc.Error
+		if errors.As(err, &oe) && oe.ErrorType == oidc.ServerError {
+			return row, err
+		}
+		return row, store.ErrNotFound
 	}
 	if !row.RevokedAt.IsZero() || !s.now().Before(row.ExpiresAt) {
 		return row, store.ErrNotFound
