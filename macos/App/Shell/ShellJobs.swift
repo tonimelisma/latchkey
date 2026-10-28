@@ -381,6 +381,19 @@ actor ShellJobs {
         }
     }
 
+    /// The scratch folders and process records of earlier starts: only real files and folders
+    /// (no links) named as Latchkey names them, `<launch>-job<n>` and `<launch>-job<n>.pids`.
+    private static func earlierEntries(in root: URL, launch: String) -> [URL] {
+        let fm = FileManager.default
+        let pattern = /^[0-9a-f]{8}-job[0-9]+(\.pids)?$/
+        return ((try? fm.contentsOfDirectory(at: root, includingPropertiesForKeys: [.isSymbolicLinkKey])) ?? [])
+            .filter { url in
+                let name = url.lastPathComponent
+                guard name.wholeMatch(of: pattern) != nil, !name.hasPrefix(launch + "-") else { return false }
+                return (try? url.resourceValues(forKeys: [.isSymbolicLinkKey]).isSymbolicLink) != true
+            }
+    }
+
     private static func hasContents(_ dir: URL) -> Bool {
         !((try? FileManager.default.contentsOfDirectory(atPath: dir.path)) ?? []).isEmpty
     }
@@ -390,8 +403,8 @@ actor ShellJobs {
     /// earlier runs to the Trash.
     func recoverEarlier() async {
         let fm = FileManager.default
-        let records = ((try? fm.contentsOfDirectory(at: setup.scratchRoot, includingPropertiesForKeys: nil)) ?? [])
-            .filter { $0.pathExtension == "pids" && !$0.lastPathComponent.hasPrefix(setup.launch + "-") }
+        let entries = Self.earlierEntries(in: setup.scratchRoot, launch: setup.launch)
+        let records = entries.filter { $0.pathExtension == "pids" }
         var earlier: [Processes.ID] = []
         for record in records {
             let text = (try? String(contentsOf: record, encoding: .utf8)) ?? ""
@@ -405,12 +418,8 @@ actor ShellJobs {
             try? await Task.sleep(for: .seconds(1))
             earlier.filter(Processes.alive).forEach { kill($0.pid, SIGKILL) }
         }
-        let folders =
-            (try? FileManager.default.contentsOfDirectory(
-                at: setup.scratchRoot, includingPropertiesForKeys: nil)) ?? []
         var trashed = 0
-        for folder in folders
-        where folder.pathExtension != "pids" && !folder.lastPathComponent.hasPrefix(setup.launch + "-") {
+        for folder in entries where folder.pathExtension != "pids" {
             if Self.hasContents(folder) {
                 setup.remove(folder)
                 trashed += 1
@@ -718,7 +727,8 @@ enum Processes {
     static func name(of pid: pid_t) -> String {
         var buf = [CChar](repeating: 0, count: 256)
         let n = proc_name(pid, &buf, UInt32(buf.count))
-        return n > 0 ? String(cString: buf) : "process \(pid)"
+        return n > 0
+            ? String(decoding: buf.prefix(Int(n)).map { UInt8(bitPattern: $0) }, as: UTF8.self) : "process \(pid)"
     }
 }
 

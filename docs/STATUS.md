@@ -1,6 +1,6 @@
 # Status
 
-Last updated: 2026-10-27 (audit trail and OAuth on zitadel/oidc deployed; app 0.8.27)
+Last updated: 2026-10-27 (nothing left behind: Shell fence, leases, Left Behind list; app 0.8.28)
 
 Xcode signing ready (2026-10-20): Toni's Xcode account has a valid "Apple Development" certificate
 (certificate expires 2027-07-22). Keep the team ID out of committed project files
@@ -33,6 +33,21 @@ after the app was quit.
 ## Next steps
 
 Releases, terms and privacy, and the directory listing are much later (Toni, 2026-10-22).
+
+Nothing left behind (Toni, 2026-10-27; app 0.8.28): after headless Chrome ran two days and
+`/tmp` filled with a session's downloads, a Shell command's leftovers are stopped when it
+finishes (its terminal session, its family followed every half second, and programs using its
+scratch folder) unless Claude asks to keep them (`keep_minutes`, renewed by checking, 24 hours
+at most); each command has a scratch folder (`TMPDIR`) moved to the Trash afterwards; writes
+outside scratch, the command's folder, Downloads, package caches, and declared `writes` fail
+(macOS's sandbox), shell startup files, launch agents, and login items only when declared; what
+is left goes to Claude in the answer and to the Activity window's Left Behind view; Toni is
+notified only of undeclared changes to launch agents, login items, or startup files and of
+processes that won't stop. Also: Notes deletes folders; Messages copies go once sent; Claude's
+Safari window closes after 30 minutes unused; things made through the tools are on the list.
+Specs 004 FR-313 to FR-326, 001 FR-640 to FR-643, 002 FR-152 and FR-153, 005 FR-411. A scratch
+shell in a throwaway Linux container was left out. Known gaps: programs handed to launchd
+(`open -a`), a quick double fork, and writes other programs make for a command (`defaults`).
 
 All capabilities are built and checked live (app 0.7.4, 2026-10-22; current app 0.8.13, installed with `make -C macos install`), through the hosted relay with
 a fresh Claude Code session on Toni's real Mac: Notes (read, checklists, create/append/edit/
@@ -185,9 +200,6 @@ The Mac state line appears in every result (it reported the battery warning at 1
 ## Waiting on Toni
 
 1. Answer the macOS alert about Latchkey accessing the screen (Allow), if it's still showing.
-2. Pick from `docs/ideas/leftovers.md` (2026-10-27): ideas for making sure Claude's work on the
-   Mac leaves no processes, files, or app items behind, or that Toni gets a list of what's left.
-   Nothing there is decided.
 
 ## Milestones (from `specs/001-core/plan.md`)
 

@@ -181,10 +181,18 @@ final class Reports: @unchecked Sendable {
         let library = home.appending(path: "Library")
         try FileManager.default.createDirectory(
             at: library.appending(path: "LaunchAgents"), withIntermediateDirectories: true)
+        let support = library.appending(path: "Application Support")
+        try FileManager.default.createDirectory(at: support, withIntermediateDirectories: true)
         let r = try await jobs.run(
-            "echo a > LaunchAgents/x.plist; echo b > other.txt && echo ok", folder: library.path, wait: .seconds(10))
-        #expect(r.output.contains("ok"), "an ordinary write in the chosen folder works: \(r.output)")
+            "echo a > LaunchAgents/x.plist; echo b > 'Application Support/other.txt' && echo ok", folder: library.path,
+            wait: .seconds(10), writes: [support.path], why: "test")
+        #expect(r.output.contains("ok"), "an ordinary declared write works: \(r.output)")
         #expect(!FileManager.default.fileExists(atPath: library.appending(path: "LaunchAgents/x.plist").path))
+        let inside = try await jobs.run(
+            "echo a > LaunchAgents/y.plist", folder: library.path, wait: .seconds(10),
+            writes: [library.appending(path: "LaunchAgents/../Fonts").path])
+        #expect(!FileManager.default.fileExists(atPath: library.appending(path: "LaunchAgents/y.plist").path))
+        _ = inside
         let rc = home.appending(path: ".zshrc")
         let d = try await jobs.run(
             "echo 'export X=1' >> '\(rc.path)' && echo ok", folder: nil, wait: .seconds(10), writes: [rc.path],
@@ -206,7 +214,7 @@ final class Reports: @unchecked Sendable {
     }
 
     @Test func leftoversOfAnEarlierRunAreRemovedAtStart() async throws {
-        let earlier = "older1"
+        let earlier = "0ddba111"
         let p = Process()
         p.executableURL = URL(filePath: "/bin/sleep")
         p.arguments = ["300"]
@@ -251,6 +259,38 @@ final class Reports: @unchecked Sendable {
             "sleep 300", folder: nil, wait: .milliseconds(100), writes: [agent.path], why: "install an agent")
         #expect(await !jobs.unexplained(agent), "declared")
         _ = try await jobs.stop(d.job)
+    }
+
+    /// Security review 2026-10-27: a command can't write into the folder of other jobs' scratch
+    /// folders and process records, which Latchkey acts on at start.
+    @Test func theJobsFolderIsOffLimitsButOwnScratchIsNot() async throws {
+        let fake = setup.scratchRoot.appending(path: "deadbeef-job1.pids")
+        let r = try await jobs.run(
+            "echo '1 1' > '\(fake.path)'; echo ok > \"$LATCHKEY_SCRATCH/mine\" && echo wrote", folder: nil,
+            wait: .seconds(10))
+        #expect(!FileManager.default.fileExists(atPath: fake.path))
+        #expect(r.output.contains("wrote"), "\(r.output)")
+    }
+
+    @Test func onlyLatchkeysOwnNamesAreActedOnAtStart() async throws {
+        try FileManager.default.createDirectory(at: setup.scratchRoot, withIntermediateDirectories: true)
+        let precious = root.appending(path: "precious")
+        try FileManager.default.createDirectory(at: precious, withIntermediateDirectories: true)
+        try FileManager.default.createSymbolicLink(
+            at: setup.scratchRoot.appending(path: "deadbeef-job2"), withDestinationURL: precious)
+        let odd = setup.scratchRoot.appending(path: "not-a-job")
+        try FileManager.default.createDirectory(at: odd, withIntermediateDirectories: true)
+        try Data("x".utf8).write(to: odd.appending(path: "f"))
+        await jobs.recoverEarlier()
+        #expect(FileManager.default.fileExists(atPath: precious.path), "a link is never followed")
+        #expect(FileManager.default.fileExists(atPath: odd.path), "only names Latchkey gives")
+    }
+
+    @Test func theLibraryFolderAsTheCommandsFolderIsNotWritable() async throws {
+        let library = home.appending(path: "Library")
+        try FileManager.default.createDirectory(at: library, withIntermediateDirectories: true)
+        let r = try await jobs.run("echo x > stray.txt", folder: library.path, wait: .seconds(10))
+        #expect(r.refusedWrite)
     }
 
     @Test func leaseOutOfRangeIsRefused() async {

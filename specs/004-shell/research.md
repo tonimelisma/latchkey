@@ -71,3 +71,12 @@ Low-level choices (Claude's):
   started; the job's own folder is not listed file by file (a build changes thousands).
 - **Watching permanent places** with `DispatchSource` on a handful of folders, not FSEvents on
   the home folder (every change in the home folder would wake the app).
+
+Security review of the first version (2026-10-27): the Jobs folder sat inside the allowed
+`~/Library/Caches`, so a command could plant a process record that Latchkey would act on at
+the next start; now fenced off except the job's own scratch folder, and start acts only on the
+names it gives, never through links. Also raised and left as known gaps (Toni's scope is the
+leftovers of ordinary work, not a hostile command): work handed to other programs (launchd,
+`open`, Apple events, `defaults`) is outside the fence, and the permanent places are the shell
+startup files, launch agents, and login items, not every place that can run code later
+(`~/.ssh/config`, git hooks, folders on PATH).

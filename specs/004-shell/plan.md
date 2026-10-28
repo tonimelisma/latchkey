@@ -113,11 +113,14 @@ applies to the shell and everything it starts, for as long as they run. The prof
 everything except writes, then allows writes to: `/dev`; the scratch folder; the user's own
 temporary folder under `/private/var/folders` (system frameworks need it); Downloads;
 `~/Library/Caches`, `~/.cache`, `~/.npm`; the job's folder when it isn't the home folder or above
-it; each declared path. Later rules win, so it then refuses writes to the permanent places
+it, nor `~/Library` itself; each declared path. Later rules win, so it then refuses writes to the permanent places
 (`~/.zshrc`, `~/.zprofile`, `~/.zshenv`, `~/.zlogin`, `~/.zlogout`, `~/.bashrc`,
 `~/.bash_profile`, `~/.profile`, `~/Library/LaunchAgents`, and the login items folder
 `~/Library/Application Support/com.apple.backgroundtaskmanagementagent`) unless declared, and
-always to Latchkey's own files (Files' `OwnFiles`). `shell_run` takes `writes` (paths) and `why`;
+always to Latchkey's own files (Files' `OwnFiles`) and to the Jobs folder except the job's
+own scratch folder: the other jobs' folders and process records are what Latchkey stops and
+trashes by at start, where only names it gives (`<launch>-job<n>`, no links) are acted on
+(security review, 2026-10-27). `shell_run` takes `writes` (paths) and `why`;
 `~`, the home folder, a folder above it, and `~/Library` itself are refused (FR-318). A refused
 write shows as "Operation not permitted"; when the output has it, the answer adds how to write
 there (FR-320).

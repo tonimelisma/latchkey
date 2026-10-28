@@ -23,6 +23,11 @@ Claude (web, Desktop, phone)  ──HTTPS──▶  Latchkey relay  ◀──out
   (passkeys, no passwords), remembers your Mac's last state, and answers instantly when the Mac
   is away. Claude asks for your approval every time it connects: Latchkey's Allow page appears on
   each sign-in from a Claude app, and nothing is approved silently.
+- **Claude's work leaves nothing behind.** A shell command writes only to its own scratch folder, the folder it
+  runs in, Downloads, package caches, and what Claude declares; what it leaves running is stopped when it
+  finishes unless Claude asks to keep it for a while; its scratch folder goes to the Trash. Claude's Safari
+  window closes after 30 minutes unused. The Activity window's Left Behind view lists what was kept, removed,
+  and made, and you're notified only of what nobody meant to leave.
 - **You see who has access.** Latchkey's Settings window and your account page list the Claude apps that can use
   your Mac, and you can remove any one of them.
 - **You choose what Claude can do.** Each capability has a level in Latchkey's Settings window; a capability that's
@@ -31,10 +36,10 @@ Claude (web, Desktop, phone)  ──HTTPS──▶  Latchkey relay  ◀──out
 
   | Capability | Read only | Read & write adds |
   |---|---|---|
-  | Notes | `notes_find`, `notes_read` | `notes_change` (create, append, replace, edit, delete to Recently Deleted) |
+  | Notes | `notes_find`, `notes_read` | `notes_change` (create, append, replace, edit, delete notes or folders to Recently Deleted) |
   | Messages | `messages_find`, `messages_read` | `messages_send` (text and files) |
   | Files | `files_find`, `files_read` (text, PDFs, documents, images) | `files_change` (write, edit, folders, move, copy, Trash) |
-  | Shell | | `shell_run`, `shell_check` (long and interactive commands) |
+  | Shell | | `shell_run`, `shell_check` (long and interactive commands; writes fenced, leftovers removed) |
   | Browser (your Safari, your logins) | `browser_read` | `browser_act` (click, type, script) |
   | Computer control (while unlocked) | `computer_look` | `computer_act` (mouse, keyboard, apps) |
   | Calendar (every account on the Mac) | `calendar_find` (events, free time) | `calendar_change` (create, move, repeat, delete) |

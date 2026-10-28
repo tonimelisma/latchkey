@@ -14,8 +14,7 @@ enum Fence {
 
     /// The paths Claude declared, resolved; too broad ones are refused (FR-318).
     static func declared(_ writes: [String], home: URL) throws -> [URL] {
-        let homeParts = OwnFiles.parts(home)
-        return try writes.map { raw in
+        try writes.map { raw in
             let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !trimmed.isEmpty else { throw ShellJobs.Failure(message: "A path in writes is empty.") }
             let expanded =
@@ -26,8 +25,7 @@ enum Fence {
                 throw ShellJobs.Failure(message: "Give writes as full paths (or starting with ~/): \(raw)")
             }
             let url = OwnFiles.real(URL(filePath: expanded).standardizedFileURL)
-            let parts = OwnFiles.parts(url)
-            if homeParts.starts(with: parts) || parts == homeParts + ["library"] {
+            if tooBroad(url, home: home) {
                 throw ShellJobs.Failure(
                     message:
                         "\(raw) is too broad to declare: it would let the command write anywhere in it. Declare the specific folders or files it writes."
@@ -46,6 +44,14 @@ enum Fence {
         }
     }
 
+    /// True when making `folder` writable would open the home folder, a folder above it, or the
+    /// whole Library folder (FR-317, FR-318).
+    static func tooBroad(_ folder: URL, home: URL) -> Bool {
+        let homeParts = OwnFiles.parts(home)
+        let parts = OwnFiles.parts(folder)
+        return homeParts.starts(with: parts) || parts == homeParts + ["library"]
+    }
+
     static func profile(
         scratch: URL, folder: URL, declared: [URL], home: URL, own: OwnFiles, systemTemp: URL? = nil
     ) -> String {
@@ -56,7 +62,7 @@ enum Fence {
         allowed.append(realHome.appending(path: "Downloads").path)
         allowed += caches.map { realHome.appending(path: $0).path }
         let working = OwnFiles.real(folder)
-        if !OwnFiles.parts(realHome).starts(with: OwnFiles.parts(working)) { allowed.append(working.path) }
+        if !tooBroad(working, home: realHome) { allowed.append(working.path) }
         allowed += declared.map(\.path)
         var rules = [
             "(version 1)", "(allow default)", "(deny file-write*)",
@@ -65,6 +71,11 @@ enum Fence {
         let permanentPaths = permanent.map { OwnFiles.real(realHome.appending(path: $0)) }
         rules.append(
             "(deny file-write* " + permanentPaths.map { "(subpath \(quote($0.path)))" }.joined(separator: " ") + ")")
+        // The other jobs' scratch folders and the records of their processes are Latchkey's
+        // (the app stops and trashes by them at start, FR-324): only the job's own scratch.
+        let jobsRoot = OwnFiles.real(scratch).deletingLastPathComponent()
+        rules.append("(deny file-write* (subpath \(quote(jobsRoot.path))))")
+        rules.append("(allow file-write* (subpath \(quote(OwnFiles.real(scratch).path))))")
         let declaredPermanent = declared.filter { isPermanent($0, home: realHome) }
         if !declaredPermanent.isEmpty {
             rules.append(
