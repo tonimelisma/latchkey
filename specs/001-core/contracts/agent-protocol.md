@@ -282,7 +282,9 @@ must be among the relay's entries. A call still running (no relay entry yet, at 
 deadline old) is not counted as missing. A relay call missing from the Mac that is older than
 the Mac's first logged call with an id (for this pairing) was made before the Mac's app could
 store ids, and is counted with the calls from before call ids; with no id'd call in the Mac's
-log, nothing is left out that way (2026-10-27).
+log, nothing is left out that way (2026-10-27). That point is never later than the switch-over
+itself, 2026-10-28 05:38:15 UTC (app 0.8.24's first connection), so a wiped and refilled log
+can't excuse later calls.
 
 ## Tools
 

@@ -1,6 +1,6 @@
 # Status
 
-Last updated: 2026-10-27 (audit trail and OAuth on zitadel/oidc deployed; app 0.8.26)
+Last updated: 2026-10-27 (audit trail and OAuth on zitadel/oidc deployed; app 0.8.27)
 
 Xcode signing ready (2026-10-20): Toni's Xcode account has a valid "Apple Development" certificate
 (certificate expires 2027-07-22). Keep the team ID out of committed project files
@@ -58,7 +58,7 @@ The Mac state line appears in every result (it reported the battery warning at 1
    close reasons. The 7 calls between the relay deploy and the app install were run by app
    0.8.23, which kept no call ids; the 0.8.25 install's check reported them missing on the Mac
    (they are in its log without ids). Since 0.8.26 relay calls older than the Mac's first logged
-   call with an id count as from before call ids (contract, "Audit comparison"); a wiped log
+   call with an id, and before the 0.8.24 switch-over (0.8.27), count as from before call ids (contract, "Audit comparison"); a wiped log
    still shows every call missing. Fixed in 0.8.25: the app reported keep-awake off for a second at
    start (two needless keep-awake events at the relay per start); Messages attachment copies in
    ~/Pictures/Latchkey were cleared only when the next attachment was sent (now at start and

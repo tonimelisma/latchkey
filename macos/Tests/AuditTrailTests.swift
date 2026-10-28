@@ -349,7 +349,8 @@ enum LogBeforeEvents {
     @Test func relayCallsFromBeforeTheMacStoredIdsAreLeftOut() {
         let c = AuditComparison.compare(
             relay: [Self.relay("call_OLD1", 40), Self.relay("call_OLD2", 35), Self.relay("call_A", 30)],
-            mac: [Self.mac("call_A", 30)], macWithoutIDs: 0, device: Self.device, now: Self.now)
+            mac: [Self.mac("call_A", 30)], macWithoutIDs: 0, device: Self.device, now: Self.now,
+            switchOver: Self.now)
         #expect(c.allMatch)
         #expect(c.matched == 1)
         #expect(c.beforeCallIDs == 2)
@@ -359,8 +360,19 @@ enum LogBeforeEvents {
         #expect(wiped.missingOnMac.count == 2, "with no id'd call on the Mac, nothing is left out")
         let later = AuditComparison.compare(
             relay: [Self.relay("call_A", 30), Self.relay("call_LOST", 20)], mac: [Self.mac("call_A", 30)],
-            macWithoutIDs: 0, device: Self.device, now: Self.now)
+            macWithoutIDs: 0, device: Self.device, now: Self.now, switchOver: Self.now)
         #expect(later.missingOnMac.map(\.callID) == ["call_LOST"], "after the first id'd call, gaps count")
+    }
+
+    /// The exemption never reaches past the real switch-over (security review, 2026-10-27): a log
+    /// wiped and then given one new call can't excuse the calls the relay made before that call.
+    @Test func aWipedLogCantMoveTheSwitchOver() {
+        let c = AuditComparison.compare(
+            relay: [Self.relay("call_GONE", 40), Self.relay("call_NEW", 5)], mac: [Self.mac("call_NEW", 5)],
+            macWithoutIDs: 0, device: Self.device, now: Self.now,
+            switchOver: Self.now.addingTimeInterval(-50 * 60))
+        #expect(c.missingOnMac.map(\.callID) == ["call_GONE"])
+        #expect(AuditComparison.callIDSwitchOver == Date(timeIntervalSince1970: 1_793_165_895))
     }
 
     @Test func bothSidesMissingAreAllNamed() {

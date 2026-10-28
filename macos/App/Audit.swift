@@ -106,9 +106,15 @@ struct AuditComparison: Equatable, Sendable {
     /// Ids the relay makes since FR-632: `call_` and random base32.
     static func isGlobal(_ id: String) -> Bool { id.hasPrefix("call_") }
 
+    /// When the first app that stores call ids (0.8.24) connected to the relay that makes them:
+    /// 2026-10-28 05:38:15 UTC. Calls before it ran on an app that couldn't store ids. The
+    /// exemption below never reaches past this moment, so a log wiped and refilled later can't
+    /// excuse anything (security review, 2026-10-27).
+    static let callIDSwitchOver = Date(timeIntervalSince1970: 1_793_165_895)
+
     static func compare(
         relay: [AuditEntry], mac: [MacCall], macWithoutIDs: Int, device: String, now: Date,
-        grace: TimeInterval = AuditComparison.grace
+        grace: TimeInterval = AuditComparison.grace, switchOver: Date = AuditComparison.callIDSwitchOver
     ) -> AuditComparison {
         var c = AuditComparison()
         c.beforeCallIDs = macWithoutIDs
@@ -133,7 +139,7 @@ struct AuditComparison: Equatable, Sendable {
         // it were made while the Mac's app couldn't store ids yet (the switch-over, 2026-10-27).
         // A wiped log has none, so then nothing is left out. Removing entries to move it breaks
         // the tamper chain (FR-612).
-        let firstMacID = macCalls.map(\.at).min()
+        let firstMacID = macCalls.map(\.at).min().map { min($0, switchOver) }
         var relayIDs = Set<String>()
         for r in relay where r.outcome != .offline {
             guard !r.callID.isEmpty else {
