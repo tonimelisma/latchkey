@@ -43,6 +43,20 @@ edit/read/trash a test file), Shell (output, background job, answering a prompt)
 (screenshot 1568×1018, front window elements, apps, pointer move; no clicks on Toni's screen).
 The Mac state line appears in every result (it reported the battery warning at 15%).
 
+00. **Audit trail without gaps (spec 001 FR-630 to FR-637), on main, NOT deployed or installed.**
+   Relay: audit and events kept until the account is deleted, permanent call ids, the Claude
+   app's name with each call, the audit_request answer, readable event lines instead of SDK
+   noise. Mac: the app's own events in the encrypted activity log, call id / pairing / Claude
+   app per action, the comparison with the relay after each connection and on request, the
+   installer failing on any gap, the browser no longer adopting the Owner's Safari window or
+   reading a page that didn't load. Blocked: `make security` (the deploy gate) fails on
+   GHSA-mgcc-cww5-fp2q in go-jose v3, which comes only through fosite; Toni decided to replace
+   fosite with a ready-made library, zitadel/oidc (docs/decisions.md 2026-10-27), being built on
+   branch `oauth-zitadel`. Order then: deploy the relay, then install the app (no backwards
+   compatibility: the new app requires the new relay). Also found by the 2026-10-27 audit:
+   Messages attachment copies in ~/Pictures/Latchkey weren't removed after a day (two from
+   2026-10-22 were; removed by hand), not yet fixed. Ideas for keeping Claude's sessions from
+   leaving things behind: docs/ideas/leftovers.md (for Toni).
 0. Spec 007 (Calendar, Reminders, Contacts, Location & Maps) is built and installed (app 0.8.16,
    2026-10-26): 8 new tools, 23 in all, through EventKit, Contacts, Core Location, and MapKit;
    weather left out (needs a paid developer account). Checked live through the hosted relay: all
