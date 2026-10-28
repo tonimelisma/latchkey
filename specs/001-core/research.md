@@ -57,7 +57,8 @@ Evidence behind `plan.md`, gathered 2026-10-18 to 2026-10-19. Re-check anything 
 
 - go-webauthn: BSD-3, still v0 (breaking changes possible), supports usernameless login.
   https://github.com/go-webauthn/webauthn
-- fosite: Apache-2.0, used by Ory Hydra; maintenance status not directly confirmed (unverified).
+- fosite: Apache-2.0, used by Ory Hydra. Used until 2026-10-27, then replaced by zitadel/oidc
+  (see "Replacing fosite" below).
 - Go OAuth alternatives considered: forge-oauth (CIMD, pre-1.0), authlet (GPL-3, license
   conflict), mcp-kit (pre-1.0). https://pkg.go.dev/forge-cms.dev/forge-oauth,
   https://pkg.go.dev/github.com/eliminyro/authlet, https://pkg.go.dev/github.com/haakco/mcp-kit
@@ -263,10 +264,10 @@ non-loopback redirect host. Choices made (low-level; Toni decided the behaviour)
   (chosen), so every path (authorize, token, revoke, the bearer check, the account page) gets it
   and no request leaves for an unlisted host. Rejected: checking in each HTTP handler (easy to
   miss one), or after the fetch (keeps the request-forgery surface).
-- **The words a refused client gets.** fosite replaces the hint of a failed client lookup with
-  its own sentence, so the lookup's error carries a marker and the handlers put the sentence
-  back (`invalid_client`, 401). At `/authorize` there is no accepted redirect URI, so fosite
-  shows the error in the browser and redirects nowhere.
+- **The words a refused client gets.** The OAuth library (fosite, now zitadel/oidc) may wrap a
+  failed client lookup in an error of its own, so the lookup's error carries a marker and the
+  handlers put the sentence back (`invalid_client`, 401). At `/authorize` there is no accepted
+  redirect URI, so the error is shown in the browser and the browser is sent nowhere.
 - **Registration off.** RFC 7591 defines error codes only for bad metadata, none for "closed".
   Chosen: `403` with the RFC's JSON error shape and `access_denied` (RFC 6749's code for a
   refused request) plus the sentence. Rejected: `404` (reads as a broken relay), `400
@@ -350,13 +351,14 @@ https://www.sqlite.org/pragma.html#pragma_secure_delete.
   every `oauth_requests` row (repeated on each rotation).
 - **The public ID.** 16 random bytes generated at approval (chosen); versus a hash of the
   request ID (stable without storage, but one leaked request ID would name the grant, and a
-  keyed hash adds a key to manage); versus the request ID itself (it is fosite's internal handle
-  and appears in logs). Never a token signature.
+  keyed hash adds a key to manage); versus the request ID itself (it is the OAuth layer's internal
+  handle and appears in logs). Never a token signature.
 - **What "live" means.** An unrevoked, unexpired access or refresh token (chosen, and what the
   account page meant already); an approval whose code was never redeemed is not access.
   Therefore "a new approval" reaches the Mac when the code is redeemed, seconds after Allow.
-- **Finding out that a client revoked, or that a token was reused.** fosite calls the storage
-  (`RevokeRefreshToken`, `RevokeAccessToken`) for both; the adapter then checks whether the
+- **Finding out that a client revoked, or that a token was reused.** The OAuth library calls the
+  storage for both (fosite: `RevokeRefreshToken`, `RevokeAccessToken`; zitadel: `RevokeToken`,
+  `TokenRequestByRefreshToken`); the adapter then checks whether the
   grant is still live and reports the change if not (chosen). Versus wrapping the `/revoke`
   handler (misses reuse detection, which happens inside the token endpoint).
 - **Closing one grant's MCP sessions.** The SDK binds a session to a user, not a token. Chosen:
@@ -452,6 +454,79 @@ account. What was left to Claude:
   protocol violation (4005), so the relay never sends `audit` to an app that can't read it.
 - The MCP SDK's lines: its servers get the relay's logger filtered to warnings and errors
   (chosen: its warnings stay) versus a discard logger (would hide its errors too).
+
+## Replacing fosite (2026-10-27)
+
+Why: `make security` (the deploy gate) failed on GHSA-mgcc-cww5-fp2q (high, CVSS 7.5: CPU denial
+of service when parsing JWKs/JWS) in `github.com/go-jose/go-jose/v3` 3.0.5, which reached the
+relay only through `github.com/ory/fosite` v0.49.0. No fixed v3 exists (fixed in v4.1.6). It
+was reachable: fosite's `DefaultClientAuthenticationStrategy` parses any `client_assertion`
+sent to `/token` (`jwt.ParseWithClaims`) before it checks the client. fosite's move to v4 is
+not available: issue #797 ("Consider upgrading to github.com/go-jose/go-jose/v4") is open, PR
+#824 ("chore: upgrade to jose v4 library") is open and unmerged, PR #881 ("Migrate from
+go-jose/v3 to go-jose/v4") was closed unmerged (GitHub, read 2026-10-27).
+https://github.com/ory/fosite/issues/797, https://github.com/ory/fosite/pull/824,
+https://github.com/ory/fosite/pull/881, https://osv.dev/GHSA-mgcc-cww5-fp2q
+
+Toni decided to replace fosite with a ready-made library rather than code of our own, and
+delegated the pick (docs/decisions.md, 2026-10-27). Candidates:
+
+- **zitadel/oidc** (`github.com/zitadel/oidc/v3`, v3.51.16; Apache-2.0; OpenID-certified OP
+  library; maintained; go-jose v4). Authorization code with PKCE S256, refresh tokens with the
+  storage deciding rotation and reuse detection, revocation (RFC 7009), opaque bearer tokens
+  through a pluggable `Crypto` (`op.WithCrypto`), client authentication `none`, `client_secret_basic`
+  and `_post`, `private_key_jwt` only when turned on. Chosen.
+  https://github.com/zitadel/oidc, https://pkg.go.dev/github.com/zitadel/oidc/v3/pkg/op
+- **go-oauth2/oauth2** (MIT): no refresh-token rotation with reuse detection, and plain PKCE
+  allowed by default. Rejected. https://github.com/go-oauth2/oauth2
+- **authlet** (GPL-3.0): license conflict with the relay. Rejected.
+  https://pkg.go.dev/github.com/eliminyro/authlet
+
+How zitadel/oidc is wired, and what it couldn't do as is (each through its supported extension
+points, no OAuth logic of our own beyond what fosite's adapter already held):
+
+- **No ID token.** zitadel's `Exchange` handler always calls `CreateIDToken`, which signs an
+  OpenID Connect ID token even without the `openid` scope and needs a signing key. The relay
+  calls zitadel's building blocks for `/token` instead (`ParseAccessTokenRequest`,
+  `ValidateAccessTokenRequest`, `ParseRefreshTokenRequest`, `ValidateRefreshTokenRequest`,
+  `CreateAccessToken`) and writes the OAuth response itself. Weighed: the handler with a
+  throwaway signing key (an extra field in every response, a key to keep), or zitadel's newer
+  `op.Server` interface (each grant written by us: more of our own code). `/revoke` uses
+  zitadel's `Revoke` handler as is.
+- **No openid scope; "mcp offline_access".** zitadel's `ValidateAuthReqScopes` refuses an empty
+  scope; fosite allowed it and the relay grants `mcp` regardless. `/authorize` is the relay's
+  own handler (it was with fosite too: sign-in, consent every time, CSRF), so it keeps its own
+  scope rule and calls zitadel's parser and redirect-URI check. zitadel's login-redirect flow
+  (`Authorize` → login URL → `AuthorizeCallback`) would add a redirect the Owner sees and needs
+  storage for pending requests; not used.
+- **Opaque tokens that survive the move.** zitadel's bearer token is `Crypto.Encrypt(id +
+  ":" + subject)`; the relay's `Crypto` returns the ID, and the ID is a token in fosite's format
+  (prefix, 32 random bytes, HMAC-SHA512/256 under the same `oauth_hmac` key), stored by its
+  signature as before. Weighed: zitadel's AES-GCM tokens (would end every token Claude holds,
+  and Toni would have to reconnect Claude); keeping two formats (more code, no gain).
+- **Refresh rotation and reuse detection** live in the storage (`TokenRequestByRefreshToken`,
+  `CreateAccessAndRefreshTokens`), the same rules and SQL as under fosite.
+- **Codes used once** (FR-096): zitadel reads the code in `AuthRequestByCode` and leaves using
+  it up to the storage (`DeleteAuthRequest`); the relay marks it used in `CreateAccessToken`
+  with the same conditional update, so a second exchange ends the grant. `DeleteAuthRequest`
+  keeps the row so a replay is recognized.
+- **Client assertions never parsed.** With `AuthMethodPrivateKeyJWT` off, zitadel refuses a
+  `client_assertion_type` of jwt-bearer without parsing; but `ClientIDFromRequest` (not used by
+  the relay's endpoints) would parse a `client_assertion` for a provider with JWT profile
+  support. The relay refuses any request carrying `client_assertion` or `client_assertion_type`
+  at `/token` and `/revoke` before zitadel sees it (test: a megabyte of JWT-shaped garbage is
+  answered `401 invalid_client` within a second). zitadel's revocation would read an
+  unrecognized token as a JWT access token when `Crypto.Decrypt` fails; the relay's `Decrypt`
+  never fails, so that path isn't reached either.
+- **Errors.** zitadel turns any non-`oidc.Error` into `server_error` with the Go error's text as
+  the description; every error the storage and client lookup return is an `oidc.Error` with a
+  fixed description, and the relay's handlers write errors with an empty description for
+  anything else, so no internal detail reaches a client (FR-095). zitadel's `RequestError` and
+  `AuthRequestError` log every refusal through `slog`'s default logger; the relay writes its
+  own error responses so its output stays its event record.
+- **Dependencies.** zitadel/oidc brings `go-chi/chi/v5`; 5.3.2 has GHSA-j6qf-3m9c-vwj3
+  (medium), so 5.4.0 is required. `go-jose/v4` is a direct requirement at 4.1.6.
+  https://osv.dev/GHSA-j6qf-3m9c-vwj3
 
 ## Menu bar design (FR-600 to FR-605, spec 002 FR-131, 2026-10-26)
 

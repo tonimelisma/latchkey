@@ -12,7 +12,7 @@ Claude (web / Desktop / iOS / Android)          Anthropic's cloud calls the rela
 ┌──────────────────────────── Relay (Go, one binary, SQLite) ────────────────────────────┐
 │  /mcp            MCP server: handshake, tools/list (cached), laptop_status, forwarding   │
 │  /.well-known/*  OAuth discovery (RFC 9728 protected resource, RFC 8414 auth server)    │
-│  /authorize /token /register   OAuth authorization server (fosite)                       │
+│  /authorize /token /register   OAuth authorization server (zitadel/oidc)                 │
 │  /account        Web pages: sign-up, passkey sign-in, recovery, revoke, delete, audit    │
 │  /agent/v1       WebSocket endpoint the Mac app dials into                               │
 │  Hub: in-memory map device_id -> live connection; deadlines; offline answers            │
@@ -117,11 +117,63 @@ Serves FR-011, Constitution II.
 - [NEEDS CLARIFICATION: Claude's hosted client timeout is undocumented. Measure it in M4 and keep
   our cap below it.]
 
-### D4. OAuth authorization server: fosite plus Claude's client registration methods
+### D4. OAuth authorization server: zitadel/oidc plus Claude's client registration methods
 Serves FR-040, FR-014, FR-180 to FR-185.
-- `github.com/ory/fosite` (Apache-2.0) for authorization code + PKCE S256, token issuance, refresh
-  rotation. Opaque HMAC tokens stored hashed.
-- Client registration, implemented in fosite's client storage:
+- `github.com/zitadel/oidc/v3` (Apache-2.0, OpenID-certified; its `op` package) since
+  2026-10-27, replacing `github.com/ory/fosite` (Toni, 2026-10-27; research.md, "Replacing
+  fosite"). Why: fosite 0.49 depends on `go-jose/v3`, whose JWK/JWS parsing has a high-rated
+  CPU denial of service (GHSA-mgcc-cww5-fp2q) with no fixed v3 release, and fosite parsed any
+  `client_assertion` sent to `/token` before checking the client, so it was reachable; `make
+  security` refused every deploy. `go-jose/v4` is required at 4.1.6 or later (fixed).
+  How it is wired (`internal/oauth`):
+  - `/token`: zitadel parses the request (form-encoded only) and checks it:
+    `ParseAccessTokenRequest` + `ValidateAccessTokenRequest` (code, PKCE S256 verifier, client
+    authentication, redirect URI) and `ParseRefreshTokenRequest` + `ValidateRefreshTokenRequest`
+    (client, scopes); `CreateAccessToken` asks the storage for the tokens and decides on a
+    refresh token (`offline_access` granted). The JSON response is put together by the relay
+    rather than by zitadel's `Exchange` handler, which always adds an OpenID Connect ID token
+    (and would need a signing key); the relay offers OAuth only. A verifier that isn't 43 to 128
+    unreserved characters is refused (RFC 7636 §4.1), as before.
+  - `/revoke`: zitadel's `Revoke` handler (client authentication, RFC 7009); the storage revokes
+    the token's whole grant, refuses a token of another client (`unauthorized_client`), and
+    answers 200 for an unknown or already revoked one.
+  - `/authorize` stays the relay's own handler (sign-in, consent asked every time, CSRF), using
+    zitadel's `ParseAuthorizeRequest` and `ValidateAuthReqRedirectURI`; the rest of the checks
+    are the relay's, in the order and with the answers it always gave: client lookup first
+    (FR-183), an untrusted client or redirect URI shown in the browser as JSON (401
+    `invalid_client`, else 400) and redirected nowhere, then `unsupported_response_type`,
+    `invalid_state` (state shorter than 8 characters), `invalid_scope` (anything but `mcp`
+    and `offline_access`), PKCE required with S256 only (`invalid_request`), the resource
+    indicator; these are redirected with `error`, `error_description`, `state`, `iss`. zitadel's
+    own login-redirect flow (`Authorize`, `AuthorizeCallback`) isn't used: the consent page is
+    the login UI, and the code is stored when the Owner presses Allow. A request without
+    `redirect_uri` is refused (zitadel requires it; fosite filled in a client's only registered
+    URI; every Claude app sends it).
+  - Client assertions (`client_assertion`, `client_assertion_type`; `private_key_jwt`,
+    `client_secret_jwt`) are refused with `401 invalid_client` at `/token` and `/revoke` before
+    zitadel sees the request, so nothing parses them; zitadel's `AuthMethodPrivateKeyJWT` is off
+    as well. Request objects (`request`) are ignored, as before.
+  - Storage (`op.Storage`) is an adapter on the same `oauth_requests` table (no migration):
+    `AuthRequestByCode` (a used code presented again revokes its grant), `TokenRequestByRefreshToken`
+    (reuse detection), `CreateAccessToken` / `CreateAccessAndRefreshTokens` (use the code up,
+    or rotate the refresh token, then write the tokens with the conditional insert below),
+    `GetRefreshTokenInfo` / `RevokeToken`, `GetClientByClientID` (the CIMD/DCR lookup below),
+    `AuthorizeClientIDSecret` (SHA-256 of the secret). The OpenID Connect parts (ID tokens,
+    userinfo, keys, introspection, end-session) answer "not offered".
+  - Opaque tokens: zitadel makes a bearer token by "encrypting" a token ID; the relay's
+    `op.WithCrypto` returns the ID unchanged, and the ID is the token itself, in the format
+    below. The bearer check on `/mcp` is the relay's (the token's HMAC, its row, revoked,
+    expiry, the account), not zitadel's.
+  - Existing grants carry over: the token format, the key, and the rows are what fosite wrote
+    (fosite's prefixed HMAC-SHA512/256, `ory_at_` / `ory_rt_` / `ory_ac_`), and new rows are
+    written with the `session_json` shape fosite read, so a rollback to the fosite version also
+    still works with them. Tested against a fixture written by the fosite version
+    (`internal/oauth/testdata/fosite-0.49-grant.json`): its access token works, its refresh
+    token refreshes, its rotated refresh token and its used code still end the grant.
+  - What changed that a client could notice: `token_type` stays `bearer`; error descriptions
+    are worded differently (codes and status are the same); no PKCE row is written any more
+    (the challenge is in the code's row; kind `pkce` stays in the table for old rows).
+- Client registration, implemented in the client lookup the storage adapter uses:
   - CIMD: when `client_id` is an HTTPS URL, fetch and validate the metadata document, cache it
     (respect HTTP caching, at least 5 minutes, at most 24 h). Hardening (FR-095; security
     review, 2026-10-25): the minimum exists because the client is looked up on every token and
@@ -135,8 +187,8 @@ Serves FR-040, FR-014, FR-180 to FR-185.
     ago; documents of clients holding a grant always stay. `oauth_requests` gets an index on
     `client_id` for those checks (migration 7). A failed lookup's error carries one fixed
     sentence; the reason (which can name internal hosts and addresses) goes to the relay's log
-    only. fosite already kept that reason from clients (it replaces the hint at `/authorize`
-    and exposes no debug text); the fixed sentence makes that independent of fosite.
+    only. The fixed sentence makes that independent of the OAuth library: every error the
+    relay hands zitadel is an `oidc.Error` with a fixed description, and anything else reaches the client as a bare `server_error`.
   - DCR (RFC 7591) at `/register` for clients that don't use CIMD.
   - Which clients are accepted (FR-180 to FR-185; Toni, 2026-10-25: "Claude only" out of the
     box). `ALLOWED_CLIENT_HOSTS` is a comma-separated list of host names, default `claude.ai`;
@@ -159,8 +211,10 @@ Serves FR-040, FR-014, FR-180 to FR-185.
       which is what makes Claude choose CIMD (FR-182);
     - a refused client gets `invalid_client` with the sentence "This relay only accepts
       Claude's apps." (with a non-default list: "This relay only accepts apps from <hosts>.").
-      At `/authorize` fosite shows that error in the browser and redirects nowhere, because no
-      redirect URI was accepted (FR-183);
+      At `/authorize` that error is shown in the browser and redirects nowhere, because no
+      redirect URI was accepted (FR-183). zitadel wraps a failed client lookup at `/token` in
+      an `invalid_client` of its own; the lookup's error carries a marker and the handler puts
+      the sentence back;
     - at start (`oauth.New`) and in the daily purge, every stored client the list refuses is
       deleted with its codes and tokens in one transaction (`store.DeleteClientsExcept`),
       including tokens whose client row is already gone (FR-184);
@@ -209,17 +263,18 @@ Serves FR-040, FR-014, FR-180 to FR-185.
   than needed, and goes stale when tokens expire or are revoked by the client), or reading the
   tokens, chosen because it is exactly "who can reach the Mac now" and stores nothing new.
 - Redirect URIs must be registered by the client (CIMD document or DCR); for loopback URIs
-  (`localhost`, `127.0.0.1`, `[::1]`) the port is ignored. fosite ignores the port only for IP
-  literals, so the client lookup adds the requested `localhost` URI when it matches a registered
-  one on everything but the port.
-- Codes are redeemed once, also under concurrency (FR-096; security review, 2026-10-25): fosite
+  (`localhost`, `127.0.0.1`, `[::1]`) the port is ignored: the client lookup adds the requested loopback URI when it matches a
+  registered one on everything but the port (same host, path and query; zitadel then checks for
+  an exact match, as a web client). zitadel's own native-app rule was not used: it also lets
+  `localhost` stand in for `127.0.0.1` and the reverse.
+- Codes are redeemed once, also under concurrency (FR-096; security review, 2026-10-25): the library
   reads a code's row and marks it used in separate steps, so two exchanges could both read it
   unused. The marking is now `UPDATE … WHERE used_at IS NULL`; the exchange that changes no row
-  fails with fosite's `ErrInvalidatedAuthorizeCode`, and the grant's rows are all marked
+  fails (`invalid_grant`), and the grant's rows are all marked
   revoked, which revokes tokens already written and (through the conditional insert below)
   refuses any written later, exactly as for a later replay. A replay found on read marks the
-  grant the same way. The token endpoint answers these with `invalid_grant`, not fosite's
-  `server_error`. One order still slipped through until 2026-10-25: fosite checks PKCE between
+  grant the same way. The token endpoint answers these with `invalid_grant`, never `server_error`. One order still
+  slipped through until 2026-10-25 under fosite, which checked PKCE between
   reading the code and marking it, and deletes the PKCE row on first use, so a second exchange
   that had read the code unused found no PKCE row and stopped with `invalid_grant` before the
   marking, leaving the first exchange's tokens alive. The PKCE row is now kept until it
@@ -227,15 +282,18 @@ Serves FR-040, FR-014, FR-180 to FR-185.
   reaches the marking. Weighed: revoking the grant when the PKCE row is missing but the code
   row exists (an inference from a missing row, and a second place that decides "used twice"),
   or keeping the row (chosen: the decision stays in the one conditional update; the row
-  guarded nothing, since fosite checks the code's used mark before it looks at PKCE). Options weighed: a transaction around fosite's whole exchange (fosite's
-  transactional storage; holds SQLite's write lock across the client lookup) or the
+  guarded nothing, since fosite checked the code's used mark before it looked at PKCE). Since
+  zitadel (2026-10-27) there is no PKCE row: the challenge is read from the code's row, the code
+  is read in `AuthRequestByCode` and marked used in `CreateAccessToken` after zitadel's checks,
+  so a wrong verifier doesn't use a code up. Options weighed: a transaction around the whole
+  exchange (transactional storage; holds SQLite's write lock across the client lookup) or the
   conditional update, chosen as one statement with no lock held.
 - RFC 9207 (FR-097): the metadata advertises `authorization_response_iss_parameter_supported`
-  and every redirect back to the client (code or error) carries `iss=<issuer>`. fosite 0.49
-  doesn't support it, so the response writer handed to fosite's two redirect writers adds the
-  parameter to the `Location` header. Errors shown in the browser (unknown client or redirect
+  and every redirect back to the client (code or error) carries `iss=<issuer>`. The relay
+  writes these redirects itself (`redirectBack`), with `iss`. Errors shown in the browser (unknown client or redirect
   URI) aren't redirects and carry none.
-- Tokens: fosite's HMAC strategy with a 32-byte secret generated on first start and kept in the
+- Tokens: opaque HMAC tokens (`internal/oauth/tokens.go`, the format fosite's HMAC strategy
+  used, kept so earlier tokens work) with a 32-byte secret generated on first start and kept in the
   database, so tokens survive restarts (SC-07). Refresh rotation marks the old token rotated; it
   stays valid for 60 s, after which reuse revokes the whole token family (RFC 6819 §5.2.2.3).
 - Revoking Claude's access (FR-044) cannot be outrun by a refresh already in flight: it deletes
@@ -243,7 +301,7 @@ Serves FR-040, FR-014, FR-180 to FR-185.
   written only if a code or refresh token of the same grant and Owner still exists and no token
   of that grant has been revoked (a client's `/revoke` and reuse detection mark tokens revoked
   rather than deleting them), checked in the same SQL statement as the insert. A refresh whose token vanished mid-exchange fails
-  (`invalid_request`) instead of minting tokens. Options weighed: fosite's transactional
+  (`invalid_request`) instead of minting tokens. Options weighed: transactional
   storage with `BEGIN IMMEDIATE` (touches every storage call and holds the write lock across
   the client lookup, which may fetch a CIMD document for seconds), or a per-Owner revocation
   generation on every token (a new column and a check on every `/mcp` request); the
@@ -621,7 +679,7 @@ Serves FR-022, FR-023, FR-024, FR-026, FR-026a, FR-610 to FR-615, Constitution V
 
 ### D12. Apps with access: one row per approval, pushed to the Mac
 Serves FR-190, FR-191, FR-192; Constitution II, VI.
-- A grant is one Allow on the consent page: fosite's request ID, shared by the code and every
+- A grant is one Allow on the consent page: its request ID, shared by the code and every
   token that descends from it (refresh keeps the ID). The relay stores one `oauth_grants` row
   per grant when the Owner allows it, before the code leaves: a public ID (16 random bytes,
   `grt_…`), and what the consent page showed (cleaned name, checked host, the redirect host or
@@ -635,7 +693,7 @@ Serves FR-190, FR-191, FR-192; Constitution II, VI.
   last one sent (ignoring last-used times) is skipped. `revoke_client` runs the same removal as
   the account page, is counted by the frame allowance (FR-091), and is audited as metadata.
 - What reports a change: the token endpoint when a code is redeemed (the grant's first token);
-  `RevokeGrant` (Mac, account page) and `RevokeUser` (remove all, recovery); fosite's storage
+  `RevokeGrant` (Mac, account page) and `RevokeUser` (remove all, recovery); the storage adapter's
   calls for a client's `/revoke`, refresh-token reuse, and a replayed code, when the grant is no
   longer live afterwards; and the daily purge, which re-sends to every connected Mac.
 - Removing one grant deletes its rows in one transaction, so no token can be written for it
@@ -867,7 +925,7 @@ latchkey/
     internal/hub/             live device connections, deadlines, offline answers
     internal/agentproto/      message types for contracts/agent-protocol.md
     internal/mcpserver/       MCP surface, laptop_status, forwarding
-    internal/oauth/           fosite wiring, CIMD, DCR, metadata
+    internal/oauth/           zitadel/oidc wiring, token storage, CIMD, DCR, metadata
     internal/account/         passkeys, recovery, pairing, web pages
     internal/store/           SQLite schema and queries
     internal/server/          assembles the parts into one http.Handler (used by cmd/relay and tests)
