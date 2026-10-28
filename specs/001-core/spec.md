@@ -195,8 +195,9 @@ Format: EARS ("When <trigger>, the <system> shall <response>"). IDs are stable; 
   on 2026-10-26, since shell commands Claude runs could read it).
 - **FR-615** "Export…" in the Activity window shall save the entries the window's search and
   filters currently select as readable JSON Lines (one entry per line: time in ISO 8601 with its
-  UTC offset, tool, arguments, result, whether it failed, duration in milliseconds), to a place
-  the Owner chooses in the standard save dialog. Entries that can't be read are left out.
+  UTC offset, tool, arguments, result, whether it failed, duration in milliseconds; since
+  2026-10-27 also whether it is an action or an event, the call id, and the Claude app, FR-633,
+  FR-637), to a place the Owner chooses in the standard save dialog. Entries that can't be read are left out.
 
 ### Diagnostic log (Toni, 2026-10-27)
 - **FR-620** The Mac app and its helper shall write to macOS's log, each time it changes: the

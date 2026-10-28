@@ -30,6 +30,8 @@ struct ConnectionHooks: Sendable {
     var notice: @Sendable (Notice) async -> Void
     /// The Claude apps with access, each time the relay sends the list (FR-192).
     var clients: @Sendable ([ClientEntry]) async -> Void = { _ in }
+    /// Each time a connection is established (after `welcome`); not awaited by the connection.
+    var connected: @Sendable () async -> Void = {}
 }
 
 /// The one outbound WebSocket to the relay (plan D1, agent-protocol.md). Reconnects by itself
@@ -48,6 +50,11 @@ actor RelayConnection {
     private var pendingPing: UUID?
     private var stateFrames = StateFrames()
     private var stateFlush: Task<Void, Never>?
+    /// Audit pages asked for and not yet answered, by request id (FR-634).
+    private var auditWaiters: [String: CheckedContinuation<AuditPage?, Never>] = [:]
+    private var auditRequests = 0
+    /// How long one page may take (Constitution II).
+    static let auditPageDeadline: Duration = .seconds(15)
 
     init(identity: DeviceIdentity, hooks: ConnectionHooks) {
         self.identity = identity
@@ -143,6 +150,47 @@ actor RelayConnection {
         }
     }
 
+    /// The relay's whole audit of this Mac, a page at a time (FR-634). Each page has a deadline;
+    /// the connection ending answers every page still waiting.
+    func fetchAudit() async -> AuditFetch {
+        guard task != nil else { return .notConnected }
+        let fetched = await AuditPaging.fetch { since in await self.auditPage(since: since) }
+        if fetched == .noAnswer, task == nil { return .notConnected }
+        return fetched
+    }
+
+    private func auditPage(since: Int64) async -> AuditPage? {
+        guard let task else { return nil }
+        auditRequests += 1
+        let id = "a\(auditRequests)"
+        return await withCheckedContinuation { (c: CheckedContinuation<AuditPage?, Never>) in
+            auditWaiters[id] = c
+            Task {
+                do {
+                    try await send(
+                        .auditRequest(AuditRequest(id: id, since: since, limit: AuditPaging.pageSize)), on: task)
+                } catch {
+                    self.answerAudit(id, nil)
+                    return
+                }
+                try? await Task.sleep(for: Self.auditPageDeadline)
+                self.answerAudit(id, nil)
+            }
+        }
+    }
+
+    private func answerAudit(_ id: String, _ page: AuditPage?) {
+        auditWaiters.removeValue(forKey: id)?.resume(returning: page)
+    }
+
+    /// The connection ended: no page can come. Only relays that answer `audit_request` are
+    /// supported (Toni, 2026-10-27: no backwards compatibility).
+    private func endAudits(closeCode: Int) {
+        let waiting = auditWaiters
+        auditWaiters = [:]
+        for c in waiting.values { c.resume(returning: nil) }
+    }
+
     private func send(_ m: AgentMessage, on t: URLSessionWebSocketTask) async throws {
         try await t.send(.string(String(decoding: try m.encode(), as: UTF8.self)))
     }
@@ -171,21 +219,25 @@ actor RelayConnection {
                 attempt = 0
                 suspended = false
                 await hooks.status(.connected)
-                Diagnostics.connection.notice("Connected to the relay")
+                EventLog.shared.record(.connection, "Connected to the relay")
+                let connected = hooks.connected
+                Task { await connected() }
                 try await serve(t)
             } catch {
                 // fall through to the close-code decision
-                Diagnostics.connection.notice("Connection ended: \(error.localizedDescription, privacy: .public)")
+                EventLog.shared.record(.connection, "Connection ended: \(error.localizedDescription)")
             }
             task = nil
+            endAudits(closeCode: t.closeCode.rawValue)
             await calls.cancelAll()
             if Task.isCancelled { return }
             let reason = t.closeReason.map { String(decoding: $0, as: UTF8.self) }
             let next = policy.next(afterClose: t.closeCode.rawValue, reason: reason, attempt: attempt)
             suspended = next.show == .suspended
-            Diagnostics.connection.notice(
-                "Closed with code \(t.closeCode.rawValue) \(reason ?? "", privacy: .public); \(next.retryAfter.map { "retrying in \(Int($0)) s" } ?? "not retrying", privacy: .public) (attempt \(attempt + 1))"
-            )
+            EventLog.shared.record(
+                .connection,
+                Self.closeLine(
+                    code: t.closeCode.rawValue, reason: reason, retryAfter: next.retryAfter, attempt: attempt))
             guard let delay = next.retryAfter else {
                 if let show = next.show { await hooks.status(show) }
                 loop = nil
@@ -195,6 +247,13 @@ actor RelayConnection {
             await hooks.status(next.show ?? .waiting(until: Date().addingTimeInterval(delay)))
             await sleep(delay)  // or until a wake or a network change (reconnectNow)
         }
+    }
+
+    /// The event for a closed connection: code, reason, and what happens next (FR-620, FR-633).
+    static func closeLine(code: Int, reason: String?, retryAfter: TimeInterval?, attempt: Int) -> String {
+        let reasonText = reason.map { $0.isEmpty ? "" : " \($0)" } ?? ""
+        let next = retryAfter.map { "retrying in \(Int($0)) s" } ?? "not retrying"
+        return "Closed with code \(code)\(reasonText); \(next) (attempt \(attempt + 1))"
     }
 
     /// Waits for the delay, or until reconnectNow.
@@ -256,6 +315,7 @@ actor RelayConnection {
             case .cancel(let c): await calls.cancel(c.id)
             case .notice(let n): await hooks.notice(n)
             case .clients(let c): await hooks.clients(c.clients)
+            case .audit(let page): answerAudit(page.id, page)
             default: throw ProtocolError.violation("unexpected message")
             }
         }

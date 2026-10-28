@@ -249,8 +249,9 @@ connection (ignoring `last_used_at`) is not sent again, except in answer to `rev
 
 ## Audit comparison (`audit_request`, `audit`; added 2026-10-27, FR-634)
 
-Only between an agent that listed `"audit"` in `features` and a relay that knows it (a relay
-that doesn't answers nothing, and the app reports the comparison as not possible).
+Only from an agent that listed `"audit"` in `features`. Every relay must know these messages: no
+backwards compatibility with older relays (Toni, 2026-10-27); the relay is deployed before an app
+that sends them is installed.
 
 agent → relay:
 ```json

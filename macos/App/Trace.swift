@@ -4,22 +4,48 @@ import OSLog
 import Security
 import SwiftData
 
-/// One tool call the Mac ran, as the app shows it (FR-026). Kept only on this Mac.
+/// What an entry is: something Claude had the Mac do, or the app's own event (FR-633).
+enum ActivityKind: String, Codable, Sendable, CaseIterable {
+    case action, event
+}
+
+/// One entry of the activity log, as the app shows it (FR-026, FR-633): a tool call the Mac ran
+/// (an action), or one of the app's own events. Kept only on this Mac.
 struct Activity: Identifiable, Sendable, Codable {
     var id = UUID()
     var at: Date
+    /// The tool's name; for an event, its category (`EventCategory`).
     var tool: String
     var arguments: String
+    /// For an event, its text.
     var result: String
     var isError: Bool
     var durationMS: Int
     /// Its place in the tamper check's chain (FR-612); 0 for an entry recorded before the check.
     /// Kept beside the sealed content, not in it.
     var seq = 0
+    /// Kept beside the sealed content, like `seq`, and covered by the chain.
+    var kind = ActivityKind.action
+    /// The relay's id of the call (FR-632); nil for events and entries from before call ids.
+    var callID: String?
+    /// The pairing (device ID) the call came through, so the comparison with the relay's audit
+    /// of this Mac leaves out the calls of an earlier pairing (FR-634).
+    var device: String?
+    /// The Claude app that made the call, as the relay named it (FR-637); nil when unknown, for
+    /// events, and for entries from before. Sealed with the content; text from the network.
+    var client: String?
 
     var beforeCheck: Bool { seq == 0 }
 
-    enum CodingKeys: String, CodingKey { case id, at, tool, arguments, result, isError, durationMS }
+    /// The sealed content: everything but the fields kept beside it. `client` is optional, so
+    /// content sealed before it existed opens as before.
+    enum CodingKeys: String, CodingKey { case id, at, tool, arguments, result, isError, durationMS, client }
+
+    /// One of the app's own events (FR-633).
+    static func event(_ category: EventCategory, _ text: String, error: Bool = false, at: Date = Date()) -> Activity {
+        Activity(
+            at: at, tool: category.rawValue, arguments: "", result: text, isError: error, durationMS: 0, kind: .event)
+    }
 }
 
 /// What is stored: the time and the chain's fields in the clear, everything else AES-GCM
@@ -40,14 +66,27 @@ final class SealedActivity {
     /// read are counted without decrypting the log (FR-203). "" = not yet looked at; "-" = sealed
     /// with a key that was already gone when the check came.
     var keyID: String = ""
+    /// `ActivityKind`'s raw value (FR-633). Added 2026-10-27 with defaults, so a log from before
+    /// upgrades in place: its entries are actions without a call id.
+    var kind: String = ActivityKind.action.rawValue
+    /// The relay's call id (FR-632), or "".
+    var callID: String = ""
+    /// The device ID the call came through, or "".
+    var device: String = ""
 
-    init(id: UUID, at: Date, sealed: Data, seq: Int = 0, mac: Data? = nil, keyID: String = "") {
+    init(
+        id: UUID, at: Date, sealed: Data, seq: Int = 0, mac: Data? = nil, keyID: String = "",
+        kind: String = ActivityKind.action.rawValue, callID: String = "", device: String = ""
+    ) {
         self.id = id
         self.at = at
         self.sealed = sealed
         self.seq = seq
         self.mac = mac
         self.keyID = keyID
+        self.kind = kind
+        self.callID = callID
+        self.device = device
     }
 }
 
@@ -298,13 +337,16 @@ struct ActivityQuery: Sendable, Equatable {
     /// From this moment (inclusive) to `to` (exclusive); nil is open.
     var from: Date?
     var to: Date?
+    /// Claude's actions or the app's events only; nil for both (FR-633).
+    var kind: ActivityKind?
 
     func matches(_ a: Activity) -> Bool { matches(a, ActivityMatcher(text)) }
 
     func matches(_ a: Activity, _ matcher: ActivityMatcher) -> Bool {
+        if let kind, a.kind != kind { return false }
         if let tool, a.tool != tool { return false }
         return matcher.isEmpty || matcher.found(in: a.tool) || matcher.found(in: a.arguments)
-            || matcher.found(in: a.result)
+            || matcher.found(in: a.result) || a.client.map(matcher.found(in:)) == true
     }
 }
 
@@ -387,14 +429,33 @@ struct ActivityReader: Sendable {
         ).withUnsafeBytes { $0.map { String(format: "%02x", $0) }.joined() }
     }
 
-    /// The checksum of FR-612: HMAC-SHA256 under a key derived from the log key.
-    func mac(previous: Data, seq: Int, id: UUID, at: Date, keyID: String) -> Data {
+    /// The checksum of FR-612: HMAC-SHA256 under a key derived from the log key. An event, a call
+    /// id, or a device (FR-632, FR-633) is covered too; an action without them is checksummed
+    /// exactly as before they existed, so the chain of an upgraded log still holds.
+    func mac(
+        previous: Data, seq: Int, id: UUID, at: Date, keyID: String, kind: String = ActivityKind.action.rawValue,
+        callID: String = "", device: String = ""
+    ) -> Data {
         var m = Data(previous)
         m.append(bigEndian: UInt64(seq))
         m.append(contentsOf: withUnsafeBytes(of: id.uuid) { Array($0) })
         m.append(bigEndian: at.timeIntervalSinceReferenceDate.bitPattern)
         m.append(Data(keyID.utf8))
+        if kind != ActivityKind.action.rawValue || !callID.isEmpty || !device.isEmpty {
+            // The key ID before is always 16 characters (or "-", never chained), so these
+            // separated fields can't be confused with it.
+            for field in [kind, callID, device] {
+                m.append(0)
+                m.append(Data(field.utf8))
+            }
+        }
         return Data(HMAC<SHA256>.authenticationCode(for: m, using: chainKey))
+    }
+
+    func mac(previous: Data, _ a: Activity, seq: Int) -> Data {
+        mac(
+            previous: previous, seq: seq, id: a.id, at: a.at, keyID: keyID, kind: a.kind.rawValue,
+            callID: a.callID ?? "", device: a.device ?? "")
     }
 
     static let chainStart = Data(repeating: 0, count: 32)
@@ -419,6 +480,9 @@ struct ActivityReader: Sendable {
         var seq: Int
         var keyID: String
         var sealed: Data
+        var kind: String
+        var callID: String
+        var device: String
 
         init(_ s: SealedActivity) {
             id = s.id
@@ -426,6 +490,9 @@ struct ActivityReader: Sendable {
             seq = s.seq
             keyID = s.keyID
             sealed = s.sealed
+            kind = s.kind
+            callID = s.callID
+            device = s.device
         }
     }
 
@@ -442,6 +509,9 @@ struct ActivityReader: Sendable {
         guard let data, var a = try? JSONDecoder().decode(Activity.self, from: data) else { return nil }
         a.id = s.id
         a.seq = s.seq
+        a.kind = ActivityKind(rawValue: s.kind) ?? .action
+        a.callID = s.callID.isEmpty ? nil : s.callID
+        a.device = s.device.isEmpty ? nil : s.device
         return a
     }
 
@@ -461,6 +531,7 @@ struct ActivityReader: Sendable {
             ?? (oldestFirst ? ActivityCursor(at: .distantPast, seq: -1) : ActivityCursor(at: .distantFuture, seq: .max))
         let from = query.from ?? .distantPast
         let to = query.to ?? .distantFuture
+        let kind = query.kind?.rawValue ?? ""
         // Unfiltered, a page needs about `limit` rows (the menu asks for 10); a search, many.
         let batch = query.text.isEmpty && query.tool == nil ? min(max(limit, 50), 1000) : 1000
         let matcher = ActivityMatcher(query.text)
@@ -472,8 +543,8 @@ struct ActivityReader: Sendable {
                 // A plain range on the time, which the index serves; entries at the cursor's own
                 // time that were already shown are skipped below.
                 predicate: oldestFirst
-                    ? #Predicate { $0.at >= from && $0.at < to && $0.at >= pAt }
-                    : #Predicate { $0.at >= from && $0.at < to && $0.at <= pAt },
+                    ? #Predicate { $0.at >= from && $0.at < to && $0.at >= pAt && (kind == "" || $0.kind == kind) }
+                    : #Predicate { $0.at >= from && $0.at < to && $0.at <= pAt && (kind == "" || $0.kind == kind) },
                 sortBy: [SortDescriptor(\.at, order: order), SortDescriptor(\.seq, order: order)])
             d.fetchLimit = batch
             let (count, done) = try autoreleasepool { () throws -> (Int, Bool) in
@@ -568,6 +639,31 @@ struct ActivityReader: Sendable {
         return written
     }
 
+    /// Every action with a call id, from the fields in the clear (no decrypting), and how many
+    /// actions have none (from before call ids, FR-634).
+    func calls() throws -> (calls: [MacCall], withoutIDs: Int) {
+        let action = ActivityKind.action.rawValue
+        var d = FetchDescriptor<SealedActivity>(predicate: #Predicate { $0.kind == action && $0.callID != "" })
+        d.propertiesToFetch = [\.callID, \.device, \.at]
+        let calls = try ModelContext(container).fetch(d).map {
+            MacCall(callID: $0.callID, device: $0.device, at: $0.at)
+        }
+        let without = try ModelContext(container).fetchCount(
+            FetchDescriptor<SealedActivity>(predicate: #Predicate { $0.kind == action && $0.callID == "" }))
+        return (calls, without)
+    }
+
+    /// The tool of each of these calls, decrypted, for naming the ones missing on the relay.
+    func tools(of callIDs: Set<String>) throws -> [String: String] {
+        guard !callIDs.isEmpty else { return [:] }
+        let ids = Array(callIDs)
+        let rows = try ModelContext(container).fetch(
+            FetchDescriptor<SealedActivity>(predicate: #Predicate { ids.contains($0.callID) }))
+        var out: [String: String] = [:]
+        for row in rows { if let a = open(row) { out[row.callID] = a.tool } }
+        return out
+    }
+
     /// Walks the chain of entries under the current key, oldest first, reading only the
     /// fields in the clear (FR-612); then looks for the newest entry Latchkey knows it wrote
     /// (FR-613). `expected` is nil when that isn't known.
@@ -586,13 +682,16 @@ struct ActivityReader: Sendable {
             var d = FetchDescriptor<SealedActivity>(
                 predicate: #Predicate { $0.keyID == kid && $0.seq > a }, sortBy: [SortDescriptor(\.seq)])
             d.fetchLimit = batch
-            d.propertiesToFetch = [\.seq, \.id, \.at, \.keyID, \.mac]
+            d.propertiesToFetch = [\.seq, \.id, \.at, \.keyID, \.mac, \.kind, \.callID, \.device]
             let count = try autoreleasepool { () throws -> Int in
                 let rows = try ModelContext(container).fetch(d)
                 for row in rows {
                     let stored = row.mac ?? Data()
                     let place = ActivityCursor(at: row.at, seq: row.seq)
-                    if stored != mac(previous: previous, seq: row.seq, id: row.id, at: row.at, keyID: kid) {
+                    let computed = mac(
+                        previous: previous, seq: row.seq, id: row.id, at: row.at, keyID: kid, kind: row.kind,
+                        callID: row.callID, device: row.device)
+                    if stored != computed {
                         result.broken.append(place)
                     }
                     if let expected, row.seq == expected.seq {
@@ -632,9 +731,13 @@ struct ActivityExport {
 
     func line(_ a: Activity) -> String {
         let fields: [(String, String)] = [
-            ("time", Self.json(formatter.string(from: a.at))), ("tool", Self.json(a.tool)),
-            ("arguments", Self.embedded(a.arguments)), ("result", Self.embedded(a.result)),
+            ("time", Self.json(formatter.string(from: a.at))), ("kind", Self.json(a.kind.rawValue)),
+            ("tool", Self.json(a.tool)), ("arguments", Self.embedded(a.arguments)),
+            // An event's text is text, even when it happens to parse as JSON.
+            ("result", a.kind == .event ? Self.json(a.result) : Self.embedded(a.result)),
             ("isError", a.isError ? "true" : "false"), ("durationMS", String(a.durationMS)),
+            ("call_id", a.callID.map { Self.json($0) } ?? "null"),
+            ("client", a.client.map { Self.json($0) } ?? "null"),
         ]
         return "{" + fields.map { "\(Self.json($0.0)):\($0.1)" }.joined(separator: ",") + "}"
     }
@@ -790,10 +893,11 @@ final class TraceStore {
         var seq = nextSeq
         var previous = previousMac
         for a in entries {
-            let mac = reader.mac(previous: previous, seq: seq, id: a.id, at: a.at, keyID: reader.keyID)
+            let mac = reader.mac(previous: previous, a, seq: seq)
             context.insert(
                 SealedActivity(
-                    id: a.id, at: a.at, sealed: try reader.seal(a, seq: seq), seq: seq, mac: mac, keyID: reader.keyID))
+                    id: a.id, at: a.at, sealed: try reader.seal(a, seq: seq), seq: seq, mac: mac, keyID: reader.keyID,
+                    kind: a.kind.rawValue, callID: a.callID ?? "", device: a.device ?? ""))
             previous = mac
             seq += 1
         }
@@ -826,8 +930,9 @@ final class TraceStore {
         }
     }
 
-    /// The newest entries that can be read, for the menu (FR-203).
-    func recent(limit: Int) throws -> [Activity] { try reader.page(ActivityQuery(), limit: limit).entries }
+    /// The newest of Claude's actions that can be read, for the menu (FR-203); the app's own
+    /// events are in the Activity window only.
+    func recent(limit: Int) throws -> [Activity] { try reader.page(ActivityQuery(kind: .action), limit: limit).entries }
 
     /// The newest readable entries, and how many stored entries can't be read (FR-203).
     func page(limit: Int) throws -> ActivityPage { try reader.page(ActivityQuery(), limit: limit) }

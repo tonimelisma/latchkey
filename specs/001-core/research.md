@@ -535,3 +535,73 @@ in the whole log 3.1 s; tool filter, first page 0.03 s; last 30 days, first page
 the whole log 8.9 s; the log on disk 163 MB. A Release build is faster; entries with images take
 longer to search and export, in proportion to their size.
 
+
+## The Mac's audit trail: its own events, call ids, and the comparison (FR-632 to FR-634, FR-636, FR-637, 2026-10-27)
+
+Toni decided the requirements (the Mac's events in the activity log, the relay's call id in
+each entry, a comparison after each connection and on request, the installer failing on a gap).
+Why: macOS's unified log discarded the app's diagnostic lines within hours (the `log show`
+for the day of the audit came back empty), so it can't be the record. What was left to Claude:
+
+- Where kind, call id, and device live: beside the sealed content, in the clear, with defaults
+  (`kind` "action", `callID` "", `device` ""), so SwiftData upgrades the existing store in place
+  as it did for the chain's fields (chosen; tested from the 0.8.15–0.8.23 schema with a real
+  chain and record) versus inside the sealed JSON only (the comparison would decrypt every entry,
+  images included, after every connection) versus a table of its own (two writes that can
+  disagree). None of them is content: the kind says an entry is the app's own, the call id is a
+  random id the relay has anyway, the device ID names the pairing. The Claude app's name
+  (FR-637) is content-like (which app did what), so it is sealed with the entry instead
+  (`client`, optional in the JSON, so older boxes open unchanged).
+- Covering them by the chain: the checksum appends the three fields (each after a zero byte)
+  only when one is not its default (chosen). An action without them is checksummed exactly as
+  before, so the upgraded log's chain holds without rewriting a row, and changing any of them in
+  the file breaks the chain at that entry. Versus always appending (every old checksum would
+  need recomputing: a rewrite of Toni's log) or a version byte per row (one more field).
+- Why a device column: the relay keeps an audit per device, so after pairing again the earlier
+  pairing's calls are in another device's audit; without the device they would be reported
+  missing on the relay after every re-pairing. They are left out and counted instead.
+- The comparison's rules (`AuditComparison`): relay rows with an id and an outcome other than
+  `offline` must be in the Mac's log; the Mac's actions with a `call_` id of this device must be
+  in the relay's rows (an offline row with that id counts as present). Left out and counted:
+  rows and entries without an id or with an older per-connection id (`c_1`), the Mac's calls of
+  an earlier pairing, and anything on one side only from the last 120 s (the relay caps
+  deadlines at 60 s, and a call the relay gave up on can still finish and be recorded on the
+  Mac). The Mac's missing calls are named with their tool, decrypted only for those entries.
+- Paging the relay's answer (security review, 2026-10-27): a page larger than asked, an entry
+  before the page's `since`, a `next_since` not after both `since` and the page's newest entry,
+  or more than a million entries in all is a malformed answer, and the check is reported "not
+  possible" rather than looping or collecting without end. Each page has a 15 s deadline
+  (Constitution II).
+- A relay that doesn't know `audit_request`: the contract says it "answers nothing", but the
+  relays deployed until now close the connection with 4005 on an unknown type. The app
+  therefore remembers, for the life of the connection object, that a 4005 arrived while an audit
+  page was asked for, never asks that relay again in this launch, and records "Audit check not
+  possible: the relay doesn't answer audit requests" after each connection. Cost against an old
+  relay: one extra reconnect per launch. Alternatives: a relay feature list in `welcome` (a
+  protocol change for Toni and the relay side) or asking only after a `call_` id was seen (no
+  check on a Mac that gets no calls). Toni decided (2026-10-27): no backwards compatibility, so
+  the fallback was removed; the relay is deployed before an app that checks, and the installer
+  fails on any "not possible" line.
+- Events: one `EventLog` the whole app writes to, from any thread; each event goes to macOS's
+  log (FR-620) and into the activity log. Before the log is open they wait in memory and are
+  written in order; a failed save keeps them for the next (at most 10,000 held, and the number
+  dropped beyond that is itself recorded). Polled states pass through `Changes` (keep-awake
+  line, approvals line, the helper's problems), so the log holds changes, not repeats. Lines
+  that carry the relay's address are kept out of macOS's public log (`systemLog: false`) and
+  written there with their existing private formatting.
+- What the installer reads: the `audit` category line starting "Audit check", within two
+  minutes of the start (pages of up to 15 s, and a reconnect against a relay that closes on the
+  request). Anything but "Audit check: all …" fails, an unpaired Mac excepted.
+- The helper's "Sleep disabled" line: written when the value or the request changes, not on the
+  app's once-a-minute re-apply.
+
+The Activity window that took about 10 s to appear (2026-10-27, Toni's log: 321 entries, 19 MB
+of screenshots): measured with a log of the same shape (`ActivityImageScaleTests`, 320 entries,
+80 of them 180 KB JPEGs): opening the log 0.01 s, first page 0.02 s, rows 0.00 s, menu 0.01 s,
+tamper check 0.03 s, comparison's calls 0.01 s, export 0.13 s with every image whole. A table of
+200 such entries lays out in 0.11 s, the old details pane's full base64 text in 0.08 s. The
+delay was not reproduced, so the window now holds small rows only (`ActivityRow`), shows an
+image in the details pane as one line ("image/jpeg image, 180 KB, not shown") and cuts other
+text at 10,000 characters, clips menu text from its first characters only, and logs "Show All
+Activity chosen", "Activity window shown", and the first page's time in the `activity` category,
+so the next slow open shows where the time went.

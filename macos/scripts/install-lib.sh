@@ -121,3 +121,26 @@ helper_verdict() {
   echo "install: THE OLD HELPER IS STILL RUNNING: no start line from helper $1 (${3:-none})." >&2
   return 1
 }
+
+# audit_verdict <the app's last "Audit check…" line since the install, or empty> (spec 001 FR-634,
+# FR-636): the app compared its activity log with the relay's audit of this Mac right after
+# connecting, and every call matched. Anything missing on either side, a check that couldn't be made
+# (a relay that doesn't answer audit requests or didn't answer in time), or no check at all fails.
+audit_verdict() {
+  case "$1" in
+    "Audit check: all "*)
+      echo "install: ${1#Audit check: }"
+      return 0
+      ;;
+    "")
+      echo "install: NO AUDIT CHECK: the app didn't compare its log with the relay's audit after connecting." >&2
+      ;;
+    "Audit check not possible: "*)
+      echo "install: AUDIT CHECK NOT POSSIBLE: ${1#Audit check not possible: }." >&2
+      ;;
+    *)
+      echo "install: THE ACTIVITY LOG AND THE RELAY DISAGREE: ${1#Audit check: }" >&2
+      ;;
+  esac
+  return 1
+}

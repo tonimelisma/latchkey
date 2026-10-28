@@ -815,7 +815,46 @@ through only when it differs from the last. Interpolated values are private by d
 fixed states, error descriptions, close codes and reasons, and app bundle IDs are `.public`.
 Read with `log show --predicate 'subsystem == "net.melisma.latchkey"'`. Options considered: a
 file of our own (rejected: another store to protect and age), the activity log (rejected: it
-records Claude's actions, and these are the app's own).
+records Claude's actions, and these are the app's own). Changed 2026-10-27 (FR-633): macOS
+discarded these lines within hours, so each one is now also an event in the activity log (D19);
+the lines in macOS's log stay, with an `audit` category added.
+
+### D19. Mac audit trail
+Serves FR-026, FR-610, FR-632 to FR-634, FR-636, FR-637; Constitution II, VI. Options and the
+measurements are in research.md ("The Mac's audit trail").
+- Stored shape: `SealedActivity` gains `kind` ("action" or "event"), `callID`, and `device` in
+  the clear, with defaults, so SwiftData upgrades Toni's log in place (old rows read as actions
+  without a call id). The chain's checksum covers the three whenever one isn't its default, so
+  old checksums still hold and a changed kind or id breaks the chain. The Claude app's name
+  (`client`, FR-637) is sealed with the content. `AuditTrailTests` upgrades a chained log in the
+  0.8.15–0.8.23 schema and checks every entry, the chain, and the record.
+- Events (FR-633): `EventLog` (App/EventLog.swift), callable from any thread, writes each event
+  to macOS's log (FR-620, same categories, `audit` added) and into the activity log, waiting in
+  memory until the log is open and keeping events after a failed save. The kinds are
+  `EventCategory`: app (start, quit, uninstall, errors shown), connection (connects, closes with
+  code and reason, retries, network changes), keep-awake decisions (only on change), the
+  helper's failures as the app sees them (once until they go away), power (sleep, wake,
+  shutdown), permissions (requests, answers, every change of the approvals line), setup
+  decisions, pause, pairing (paired, links, Disconnect, revoked), activity-log problems that
+  can be recorded, and audit results. The menu shows Claude's actions only; the Activity window
+  has a Show filter (everything, Claude's actions, Latchkey events) and a Claude App column;
+  Export adds `kind`, `call_id`, and `client`.
+- Calls (FR-632, FR-637): each action stores the `call`'s `id`, the pairing's device ID, and the
+  `client` it named.
+- Comparison (FR-634): after each `welcome` (the connection's `connected` hook, not awaited by
+  it) and from Check Against Relay in the Activity window, the app asks for the relay's audit
+  from the start, 1,000 rows a page, 15 s per page, and checks each page (no more than asked,
+  nothing before `since`, `next_since` past the newest row, a million rows in all).
+  `AuditComparison.compare` is a pure function; its result is one event naming every missing
+  call ("Audit check: 412 calls match; missing on the Mac: call_… (tool, time); …" or "Audit
+  check: all 412 calls match"), also in macOS's log under `audit`, and a warning in the Activity
+  window while any is missing. A relay that doesn't answer in time gives "Audit check not
+  possible: the relay didn't answer". Older relays aren't supported (Toni, 2026-10-27).
+- Installer (FR-636): `install.sh` waits up to two minutes for the new app's "Audit check" line
+  and fails (`audit_verdict` in install-lib.sh) on anything but "Audit check: all …", an
+  unpaired Mac excepted.
+- No age-based deletion anywhere on the Mac: `AuditTrailTests` keeps events 20 years old and
+  checks that no app code deletes activity rows; uninstall removes the whole file.
 
 ## Repository layout
 

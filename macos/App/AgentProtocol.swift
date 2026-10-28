@@ -111,7 +111,8 @@ struct Hello: Codable, Sendable {
     }
 
     /// `clients`: send the list of Claude apps with access, and keep it current (FR-190, FR-192).
-    static let supportedFeatures = ["clients"]
+    /// `audit`: answer `audit_request` with this Mac's audit (FR-634).
+    static let supportedFeatures = ["clients", "audit"]
 
     /// The hello this app sends: always with the features it supports.
     static func make(
@@ -155,7 +156,10 @@ struct Call: Codable, Sendable {
     var tool: String
     var arguments: JSONValue
     var deadlineMS: Int
-    enum CodingKeys: String, CodingKey { case id, tool, arguments, deadlineMS = "deadline_ms" }
+    /// The Claude app that made the call, as the relay records it (FR-637); nil or "" when the
+    /// relay doesn't know or is older. Text from the network: shown with `Text(verbatim:)`.
+    var client: String?
+    enum CodingKeys: String, CodingKey { case id, tool, arguments, deadlineMS = "deadline_ms", client }
 }
 
 struct Cancel: Codable, Sendable { var id: String; var reason: String }
@@ -208,14 +212,63 @@ struct ClientsUpdate: Codable, Equatable, Sendable { var clients: [ClientEntry] 
 /// App → relay: remove this approval (FR-191). The relay answers with the new `clients` list.
 struct RevokeClient: Codable, Equatable, Sendable { var id: String }
 
+/// App → relay: a page of the relay's audit of this Mac (FR-634). `since` is in milliseconds
+/// since 1970, inclusive; `limit` 1 to 1000.
+struct AuditRequest: Codable, Equatable, Sendable {
+    var id: String
+    var since: Int64
+    var limit: Int
+}
+
+enum AuditOutcome: String, Codable, Sendable {
+    case ok, error, timeout
+    /// The call never reached the Mac: not expected in its log.
+    case offline
+}
+
+/// One row of the relay's audit: metadata only.
+struct AuditEntry: Codable, Equatable, Sendable {
+    /// "" for a call from before call ids (FR-632).
+    var callID: String
+    /// Milliseconds since 1970.
+    var at: Int64
+    var tool: String
+    var outcome: AuditOutcome
+    var durationMS: Int64
+
+    enum CodingKeys: String, CodingKey {
+        case callID = "call_id", at, tool, outcome, durationMS = "duration_ms"
+    }
+
+    var date: Date { Date(timeIntervalSince1970: Double(at) / 1000) }
+}
+
+/// Relay → app: the answer to an `audit_request`, oldest first.
+struct AuditPage: Codable, Equatable, Sendable {
+    var id: String
+    var entries: [AuditEntry]
+    /// The `since` of the next page; nil when there are no more.
+    var nextSince: Int64?
+
+    enum CodingKeys: String, CodingKey { case id, entries, nextSince = "next_since" }
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(id, forKey: .id)
+        try c.encode(entries, forKey: .entries)
+        try c.encode(nextSince, forKey: .nextSince)  // null on the last page
+    }
+}
+
 enum AgentMessage: Sendable {
     case challenge(Challenge), hello(Hello), welcome(Welcome), state(StateUpdate), tools(ToolsUpdate)
     case progress(Progress), result(CallResult), goodbye(Goodbye), call(Call), cancel(Cancel), notice(Notice)
     case clients(ClientsUpdate), revokeClient(RevokeClient)
+    case auditRequest(AuditRequest), audit(AuditPage)
 
     static let allTypes = [
         "challenge", "hello", "welcome", "state", "tools", "progress", "result", "goodbye", "call", "cancel", "notice",
-        "clients", "revoke_client",
+        "clients", "revoke_client", "audit_request", "audit",
     ]
 
     var type: String {
@@ -233,6 +286,8 @@ enum AgentMessage: Sendable {
         case .notice: "notice"
         case .clients: "clients"
         case .revokeClient: "revoke_client"
+        case .auditRequest: "audit_request"
+        case .audit: "audit"
         }
     }
 
@@ -271,6 +326,8 @@ enum AgentMessage: Sendable {
                 let r = try dec.decode(RevokeClient.self, from: data)
                 guard ClientEntry.isValid(id: r.id) else { throw ProtocolError.violation("invalid client id") }
                 return .revokeClient(r)
+            case "audit_request": return .auditRequest(try dec.decode(AuditRequest.self, from: data))
+            case "audit": return .audit(try dec.decode(AuditPage.self, from: data))
             default: throw ProtocolError.violation("unknown message type \(type)")
             }
         } catch let e as ProtocolError {
@@ -297,6 +354,8 @@ enum AgentMessage: Sendable {
         case .notice(let m): body = try enc.encode(m)
         case .clients(let m): body = try enc.encode(m)
         case .revokeClient(let m): body = try enc.encode(m)
+        case .auditRequest(let m): body = try enc.encode(m)
+        case .audit(let m): body = try enc.encode(m)
         }
         guard var object = try JSONSerialization.jsonObject(with: body) as? [String: Any] else {
             throw ProtocolError.violation("message did not encode as an object")

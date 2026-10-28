@@ -92,9 +92,9 @@ import Testing
     @Test func helloCarriesTheClientsFeature() throws {
         let hello = Hello.make(
             deviceID: "dev_1", signature: "sig", appVersion: "0.8.10", osVersion: "26.1", tools: [], state: .sample)
-        #expect(hello.features == ["clients"])
+        #expect(hello.features == ["clients", "audit"])
         let object = try jsonObject(AgentMessage.hello(hello).encode()) as! [String: Any]
-        #expect(object["features"] as? [String] == ["clients"])
+        #expect(object["features"] as? [String] == ["clients", "audit"])
     }
 
     @Test func helloWithoutFeaturesStillDecodes() throws {

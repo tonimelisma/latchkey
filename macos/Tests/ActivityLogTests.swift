@@ -448,9 +448,9 @@ enum LogBeforeTheCheck {
             isError: true, durationMS: 42)
         #expect(
             format.line(a)
-                == #"{"time":"2026-10-26T00:33:20.250-07:00","tool":"files_read","arguments":{"path":"/Users/toni/a.txt"},"result":[{"text":"hi","type":"text"}],"isError":true,"durationMS":42}"#
+                == #"{"time":"2026-10-26T00:33:20.250-07:00","kind":"action","tool":"files_read","arguments":{"path":"/Users/toni/a.txt"},"result":[{"text":"hi","type":"text"}],"isError":true,"durationMS":42,"call_id":null,"client":null}"#
                 || format.line(a)
-                    == #"{"time":"2026-10-26T00:33:20.250-07:00","tool":"files_read","arguments":{"path":"/Users/toni/a.txt"},"result":[{"type":"text","text":"hi"}],"isError":true,"durationMS":42}"#,
+                    == #"{"time":"2026-10-26T00:33:20.250-07:00","kind":"action","tool":"files_read","arguments":{"path":"/Users/toni/a.txt"},"result":[{"type":"text","text":"hi"}],"isError":true,"durationMS":42,"call_id":null,"client":null}"#,
             "\(format.line(a))")
         let plain = Activity(
             at: Date(timeIntervalSince1970: 0), tool: "remove_access", arguments: "Claude (claude.ai)",
@@ -459,7 +459,10 @@ enum LogBeforeTheCheck {
         #expect(line.contains(#""time":"1970-01-01T00:00:00.000Z""#))
         #expect(line.contains(#""arguments":"Claude (claude.ai)""#), "text that isn't JSON stays a string")
         let object = try #require(try JSONSerialization.jsonObject(with: Data(line.utf8)) as? [String: Any])
-        #expect(Set(object.keys) == ["time", "tool", "arguments", "result", "isError", "durationMS"])
+        #expect(
+            Set(object.keys) == [
+                "time", "kind", "tool", "arguments", "result", "isError", "durationMS", "call_id", "client",
+            ])
     }
 
     @MainActor @Test func exportWritesWhatTheWindowSelectsOldestFirst() throws {

@@ -13,6 +13,11 @@ enum Diagnostics {
     static let connection = Logger(subsystem: subsystem, category: "connection")
     static let power = Logger(subsystem: subsystem, category: "power")
     static let permissions = Logger(subsystem: subsystem, category: "permissions")
+    /// Start, quit, pairing, pause (the same category as `AppModel.log`).
+    static let lifecycle = Logger(subsystem: subsystem, category: "lifecycle")
+    static let activity = Logger(subsystem: subsystem, category: "activity")
+    /// The comparison with the relay's audit (FR-634); the installer reads it (FR-636).
+    static let audit = Logger(subsystem: subsystem, category: "audit")
 }
 
 /// Passes a value on only when it differs from the last one, so a state read every few seconds

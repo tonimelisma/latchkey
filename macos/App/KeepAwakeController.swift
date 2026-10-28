@@ -17,7 +17,7 @@ final class HelperClient {
     func registerIfNeeded() {
         guard service.status == .notRegistered || service.status == .notFound else { return }
         do { try service.register() } catch {
-            Diagnostics.helper.error("Couldn't register the helper: \(error.localizedDescription, privacy: .public)")
+            EventLog.shared.record(.helper, "Couldn't register the helper: \(error.localizedDescription)", error: true)
         }
     }
 
@@ -103,9 +103,36 @@ final class KeepAwakeController {
 
     var helperApproved: Bool { helper.status == .enabled }
 
+    /// The problems of the last `apply`, so each is an event once until it goes away (FR-633);
+    /// macOS's log gets every one (FR-620).
+    private var problems: [String] = []
+    private var lastProblems: [String] = []
+
+    private func problem(_ text: String) {
+        Diagnostics.keepAwake.error("\(text, privacy: .public)")
+        problems.append(text)
+    }
+
+    private func recordProblems() {
+        defer {
+            lastProblems = problems
+            problems = []
+        }
+        guard problems != lastProblems else { return }
+        for p in problems where !lastProblems.contains(p) {
+            EventLog.shared.record(.helper, p, error: true, systemLog: false)
+        }
+    }
+
     /// Applies the decision; returns whether the system setting now matches it.
     @discardableResult
     func apply(_ decision: KeepAwake) async -> Bool {
+        let ok = await applyOnce(decision)
+        recordProblems()
+        return ok
+    }
+
+    private func applyOnce(_ decision: KeepAwake) async -> Bool {
         let on = decision == .on
         if on, assertion == 0 {
             IOPMAssertionCreateWithName(
@@ -117,8 +144,7 @@ final class KeepAwakeController {
         }
         guard helperApproved else {
             if on {
-                Diagnostics.keepAwake.error(
-                    "Helper not approved (\(String(describing: self.helper.status), privacy: .public))")
+                problem("Helper not approved (\(String(describing: helper.status)))")
             }
             verified = !on
             return verified
@@ -126,18 +152,17 @@ final class KeepAwakeController {
         // No answer: an old helper may have just ended itself after an install, and launchd
         // starts the new one on the next connection, so try once more.
         if await helper.setSleepDisabled(on) == nil {
-            Diagnostics.keepAwake.error("Helper didn't answer setting sleep disabled to \(on); trying once more")
+            problem("Helper didn't answer setting sleep disabled to \(on); trying once more")
             try? await Task.sleep(for: .seconds(1))
             if await helper.setSleepDisabled(on) == nil {
-                Diagnostics.keepAwake.error("Helper didn't answer the second time either")
+                problem("Helper didn't answer the second time either")
             }
         }
         // Verify from the kernel itself rather than trusting the reply (FR-031).
         let now = PowerReader.sleepDisabled()
         verified = now == on
         if !verified {
-            Diagnostics.keepAwake.error(
-                "SleepDisabled is \(now.map { "\($0)" } ?? "unknown", privacy: .public), wanted \(on)")
+            problem("SleepDisabled is \(now.map { "\($0)" } ?? "unknown"), wanted \(on)")
         }
         return verified
     }

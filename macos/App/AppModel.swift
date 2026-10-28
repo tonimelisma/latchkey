@@ -18,7 +18,14 @@ final class AppModel {
     private(set) var keepAwake: KeepAwake = .offUser
     private(set) var relayURL: URL?
     private(set) var helperStatus: SMAppService.Status = .notRegistered
-    var lastError: String?
+    /// What went wrong, as the Owner is shown it; each one is an event too (FR-633).
+    var lastError: String? {
+        didSet {
+            if let lastError, lastError != oldValue {
+                EventLog.shared.record(.app, "Shown to the Owner: \(lastError)", error: true)
+            }
+        }
+    }
 
     var keepAwakeEnabled: Bool {
         didSet { defaults.set(keepAwakeEnabled, forKey: Keys.keepAwake); Task { await refresh() } }
@@ -78,6 +85,17 @@ final class AppModel {
         capabilities = CapabilityRegistry(
             capabilities: Self.makeCapabilities(), levels: levels)
         activityLog = ActivityLog.open()
+        // The app's own events go into the same log (FR-633); without one there is nowhere to
+        // keep them, and macOS's log still has their lines (FR-620).
+        if let store = activityLog.store {
+            EventLog.shared.attach { try store.record($0) }
+        } else {
+            EventLog.shared.discard()
+        }
+    }
+
+    private func event(_ category: EventCategory, _ text: String, error: Bool = false) {
+        EventLog.shared.record(category, text, error: error)
     }
 
     // MARK: lifecycle
@@ -108,6 +126,8 @@ final class AppModel {
             Self.log.notice(
                 "Started \(Self.version, privacy: .public), paired with \(identity.relayURL.absoluteString, privacy: .private(mask: .hash))"
             )
+            EventLog.shared.record(
+                .app, "Started \(Self.version), paired with \(identity.relayURL.absoluteString)", systemLog: false)
             relayURL = identity.relayURL
             // Paired from this moment, not from the connection's first report a moment later:
             // otherwise the setup check below opens its window on every start (FR-205).
@@ -116,10 +136,24 @@ final class AppModel {
         } else {
             Self.log.notice(
                 "Started \(Self.version, privacy: .public), not paired (\(DeviceIdentity.missing, privacy: .public))")
+            EventLog.shared.record(
+                .app, "Started \(Self.version), not paired (\(DeviceIdentity.missing))", systemLog: false)
         }
+        recordLogProblems()
         Task { await refresh() }
         loadRecentActivity()
         decideSetupAtStart()
+    }
+
+    /// What the start found about the activity log's own record (FR-613), as an event.
+    private func recordLogProblems() {
+        switch trace?.latestState {
+        case .missing:
+            event(.activity, "The record of the newest activity entry is missing from the Keychain", error: true)
+        case .unreadable(let why):
+            event(.activity, "The record of the newest activity entry can't be read: \(why)", error: true)
+        case .ok, nil: break
+        }
     }
 
     /// An unpaired Mac sees setup at once. A paired one waits until macOS has said what every
@@ -127,7 +161,7 @@ final class AppModel {
     /// done, and logs them (FR-621; the window opened over a finished setup on 2026-10-27).
     private func decideSetupAtStart() {
         guard isPaired else {
-            Diagnostics.permissions.notice("Opening setup: not paired")
+            event(.setup, "Opening setup: not paired")
             return showSetup()
         }
         Task {
@@ -141,15 +175,14 @@ final class AppModel {
             let missing = SetupDecision.missing(steps)
             let unknown = SetupDecision.unknown(steps)
             if !unknown.isEmpty {
-                Diagnostics.permissions.error(
-                    "Still unknown after 5 s, not counted as missing: \(unknown.joined(separator: ", "), privacy: .public)"
-                )
+                event(
+                    .setup, "Still unknown after 5 s, not counted as missing: \(unknown.joined(separator: ", "))",
+                    error: true)
             }
             if missing.isEmpty {
-                Diagnostics.permissions.notice("Setup is finished")
+                event(.setup, "Setup is finished")
             } else {
-                Diagnostics.permissions.notice(
-                    "Opening setup: missing \(missing.joined(separator: ", "), privacy: .public)")
+                event(.setup, "Opening setup: missing \(missing.joined(separator: ", "))")
                 showSetup()
             }
         }
@@ -188,7 +221,7 @@ final class AppModel {
     /// The app landed in the Trash. If a newer copy takes its place within a few seconds, this is
     /// an update: hand over to it and quit. Otherwise uninstall.
     func movedToTrash(installedPath: String) async {
-        Self.log.notice("The app was moved to the Trash; waiting to see whether it was replaced")
+        event(.app, "The app was moved to the Trash; waiting to see whether it was replaced")
         for _ in 0..<25 {
             if AppLocation.replaced(at: installedPath) {
                 await shutdown()
@@ -201,7 +234,7 @@ final class AppModel {
             }
             try? await Task.sleep(for: .milliseconds(200))
         }
-        Self.log.notice("Not replaced: uninstalling")
+        event(.app, "Not replaced: uninstalling")
         await uninstall()
     }
 
@@ -214,6 +247,8 @@ final class AppModel {
         connection = nil
         await keepAwakeController.restore()
         await BackgroundItems.unregisterAll()
+        event(.app, "Uninstalling: removing the local files, the activity log included")
+        EventLog.shared.discard()  // nothing more can be kept once the log is gone
         LocalData().remove()
         NSApp.terminate(nil)
     }
@@ -233,8 +268,9 @@ final class AppModel {
                 MainActor.assumeIsolated {
                     guard let self else { return }
                     let reason = KeepAwakePolicy.sleepReason(self.keepAwake)
-                    Diagnostics.power.notice(
-                        "Going to sleep: keep-awake \(self.keepAwake.rawValue, privacy: .public), lid \(PowerReader.lidClosed().map { $0 ? "closed" : "open" } ?? "none", privacy: .public), sleep disabled \(PowerReader.sleepDisabled().map { "\($0)" } ?? "unknown", privacy: .public)"
+                    self.event(
+                        .power,
+                        "Going to sleep: keep-awake \(self.keepAwake.rawValue), lid \(PowerReader.lidClosed().map { $0 ? "closed" : "open" } ?? "none"), sleep disabled \(PowerReader.sleepDisabled().map { "\($0)" } ?? "unknown")"
                     )
                     Task { await self.connection?.sendGoodbye(reason) }
                 }
@@ -243,7 +279,7 @@ final class AppModel {
             ws.addObserver(forName: NSWorkspace.willPowerOffNotification, object: nil, queue: .main) { [weak self] _ in
                 MainActor.assumeIsolated {
                     guard let self else { return }
-                    Diagnostics.power.notice("The Mac is shutting down or restarting")
+                    self.event(.power, "The Mac is shutting down or restarting")
                     Task { await self.connection?.sendGoodbye(.systemShutdown) }
                 }
             })
@@ -251,7 +287,7 @@ final class AppModel {
             ws.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: .main) { [weak self] _ in
                 MainActor.assumeIsolated {
                     guard let self else { return }
-                    Diagnostics.power.notice("Woke from sleep")
+                    self.event(.power, "Woke from sleep")
                     Task {
                         await self.refresh()  // re-apply keep-awake after wake (FR-031)
                         await self.connection?.reconnectNow()
@@ -271,7 +307,7 @@ final class AppModel {
     private func pathChanged(satisfied: Bool) async {
         defer { lastPathSatisfied = satisfied }
         if satisfied != lastPathSatisfied {
-            Diagnostics.connection.notice("Network \(satisfied ? "available" : "unavailable", privacy: .public)")
+            event(.connection, "Network \(satisfied ? "available" : "unavailable")")
         }
         if satisfied, lastPathSatisfied != nil { await connection?.reconnectNow() }
     }
@@ -305,7 +341,7 @@ final class AppModel {
             "Keep-awake \(keepAwake.rawValue) (wanted \(decision.rawValue)); \(source); lid \(lid); thermal \(power.thermal.rawValue); sleep disabled \(PowerReader.sleepDisabled().map { "\($0)" } ?? "unknown")"
         logApprovals()
         if keepAwakeChanges.changed(line) {
-            Diagnostics.keepAwake.notice("\(line, privacy: .public); battery \(self.power.batteryPercent)%")
+            event(.keepAwake, "\(line); battery \(power.batteryPercent)%")
         }
         await connection?.sendState()
     }
@@ -339,7 +375,7 @@ final class AppModel {
     func setPaused(_ on: Bool) {
         paused = on
         Pause.set(on, defaults)
-        Self.log.notice("\(on ? "Paused" : "Resumed", privacy: .public) Claude's access")
+        event(.pause, "\(on ? "Paused" : "Resumed") Claude's access")
         guard on else { return }
         Task { [connection] in
             await Pause.stopWork(calls: { reason in await connection?.stopCalls(reason) }, shell: ShellCapability.jobs)
@@ -397,7 +433,7 @@ final class AppModel {
     /// Asks macOS to show its prompt the first time; after that, opens System Settings.
     func allowScreenRecording() {
         let granted = CGRequestScreenCaptureAccess()
-        Diagnostics.permissions.notice("Asked for Screen Recording: \(granted)")
+        event(.permissions, "Asked for Screen Recording: \(granted)")
         if !granted { Permissions.openPrivacySettings("Privacy_ScreenCapture") }
         checkScreenPermissions()
     }
@@ -405,7 +441,7 @@ final class AppModel {
     func allowAccessibility() {
         let prompt = "AXTrustedCheckOptionPrompt"  // kAXTrustedCheckOptionPrompt, which Swift 6 rejects as shared state
         let trusted = AXIsProcessTrustedWithOptions([prompt: true] as CFDictionary)
-        Diagnostics.permissions.notice("Asked for Accessibility: \(trusted)")
+        event(.permissions, "Asked for Accessibility: \(trusted)")
         if !trusted { Permissions.openPrivacySettings("Privacy_Accessibility") }
         checkScreenPermissions()
     }
@@ -438,9 +474,7 @@ final class AppModel {
             _ = try? await NSWorkspace.shared.openApplication(at: url, configuration: config)
         }
         let state = await Task.detached { Permissions.automation(of: app, ask: true) }.value
-        Diagnostics.permissions.notice(
-            "Asked to control \(app, privacy: .public): \(state.map { "\($0)" } ?? "unknown (app not running)", privacy: .public)"
-        )
+        event(.permissions, "Asked to control \(app): \(state.map { "\($0)" } ?? "unknown (app not running)")")
         if let state { setControl(app, state) }
     }
 
@@ -487,13 +521,13 @@ final class AppModel {
     func allowEvents(_ kind: EventsKind) async {
         let page = kind == .events ? "Privacy_Calendars" : "Privacy_Reminders"
         let before = EventKitBackend.status(kind)
-        Diagnostics.permissions.notice(
-            "Asking for \(kind == .events ? "Calendars" : "Reminders", privacy: .public): status \(before.rawValue)")
+        event(.permissions, "Asking for \(kind == .events ? "Calendars" : "Reminders"): status \(before.rawValue)")
         if before == .notDetermined {
             NSApp.activate()  // macOS shows the question only for an app in front
             let outcome = await EventKitBackend.requestAccess(kind)
-            Diagnostics.permissions.notice(
-                "Answer: \(outcome.granted), \(outcome.error ?? "no error", privacy: .public), status \(EventKitBackend.status(kind).rawValue)"
+            event(
+                .permissions,
+                "Answer: \(outcome.granted), \(outcome.error ?? "no error"), status \(EventKitBackend.status(kind).rawValue)"
             )
             // No question appeared or it was refused: System Settings is the only way left.
             if !outcome.granted { Permissions.openPrivacySettings(page) }
@@ -504,8 +538,7 @@ final class AppModel {
     }
 
     func allowLocation() {
-        Diagnostics.permissions.notice(
-            "Asking for Location: \(String(describing: self.locationAccess), privacy: .public)")
+        event(.permissions, "Asking for Location: \(String(describing: locationAccess))")
         switch locationAccess {
         case .notAsked: LocationFixer.shared.requestAccess()
         case .servicesOff, .denied: Permissions.openPrivacySettings("Privacy_LocationServices")
@@ -517,9 +550,9 @@ final class AppModel {
     func allowContacts() async {
         do {
             let granted = try await CNContactStore().requestAccess(for: .contacts)
-            Diagnostics.permissions.notice("Asked for Contacts: \(granted)")
+            event(.permissions, "Asked for Contacts: \(granted)")
         } catch {
-            Diagnostics.permissions.error("Asked for Contacts: \(error.localizedDescription, privacy: .public)")
+            event(.permissions, "Asked for Contacts: \(error.localizedDescription)", error: true)
         }
         checkContacts()
     }
@@ -553,7 +586,7 @@ final class AppModel {
     /// One line with every approval's state, whenever one changes (FR-620).
     func logApprovals() {
         let line = approvals.map { "\($0.id) \(String(describing: $0.state))" }.joined(separator: ", ")
-        if approvalChanges.changed(line) { Diagnostics.permissions.notice("Approvals: \(line, privacy: .public)") }
+        if approvalChanges.changed(line) { event(.permissions, "Approvals: \(line)") }
     }
 
     func setStartsAtLogin(_ on: Bool) {
@@ -575,6 +608,9 @@ final class AppModel {
         }
         do {
             let identity = try await pairing.pair(relay: relay, macName: Host.current().localizedName ?? "Mac")
+            EventLog.shared.record(
+                .pairing, "Paired with \(relay.absoluteString) as \(identity.deviceID)", systemLog: false)
+            Self.log.notice("Paired through the sign-in window")
             relayURL = relay
             connect(identity)
         } catch PairingError.cancelled {
@@ -600,7 +636,7 @@ final class AppModel {
         if pairing.isOwn(link.code) { return }  // the sign-in window already delivered it
         Task {
             let handled = await links.run { await self.confirmAndPair(relay: relay, code: link.code) }
-            if !handled { Self.log.notice("A pairing link arrived while another was being handled: ignored") }
+            if !handled { self.event(.pairing, "A pairing link arrived while another was being handled: ignored") }
         }
     }
 
@@ -622,9 +658,13 @@ final class AppModel {
             NSApp.activate()
             guard alert.runModal() == .alertFirstButtonReturn, ask.canConnect else { return }
             Self.log.notice("Pairing link confirmed for \(relay.absoluteString, privacy: .private(mask: .hash))")
+            EventLog.shared.record(.pairing, "Pairing link confirmed for \(relay.absoluteString)", systemLog: false)
             pairing.cancelPending()  // the sign-in window's pairing, if one is open, gives way
             let identity = try await PairingFlow.exchange(
                 relay: relay, code: code, macName: Host.current().localizedName ?? "Mac")
+            EventLog.shared.record(
+                .pairing, "Paired with \(relay.absoluteString) as \(identity.deviceID)", systemLog: false)
+            Self.log.notice("Paired through a pairing link")
             relayURL = relay
             connect(identity)
         } catch {
@@ -662,7 +702,7 @@ final class AppModel {
         await connection?.stop(goodbye: .userDisconnected, state: agentState)
         connection = nil
         finishRemovals(access.disconnected())
-        Self.log.notice("Disconnect This Mac: forgetting the pairing")
+        event(.pairing, "Disconnect This Mac: forgetting the pairing")
         DeviceIdentity.delete()
         status = .notPaired
     }
@@ -678,7 +718,9 @@ final class AppModel {
             call: { [weak self] call in await self?.handle(call) ?? .text("The app is shutting down.", isError: true) },
             status: { [weak self] s in await self?.connectionChanged(s) },
             notice: { [weak self] n in await self?.show(n) },
-            clients: { [weak self] list in await self?.clientsChanged(list) })
+            clients: { [weak self] list in await self?.clientsChanged(list) },
+            connected: { [weak self] in await self?.checkAudit() })
+        device = identity.deviceID
         let c = RelayConnection(identity: identity, hooks: hooks)
         connection = c
         Task { await c.start() }
@@ -689,7 +731,7 @@ final class AppModel {
         // The list is shown only while connected: after a drop it may have changed elsewhere.
         if s != .connected { finishRemovals(access.disconnected()) }
         if s == .revoked {  // 4002: delete the local key (agent-protocol.md)
-            Self.log.notice("The relay revoked this Mac: forgetting the pairing")
+            event(.pairing, "The relay revoked this Mac: forgetting the pairing", error: true)
             DeviceIdentity.delete()
             connection = nil
         }
@@ -711,7 +753,8 @@ final class AppModel {
         let entry = Activity(
             at: started, tool: call.tool, arguments: call.arguments.jsonText,
             result: told.content.jsonText, isError: told.isError,
-            durationMS: Int(Date().timeIntervalSince(started) * 1000))
+            durationMS: Int(Date().timeIntervalSince(started) * 1000), callID: call.id, device: device,
+            client: call.client.flatMap { $0.isEmpty ? nil : $0 })
         try? trace?.record(entry)
         loadRecentActivity()
         if let activity = result.activity, !result.isError { Notifier.post(activity) }  // FR-130
@@ -775,6 +818,50 @@ final class AppModel {
             NSApp.activate()
             alert.runModal()
         }
+    }
+
+    // MARK: the comparison with the relay's audit (FR-634)
+
+    /// The device ID of the pairing in use, stored with each call (FR-632).
+    private var device: String?
+    /// The last comparison's result, for the Activity window; nil before one finished.
+    private(set) var audit: AuditComparison?
+    /// The last comparison's event text, or why it couldn't be made.
+    private(set) var auditLine: String?
+    private(set) var auditing = false
+
+    /// Compares this Mac's log with the relay's audit of this Mac, records the result as an
+    /// event (and in macOS's log, where the installer reads it), and keeps it for the window.
+    /// Runs after each connection and from the Activity window's button.
+    func checkAudit() async {
+        guard !auditing else { return }
+        auditing = true
+        defer { auditing = false }
+        guard let trace else {
+            return finishAudit(nil, "Audit check not possible: the activity log is unavailable")
+        }
+        guard let connection, let device else { return finishAudit(nil, AuditFetch.notConnected.problem ?? "") }
+        let fetched = await connection.fetchAudit()
+        guard case .entries(let relay) = fetched else { return finishAudit(nil, fetched.problem ?? "") }
+        let reader = trace.reader
+        let now = Date()
+        let outcome = await Task.detached { () -> (AuditComparison, String)? in
+            guard let mine = try? reader.calls() else { return nil }
+            let c = AuditComparison.compare(
+                relay: relay, mac: mine.calls, macWithoutIDs: mine.withoutIDs, device: device, now: now)
+            let tools = (try? reader.tools(of: Set(c.missingOnRelay.map(\.callID)))) ?? [:]
+            return (c, c.summary(tools: tools))
+        }.value
+        guard let outcome else {
+            return finishAudit(nil, "Audit check not possible: the activity log couldn't be read")
+        }
+        finishAudit(outcome.0, outcome.1)
+    }
+
+    private func finishAudit(_ comparison: AuditComparison?, _ line: String) {
+        audit = comparison
+        auditLine = line
+        event(.audit, line, error: comparison?.allMatch != true)
     }
 
     // MARK: activity (FR-131, FR-132)

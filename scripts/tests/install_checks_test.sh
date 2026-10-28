@@ -44,5 +44,17 @@ check "only an old helper's line" 1 helper_verdict 0.8.23 "$on" "Helper 0.8.22 s
 check "no helper line while keep-awake is wanted" 1 helper_verdict 0.8.23 "$on" ""
 check "keep-awake not wanted: helper not needed" 0 helper_verdict 0.8.23 "$user_off" ""
 
+# The app's log and the relay's audit agree (spec 001 FR-634, FR-636; 2026-10-27 nothing compared them).
+check "every call matches" 0 audit_verdict "Audit check: all 412 calls match; 3 calls from before call ids left out"
+check "no calls yet" 0 audit_verdict "Audit check: all 0 calls match"
+check "a call missing on the Mac" 1 audit_verdict \
+  "Audit check: 411 calls match; missing on the Mac: call_7Q2M (shell_run, 2026-10-27T17:40:00Z)"
+check "a call missing on the relay" 1 audit_verdict \
+  "Audit check: 412 calls match; missing on the relay: call_9X (notes_read, 2026-10-27T17:41:00Z)"
+check "a relay that doesn't answer audit requests" 1 audit_verdict \
+  "Audit check not possible: the relay doesn't answer audit requests"
+check "a relay that didn't answer in time" 1 audit_verdict "Audit check not possible: the relay didn't answer"
+check "no audit check line" 1 audit_verdict ""
+
 [ "$fails" = 0 ] && echo "all install check tests pass" || echo "$fails install check tests failed"
 [ "$fails" = 0 ]

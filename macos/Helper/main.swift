@@ -6,6 +6,8 @@ import Foundation
 
 final class SleepSetting: NSObject, HelperProtocol, @unchecked Sendable {
     private let queue = DispatchQueue(label: AppIdentity.current.helperBundleID + ".pmset")
+    /// The last setting logged (FR-620: each time it changes).
+    private let reported = Changes<String>()
 
     func setSleepDisabled(_ disabled: Bool, reply: @escaping @Sendable (Bool, String?) -> Void) {
         queue.async {
@@ -14,7 +16,8 @@ final class SleepSetting: NSObject, HelperProtocol, @unchecked Sendable {
             if let error {
                 Diagnostics.helper.error(
                     "pmset disablesleep \(disabled ? 1 : 0) failed: \(error, privacy: .public)")
-            } else {
+            } else if self.reported.changed("\(now) \(disabled)") {
+                // The app re-applies every minute; the line is written when the value changes.
                 Diagnostics.helper.notice("Sleep disabled: \(now) (asked \(disabled))")
             }
             reply(now, error)
@@ -26,7 +29,10 @@ final class SleepSetting: NSObject, HelperProtocol, @unchecked Sendable {
     }
 
     func restore() {
-        queue.sync { _ = Self.pmset(["-a", "disablesleep", "0"]) }
+        queue.sync {
+            _ = Self.pmset(["-a", "disablesleep", "0"])
+            _ = reported.changed("restored")  // the next setting is a change again
+        }
     }
 
     static func current() -> Bool { PmsetParser.sleepDisabled(pmset(["-g"]).output) }

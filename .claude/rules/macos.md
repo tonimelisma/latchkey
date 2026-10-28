@@ -116,4 +116,15 @@ paths:
   wait, so the app retries every 12 s (up to 5 times). After an install, check
   `pmset -g | grep SleepDisabled` is 1 while keep-awake is on.
 
+- macOS's unified log is not a record: it discards `notice` lines within hours (the audit of
+  2026-10-27 found the day's keep-awake, helper, and connection lines already gone). Anything
+  that must be kept goes through `EventLog.shared.record(...)` (App/EventLog.swift), which
+  writes the macOS line and an event in the encrypted activity log (FR-633); a plain
+  `Logger`/`Diagnostics` call alone is only for debugging noise. A state checked every few
+  seconds passes through `Changes` first, or the log fills with repeats. A line with the
+  relay's address takes `systemLog: false` and its own private `Logger` line.
+- A relay closes the connection with 4005 on any message type it doesn't know. No backwards
+  compatibility (Toni, 2026-10-27, one user): deploy the relay before installing an app that
+  sends a new message type, and the app needs no fallback for older relays.
+
 Add new gotchas here as they are discovered.

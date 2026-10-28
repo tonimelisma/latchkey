@@ -28,6 +28,7 @@ struct MenuContent: View {
             }
             ForEach(ActivityFormat.menuItems(model.recentActivity)) { ActivityItem(entry: $0) }
             Button("Show All Activity…") {
+                Diagnostics.activity.notice("Show All Activity chosen")
                 openWindow(id: "activity")
                 NSApp.activate()
             }
@@ -58,6 +59,7 @@ struct ActivityItem: View {
             Text("Asked: \(ActivityFormat.clip(entry.arguments))")
             Text("\(entry.isError ? "Failed" : "Result"): \(ActivityFormat.clip(entry.result))")
             Text("Took \(entry.durationMS) ms")
+            if let client = entry.client { Text(verbatim: "From \(client)") }  // FR-637; text from the network
         }
     }
 }
@@ -653,8 +655,12 @@ enum ActivityFormat {
     }
 
     /// One line, at most `limit` characters, for a menu item.
+    /// Only the start of the text is looked at, so a screenshot's megabyte of base64 costs nothing.
     static func clip(_ s: String, _ limit: Int = 80) -> String {
-        let line = s.replacingOccurrences(of: "\n", with: " ")
-        return line.count > limit ? String(line.prefix(limit - 1)) + "…" : line
+        let scalars = s.unicodeScalars
+        let head = scalars.prefix(limit * 4)
+        let cut = head.endIndex != scalars.endIndex
+        let line = String(String.UnicodeScalarView(head)).replacingOccurrences(of: "\n", with: " ")
+        return line.count > limit || cut ? String(line.prefix(limit - 1)) + "…" : line
     }
 }

@@ -45,7 +45,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         signal(SIGTERM, SIG_IGN)
         let source = DispatchSource.makeSignalSource(signal: SIGTERM, queue: .main)
         source.setEventHandler {
-            AppModel.log.notice("SIGTERM: quitting")
+            EventLog.shared.record(.app, "SIGTERM: quitting")
             // Not from inside this main-queue block: terminate's wait for the shutdown would run
             // nested in it, and the main queue (which the shutdown needs) would never run again.
             NSApp.perform(#selector(NSApplication.terminate(_:)), with: nil, afterDelay: 0)
@@ -59,17 +59,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
-        AppModel.log.notice("Quitting")
+        EventLog.shared.record(.app, "Quitting")
         // Quit within 6 s even if a step hangs (Constitution II); the helper restores sleep by
         // itself when the app goes away.
         let done = QuitOnce { sender.reply(toApplicationShouldTerminate: true) }
         Task {
             await model.shutdown()
+            EventLog.shared.record(.app, "Quit: the relay was told and sleep restored")
             done.fire()
         }
         Task {
             try? await Task.sleep(for: .seconds(6))
-            AppModel.log.notice("Quit: shutdown took too long; quitting anyway")
+            EventLog.shared.record(.app, "Quit: shutdown took too long; quitting anyway", error: true)
             done.fire()
         }
         return .terminateLater

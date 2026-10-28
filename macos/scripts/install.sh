@@ -7,7 +7,7 @@
 # if this Mac was paired before and the new app starts "not paired", the install fails loudly
 # (install-lib.sh; on 2026-10-24 it reported success after exactly that). Then it checks the app
 # as the Owner meets it: no setup window over a finished setup, keep-awake as wanted, the new
-# helper running (spec 001 FR-622).
+# helper running (spec 001 FR-622), and the activity log agreeing with the relay's audit (FR-636).
 set -eu
 cd "$(dirname "$0")/.."
 # shellcheck source=macos/scripts/install-lib.sh
@@ -115,8 +115,24 @@ while [ $i -lt 10 ]; do
 done
 windows=$(swift scripts/count-windows.swift 2>/dev/null || echo "?")
 helper=$(last_line helper "Helper ")
+# The comparison with the relay's audit runs right after the app connects (spec 001 FR-634); a
+# relay page may take up to 15 s, and a relay that closes on the request is seen on the reconnect.
+audit=""
+case "$started" in
+  *"not paired"*) echo "install: not paired, so no audit check against a relay" ;;
+  *)
+    i=0
+    while [ $i -lt 60 ]; do
+      audit=$(last_line audit "Audit check")
+      [ -n "$audit" ] && break
+      sleep 2
+      i=$((i + 1))
+    done
+    ;;
+esac
 failed=0
 keepawake_verdict "$awake" || failed=1
 helper_verdict "$VERSION" "$awake" "$helper" || failed=1
 window_verdict "$windows" "$setup" || failed=1
+case "$started" in *"not paired"*) ;; *) audit_verdict "$audit" || failed=1 ;; esac
 exit $failed
