@@ -1,6 +1,6 @@
 # Status
 
-Last updated: 2026-10-28 (Shell fence also covers ~/.ssh and git hooks; app 0.8.34)
+Last updated: 2026-10-28 (Shell fence also covers ~/.ssh and git hooks; app 0.8.35)
 
 Xcode signing ready (2026-10-20): Toni's Xcode account has a valid "Apple Development" certificate
 (certificate expires 2027-07-22). Keep the team ID out of committed project files

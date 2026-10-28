@@ -17,6 +17,10 @@ enum Fence {
     /// Git hooks run on every commit in their project, wherever it is: any `.git/hooks`, a
     /// submodule's included, in any letter case since the Mac's disks ignore it (FR-319).
     static let hooks = #"(regex #"/\.[gG][iI][tT]/([^/]+/)*[hH][oO][oO][kK][sS](/|$)")"#
+    /// What `git init` and `git clone` write there: the folder and the samples, which git never
+    /// runs (live check 2026-10-28: every new project outside scratch failed without them).
+    static let hookSamples =
+        #"(regex #"/\.[gG][iI][tT]/([^/]+/)*[hH][oO][oO][kK][sS]$" #"/\.[gG][iI][tT]/([^/]+/)*[hH][oO][oO][kK][sS]/[^/]+\.sample$")"#
 
     /// The paths Claude declared, resolved; too broad ones are refused (FR-318).
     static func declared(_ writes: [String], home: URL) throws -> [URL] {
@@ -83,6 +87,7 @@ enum Fence {
         rules.append(
             "(deny file-write* " + permanentPaths.map { "(subpath \(quote($0.path)))" }.joined(separator: " ") + " "
                 + hooks + ")")
+        rules.append("(allow file-write* " + hookSamples + ")")
         // The other jobs' scratch folders and the records of their processes are Latchkey's
         // (the app stops and trashes by them at start, FR-324): only the job's own scratch.
         let jobsRoot = OwnFiles.real(scratch).deletingLastPathComponent()

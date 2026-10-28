@@ -203,6 +203,18 @@ final class Reports: @unchecked Sendable {
         #expect(d.left?.contains("permanent change") == true, "\(d.left ?? "nil")")
     }
 
+    @Test func newProjectsGetGitsSampleHooks() async throws {
+        let projects = home.appending(path: "Downloads")
+        try FileManager.default.createDirectory(at: projects, withIntermediateDirectories: true)
+        let r = try await jobs.run(
+            "git init -q p && ls p/.git/hooks | grep -c sample; mv p/.git/hooks/pre-commit.sample p/.git/hooks/pre-commit",
+            folder: projects.path, wait: .seconds(10))
+        #expect(r.refusedWrite, "a sample renamed into a hook is refused: \(r.output)")
+        let hooks = projects.appending(path: "p/.git/hooks")
+        #expect(FileManager.default.fileExists(atPath: hooks.appending(path: "pre-commit.sample").path), "\(r.output)")
+        #expect(!FileManager.default.fileExists(atPath: hooks.appending(path: "pre-commit").path))
+    }
+
     @Test func sshAndGitHooksNeedDeclaring() async throws {
         let ssh = home.appending(path: ".ssh")
         let repo = home.appending(path: "project")
