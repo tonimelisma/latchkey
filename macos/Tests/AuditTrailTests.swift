@@ -381,6 +381,37 @@ enum LogBeforeEvents {
 
     /// Security review, 2026-10-27: a relay's answer can't make the Mac collect without end or
     /// ask again for what it already has.
+    /// Call ids are never cut (two long ids could then look alike and hide a gap): one that
+    /// isn't `call_` and 1 to 64 letters or digits is refused (security review, 2026-10-27).
+    @Test func callIDsHaveOneExactShape() {
+        #expect(AuditComparison.isValidCallID("call_7Q2MXK4RZB3N8P5TVWYC6DHJ9F"))
+        #expect(AuditComparison.isValidCallID("call_A"))
+        for bad in ["c_17", "call_", "call_" + String(repeating: "A", count: 65), "call_A B", "call_é", "CALL_A", ""] {
+            #expect(!AuditComparison.isValidCallID(bad), "\(bad)")
+        }
+        #expect(CallCheck.refusal(callID: "c_17") != nil)
+        #expect(CallCheck.refusal(callID: "call_7Q2MXK4RZB3N8P5TVWYC6DHJ9F") == nil)
+    }
+
+    @Test func aRelayIdOfTheWrongShapeIsMalformed() async {
+        let fetch = await AuditPaging.fetch { _ in
+            AuditPage(id: "a", entries: [Self.relay("call_" + String(repeating: "X", count: 5000), 3)], nextSince: nil)
+        }
+        #expect(fetch == .badAnswer)
+    }
+
+    /// The same id twice on either side is a discrepancy, not quietly merged.
+    @Test func anIdRecordedTwiceIsReported() {
+        let c = AuditComparison.compare(
+            relay: [Self.relay("call_A", 30), Self.relay("call_B", 25), Self.relay("call_B", 24)],
+            mac: [Self.mac("call_A", 30), Self.mac("call_A", 29), Self.mac("call_B", 25)], macWithoutIDs: 0,
+            device: Self.device, now: Self.now)
+        #expect(!c.allMatch)
+        let text = c.summary(tools: [:])
+        #expect(text.contains("recorded twice on the Mac: call_A"))
+        #expect(text.contains("listed twice by the relay: call_B"))
+    }
+
     @Test func aPageLargerThanAskedIsMalformed() async {
         let entry = Self.relay("call_A", 3)
         let fetch = await AuditPaging.fetch(limit: 2) { _ in

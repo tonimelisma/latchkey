@@ -739,6 +739,12 @@ final class AppModel {
 
     /// Runs a call and records it in the local trace (FR-026).
     private func handle(_ call: Call) async -> ToolResult {
+        if let refused = CallCheck.refusal(callID: call.id) {
+            EventLog.shared.record(
+                .audit, "Refused a call of \(AuditComparison.clip(call.tool)): its id isn't of the allowed form",
+                error: true)
+            return refused
+        }
         let started = Date()
         busy += 1  // FR-132
         defer { busy -= 1 }
@@ -754,7 +760,7 @@ final class AppModel {
             // Relay-supplied names (tool, call id, Claude app) are bounded before they're kept.
             at: started, tool: AuditComparison.clip(call.tool), arguments: call.arguments.jsonText,
             result: told.content.jsonText, isError: told.isError,
-            durationMS: Int(Date().timeIntervalSince(started) * 1000), callID: AuditComparison.clip(call.id),
+            durationMS: Int(Date().timeIntervalSince(started) * 1000), callID: call.id,
             device: device, client: call.client.flatMap { $0.isEmpty ? nil : AuditComparison.clip($0) })
         try? trace?.record(entry)
         loadRecentActivity()

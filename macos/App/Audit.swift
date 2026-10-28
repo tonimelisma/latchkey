@@ -53,7 +53,9 @@ enum AuditPaging {
         // Empty pages that keep moving on would never end either.
         for _ in 0...(maxEntries / max(limit, 1) + 1) {
             guard let answer = await page(since) else { return .noAnswer }
-            guard answer.entries.count <= limit, answer.entries.allSatisfy({ $0.at >= since }) else {
+            guard answer.entries.count <= limit, answer.entries.allSatisfy({ $0.at >= since }),
+                answer.entries.allSatisfy({ $0.callID.isEmpty || AuditComparison.isValidCallID($0.callID) })
+            else {
                 return .badAnswer
             }
             guard all.count + answer.entries.count <= maxEntries else { return .badAnswer }
@@ -83,8 +85,18 @@ struct AuditComparison: Equatable, Sendable {
     var otherPairings = 0
     /// Left out and counted: calls on one side only that are recent enough to be still running.
     var stillRunning = 0
+    /// Ids recorded more than once in the Mac's log, and listed more than once by the relay: each
+    /// call has one id, so a repeat is a discrepancy (security review, 2026-10-27).
+    var twiceOnMac: [String] = []
+    var twiceOnRelay: [String] = []
 
-    var allMatch: Bool { missingOnMac.isEmpty && missingOnRelay.isEmpty }
+    var allMatch: Bool { missingOnMac.isEmpty && missingOnRelay.isEmpty && twiceOnMac.isEmpty && twiceOnRelay.isEmpty }
+
+    /// Since FR-632 every call id is `call_` and 1 to 64 letters or digits (the relay makes 26
+    /// base32 characters). Ids are compared whole, never cut, so this bound is checked instead.
+    static func isValidCallID(_ id: String) -> Bool {
+        id.wholeMatch(of: /call_[0-9A-Za-z]{1,64}/) != nil
+    }
 
     /// A call on one side only this recent may still be running or not yet recorded on the
     /// other: the relay caps a call's deadline at 60 seconds, and a call the relay gave up on can
@@ -110,6 +122,8 @@ struct AuditComparison: Equatable, Sendable {
                 c.otherPairings += 1
             } else if macIDs.insert(m.callID).inserted {
                 macCalls.append(m)
+            } else if !c.twiceOnMac.contains(m.callID) {
+                c.twiceOnMac.append(m.callID)
             }
         }
         var relayIDs = Set<String>()
@@ -118,7 +132,10 @@ struct AuditComparison: Equatable, Sendable {
                 c.beforeCallIDs += 1
                 continue
             }
-            guard relayIDs.insert(r.callID).inserted else { continue }
+            guard relayIDs.insert(r.callID).inserted else {
+                if !c.twiceOnRelay.contains(r.callID) { c.twiceOnRelay.append(r.callID) }
+                continue
+            }
             if macIDs.contains(r.callID) {
                 c.matched += 1
             } else if r.date > recent {
@@ -185,6 +202,8 @@ struct AuditComparison: Equatable, Sendable {
                             "\(Self.clip($0.callID)) (\(Self.clip(tools[$0.callID] ?? "unknown tool")), \(format.string(from: $0.at)))"
                         }))
         }
+        if !twiceOnMac.isEmpty { parts.append("recorded twice on the Mac: " + Self.listed(twiceOnMac)) }
+        if !twiceOnRelay.isEmpty { parts.append("listed twice by the relay: " + Self.listed(twiceOnRelay)) }
         if beforeCallIDs > 0 {
             parts.append("\(Self.count(beforeCallIDs)) from before call ids left out")
         }
@@ -199,4 +218,17 @@ struct AuditComparison: Equatable, Sendable {
     }
 
     private static func count(_ n: Int) -> String { n == 1 ? "1 call" : "\(n) calls" }
+}
+
+/// Calls whose id isn't the one shape FR-632 allows are refused before they run: the id is the
+/// key the audit comparison matches on, so it's checked rather than cut (security review,
+/// 2026-10-27).
+enum CallCheck {
+    static func refusal(callID: String) -> ToolResult? {
+        AuditComparison.isValidCallID(callID)
+            ? nil
+            : .text(
+                "Latchkey refused this call: the relay gave it an id of the wrong form. Nothing was done.",
+                isError: true)
+    }
 }
