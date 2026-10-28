@@ -37,3 +37,37 @@ Done 2026-10-22 with 003, 005, 006.
 - **Finished jobs** are kept for 10 minutes so their output can still be read, at most 20.
 - **Visibility**: each command Claude runs posts a notification ("Claude ran: …") and appears
   in the menu's activity, like other changes (spec 002 FR-130).
+
+## Nothing left behind (2026-10-27)
+
+What happened, and how other agent tools handle it: `docs/ideas/leftovers.md` (history) and the
+discussion with Toni of 2026-10-27. Other tools prevent rather than clean up: Claude Code, Codex,
+and Gemini CLI fence a command's writes with macOS's sandbox (Seatbelt, `sandbox-exec`) to the
+work folder and the temporary folder; ChatGPT agent, Anthropic's computer-use reference, Docker
+Sandboxes, and Cua run in a throwaway machine. Nobody keeps a list of what was left.
+
+Checked on this Mac (macOS 27.0.1): `sandbox-exec` with a write fence works under `script`;
+later rules win over earlier ones (a refusal inside an allowed folder holds); background
+processes and `nohup` children stay fenced after the shell exits; a refused write reads
+"operation not permitted". Another process's environment is not readable: `KERN_PROCARGS2`
+returns the program and its arguments only (also to `ps -wwE`), so an inherited variable can't
+mark a job's processes. The kernel's unique process ids (which would survive a parent's exit)
+and `sandbox_check` aren't public; parent, session, start time, working folder, and open files
+are (`proc_pidinfo`, `proc_pidfdinfo`).
+
+Low-level choices (Claude's):
+- **Finding a job's processes**: session, family followed every half second, and users of the
+  scratch folder (plan D6), not Endpoint Security (root, an Apple entitlement, Full Disk
+  Access). Half a second costs about a millisecond per look and only while a job runs.
+- **Scratch folder** in Caches, not `/tmp`: per user, purgeable by macOS, and inside the fence.
+- **Fence profile** given inline (`-p`), built per job; no file to clean up. Writes allowed by
+  default, not reads or network: the leftovers problem is writes (Toni's scope, no prompt or
+  reading controls).
+- **Caches allowed without declaring**: `~/Library/Caches` (Homebrew, pip, Xcode), `~/.cache`,
+  `~/.npm`; anything else (for example `/opt/homebrew` for `brew install`) is declared.
+- **Refused declarations**: `/`, the home folder and folders above it, `~/Library` itself; a
+  declaration that broad would switch the fence off.
+- **Results looked for** in declared paths and Downloads by modification date since the job
+  started; the job's own folder is not listed file by file (a build changes thousands).
+- **Watching permanent places** with `DispatchSource` on a handful of folders, not FSEvents on
+  the home folder (every change in the home folder would wake the app).

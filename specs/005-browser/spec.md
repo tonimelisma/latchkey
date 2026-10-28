@@ -45,6 +45,9 @@ phone, Claude can't check a reservation in the Owner's account or fill in a form
   nor what a field holds that the page marks as a password, a one-time code, or a card number
   or security code; it shall say only that the field is filled in. Claude shall still be able
   to type into such a field while Browser is Read & write (security review, 2026-10-25).
+- **FR-411** When Claude hasn't used its Safari window for 30 minutes, Browser shall close that
+  window and record it as a Left Behind entry (spec 001 FR-640; Toni, 2026-10-27: the Mac can't
+  tell when a conversation ends, and the relay ends a quiet Claude session after 30 minutes).
 
 ## Success criteria
 

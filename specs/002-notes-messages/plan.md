@@ -79,6 +79,9 @@ Serves FR-102, FR-103, FR-112.
   note's id in the database (waits up to 3 s for Notes to write it). Changes find the note's
   scripting id the same way in reverse.
 - Delete uses Notes' own `delete`, which moves the note to Recently Deleted (FR-103).
+- Deleting a folder (`notes_change` action `delete_folder`, folder name) uses the same `delete` on
+  the folder of the default account; the script refuses that account's default folder and a
+  folder holding folders (FR-152). Notes moves its notes to Recently Deleted.
 - Messages send via AppleScript to Messages.app. The recipient is resolved in this order: a
   conversation id; a group's name; a number or email address (its existing conversation if
   there is one, so Messages keeps the same service, else a new iMessage); a name in Contacts
@@ -86,7 +89,9 @@ Serves FR-102, FR-103, FR-112.
   numbers and no conversation, return the choices instead of guessing).
 - Attachments: any file the Mac can read is copied to `~/Pictures/Latchkey/` and sent from there
   as `POSIX file`, because Messages reliably delivers scripted attachments only from Pictures
-  (Toni chose the visible folder, 2026-10-22); copies older than a day are removed.
+  (Toni chose the visible folder, 2026-10-22). Each send's copies sit in a folder of their own,
+  removed as soon as `chat.db` shows the message sent (FR-153); the rest, older than a day, at
+  start and every hour.
 - After sending, the app watches `chat.db` for the new outgoing message (up to 5 s) and reports
   sent, failed (Messages' error flag), or not yet confirmed.
 - Needs the Automation permission for Notes and for Messages (D5).

@@ -52,11 +52,43 @@ final class FakeScripts: ScriptRunner, @unchecked Sendable {
 
     @Test func toolsDeclareTheirHints() throws {
         let (_, _, tools) = try setup()
-        #expect(Set(tools.keys) == ["notes_create", "notes_update", "notes_delete"])
+        #expect(Set(tools.keys) == ["notes_create", "notes_update", "notes_delete", "notes_delete_folder"])
+        #expect(tools["notes_delete_folder"]?.tool.annotations?.destructiveHint == true)
         #expect(tools["notes_create"]?.tool.annotations?.destructiveHint == false)
         #expect(tools["notes_update"]?.tool.annotations?.destructiveHint == true)
         #expect(tools["notes_delete"]?.tool.annotations?.destructiveHint == true)
         for t in tools.values { #expect(t.tool.annotations?.readOnlyHint == false) }
+    }
+
+    /// Spec 002 FR-152: a folder can be deleted; its notes go to Recently Deleted.
+    @Test func deletesAFolder() async throws {
+        let (_, fake, tools) = try setup()
+        fake.answer = { _, _ in "2" }
+        let result = await tools["notes_delete_folder"]!.handler(.object(["folder": .string("Latchkey Check")]))
+        #expect(!result.isError, "\(result.content.jsonText)")
+        #expect(result.content.jsonText.contains("2 notes moved to Recently Deleted"))
+        #expect(fake.calls.last?.script == NotesCapability.Script.deleteFolder)
+        #expect(fake.lastArgs == ["Latchkey Check"])
+        #expect(result.activity == "Claude deleted the Notes folder “Latchkey Check”")
+    }
+
+    @Test func refusesTheDefaultFolder() async throws {
+        let (_, fake, tools) = try setup()
+        fake.answer = { _, _ in throw ScriptError.failed("execution error: LATCHKEY_DEFAULT_FOLDER (-2700)") }
+        let result = await tools["notes_delete_folder"]!.handler(.object(["folder": .string("Notes")]))
+        #expect(result.isError)
+        #expect(result.content.jsonText.contains("default folder"))
+        #expect(result.content.jsonText.contains("Nothing was deleted"))
+    }
+
+    @Test func theChangeToolReachesFolderDelete() async throws {
+        let fake = FakeScripts()
+        fake.answer = { _, _ in "0" }
+        let store = try NotesStore(url: NotesFixture.make())
+        let change = try #require(
+            NotesCapability.writeTools(store: { store }, scripts: fake).first { $0.tool.name == "notes_change" })
+        let result = await change.handler(.object(["action": .string("delete_folder"), "folder": .string("Old")]))
+        #expect(result.content.jsonText.contains("Deleted the empty folder “Old”"), "\(result.content.jsonText)")
     }
 
     @Test func createsANoteAndReturnsItsID() async throws {

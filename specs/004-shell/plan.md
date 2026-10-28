@@ -8,14 +8,14 @@ Claude sees consolidated tools (Toni, 2026-10-23: 15 tools in all, from 45): the
 
 | Tool | readOnly | destructive | Operations behind it |
 |---|---|---|---|
-| `shell_run` (command, folder?, wait?; or job + input / stop) | no | yes | run, send, stop |
+| `shell_run` (command, folder?, wait?, writes?, why?, keep_minutes?; or job + input / stop) | no | yes | run, send, stop |
 | `shell_check` (job?, wait?) | yes | no | check; without job, list jobs |
 
 Operations:
 
 | Tool | readOnly | destructive | Serves |
 |---|---|---|---|
-| `shell_run` (command, folder?, wait?) | no | yes | FR-301, FR-302, FR-307 |
+| `shell_run` (command, folder?, wait?, writes?, why?, keep_minutes?) | no | yes | FR-301, FR-302, FR-307, FR-314, FR-318 |
 | `shell_check` (job, wait?) | yes | no | FR-303 |
 | `shell_send` (job, text, enter?) | no | yes | FR-303 |
 | `shell_stop` (job) | no | yes | FR-303 |
@@ -47,7 +47,9 @@ new session, and everything the command starts stays in that session unless it l
 purpose. The app notes the session when the job starts (the child of `script` that leads a
 session) and, to end a job, signals every process in it and `script` itself: terminate, then
 kill whatever is left after 1 s. So a process the command left in the background, or one that
-ignores Ctrl-C and hangup, doesn't outlive the job. A job that already ended is not swept.
+ignores Ctrl-C and hangup, doesn't outlive the job. Since 2026-10-27 a job that ended by itself
+is swept too (D6); until then it wasn't, which is how two headless Chrome processes ran for two
+days.
 A call that is cancelled while waiting on a job (deadline, or Shell turned off) stops waiting at
 once.
 
@@ -64,6 +66,83 @@ Control sequences removed; carriage-return redraws keep the last version of the 
 Capabilities gain a list of the levels they offer: shell offers Off and On (On = full use),
 starting On (FR-308). `shell_run` returns an `activity` ("Claude ran: …") for the notification
 and the trace (FR-307).
+
+## D6. Leftovers are followed and swept (FR-313, FR-324, FR-326)
+
+A job's processes are found three ways, all with public process information (`libproc`):
+- its terminal session (D3), which keeps an ordinary background process (`&`, `nohup`) even
+  after the shell that started it has exited;
+- its family: every half second while any job runs, and again when one ends, each process whose
+  parent is one of the job's is added to the job, until nothing new turns up; a process is known
+  by its id and start time, so an id the system gives to another process later is never
+  mistaken for it. This keeps a process that left the session (`setsid`) as the job's;
+- at the sweep, any process started since the job began whose working folder or an open file is
+  in the job's scratch folder, such as a browser with its profile there.
+Sweeping a job: terminate all of these, then kill after 1 s; one still there after that is
+reported (FR-325). The sweep runs when the command ends and its lease is zero, when its lease
+ends (D7), when the job is stopped, on quit and Shell Off, and at start for what jobs of an
+earlier run left (each job keeps its known processes in `<scratch folder>.pids` beside the
+scratch folder).
+Not found: a program handed to launchd or LaunchServices (`open -a`, `launchctl`), and a
+program that leaves the session through a parent that exits within half a second (a quick
+double fork), unless it uses the scratch folder (spec edge cases).
+
+An inherited environment variable was the first plan: macOS 27 no longer shows another
+process's environment (`KERN_PROCARGS2` returns the arguments only, also to `ps -E`), so it
+can't be read back (research.md).
+
+## D7. Leases (FR-314)
+
+`shell_run` takes `keep_minutes` (0 to 1440, default 0). A job's lease ends `keep_minutes` after
+the command finished; `shell_check` of the job starts the time again; the end never passes 24
+hours after the command finished. A timer every minute ends the leases that are due. A job with
+a lease running stays listed past the usual 10 minutes.
+
+## D8. Scratch folder (FR-315, FR-316)
+
+`~/Library/Caches/<app data folder>/Jobs/<launch>-<job>/`, given to the command as `TMPDIR` and
+`LATCHKEY_SCRATCH`, so `mktemp`, Python, Node, Go, and Chrome's temporary profiles land there.
+Removing a job's leftovers moves the folder to the Trash (`FileManager.trashItem`), or deletes
+it when empty. At start, folders of earlier launches are moved to the Trash too (FR-324).
+
+## D9. The fence (FR-317 to FR-320)
+
+Each command runs as `script -q /dev/null /usr/bin/sandbox-exec -p <profile> /bin/zsh -l -c --
+<command>`: macOS's sandbox (Seatbelt, as Claude Code, Codex, and Gemini CLI use it), which
+applies to the shell and everything it starts, for as long as they run. The profile allows
+everything except writes, then allows writes to: `/dev`; the scratch folder; the user's own
+temporary folder under `/private/var/folders` (system frameworks need it); Downloads;
+`~/Library/Caches`, `~/.cache`, `~/.npm`; the job's folder when it isn't the home folder or above
+it; each declared path. Later rules win, so it then refuses writes to the permanent places
+(`~/.zshrc`, `~/.zprofile`, `~/.zshenv`, `~/.zlogin`, `~/.zlogout`, `~/.bashrc`,
+`~/.bash_profile`, `~/.profile`, `~/Library/LaunchAgents`, and the login items folder
+`~/Library/Application Support/com.apple.backgroundtaskmanagementagent`) unless declared, and
+always to Latchkey's own files (Files' `OwnFiles`). `shell_run` takes `writes` (paths) and `why`;
+`~`, the home folder, a folder above it, and `~/Library` itself are refused (FR-318). A refused
+write shows as "Operation not permitted"; when the output has it, the answer adds how to write
+there (FR-320).
+
+## D10. What a job left (FR-321, FR-323)
+
+When the leftovers are swept, the answer that reports the end (or the next one) and the activity
+log get one Left Behind entry: the processes stopped (by name), the scratch folder moved to the
+Trash or kept until when, and the files new or changed since the job started in the declared
+paths and in Downloads (at most 20 named, then a count; at most 2,000 entries looked at), each
+declared permanent place marked "permanent change". The entry goes to the activity log only
+(`EventLog`, `systemLog: false`: it names files, which macOS's log must not, spec 001 FR-620).
+
+## D11. Changes that got past the fence (FR-325)
+
+The permanent places of D9 are watched with `DispatchSource` file-system sources (the home
+folder's top level for the startup files, the launch agents folder, the login items folder;
+cheap, no recursive watch). A change while a job runs or is kept, at a path no live job
+declared, is a Left Behind entry and a notification ("A command Claude ran may have changed …").
+
+## D12. Jobs in every answer (FR-322)
+
+The app appends a text line to every tool result while any job runs or is kept:
+`[Shell: job3 running since 14:05; job2's leftovers kept until 15:40 (check job2 to keep them)]`.
+It is part of the Mac's result (the relay's state line follows it), so no protocol change.
 
 ## Testing
 
@@ -82,7 +161,7 @@ Shell goes Off (with the waiting call answered); the cap with a limit of 2.
 | III. Disabled means nonexistent | Pass |
 | IV. Good macOS citizen | Pass: the Owner's own permissions; no root |
 | V. Self-hostable | Pass: relay unchanged |
-| VI. Store the minimum | Pass: output only in memory, last 1 MB, 10 minutes after the end |
-| VII. Test-first | Planned |
-| VIII. Simplicity | Pass: system `script` and zsh |
+| VI. Store the minimum | Pass: output only in memory, last 1 MB, 10 minutes after the end; Left Behind entries name files and processes, in the encrypted activity log only |
+| VII. Test-first | Planned; leftovers (D6 to D12): tests first, with real commands and a real sandbox, stand-ins only for the Trash and the record |
+| VIII. Simplicity | Pass: system `script`, `sandbox-exec`, and zsh; no new dependency |
 | IX. Open source | Pass |

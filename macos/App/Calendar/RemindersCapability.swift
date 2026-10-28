@@ -191,9 +191,11 @@ enum RemindersCapability {
             var d = try draft(args, zone: zone) ?? ReminderDraft()
             d.title = title
             let r = try backend.createReminder(d)
-            return done(
+            var added = done(
                 "Added “\(r.title)” to \(r.list)\(due(r, zone: zone).map { ", due \($0)" } ?? ""). id \(r.id)",
                 "Claude added the reminder “\(r.title)” to \(r.list)")
+            added.made = "the reminder “\(r.title)” in \(r.list)"
+            return added
         case "update":
             let reminderID = try id()
             guard var d = try draft(args, zone: zone) else {

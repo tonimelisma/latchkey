@@ -32,7 +32,8 @@ AppleScript through the shared `osascript` runner (spec 002): opening makes a ne
 first time (its id is remembered) and later loads pages or adds tabs in that window only
 (FR-403). `do JavaScript` runs in that window's current tab. Claude's text, URLs, and scripts
 travel as arguments, and values put into page scripts are JSON-encoded. A closed window is
-noticed and replaced on the next open.
+noticed and replaced on the next open. Each use notes the time; a minute timer closes the
+window (by its id, never another) once it is 30 minutes unused, and forgets it (FR-411).
 
 The address Claude asks to open is checked before anything goes to Safari (FR-409): tabs and
 line breaks are removed and the ends trimmed (as browsers do), an address without a scheme gets

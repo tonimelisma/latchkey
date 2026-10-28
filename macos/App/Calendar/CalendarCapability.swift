@@ -235,6 +235,7 @@ enum CalendarCapability {
                 "Added “\(e.title)” to \(e.calendar): \(CalendarDates.span(e.start, e.end, allDay: e.allDay, zone: zone)). id \(e.id)\n"
                     + CalendarDates.zoneLine(zone, at: e.start))
             r.activity = "Claude added “\(e.title)” to \(e.calendar)"
+            r.made = "the event “\(e.title)” in \(e.calendar)"
             return r
         case "update":
             let old = try changeable(args, backend)

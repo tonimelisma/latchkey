@@ -237,6 +237,7 @@ enum NotesCapability {
                             text: id.map { "Created “\(title)” (id \($0))." }
                                 ?? "Created “\(title)”. It will show up in notes_find in a moment.")
                         result.activity = "Claude created the note “\(title)”"
+                        result.made = "the note “\(title)”" + (folder.isEmpty ? "" : " in \(folder)")
                         return result
                     }
                 }),
@@ -320,6 +321,41 @@ enum NotesCapability {
                         return result
                     }
                 }),
+            ToolEntry(
+                tool: .make(
+                    "notes_delete_folder", title: "Delete a Note Folder",
+                    description:
+                        "Deletes a folder of the default Notes account; its notes move to Recently Deleted for 30 days. Not the account's default folder, nor a folder with folders inside.",
+                    input: ["folder": .stringParam("The folder's name, from notes_folders")], required: ["folder"],
+                    readOnly: false, destructive: true, deadlineMS: 30_000),
+                handler: { args in
+                    guard let folder = args["folder"]?.stringValue, !folder.isEmpty else {
+                        return .text("Give the folder's name.", isError: true)
+                    }
+                    do {
+                        let count = try await scripts.run(Script.deleteFolder, [folder])
+                        let notes = Int(count.trimmingCharacters(in: .whitespacesAndNewlines)) ?? 0
+                        var result = ToolResult.text(
+                            notes == 0
+                                ? "Deleted the empty folder “\(folder)”."
+                                : "Deleted the folder “\(folder)”; its \(notes) note\(notes == 1 ? "" : "s") moved to Recently Deleted, where Notes keeps them for 30 days."
+                        )
+                        result.activity = "Claude deleted the Notes folder “\(folder)”"
+                        return result
+                    } catch ScriptError.failed(let message) where message.contains("LATCHKEY_") {
+                        let why =
+                            message.contains("LATCHKEY_NO_FOLDER")
+                            ? "There's no folder named “\(folder)” in the default Notes account."
+                            : message.contains("LATCHKEY_DEFAULT_FOLDER")
+                                ? "“\(folder)” is the account's default folder, which Latchkey doesn't delete."
+                                : "“\(folder)” has folders inside it; delete those first."
+                        return .text(why + " Nothing was deleted.", isError: true)
+                    } catch let failure as ScriptError {
+                        return .text(explain(failure), isError: true)
+                    } catch {
+                        return .text("Notes couldn't delete the folder: \(error.localizedDescription)", isError: true)
+                    }
+                }),
         ]
     }
 
@@ -381,6 +417,22 @@ enum NotesCapability {
             on run argv
             set theID to item 1 of argv
             tell application "Notes" to delete note id theID
+            end run
+            """
+        /// argv: folder name. Answers how many notes it held (spec 002 FR-152).
+        static let deleteFolder = """
+            on run argv
+            set folderName to item 1 of argv
+            tell application "Notes"
+            set acc to default account
+            if not (exists folder folderName of acc) then error "LATCHKEY_NO_FOLDER"
+            set f to folder folderName of acc
+            if (id of f) is (id of (default folder of acc)) then error "LATCHKEY_DEFAULT_FOLDER"
+            if (count of folders of f) > 0 then error "LATCHKEY_HAS_FOLDERS"
+            set noteCount to count of notes of f
+            delete f
+            return noteCount as text
+            end tell
             end run
             """
     }

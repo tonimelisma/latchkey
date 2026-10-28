@@ -7,6 +7,15 @@ struct ToolResult: Sendable, Equatable {
     var structuredContent: JSONValue?
     var isError: Bool
     var activity: String?
+    /// What the call created ("the note “Plan”"), for the Left Behind list (FR-641).
+    var made: String?
+
+    /// Adds a line of text at the end of the answer.
+    mutating func appendText(_ s: String) {
+        guard case .array(var items) = content else { return }
+        items.append(.object(["type": .string("text"), "text": .string(s)]))
+        content = .array(items)
+    }
 
     static func text(_ s: String, isError: Bool = false) -> ToolResult {
         ToolResult(content: .array([.object(["type": .string("text"), "text": .string(s)])]), isError: isError)

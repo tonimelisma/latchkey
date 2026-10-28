@@ -13,6 +13,8 @@ actor SafariBrowser {
 
     let scripts: any ScriptRunner
     private var window: String?
+    /// When Claude last used its window (spec 005 FR-411).
+    private var lastUse = Date()
     /// How long a page may take to load (plan D3).
     private let settleLimit: Duration
 
@@ -168,7 +170,16 @@ actor SafariBrowser {
         }
     }
 
+    /// Closes Claude's window once it has gone `after` unused (FR-411). True when it closed one.
+    func closeIfIdle(after: TimeInterval = 1800, now: Date = Date()) async -> Bool {
+        guard let id = window, now.timeIntervalSince(lastUse) >= after else { return false }
+        window = nil
+        _ = try? await scripts.run(Script.close, [id])
+        return true
+    }
+
     private func call(_ script: String, _ args: [String]) async throws -> String {
+        lastUse = Date()
         do { return try await scripts.run(script, args) } catch ScriptError.failed(let message) {
             if message.contains("LATCHKEY_NO_WINDOW") {
                 window = nil
@@ -238,6 +249,15 @@ actor SafariBrowser {
             set out to out & (index of t) & sep & (name of t) & sep & (URL of t) & linefeed
             end repeat
             return out
+            end tell
+            end run
+            """
+        /// argv: window id. Closes that window only, if it is still there.
+        static let close = """
+            on run argv
+            set winID to (item 1 of argv) as integer
+            tell application "Safari"
+            if (exists window id winID) then close window id winID
             end tell
             end run
             """

@@ -174,7 +174,8 @@ enum FilesCapability {
                         return changed(
                             "Saved \(url.path).",
                             exists
-                                ? "Claude replaced \(url.lastPathComponent)" : "Claude saved \(url.lastPathComponent)")
+                                ? "Claude replaced \(url.lastPathComponent)" : "Claude saved \(url.lastPathComponent)",
+                            made: exists ? nil : "the file \(url.path)")
                     }
                 }),
             ToolEntry(
@@ -216,7 +217,9 @@ enum FilesCapability {
                         let url = resolve(args["path"]?.stringValue ?? "", home: home)
                         try keepOut(of: own, url)
                         try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
-                        return changed("Created \(url.path).", "Claude created the folder \(url.lastPathComponent)")
+                        return changed(
+                            "Created \(url.path).", "Claude created the folder \(url.lastPathComponent)",
+                            made: "the folder \(url.path)")
                     }
                 }),
             ToolEntry(
@@ -250,7 +253,9 @@ enum FilesCapability {
                     await run {
                         let (from, to) = try destination(args, home: home, own: own, removesSource: false)
                         try FileManager.default.copyItem(at: from, to: to)
-                        return changed("Copied \(from.path) to \(to.path).", "Claude copied \(from.lastPathComponent)")
+                        return changed(
+                            "Copied \(from.path) to \(to.path).", "Claude copied \(from.lastPathComponent)",
+                            made: "the copy \(to.path)")
                     }
                 }),
             ToolEntry(
@@ -345,9 +350,10 @@ enum FilesCapability {
         ByteCountFormatter.string(fromByteCount: Int64(bytes), countStyle: .file)
     }
 
-    private static func changed(_ text: String, _ activity: String) -> ToolResult {
+    private static func changed(_ text: String, _ activity: String, made: String? = nil) -> ToolResult {
         var r = ToolResult.text(text)
         r.activity = activity
+        r.made = made
         return r
     }
 

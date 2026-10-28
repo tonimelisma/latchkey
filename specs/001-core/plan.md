@@ -903,6 +903,10 @@ measurements are in research.md ("The Mac's audit trail").
   can be recorded, and audit results. The menu shows Claude's actions only; the Activity window
   has a Show filter (everything, Claude's actions, Latchkey events) and a Claude App column;
   Export adds `kind`, `call_id`, and `client`.
+- Left Behind (FR-640 to FR-643): a further `EventCategory`, `leftovers`, recorded with
+  `systemLog: false`. The Show filter gains Left Behind (events of that category). A tool result
+  carries `made` (what it created, "the note “Plan”"), which the app records as "Claude made
+  …" after the call. Shell's entries and the notification are spec 004 D10, D11.
 - Calls (FR-632, FR-637): each action stores the `call`'s `id`, the pairing's device ID, and the
   `client` it named.
 - Comparison (FR-634): after each `welcome` (the connection's `connected` hook, not awaited by

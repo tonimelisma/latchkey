@@ -199,6 +199,7 @@ enum MessagesCapability {
                                 "Messages couldn't send it to \(target.label). The number may not be on iMessage, or the Mac may be offline.",
                                 isError: true)
                         case .sent:
+                            removeCopies(copies)  // Messages has sent them; nothing waits for the day-old sweep
                             var r = ToolResult.text("Sent to \(target.label): \(what).")
                             r.activity = "Claude sent a message to \(target.name)"
                             return r
@@ -287,6 +288,12 @@ enum MessagesCapability {
             try FileManager.default.copyItem(at: URL(filePath: path), to: copy)
             return copy
         }
+    }
+
+    /// Removes the copies of one send, each in its own folder (`stage`), once Messages has sent
+    /// them (spec 002 FR-153).
+    static func removeCopies(_ copies: [URL]) {
+        for copy in copies { try? FileManager.default.removeItem(at: copy.deletingLastPathComponent()) }
     }
 
     /// Clears day-old copies now and then every `every`, so they don't wait for the next send

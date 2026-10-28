@@ -72,6 +72,9 @@ As an Owner, I set Notes and Messages each to Off, Read only, or Read & write in
   folder), append to a note, replace a note's text, edit a passage of a note, and delete a note
   (edit added by Toni, 2026-10-22).
 - **FR-103** Deleting a note shall move it to Recently Deleted, never erase it.
+- **FR-152** While Notes is Read & write, Claude shall be able to delete a folder; its notes shall
+  move to Recently Deleted (FR-103). The account's default folder and a folder with folders
+  inside it shall not be deleted (Toni, 2026-10-27: an empty "Latchkey Check" folder was left).
 - **FR-104** Claude shall be able to view an image attached to a note.
 - **FR-105** Password-locked notes shall be listed as locked, with no content.
 - **FR-106** When a change would lose part of a note (checklists, images, tables, or a locked
@@ -118,6 +121,9 @@ As an Owner, I set Notes and Messages each to Off, Read only, or Read & write in
 ### Performance and limits
 - **FR-150** A search shall answer within 5 seconds for a library of 10,000 notes or 200,000
   messages.
+- **FR-153** When Messages has sent a message with files, Latchkey's copies of those files shall
+  be removed at once; copies of a send that wasn't confirmed shall be removed after a day, checked
+  at start and every hour (Toni, 2026-10-27).
 - **FR-151** Every result shall stay within Claude's result size (about 150,000 characters),
   returning the most relevant part and saying when it was shortened.
 

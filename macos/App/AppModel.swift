@@ -18,6 +18,11 @@ final class AppModel {
     private(set) var keepAwake: KeepAwake = .offUser
     /// Clears day-old Messages attachment copies (spec 002 plan D3).
     private var attachmentSweeper: Task<Void, Never>?
+    /// Ends Shell leases and closes Claude's idle Safari window, every minute (spec 004 FR-314,
+    /// spec 005 FR-411).
+    private var leftoverTimer: Task<Void, Never>?
+    /// Changes to launch agents, login items, and shell startup files (spec 004 FR-325).
+    private var permanentWatch: PermanentWatch?
     private(set) var relayURL: URL?
     private(set) var helperStatus: SMAppService.Status = .notRegistered
     /// What went wrong, as the Owner is shown it; each one is an event too (FR-633).
@@ -125,6 +130,18 @@ final class AppModel {
         LocationFixer.shared.onAccessChange = { [weak self] _ in self?.checkPersonalData() }
         watchSystem()
         attachmentSweeper = MessagesCapability.sweepCopies(in: MessagesCapability.staging)
+        leftoverTimer = Self.tidyEveryMinute()
+        if ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil {
+            permanentWatch = PermanentWatch(home: .homeDirectory) { url in
+                Task {
+                    let jobs = ShellCapability.jobs
+                    guard await jobs.unexplained(url) else { return }
+                    jobs.setup.report(
+                        "\(Leftovers.short(url, home: .homeDirectory)) changed while a command Claude ran was running or kept, and no command declared it",
+                        true)
+                }
+            }
+        }
         // The first state the relay hears is the one about to be applied, not the default "off"
         // (each start used to record two needless keep-awake changes, 2026-10-27).
         keepAwake = KeepAwakePolicy.atStart(
@@ -759,7 +776,8 @@ final class AppModel {
         defer { busy -= 1 }
         let registry = capabilities
         let wasPaused = paused
-        let result = wasPaused ? Pause.refused : await registry.call(tool: call.tool, arguments: call.arguments)
+        var result = wasPaused ? Pause.refused : await registry.call(tool: call.tool, arguments: call.arguments)
+        if let line = await ShellCapability.jobs.statusLine() { result.appendText(line) }  // spec 004 FR-322
         // A call the Owner stopped by pausing or lowering the level is logged with what Claude was told.
         let told =
             !wasPaused && paused
@@ -774,7 +792,27 @@ final class AppModel {
         try? trace?.record(entry)
         loadRecentActivity()
         if let activity = result.activity, !result.isError { Notifier.post(activity) }  // FR-130
+        if let made = result.made, !result.isError {  // FR-641
+            let by = entry.client.map { " (\($0))" } ?? ""
+            EventLog.shared.record(.leftovers, "Claude made \(made)\(by)", systemLog: false)
+        }
         return result
+    }
+
+    /// At start, what earlier runs left; then every minute, the leases that ended and Claude's
+    /// idle Safari window (spec 004 FR-314, FR-324, spec 005 FR-411).
+    private static func tidyEveryMinute() -> Task<Void, Never> {
+        Task.detached(priority: .utility) {
+            await ShellCapability.jobs.recoverEarlier()
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(60))
+                await ShellCapability.jobs.tidy()
+                if await BrowserCapability.browser.closeIfIdle() {
+                    EventLog.shared.record(
+                        .leftovers, "Closed Claude's Safari window after 30 minutes unused", systemLog: false)
+                }
+            }
+        }
     }
 
     // MARK: Claude apps with access (FR-190 to FR-192)

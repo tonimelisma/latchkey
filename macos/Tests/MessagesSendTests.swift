@@ -84,13 +84,23 @@ import Testing
         let s = try setup()
         let file = FileManager.default.temporaryDirectory.appending(path: "report-\(UUID().uuidString).pdf")
         try Data("%PDF".utf8).write(to: file)
+        let copied = Copied()
+        let original = s.fake.answer
+        s.fake.answer = { script, args in
+            copied.data = args.last.flatMap { FileManager.default.contents(atPath: $0) }
+            return try original(script, args)
+        }
         let result = await send(s, ["to": .string("Sarah"), "attachments": .array([.string(file.path)])])
         #expect(!result.isError, "\(result.content.jsonText)")
         let sent = try #require(s.fake.lastArgs.last)
         #expect(sent.hasPrefix(s.staging.path), "copied to the Pictures folder first")
-        #expect(FileManager.default.contents(atPath: sent) == Data("%PDF".utf8))
+        #expect(copied.data == Data("%PDF".utf8), "the copy Messages was given held the file")
         #expect(s.fake.lastArgs[2] == "", "no text")
+        // Spec 002 FR-153: once Messages has sent it, the copy and its folder are gone.
+        #expect(!FileManager.default.fileExists(atPath: URL(filePath: sent).deletingLastPathComponent().path))
     }
+
+    final class Copied: @unchecked Sendable { var data: Data? }
 
     @Test func missingFilesAreRefusedBeforeSending() async throws {
         let s = try setup()

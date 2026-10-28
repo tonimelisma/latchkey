@@ -253,6 +253,19 @@ days; nothing checked that the two sides agree.
   records it in its audit), and the Mac's activity log shall store and show it for that call
   (Toni, 2026-10-27: the audit found no way to tell on the Mac which app did what).
 
+### Left Behind (Toni, 2026-10-27)
+Why: on 2026-10-25 commands left processes and files on the Mac that nobody listed (spec 004).
+- **FR-640** The Activity window shall show Left Behind entries on their own (a choice of the
+  Show filter): what Shell commands left (spec 004 FR-323, FR-325), Claude's Safari window closed
+  (spec 005 FR-411), and what Claude made through the other tools (FR-641).
+- **FR-641** When Claude creates a file or folder, copies a file, or creates a note, event,
+  reminder, or contact, the Mac shall record a Left Behind entry naming it.
+- **FR-642** Left Behind entries shall be kept, encrypted, and chained like the other entries,
+  and never written to macOS's own log (they name files; FR-620).
+- **FR-643** The Owner shall be notified only of leftovers nobody meant to leave (spec 004
+  FR-325), never of results Claude declared or things it made through the tools.
+- Anything Latchkey removes on its own goes to the Trash (Toni, 2026-10-27).
+
 ### Keep-awake and power
 - **FR-030** While keep-awake is on, the Mac shall not sleep, on battery or power, with the lid
   open or closed.

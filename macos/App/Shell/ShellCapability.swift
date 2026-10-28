@@ -16,18 +16,19 @@ enum ShellCapability {
                 tool: .make(
                     "shell_run", title: "Run a Command",
                     description:
-                        "Runs a command in the Mac owner's login shell (zsh), as them, never as administrator. Waits up to wait seconds (default and most 30); a longer command keeps running as a job: check it with shell_check, answer its questions with shell_send, stop it with shell_stop.",
-                    input: [
-                        "command": .stringParam("The command line"),
-                        "folder": .stringParam("Run in this folder (default: home)"),
-                        "wait": .integerParam("Seconds to wait for it to finish (1 to 30, default 30)"),
-                    ], required: ["command"], readOnly: false, destructive: true, openWorld: true, deadlineMS: 45_000),
+                        "Runs a command in the Mac owner's login shell (zsh), as them, never as administrator. Waits up to wait seconds (default and most 30); a longer command keeps running as a job: check it with shell_check, answer its questions with shell_send, stop it with shell_stop. \(writesRule)",
+                    input: runInput, required: ["command"], readOnly: false, destructive: true, openWorld: true,
+                    deadlineMS: 45_000),
                 handler: { args in
                     await run {
                         guard let command = args["command"]?.stringValue, !command.isEmpty else {
                             throw ShellJobs.Failure(message: "Give a command.")
                         }
-                        let s = try await jobs.run(command, folder: args["folder"]?.stringValue, wait: try wait(args))
+                        let s = try await jobs.run(
+                            command, folder: args["folder"]?.stringValue, wait: try wait(args),
+                            writes: try writes(args),
+                            why: args["why"]?.stringValue,
+                            keepMinutes: Int(try args.number("keep_minutes", in: 0...1440) ?? 0))
                         var r = result(s)
                         r.activity = "Claude ran: \(command.count > 80 ? String(command.prefix(79)) + "…" : command)"
                         return r
@@ -94,11 +95,47 @@ enum ShellCapability {
                     guard !list.isEmpty else { return .text("No jobs.") }
                     return .text(
                         list.map { j in
-                            let state = j.finished ? "finished, exit status \(j.exitCode ?? -1)" : "running"
+                            var state = j.finished ? "finished, exit status \(j.exitCode ?? -1)" : "running"
+                            if let until = j.keptUntil {
+                                state += "; leftovers kept until \(until.formatted(date: .omitted, time: .shortened))"
+                            }
                             return "- \(j.job): \(j.command) (\(state), started \(j.started.formatted(.iso8601)))"
                         }.joined(separator: "\n"))
                 }),
         ]
+    }
+
+    /// What shell_run tells Claude about the fence, the scratch folder, and leases (spec 004
+    /// FR-314 to FR-318).
+    static let writesRule =
+        "A command writes only to its own scratch folder ($LATCHKEY_SCRATCH, also $TMPDIR; moved to the Trash when it finishes), the folder it runs in (unless that is the home folder), Downloads, and package caches; anything else fails unless declared in writes (with why). Whatever it leaves running is stopped when it finishes, unless keep_minutes asks to keep it (checking the job keeps it longer; 24 hours at most)."
+
+    static let runInput: [String: JSONValue] = [
+        "command": .stringParam("The command line"),
+        "folder": .stringParam("Run in this folder (default: home)"),
+        "wait": .integerParam("Seconds to wait for it to finish (1 to 30, default 30)"),
+        "writes": .object([
+            "type": .string("array"), "items": .object(["type": .string("string")]),
+            "description": .string(
+                "Folders or files outside the allowed places the command will write (full paths or ~/…); results meant to stay"
+            ),
+        ]),
+        "why": .stringParam("With writes: what the command writes there, for the owner's list"),
+        "keep_minutes": .integerParam(
+            "Keep what the command leaves running (a server, a watcher) and its scratch folder this many minutes after it finishes (0 to 1440, default 0)"
+        ),
+    ]
+
+    private static func writes(_ args: JSONValue) throws -> [String] {
+        guard let value = args["writes"] else { return [] }
+        if case .array(let items) = value {
+            return try items.map {
+                guard let s = $0.stringValue else { throw ShellJobs.Failure(message: "writes is a list of paths.") }
+                return s
+            }
+        }
+        if let s = value.stringValue { return [s] }
+        throw ShellJobs.Failure(message: "writes is a list of paths.")
     }
 
     private static func wait(_ args: JSONValue, default standard: Double = 30) throws -> Duration {
@@ -108,8 +145,10 @@ enum ShellCapability {
     private static func result(_ s: ShellJobs.Snapshot) -> ToolResult {
         var text = s.dropped > 0 ? "(\(s.dropped) earlier characters left out)\n" : ""
         text += s.output.isEmpty ? "(no new output)" : s.output
+        if s.refusedWrite { text += "\n" + Fence.hint }
         if s.finished {
             text += "\n[\(s.job) finished, exit status \(s.exitCode ?? -1)]"
+            if let left = s.left { text += "\n" + left }
         } else {
             text +=
                 "\n[\(s.job) is still running. If it's waiting for input, answer with shell_run (job and input); check again with shell_check; stop with shell_run (job and stop).]"

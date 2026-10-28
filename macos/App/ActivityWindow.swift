@@ -50,13 +50,14 @@ struct ActivityView: View {
         .searchable(text: $query.text, placement: .toolbar, prompt: "Search Activity")
         .toolbar {
             ToolbarItem {
-                Picker("Show", selection: $query.kind) {
-                    Text("Everything").tag(ActivityKind?.none)
+                Picker("Show", selection: $query.show) {
+                    Text("Everything").tag(ActivityShow.everything)
                     Divider()
-                    Text("Claude’s Actions").tag(ActivityKind?.some(.action))
-                    Text("Latchkey Events").tag(ActivityKind?.some(.event))
+                    Text("Claude’s Actions").tag(ActivityShow.actions)
+                    Text("Latchkey Events").tag(ActivityShow.events)
+                    Text("Left Behind").tag(ActivityShow.leftBehind)
                 }
-                .help("Show what Claude did, Latchkey’s own events, or both")
+                .help("Show what Claude did, Latchkey’s own events, what Claude’s work left on this Mac, or everything")
             }
             ToolbarItem {
                 Picker("Tool", selection: $query.tool) {
@@ -320,6 +321,7 @@ extension ActivityFormat {
         case .pairing: "Pairing"
         case .activity: "Activity Log"
         case .audit: "Relay Check"
+        case .leftovers: "Left Behind"
         case nil: category
         }
     }
@@ -482,5 +484,34 @@ struct ActivityDetail: Sendable, Equatable {
         result = a.kind == .event ? a.result : ActivityFormat.preview(a.result)
         client = a.client
         callID = a.callID
+    }
+}
+
+/// The Show filter's choices (FR-633, FR-640).
+enum ActivityShow: Hashable {
+    case everything, actions, events, leftBehind
+}
+
+extension ActivityQuery {
+    /// The Show filter as kind and tool: Left Behind is the events of that category.
+    var show: ActivityShow {
+        get {
+            switch kind {
+            case nil: .everything
+            case .action: .actions
+            case .event: tool == EventCategory.leftovers.rawValue ? .leftBehind : .events
+            }
+        }
+        set {
+            if tool == EventCategory.leftovers.rawValue { tool = nil }
+            switch newValue {
+            case .everything: kind = nil
+            case .actions: kind = .action
+            case .events: kind = .event
+            case .leftBehind:
+                kind = .event
+                tool = EventCategory.leftovers.rawValue
+            }
+        }
     }
 }

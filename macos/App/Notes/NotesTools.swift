@@ -40,7 +40,7 @@ extension NotesCapability {
         ]
     }
 
-    static let changeActions = ["create", "append", "replace", "edit", "delete"]
+    static let changeActions = ["create", "append", "replace", "edit", "delete", "delete_folder"]
 
     static func writeTools(store: @escaping StoreSource, scripts: any ScriptRunner) -> [ToolEntry] {
         let ops = Operations(writeOperations(store: store, scripts: scripts))
@@ -52,7 +52,8 @@ extension NotesCapability {
                         Creates, changes, or deletes a note in Apple Notes. action: create (title, text, folder), \
                         append (id, text: added at the end), replace (id, text: everything below the title), \
                         edit (id, find: an exact passage in one paragraph, text: its replacement), \
-                        delete (id: moves the note to Recently Deleted for 30 days). Text is Markdown-like: \
+                        delete (id: moves the note to Recently Deleted for 30 days), delete_folder (folder: \
+                        deletes that folder, its notes to Recently Deleted; not the default folder). Text is Markdown-like: \
                         # headings, - lists, 1. numbered lists; - [ ] items become ☐ (Notes doesn't let other apps \
                         make real checklists). Notes with checklists, images, tables, or mentions can't be changed \
                         this way without losing them, so Latchkey refuses those.
@@ -63,7 +64,9 @@ extension NotesCapability {
                         "title": .stringParam("For create: the note's title"),
                         "text": .stringParam("The text to write"),
                         "find": .stringParam("For edit: the exact passage to replace"),
-                        "folder": .stringParam("For create: the folder (the default folder if left out)"),
+                        "folder": .stringParam(
+                            "For create: the folder (the default folder if left out); for delete_folder: the folder to delete"
+                        ),
                     ], required: ["action"], readOnly: false, destructive: true, deadlineMS: 30_000),
                 handler: { args in
                     let action = args["action"]?.stringValue
@@ -72,6 +75,7 @@ extension NotesCapability {
                     case "append", "replace", "edit":
                         return await ops.call("notes_update", args.with(["mode": args["action"]]))
                     case "delete": return await ops.call("notes_delete", args)
+                    case "delete_folder": return await ops.call("notes_delete_folder", args)
                     default: return .unknown("action", action, allowed: changeActions)
                     }
                 })

@@ -13,7 +13,8 @@ import Testing
         ("notes search", NotesScriptReader.Script.search), ("notes read", NotesScriptReader.Script.read),
         ("messages send", MessagesCapability.Script.send), ("safari open", SafariBrowser.Script.open),
         ("safari javascript", SafariBrowser.Script.javaScript), ("safari tabs", SafariBrowser.Script.tabs),
-        ("safari probe", SafariBrowser.Script.probe),
+        ("safari probe", SafariBrowser.Script.probe), ("safari close", SafariBrowser.Script.close),
+        ("notes delete folder", NotesCapability.Script.deleteFolder),
     ]
 
     @Test(arguments: scripts.map(\.0))

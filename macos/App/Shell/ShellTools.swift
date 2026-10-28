@@ -12,17 +12,15 @@ extension ShellCapability {
                         Runs a command in the Mac owner's login shell (zsh), as them, never as administrator. \
                         Waits up to wait seconds (default and most 30); a longer command keeps running as a job \
                         (check it with shell_check). With job and input: types input into that job (then Enter \
-                        unless enter is false). With job and stop: stops it (Ctrl-C, then forcibly).
+                        unless enter is false). With job and stop: stops it (Ctrl-C, then forcibly). \
+                        \(writesRule)
                         """,
-                    input: [
-                        "command": .stringParam("The command line"),
-                        "folder": .stringParam("Run in this folder (default: home)"),
-                        "wait": .integerParam("Seconds to wait (1 to 30, default 30)"),
+                    input: runInput.merging([
                         "job": .stringParam("A running job's id, to type into or stop"),
                         "input": .stringParam("With job: what to type"),
                         "enter": .boolParam("With input: press Enter after (default true)"),
                         "stop": .boolParam("With job: stop it"),
-                    ], readOnly: false, destructive: true, openWorld: true, deadlineMS: 45_000),
+                    ]) { a, _ in a }, readOnly: false, destructive: true, openWorld: true, deadlineMS: 45_000),
                 handler: { args in
                     if args.hasAny("job") {
                         if args["stop"] == .bool(true) { return await ops.call("shell_stop", args) }
@@ -37,7 +35,7 @@ extension ShellCapability {
                 tool: .make(
                     "shell_check", title: "Check Commands",
                     description:
-                        "With job: shows that job's new output since the last check and whether it has finished, waiting up to wait seconds. Without: lists running jobs and those finished in the last 10 minutes.",
+                        "With job: shows that job's new output since the last check and whether it has finished, waiting up to wait seconds; for a job whose leftovers are kept, checking keeps them longer. Without: lists running jobs, those whose leftovers are kept, and those finished in the last 10 minutes.",
                     input: [
                         "job": .stringParam("The job id from shell_run"),
                         "wait": .integerParam("Seconds to wait for more output or the end (0 to 30, default 10)"),

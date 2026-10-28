@@ -189,6 +189,7 @@ enum ContactsCapability {
             let c = try backend.create(d)
             var r = ToolResult.text("Added \(c.name) to Contacts. id \(c.id)")
             r.activity = "Claude added \(c.name) to Contacts"
+            r.made = "the contact \(c.name)"
             return r
         case "update":
             let d = try draft(args)

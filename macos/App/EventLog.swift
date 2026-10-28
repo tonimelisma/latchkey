@@ -26,6 +26,9 @@ enum EventCategory: String, CaseIterable, Sendable {
     case activity
     /// The comparison with the relay's audit (FR-634).
     case audit
+    /// What Claude's work left on the Mac (FR-640 to FR-643). Names files, so recorded with
+    /// `systemLog: false` only.
+    case leftovers
 
     /// The category in macOS's log. Setup decisions stay under `permissions`, where the
     /// installer reads them (FR-622).
@@ -39,6 +42,7 @@ enum EventCategory: String, CaseIterable, Sendable {
         case .permissions, .setup: Diagnostics.permissions
         case .activity: Diagnostics.activity
         case .audit: Diagnostics.audit
+        case .leftovers: Diagnostics.activity
         }
     }
 }
