@@ -107,7 +107,8 @@ paths:
   is replaced. Anything it reads from its own file must be read once at start (its team ID for
   the signature check failed with UNIX error 2 after the next install, so it refused every app
   connection: keep-awake was silently off from 2026-10-25 until 0.8.19). Since 0.8.19 it ends
-  itself when it sees its program replaced, and the app retries once. After an install, check
+  itself when it sees its program replaced; launchd starts the new one only after its 10-second
+  wait, so the app retries every 12 s (up to 5 times). After an install, check
   `pmset -g | grep SleepDisabled` is 1 while keep-awake is on.
 
 Add new gotchas here as they are discovered.

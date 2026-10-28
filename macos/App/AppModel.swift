@@ -221,7 +221,7 @@ final class AppModel {
     private func pathChanged(satisfied: Bool) async {
         defer { lastPathSatisfied = satisfied }
         if satisfied != lastPathSatisfied {
-            Diagnostics.connection.notice("Network \(satisfied ? "available" : "unavailable")")
+            Diagnostics.connection.notice("Network \(satisfied ? "available" : "unavailable", privacy: .public)")
         }
         if satisfied, lastPathSatisfied != nil { await connection?.reconnectNow() }
     }
@@ -238,6 +238,17 @@ final class AppModel {
                 userEnabled: keepAwakeEnabled, helperAvailable: keepAwakeController.helperApproved))
         let ok = await keepAwakeController.apply(decision)
         keepAwake = (decision == .on && !ok) ? .offHelperUnavailable : decision
+        // A helper that just ended itself after an install is restarted by launchd only after its
+        // 10-second wait (seen 2026-10-27), so try again a little later, a few times.
+        if decision == .on && !ok && keepAwakeRetries < 5 {
+            keepAwakeRetries += 1
+            Task {
+                try? await Task.sleep(for: .seconds(12))
+                await refresh()
+            }
+        } else if ok {
+            keepAwakeRetries = 0
+        }
         let source = power.powerSource == .ac ? "power adapter" : "battery"
         let lid = power.lidClosed.map { $0 ? "closed" : "open" } ?? "none"
         let line =
@@ -251,6 +262,8 @@ final class AppModel {
 
     /// The keep-awake line last logged (FR-620).
     private let keepAwakeChanges = Changes<String>()
+    /// Retries after keep-awake failed to take effect, since the last success.
+    private var keepAwakeRetries = 0
 
     func approveHelper() { keepAwakeController.helper.openApprovalSettings() }
 

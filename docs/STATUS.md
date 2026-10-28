@@ -1,6 +1,6 @@
 # Status
 
-Last updated: 2026-10-26 (Calendar, Reminders, Contacts, Location & Maps, spec 007; activity log kept for good; keep-awake helper fix; diagnostic log; app 0.8.20)
+Last updated: 2026-10-26 (Calendar, Reminders, Contacts, Location & Maps, spec 007; activity log kept for good; keep-awake helper fix; diagnostic log; app 0.8.21)
 
 Xcode signing ready (2026-10-20): Toni's Xcode account has a valid "Apple Development" certificate
 (certificate expires 2027-07-22). Keep the team ID out of committed project files
