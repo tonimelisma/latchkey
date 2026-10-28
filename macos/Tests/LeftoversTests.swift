@@ -211,12 +211,14 @@ final class Reports: @unchecked Sendable {
             try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         }
         let r = try await jobs.run(
-            "echo a > .git/hooks/pre-commit; echo b > '\(ssh.path)/config'; echo c > .git/HEAD && echo ok",
+            "echo a > .git/hooks/pre-commit; echo d > .Git/Hooks/post-commit; mkdir -p .git/modules/m/hooks; echo e > .git/modules/m/hooks/pre-push; echo b > '\(ssh.path)/config'; echo c > .git/HEAD && echo ok",
             folder: repo.path, wait: .seconds(10),
             writes: [repo.path])
         #expect(r.output.contains("ok"), "the rest of the project is writable: \(r.output)")
         #expect(r.refusedWrite)
-        #expect(!FileManager.default.fileExists(atPath: hooks.appending(path: "pre-commit").path))
+        for hook in ["pre-commit", "post-commit", "../modules/m/hooks/pre-push"] {
+            #expect(!FileManager.default.fileExists(atPath: hooks.appending(path: hook).path), "\(hook)")
+        }
         #expect(!FileManager.default.fileExists(atPath: ssh.appending(path: "config").path))
         let d = try await jobs.run(
             "echo a > .git/hooks/pre-commit && echo b > '\(ssh.path)/config' && echo ok", folder: repo.path,

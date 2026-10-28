@@ -14,8 +14,9 @@ enum Fence {
         ".zshrc", ".zprofile", ".zshenv", ".zlogin", ".zlogout", ".bashrc", ".bash_profile", ".profile",
         "Library/LaunchAgents", "Library/Application Support/com.apple.backgroundtaskmanagementagent", ".ssh",
     ]
-    /// Git hooks run on every commit in their project, wherever it is: any `.git/hooks` (FR-319).
-    static let hooks = #"(regex #"/\.git/hooks(/|$)")"#
+    /// Git hooks run on every commit in their project, wherever it is: any `.git/hooks`, a
+    /// submodule's included, in any letter case since the Mac's disks ignore it (FR-319).
+    static let hooks = #"(regex #"/\.[gG][iI][tT]/([^/]+/)*[hH][oO][oO][kK][sS](/|$)")"#
 
     /// The paths Claude declared, resolved; too broad ones are refused (FR-318).
     static func declared(_ writes: [String], home: URL) throws -> [URL] {
@@ -43,7 +44,7 @@ enum Fence {
     /// True when `url` is one of the permanent places or inside one, or holds one.
     static func isPermanent(_ url: URL, home: URL) -> Bool {
         let parts = OwnFiles.parts(url)
-        if zip(parts, parts.dropFirst()).contains(where: { $0 == (".git", "hooks") }) { return true }
+        if let git = parts.firstIndex(of: ".git"), parts[(git + 1)...].contains("hooks") { return true }
         return permanent.contains { place in
             let p = OwnFiles.parts(home.appending(path: place))
             return parts.starts(with: p) || p.starts(with: parts)
