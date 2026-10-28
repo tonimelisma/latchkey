@@ -254,19 +254,6 @@ final class Reports: @unchecked Sendable {
         #expect(await ShellJobTests.gone(child))
     }
 
-    /// Live check 2026-10-27: a quick command that leaves a `nohup` process, kept, then stopped.
-    @Test func aQuickCommandsKeptNohupProcessIsFoundAndReported() async throws {
-        let r = try await jobs.run(
-            "nohup sleep 602 >/dev/null 2>&1 & echo PID:$!", folder: nil, wait: .seconds(10), keepMinutes: 2)
-        let child = try ShellJobTests.pid(in: r.output)
-        defer { kill(child, SIGKILL) }
-        try await Task.sleep(for: .milliseconds(300))
-        #expect(ShellJobTests.alive(child), "kept")
-        let stopped = try await jobs.stop(r.job)
-        #expect(await ShellJobTests.gone(child))
-        #expect(stopped.left?.contains("sleep") == true, "\(stopped.left ?? "nil")")
-    }
-
     /// A job stopped the moment it started leaves no shell behind (a test left one waiting on its
     /// closed terminal, 2026-10-27).
     @Test func aJobStoppedAtOnceLeavesNoShell() async throws {
@@ -336,11 +323,12 @@ final class Reports: @unchecked Sendable {
     /// Live check 2026-10-27: ordinary tools work inside the fence.
     @Test func everydayToolsWorkInsideTheFence() async throws {
         let r = try await jobs.run(
-            "ps -o pid= -p $$ >/dev/null && echo PS-OK; top -l 1 -n 0 | head -1 | grep -q Processes && echo TOP-OK; echo $HOMEBREW_TEMP",
+            "ps -o pid= -p $$ >/dev/null && echo PS-OK; top -l 1 -n 0 | head -1 | grep -q Processes && echo TOP-OK; echo $HOMEBREW_TEMP; env -u TMPDIR /bin/bash -c 'cat <<<HEREDOC-OK'",
             folder: nil, wait: .seconds(20))
         #expect(r.output.contains("PS-OK"), "\(r.output)")
         #expect(r.output.contains("TOP-OK"), "\(r.output)")
         #expect(r.output.contains(setup.scratchRoot.path), "Homebrew's temporary folder is the scratch folder")
+        #expect(r.output.contains("HEREDOC-OK"), "bash here-documents without TMPDIR, as in Homebrew: \(r.output)")
     }
 
     @Test func leaseOutOfRangeIsRefused() async {

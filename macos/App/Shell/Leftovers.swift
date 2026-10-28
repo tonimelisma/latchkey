@@ -70,6 +70,10 @@ enum Fence {
         var rules = [
             "(version 1)", "(allow default)", "(deny file-write*)",
             "(allow file-write* " + allowed.map { "(subpath \(quote($0)))" }.joined(separator: " ") + ")",
+            // bash's here-document files, deleted as soon as read; Homebrew clears TMPDIR before
+            // its bash runs, so they land in /tmp (live check 2026-10-27). bash first checks that
+            // /tmp itself is writable, which the folder rule allows; files in it stay fenced.
+            "(allow file-write* (literal \"/private/tmp\") (regex #\"^/private/tmp/sh-thd[^/]*$\"))",
         ]
         let permanentPaths = permanent.map { OwnFiles.real(realHome.appending(path: $0)) }
         rules.append(

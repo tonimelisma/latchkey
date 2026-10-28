@@ -122,7 +122,9 @@ own scratch folder: the other jobs' folders and process records are what Latchke
 trashes by at start, where only names it gives (`<launch>-job<n>`, no links) are acted on
 (security review, 2026-10-27). `ps` and `top` are started outside the sandbox (macOS won't
 start them inside one; they write nothing), and `HOMEBREW_TEMP` points at the scratch folder
-(Homebrew's default is `/private/tmp`), from the live check of 2026-10-27. `shell_run` takes `writes` (paths) and `why`;
+(Homebrew's default is `/private/tmp`), and bash's here-document files (`/private/tmp/sh-thd…`,
+deleted as soon as read; Homebrew's bash runs without `TMPDIR`) may be written, from the live
+check of 2026-10-27. `shell_run` takes `writes` (paths) and `why`;
 `~`, the home folder, a folder above it, and `~/Library` itself are refused (FR-318). A refused
 write shows as "Operation not permitted"; when the output has it, the answer adds how to write
 there (FR-320).
