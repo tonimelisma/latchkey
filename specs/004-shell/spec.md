@@ -74,8 +74,8 @@ what is left is on one list.
 - **FR-318** When starting a command, Claude shall be able to declare the folders or files it
   will write and why. Declaring the home folder, a folder above it, or the whole Library folder
   shall be refused with an error asking for the specific folder.
-- **FR-319** Shell startup files, launch agents, and login items shall be writable only when
-  declared, even inside an allowed folder; Latchkey's own files never.
+- **FR-319** Shell startup files, launch agents, login items, `~/.ssh`, and git hooks shall be
+  writable only when declared (`~/.ssh` and git hooks added by Toni, 2026-10-28), even inside an allowed folder; Latchkey's own files never.
 - **FR-320** When a command's output shows a write refused under FR-317, the answer shall tell
   Claude how to write there: use the scratch folder, or declare the folder and run it again.
 - **FR-321** When a command finishes, its answer shall say what it left: the processes stopped,

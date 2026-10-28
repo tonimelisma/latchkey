@@ -1,6 +1,6 @@
 # Status
 
-Last updated: 2026-10-27 (nothing left behind: Shell fence, leases, Left Behind list; app 0.8.32)
+Last updated: 2026-10-28 (Shell fence also covers ~/.ssh and git hooks; app 0.8.33)
 
 Xcode signing ready (2026-10-20): Toni's Xcode account has a valid "Apple Development" certificate
 (certificate expires 2027-07-22). Keep the team ID out of committed project files
@@ -40,7 +40,7 @@ finishes (its terminal session, its family followed every half second, and progr
 scratch folder) unless Claude asks to keep them (`keep_minutes`, renewed by checking, 24 hours
 at most); each command has a scratch folder (`TMPDIR`) moved to the Trash afterwards; writes
 outside scratch, the command's folder, Downloads, package caches, and declared `writes` fail
-(macOS's sandbox), shell startup files, launch agents, and login items only when declared; what
+(macOS's sandbox), shell startup files, launch agents, login items, `~/.ssh`, and git hooks only when declared; what
 is left goes to Claude in the answer and to the Activity window's Left Behind view; Toni is
 notified only of undeclared changes to launch agents, login items, or startup files and of
 processes that won't stop. Also: Notes deletes folders; Messages copies go once sent; Claude's

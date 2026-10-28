@@ -203,6 +203,28 @@ final class Reports: @unchecked Sendable {
         #expect(d.left?.contains("permanent change") == true, "\(d.left ?? "nil")")
     }
 
+    @Test func sshAndGitHooksNeedDeclaring() async throws {
+        let ssh = home.appending(path: ".ssh")
+        let repo = home.appending(path: "project")
+        let hooks = repo.appending(path: ".git/hooks")
+        for folder in [ssh, hooks] {
+            try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        }
+        let r = try await jobs.run(
+            "echo a > .git/hooks/pre-commit; echo b > '\(ssh.path)/config'; echo c > .git/HEAD && echo ok",
+            folder: repo.path, wait: .seconds(10),
+            writes: [repo.path])
+        #expect(r.output.contains("ok"), "the rest of the project is writable: \(r.output)")
+        #expect(r.refusedWrite)
+        #expect(!FileManager.default.fileExists(atPath: hooks.appending(path: "pre-commit").path))
+        #expect(!FileManager.default.fileExists(atPath: ssh.appending(path: "config").path))
+        let d = try await jobs.run(
+            "echo a > .git/hooks/pre-commit && echo b > '\(ssh.path)/config' && echo ok", folder: repo.path,
+            wait: .seconds(10), writes: [hooks.path, ssh.appending(path: "config").path], why: "test")
+        #expect(d.output.contains("ok"), "\(d.output)")
+        #expect(d.left?.contains("permanent change") == true, "\(d.left ?? "nil")")
+    }
+
     @Test func latchkeysOwnFilesAreNeverWritable() async throws {
         let own = root.appending(path: "own")
         try FileManager.default.createDirectory(at: own, withIntermediateDirectories: true)

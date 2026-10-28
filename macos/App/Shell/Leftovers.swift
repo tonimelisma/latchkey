@@ -12,8 +12,10 @@ enum Fence {
     /// Places that make something run again: writable only when declared (FR-319).
     static let permanent = [
         ".zshrc", ".zprofile", ".zshenv", ".zlogin", ".zlogout", ".bashrc", ".bash_profile", ".profile",
-        "Library/LaunchAgents", "Library/Application Support/com.apple.backgroundtaskmanagementagent",
+        "Library/LaunchAgents", "Library/Application Support/com.apple.backgroundtaskmanagementagent", ".ssh",
     ]
+    /// Git hooks run on every commit in their project, wherever it is: any `.git/hooks` (FR-319).
+    static let hooks = #"(regex #"/\.git/hooks(/|$)")"#
 
     /// The paths Claude declared, resolved; too broad ones are refused (FR-318).
     static func declared(_ writes: [String], home: URL) throws -> [URL] {
@@ -41,6 +43,7 @@ enum Fence {
     /// True when `url` is one of the permanent places or inside one, or holds one.
     static func isPermanent(_ url: URL, home: URL) -> Bool {
         let parts = OwnFiles.parts(url)
+        if zip(parts, parts.dropFirst()).contains(where: { $0 == (".git", "hooks") }) { return true }
         return permanent.contains { place in
             let p = OwnFiles.parts(home.appending(path: place))
             return parts.starts(with: p) || p.starts(with: parts)
@@ -77,7 +80,8 @@ enum Fence {
         ]
         let permanentPaths = permanent.map { OwnFiles.real(realHome.appending(path: $0)) }
         rules.append(
-            "(deny file-write* " + permanentPaths.map { "(subpath \(quote($0.path)))" }.joined(separator: " ") + ")")
+            "(deny file-write* " + permanentPaths.map { "(subpath \(quote($0.path)))" }.joined(separator: " ") + " "
+                + hooks + ")")
         // The other jobs' scratch folders and the records of their processes are Latchkey's
         // (the app stops and trashes by them at start, FR-324): only the job's own scratch.
         let jobsRoot = OwnFiles.real(scratch).deletingLastPathComponent()
@@ -240,7 +244,8 @@ final class PermanentWatch: @unchecked Sendable {
     /// The files whose dates are compared, and the folders and files watched for events.
     private func places() -> (files: [URL], watched: [URL]) {
         let fm = FileManager.default
-        let startup = Fence.permanent.filter { !$0.contains("/") }.map { home.appending(path: $0) }
+        // Not ~/.ssh: ssh itself updates known_hosts on ordinary connections.
+        let startup = Fence.permanent.filter { !$0.contains("/") && $0 != ".ssh" }.map { home.appending(path: $0) }
         let folders = ["Library/LaunchAgents", "Library/Application Support/com.apple.backgroundtaskmanagementagent"]
             .map { home.appending(path: $0, directoryHint: .isDirectory) }
         var files = startup

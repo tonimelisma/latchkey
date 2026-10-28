@@ -116,7 +116,8 @@ temporary folder under `/private/var/folders` (system frameworks need it); Downl
 it, nor `~/Library` itself; each declared path. Later rules win, so it then refuses writes to the permanent places
 (`~/.zshrc`, `~/.zprofile`, `~/.zshenv`, `~/.zlogin`, `~/.zlogout`, `~/.bashrc`,
 `~/.bash_profile`, `~/.profile`, `~/Library/LaunchAgents`, and the login items folder
-`~/Library/Application Support/com.apple.backgroundtaskmanagementagent`) unless declared, and
+`~/Library/Application Support/com.apple.backgroundtaskmanagementagent`, `~/.ssh`, and every
+project's `.git/hooks`, by a path pattern since a project can be anywhere) unless declared, and
 always to Latchkey's own files (Files' `OwnFiles`) and to the Jobs folder except the job's
 own scratch folder: the other jobs' folders and process records are what Latchkey stops and
 trashes by at start, where only names it gives (`<launch>-job<n>`, no links) are acted on

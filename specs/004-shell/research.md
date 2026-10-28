@@ -78,5 +78,9 @@ the next start; now fenced off except the job's own scratch folder, and start ac
 names it gives, never through links. Also raised and left as known gaps (Toni's scope is the
 leftovers of ordinary work, not a hostile command): work handed to other programs (launchd,
 `open`, Apple events, `defaults`) is outside the fence, and the permanent places are the shell
-startup files, launch agents, and login items, not every place that can run code later
-(`~/.ssh/config`, git hooks, folders on PATH).
+startup files, launch agents, login items, `~/.ssh`, and git hooks (the last two added by Toni,
+2026-10-28), not every place that can run code later (folders on PATH; a project's
+`core.hooksPath` setting in `.git/config`, which git itself writes in ordinary work, so it stays
+writable). Fencing `~/.ssh` means ssh can't add a new server to `known_hosts` from a command
+unless declared; it warns and connects anyway. The watcher (FR-325) leaves `~/.ssh` out for that
+reason, and doesn't watch git hooks (projects can be anywhere).
