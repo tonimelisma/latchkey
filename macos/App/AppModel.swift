@@ -116,16 +116,42 @@ final class AppModel {
         }
         Task { await refresh() }
         loadRecentActivity()
-        if needsSetup { showSetup() }
+        decideSetupAtStart()
+    }
+
+    /// An unpaired Mac sees setup at once. A paired one only after a second look: some
+    /// permissions read wrong for a moment at launch (Location reports "not asked" until Core
+    /// Location's first callback), and the setup window opened over a finished setup
+    /// (2026-10-27, FR-205).
+    private func decideSetupAtStart() {
+        guard isPaired else { return showSetup() }
+        let first = missingSetup
+        guard !first.isEmpty else { return }
+        Task {
+            try? await Task.sleep(for: .seconds(2))
+            await checkApprovals()
+            let missing = missingSetup
+            Diagnostics.permissions.notice(
+                "At start, setup looked unfinished (\(first.joined(separator: ", "), privacy: .public)); a moment later: \(missing.isEmpty ? "finished" : missing.joined(separator: ", "), privacy: .public)"
+            )
+            if !missing.isEmpty { showSetup() }
+        }
     }
 
     /// The setup window: approve keep-awake, connect to a relay (FR-078).
     func showSetup() { setupWindow.show(model: self) }
 
-    var needsSetup: Bool {
-        !isPaired || helperStatus != .enabled || (capabilities.anyOn && !fullDiskAccess) || needsAppControl
-            || needsSafariJavaScript || needsScreenRecording || needsAccessibility
-            || needsContacts || needsCalendar || needsReminders || needsLocation
+    var needsSetup: Bool { !missingSetup.isEmpty }
+
+    /// The setup steps not done, by name, for the window and the diagnostic log.
+    var missingSetup: [String] {
+        [
+            ("connect", !isPaired), ("keep-awake", helperStatus != .enabled),
+            ("full disk access", capabilities.anyOn && !fullDiskAccess), ("app control", needsAppControl),
+            ("Safari JavaScript", needsSafariJavaScript), ("screen recording", needsScreenRecording),
+            ("accessibility", needsAccessibility), ("contacts", needsContacts), ("calendars", needsCalendar),
+            ("reminders", needsReminders), ("location", needsLocation),
+        ].filter(\.1).map(\.0)
     }
 
     /// Re-reads whether the Owner approved the helper; applies keep-awake as soon as they do.

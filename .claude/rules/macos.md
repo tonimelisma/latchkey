@@ -94,7 +94,10 @@ paths:
   stored, then start the asynchronous work. After an install, check that a set-up Mac shows no
   window: `osascript -e 'tell application "System Events" to tell process "Latchkey" to count windows'` is 0.
   (System Events also reports 0 for SwiftUI's Settings and Activity windows when they are open;
-  `CGWindowListCopyWindowInfo` is the reliable check.)
+  `CGWindowListCopyWindowInfo` is the reliable check.) Permissions can read wrong for a moment at
+  launch too (the window opened over a finished setup on 2026-10-27; Location reports "not
+  asked" until Core Location's first callback): a paired Mac decides on setup only after a
+  second look two seconds later, and logs what looked missing (`permissions` category).
 - Never pause, disconnect, or turn down capabilities on the installed app for a check: Toni's own
   Claude sessions use it (a live Pause test stalled one of his sessions mid-order, 2026-10-26).
   Test those in unit tests or with `make mac-check`. Run `claude -p` live checks from outside
