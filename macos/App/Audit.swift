@@ -114,6 +114,9 @@ struct AuditComparison: Equatable, Sendable {
         c.beforeCallIDs = macWithoutIDs
         let recent = now.addingTimeInterval(-grace)
         var macIDs = Set<String>()
+        // Sets, not list scans: the relay can send up to a million entries (security review).
+        var seenTwiceOnMac = Set<String>()
+        var seenTwiceOnRelay = Set<String>()
         var macCalls: [MacCall] = []
         for m in mac {
             if !isGlobal(m.callID) {
@@ -122,7 +125,7 @@ struct AuditComparison: Equatable, Sendable {
                 c.otherPairings += 1
             } else if macIDs.insert(m.callID).inserted {
                 macCalls.append(m)
-            } else if !c.twiceOnMac.contains(m.callID) {
+            } else if seenTwiceOnMac.insert(m.callID).inserted {
                 c.twiceOnMac.append(m.callID)
             }
         }
@@ -133,7 +136,7 @@ struct AuditComparison: Equatable, Sendable {
                 continue
             }
             guard relayIDs.insert(r.callID).inserted else {
-                if !c.twiceOnRelay.contains(r.callID) { c.twiceOnRelay.append(r.callID) }
+                if seenTwiceOnRelay.insert(r.callID).inserted { c.twiceOnRelay.append(r.callID) }
                 continue
             }
             if macIDs.contains(r.callID) {
