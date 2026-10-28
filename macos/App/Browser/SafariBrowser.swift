@@ -13,16 +13,29 @@ actor SafariBrowser {
 
     let scripts: any ScriptRunner
     private var window: String?
+    /// How long a page may take to load (plan D3).
+    private let settleLimit: Duration
 
-    init(scripts: any ScriptRunner) { self.scripts = scripts }
+    init(scripts: any ScriptRunner, settleLimit: Duration = .seconds(15)) {
+        self.scripts = scripts
+        self.settleLimit = settleLimit
+    }
 
-    /// Loads `url` in Claude's window (a new tab if asked), making the window if needed.
+    /// Loads `url` in Claude's window (a new tab if asked), making the window if needed. A page
+    /// that doesn't finish loading is an error naming what Safari still shows, never a read of
+    /// the old page as if it were the new one (2026-10-25: Claude asked for an Amazon page and
+    /// was given another page's text).
     func open(_ url: String, newTab: Bool) async throws -> PageScripts.Page {
         let address = try Self.normalize(url)
         let before = try? await stamp()
         let id = try await call(Script.open, [address, window ?? "", newTab ? "yes" : "no"])
         window = id
-        try await settle(after: before, expectNavigation: true)
+        guard try await settle(after: before, expectNavigation: true) else {
+            let shown = (try? await stamp())?.address ?? "an unknown page"
+            throw Failure.failed(
+                "Safari didn't finish loading \(address) within \(settleLimit.components.seconds) seconds; Claude's window still shows \(shown). Try again, or read the page as it is with browser_read."
+            )
+        }
         return try await read(offset: 0)
     }
 
@@ -37,21 +50,21 @@ actor SafariBrowser {
     func click(_ ref: String) async throws -> PageScripts.Page {
         let before = try? await stamp()
         try check(try await javaScript(PageScripts.click(ref)), ref: ref)
-        try await settle(after: before, expectNavigation: false)
+        _ = try await settle(after: before, expectNavigation: false)
         return try await read(offset: 0)
     }
 
     func type(_ ref: String, text: String, submit: Bool) async throws -> PageScripts.Page {
         let before = try? await stamp()
         try check(try await javaScript(PageScripts.type(ref, text: text, submit: submit)), ref: ref, option: text)
-        if submit { try await settle(after: before, expectNavigation: false) }
+        if submit { _ = try await settle(after: before, expectNavigation: false) }
         return try await read(offset: 0)
     }
 
     func back() async throws -> PageScripts.Page {
         let before = try? await stamp()
         _ = try await javaScript(PageScripts.back)
-        try await settle(after: before, expectNavigation: true)
+        _ = try await settle(after: before, expectNavigation: true)
         return try await read(offset: 0)
     }
 
@@ -125,19 +138,25 @@ actor SafariBrowser {
         PageScripts.Stamp(try await javaScript(PageScripts.stamp))
     }
 
-    /// Waits until a new page has finished loading, at most 15 s (plan D3). The old page (or a new
-    /// window's blank page) also reads "complete", so finished means a different document. An
-    /// action that may not navigate (a click that only changes the page) counts as finished when
-    /// no new page has started after 1.5 s.
-    private func settle(after before: PageScripts.Stamp?, expectNavigation: Bool) async throws {
+    /// Waits until a new page has finished loading, at most `settleLimit` (plan D3). The old page
+    /// (or a new window's blank page) also reads "complete", so finished means a different
+    /// document. An action that may not navigate (a click that only changes the page) counts as
+    /// finished when no new page has started after 1.5 s. False when the time ran out.
+    private func settle(after before: PageScripts.Stamp?, expectNavigation: Bool) async throws -> Bool {
         let start = ContinuousClock.now
-        while ContinuousClock.now < start + .seconds(15) {
+        while ContinuousClock.now < start + settleLimit {
             try await Task.sleep(for: .milliseconds(250))
-            guard let now = try? await stamp() else { continue }
+            let now: PageScripts.Stamp
+            do { now = try await stamp() } catch Failure.javaScriptOff {
+                throw Failure.javaScriptOff  // waiting won't help; the Owner must turn it on
+            } catch {
+                continue
+            }
             let newDocument = before.map { $0.origin != now.origin } ?? (now.address != "about:blank")
-            if now.complete, newDocument { return }
-            if now.complete, !expectNavigation, ContinuousClock.now > start + .milliseconds(1500) { return }
+            if now.complete, newDocument { return true }
+            if now.complete, !expectNavigation, ContinuousClock.now > start + .milliseconds(1500) { return true }
         }
+        return false
     }
 
     private func check(_ answer: String, ref: String, option: String = "") throws {
@@ -180,8 +199,17 @@ actor SafariBrowser {
             return winID
             end if
             end if
+            -- The new window is the one whose id wasn't there before: the front window may be
+            -- one of the Owner's (another Space, full screen), and Claude must never adopt it.
+            set beforeIDs to id of every window
             make new document with properties {URL:theURL}
-            return (id of front window) as text
+            repeat 50 times
+            repeat with w in windows
+            if (id of w) is not in beforeIDs then return (id of w) as text
+            end repeat
+            delay 0.1
+            end repeat
+            error "Safari didn't show the new window."
             end tell
             end run
             """
