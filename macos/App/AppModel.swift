@@ -754,7 +754,7 @@ final class AppModel {
             at: started, tool: call.tool, arguments: call.arguments.jsonText,
             result: told.content.jsonText, isError: told.isError,
             durationMS: Int(Date().timeIntervalSince(started) * 1000), callID: call.id, device: device,
-            client: call.client.flatMap { $0.isEmpty ? nil : $0 })
+            client: call.client.flatMap { $0.isEmpty ? nil : AuditComparison.clip($0) })  // from the relay: bounded
         try? trace?.record(entry)
         loadRecentActivity()
         if let activity = result.activity, !result.isError { Notifier.post(activity) }  // FR-130

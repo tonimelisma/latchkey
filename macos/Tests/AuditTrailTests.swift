@@ -325,6 +325,18 @@ enum LogBeforeEvents {
         )
     }
 
+    /// A relay can't make the forever-kept event huge (security review, 2026-10-27): at most 20
+    /// calls are named per side, and ids and tool names are cut to 64 characters.
+    @Test func longGapsAreSummedUpNotListed() {
+        let huge = "call_" + String(repeating: "X", count: 5000)
+        let relay = (0..<500).map { Self.relay("call_\($0)", 30 + Double($0)) } + [Self.relay(huge, 25)]
+        let c = AuditComparison.compare(relay: relay, mac: [], macWithoutIDs: 0, device: Self.device, now: Self.now)
+        let text = c.summary(tools: [:])
+        #expect(text.contains("and 481 more"))
+        #expect(text.count < 5000, "got \(text.count) characters")
+        #expect(AuditComparison.clip(String(repeating: "y", count: 500)).count == 64)
+    }
+
     @Test func bothSidesMissingAreAllNamed() {
         let c = AuditComparison.compare(
             relay: [Self.relay("call_A", 30), Self.relay("call_B", 25), Self.relay("call_C", 20)],

@@ -136,7 +136,21 @@ struct AuditComparison: Equatable, Sendable {
         return c
     }
 
-    /// The event's text, naming every missing call; `tools` names the Mac's missing ones.
+    /// How many missing calls an event names per side; the rest are counted. The event is kept
+    /// forever and its ids come from the relay, so neither may make it huge (security review,
+    /// 2026-10-27).
+    static let namedPerSide = 20
+
+    /// A relay-supplied value (call id, tool, Claude app name) cut to 64 characters.
+    static func clip(_ s: String) -> String { s.count > 64 ? String(s.prefix(63)) + "…" : s }
+
+    private static func listed(_ items: [String]) -> String {
+        let named = items.prefix(namedPerSide).joined(separator: ", ")
+        return items.count > namedPerSide ? named + ", and \(items.count - namedPerSide) more" : named
+    }
+
+    /// The event's text, naming the missing calls (up to `namedPerSide` per side); `tools` names
+    /// the Mac's missing ones.
     func summary(tools: [String: String]) -> String {
         let format = ISO8601DateFormatter()
         var parts: [String] = []
@@ -145,15 +159,18 @@ struct AuditComparison: Equatable, Sendable {
         if !missingOnMac.isEmpty {
             parts.append(
                 "missing on the Mac: "
-                    + missingOnMac.map { "\($0.callID) (\($0.tool), \(format.string(from: $0.date)))" }.joined(
-                        separator: ", "))
+                    + Self.listed(
+                        missingOnMac.map {
+                            "\(Self.clip($0.callID)) (\(Self.clip($0.tool)), \(format.string(from: $0.date)))"
+                        }))
         }
         if !missingOnRelay.isEmpty {
             parts.append(
                 "missing on the relay: "
-                    + missingOnRelay.map {
-                        "\($0.callID) (\(tools[$0.callID] ?? "unknown tool"), \(format.string(from: $0.at)))"
-                    }.joined(separator: ", "))
+                    + Self.listed(
+                        missingOnRelay.map {
+                            "\(Self.clip($0.callID)) (\(Self.clip(tools[$0.callID] ?? "unknown tool")), \(format.string(from: $0.at)))"
+                        }))
         }
         if beforeCallIDs > 0 {
             parts.append("\(Self.count(beforeCallIDs)) from before call ids left out")
