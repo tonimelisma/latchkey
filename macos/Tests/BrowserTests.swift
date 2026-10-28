@@ -277,6 +277,31 @@ final class FakeSafari: ScriptRunner, @unchecked Sendable {
         #expect(r.content.jsonText.contains("Allow JavaScript from Apple Events"))
     }
 
+    /// 2026-10-25 Claude asked for an Amazon page and was given the Owner's Optery window: the
+    /// script took "the front window" as Claude's new one. It must find the window it made.
+    @Test func newWindowIsTheOneItMadeNotTheFrontOne() {
+        let open = SafariBrowser.Script.open
+        #expect(!open.contains("id of front window"), "the front window may be the Owner's")
+        #expect(open.contains("is not in beforeIDs"), "the new window is the id that wasn't there before")
+    }
+
+    /// A page that never loads is an error naming what Safari still shows, not a silent read of it.
+    @Test func saysWhenThePageDidNotLoad() async {
+        let fake = FakeSafari()
+        let b = SafariBrowser(scripts: fake, settleLimit: .milliseconds(600))
+        _ = try? await b.open("https://a.example.com", newTab: false)
+        fake.lag = 1000  // the old page keeps answering
+        do {
+            _ = try await b.open("https://www.amazon.com/print", newTab: false)
+            Issue.record("read the old page as if it were the new one")
+        } catch let SafariBrowser.Failure.failed(message) {
+            #expect(message.contains("didn't finish loading"))
+            #expect(message.contains("https://old.example.com/"))
+        } catch {
+            Issue.record("unexpected \(error)")
+        }
+    }
+
     @Test func replacesAClosedWindow() async {
         let fake = FakeSafari()
         let t = tools(fake)
