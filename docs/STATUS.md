@@ -164,6 +164,9 @@ The Mac state line appears in every result (it reported the battery warning at 1
 ## Waiting on Toni
 
 1. Answer the macOS alert about Latchkey accessing the screen (Allow), if it's still showing.
+2. Pick from `docs/ideas/leftovers.md` (2026-10-27): ideas for making sure Claude's work on the
+   Mac leaves no processes, files, or app items behind, or that Toni gets a list of what's left.
+   Nothing there is decided.
 
 ## Milestones (from `specs/001-core/plan.md`)
 
