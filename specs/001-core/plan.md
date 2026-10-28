@@ -744,7 +744,7 @@ design", 2026-10-26).
   press it) and "Cancel", as Remove Access… already does (FR-605).
 
 ### D18. Relay audit trail
-Serves FR-022, FR-024, FR-630 to FR-636; Constitution II (the comparison never waits on the
+Serves FR-022, FR-024, FR-630 to FR-637; Constitution II (the comparison never waits on the
 Mac: the relay answers from its own database) and VI (metadata only, fixed words, no
 addresses, bounded for strangers).
 - Nothing is deleted by age: the 30-day purge of `audit_log` is gone, and the daily
@@ -756,6 +756,9 @@ addresses, bounded for strangers).
   the Mac, so a call answered "offline" or "never paired" has one too, sends it in `call`, and
   stores it in `audit_log.call_id` (migration 12; old rows `''`). The audit write no longer
   shares the request's cancellation, so a call whose client went away is audited as well.
+- The Claude app's name in each call (FR-637): the surface the audit stores (the session's
+  `clientInfo.name`, cleaned as FR-022a says) is computed once per call and sent as `call.client`,
+  left out when unknown, so the Mac's log and the relay's audit name the app the same way.
 - Audit comparison (FR-634, contract "Audit comparison"): a connection whose hello listed
   `audit` may send `audit_request`; the relay answers from `AuditForDevice` (this Mac's rows,
   `at >= since`, oldest first, at most the limit cut to 1000) with `next_since`. A page never

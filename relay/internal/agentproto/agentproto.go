@@ -212,6 +212,9 @@ type Call struct {
 	Tool       string          `json:"tool"`
 	Arguments  json.RawMessage `json:"arguments"`
 	DeadlineMS int64           `json:"deadline_ms"`
+	// Client is the Claude app that made the call, as the relay's audit names it (FR-637);
+	// empty when unknown.
+	Client string `json:"client,omitempty"`
 }
 
 // Cancel withdraws a call.

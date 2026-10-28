@@ -48,6 +48,9 @@ func TestAuditCarriesTheCallID(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, entries, 1)
 	assert.Equal(t, sent.ID, entries[0].CallID)
+	// FR-637: the call names the Claude app exactly as the audit does.
+	assert.Equal(t, "test-client", sent.Client)
+	assert.Equal(t, entries[0].Surface, sent.Client)
 
 	require.NoError(t, c.Close())
 	require.Eventually(t, func() bool { return !e.hub.Online(e.device.ID) }, 5*time.Second, 10*time.Millisecond)

@@ -419,12 +419,13 @@ func (s *Server) forward(userID string, tool *mcp.Tool) mcp.ToolHandler {
 	return func(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		start := s.opts.Now()
 		callID := agentproto.NewCallID() // made here, so a call that never reaches the Mac has one too (FR-632)
+		client := surface(req)           // the same name in the call and in the audit (FR-637)
 		st, d := s.status(ctx, userID)
 		if !st.Paired {
-			s.audit(ctx, req, userID, "", callID, tool.Name, store.OutcomeOffline, start)
+			s.audit(ctx, userID, "", callID, client, tool.Name, store.OutcomeOffline, start)
 			return errorResult(neverPairedText), nil
 		}
-		res, err := s.hub.CallWithID(ctx, d.ID, callID, tool.Name, req.Params.Arguments, deadline, progressFunc(ctx, req))
+		res, err := s.hub.CallWithID(ctx, d.ID, callID, client, tool.Name, req.Params.Arguments, deadline, progressFunc(ctx, req))
 		var result *mcp.CallToolResult
 		outcome := store.OutcomeOK
 		switch {
@@ -448,7 +449,7 @@ func (s *Server) forward(userID string, tool *mcp.Tool) mcp.ToolHandler {
 			now, _ := s.status(ctx, userID)
 			appendStatusLine(result, statusLine(now.State))
 		}
-		s.audit(ctx, req, userID, d.ID, callID, tool.Name, outcome, start)
+		s.audit(ctx, userID, d.ID, callID, client, tool.Name, outcome, start)
 		return result, nil
 	}
 }
@@ -485,6 +486,15 @@ func progressFunc(ctx context.Context, req *mcp.CallToolRequest) func(*agentprot
 	}
 }
 
+// surface is the Claude app's name from the session's initialize, cleaned (FR-022a); "" when
+// the client sent none.
+func surface(req *mcp.CallToolRequest) string {
+	if info := req.ClientInfo(); info != nil {
+		return cleanSurface(info.Name)
+	}
+	return ""
+}
+
 // maxSurfaceRunes caps the audit log's "surface" (FR-022a).
 const maxSurfaceRunes = 64
 
@@ -508,11 +518,7 @@ func cleanSurface(name string) string {
 
 // audit records the call, whatever its outcome (FR-022). The write doesn't end with the request:
 // a client that went away still leaves its call in the audit.
-func (s *Server) audit(ctx context.Context, req *mcp.CallToolRequest, userID, deviceID, callID, tool, outcome string, start time.Time) {
-	surface := ""
-	if info := req.ClientInfo(); info != nil {
-		surface = cleanSurface(info.Name)
-	}
+func (s *Server) audit(ctx context.Context, userID, deviceID, callID, surface, tool, outcome string, start time.Time) {
 	err := s.store.AddAudit(context.WithoutCancel(ctx), store.AuditEntry{
 		UserID: userID, DeviceID: deviceID, At: start.UTC(), Tool: tool, Surface: surface,
 		Outcome: outcome, Duration: s.opts.Now().Sub(start), CallID: callID,

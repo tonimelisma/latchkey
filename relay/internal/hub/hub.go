@@ -147,19 +147,20 @@ func (h *Hub) conn(deviceID string) *conn {
 func (h *Hub) Call(ctx context.Context, deviceID, tool string, args json.RawMessage, deadline time.Duration,
 	progress func(*agentproto.Progress),
 ) (*agentproto.Result, error) {
-	return h.CallWithID(ctx, deviceID, agentproto.NewCallID(), tool, args, deadline, progress)
+	return h.CallWithID(ctx, deviceID, agentproto.NewCallID(), "", tool, args, deadline, progress)
 }
 
 // CallWithID is Call with the call's id made by the caller (agentproto.NewCallID), which also
-// stores it in the audit (FR-632).
-func (h *Hub) CallWithID(ctx context.Context, deviceID, callID, tool string, args json.RawMessage, deadline time.Duration,
-	progress func(*agentproto.Progress),
+// stores it in the audit (FR-632), and the name of the Claude app that made it, as the audit
+// records it (FR-637; "" when unknown).
+func (h *Hub) CallWithID(ctx context.Context, deviceID, callID, client, tool string, args json.RawMessage,
+	deadline time.Duration, progress func(*agentproto.Progress),
 ) (*agentproto.Result, error) {
 	c := h.conn(deviceID)
 	if c == nil {
 		return nil, ErrOffline
 	}
-	return c.call(ctx, callID, tool, args, deadline, progress)
+	return c.call(ctx, callID, client, tool, args, deadline, progress)
 }
 
 // Revoke closes the device's connection with 4002; in-flight calls fail with ErrRevoked.
@@ -750,7 +751,7 @@ func (c *conn) failPending() {
 	c.mu.Unlock()
 }
 
-func (c *conn) call(ctx context.Context, id, tool string, args json.RawMessage, deadline time.Duration,
+func (c *conn) call(ctx context.Context, id, client, tool string, args json.RawMessage, deadline time.Duration,
 	progress func(*agentproto.Progress),
 ) (*agentproto.Result, error) {
 	if args == nil {
@@ -772,7 +773,7 @@ func (c *conn) call(ctx context.Context, id, tool string, args json.RawMessage, 
 
 	timer := time.NewTimer(deadline)
 	defer timer.Stop()
-	err := c.send(ctx, &agentproto.Call{ID: id, Tool: tool, Arguments: args, DeadlineMS: deadline.Milliseconds()})
+	err := c.send(ctx, &agentproto.Call{ID: id, Tool: tool, Arguments: args, DeadlineMS: deadline.Milliseconds(), Client: client})
 	if err != nil {
 		return nil, c.failure()
 	}

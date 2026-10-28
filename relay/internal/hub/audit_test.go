@@ -88,9 +88,12 @@ func TestCallIDsAreGlobal(t *testing.T) {
 	call := <-c.Calls
 	assert.Regexp(t, `^call_[0-9A-Z]{26}$`, call.ID)
 
-	_, err = e.hub.CallWithID(ctxT(t), e.device.ID, "call_GIVEN0000000000000000000", "battery_status", nil, time.Second, nil)
+	_, err = e.hub.CallWithID(ctxT(t), e.device.ID, "call_GIVEN0000000000000000000", "Claude Code", "battery_status", nil, time.Second, nil)
 	require.NoError(t, err)
-	assert.Equal(t, "call_GIVEN0000000000000000000", (<-c.Calls).ID)
+	given := <-c.Calls
+	assert.Equal(t, "call_GIVEN0000000000000000000", given.ID)
+	assert.Equal(t, "Claude Code", given.Client, "FR-637")
+	assert.Empty(t, call.Client, "unknown: left out")
 }
 
 // FR-631: each connection and its end, with the close code, reason, and goodbye reason.
