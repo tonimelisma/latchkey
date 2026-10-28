@@ -6,6 +6,9 @@ import Foundation
 enum Fence {
     /// Caches package tools write without being asked (research.md).
     static let caches = ["Library/Caches", ".cache", ".npm"]
+    /// Programs macOS won't start inside a sandbox (they read other processes), started outside
+    /// the fence instead; they write nothing (live check 2026-10-27: `ps` and `top` failed).
+    static let unfenced = ["/bin/ps", "/usr/bin/top"]
     /// Places that make something run again: writable only when declared (FR-319).
     static let permanent = [
         ".zshrc", ".zprofile", ".zshenv", ".zlogin", ".zlogout", ".bashrc", ".bash_profile", ".profile",
@@ -91,6 +94,9 @@ enum Fence {
             }
         }
         if !ownRules.isEmpty { rules.append("(deny file-write* " + ownRules.joined(separator: " ") + ")") }
+        rules.append(
+            "(allow process-exec " + unfenced.map { "(literal \(quote($0)))" }.joined(separator: " ")
+                + " (with no-sandbox))")
         return rules.joined(separator: "\n")
     }
 

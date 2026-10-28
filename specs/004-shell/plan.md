@@ -120,7 +120,9 @@ it, nor `~/Library` itself; each declared path. Later rules win, so it then refu
 always to Latchkey's own files (Files' `OwnFiles`) and to the Jobs folder except the job's
 own scratch folder: the other jobs' folders and process records are what Latchkey stops and
 trashes by at start, where only names it gives (`<launch>-job<n>`, no links) are acted on
-(security review, 2026-10-27). `shell_run` takes `writes` (paths) and `why`;
+(security review, 2026-10-27). `ps` and `top` are started outside the sandbox (macOS won't
+start them inside one; they write nothing), and `HOMEBREW_TEMP` points at the scratch folder
+(Homebrew's default is `/private/tmp`), from the live check of 2026-10-27. `shell_run` takes `writes` (paths) and `why`;
 `~`, the home folder, a folder above it, and `~/Library` itself are refused (FR-318). A refused
 write shows as "Operation not permitted"; when the output has it, the answer adds how to write
 there (FR-320).

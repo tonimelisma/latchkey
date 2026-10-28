@@ -204,6 +204,8 @@ actor ShellJobs {
         for (k, v) in [
             "TERM": "dumb", "NO_COLOR": "1", "PAGER": "cat", "GIT_PAGER": "cat",
             "TMPDIR": scratch.path + "/", "LATCHKEY_SCRATCH": scratch.path,
+            // Homebrew's own temporary folder is /private/tmp unless told (live check 2026-10-27).
+            "HOMEBREW_TEMP": scratch.path,
         ] { env[k] = v }
         p.environment = env
         let stdin = Pipe()
