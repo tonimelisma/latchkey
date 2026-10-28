@@ -166,7 +166,7 @@ Sent in `hello`, in every `state` message, and in `goodbye`.
 
 | type | When | Fields |
 |---|---|---|
-| `call` | Claude called a Mac tool | `id`, `tool`, `arguments`, `deadline_ms` |
+| `call` | Claude called a Mac tool | `id`, `tool`, `arguments`, `deadline_ms`, `client` (optional, added 2026-10-27, FR-637: the Claude app's name as the relay records it in its audit, e.g. "Claude Code"; empty or missing when unknown) |
 | `cancel` | Deadline passed or Claude cancelled | `id`, `reason` (`deadline` or `client_cancelled`) |
 | `notice` | Something the Owner must be told on the Mac | `kind`, `at`, `client` (optional) |
 | `clients` | Right after `welcome`, and whenever the list changes; only to an agent that announced the `clients` feature (FR-190) | `clients` (full list, replaces the previous one) |

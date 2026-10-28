@@ -175,3 +175,4 @@ Add a row when a decision is made; never delete one, mark it "superseded by" ins
 | 2026-10-27 | The relay keeps its audit of tool calls forever (until the account is deleted), replacing 30 days | Toni, spec 001 FR-024, FR-630 |
 | 2026-10-27 | The relay also records Mac connections and drops, keep-awake changes, sign-ins, Claude app approvals and removals, pairing, and every refused or failed request, kept the same way; its output carries these instead of a line per request | Toni, spec 001 FR-631, FR-635 |
 | 2026-10-27 | Every call has an id unique for all time; the Mac compares its log with the relay's audit by that id after each connection and on request, and the installer fails on any gap; a test per event kind and against any age-based deletion | Toni, spec 001 FR-632, FR-634, FR-636 |
+| 2026-10-27 | Each call carries the Claude app's name to the Mac, which stores and shows it in the activity log | Toni, spec 001 FR-637 |

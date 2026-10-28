@@ -248,6 +248,9 @@ days; nothing checked that the two sides agree.
 - **FR-636** For every kind of event in FR-631 and FR-633 a test shall show that it is recorded,
   and a test shall show that no log, on the relay or the Mac, deletes entries by age. The
   installer shall fail when the Mac's comparison (FR-634) reports anything missing.
+- **FR-637** The relay shall send with each call the name of the Claude app that made it (as it
+  records it in its audit), and the Mac's activity log shall store and show it for that call
+  (Toni, 2026-10-27: the audit found no way to tell on the Mac which app did what).
 
 ### Keep-awake and power
 - **FR-030** While keep-awake is on, the Mac shall not sleep, on battery or power, with the lid
