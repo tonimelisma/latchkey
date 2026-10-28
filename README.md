@@ -53,9 +53,11 @@ Claude (web, Desktop, phone)  ──HTTPS──▶  Latchkey relay  ◀──out
   before the Mac sleeps.
 - **Keep-awake:** while connected, the app keeps the Mac awake, lid closed included, and lets it
   sleep when the battery reaches 15% or it gets too hot.
-- **Privacy:** the relay never stores what tools return. It keeps a 30-day list of which tools ran
-  and when; the full log, with arguments and results, stays on your Mac, encrypted and checked
-  for changes, until you uninstall the app. Text written
+- **Privacy:** the relay never stores what tools return. It keeps a list of which tools ran, when,
+  and for which Claude app, plus connections, sign-ins, and refused requests, until you delete
+  your account; the full log, with arguments and results, and the app's own events, stays on
+  your Mac, encrypted and checked for changes, until you uninstall the app. After each
+  connection the Mac checks its log against the relay's list, call by call. Text written
   by others (messages, web pages, files) is marked as content, not instructions.
 
 ## Get started

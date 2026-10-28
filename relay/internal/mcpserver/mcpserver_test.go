@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -272,6 +273,10 @@ func TestDeadline(t *testing.T) {
 	}
 	c := e.connectMac()
 	cs := e.client(stateful, nil)
+	// The Mac's tool list reaches the relay a moment after it connects: under a loaded full run
+	// the call came first and got "unknown tool" (2026-10-27).
+	require.Eventually(t, func() bool { return slices.Contains(toolNames(t, cs), "slow") },
+		5*time.Second, 20*time.Millisecond, "the Mac's tools arrive")
 
 	start := time.Now()
 	res := call(t, cs, "slow")
