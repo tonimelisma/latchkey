@@ -268,8 +268,12 @@ Entries are this Mac's (`device_id` of the connection) audit rows with `at >= si
 first, at most `limit`. `next_since` is the `since` for the next page, or `null` when there are
 no more. Rows from before call ids (FR-632) have `call_id` `""`. `outcome` is `ok`, `error`,
 `timeout`, or `offline`; `offline` calls never reached the Mac and aren't expected in its log.
-An `audit_request` with an invalid `since` or `limit` is answered with `entries` `[]` and
-`next_since` `null`.
+An `audit_request` with an out-of-range `since` or `limit` is answered with `entries` `[]` and
+`next_since` `null`; one whose `since` or `limit` isn't a number, or whose `id` is missing or
+longer than 128 bytes, is a malformed message (close 4005). An `audit_request` from an agent that
+didn't list `"audit"` closes the connection with 4005. Entries with an empty `call_id` include
+the Mac's own audited actions (`revoke_client`) as well as calls from before call ids; the
+comparison leaves them all out and counts them.
 
 Comparison on the Mac: over the same period, every relay entry with a `call_id` and an outcome
 other than `offline` must have a log entry with that call id, and every log entry with a call id
