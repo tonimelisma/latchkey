@@ -129,6 +129,11 @@ struct AuditComparison: Equatable, Sendable {
                 c.twiceOnMac.append(m.callID)
             }
         }
+        // The Mac's first call with an id (this pairing): relay calls missing from the Mac before
+        // it were made while the Mac's app couldn't store ids yet (the switch-over, 2026-10-27).
+        // A wiped log has none, so then nothing is left out. Removing entries to move it breaks
+        // the tamper chain (FR-612).
+        let firstMacID = macCalls.map(\.at).min()
         var relayIDs = Set<String>()
         for r in relay where r.outcome != .offline {
             guard !r.callID.isEmpty else {
@@ -143,6 +148,8 @@ struct AuditComparison: Equatable, Sendable {
                 c.matched += 1
             } else if r.date > recent {
                 c.stillRunning += 1
+            } else if let firstMacID, r.date < firstMacID {
+                c.beforeCallIDs += 1
             } else {
                 c.missingOnMac.append(r)
             }

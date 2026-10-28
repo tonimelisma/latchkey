@@ -342,6 +342,27 @@ enum LogBeforeEvents {
         #expect(AuditComparison.clip("call_ok") == "call_ok")
     }
 
+    /// Calls the relay made with ids before this Mac's app stored any (the minutes between the
+    /// relay's deploy and the app's install, 2026-10-27) are from before call ids on the Mac;
+    /// after its first call with an id, everything must match. A wiped log has no id'd calls, so
+    /// then everything is compared and the loss shows.
+    @Test func relayCallsFromBeforeTheMacStoredIdsAreLeftOut() {
+        let c = AuditComparison.compare(
+            relay: [Self.relay("call_OLD1", 40), Self.relay("call_OLD2", 35), Self.relay("call_A", 30)],
+            mac: [Self.mac("call_A", 30)], macWithoutIDs: 0, device: Self.device, now: Self.now)
+        #expect(c.allMatch)
+        #expect(c.matched == 1)
+        #expect(c.beforeCallIDs == 2)
+        let wiped = AuditComparison.compare(
+            relay: [Self.relay("call_OLD1", 40), Self.relay("call_A", 30)], mac: [], macWithoutIDs: 0,
+            device: Self.device, now: Self.now)
+        #expect(wiped.missingOnMac.count == 2, "with no id'd call on the Mac, nothing is left out")
+        let later = AuditComparison.compare(
+            relay: [Self.relay("call_A", 30), Self.relay("call_LOST", 20)], mac: [Self.mac("call_A", 30)],
+            macWithoutIDs: 0, device: Self.device, now: Self.now)
+        #expect(later.missingOnMac.map(\.callID) == ["call_LOST"], "after the first id'd call, gaps count")
+    }
+
     @Test func bothSidesMissingAreAllNamed() {
         let c = AuditComparison.compare(
             relay: [Self.relay("call_A", 30), Self.relay("call_B", 25), Self.relay("call_C", 20)],

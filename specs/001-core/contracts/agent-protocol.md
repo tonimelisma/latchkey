@@ -279,7 +279,10 @@ comparison leaves them all out and counts them.
 Comparison on the Mac: over the same period, every relay entry with a `call_id` and an outcome
 other than `offline` must have a log entry with that call id, and every log entry with a call id
 must be among the relay's entries. A call still running (no relay entry yet, at most its
-deadline old) is not counted as missing.
+deadline old) is not counted as missing. A relay call missing from the Mac that is older than
+the Mac's first logged call with an id (for this pairing) was made before the Mac's app could
+store ids, and is counted with the calls from before call ids; with no id'd call in the Mac's
+log, nothing is left out that way (2026-10-27).
 
 ## Tools
 
