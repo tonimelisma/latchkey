@@ -142,7 +142,20 @@ struct AuditComparison: Equatable, Sendable {
     static let namedPerSide = 20
 
     /// A relay-supplied value (call id, tool, Claude app name) cut to 64 characters.
-    static func clip(_ s: String) -> String { s.count > 64 ? String(s.prefix(63)) + "…" : s }
+    /// Bounded in Unicode scalars and bytes, not characters: one character can carry thousands of
+    /// combining marks (security review, 2026-10-27). At most 64 scalars and 256 bytes.
+    static func clip(_ s: String) -> String {
+        guard s.unicodeScalars.count > 64 || s.utf8.count > 256 else { return s }
+        var kept = String.UnicodeScalarView()
+        var bytes = 0
+        for scalar in s.unicodeScalars {
+            let size = String(scalar).utf8.count
+            guard kept.count < 63, bytes + size <= 253 else { break }  // room for "…" (3 bytes)
+            kept.append(scalar)
+            bytes += size
+        }
+        return String(kept) + "…"
+    }
 
     private static func listed(_ items: [String]) -> String {
         let named = items.prefix(namedPerSide).joined(separator: ", ")

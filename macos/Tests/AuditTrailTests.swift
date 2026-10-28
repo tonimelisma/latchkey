@@ -335,6 +335,11 @@ enum LogBeforeEvents {
         #expect(text.contains("and 481 more"))
         #expect(text.count < 5000, "got \(text.count) characters")
         #expect(AuditComparison.clip(String(repeating: "y", count: 500)).count == 64)
+        // One "character" can carry thousands of combining marks: the limit is in bytes.
+        let zalgo = "e" + String(repeating: "\u{0301}", count: 5000)
+        #expect(zalgo.count == 1)
+        #expect(AuditComparison.clip(zalgo).utf8.count <= 256)
+        #expect(AuditComparison.clip("call_ok") == "call_ok")
     }
 
     @Test func bothSidesMissingAreAllNamed() {

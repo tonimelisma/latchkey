@@ -751,10 +751,11 @@ final class AppModel {
             ? .text(Pause.stopped, isError: true)
             : LevelChange.recorded(result, tool: call.tool, before: registry, now: capabilities)
         let entry = Activity(
-            at: started, tool: call.tool, arguments: call.arguments.jsonText,
+            // Relay-supplied names (tool, call id, Claude app) are bounded before they're kept.
+            at: started, tool: AuditComparison.clip(call.tool), arguments: call.arguments.jsonText,
             result: told.content.jsonText, isError: told.isError,
-            durationMS: Int(Date().timeIntervalSince(started) * 1000), callID: call.id, device: device,
-            client: call.client.flatMap { $0.isEmpty ? nil : AuditComparison.clip($0) })  // from the relay: bounded
+            durationMS: Int(Date().timeIntervalSince(started) * 1000), callID: AuditComparison.clip(call.id),
+            device: device, client: call.client.flatMap { $0.isEmpty ? nil : AuditComparison.clip($0) })
         try? trace?.record(entry)
         loadRecentActivity()
         if let activity = result.activity, !result.isError { Notifier.post(activity) }  // FR-130
