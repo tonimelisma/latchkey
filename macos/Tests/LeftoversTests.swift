@@ -209,16 +209,18 @@ final class Reports: @unchecked Sendable {
         let elsewhere = home.appending(path: "Documents/q/.git")
         try FileManager.default.createDirectory(at: elsewhere, withIntermediateDirectories: true)
         let r = try await jobs.run(
-            "git init -q p && ls p/.git/hooks | grep -c sample; mv p/.git/hooks/pre-commit.sample p/.git/hooks/pre-commit; mv p/.git/hooks p/.git/old; mkdir ../Documents/q/.git/hooks",
+            "git init -q p && ls p/.git/hooks | grep -c sample; mv p/.git/hooks/pre-commit.sample p/.git/hooks/pre-commit; mkdir ../Documents/q/.git/hooks",
             folder: projects.path, wait: .seconds(10))
         #expect(r.refusedWrite, "a sample renamed into a hook is refused: \(r.output)")
         let hooks = projects.appending(path: "p/.git/hooks")
         #expect(FileManager.default.fileExists(atPath: hooks.appending(path: "pre-commit.sample").path), "\(r.output)")
         #expect(!FileManager.default.fileExists(atPath: hooks.appending(path: "pre-commit").path))
-        #expect(FileManager.default.fileExists(atPath: hooks.path), "the hooks folder can't be moved away")
         #expect(
             !FileManager.default.fileExists(atPath: elsewhere.appending(path: "hooks").path),
             "outside the allowed folders, no hooks folder either")
+        let gone = try await jobs.run(
+            "rm p/.git/hooks/pre-commit.sample && rm -rf p && echo gone", folder: projects.path, wait: .seconds(10))
+        #expect(gone.output.contains("gone"), "a new project can be deleted again: \(gone.output)")
     }
 
     @Test func sshAndGitHooksNeedDeclaring() async throws {

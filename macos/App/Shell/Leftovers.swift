@@ -18,15 +18,16 @@ enum Fence {
     /// submodule's included, in any letter case since the Mac's disks ignore it (FR-319).
     static let hooks = #"(regex #"/\.[gG][iI][tT]/([^/]+/)*[hH][oO][oO][kK][sS](/|$)")"#
     /// What `git init` and `git clone` write there, inside the folders a command may write
-    /// anyway: creating the hooks folder, and the samples as plain files, which git never runs
-    /// (live check 2026-10-28: every new project outside scratch failed without them). Not
-    /// renaming or replacing the folder, which would swap in other hooks.
+    /// anyway: creating and deleting the hooks folder, and the samples as plain files, which git
+    /// never runs (live check 2026-10-28: every new project outside scratch failed without them,
+    /// and a cloned project couldn't be deleted). Renaming another folder into its place is a
+    /// known gap (research.md).
     static func hookSamples(in allowed: [String]) -> [String] {
         let within = "(require-any " + allowed.map { "(subpath \(quote($0)))" }.joined(separator: " ") + ")"
         let folder = #"(regex #"/\.[gG][iI][tT]/([^/]+/)*[hH][oO][oO][kK][sS]$")"#
         let sample = #"(regex #"/\.[gG][iI][tT]/([^/]+/)*[hH][oO][oO][kK][sS]/[^/]+\.sample$")"#
         return [
-            "(allow file-write-create (require-all (vnode-type DIRECTORY) \(folder) \(within)))",
+            "(allow file-write-create file-write-unlink (require-all (vnode-type DIRECTORY) \(folder) \(within)))",
             "(allow file-write* (require-all (vnode-type REGULAR-FILE) \(sample) \(within)))",
         ]
     }

@@ -81,6 +81,8 @@ leftovers of ordinary work, not a hostile command): work handed to other program
 startup files, launch agents, login items, `~/.ssh`, and git hooks (the last two added by Toni,
 2026-10-28), not every place that can run code later (folders on PATH; a project's
 `core.hooksPath` setting in `.git/config`, which git itself writes in ordinary work, so it stays
-writable; and renaming a project's `.git` folder, which only a hostile command would do). Fencing `~/.ssh` means ssh can't add a new server to `known_hosts` from a command
+writable; and renaming a project's `.git` folder, or another folder into its hooks folder's place, which
+only a hostile command would do; such a command can point git elsewhere through `.git/config`
+anyway). Fencing `~/.ssh` means ssh can't add a new server to `known_hosts` from a command
 unless declared; it warns and connects anyway. The watcher (FR-325) leaves `~/.ssh` out for that
 reason, and doesn't watch git hooks (projects can be anywhere).

@@ -118,8 +118,8 @@ it, nor `~/Library` itself; each declared path. Later rules win, so it then refu
 `~/.bash_profile`, `~/.profile`, `~/Library/LaunchAgents`, and the login items folder
 `~/Library/Application Support/com.apple.backgroundtaskmanagementagent`, `~/.ssh`, and every
 project's `.git/hooks`, submodules' included, by a path pattern in any letter case since a
-project can be anywhere and the Mac's disks ignore case; inside the folders a command may write anyway, creating the
-hooks folder (not renaming or replacing it) and writing git's `*.sample` files as plain files
+project can be anywhere and the Mac's disks ignore case; inside the folders a command may write anyway, creating and
+deleting the hooks folder and writing git's `*.sample` files as plain files
 stay allowed, since `git init` and `git clone` write them and git never runs them) unless declared, and
 always to Latchkey's own files (Files' `OwnFiles`) and to the Jobs folder except the job's
 own scratch folder: the other jobs' folders and process records are what Latchkey stops and
