@@ -60,7 +60,7 @@ The Mac state line appears in every result (it reported the battery warning at 1
    (research.md). Keep-awake was off: the helper started 2026-10-25 kept running across later
    installs, re-read its own replaced file for the signature check (UNIX error 2), and refused
    every app connection. Fixed in 0.8.19 (read once at start; ends itself when replaced; the app
-   retries); the helper still running from 2026-10-25 needs one Mac restart to pick it up. The
+   retries); Toni restarted the old helper (launchctl kickstart, 2026-10-27); SleepDisabled is 1 again. The
    state line's "not approved in System Settings" also covers a helper that doesn't answer; Calendars'
    Allow… showed nothing in 0.8.16 (Toni then allowed both in System Settings; since 0.8.17 the
    button logs macOS's answer and opens System Settings when no question appears).
