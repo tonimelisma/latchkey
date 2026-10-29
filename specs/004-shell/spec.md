@@ -94,6 +94,18 @@ what is left is on one list.
   Nothing else Shell leaves is notified.
 - **FR-326** When Latchkey quits or Shell is turned off, kept leftovers shall be stopped and
   removed as well (FR-309, FR-310).
+- **FR-327** A program a command started shall be stopped with the command's leftovers however
+  it left the command's terminal session and family (a quick double fork included), and shall
+  be found at the next start when Latchkey quit first.
+- **FR-328** When a command opens apps, files, or links through macOS (`open`) or tells other
+  apps what to do (AppleScript, `osascript`), it shall be refused unless Claude declared it
+  (`uses`: `open`, `app_scripts`), and the answer shall say how to declare it. Starting
+  background services through launchd (`launchctl`, `brew services`) shall be refused (Toni,
+  2026-10-28).
+- **FR-329** When a command changes settings through macOS's settings service (`defaults
+  write`), it shall be refused unless Claude declared that domain's file in
+  `~/Library/Preferences` in writes, and Latchkey's own settings never; reading settings shall
+  keep working, and the answer shall say how to declare it (Toni, 2026-10-28).
 - A scratch shell in a throwaway Linux container was considered and left out (Toni,
   2026-10-27).
 
@@ -113,10 +125,11 @@ what is left is on one list.
 - Huge output; output with progress bars; commands that never end; many jobs at once.
 - The Mac going to sleep or Latchkey quitting mid-command.
 - A command that detaches something from its terminal (a new session, `nohup`): still known as
-  the command's, stopped with its leftovers (FR-313). A program that leaves through a parent
-  that exits within half a second (a quick double fork) is missed unless it uses the scratch
-  folder. Something handed to launchd or opened as an
-  app (`open -a`, `launchctl`, `brew services`) is started by macOS, not by the command: not
-  tracked, keeps running; where it writes a launch agent or login item, FR-325 catches it.
-- Writes another program makes on the command's behalf (preferences through `defaults`, an app
-  told what to do through a script): outside the fence; only FR-325's places are watched.
+  the command's, stopped with its leftovers (FR-313), also when it leaves through a parent that
+  exits at once (a quick double fork, FR-327). Something opened through macOS (`open -a`) or
+  told what to do by a script is started by macOS, not by the command: refused unless declared
+  (FR-328); once declared, what it starts runs outside the fence and keeps running (it could
+  start Terminal with a command, for example). launchd refuses jobs from inside the fence.
+- Settings changed through `defaults` are refused unless declared (FR-329). Other programs a
+  command asks over their own channels (a database server, a running app's own socket) are
+  outside the fence; only FR-325's places are watched.

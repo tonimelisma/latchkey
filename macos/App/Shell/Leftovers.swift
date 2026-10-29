@@ -25,7 +25,8 @@ enum Fence {
         "com.apple.coreservices.launchservicesd", "com.apple.lsd.mapdb", "com.apple.lsd.modifydb", "com.apple.lsd.open",
     ]
     static let appleEvents = "com.apple.coreservices.appleevents"
-    /// Without it, settings are still read (from their files) but can't be changed (FR-329).
+    /// Always refused: settings are then read from their files and changed only by writing the
+    /// declared domain's file, which the fence scopes (Latchkey's own settings never; FR-329).
     static let settingsService = ["com.apple.cfprefsd.daemon", "com.apple.cfprefsd.agent"]
     /// Refused unless app_scripts is declared, so a script fails at once, not after a wait.
     static let scriptRunner = "/usr/bin/osascript"
@@ -36,10 +37,6 @@ enum Fence {
         scratch.deletingLastPathComponent().appending(path: scratch.lastPathComponent + ".mark")
     }
 
-    /// True when `url` is the settings folder or a file in it (FR-329).
-    static func isSettings(_ url: URL, home: URL) -> Bool {
-        OwnFiles.parts(url).starts(with: OwnFiles.parts(home.appending(path: "Library/Preferences")))
-    }
     /// Places that make something run again: writable only when declared (FR-319).
     static let permanent = [
         ".zshrc", ".zprofile", ".zshenv", ".zlogin", ".zlogout", ".bashrc", ".bash_profile", ".profile",
@@ -161,7 +158,7 @@ enum Fence {
                 "(deny process-exec (literal \(quote(scriptRunner))))",
             ]
         }
-        if !declared.contains(where: { isSettings($0, home: realHome) }) { rules.append(services(settingsService)) }
+        rules.append(services(settingsService))
         if let mark { rules.append("(deny file-read* (literal \(quote(OwnFiles.real(mark).path))))") }
         rules.append(
             "(allow process-exec " + unfenced.map { "(literal \(quote($0)))" }.joined(separator: " ")
@@ -184,20 +181,25 @@ enum Fence {
 
     /// Added to an answer whose output shows a refused open or script (FR-328).
     static let handoffHint =
-        "[Opening apps, files, or links through macOS (open) and scripting other apps (osascript) are refused: what they start would run outside the fence. Run it again with uses [\"open\"] or [\"app_scripts\"] if the owner's task needs it. Starting background services (launchctl, brew services) isn't possible from here.]"
+        "[Opening apps, files, or links through macOS (open) and scripting other apps (osascript) are refused: what they start runs outside the fence. Run it again with uses [\"open\"] or [\"app_scripts\"] if the owner's task needs it. Starting background services (launchctl, brew services) isn't possible from here.]"
 
     /// Added to an answer whose output shows a refused change of settings (FR-329).
     static let settingsHint =
-        "[Changing settings (defaults write) is refused unless declared: run it again with writes [\"~/Library/Preferences\"] (or the domain's file there) and why.]"
+        "[Changing settings (defaults write) is refused unless declared: run it again with writes [\"~/Library/Preferences/<domain>.plist\"] and why.]"
 
     /// What an output shows was refused (FR-320, FR-328, FR-329).
     static func refusals(in text: String) -> (write: Bool, handoff: Bool, settings: Bool) {
         let lines = text.split(separator: "\n").map { $0.lowercased() }
-        let script = lines.contains { $0.contains("operation not permitted: osascript") || $0.contains("osascript: operation not permitted") }
+        let script = lines.contains {
+            $0.contains("operation not permitted: osascript") || $0.contains("osascript: operation not permitted")
+        }
         let handoff =
             script
-            || ["unable to find application", "kLSExecutableIncorrectFormat", "(-10814)", "no application knows how to open",
-                "application isn’t running. (-600)", "application isn't running. (-600)"].contains { needle in
+            || [
+                "unable to find application", "kLSExecutableIncorrectFormat", "(-10814)",
+                "no application knows how to open",
+                "application isn’t running. (-600)", "application isn't running. (-600)",
+            ].contains { needle in
                 lines.contains { $0.contains(needle.lowercased()) }
             }
         let write = lines.contains {

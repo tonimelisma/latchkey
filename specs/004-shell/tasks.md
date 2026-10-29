@@ -16,3 +16,6 @@
   FR-323, D10.*
 - **T310** ✅ Tests first (which changes count), then watching permanent places and the notification. *FR-325, D11.*
 - **T311** ✅ Tests first, then the jobs line in every answer. *FR-322, D12.*
+- **T312** ✅ Tests first (a double fork, another app's sandbox left alone, an earlier run's mark,
+  open and osascript refused, launchd refused, settings refused, the profile per declaration),
+  then the mark, `uses`, and the service refusals. *FR-327 to FR-329, D6, D9.*

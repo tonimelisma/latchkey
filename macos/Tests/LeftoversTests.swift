@@ -128,7 +128,7 @@ final class Reports: @unchecked Sendable {
         #expect(list.terminationStatus != 0, "the job was started")
     }
 
-    /// FR-329: settings are read as usual; changing them needs ~/Library/Preferences declared.
+    /// FR-329: settings are read as usual; changing them needs the domain's file declared.
     @Test func changingSettingsNeedsDeclaring() async throws {
         let domain = "net.melisma.latchkey.test-\(UUID().uuidString)"
         defer { _ = try? Process.run(URL(filePath: "/usr/bin/defaults"), arguments: ["delete", domain]) }
@@ -169,9 +169,12 @@ final class Reports: @unchecked Sendable {
         #expect(!scripts.contains("com.apple.coreservices.appleevents"))
         #expect(!scripts.contains("com.apple.lsd.mapdb"), "scripts may start the app they talk to")
         #expect(!scripts.contains("/usr/bin/osascript"))
-        let settings = profile([home.appending(path: "Library/Preferences/com.example.plist")], [])
-        #expect(!settings.contains("com.apple.cfprefsd.agent"))
-        #expect(settings.contains("com.apple.lsd.mapdb"))
+        // Security review 2026-10-28: the settings service would write any domain, Latchkey's
+        // own included, so it stays refused; a declared domain's file is written directly.
+        let file = home.appending(path: "Library/Preferences/com.example.plist")
+        let settings = profile([file], [])
+        #expect(settings.contains("com.apple.cfprefsd.agent"))
+        #expect(settings.contains(file.path))
     }
 
     @Test func keptLeftoversLastUntilTheLeaseEnds() async throws {
@@ -403,7 +406,9 @@ final class Reports: @unchecked Sendable {
         try Data().write(to: mark)
         let p = Process()
         p.executableURL = URL(filePath: "/usr/bin/sandbox-exec")
-        p.arguments = ["-p", "(version 1)(allow default)(deny file-read* (literal \"\(mark.path)\"))", "/bin/sleep", "300"]
+        p.arguments = [
+            "-p", "(version 1)(allow default)(deny file-read* (literal \"\(mark.path)\"))", "/bin/sleep", "300",
+        ]
         try p.run()
         defer { p.terminate() }
         try await Task.sleep(for: .milliseconds(300))

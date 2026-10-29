@@ -1,6 +1,6 @@
 # Status
 
-Last updated: 2026-10-28 (Left Behind view, Notes folder delete, and the launch-agent watcher checked live; app 0.8.38)
+Last updated: 2026-10-29 (Shell fence closes its gaps; reminder lists and contact groups; app 0.8.39)
 
 Xcode signing ready (2026-10-20): Toni's Xcode account has a valid "Apple Development" certificate
 (certificate expires 2027-07-22). Keep the team ID out of committed project files
@@ -46,8 +46,13 @@ notified only of undeclared changes to launch agents, login items, or startup fi
 processes that won't stop. Also: Notes deletes folders; Messages copies go once sent; Claude's
 Safari window closes after 30 minutes unused; things made through the tools are on the list.
 Specs 004 FR-313 to FR-326, 001 FR-640 to FR-643, 002 FR-152 and FR-153, 005 FR-411. A scratch
-shell in a throwaway Linux container was left out. Known gaps: programs handed to launchd
-(`open -a`), a quick double fork, and writes other programs make for a command (`defaults`).
+shell in a throwaway Linux container was left out. The gaps are closed since app 0.8.39
+(Toni, 2026-10-28; spec 004 FR-327 to FR-329): a quick double fork is found by a mark its fence
+carries; opening apps, files, or links (`open`) and scripting other apps (`osascript`) need
+`uses`; changing settings (`defaults write`) needs the domain's file in `~/Library/Preferences` in `writes` (never Latchkey's own); launchd
+already refused jobs from inside the fence. Same release (spec 007 FR-713, FR-723): Reminders
+deletes a list when Claude gives how many reminders it holds; Contacts creates, renames, and
+deletes groups and adds or removes cards.
 Checked live on 2026-10-28 (app 0.8.38): the Left Behind view (its Tool filter showed blank;
 fixed), deleting a real Notes folder, and the launch-agent watcher's entry.
 

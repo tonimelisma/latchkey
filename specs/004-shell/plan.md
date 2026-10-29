@@ -83,9 +83,15 @@ reported (FR-325). The sweep runs when the command ends and its lease is zero, w
 ends (D7), when the job is stopped, on quit and Shell Off, and at start for what jobs of an
 earlier run left (each job keeps its known processes in `<scratch folder>.pids` beside the
 scratch folder).
-Not found: a program handed to launchd or LaunchServices (`open -a`, `launchctl`), and a
-program that leaves the session through a parent that exits within half a second (a quick
-double fork), unless it uses the scratch folder (spec edge cases).
+- its mark (FR-327, 2026-10-28): each job's fence refuses reading one empty file,
+  `<scratch folder>.mark` beside the scratch folder, and a sandbox is inherited by everything
+  started inside it and can't be left. A process whose sandbox refuses reading the mark but
+  not the job's scratch folder is the job's, wherever it went: a quick double fork included.
+  Another app's sandbox that keeps it out of Latchkey's folder refuses both and is left alone.
+  At start, the marks of an earlier run find what its records missed. The check is macOS's
+  `sandbox_check`, called through a small C file (research.md).
+Opening through LaunchServices and scripting other apps are refused unless declared (D9), so
+nothing a command starts runs outside its sandbox unless Claude asked.
 
 An inherited environment variable was the first plan: macOS 27 no longer shows another
 process's environment (`KERN_PROCARGS2` returns the arguments only, also to `ps -E`), so it
@@ -132,6 +138,21 @@ check of 2026-10-27. `shell_run` takes `writes` (paths) and `why`;
 `~`, the home folder, a folder above it, and `~/Library` itself are refused (FR-318). A refused
 write shows as "Operation not permitted"; when the output has it, the answer adds how to write
 there (FR-320).
+
+Handing work to macOS (FR-328, FR-329, 2026-10-28): unless `uses` has `open` or
+`app_scripts`, the profile refuses looking up LaunchServices
+(`com.apple.coreservices.launchservicesd`, `com.apple.lsd.mapdb`, `.modifydb`, `.open`), so
+`open` and apps opened through it fail at once ("Unable to find application", error -10814).
+Unless `uses` has `app_scripts`, it refuses the Apple Events service
+(`com.apple.coreservices.appleevents`), sending Apple Events, and starting `/usr/bin/osascript`
+(a script then fails at once, not after a 15-second wait); `app_scripts` also allows
+LaunchServices, since a script may start the app it talks to. It always refuses the settings
+service (`com.apple.cfprefsd.daemon`, `.agent`): settings are then read from their files, and
+`defaults write` writes the domain's file itself, which the fence allows only when declared
+("Could not write domain" otherwise), and never for Latchkey's own settings. Allowing the
+service when a settings file was declared was the first version; the service writes any domain
+for its caller, Latchkey's own included (security review, 2026-10-28). `launchctl submit` and `bootstrap` already fail inside any sandbox. Each refusal adds
+its hint to the answer. `shell_run` takes `uses` (a list of `open`, `app_scripts`).
 
 ## D10. What a job left (FR-321, FR-323)
 

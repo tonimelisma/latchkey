@@ -24,8 +24,9 @@ Claude (web, Desktop, phone)  ──HTTPS──▶  Latchkey relay  ◀──out
   is away. Claude asks for your approval every time it connects: Latchkey's Allow page appears on
   each sign-in from a Claude app, and nothing is approved silently.
 - **Claude's work leaves nothing behind.** A shell command writes only to its own scratch folder, the folder it
-  runs in, Downloads, package caches, and what Claude declares; what it leaves running is stopped when it
-  finishes unless Claude asks to keep it for a while; its scratch folder goes to the Trash. Claude's Safari
+  runs in, Downloads, package caches, and what Claude declares; opening apps, scripting other apps, and
+  changing settings work only when Claude declares them; what it leaves running is stopped when it
+  finishes unless Claude asks to keep it for a while, however it slipped away; its scratch folder goes to the Trash. Claude's Safari
   window closes after 30 minutes unused. The Activity window's Left Behind view lists what was kept, removed,
   and made, and you're notified only of what nobody meant to leave.
 - **You see who has access.** Latchkey's Settings window and your account page list the Claude apps that can use
@@ -43,8 +44,8 @@ Claude (web, Desktop, phone)  ──HTTPS──▶  Latchkey relay  ◀──out
   | Browser (your Safari, your logins) | `browser_read` | `browser_act` (click, type, script) |
   | Computer control (while unlocked) | `computer_look` | `computer_act` (mouse, keyboard, apps) |
   | Calendar (every account on the Mac) | `calendar_find` (events, free time) | `calendar_change` (create, move, repeat, delete) |
-  | Reminders | `reminders_find` | `reminders_change` (create, complete, change, delete, new list) |
-  | Contacts | `contacts_find` (cards, photos) | `contacts_change` (create, change, delete) |
+  | Reminders | `reminders_find` | `reminders_change` (create, complete, change, delete; new and deleted lists) |
+  | Contacts | `contacts_find` (cards, photos) | `contacts_change` (create, change, delete; groups and their members) |
   | Location & Maps | `location_read`, `maps_find` (places, directions, travel times) | |
 
 - **You see what Claude did:** a notification for every change and every new Claude connection,

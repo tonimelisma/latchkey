@@ -53,7 +53,8 @@ processes and `nohup` children stay fenced after the shell exits; a refused writ
 returns the program and its arguments only (also to `ps -wwE`), so an inherited variable can't
 mark a job's processes. The kernel's unique process ids (which would survive a parent's exit)
 and `sandbox_check` aren't public; parent, session, start time, working folder, and open files
-are (`proc_pidinfo`, `proc_pidfdinfo`).
+are (`proc_pidinfo`, `proc_pidfdinfo`). Since 2026-10-28 `sandbox_check` is used anyway, for
+the one thing nothing public answers (see "Handing work to macOS").
 
 Low-level choices (Claude's):
 - **Finding a job's processes**: session, family followed every half second, and users of the
@@ -77,7 +78,8 @@ Security review of the first version (2026-10-27): the Jobs folder sat inside th
 the next start; now fenced off except the job's own scratch folder, and start acts only on the
 names it gives, never through links. Also raised and left as known gaps (Toni's scope is the
 leftovers of ordinary work, not a hostile command): work handed to other programs (launchd,
-`open`, Apple events, `defaults`) is outside the fence, and the permanent places are the shell
+`open`, Apple events, `defaults`) is outside the fence (closed 2026-10-28, see "Handing work to
+macOS"), and the permanent places are the shell
 startup files, launch agents, login items, `~/.ssh`, and git hooks (the last two added by Toni,
 2026-10-28), not every place that can run code later (folders on PATH; a project's
 `core.hooksPath` setting in `.git/config`, which git itself writes in ordinary work, so it stays
@@ -86,3 +88,53 @@ only a hostile command would do; such a command can point git elsewhere through 
 anyway). Fencing `~/.ssh` means ssh can't add a new server to `known_hosts` from a command
 unless declared; it warns and connects anyway. The watcher (FR-325) leaves `~/.ssh` out for that
 reason, and doesn't watch git hooks (projects can be anywhere).
+
+## Handing work to macOS (2026-10-28)
+
+Toni chose (2026-10-28) to close the gaps the first version left: opening apps, scripting
+other apps, and changing settings now need declaring, and quick double forks are stopped.
+Checked on this Mac (macOS 27.0.1), each in a throwaway sandbox:
+- `open -a Calculator` under a profile refusing only `com.apple.coreservices.launchservicesd`
+  still opened Calculator; refusing `com.apple.lsd.mapdb` stops it ("Unable to find
+  application"), `open <url>` fails with -10814, and opening a folder fails at once. `git`,
+  `swift`, `swiftc`, `xcrun`, `xcodebuild`, `brew`, `node`, `python3` with ssl, `curl`, `mdfind`,
+  `sw_vers`, and `say -o` all work under the full set of refusals.
+- `(deny appleevent-send)` alone makes a script to Finder wait two minutes for a timeout;
+  refusing `com.apple.coreservices.appleevents` makes it fail in a second, but together with the
+  LaunchServices refusal a script to an app waits 15 seconds. So `osascript` itself is refused
+  unless `app_scripts` is declared, and `app_scripts` also allows LaunchServices.
+- `(deny user-preference-write)` doesn't stop `defaults write` (the settings service doesn't
+  check it for this sandbox). Refusing the settings service (`com.apple.cfprefsd.daemon`,
+  `.agent`) together with the write fence does: "Could not write domain"; `defaults read` keeps
+  working from the files. With the service refused, `defaults write` writes the domain's
+  `.plist` itself: a declared file is written, another domain and Latchkey's own (refused by the
+  fence) are not, even with the whole folder declared. An app that is running keeps its own
+  copy of its settings and may write it back over such a change.
+- `launchctl submit` and `launchctl bootstrap` fail inside any sandbox (exit 1, and 5:
+  Input/output error) and work outside it, so `brew services` can't start anything from a
+  command. Nothing to add.
+- A process double-forked out of its session is still in the job's sandbox; `sandbox_check`
+  with a path that only this job's sandbox refuses tells it apart from every other process
+  (Finder and the Dock: not sandboxed; a sandboxed app that refuses Latchkey's whole folder:
+  refuses the scratch folder too).
+
+Low-level choices (Claude's):
+- **Finding a job's processes after a double fork**: options were (a) `sandbox_check` with a
+  per-job mark, (b) an inherited environment variable, (c) Endpoint Security. (b) can't be read
+  back on macOS 27 (above); (c) needs root and an Apple entitlement. (a) can't be shed by the
+  process, costs two system calls per process per look, and is a libSystem function without a
+  public header (no public way to ask about another process's sandbox exists; Constitution IV
+  asks for public APIs where one exists). Chosen: (a), through `App/Shell/SandboxCheck.c`,
+  because Swift can't call a C function with variable arguments.
+- **The mark**: an empty file `<scratch folder>.mark` in the Jobs folder, which the command can
+  neither read nor write; the control path is the job's own scratch folder, beside it.
+- **How to declare**: one list, `uses`, next to `writes` (Toni, 2026-10-28); settings through
+  `writes` (`~/Library/Preferences`), since they are files there.
+- **Refusing `osascript` by path** rather than letting a script time out: other programs that
+  send Apple Events (rare) still wait; the hint names the way out.
+- **The settings service stays refused** even when a settings file is declared (security review,
+  2026-10-28): it writes any domain for its caller, Latchkey's own included.
+- **Known gap**: once `open` or `app_scripts` is declared, what the command starts runs outside
+  the fence (Terminal told to run a command, a `.command` file opened). Blocking chosen targets
+  (Terminal, iTerm) would leave others; declaring is the owner's gate, and the description says
+  so (security review, 2026-10-28; Toni's scope is ordinary work, not a hostile command).
