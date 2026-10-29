@@ -256,9 +256,12 @@ enum ContactsCapability {
         case "delete_group":
             let g = try group()
             try backend.deleteGroup(id: g.id)
-            let cards = g.count == 1 ? "1 card" : "\(g.count) cards"
+            let cards =
+                g.count == 0
+                ? "It had no cards."
+                : g.count == 1 ? "Its 1 card stays in Contacts." : "Its \(g.count) cards stay in Contacts."
             return done(
-                "Deleted the group “\(g.name)”. Its \(cards) stay in Contacts.",
+                "Deleted the group “\(g.name)”. \(cards)",
                 "Claude deleted the contact group “\(g.name)”")
         default:
             let g = try group()
@@ -354,8 +357,13 @@ enum ContactsCapability {
             case .notFound(let id):
                 return .text("No card has the id \(id). Search again with contacts_find.", isError: true)
             case .noSuchGroup(let g, let available):
+                // A new group's id can change within seconds (iCloud, live check 2026-10-29).
+                let start =
+                    g.hasSuffix(":ABGroup")
+                    ? "No group has the id \(g); a group's id can change right after it's made, so give its name instead."
+                    : "There's no group named “\(g)”."
                 return .text(
-                    "There's no group named “\(g)”."
+                    start
                         + (available.isEmpty ? "" : " Groups: \(available.joined(separator: ", "))."), isError: true)
             case .failed(let why): return .text("Contacts didn't accept the change: \(why)", isError: true)
             }

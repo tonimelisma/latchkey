@@ -1,6 +1,6 @@
 # Status
 
-Last updated: 2026-10-29 (Shell fence closes its gaps; reminder lists and contact groups; app 0.8.39)
+Last updated: 2026-10-29 (Shell fence closes its gaps; reminder lists and contact groups; app 0.8.40)
 
 Xcode signing ready (2026-10-20): Toni's Xcode account has a valid "Apple Development" certificate
 (certificate expires 2027-07-22). Keep the team ID out of committed project files
@@ -52,7 +52,13 @@ carries; opening apps, files, or links (`open`) and scripting other apps (`osasc
 `uses`; changing settings (`defaults write`) needs the domain's file in `~/Library/Preferences` in `writes` (never Latchkey's own); launchd
 already refused jobs from inside the fence. Same release (spec 007 FR-713, FR-723): Reminders
 deletes a list when Claude gives how many reminders it holds; Contacts creates, renames, and
-deletes groups and adds or removes cards.
+deletes groups and adds or removes cards. Checked live on 2026-10-29 through the hosted relay
+with a fresh Claude Code session: `open -a` and `osascript` refused with the hint, a script
+declared with `app_scripts` ran, `defaults write` refused with the hint, a double-forked
+`setsid` process stopped, a test reminder list refused with the wrong count and deleted with
+the right one, a test contact and group created, joined, left, and deleted; nothing left. A
+new group's and card's ids changed within seconds (iCloud), so a stale group id now says to
+give the group's name; deleting a group says how many cards stay, or that it had none (0.8.40).
 Checked live on 2026-10-28 (app 0.8.38): the Left Behind view (its Tool filter showed blank;
 fixed), deleting a real Notes folder, and the launch-agent watcher's entry.
 

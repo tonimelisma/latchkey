@@ -128,3 +128,9 @@ request, so notes are not read.
   [Apple Ecosystem MCP](https://glama.ai/mcp/servers/abhinavag-svg/apple-ecosystem-mcp)
 - Weather terms checked and not used: [MET Norway](https://api.met.no/doc/TermsOfService),
   [Open-Meteo](https://open-meteo.com/en/terms)
+
+Live check 2026-10-29 (app 0.8.39): a group made through Contacts got a new id within seconds,
+as new cards do (iCloud takes them over). A group id that's gone stale is answered with "give
+its name instead"; names keep working. The first check's delete message counted a member that
+had just been removed (the count was read while the change was still syncing); the second
+check counted 0 correctly.

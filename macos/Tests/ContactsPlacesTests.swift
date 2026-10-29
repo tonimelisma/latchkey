@@ -160,8 +160,24 @@ func resultText(_ r: ToolResult) -> String {
         #expect(missing.isError && resultText(missing).contains("Relatives"))
         let gone = await change.handler(.object(["action": .string("delete_group"), "group": .string("G1")]))
         #expect(gone.activity == "Claude deleted the contact group “Relatives”")
-        #expect(resultText(gone).contains("1 card") && fake.groupNames["G1"] == nil)
+        #expect(resultText(gone).contains("Its 1 card stays in Contacts."), "\(resultText(gone))")
+        #expect(fake.groupNames["G1"] == nil)
         #expect(fake.cards.count == 3 && fake.cards[0].groups.isEmpty)
+        _ = await change.handler(.object(["action": .string("create_group"), "name": .string("Empty")]))
+        let empty = await change.handler(.object(["action": .string("delete_group"), "group": .string("Empty")]))
+        #expect(resultText(empty).contains("It had no cards."), "\(resultText(empty))")
+    }
+
+    /// Live check 2026-10-29: a new group's id changed within seconds (iCloud); its name still works.
+    @Test func aStaleGroupIdSaysToUseTheName() async throws {
+        let change = try tool("contacts_change")
+        let stale = await change.handler(
+            .object([
+                "action": .string("delete_group"), "group": .string("0214F621-BF95-4AE3-A402-AB56FC9EDF1C:ABGroup"),
+            ]))
+        #expect(stale.isError)
+        #expect(resultText(stale).contains("No group has the id"), "\(resultText(stale))")
+        #expect(resultText(stale).contains("name"))
     }
 
     @Test func addsAndRemovesGroupMembers() async throws {
