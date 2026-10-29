@@ -408,6 +408,9 @@ final class Reports: @unchecked Sendable {
         #expect(q.kind == .event)
         #expect(q.tool == "leftovers")
         #expect(q.show == .leftBehind)
+        #expect(q.toolChoice == nil, "the Tool filter shows All Tools, not a blank")
+        q.toolChoice = "shell_run"
+        #expect(q.show == .leftBehind, "and can't undo Left Behind")
         q.show = .events
         #expect(q.tool == nil)
         #expect(ActivityFormat.eventTitle("leftovers") == "Left Behind")

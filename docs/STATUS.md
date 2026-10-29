@@ -1,6 +1,6 @@
 # Status
 
-Last updated: 2026-10-28 (Shell fence also covers ~/.ssh and git hooks; app 0.8.37)
+Last updated: 2026-10-28 (Left Behind view, Notes folder delete, and the launch-agent watcher checked live; app 0.8.38)
 
 Xcode signing ready (2026-10-20): Toni's Xcode account has a valid "Apple Development" certificate
 (certificate expires 2027-07-22). Keep the team ID out of committed project files
@@ -48,6 +48,8 @@ Safari window closes after 30 minutes unused; things made through the tools are 
 Specs 004 FR-313 to FR-326, 001 FR-640 to FR-643, 002 FR-152 and FR-153, 005 FR-411. A scratch
 shell in a throwaway Linux container was left out. Known gaps: programs handed to launchd
 (`open -a`), a quick double fork, and writes other programs make for a command (`defaults`).
+Checked live on 2026-10-28 (app 0.8.38): the Left Behind view (its Tool filter showed blank;
+fixed), deleting a real Notes folder, and the launch-agent watcher's entry.
 
 All capabilities are built and checked live (app 0.7.4, 2026-10-22; current app 0.8.13, installed with `make -C macos install`), through the hosted relay with
 a fresh Claude Code session on Toni's real Mac: Notes (read, checklists, create/append/edit/

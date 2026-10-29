@@ -60,7 +60,7 @@ struct ActivityView: View {
                 .help("Show what Claude did, Latchkey’s own events, what Claude’s work left on this Mac, or everything")
             }
             ToolbarItem {
-                Picker("Tool", selection: $query.tool) {
+                Picker("Tool", selection: $query.toolChoice) {
                     Text("All Tools").tag(String?.none)
                     Divider()
                     ForEach(ActivityFormat.toolNames(model.capabilities), id: \.self) {
@@ -68,6 +68,7 @@ struct ActivityView: View {
                     }
                 }
                 .help("Show one tool only")
+                .disabled(query.show == .leftBehind)
             }
             ToolbarItem {
                 Picker("Date", selection: $range) {
@@ -513,5 +514,12 @@ extension ActivityQuery {
                 tool = EventCategory.leftovers.rawValue
             }
         }
+    }
+
+    /// The Tool filter's choice: All Tools while Left Behind uses the tool field for its
+    /// category, which the filter doesn't list (it showed blank, live check 2026-10-28).
+    var toolChoice: String? {
+        get { show == .leftBehind ? nil : tool }
+        set { if show != .leftBehind { tool = newValue } }
     }
 }
