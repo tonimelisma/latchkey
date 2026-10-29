@@ -28,7 +28,8 @@ enum ShellCapability {
                             command, folder: args["folder"]?.stringValue, wait: try wait(args),
                             writes: try writes(args),
                             why: args["why"]?.stringValue,
-                            keepMinutes: Int(try args.number("keep_minutes", in: 0...1440) ?? 0))
+                            keepMinutes: Int(try args.number("keep_minutes", in: 0...1440) ?? 0),
+                            uses: try uses(args))
                         var r = result(s)
                         r.activity = "Claude ran: \(command.count > 80 ? String(command.prefix(79)) + "…" : command)"
                         return r
@@ -108,7 +109,7 @@ enum ShellCapability {
     /// What shell_run tells Claude about the fence, the scratch folder, and leases (spec 004
     /// FR-314 to FR-318).
     static let writesRule =
-        "A command writes only to its own scratch folder ($LATCHKEY_SCRATCH, also $TMPDIR; moved to the Trash when it finishes), the folder it runs in (unless that is the home folder), Downloads, and package caches; anything else fails unless declared in writes (with why). Whatever it leaves running is stopped when it finishes, unless keep_minutes asks to keep it (checking the job keeps it longer; 24 hours at most)."
+        "A command writes only to its own scratch folder ($LATCHKEY_SCRATCH, also $TMPDIR; moved to the Trash when it finishes), the folder it runs in (unless that is the home folder), Downloads, and package caches; anything else fails unless declared in writes (with why), and so does changing settings (defaults write: declare ~/Library/Preferences). Opening apps, files, or links through macOS (open) and scripting other apps (osascript) fail unless declared in uses; starting background services (launchctl, brew services) isn't possible. Whatever it leaves running is stopped when it finishes, unless keep_minutes asks to keep it (checking the job keeps it longer; 24 hours at most)."
 
     static let runInput: [String: JSONValue] = [
         "command": .stringParam("The command line"),
@@ -121,6 +122,15 @@ enum ShellCapability {
             ),
         ]),
         "why": .stringParam("With writes: what the command writes there, for the owner's list"),
+        "uses": .object([
+            "type": .string("array"),
+            "items": .object([
+                "type": .string("string"), "enum": .array(Fence.Use.allCases.map { .string($0.rawValue) }),
+            ]),
+            "description": .string(
+                "What the command does beyond the fence, only when the owner's task needs it: open (apps, files, links through macOS; they keep running), app_scripts (tells other apps what to do; may open them)"
+            ),
+        ]),
         "keep_minutes": .integerParam(
             "Keep what the command leaves running (a server, a watcher) and its scratch folder this many minutes after it finishes (0 to 1440, default 0)"
         ),
@@ -138,6 +148,30 @@ enum ShellCapability {
         throw ShellJobs.Failure(message: "writes is a list of paths.")
     }
 
+    private static func uses(_ args: JSONValue) throws -> Set<Fence.Use> {
+        guard let value = args["uses"] else { return [] }
+        let names: [String]
+        if case .array(let items) = value {
+            names = try items.map {
+                guard let s = $0.stringValue else { throw ShellJobs.Failure(message: "uses is a list of names.") }
+                return s
+            }
+        } else if let s = value.stringValue {
+            names = [s]
+        } else {
+            throw ShellJobs.Failure(message: "uses is a list of names.")
+        }
+        return Set(
+            try names.map { name in
+                guard let use = Fence.Use(rawValue: name) else {
+                    throw ShellJobs.Failure(
+                        message:
+                            "uses takes \(Fence.Use.allCases.map(\.rawValue).joined(separator: " and ")), not \(name).")
+                }
+                return use
+            })
+    }
+
     private static func wait(_ args: JSONValue, default standard: Double = 30) throws -> Duration {
         .milliseconds(Int(min(try args.number("wait", in: 0...Double.greatestFiniteMagnitude) ?? standard, 30) * 1000))
     }
@@ -146,6 +180,8 @@ enum ShellCapability {
         var text = s.dropped > 0 ? "(\(s.dropped) earlier characters left out)\n" : ""
         text += s.output.isEmpty ? "(no new output)" : s.output
         if s.refusedWrite { text += "\n" + Fence.hint }
+        if s.refusedHandoff { text += "\n" + Fence.handoffHint }
+        if s.refusedSettings { text += "\n" + Fence.settingsHint }
         if s.finished {
             text += "\n[\(s.job) finished, exit status \(s.exitCode ?? -1)]"
             if let left = s.left { text += "\n" + left }

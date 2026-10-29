@@ -9,6 +9,37 @@ enum Fence {
     /// Programs macOS won't start inside a sandbox (they read other processes), started outside
     /// the fence instead; they write nothing (live check 2026-10-27: `ps` and `top` failed).
     static let unfenced = ["/bin/ps", "/usr/bin/top"]
+
+    /// What a command may reach beyond the fence once declared in `uses` (FR-328).
+    enum Use: String, CaseIterable, Sendable {
+        /// Opening apps, files, and links through macOS (`open`), which starts them outside the fence.
+        case open
+        /// Telling other apps what to do (AppleScript, `osascript`); may start the app it talks to.
+        case appScripts = "app_scripts"
+    }
+
+    /// macOS's services for opening apps, for sending Apple Events, and for changing settings
+    /// (research.md, "Handing work to macOS"). Opening fails at once without the first; a script
+    /// sent without the second fails within a second.
+    static let launchServices = [
+        "com.apple.coreservices.launchservicesd", "com.apple.lsd.mapdb", "com.apple.lsd.modifydb", "com.apple.lsd.open",
+    ]
+    static let appleEvents = "com.apple.coreservices.appleevents"
+    /// Without it, settings are still read (from their files) but can't be changed (FR-329).
+    static let settingsService = ["com.apple.cfprefsd.daemon", "com.apple.cfprefsd.agent"]
+    /// Refused unless app_scripts is declared, so a script fails at once, not after a wait.
+    static let scriptRunner = "/usr/bin/osascript"
+
+    /// The job's mark beside its scratch folder: its fence refuses reading it, which tells the
+    /// job's processes apart from every other process wherever they went (FR-327).
+    static func mark(of scratch: URL) -> URL {
+        scratch.deletingLastPathComponent().appending(path: scratch.lastPathComponent + ".mark")
+    }
+
+    /// True when `url` is the settings folder or a file in it (FR-329).
+    static func isSettings(_ url: URL, home: URL) -> Bool {
+        OwnFiles.parts(url).starts(with: OwnFiles.parts(home.appending(path: "Library/Preferences")))
+    }
     /// Places that make something run again: writable only when declared (FR-319).
     static let permanent = [
         ".zshrc", ".zprofile", ".zshenv", ".zlogin", ".zlogout", ".bashrc", ".bash_profile", ".profile",
@@ -74,7 +105,8 @@ enum Fence {
     }
 
     static func profile(
-        scratch: URL, folder: URL, declared: [URL], home: URL, own: OwnFiles, systemTemp: URL? = nil
+        scratch: URL, folder: URL, declared: [URL], home: URL, own: OwnFiles, uses: Set<Use> = [],
+        mark: URL? = nil, systemTemp: URL? = nil
     ) -> String {
         let realHome = OwnFiles.real(home)
         var allowed = ["/dev", OwnFiles.real(scratch).path]
@@ -118,6 +150,19 @@ enum Fence {
             }
         }
         if !ownRules.isEmpty { rules.append("(deny file-write* " + ownRules.joined(separator: " ") + ")") }
+        // What macOS would do for the command outside the fence (FR-328, FR-329).
+        func services(_ names: [String]) -> String {
+            "(deny mach-lookup (global-name " + names.map(quote).joined(separator: " ") + "))"
+        }
+        if uses.isDisjoint(with: [.open, .appScripts]) { rules.append(services(launchServices)) }
+        if !uses.contains(.appScripts) {
+            rules += [
+                services([appleEvents]), "(deny appleevent-send)",
+                "(deny process-exec (literal \(quote(scriptRunner))))",
+            ]
+        }
+        if !declared.contains(where: { isSettings($0, home: realHome) }) { rules.append(services(settingsService)) }
+        if let mark { rules.append("(deny file-read* (literal \(quote(OwnFiles.real(mark).path))))") }
         rules.append(
             "(allow process-exec " + unfenced.map { "(literal \(quote($0)))" }.joined(separator: " ")
                 + " (with no-sandbox))")
@@ -135,6 +180,31 @@ enum Fence {
             out.append(c)
         }
         return out
+    }
+
+    /// Added to an answer whose output shows a refused open or script (FR-328).
+    static let handoffHint =
+        "[Opening apps, files, or links through macOS (open) and scripting other apps (osascript) are refused: what they start would run outside the fence. Run it again with uses [\"open\"] or [\"app_scripts\"] if the owner's task needs it. Starting background services (launchctl, brew services) isn't possible from here.]"
+
+    /// Added to an answer whose output shows a refused change of settings (FR-329).
+    static let settingsHint =
+        "[Changing settings (defaults write) is refused unless declared: run it again with writes [\"~/Library/Preferences\"] (or the domain's file there) and why.]"
+
+    /// What an output shows was refused (FR-320, FR-328, FR-329).
+    static func refusals(in text: String) -> (write: Bool, handoff: Bool, settings: Bool) {
+        let lines = text.split(separator: "\n").map { $0.lowercased() }
+        let script = lines.contains { $0.contains("operation not permitted: osascript") || $0.contains("osascript: operation not permitted") }
+        let handoff =
+            script
+            || ["unable to find application", "kLSExecutableIncorrectFormat", "(-10814)", "no application knows how to open",
+                "application isn’t running. (-600)", "application isn't running. (-600)"].contains { needle in
+                lines.contains { $0.contains(needle.lowercased()) }
+            }
+        let write = lines.contains {
+            $0.contains("operation not permitted") && !$0.contains("osascript")
+        }
+        let settings = lines.contains { $0.contains("could not write domain") }
+        return (write, handoff, settings)
     }
 
     /// Added to an answer whose output shows a refused write (FR-320).

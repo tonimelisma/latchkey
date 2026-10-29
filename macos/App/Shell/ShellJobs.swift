@@ -21,6 +21,10 @@ actor ShellJobs {
         var left: String?
         /// True when the output shows a write the fence refused (FR-320).
         var refusedWrite = false
+        /// True when it shows a refused open or script (FR-328).
+        var refusedHandoff = false
+        /// True when it shows a refused change of settings (FR-329).
+        var refusedSettings = false
     }
 
     struct Summary: Sendable {
@@ -48,6 +52,8 @@ actor ShellJobs {
         let process: Process
         let input: FileHandle
         let scratch: URL
+        /// The mark the job's fence carries (FR-327).
+        let mark: URL
         let declared: [URL]
         let why: String?
         let keepMinutes: Int
@@ -75,6 +81,7 @@ actor ShellJobs {
             self.process = process
             self.input = input
             self.scratch = scratch
+            self.mark = Fence.mark(of: scratch)
             self.declared = declared
             self.why = why
             self.keepMinutes = keepMinutes
@@ -123,9 +130,11 @@ actor ShellJobs {
         /// Every process of the job still running (plan D6): its terminal session, the
         /// processes followed while it ran (also those that left the session), and, when
         /// `scratchUsers`, any started since the job began that has a file open, or its working
-        /// folder, in the job's scratch folder.
+        /// folder, in the job's scratch folder. Also any process carrying the job's mark, however
+        /// it left (FR-327).
         func members(scratchUsers: Bool = false) -> [pid_t] {
             var pids = Set(session().map { Processes.members(ofSession: $0) } ?? [])
+            pids.formUnion(Processes.marked(by: mark, control: scratch))
             pids.formUnion(knownIDs.filter(Processes.alive).map(\.pid))
             if scratchUsers { pids.formUnion(Processes.using(scratch, startedAfter: started)) }
             if process.isRunning { pids.insert(process.processIdentifier) }
@@ -167,7 +176,7 @@ actor ShellJobs {
 
     func run(
         _ command: String, folder: String?, wait: Duration, writes: [String] = [], why: String? = nil,
-        keepMinutes: Int = 0
+        keepMinutes: Int = 0, uses: Set<Fence.Use> = []
     ) async throws -> Snapshot {
         cleanup()
         let running = jobs.values.filter { !$0.isFinished }.count
@@ -190,9 +199,11 @@ actor ShellJobs {
         let id = "job\(counter)"
         let scratch = setup.scratchRoot.appending(path: "\(setup.launch)-\(id)", directoryHint: .isDirectory)
         try FileManager.default.createDirectory(at: scratch, withIntermediateDirectories: true)
+        let mark = Fence.mark(of: scratch)
+        try Data().write(to: mark)
         let fence = Fence.profile(
             scratch: scratch, folder: URL(filePath: dir), declared: declared, home: setup.home, own: setup.own,
-            systemTemp: setup.systemTemp)
+            uses: uses, mark: mark, systemTemp: setup.systemTemp)
         let p = Process()
         p.executableURL = URL(filePath: "/usr/bin/script")
         // "--": a command starting with "-" is the command, not more options for zsh.
@@ -384,6 +395,7 @@ actor ShellJobs {
         job.swept = true
         job.leaseEnd = nil
         try? FileManager.default.removeItem(at: Self.record(of: job, in: setup))
+        try? FileManager.default.removeItem(at: job.mark)
         job.left = report.answer
         if let entry = report.entry { setup.report(entry, false) }
         if !stuck.isEmpty {
@@ -394,10 +406,11 @@ actor ShellJobs {
     }
 
     /// The scratch folders and process records of earlier starts: only real files and folders
-    /// (no links) named as Latchkey names them, `<launch>-job<n>` and `<launch>-job<n>.pids`.
+    /// (no links) named as Latchkey names them, `<launch>-job<n>`, `<launch>-job<n>.pids`, and
+    /// `<launch>-job<n>.mark`.
     private static func earlierEntries(in root: URL, launch: String) -> [URL] {
         let fm = FileManager.default
-        let pattern = /^[0-9a-f]{8}-job[0-9]+(\.pids)?$/
+        let pattern = /^[0-9a-f]{8}-job[0-9]+(\.pids|\.mark)?$/
         return ((try? fm.contentsOfDirectory(at: root, includingPropertiesForKeys: [.isSymbolicLinkKey])) ?? [])
             .filter { url in
                 let name = url.lastPathComponent
@@ -423,6 +436,13 @@ actor ShellJobs {
             earlier += text.split(separator: "\n").compactMap(Processes.ID.init(line:)).filter(Processes.alive)
             try? fm.removeItem(at: record)
         }
+        // Processes carrying an earlier job's mark, which its record may have missed (FR-327).
+        let seen = Set(earlier)
+        for mark in entries where mark.pathExtension == "mark" {
+            let scratch = mark.deletingPathExtension()
+            earlier += Processes.marked(by: mark, control: scratch).compactMap(Processes.id(of:))
+                .filter { !seen.contains($0) }
+        }
         var stopped: [String] = []
         if !earlier.isEmpty {
             stopped = earlier.map { Processes.name(of: $0.pid) }
@@ -431,7 +451,8 @@ actor ShellJobs {
             earlier.filter(Processes.alive).forEach { kill($0.pid, SIGKILL) }
         }
         var trashed = 0
-        for folder in entries where folder.pathExtension != "pids" {
+        for mark in entries where mark.pathExtension == "mark" { try? fm.removeItem(at: mark) }
+        for folder in entries where !["pids", "mark"].contains(folder.pathExtension) {
             if Self.hasContents(folder) {
                 setup.remove(folder)
                 trashed += 1
@@ -553,6 +574,7 @@ actor ShellJobs {
         }
         let raw = String(decoding: job.takeNew(), as: UTF8.self)
         let (text, dropped) = TerminalText.tail(TerminalText.clean(raw), limit: Self.outputLimit)
+        let refused = Fence.refusals(in: text)
         var left: String?
         if finished {
             if let done = job.left, !job.leftShown {
@@ -566,7 +588,7 @@ actor ShellJobs {
         return Snapshot(
             job: job.id, command: job.command, output: text, dropped: dropped, finished: finished,
             exitCode: finished ? job.process.terminationStatus : nil, left: left,
-            refusedWrite: text.localizedCaseInsensitiveContains("operation not permitted"))
+            refusedWrite: refused.write, refusedHandoff: refused.handoff, refusedSettings: refused.settings)
     }
 
     /// Finished jobs stay 10 minutes; at most 20 are kept. Running ones are capped in `run`. A
@@ -734,6 +756,18 @@ enum Processes {
             )
         }
         return out
+    }
+
+    /// Every sandboxed process whose sandbox refuses reading `mark` but not `control` (the job's
+    /// scratch folder beside it): a job's processes, wherever they went (FR-327). Another app's
+    /// sandbox that keeps it out of Latchkey's folder refuses both.
+    static func marked(by mark: URL, control: URL) -> [pid_t] {
+        guard FileManager.default.fileExists(atPath: mark.path) else { return [] }
+        let me = getpid()
+        return all().filter { pid in
+            pid != me && latchkey_is_sandboxed(pid) != 0 && latchkey_sandbox_denies_read(pid, mark.path) != 0
+                && latchkey_sandbox_denies_read(pid, control.path) == 0
+        }
     }
 
     static func name(of pid: pid_t) -> String {

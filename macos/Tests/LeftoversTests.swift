@@ -66,6 +66,114 @@ final class Reports: @unchecked Sendable {
         #expect(await ShellJobTests.gone(child), "a program using the scratch folder survived: \(r.output)")
     }
 
+    /// A daemon's double fork: out of the session and the family within a moment, and nothing in
+    /// the scratch folder. Found by the mark its fence carries (FR-327).
+    @Test func aQuickDoubleForkIsStoppedToo() async throws {
+        let cmd =
+            "perl -MPOSIX -e 'exit if fork; POSIX::setsid(); exit if fork; chdir \"/\"; $|=1; print \"PID:$$\\n\"; close STDOUT; close STDERR; close STDIN; sleep 300'; sleep 0.3"
+        let r = try await jobs.run(cmd, folder: nil, wait: .seconds(10))
+        let child = try ShellJobTests.pid(in: r.output)
+        defer { kill(child, SIGKILL) }
+        #expect(r.finished)
+        #expect(await ShellJobTests.gone(child), "a double-forked program survived: \(r.output)")
+    }
+
+    /// Another sandboxed program (an App Store app's sandbox refuses reading the jobs folder too)
+    /// is never taken for a command's (FR-327).
+    @Test func otherSandboxedProgramsAreLeftAlone() async throws {
+        try FileManager.default.createDirectory(at: setup.scratchRoot, withIntermediateDirectories: true)
+        let other = Process()
+        other.executableURL = URL(filePath: "/usr/bin/sandbox-exec")
+        other.arguments = [
+            "-p", "(version 1)(allow default)(deny file-read* (subpath \"\(setup.scratchRoot.path)\"))", "/bin/sleep",
+            "300",
+        ]
+        try other.run()
+        defer { other.terminate() }
+        let r = try await jobs.run("sleep 0.6; echo done", folder: nil, wait: .seconds(10))
+        #expect(r.finished)
+        #expect(other.isRunning, "a sandboxed program that isn't the command's was stopped")
+    }
+
+    /// FR-328: opening apps, files, or links through macOS, and scripting other apps, need
+    /// declaring in uses.
+    @Test func openingAndScriptingAppsNeedDeclaring() async throws {
+        let tool = ShellCapability.operations(jobs: jobs).first { $0.tool.name == "shell_run" }!
+        let answer = await tool.handler(.object(["command": .string("open -g -j -a Calculator")]))
+        #expect(answer.content.jsonText.contains("uses"), "\(answer.content.jsonText)")
+        let script = try await jobs.run("osascript -e 'return 41 + 1'", folder: nil, wait: .seconds(15))
+        #expect(script.refusedHandoff, "\(script.output)")
+        #expect(!script.output.contains("42"))
+        #expect(!script.refusedWrite, "not a write: \(script.output)")
+        let declared = try await jobs.run(
+            "osascript -e 'return 41 + 1'", folder: nil, wait: .seconds(15), uses: [.appScripts])
+        #expect(declared.output.contains("42"), "\(declared.output)")
+    }
+
+    /// FR-328: launchd refuses jobs from inside the fence, so nothing can be handed to it.
+    @Test func nothingCanBeHandedToLaunchd() async throws {
+        let label = "net.melisma.latchkey.test-\(UUID().uuidString)"
+        defer { _ = try? Process.run(URL(filePath: "/bin/launchctl"), arguments: ["remove", label]) }
+        let r = try await jobs.run(
+            "launchctl submit -l \(label) -- /bin/sleep 30; echo status:$?", folder: nil, wait: .seconds(10),
+            uses: [.open, .appScripts])
+        #expect(!r.output.contains("status:0"), "\(r.output)")
+        let list = Process()
+        list.executableURL = URL(filePath: "/bin/launchctl")
+        list.arguments = ["list", label]
+        list.standardOutput = FileHandle.nullDevice
+        list.standardError = FileHandle.nullDevice
+        try list.run()
+        list.waitUntilExit()
+        #expect(list.terminationStatus != 0, "the job was started")
+    }
+
+    /// FR-329: settings are read as usual; changing them needs ~/Library/Preferences declared.
+    @Test func changingSettingsNeedsDeclaring() async throws {
+        let domain = "net.melisma.latchkey.test-\(UUID().uuidString)"
+        defer { _ = try? Process.run(URL(filePath: "/usr/bin/defaults"), arguments: ["delete", domain]) }
+        let r = try await jobs.run(
+            "defaults read -g AppleLocale && defaults write \(domain) x 1", folder: nil, wait: .seconds(10))
+        #expect(r.output.contains("_"), "reading settings works: \(r.output)")
+        #expect(r.refusedSettings, "\(r.output)")
+        let tool = ShellCapability.operations(jobs: jobs).first { $0.tool.name == "shell_run" }!
+        let answer = await tool.handler(.object(["command": .string("defaults write \(domain) x 1")]))
+        #expect(answer.content.jsonText.contains("Library/Preferences"), "\(answer.content.jsonText)")
+        let read = Process()
+        read.executableURL = URL(filePath: "/usr/bin/defaults")
+        read.arguments = ["read", domain]
+        read.standardOutput = FileHandle.nullDevice
+        read.standardError = FileHandle.nullDevice
+        try read.run()
+        read.waitUntilExit()
+        #expect(read.terminationStatus != 0, "the setting was written")
+    }
+
+    @Test func declaringOpensOnlyWhatWasDeclared() {
+        let scratch = setup.scratchRoot.appending(path: "x-job1")
+        func profile(_ declared: [URL], _ uses: Set<Fence.Use>) -> String {
+            Fence.profile(
+                scratch: scratch, folder: home, declared: declared, home: home, own: setup.own, uses: uses,
+                mark: Fence.mark(of: scratch))
+        }
+        let closed = profile([], [])
+        for service in ["com.apple.lsd.mapdb", "com.apple.coreservices.appleevents", "com.apple.cfprefsd.agent"] {
+            #expect(closed.contains(service), "\(service)")
+        }
+        #expect(closed.contains("/usr/bin/osascript"))
+        #expect(closed.contains(Fence.mark(of: scratch).path), "every fence carries its job's mark")
+        let open = profile([], [.open])
+        #expect(!open.contains("com.apple.lsd.mapdb"))
+        #expect(open.contains("com.apple.coreservices.appleevents"))
+        let scripts = profile([], [.appScripts])
+        #expect(!scripts.contains("com.apple.coreservices.appleevents"))
+        #expect(!scripts.contains("com.apple.lsd.mapdb"), "scripts may start the app they talk to")
+        #expect(!scripts.contains("/usr/bin/osascript"))
+        let settings = profile([home.appending(path: "Library/Preferences/com.example.plist")], [])
+        #expect(!settings.contains("com.apple.cfprefsd.agent"))
+        #expect(settings.contains("com.apple.lsd.mapdb"))
+    }
+
     @Test func keptLeftoversLastUntilTheLeaseEnds() async throws {
         let r = try await jobs.run(Self.leaver, folder: nil, wait: .seconds(10), keepMinutes: 5)
         let child = try ShellJobTests.pid(in: r.output)
@@ -287,6 +395,23 @@ final class Reports: @unchecked Sendable {
         #expect(reports.all.contains { $0.0.contains("before Latchkey last quit") })
     }
 
+    /// FR-324, FR-327: a process of an earlier run that its record missed is found by its mark.
+    @Test func anEarlierRunsMarkedProcessIsStoppedAtStart() async throws {
+        let earlier = setup.scratchRoot.appending(path: "0ddba112-job1", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: earlier, withIntermediateDirectories: true)
+        let mark = Fence.mark(of: earlier)
+        try Data().write(to: mark)
+        let p = Process()
+        p.executableURL = URL(filePath: "/usr/bin/sandbox-exec")
+        p.arguments = ["-p", "(version 1)(allow default)(deny file-read* (literal \"\(mark.path)\"))", "/bin/sleep", "300"]
+        try p.run()
+        defer { p.terminate() }
+        try await Task.sleep(for: .milliseconds(300))
+        await jobs.recoverEarlier()
+        #expect(await ShellJobTests.gone(p.processIdentifier), "an earlier run's marked process survived")
+        #expect(!FileManager.default.fileExists(atPath: mark.path), "the mark is removed too")
+    }
+
     /// Live check 2026-10-27: stopping a kept job says what was removed.
     @Test func stoppingAKeptJobSaysWhatItRemoved() async throws {
         let r = try await jobs.run(Self.leaver, folder: nil, wait: .seconds(10), keepMinutes: 5)
@@ -432,6 +557,8 @@ final class Reports: @unchecked Sendable {
         #expect(props?["writes"] != nil)
         #expect(props?["keep_minutes"] != nil)
         #expect(props?["why"] != nil)
+        #expect(props?["uses"]?["items"]?["enum"] == .array([.string("open"), .string("app_scripts")]))
+        #expect(text.contains("uses"))
     }
 }
 
