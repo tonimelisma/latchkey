@@ -91,6 +91,24 @@ protocol ContactsBackend: Sendable {
     func create(_ draft: ContactDraft) throws -> ContactCard
     func update(id: String, _ draft: ContactDraft) throws -> ContactCard
     func delete(id: String) throws
+    func createGroup(name: String) throws -> ContactGroup
+    func renameGroup(id: String, name: String) throws -> ContactGroup
+    /// Deletes the group only; its cards stay in Contacts.
+    func deleteGroup(id: String) throws
+    func addMember(contactID: String, groupID: String) throws
+    func removeMember(contactID: String, groupID: String) throws
+}
+
+extension ContactsBackend {
+    /// The group a name or id names.
+    func resolveGroup(_ nameOrID: String) throws -> ContactGroup {
+        let all = try groups()
+        guard
+            let g = all.first(where: { $0.id == nameOrID })
+                ?? all.first(where: { $0.name.caseInsensitiveCompare(nameOrID) == .orderedSame })
+        else { throw ContactsFailure.noSuchGroup(nameOrID, available: all.map(\.name)) }
+        return g
+    }
 }
 
 enum ContactMatch {
@@ -209,6 +227,61 @@ final class CNContactsBackend: ContactsBackend, @unchecked Sendable {
         guard let c = try cn(id).mutableCopy() as? CNMutableContact else { throw ContactsFailure.notFound(id) }
         let save = CNSaveRequest()
         save.delete(c)
+        try execute(save)
+    }
+
+    // MARK: groups
+
+    private func cnGroup(_ id: String) throws -> CNMutableGroup {
+        let found = try store.groups(matching: CNGroup.predicateForGroups(withIdentifiers: [id])).first
+        guard let g = found?.mutableCopy() as? CNMutableGroup else { throw ContactsFailure.notFound(id) }
+        return g
+    }
+
+    private func group(id: String) throws -> ContactGroup {
+        guard let g = try groups().first(where: { $0.id == id }) else { throw ContactsFailure.notFound(id) }
+        return g
+    }
+
+    func createGroup(name: String) throws -> ContactGroup {
+        try check()
+        let g = CNMutableGroup()
+        g.name = name
+        let save = CNSaveRequest()
+        save.add(g, toContainerWithIdentifier: nil)
+        try execute(save)
+        return ContactGroup(id: g.identifier, name: g.name, count: 0)
+    }
+
+    func renameGroup(id: String, name: String) throws -> ContactGroup {
+        try check()
+        let g = try cnGroup(id)
+        g.name = name
+        let save = CNSaveRequest()
+        save.update(g)
+        try execute(save)
+        return try group(id: id)
+    }
+
+    func deleteGroup(id: String) throws {
+        try check()
+        let save = CNSaveRequest()
+        save.delete(try cnGroup(id))
+        try execute(save)
+    }
+
+    func addMember(contactID: String, groupID: String) throws {
+        try check()
+        let save = CNSaveRequest()
+        save.addMember(try cn(contactID, keys: [CNContactIdentifierKey as CNKeyDescriptor]), to: try cnGroup(groupID))
+        try execute(save)
+    }
+
+    func removeMember(contactID: String, groupID: String) throws {
+        try check()
+        let save = CNSaveRequest()
+        save.removeMember(
+            try cn(contactID, keys: [CNContactIdentifierKey as CNKeyDescriptor]), from: try cnGroup(groupID))
         try execute(save)
     }
 

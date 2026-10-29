@@ -5,7 +5,7 @@ enum RemindersCapability {
     static func make() -> Capability {
         Capability(
             id: CapabilityRegistry.reminders, title: "Reminders",
-            summary: "See, add, complete, change, and delete reminders",
+            summary: "See, add, complete, change, and delete reminders and lists",
             readTools: readTools(backend: EventKitBackend.shared, zone: { .current }),
             writeTools: writeTools(backend: EventKitBackend.shared, zone: { .current }))
     }
@@ -25,7 +25,8 @@ enum RemindersCapability {
                     description: """
                         Lists and searches reminders in the Mac's Reminders, with each one's id. With id: that \
                         reminder in full. With nothing: the lists with how many are open, then the open reminders \
-                        (dated ones by due date first). query matches title and notes; list limits to one list. \
+                        (dated ones by due date first). query matches title and notes; list limits to one list and \
+                        says how many reminders it holds, open and completed. \
                         Open reminders: to keeps those due by then. completed: true lists completed ones instead, \
                         from from (default 30 days ago) to to (default now). Dates: \(CalendarDates.accepted).
                         """,
@@ -42,7 +43,7 @@ enum RemindersCapability {
         ]
     }
 
-    static let changeActions = ["create", "update", "complete", "uncomplete", "delete", "create_list"]
+    static let changeActions = ["create", "update", "complete", "uncomplete", "delete", "create_list", "delete_list"]
 
     static func writeTools(backend: any EventsBackend, zone: @escaping CalendarCapability.Zone) -> [ToolEntry] {
         [
@@ -50,10 +51,12 @@ enum RemindersCapability {
                 tool: .make(
                     "reminders_change", title: "Change Reminders",
                     description: """
-                        Creates, changes, completes, or deletes a reminder, or creates a list. action: create \
-                        (title; notes, list, due, priority, url, repeat optional), update (id and only the fields \
-                        to change), complete or uncomplete (id), delete (id; it can't be undone), create_list \
-                        (title). due is a day (\(CalendarDates.accepted)); with a time, the Mac alerts then. An \
+                        Creates, changes, completes, or deletes a reminder, or creates or deletes a list. action: \
+                        create (title; notes, list, due, priority, url, repeat optional), update (id and only the \
+                        fields to change), complete or uncomplete (id), delete (id; it can't be undone), \
+                        create_list (title), delete_list (list and reminder_count: how many reminders it holds, \
+                        open and completed, as reminders_find with list says; the list and all its reminders are \
+                        deleted and can't be brought back). due is a day (\(CalendarDates.accepted)); with a time, the Mac alerts then. An \
                         empty text clears a field. Flags, tags, and subtasks aren't available to apps.
                         """,
                     input: [
@@ -69,8 +72,11 @@ enum RemindersCapability {
                         "repeat_every": .integerParam("Repeat every this many days, weeks, … (default 1)"),
                         "repeat_until": .stringParam("Last day it repeats"),
                         "repeat_count": .integerParam("Or: how many times in all"),
+                        "reminder_count": .integerParam(
+                            "For delete_list: how many reminders the list holds, open and completed"),
                     ], required: ["action"], readOnly: false, destructive: true, deadlineMS: 15_000),
-                handler: { args in await CalendarCapability.run(.reminders) { try change(args, backend, zone()) } })
+                handler: { args in await CalendarCapability.run(.reminders) { try await change(args, backend, zone()) }
+                })
         ]
     }
 
@@ -84,7 +90,10 @@ enum RemindersCapability {
         }
         var lists: [String]?
         if let name = args["list"]?.stringValue, !name.isEmpty {
-            lists = [try backend.resolveCalendar(name, .reminders).id]
+            let list = try backend.resolveCalendar(name, .reminders)
+            lists = [list.id]
+            let (open, done) = try await count(list.id, backend)
+            lines.append("\(list.title) holds \(reminders(open + done)) (\(open) open, \(done) completed).")
         }
         let completed = args["completed"]?.boolValue == true
         let cal = CalendarDates.calendar(zone)
@@ -139,6 +148,15 @@ enum RemindersCapability {
         return .text(lines.joined(separator: "\n"))
     }
 
+    /// Open and completed reminders in a list.
+    static func count(_ listID: String, _ backend: any EventsBackend) async throws -> (open: Int, completed: Int) {
+        let open = try await backend.reminders(completed: false, from: nil, to: nil, lists: [listID]).count
+        let done = try await backend.reminders(completed: true, from: nil, to: nil, lists: [listID]).count
+        return (open, done)
+    }
+
+    static func reminders(_ n: Int) -> String { n == 1 ? "1 reminder" : "\(n) reminders" }
+
     static func due(_ r: ReminderInfo, zone: TimeZone) -> String? {
         r.due.map { CalendarDates.format($0, day: !r.dueHasTime, zone: zone) }
     }
@@ -169,7 +187,7 @@ enum RemindersCapability {
 
     // MARK: change
 
-    static func change(_ args: JSONValue, _ backend: any EventsBackend, _ zone: TimeZone) throws -> ToolResult {
+    static func change(_ args: JSONValue, _ backend: any EventsBackend, _ zone: TimeZone) async throws -> ToolResult {
         guard backend.allowed(.reminders) else { throw EventsFailure.noAccess(.reminders) }
         let action = args["action"]?.stringValue
         func id() throws -> String {
@@ -223,6 +241,28 @@ enum RemindersCapability {
             return done(
                 "Created the list “\(c.title)” in \(c.account). id \(c.id)",
                 "Claude created the reminder list “\(c.title)”")
+        case "delete_list":
+            guard let name = args["list"]?.stringValue, !name.isEmpty else {
+                throw ArgumentError(message: "Give the list to delete (name or id), from reminders_find.")
+            }
+            let list = try backend.resolveCalendar(name, .reminders)
+            guard list.writable else {
+                throw ArgumentError(message: "“\(list.title)” is read-only: it can't be deleted on this Mac.")
+            }
+            let (open, completed) = try await count(list.id, backend)
+            let holds = "“\(list.title)” holds \(reminders(open + completed)) (\(open) open, \(completed) completed)"
+            guard let given = try args.integer("reminder_count", in: 0...Int.max) else {
+                throw ArgumentError(
+                    message: "Give reminder_count, how many reminders the list holds. \(holds); nothing was deleted.")
+            }
+            guard given == open + completed else {
+                throw ArgumentError(
+                    message: "reminder_count is \(given), but \(holds). Nothing was deleted; check the list first.")
+            }
+            try backend.deleteList(id: list.id)
+            return done(
+                "Deleted the list “\(list.title)” and its \(reminders(given)).",
+                "Claude deleted the reminder list “\(list.title)” and its \(reminders(given))")
         default:
             return .unknown("action", action, allowed: changeActions)
         }

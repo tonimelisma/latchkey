@@ -72,10 +72,39 @@ request, so notes are not read.
 - **Field updates.** A field given in an update replaces that field; a list (phone numbers,
   emails, addresses, alarms) is replaced as a whole. Alternatives (add/remove operations per
   item) double the schema; Claude reads the card first and sends the full list.
-- **Reminder lists.** Creating a list is offered; deleting one is not (it would delete every
-  reminder in it at once, with no way back). Recorded for Toni's review.
-- **Contact groups.** Read (listed, and shown on a card); not changed. Recorded for Toni's
-  review.
+- **Reminder lists.** Creating and deleting a list are offered. Deleting one deletes every
+  reminder in it at once, with no way back, so Toni decided (2026-10-28) that the call must
+  carry the number of reminders the list holds, and a wrong number is refused with the actual
+  one (spec FR-713). Low-level choices (Claude):
+  - Shape: an action `delete_list` on `reminders_change` with `list` and `reminder_count`,
+    like `create_list`; a separate tool would break the find/change pattern.
+  - What counts: open and completed reminders together (options: open only, which the list
+    overview already shows; or all). Chosen all, because completed ones are deleted too and a
+    count of open ones would let a list of old completed reminders vanish unseen. Reading one
+    list (`reminders_find` with `list`) now says "holds N reminders (x open, y completed)", so
+    Claude learns the number by looking; the overview without a list keeps open counts only, so
+    it doesn't fetch every completed reminder on the Mac.
+  - Read-only lists (`allowsContentModifications` false) are refused before counting; anything
+    else EventKit refuses (the account's last list, for instance) comes back as its message.
+  - The count is read just before the delete, in the same call; nothing is stored between calls
+    (Constitution VI).
+- **Contact groups.** Listed, shown on a card, and changed: create, rename, delete, add and
+  remove cards (Toni, 2026-10-28; spec FR-723). Low-level choices (Claude):
+  - Shape: five actions on `contacts_change` (`create_group`, `rename_group`, `delete_group`,
+    `add_to_group`, `remove_from_group`) with `group` (name or id, as `contacts_find` takes),
+    `name` (the new name), and `id` or `ids` (cards). One action per operation matches the
+    reminders and calendar actions; one `group_members` list replacing the whole membership was
+    the alternative, but it needs the full member list read first and one stale read drops
+    people.
+  - Several cards per call (`ids`) so "add these five people" is one call; each card is looked
+    up first, so an unknown id changes nothing.
+  - Deleting a group asks for no count, unlike a reminder list: no card is deleted, only the
+    grouping, and the answer says how many cards stay.
+  - Two groups with the same name (any letter case) are refused on create and rename, since
+    groups are named by name in every other call.
+  - New groups go to the default account (`toContainerWithIdentifier: nil`). A card from
+    another account (Exchange, Google) can't join an iCloud group; Contacts refuses and the
+    tool passes its message on. Some accounts (Exchange) have no groups at all.
 - **Backends behind protocols.** Tests must never touch the Owner's real calendars or contacts
   (`.claude/rules/macos.md`), so the tools talk to small protocols (`EventsBackend`,
   `ContactsBackend`, `PlacesBackend`) with an EventKit/Contacts/MapKit implementation and an

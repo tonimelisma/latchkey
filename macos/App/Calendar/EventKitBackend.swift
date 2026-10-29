@@ -333,6 +333,19 @@ final class EventKitBackend: EventsBackend, @unchecked Sendable {
         }
     }
 
+    func deleteList(id: String) throws {
+        try check(.reminders)
+        try locked {
+            guard let c = store.calendar(withIdentifier: id), c.allowedEntityTypes.contains(.reminder) else {
+                throw EventsFailure.notFound(id)
+            }
+            do { try store.removeCalendar(c, commit: true) } catch {
+                store.reset()
+                throw EventsFailure.failed(error.localizedDescription)
+            }
+        }
+    }
+
     private func save(_ r: EKReminder) throws {
         do { try store.save(r, commit: true) } catch {
             store.reset()

@@ -16,10 +16,16 @@ final class FakeContacts: ContactsBackend, @unchecked Sendable {
             id: "P2", givenName: "Sarah", familyName: "Jones", phones: [Labeled(label: "home", value: "555 999 0000")]),
         ContactCard(id: "P3", organization: "Joe's Pizza"),
     ]
+    var groupNames = ["G1": "Family"]
     var lastDraft: ContactDraft?
 
     func allowed() -> Bool { access }
-    func groups() throws -> [ContactGroup] { [ContactGroup(id: "G1", name: "Family", count: 1)] }
+    func groups() throws -> [ContactGroup] {
+        groupNames.map { id, name in
+            ContactGroup(id: id, name: name, count: cards.filter { $0.groups.contains(name) }.count)
+        }
+        .sorted { $0.name < $1.name }
+    }
     func all() throws -> [ContactCard] { cards }
     func card(id: String) throws -> ContactCard {
         guard let c = cards.first(where: { $0.id == id }) else { throw ContactsFailure.notFound(id) }
@@ -41,6 +47,33 @@ final class FakeContacts: ContactsBackend, @unchecked Sendable {
         return c
     }
     func delete(id: String) throws { cards.removeAll { $0.id == id } }
+    func createGroup(name: String) throws -> ContactGroup {
+        let id = "G\(groupNames.count + 1)"
+        groupNames[id] = name
+        return ContactGroup(id: id, name: name, count: 0)
+    }
+    func renameGroup(id: String, name: String) throws -> ContactGroup {
+        guard let old = groupNames[id] else { throw ContactsFailure.notFound(id) }
+        groupNames[id] = name
+        for i in cards.indices { cards[i].groups = cards[i].groups.map { $0 == old ? name : $0 } }
+        return try groups().first { $0.id == id }!
+    }
+    func deleteGroup(id: String) throws {
+        guard let old = groupNames.removeValue(forKey: id) else { throw ContactsFailure.notFound(id) }
+        for i in cards.indices { cards[i].groups.removeAll { $0 == old } }
+    }
+    func addMember(contactID: String, groupID: String) throws {
+        guard let name = groupNames[groupID], let i = cards.firstIndex(where: { $0.id == contactID }) else {
+            throw ContactsFailure.notFound(contactID)
+        }
+        if !cards[i].groups.contains(name) { cards[i].groups.append(name) }
+    }
+    func removeMember(contactID: String, groupID: String) throws {
+        guard let name = groupNames[groupID], let i = cards.firstIndex(where: { $0.id == contactID }) else {
+            throw ContactsFailure.notFound(contactID)
+        }
+        cards[i].groups.removeAll { $0 == name }
+    }
 }
 
 func resultText(_ r: ToolResult) -> String {
@@ -106,6 +139,50 @@ func resultText(_ r: ToolResult) -> String {
         let badDay = await change.handler(
             .object(["action": .string("update"), "id": .string("P1"), "birthday": .string("1990-02-30")]))
         #expect(badDay.isError)
+    }
+
+    @Test func createsRenamesAndDeletesGroups() async throws {
+        let change = try tool("contacts_change")
+        let made = await change.handler(.object(["action": .string("create_group"), "name": .string("Book club")]))
+        #expect(!made.isError, "\(resultText(made))")
+        #expect(made.activity == "Claude created the contact group “Book club”")
+        #expect(fake.groupNames.values.contains("Book club"))
+        let twice = await change.handler(.object(["action": .string("create_group"), "name": .string("family")]))
+        #expect(twice.isError && fake.groupNames.count == 2)
+        let noName = await change.handler(.object(["action": .string("create_group")]))
+        #expect(noName.isError)
+        let renamed = await change.handler(
+            .object(["action": .string("rename_group"), "group": .string("Family"), "name": .string("Relatives")]))
+        #expect(renamed.activity == "Claude renamed the contact group “Family” to “Relatives”")
+        #expect(fake.cards[0].groups == ["Relatives"])
+        let missing = await change.handler(
+            .object(["action": .string("rename_group"), "group": .string("Nope"), "name": .string("X")]))
+        #expect(missing.isError && resultText(missing).contains("Relatives"))
+        let gone = await change.handler(.object(["action": .string("delete_group"), "group": .string("G1")]))
+        #expect(gone.activity == "Claude deleted the contact group “Relatives”")
+        #expect(resultText(gone).contains("1 card") && fake.groupNames["G1"] == nil)
+        #expect(fake.cards.count == 3 && fake.cards[0].groups.isEmpty)
+    }
+
+    @Test func addsAndRemovesGroupMembers() async throws {
+        let change = try tool("contacts_change")
+        let added = await change.handler(
+            .object([
+                "action": .string("add_to_group"), "group": .string("family"),
+                "ids": .array([.string("P2"), .string("P3")]),
+            ]))
+        #expect(!added.isError, "\(resultText(added))")
+        #expect(added.activity == "Claude added Sarah Jones and Joe's Pizza to the contact group “Family”")
+        #expect(fake.cards.allSatisfy { $0.groups == ["Family"] })
+        let removed = await change.handler(
+            .object(["action": .string("remove_from_group"), "group": .string("Family"), "id": .string("P1")]))
+        #expect(removed.activity == "Claude removed Sarah Smith from the contact group “Family”")
+        #expect(fake.cards[0].groups.isEmpty)
+        let nobody = await change.handler(.object(["action": .string("add_to_group"), "group": .string("Family")]))
+        #expect(nobody.isError)
+        let unknown = await change.handler(
+            .object(["action": .string("add_to_group"), "group": .string("Family"), "id": .string("P9")]))
+        #expect(unknown.isError)
     }
 
     @Test func birthdaysWithAndWithoutYear() {

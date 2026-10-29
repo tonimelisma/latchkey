@@ -119,6 +119,13 @@ final class FakeEvents: EventsBackend, @unchecked Sendable {
         lists.append(c)
         return c
     }
+
+    func deleteList(id: String) throws {
+        guard lists.contains(where: { $0.id == id }) else { throw EventsFailure.notFound(id) }
+        deleted.append(id)
+        lists.removeAll { $0.id == id }
+        reminderList.removeAll { $0.listID == id }
+    }
 }
 
 @Suite struct CalendarDatesTests {
@@ -422,6 +429,36 @@ final class FakeEvents: EventsBackend, @unchecked Sendable {
         let bad = await change.handler(
             .object(["action": .string("create"), "title": .string("X"), "priority": .string("urgent")]))
         #expect(bad.isError)
+    }
+
+    @Test func deletesAListOnlyWithItsReminderCount() async throws {
+        fake.reminderList = [
+            ReminderInfo(id: "R1", title: "Milk", list: "Groceries", listID: "L-SHOP"),
+            ReminderInfo(
+                id: "R2", title: "Eggs", list: "Groceries", listID: "L-SHOP", completed: true, completedAt: Date()),
+            ReminderInfo(id: "R3", title: "Call mom", list: "Reminders", listID: "L-TODO"),
+        ]
+        let shown = text(try await tool("reminders_find").handler(.object(["list": .string("groceries")])))
+        #expect(shown.contains("Groceries holds 2 reminders (1 open, 1 completed)"), "\(shown)")
+        let change = try tool("reminders_change")
+        let noCount = await change.handler(.object(["action": .string("delete_list"), "list": .string("Groceries")]))
+        #expect(noCount.isError && text(noCount).contains("reminder_count"))
+        let wrong = await change.handler(
+            .object(["action": .string("delete_list"), "list": .string("Groceries"), "reminder_count": .number(1)]))
+        #expect(wrong.isError && text(wrong).contains("holds 2 reminders"), "\(text(wrong))")
+        #expect(fake.lists.contains { $0.id == "L-SHOP" } && fake.reminderList.count == 3)
+        let noList = await change.handler(.object(["action": .string("delete_list"), "reminder_count": .number(0)]))
+        #expect(noList.isError)
+        let gone = await change.handler(
+            .object(["action": .string("delete_list"), "list": .string("L-SHOP"), "reminder_count": .number(2)]))
+        #expect(!gone.isError, "\(text(gone))")
+        #expect(gone.activity == "Claude deleted the reminder list “Groceries” and its 2 reminders")
+        #expect(!fake.lists.contains { $0.id == "L-SHOP" })
+        #expect(fake.reminderList.map(\.id) == ["R3"])
+        fake.lists[0].writable = false
+        let locked = await change.handler(
+            .object(["action": .string("delete_list"), "list": .string("Reminders"), "reminder_count": .number(1)]))
+        #expect(locked.isError && fake.lists.count == 1)
     }
 
     @Test func clearsADueDateWithEmptyText() throws {

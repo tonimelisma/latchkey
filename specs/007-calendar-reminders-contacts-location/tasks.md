@@ -8,3 +8,4 @@
 - **T706** Registry, levels, Settings, Permissions tab, setup steps, Info.plist and entitlements. *FR-741, FR-742, D5.*
 - **T707** Activity text, notifications, others' text marked. *FR-743, FR-746, D6.*
 - **T708** Install and live check through the hosted relay (test event, reminder, contact, location, place, drive time). *SC-701 to SC-704.*
+- **T709** Tests first (in-memory backends), then deleting a reminder list with its reminder count, and contact groups (create, rename, delete, add and remove cards), in the tools and the EventKit and Contacts backends. *FR-713, FR-723, D1 to D3.*

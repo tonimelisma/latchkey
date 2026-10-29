@@ -30,12 +30,16 @@ accounts, and in Apple Maps.
    my open reminders by list and due date.
 2. Given Read & write, when I ask Claude to remind me of something, check something off, change
    or delete a reminder, or start a new list, then it does.
+3. Given Read & write, when I ask Claude to delete a reminder list, then it deletes the list
+   only after it has looked at how many reminders the list holds (Toni, 2026-10-28).
 
 ### US3 (P1): My contacts
 1. Given Contacts is Read only or more, when I ask "what's Sarah's address?", then Claude finds
    the card and reads it.
 2. Given Read & write, when I ask Claude to add a person, change a number, or delete a card,
    then it does.
+3. Given Read & write, when I ask Claude to make a group, rename or delete one, or put people
+   in a group or take them out, then it does (Toni, 2026-10-28).
 
 ### US4 (P2): Where the Mac is, places, and directions
 1. Given Location & Maps is On, when I ask "where is my Mac?", then Claude gives its location
@@ -69,6 +73,12 @@ accounts, and in Apple Maps.
   when, link, alarms, how it repeats.
 - **FR-712** While Read & write, Claude shall be able to create, change, complete, mark not
   completed, and delete reminders, and create a reminder list.
+- **FR-713** While Read & write, Claude shall be able to delete a reminder list, with all the
+  reminders in it, by giving the list and the number of reminders it holds (open and
+  completed). When the number given isn't the list's actual number, the tool shall delete
+  nothing and say the actual number, so Claude can't delete a list it hasn't looked at (Toni,
+  2026-10-28). Reading one list (FR-711) shall say how many reminders it holds, open and
+  completed.
 
 ### Contacts
 - **FR-721** While Contacts is Read only or Read & write, Claude shall be able to search
@@ -77,6 +87,9 @@ accounts, and in Apple Maps.
   birthday and other dates, web addresses, related names, groups), and see its photo.
 - **FR-722** While Read & write, Claude shall be able to create a card, change its fields, and
   delete it.
+- **FR-723** While Read & write, Claude shall be able to create a contact group, rename it,
+  delete it (its cards stay in Contacts), and add cards to it or remove them from it (Toni,
+  2026-10-28).
 
 ### Location and Maps
 - **FR-731** While Location & Maps is On, Claude shall be able to get the Mac's current
@@ -97,7 +110,7 @@ accounts, and in Apple Maps.
 - **FR-742** Each capability's macOS permission (Calendars, Reminders, Contacts, Location) shall
   be asked for in the setup window and shown in the Settings window's Permissions tab, never
   when a request arrives. When it is missing, the tools shall say what to turn on.
-- **FR-743** Every change Claude makes (event, reminder, list, contact) shall show a
+- **FR-743** Every change Claude makes (event, reminder, list, contact, group) shall show a
   notification naming it, and appear in the activity log.
 - **FR-744** Times shall be read and written in the Mac's time zone unless Claude gives another
   offset, and every answer with times shall name the time zone.

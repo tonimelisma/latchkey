@@ -151,6 +151,8 @@ protocol EventsBackend: Sendable {
     func updateReminder(id: String, _ draft: ReminderDraft) throws -> ReminderInfo
     func deleteReminder(id: String) throws
     func createList(title: String) throws -> CalendarInfo
+    /// Deletes a reminder list and every reminder in it.
+    func deleteList(id: String) throws
 }
 
 extension EventsBackend {

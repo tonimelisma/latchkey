@@ -5,7 +5,7 @@ enum ContactsCapability {
     static func make() -> Capability {
         Capability(
             id: CapabilityRegistry.contacts, title: "Contacts",
-            summary: "Look up, add, change, and delete contacts",
+            summary: "Look up, add, change, and delete contacts and groups",
             readTools: readTools(backend: CNContactsBackend.shared),
             writeTools: writeTools(backend: CNContactsBackend.shared))
     }
@@ -39,7 +39,10 @@ enum ContactsCapability {
         ]
     }
 
-    static let changeActions = ["create", "update", "delete"]
+    static let changeActions = [
+        "create", "update", "delete", "create_group", "rename_group", "delete_group", "add_to_group",
+        "remove_from_group",
+    ]
 
     static func writeTools(backend: any ContactsBackend) -> [ToolEntry] {
         let labeled: (String) -> JSONValue = { what in
@@ -65,7 +68,9 @@ enum ContactsCapability {
                         or company), update (id and only the fields to change; a list such as phones replaces the \
                         card's whole list, so read the card first), delete (id; the card is removed from every \
                         device the Contacts sync with). An empty text clears a field. birthday is YYYY-MM-DD, or \
-                        --MM-DD without a year.
+                        --MM-DD without a year. Groups: create_group (name), rename_group (group and the new name), \
+                        delete_group (group; its cards stay in Contacts), add_to_group and remove_from_group (group \
+                        and id, or ids for several cards).
                         """,
                     input: [
                         "action": .enumParam(changeActions, "What to do"),
@@ -92,6 +97,12 @@ enum ContactsCapability {
                             "description": .string("The whole list of postal addresses; [] removes all"),
                         ]),
                         "birthday": .stringParam("YYYY-MM-DD or --MM-DD"),
+                        "group": .stringParam("The group (name or id, from contacts_find)"),
+                        "name": .stringParam("For create_group and rename_group: the group's name"),
+                        "ids": .object([
+                            "type": .string("array"), "items": .object(["type": .string("string")]),
+                            "description": .string("For add_to_group and remove_from_group: several cards' ids"),
+                        ]),
                     ], required: ["action"], readOnly: false, destructive: true, deadlineMS: 15_000),
                 handler: { args in await run { try change(args, backend) } })
         ]
@@ -122,9 +133,7 @@ enum ContactsCapability {
             return .text(lines.joined(separator: "\n"))
         }
         if let g = args["group"]?.stringValue, !g.isEmpty {
-            let groups = try backend.groups()
-            guard let group = groups.first(where: { $0.id == g || $0.name.caseInsensitiveCompare(g) == .orderedSame })
-            else { throw ContactsFailure.noSuchGroup(g, available: groups.map(\.name)) }
+            let group = try backend.resolveGroup(g)
             cards = cards.filter { $0.groups.contains(group.name) }
         }
         let query = args["query"]?.stringValue ?? ""
@@ -204,8 +213,82 @@ enum ContactsCapability {
             var r = ToolResult.text("Deleted \(old.name) from Contacts.")
             r.activity = "Claude deleted the contact \(old.name)"
             return r
+        case "create_group", "rename_group", "delete_group", "add_to_group", "remove_from_group":
+            return try changeGroup(action ?? "", args, backend)
         default:
             return .unknown("action", action, allowed: changeActions)
+        }
+    }
+
+    /// Group changes (spec 007 FR-723): the cards themselves are never deleted here.
+    static func changeGroup(_ action: String, _ args: JSONValue, _ backend: any ContactsBackend) throws -> ToolResult {
+        func newName() throws -> String {
+            let name = args["name"]?.stringValue?.trimmingCharacters(in: .whitespaces) ?? ""
+            guard !name.isEmpty else { throw ArgumentError(message: "Give the group's name.") }
+            if let same = try backend.groups().first(where: { $0.name.caseInsensitiveCompare(name) == .orderedSame }) {
+                throw ArgumentError(message: "There's already a group named “\(same.name)” (id \(same.id)).")
+            }
+            return name
+        }
+        func group() throws -> ContactGroup {
+            guard let g = args["group"]?.stringValue, !g.isEmpty else {
+                throw ArgumentError(message: "Give the group (name or id), from contacts_find.")
+            }
+            return try backend.resolveGroup(g)
+        }
+        func done(_ text: String, _ activity: String) -> ToolResult {
+            var r = ToolResult.text(text)
+            r.activity = activity
+            return r
+        }
+        switch action {
+        case "create_group":
+            let g = try backend.createGroup(name: try newName())
+            var r = done("Created the group “\(g.name)”. id \(g.id)", "Claude created the contact group “\(g.name)”")
+            r.made = "the contact group “\(g.name)”"
+            return r
+        case "rename_group":
+            let old = try group()
+            let g = try backend.renameGroup(id: old.id, name: try newName())
+            return done(
+                "Renamed the group “\(old.name)” to “\(g.name)”.",
+                "Claude renamed the contact group “\(old.name)” to “\(g.name)”")
+        case "delete_group":
+            let g = try group()
+            try backend.deleteGroup(id: g.id)
+            let cards = g.count == 1 ? "1 card" : "\(g.count) cards"
+            return done(
+                "Deleted the group “\(g.name)”. Its \(cards) stay in Contacts.",
+                "Claude deleted the contact group “\(g.name)”")
+        default:
+            let g = try group()
+            var ids: [String] = []
+            if case .array(let items)? = args["ids"] {
+                ids = try items.map {
+                    guard let s = $0.stringValue, !s.isEmpty else {
+                        throw ArgumentError(message: "ids must be card ids.")
+                    }
+                    return s
+                }
+            }
+            if let id = args["id"]?.stringValue, !id.isEmpty { ids.insert(id, at: 0) }
+            guard !ids.isEmpty else { throw ArgumentError(message: "Give the card's id (or ids), from contacts_find.") }
+            let cards = try ids.map { try backend.card(id: $0) }
+            let adding = action == "add_to_group"
+            for c in cards {
+                if adding {
+                    try backend.addMember(contactID: c.id, groupID: g.id)
+                } else {
+                    try backend.removeMember(contactID: c.id, groupID: g.id)
+                }
+            }
+            let names =
+                cards.dropLast().map(\.name).joined(separator: ", ") + (cards.count > 1 ? " and " : "")
+                + cards.last!.name
+            return adding
+                ? done("Added \(names) to “\(g.name)”.", "Claude added \(names) to the contact group “\(g.name)”")
+                : done(
+                    "Removed \(names) from “\(g.name)”.", "Claude removed \(names) from the contact group “\(g.name)”")
         }
     }
 

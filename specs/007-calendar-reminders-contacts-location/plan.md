@@ -13,9 +13,9 @@ read-only.
 | `calendar_find` (id?, query?, from?, to?, calendar?, free?, minutes?, hours?, limit?) | Read only | yes | no | FR-701, FR-702 |
 | `calendar_change` (action: create, update, delete; id, title, start, end, all_day, calendar, location, notes, url, alarms, repeat, repeat_every, repeat_until, repeat_count, span) | Read & write | no | yes | FR-703, FR-704 |
 | `reminders_find` (id?, query?, list?, completed?, from?, to?, limit?) | Read only | yes | no | FR-711 |
-| `reminders_change` (action: create, update, complete, uncomplete, delete, create_list; id, title, notes, list, due, priority, url, alarms, repeat, repeat_every, repeat_until, repeat_count) | Read & write | no | yes | FR-712 |
+| `reminders_change` (action: create, update, complete, uncomplete, delete, create_list, delete_list; id, title, notes, list, due, priority, url, alarms, repeat, repeat_every, repeat_until, repeat_count, reminder_count) | Read & write | no | yes | FR-712, FR-713 |
 | `contacts_find` (id?, query?, group?, photo?, limit?) | Read only | yes | no | FR-721 |
-| `contacts_change` (action: create, update, delete; id, given_name, family_name, middle_name, nickname, organization, job_title, department, phones, emails, addresses, birthday, urls) | Read & write | no | yes | FR-722 |
+| `contacts_change` (action: create, update, delete, create_group, rename_group, delete_group, add_to_group, remove_from_group; id, ids, group, name, given_name, family_name, middle_name, nickname, organization, job_title, department, phones, emails, addresses, birthday, urls) | Read & write | no | yes | FR-722, FR-723 |
 | `location_read` () | On | yes | no | FR-731 |
 | `maps_find` (query?, near?, to?, from?, mode?, depart_at?, arrive_by?, address?, limit?) | On | yes | no | FR-732 to FR-734 |
 
@@ -26,7 +26,16 @@ read-only.
   `calendar` (name or id).
 - `reminders_find`: with `id`, one reminder. With nothing, the lists with open counts, then open
   reminders (overdue and dated first, then undated). `completed: true` lists completed ones from
-  `from` (default 30 days ago) to `to` (default now).
+  `from` (default 30 days ago) to `to` (default now). With `list`, the answer starts with how
+  many reminders the list holds, open and completed (FR-713).
+- `reminders_change` `delete_list`: `list` (name or id) and `reminder_count`; the tool counts
+  the list's open and completed reminders and deletes it only when the number matches,
+  otherwise it answers with the actual number and deletes nothing (FR-713, research.md
+  "Reminder lists").
+- `contacts_change` groups: `create_group` (`name`), `rename_group` (`group`, `name`),
+  `delete_group` (`group`; cards stay), `add_to_group` / `remove_from_group` (`group`, and `id`
+  or `ids`). A name another group already has is refused (FR-723, research.md "Contact
+  groups").
 - `contacts_find`: with `id`, the card (with `photo`, its picture as an image). With nothing,
   the groups and the number of contacts. Otherwise cards matching `query` in names, nickname,
   company, emails, and phone digits, and `group`.
@@ -61,7 +70,8 @@ read-only.
   the callback API wrapped in a continuation with the tool's deadline. Due dates: a date only
   sets `dueDateComponents` without a time; a date-time sets both. Priority maps none 0, high 1,
   medium 5, low 9 (Apple's values). `create_list` makes an `EKCalendar(for: .reminder)` in the
-  default reminders source.
+  default reminders source; `delete_list` counts with the two reminder predicates for that one
+  list, then `removeCalendar(_:commit:)` (FR-713).
 - Free time (FR-702): busy intervals merged, then the gaps of at least `minutes` inside each
   day's `hours`, per research.md.
 - Dates (FR-744): one parser and one formatter (`CalendarDates`), research.md "Dates in and
@@ -71,7 +81,9 @@ read-only.
 
 - `ContactsBackend` with `ContactCard` values; the real one uses `CNContactStore`
   (`unifiedContacts(matching:)` for names, enumeration for emails and phone digits,
-  `CNSaveRequest` for changes in the default container).
+  `CNSaveRequest` for changes in the default container). Groups (FR-723): `CNMutableGroup` with
+  `CNSaveRequest.add(_:toContainerWithIdentifier:)`, `update`, `delete`, `addMember(_:to:)`,
+  and `removeMember(_:from:)`.
 - The note field is not fetched (needs Apple's special entitlement; research.md).
 - Messages' `ContactBook` (spec 002 D4) stays as it is and keeps reading Contacts whenever macOS
   allows it, whatever the Contacts level (FR-745). After a change, `ContactBook` is told to
@@ -114,7 +126,9 @@ read-only.
 ## Testing (Constitution VII)
 
 - Tests first, against in-memory backends: tool names, levels and annotations (23 tools; Read
-  only and Off hide the right ones), every action's routing and messages, date parsing and
+  only and Off hide the right ones), every action's routing and messages (a reminder list is
+  deleted only with its right count; groups created, renamed, deleted, members added and
+  removed), date parsing and
   formatting with offsets and all-day dates, free-time computation, repeat rules, event ids,
   contact matching by phone digits, permission-missing answers, `maps_find` argument rules.
 - Real frameworks: a test checks that `EKRecurrenceRule` and `CNMutableContact` are built as
