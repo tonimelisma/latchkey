@@ -37,6 +37,13 @@ enum Fence {
         scratch.deletingLastPathComponent().appending(path: scratch.lastPathComponent + ".mark")
     }
 
+    /// An empty file beside the mark that the job's fence lets it read: another sandbox treats
+    /// the two alike, since only the job's own names the mark (the font service's refuses every
+    /// file but no folder, live check 2026-10-29).
+    static func control(of scratch: URL) -> URL {
+        scratch.deletingLastPathComponent().appending(path: scratch.lastPathComponent + ".open")
+    }
+
     /// Places that make something run again: writable only when declared (FR-319).
     static let permanent = [
         ".zshrc", ".zprofile", ".zshenv", ".zlogin", ".zlogout", ".bashrc", ".bash_profile", ".profile",

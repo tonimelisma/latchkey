@@ -52,8 +52,9 @@ actor ShellJobs {
         let process: Process
         let input: FileHandle
         let scratch: URL
-        /// The mark the job's fence carries (FR-327).
+        /// The mark the job's fence carries, and the file beside it it may read (FR-327).
         let mark: URL
+        let control: URL
         let declared: [URL]
         let why: String?
         let keepMinutes: Int
@@ -82,6 +83,7 @@ actor ShellJobs {
             self.input = input
             self.scratch = scratch
             self.mark = Fence.mark(of: scratch)
+            self.control = Fence.control(of: scratch)
             self.declared = declared
             self.why = why
             self.keepMinutes = keepMinutes
@@ -134,7 +136,7 @@ actor ShellJobs {
         /// it left (FR-327).
         func members(scratchUsers: Bool = false) -> [pid_t] {
             var pids = Set(session().map { Processes.members(ofSession: $0) } ?? [])
-            pids.formUnion(Processes.marked(by: mark, control: scratch))
+            pids.formUnion(Processes.marked(by: mark, control: control))
             pids.formUnion(knownIDs.filter(Processes.alive).map(\.pid))
             if scratchUsers { pids.formUnion(Processes.using(scratch, startedAfter: started)) }
             if process.isRunning { pids.insert(process.processIdentifier) }
@@ -201,6 +203,7 @@ actor ShellJobs {
         try FileManager.default.createDirectory(at: scratch, withIntermediateDirectories: true)
         let mark = Fence.mark(of: scratch)
         try Data().write(to: mark)
+        try Data().write(to: Fence.control(of: scratch))
         let fence = Fence.profile(
             scratch: scratch, folder: URL(filePath: dir), declared: declared, home: setup.home, own: setup.own,
             uses: uses, mark: mark, systemTemp: setup.systemTemp)
@@ -396,6 +399,7 @@ actor ShellJobs {
         job.leaseEnd = nil
         try? FileManager.default.removeItem(at: Self.record(of: job, in: setup))
         try? FileManager.default.removeItem(at: job.mark)
+        try? FileManager.default.removeItem(at: job.control)
         job.left = report.answer
         if let entry = report.entry { setup.report(entry, false) }
         if !stuck.isEmpty {
@@ -406,11 +410,11 @@ actor ShellJobs {
     }
 
     /// The scratch folders and process records of earlier starts: only real files and folders
-    /// (no links) named as Latchkey names them, `<launch>-job<n>`, `<launch>-job<n>.pids`, and
-    /// `<launch>-job<n>.mark`.
+    /// (no links) named as Latchkey names them, `<launch>-job<n>`, and the same with `.pids`,
+    /// `.mark`, or `.open`.
     private static func earlierEntries(in root: URL, launch: String) -> [URL] {
         let fm = FileManager.default
-        let pattern = /^[0-9a-f]{8}-job[0-9]+(\.pids|\.mark)?$/
+        let pattern = /^[0-9a-f]{8}-job[0-9]+(\.pids|\.mark|\.open)?$/
         return ((try? fm.contentsOfDirectory(at: root, includingPropertiesForKeys: [.isSymbolicLinkKey])) ?? [])
             .filter { url in
                 let name = url.lastPathComponent
@@ -439,8 +443,8 @@ actor ShellJobs {
         // Processes carrying an earlier job's mark, which its record may have missed (FR-327).
         let seen = Set(earlier)
         for mark in entries where mark.pathExtension == "mark" {
-            let scratch = mark.deletingPathExtension()
-            earlier += Processes.marked(by: mark, control: scratch).compactMap(Processes.id(of:))
+            let control = Fence.control(of: mark.deletingPathExtension())
+            earlier += Processes.marked(by: mark, control: control).compactMap(Processes.id(of:))
                 .filter { !seen.contains($0) }
         }
         var stopped: [String] = []
@@ -451,8 +455,8 @@ actor ShellJobs {
             earlier.filter(Processes.alive).forEach { kill($0.pid, SIGKILL) }
         }
         var trashed = 0
-        for mark in entries where mark.pathExtension == "mark" { try? fm.removeItem(at: mark) }
-        for folder in entries where !["pids", "mark"].contains(folder.pathExtension) {
+        for file in entries where ["mark", "open"].contains(file.pathExtension) { try? fm.removeItem(at: file) }
+        for folder in entries where !["pids", "mark", "open"].contains(folder.pathExtension) {
             if Self.hasContents(folder) {
                 setup.remove(folder)
                 trashed += 1
@@ -758,11 +762,12 @@ enum Processes {
         return out
     }
 
-    /// Every sandboxed process whose sandbox refuses reading `mark` but not `control` (the job's
-    /// scratch folder beside it): a job's processes, wherever they went (FR-327). Another app's
-    /// sandbox that keeps it out of Latchkey's folder refuses both.
+    /// Every sandboxed process whose sandbox refuses reading `mark` but not `control` (an empty
+    /// file beside it): a job's processes, wherever they went (FR-327). Another sandbox that
+    /// keeps a process out of Latchkey's folder, or away from files, refuses both.
     static func marked(by mark: URL, control: URL) -> [pid_t] {
-        guard FileManager.default.fileExists(atPath: mark.path) else { return [] }
+        let fm = FileManager.default
+        guard fm.fileExists(atPath: mark.path), fm.fileExists(atPath: control.path) else { return [] }
         let me = getpid()
         return all().filter { pid in
             pid != me && latchkey_is_sandboxed(pid) != 0 && latchkey_sandbox_denies_read(pid, mark.path) != 0

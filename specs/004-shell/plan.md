@@ -86,8 +86,11 @@ scratch folder).
 - its mark (FR-327, 2026-10-28): each job's fence refuses reading one empty file,
   `<scratch folder>.mark` beside the scratch folder, and a sandbox is inherited by everything
   started inside it and can't be left. A process whose sandbox refuses reading the mark but
-  not the job's scratch folder is the job's, wherever it went: a quick double fork included.
-  Another app's sandbox that keeps it out of Latchkey's folder refuses both and is left alone.
+  not a second empty file beside it (`<scratch folder>.open`) is the job's, wherever it went: a
+  quick double fork included. Another sandbox that keeps a process out of Latchkey's folder, or
+  away from files, refuses both and is left alone. (0.8.38 to 0.8.40 compared the mark with the
+  scratch folder; macOS's font service, whose sandbox refuses every file but no folder, was
+  stopped after every command and restarted by launchd; live check 2026-10-29.)
   At start, the marks of an earlier run find what its records missed. The check is macOS's
   `sandbox_check`, called through a small C file (research.md).
 Opening through LaunchServices and scripting other apps are refused unless declared (D9), so

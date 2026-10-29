@@ -95,6 +95,25 @@ final class Reports: @unchecked Sendable {
         #expect(other.isRunning, "a sandboxed program that isn't the command's was stopped")
     }
 
+    /// Live check 2026-10-29: macOS's font service runs in a sandbox that refuses reading files
+    /// but not folders, and was stopped after every command while the mark was compared with
+    /// the scratch folder.
+    @Test func aSandboxThatRefusesFilesButNotFoldersIsLeftAlone() async throws {
+        try FileManager.default.createDirectory(at: setup.scratchRoot, withIntermediateDirectories: true)
+        let other = Process()
+        other.executableURL = URL(filePath: "/usr/bin/sandbox-exec")
+        other.arguments = [
+            "-p",
+            "(version 1)(allow default)(deny file-read* (require-all (subpath \"\(setup.scratchRoot.path)\") (vnode-type REGULAR-FILE)))",
+            "/bin/sleep", "300",
+        ]
+        try other.run()
+        defer { other.terminate() }
+        let r = try await jobs.run("sleep 0.6; echo done", folder: nil, wait: .seconds(10))
+        #expect(r.finished)
+        #expect(other.isRunning, "a sandboxed program that refuses files was taken for the command's")
+    }
+
     /// FR-328: opening apps, files, or links through macOS, and scripting other apps, need
     /// declaring in uses.
     @Test func openingAndScriptingAppsNeedDeclaring() async throws {
@@ -404,6 +423,7 @@ final class Reports: @unchecked Sendable {
         try FileManager.default.createDirectory(at: earlier, withIntermediateDirectories: true)
         let mark = Fence.mark(of: earlier)
         try Data().write(to: mark)
+        try Data().write(to: Fence.control(of: earlier))
         let p = Process()
         p.executableURL = URL(filePath: "/usr/bin/sandbox-exec")
         p.arguments = [

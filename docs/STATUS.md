@@ -1,6 +1,6 @@
 # Status
 
-Last updated: 2026-10-29 (Shell fence closes its gaps; reminder lists and contact groups; app 0.8.40)
+Last updated: 2026-10-29 (Shell fence closes its gaps; reminder lists and contact groups; app 0.8.41)
 
 Xcode signing ready (2026-10-20): Toni's Xcode account has a valid "Apple Development" certificate
 (certificate expires 2027-07-22). Keep the team ID out of committed project files
@@ -59,6 +59,9 @@ declared with `app_scripts` ran, `defaults write` refused with the hint, a doubl
 the right one, a test contact and group created, joined, left, and deleted; nothing left. A
 new group's and card's ids changed within seconds (iCloud), so a stale group id now says to
 give the group's name; deleting a group says how many cards stay, or that it had none (0.8.40).
+Deleting a group within seconds of making it can leave iCloud's copy behind (seen once; the
+test copy was deleted). The check also showed every command stopping macOS's font service
+(`fontd`, restarted by launchd): its sandbox looked like the job's; fixed in 0.8.41.
 Checked live on 2026-10-28 (app 0.8.38): the Left Behind view (its Tool filter showed blank;
 fixed), deleting a real Notes folder, and the launch-agent watcher's entry.
 

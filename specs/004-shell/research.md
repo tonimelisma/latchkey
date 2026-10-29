@@ -127,7 +127,10 @@ Low-level choices (Claude's):
   asks for public APIs where one exists). Chosen: (a), through `App/Shell/SandboxCheck.c`,
   because Swift can't call a C function with variable arguments.
 - **The mark**: an empty file `<scratch folder>.mark` in the Jobs folder, which the command can
-  neither read nor write; the control path is the job's own scratch folder, beside it.
+  neither read nor write; the control is another empty file beside it, `<scratch folder>.open`,
+  so a sandbox that judges by kind (file or folder) or by place answers both alike. The scratch
+  folder was the first control: the font service's sandbox refuses every file but no folder,
+  so it was taken for every job's (live check 2026-10-29).
 - **How to declare**: one list, `uses`, next to `writes` (Toni, 2026-10-28); settings through
   `writes` (`~/Library/Preferences`), since they are files there.
 - **Refusing `osascript` by path** rather than letting a script time out: other programs that
