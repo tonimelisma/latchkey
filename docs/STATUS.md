@@ -222,6 +222,10 @@ Claude's tab forward and Toni's back; idle close closes the tab. Claude's tab is
 hidden mark on its page and checked again inside every script that acts on it, so a tab of
 Toni's is never read, loaded, closed, or brought forward (security review). A tab Latchkey
 can't be sure of is left open and named in Left Behind.
+Activity window (spec 001 FR-616; app 0.8.44): opens at once however big the log grows; the
+tamper check grows in a straight line instead of with the square of the log and runs in the
+background ("Checking…" until done); a start no longer reads the whole log on the main thread.
+Two once-flaky tests made steady (best of three timings; counted waits instead of sleeping).
 Contacts (spec 007 FR-724 to FR-727; app 0.8.44): cards and groups Latchkey made are found
 again when iCloud gives them a new id, and iCloud's copy is deleted with them within 10
 minutes; Toni's own look-alikes are never matched; every such deletion is notified.
