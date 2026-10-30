@@ -86,7 +86,12 @@ actor SafariBrowser {
 
     let scripts: any ScriptRunner
     /// Claude's window, or the Owner's window that holds Claude's tab.
-    private var window: String? { didSet { remember() } }
+    private var window: String? {
+        didSet {
+            if window != oldValue { tabs = [] }  // another window's tabs never stand for this one
+            remember()
+        }
+    }
     /// Set when Claude's page is a tab in `window` rather than the whole window.
     private var tab: ClaudeTab? { didSet { remember() } }
     /// When Claude last used its page (spec 005 FR-411).
@@ -153,8 +158,8 @@ actor SafariBrowser {
     private var orphan: (window: String, tabs: [String], lastUse: Date)?
 
     /// After Safari restarted (FR-411): Claude's own window is found again when exactly one open
-    /// window has exactly its tabs, and none otherwise; tried while Safari runs, given up a day
-    /// after the last use. Claude's tab in the Owner's window can't be told from the Owner's tabs
+    /// window has exactly its tabs, and none otherwise; tried in the first 5 minutes after Safari
+    /// starts, then given up. Claude's tab in the Owner's window can't be told from the Owner's tabs
     /// once its mark is gone, so it is left alone and, when a tab shows Claude's last address,
     /// noted as lost (FR-418).
     private func findRestored(now: Date) async {
@@ -168,7 +173,11 @@ actor SafariBrowser {
             }
             return
         }
-        if now.timeIntervalSince(saved.lastUse) > 86400 { return forgetRestored() }
+        // Only while Safari is bringing its windows back, so a window the Owner opens later with
+        // the same tabs is never taken for Claude's (security review, 2026-10-29).
+        guard let safari = memory?.safari(), let launched = WindowMemory.launched(safari),
+            now.timeIntervalSince(launched) < 300
+        else { return forgetRestored() }
         guard let tabs = saved.tabs, !tabs.isEmpty,
             let found = try? await scripts.run(Script.findWindow, [tabs.joined(separator: "\n")]),
             !found.isEmpty
@@ -953,6 +962,11 @@ struct WindowMemory: Sendable {
         }
         try? fm.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
         try? data.write(to: file, options: .atomic)
+    }
+
+    /// When that Safari started, from `safari`'s "pid launch-time".
+    static func launched(_ safari: String) -> Date? {
+        safari.split(separator: " ").last.flatMap { Double($0) }.map { Date(timeIntervalSince1970: $0) }
     }
 
     /// The app's own; none under tests, which never touch real storage.

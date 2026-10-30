@@ -122,7 +122,8 @@ the page's; or the addresses of its tabs, noted each minute (chosen). It is foun
 exactly one visible window has exactly those tabs; two matches, or none, leave every window
 alone. The security review pointed out that adopting such a window would let Claude act in one
 of the Owner's windows if the match were wrong, so it is only ever closed, after checking again
-that it is still the one window with those tabs. The remaining risk is closing an Owner's window
+that it is still the one window with those tabs, and it is looked for only in the first 5
+minutes after Safari starts, so a window the Owner opens later with the same tabs never counts. The remaining risk is closing an Owner's window
 with exactly the same tabs while Claude's was not brought back; judged rare enough. Claude's tab
 in the Owner's window (the default since 2026-10-29) can't be found this way, since the Owner's
 restored tabs look the same; it is left alone and noted (FR-418), asking Safari only whether

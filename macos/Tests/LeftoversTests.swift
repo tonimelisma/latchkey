@@ -663,8 +663,8 @@ final class Reports: @unchecked Sendable {
         #expect(WindowMemory(file: file) { nil }.load()?.window == "42")
 
         let otherSafari = RecordingRunner(answers: [""])
-        let restartedSafari = SafariBrowser(scripts: otherSafari, memory: WindowMemory(file: file) { "200 2" })
-        #expect(await !restartedSafari.closeIfIdle(after: 0), "Safari restarted: the id may be the Owner's")
+        let afterSafari = SafariBrowser(scripts: otherSafari, memory: WindowMemory(file: file) { restartedSafari() })
+        #expect(await !afterSafari.closeIfIdle(after: 0), "Safari restarted: the id may be the Owner's")
 
         let runner = RecordingRunner(answers: [""])
         let restarted = SafariBrowser(scripts: runner, memory: WindowMemory(file: file) { "100 1" })
@@ -696,7 +696,7 @@ extension IdleBrowserTests {
         #expect(notRunning.calls.isEmpty, "Safari isn't running: asking it would start it")
 
         let none = ScriptAnswers([SafariBrowser.Script.findWindow: ""])
-        let notYet = SafariBrowser(scripts: none, memory: WindowMemory(file: file) { "200 2" })
+        let notYet = SafariBrowser(scripts: none, memory: WindowMemory(file: file) { restartedSafari() })
         #expect(await !notYet.closeIfIdle(after: 0), "no window has those tabs: none is taken")
         #expect(none.calls.first?.1 == [tabs])
         #expect(FileManager.default.fileExists(atPath: file.path), "kept, to look again")
@@ -706,7 +706,7 @@ extension IdleBrowserTests {
             SafariBrowser.Script.open: "88",
         ])
         let back = SafariBrowser(
-            scripts: found, settleLimit: .milliseconds(50), memory: WindowMemory(file: file) { "200 2" })
+            scripts: found, settleLimit: .milliseconds(50), memory: WindowMemory(file: file) { restartedSafari() })
         #expect(await !back.closeIfIdle(after: 1800), "it keeps the time Claude last used it")
         #expect(!found.calls.contains { $0.0 == SafariBrowser.Script.close })
         _ = try? await back.open("https://example.net", newTab: false)
@@ -727,7 +727,7 @@ extension IdleBrowserTests {
         let answers = ScriptAnswers([SafariBrowser.Script.findWindow: "77"])
         let notes = Reports()
         let browser = SafariBrowser(
-            scripts: answers, memory: WindowMemory(file: file) { "200 2" }, note: { notes.add($0, false) })
+            scripts: answers, memory: WindowMemory(file: file) { restartedSafari() }, note: { notes.add($0, false) })
         _ = await browser.closeIfIdle(after: 1800)
         answers.set(SafariBrowser.Script.findWindow, "")
         _ = await browser.closeIfIdle(after: 1800, now: Date().addingTimeInterval(1900))
@@ -746,7 +746,7 @@ extension IdleBrowserTests {
         let answers = ScriptAnswers([SafariBrowser.Script.anyTabAt: "yes"])
         let notes = Reports()
         let browser = SafariBrowser(
-            scripts: answers, memory: WindowMemory(file: file) { "200 2" }, note: { notes.add($0, false) })
+            scripts: answers, memory: WindowMemory(file: file) { restartedSafari() }, note: { notes.add($0, false) })
         #expect(await !browser.closeIfIdle(after: 0))
         #expect(answers.calls.map(\.0) == [SafariBrowser.Script.anyTabAt])
         #expect(answers.calls.first?.1 == ["https://example.com/"])
@@ -770,7 +770,26 @@ extension IdleBrowserTests {
         #expect(!answers.calls.contains { $0.0 == SafariBrowser.Script.close })
         #expect(!FileManager.default.fileExists(atPath: file.path))
     }
+
+    /// Safari brings its windows back as it starts: a window found later, perhaps one the Owner
+    /// opened with the same tabs, is never taken for Claude's.
+    @Test func onlyWindowsBroughtBackAtSafarisStartCount() async throws {
+        let folder = FileManager.default.temporaryDirectory.appending(path: "window-memory-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let file = folder.appending(path: "safari-window.json")
+        WindowMemory(file: file) { nil }.save(
+            .init(window: "42", lastUse: Date(), safari: "100 1", tab: nil, tabs: ["https://example.com/"]))
+        let answers = ScriptAnswers([SafariBrowser.Script.findWindow: "77"])
+        let long = "200 \(Date().addingTimeInterval(-600).timeIntervalSince1970)"
+        let browser = SafariBrowser(scripts: answers, memory: WindowMemory(file: file) { long })
+        _ = await browser.closeIfIdle(after: 0)
+        #expect(answers.calls.isEmpty, "Safari has run 10 minutes: nothing is looked for")
+        #expect(!FileManager.default.fileExists(atPath: file.path))
+    }
 }
+
+/// A Safari that has just started, as `WindowMemory.safari` names it.
+func restartedSafari() -> String { "200 \(Date().timeIntervalSince1970)" }
 
 /// Answers each script by which script it is ("" for others), and remembers each call.
 final class ScriptAnswers: ScriptRunner, @unchecked Sendable {

@@ -39,8 +39,9 @@ id, the last use, and which run of Safari it belongs to (process id and launch t
 but only while the same Safari runs: after Safari restarts, the id could be one of the Owner's.
 So each minute the timer also notes the addresses of Claude's own window's tabs (and forgets a
 window the Owner closed). After Safari restarts, that window is found again when exactly one
-visible window has exactly those tabs, tried each minute and at Claude's next page while Safari
-runs (never starting it), given up a day after the last use. Known by its addresses alone, it is
+visible window has exactly those tabs, tried each minute and at Claude's next page in the first
+5 minutes after Safari starts, while it brings its windows back (never starting Safari), then
+given up; the tab list is cleared whenever Claude's window changes. Known by its addresses alone, it is
 never used for Claude's pages: it is only closed once 30 minutes have passed since Claude last
 used it, and only if it is still the one window with those tabs; otherwise it is left open and
 noted. Claude's tab in the Owner's window has lost its mark after a restart, so it is left alone;
