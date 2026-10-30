@@ -234,6 +234,8 @@ Two once-flaky tests made steady (best of three timings; counted waits instead o
 Contacts (spec 007 FR-724 to FR-727; app 0.8.44): cards and groups Latchkey made are found
 again when iCloud gives them a new id, and iCloud's copy is deleted with them within 10
 minutes; Toni's own look-alikes are never matched; every such deletion is notified.
+Since 0.8.45 Shell never scripts other apps (Toni, 2026-10-29): `osascript` is always refused,
+since a script reaching an app must run outside the fence and could run anything.
 Declared app scripts (`uses: ["app_scripts"]`) never reached an app from 0.8.39 to 0.8.43:
 apps refuse Apple events from any sandboxed program; since 0.8.44 `osascript` runs outside the
 fence when declared (found by the Mail research).

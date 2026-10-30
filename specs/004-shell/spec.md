@@ -97,9 +97,11 @@ what is left is on one list.
 - **FR-327** A program a command started shall be stopped with the command's leftovers however
   it left the command's terminal session and family (a quick double fork included), and shall
   be found at the next start when Latchkey quit first.
-- **FR-328** When a command opens apps, files, or links through macOS (`open`) or tells other
-  apps what to do (AppleScript, `osascript`), it shall be refused unless Claude declared it
-  (`uses`: `open`, `app_scripts`), and the answer shall say how to declare it. Starting
+- **FR-328** When a command opens apps, files, or links through macOS (`open`), it shall be
+  refused unless Claude declared it (`uses`: `open`), and the answer shall say how to declare it.
+  When a command tells other apps what to do (AppleScript, `osascript`), it shall always be
+  refused, and the answer shall point to Latchkey's own tools (Toni, 2026-10-29: a script must
+  run outside the fence to reach an app and could then run anything; `app_scripts` withdrawn). Starting
   background services through launchd (`launchctl`, `brew services`) shall be refused (Toni,
   2026-10-28).
 - **FR-329** When a command changes settings through macOS's settings service (`defaults

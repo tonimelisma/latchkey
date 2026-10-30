@@ -142,23 +142,22 @@ check of 2026-10-27. `shell_run` takes `writes` (paths) and `why`;
 write shows as "Operation not permitted"; when the output has it, the answer adds how to write
 there (FR-320).
 
-Handing work to macOS (FR-328, FR-329, 2026-10-28): unless `uses` has `open` or
-`app_scripts`, the profile refuses looking up LaunchServices
+Handing work to macOS (FR-328, FR-329, 2026-10-28): unless `uses` has `open`, the profile
+refuses looking up LaunchServices
 (`com.apple.coreservices.launchservicesd`, `com.apple.lsd.mapdb`, `.modifydb`, `.open`), so
 `open` and apps opened through it fail at once ("Unable to find application", error -10814).
-Unless `uses` has `app_scripts`, it refuses the Apple Events service
-(`com.apple.coreservices.appleevents`), sending Apple Events, and starting `/usr/bin/osascript`
-(a script then fails at once, not after a 15-second wait); `app_scripts` also allows
-LaunchServices, since a script may start the app it talks to, and starts `osascript` outside
-the sandbox: apps refuse Apple events from any sandboxed program ("A privilege violation
-occurred", -10004), so a declared script could never reach an app from inside the fence (found
-by the Mail research, 2026-10-29; fixed in 0.8.44). It always refuses the settings
+It always refuses the Apple Events service (`com.apple.coreservices.appleevents`), sending
+Apple Events, and starting `/usr/bin/osascript` (a script then fails at once, not after a
+15-second wait). Since 0.8.45 the Apple
+Events refusals and `osascript`'s are always there (Toni, 2026-10-29): apps refuse Apple
+events from any sandboxed program (-10004), so reaching an app would need `osascript` outside
+the fence, where it could run anything; 0.8.44 allowed that when `app_scripts` was declared. It always refuses the settings
 service (`com.apple.cfprefsd.daemon`, `.agent`): settings are then read from their files, and
 `defaults write` writes the domain's file itself, which the fence allows only when declared
 ("Could not write domain" otherwise), and never for Latchkey's own settings. Allowing the
 service when a settings file was declared was the first version; the service writes any domain
 for its caller, Latchkey's own included (security review, 2026-10-28). `launchctl submit` and `bootstrap` already fail inside any sandbox. Each refusal adds
-its hint to the answer. `shell_run` takes `uses` (a list of `open`, `app_scripts`).
+its hint to the answer. `shell_run` takes `uses` (a list; `open` is its one value).
 
 ## D10. What a job left (FR-321, FR-323)
 

@@ -152,3 +152,9 @@ outside works, so any sandbox, not one of the fence's rules, is what apps refuse
 test used a script that talks to no app. Since 0.8.44 a declared `app_scripts` starts
 `osascript` with `(with no-sandbox)`, like `ps` and `top`; it stays in the job's terminal
 session and family, so it is still stopped with the command.
+
+Scripting apps withdrawn (Toni, 2026-10-29): a declared `app_scripts` had to start `osascript`
+outside the sandbox (apps refuse sandboxed senders), and such a script can run any command
+(`do shell script`) or tell Terminal to. Options were: never from Shell; a blocklist (commands,
+JavaScript scripts, Terminal and iTerm), which narrows but can't close it; keep it. Toni chose
+never: `osascript` is always refused, and Claude uses Latchkey's own tools for apps.

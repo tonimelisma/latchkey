@@ -14,8 +14,6 @@ enum Fence {
     enum Use: String, CaseIterable, Sendable {
         /// Opening apps, files, and links through macOS (`open`), which starts them outside the fence.
         case open
-        /// Telling other apps what to do (AppleScript, `osascript`); may start the app it talks to.
-        case appScripts = "app_scripts"
     }
 
     /// macOS's services for opening apps, for sending Apple Events, and for changing settings
@@ -28,7 +26,9 @@ enum Fence {
     /// Always refused: settings are then read from their files and changed only by writing the
     /// declared domain's file, which the fence scopes (Latchkey's own settings never; FR-329).
     static let settingsService = ["com.apple.cfprefsd.daemon", "com.apple.cfprefsd.agent"]
-    /// Refused unless app_scripts is declared, so a script fails at once, not after a wait.
+    /// Always refused, so a script fails at once, not after a wait: scripting other apps is never
+    /// done from Shell (Toni, 2026-10-29), since a script must run outside the fence to reach an
+    /// app and could then run anything.
     static let scriptRunner = "/usr/bin/osascript"
 
     /// The job's mark beside its scratch folder: its fence refuses reading it, which tells the
@@ -158,20 +158,14 @@ enum Fence {
         func services(_ names: [String]) -> String {
             "(deny mach-lookup (global-name " + names.map(quote).joined(separator: " ") + "))"
         }
-        if uses.isDisjoint(with: [.open, .appScripts]) { rules.append(services(launchServices)) }
-        if !uses.contains(.appScripts) {
-            rules += [
-                services([appleEvents]), "(deny appleevent-send)",
-                "(deny process-exec (literal \(quote(scriptRunner))))",
-            ]
-        }
+        if !uses.contains(.open) { rules.append(services(launchServices)) }
+        rules += [
+            services([appleEvents]), "(deny appleevent-send)", "(deny process-exec (literal \(quote(scriptRunner))))",
+        ]
         rules.append(services(settingsService))
         if let mark { rules.append("(deny file-read* (literal \(quote(OwnFiles.real(mark).path))))") }
-        // Apps refuse Apple events from a sandboxed program (-10004), so a declared script runs
-        // outside the fence (FR-328; Mail research, 2026-10-29).
-        let outside = unfenced + (uses.contains(.appScripts) ? [scriptRunner] : [])
         rules.append(
-            "(allow process-exec " + outside.map { "(literal \(quote($0)))" }.joined(separator: " ")
+            "(allow process-exec " + unfenced.map { "(literal \(quote($0)))" }.joined(separator: " ")
                 + " (with no-sandbox))")
         return rules.joined(separator: "\n")
     }
@@ -191,7 +185,7 @@ enum Fence {
 
     /// Added to an answer whose output shows a refused open or script (FR-328).
     static let handoffHint =
-        "[Opening apps, files, or links through macOS (open) and scripting other apps (osascript) are refused: what they start runs outside the fence. Run it again with uses [\"open\"] or [\"app_scripts\"] if the owner's task needs it. Starting background services (launchctl, brew services) isn't possible from here.]"
+        "[Opening apps, files, or links through macOS (open) is refused unless declared: what it starts runs outside the fence; run it again with uses [\"open\"] if the owner's task needs it. Scripting other apps (osascript) isn't possible from Shell: use Latchkey's own tools for Notes, Messages, Calendar, Reminders, Contacts, Safari, or Computer control. Starting background services (launchctl, brew services) isn't possible either.]"
 
     /// Added to an answer whose output shows a refused change of settings (FR-329).
     static let settingsHint =

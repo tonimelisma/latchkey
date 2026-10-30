@@ -109,7 +109,7 @@ enum ShellCapability {
     /// What shell_run tells Claude about the fence, the scratch folder, and leases (spec 004
     /// FR-314 to FR-318).
     static let writesRule =
-        "A command writes only to its own scratch folder ($LATCHKEY_SCRATCH, also $TMPDIR; moved to the Trash when it finishes), the folder it runs in (unless that is the home folder), Downloads, and package caches; anything else fails unless declared in writes (with why), and so does changing settings (defaults write: declare ~/Library/Preferences/<domain>.plist). Opening apps, files, or links through macOS (open) and scripting other apps (osascript) fail unless declared in uses; starting background services (launchctl, brew services) isn't possible. Whatever it leaves running is stopped when it finishes, unless keep_minutes asks to keep it (checking the job keeps it longer; 24 hours at most)."
+        "A command writes only to its own scratch folder ($LATCHKEY_SCRATCH, also $TMPDIR; moved to the Trash when it finishes), the folder it runs in (unless that is the home folder), Downloads, and package caches; anything else fails unless declared in writes (with why), and so does changing settings (defaults write: declare ~/Library/Preferences/<domain>.plist). Opening apps, files, or links through macOS (open) fails unless declared in uses; scripting other apps (osascript) and starting background services (launchctl, brew services) aren't possible. Whatever it leaves running is stopped when it finishes, unless keep_minutes asks to keep it (checking the job keeps it longer; 24 hours at most)."
 
     static let runInput: [String: JSONValue] = [
         "command": .stringParam("The command line"),
@@ -128,7 +128,7 @@ enum ShellCapability {
                 "type": .string("string"), "enum": .array(Fence.Use.allCases.map { .string($0.rawValue) }),
             ]),
             "description": .string(
-                "What the command does beyond the fence, only when the owner's task needs it: open (apps, files, links through macOS), app_scripts (tells other apps what to do; may open them). What these start runs outside the fence and keeps running."
+                "What the command does beyond the fence, only when the owner's task needs it: open (apps, files, links through macOS). What it starts runs outside the fence and keeps running."
             ),
         ]),
         "keep_minutes": .integerParam(

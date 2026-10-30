@@ -124,9 +124,14 @@ final class Reports: @unchecked Sendable {
         #expect(script.refusedHandoff, "\(script.output)")
         #expect(!script.output.contains("42"))
         #expect(!script.refusedWrite, "not a write: \(script.output)")
+        // Toni, 2026-10-29: scripting apps never from Shell, declared or not (a script must run
+        // outside the fence to reach an app, and could then run anything).
         let declared = try await jobs.run(
-            "osascript -e 'return 41 + 1'", folder: nil, wait: .seconds(15), uses: [.appScripts])
-        #expect(declared.output.contains("42"), "\(declared.output)")
+            "osascript -e 'return 41 + 1'", folder: nil, wait: .seconds(15), uses: [.open])
+        #expect(!declared.output.contains("42"), "\(declared.output)")
+        let refused = await tool.handler(
+            .object(["command": .string("true"), "uses": .array([.string("app_scripts")])]))
+        #expect(refused.isError && refused.content.jsonText.contains("uses takes open"), "\(refused.content.jsonText)")
     }
 
     /// FR-330: at start, the fence and the mark are checked on this Mac; both work here.
@@ -158,7 +163,7 @@ final class Reports: @unchecked Sendable {
         defer { _ = try? Process.run(URL(filePath: "/bin/launchctl"), arguments: ["remove", label]) }
         let r = try await jobs.run(
             "launchctl submit -l \(label) -- /bin/sleep 30; echo status:$?", folder: nil, wait: .seconds(10),
-            uses: [.open, .appScripts])
+            uses: [.open])
         #expect(!r.output.contains("status:0"), "\(r.output)")
         let list = Process()
         list.executableURL = URL(filePath: "/bin/launchctl")
@@ -207,14 +212,8 @@ final class Reports: @unchecked Sendable {
         let open = profile([], [.open])
         #expect(!open.contains("com.apple.lsd.mapdb"))
         #expect(open.contains("com.apple.coreservices.appleevents"))
-        let scripts = profile([], [.appScripts])
-        #expect(!scripts.contains("com.apple.coreservices.appleevents"))
-        #expect(!scripts.contains("com.apple.lsd.mapdb"), "scripts may start the app they talk to")
-        // Mail research 2026-10-29: apps refuse Apple events from any sandboxed program (-10004),
-        // so a declared script runs outside the fence, as ps and top do.
-        #expect(scripts.contains("(literal \"/usr/bin/osascript\") (with no-sandbox))"), "\(scripts)")
-        #expect(!scripts.contains("(deny process-exec (literal \"/usr/bin/osascript\"))"))
-        #expect(!closed.contains("\"/usr/bin/osascript\") (with no-sandbox)"))
+        #expect(open.contains("(deny process-exec (literal \"/usr/bin/osascript\"))"), "scripts never, even with open")
+        #expect(!open.contains("\"/usr/bin/osascript\") (with no-sandbox)"))
         // Security review 2026-10-28: the settings service would write any domain, Latchkey's
         // own included, so it stays refused; a declared domain's file is written directly.
         let file = home.appending(path: "Library/Preferences/com.example.plist")
@@ -609,7 +608,7 @@ final class Reports: @unchecked Sendable {
         #expect(props?["writes"] != nil)
         #expect(props?["keep_minutes"] != nil)
         #expect(props?["why"] != nil)
-        #expect(props?["uses"]?["items"]?["enum"] == .array([.string("open"), .string("app_scripts")]))
+        #expect(props?["uses"]?["items"]?["enum"] == .array([.string("open")]))
         #expect(text.contains("uses"))
     }
 }
