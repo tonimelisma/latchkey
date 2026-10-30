@@ -3,7 +3,7 @@ import Testing
 
 @testable import Latchkey
 
-/// Years of entries (FR-614, FR-616): 100,000 generated entries on disk, about 1 KB each. Prints
+/// A large log (FR-614, FR-616): 30,000 generated entries on disk, about 1 KB each. Prints
 /// how long each step takes. Fails on a step slow enough for the Owner to notice, on work the
 /// window waits for that grows with the log, and on the main thread being held up while the
 /// whole-log work runs.
@@ -11,12 +11,14 @@ import Testing
 /// Why it is built this way (2026-10-29, after it failed once in a full run on 2026-10-28):
 /// - Steps that must not grow with the log are timed best of three, so a moment of load from
 ///   the tests running alongside doesn't count; their limits are 20 to 100 times what they take.
-/// - The tamper check is timed at 20,000 and at 100,000 entries: five times the entries may take
+/// - The tamper check is timed at 6,000 and at 30,000 entries: five times the entries may take
 ///   about five times as long, not 25 (it did grow with the square of the log until 2026-10-29).
 /// - The whole-log steps run off the main thread, as in the app, and recording yields between
 ///   batches, so the main thread isn't held for half a minute while other tests wait for it.
 @Suite(.serialized) struct ActivityLogScaleTests {
-    static let count = 100_000
+    /// 30,000 shows the check growing with the log (5 times the entries, about 5 times the time;
+    /// its square would be 25 times) as well as 100,000 did, in a third of the time (2026-10-29).
+    static let count = 30_000
 
     static func seconds(_ body: () throws -> Void) rethrows -> Double {
         let start = Date()
@@ -24,7 +26,7 @@ import Testing
         return Date().timeIntervalSince(start)
     }
 
-    @MainActor @Test func aHundredThousandEntries() async throws {
+    @MainActor @Test func aLargeLog() async throws {
         let dir = try TraceTests.scratch()
         defer { try? FileManager.default.removeItem(at: dir) }
         let keys = MemoryTraceKey()
@@ -47,7 +49,7 @@ import Testing
 
         let start = Date().addingTimeInterval(-Double(Self.count) * 600)  // one every 10 minutes: ~2 years
         let filler = String(repeating: "lorem ipsum dolor sit amet ", count: 36)  // ~1 KB
-        var checkAt20k = 0.0
+        var checkAtFifth = 0.0
         do {
             let trace = try TraceStore(directory: dir, keys: keys, latest: latest)
             let recording = Date()
@@ -62,7 +64,7 @@ import Testing
                             durationMS: n)
                     })
                 await Task.yield()  // other tests' main-thread work goes on meanwhile
-                if chunk + 1000 == 20_000 {
+                if chunk + 1000 == 6_000 {
                     let reader = trace.reader
                     let expected = trace.expected
                     var fastest = Double.infinity
@@ -72,10 +74,10 @@ import Testing
                         }.value
                         fastest = min(fastest, t)
                     }
-                    checkAt20k = fastest
+                    checkAtFifth = fastest
                 }
             }
-            timings.append(("record 100k (batches of 1,000)", Date().timeIntervalSince(recording)))
+            timings.append(("record 30k (batches of 1,000)", Date().timeIntervalSince(recording)))
         }
         let trace = try best("open the log") { try TraceStore(directory: dir, keys: keys, latest: latest) }
         let reader = trace.reader
@@ -106,9 +108,9 @@ import Testing
             mainSteps += 1
             try await Task.sleep(for: .milliseconds(20))
         }
-        let (check, checkAt100k) = try await checking.value
-        timings.append(("tamper check, 20k entries", checkAt20k))
-        timings.append(("tamper check, 100k entries", checkAt100k))
+        let (check, checkAtAll) = try await checking.value
+        timings.append(("tamper check, 6k entries", checkAtFifth))
+        timings.append(("tamper check, 30k entries", checkAtAll))
         timings.append(("main thread step during the check", slowestMainStep))
         #expect(check.broken.isEmpty)
         #expect(check.missingNewer == false)
@@ -141,7 +143,7 @@ import Testing
             to: FileManager.default.temporaryDirectory.appending(path: "latchkey-activity-scale.txt"), atomically: true,
             encoding: .utf8)
         let took = Dictionary(uniqueKeysWithValues: timings)
-        // What the window and the menu wait for: the same for 100 entries or 100,000.
+        // What the window and the menu wait for: the same for 100 entries or 30,000.
         #expect(took["open the log"]! < 1, "open the log: \(took["open the log"]!) s")
         #expect(took["first page (200)"]! < 0.5, "first page: \(took["first page (200)"]!) s")
         #expect(took["next page (200)"]! < 0.5, "next page: \(took["next page (200)"]!) s")
@@ -149,7 +151,7 @@ import Testing
         #expect(slowestMainStep < 0.5, "the main thread waited \(slowestMainStep) s for the check")
         // The check grows with the log, never with its square.
         #expect(
-            checkAt100k < 12 * checkAt20k,
-            "tamper check: \(checkAt20k) s at 20,000 entries, \(checkAt100k) s at 100,000")
+            checkAtAll < 12 * checkAtFifth,
+            "tamper check: \(checkAtFifth) s at 6,000 entries, \(checkAtAll) s at 30,000")
     }
 }

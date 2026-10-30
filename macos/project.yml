@@ -125,6 +125,10 @@ schemes:
         LatchkeyTests: [test]
     test:
       targets:
-        - LatchkeyTests
+        # Suites run side by side (each test has its own folders and stand-ins); suites that
+        # must not overlap within themselves are marked .serialized (2026-10-29: serial took
+        # two minutes).
+        - name: LatchkeyTests
+          parallelizable: true
       environmentVariables:
         LATCHKEY_FIXTURES: "$(SRCROOT)/../specs/001-core/contracts/fixtures"

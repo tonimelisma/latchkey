@@ -31,7 +31,8 @@ import Testing
         let fired = Locked(false)
         let watcher = try #require(TrashWatcher(bundle: bundle) { fired.mutate { $0 = true } })
         try FileManager.default.moveItem(at: bundle, to: trash.appending(path: "Latchkey.app"))
-        for _ in 0..<50 where !fired.value { try await Task.sleep(for: .milliseconds(20)) }
+        // Up to 5 s: macOS reports file moves later while other suites run (2026-10-29).
+        for _ in 0..<250 where !fired.value { try await Task.sleep(for: .milliseconds(20)) }
         #expect(fired.value)
         _ = watcher
     }

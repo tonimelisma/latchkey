@@ -234,6 +234,13 @@ Two once-flaky tests made steady (best of three timings; counted waits instead o
 Contacts (spec 007 FR-724 to FR-727; app 0.8.44): cards and groups Latchkey made are found
 again when iCloud gives them a new id, and iCloud's copy is deleted with them within 10
 minutes; Toni's own look-alikes are never matched; every such deletion is notified.
+Tests (Toni, 2026-10-29; app 0.8.45): a full `make test` takes about 32 s with the build,
+down from about 2.5 min, and the random hang is gone. The suites now run side by side; the hang
+was the Shell self-check blocking a shared thread while waiting for its test program to end
+(also a possible stall at the app's start); stopping a command right after starting it took
+3 s because Ctrl-C was sent before its shell existed (now waits for the shell); the large-log
+test uses 30,000 entries; waits on processes, output, and file events look again for up to 5 s
+instead of a fixed time.
 Since 0.8.45 Shell never scripts other apps (Toni, 2026-10-29): `osascript` is always refused,
 since a script reaching an app must run outside the fence and could run anything.
 Declared app scripts (`uses: ["app_scripts"]`) never reached an app from 0.8.39 to 0.8.43:

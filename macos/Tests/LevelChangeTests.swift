@@ -119,8 +119,7 @@ import Testing
         var registry = CapabilityRegistry(capabilities: [shell], levels: [CapabilityRegistry.shell: .readWrite])
         let before = registry
         // A job left running in the background, with a process of its own that ignores Ctrl-C.
-        let background = try await jobs.run(ShellJobTests.stubborn, folder: nil, wait: .milliseconds(600))
-        let child = try ShellJobTests.pid(in: background.output)
+        let (_, child) = try await ShellJobTests.startStubborn(jobs)
         defer { kill(child, SIGKILL) }
         // And a command Claude is waiting on right now.
         let calls = RunningCalls()

@@ -273,7 +273,12 @@ actor ShellJobs {
     func stop(_ id: String) async throws -> Snapshot {
         let job = try job(id)
         if !job.isFinished {
-            _ = job.session()
+            // Ctrl-C reaches only a shell that has started: sent before, it was lost, and every
+            // stop right after a start waited out the 3 s (2026-10-29).
+            let deadline = ContinuousClock.now + .seconds(2)
+            while job.session() == nil, job.process.isRunning, ContinuousClock.now < deadline {
+                await Self.pause(.milliseconds(20))
+            }
             try? job.input.write(contentsOf: Data([0x03]))
             _ = await waitForEnd(job, .seconds(3), evenIfCancelled: true)
             await end(job)
@@ -521,12 +526,7 @@ actor ShellJobs {
             if !p.isRunning { broken.append("macOS's sandbox didn't start a program") }
             if fm.fileExists(atPath: outside.path) { broken.append("macOS's sandbox didn't refuse a write") }
             if p.isRunning, !found { broken.append("a program in a fence couldn't be found by its mark") }
-            // Not waitUntilExit: it sometimes never returned after the program had exited (a test
-            // hung 11 minutes, 2026-10-29), which would block Shell until Latchkey restarts.
-            p.terminate()
-            let gone = ContinuousClock.now + .seconds(2)
-            while p.isRunning, ContinuousClock.now < gone { await Self.pause(.milliseconds(20)) }
-            if p.isRunning { kill(p.processIdentifier, SIGKILL) }
+            await Self.end(p)
         } catch {
             broken.append("the check couldn't run (\(error.localizedDescription))")
         }
@@ -541,6 +541,16 @@ actor ShellJobs {
         }
         fenceWarning = warning
         return warning
+    }
+
+    /// Ends a program without blocking a thread: blocking one in Swift's shared pool (as
+    /// `waitUntilExit` did in the self-check) stalls every task waiting for a thread; the test
+    /// suite hung that way (2026-10-29). Killed, then looked at every 10 ms for up to 2 s.
+    static func end(_ p: Process) async {
+        guard p.isRunning else { return }
+        kill(p.processIdentifier, SIGKILL)
+        let deadline = ContinuousClock.now + .seconds(2)
+        while p.isRunning, ContinuousClock.now < deadline { await pause(.milliseconds(10)) }
     }
 
     private var follower: Task<Void, Never>?
@@ -697,8 +707,11 @@ struct ShellSetup: Sendable {
     /// Records a Left Behind entry; `true` also notifies the Owner (FR-325).
     var report: @Sendable (String, Bool) -> Void
 
-    static let standard: ShellSetup =
+    /// The app's setup; under tests, a fresh one each time, so runners in tests that run side by
+    /// side never share a folder or job names (2026-10-29).
+    static var standard: ShellSetup {
         ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil ? .testing() : .app
+    }
 
     static let app = ShellSetup(
         launch: newLaunch(), home: URL.homeDirectory,

@@ -99,10 +99,23 @@ import Testing
     static func alive(_ pid: pid_t) -> Bool { kill(pid, 0) == 0 }
 
     /// True once the process is gone. A killed process stays visible for a moment, until the
-    /// system has cleared it away, so this looks for up to a second.
+    /// system has cleared it away, so this looks for up to 5 s (1 s wasn't enough while suites
+    /// run side by side, 2026-10-29); it returns as soon as the process is gone.
     static func gone(_ pid: pid_t) async -> Bool {
-        for _ in 0..<50 where alive(pid) { try? await Task.sleep(for: .milliseconds(20)) }
+        for _ in 0..<250 where alive(pid) { try? await Task.sleep(for: .milliseconds(20)) }
         return !alive(pid)
+    }
+
+    /// Starts `stubborn` and returns once its background process has printed its id, however
+    /// busy the Mac (up to 5 s; a fixed 0.6 s wait failed while suites ran side by side).
+    static func startStubborn(_ jobs: ShellJobs) async throws -> (job: String, child: pid_t) {
+        let r = try await jobs.run(stubborn, folder: nil, wait: .milliseconds(200))
+        var out = r.output
+        let deadline = ContinuousClock.now + .seconds(5)
+        while out.firstMatch(of: /PID:(\d+)/) == nil, ContinuousClock.now < deadline {
+            out += try await jobs.check(r.job, wait: .milliseconds(200)).output
+        }
+        return (r.job, try pid(in: out))
     }
 
     /// A command that leaves a process in the background that ignores Ctrl-C, hangup and
@@ -110,11 +123,10 @@ import Testing
     static let stubborn = "(trap '' HUP INT TERM; exec sleep 300) & echo PID:$!; sleep 300"
 
     @Test func stoppingAJobStopsEverythingItStarted() async throws {
-        let r = try await jobs.run(Self.stubborn, folder: nil, wait: .milliseconds(600))
-        let child = try Self.pid(in: r.output)
+        let (job, child) = try await Self.startStubborn(jobs)
         defer { kill(child, SIGKILL) }
         #expect(Self.alive(child))
-        let stopped = try await jobs.stop(r.job)
+        let stopped = try await jobs.stop(job)
         #expect(stopped.finished)
         #expect(await Self.gone(child), "a process the command left in the background survived")
     }
@@ -122,16 +134,15 @@ import Testing
     /// FR-309, FR-310: quitting, or turning Shell off, stops every running command with all it
     /// started.
     @Test func stopAllStopsJobsAndEverythingTheyStarted() async throws {
-        let r = try await jobs.run(Self.stubborn, folder: nil, wait: .milliseconds(600))
+        let (job, child) = try await Self.startStubborn(jobs)
         let other = try await jobs.run("sleep 300", folder: nil, wait: .milliseconds(100))
-        let child = try Self.pid(in: r.output)
         defer { kill(child, SIGKILL) }
         let start = Date()
         await jobs.stopAll()
         #expect(Date().timeIntervalSince(start) < 5)
         #expect(await Self.gone(child))
         let list = await jobs.list()
-        #expect(list.first { $0.job == r.job }?.finished == true)
+        #expect(list.first { $0.job == job }?.finished == true)
         #expect(list.first { $0.job == other.job }?.finished == true)
     }
 

@@ -127,4 +127,13 @@ paths:
   compatibility (Toni, 2026-10-27, one user): deploy the relay before installing an app that
   sends a new message type, and the app needs no fallback for older relays.
 
+- Never block a thread in async code (`Process.waitUntilExit`, a semaphore, `DispatchGroup.wait`):
+  Swift runs async code on a small shared pool, and one blocked thread stalls every task
+  waiting for one. The Shell self-check's `waitUntilExit` hung the whole test suite at random
+  (2026-10-29); end a program with `ShellJobs.end` (kill, then check every 10 ms).
+- Tests run side by side (`parallelizable` in project.yml, 2026-10-29): a test needs its own
+  folders and stand-ins (no shared static state), and a wait for something the system does
+  (a process gone, a file event, output arriving) looks repeatedly up to a few seconds instead
+  of sleeping a fixed time.
+
 Add new gotchas here as they are discovered.

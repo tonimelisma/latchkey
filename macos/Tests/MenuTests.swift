@@ -132,8 +132,7 @@ import Testing
             LevelChangeTests.call("r1", "files_read"), run: { _ in await read.handler(.object([:])) },
             answer: { id, r in answers.mutate { $0[id] = r } })
         let jobs = ShellJobs()
-        let background = try await jobs.run(ShellJobTests.stubborn, folder: nil, wait: .milliseconds(600))
-        let child = try ShellJobTests.pid(in: background.output)
+        let (_, child) = try await ShellJobTests.startStubborn(jobs)
 
         await Pause.stopWork(
             calls: { reason in await calls.stop(reason) { id, r in answers.mutate { $0[id] = r } } }, shell: jobs)

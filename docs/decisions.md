@@ -185,6 +185,7 @@ Add a row when a decision is made; never delete one, mark it "superseded by" ins
 | 2026-10-28 | A Shell command opens apps, files, or links through macOS and scripts other apps only when declared in `uses` (`open`, `app_scripts`); changes settings only with the domain's file in `~/Library/Preferences` declared in `writes` (never Latchkey's own); a quick double fork is stopped with the rest (supersedes the gap in the row above) | Toni, spec 004 FR-327 to FR-329 |
 | 2026-10-28 | Claude can delete a reminder list only by giving how many reminders it holds (open and completed); a wrong number is refused with the actual count | Toni, spec 007 FR-713 |
 | 2026-10-28 | Claude can create, rename, and delete contact groups and add or remove cards; deleting a group keeps its cards | Toni, spec 007 FR-723 |
+| 2026-10-29 | Test suites run side by side; the large-log test uses 30,000 entries; every test still runs on every change | Toni, .claude/rules/macos.md |
 | 2026-10-29 | Shell never scripts other apps (`osascript` always refused, `app_scripts` withdrawn): a script would have to run outside the fence and could run anything; Claude uses Latchkey's own tools | Toni, spec 004 FR-328 |
 | 2026-10-29 | Browser opens Claude's pages in a background tab of the Owner's front Safari window by default; Settings chooses a tab or a window of its own; a screenshot brings Claude's tab forward and back | Toni, spec 005 FR-412 to FR-418 |
 | 2026-10-29 | Shell's self-check: when broken, keep running and warn (not refuse commands) | Toni, spec 004 FR-330 |

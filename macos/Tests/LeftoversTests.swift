@@ -143,6 +143,19 @@ final class Reports: @unchecked Sendable {
         #expect(left.isEmpty, "the check leaves nothing: \(left)")
     }
 
+    /// 2026-10-29: the self-check's program is ended without blocking a thread, even one that
+    /// ignores being asked to end (blocking stalled the whole test suite).
+    @Test func aProgramIsEndedWithoutBlocking() async throws {
+        let p = Process()
+        p.executableURL = URL(filePath: "/bin/sh")
+        p.arguments = ["-c", "trap '' TERM; sleep 30"]
+        try p.run()
+        let start = ContinuousClock.now
+        await ShellJobs.end(p)
+        #expect(!p.isRunning)
+        #expect(ContinuousClock.now - start < .seconds(2))
+    }
+
     /// FR-330: when a macOS update breaks the mark, Shell keeps running, Claude is told in
     /// every answer, and the Owner is notified once.
     @Test func aBrokenSelfCheckWarnsButShellKeepsRunning() async throws {
