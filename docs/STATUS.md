@@ -124,8 +124,9 @@ The Mac state line appears in every result (it reported the battery warning at 1
 3. ~~Dependency scanning~~: done 2026-10-23 with the rest of the hardening (abuse limits,
    headers, container, `make security` gating deploys, CI, Dependabot, pinning; see
    docs/best-practices.md §4 and §7). Watch the first CI run and Dependabot's first proposals.
-4. End-to-end encryption between Claude and the Mac: researched, not decided (options in
-   docs/best-practices.md §4).
+4. ~~End-to-end encryption between Claude and the Mac~~: closed 2026-10-29 (Toni): not
+   possible, since Claude's custom connectors send plain bearer-token requests with no inner
+   layer to encrypt or sign (research in docs/best-practices.md §4). Not pursued.
 5. ~~Whole-repository security scan~~: done 2026-10-24. Threat model (docs/threat-model.md),
    then Anthropic's Claude Security scan twice at high effort: 57 findings (none critical or
    high) that merge into about 25 issues, each fixed with a failing test first (app 0.8.6).

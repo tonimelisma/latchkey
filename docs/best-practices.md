@@ -123,6 +123,8 @@ updates, minimal server-side data.
 
 ### End-to-end encryption between Claude and the Mac (researched 2026-10-23)
 
+**Decision (Toni, 2026-10-29):** not possible, not pursued.
+
 **Question.** Can requests be encrypted, or their integrity proven, from Claude's servers to the
 Mac, inside the HTTPS connection that ends at the relay, so the relay can't read, change, or
 invent tool calls?
