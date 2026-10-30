@@ -1,6 +1,6 @@
 # Status
 
-Last updated: 2026-10-29 (declared app scripts reach apps; Shell self-check; app 0.8.44)
+Last updated: 2026-10-29 (Claude's Safari tab; stale iCloud ids; declared app scripts; app 0.8.44)
 
 Xcode signing ready (2026-10-20): Toni's Xcode account has a valid "Apple Development" certificate
 (certificate expires 2027-07-22). Keep the team ID out of committed project files
@@ -215,6 +215,16 @@ The Mac state line appears in every result (it reported the battery warning at 1
 2. Known limit: macOS shows its own "allow Latchkey to access the screen directly" alert from
    time to time for screen capture; it needs Toni at the Mac (computer control only).
 
+Browser (Toni, 2026-10-29; spec 005 FR-412 to FR-418; app 0.8.44): Claude's pages open in a
+background tab at the end of Toni's front Safari window; Settings → What Claude Can Do →
+Browser → "Claude Opens Pages In" switches to a window of its own. A screenshot brings
+Claude's tab forward and Toni's back; idle close closes the tab. Claude's tab is known by a
+hidden mark on its page and checked again inside every script that acts on it, so a tab of
+Toni's is never read, loaded, closed, or brought forward (security review). A tab Latchkey
+can't be sure of is left open and named in Left Behind.
+Contacts (spec 007 FR-724 to FR-727; app 0.8.44): cards and groups Latchkey made are found
+again when iCloud gives them a new id, and iCloud's copy is deleted with them within 10
+minutes; Toni's own look-alikes are never matched; every such deletion is notified.
 Declared app scripts (`uses: ["app_scripts"]`) never reached an app from 0.8.39 to 0.8.43:
 apps refuse Apple events from any sandboxed program; since 0.8.44 `osascript` runs outside the
 fence when declared (found by the Mail research).

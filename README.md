@@ -27,7 +27,7 @@ Claude (web, Desktop, phone)  ──HTTPS──▶  Latchkey relay  ◀──out
   runs in, Downloads, package caches, and what Claude declares; opening apps, scripting other apps, and
   changing settings work only when Claude declares them; what it leaves running is stopped when it
   finishes unless Claude asks to keep it for a while, however it slipped away; its scratch folder goes to the Trash. Claude's Safari
-  window closes after 30 minutes unused. The Activity window's Left Behind view lists what was kept, removed,
+  tab (a background tab in your window, or a window of its own if you choose) closes after 30 minutes unused. The Activity window's Left Behind view lists what was kept, removed,
   and made, and you're notified only of what nobody meant to leave.
 - **You see who has access.** Latchkey's Settings window and your account page list the Claude apps that can use
   your Mac, and you can remove any one of them.
