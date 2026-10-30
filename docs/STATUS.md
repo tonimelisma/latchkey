@@ -217,7 +217,12 @@ The Mac state line appears in every result (it reported the battery warning at 1
 
 ## Waiting on Toni
 
-1. Answer the macOS alert about Latchkey accessing the screen (Allow), if it's still showing.
+1. Answer the macOS alert about Latchkey accessing the screen (Allow) whenever it shows (none
+   showing and none in macOS's log on 2026-10-29).
+
+The other live checks that need Toni (the Allow page from claude.ai, removing an app's access,
+Shell switched off mid-command, a page with a filled password field, a suspended account) are
+left to the tests against a real relay and real commands (Toni, 2026-10-29).
 
 ## Milestones (from `specs/001-core/plan.md`)
 
