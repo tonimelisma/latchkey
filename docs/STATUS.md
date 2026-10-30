@@ -1,6 +1,6 @@
 # Status
 
-Last updated: 2026-10-29 (Claude's Safari window is remembered across Latchkey restarts; app 0.8.42)
+Last updated: 2026-10-29 (Shell self-check at start; specs 003, 004, 006 reviewed; app 0.8.43)
 
 Xcode signing ready (2026-10-20): Toni's Xcode account has a valid "Apple Development" certificate
 (certificate expires 2027-07-22). Keep the team ID out of committed project files
@@ -214,6 +214,12 @@ The Mac state line appears in every result (it reported the battery warning at 1
    on Toni's installed app (the upgrade of his existing entries is covered by a test).
 2. Known limit: macOS shows its own "allow Latchkey to access the screen directly" alert from
    time to time for screen capture; it needs Toni at the Mac (computer control only).
+
+Shell self-check (Toni, 2026-10-29; app 0.8.43; spec 004 FR-330): at start, Latchkey checks
+that the fence still refuses a write and that a program in a fence is found by its mark; when
+a macOS update breaks either, commands still run, every Shell answer says so, and Toni gets
+one notification. Specs 003 to 006 reviewed and approved by Toni (2026-10-29); spec 005 gets
+Claude's tab in Toni's own Safari window as the default (in progress).
 
 ## Waiting on Toni
 

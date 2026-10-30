@@ -184,6 +184,8 @@ Add a row when a decision is made; never delete one, mark it "superseded by" ins
 | 2026-10-28 | A Shell command opens apps, files, or links through macOS and scripts other apps only when declared in `uses` (`open`, `app_scripts`); changes settings only with the domain's file in `~/Library/Preferences` declared in `writes` (never Latchkey's own); a quick double fork is stopped with the rest (supersedes the gap in the row above) | Toni, spec 004 FR-327 to FR-329 |
 | 2026-10-28 | Claude can delete a reminder list only by giving how many reminders it holds (open and completed); a wrong number is refused with the actual count | Toni, spec 007 FR-713 |
 | 2026-10-28 | Claude can create, rename, and delete contact groups and add or remove cards; deleting a group keeps its cards | Toni, spec 007 FR-723 |
+| 2026-10-29 | Shell checks its fence and mark at start; when broken, it keeps running, warns Claude in every answer, and notifies Toni once | Toni, spec 004 FR-330 |
+| 2026-10-29 | Specs 003 to 006 reviewed and approved; Files reaches every file the Owner's account can open | Toni |
 | 2026-10-29 | The live checks that need Toni (Allow page from claude.ai, removing an app's access, Shell off mid-command, a filled password field, a suspended account) are not run; the tests are trusted | Toni, docs/STATUS.md |
 | 2026-10-29 | No end-to-end encryption between Claude and the Mac: not possible with custom connectors; not pursued (closes the 2026-10-23 row) | Toni, docs/best-practices.md §4 |
 | 2026-10-27 | Left out of the leftovers work: a scratch shell in a throwaway Linux container, an AI judge of writes, house rules, Finder tags, Endpoint Security, disk snapshots, a separate macOS user, a macOS virtual machine | Toni |
