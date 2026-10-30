@@ -1,0 +1,23 @@
+# Tasks 008: Mail
+
+From `plan.md`. `[P]` = parallel-safe.
+
+- **T801** ✅ Live check: does text set by Mail's scripting arrive marked as quoted on macOS 27?
+  One test message to Toni's own address; result in `research.md`. *Spec edge case, D6.*
+- **T802** ✅ Add MimeFoundation to `project.yml`, pinned by commit. *D2.*
+- **T803** ✅ Tests first, then the fixture (`Tests/MailFixture.swift`): a generated Envelope Index
+  with the real tables and columns and `.emlx` files (plain, HTML-only, multipart with an image
+  and a PDF, partial with a downloaded and a missing attachment, Gmail labels). *D2.*
+- **T804** ✅ Tests first, then `MailStore`: layout check, accounts and mailboxes, find filters and
+  paging, labels, message files and paths, MIME text and attachments, text search with its time
+  limit, the Sent copy lookup. *FR-801 to FR-803, FR-807, FR-834, D2 to D5.*
+- **T805** ✅ [P] Tests first, then `mail_find` and `mail_read` (marking, paging, attachments as
+  image, text, or name, not-on-the-Mac answers, conversation). *FR-801 to FR-807, D1, D5, D9.*
+- **T806** ✅ [P] Tests first (stand-in script runner), then `mail_change`: every action's script
+  arguments, several ids, delete to Trash, drafts, activity. *FR-810, FR-811, FR-821, FR-832, D6.*
+- **T807** ✅ Tests first, then `mail_send`: sender checks, reply quote, forward with attachments,
+  confirmation in Sent, unconfirmed answer, never resent. *FR-820, FR-822 to FR-824, D6, D7.*
+- **T808** ✅ Registry, levels (`mark_read` only at Read & write), setup step and Permissions row for
+  Automation of Mail, Full Disk Access check, script syntax tests. *FR-830, FR-833, D8.*
+- **T809** Install and live check through the hosted relay (parent session; Toni's approval for
+  any send). *SC-801 to SC-804.*

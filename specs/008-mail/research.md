@@ -82,3 +82,71 @@ mail unread, and Claude marks it read when the Owner sees what it says; starts a
 
 Read and search from the Envelope Index (read-only) and the `.emlx` files; act through Mail's
 scripting; confirm sends in the Sent mailbox by Message-ID.
+
+## Live check: scripted text arrives quoted (2026-10-29, macOS 27.0.1, Mail 16.0)
+
+One test message, as Toni approved: Mail's scripting (`make new outgoing message` with
+`content` and `visible:false`, one `to recipient`, `send`), from Mail's default account (it chose
+the Exchange account, the Owner's own address), to that same address, subject "Latchkey test: please
+ignore". The sent copy (Sent Items, read-only from the Envelope Index and its `.emlx`):
+
+- The plain part is quoted-printable with every line starting `> `.
+- The HTML part wraps the text in `<div class="Apple-Mail-URLShareWrapperClass"><blockquote
+  type="cite" style="border-left-style: none; …">`. Mail hides the quote with that style; other
+  mail apps (and every plain-text reader) show the text as quoted.
+
+**The problem happens on macOS 27.** It is FB11734014, open since Ventura. Known ways round it,
+none tested here (nothing else may be sent):
+
+| Way | Pros | Cons |
+|---|---|---|
+| Mail's scripting, as built (`content`) | Unattended, any account, reply/forward threading by Mail, Sent copy by Mail | Text shows as quoted in other apps |
+| Setting `content` after creating, or `html content` | Same as above | Reported not to help: every way of setting the body through scripting gets the wrapper, and re-setting it re-applies it ([che-apple-mail-mcp 2.17.0](https://github.com/PsychQuant/che-apple-mail-mcp/releases/tag/v2.17.0)) |
+| `mailto:` into a compose window, then keystrokes (che-apple-mail-mcp) | Mail's own compose path, no wrapper | Needs Accessibility; a window appears on the Owner's screen and keys are typed into it; new messages only (not reply/forward), no choice of sender; can't confirm the send by itself; breaks when the Owner types meanwhile |
+| Pasting into the compose window (sweetrb "native editor") | No wrapper; replies too | Same as above plus it borrows the clipboard |
+| SMTP directly (sweetrb) | Clean MIME, any client shows it right | Needs each account's server and an app password in the Keychain; bypasses Mail (Sent copy by IMAP); Exchange may not allow SMTP |
+
+The spec leaves the choice to Toni ([NEEDS CLARIFICATION] in the edge cases). Built meanwhile:
+scripting (`content` set once, at creation), the most direct of the unattended ways.
+
+## Ids and paths (checked live 2026-10-29, read-only)
+
+- Mail's scripting `id` of a message is its `messages.ROWID`; `first message of mailbox "Sent
+  Items" of account id "<UUID>" whose id is N` answered in 0.4 s. Account ids are the UUIDs in
+  mailbox URLs and the account folders under `V10`.
+- Each account's Trash, Sent, Junk, and Drafts are the children of Mail's `trash mailbox`, `sent
+  mailbox`, `junk mailbox`, `drafts mailbox` whose `account` is it (Exchange: Deleted Items, Sent
+  Items, Junk Email, Drafts; Gmail: Trash or Bin, Sent Mail, Spam, Drafts). `account` has no
+  trash property of its own (error -1700).
+- The `.emlx` folder under the mailbox is named after the Envelope Index's `UUID` property;
+  ROWID 99006 is under `Data/9/9/Messages/`, 100833 under `Data/0/0/1/Messages/`. Downloaded
+  attachments of partial messages: `Data/…/Attachments/<ROWID>/<part>/<file name>`.
+- `message_global_data.message_id_header` holds the Message-ID with its angle brackets; the sent
+  copy appeared in Sent Items within seconds (`date_received` a few seconds after the send).
+- `recipients.type`: 0 To, 1 Cc (2 is taken as Bcc). `messages.read`/`flagged` are columns; the
+  `flags` bit 1 is read too.
+- Gmail label mailboxes have `source` = the All Mail mailbox's ROWID.
+
+## Low-level choices (plan)
+
+- **Account names when Mail can't be asked**: (a) Mail's scripting only (fails when Mail isn't
+  running or not yet allowed), (b) `~/Library/Accounts/Accounts4.sqlite` (undocumented, another
+  layout to track), (c) scripting when allowed and running, else kind plus the commonest Sent
+  address. Chose (c): reading never needs Mail or a prompt.
+- **Which mailbox to address a Gmail message through**: (a) always All Mail (moving would add a
+  label without leaving Inbox), (b) its first label other than All Mail. Chose (b), so a move
+  from Inbox relabels it, as in Mail.
+- **Finding the Sent copy**: Mail's scripting can't set or read a Message-ID before sending. (a)
+  match by subject, first recipient, and time in the account's Sent mailbox, then read its
+  Message-ID; (b) a marker in the text (changes what the recipient sees). Chose (a).
+- **Reply quote**: setting a reply's text replaces Mail's quote (sweetrb #7, README "AppleScript
+  transport quoting"). (a) send without the original, (b) Latchkey writes "On … wrote:" and the
+  original's plain text with "> ". Chose (b), as the spec asks for the original quoted.
+- **HTML to text**: (a) `NSAttributedString` HTML import (WebKit, may load remote content, main
+  thread), (b) Files' `HTMLText` (Foundation's XML parser, loads nothing). Chose (b).
+- **`mark_read` at Read only**: (a) offered at every level, (b) only at Read & write (marking is
+  a change, FR-810). Chose (b), with `mail_read` keeping its read-only hint.
+- **MimeFoundation pin**: the project has no release tags; pinned to commit
+  `dcb6746729d20cf00c42ad6453b4637a075f7d0b` (2026-02-11, "Fix for iOS"), as Sparkle is pinned by
+  commit. Its swift-crypto and swift-certificates (Apache-2.0) resolve by Xcode's resolution
+  of its `from:` ranges.
