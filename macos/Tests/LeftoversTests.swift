@@ -129,6 +129,29 @@ final class Reports: @unchecked Sendable {
         #expect(declared.output.contains("42"), "\(declared.output)")
     }
 
+    /// FR-330: at start, the fence and the mark are checked on this Mac; both work here.
+    @Test func theSelfCheckPassesOnThisMac() async throws {
+        #expect(await jobs.selfCheck() == nil)
+        #expect(await jobs.fenceWarning == nil)
+        #expect(reports.all.isEmpty)
+        let left = try FileManager.default.contentsOfDirectory(atPath: setup.scratchRoot.path)
+        #expect(left.isEmpty, "the check leaves nothing: \(left)")
+    }
+
+    /// FR-330: when a macOS update breaks the mark, Shell keeps running, Claude is told in
+    /// every answer, and the Owner is notified once.
+    @Test func aBrokenSelfCheckWarnsButShellKeepsRunning() async throws {
+        let warning = try #require(await jobs.selfCheck(marked: { _, _ in [] }))
+        #expect(warning.contains("may not all be stopped"), "\(warning)")
+        #expect(reports.all.filter { $0.1 }.count == 1, "one notification")
+        let tool = ShellCapability.operations(jobs: jobs).first { $0.tool.name == "shell_run" }!
+        let answer = await tool.handler(.object(["command": .string("echo still-runs")]))
+        #expect(answer.content.jsonText.contains("still-runs"))
+        #expect(answer.content.jsonText.contains("may not all be stopped"))
+        _ = await jobs.selfCheck(marked: { _, _ in [] })
+        #expect(reports.all.filter { $0.1 }.count == 1, "not notified again for the same warning")
+    }
+
     /// FR-328: launchd refuses jobs from inside the fence, so nothing can be handed to it.
     @Test func nothingCanBeHandedToLaunchd() async throws {
         let label = "net.melisma.latchkey.test-\(UUID().uuidString)"

@@ -182,6 +182,7 @@ enum ShellCapability {
         if s.refusedWrite { text += "\n" + Fence.hint }
         if s.refusedHandoff { text += "\n" + Fence.handoffHint }
         if s.refusedSettings { text += "\n" + Fence.settingsHint }
+        if let warning = s.fenceWarning { text += "\n" + warning }
         if s.finished {
             text += "\n[\(s.job) finished, exit status \(s.exitCode ?? -1)]"
             if let left = s.left { text += "\n" + left }

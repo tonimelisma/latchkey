@@ -106,6 +106,10 @@ what is left is on one list.
   write`), it shall be refused unless Claude declared that domain's file in
   `~/Library/Preferences` in writes, and Latchkey's own settings never; reading settings shall
   keep working, and the answer shall say how to declare it (Toni, 2026-10-28).
+- **FR-330** When Latchkey starts, it shall check that the fence refuses a write and that a
+  program inside a fence is found by its mark (FR-327). When either fails, commands shall still
+  run, every Shell answer shall say that writes may not be fenced and leftovers may not all be
+  stopped, and the Owner shall be notified once (Toni, 2026-10-29).
 - A scratch shell in a throwaway Linux container was considered and left out (Toni,
   2026-10-27).
 

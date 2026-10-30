@@ -25,6 +25,8 @@ actor ShellJobs {
         var refusedHandoff = false
         /// True when it shows a refused change of settings (FR-329).
         var refusedSettings = false
+        /// What the self-check at start found broken (FR-330); nil when all is well.
+        var fenceWarning: String?
     }
 
     struct Summary: Sendable {
@@ -471,6 +473,73 @@ actor ShellJobs {
         setup.report("Left from Shell commands before Latchkey last quit: " + parts.joined(separator: "; "), false)
     }
 
+    /// What the last self-check found broken (FR-330).
+    private(set) var fenceWarning: String?
+
+    /// At start (FR-330): a throwaway program in a fence of its own must be refused a write and
+    /// be found by its mark, since both rest on macOS features Apple could change (research.md).
+    /// When either fails, Shell keeps running; every answer says so, and the Owner is notified
+    /// once per kind of failure. Returns the warning, nil when all is well.
+    @discardableResult
+    func selfCheck(
+        marked: @Sendable (URL, URL) -> [pid_t] = Processes.marked(by:control:)
+    ) async -> String? {
+        let fm = FileManager.default
+        let probe = setup.scratchRoot.appending(path: "\(setup.launch)-check", directoryHint: .isDirectory)
+        let mark = Fence.mark(of: probe)
+        let control = Fence.control(of: probe)
+        let outside = probe.appending(path: "outside")
+        defer {
+            for url in [probe, mark, control] { try? fm.removeItem(at: url) }
+        }
+        var broken: [String] = []
+        do {
+            try fm.createDirectory(at: probe, withIntermediateDirectories: true)
+            try Data().write(to: mark)
+            try Data().write(to: control)
+            let quoted = { (u: URL) in "\"" + OwnFiles.real(u).path + "\"" }
+            let p = Process()
+            p.executableURL = URL(filePath: "/usr/bin/sandbox-exec")
+            p.arguments = [
+                "-p",
+                "(version 1)(allow default)(deny file-write* (literal \(quoted(outside))))(deny file-read* (literal \(quoted(mark))))",
+                "/bin/sh", "-c", "echo x > \"$1\" 2>/dev/null; exec sleep 30", "check", outside.path,
+            ]
+            p.standardOutput = FileHandle.nullDevice
+            p.standardError = FileHandle.nullDevice
+            try p.run()
+            defer {
+                p.terminate()
+                p.waitUntilExit()
+            }
+            var found = false
+            let deadline = ContinuousClock.now + .seconds(3)
+            while p.isRunning, ContinuousClock.now < deadline {
+                if Processes.name(of: p.processIdentifier) == "sleep" {
+                    found = marked(mark, control).contains(p.processIdentifier)
+                    break
+                }
+                await Self.pause(.milliseconds(20))
+            }
+            if !p.isRunning { broken.append("macOS's sandbox didn't start a program") }
+            if fm.fileExists(atPath: outside.path) { broken.append("macOS's sandbox didn't refuse a write") }
+            if p.isRunning, !found { broken.append("a program in a fence couldn't be found by its mark") }
+        } catch {
+            broken.append("the check couldn't run (\(error.localizedDescription))")
+        }
+        guard !broken.isEmpty else {
+            fenceWarning = nil
+            return nil
+        }
+        let warning =
+            "[Warning: Latchkey's check of the Shell fence failed at start (\(broken.joined(separator: "; "))), probably after a macOS update. Commands run, but writes may not be fenced and what they leave running may not all be stopped. Tell the Mac's owner.]"
+        if warning != fenceWarning {
+            setup.report("Shell's fence check failed: \(broken.joined(separator: "; ")). Commands still run.", true)
+        }
+        fenceWarning = warning
+        return warning
+    }
+
     private var follower: Task<Void, Never>?
 
     /// Follows the running jobs' processes every half second while any runs (plan D6), so a
@@ -592,7 +661,8 @@ actor ShellJobs {
         return Snapshot(
             job: job.id, command: job.command, output: text, dropped: dropped, finished: finished,
             exitCode: finished ? job.process.terminationStatus : nil, left: left,
-            refusedWrite: refused.write, refusedHandoff: refused.handoff, refusedSettings: refused.settings)
+            refusedWrite: refused.write, refusedHandoff: refused.handoff, refusedSettings: refused.settings,
+            fenceWarning: fenceWarning)
     }
 
     /// Finished jobs stay 10 minutes; at most 20 are kept. Running ones are capped in `run`. A

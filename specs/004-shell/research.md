@@ -141,3 +141,7 @@ Low-level choices (Claude's):
   the fence (Terminal told to run a command, a `.command` file opened). Blocking chosen targets
   (Terminal, iTerm) would leave others; declaring is the owner's gate, and the description says
   so (security review, 2026-10-28; Toni's scope is ordinary work, not a hostile command).
+
+Self-check (2026-10-29): Toni chose that a failed check keeps Shell running with a warning
+rather than refusing commands (Shell would be unusable after such a macOS update until
+Latchkey is fixed). The check costs one short program at start, about 50 ms.

@@ -803,6 +803,7 @@ final class AppModel {
     /// idle Safari window (spec 004 FR-314, FR-324, spec 005 FR-411).
     private static func tidyEveryMinute() -> Task<Void, Never> {
         Task.detached(priority: .utility) {
+            await ShellCapability.jobs.selfCheck()  // spec 004 FR-330
             await ShellCapability.jobs.recoverEarlier()
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(60))

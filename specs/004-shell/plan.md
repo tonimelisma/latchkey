@@ -200,3 +200,14 @@ Shell goes Off (with the waiting call answered); the cap with a limit of 2.
 | VII. Test-first | Planned; leftovers (D6 to D12): tests first, with real commands and a real sandbox, stand-ins only for the Trash and the record |
 | VIII. Simplicity | Pass: system `script`, `sandbox-exec`, and zsh; no new dependency |
 | IX. Open source | Pass |
+
+## D13. Self-check at start (FR-330, 2026-10-29)
+
+The fence (`sandbox-exec`, deprecated by Apple but working) and the mark (`sandbox_check`, no
+public header) are macOS features an update could change without notice, which would leave
+writes unfenced or double forks running without any error. At start, before what earlier runs
+left is recovered, Latchkey runs `/bin/sh` under a profile that refuses one write and reading a
+mark, in a folder `<launch>-check` in the Jobs folder: the write must fail and the program must
+be found by its mark within 3 s. The folder, mark, and program are removed at once. A failure
+becomes a warning appended to every Shell answer and a Left Behind entry with one notification
+(Toni chose to keep Shell running rather than refuse commands, 2026-10-29).

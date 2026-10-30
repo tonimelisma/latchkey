@@ -19,3 +19,5 @@
 - **T312** ✅ Tests first (a double fork, another app's sandbox left alone, an earlier run's mark,
   open and osascript refused, launchd refused, settings refused, the profile per declaration),
   then the mark, `uses`, and the service refusals. *FR-327 to FR-329, D6, D9.*
+- **T313** ✅ Tests first (the check passes on this Mac and leaves nothing; a broken mark warns in
+  every answer and notifies once), then the self-check at start. *FR-330, D13.*
