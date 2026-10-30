@@ -287,10 +287,18 @@ actor ShellJobs {
         return try await snapshot(job, waiting: .zero)
     }
 
-    /// Ends whatever is left of a job: terminate, then kill after a second. Returns the processes
-    /// still there after that.
+    /// What `end` did: the processes it signalled, by name, as they were named then, and those
+    /// still there after it.
+    struct Ended {
+        var signalled: [pid_t: String] = [:]
+        var stuck: [pid_t] = []
+    }
+
+    /// Ends whatever is left of a job: terminate, then kill after a second. The names are taken
+    /// when the processes are signalled, so one found at the last moment is reported too (a
+    /// snapshot taken before missed it under load, 2026-10-29).
     @discardableResult
-    private func end(_ job: Job) async -> [pid_t] {
+    private func end(_ job: Job) async -> Ended {
         // Know the job's shell before anything is signalled: ending `script` first would orphan a
         // shell still starting, which then waits forever on its closed terminal (a test left one
         // on 2026-10-27).
@@ -299,14 +307,22 @@ actor ShellJobs {
             await Self.pause(.milliseconds(20))
         }
         track()
-        guard job.hasProcesses else { return [] }
-        job.signalAll(SIGTERM)
+        var ended = Ended()
+        func signal(_ sig: Int32) {
+            for pid in job.members() {
+                if ended.signalled[pid] == nil { ended.signalled[pid] = Processes.name(of: pid) }
+                kill(pid, sig)
+            }
+        }
+        guard job.hasProcesses else { return ended }
+        signal(SIGTERM)
         if !(await gone(job, within: .seconds(1))) {
-            job.signalAll(SIGKILL)
+            signal(SIGKILL)
             _ = await gone(job, within: .seconds(2))
         }
         _ = await waitForEnd(job, .seconds(2), evenIfCancelled: true)
-        return job.members()
+        ended.stuck = job.members()
+        return ended
     }
 
     private func gone(_ job: Job, within limit: Duration) async -> Bool {
@@ -331,7 +347,7 @@ actor ShellJobs {
     func stopAll() async {
         let running = jobs.values.filter { !$0.isFinished }
         await withTaskGroup(of: Void.self) { group in
-            for job in running { group.addTask { await self.end(job) } }
+            for job in running { group.addTask { _ = await self.end(job) } }
         }
         for job in jobs.values where !job.swept { await sweep(job) }
     }
@@ -388,9 +404,15 @@ actor ShellJobs {
         track()
         let found0 = job.members(scratchUsers: true)
         _ = job.learn(Set(found0.compactMap(Processes.id(of:))))
-        let names = Dictionary(found0.map { ($0, Processes.name(of: $0)) }) { a, _ in a }
-        let stuck = await end(job)
-        let stopped = names.filter { !stuck.contains($0.key) }.values.filter { $0 != "script" && $0 != "zsh" }
+        var names = Dictionary(found0.map { ($0, Processes.name(of: $0)) }) { a, _ in a }
+        let ended = await end(job)
+        names.merge(ended.signalled) { first, _ in first }
+        let stuck = ended.stuck
+        // Latchkey's own `script` and the command's shell are left out by process id, not by
+        // name: a background subshell is named zsh until it starts its program, and was left
+        // out of what was stopped (a test caught it, 2026-10-29).
+        let own: Set<pid_t> = [job.process.processIdentifier, job.session() ?? -1]
+        let stopped = names.filter { !stuck.contains($0.key) && !own.contains($0.key) }.values
         let scratchUsed = Self.hasContents(job.scratch)
         if scratchUsed {
             setup.remove(job.scratch)

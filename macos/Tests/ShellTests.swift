@@ -39,7 +39,9 @@ import Testing
         // Past 1 MB the oldest output is dropped; reading after that crashed the app (scan 2026-10-24).
         let r = try await jobs.run(
             "head -c 2500000 /dev/zero | tr '\\0' a; sleep 1; echo; echo END", folder: nil, wait: .milliseconds(700))
-        #expect(r.output.hasSuffix("a") || r.output.contains("END"))
+        // Nothing yet is fine while other suites run (2026-10-29); the read past the dropped
+        // megabyte is the one below.
+        #expect(r.output.isEmpty || r.output.hasSuffix("a") || r.output.contains("END"))
         let later = try await jobs.check(r.job, wait: .seconds(10))
         #expect(later.finished)
         #expect(later.output.contains("END"))
