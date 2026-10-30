@@ -130,6 +130,20 @@ enum PageScripts {
 
     static let back = "(function () { history.back(); return 'ok'; })()"
 
+    static let titleAndAddress = "document.title + '\\t' + location.href"
+
+    /// Put before every script in Claude's tab (spec 005 plan D6): marks the page as Claude's,
+    /// so Latchkey finds the tab again after the Owner's tabs moved. Not enumerable; a page that
+    /// blocks it only makes Latchkey lose track of the tab. `token` is hex.
+    static func tabMark(_ token: String) -> String {
+        "try { Object.defineProperty(window, '__latchkeyTab', { value: '\(token)', configurable: true }); } catch (e) {}\n"
+    }
+
+    /// Whether a page carries Claude's mark: "yes" or "no", nothing else of the page.
+    static func tabCheck(_ token: String) -> String {
+        "window.__latchkeyTab === '\(token)' ? 'yes' : 'no'"
+    }
+
     /// Claude's own script; its result as text.
     static func custom(_ code: String) -> String {
         """

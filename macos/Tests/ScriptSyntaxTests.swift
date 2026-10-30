@@ -15,6 +15,11 @@ import Testing
         ("safari javascript", SafariBrowser.Script.javaScript), ("safari tabs", SafariBrowser.Script.tabs),
         ("safari probe", SafariBrowser.Script.probe), ("safari close", SafariBrowser.Script.close),
         ("notes delete folder", NotesCapability.Script.deleteFolder),
+        ("safari tab survey", SafariBrowser.Script.tabSurvey),
+        ("safari tab javascript", SafariBrowser.Script.tabJavaScript),
+        ("safari tab load", SafariBrowser.Script.tabLoad), ("safari tab new", SafariBrowser.Script.tabNew),
+        ("safari tab show", SafariBrowser.Script.tabShow), ("safari tab restore", SafariBrowser.Script.tabRestore),
+        ("safari tab close", SafariBrowser.Script.tabClose),
     ]
 
     @Test(arguments: scripts.map(\.0))

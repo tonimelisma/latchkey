@@ -800,7 +800,7 @@ final class AppModel {
     }
 
     /// At start, what earlier runs left; then every minute, the leases that ended and Claude's
-    /// idle Safari window (spec 004 FR-314, FR-324, spec 005 FR-411).
+    /// idle Safari tab or window (spec 004 FR-314, FR-324, spec 005 FR-411).
     private static func tidyEveryMinute() -> Task<Void, Never> {
         Task.detached(priority: .utility) {
             await ShellCapability.jobs.selfCheck()  // spec 004 FR-330
@@ -808,10 +808,7 @@ final class AppModel {
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(60))
                 await ShellCapability.jobs.tidy()
-                if await BrowserCapability.browser.closeIfIdle() {
-                    EventLog.shared.record(
-                        .leftovers, "Closed Claude's Safari window after 30 minutes unused", systemLog: false)
-                }
+                _ = await BrowserCapability.browser.closeIfIdle()  // notes what it closed
             }
         }
     }

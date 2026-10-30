@@ -8,3 +8,6 @@
 - **T404** ✅ Setup steps: Automation for Safari, the JavaScript setting with Check. *FR-406, D4.*
 - **T405** ✅ Tests first, then only http and https addresses open (security scan, 2026-10-24).
   *FR-409, D2.*
+- **T406** ✅ Tests first (stand-in Safari with windows and tabs, WebKit view for the mark), then
+  Claude's page as a background tab in the Owner's window, the Settings choice, finding the tab
+  again, screenshot and back, idle close (2026-10-29). *FR-403, FR-411 to FR-418, D6.*

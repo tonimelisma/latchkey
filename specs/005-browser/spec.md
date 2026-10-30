@@ -21,7 +21,10 @@ phone, Claude can't check a reservation in the Owner's account or fill in a form
 1. Given Browser is Read & write, when I ask Claude to fill in and send a form, then it does.
 
 ### US3 (P1): Stay out of my way
-1. Claude works in a Safari window of its own and never touches my other windows and tabs.
+1. Claude works in a Safari tab of its own (or, if I choose, a window of its own) and never
+   touches my other windows and tabs.
+2. Given Claude's page is a tab in my window, when Claude works, then the tab I'm using stays in
+   front and Claude works in its tab behind it (Toni, 2026-10-29).
 
 ## Requirements
 
@@ -31,7 +34,9 @@ phone, Claude can't check a reservation in the Owner's account or fill in a form
   type into fields, choose options, submit forms, and run its own script in the page.
 - **FR-403** Claude shall use the Owner's Safari with the Owner's logins and saved sessions
   (Toni, 2026-10-22), in a window of its own; it shall not read or change the Owner's other
-  windows and tabs.
+  windows and tabs. (2026-10-29: "a window of its own" became a tab or a window of its own,
+  FR-412; the Owner's other tabs, including those in the window that holds Claude's tab, stay
+  untouched.)
 - **FR-404** Page content shall be marked as written by the website, not instructions.
 - **FR-405** Results shall stay within Claude's result size, with a way to read on.
 - **FR-406** When Safari's "Allow JavaScript from Apple Events" or the Automation permission is
@@ -48,7 +53,27 @@ phone, Claude can't check a reservation in the Owner's account or fill in a form
 - **FR-411** When Claude hasn't used its Safari window for 30 minutes, Browser shall close that
   window and record it as a Left Behind entry (spec 001 FR-640; Toni, 2026-10-27: the Mac can't
   tell when a conversation ends, and the relay ends a quiet Claude session after 30 minutes),
-  also when Latchkey restarted or was updated in between (Toni, 2026-10-29).
+  also when Latchkey restarted or was updated in between (Toni, 2026-10-29). (2026-10-29: when
+  Claude's page is a tab, FR-412, Browser closes that tab instead, the same way.)
+- **FR-412** Browser shall open Claude's pages either in a tab of the Owner's Safari window or
+  in a Safari window of Claude's own, as the Owner chooses in Latchkey's Settings, and shall
+  start with a tab (Toni, 2026-10-29).
+- **FR-413** While Claude's page is a tab, Browser shall open it in the background, at the end
+  of the Owner's front Safari window: the tab the Owner has in front stays in front, and Claude
+  reads, clicks, types, and runs scripts in its own tab behind it (Toni, 2026-10-29).
+- **FR-414** When Claude's page is to be a tab and Safari has no window open, Browser shall open
+  a new window and use its tab (Toni, 2026-10-29).
+- **FR-415** While Claude's page is a tab, a screenshot of it (spec 006 FR-509) shall bring
+  Claude's tab to the front for the shot and then bring back the tab that was in front, also
+  when the shot fails; a tab the Owner switched to meanwhile stays (Toni, 2026-10-29).
+- **FR-416** While Claude's page is a tab, Claude's tabs shall be the one tab it opened: a page
+  Claude opens, also one it asks for in a new tab, loads in that tab, and the list of tabs shows
+  that tab alone (2026-10-29).
+- **FR-417** When the Owner changes where Claude's pages open, the next page Claude opens shall
+  follow the new choice, and Browser shall close Claude's previous tab or window (2026-10-29).
+- **FR-418** When Browser can't tell for sure which tab is Claude's (the Owner closed it, or
+  tabs moved while its page changed), it shall leave every tab alone, record a Left Behind entry
+  saying it lost track of Claude's tab, and open a new tab for Claude's next page (2026-10-29).
 
 ## Success criteria
 
@@ -57,7 +82,11 @@ phone, Claude can't check a reservation in the Owner's account or fill in a form
 
 ## Edge cases
 
-- The Owner closes Claude's window: the next request opens a new one.
+- The Owner closes Claude's window or tab: the next request opens a new one (FR-418).
+- The Owner moves or closes other tabs in the window that holds Claude's tab: Claude's tab is
+  found again by the mark on its page (plan D6).
+- The Owner's front window is a private window: Claude's tab opens there, without the Owner's
+  logins (Safari's scripting can't tell private windows apart).
 - Pages that keep loading or change constantly; very long pages; pages in frames.
 - Sites that ignore script-driven clicks (rare): Claude is told nothing changed and can use
   computer control when the screen is on.

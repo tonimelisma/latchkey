@@ -109,19 +109,32 @@ struct SettingsView: View {
 
 struct CapabilitiesPane: View {
     let model: AppModel
+    /// Where Claude's Safari pages open (spec 005 FR-412); takes effect at the next page.
+    @AppStorage(BrowserPlace.key) private var browserPlace: BrowserPlace = .tab
 
     var body: some View {
         Form {
-            ForEach(model.capabilities.capabilities) { cap in
-                Picker(
-                    selection: Binding(
-                        get: { model.capabilities.level(cap.id) },
-                        set: { model.setLevel(cap.id, $0) })
-                ) {
-                    ForEach(cap.levels, id: \.self) { Text(cap.title(for: $0)).tag($0) }
+            Section {
+                ForEach(model.capabilities.capabilities) { cap in
+                    Picker(
+                        selection: Binding(
+                            get: { model.capabilities.level(cap.id) },
+                            set: { model.setLevel(cap.id, $0) })
+                    ) {
+                        ForEach(cap.levels, id: \.self) { Text(cap.title(for: $0)).tag($0) }
+                    } label: {
+                        Text(cap.title)
+                        Text(cap.summary)
+                    }
+                }
+            }
+            Section("Browser") {
+                Picker(selection: $browserPlace) {
+                    Text("A Tab in Your Safari Window").tag(BrowserPlace.tab)
+                    Text("A Window of Its Own").tag(BrowserPlace.window)
                 } label: {
-                    Text(cap.title)
-                    Text(cap.summary)
+                    Text("Claude Opens Pages In")
+                    Text("A tab opens behind the one you’re using, so you can keep working.")
                 }
             }
         }

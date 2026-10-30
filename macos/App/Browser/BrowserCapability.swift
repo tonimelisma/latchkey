@@ -3,7 +3,9 @@ import Foundation
 
 /// The Owner's Safari (spec 005).
 enum BrowserCapability {
-    static let browser = SafariBrowser(scripts: OSAScriptRunner(), memory: .app)
+    static let browser = SafariBrowser(
+        scripts: OSAScriptRunner(), memory: .app, place: { BrowserPlace.current },
+        note: { EventLog.shared.record(.leftovers, $0, systemLog: false) })
 
     static func make() -> Capability {
         Capability(
@@ -76,9 +78,9 @@ enum BrowserCapability {
                             )
                         }
                         if let problem = await ScreenCheck.problem(SystemScreen()) { throw Failure.failed(problem) }
-                        let t = try await browser.tabs(select: nil)
-                        let title = t.tabs.first { $0.0 == t.current }?.1 ?? ""
-                        let image = try await ScreenCapture.window(app: Permissions.safariApp, title: title)
+                        let image = try await browser.showing { title in
+                            try await ScreenCapture.window(app: Permissions.safariApp, title: title)
+                        }
                         return .image(image.data, mimeType: image.mimeType)
                     }
                 }),
@@ -170,7 +172,9 @@ enum BrowserCapability {
     static func explain(_ f: Failure) -> String {
         switch f {
         case .noWindow:
-            "Claude's Safari window isn't open (it may have been closed). Open a page with browser_read and a url."
+            "Claude's Safari page isn't open (it may have been closed). Open a page with browser_read and a url."
+        case .moved:
+            "Safari's tabs changed while Latchkey was using Claude's page. Try again."
         case .javaScriptOff:
             "Safari doesn't allow Latchkey to read pages yet. The Mac's owner can turn on \"Allow JavaScript from Apple Events\" in Safari → Settings → Developer (first turn on \"Show features for web developers\" in Settings → Advanced)."
         case .elementMissing(let ref):

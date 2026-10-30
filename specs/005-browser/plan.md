@@ -8,7 +8,7 @@ Claude sees consolidated tools (Toni, 2026-10-23: 15 tools in all, from 45): the
 
 | Tool | Level | readOnly | destructive | Operations behind it |
 |---|---|---|---|---|
-| `browser_read` (url?, new_tab?, back?, tab?, tabs?, screenshot?, offset?) | Read only | yes | no | open, back, switch tab, tabs, screenshot, read |
+| `browser_read` (url?, new_tab?, back?, tab?, tabs?, screenshot?, offset?) | Read only | yes | no | open, back, switch tab, tabs, screenshot, read (FR-412 to FR-416 in a tab) |
 | `browser_act` (action: click, type, script; …) | Read & write | no | yes | click, type, script |
 
 Operations:
@@ -77,6 +77,40 @@ New capability `browser`, levels Off / Read only / Read & write, starting Read &
 Clicks, typing, and scripts return an activity for the trace and the menu (FR-408); they don't
 notify, as one task can mean dozens of clicks.
 
+## D6. Claude's page as a tab in the Owner's window (2026-10-29)
+
+Serves FR-403, FR-411 to FR-418. Settings → What Claude Can Do → Browser has "Claude Opens Pages
+In": "A Tab in Your Safari Window" (default) or "A Window of Its Own" (D2, as before). The choice
+is the user default `browserPlace` (`tab` or `window`), read each time Claude opens a page; the
+other operations follow whichever Claude has. A changed choice closes Claude's previous tab or
+window at the next page Claude opens (FR-417).
+
+- **Opening** (FR-413, FR-414): `make new tab at end of tabs` of the first Safari window that has
+  a current tab (front to back), without making it the current tab, so the Owner's tab stays in
+  front. With no such window, a new window, found as in D2 by the id that wasn't there before.
+  Later pages load in that tab (`set URL`), also with `new_tab` (FR-416).
+- **Knowing Claude's tab**: Safari's tabs have no id; only a position. Latchkey keeps the window
+  id, the tab's position, the window's tab count, the tab's last address, and a random token.
+  Before every script it puts the token on Claude's page as a hidden property
+  (`window.__latchkeyTab`, not enumerable). Before each use, one script surveys the window: for
+  each tab only whether it shows Claude's last address and, for the tab at Claude's position and
+  tabs at that address only, whether it carries the token ("yes"/"no"). Nothing else of the
+  Owner's tabs is read, and no script of Claude's runs in them. Latchkey then picks (pure Swift,
+  `TabSurvey.pick`): the tab at Claude's position if marked; else, within 10 s of Claude's last
+  action (a page Claude opened or clicked is loading, and a new page has no mark yet) and with the
+  same tab count, the tab at that position; else a marked tab at Claude's last address (tabs
+  moved). Otherwise none: Latchkey forgets the tab, notes it lost track of it (FR-418), and Claude
+  is told its page isn't open. The script that then acts checks the tab count first and refuses
+  if tabs changed in between (Latchkey surveys again once).
+- **Screenshot** (FR-415): one script remembers the tab in front, brings Claude's tab forward, and
+  answers its title; after 0.3 s for Safari to draw it, the window is captured as before; then a
+  script brings the remembered tab back only if Claude's tab is still in front.
+- **Idle close** (FR-411): Claude's tab is closed by the same survey, with "recent" off, so an
+  unmarked tab at its position is never closed. `safari-window.json` gains the tab (position,
+  count, address, token), so a restarted Latchkey closes it too, in the same run of Safari.
+- **Tabs** (FR-416): the tab list shows Claude's tab alone as tab 1; switching to another number
+  is refused with a hint to open a page instead.
+
 ## Testing
 
 A stand-in script runner answers like Safari: open, read (page JSON), click, type, missing
@@ -85,6 +119,14 @@ element, closed window, the JavaScript setting off, refused addresses (FR-409) b
 itself is checked by running it in a WebKit view (`WKWebView`) on a fixed page in the tests,
 including a form with filled-in secret fields whose values must not appear anywhere in the
 answer (FR-410).
+
+For a tab (D6), a stand-in Safari with windows and tabs records which tabs ran which script:
+Claude's tab opens behind the Owner's, is found again after the Owner closes a tab before it, is
+never replaced by an Owner's tab in its place (also at the same address), comes forward for a
+screenshot and goes back (also when the shot fails), closes when idle (also after a restart), and
+the setting switches between tab and window. The Owner's tabs never run a script of Claude's.
+`TabSurvey.pick` has its own table of cases; the mark is checked in a WebKit view. Every new
+AppleScript compiles (`ScriptSyntaxTests`).
 
 ## Constitution check
 
@@ -95,7 +137,7 @@ answer (FR-410).
 | III. Disabled means nonexistent | Pass |
 | IV. Good macOS citizen | Pass: Apple Events with the Owner's consent; the Owner turns on Safari's setting |
 | V. Self-hostable | Pass |
-| VI. Store the minimum | Pass: nothing kept beyond the window id in memory |
+| VI. Store the minimum | Pass: the window id, and for a tab its position, count, address, and token, deleted when it closes |
 | VII. Test-first | Planned |
 | VIII. Simplicity | Pass: AppleScript and a page script; no driver or extension |
 | IX. Open source | Pass |

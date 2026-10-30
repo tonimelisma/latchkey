@@ -9,20 +9,21 @@ extension BrowserCapability {
                 tool: .make(
                     "browser_read", title: "Read the Web",
                     description: """
-                        Uses Safari on the Mac, signed in as the Mac's owner, in Claude's own window. With url: \
-                        opens that page (new_tab for a new tab). With back: goes back. With tab: switches to that \
-                        tab. With nothing: reads the page showing. Answers with the page's text and the links, \
+                        Uses Safari on the Mac, signed in as the Mac's owner, in a page of Claude's own: a tab \
+                        behind the owner's tab, or a window of Claude's own, as the owner chose. With url: opens \
+                        that page (new_tab for a new tab, in a window of Claude's own only). With back: goes back. \
+                        With tab: switches to that tab. With nothing: reads the page showing. Answers with the page's text and the links, \
                         buttons, and fields on it, each with a reference like e12 for browser_act. Long pages come \
-                        in parts; pass offset to read on. tabs: lists the tabs. screenshot: shows the window as an \
+                        in parts; pass offset to read on. tabs: lists the tabs. screenshot: shows the page as an \
                         image (needs the Mac unlocked with its screen on).
                         """,
                     input: [
                         "url": .stringParam("A page to open"),
-                        "new_tab": .boolParam("With url: open it in a new tab"),
+                        "new_tab": .boolParam("With url: open it in a new tab (in a window of Claude's own)"),
                         "back": .boolParam("Go back to the previous page"),
                         "tab": .integerParam("Switch to this tab number"),
                         "tabs": .boolParam("List the tabs"),
-                        "screenshot": .boolParam("Show the window as an image"),
+                        "screenshot": .boolParam("Show the page as an image"),
                         "offset": .integerParam("Read the page from this character"),
                     ], readOnly: true, openWorld: true, deadlineMS: 30_000),
                 handler: { args in
@@ -49,7 +50,7 @@ extension BrowserCapability {
                 tool: .make(
                     "browser_act", title: "Act on the Page",
                     description: """
-                        Acts on the page showing in Claude's Safari window, then answers with the page. action: \
+                        Acts on Claude's page in Safari, then answers with the page. action: \
                         click (ref: a link or button), type (ref: a field, text; or a list and the option's \
                         text; submit sends the form), script (code: JavaScript run in the page; its result is \
                         returned).

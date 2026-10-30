@@ -47,6 +47,44 @@ Done 2026-10-22 with 003, 004, 006.
 - **Scripts from Claude** (`browser_script`, Read & write level): runs Claude's own JavaScript in
   the tab; result as text. Passed as an argument, never pasted into the AppleScript.
 
+## Claude's page as a tab in the Owner's window (2026-10-29)
+
+Toni chose a tab in the Owner's window as the default, opened in the background, with a window of
+its own as the other choice. Safari's scripting dictionary (`sdef /Applications/Safari.app`) gives
+a tab only `index`, `URL`, `name`, `visible`, `source`, `text`, and a hidden `pid` (its web
+content process): no id that lasts. How to know which tab is Claude's:
+
+- **Position only**: breaks as soon as the Owner closes a tab to the left (Claude's tab moves) or
+  closes Claude's tab (another slides into its place): Claude would read the Owner's tab. Rejected.
+- **Address**: pages change their own address, and the Owner may have the same page open.
+  Rejected on its own.
+- **`window.name`**: lasts across pages in a tab, but WebKit clears it when a top-level page goes
+  to another site (WebKit changeset 209076, 2016:
+  https://lists.w3.org/Archives/Public/public-webappsec/2016Dec/0002.html). Rejected.
+- **Web content process id**: changes when the tab goes to another site, and same-site tabs may
+  share one. Rejected.
+- **Position, count, and a mark on the page** (chosen): a random token set as a hidden property on
+  Claude's page before every script. It survives the Owner's tabs moving, and is lost when the
+  page changes; Claude's own navigation is covered by accepting the unmarked tab at its position
+  for 10 seconds after Claude acted, when the tab count is unchanged. Anything less certain counts
+  as lost: the tab is left alone and noted (FR-418). Cost: a page that navigates by itself between
+  Claude's calls (a timed redirect) makes Latchkey lose its tab, which then stays open and is
+  named in Left Behind. The check runs a one-line yes/no script in the tab at Claude's position
+  and in tabs at Claude's address only; no other tab of the Owner's runs anything.
+- **Deciding in Swift or in AppleScript**: in Swift (chosen), from a survey script that answers
+  only yes/no flags per tab, so the decision is unit-tested; costs one more `osascript` per use
+  (about 0.1 s). The acting script checks the tab count, so tabs changing in between are caught.
+
+Other choices (Claude's): the new tab goes at the end of the front window (where Safari puts new
+tabs; no current tab means a non-browser window, skipped); `new_tab` in a tab loads in Claude's
+one tab rather than adding tabs to the Owner's window (FR-416: fewer of Claude's tabs to track
+and close; Claude can still go back); a changed setting closes the old tab or window at the next
+page rather than at once (nothing in progress is cut off, nothing is left open); the Left Behind
+entries are recorded by the browser itself through a callback, so tab and window wording comes
+from one place. Not verifiable without the real Safari (tests never touch it): that
+`make new tab` leaves the current tab alone, and that a background tab draws in time for the
+screenshot; both are standard Safari scripting behavior.
+
 ## Claude's window across restarts (2026-10-29)
 
 A live check found that an update of Latchkey forgot Claude's Safari window, which then never
