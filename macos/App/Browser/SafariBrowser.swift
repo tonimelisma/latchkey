@@ -112,6 +112,10 @@ actor SafariBrowser {
     /// comes from the page, which could otherwise keep the allowance open).
     private var navigatedThisAction = false
     private var noteTaken = false
+    /// When a page's note last opened the allowance: a note never moves it forward while that
+    /// allowance is open, so calls that interleave can't keep it open (security review,
+    /// 2026-10-29).
+    private var noteOpened: Date?
     /// How long after Claude's navigation started its tab may be unmarked.
     private var allowance: TimeInterval { Double(settleLimit.components.seconds) + 1 }
 
@@ -249,14 +253,36 @@ actor SafariBrowser {
 
     /// Takes the page's note of where it is going: once per action. In an action that already
     /// began a navigation, the address joins it without moving its start.
+    /// Only an address on the site of the page Claude's tab shows counts: what the page can
+    /// name is its own site (security review, 2026-10-29); a click to another site loses the
+    /// tab, which stays open and is named in Left Behind.
     private func take(note: String) {
-        guard !noteTaken, let goal = Self.goal(fromNote: note) else { return }
+        guard !noteTaken, let goal = Self.goal(fromNote: note), let here = tab?.address,
+            Self.sameSite(goal, here)
+        else { return }
         noteTaken = true
         if navigatedThisAction, navigation != nil {
             if navigation?.addresses.contains(goal) == false { navigation?.addresses.append(goal) }
+        } else if let opened = noteOpened, Date().timeIntervalSince(opened) < allowance {
+            if navigation?.addresses.contains(goal) == false { navigation?.addresses.append(goal) }
         } else {
+            noteOpened = Date()
             navigated(to: goal)
         }
+    }
+
+    /// The same site: scheme http or https, the host with or without www., the same port.
+    static func sameSite(_ a: String, _ b: String) -> Bool {
+        func site(_ s: String) -> (String, Int?)? {
+            guard let c = URLComponents(string: s), let scheme = c.scheme?.lowercased(),
+                ["http", "https"].contains(scheme),
+                var host = c.host?.lowercased(), !host.isEmpty
+            else { return nil }
+            if host.hasPrefix("www.") { host = String(host.dropFirst(4)) }
+            return (host, c.port)
+        }
+        guard let x = site(a), let y = site(b) else { return false }
+        return x.0 == y.0 && x.1 == y.1
     }
 
     /// The address in the page's note (JSON-encoded by the page script), if it is one web

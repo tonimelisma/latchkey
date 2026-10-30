@@ -330,16 +330,32 @@ final class Notes: @unchecked Sendable {
         let fake = FakeSafariTabs()
         let b = browser(fake)
         _ = try await b.open("https://shop.example.com", newTab: false)
-        fake.pageGoal = "https://owner.example.com/"
+        await b.age(by: 60)  // Claude's own load is long over
+        fake.pageGoal = "https://shop.example.com/cart"
         let before = Date()
         _ = try await b.click("e1")  // several scripts in one action, each reporting the goal
-        let after = Date()
         let first = try #require(await b.navigationState())
-        #expect(first.addresses == ["https://owner.example.com/"])
+        #expect(first.addresses.contains("https://shop.example.com/cart"))
         #expect(first.since < before.addingTimeInterval(0.4), "set by the first report only")
-        _ = try await b.read(offset: 0)  // a new action may report once more
+        // Security review 2026-10-29: later actions (or interleaved ones) can't move it forward
+        // while the allowance a note opened is still open.
+        _ = try await b.read(offset: 0)
         let second = try #require(await b.navigationState())
-        #expect(second.since >= after)
+        #expect(second.since == first.since, "a note can't keep the allowance open")
+        fake.pageGoal = nil
+    }
+
+    /// Security review 2026-10-29: a page can only name an address on its own site.
+    @Test func aNoteOfAnotherSiteIsIgnored() async throws {
+        let fake = FakeSafariTabs()
+        let b = browser(fake)
+        _ = try await b.open("https://shop.example.com", newTab: false)
+        await b.age(by: 60)
+        fake.pageGoal = "https://owner.example.com/"
+        _ = try await b.read(offset: 0)
+        let state = await b.navigationState()
+        #expect(
+            state.map { !$0.addresses.contains("https://owner.example.com/") } ?? true, "\(String(describing: state))")
         fake.pageGoal = nil
     }
 
@@ -359,9 +375,9 @@ final class Notes: @unchecked Sendable {
         let fake = FakeSafariTabs()
         let b = browser(fake)
         _ = try await b.open("https://shop.example.com", newTab: false)
-        fake.clickGoesTo = "https://pay.example.net/checkout"
+        fake.clickGoesTo = "https://shop.example.com/checkout"
         let page = try await b.click("e1")
-        #expect(page.url == "https://pay.example.net/checkout")
+        #expect(page.url == "https://shop.example.com/checkout")
         #expect(fake.claudeTabs.first?.mark != nil, "marked again on the new page")
     }
 

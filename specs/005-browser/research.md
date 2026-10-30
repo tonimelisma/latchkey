@@ -143,3 +143,13 @@ with exactly the same tabs while Claude's was not brought back; judged rare enou
 in the Owner's window (the default since 2026-10-29) can't be found this way, since the Owner's
 restored tabs look the same; it is left alone and noted (FR-418), asking Safari only whether
 some tab shows Claude's last address.
+
+windows are never adopted; a window Safari restores after its own restart stays open.
+
+Security review, third round (2026-10-29): the page's note of where it is going can be forged
+by the page (the mark's token is on the page too, so no secret can tell Latchkey's getter from
+the page's). So a note counts only for an address on the site of the page Claude's tab shows
+(http or https, with or without www., the same port), and once a note opened the allowance it
+can't move it forward until it closes, so interleaved calls can't keep it open. Cost: a click
+that takes Claude's tab to another site loses the tab; it stays open, is named in Left Behind,
+and Claude's next page opens in a fresh tab.
