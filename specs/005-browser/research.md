@@ -93,6 +93,21 @@ Security review fixes (2026-10-29):
 - **Checking between survey and action**: the count alone missed a tab dragged into Claude's
   place. The acting script now repeats the mark check (or the loading-address check) itself,
   in one Apple Event with the action, so nothing happens in between.
+- **The page's note of where it is going** (second finding): it was a page property, so a page in
+  Claude's tab could write any address and, through a line break, add parts to the script's
+  answer, and every script could restart the allowance. Options for keeping it: a page property
+  (rejected), a property set from the AppleScript side (the page still sees and changes it), or a
+  variable inside the listener's closure, read through a getter defined non-configurable and
+  without a setter (chosen: page code can't write the variable or replace the getter once
+  Latchkey's is there; Latchkey ignores a getter that is configurable, has a setter, or is
+  enumerable). For the answer's shape: line breaks removed in the AppleScript plus the note
+  JSON-encoded and checked as one web address in Swift (chosen), or the whole answer as JSON from
+  AppleScript (AppleScript has no JSON encoder; more code for the same result). Limits: one note
+  per action of Claude's, and the allowance's start set at most once per action. What remains: a
+  page that installs an identical getter before Latchkey's first script, or that really goes to
+  an address of its choosing, can still name the address, once per action; it still takes the
+  Owner's tab sliding into Claude's place, with the same count, at that address, within 16 s,
+  for Latchkey to use the wrong tab.
 
 Other choices (Claude's): the new tab goes at the end of the front window (where Safari puts new
 tabs; no current tab means a non-browser window, skipped); `new_tab` in a tab loads in Claude's

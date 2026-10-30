@@ -116,8 +116,14 @@ window at the next page Claude opens (FR-417).
   refreshes, so it could stay open for ever. It starts when Claude opens a page (the address
   asked for) and when Claude's marked page reports that it is going to another page: the mark
   script also listens for the Navigation API's `navigate` event, and every script in Claude's
-  tab ends by taking the address it noted (clicks, forms, `back`, which notes the previous
-  history entry itself). It lasts the settle limit plus 1 s (16 s) from that moment, and only
+  tab ends by taking the address it noted (clicks, forms, `back`). The note is the event's
+  destination only, kept in the listener's own variable and read through a getter that can't be
+  changed (page code can't write it; a note the page put there first is ignored); it comes back
+  JSON-encoded on one line, the AppleScript removes line breaks from it, and Latchkey uses it
+  only when it decodes to one http(s) address without spaces. One note counts per action of
+  Claude's (each tool call), and the start is set at most once per action: in an action that
+  opened a page, a note only adds its address. It lasts the settle limit plus 1 s (16 s) from
+  that moment, and only
   for those addresses, in the spellings a redirect to https, www., or a final / gives. A page
   that goes elsewhere (other redirects, a navigation the page starts later without a script of
   Claude's seeing it) makes Latchkey lose the tab: it stays open and is named (FR-418).

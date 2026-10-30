@@ -38,6 +38,8 @@ final class FakeSafariTabs: ScriptRunner, @unchecked Sendable {
     var slideIn: String?
     /// Set to an address: the next click in Claude's tab goes to that page.
     var clickGoesTo: String?
+    /// Set to an address: every script in Claude's tab reports that its page is going there.
+    var pageGoal: String?
 
     init(userTabs: [String] = ["https://mail.example.com/", "https://news.example.com/"]) {
         windows =
@@ -151,7 +153,10 @@ final class FakeSafariTabs: ScriptRunner, @unchecked Sendable {
                 } else {
                     answer = "ok"
                 }
-                return tab.url + "\n" + destination + "\n" + answer
+                if destination.isEmpty, let goal = pageGoal { destination = goal }
+                // As the script answers: the noted address JSON-encoded, on one line.
+                let note = String(data: try! JSONEncoder().encode(destination), encoding: .utf8)!
+                return tab.url + "\n" + note + "\n" + answer
             case SafariBrowser.Script.tabLoad:
                 let (w, i) = try guarded(args)
                 loads += 1
@@ -319,6 +324,37 @@ final class Notes: @unchecked Sendable {
     }
 
     /// A click that goes to another page keeps Claude's tab: the page said where it was going.
+    /// Security review 2026-10-29: a page that keeps saying it is going somewhere opens the
+    /// loading allowance at most once per action of Claude's.
+    @Test func aPageReportsWhereItGoesOncePerAction() async throws {
+        let fake = FakeSafariTabs()
+        let b = browser(fake)
+        _ = try await b.open("https://shop.example.com", newTab: false)
+        fake.pageGoal = "https://owner.example.com/"
+        let before = Date()
+        _ = try await b.click("e1")  // several scripts in one action, each reporting the goal
+        let after = Date()
+        let first = try #require(await b.navigationState())
+        #expect(first.addresses == ["https://owner.example.com/"])
+        #expect(first.since < before.addingTimeInterval(0.4), "set by the first report only")
+        _ = try await b.read(offset: 0)  // a new action may report once more
+        let second = try #require(await b.navigationState())
+        #expect(second.since >= after)
+        fake.pageGoal = nil
+    }
+
+    /// A noted address is used only when it is one web address on one line.
+    @Test func noteOfWhereThePageGoesIsChecked() {
+        #expect(
+            SafariBrowser.goal(fromNote: #""https://pay.example.net/checkout""#) == "https://pay.example.net/checkout")
+        #expect(SafariBrowser.goal(fromNote: #""""#) == nil)
+        #expect(SafariBrowser.goal(fromNote: #""https://a.example/\nhttps://owner.example/""#) == nil, "a line break")
+        #expect(SafariBrowser.goal(fromNote: #""https://a.example/\r""#) == nil)
+        #expect(SafariBrowser.goal(fromNote: "https://a.example/") == nil, "not JSON")
+        #expect(SafariBrowser.goal(fromNote: #""javascript:alert(1)""#) == nil)
+        #expect(SafariBrowser.goal(fromNote: #""https://a.example/ x""#) == nil, "a space")
+    }
+
     @Test func aClickToAnotherPageKeepsTheTab() async throws {
         let fake = FakeSafariTabs()
         let b = browser(fake)
@@ -528,10 +564,42 @@ final class PlaceBox: @unchecked Sendable {
         let page = TestPage()
         try await page.load()
         _ = try await page.run(PageScripts.tabMark("abc123") + "'ok'")
-        #expect(try await page.run(PageScripts.takeDestination) == "", "nothing yet")
+        #expect(try await page.run(PageScripts.takeDestination) == #""""#, "nothing yet")
         _ = try await page.run(PageScripts.tabMark("abc123") + "location.hash = 'next'; 'ok'")
-        #expect(try await page.run(PageScripts.takeDestination) == "https://shop.example.com/#next")
-        #expect(try await page.run(PageScripts.takeDestination) == "", "asking clears it")
+        #expect(try await page.run(PageScripts.takeDestination) == #""https://shop.example.com/#next""#)
+        #expect(try await page.run(PageScripts.takeDestination) == #""""#, "asking clears it")
+    }
+
+    /// Security review 2026-10-29: the page can't write the note; only its own navigation does.
+    @MainActor @Test func thePageCantWriteTheNote() async throws {
+        let page = TestPage()
+        try await page.load()
+        _ = try await page.run(PageScripts.tabMark("abc123") + "'ok'")
+        _ = try await page.run(
+            """
+            window.__latchkeyGoal = 'https://owner.example.com/';
+            try { Object.defineProperty(window, '__latchkeyGoal', { value: 'https://owner.example.com/' }); } catch (e) {}
+            window.__latchkeyListens = false;
+            'ok'
+            """)
+        #expect(try await page.run(PageScripts.takeDestination) == #""""#)
+        _ = try await page.run(PageScripts.tabMark("abc123") + "'ok'")
+        #expect(try await page.run(PageScripts.takeDestination) == #""""#, "marking again changes nothing")
+    }
+
+    /// A page that puts its own note in place before Latchkey's is not believed.
+    @MainActor @Test func aNoteThePageMadeFirstIsIgnored() async throws {
+        for setup in [
+            "window.__latchkeyGoal = 'https://owner.example.com/'; 'ok'",
+            "Object.defineProperty(window, '__latchkeyGoal', { get: function () { return 'https://owner.example.com/'; }, configurable: true }); 'ok'",
+            "Object.defineProperty(window, '__latchkeyGoal', { get: function () { return 'https://owner.example.com/'; }, set: function () {} }); 'ok'",
+        ] {
+            let page = TestPage()
+            try await page.load()
+            _ = try await page.run(setup)
+            _ = try await page.run(PageScripts.tabMark("abc123") + "'ok'")
+            #expect(try await page.run(PageScripts.takeDestination) == #""""#, "\(setup)")
+        }
     }
 
     @Test func spellsAddressesAsRedirectsDo() {

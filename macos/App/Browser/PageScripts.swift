@@ -128,34 +128,38 @@ enum PageScripts {
         """
     }
 
-    /// Notes where going back leads (plan D6), from the Navigation API where Safari has it.
-    static let back = """
-        (function () {
-          try {
-            var n = window.navigation;
-            if (n && n.currentEntry && n.currentEntry.index > 0) window.__latchkeyGoal = n.entries()[n.currentEntry.index - 1].url;
-          } catch (e) {}
-          history.back();
-          return 'ok';
-        })()
-        """
+    static let back = "(function () { history.back(); return 'ok'; })()"
 
     static let titleAndAddress = "document.title + '\\t' + location.href"
 
     /// Put before every script in Claude's tab (spec 005 plan D6): marks the page as Claude's,
     /// so Latchkey finds the tab again after the Owner's tabs moved, and notes where the page is
-    /// going when it starts loading another (the Navigation API's navigate event), so Latchkey
-    /// knows Claude's tab while the new page, still unmarked, loads. Not enumerable; a page that
-    /// blocks it only makes Latchkey lose track of the tab. `token` is hex.
+    /// going when it starts loading another, so Latchkey knows Claude's tab while the new page,
+    /// still unmarked, loads. The mark is not enumerable; a page that blocks it only makes
+    /// Latchkey lose track of the tab. The note is only the Navigation API's navigate event's
+    /// destination, kept in a variable of the listener's own (page code can't write it) and read
+    /// through a getter that can't be changed or replaced once set (security review,
+    /// 2026-10-29). Installed once per page. `token` is hex.
     static func tabMark(_ token: String) -> String {
         "try { Object.defineProperty(window, '__latchkeyTab', { value: '\(token)', configurable: true }); } catch (e) {}\n"
-            + "try { if (window.navigation && !window.__latchkeyListens) { Object.defineProperty(window, '__latchkeyListens', { value: true, configurable: true }); "
-            + "window.navigation.addEventListener('navigate', function (e) { try { window.__latchkeyGoal = e.destination.url; } catch (x) {} }); } } catch (e) {}\n"
+            + "try { if (window.navigation && !Object.getOwnPropertyDescriptor(window, '__latchkeyGoal')) { (function (nav) { "
+            + "var goal = ''; nav.addEventListener('navigate', function (e) { try { goal = String(e.destination.url); } catch (x) {} }); "
+            + "Object.defineProperty(window, '__latchkeyGoal', { get: function () { var g = goal; goal = ''; return g; }, configurable: false, enumerable: false }); "
+            + "})(window.navigation); } } catch (e) {}\n"
     }
 
-    /// Where the page said it is going since last asked, or ""; asking clears it.
-    static let takeDestination =
-        "(function () { var g = window.__latchkeyGoal || ''; window.__latchkeyGoal = ''; return String(g); })()"
+    /// Where the page said it is going since last asked, JSON-encoded (one line), or "" encoded;
+    /// asking clears it. Only Latchkey's own getter counts: one that can't be changed and has no
+    /// setter; a note the page made first is ignored.
+    static let takeDestination = """
+        (function () {
+          try {
+            var d = Object.getOwnPropertyDescriptor(window, '__latchkeyGoal');
+            if (!d || typeof d.get !== 'function' || d.set || d.configurable || d.enumerable) return '""';
+            return JSON.stringify(String(d.get.call(window)));
+          } catch (e) { return '""'; }
+        })()
+        """
 
     /// Whether a page carries Claude's mark: "yes" or "no", nothing else of the page.
     static func tabCheck(_ token: String) -> String {

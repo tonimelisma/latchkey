@@ -106,6 +106,12 @@ actor SafariBrowser {
     /// loaded, or where Claude's marked page said it was going). Not `lastUse`, which every Apple
     /// Event refreshes (security review, 2026-10-29).
     private var navigation: (since: Date, addresses: [String])?
+    /// Per action of Claude's (each public call): whether the navigation began in it, and
+    /// whether its page's note of where it is going was taken. One note per action, and
+    /// `navigation.since` set at most once per action (security review, 2026-10-29: the note
+    /// comes from the page, which could otherwise keep the allowance open).
+    private var navigatedThisAction = false
+    private var noteTaken = false
     /// How long after Claude's navigation started its tab may be unmarked.
     private var allowance: TimeInterval { Double(settleLimit.components.seconds) + 1 }
 
@@ -228,11 +234,52 @@ actor SafariBrowser {
         navigation?.since.addTimeInterval(-seconds)
     }
 
+    /// For tests: Claude's navigation as Latchkey has it.
+    func navigationState() -> (since: Date, addresses: [String])? { navigation }
+
+    private func beginAction() {
+        navigatedThisAction = false
+        noteTaken = false
+    }
+
+    private func navigated(to address: String) {
+        navigation = (Date(), [address])
+        navigatedThisAction = true
+    }
+
+    /// Takes the page's note of where it is going: once per action. In an action that already
+    /// began a navigation, the address joins it without moving its start.
+    private func take(note: String) {
+        guard !noteTaken, let goal = Self.goal(fromNote: note) else { return }
+        noteTaken = true
+        if navigatedThisAction, navigation != nil {
+            if navigation?.addresses.contains(goal) == false { navigation?.addresses.append(goal) }
+        } else {
+            navigated(to: goal)
+        }
+    }
+
+    /// The address in the page's note (JSON-encoded by the page script), if it is one web
+    /// address with no spaces or line breaks; nil otherwise.
+    static func goal(fromNote note: String) -> String? {
+        guard let data = note.data(using: .utf8),
+            let goal = try? JSONDecoder().decode(String.self, from: data), !goal.isEmpty,
+            goal.unicodeScalars.allSatisfy({
+                !CharacterSet.whitespacesAndNewlines.contains($0) && !CharacterSet.controlCharacters.contains($0)
+            }),
+            let c = URLComponents(string: goal), let scheme = c.scheme?.lowercased(),
+            ["http", "https"].contains(scheme),
+            c.host?.isEmpty == false
+        else { return nil }
+        return goal
+    }
+
     /// Loads `url` in Claude's window (a new tab if asked), making the window if needed. A page
     /// that doesn't finish loading is an error naming what Safari still shows, never a read of
     /// the old page as if it were the new one (2026-10-25: Claude asked for an Amazon page and
     /// was given another page's text).
     func open(_ url: String, newTab: Bool) async throws -> PageScripts.Page {
+        beginAction()
         let address = try Self.normalize(url)
         await findRestored(now: Date())
         let wanted = place()
@@ -249,7 +296,7 @@ actor SafariBrowser {
                 }
                 window = f[0]
                 tab = ClaudeTab(index: index, count: count, address: address, token: Self.newToken())
-                navigation = (Date(), [address])
+                navigated(to: address)
             }
         } else {
             window = try await call(Script.open, [address, window ?? "", newTab ? "yes" : "no"])
@@ -260,10 +307,15 @@ actor SafariBrowser {
                 "Safari didn't finish loading \(address) within \(settleLimit.components.seconds) seconds; Claude's window still shows \(shown). Try again, or read the page as it is with browser_read."
             )
         }
-        return try await read(offset: 0)
+        return try await readPage(offset: 0)
     }
 
     func read(offset: Int) async throws -> PageScripts.Page {
+        beginAction()
+        return try await readPage(offset: offset)
+    }
+
+    private func readPage(offset: Int) async throws -> PageScripts.Page {
         do {
             return try PageScripts.decode(try await javaScript(PageScripts.read(offset: offset)))
         } catch is DecodingError {
@@ -272,32 +324,39 @@ actor SafariBrowser {
     }
 
     func click(_ ref: String) async throws -> PageScripts.Page {
+        beginAction()
         let before = try? await stamp()
         try check(try await javaScript(PageScripts.click(ref)), ref: ref)
         _ = try await settle(after: before, expectNavigation: false)
-        return try await read(offset: 0)
+        return try await readPage(offset: 0)
     }
 
     func type(_ ref: String, text: String, submit: Bool) async throws -> PageScripts.Page {
+        beginAction()
         let before = try? await stamp()
         try check(try await javaScript(PageScripts.type(ref, text: text, submit: submit)), ref: ref, option: text)
         if submit { _ = try await settle(after: before, expectNavigation: false) }
-        return try await read(offset: 0)
+        return try await readPage(offset: 0)
     }
 
     func back() async throws -> PageScripts.Page {
+        beginAction()
         let before = try? await stamp()
         _ = try await javaScript(PageScripts.back)
         _ = try await settle(after: before, expectNavigation: true)
-        return try await read(offset: 0)
+        return try await readPage(offset: 0)
     }
 
-    func run(_ code: String) async throws -> String { try await javaScript(PageScripts.custom(code)) }
+    func run(_ code: String) async throws -> String {
+        beginAction()
+        return try await javaScript(PageScripts.custom(code))
+    }
 
     /// The tabs of Claude's window (index, title, address) and which is showing; `select`
     /// switches to a tab first. In a tab of the Owner's window, Claude's tabs are the one it
     /// opened (FR-416).
     func tabs(select: Int?) async throws -> (current: Int, tabs: [(Int, String, String)]) {
+        beginAction()
         guard let window else { throw Failure.noWindow }
         if tab != nil {
             if let select, select != 1 {
@@ -377,7 +436,7 @@ actor SafariBrowser {
                 let parts = out.split(separator: "\n", maxSplits: 2, omittingEmptySubsequences: false).map(String.init)
                 if let address = parts.first, !address.isEmpty { tab?.address = address }
                 // Claude's own page said it is going to another page (a click, a form, back).
-                if parts.count > 1, !parts[1].isEmpty { navigation = (Date(), [parts[1]]) }
+                if parts.count > 1 { take(note: parts[1]) }
                 return parts.count > 2 ? parts[2] : ""
             } catch Failure.moved where attempt == 1 {
                 continue
@@ -447,7 +506,7 @@ actor SafariBrowser {
         do { found = try await locate() } catch Failure.noWindow { return false }
         _ = try await call(Script.tabLoad, guardArguments(found) + [address])
         tab?.address = address
-        navigation = (Date(), [address])
+        navigated(to: address)
         return true
     }
 
@@ -498,6 +557,7 @@ actor SafariBrowser {
     /// shot and the tab the Owner had in front comes back afterwards, also when the shot failed
     /// (FR-415); a tab the Owner switched to meanwhile stays.
     func showing<T: Sendable>(_ body: @Sendable (String) async throws -> T) async throws -> T {
+        beginAction()
         guard tab != nil else {
             let t = try await tabs(select: nil)
             return try await body(t.tabs.first { $0.0 == t.current }?.1 ?? "")
@@ -819,6 +879,11 @@ actor SafariBrowser {
             set theGoal to (do JavaScript (item 7 of argv) in t) as text
             end try
             if theGoal is "missing value" then set theGoal to ""
+            -- The note is the page's: it must not add lines to the answer.
+            set AppleScript's text item delimiters to {return, linefeed}
+            set theGoalParts to text items of theGoal
+            set AppleScript's text item delimiters to ""
+            set theGoal to theGoalParts as text
             set theAddress to ""
             try
             set theAddress to (URL of t) as text
