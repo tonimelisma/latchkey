@@ -1,6 +1,6 @@
 # Spec 004: Shell — WHAT and WHY
 
-Status: Approved to build without a review stop (Toni, 2026-10-22); Toni reviews at the end.
+Status: Built without a review stop (Toni, 2026-10-22); reviewed and approved by Toni, 2026-10-29.
 Scope: Claude runs commands on the Mac as the Owner, including long and interactive ones.
 Out of scope: administrator (root) commands.
 

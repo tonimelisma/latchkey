@@ -1,6 +1,6 @@
 # Spec 003: Files — WHAT and WHY
 
-Status: Approved to build without a review stop (Toni, 2026-10-22); Toni reviews at the end.
+Status: Built without a review stop (Toni, 2026-10-22); reviewed and approved by Toni, 2026-10-29.
 Scope: Claude finds, reads, creates, changes, moves, copies, and deletes files on the Mac.
 Out of scope: running programs (spec 004), browsing (005), the screen (006).
 
@@ -33,8 +33,9 @@ Documents, downloads, photos and projects live on the Mac. From a phone, Claude 
 - **FR-203** Deleting shall move to the Trash, never erase.
 - **FR-204** Moving or copying shall never replace an existing file; writing over an existing
   file shall happen only when Claude asks for it explicitly.
-- **FR-205** Claude shall reach every file the Owner can open: the home folder, iCloud Drive,
-  and connected drives (Toni, 2026-10-22). The one exception is FR-210.
+- **FR-205** Claude shall reach every file on the Mac the Owner's account can open, anywhere on
+  the disk, such as the home folder, iCloud Drive, apps, and connected drives (Toni, 2026-10-22;
+  worded as the whole disk, Toni, 2026-10-29). The one exception is FR-210.
 - **FR-206** File contents shall be marked as the file's content, not instructions (as spec 002
   FR-114).
 - **FR-207** Results shall stay within Claude's result size, saying when shortened and how to

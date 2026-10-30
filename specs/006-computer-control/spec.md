@@ -1,6 +1,6 @@
 # Spec 006: Computer control — WHAT and WHY
 
-Status: Approved to build without a review stop (Toni, 2026-10-22); Toni reviews at the end.
+Status: Built without a review stop (Toni, 2026-10-22); reviewed and approved by Toni, 2026-10-29.
 Scope: Claude sees the Mac's screen and uses its mouse and keyboard, in any app, while the
 screen is on and unlocked. Also a screenshot of Claude's Safari window (spec 005).
 Out of scope: unlocking the Mac or typing passwords for the Owner.
