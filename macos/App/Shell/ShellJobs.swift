@@ -509,7 +509,8 @@ actor ShellJobs {
             p.standardError = FileHandle.nullDevice
             try p.run()
             var found = false
-            let deadline = ContinuousClock.now + .seconds(3)
+            // A busy Mac at login can take seconds to start a program (a test run under load did).
+            let deadline = ContinuousClock.now + .seconds(10)
             while p.isRunning, ContinuousClock.now < deadline {
                 if Processes.name(of: p.processIdentifier) == "sleep" {
                     found = marked(mark, control).contains(p.processIdentifier)

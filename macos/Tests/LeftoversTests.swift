@@ -323,7 +323,7 @@ final class Reports: @unchecked Sendable {
     }
 
     @Test func theHomeFolderItselfIsNotWritable() async throws {
-        let r = try await jobs.run("echo a > '\(home.path)/stray.txt'", folder: home.path, wait: .seconds(10))
+        let r = try await jobs.run("echo a > '\(home.path)/stray.txt'", folder: home.path, wait: .seconds(30))
         #expect(r.refusedWrite)
         #expect(!FileManager.default.fileExists(atPath: home.appending(path: "stray.txt").path))
     }

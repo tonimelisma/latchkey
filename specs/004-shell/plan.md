@@ -211,6 +211,6 @@ public header) are macOS features an update could change without notice, which w
 writes unfenced or double forks running without any error. At start, before what earlier runs
 left is recovered, Latchkey runs `/bin/sh` under a profile that refuses one write and reading a
 mark, in a folder `<launch>-check` in the Jobs folder: the write must fail and the program must
-be found by its mark within 3 s. The folder, mark, and program are removed at once. A failure
+be found by its mark within 10 s (3 s failed once under load). The folder, mark, and program are removed at once. A failure
 becomes a warning appended to every Shell answer and a Left Behind entry with one notification
 (Toni chose to keep Shell running rather than refuse commands, 2026-10-29).

@@ -116,6 +116,9 @@ actor SafariBrowser {
     /// allowance is open, so calls that interleave can't keep it open (security review,
     /// 2026-10-29).
     private var noteOpened: Date?
+    /// Whether this action may move Claude's page (a click, typing, back): only then may a note
+    /// open the allowance (security review, 2026-10-29).
+    private var mayNavigate = false
     /// How long after Claude's navigation started its tab may be unmarked.
     private var allowance: TimeInterval { Double(settleLimit.components.seconds) + 1 }
 
@@ -241,9 +244,10 @@ actor SafariBrowser {
     /// For tests: Claude's navigation as Latchkey has it.
     func navigationState() -> (since: Date, addresses: [String])? { navigation }
 
-    private func beginAction() {
+    private func beginAction(mayNavigate: Bool = false) {
         navigatedThisAction = false
         noteTaken = false
+        self.mayNavigate = mayNavigate
     }
 
     private func navigated(to address: String) {
@@ -256,16 +260,14 @@ actor SafariBrowser {
     /// Only an address on the site of the page Claude's tab shows counts: what the page can
     /// name is its own site (security review, 2026-10-29); a click to another site loses the
     /// tab, which stays open and is named in Left Behind.
-    private func take(note: String) {
-        guard !noteTaken, let goal = Self.goal(fromNote: note), let here = tab?.address,
-            Self.sameSite(goal, here)
-        else { return }
+    private func take(note: String, here: String?) {
+        guard !noteTaken, let goal = Self.goal(fromNote: note), let here, Self.sameSite(goal, here) else { return }
         noteTaken = true
         if navigatedThisAction, navigation != nil {
             if navigation?.addresses.contains(goal) == false { navigation?.addresses.append(goal) }
         } else if let opened = noteOpened, Date().timeIntervalSince(opened) < allowance {
             if navigation?.addresses.contains(goal) == false { navigation?.addresses.append(goal) }
-        } else {
+        } else if mayNavigate {
             noteOpened = Date()
             navigated(to: goal)
         }
@@ -350,7 +352,7 @@ actor SafariBrowser {
     }
 
     func click(_ ref: String) async throws -> PageScripts.Page {
-        beginAction()
+        beginAction(mayNavigate: true)
         let before = try? await stamp()
         try check(try await javaScript(PageScripts.click(ref)), ref: ref)
         _ = try await settle(after: before, expectNavigation: false)
@@ -358,7 +360,7 @@ actor SafariBrowser {
     }
 
     func type(_ ref: String, text: String, submit: Bool) async throws -> PageScripts.Page {
-        beginAction()
+        beginAction(mayNavigate: true)
         let before = try? await stamp()
         try check(try await javaScript(PageScripts.type(ref, text: text, submit: submit)), ref: ref, option: text)
         if submit { _ = try await settle(after: before, expectNavigation: false) }
@@ -366,7 +368,7 @@ actor SafariBrowser {
     }
 
     func back() async throws -> PageScripts.Page {
-        beginAction()
+        beginAction(mayNavigate: true)
         let before = try? await stamp()
         _ = try await javaScript(PageScripts.back)
         _ = try await settle(after: before, expectNavigation: true)
@@ -460,9 +462,11 @@ actor SafariBrowser {
                     Script.tabJavaScript,
                     guardArguments(found) + [PageScripts.tabMark(found.tab.token) + code, PageScripts.takeDestination])
                 let parts = out.split(separator: "\n", maxSplits: 2, omittingEmptySubsequences: false).map(String.init)
+                // The site to compare a note with is the one the tab showed before the script.
+                let before = tab?.address
                 if let address = parts.first, !address.isEmpty { tab?.address = address }
                 // Claude's own page said it is going to another page (a click, a form, back).
-                if parts.count > 1 { take(note: parts[1]) }
+                if parts.count > 1 { take(note: parts[1], here: before) }
                 return parts.count > 2 ? parts[2] : ""
             } catch Failure.moved where attempt == 1 {
                 continue

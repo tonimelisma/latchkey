@@ -1,6 +1,6 @@
 # Status
 
-Last updated: 2026-10-29 (Claude's Safari window or tab after Safari restarts; Shell's start check can't hang; app 0.8.46)
+Last updated: 2026-10-29 (Safari tab hardened; Safari restarts; Shell scripts withdrawn; faster tests; app 0.8.47)
 
 Xcode signing ready (2026-10-20): Toni's Xcode account has a valid "Apple Development" certificate
 (certificate expires 2027-07-22). Keep the team ID out of committed project files
@@ -224,6 +224,9 @@ Claude's tab forward and Toni's back; idle close closes the tab. Claude's tab is
 hidden mark on its page and checked again inside every script that acts on it, so a tab of
 Toni's is never read, loaded, closed, or brought forward (security review). A tab Latchkey
 can't be sure of is left open and named in Left Behind.
+Since 0.8.45 a page's own note of where it is going counts only for its own site and can't keep
+the loading allowance open (security review): a click to another site loses Claude's tab, which
+stays open, is named in Left Behind, and Claude's next page opens in a fresh tab.
 Activity window (spec 001 FR-616; app 0.8.44): opens at once however big the log grows; the
 tamper check grows in a straight line instead of with the square of the log and runs in the
 background ("Checking…" until done); a start no longer reads the whole log on the main thread.

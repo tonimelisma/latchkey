@@ -352,10 +352,24 @@ final class Notes: @unchecked Sendable {
         _ = try await b.open("https://shop.example.com", newTab: false)
         await b.age(by: 60)
         fake.pageGoal = "https://owner.example.com/"
-        _ = try await b.read(offset: 0)
+        _ = try await b.click("e1")
         let state = await b.navigationState()
         #expect(
             state.map { !$0.addresses.contains("https://owner.example.com/") } ?? true, "\(String(describing: state))")
+        fake.pageGoal = nil
+    }
+
+    /// Security review 2026-10-29: a read can't open the allowance, however often the page
+    /// reports; only Claude's own click, typing, or back can.
+    @Test func aReadNeverOpensTheAllowance() async throws {
+        let fake = FakeSafariTabs()
+        let b = browser(fake)
+        _ = try await b.open("https://shop.example.com", newTab: false)
+        await b.age(by: 60)
+        let old = await b.navigationState()?.since
+        fake.pageGoal = "https://shop.example.com/cart"
+        _ = try await b.read(offset: 0)
+        #expect(await b.navigationState()?.since == old, "a read opened the allowance")
         fake.pageGoal = nil
     }
 
