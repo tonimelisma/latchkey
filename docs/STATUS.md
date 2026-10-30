@@ -242,6 +242,9 @@ Claude's tab in Toni's own Safari window as the default (in progress).
 
 ## Waiting on Toni
 
+0. Review the Mail spec draft (specs/008-mail/spec.md, branch `008-mail`): the choices of
+   2026-10-29 are in it; no plan, tasks, or code until Toni approves it.
+
 1. Answer the macOS alert about Latchkey accessing the screen (Allow) whenever it shows (none
    showing and none in macOS's log on 2026-10-29).
 
