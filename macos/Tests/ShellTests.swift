@@ -122,7 +122,7 @@ import Testing
 
     /// A command that leaves a process in the background that ignores Ctrl-C, hangup and
     /// terminate, and then waits: only stopping the whole terminal session ends it.
-    static let stubborn = "(trap '' HUP INT TERM; exec sleep 300) & echo PID:$!; sleep 300"
+    static let stubborn = LeftoversTests.leaver + "; sleep 300"
 
     @Test func stoppingAJobStopsEverythingItStarted() async throws {
         let (job, child) = try await Self.startStubborn(jobs)

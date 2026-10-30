@@ -32,7 +32,12 @@ final class Reports: @unchecked Sendable {
 
     /// A process that ignores Ctrl-C, hangup and terminate, left in the background by a command
     /// that then ends at once: what the Chrome processes of 2026-10-25 did.
-    static let leaver = "(trap '' HUP INT TERM; exec sleep 300) & echo PID:$!"
+    /// The signals are ignored before the background process exists (it inherits that when it is
+    /// started), so it holds from its first instant: with a trap inside it, a loaded Mac could end
+    /// the command first and the terminal's hang-up killed it before it ignored anything (the
+    /// flaky test, 2026-10-29).
+    static let leaver =
+        #"perl -e '$SIG{$_} = "IGNORE" for qw(HUP INT TERM); my $p = fork; if (!$p) { exec "sleep", "300" } $| = 1; print "PID:$p\n"'"#
 
     @Test func aFinishedCommandLeavesNothingRunning() async throws {
         let r = try await jobs.run(Self.leaver, folder: nil, wait: .seconds(10))
