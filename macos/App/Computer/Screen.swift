@@ -86,7 +86,14 @@ struct SystemScreen: ScreenStateSource {
 enum ScreenCheck {
     static let stillWorks = "Files, shell, Notes, Messages, and the browser still work."
 
-    static func problem(_ s: any ScreenStateSource) async -> String? {
+    /// How often, and how long apart, a sleeping display is looked at again after waking it: 2 s.
+    static let wakeChecks = 20
+
+    /// `pause` waits between looks; tests pass one that doesn't sleep.
+    static func problem(
+        _ s: any ScreenStateSource,
+        pause: @Sendable () async -> Void = { try? await Task.sleep(for: .milliseconds(100)) }
+    ) async -> String? {
         let displays = s.displays()
         guard let main = displays.first else {
             return
@@ -94,7 +101,7 @@ enum ScreenCheck {
         }
         if s.isAsleep(main.id) {
             s.wake()
-            for _ in 0..<20 where s.isAsleep(main.id) { try? await Task.sleep(for: .milliseconds(100)) }
+            for _ in 0..<wakeChecks where s.isAsleep(main.id) { await pause() }
             if s.isAsleep(main.id) {
                 return "The Mac's display is asleep and didn't wake, so Claude can't see the screen. \(stillWorks)"
             }

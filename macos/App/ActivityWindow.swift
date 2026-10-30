@@ -21,6 +21,8 @@ struct ActivityView: View {
     @State private var unreadable = 0
     @State private var changed = 0
     @State private var check: LogCheck?
+    /// Whether the tamper check has finished (FR-616); until then no entry is marked as checked.
+    @State private var checked = false
     @State private var loading = false
     @State private var exporting = false
     @State private var diskBytes: Int64 = 0
@@ -128,6 +130,8 @@ struct ActivityView: View {
                     Label("Changed", systemImage: "exclamationmark.triangle")
                 } else if e.beforeCheck {
                     Text("Before check").foregroundStyle(.secondary)
+                } else if !checked {
+                    Text(verbatim: "")  // not checked yet: the check runs in the background (FR-616)
                 } else {
                     Image(systemName: "checkmark").foregroundStyle(.secondary).accessibilityLabel("Checked")
                 }
@@ -170,6 +174,7 @@ struct ActivityView: View {
             model.trace.flatMap { ActivityFormat.latestNote($0.latestState) },
             ActivityFormat.unreadableNote(unreadable),
             ActivityFormat.beforeCheckNote(check?.beforeCheck ?? 0),
+            model.trace != nil && !checked ? ActivityFormat.checking : nil,
         ].compactMap { $0 }
         if let problem = model.activityLog.problem {
             Label(problem, systemImage: "exclamationmark.triangle").padding(.horizontal, 8).padding(.top, 8)
@@ -200,13 +205,9 @@ struct ActivityView: View {
         if !reset && (loading || next == nil) { return }
         let q = query
         let after = reset ? nil : next
-        let limit = Self.pageSize
         loading = true
         let started = Date()
-        let loaded = await Task.detached { () -> (ActivityPage, [ActivityRow])? in
-            guard let page = try? reader.page(q, after: after, limit: limit) else { return nil }
-            return (page, page.entries.map(ActivityRow.init))
-        }.value
+        let loaded = await ActivityLoading.page(reader, q, after: after, limit: Self.pageSize)
         loading = false
         guard q == query, let (page, newRows) = loaded else { return }
         let byID = Dictionary(page.entries.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
@@ -239,9 +240,11 @@ struct ActivityView: View {
 
     private func runCheck() async {
         guard let trace = model.trace else { return }
-        let reader = trace.reader
-        let expected = trace.expected
-        check = await Task.detached { try? reader.check(expected: expected) }.value
+        let started = Date()
+        check = await ActivityLoading.check(trace.reader, expected: trace.expected)
+        checked = true
+        Diagnostics.activity.notice(
+            "Activity window: tamper check in \(Int(Date().timeIntervalSince(started) * 1000)) ms")
     }
 
     /// Export… (FR-615): what the search and filters select, to a file the Owner picks.
@@ -390,6 +393,9 @@ extension ActivityFormat {
         }
     }
 
+    /// While the tamper check runs (FR-616): entries aren't marked until it has finished.
+    static let checking = "Checking the activity log for changes…"
+
     static func beforeCheckNote(_ count: Int) -> String? {
         count > 0
             ? "Entries marked “Before check” were recorded before Latchkey began checking the log for changes." : nil
@@ -433,6 +439,40 @@ extension ActivityFormat {
             return object
         }
         return object.mapValues(withoutImages)
+    }
+}
+
+/// What the Activity window reads from the log. Each of these can take time that grows with
+/// the log, so the window calls them only through `ActivityLoading`, off the main thread.
+protocol ActivityLogSource: Sendable {
+    func windowPage(_ query: ActivityQuery, after cursor: ActivityCursor?, limit: Int) throws -> ActivityPage
+    func windowCheck(expected: ChainTip?) throws -> LogCheck
+}
+
+extension ActivityReader: ActivityLogSource {
+    func windowPage(_ query: ActivityQuery, after cursor: ActivityCursor?, limit: Int) throws -> ActivityPage {
+        try page(query, after: cursor, limit: limit)
+    }
+
+    func windowCheck(expected: ChainTip?) throws -> LogCheck { try check(expected: expected) }
+}
+
+/// The Activity window's reads, each run off the main thread and awaited, so the window appears
+/// at once and fills in as they finish (FR-616).
+enum ActivityLoading {
+    /// A page, and the small rows the table shows for it; nil when the log can't be read.
+    static func page(
+        _ source: some ActivityLogSource, _ query: ActivityQuery, after: ActivityCursor?, limit: Int
+    ) async -> (ActivityPage, [ActivityRow])? {
+        await Task.detached(priority: .userInitiated) { () -> (ActivityPage, [ActivityRow])? in
+            guard let page = try? source.windowPage(query, after: after, limit: limit) else { return nil }
+            return (page, page.entries.map(ActivityRow.init))
+        }.value
+    }
+
+    /// The tamper check over the whole log (FR-612, FR-613); nil when it couldn't be made.
+    static func check(_ source: some ActivityLogSource, expected: ChainTip?) async -> LogCheck? {
+        await Task.detached(priority: .utility) { try? source.windowCheck(expected: expected) }.value
     }
 }
 

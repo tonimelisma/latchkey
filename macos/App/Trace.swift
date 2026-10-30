@@ -517,12 +517,15 @@ struct ActivityReader: Sendable {
 
     /// The entries matching `query`, newest first (or oldest first), after `cursor`, at most
     /// `limit`. Decrypts a batch at a time, each batch in a context of its own so memory stays flat.
+    /// `countUnreadable: false` leaves `unreadable` at 0: counting reads an index of the whole
+    /// log, and the menu doesn't show the count.
     func page(
-        _ query: ActivityQuery, after cursor: ActivityCursor? = nil, limit: Int, oldestFirst: Bool = false
+        _ query: ActivityQuery, after cursor: ActivityCursor? = nil, limit: Int, oldestFirst: Bool = false,
+        countUnreadable: Bool = true
     ) throws -> ActivityPage {
         var page = ActivityPage()
         let kid = keyID
-        if cursor == nil {
+        if cursor == nil && countUnreadable {
             page.unreadable = try ModelContext(container).fetchCount(
                 FetchDescriptor<SealedActivity>(predicate: #Predicate { $0.keyID != kid }))
         }
@@ -614,6 +617,11 @@ struct ActivityReader: Sendable {
         }
     }
 
+    /// The newest of Claude's actions that can be read, for the menu (FR-203).
+    func recent(limit: Int) throws -> [Activity] {
+        try page(ActivityQuery(kind: .action), limit: limit, countUnreadable: false).entries
+    }
+
     /// Every entry `query` selects, oldest first, as JSON Lines into `url` (FR-615). Returns how
     /// many were written.
     @discardableResult
@@ -664,14 +672,54 @@ struct ActivityReader: Sendable {
         return out
     }
 
+    /// The newest checked entry under the current key: its number and checksum, where the chain
+    /// continues. Walks the numbers down from the newest, a few rows at a time.
+    ///
+    /// Not one query for "this key, highest number": SQLite answers that from the key's index
+    /// and sorts every entry of the key to find the top one, so each start read the whole log
+    /// (2026-10-29). The number's own index gives the rows newest first; another key's rows
+    /// are skipped here. Only a log whose newest entries are all under an earlier key (the key
+    /// was lost) is walked further, and only until the first entry under this one.
+    func newestChained(_ context: ModelContext) throws -> ChainTip? {
+        let kid = keyID
+        var below = Int.max
+        let batch = 64
+        while true {
+            let b = below
+            var d = FetchDescriptor<SealedActivity>(
+                predicate: #Predicate { $0.seq > 0 && $0.seq < b }, sortBy: [SortDescriptor(\.seq, order: .reverse)])
+            d.fetchLimit = batch
+            d.propertiesToFetch = [\.seq, \.keyID, \.mac]
+            let rows = try context.fetch(d)
+            if let mine = rows.first(where: { $0.keyID == kid }) {
+                return ChainTip(seq: mine.seq, mac: mine.mac ?? Data())
+            }
+            guard rows.count == batch, let last = rows.last else { return nil }
+            below = last.seq
+        }
+    }
+
+    /// Entries under the current key recorded before the check began. Asked for by number
+    /// alone (there are no new ones), for the same reason as the check's batches.
+    private func beforeCheckCount() throws -> Int {
+        let kid = keyID
+        var d = FetchDescriptor<SealedActivity>(predicate: #Predicate { $0.seq == 0 })
+        d.propertiesToFetch = [\.keyID]
+        return try autoreleasepool { try ModelContext(container).fetch(d).filter { $0.keyID == kid }.count }
+    }
+
     /// Walks the chain of entries under the current key, oldest first, reading only the
     /// fields in the clear (FR-612); then looks for the newest entry Latchkey knows it wrote
     /// (FR-613). `expected` is nil when that isn't known.
+    ///
+    /// Each batch is asked for by number alone, so SQLite reads it in order from the number's
+    /// index; rows of other keys are skipped here. Asked for "this key and after this number",
+    /// SQLite used the key's index and sorted every remaining entry for each batch of 5,000:
+    /// that sorting grew with the square of the log (2026-10-29; the whole check took 5 s at 100,000).
     func check(expected: ChainTip?) throws -> LogCheck {
         var result = LogCheck()
         let kid = keyID
-        result.beforeCheck = try ModelContext(container).fetchCount(
-            FetchDescriptor<SealedActivity>(predicate: #Predicate { $0.seq == 0 && $0.keyID == kid }))
+        result.beforeCheck = try beforeCheckCount()
         var previous = Self.chainStart
         var after = 0
         var found = false
@@ -680,12 +728,14 @@ struct ActivityReader: Sendable {
         while true {
             let a = after
             var d = FetchDescriptor<SealedActivity>(
-                predicate: #Predicate { $0.keyID == kid && $0.seq > a }, sortBy: [SortDescriptor(\.seq)])
+                predicate: #Predicate { $0.seq > a }, sortBy: [SortDescriptor(\.seq)])
             d.fetchLimit = batch
             d.propertiesToFetch = [\.seq, \.id, \.at, \.keyID, \.mac, \.kind, \.callID, \.device]
             let count = try autoreleasepool { () throws -> Int in
                 let rows = try ModelContext(container).fetch(d)
                 for row in rows {
+                    after = row.seq
+                    guard row.keyID == kid else { continue }
                     let stored = row.mac ?? Data()
                     let place = ActivityCursor(at: row.at, seq: row.seq)
                     let computed = mac(
@@ -699,7 +749,6 @@ struct ActivityReader: Sendable {
                         if stored != expected.mac, result.broken.last != place { result.broken.append(place) }
                     }
                     previous = stored
-                    after = row.seq
                     newest = (row.seq, row.at)
                 }
                 return rows.count
@@ -838,10 +887,7 @@ final class TraceStore {
         var newest = FetchDescriptor<SealedActivity>(sortBy: [SortDescriptor(\.seq, order: .reverse)])
         newest.fetchLimit = 1
         let lastSeq = try context.fetch(newest).first?.seq ?? 0
-        var mine = FetchDescriptor<SealedActivity>(
-            predicate: #Predicate { $0.keyID == kid && $0.seq > 0 }, sortBy: [SortDescriptor(\.seq, order: .reverse)])
-        mine.fetchLimit = 1
-        let lastMine = try context.fetch(mine).first.map { ChainTip(seq: $0.seq, mac: $0.mac ?? Data()) }
+        let lastMine = try reader.newestChained(context)
 
         // FR-613: only "no record" may lead to writing one; one that can't be read or isn't
         // understood is left alone for this launch, and raises no alarm.
@@ -932,7 +978,7 @@ final class TraceStore {
 
     /// The newest of Claude's actions that can be read, for the menu (FR-203); the app's own
     /// events are in the Activity window only.
-    func recent(limit: Int) throws -> [Activity] { try reader.page(ActivityQuery(kind: .action), limit: limit).entries }
+    func recent(limit: Int) throws -> [Activity] { try reader.recent(limit: limit) }
 
     /// The newest readable entries, and how many stored entries can't be read (FR-203).
     func page(limit: Int) throws -> ActivityPage { try reader.page(ActivityQuery(), limit: limit) }

@@ -198,6 +198,24 @@ Format: EARS ("When <trigger>, the <system> shall <response>"). IDs are stable; 
   UTC offset, tool, arguments, result, whether it failed, duration in milliseconds; since
   2026-10-27 also whether it is an action or an event, the call id, and the Claude app, FR-633,
   FR-637), to a place the Owner chooses in the standard save dialog. Entries that can't be read are left out.
+- **FR-616** When the Owner opens the Activity window, the window shall appear at once and fill
+  in as the log is read: no work over the whole log (the tamper check, counting unreadable
+  entries, searching) shall run on the app's main thread or hold up the window, the menu, or
+  recording, and the time the window and the menu wait shall not grow with the size of the log.
+  Until the tamper check has finished, the window shall say it is checking and shall not mark
+  any entry as checked (2026-10-29).
+  Why (2026-10-29): the window once took about 10 seconds to appear on Toni's Mac (2026-10-27).
+  The timing lines added then show, for the installed app on 2026-10-28 over its 18 MB log,
+  0.2 s from choosing Show All Activity to the window and 0.23 s for the first page, so the
+  small-rows change of 2026-10-27 holds; the 10 seconds weren't seen again. Reading every step
+  that runs when the window opens found what does grow with the log, though: the tamper check
+  and each start asked SQLite for "this key, after this number", which it answered by sorting
+  every entry of the key, so the check's sorting grew with the square of the log (the whole
+  check took 5 s at 100,000 entries; by estimate, the sorting alone a minute or more at a million) and
+  each start read the whole log on the main thread; the menu counted unreadable entries
+  over the whole log on the main thread after every call; and the window marked entries
+  "checked" before the check had run. A new line says when the window is in front and whether
+  the app was active, in case a window opened behind another app is what looked slow.
 
 ### Diagnostic log (Toni, 2026-10-27)
 - **FR-620** The Mac app and its helper shall write to macOS's log, each time it changes: the

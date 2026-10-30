@@ -923,7 +923,22 @@ final class AppModel {
     private(set) var busy = 0
     private(set) var recentActivity: [Activity] = []
 
-    func loadRecentActivity() { recentActivity = (try? trace?.recent(limit: 10)) ?? [] }
+    private var recentLoads = 0
+
+    /// Reads the menu's newest entries off the main thread (after every call, they decrypt up to
+    /// a few dozen entries, screenshots included); the newest load wins.
+    func loadRecentActivity() {
+        guard let reader = trace?.reader else {
+            recentActivity = []
+            return
+        }
+        recentLoads += 1
+        let load = recentLoads
+        Task {
+            let entries = await Task.detached { (try? reader.recent(limit: 10)) ?? [] }.value
+            if load == recentLoads { recentActivity = entries }
+        }
+    }
 
     /// Account recovered (plan D5) or a Claude client given access: tell the Owner on this Mac.
     private func show(_ n: Notice) async {

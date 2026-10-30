@@ -654,7 +654,7 @@ Serves FR-022, FR-023, FR-024, FR-026, FR-026a, FR-610 to FR-615, Constitution V
   check walks the entries under the current key in seq order, reading only the clear fields,
   and lists each entry whose mac doesn't follow (resyncing on its stored mac, so later breaks
   are found too); a sealed box under the current key that no longer opens counts as changed.
-  The window runs it off the main thread each time it opens. Entries from before (seq 0) are
+  The window runs it off the main thread each time it opens (FR-616). Entries from before (seq 0) are
   shown with "Before check". The upgrade is SwiftData's in-place migration (the new fields have
   defaults), then one pass that gives every old entry the ID of the key that opens it (or "-")
   in a single save; a failed save changes nothing and is retried at the next start.
@@ -673,6 +673,22 @@ Serves FR-022, FR-023, FR-024, FR-026, FR-026a, FR-610 to FR-615, Constitution V
   `ModelContext` of its own off the main thread; nothing searchable is stored in the clear.
   Export… (FR-615) writes the same query oldest first, a page at a time, as JSON Lines to the
   file chosen in `NSSavePanel`. Timings for 100,000 entries are in research.md.
+- Opening the window (FR-616, 2026-10-29): the window's reads go through `ActivityLoading`, which
+  runs each on a detached task (the first page at user-initiated priority, the tamper check at
+  utility) and hands back small rows; the window shows "Checking the activity log for changes…"
+  and an empty Check column until the check returns. Queries that walk the chain ask by `seq`
+  alone, so SQLite reads them in order from the `seq` index, and skip other keys' rows in
+  Swift: the check's batches of 5,000, the count of entries from before the check, and, at
+  start, the newest entry under the current key (64 rows at a time, newest first). Asking for
+  "key ID = this key and seq > n" made SQLite use the key-ID index and sort every entry of the
+  key for each batch (seen with `EXPLAIN QUERY PLAN` on a generated store: `USE TEMP B-TREE FOR
+  ORDER BY`). The menu's newest entries are read off the main thread after every call, newest
+  load wins, without counting unreadable entries (`countUnreadable: false`). Measured
+  2026-10-29 on 100,000 entries of about 1 KB: open 0.003 s (was 0.06 s and growing), first page
+  0.013 s, menu 0.003 s, check 0.73 s at 20,000 and 4.0 s at 100,000 (linear; mostly SwiftData
+  reading each row's clear fields), main-thread record and menu read during the check at most
+  0.009 s. `ActivityLogScaleTests` fails when any of these grows with the log;
+  `ActivityWindowLoadingTests` fails when the window's reads run on the main thread.
 - The Keychain look (`Keychain.lookup`) answers one of three things: no item (only when the
   search itself says "not found"), the item's data, or "there is an item that can't be read"
   (every other failure: a Keychain error, more than one match, no data). A new log key is made

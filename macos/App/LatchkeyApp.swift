@@ -102,7 +102,15 @@ final class WindowPresence {
             observers.append(
                 nc.addObserver(forName: name, object: nil, queue: .main) { [weak self] note in
                     let closing = name == NSWindow.willCloseNotification ? note.object as? NSWindow : nil
-                    MainActor.assumeIsolated { self?.update(closing: closing) }
+                    let key = name == NSWindow.didBecomeKeyNotification ? note.object as? NSWindow : nil
+                    MainActor.assumeIsolated {
+                        // With "Show All Activity chosen", tells a window slow to open from one that
+                        // opened behind another app's (2026-10-27: about 10 s, not seen again).
+                        if key?.title == "Latchkey Activity" {
+                            Diagnostics.activity.notice("Activity window in front (app active: \(NSApp.isActive))")
+                        }
+                        self?.update(closing: closing)
+                    }
                 })
         }
     }

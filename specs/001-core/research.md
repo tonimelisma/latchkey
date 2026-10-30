@@ -610,6 +610,21 @@ in the whole log 3.1 s; tool filter, first page 0.03 s; last 30 days, first page
 the whole log 8.9 s; the log on disk 163 MB. A Release build is faster; entries with images take
 longer to search and export, in proportion to their size.
 
+Queries that walk the chain, and what the window waits for (FR-616, 2026-10-29). `EXPLAIN QUERY
+PLAN` on a generated store showed "key ID = k and seq > n, ordered by seq" answered from the
+key-ID index with a sort of every entry of the key (`USE TEMP B-TREE FOR ORDER BY`): each of the
+check's batches of 5,000 sorted the rest of the log (quadratic), and the start's "newest entry
+under this key" sorted the whole log on the main thread. Options: a two-column index on (key
+ID, seq) (one query each; but a schema change of the Owner's only copy of the log, and whether
+SwiftData builds a new index on an existing store needs proving); asking by seq alone and
+skipping other keys' rows in Swift (no schema change; reads every row once, other keys' too,
+which exist only after a lost key); keeping the queries (fine for a year's log, not for one kept
+for good). Chosen: by seq alone. Same test, 2026-10-29, while the rest of the suite ran: opening
+0.003 s, first page 0.013 s, next page 0.015 s, menu 0.003 s (each best of three), check 0.73 s at
+20,000 entries and 4.0 s at 100,000, a main-thread record and menu read during the check at most
+0.009 s, text search 4.8 s, export 12.4 s. The check is now linear; most of its time is SwiftData
+reading each row's clear fields (about 40 µs a row).
+
 
 ## The Mac's audit trail: its own events, call ids, and the comparison (FR-632 to FR-634, FR-636, FR-637, 2026-10-27)
 
