@@ -215,8 +215,15 @@ enum ContactsCapability {
         guard backend.allowed() else { throw ContactsFailure.noAccess }
         // iCloud's copies of things deleted earlier that came back after that answer (FR-727).
         let leftovers = memory.isEmpty ? [] : try memory.sweepLeftovers(in: backend)
-        var r = try await changeOne(args, backend, memory)
+        // Those deletions are Claude's changes too: in the activity and its notification even
+        // when the requested change then fails (security review, 2026-10-29).
+        var r: ToolResult
+        do { r = try await changeOne(args, backend, memory) } catch { r = await run { throw error } }
         for line in leftovers { r.appendText(line) }
+        if !leftovers.isEmpty {
+            let also = "deleted iCloud's leftover copies of what Claude deleted earlier"
+            r.activity = r.activity.map { "\($0); also \(also)" } ?? "Claude \(also)"
+        }
         return r
     }
 

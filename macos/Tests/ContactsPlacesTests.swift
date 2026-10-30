@@ -408,6 +408,22 @@ func resultText(_ r: ToolResult) -> String {
         #expect(resultText(gone).contains("Also deleted iCloud's copy of the group"), "\(resultText(gone))")
         #expect(gone.activity == "Claude deleted the contact group “Book club” and iCloud's copy of it")
         #expect(fake.groupNames == ["G1": "Family"])
+    }
+
+    /// Security review 2026-10-29: a copy deleted at a later change is in that change's activity
+    /// (and so its notification), also when the change itself fails.
+    @Test func aLaterCopyDeletionIsInTheActivity() async throws {
+        let id = try await createGroup("Book club")
+        let gone = try await change(["action": .string("delete_group"), "group": .string(id)])
+        #expect(!gone.isError)
+        fake.groupNames["LATE-G"] = "Book club"  // iCloud's copy turns up after the answer
+        let failed = try await change([
+            "action": .string("rename_group"), "group": .string("Nope"), "name": .string("X"),
+        ])
+        #expect(failed.isError)
+        #expect(fake.groupNames["LATE-G"] == nil, "the late copy is deleted")
+        #expect(failed.activity?.contains("iCloud's leftover copies") == true, "\(failed.activity ?? "nil")")
+        #expect(resultText(failed).contains("Book club"), "\(resultText(failed))")
         #expect(fake.cards.count == 3, "cards are never deleted with a group")
     }
 
