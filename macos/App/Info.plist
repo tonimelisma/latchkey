@@ -29,7 +29,7 @@
 	<key>NSHumanReadableCopyright</key>
 	<string>Apache-2.0</string>
 	<key>NSAppleEventsUsageDescription</key>
-	<string>Latchkey uses Notes and Messages to create and change notes and send messages when you ask Claude to.</string>
+	<string>Latchkey uses Notes, Messages, Mail, and Safari to change notes, send messages, organise and send email, and open web pages when you ask Claude to.</string>
 	<key>NSContactsUsageDescription</key>
 	<string>Latchkey lets Claude look up, add, and change your contacts, and shows names in messages instead of phone numbers.</string>
 	<key>NSCalendarsFullAccessUsageDescription</key>

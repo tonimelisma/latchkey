@@ -87,7 +87,8 @@ import Testing
         let all = Approval.list(facts)
         #expect(
             all.map(\.id) == [
-                "helper", "disk", "notes", "messages", "contacts", "calendars", "reminders", "location", "safari",
+                "helper", "disk", "notes", "messages", "mail", "contacts", "calendars", "reminders", "location",
+                "safari",
                 "safariJS", "screen", "accessibility",
             ])
         #expect(all.filter { $0.state == .missing }.map(\.id) == ["helper"], "everything off needs only keep-awake")
@@ -98,6 +99,15 @@ import Testing
         #expect(some.filter { $0.state == .missing }.map(\.id) == ["helper", "notes", "contacts"])
         #expect(some.first { $0.id == "disk" }?.state == .allowed)
         #expect(some.first { $0.id == "messages" }?.state == .notNeeded, "reading messages needs no control")
+
+        // Spec 008: organising and sending email need control of Mail; reading doesn't.
+        facts.level = { [CapabilityRegistry.mail: .readOnly][$0] ?? .off }
+        #expect(Approval.list(facts).first { $0.id == "mail" }?.state == .notNeeded)
+        facts.level = { [CapabilityRegistry.mail: .readWrite][$0] ?? .off }
+        #expect(Approval.list(facts).first { $0.id == "mail" }?.state == .missing)
+        facts.mail = .allowed
+        #expect(Approval.list(facts).first { $0.id == "mail" }?.state == .allowed)
+        facts.level = { [CapabilityRegistry.notes: .readWrite, CapabilityRegistry.messages: .readOnly][$0] ?? .off }
 
         facts.contacts = .denied
         #expect(Approval.list(facts).first { $0.id == "contacts" }?.state == .optional, "names are optional")

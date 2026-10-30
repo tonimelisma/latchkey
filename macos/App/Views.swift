@@ -197,6 +197,7 @@ struct PermissionsPane: View {
         case "disk": Button("Allow…") { Permissions.openFullDiskAccessSettings() }
         case "notes": control(Permissions.notesApp)
         case "messages": control(Permissions.messagesApp)
+        case "mail": control(Permissions.mailApp)
         case "safari": control(Permissions.safariApp)
         case "contacts":
             if model.contactsStatus == .notDetermined {
@@ -356,7 +357,7 @@ struct SetupView: View {
                 }
             }
             if model.capabilities.anyOn {
-                step("disk", "Let Latchkey read your files, notes, and messages") {
+                step("disk", "Let Latchkey read your files, notes, messages, and mail") {
                     Text(
                         "macOS needs you to switch this on yourself. In System Settings, turn on Latchkey under Full Disk Access."
                     )
@@ -373,6 +374,11 @@ struct SetupView: View {
                 controlStep(
                     "messages", "Let Latchkey send messages", app: Permissions.messagesApp, appName: "Messages",
                     purpose: "So Claude can send messages for you.")
+            }
+            if level(CapabilityRegistry.mail) == .readWrite {
+                controlStep(
+                    "mail", "Let Latchkey organise and send email", app: Permissions.mailApp, appName: "Mail",
+                    purpose: "So Claude can file, flag, and delete email, save drafts, and send email for you.")
             }
             if level(CapabilityRegistry.contacts) != .off {
                 step("contacts", "Let Claude see your contacts") {
@@ -497,6 +503,7 @@ struct SetupView: View {
         if model.capabilities.anyOn { steps.append("disk") }
         if level(CapabilityRegistry.notes) == .readWrite { steps.append("notes") }
         if level(CapabilityRegistry.messages) == .readWrite { steps.append("messages") }
+        if level(CapabilityRegistry.mail) == .readWrite { steps.append("mail") }
         if level(CapabilityRegistry.messages) != .off || level(CapabilityRegistry.contacts) != .off {
             steps.append("contacts")
         }
@@ -551,6 +558,7 @@ struct SetupView: View {
         case "disk": model.fullDiskAccess
         case "notes": model.control(of: Permissions.notesApp) == .allowed
         case "messages": model.control(of: Permissions.messagesApp) == .allowed
+        case "mail": model.control(of: Permissions.mailApp) == .allowed
         case "contacts": model.contactsStatus == .authorized
         case "calendars": model.calendarStatus == .fullAccess
         case "reminders": model.remindersStatus == .fullAccess
@@ -638,7 +646,7 @@ enum ActivityFormat {
     static let capabilityNames = [
         "shell": "Shell", "files": "Files", "notes": "Notes", "messages": "Messages", "browser": "Browser",
         "computer": "Computer", "calendar": "Calendar", "reminders": "Reminders", "contacts": "Contacts",
-        "location": "Location", "maps": "Maps",
+        "location": "Location", "maps": "Maps", "mail": "Mail",
     ]
     /// The argument that names what was acted on, first found wins.
     static let targetKeys = [

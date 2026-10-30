@@ -9,11 +9,15 @@ enum Permissions {
     static let notesDatabase = URL.homeDirectory.appending(
         path: "Library/Group Containers/group.com.apple.notes/NoteStore.sqlite")
     static let messagesDatabase = URL.homeDirectory.appending(path: "Library/Messages/chat.db")
+    /// Mail's index (spec 008), in its newest data folder; nil when it can't be found (or listed).
+    static var mailIndex: URL? { MailStore.defaultRoot().map(MailStore.indexURL) }
 
     /// Full Disk Access can't be asked for; the only test is to open a protected file. A missing
     /// file (Messages never used) doesn't count against it.
     static var hasFullDiskAccess: Bool {
-        let existing = [notesDatabase, messagesDatabase].filter { FileManager.default.fileExists(atPath: $0.path) }
+        let existing = ([notesDatabase, messagesDatabase] + [mailIndex].compactMap { $0 }).filter {
+            FileManager.default.fileExists(atPath: $0.path)
+        }
         guard !existing.isEmpty else { return true }
         return existing.allSatisfy { url in
             guard let handle = try? FileHandle(forReadingFrom: url) else { return false }
@@ -24,6 +28,7 @@ enum Permissions {
 
     static let notesApp = "com.apple.Notes"
     static let messagesApp = "com.apple.MobileSMS"
+    static let mailApp = MailCapability.mailApp
     static let safariApp = "com.apple.Safari"
 
     enum Automation: Sendable, Equatable { case allowed, denied, notAsked }
@@ -105,6 +110,7 @@ struct ApprovalFacts {
     var fullDiskAccess: Bool
     var notes: Permissions.Automation
     var messages: Permissions.Automation
+    var mail: Permissions.Automation = .notAsked
     var safari: Permissions.Automation
     var contacts: CNAuthorizationStatus
     var calendars = false
@@ -138,6 +144,7 @@ struct Approval: Identifiable, Equatable {
     static func list(_ f: ApprovalFacts) -> [Approval] {
         let notes = f.level(CapabilityRegistry.notes)
         let messages = f.level(CapabilityRegistry.messages)
+        let mail = f.level(CapabilityRegistry.mail)
         let browser = f.level(CapabilityRegistry.browser) != .off
         let computer = f.level(CapabilityRegistry.computer) != .off
         let anyOn = CapabilityRegistry.all.contains { f.level($0) != .off }
@@ -160,7 +167,7 @@ struct Approval: Identifiable, Equatable {
                 id: "helper", title: "Keep This Mac Awake",
                 purpose: "So Claude can reach this Mac with the lid closed.", state: state(f.helper, needed: true)),
             Approval(
-                id: "disk", title: "Full Disk Access", purpose: "To read your files, notes, and messages.",
+                id: "disk", title: "Full Disk Access", purpose: "To read your files, notes, messages, and mail.",
                 state: state(f.fullDiskAccess, needed: anyOn)),
             Approval(
                 id: "notes", title: "Control Notes", purpose: "To create, edit, and delete notes.",
@@ -168,6 +175,9 @@ struct Approval: Identifiable, Equatable {
             Approval(
                 id: "messages", title: "Control Messages", purpose: "To send messages for you.",
                 state: state(f.messages == .allowed, needed: messages == .readWrite)),
+            Approval(
+                id: "mail", title: "Control Mail", purpose: "To organise and send email for you.",
+                state: state(f.mail == .allowed, needed: mail == .readWrite)),
             Approval(id: "contacts", title: "Contacts", purpose: contactsPurpose, state: contacts),
             Approval(
                 id: "calendars", title: "Calendars", purpose: "To see your events and add or change them.",
