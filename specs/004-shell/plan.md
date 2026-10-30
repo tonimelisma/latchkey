@@ -149,7 +149,10 @@ Handing work to macOS (FR-328, FR-329, 2026-10-28): unless `uses` has `open` or
 Unless `uses` has `app_scripts`, it refuses the Apple Events service
 (`com.apple.coreservices.appleevents`), sending Apple Events, and starting `/usr/bin/osascript`
 (a script then fails at once, not after a 15-second wait); `app_scripts` also allows
-LaunchServices, since a script may start the app it talks to. It always refuses the settings
+LaunchServices, since a script may start the app it talks to, and starts `osascript` outside
+the sandbox: apps refuse Apple events from any sandboxed program ("A privilege violation
+occurred", -10004), so a declared script could never reach an app from inside the fence (found
+by the Mail research, 2026-10-29; fixed in 0.8.44). It always refuses the settings
 service (`com.apple.cfprefsd.daemon`, `.agent`): settings are then read from their files, and
 `defaults write` writes the domain's file itself, which the fence allows only when declared
 ("Could not write domain" otherwise), and never for Latchkey's own settings. Allowing the

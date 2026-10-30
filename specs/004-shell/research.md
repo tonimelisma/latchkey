@@ -145,3 +145,10 @@ Low-level choices (Claude's):
 Self-check (2026-10-29): Toni chose that a failed check keeps Shell running with a warning
 rather than refusing commands (Shell would be unusable after such a macOS update until
 Latchkey is fixed). The check costs one short program at start, about 50 ms.
+
+Scripts to apps from inside a sandbox (2026-10-29): `sandbox-exec -p '(version 1)(allow
+default)'` alone makes `tell application "Finder"` fail with -10004 while the same script
+outside works, so any sandbox, not one of the fence's rules, is what apps refuse. The 0.8.39
+test used a script that talks to no app. Since 0.8.44 a declared `app_scripts` starts
+`osascript` with `(with no-sandbox)`, like `ps` and `top`; it stays in the job's terminal
+session and family, so it is still stopped with the command.

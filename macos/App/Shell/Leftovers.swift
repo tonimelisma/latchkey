@@ -167,8 +167,11 @@ enum Fence {
         }
         rules.append(services(settingsService))
         if let mark { rules.append("(deny file-read* (literal \(quote(OwnFiles.real(mark).path))))") }
+        // Apps refuse Apple events from a sandboxed program (-10004), so a declared script runs
+        // outside the fence (FR-328; Mail research, 2026-10-29).
+        let outside = unfenced + (uses.contains(.appScripts) ? [scriptRunner] : [])
         rules.append(
-            "(allow process-exec " + unfenced.map { "(literal \(quote($0)))" }.joined(separator: " ")
+            "(allow process-exec " + outside.map { "(literal \(quote($0)))" }.joined(separator: " ")
                 + " (with no-sandbox))")
         return rules.joined(separator: "\n")
     }

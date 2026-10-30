@@ -1,6 +1,6 @@
 # Status
 
-Last updated: 2026-10-29 (Shell self-check at start; specs 003, 004, 006 reviewed; app 0.8.43)
+Last updated: 2026-10-29 (declared app scripts reach apps; Shell self-check; app 0.8.44)
 
 Xcode signing ready (2026-10-20): Toni's Xcode account has a valid "Apple Development" certificate
 (certificate expires 2027-07-22). Keep the team ID out of committed project files
@@ -215,6 +215,9 @@ The Mac state line appears in every result (it reported the battery warning at 1
 2. Known limit: macOS shows its own "allow Latchkey to access the screen directly" alert from
    time to time for screen capture; it needs Toni at the Mac (computer control only).
 
+Declared app scripts (`uses: ["app_scripts"]`) never reached an app from 0.8.39 to 0.8.43:
+apps refuse Apple events from any sandboxed program; since 0.8.44 `osascript` runs outside the
+fence when declared (found by the Mail research).
 Shell self-check (Toni, 2026-10-29; app 0.8.43; spec 004 FR-330): at start, Latchkey checks
 that the fence still refuses a write and that a program in a fence is found by its mark; when
 a macOS update breaks either, commands still run, every Shell answer says so, and Toni gets

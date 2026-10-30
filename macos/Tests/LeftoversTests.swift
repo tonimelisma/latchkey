@@ -210,7 +210,11 @@ final class Reports: @unchecked Sendable {
         let scripts = profile([], [.appScripts])
         #expect(!scripts.contains("com.apple.coreservices.appleevents"))
         #expect(!scripts.contains("com.apple.lsd.mapdb"), "scripts may start the app they talk to")
-        #expect(!scripts.contains("/usr/bin/osascript"))
+        // Mail research 2026-10-29: apps refuse Apple events from any sandboxed program (-10004),
+        // so a declared script runs outside the fence, as ps and top do.
+        #expect(scripts.contains("(literal \"/usr/bin/osascript\") (with no-sandbox))"), "\(scripts)")
+        #expect(!scripts.contains("(deny process-exec (literal \"/usr/bin/osascript\"))"))
+        #expect(!closed.contains("\"/usr/bin/osascript\") (with no-sandbox)"))
         // Security review 2026-10-28: the settings service would write any domain, Latchkey's
         // own included, so it stays refused; a declared domain's file is written directly.
         let file = home.appending(path: "Library/Preferences/com.example.plist")
