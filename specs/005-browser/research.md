@@ -46,3 +46,14 @@ Done 2026-10-22 with 003, 004, 006.
   expect; `submit` presses Enter by submitting the field's form.
 - **Scripts from Claude** (`browser_script`, Read & write level): runs Claude's own JavaScript in
   the tab; result as text. Passed as an argument, never pasted into the AppleScript.
+
+## Claude's window across restarts (2026-10-29)
+
+A live check found that an update of Latchkey forgot Claude's Safari window, which then never
+closed (FR-411). Where to keep the window's id: user defaults (tests would need a stand-in, and
+other programs can write them), the activity log (encrypted and append-only, wrong shape for a
+value that changes on every use), or a small JSON file in the support folder (chosen: plain,
+private to the user, deleted once the window closes). Safari's window ids are only meaningful
+while the same Safari runs, so the file also names Safari's process id and launch time, and a
+mismatch means start fresh rather than risk closing one of the Owner's windows. The Owner's own
+windows are never adopted; a window Safari restores after its own restart stays open.

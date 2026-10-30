@@ -1,6 +1,6 @@
 # Status
 
-Last updated: 2026-10-29 (Shell fence closes its gaps; reminder lists and contact groups; app 0.8.41)
+Last updated: 2026-10-29 (Claude's Safari window is remembered across Latchkey restarts; app 0.8.42)
 
 Xcode signing ready (2026-10-20): Toni's Xcode account has a valid "Apple Development" certificate
 (certificate expires 2027-07-22). Keep the team ID out of committed project files
@@ -63,7 +63,8 @@ Deleting a group within seconds of making it can leave iCloud's copy behind (see
 test copy was deleted). The check also showed every command stopping macOS's font service
 (`fontd`, restarted by launchd): its sandbox looked like the job's; fixed in 0.8.41.
 Checked live on 2026-10-28 (app 0.8.38): the Left Behind view (its Tool filter showed blank;
-fixed), deleting a real Notes folder, and the launch-agent watcher's entry.
+fixed), deleting a real Notes folder, and the launch-agent watcher's entry. Safari's idle close
+couldn't be: a restart forgot Claude's window; since 0.8.42 it is remembered (2026-10-29).
 
 All capabilities are built and checked live (app 0.7.4, 2026-10-22; current app 0.8.13, installed with `make -C macos install`), through the hosted relay with
 a fresh Claude Code session on Toni's real Mac: Notes (read, checklists, create/append/edit/

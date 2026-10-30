@@ -3,7 +3,7 @@ import Foundation
 
 /// The Owner's Safari (spec 005).
 enum BrowserCapability {
-    static let browser = SafariBrowser(scripts: OSAScriptRunner())
+    static let browser = SafariBrowser(scripts: OSAScriptRunner(), memory: .app)
 
     static func make() -> Capability {
         Capability(

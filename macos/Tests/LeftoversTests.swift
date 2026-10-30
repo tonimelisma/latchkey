@@ -622,6 +622,30 @@ final class Reports: @unchecked Sendable {
         #expect(last.1 == ["42"])
         #expect(await !browser.closeIfIdle(after: 0), "no window any more")
     }
+
+    /// A restarted Latchkey still closes the window it was using, but only in the same run of
+    /// Safari (live check 2026-10-29: an update made it forget the window).
+    @Test func aRestartRemembersClaudesWindow() async throws {
+        let folder = FileManager.default.temporaryDirectory.appending(path: "window-memory-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let file = folder.appending(path: "safari-window.json")
+        let first = SafariBrowser(
+            scripts: RecordingRunner(answers: ["42", "{}"]), settleLimit: .milliseconds(50),
+            memory: WindowMemory(file: file) { "100 1" })
+        _ = try? await first.open("https://example.com", newTab: false)
+        #expect(WindowMemory(file: file) { nil }.load()?.window == "42")
+
+        let otherSafari = RecordingRunner(answers: [""])
+        let restartedSafari = SafariBrowser(scripts: otherSafari, memory: WindowMemory(file: file) { "200 2" })
+        #expect(await !restartedSafari.closeIfIdle(after: 0), "Safari restarted: the id may be the Owner's")
+
+        let runner = RecordingRunner(answers: [""])
+        let restarted = SafariBrowser(scripts: runner, memory: WindowMemory(file: file) { "100 1" })
+        #expect(await !restarted.closeIfIdle(after: 1800), "it keeps the time Claude last used it")
+        #expect(await restarted.closeIfIdle(after: 1800, now: Date().addingTimeInterval(1900)))
+        #expect(runner.calls.last?.1 == ["42"])
+        #expect(!FileManager.default.fileExists(atPath: file.path), "forgotten once closed")
+    }
 }
 
 /// Answers scripts in order, repeating the last answer, and remembers each call.

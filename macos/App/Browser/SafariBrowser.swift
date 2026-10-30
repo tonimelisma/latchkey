@@ -1,4 +1,4 @@
-import Foundation
+import AppKit
 
 /// The Owner's Safari, driven through Apple Events in a window of Claude's own (spec 005 plan
 /// D2). Remembers that window's id; never touches other windows.
@@ -12,15 +12,33 @@ actor SafariBrowser {
     }
 
     let scripts: any ScriptRunner
-    private var window: String?
+    private var window: String? { didSet { remember() } }
     /// When Claude last used its window (spec 005 FR-411).
-    private var lastUse = Date()
+    private var lastUse = Date() { didSet { remember() } }
     /// How long a page may take to load (plan D3).
     private let settleLimit: Duration
+    private let memory: WindowMemory?
 
-    init(scripts: any ScriptRunner, settleLimit: Duration = .seconds(15)) {
+    init(scripts: any ScriptRunner, settleLimit: Duration = .seconds(15), memory: WindowMemory? = nil) {
         self.scripts = scripts
         self.settleLimit = settleLimit
+        self.memory = memory
+        // The window a Latchkey that quit was using, so it still closes when unused (FR-411; a
+        // restart forgot it, live check 2026-10-29). Only from the same run of Safari: after
+        // Safari restarts, the id may be one of the Owner's windows.
+        if let memory, let saved = memory.load(), saved.safari == memory.safari() {
+            window = saved.window
+            lastUse = saved.lastUse
+        }
+    }
+
+    private func remember() {
+        guard let memory else { return }
+        if let window, let safari = memory.safari() {
+            memory.save(WindowMemory.Saved(window: window, lastUse: lastUse, safari: safari))
+        } else {
+            memory.save(nil)
+        }
     }
 
     /// Loads `url` in Claude's window (a new tab if asked), making the window if needed. A page
@@ -276,5 +294,44 @@ actor SafariBrowser {
             end tell
             end run
             """
+    }
+}
+
+/// Where Claude's Safari window is kept across restarts of Latchkey: a small file in its support
+/// folder (research.md). `safari` names the running Safari, by process id and launch time.
+struct WindowMemory: Sendable {
+    struct Saved: Codable, Equatable, Sendable {
+        var window: String
+        var lastUse: Date
+        var safari: String
+    }
+
+    var file: URL
+    var safari: @Sendable () -> String?
+
+    func load() -> Saved? {
+        guard let data = try? Data(contentsOf: file) else { return nil }
+        return try? JSONDecoder().decode(Saved.self, from: data)
+    }
+
+    func save(_ saved: Saved?) {
+        let fm = FileManager.default
+        guard let saved, let data = try? JSONEncoder().encode(saved) else {
+            try? fm.removeItem(at: file)
+            return
+        }
+        try? fm.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try? data.write(to: file, options: .atomic)
+    }
+
+    /// The app's own; none under tests, which never touch real storage.
+    static var app: WindowMemory? {
+        guard ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil else { return nil }
+        return WindowMemory(file: AppIdentity.current.supportDirectory.appending(path: "safari-window.json")) {
+            guard let s = NSRunningApplication.runningApplications(withBundleIdentifier: "com.apple.Safari").first,
+                let launched = s.launchDate
+            else { return nil }
+            return "\(s.processIdentifier) \(launched.timeIntervalSince1970)"
+        }
     }
 }
