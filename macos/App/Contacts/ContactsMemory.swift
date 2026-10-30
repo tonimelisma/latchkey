@@ -326,15 +326,24 @@ final class ContactsMemory: @unchecked Sendable {
                 s.groups.filter { $0.deleted && young($0.created) }.map { ($0.key, $0.name) }
             )
         }
+        // One failing copy doesn't hide the deletions already done (security review, 2026-10-29).
         var lines: [String] = []
         for key in cards {
-            for name in try removeCardCopies(key, in: backend) {
-                lines.append("Also deleted iCloud's leftover copy of the contact \(name), deleted earlier.")
+            do {
+                for name in try removeCardCopies(key, in: backend) {
+                    lines.append("Also deleted iCloud's leftover copy of the contact \(name), deleted earlier.")
+                }
+            } catch {
+                lines.append("Couldn't delete iCloud's leftover copy of a contact deleted earlier: \(error)")
             }
         }
         for (key, name) in groups {
-            if try removeGroupCopies(key, in: backend).deleted > 0 {
-                lines.append("Also deleted iCloud's leftover copy of the group “\(name)”, deleted earlier.")
+            do {
+                if try removeGroupCopies(key, in: backend).deleted > 0 {
+                    lines.append("Also deleted iCloud's leftover copy of the group “\(name)”, deleted earlier.")
+                }
+            } catch {
+                lines.append("Couldn't delete iCloud's leftover copy of the group “\(name)”: \(error)")
             }
         }
         return lines

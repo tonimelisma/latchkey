@@ -792,6 +792,7 @@ final class AppModel {
         try? trace?.record(entry)
         loadRecentActivity()
         if let activity = result.activity, !result.isError { Notifier.post(activity) }  // FR-130
+        if let also = result.alsoDone { Notifier.post(also) }
         if let made = result.made, !result.isError {  // FR-641
             let by = entry.client.map { " (\($0))" } ?? ""
             EventLog.shared.record(.leftovers, "Claude made \(made)\(by)", systemLog: false)

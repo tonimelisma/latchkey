@@ -9,6 +9,9 @@ struct ToolResult: Sendable, Equatable {
     var activity: String?
     /// What the call created ("the note “Plan”"), for the Left Behind list (FR-641).
     var made: String?
+    /// Changes made along the way that happened whether or not the call itself succeeded (iCloud
+    /// copies deleted, spec 007 FR-727): notified even when the answer is an error.
+    var alsoDone: String?
 
     /// Adds a line of text at the end of the answer, on a line of its own (Claude's apps join
     /// text parts without a break).

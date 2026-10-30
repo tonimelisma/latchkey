@@ -220,10 +220,7 @@ enum ContactsCapability {
         var r: ToolResult
         do { r = try await changeOne(args, backend, memory) } catch { r = await run { throw error } }
         for line in leftovers { r.appendText(line) }
-        if !leftovers.isEmpty {
-            let also = "deleted iCloud's leftover copies of what Claude deleted earlier"
-            r.activity = r.activity.map { "\($0); also \(also)" } ?? "Claude \(also)"
-        }
+        if !leftovers.isEmpty { r.alsoDone = "Claude deleted iCloud's leftover copies of what it deleted earlier" }
         return r
     }
 

@@ -422,7 +422,7 @@ func resultText(_ r: ToolResult) -> String {
         ])
         #expect(failed.isError)
         #expect(fake.groupNames["LATE-G"] == nil, "the late copy is deleted")
-        #expect(failed.activity?.contains("iCloud's leftover copies") == true, "\(failed.activity ?? "nil")")
+        #expect(failed.alsoDone?.contains("iCloud's leftover copies") == true, "\(failed.alsoDone ?? "nil")")
         #expect(resultText(failed).contains("Book club"), "\(resultText(failed))")
         #expect(fake.cards.count == 3, "cards are never deleted with a group")
     }
