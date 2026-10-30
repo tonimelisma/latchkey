@@ -96,17 +96,34 @@ window at the next page Claude opens (FR-417).
   each tab only whether it shows Claude's last address and, for the tab at Claude's position and
   tabs at that address only, whether it carries the token ("yes"/"no"). Nothing else of the
   Owner's tabs is read, and no script of Claude's runs in them. Latchkey then picks (pure Swift,
-  `TabSurvey.pick`): the tab at Claude's position if marked; else, within 10 s of Claude's last
-  action (a page Claude opened or clicked is loading, and a new page has no mark yet) and with the
-  same tab count, the tab at that position; else a marked tab at Claude's last address (tabs
-  moved). Otherwise none: Latchkey forgets the tab, notes it lost track of it (FR-418), and Claude
-  is told its page isn't open. The script that then acts checks the tab count first and refuses
-  if tabs changed in between (Latchkey surveys again once).
+  `TabSurvey.pick`): the tab at Claude's position if marked; else, while a page Claude loaded is
+  loading (a new page has no mark yet), the tab at that position if the tab count is the same and
+  the tab shows that page's address; else a marked tab at Claude's last address (tabs moved).
+  Otherwise none: Latchkey forgets the tab, notes it lost track of it (FR-418), and Claude is told
+  its page isn't open.
+- **Claude's own navigation** (security review, 2026-10-29): "a page Claude loaded is loading" is
+  its own record, not the time of Claude's last use, which every Apple Event (the survey too)
+  refreshes, so it could stay open for ever. It starts when Claude opens a page (the address
+  asked for) and when Claude's marked page reports that it is going to another page: the mark
+  script also listens for the Navigation API's `navigate` event, and every script in Claude's
+  tab ends by taking the address it noted (clicks, forms, `back`, which notes the previous
+  history entry itself). It lasts the settle limit plus 1 s (16 s) from that moment, and only
+  for those addresses, in the spellings a redirect to https, www., or a final / gives. A page
+  that goes elsewhere (other redirects, a navigation the page starts later without a script of
+  Claude's seeing it) makes Latchkey lose the tab: it stays open and is named (FR-418).
+- **Checking again before acting** (security review, 2026-10-29): every script that acts on
+  Claude's tab (script, load, bring forward, close) starts by checking, in the same script, that
+  the tab count is the same and the tab at Claude's position carries the mark (the yes/no check)
+  or, during Claude's navigation, shows one of its addresses. Otherwise it does nothing and
+  answers "moved"; Latchkey surveys again once. The mark is only put on a tab that passed this
+  check. Bringing the Owner's tab back after a screenshot also needs Claude's tab, still
+  marked, in front.
 - **Screenshot** (FR-415): one script remembers the tab in front, brings Claude's tab forward, and
   answers its title; after 0.3 s for Safari to draw it, the window is captured as before; then a
   script brings the remembered tab back only if Claude's tab is still in front.
-- **Idle close** (FR-411): Claude's tab is closed by the same survey, with "recent" off, so an
-  unmarked tab at its position is never closed. `safari-window.json` gains the tab (position,
+- **Idle close** (FR-411): Claude's tab is closed by the same survey and check, with no
+  navigation allowance, so an unmarked tab at its position is never closed; when the check fails,
+  the lost tab is noted. `safari-window.json` gains the tab (position,
   count, address, token), so a restarted Latchkey closes it too, in the same run of Safari.
 - **Tabs** (FR-416): the tab list shows Claude's tab alone as tab 1; switching to another number
   is refused with a hint to open a page instead.
@@ -124,7 +141,10 @@ For a tab (D6), a stand-in Safari with windows and tabs records which tabs ran w
 Claude's tab opens behind the Owner's, is found again after the Owner closes a tab before it, is
 never replaced by an Owner's tab in its place (also at the same address), comes forward for a
 screenshot and goes back (also when the shot fails), closes when idle (also after a restart), and
-the setting switches between tab and window. The Owner's tabs never run a script of Claude's.
+the setting switches between tab and window, an Owner's tab slides into Claude's place between
+the survey and the action (for reading, opening, screenshot, and closing), Latchkey's own scripts
+keep running past the navigation allowance, and a click goes to another site. The Owner's tabs
+never run a script of Claude's, get the mark, load a page, close, or come forward.
 `TabSurvey.pick` has its own table of cases; the mark is checked in a WebKit view. Every new
 AppleScript compiles (`ScriptSyntaxTests`).
 

@@ -128,16 +128,34 @@ enum PageScripts {
         """
     }
 
-    static let back = "(function () { history.back(); return 'ok'; })()"
+    /// Notes where going back leads (plan D6), from the Navigation API where Safari has it.
+    static let back = """
+        (function () {
+          try {
+            var n = window.navigation;
+            if (n && n.currentEntry && n.currentEntry.index > 0) window.__latchkeyGoal = n.entries()[n.currentEntry.index - 1].url;
+          } catch (e) {}
+          history.back();
+          return 'ok';
+        })()
+        """
 
     static let titleAndAddress = "document.title + '\\t' + location.href"
 
     /// Put before every script in Claude's tab (spec 005 plan D6): marks the page as Claude's,
-    /// so Latchkey finds the tab again after the Owner's tabs moved. Not enumerable; a page that
+    /// so Latchkey finds the tab again after the Owner's tabs moved, and notes where the page is
+    /// going when it starts loading another (the Navigation API's navigate event), so Latchkey
+    /// knows Claude's tab while the new page, still unmarked, loads. Not enumerable; a page that
     /// blocks it only makes Latchkey lose track of the tab. `token` is hex.
     static func tabMark(_ token: String) -> String {
         "try { Object.defineProperty(window, '__latchkeyTab', { value: '\(token)', configurable: true }); } catch (e) {}\n"
+            + "try { if (window.navigation && !window.__latchkeyListens) { Object.defineProperty(window, '__latchkeyListens', { value: true, configurable: true }); "
+            + "window.navigation.addEventListener('navigate', function (e) { try { window.__latchkeyGoal = e.destination.url; } catch (x) {} }); } } catch (e) {}\n"
     }
+
+    /// Where the page said it is going since last asked, or ""; asking clears it.
+    static let takeDestination =
+        "(function () { var g = window.__latchkeyGoal || ''; window.__latchkeyGoal = ''; return String(g); })()"
 
     /// Whether a page carries Claude's mark: "yes" or "no", nothing else of the page.
     static func tabCheck(_ token: String) -> String {

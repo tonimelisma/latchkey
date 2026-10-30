@@ -27,12 +27,14 @@ struct ClaudeTab: Codable, Equatable, Sendable {
 
 /// What Safari reports about a window's tabs before Latchkey uses Claude's: for each tab only
 /// whether it shows Claude's last address and whether it carries Claude's mark (checked only in
-/// the tab at Claude's position and tabs at that address). Nothing of the Owner's tabs comes back.
+/// the tab at Claude's position and tabs at that address), and for the tab at Claude's position
+/// whether it shows an address Claude just loaded. Nothing of the Owner's tabs comes back.
 struct TabSurvey: Equatable {
     struct Row: Equatable {
         var index: Int
         var sameAddress: Bool
         var marked: Bool
+        var loading = false
     }
 
     var count: Int
@@ -43,26 +45,28 @@ struct TabSurvey: Equatable {
         self.rows = rows
     }
 
-    /// Safari's answer: the tab count, then "index<TAB>true|false<TAB>true|false" per tab.
+    /// Safari's answer: the tab count, then "index<TAB>same<TAB>marked<TAB>loading" per tab,
+    /// each true or false.
     init(_ text: String) {
         var lines = text.split(separator: "\n", omittingEmptySubsequences: true)
         count = lines.isEmpty ? 0 : Int(lines.removeFirst().trimmingCharacters(in: .whitespaces)) ?? 0
         rows = lines.compactMap { line in
             let f = line.split(separator: "\t").map { $0.trimmingCharacters(in: .whitespaces) }
-            guard f.count == 3, let i = Int(f[0]) else { return nil }
-            return Row(index: i, sameAddress: f[1] == "true", marked: f[2] == "true")
+            guard f.count >= 3, let i = Int(f[0]) else { return nil }
+            return Row(
+                index: i, sameAddress: f[1] == "true", marked: f[2] == "true", loading: f.count > 3 && f[3] == "true")
         }
     }
 
     /// Which tab is Claude's, or nil when none surely is (FR-403: better lose Claude's tab than
-    /// use one of the Owner's). The tab at Claude's position with Claude's mark; or, while Claude
-    /// has just acted (its page may be loading, so the mark is gone), the tab at that position
-    /// when the window has as many tabs as before; or, when tabs moved, a tab with Claude's mark
-    /// at Claude's last address.
-    static func pick(_ s: TabSurvey, remembered t: ClaudeTab, recent: Bool) -> Int? {
+    /// use one of the Owner's). The tab at Claude's position with Claude's mark; or, while a page
+    /// Claude loaded is loading (`navigating`; the new page has no mark yet), the tab at that
+    /// position when the window has as many tabs as before and the tab shows the address Claude
+    /// loaded; or, when tabs moved, a tab with Claude's mark at Claude's last address.
+    static func pick(_ s: TabSurvey, remembered t: ClaudeTab, navigating: Bool) -> Int? {
         if let r = s.rows.first(where: { $0.index == t.index }) {
             if r.marked { return r.index }
-            if recent && s.count == t.count { return r.index }
+            if navigating && r.loading && s.count == t.count { return r.index }
         }
         return s.rows.first { $0.index != t.index && $0.sameAddress && $0.marked }?.index
     }
@@ -93,8 +97,12 @@ actor SafariBrowser {
     private let place: @Sendable () -> BrowserPlace
     /// Records a Left Behind entry (spec 001 FR-640).
     private let note: @Sendable (String) -> Void
-    /// How long after Claude's last action its tab may be unmarked (its new page still loading).
-    static let recentAction: TimeInterval = 10
+    /// Claude's own navigation in its tab: when it started and where to (the address Claude
+    /// loaded, or where Claude's marked page said it was going). Not `lastUse`, which every Apple
+    /// Event refreshes (security review, 2026-10-29).
+    private var navigation: (since: Date, addresses: [String])?
+    /// How long after Claude's navigation started its tab may be unmarked.
+    private var allowance: TimeInterval { Double(settleLimit.components.seconds) + 1 }
 
     /// `place` is read each time Claude opens a page; callers that don't say get a window of
     /// Claude's own, as before tabs (the app passes the Owner's setting).
@@ -127,8 +135,11 @@ actor SafariBrowser {
         }
     }
 
-    /// For tests: as if Claude last used its page `seconds` earlier.
-    func age(by seconds: TimeInterval) { lastUse = lastUse.addingTimeInterval(-seconds) }
+    /// For tests: as if Claude last used its page, and last navigated it, `seconds` earlier.
+    func age(by seconds: TimeInterval) {
+        lastUse = lastUse.addingTimeInterval(-seconds)
+        navigation?.since.addTimeInterval(-seconds)
+    }
 
     /// Loads `url` in Claude's window (a new tab if asked), making the window if needed. A page
     /// that doesn't finish loading is an error naming what Safari still shows, never a read of
@@ -150,6 +161,7 @@ actor SafariBrowser {
                 }
                 window = f[0]
                 tab = ClaudeTab(index: index, count: count, address: address, token: Self.newToken())
+                navigation = (Date(), [address])
             }
         } else {
             window = try await call(Script.open, [address, window ?? "", newTab ? "yes" : "no"])
@@ -266,15 +278,19 @@ actor SafariBrowser {
     private func javaScript(_ code: String) async throws -> String {
         guard let window else { throw Failure.noWindow }
         guard tab != nil else { return try await call(Script.javaScript, [window, code]) }
-        // Safari's tabs may move between finding Claude's tab and using it: find it again once.
+        // Safari's tabs may move between finding Claude's tab and using it: the script checks
+        // again before acting, and Latchkey finds the tab again once.
         for attempt in 1...2 {
-            let (w, t) = try await locate()
+            let found = try await locate()
             do {
                 let out = try await call(
-                    Script.tabJavaScript, [w, String(t.index), String(t.count), PageScripts.tabMark(t.token) + code])
-                let parts = out.split(separator: "\n", maxSplits: 1, omittingEmptySubsequences: false)
-                if let address = parts.first, !address.isEmpty { tab?.address = String(address) }
-                return parts.count > 1 ? String(parts[1]) : ""
+                    Script.tabJavaScript,
+                    guardArguments(found) + [PageScripts.tabMark(found.tab.token) + code, PageScripts.takeDestination])
+                let parts = out.split(separator: "\n", maxSplits: 2, omittingEmptySubsequences: false).map(String.init)
+                if let address = parts.first, !address.isEmpty { tab?.address = address }
+                // Claude's own page said it is going to another page (a click, a form, back).
+                if parts.count > 1, !parts[1].isEmpty { navigation = (Date(), [parts[1]]) }
+                return parts.count > 2 ? parts[2] : ""
             } catch Failure.moved where attempt == 1 {
                 continue
             }
@@ -282,50 +298,111 @@ actor SafariBrowser {
         throw Failure.moved
     }
 
+    /// Claude's tab as found, and the addresses an unmarked tab in its place may show (empty
+    /// unless a page Claude loaded is loading).
+    struct Found {
+        var window: String
+        var tab: ClaudeTab
+        var loading: [String]
+    }
+
+    /// The addresses Claude's tab may show unmarked now: those of Claude's own navigation, while
+    /// it is recent, in their usual spellings (http or https, with or without www. and a final /).
+    private var loadingAddresses: [String] {
+        guard let navigation, Date().timeIntervalSince(navigation.since) < allowance else { return [] }
+        return Self.spellings(of: navigation.addresses)
+    }
+
     /// Claude's tab in the Owner's window, found again (plan D6). When no tab surely is Claude's,
     /// Latchkey forgets it, notes that it lost track of it, and Claude is told its page is gone.
-    /// `recent` is whether Claude acted a moment ago (its page may still be loading).
-    private func locate(recent: Bool? = nil) async throws -> (String, ClaudeTab) {
+    /// `navigating: false` allows only a marked tab (closing).
+    private func locate(navigating: Bool = true) async throws -> Found {
         guard let window, var t = tab else { throw Failure.noWindow }
-        let recent = recent ?? (Date().timeIntervalSince(lastUse) < Self.recentAction)
+        let loading = navigating ? loadingAddresses : []
         let survey = TabSurvey(
-            try await call(Script.tabSurvey, [window, String(t.index), t.address, PageScripts.tabCheck(t.token)]))
-        guard let index = TabSurvey.pick(survey, remembered: t, recent: recent) else {
-            self.window = nil
-            tab = nil
-            note(
-                "Latchkey lost track of Claude's Safari tab (it was closed, or moved while its page changed). If it's still open, it stays open."
-            )
+            try await call(
+                Script.tabSurvey,
+                [window, String(t.index), t.address, PageScripts.tabCheck(t.token), loading.joined(separator: "\n")]))
+        guard let index = TabSurvey.pick(survey, remembered: t, navigating: !loading.isEmpty) else {
+            lost()
             throw Failure.noWindow
         }
         t.index = index
         t.count = survey.count
         tab = t
-        return (window, t)
+        return Found(window: window, tab: t, loading: loading)
+    }
+
+    private func lost() {
+        window = nil
+        tab = nil
+        navigation = nil
+        note(
+            "Latchkey lost track of Claude's Safari tab (it was closed, or moved while its page changed). If it's still open, it stays open."
+        )
+    }
+
+    /// The first arguments of every script that acts on Claude's tab: it checks again, in the
+    /// same script, that the tab is Claude's before acting (marked, or showing an address Claude
+    /// is loading), so a tab that moved into Claude's place in between is left alone.
+    private func guardArguments(_ f: Found) -> [String] {
+        [
+            f.window, String(f.tab.index), String(f.tab.count), PageScripts.tabCheck(f.tab.token),
+            f.loading.joined(separator: "\n"),
+        ]
     }
 
     /// Loads `address` in Claude's tab, if Latchkey still finds one. False when not.
     private func loadInTab(_ address: String) async throws -> Bool {
         guard tab != nil else { return false }
-        let w: String
-        let t: ClaudeTab
-        do { (w, t) = try await locate() } catch Failure.noWindow { return false }
-        _ = try await call(Script.tabLoad, [w, String(t.index), String(t.count), address])
+        let found: Found
+        do { found = try await locate() } catch Failure.noWindow { return false }
+        _ = try await call(Script.tabLoad, guardArguments(found) + [address])
         tab?.address = address
+        navigation = (Date(), [address])
         return true
+    }
+
+    /// The usual spellings of `addresses`, as a redirect to https, to www., or to a final / gives.
+    static func spellings(of addresses: [String]) -> [String] {
+        var out: [String] = []
+        func add(_ s: String) { if !s.contains("\n"), !out.contains(s) { out.append(s) } }
+        for a in addresses {
+            add(a)
+            guard var c = URLComponents(string: a), let host = c.host, !host.isEmpty,
+                let scheme = c.scheme?.lowercased(), ["http", "https"].contains(scheme)
+            else { continue }
+            let bare = host.hasPrefix("www.") ? String(host.dropFirst(4)) : host
+            let path = c.percentEncodedPath
+            let paths =
+                path.isEmpty || path == "/"
+                ? ["", "/"] : (path.hasSuffix("/") ? [path, String(path.dropLast())] : [path, path + "/"])
+            for s in ["https", "http"] {
+                for h in [bare, "www." + bare] {
+                    for p in paths {
+                        c.scheme = s
+                        c.host = h
+                        c.percentEncodedPath = p
+                        if let spelled = c.string { add(spelled) }
+                    }
+                }
+            }
+        }
+        return out
     }
 
     /// Closes Claude's tab or window, whichever it has: the setting changed (FR-417).
     private func closeClaudesPage() async {
         if tab != nil {
-            if let (w, t) = try? await locate(recent: false) {
-                _ = try? await scripts.run(Script.tabClose, [w, String(t.index), String(t.count)])
+            if let found = try? await locate(navigating: false) {
+                _ = try? await call(Script.tabClose, guardArguments(found))
             }
         } else if let window {
             _ = try? await scripts.run(Script.close, [window])
         }
         window = nil
         tab = nil
+        navigation = nil
     }
 
     /// Shows Claude's page for a screenshot (spec 006 FR-509): `body` gets the title Safari's
@@ -337,13 +414,14 @@ actor SafariBrowser {
             let t = try await tabs(select: nil)
             return try await body(t.tabs.first { $0.0 == t.current }?.1 ?? "")
         }
-        let (w, t) = try await locate()
-        let f = try await call(Script.tabShow, [w, String(t.index), String(t.count)]).split(
+        let found = try await locate()
+        let t = found.tab
+        let f = try await call(Script.tabShow, guardArguments(found)).split(
             separator: "\t", maxSplits: 1, omittingEmptySubsequences: false
         ).map(String.init)
         let previous = f.first.flatMap { Int($0.trimmingCharacters(in: .whitespacesAndNewlines)) } ?? t.index
         let title = f.count > 1 ? f[1].trimmingCharacters(in: .newlines) : ""
-        let back = [w, String(t.index), String(previous)]
+        let back = [found.window, String(t.index), String(previous), PageScripts.tabCheck(t.token)]
         do {
             try await Task.sleep(for: .milliseconds(300))  // Safari draws the tab
             let result = try await body(title)
@@ -402,12 +480,17 @@ actor SafariBrowser {
         let minutes = Int(after / 60)
         if tab != nil {
             // A tab Latchkey can't surely find isn't closed: it might be the Owner's now.
-            if let (w, t) = try? await locate(recent: false) {
-                _ = try? await scripts.run(Script.tabClose, [w, String(t.index), String(t.count)])
-                note("Closed Claude's Safari tab after \(minutes) minutes unused")
+            if let found = try? await locate(navigating: false) {
+                do {
+                    _ = try await call(Script.tabClose, guardArguments(found))
+                    note("Closed Claude's Safari tab after \(minutes) minutes unused")
+                } catch {
+                    lost()
+                }
             }
             window = nil
             tab = nil
+            navigation = nil
             return true
         }
         window = nil
@@ -511,6 +594,7 @@ actor SafariBrowser {
             set idx to (item 2 of argv) as integer
             set lastURL to item 3 of argv
             set checkJS to item 4 of argv
+            set theExpected to paragraphs of (item 5 of argv)
             set sep to character id 9
             tell application "Safari"
             if not (exists window id winID) then error "LATCHKEY_NO_WINDOW"
@@ -529,44 +613,71 @@ actor SafariBrowser {
             set isMarked to ((do JavaScript checkJS in t) is "yes")
             end try
             end if
-            set out to out & (i as text) & sep & (sameURL as text) & sep & (isMarked as text) & linefeed
+            set isLoading to false
+            if i is idx then
+            try
+            set isLoading to ((URL of t) is in theExpected)
+            end try
+            end if
+            set out to out & (i as text) & sep & (sameURL as text) & sep & (isMarked as text) & sep & (isLoading as text) & linefeed
             end repeat
             return out
             end tell
             end run
             """
-        /// The start of every script on Claude's tab: the window is there and has as many tabs
-        /// as when Latchkey found Claude's (else they moved in between).
+        /// The start of every script that acts on Claude's tab (argv: window id, tab index, tab
+        /// count, the yes/no mark check, the addresses Claude is loading, one per line): the
+        /// window has as many tabs as when Latchkey found Claude's, and the tab still carries
+        /// Claude's mark or shows an address Claude is loading. Else tabs moved in between, and
+        /// nothing is done to the tab (security review, 2026-10-29).
         private static let tabGuard = """
             set winID to (item 1 of argv) as integer
             set idx to (item 2 of argv) as integer
             set n to (item 3 of argv) as integer
+            set checkJS to item 4 of argv
+            set theExpected to paragraphs of (item 5 of argv)
             tell application "Safari"
             if not (exists window id winID) then error "LATCHKEY_NO_WINDOW"
             set w to window id winID
             if (count of tabs of w) is not n then error "LATCHKEY_MOVED"
             set t to tab idx of w
+            set confirmed to false
+            try
+            set confirmed to ((do JavaScript checkJS in t) is "yes")
+            end try
+            if not confirmed then
+            try
+            set confirmed to ((URL of t) is in theExpected)
+            end try
+            end if
+            if not confirmed then error "LATCHKEY_MOVED"
             """
-        /// argv: window id, tab index, tab count, script. Answers the tab's address, a line
-        /// break, and the script's result.
+        /// argv: the guard's five, the script, the script that answers where the page said it is
+        /// going. Answers the tab's address, where the page is going (or nothing), and the
+        /// script's result, one per line.
         static let tabJavaScript = """
             on run argv
             \(tabGuard)
-            set theAnswer to do JavaScript (item 4 of argv) in t
+            set theAnswer to do JavaScript (item 6 of argv) in t
             if theAnswer is missing value then set theAnswer to ""
+            set theGoal to ""
+            try
+            set theGoal to (do JavaScript (item 7 of argv) in t) as text
+            end try
+            if theGoal is "missing value" then set theGoal to ""
             set theAddress to ""
             try
             set theAddress to (URL of t) as text
             end try
-            return theAddress & linefeed & (theAnswer as text)
+            return theAddress & linefeed & theGoal & linefeed & (theAnswer as text)
             end tell
             end run
             """
-        /// argv: window id, tab index, tab count, url.
+        /// argv: the guard's five, url.
         static let tabLoad = """
             on run argv
             \(tabGuard)
-            set URL of t to (item 4 of argv)
+            set URL of t to (item 6 of argv)
             return ""
             end tell
             end run
@@ -603,7 +714,7 @@ actor SafariBrowser {
             end tell
             end run
             """
-        /// argv: window id, tab index, tab count. Brings Claude's tab to the front of its window;
+        /// argv: the guard's five. Brings Claude's tab to the front of its window;
         /// answers the tab that was in front and Claude's page title.
         static let tabShow = """
             on run argv
@@ -619,24 +730,29 @@ actor SafariBrowser {
             end tell
             end run
             """
-        /// argv: window id, Claude's tab index, the tab to bring back. Only while Claude's tab is
-        /// still in front: a tab the Owner chose meanwhile stays.
+        /// argv: window id, Claude's tab index, the tab to bring back, the yes/no mark check. Only
+        /// while Claude's tab, still marked, is in front: a tab the Owner chose meanwhile stays.
         static let tabRestore = """
             on run argv
             set winID to (item 1 of argv) as integer
             set idx to (item 2 of argv) as integer
             set previousIndex to (item 3 of argv) as integer
+            set checkJS to item 4 of argv
             tell application "Safari"
             if not (exists window id winID) then return ""
             set w to window id winID
             if (index of current tab of w) is idx and previousIndex is not idx and previousIndex is less than or equal to (count of tabs of w) then
-            set current tab of w to tab previousIndex of w
+            set isMarked to false
+            try
+            set isMarked to ((do JavaScript checkJS in (tab idx of w)) is "yes")
+            end try
+            if isMarked then set current tab of w to tab previousIndex of w
             end if
             return ""
             end tell
             end run
             """
-        /// argv: window id, tab index, tab count. Closes Claude's tab only.
+        /// argv: the guard's five. Closes Claude's tab only.
         static let tabClose = """
             on run argv
             \(tabGuard)

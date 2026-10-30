@@ -66,14 +66,33 @@ content process): no id that lasts. How to know which tab is Claude's:
 - **Position, count, and a mark on the page** (chosen): a random token set as a hidden property on
   Claude's page before every script. It survives the Owner's tabs moving, and is lost when the
   page changes; Claude's own navigation is covered by accepting the unmarked tab at its position
-  for 10 seconds after Claude acted, when the tab count is unchanged. Anything less certain counts
+  while that navigation is recent, when the tab count is unchanged and the tab shows the address
+  Claude loaded or its marked page said it was going to (plan D6). Anything less certain counts
   as lost: the tab is left alone and noted (FR-418). Cost: a page that navigates by itself between
   Claude's calls (a timed redirect) makes Latchkey lose its tab, which then stays open and is
   named in Left Behind. The check runs a one-line yes/no script in the tab at Claude's position
   and in tabs at Claude's address only; no other tab of the Owner's runs anything.
 - **Deciding in Swift or in AppleScript**: in Swift (chosen), from a survey script that answers
   only yes/no flags per tab, so the decision is unit-tested; costs one more `osascript` per use
-  (about 0.1 s). The acting script checks the tab count, so tabs changing in between are caught.
+  (about 0.1 s). The acting script checks again (count, and mark or loading address), so tabs
+  changing in between are caught.
+
+Security review fixes (2026-10-29):
+
+- **When does "Claude's page is loading" hold?** The first version used the time of Claude's last
+  use, which every Apple Event refreshes (the survey included), so the allowance for an unmarked
+  tab could stay open for ever and the mark could end up on an Owner's tab moved into Claude's
+  place. Options: a fixed time after Claude's own navigation only (still accepts any tab in that
+  time); that plus the tab showing the address Claude loaded (chosen); or no allowance at all
+  (every click to another page would lose the tab). For clicks the address isn't known ahead:
+  options were the link's href (misses buttons, forms, and script navigations), reading the
+  unconfirmed tab's address in Swift (reads the Owner's tab), or the page's own Navigation API
+  `navigate` event, noted by Claude's marked page (chosen; WebKit has it, checked in the WebKit
+  view test). Redirects change the address: the common ones (to https, to www., a final /) are
+  accepted as spellings; others lose the tab, which is safe and named in Left Behind.
+- **Checking between survey and action**: the count alone missed a tab dragged into Claude's
+  place. The acting script now repeats the mark check (or the loading-address check) itself,
+  in one Apple Event with the action, so nothing happens in between.
 
 Other choices (Claude's): the new tab goes at the end of the front window (where Safari puts new
 tabs; no current tab means a non-browser window, skipped); `new_tab` in a tab loads in Claude's
