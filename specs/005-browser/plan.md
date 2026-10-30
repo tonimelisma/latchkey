@@ -58,9 +58,15 @@ click, typing, or Claude's own script is Read & write, which may run script in t
 
 ## D3. Reading and acting
 
-One page script returns title, URL, visible text (100,000 characters per answer, `offset` to
-read on), and up to 400 visible links, buttons, fields, and choices, each tagged with a
-reference stored on the element (`data-latchkey="e12"`). Click and type find the element by
+One page script returns title, URL, visible text (40,000 characters from `offset`), and up to
+400 visible links, buttons, fields, and choices, each tagged with a reference stored on the
+element (`data-latchkey="e12"`). The answer as a whole stays within Claude's result size (40,000
+characters, FR-405; 2026-10-29: a Wikipedia article came back as 71,455): the list of links,
+buttons, and fields takes at most 20,000 (a link on the page's own host shows its path only;
+those that don't fit are counted, and a script can find them), the text gets the rest, and the
+answer names the offset to read on from ("Characters 0–24518 of 70184. Read on with browser_read
+and offset 24518."). Offsets count as JavaScript does (UTF-16). `browser_read` with a url and
+an offset opens the page and reads it from the offset. Click and type find the element by
 that reference; typing sets the value the way frameworks expect and fires input and change
 events; submit uses the field's form. After an action, Latchkey waits for the page to finish
 loading (at most 15 s) and returns the page's new title and URL. Every reading result starts by
@@ -116,7 +122,18 @@ window at the next page Claude opens (FR-417).
   refreshes, so it could stay open for ever. It starts when Claude opens a page (the address
   asked for) and when Claude's marked page reports that it is going to another page: the mark
   script also listens for the Navigation API's `navigate` event, and every script in Claude's
-  tab ends by taking the address it noted (clicks, forms, `back`). The note is the event's
+  tab ends by taking the address it noted (clicks, forms, `back`). Real Safari (2026-10-29)
+  times this differently from the WebKit view: `location.href` fires the event during the
+  script and the page is gone by the next `do JavaScript`, and a link, a form, or back fires it
+  only after the script has returned, usually after the new page has replaced the old one. So
+  the note is taken in the same run as the script (`PageScripts.inTab`); the click script also
+  answers the address of the link it clicked when the link opens in the same tab, read after the
+  page's click handlers, and the back script the address of the history entry it goes to
+  (Navigation API `entries()`); and after a click, typing, or back the acting AppleScript asks
+  for the note again every 0.05 s for up to about 0.6 s, stopping at a note, at a page without
+  Latchkey's note (the new page answers `null`), or when the window's tab count changed. All
+  three are the page's word and count only as notes do (same site, one per action, only in
+  Claude's click, typing, or back). The note is the event's
   destination only, kept in the listener's own variable and read through a getter that can't be
   changed (page code can't write it; a note the page put there first is ignored); it comes back
   JSON-encoded on one line, the AppleScript removes line breaks from it, and Latchkey uses it
@@ -163,6 +180,24 @@ keep running past the navigation allowance, and a click goes to another site. Th
 never run a script of Claude's, get the mark, load a page, close, or come forward.
 `TabSurvey.pick` has its own table of cases; the mark is checked in a WebKit view. Every new
 AppleScript compiles (`ScriptSyntaxTests`).
+
+The stand-in Safari times notes as real Safari does (2026-10-29): a link's and back's note never
+arrives (the page is gone first), a button's arrives only to the acting script's wait, a
+script's only in its own run. Tests: a same-site link, a button, and back keep the tab; a link
+to another site and a script that navigates lose it; a note in the click script's own run
+counts. The WebKit view checks the note taken in the script's own run, `null` on a page
+without the note, and the addresses the click and back scripts answer. Paging: a page like
+the Wikipedia article stays within Claude's result size and names the offset, and a url with
+an offset reads from it.
+
+What only real Safari can show is checked by `macos/scripts/safari-check.sh`: Latchkey's own
+`SafariBrowser` against real Safari, in a window the check opens and closes, never touching
+the Owner's: a same-site click keeps the tab and the new page reads (and back, and a second
+click), a script's navigation and a cross-site click lose it as designed, a long page comes in
+parts with a working offset. It runs from a terminal that may control Safari, not from the
+test host: the test host is its own app to macOS, and its first Apple Event to Safari opens an
+Automation prompt, during which Safari answers no window or tab scripting from anyone (seen
+2026-10-29: the prompt waited behind the locked screen and blocked every Safari script).
 
 ## Constitution check
 

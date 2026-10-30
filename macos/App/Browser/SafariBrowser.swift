@@ -260,16 +260,30 @@ actor SafariBrowser {
     /// Only an address on the site of the page Claude's tab shows counts: what the page can
     /// name is its own site (security review, 2026-10-29); a click to another site loses the
     /// tab, which stays open and is named in Left Behind.
-    private func take(note: String, here: String?) {
-        guard !noteTaken, let goal = Self.goal(fromNote: note), let here, Self.sameSite(goal, here) else { return }
+    /// One script's notes count as one: the note taken in the script's own run, the one the
+    /// acting script waited for, and the address of the link Claude clicked (or of the entry
+    /// back goes to), each JSON-encoded.
+    private func take(notes: [String], here: String?) {
+        guard !noteTaken, let here else { return }
+        var goals: [String] = []
+        for note in notes {
+            if let goal = Self.goal(fromNote: note), Self.sameSite(goal, here), !goals.contains(goal) {
+                goals.append(goal)
+            }
+        }
+        guard let first = goals.first else { return }
         noteTaken = true
+        func add() {
+            for goal in goals where navigation?.addresses.contains(goal) == false { navigation?.addresses.append(goal) }
+        }
         if navigatedThisAction, navigation != nil {
-            if navigation?.addresses.contains(goal) == false { navigation?.addresses.append(goal) }
+            add()
         } else if let opened = noteOpened, Date().timeIntervalSince(opened) < allowance {
-            if navigation?.addresses.contains(goal) == false { navigation?.addresses.append(goal) }
+            add()
         } else if mayNavigate {
             noteOpened = Date()
-            navigated(to: goal)
+            navigated(to: first)
+            add()
         }
     }
 
@@ -354,7 +368,7 @@ actor SafariBrowser {
     func click(_ ref: String) async throws -> PageScripts.Page {
         beginAction(mayNavigate: true)
         let before = try? await stamp()
-        try check(try await javaScript(PageScripts.click(ref)), ref: ref)
+        try check(try await javaScript(PageScripts.click(ref), acting: true), ref: ref)
         _ = try await settle(after: before, expectNavigation: false)
         return try await readPage(offset: 0)
     }
@@ -362,7 +376,9 @@ actor SafariBrowser {
     func type(_ ref: String, text: String, submit: Bool) async throws -> PageScripts.Page {
         beginAction(mayNavigate: true)
         let before = try? await stamp()
-        try check(try await javaScript(PageScripts.type(ref, text: text, submit: submit)), ref: ref, option: text)
+        try check(
+            try await javaScript(PageScripts.type(ref, text: text, submit: submit), acting: true), ref: ref,
+            option: text)
         if submit { _ = try await settle(after: before, expectNavigation: false) }
         return try await readPage(offset: 0)
     }
@@ -370,7 +386,7 @@ actor SafariBrowser {
     func back() async throws -> PageScripts.Page {
         beginAction(mayNavigate: true)
         let before = try? await stamp()
-        _ = try await javaScript(PageScripts.back)
+        _ = try await javaScript(PageScripts.back, acting: true)
         _ = try await settle(after: before, expectNavigation: true)
         return try await readPage(offset: 0)
     }
@@ -450,9 +466,15 @@ actor SafariBrowser {
         return !isPort
     }
 
-    private func javaScript(_ code: String) async throws -> String {
+    /// Runs `code` in Claude's page. `acting`: Claude's click, typing, or back, whose script may
+    /// answer the address it sends the page to on a second line (taken here, not returned), and
+    /// after which the acting AppleScript waits a moment for the page's note of where it is going.
+    private func javaScript(_ code: String, acting: Bool = false) async throws -> String {
         guard let window else { throw Failure.noWindow }
-        guard tab != nil else { return try await call(Script.javaScript, [window, code]) }
+        guard tab != nil else {
+            let out = try await call(Script.javaScript, [window, code])
+            return acting ? String(out.prefix { $0 != "\n" }) : out
+        }
         // Safari's tabs may move between finding Claude's tab and using it: the script checks
         // again before acting, and Latchkey finds the tab again once.
         for attempt in 1...2 {
@@ -460,14 +482,30 @@ actor SafariBrowser {
             do {
                 let out = try await call(
                     Script.tabJavaScript,
-                    guardArguments(found) + [PageScripts.tabMark(found.tab.token) + code, PageScripts.takeDestination])
+                    guardArguments(found) + [
+                        PageScripts.tabMark(found.tab.token) + PageScripts.inTab(code), PageScripts.takeDestination,
+                        acting ? "yes" : "no",
+                    ])
                 let parts = out.split(separator: "\n", maxSplits: 2, omittingEmptySubsequences: false).map(String.init)
                 // The site to compare a note with is the one the tab showed before the script.
                 let before = tab?.address
                 if let address = parts.first, !address.isEmpty { tab?.address = address }
+                var answer = ""
+                var notes: [String] = []
+                if parts.count > 2, let data = parts[2].data(using: .utf8),
+                    let both = try? JSONDecoder().decode([String].self, from: data), both.count == 2
+                {
+                    answer = both[0]
+                    notes.append(both[1])
+                }
+                if parts.count > 1 { notes.append(parts[1]) }
+                if acting, let line = answer.firstIndex(of: "\n") {
+                    notes.append(String(answer[answer.index(after: line)...]))
+                    answer = String(answer[..<line])
+                }
                 // Claude's own page said it is going to another page (a click, a form, back).
-                if parts.count > 1 { take(note: parts[1], here: before) }
-                return parts.count > 2 ? parts[2] : ""
+                take(notes: notes, here: before)
+                return answer
             } catch Failure.moved where attempt == 1 {
                 continue
             }
@@ -897,18 +935,32 @@ actor SafariBrowser {
             if not confirmed then error "LATCHKEY_MOVED"
             """
         /// argv: the guard's five, the script, the script that answers where the page said it is
-        /// going. Answers the tab's address, where the page is going (or nothing), and the
-        /// script's result, one per line.
+        /// going, "yes" when the script is Claude's click, typing, or back. Answers the tab's
+        /// address, where the page is going (or nothing), and the script's result, one per line.
+        /// After a click, typing, or back, it asks for the page's note for up to about 0.6 s:
+        /// Safari fires the `navigate` event of a link, a form, or back only after the script
+        /// returned (real Safari, 2026-10-29). It stops at a note, at a page without Latchkey's
+        /// note (the new page), or when the window's tabs changed.
         static let tabJavaScript = """
             on run argv
             \(tabGuard)
             set theAnswer to do JavaScript (item 6 of argv) in t
             if theAnswer is missing value then set theAnswer to ""
             set theGoal to ""
+            set theNothing to quote & quote
+            if (item 8 of argv) is "yes" then
+            repeat 12 times
+            set thePolled to "null"
             try
-            set theGoal to (do JavaScript (item 7 of argv) in t) as text
+            if (count of tabs of w) is n then set thePolled to (do JavaScript (item 7 of argv) in t) as text
             end try
-            if theGoal is "missing value" then set theGoal to ""
+            if thePolled is not theNothing then
+            if thePolled is not "null" and thePolled is not "missing value" then set theGoal to thePolled
+            exit repeat
+            end if
+            delay 0.05
+            end repeat
+            end if
             -- The note is the page's: it must not add lines to the answer.
             set AppleScript's text item delimiters to {return, linefeed}
             set theGoalParts to text items of theGoal
