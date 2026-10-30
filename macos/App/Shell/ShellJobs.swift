@@ -508,10 +508,6 @@ actor ShellJobs {
             p.standardOutput = FileHandle.nullDevice
             p.standardError = FileHandle.nullDevice
             try p.run()
-            defer {
-                p.terminate()
-                p.waitUntilExit()
-            }
             var found = false
             let deadline = ContinuousClock.now + .seconds(3)
             while p.isRunning, ContinuousClock.now < deadline {
@@ -524,6 +520,12 @@ actor ShellJobs {
             if !p.isRunning { broken.append("macOS's sandbox didn't start a program") }
             if fm.fileExists(atPath: outside.path) { broken.append("macOS's sandbox didn't refuse a write") }
             if p.isRunning, !found { broken.append("a program in a fence couldn't be found by its mark") }
+            // Not waitUntilExit: it sometimes never returned after the program had exited (a test
+            // hung 11 minutes, 2026-10-29), which would block Shell until Latchkey restarts.
+            p.terminate()
+            let gone = ContinuousClock.now + .seconds(2)
+            while p.isRunning, ContinuousClock.now < gone { await Self.pause(.milliseconds(20)) }
+            if p.isRunning { kill(p.processIdentifier, SIGKILL) }
         } catch {
             broken.append("the check couldn't run (\(error.localizedDescription))")
         }

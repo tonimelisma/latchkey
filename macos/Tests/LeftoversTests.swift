@@ -675,6 +675,119 @@ final class Reports: @unchecked Sendable {
     }
 }
 
+extension IdleBrowserTests {
+    /// After Safari restarts and brings Claude's window back under a new id, Latchkey knows it by
+    /// its tabs, and only when exactly one window has them (the script's job; here its answer).
+    @Test func aRestartedSafariGivesClaudesWindowBack() async throws {
+        let folder = FileManager.default.temporaryDirectory.appending(path: "window-memory-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let file = folder.appending(path: "safari-window.json")
+        let tabs = "https://example.com/\nhttps://example.org/"
+        let first = SafariBrowser(
+            scripts: ScriptAnswers([SafariBrowser.Script.open: "42", SafariBrowser.Script.tabAddresses: tabs]),
+            settleLimit: .milliseconds(50), memory: WindowMemory(file: file) { "100 1" })
+        _ = try? await first.open("https://example.com", newTab: false)
+        #expect(await !first.closeIfIdle(after: 1800))
+        #expect(WindowMemory(file: file) { nil }.load()?.tabs == ["https://example.com/", "https://example.org/"])
+
+        let notRunning = ScriptAnswers([:])
+        let quiet = SafariBrowser(scripts: notRunning, memory: WindowMemory(file: file) { nil })
+        #expect(await !quiet.closeIfIdle(after: 0))
+        #expect(notRunning.calls.isEmpty, "Safari isn't running: asking it would start it")
+
+        let none = ScriptAnswers([SafariBrowser.Script.findWindow: ""])
+        let notYet = SafariBrowser(scripts: none, memory: WindowMemory(file: file) { "200 2" })
+        #expect(await !notYet.closeIfIdle(after: 0), "no window has those tabs: none is taken")
+        #expect(none.calls.first?.1 == [tabs])
+        #expect(FileManager.default.fileExists(atPath: file.path), "kept, to look again")
+
+        let found = ScriptAnswers([
+            SafariBrowser.Script.findWindow: "77", SafariBrowser.Script.tabAddresses: tabs,
+            SafariBrowser.Script.open: "88",
+        ])
+        let back = SafariBrowser(
+            scripts: found, settleLimit: .milliseconds(50), memory: WindowMemory(file: file) { "200 2" })
+        #expect(await !back.closeIfIdle(after: 1800), "it keeps the time Claude last used it")
+        #expect(!found.calls.contains { $0.0 == SafariBrowser.Script.close })
+        _ = try? await back.open("https://example.net", newTab: false)
+        let opened = try #require(found.calls.first { $0.0 == SafariBrowser.Script.open })
+        #expect(opened.1[1] == "", "known by its addresses alone, it is never used for Claude's pages")
+        _ = await back.closeIfIdle(after: 1800, now: Date().addingTimeInterval(1900))
+        let closed = found.calls.filter { $0.0 == SafariBrowser.Script.close }.map(\.1)
+        #expect(closed.contains(["77"]), "\(closed)")
+    }
+
+    /// A window Safari brought back that changed before its time was up is left open and noted.
+    @Test func aChangedRestoredWindowIsLeftOpen() async throws {
+        let folder = FileManager.default.temporaryDirectory.appending(path: "window-memory-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let file = folder.appending(path: "safari-window.json")
+        WindowMemory(file: file) { nil }.save(
+            .init(window: "42", lastUse: Date(), safari: "100 1", tab: nil, tabs: ["https://example.com/"]))
+        let answers = ScriptAnswers([SafariBrowser.Script.findWindow: "77"])
+        let notes = Reports()
+        let browser = SafariBrowser(
+            scripts: answers, memory: WindowMemory(file: file) { "200 2" }, note: { notes.add($0, false) })
+        _ = await browser.closeIfIdle(after: 1800)
+        answers.set(SafariBrowser.Script.findWindow, "")
+        _ = await browser.closeIfIdle(after: 1800, now: Date().addingTimeInterval(1900))
+        #expect(!answers.calls.contains { $0.0 == SafariBrowser.Script.close })
+        #expect(notes.all.contains { $0.0.contains("lost track of Claude's Safari window") }, "\(notes.all)")
+    }
+
+    /// Claude's tab in the Owner's window can't be told apart after Safari restarts: it is left
+    /// alone, and noted when a tab shows its address (FR-418).
+    @Test func aTabFromBeforeSafariRestartedIsLeftAlone() async throws {
+        let folder = FileManager.default.temporaryDirectory.appending(path: "window-memory-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let file = folder.appending(path: "safari-window.json")
+        let tab = ClaudeTab(index: 2, count: 3, address: "https://example.com/", token: "t")
+        WindowMemory(file: file) { nil }.save(.init(window: "5", lastUse: Date(), safari: "100 1", tab: tab, tabs: nil))
+        let answers = ScriptAnswers([SafariBrowser.Script.anyTabAt: "yes"])
+        let notes = Reports()
+        let browser = SafariBrowser(
+            scripts: answers, memory: WindowMemory(file: file) { "200 2" }, note: { notes.add($0, false) })
+        #expect(await !browser.closeIfIdle(after: 0))
+        #expect(answers.calls.map(\.0) == [SafariBrowser.Script.anyTabAt])
+        #expect(answers.calls.first?.1 == ["https://example.com/"])
+        #expect(notes.all.contains { $0.0.contains("https://example.com/") }, "\(notes.all)")
+        #expect(!FileManager.default.fileExists(atPath: file.path))
+    }
+
+    /// A window the Owner closed is forgotten, not looked for again.
+    @Test func aWindowTheOwnerClosedIsForgotten() async throws {
+        let folder = FileManager.default.temporaryDirectory.appending(path: "window-memory-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let file = folder.appending(path: "safari-window.json")
+        let answers = ScriptAnswers([
+            SafariBrowser.Script.open: "42", SafariBrowser.Script.tabAddresses: "LATCHKEY_NO_WINDOW",
+        ])
+        let browser = SafariBrowser(
+            scripts: answers, settleLimit: .milliseconds(50), memory: WindowMemory(file: file) { "100 1" })
+        _ = try? await browser.open("https://example.com", newTab: false)
+        #expect(await !browser.closeIfIdle(after: 1800))
+        #expect(await !browser.closeIfIdle(after: 0), "nothing left to close")
+        #expect(!answers.calls.contains { $0.0 == SafariBrowser.Script.close })
+        #expect(!FileManager.default.fileExists(atPath: file.path))
+    }
+}
+
+/// Answers each script by which script it is ("" for others), and remembers each call.
+final class ScriptAnswers: ScriptRunner, @unchecked Sendable {
+    private let lock = NSLock()
+    private var answers: [String: String]
+    private var made: [(String, [String])] = []
+    var calls: [(String, [String])] { lock.withLock { made } }
+    func set(_ script: String, _ answer: String) { lock.withLock { answers[script] = answer } }
+    init(_ answers: [String: String]) { self.answers = answers }
+    func run(_ script: String, _ args: [String]) async throws -> String {
+        lock.withLock {
+            made.append((script, args))
+            return answers[script] ?? ""
+        }
+    }
+}
+
 /// Answers scripts in order, repeating the last answer, and remembers each call.
 final class RecordingRunner: ScriptRunner, @unchecked Sendable {
     private let lock = NSLock()

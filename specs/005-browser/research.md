@@ -113,4 +113,17 @@ value that changes on every use), or a small JSON file in the support folder (ch
 private to the user, deleted once the window closes). Safari's window ids are only meaningful
 while the same Safari runs, so the file also names Safari's process id and launch time, and a
 mismatch means start fresh rather than risk closing one of the Owner's windows. The Owner's own
-windows are never adopted; a window Safari restores after its own restart stays open.
+windows are never adopted.
+
+A window Safari brings back after its own restart has a new id (Toni asked for it to close too,
+2026-10-29). Ways to know it again: a mark set in the page (`window.name`, session storage),
+which a cross-site navigation clears and Safari may not restore; the window's title, which is
+the page's; or the addresses of its tabs, noted each minute (chosen). It is found only when
+exactly one visible window has exactly those tabs; two matches, or none, leave every window
+alone. The security review pointed out that adopting such a window would let Claude act in one
+of the Owner's windows if the match were wrong, so it is only ever closed, after checking again
+that it is still the one window with those tabs. The remaining risk is closing an Owner's window
+with exactly the same tabs while Claude's was not brought back; judged rare enough. Claude's tab
+in the Owner's window (the default since 2026-10-29) can't be found this way, since the Owner's
+restored tabs look the same; it is left alone and noted (FR-418), asking Safari only whether
+some tab shows Claude's last address.

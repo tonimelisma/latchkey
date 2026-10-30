@@ -54,7 +54,9 @@ phone, Claude can't check a reservation in the Owner's account or fill in a form
   window and record it as a Left Behind entry (spec 001 FR-640; Toni, 2026-10-27: the Mac can't
   tell when a conversation ends, and the relay ends a quiet Claude session after 30 minutes),
   also when Latchkey restarted or was updated in between (Toni, 2026-10-29). (2026-10-29: when
-  Claude's page is a tab, FR-412, Browser closes that tab instead, the same way.)
+  Claude's page is a tab, FR-412, Browser closes that tab instead, the same way.) (2026-10-29,
+  Toni: also when Safari restarted and brought Claude's own window back; Claude's tab, which can't
+  be told from the Owner's then, is left alone and noted under FR-418.)
 - **FR-412** Browser shall open Claude's pages either in a tab of the Owner's Safari window or
   in a Safari window of Claude's own, as the Owner chooses in Latchkey's Settings, and shall
   start with a tab (Toni, 2026-10-29).

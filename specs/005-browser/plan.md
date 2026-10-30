@@ -37,6 +37,15 @@ window (by its id, never another) once it is 30 minutes unused, and forgets it (
 id, the last use, and which run of Safari it belongs to (process id and launch time) are kept in
 `safari-window.json` in the support folder, so a restarted Latchkey picks the window up again,
 but only while the same Safari runs: after Safari restarts, the id could be one of the Owner's.
+So each minute the timer also notes the addresses of Claude's own window's tabs (and forgets a
+window the Owner closed). After Safari restarts, that window is found again when exactly one
+visible window has exactly those tabs, tried each minute and at Claude's next page while Safari
+runs (never starting it), given up a day after the last use. Known by its addresses alone, it is
+never used for Claude's pages: it is only closed once 30 minutes have passed since Claude last
+used it, and only if it is still the one window with those tabs; otherwise it is left open and
+noted. Claude's tab in the Owner's window has lost its mark after a restart, so it is left alone;
+when some tab shows Claude's last address, a Left Behind entry says Latchkey lost track of it
+(FR-418).
 
 The address Claude asks to open is checked before anything goes to Safari (FR-409): tabs and
 line breaks are removed and the ends trimmed (as browsers do), an address without a scheme gets

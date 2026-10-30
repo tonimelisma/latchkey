@@ -117,21 +117,99 @@ actor SafariBrowser {
         self.place = place
         self.note = note
         // The window a Latchkey that quit was using, so it still closes when unused (FR-411; a
-        // restart forgot it, live check 2026-10-29). Only from the same run of Safari: after
-        // Safari restarts, the id may be one of the Owner's windows.
-        if let memory, let saved = memory.load(), saved.safari == memory.safari() {
+        // restart forgot it, live check 2026-10-29). Its id holds only in the same run of
+        // Safari: after Safari restarts, the id may be one of the Owner's windows, so the page
+        // is looked for again (`findRestored`).
+        guard let memory, let saved = memory.load() else { return }
+        if saved.safari == memory.safari() {
             window = saved.window
             tab = saved.tab
             lastUse = saved.lastUse
+            tabs = saved.tabs ?? []
+        } else {
+            restored = saved
         }
     }
 
     private func remember() {
         guard let memory else { return }
         if let window, let safari = memory.safari() {
-            memory.save(WindowMemory.Saved(window: window, lastUse: lastUse, safari: safari, tab: tab))
-        } else {
+            restored = nil
+            memory.save(
+                WindowMemory.Saved(
+                    window: window, lastUse: lastUse, safari: safari, tab: tab, tabs: tab == nil ? tabs : nil))
+        } else if restored == nil {
             memory.save(nil)
+        }
+    }
+
+    /// The addresses of Claude's own window's tabs, noted each minute: how the window is known
+    /// again after Safari restarts and brings it back under a new id.
+    private var tabs: [String] = []
+    /// Claude's page from before Safari restarted, still to be looked for.
+    private var restored: WindowMemory.Saved?
+    /// Claude's own window as Safari brought it back: only ever closed, never used for Claude's
+    /// pages, since it is known by its addresses alone (security review, 2026-10-29).
+    private var orphan: (window: String, tabs: [String], lastUse: Date)?
+
+    /// After Safari restarted (FR-411): Claude's own window is found again when exactly one open
+    /// window has exactly its tabs, and none otherwise; tried while Safari runs, given up a day
+    /// after the last use. Claude's tab in the Owner's window can't be told from the Owner's tabs
+    /// once its mark is gone, so it is left alone and, when a tab shows Claude's last address,
+    /// noted as lost (FR-418).
+    private func findRestored(now: Date) async {
+        guard let saved = restored, memory?.safari() != nil else { return }
+        if let t = saved.tab {
+            forgetRestored()
+            if (try? await scripts.run(Script.anyTabAt, [t.address])) == "yes" {
+                note(
+                    "Latchkey lost track of Claude's Safari tab (\(t.address)) when Safari restarted. If it's still open, it stays open."
+                )
+            }
+            return
+        }
+        if now.timeIntervalSince(saved.lastUse) > 86400 { return forgetRestored() }
+        guard let tabs = saved.tabs, !tabs.isEmpty,
+            let found = try? await scripts.run(Script.findWindow, [tabs.joined(separator: "\n")]),
+            !found.isEmpty
+        else { return }
+        forgetRestored()
+        orphan = (found, tabs, saved.lastUse)
+    }
+
+    /// Closes the window Safari brought back once 30 minutes have passed since Claude last used
+    /// it, and only if it is still the one window with exactly those tabs; a window that changed
+    /// is left open and noted.
+    private func closeOrphan(after: TimeInterval, now: Date) async {
+        guard let o = orphan, now.timeIntervalSince(o.lastUse) >= after else { return }
+        orphan = nil
+        let still = try? await scripts.run(Script.findWindow, [o.tabs.joined(separator: "\n")])
+        guard still == o.window else {
+            note(
+                "Latchkey lost track of Claude's Safari window after Safari restarted (its tabs changed). If it's still open, it stays open."
+            )
+            return
+        }
+        _ = try? await scripts.run(Script.close, [o.window])
+        note("Closed Claude's Safari window after \(Int(after / 60)) minutes unused (Safari had restarted)")
+    }
+
+    private func forgetRestored() {
+        restored = nil
+        if window == nil { memory?.save(nil) }
+    }
+
+    /// Notes the tabs of Claude's own window; forgets the window when the Owner closed it.
+    private func noteTabs(_ id: String) async {
+        guard let answer = try? await scripts.run(Script.tabAddresses, [id]), !answer.isEmpty else { return }
+        if answer == "LATCHKEY_NO_WINDOW" {
+            window = nil
+            return
+        }
+        let now = answer.components(separatedBy: "\n")
+        if now != tabs {
+            tabs = now
+            remember()
         }
     }
 
@@ -147,6 +225,7 @@ actor SafariBrowser {
     /// was given another page's text).
     func open(_ url: String, newTab: Bool) async throws -> PageScripts.Page {
         let address = try Self.normalize(url)
+        await findRestored(now: Date())
         let wanted = place()
         if window != nil, (tab != nil) != (wanted == .tab) { await closeClaudesPage() }  // FR-417
         var before = try? await stamp()
@@ -476,7 +555,13 @@ actor SafariBrowser {
     /// Closes Claude's tab or window once it has gone `after` unused (FR-411), and notes it for
     /// the Left Behind list. True when it closed one, or found its tab gone.
     func closeIfIdle(after: TimeInterval = 1800, now: Date = Date()) async -> Bool {
-        guard let id = window, now.timeIntervalSince(lastUse) >= after else { return false }
+        await findRestored(now: now)
+        await closeOrphan(after: after, now: now)
+        guard let id = window else { return false }
+        guard now.timeIntervalSince(lastUse) >= after else {
+            if tab == nil { await noteTabs(id) }
+            return false
+        }
         let minutes = Int(after / 60)
         if tab != nil {
             // A tab Latchkey can't surely find isn't closed: it might be the Owner's now.
@@ -576,6 +661,66 @@ actor SafariBrowser {
             end run
             """
         /// argv: window id. Closes that window only, if it is still there.
+        /// argv: Claude's own window id. Its tabs' addresses, one per line.
+        static let tabAddresses = """
+            on run argv
+            set winID to (item 1 of argv) as integer
+            tell application "Safari"
+            if not (exists window id winID) then return "LATCHKEY_NO_WINDOW"
+            if not (visible of window id winID) then return "LATCHKEY_NO_WINDOW"
+            set theAddresses to URL of every tab of window id winID
+            end tell
+            set out to ""
+            repeat with theAddress in theAddresses
+            if out is not "" then set out to out & linefeed
+            if theAddress is not missing value then set out to out & theAddress
+            end repeat
+            return out
+            end run
+            """
+        /// argv: addresses, one per line. The id of the one visible window whose tabs are exactly
+        /// these, or "" when none or more than one; nothing else of the Owner's windows.
+        static let findWindow = """
+            on run argv
+            set wanted to item 1 of argv
+            set found to {}
+            tell application "Safari"
+            repeat with w in windows
+            try
+            if visible of w then
+            set theAddresses to URL of every tab of w
+            set out to ""
+            repeat with theAddress in theAddresses
+            if out is not "" then set out to out & linefeed
+            if theAddress is not missing value then set out to out & theAddress
+            end repeat
+            if out is wanted then set end of found to ((id of w) as text)
+            end if
+            end try
+            end repeat
+            end tell
+            if (count of found) is 1 then return item 1 of found
+            return ""
+            end run
+            """
+        /// argv: an address. "yes" when some open tab shows it, else "no".
+        static let anyTabAt = """
+            on run argv
+            set wanted to item 1 of argv
+            tell application "Safari"
+            repeat with w in windows
+            try
+            if visible of w then
+            repeat with t in tabs of w
+            if (URL of t) is wanted then return "yes"
+            end repeat
+            end if
+            end try
+            end repeat
+            end tell
+            return "no"
+            end run
+            """
         static let close = """
             on run argv
             set winID to (item 1 of argv) as integer
@@ -788,6 +933,8 @@ struct WindowMemory: Sendable {
         var safari: String
         /// Claude's tab in that window, when its page is a tab (FR-412); none in older files.
         var tab: ClaudeTab?
+        /// The addresses of Claude's own window's tabs, to find it after Safari restarts.
+        var tabs: [String]?
     }
 
     var file: URL
