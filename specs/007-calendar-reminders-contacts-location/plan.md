@@ -84,6 +84,19 @@ read-only.
   `CNSaveRequest` for changes in the default container). Groups (FR-723): `CNMutableGroup` with
   `CNSaveRequest.add(_:toContainerWithIdentifier:)`, `update`, `delete`, `addMember(_:to:)`,
   and `removeMember(_:from:)`.
+- Ids that change (FR-724 to FR-727; research.md "Ids that change"): `ContactsMemory`, shared by
+  `contacts_find` and `contacts_change`, keeps in memory, for this run of the app only, each card
+  and group Latchkey created: every id it had, the fingerprint of each version Latchkey wrote
+  (a group: each name it gave), the ids of cards or groups that already looked the same just
+  before (never matched), the cards Latchkey put in a group, and when it was made. An unknown id
+  that is one of these is found again by fingerprint or name, only when exactly one fits; the
+  answer says the new id. After deleting one of these within 10 minutes of its create, the tool
+  deletes iCloud's copies (looking a second time 2 seconds later when the create was under 2
+  minutes ago), and each later `contacts_change` within the 10 minutes first deletes copies that
+  came back. `ContactsBackend.memberIDs(groupID:)` lists a group's cards for the group check.
+- Calendar and Reminders keep plain EventKit ids: live checks created, moved, and deleted events
+  and reminders by the ids they were given, and an event moved to another calendar is answered
+  with its new id (research.md "Ids that change").
 - The note field is not fetched (needs Apple's special entitlement; research.md).
 - Messages' `ContactBook` (spec 002 D4) stays as it is and keeps reading Contacts whenever macOS
   allows it, whatever the Contacts level (FR-745). After a change, `ContactBook` is told to
@@ -130,7 +143,9 @@ read-only.
   deleted only with its right count; groups created, renamed, deleted, members added and
   removed), date parsing and
   formatting with offsets and all-day dates, free-time computation, repeat rules, event ids,
-  contact matching by phone digits, permission-missing answers, `maps_find` argument rules.
+  contact matching by phone digits, a card's and a group's id changing after the create, iCloud's
+  copies deleted (at once, a moment later, at the next change) and the Owner's look-alike cards
+  and same-named groups left alone (FR-724 to FR-727), permission-missing answers, `maps_find` argument rules.
 - Real frameworks: a test checks that `EKRecurrenceRule` and `CNMutableContact` are built as
   intended without saving. The EventKit, Contacts, Core Location, and MapKit backends are checked
   live through the hosted relay with a fresh Claude Code session: create, read, move, and delete
@@ -146,7 +161,7 @@ read-only.
 | III. Disabled means nonexistent | Pass: levels filter the tools (registry) |
 | IV. Good macOS citizen | Pass: public frameworks and standard prompts only |
 | V. Self-hostable | Pass: no new service; MapKit is part of macOS |
-| VI. Store the minimum | Pass: nothing stored; ids are derived |
+| VI. Store the minimum | Pass: nothing stored on disk; ids are derived; what Latchkey created in Contacts is kept in memory for the run only (FR-724) |
 | VII. Test-first | Pass: tests above written first |
 | VIII. Simplicity | Pass: Apple frameworks, no dependencies |
 | IX. Open source | Pass |

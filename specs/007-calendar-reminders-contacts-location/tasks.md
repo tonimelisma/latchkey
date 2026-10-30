@@ -9,3 +9,4 @@
 - **T707** Activity text, notifications, others' text marked. *FR-743, FR-746, D6.*
 - **T708** Install and live check through the hosted relay (test event, reminder, contact, location, place, drive time). *SC-701 to SC-704.*
 - **T709** Tests first (in-memory backends), then deleting a reminder list with its reminder count, and contact groups (create, rename, delete, add and remove cards), in the tools and the EventKit and Contacts backends. *FR-713, FR-723, D1 to D3.*
+- **T710** Tests first (in-memory backend: ids changed after the create, iCloud's copies appearing at once, a moment later, or later, the Owner's look-alikes), then remembering what Latchkey created in Contacts, finding it again under a new id, and deleting iCloud's copies with it. *FR-724 to FR-727, D3.* Live check on real iCloud still to do.

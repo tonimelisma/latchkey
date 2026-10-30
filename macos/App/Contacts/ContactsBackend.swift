@@ -97,6 +97,8 @@ protocol ContactsBackend: Sendable {
     func deleteGroup(id: String) throws
     func addMember(contactID: String, groupID: String) throws
     func removeMember(contactID: String, groupID: String) throws
+    /// The ids of the cards in a group.
+    func memberIDs(groupID: String) throws -> [String]
 }
 
 extension ContactsBackend {
@@ -283,6 +285,14 @@ final class CNContactsBackend: ContactsBackend, @unchecked Sendable {
         save.removeMember(
             try cn(contactID, keys: [CNContactIdentifierKey as CNKeyDescriptor]), from: try cnGroup(groupID))
         try execute(save)
+    }
+
+    func memberIDs(groupID: String) throws -> [String] {
+        try check()
+        return try store.unifiedContacts(
+            matching: CNContact.predicateForContactsInGroup(withIdentifier: groupID),
+            keysToFetch: [CNContactIdentifierKey as CNKeyDescriptor]
+        ).map(\.identifier)
     }
 
     private func execute(_ save: CNSaveRequest) throws {

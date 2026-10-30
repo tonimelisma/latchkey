@@ -134,3 +134,53 @@ as new cards do (iCloud takes them over). A group id that's gone stale is answer
 its name instead"; names keep working. The first check's delete message counted a member that
 had just been removed (the count was read while the change was still syncing); the second
 check counted 0 correctly.
+
+## Ids that change (2026-10-29, spec FR-724 to FR-727; low-level choices by Claude)
+
+Seen live: a card (2026-10-26) and a group (2026-10-29) created through Latchkey got a new id
+within seconds, so the id the create answered went stale; and deleting a new group by its first
+id deleted one copy while iCloud's copy survived. The Contacts framework gives a card or group
+no creation date and no link between the two ids, so Latchkey has to recognise its own.
+
+- **What is remembered.** Options: (a) nothing, answer "search again" (before); (b) a table on
+  disk; (c) memory for the app's run. Chosen (c), `ContactsMemory`: the problem lasts seconds to
+  minutes, and nothing about the Owner's contacts is written to disk (Constitution VI). Kept per
+  card: every id it had, the fingerprint of each version Latchkey wrote, the ids of cards that
+  looked the same just before each write, when it was made; per group: ids, every name Latchkey
+  gave it, groups that had that name before, fingerprints of the cards Latchkey put in it. At
+  most 200 of each (oldest dropped).
+- **How a card is recognised.** Options: names only; names plus first email or phone; the whole
+  content. Chosen the whole content as a fingerprint: names, nickname, company, job title,
+  department, every phone (digits only), email, postal address, web address, date, related name
+  (all case- and accent-folded, sorted, labels left out), birthday, and whether it has a
+  picture. Labels and phone formatting are left out because iCloud may rewrite them; anything
+  else differing (someone added an address) means it isn't Latchkey's copy. Names only would
+  take the Owner's other Sarah Jones.
+- **How a group is recognised.** By a name Latchkey gave it: names are already unique (create
+  and rename refuse a name in use), so at create time no other group has it.
+- **Why the Owner's own items can't be deleted.** A card or group is only ever matched to a
+  record of something Latchkey created in this run. Cards that already had the same fingerprint
+  just before Latchkey created or changed its card (one more full read of Contacts per create,
+  and per update of Latchkey's own card), and groups that had the name, are never matched, even
+  when identical. Nothing is matched when two live records could share a card (Claude made two
+  identical test cards) or when more than one candidate fits. A copy is deleted only within 10
+  minutes of the create, a card copy only with exactly the content Latchkey wrote (so nothing
+  the Owner typed into it can be lost), a group copy only when every card in it is one Latchkey
+  put in the group (and deleting a group never deletes cards). What remains possible: the Owner
+  makes, by hand, an exact twin of Latchkey's new card, or an empty same-named group, within
+  those 10 minutes, and Claude deletes Latchkey's one; the twin then goes too. Nothing the Owner
+  wrote is lost in that case, since the twin holds only what Latchkey wrote.
+- **When to look for a copy.** Options: once right after the delete; also a moment later; also
+  at later calls. Chosen all three: right after the delete; when nothing was found and the
+  create was under 2 minutes ago, once more 2 seconds later (inside the 15 s deadline); and at
+  the start of each later `contacts_change` within the 10 minutes. Not at `contacts_find`,
+  which is read-only. A copy that appears later than that, with no further change, stays.
+- **What the answer says.** "Sarah's id changed to … (iCloud took the card over); use that one.",
+  "Also deleted iCloud's copy of the group, which had appeared with a new id.", and for a
+  same-named group with other cards, that it was left alone and its id.
+- **Calendar and Reminders.** Checked for the same pattern: EventKit's `eventIdentifier` and
+  `calendarItemIdentifier` stayed the same in every live check (an event created, moved, and
+  deleted, and a reminder created, completed, and deleted, 2026-10-26; a reminder list created
+  and deleted, 2026-10-29).
+  Apple documents that an event's identifier may change when it moves to another calendar; the
+  update answers with the event as saved, so Claude gets the new id. Not changed.

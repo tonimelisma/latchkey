@@ -90,6 +90,24 @@ accounts, and in Apple Maps.
 - **FR-723** While Read & write, Claude shall be able to create a contact group, rename it,
   delete it (its cards stay in Contacts), and add cards to it or remove them from it (Toni,
   2026-10-28).
+- **FR-724** When Claude gives the id of a card that Latchkey created while the app has been
+  running, and no card has that id any more (iCloud gave it a new one), the tool shall find the
+  card again by its content, act on it, and say its new id. It shall not guess when more than
+  one card could be meant, and never take a card that already looked the same before Latchkey
+  created it (live checks 2026-10-26 and 2026-10-29).
+- **FR-725** When Claude gives the id of a group that Latchkey created while the app has been
+  running, and no group has that id any more, the tool shall find the group again by its name,
+  act on it, and say its new id.
+- **FR-726** When Claude deletes a card or group that Latchkey created while the app has been
+  running, within 10 minutes of creating it, the tool shall also delete any copy of it that
+  appeared under another id (iCloud's): for a card, one with exactly the content Latchkey wrote
+  that didn't exist before Latchkey created or changed it; for a group, one with a name Latchkey
+  gave it that no other group had, holding only cards Latchkey put in the group. A same-named
+  group holding other cards shall be left alone and named in the answer. The Owner's own cards
+  and groups, including ones that look the same, shall never be deleted this way (live check
+  2026-10-29: deleting a new group left iCloud's copy behind).
+- **FR-727** When such a copy appears only after the delete has answered, the next change Claude
+  makes in Contacts within that 10 minutes shall delete it the same way and say so.
 
 ### Location and Maps
 - **FR-731** While Location & Maps is On, Claude shall be able to get the Mac's current
