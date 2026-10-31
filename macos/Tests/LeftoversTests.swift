@@ -50,12 +50,17 @@ final class Reports: @unchecked Sendable {
     }
 
     @Test func aProcessThatLeftTheTerminalIsStoppedToo() async throws {
-        // A new session of its own, as setsid does: the terminal sweep alone misses it.
-        let cmd = "perl -MPOSIX -e '$|=1; POSIX::setsid(); print \"PID:$$\\n\"; sleep 300' & sleep 0.5"
-        let r = try await jobs.run(cmd, folder: nil, wait: .seconds(10), keepMinutes: 1)
+        // A new session of its own, as setsid does: the terminal sweep alone misses it. The
+        // command ends only once the program has left and said so (a fixed half-second wait
+        // failed once while the whole suite ran, 2026-10-31).
+        let cmd =
+            "perl -MPOSIX -e '$|=1; POSIX::setsid(); print \"PID:$$\\n\"; open(my $f, \">\", \"$ENV{TMPDIR}/left\"); close $f; sleep 300' & "
+            + "for i in $(seq 200); do [ -e \"$TMPDIR/left\" ] && break; sleep 0.05; done; sleep 0.1"
+        let r = try await jobs.run(cmd, folder: nil, wait: .seconds(20), keepMinutes: 1)
+        #expect(r.finished, "the program didn't start within 10 s: \(r.output)")
         let child = try ShellJobTests.pid(in: r.output)
         defer { kill(child, SIGKILL) }
-        #expect(getsid(child) == child, "it really left the terminal session")
+        #expect(getsid(child) == child, "it really left the terminal session (getsid \(getsid(child)), errno \(errno))")
         _ = try await jobs.stop(r.job)
         #expect(await ShellJobTests.gone(child), "a process that left the session survived")
     }

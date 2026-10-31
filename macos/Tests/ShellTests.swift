@@ -94,7 +94,7 @@ import Testing
 
     /// Reads "PID:<n>" from a job's output.
     static func pid(in output: String) throws -> pid_t {
-        let match = try #require(output.firstMatch(of: /PID:(\d+)/))
+        let match = try #require(output.firstMatch(of: /PID:(\d+)/), "no PID in the output: \(output)")
         return try #require(pid_t(match.output.1))
     }
 
