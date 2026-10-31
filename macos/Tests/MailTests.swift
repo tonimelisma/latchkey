@@ -318,3 +318,28 @@ enum MailTestEnv {
         #expect(r.isError && MailTestEnv.text(r).contains("Full Disk Access"))
     }
 }
+
+/// Live check 2026-10-30: a message's text ended in raw HTML table markup.
+@Suite struct MailTextTests {
+    @Test func aPlainPartThatIsReallyHTMLIsConverted() {
+        let plain = "<html><body><table><tr><td>Hello</td><td>there</td></tr></table><p>Bye</p></body></html>"
+        let text = MailFile.readableText(plain: plain, html: nil)
+        #expect(text?.contains("Hello") == true)
+        #expect(text?.contains("<td") == false, "\(text ?? "nil")")
+    }
+
+    @Test func ordinaryPlainTextIsKept() {
+        let plain = "Use a < b and x > y in the formula.\nThanks"
+        #expect(MailFile.readableText(plain: plain, html: "<p>other</p>") == plain)
+    }
+
+    @Test func outlooksHiddenCommentsLeaveNoMarkup() {
+        let html = """
+            <p>Dear customer</p><!--[if mso]><table><tr><td>Outlook only</td></tr></table><![endif]-->
+            <p>Your order shipped.</p>
+            """
+        let text = HTMLText.fromHTML(html)
+        #expect(text.contains("Your order shipped."))
+        #expect(!text.contains("<table") && !text.contains("<td") && !text.contains("endif"), "\(text)")
+    }
+}

@@ -106,6 +106,9 @@ enum HTMLText {
     ]
 
     static func fromHTML(_ html: String) -> String {
+        // Comments go first, Outlook's conditional ones (<!--[if mso]> … <![endif]-->) too: the
+        // tidying parser can keep their markup as text (live check of a mail, 2026-10-30).
+        let html = html.replacingOccurrences(of: "<!--[\\s\\S]*?-->", with: "", options: .regularExpression)
         guard
             let doc = try? XMLDocument(
                 xmlString: html, options: [.documentTidyHTML, .nodeLoadExternalEntitiesNever])

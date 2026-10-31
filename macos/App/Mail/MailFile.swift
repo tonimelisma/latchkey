@@ -45,14 +45,28 @@ struct MailFile: Sendable {
         return data[start..<end]
     }
 
+    /// The message's text: its plain part, or its HTML as text when it has no plain part or the
+    /// plain part is itself HTML (many senders put the HTML there too; live check 2026-10-30).
+    static func readableText(plain: String?, html: String?) -> String? {
+        if let plain, !plain.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return looksLikeHTML(plain) ? HTMLText.fromHTML(plain) : plain
+        }
+        return html.map(HTMLText.fromHTML)
+    }
+
+    /// True when text is mostly markup: an html or body tag, or several table, paragraph, or
+    /// break tags. A stray "<" in ordinary text is not.
+    static func looksLikeHTML(_ s: String) -> Bool {
+        if s.range(of: #"<\s*(html|body)\b"#, options: [.regularExpression, .caseInsensitive]) != nil { return true }
+        let tags = s.matches(of: /(?i)<\/?\s*(table|tr|td|div|p|br|span|font)\b[^>]*>/).count
+        return tags >= 3
+    }
+
     static func parse(_ emlx: Data, partial: Bool) throws -> MailFile {
         let raw = message(in: emlx)
         let msg: MimeMessage
         do { msg = try MimeMessage.load(MemoryStream([UInt8](raw), writable: false)) } catch { throw Unreadable() }
-        var text = msg.textBody
-        if text?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true, let html = msg.htmlBody {
-            text = HTMLText.fromHTML(html)
-        }
+        let text = readableText(plain: msg.textBody, html: msg.htmlBody)
         var attachments: [Attachment] = []
         for part in msg.bodyParts {
             guard let p = part as? MimePart else { continue }
