@@ -325,24 +325,19 @@ struct SetupView: View {
     @State private var relay = ""
     @State private var working = false
     @State private var opened: String?
+    /// A step shown open whatever its state, for the size test.
+    var showing: String?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 16) {
             VStack(alignment: .leading, spacing: 4) {
                 Text("Set Up Latchkey").font(.title.bold())
-                Text("A few steps, then Claude can reach this Mac from anywhere.").foregroundStyle(.secondary).padding(
-                    .bottom, 8)
-            }
-            step("helper", "Let Latchkey keep this Mac awake") {
-                Text(
-                    "So Claude can reach your Mac with the lid closed. In System Settings, turn on Latchkey under Allow in the Background."
-                )
-                .foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-                Button("Open System Settings") { model.approveHelper() }
+                Text("Four steps, then Claude can reach this Mac from anywhere, even while you’re away.")
+                    .foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             }
             step("connect", "Connect to your account") {
                 Text(
-                    "Enter your relay's address. Your browser opens so you can sign in or create an account with a passkey."
+                    "Enter your relay’s address. Your browser opens so you can sign in or create an account with a passkey."
                 )
                 .foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                 HStack {
@@ -350,163 +345,63 @@ struct SetupView: View {
                         .textFieldStyle(.roundedBorder)
                         .onSubmit(connect)
                     Button("Connect", action: connect)
+                        .keyboardShortcut(.defaultAction)
                         .disabled(relay.trimmingCharacters(in: .whitespaces).isEmpty || working)
                 }
                 if let error = model.lastError {
                     Text(error).foregroundStyle(.red).fixedSize(horizontal: false, vertical: true)
                 }
             }
-            if model.isPaired && model.needsSetup {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(
-                        "Allow everything now, so macOS never stops to ask while you’re away. Latchkey asks each question in turn; click Allow in each, then turn on what System Settings shows."
-                    )
-                    .foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-                    HStack {
-                        Button("Allow All") { Task { await model.allowAll() } }
-                            .disabled(model.allowingAll)
-                        if model.allowingAll { ProgressView().controlSize(.small) }
-                    }
-                }
-            }
-            do {
-                step("disk", "Let Latchkey read your files, notes, messages, and mail") {
-                    Text(
-                        "macOS needs you to switch this on yourself. In System Settings, turn on Latchkey under Full Disk Access."
-                    )
-                    .foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-                    Button("Open System Settings") { Permissions.openFullDiskAccessSettings() }
-                }
-            }
-            step("notifications", "Let Latchkey tell you what Claude did") {
+            step("questions", "Answer macOS’s questions") {
                 Text(
-                    "So you see each change Claude makes on this Mac. When macOS asks about notifications, click Allow."
+                    "macOS asks before Latchkey can use each part of your Mac. Latchkey asks them all now, one after another, so nothing waits for you later. Click Allow in each."
                 )
                 .foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-                Button("Continue") { Task { await model.allowNotifications() } }
-            }
-            do {
-                controlStep(
-                    "notes", "Let Latchkey change your notes", app: Permissions.notesApp, appName: "Notes",
-                    purpose: "So Claude can create, edit, and delete notes.")
-            }
-            do {
-                controlStep(
-                    "messages", "Let Latchkey send messages", app: Permissions.messagesApp, appName: "Messages",
-                    purpose: "So Claude can send messages for you.")
-            }
-            do {
-                controlStep(
-                    "mail", "Let Latchkey organise and send email", app: Permissions.mailApp, appName: "Mail",
-                    purpose: "So Claude can file, flag, and delete email, save drafts, and send email for you.")
-            }
-            do {
-                step("contacts", "Let Claude see your contacts") {
-                    if model.contactsStatus == .notDetermined {
-                        Text(
-                            "So Claude can look up, add, and change contacts, and show names in messages. When macOS asks about Contacts, click Allow."
-                        )
-                        .foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-                        Button("Continue") { Task { await model.allowContacts() } }
-                    } else {
-                        Text("In System Settings, turn on Latchkey under Contacts.")
-                            .foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-                        Button("Open System Settings") { Permissions.openContactsSettings() }
+                checklist(questionRows, columns: 2)
+                HStack {
+                    Button("Ask Now") { Task { await model.allowAll() } }
+                        .keyboardShortcut(.defaultAction)
+                        .disabled(model.allowingAll)
+                    if model.allowingAll {
+                        ProgressView().controlSize(.small)
+                        Text("Asking…").foregroundStyle(.secondary)
                     }
                 }
             }
-            do {
-                eventsStep(
-                    "calendars", "Let Claude see your calendars", status: model.calendarStatus, kind: .events,
-                    purpose: "So Claude can tell you what's coming up, find free time, and add or change events.",
-                    pane: "Calendars")
-            }
-            do {
-                eventsStep(
-                    "reminders", "Let Claude see your reminders", status: model.remindersStatus, kind: .reminders,
-                    purpose: "So Claude can list, add, and complete reminders.", pane: "Reminders")
-            }
-            do {
-                step("location", "Let Claude see where this Mac is") {
-                    switch model.locationAccess {
-                    case .servicesOff:
-                        Text(
-                            "Location Services are off on this Mac. In System Settings, turn on Location Services, then turn on Latchkey in the list."
-                        )
-                        .foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-                        Button("Open System Settings") { model.allowLocation() }
-                    case .denied:
-                        Text("In System Settings, turn on Latchkey under Location Services.")
-                            .foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-                        Button("Open System Settings") { model.allowLocation() }
-                    default:
-                        Text(
-                            "So Claude can tell you where this Mac is and find places nearby. When macOS asks about your location, click Allow."
-                        )
-                        .foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-                        Button("Continue") { model.allowLocation() }
-                    }
-                }
-            }
-            step("localNetwork", "Let commands reach devices on your network") {
+            step("switches", "Turn on Latchkey in System Settings") {
                 Text(
-                    "So commands Claude runs can reach printers, routers, and other devices at home. When macOS asks about the local network, click Allow."
+                    "Only you can turn these on. Latchkey opens each page in turn; turn on Latchkey there, and the next page opens."
                 )
                 .foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-                Button("Continue") { Task { await model.allowLocalNetwork() } }
+                checklist(switchRows, columns: 1)
+                Button("Open System Settings") { model.openSwitches() }
+                    .keyboardShortcut(.defaultAction)
             }
-            do {
-                controlStep(
-                    "safari", "Let Latchkey use Safari", app: Permissions.safariApp, appName: "Safari",
-                    purpose: "So Claude can open and read web pages, signed in as you.")
-                step("safariJS", "Turn on Safari's setting for Latchkey") {
-                    Text(
-                        "In Safari, choose Safari → Settings. Under Advanced, turn on “Show features for web developers”. Then under Developer, turn on “Allow JavaScript from Apple Events”. Then click Check."
-                    )
-                    .foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-                    if model.safariJavaScript == false {
-                        Text("Safari's setting isn't on yet.").foregroundStyle(.red)
-                    }
-                    HStack {
-                        Button("Open Safari") { Permissions.open(app: Permissions.safariApp) }
-                        Button("Check") { Task { await model.checkSafariJavaScript() } }
-                    }
+            step("safari", "Turn on Safari’s setting for Latchkey") {
+                Text(
+                    "In Safari, choose Safari → Settings. Under Advanced, turn on “Show features for web developers”. Then under Developer, turn on “Allow JavaScript from Apple Events”, and click Check."
+                )
+                .foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                if model.safariJavaScript == false {
+                    Text("Safari’s setting isn’t on yet.").foregroundStyle(.red)
+                }
+                HStack {
+                    Button("Open Safari") { Permissions.open(app: Permissions.safariApp) }
+                    Button("Check") { Task { await model.checkSafariJavaScript() } }
+                        .keyboardShortcut(.defaultAction)
                 }
             }
-            do {
-                step("screen", "Let Claude see the screen") {
-                    Text(
-                        "For computer control, while the Mac is unlocked. In System Settings, turn on Latchkey under Screen & System Audio Recording."
-                    )
-                    .foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-                    Button("Continue") { model.allowScreenRecording() }
-                }
-                step("screenAccess", "Answer macOS's screen question now") {
-                    Text(
-                        "macOS asks once more, the first time Latchkey takes a screenshot. Latchkey takes one now; if macOS asks, click Allow."
-                    )
-                    .foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-                    Button("Continue") { Task { await model.confirmScreenAccess() } }
-                        .disabled(!model.screenRecording)
-                }
-                step("accessibility", "Let Claude use the mouse and keyboard") {
-                    Text(
-                        "For computer control, and so Latchkey can write email in Mail's window. In System Settings, turn on Latchkey under Accessibility."
-                    )
-                    .foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-                    Button("Continue") { model.allowAccessibility() }
-                }
-            }
+            Divider()
             HStack {
                 Text("Latchkey lives in the menu bar. To uninstall, move it to the Trash.")
                     .font(.footnote).foregroundStyle(.secondary)
                 Spacer()
                 Button(model.needsSetup ? "Later" : "Done", action: close)
-                    .keyboardShortcut(.defaultAction)
+                    .keyboardShortcut(model.needsSetup ? .cancelAction : .defaultAction)
             }
         }
         .padding(24)
-        .frame(width: 480)
+        .frame(width: 500)
         .onAppear { relay = model.relayURL?.absoluteString ?? AppModel.hostedRelay }
         .task {
             while !Task.isCancelled {  // notice the approvals in System Settings
@@ -516,83 +411,105 @@ struct SetupView: View {
         }
     }
 
-    /// Every setup step, whatever the levels (FR-623), so they're numbered without gaps.
-    private var visibleSteps: [String] {
-        [
-            "helper", "connect", "disk", "notifications", "notes", "messages", "mail", "contacts", "calendars",
-            "reminders", "location", "localNetwork", "safari", "safariJS", "screen", "screenAccess", "accessibility",
+    private static let steps = ["connect", "questions", "switches", "safari"]
+
+    /// One line of a step's checklist: done, or what to do about it.
+    private struct Row: Identifiable {
+        let id: String
+        let title: String
+        let done: Bool
+        /// Shown when macOS was answered "Don't Allow": only System Settings can change it now.
+        var fix: (() -> Void)?
+    }
+
+    private var questionRows: [Row] {
+        let control: (String, String) -> Row = { app, name in
+            Row(
+                id: app, title: name, done: model.control(of: app) == .allowed,
+                fix: model.control(of: app) == .denied ? { Permissions.openAutomationSettings() } : nil)
+        }
+        return [
+            Row(
+                id: "notifications", title: "Notifications", done: model.notifications == .allowed,
+                fix: model.notifications == .denied ? { Permissions.openNotificationSettings() } : nil),
+            Row(
+                id: "contacts", title: "Contacts", done: model.contactsStatus == .authorized,
+                fix: model.contactsStatus != .notDetermined
+                    ? { Permissions.openContactsSettings() } : nil),
+            Row(
+                id: "calendars", title: "Calendars", done: model.calendarStatus == .fullAccess,
+                fix: model.calendarStatus == .notDetermined ? nil : { Task { await model.allowEvents(.events) } }),
+            Row(
+                id: "reminders", title: "Reminders", done: model.remindersStatus == .fullAccess,
+                fix: model.remindersStatus == .notDetermined ? nil : { Task { await model.allowEvents(.reminders) } }),
+            Row(
+                id: "location",
+                title: model.locationAccess == .servicesOff ? "Location (Location Services off)" : "Location",
+                done: model.locationAccess == .allowed,
+                fix: [.denied, .servicesOff].contains(model.locationAccess) ? { model.allowLocation() } : nil),
+            Row(
+                id: "localNetwork", title: "Local network", done: model.localNetwork == true,
+                fix: model.localNetwork == false ? { Task { await model.allowLocalNetwork() } } : nil),
+            control(Permissions.notesApp, "Notes"),
+            control(Permissions.messagesApp, "Messages"),
+            control(Permissions.mailApp, "Mail"),
+            control(Permissions.safariApp, "Safari"),
         ]
     }
 
-    private func n(_ step: String) -> Int { (visibleSteps.firstIndex(of: step) ?? 0) + 1 }
-
-    /// Calendars or Reminders: macOS asks once, then only System Settings can change it.
-    private func eventsStep(
-        _ key: String, _ title: String, status: EKAuthorizationStatus, kind: EventsKind, purpose: String, pane: String
-    ) -> some View {
-        step(key, title) {
-            if status == .notDetermined {
-                Text("\(purpose) When macOS asks about \(pane), click Allow.")
-                    .foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-                Button("Continue") { Task { await model.allowEvents(kind) } }
-            } else {
-                Text("In System Settings, open \(pane) and set Latchkey to Full Access.")
-                    .foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-                Button("Open System Settings") { Task { await model.allowEvents(kind) } }
-            }
-        }
+    private var switchRows: [Row] {
+        [
+            Row(id: "keepAwake", title: "Allow in the Background (keeps this Mac awake)", done: model.isOn(.keepAwake)),
+            Row(id: "disk", title: "Full Disk Access", done: model.isOn(.disk)),
+            Row(id: "screen", title: "Screen & System Audio Recording", done: model.isOn(.screen)),
+            Row(id: "accessibility", title: "Accessibility", done: model.isOn(.accessibility)),
+        ]
     }
 
-    private func controlStep(_ key: String, _ title: String, app: String, appName: String, purpose: String) -> some View
-    {
-        step(key, title) {
-            if model.control(of: app) == .denied {
-                Text(
-                    "Latchkey isn't allowed to control \(appName). In System Settings, open Automation and turn on \(appName) under Latchkey."
-                )
-                .foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-                Button("Open System Settings") { Permissions.openAutomationSettings() }
-            } else {
-                Text("\(purpose) When macOS asks whether Latchkey may control \(appName), click Allow.")
-                    .foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-                Button("Continue") { Task { await model.allowControl(of: app) } }
+    /// Short lines in columns, each ticked when done; a refused one offers System Settings.
+    private func checklist(_ rows: [Row], columns: Int) -> some View {
+        LazyVGrid(
+            columns: Array(repeating: GridItem(.flexible(), alignment: .leading), count: columns), alignment: .leading,
+            spacing: 4
+        ) {
+            ForEach(rows) { row in
+                HStack(spacing: 6) {
+                    Image(systemName: row.done ? "checkmark.circle.fill" : "circle")
+                        .foregroundStyle(row.done ? .green : .secondary)
+                        .accessibilityLabel(row.done ? "Allowed" : "Not allowed yet")
+                    Text(row.title).foregroundStyle(row.done ? .secondary : .primary)
+                    if let fix = row.fix {
+                        Button("Open…", action: fix).controlSize(.small)
+                            .accessibilityLabel(Text("Open System Settings for \(row.title)"))
+                    }
+                }
             }
         }
     }
 
     private func isDone(_ key: String) -> Bool {
         switch key {
-        case "helper": model.helperStatus == .enabled
         case "connect": model.isPaired
-        case "disk": model.fullDiskAccess
-        case "notes": model.control(of: Permissions.notesApp) == .allowed
-        case "messages": model.control(of: Permissions.messagesApp) == .allowed
-        case "mail": model.control(of: Permissions.mailApp) == .allowed
-        case "contacts": model.contactsStatus == .authorized
-        case "calendars": model.calendarStatus == .fullAccess
-        case "reminders": model.remindersStatus == .fullAccess
-        case "location": model.locationAccess == .allowed
-        case "safari": model.control(of: Permissions.safariApp) == .allowed
-        case "safariJS": model.safariJavaScript == true
-        case "notifications": model.notifications == .allowed
-        case "localNetwork": model.localNetwork == true
-        case "screen": model.screenRecording
-        case "screenAccess": !model.needsScreenAccess
-        case "accessibility": model.accessibility
+        case "questions": model.questionsAnswered
+        case "switches": model.switchesOn
+        case "safari": model.safariJavaScript == true
         default: false
         }
     }
 
     /// The step shown in full: the one the Owner opened, else the first one not done. The others
-    /// are one line each, so the window fits any screen.
+    /// are one line each. Nothing after connecting opens before the Mac is paired.
     private var current: String? {
-        if let opened, visibleSteps.contains(opened), !isDone(opened) { return opened }
-        return visibleSteps.first { !isDone($0) }
+        if let showing { return showing }
+        if let opened, Self.steps.contains(opened), !isDone(opened), model.isPaired || opened == "connect" {
+            return opened
+        }
+        return Self.steps.first { !isDone($0) }
     }
 
     @ViewBuilder
     private func step<Content: View>(_ key: String, _ title: String, @ViewBuilder content: () -> Content) -> some View {
-        let n = n(key)
+        let n = (Self.steps.firstIndex(of: key) ?? 0) + 1
         let done = isDone(key)
         let open = key == current
         HStack(alignment: .top, spacing: 12) {
@@ -601,8 +518,8 @@ struct SetupView: View {
                 .foregroundStyle(done ? .green : open ? .primary : .secondary)
                 .accessibilityLabel(done ? "Done" : "Step \(n)")
             VStack(alignment: .leading, spacing: 8) {
-                if done || open {
-                    Text(title).font(.headline)
+                if done || open || !model.isPaired {
+                    Text(title).font(.headline).foregroundStyle(done || open ? .primary : .secondary)
                 } else {
                     Button {
                         opened = key

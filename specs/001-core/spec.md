@@ -237,9 +237,13 @@ Format: EARS ("When <trigger>, the <system> shall <response>"). IDs are stable; 
   Mac is paired, the app shall ask each question macOS asks in its own dialog, one after another,
   each waiting for its answer (Notifications, Contacts, Calendars, Reminders, Location, control of
   Notes, Messages, Mail, and Safari, Local Network, and, once Screen Recording is allowed, one
-  throwaway screenshot for macOS's direct screen access question), then open System Settings for
-  the first switch only it can turn on. Setup shall offer the same as one "Allow All" button
-  whenever a permission is missing. A permission refused or not yet given counts as missing and
+  throwaway screenshot for macOS's direct screen access question), then open System Settings at
+  the first switch only the Owner can turn on, and each time one is turned on, open the page of
+  the next. The setup window shall have four steps (2026-10-31, after a review against Apple's
+  guidelines found seventeen steps unwieldy): connect; answer macOS's questions (a checklist,
+  with Ask Now to ask again and, for a question refused, a way to System Settings); turn on
+  Latchkey in System Settings (a checklist and one button that opens the pages in turn); and
+  Safari's setting. A permission refused or not yet given counts as missing and
   opens setup. The app shall never ask for a permission during use (no notification request when
   posting). Why: Toni got "Allow Latchkey to…" questions during use, when the Mac is usually
   unattended.

@@ -284,7 +284,9 @@ the two body lines exactly as asked, with no "> " quoting, indentation, or extra
 
 Every permission at first run (0.8.52, Toni 2026-10-31, spec 001 FR-623): every approval any
 capability can use is asked for at first run, whatever the levels, so macOS never asks during
-use. Right after pairing Latchkey asks each macOS question in turn, and setup has Allow All.
+use. Right after pairing Latchkey asks each macOS question in turn. Since 0.8.53 the setup
+window has four steps instead of seventeen (connect, macOS's questions, System Settings,
+Safari), and System Settings opens page after page as each switch is turned on.
 Three approvals were added: Notifications (asked during use until now), Local Network (asked
 when a command reached a device at home), and macOS's direct screen access question (asked at
 the first screenshot). Accessibility is now asked for whatever computer control is set to,

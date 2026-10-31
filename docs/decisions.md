@@ -186,6 +186,7 @@ Add a row when a decision is made; never delete one, mark it "superseded by" ins
 | 2026-10-28 | Claude can delete a reminder list only by giving how many reminders it holds (open and completed); a wrong number is refused with the actual count | Toni, spec 007 FR-713 |
 | 2026-10-28 | Claude can create, rename, and delete contact groups and add or remove cards; deleting a group keeps its cards | Toni, spec 007 FR-723 |
 | 2026-10-31 | Every macOS permission every capability can use is asked for at first run, whatever the levels: right after pairing Latchkey asks each macOS question in turn (adding Notifications, Local Network, and macOS's direct screen access question), and setup has Allow All; nothing is asked during use | Toni, spec 001 FR-623, FR-606 |
+| 2026-10-31 | The setup window has four steps (connect, macOS's questions, System Settings, Safari), each a checklist; System Settings opens page after page as each switch is turned on | Toni asked for a review against Apple's guidelines; spec 001 FR-623 |
 | 2026-10-30 | Mail sends through Mail's compose window with Accessibility, never Mail's scripted content (which arrives indented as a quote in other mail apps); with the screen off or locked, sending is refused and says why | Toni, spec 008 |
 | 2026-10-29 | MimeFoundation decodes mail (pinned by commit) | Toni, spec 008 |
 | 2026-10-29 | Test suites run side by side; the large-log test uses 30,000 entries; every test still runs on every change | Toni, .claude/rules/macos.md |

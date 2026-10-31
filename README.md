@@ -76,7 +76,8 @@ Claude (web, Desktop, phone)  ──HTTPS──▶  Latchkey relay  ◀──out
    Access; Notifications; control of Notes, Messages, Mail, and Safari; Contacts; Calendars;
    Reminders; Location; Local Network; Screen Recording and macOS's follow-up screen question;
    Accessibility; and Safari's "Allow JavaScript from Apple Events"). Right after you connect,
-   Latchkey asks each macOS question in turn; Allow All in the setup window does it again. Later, the
+   Latchkey asks each macOS question in turn, then opens each System Settings page you need, one
+   after another, as you turn Latchkey on. Later, the
    Permissions tab in Latchkey's Settings window shows each one and whether it's allowed.
 2. **Connect Claude.** On claude.ai, open Settings → Connectors → Add custom connector, and enter
    your relay's address followed by `/mcp`, for example `https://relay.example.com/mcp`. Sign

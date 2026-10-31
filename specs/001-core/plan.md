@@ -1015,13 +1015,17 @@ Pairing comes before the Mac app, so the app connects the real way from its firs
 
 Every approval in the Permissions tab is needed whatever the levels, so setup lists every step
 and a missing one opens it. `AppModel.allowAll()` runs right after pairing (both the sign-in
-window and a pairing link) and from setup's Allow All button: it asks, one at a time and
+window and a pairing link) and from setup's Ask Now button: it asks, one at a time and
 waiting for each answer, Notifications (`requestAuthorization`), Contacts, Calendars, Reminders,
 Location (waits up to a minute for Core Location's answer), control of every scripted app
 (`Permissions.scriptedApps`, the app opened hidden first), Local Network, and macOS's direct
-screen access question; then it opens System Settings at the first switch still off (Full Disk
-Access, Screen Recording, Accessibility, keep-awake). Nothing asks during use: notifications are
-posted without asking.
+screen access question; then `openSwitches()` opens System Settings at the first switch still
+off (`AppModel.Switch`: keep-awake, Full Disk Access, Screen Recording with its screenshot,
+Accessibility), and every look at the approvals (each second while a window is open) opens the
+next page once one turns on. Screen Recording turned on brings the throwaway screenshot once.
+Nothing asks during use: notifications are posted without asking. The setup window groups the
+approvals into four steps (connect, macOS's questions, System Settings, Safari), each a
+checklist; a refused question shows "Open…" to its own System Settings page.
 
 - Local Network has no call that reads it. Options: (a) a Bonjour search for a type declared in
   NSBonjourServices, which runs when allowed and waits with DNS-SD's "policy denied" (-65570)

@@ -5,8 +5,11 @@ import Testing
 @testable import Latchkey
 
 @MainActor @Suite struct SetupRenderTests {
-    @Test func fitsOnASmallScreen() throws {
-        let view = SetupView(model: AppModel(), close: {}).background(Color.white).environment(\.colorScheme, .light)
+    /// Every step, open, fits; SETUP_RENDER_DIR saves a picture of each.
+    @Test(arguments: [nil, "questions", "switches", "safari"])
+    func fitsOnASmallScreen(_ step: String?) throws {
+        let view = SetupView(model: AppModel(), close: {}, showing: step).background(Color.white)
+            .environment(\.colorScheme, .light)
         let renderer = ImageRenderer(content: view)
         renderer.scale = 2
         let image = try #require(renderer.nsImage)
@@ -14,7 +17,7 @@ import Testing
             let tiff = image.tiffRepresentation,
             let png = NSBitmapImageRep(data: tiff)?.representation(using: .png, properties: [:])
         {
-            try png.write(to: URL(filePath: dir).appending(path: "setup.png"))
+            try png.write(to: URL(filePath: dir).appending(path: "setup-\(step ?? "start").png"))
         }
         // A 13-inch MacBook Air's screen, less the menu bar and some margin.
         #expect(image.size.height <= 800, "height \(image.size.height)")

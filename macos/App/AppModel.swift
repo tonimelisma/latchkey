@@ -615,19 +615,70 @@ final class AppModel {
         }
         for app in Permissions.scriptedApps where control(of: app) == .notAsked { await allowControl(of: app) }
         if localNetwork != true { await allowLocalNetwork() }
-        if screenRecording, !screenAccess { await confirmScreenAccess() }
         await checkApprovals()
-        // The rest are switches only System Settings has: open the first one still off.
-        if !fullDiskAccess {
-            Permissions.openFullDiskAccessSettings()
-        } else if !screenRecording {
-            allowScreenRecording()
-        } else if !accessibility {
-            allowAccessibility()
-        } else if helperStatus != .enabled {
-            approveHelper()
+        event(.permissions, "Allow All: questions done, missing \(missingSetup.joined(separator: ", "))")
+        openSwitches()
+    }
+
+    /// The questions macOS asks in its own dialog, for setup's checklist: all allowed means the
+    /// step is done. A refused one shows its own way to System Settings.
+    var questionsAnswered: Bool {
+        notifications == .allowed && contactsStatus == .authorized && calendarStatus == .fullAccess
+            && remindersStatus == .fullAccess && locationAccess == .allowed && localNetwork == true
+            && Permissions.scriptedApps.allSatisfy { control(of: $0) == .allowed }
+    }
+
+    /// The switches only the Owner can turn on, in System Settings, in the order setup opens them.
+    enum Switch: CaseIterable { case keepAwake, disk, screen, accessibility }
+
+    func isOn(_ s: Switch) -> Bool {
+        switch s {
+        case .keepAwake: helperStatus == .enabled
+        case .disk: fullDiskAccess
+        case .screen: screenRecording && screenAccess
+        case .accessibility: accessibility
         }
-        event(.permissions, "Allow All: done, missing \(missingSetup.joined(separator: ", "))")
+    }
+
+    func open(_ s: Switch) {
+        switch s {
+        case .keepAwake: approveHelper()
+        case .disk: Permissions.openFullDiskAccessSettings()
+        case .screen: if screenRecording { Task { await confirmScreenAccess() } } else { allowScreenRecording() }
+        case .accessibility: allowAccessibility()
+        }
+    }
+
+    var switchesOn: Bool { Switch.allCases.allSatisfy(isOn) }
+
+    /// While true, turning one switch on opens the page of the next (FR-623): one click for all.
+    private(set) var openingSwitches = false
+    private var openedSwitch: Switch?
+    private var screenConfirmed = false
+
+    func openSwitches() {
+        openingSwitches = true
+        openedSwitch = nil
+        screenConfirmed = false
+        advanceSwitches()
+    }
+
+    /// Called after every look at the approvals.
+    private func advanceSwitches() {
+        guard openingSwitches else { return }
+        guard let next = Switch.allCases.first(where: { !isOn($0) }) else {
+            openingSwitches = false
+            return
+        }
+        if next == .screen, screenRecording, !screenConfirmed, openedSwitch == .screen {
+            // Just turned on: macOS's second question comes with the first screenshot (once).
+            screenConfirmed = true
+            Task { await confirmScreenAccess() }
+            return
+        }
+        guard next != openedSwitch else { return }
+        openedSwitch = next
+        open(next)
     }
 
     func checkPersonalData() {
@@ -701,6 +752,7 @@ final class AppModel {
         await checkNotifications()
         await checkLocalNetwork()
         logApprovals()
+        advanceSwitches()
     }
 
     private let approvalChanges = Changes<String>()
