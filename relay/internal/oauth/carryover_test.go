@@ -9,6 +9,8 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -55,7 +57,20 @@ func setupFromFosite(t *testing.T) (*env, fositeFixture) {
 	require.NoError(t, st.Close())
 	raw, err := sql.Open("sqlite", "file:"+path)
 	require.NoError(t, err)
+	// The MCP SDK checks a token's expiry against the real clock, so the fixture's times are moved
+	// to now, keeping their spacing (the frozen times failed once the fixture's access token had
+	// expired in real time, 2026-10-30).
+	shift := time.Now().UnixMilli() - f.MadeAtMS
+	stamp := regexp.MustCompile(`\b1[78]\d{11}\b`)
+	moved := func(q string) string {
+		return stamp.ReplaceAllStringFunc(q, func(s string) string {
+			n, _ := strconv.ParseInt(s, 10, 64)
+			return strconv.FormatInt(n+shift, 10)
+		})
+	}
+	f.MadeAtMS += shift
 	for _, q := range f.SQL {
+		q = moved(q)
 		_, err := raw.ExecContext(ctx, q)
 		require.NoError(t, err, q)
 	}
