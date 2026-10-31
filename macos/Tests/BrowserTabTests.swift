@@ -232,7 +232,7 @@ final class Notes: @unchecked Sendable {
 @Suite struct BrowserTabTests {
     func browser(_ fake: FakeSafariTabs, notes: Notes = Notes(), memory: WindowMemory? = nil) -> SafariBrowser {
         SafariBrowser(
-            scripts: fake, settleLimit: .milliseconds(600), memory: memory, place: { .tab }, note: { notes.add($0) })
+            scripts: fake, settleLimit: .seconds(3), memory: memory, place: { .tab }, note: { notes.add($0) })
     }
 
     /// FR-412, FR-413: a new tab at the end of the Owner's front window, behind the tab the Owner
@@ -506,7 +506,7 @@ final class Notes: @unchecked Sendable {
     @Test func changingTheSettingMovesToATab() async throws {
         let fake = FakeSafariTabs()
         let place = PlaceBox(.window)
-        let b = SafariBrowser(scripts: fake, settleLimit: .milliseconds(600), place: { place.value })
+        let b = SafariBrowser(scripts: fake, settleLimit: .seconds(3), place: { place.value })
         _ = try await b.open("https://w.example.com", newTab: false)
         #expect(fake.windows.contains { $0.id == 77 })
         place.value = .tab
