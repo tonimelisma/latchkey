@@ -141,6 +141,8 @@ enum MailWrite {
         return String(a[a.index(after: open)..<close])
     }
 
+    /// A new message, reply, or forward written in Mail's own window (plan D6, Toni 2026-10-30),
+    /// then sent and confirmed in Sent (plan D7), or saved as a draft.
     static func compose(_ args: JSONValue, _ s: MailStore, _ env: Env, draft: Bool) async throws -> ToolResult {
         let to = try addresses(args, "to")
         let cc = try addresses(args, "cc")
@@ -148,22 +150,22 @@ enum MailWrite {
         let text = args["text"]?.stringValue ?? ""
         let subject = args["subject"]?.stringValue ?? ""
         var original: MailStore.Summary?
-        var kind = "new"
+        var kind: ResponseKind?
         if let r = args["reply_to"]?.stringValue, !r.isEmpty {
             original = try s.message(try MailCapability.messageID(r))
-            kind = args["reply_all"]?.boolValue == true ? "replyall" : "reply"
+            kind = args["reply_all"]?.boolValue == true ? .replyAll : .reply
         } else if let f = args["forward"]?.stringValue, !f.isEmpty {
             original = try s.message(try MailCapability.messageID(f))
-            kind = "forward"
+            kind = .forward
         }
         let nothing = draft ? "No draft was saved" : "Nothing was sent"
         if !draft {
-            if kind == "new" || kind == "forward", to.isEmpty, cc.isEmpty, bcc.isEmpty {
+            if kind == nil || kind == .forward, to.isEmpty, cc.isEmpty, bcc.isEmpty {
                 return .text("\(nothing): say who to send it to (to).", isError: true)
             }
-            if kind == "new", subject.isEmpty { return .text("\(nothing): give a subject.", isError: true) }
+            if kind == nil, subject.isEmpty { return .text("\(nothing): give a subject.", isError: true) }
         }
-        var files: [String] = []
+        var files: [URL] = []
         if case .array(let list)? = args["attachments"] {
             for p in list.compactMap(\.stringValue) {
                 let url = URL(filePath: (p as NSString).expandingTildeInPath)
@@ -171,18 +173,17 @@ enum MailWrite {
                 guard FileManager.default.fileExists(atPath: url.path, isDirectory: &isDir), !isDir.boolValue,
                     FileManager.default.isReadableFile(atPath: url.path)
                 else { return .text("\(nothing): there's no readable file at \(p).", isError: true) }
-                files.append(url.path)
+                files.append(url)
             }
         }
         // The sending account (FR-822).
         let accounts = try await MailCapability.accounts(s, env, launch: true)
         var account: MailCapability.AccountInfo?
-        var senderAddress = ""
+        var sender: String?
         if let original {
             account = accounts.first { $0.id == original.mailbox.accountID }
             let received = try s.recipients(original.id).map { $0.address.lowercased() }
-            senderAddress =
-                account?.addresses.first { received.contains($0.lowercased()) } ?? account?.addresses.first ?? ""
+            sender = account?.addresses.first { received.contains($0.lowercased()) } ?? account?.addresses.first
         } else if let from = args["from"]?.stringValue, !from.isEmpty {
             guard let a = MailCapability.account(named: bare(from), in: accounts), !a.addresses.isEmpty else {
                 return .text(
@@ -190,78 +191,41 @@ enum MailWrite {
                     isError: true)
             }
             account = a
-            senderAddress =
-                a.addresses.first { $0.caseInsensitiveCompare(bare(from)) == .orderedSame } ?? a.addresses[0]
+            sender = a.addresses.first { $0.caseInsensitiveCompare(bare(from)) == .orderedSame } ?? a.addresses[0]
         }
-        // The body: a reply or forward carries the original, written by Latchkey (plan D6).
-        var body = text
-        var extraFiles: [URL] = []
-        var cleanup: URL?
-        if let original {
-            let file = s.file(for: original)
-            let parsed = file.flatMap { try? MailFile.read($0) }
-            let originalText = parsed?.text?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-            if kind == "forward" {
-                let recipients = try s.recipients(original.id).filter { $0.kind == .to }.map(\.label)
-                body +=
-                    "\n\nBegin forwarded message:\n\nFrom: \(original.sender)\nSubject: \(original.subject)\nDate: \(MailCapability.format(original.date))\nTo: \(recipients.joined(separator: ", "))\n\n"
-                    + originalText
-                if let parsed, !parsed.attachments.isEmpty {
-                    let dir = env.downloads.appending(path: "Latchkey-\(UUID().uuidString)")
-                    try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-                    cleanup = dir
-                    for a in parsed.attachments {
-                        guard
-                            let data = a.data
-                                ?? MailCapability.downloaded(a, file, original, s).flatMap({ try? Data(contentsOf: $0) }
-                                )
-                        else { continue }
-                        // The sender's name, made harmless, so the forward shows it.
-                        extraFiles.append(try MailPaths.writeCopy(data, named: a.name, in: dir))
-                    }
-                }
-            } else if !originalText.isEmpty {
-                let quoted = originalText.split(separator: "\n", omittingEmptySubsequences: false).map { "> \($0)" }
-                body +=
-                    "\n\nOn \(MailCapability.format(original.date)), \(original.sender) wrote:\n\n"
-                    + quoted.joined(separator: "\n")
+        let opening: ComposeOpening
+        if let original, let kind {
+            guard let messageID = try s.messageIDHeader(original.id), !messageID.isEmpty else {
+                return .text(
+                    "\(nothing): Mail has no Message-ID for that message, so it can't be opened.", isError: true)
             }
+            opening = .respond(messageID: messageID, kind: kind)
+        } else {
+            guard let url = MailCompose.mailto(to: to, cc: cc, bcc: bcc, subject: subject) else {
+                return .text("\(nothing): those addresses can't go into a new message.", isError: true)
+            }
+            opening = .new(mailto: url)
         }
-        defer {
-            if let cleanup, draft { try? FileManager.default.removeItem(at: cleanup) }
-        }
+        let request = MailCompose.Request(
+            opening: opening, to: to, cc: cc, bcc: bcc, subject: kind == nil ? subject : nil,
+            sender: sender, text: text, files: files, draft: draft)
         let start = Date().addingTimeInterval(-2)
-        let place = original?.place
-        let answer: String
+        let shownSubject: String
         do {
-            answer = try await env.scripts.run(
-                MailScript.compose,
-                [
-                    draft ? "draft" : "send", kind, place?.accountID ?? "", place?.path ?? "",
-                    original.map { String($0.id) } ?? "", senderAddress, senderAddress, subject, body,
-                    to.joined(separator: "\n"), cc.joined(separator: "\n"), bcc.joined(separator: "\n"),
-                    files.joined(separator: "\n"), extraFiles.map(\.path).joined(separator: "\n"),
-                ])
-        } catch ScriptError.timedOut where !draft {
-            removeLater(cleanup)
-            var r = ToolResult.text(
-                "Mail didn't answer in time, so the message may or may not have gone. Don't send it again; check with mail_find (mailbox Sent) in a minute."
-            )
-            r.activity = "Claude sent an email (unconfirmed)"
-            return r
-        }
-        let finalSubject =
-            subject.isEmpty ? (original.map { (kind == "forward" ? "Fwd: " : "Re: ") + $0.subject } ?? "") : subject
-        let who = (to + cc + bcc).first ?? original?.senderAddress ?? ""
-        if answer.hasPrefix("sender ") {
-            removeLater(cleanup)
+            shownSubject = try await env.composeQueue.run {
+                try await MailCompose.run(request, env.windows, attachWait: env.attachWait)
+            }
+        } catch let f as ComposeFailure {
+            let why = f.message.hasPrefix("Nothing was sent") ? f.message : "\(nothing): \(f.message)"
             return .text(
-                "\(nothing): Mail would have used \(answer.dropFirst(7)) as the sender instead of \(senderAddress).",
+                draft ? why.replacingOccurrences(of: "Nothing was sent", with: "No draft was saved") : why,
                 isError: true)
         }
+        let finalSubject = shownSubject.isEmpty ? subject : shownSubject
+        let who = (to + cc + bcc).first ?? (kind == .forward ? "" : original?.senderAddress ?? "")
         if draft {
             var r = ToolResult.text(
-                "Saved a draft\(who.isEmpty ? "" : " to \(who)"): \(q(finalSubject)), in \(account?.label ?? "the default account")'s Drafts."
+                "Saved a draft\(who.isEmpty ? "" : " to \(who)"): \(q(finalSubject)), in \(account?.label ?? "the account")'s Drafts."
             )
             r.activity = "Claude saved a draft\(who.isEmpty ? "" : " to \(who)"): «\(finalSubject)»"
             r.made = "the draft «\(finalSubject)» in Mail"
@@ -273,42 +237,30 @@ enum MailWrite {
                 && (account?.sentName.map { b.name.caseInsensitiveCompare($0) == .orderedSame }
                     ?? MailStore.looksSent(b.name))
         }
-        let wantFiles = files.count + extraFiles.count
         var copy: (id: Int64, messageID: String?, attachments: Int)?
         let deadline = ContinuousClock.now + env.confirmWait
         while copy == nil, ContinuousClock.now < deadline, !Task.isCancelled {
             copy = try s.sentCopy(in: boxes, since: start, subject: finalSubject, recipient: bare(who))
             if copy == nil { try? await Task.sleep(for: env.poll) }
         }
-        let fileNote = wantFiles == 0 ? "" : ", \(wantFiles) attachment\(wantFiles == 1 ? "" : "s")"
+        let fileNote = files.isEmpty ? "" : ", \(files.count) attachment\(files.count == 1 ? "" : "s")"
         var r: ToolResult
         if let copy {
-            removeLater(cleanup)
             var line = "Sent to \(([who] + (to + cc + bcc).dropFirst()).joined(separator: ", "))"
-            if !senderAddress.isEmpty { line += " from \(senderAddress)" }
+            if let sender { line += " from \(sender)" }
             line +=
                 ": \(q(finalSubject))\(fileNote). It is in Sent (Message-ID \(copy.messageID ?? "unknown"), id \(copy.id))."
-            if copy.attachments < wantFiles {
+            if copy.attachments < files.count {
                 line +=
-                    " But the copy in Sent shows \(copy.attachments) attachment\(copy.attachments == 1 ? "" : "s"), not \(wantFiles): check it in Mail before sending again."
+                    " But the copy in Sent shows \(copy.attachments) attachment\(copy.attachments == 1 ? "" : "s"), not \(files.count): check it in Mail before sending again."
             }
             r = .text(line)
         } else {
-            removeLater(cleanup)
             r = .text(
-                "Mail took the message to \(who): \(q(finalSubject))\(fileNote), but its copy isn't in Sent yet. Don't send it again; check with mail_find (mailbox Sent) in a minute."
+                "Mail sent the message to \(who): \(q(finalSubject))\(fileNote), but its copy isn't in Sent yet. Don't send it again; check with mail_find (mailbox Sent) in a minute."
             )
         }
         r.activity = "Claude sent an email to \(who): «\(finalSubject)»"
         return r
-    }
-
-    /// Removes forwarded attachments' copies once Mail has had time to read them.
-    static func removeLater(_ dir: URL?) {
-        guard let dir else { return }
-        Task.detached(priority: .utility) {
-            try? await Task.sleep(for: .seconds(120))
-            try? FileManager.default.removeItem(at: dir)
-        }
     }
 }

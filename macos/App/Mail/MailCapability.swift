@@ -16,9 +16,14 @@ enum MailCapability {
         var scratch: URL
         /// Where Mail is asked to save an attachment it must download first (Mail is sandboxed).
         var downloads: URL
+        /// Mail's compose windows, through Accessibility (plan D6).
+        var windows: any ComposeWindows
+        var composeQueue = ComposeQueue()
         var searchBudget: Duration = .seconds(20)
         var confirmWait: Duration = .seconds(30)
         var poll: Duration = .milliseconds(500)
+        /// How long Mail gets to attach pasted files.
+        var attachWait: Duration = MailCompose.attachWait
     }
 
     static let mailApp = "com.apple.mail"
@@ -31,7 +36,7 @@ enum MailCapability {
             store: { try opener.store() }, scripts: scripts, accounts: MailAccounts(scripts: scripts, mayScript: may),
             mayScript: may,
             scratch: FileManager.default.temporaryDirectory.appending(path: "Latchkey Mail"),
-            downloads: URL.homeDirectory.appending(path: "Downloads"))
+            downloads: URL.homeDirectory.appending(path: "Downloads"), windows: AXMailWindows())
         return Capability(
             id: CapabilityRegistry.mail, title: "Mail", summary: "Find, read, organise, and send email",
             readTools: readTools(env), writeTools: writeTools(env))
@@ -157,7 +162,8 @@ enum MailCapability {
                         Changes email in Apple Mail: mark_read, mark_unread, flag, unflag, junk, not_junk, \
                         move (to mailbox, in the same account), delete (moves it to its account's Trash), for id \
                         or several ids. draft saves a new message, a reply (reply_to), or a forward (forward) \
-                        in the account's Drafts without sending it.
+                        in the account's Drafts without sending it (written in Mail's window: the Mac must be \
+                        unlocked with its screen on).
                         """, input: change, required: ["action"], readOnly: false, destructive: true,
                     deadlineMS: 60_000),
                 handler: { args in await run(env) { s in try await MailWrite.change(args, s, env) } }),
@@ -166,10 +172,11 @@ enum MailCapability {
                     "mail_send", title: "Send Email",
                     description: """
                         Sends an email from Apple Mail: a new message (to, subject, text), a reply (reply_to, \
-                        optionally reply_all), or a forward (forward and to), with attachments from the Mac. A \
-                        reply or forward goes from the account the original came to; a new message from \
-                        from or Mail's default account. Answers once the message is in the account's Sent \
-                        mailbox.
+                        optionally reply_all; Mail quotes the original below the text), or a forward (forward \
+                        and to), with attachments from the Mac. Mail writes it in its own window on the screen, \
+                        so it works only while the Mac is unlocked with its screen on. A reply or forward goes \
+                        from the account the original came to; a new message from from or Mail's default \
+                        account. Answers once the message is in the account's Sent mailbox.
                         """, input: composeInput(), readOnly: false, openWorld: true, deadlineMS: 90_000),
                 handler: { args in await run(env) { s in try await MailWrite.send(args, s, env) } }),
         ]

@@ -125,14 +125,16 @@ enum MailTestEnv {
 
     static func make(
         _ f: MailFixture, scripts: FakeScripts = FakeScripts(), may: Bool = false, budget: Duration = .seconds(5),
-        confirmWait: Duration = .seconds(2)
+        confirmWait: Duration = .seconds(2), windows: FakeWindows = FakeWindows()
     ) throws -> MailCapability.Env {
         let store = try MailStore(root: f.root)
         let tmp = FileManager.default.temporaryDirectory.appending(path: "mailtest-\(UUID().uuidString)")
         return MailCapability.Env(
             store: { store }, scripts: scripts, accounts: MailAccounts(scripts: scripts, mayScript: { may }),
-            mayScript: { may }, scratch: tmp.appending(path: "scratch"), downloads: tmp.appending(path: "Downloads"),
-            searchBudget: budget, confirmWait: confirmWait, poll: .milliseconds(50))
+            mayScript: { may }, scratch: tmp.appending(path: "scratch"),
+            downloads: tmp.appending(path: "Downloads"), windows: windows, searchBudget: budget,
+            confirmWait: confirmWait,
+            poll: .milliseconds(50), attachWait: .milliseconds(300))
     }
 
     static func tool(_ name: String, _ env: MailCapability.Env, level: AccessLevel = .readWrite) throws -> ToolEntry {
@@ -310,7 +312,7 @@ enum MailTestEnv {
         let env = MailCapability.Env(
             store: { nil }, scripts: scripts, accounts: MailAccounts(scripts: scripts, mayScript: { false }),
             mayScript: { false }, scratch: FileManager.default.temporaryDirectory,
-            downloads: FileManager.default.temporaryDirectory)
+            downloads: FileManager.default.temporaryDirectory, windows: FakeWindows())
         let r = try await MailTestEnv.tool("mail_find", env).handler(.object([:]))
         #expect(r.isError && MailTestEnv.text(r).contains("Full Disk Access"))
     }

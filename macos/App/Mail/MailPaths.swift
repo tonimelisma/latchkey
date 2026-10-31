@@ -43,17 +43,4 @@ enum MailPaths {
         let values = try? resolved.resourceValues(forKeys: [.isRegularFileKey])
         return values?.isRegularFile == true ? resolved : nil
     }
-
-    /// Writes a copy for Mail to attach (a forward), in a folder of its own under `dir`, under
-    /// a name that keeps the original's look but can't leave that folder.
-    static func writeCopy(_ data: Data, named name: String, in dir: URL) throws -> URL {
-        let folder = dir.appending(path: UUID().uuidString)
-        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-        let file = folder.appending(path: safeName(name, fallback: "attachment"))
-        guard file.standardizedFileURL.deletingLastPathComponent().path == folder.standardizedFileURL.path else {
-            throw CocoaError(.fileWriteInvalidFileName)
-        }
-        try data.write(to: file, options: .withoutOverwriting)
-        return file
-    }
 }

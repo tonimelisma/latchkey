@@ -24,7 +24,7 @@ import Testing
         ("safari tab show", SafariBrowser.Script.tabShow), ("safari tab restore", SafariBrowser.Script.tabRestore),
         ("safari tab close", SafariBrowser.Script.tabClose),
         ("mail accounts", MailScript.accounts), ("mail change", MailScript.change),
-        ("mail compose", MailScript.compose), ("mail save attachment", MailScript.saveAttachment),
+        ("mail save attachment", MailScript.saveAttachment),
     ]
 
     @Test(arguments: scripts.map(\.0))

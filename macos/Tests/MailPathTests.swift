@@ -85,14 +85,4 @@ import Testing
         #expect(dest.path.hasPrefix(env.downloads.path) && !dest.path.contains("..") && dest.pathExtension == "txt")
         #expect(!MailScript.saveAttachment.contains("& attName"))
     }
-
-    @Test func forwardedCopiesStayInTheirFolder() throws {
-        let dir = FileManager.default.temporaryDirectory.appending(path: "fwd-\(UUID().uuidString)")
-        for name in ["../../evil.txt", "/etc/passwd", "..", "a\u{0}b"] {
-            let f = try MailPaths.writeCopy(Data("x".utf8), named: name, in: dir)
-            #expect(
-                f.deletingLastPathComponent().deletingLastPathComponent().standardizedFileURL.path
-                    == dir.standardizedFileURL.path, "\(name) → \(f.path)")
-        }
-    }
 }
