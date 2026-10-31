@@ -24,7 +24,7 @@ struct OSAScriptRunner: ScriptRunner {
     var timeout: Duration = .seconds(25)
 
     func run(_ script: String, _ args: [String]) async throws -> String {
-        if let app, Permissions.automation(of: app, ask: false) == .notAsked { throw ScriptError.notAllowed }
+        if let app, await Permissions.automationOpening(app) == .notAsked { throw ScriptError.notAllowed }
         let lines = script.split(separator: "\n", omittingEmptySubsequences: false).flatMap { ["-e", String($0)] }
         let r: ProcessResult
         do { r = try await ProcessCommands.launch("/usr/bin/osascript", lines + ["--"] + args, timeout: timeout) } catch

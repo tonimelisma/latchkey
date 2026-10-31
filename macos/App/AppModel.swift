@@ -83,7 +83,7 @@ final class AppModel {
         static let launchedBefore = "launchedBefore"
         static let appControl = "appControlAllowed"
         static let safariJavaScript = "safariJavaScriptAllowed"
-        static let localNetwork = "localNetworkAllowed"
+        static let localNetwork = LocalNetwork.defaultsKey
         static let screenAccess = "screenAccessConfirmed"
     }
 

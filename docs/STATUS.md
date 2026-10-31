@@ -311,7 +311,8 @@ screenshot each say which permission and where to turn it on. Checked live 2026-
 the hosted relay: location, a command reaching the home router, calendars, reminders,
 contacts, notes, mail, messages, and a Safari page all worked (Safari's script ran past the new
 check); the screenshot couldn't be tried (lid closed), nor the monthly screen question (due
-Nov 22).
+Nov 22). Since 0.8.56 an app that isn't open is opened hidden to be checked first, and a Shell
+command that can't reach a device nearby says when Local Network isn't allowed.
 
 ## Waiting on Toni
 

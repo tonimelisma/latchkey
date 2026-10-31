@@ -184,6 +184,7 @@ enum ShellCapability {
             // "Operation not permitted" is also macOS's privacy protection refusing a read (FR-625).
             if !Permissions.hasFullDiskAccess { text += "\n" + Fence.privacyHint }
         }
+        if LocalNetwork.looksRefused(s.output), LocalNetwork.refused { text += "\n" + LocalNetwork.hint }
         if s.refusedHandoff { text += "\n" + Fence.handoffHint }
         if s.refusedSettings { text += "\n" + Fence.settingsHint }
         if let warning = s.fenceWarning { text += "\n" + warning }

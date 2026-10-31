@@ -51,6 +51,22 @@ enum Permissions {
         }
     }
 
+    /// Like `automation(of:ask: false)`, but an app that isn't running is opened hidden first, as
+    /// its script would open it anyway, and looked at for up to 5 seconds (spec 001 FR-625).
+    nonisolated static func automationOpening(_ bundleID: String) async -> Automation? {
+        if let known = automation(of: bundleID, ask: false) { return known }
+        guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) else { return nil }
+        let config = NSWorkspace.OpenConfiguration()
+        config.activates = false
+        config.hides = true
+        _ = try? await NSWorkspace.shared.openApplication(at: url, configuration: config)
+        for _ in 0..<20 {
+            if let known = automation(of: bundleID, ask: false) { return known }
+            try? await Task.sleep(for: .milliseconds(250))
+        }
+        return nil
+    }
+
     static func open(app bundleID: String) {
         if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) {
             NSWorkspace.shared.openApplication(at: url, configuration: NSWorkspace.OpenConfiguration())

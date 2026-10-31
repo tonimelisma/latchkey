@@ -1067,7 +1067,11 @@ Chosen: (a), in `ScreenReminder` and `AppModel.remindScreenWhileHere`. (c) is op
   prompting before each script and, when macOS hasn't asked yet, throws `notAllowed` instead of
   running it. The answers send the owner to Latchkey's Settings → Permissions, which has a
   button for either case (never asked, or refused). An app that isn't running can't be checked
-  that way, so its script still runs.
+  that way, so it is opened hidden and looked at for up to 5 seconds
+  (`Permissions.automationOpening`); its script would have opened it anyway.
+- Local Network: a Shell answer whose output has "No route to host" gains a Local Network line
+  while the last look found it not allowed (`LocalNetwork.refused`). macOS gives commands no
+  other sign of this refusal.
 - Full Disk Access taken back after a database was opened: the catch-all looks again
   (`Permissions.hasFullDiskAccess`) and gives the Full Disk Access answer.
 - Files: macOS's privacy protection answers EPERM, a file's own permissions EACCES; only EPERM

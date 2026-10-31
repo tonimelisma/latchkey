@@ -18,6 +18,13 @@ struct PermissionAnswerTests {
         #expect(FilesCapability.privacyRefusal.contains("Full Disk Access"))
     }
 
+    @Test func anUnreachableDeviceNearbyIsRecognised() {
+        #expect(LocalNetwork.looksRefused("ping: sendto: No route to host"))
+        #expect(LocalNetwork.looksRefused("curl: (7) Failed to connect to 192.168.1.1 port 80: No route to host"))
+        #expect(!LocalNetwork.looksRefused("curl: (6) Could not resolve host: example.invalid"))
+        #expect(LocalNetwork.hint.contains("Local Network"))
+    }
+
     @Test func aDeclinedScreenshotIsRecognised() {
         let declined = NSError(domain: SCStreamErrorDomain, code: SCStreamError.Code.userDeclined.rawValue)
         #expect(ScreenCapture.declined(declined))

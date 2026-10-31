@@ -258,8 +258,10 @@ Format: EARS ("When <trigger>, the <system> shall <response>"). IDs are stable; 
   owner turns it on; and a call shall never run a script whose app macOS hasn't asked about
   yet, since that would raise macOS's question during use. Covers Automation of Notes,
   Messages, Mail, and Safari; Full Disk Access for Notes, Messages, Mail, Files, and Shell
-  (macOS's "operation not permitted"); Contacts for names in Messages; and a screenshot macOS
-  refuses while Screen Recording is on. Why: an audit on 2026-10-31 found these answered with
+  (macOS's "operation not permitted"); Contacts for names in Messages; a screenshot macOS
+  refuses while Screen Recording is on; and Local Network for a Shell command that can't reach
+  a device nearby. An app that isn't open is opened hidden to be looked at, as its script
+  would open it anyway. Why: an audit on 2026-10-31 found these answered with
   a 25-second timeout, a raw error, or a silently empty result.
 - **FR-622** After every install, the installer shall check the running app and fail when the
   setup window is open on a Mac whose setup is finished, keep-awake isn't what the app wants, or
