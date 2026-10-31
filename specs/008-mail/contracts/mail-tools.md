@@ -95,7 +95,8 @@ in the Mac's time zone). Numbers are checked with `JSONValue.integer` (whole, no
 
 - Full Disk Access missing: `Latchkey can't read Mail yet: macOS needs the Mac's owner to turn on
   Latchkey in System Settings → Privacy & Security → Full Disk Access.`
-- Automation missing: `Latchkey isn't allowed to control Mail. The Mac's owner can allow it in
-  System Settings → Privacy & Security → Automation → Latchkey.`
+- Automation refused or never asked: `Latchkey isn't allowed to control Mail. The Mac's owner
+  can allow it in Latchkey's Settings → Permissions.` (never asked: the script isn't run, so
+  macOS's question doesn't come during use; spec 001 FR-625)
 - Unknown layout: `This version of Mail stores mail in a way Latchkey doesn't know yet (…).`
 - Unknown id: `There is no message with id N. Find it with mail_find.`

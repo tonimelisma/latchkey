@@ -293,7 +293,12 @@ enum ComputerCapability {
         } catch let a as ArgumentError {
             return .text(a.message, isError: true)
         } catch {
+            if ScreenCapture.declined(error) { return .text(screenDeclined, isError: true) }
             return .text("The screen couldn't be used: \(error.localizedDescription)", isError: true)
         }
     }
+
+    /// Screen Recording is on, but macOS refused the capture itself (FR-625).
+    static let screenDeclined =
+        "macOS refused the screenshot. It may be waiting for the Mac's owner to answer its question about Latchkey seeing the screen; otherwise the owner can turn on Latchkey in System Settings → Privacy & Security → Screen & System Audio Recording."
 }

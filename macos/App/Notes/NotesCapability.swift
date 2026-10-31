@@ -10,8 +10,8 @@ enum NotesCapability {
         let source = Opener()
         return Capability(
             id: CapabilityRegistry.notes, title: "Notes", summary: "Read, search, create, edit, and delete notes",
-            readTools: readTools(store: { try source.store() }, scripts: OSAScriptRunner()),
-            writeTools: writeTools(store: { try source.store() }, scripts: OSAScriptRunner()))
+            readTools: readTools(store: { try source.store() }, scripts: OSAScriptRunner(app: Permissions.notesApp)),
+            writeTools: writeTools(store: { try source.store() }, scripts: OSAScriptRunner(app: Permissions.notesApp)))
     }
 
     static let noAccess = """
@@ -145,6 +145,8 @@ enum NotesCapability {
         } catch let a as ArgumentError {
             return .text(a.message, isError: true)
         } catch {
+            // Full Disk Access turned off after the database was opened (FR-625).
+            if !Permissions.hasFullDiskAccess { return .text(noAccess, isError: true) }
             return .text("Notes couldn't be read: \(error.localizedDescription)", isError: true)
         }
     }
@@ -152,7 +154,7 @@ enum NotesCapability {
     static func explain(_ f: ScriptError) -> String {
         switch f {
         case .notAllowed:
-            "Latchkey isn't allowed to control Notes. The Mac's owner can allow it in System Settings → Privacy & Security → Automation → Latchkey."
+            "Latchkey isn't allowed to control Notes. The Mac's owner can allow it in Latchkey's Settings → Permissions."
         case .timedOut:
             "Notes didn't answer within 25 seconds. The change may or may not have happened; check with notes_read."
         case .failed(let message): "Notes reported an error: \(message)"

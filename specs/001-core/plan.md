@@ -1061,6 +1061,23 @@ Options:
 
 Chosen: (a), in `ScreenReminder` and `AppModel.remindScreenWhileHere`. (c) is open for Toni.
 
+### D22. Missing permissions named in Claude's answer (FR-625)
+
+- Automation: `OSAScriptRunner(app:)` asks `AEDeterminePermissionToAutomateTarget` without
+  prompting before each script and, when macOS hasn't asked yet, throws `notAllowed` instead of
+  running it. The answers send the owner to Latchkey's Settings → Permissions, which has a
+  button for either case (never asked, or refused). An app that isn't running can't be checked
+  that way, so its script still runs.
+- Full Disk Access taken back after a database was opened: the catch-all looks again
+  (`Permissions.hasFullDiskAccess`) and gives the Full Disk Access answer.
+- Files: macOS's privacy protection answers EPERM, a file's own permissions EACCES; only EPERM
+  (anywhere in the error's chain) names Full Disk Access. Options were (a) EPERM, chosen; (b) a
+  list of protected folders, which goes stale; (c) checking Full Disk Access on every failure,
+  which also blames it for ordinary permission errors.
+- Shell: its "write refused" hint gains a Full Disk Access line while Latchkey lacks it.
+- Messages: a name that matches nobody says when Contacts isn't allowed.
+- Screenshots: ScreenCaptureKit's `userDeclined` gets its own answer.
+
 ## Constitution check
 
 | Article | Status |

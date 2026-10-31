@@ -37,7 +37,7 @@ enum MailCapability {
 
     static func make() -> Capability {
         let opener = Opener()
-        let scripts = OSAScriptRunner()
+        let scripts = OSAScriptRunner(app: mailApp)
         let may: @Sendable () -> Bool = { Permissions.automation(of: mailApp, ask: false) == .allowed }
         let env = Env(
             store: { try opener.store() }, scripts: scripts, accounts: MailAccounts(scripts: scripts, mayScript: may),
@@ -56,7 +56,7 @@ enum MailCapability {
         """
 
     static let notAllowed =
-        "Latchkey isn't allowed to control Mail. The Mac's owner can allow it in System Settings → Privacy & Security → Automation → Latchkey."
+        "Latchkey isn't allowed to control Mail. The Mac's owner can allow it in Latchkey's Settings → Permissions."
 
     static let marking = MessagesCapability.marking
 
@@ -439,6 +439,7 @@ enum MailCapability {
         guard let data else {
             return .text(
                 "The attachment \(q(a.name)) isn't on the Mac: Mail hasn't downloaded it. Opening the message in Mail downloads it."
+                    + (env.mayScript() ? "" : " Latchkey would download it itself, but: " + notAllowed)
             )
         }
         let dir = env.scratch.appending(path: UUID().uuidString)
@@ -538,6 +539,8 @@ enum MailCapability {
         } catch let a as ArgumentError {
             return .text(a.message, isError: true)
         } catch {
+            // Full Disk Access turned off after the database was opened (FR-625).
+            if !Permissions.hasFullDiskAccess { return .text(noAccess, isError: true) }
             return .text("Mail couldn't be read: \(error.localizedDescription)", isError: true)
         }
     }

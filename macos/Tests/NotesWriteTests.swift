@@ -175,7 +175,7 @@ final class FakeScripts: ScriptRunner, @unchecked Sendable {
         fake.answer = { _, _ in throw ScriptError.notAllowed }
         let result = await tools["notes_delete"]!.handler(.object(["id": .string("N-IDEAS")]))
         #expect(result.isError)
-        #expect(result.content.jsonText.contains("Automation"))
+        #expect(result.content.jsonText.contains("allowed to control Notes"))
     }
 }
 

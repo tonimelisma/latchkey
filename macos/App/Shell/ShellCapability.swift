@@ -179,7 +179,11 @@ enum ShellCapability {
     private static func result(_ s: ShellJobs.Snapshot) -> ToolResult {
         var text = s.dropped > 0 ? "(\(s.dropped) earlier characters left out)\n" : ""
         text += s.output.isEmpty ? "(no new output)" : s.output
-        if s.refusedWrite { text += "\n" + Fence.hint }
+        if s.refusedWrite {
+            text += "\n" + Fence.hint
+            // "Operation not permitted" is also macOS's privacy protection refusing a read (FR-625).
+            if !Permissions.hasFullDiskAccess { text += "\n" + Fence.privacyHint }
+        }
         if s.refusedHandoff { text += "\n" + Fence.handoffHint }
         if s.refusedSettings { text += "\n" + Fence.settingsHint }
         if let warning = s.fenceWarning { text += "\n" + warning }

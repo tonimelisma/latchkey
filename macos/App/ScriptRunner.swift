@@ -18,9 +18,13 @@ enum ScriptError: Error, Equatable {
 /// arguments, never inside the script, after "--" so that none of it is read as an option (an
 /// argument "-e" would otherwise add a line of AppleScript; security scan 2026-10-24).
 struct OSAScriptRunner: ScriptRunner {
+    /// The app the scripts control; when macOS hasn't asked about it yet, a script would raise
+    /// its question during use, so it isn't run (FR-623).
+    var app: String?
     var timeout: Duration = .seconds(25)
 
     func run(_ script: String, _ args: [String]) async throws -> String {
+        if let app, Permissions.automation(of: app, ask: false) == .notAsked { throw ScriptError.notAllowed }
         let lines = script.split(separator: "\n", omittingEmptySubsequences: false).flatMap { ["-e", String($0)] }
         let r: ProcessResult
         do { r = try await ProcessCommands.launch("/usr/bin/osascript", lines + ["--"] + args, timeout: timeout) } catch

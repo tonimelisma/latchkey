@@ -365,7 +365,23 @@ enum FilesCapability {
         } catch CommandError.timedOut {
             return .text("Spotlight didn't answer within 20 seconds. Try a narrower search or a folder.", isError: true)
         } catch {
+            if refusedByPrivacy(error) { return .text(privacyRefusal, isError: true) }
             return .text((error as NSError).localizedDescription, isError: true)
         }
+    }
+
+    static let privacyFix =
+        "the Mac's owner can turn on Latchkey in System Settings → Privacy & Security → Full Disk Access"
+    static let privacyRefusal = "macOS's privacy protection refused it: \(privacyFix)."
+
+    /// macOS's privacy protection answers "operation not permitted" (EPERM); a file's own
+    /// permissions answer "permission denied" (EACCES) (FR-625).
+    static func refusedByPrivacy(_ error: Error) -> Bool {
+        var e: NSError? = error as NSError
+        while let current = e {
+            if current.domain == NSPOSIXErrorDomain, current.code == Int(EPERM) { return true }
+            e = current.userInfo[NSUnderlyingErrorKey] as? NSError
+        }
+        return false
     }
 }

@@ -253,6 +253,14 @@ Format: EARS ("When <trigger>, the <system> shall <response>"). IDs are stable; 
   then and not while Claude uses the Mac unattended; it shall try again at most once an hour
   while the question stays due. Why: macOS 27 still asks this (Toni's Mac, 2026-10-31: last
   asked Oct 23, next due Nov 22), and no app can turn it off.
+- **FR-625** When a call fails because a macOS permission is missing (refused, never asked,
+  or taken back after setup), Claude's answer shall name the permission and where the Mac's
+  owner turns it on; and a call shall never run a script whose app macOS hasn't asked about
+  yet, since that would raise macOS's question during use. Covers Automation of Notes,
+  Messages, Mail, and Safari; Full Disk Access for Notes, Messages, Mail, Files, and Shell
+  (macOS's "operation not permitted"); Contacts for names in Messages; and a screenshot macOS
+  refuses while Screen Recording is on. Why: an audit on 2026-10-31 found these answered with
+  a 25-second timeout, a raw error, or a silently empty result.
 - **FR-622** After every install, the installer shall check the running app and fail when the
   setup window is open on a Mac whose setup is finished, keep-awake isn't what the app wants, or
   the keep-awake helper running isn't the one just installed.

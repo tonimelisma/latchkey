@@ -302,6 +302,13 @@ using the Mac, Latchkey takes one throwaway screenshot, so the question comes wh
 there. It can't come earlier than macOS's date; Apple's screen-sharing permission (asked for
 by application) would remove it, and is not applied for.
 
+Missing permissions named (0.8.55, spec 001 FR-625): an audit of every tool found most
+permissions already answered clearly; the gaps now are too. Notes, Messages, Mail, and Safari
+don't run a script when macOS hasn't asked about the app yet (that raised the question during
+use and timed out after 25 seconds); Full Disk Access taken away later, a file macOS protects,
+a Shell command refused by it, Contacts missing for names in Messages, and a refused
+screenshot each say which permission and where to turn it on.
+
 ## Waiting on Toni
 
 1. Answer the macOS alert about Latchkey accessing the screen (Allow) whenever it shows (none

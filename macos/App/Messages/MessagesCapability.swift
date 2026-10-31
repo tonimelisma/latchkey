@@ -13,8 +13,13 @@ enum MessagesCapability {
             id: CapabilityRegistry.messages, title: "Messages", summary: "Read, search, and send messages",
             readTools: readTools(store: { try source.store() }),
             writeTools: writeTools(
-                store: { try source.store() }, contacts: contacts, scripts: OSAScriptRunner(), staging: staging))
+                store: { try source.store() }, contacts: contacts,
+                scripts: OSAScriptRunner(app: Permissions.messagesApp), staging: staging))
     }
+
+    /// Names come from Contacts; without it they are missing (spec 001 FR-625).
+    static let contactsRefused =
+        "(Latchkey isn't allowed to see Contacts, so it can't find people by name or show their names; the Mac's owner can allow Contacts in Latchkey's Settings → Permissions.)"
 
     static let noAccess = """
         Latchkey can't read Messages yet: macOS needs the Mac's owner to turn on Latchkey in \
@@ -251,6 +256,7 @@ enum MessagesCapability {
                 Unclear(
                     message:
                         "Nothing was sent: no one in Contacts is called \(to). Give a phone number or email address, or a conversation id from messages_find."
+                        + (ContactBook.allowed ? "" : " " + contactsRefused)
                 ))
         case 1:
             let p = people[0]
@@ -455,6 +461,8 @@ enum MessagesCapability {
         } catch let a as ArgumentError {
             return .text(a.message, isError: true)
         } catch {
+            // Full Disk Access turned off after the database was opened (FR-625).
+            if !Permissions.hasFullDiskAccess { return .text(noAccess, isError: true) }
             return .text("Messages couldn't be read: \(error.localizedDescription)", isError: true)
         }
     }
@@ -462,7 +470,7 @@ enum MessagesCapability {
     static func explain(_ f: ScriptError) -> String {
         switch f {
         case .notAllowed:
-            "Latchkey isn't allowed to control Messages. The Mac's owner can allow it in System Settings → Privacy & Security → Automation → Latchkey."
+            "Latchkey isn't allowed to control Messages. The Mac's owner can allow it in Latchkey's Settings → Permissions."
         case .timedOut:
             "Messages didn't answer within 25 seconds. The message may or may not have been sent; check with messages_read."
         case .failed(let message): "Messages reported an error: \(message)"

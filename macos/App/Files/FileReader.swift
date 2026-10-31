@@ -28,6 +28,9 @@ enum FileReader {
             return .notReadable("not a file but a device or pipe")
         }
         let type = values?.contentType ?? .data
+        do { try FileHandle(forReadingFrom: target).close() } catch  where FilesCapability.refusedByPrivacy(error) {
+            return .notReadable("protected by macOS; \(FilesCapability.privacyFix)")
+        } catch {}
         if type.conforms(to: .image) {
             do { return .image(try ImagePrep.prepare(target)) } catch {
                 return .notReadable("an image macOS can't open")

@@ -213,6 +213,10 @@ enum Fence {
         return (write, handoff, settings)
     }
 
+    /// Added too while Latchkey lacks Full Disk Access (spec 001 FR-625).
+    static let privacyHint =
+        "[Or macOS's privacy protection refused a read: Latchkey doesn't have Full Disk Access. The Mac's owner can turn it on in System Settings → Privacy & Security → Full Disk Access.]"
+
     /// Added to an answer whose output shows a refused write (FR-320).
     static let hint =
         "[A write was refused: a command writes only to its scratch folder ($LATCHKEY_SCRATCH, also $TMPDIR, emptied after it), the folder it runs in (unless that is the home folder), Downloads, and package caches. To write somewhere else, run it again with writes (the folders or files) and why.]"

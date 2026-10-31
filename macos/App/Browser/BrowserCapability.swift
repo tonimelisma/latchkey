@@ -4,7 +4,7 @@ import Foundation
 /// The Owner's Safari (spec 005).
 enum BrowserCapability {
     static let browser = SafariBrowser(
-        scripts: OSAScriptRunner(), memory: .app, place: { BrowserPlace.current },
+        scripts: OSAScriptRunner(app: Permissions.safariApp), memory: .app, place: { BrowserPlace.current },
         note: { EventLog.shared.record(.leftovers, $0, systemLog: false) })
 
     static func make() -> Capability {
@@ -179,7 +179,7 @@ enum BrowserCapability {
             return .text(a.message, isError: true)
         } catch ScriptError.notAllowed {
             return .text(
-                "Latchkey isn't allowed to control Safari. The Mac's owner can allow it in System Settings → Privacy & Security → Automation → Latchkey.",
+                "Latchkey isn't allowed to control Safari. The Mac's owner can allow it in Latchkey's Settings → Permissions.",
                 isError: true)
         } catch ScriptError.timedOut {
             return .text("Safari didn't answer within 25 seconds.", isError: true)

@@ -9,6 +9,12 @@ import UniformTypeIdentifiers
 enum ScreenCapture {
     struct Failure: Error { var message: String }
 
+    /// ScreenCaptureKit's refusal: the Owner declined, or macOS's question is waiting.
+    static func declined(_ error: Error) -> Bool {
+        let e = error as NSError
+        return e.domain == SCStreamErrorDomain && e.code == SCStreamError.Code.userDeclined.rawValue
+    }
+
     static func display(_ d: DisplayInfo) async throws -> PreparedImage {
         let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
         guard let display = content.displays.first(where: { $0.displayID == d.id }) else {
