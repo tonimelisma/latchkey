@@ -295,6 +295,13 @@ location, a command reaching the home router, calendars, reminders, contacts, no
 messages, and a Safari page all worked through the hosted relay, with no macOS question on the
 screen and the setup window closed.
 
+macOS's monthly screen question (0.8.54, spec 001 FR-624): macOS 27 still asks about once a
+month whether Latchkey may keep seeing the screen, at its first screenshot after a date macOS
+keeps (on Toni's Mac: last asked Oct 23, next Nov 22). Once that date has passed and Toni is
+using the Mac, Latchkey takes one throwaway screenshot, so the question comes while he is
+there. It can't come earlier than macOS's date; Apple's screen-sharing permission (asked for
+by application) would remove it, and is not applied for.
+
 ## Waiting on Toni
 
 1. Answer the macOS alert about Latchkey accessing the screen (Allow) whenever it shows (none

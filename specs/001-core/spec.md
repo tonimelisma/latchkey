@@ -247,6 +247,12 @@ Format: EARS ("When <trigger>, the <system> shall <response>"). IDs are stable; 
   opens setup. The app shall never ask for a permission during use (no notification request when
   posting). Why: Toni got "Allow Latchkey to…" questions during use, when the Mac is usually
   unattended.
+- **FR-624** When macOS's periodic screen question ("continue to allow", about once a month) is
+  due for Latchkey and the Owner is at the Mac (the keyboard or pointer used within the last
+  minute, the screen unlocked), the app shall take one throwaway screenshot, so that macOS asks
+  then and not while Claude uses the Mac unattended; it shall try again at most once an hour
+  while the question stays due. Why: macOS 27 still asks this (Toni's Mac, 2026-10-31: last
+  asked Oct 23, next due Nov 22), and no app can turn it off.
 - **FR-622** After every install, the installer shall check the running app and fail when the
   setup window is open on a Mac whose setup is finished, keep-awake isn't what the app wants, or
   the keep-awake helper running isn't the one just installed.

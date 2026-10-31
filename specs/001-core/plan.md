@@ -1040,6 +1040,27 @@ checklist; a refused question shows "Open…" to its own System Settings page.
 - The test host never runs the Local Network check: it is its own app to macOS, and the question
   would land on the Owner's screen (it did once while this was written).
 
+### D21. macOS's monthly screen question while the Owner is here (FR-624)
+
+Since macOS 15, an app that captures the screen with ScreenCaptureKit is asked again about once
+a month ("continue to allow"), at its first screenshot after a date macOS keeps in
+`~/Library/Group Containers/group.com.apple.replayd/ScreenCaptureApprovals.plist`
+(`kScreenCapturePrivacyHintDate` under the app's bundle ID; readable with Full Disk Access).
+Options:
+- (a) Read that date each minute; once it has passed and the Owner is at the Mac (any input
+  within 60 s, `CGEventSource`; screen not locked, `CGSessionCopyCurrentDictionary`), take the
+  throwaway screenshot `ScreenCapture.confirm`, at most once an hour. Pros: public calls only,
+  nothing changed in macOS's records. Cons: the question can't be brought on before its date, so
+  an Owner away from the date until Claude's next screenshot still meets it.
+- (b) Write a later date into macOS's record. Pros: no question at all. Cons: changes a privacy
+  record macOS protects, may stop working with any update, and goes against Constitution IV.
+- (c) Apple's Persistent Content Capture entitlement, granted on request for screen-sharing
+  apps. Pros: Apple's own way. Cons: an application to Apple; not known whether it is granted
+  to an app like this.
+- (d) Apple's picker (`SCContentSharingPicker`). Needs the Owner at each capture.
+
+Chosen: (a), in `ScreenReminder` and `AppModel.remindScreenWhileHere`. (c) is open for Toni.
+
 ## Constitution check
 
 | Article | Status |

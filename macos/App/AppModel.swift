@@ -23,6 +23,8 @@ final class AppModel {
     private var leftoverTimer: Task<Void, Never>?
     /// Changes to launch agents, login items, and shell startup files (spec 004 FR-325).
     private var permanentWatch: PermanentWatch?
+    /// macOS's monthly screen question, brought on while the Owner is here (FR-624).
+    private var screenReminder: Task<Void, Never>?
     private(set) var relayURL: URL?
     private(set) var helperStatus: SMAppService.Status = .notRegistered
     /// What went wrong, as the Owner is shown it; each one is an event too (FR-633).
@@ -135,6 +137,7 @@ final class AppModel {
         attachmentSweeper = MessagesCapability.sweepCopies(in: MessagesCapability.staging)
         leftoverTimer = Self.tidyEveryMinute()
         if ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil {
+            screenReminder = remindScreenWhileHere()
             permanentWatch = PermanentWatch(home: .homeDirectory) { url in
                 Task {
                     let jobs = ShellCapability.jobs
@@ -456,6 +459,26 @@ final class AppModel {
         event(.permissions, "Took a first screenshot: \(done)")
         screenAccess = done
         defaults.set(done, forKey: Keys.screenAccess)
+    }
+
+    /// Every minute: when macOS's monthly "continue to allow" question is due and the Owner is
+    /// at the Mac, one throwaway screenshot brings it on now (FR-624, plan D21).
+    private func remindScreenWhileHere() -> Task<Void, Never> {
+        Task { [weak self] in
+            var lastTry: Date?
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(60))
+                guard let self, self.screenRecording, let due = ScreenReminder.dueNow(lastTry: lastTry) else {
+                    continue
+                }
+                lastTry = Date()
+                let done = await ScreenCapture.confirm()
+                self.event(
+                    .permissions,
+                    "macOS's screen question was due \(due.formatted()); took a screenshot while the Owner is here: \(done)"
+                )
+            }
+        }
     }
 
     func checkScreenPermissions() {
