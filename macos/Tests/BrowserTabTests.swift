@@ -77,7 +77,7 @@ final class FakeSafariTabs: ScriptRunner, @unchecked Sendable {
     }
 
     private func marked(_ tab: FakeTab, _ checkJS: String) -> Bool {
-        tab.mark.map { checkJS.contains("'\($0)'") } ?? false
+        tab.mark.map { checkJS.contains("\"\($0)\"") } ?? false
     }
 
     /// Like the tab scripts' guard: the count is the same, and the tab carries Claude's mark or
@@ -101,11 +101,12 @@ final class FakeSafariTabs: ScriptRunner, @unchecked Sendable {
     }
 
     private static func token(in js: String) -> String? {
-        guard let r = js.range(of: #"__latchkeyTab', \{ value: '([0-9a-f]+)'"#, options: .regularExpression) else {
+        // The token is spliced in as a JSON string literal (Semgrep rule, 2026-10-30).
+        guard let r = js.range(of: #"__latchkeyTab', \{ value: "([0-9a-f]+)""#, options: .regularExpression) else {
             return nil
         }
         let found = js[r]
-        return found.split(separator: "'").dropFirst(2).first.map(String.init)
+        return found.split(separator: "\"").dropFirst().first.map(String.init)
     }
 
     func run(_ script: String, _ args: [String]) async throws -> String {
