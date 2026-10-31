@@ -30,6 +30,8 @@ enum Permissions {
     static let messagesApp = "com.apple.MobileSMS"
     static let mailApp = MailCapability.mailApp
     static let safariApp = "com.apple.Safari"
+    /// Every app Latchkey scripts, asked for in setup whatever the levels (Toni, 2026-10-31).
+    static let scriptedApps = [notesApp, messagesApp, mailApp, safariApp]
 
     enum Automation: Sendable, Equatable { case allowed, denied, notAsked }
 
@@ -71,6 +73,12 @@ enum Permissions {
         if let url = URL(string: pane) { NSWorkspace.shared.open(url) }
     }
 
+    static func openNotificationSettings() {
+        if let url = URL(string: "x-apple.systempreferences:com.apple.Notifications-Settings.extension") {
+            NSWorkspace.shared.open(url)
+        }
+    }
+
     /// Opens System Settings → Privacy & Security → Full Disk Access.
     static func openFullDiskAccessSettings() {
         let pane = "x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension?Privacy_AllFiles"
@@ -94,8 +102,8 @@ enum SetupDecision {
 enum Notifier {
     static func post(_ body: String) {
         Task {
+            // Asked in setup, never here: a question during use waits on an unattended Mac.
             let center = UNUserNotificationCenter.current()
-            _ = try? await center.requestAuthorization(options: [.alert, .sound])
             let content = UNMutableNotificationContent()
             content.title = "Claude"
             content.body = body
@@ -119,19 +127,24 @@ struct ApprovalFacts {
     var safariJavaScript: Bool?
     var screenRecording: Bool
     var accessibility: Bool
-    var level: (String) -> AccessLevel
+    var notifications: NotificationAccess = .notAsked
+    /// Nil until Latchkey has looked.
+    var localNetwork: Bool?
+    /// A screenshot has gone through since Screen Recording was allowed (macOS's second question).
+    var screenAccess = false
 }
 
-/// One macOS approval Latchkey uses, in the Settings window's Permissions tab (FR-606).
+/// Whether Latchkey may post notifications; unknown until macOS has said.
+enum NotificationAccess: Sendable, Equatable { case allowed, denied, notAsked, unknown }
+
+/// One macOS approval Latchkey uses, in the Settings window's Permissions tab (FR-606). Every
+/// one is asked for at first run, whatever each capability's level, so no macOS question waits
+/// on an unattended Mac later (FR-623, Toni 2026-10-31).
 struct Approval: Identifiable, Equatable {
     enum State: Equatable {
         case allowed
-        /// The current levels need it and it isn't allowed; setup asks for it too.
+        /// Not allowed; setup asks for it.
         case missing
-        /// Not allowed, and nothing turned on needs it.
-        case notNeeded
-        /// Not allowed and not required: Messages shows numbers instead of names.
-        case optional
         /// macOS hasn't said yet (just after launch); never counts as missing.
         case checking
     }
@@ -142,72 +155,65 @@ struct Approval: Identifiable, Equatable {
     let state: State
 
     static func list(_ f: ApprovalFacts) -> [Approval] {
-        let notes = f.level(CapabilityRegistry.notes)
-        let messages = f.level(CapabilityRegistry.messages)
-        let mail = f.level(CapabilityRegistry.mail)
-        let browser = f.level(CapabilityRegistry.browser) != .off
-        let computer = f.level(CapabilityRegistry.computer) != .off
-        let anyOn = CapabilityRegistry.all.contains { f.level($0) != .off }
-        func state(_ allowed: Bool, needed: Bool) -> State { allowed ? .allowed : needed ? .missing : .notNeeded }
-        // The Contacts capability needs it; Messages only uses it for names (spec 007 FR-745).
-        let contacts: State =
-            switch (f.contacts, f.level(CapabilityRegistry.contacts) != .off, messages != .off) {
-            case (.authorized, _, _): .allowed
-            case (_, true, _): .missing
-            case (_, false, false): .notNeeded
-            case (.notDetermined, false, true): .missing
-            default: .optional
-            }
-        let contactsPurpose =
-            f.level(CapabilityRegistry.contacts) != .off
-            ? "To look up, add, and change contacts, and show names in messages."
-            : "To show names in messages instead of phone numbers. Optional."
+        func state(_ allowed: Bool) -> State { allowed ? .allowed : .missing }
         return [
             Approval(
                 id: "helper", title: "Keep This Mac Awake",
-                purpose: "So Claude can reach this Mac with the lid closed.", state: state(f.helper, needed: true)),
+                purpose: "So Claude can reach this Mac with the lid closed.", state: state(f.helper)),
             Approval(
                 id: "disk", title: "Full Disk Access", purpose: "To read your files, notes, messages, and mail.",
-                state: state(f.fullDiskAccess, needed: anyOn)),
+                state: state(f.fullDiskAccess)),
+            Approval(
+                id: "notifications", title: "Notifications", purpose: "To tell you what Claude did on this Mac.",
+                state: f.notifications == .unknown ? .checking : state(f.notifications == .allowed)),
             Approval(
                 id: "notes", title: "Control Notes", purpose: "To create, edit, and delete notes.",
-                state: state(f.notes == .allowed, needed: notes == .readWrite)),
+                state: state(f.notes == .allowed)),
             Approval(
                 id: "messages", title: "Control Messages", purpose: "To send messages for you.",
-                state: state(f.messages == .allowed, needed: messages == .readWrite)),
+                state: state(f.messages == .allowed)),
             Approval(
                 id: "mail", title: "Control Mail", purpose: "To organise and send email for you.",
-                state: state(f.mail == .allowed, needed: mail == .readWrite)),
-            Approval(id: "contacts", title: "Contacts", purpose: contactsPurpose, state: contacts),
+                state: state(f.mail == .allowed)),
+            Approval(
+                id: "contacts", title: "Contacts",
+                purpose: "To look up, add, and change contacts, and show names in messages.",
+                state: state(f.contacts == .authorized)),
             Approval(
                 id: "calendars", title: "Calendars", purpose: "To see your events and add or change them.",
-                state: state(f.calendars, needed: f.level(CapabilityRegistry.calendar) != .off)),
+                state: state(f.calendars)),
             Approval(
                 id: "reminders", title: "Reminders", purpose: "To see your reminders and add or change them.",
-                state: state(f.reminders, needed: f.level(CapabilityRegistry.reminders) != .off)),
+                state: state(f.reminders)),
             Approval(
                 id: "location", title: "Location",
                 purpose: f.location == .servicesOff
                     ? "To tell Claude where this Mac is. Location Services are off for the whole Mac."
                     : "To tell Claude where this Mac is, and find places nearby.",
-                state: f.location == .unknown
-                    ? .checking : state(f.location == .allowed, needed: f.level(CapabilityRegistry.location) != .off)),
+                state: f.location == .unknown ? .checking : state(f.location == .allowed)),
+            Approval(
+                id: "localNetwork", title: "Local Network",
+                purpose: "So commands Claude runs can reach printers, routers, and other devices on your network.",
+                state: f.localNetwork == nil ? .checking : state(f.localNetwork == true)),
             Approval(
                 id: "safari", title: "Control Safari", purpose: "To open and read web pages, signed in as you.",
-                state: state(f.safari == .allowed, needed: browser)),
+                state: state(f.safari == .allowed)),
             Approval(
                 id: "safariJS", title: "Safari JavaScript",
                 purpose:
                     "In Safari’s Developer settings, turn on “Allow JavaScript from Apple Events”, then click Check.",
-                state: state(f.safariJavaScript == true, needed: browser)),
+                state: state(f.safariJavaScript == true)),
             Approval(
                 id: "screen", title: "Screen & System Audio Recording",
-                purpose: "To see the screen, for computer control.",
-                state: state(f.screenRecording, needed: computer)),
+                purpose: "To see the screen, for computer control.", state: state(f.screenRecording)),
+            Approval(
+                id: "screenAccess", title: "Direct Screen Access",
+                purpose: "macOS asks once more, at the first screenshot. Allow it here, not while you’re away.",
+                state: state(f.screenRecording && f.screenAccess)),
             Approval(
                 id: "accessibility", title: "Accessibility",
-                purpose: "To use the mouse and keyboard, for computer control.",
-                state: state(f.accessibility, needed: computer)),
+                purpose: "To use the mouse and keyboard, and to write email in Mail’s window.",
+                state: state(f.accessibility)),
         ]
     }
 }

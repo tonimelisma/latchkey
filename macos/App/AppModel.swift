@@ -81,6 +81,8 @@ final class AppModel {
         static let launchedBefore = "launchedBefore"
         static let appControl = "appControlAllowed"
         static let safariJavaScript = "safariJavaScriptAllowed"
+        static let localNetwork = "localNetworkAllowed"
+        static let screenAccess = "screenAccessConfirmed"
     }
 
     init() {
@@ -227,15 +229,17 @@ final class AppModel {
     var setupSteps: [(String, SetupStep)] {
         let known: [(String, Bool)] = [
             ("connect", !isPaired), ("keep-awake", helperStatus != .enabled),
-            ("full disk access", capabilities.anyOn && !fullDiskAccess), ("app control", needsAppControl),
+            ("full disk access", !fullDiskAccess), ("app control", needsAppControl),
             ("Safari JavaScript", needsSafariJavaScript), ("screen recording", needsScreenRecording),
             ("accessibility", needsAccessibility), ("contacts", needsContacts), ("calendars", needsCalendar),
-            ("reminders", needsReminders),
+            ("reminders", needsReminders), ("screen access", needsScreenAccess),
         ]
-        let location: SetupStep =
-            capabilities.level(CapabilityRegistry.location) == .off
-            ? .done : locationAccess == .unknown ? .unknown : locationAccess == .allowed ? .done : .missing
-        return known.map { ($0.0, $0.1 ? SetupStep.missing : .done) } + [("location", location)]
+        func step(_ allowed: Bool?) -> SetupStep { allowed == nil ? .unknown : allowed == true ? .done : .missing }
+        let location = step(locationAccess == .unknown ? nil : locationAccess == .allowed)
+        let notified = step(notifications == .unknown ? nil : notifications == .allowed)
+        return known.map { ($0.0, $0.1 ? SetupStep.missing : .done) } + [
+            ("location", location), ("notifications", notified), ("local network", step(localNetwork)),
+        ]
     }
 
     /// Re-reads whether the Owner approved the helper; applies keep-awake as soon as they do.
@@ -420,38 +424,39 @@ final class AppModel {
     private(set) var appControl: [String: Permissions.Automation] = Dictionary(
         uniqueKeysWithValues: (UserDefaults.standard.stringArray(forKey: Keys.appControl) ?? []).map { ($0, .allowed) })
 
-    /// The app each capability drives when it changes things.
-    static let controlledApps = [
-        CapabilityRegistry.notes: Permissions.notesApp, CapabilityRegistry.messages: Permissions.messagesApp,
-        CapabilityRegistry.mail: Permissions.mailApp,
-    ]
-
     func control(of app: String) -> Permissions.Automation { appControl[app] ?? .notAsked }
 
-    /// Changing notes and sending messages need it; asked in setup so no prompt waits on an
-    /// unattended Mac (FR-140).
-    func needsControl(for capability: String) -> Bool {
-        guard let app = Self.controlledApps[capability] else { return false }
-        // Reading Safari pages needs it too; Notes and Messages read their databases.
-        let level = capabilities.level(capability)
-        let needed = capability == CapabilityRegistry.browser ? level != .off : level == .readWrite
-        return needed && control(of: app) != .allowed
-    }
+    /// Asked in setup for every scripted app, whatever the levels, so no question waits on an
+    /// unattended Mac (FR-140, FR-623).
+    func needsControl(of app: String) -> Bool { control(of: app) != .allowed }
 
     /// Safari's "Allow JavaScript from Apple Events" (spec 005 FR-406): only a test shows it.
     private(set) var safariJavaScript: Bool? =
         UserDefaults.standard.object(forKey: Keys.safariJavaScript) as? Bool == true ? true : nil
 
-    var needsSafariJavaScript: Bool {
-        capabilities.level(CapabilityRegistry.browser) != .off && safariJavaScript != true
-    }
+    var needsSafariJavaScript: Bool { safariJavaScript != true }
 
     /// Computer control (spec 006 FR-506): Screen Recording to see, Accessibility to act.
     private(set) var screenRecording = CGPreflightScreenCaptureAccess()
     private(set) var accessibility = AXIsProcessTrusted()
 
-    var needsScreenRecording: Bool { capabilities.level(CapabilityRegistry.computer) != .off && !screenRecording }
-    var needsAccessibility: Bool { capabilities.level(CapabilityRegistry.computer) != .off && !accessibility }
+    // Every approval is asked for at first run, whatever the levels (FR-623, Toni 2026-10-31).
+    var needsScreenRecording: Bool { !screenRecording }
+    /// Computer control, and writing email in Mail's window (spec 008).
+    var needsAccessibility: Bool { !accessibility }
+
+    /// macOS's second question, at the first screenshot (direct screen access), answered in setup.
+    private(set) var screenAccess = UserDefaults.standard.bool(forKey: Keys.screenAccess)
+    var needsScreenAccess: Bool { !(screenRecording && screenAccess) }
+
+    func confirmScreenAccess() async {
+        guard screenRecording else { return allowScreenRecording() }
+        NSApp.activate()
+        let done = await ScreenCapture.confirm()
+        event(.permissions, "Took a first screenshot: \(done)")
+        screenAccess = done
+        defaults.set(done, forKey: Keys.screenAccess)
+    }
 
     func checkScreenPermissions() {
         screenRecording = CGPreflightScreenCaptureAccess()
@@ -484,10 +489,10 @@ final class AppModel {
         defaults.set(safariJavaScript == true, forKey: Keys.safariJavaScript)
     }
 
-    var needsAppControl: Bool { Self.controlledApps.keys.contains { needsControl(for: $0) } }
+    var needsAppControl: Bool { Permissions.scriptedApps.contains { needsControl(of: $0) } }
 
     func checkAppControl() async {
-        for app in Self.controlledApps.values {
+        for app in Permissions.scriptedApps {
             let state = await Task.detached { Permissions.automation(of: app, ask: false) }.value
             if let state { setControl(app, state) }
         }
@@ -516,10 +521,7 @@ final class AppModel {
     private(set) var contactsStatus = CNContactStore.authorizationStatus(for: .contacts)
 
     /// Messages asks once and gets by without it; the Contacts capability needs it (spec 007 FR-745).
-    var needsContacts: Bool {
-        (capabilities.level(CapabilityRegistry.messages) != .off && contactsStatus == .notDetermined)
-            || (capabilities.level(CapabilityRegistry.contacts) != .off && contactsStatus != .authorized)
-    }
+    var needsContacts: Bool { contactsStatus != .authorized }
 
     func checkContacts() { contactsStatus = CNContactStore.authorizationStatus(for: .contacts) }
 
@@ -529,14 +531,103 @@ final class AppModel {
     private(set) var remindersStatus = EventKitBackend.status(.reminders)
     private(set) var locationAccess = AppleMapsBackend.shared.locationAccess()
 
-    var needsCalendar: Bool { capabilities.level(CapabilityRegistry.calendar) != .off && calendarStatus != .fullAccess }
-    var needsReminders: Bool {
-        capabilities.level(CapabilityRegistry.reminders) != .off && remindersStatus != .fullAccess
-    }
+    var needsCalendar: Bool { calendarStatus != .fullAccess }
+    var needsReminders: Bool { remindersStatus != .fullAccess }
     /// Certainly needed: "not known yet" doesn't count (FR-621).
-    var needsLocation: Bool {
-        capabilities.level(CapabilityRegistry.location) != .off && locationAccess != .allowed
-            && locationAccess != .unknown
+    var needsLocation: Bool { locationAccess != .allowed && locationAccess != .unknown }
+
+    // MARK: Notifications and Local Network (FR-623)
+
+    private(set) var notifications = NotificationAccess.unknown
+
+    func checkNotifications() async {
+        let status = await UNUserNotificationCenter.current().notificationSettings().authorizationStatus
+        notifications =
+            switch status {
+            case .authorized, .provisional, .ephemeral: .allowed
+            case .denied: .denied
+            case .notDetermined: .notAsked
+            @unknown default: .denied
+            }
+    }
+
+    func allowNotifications() async {
+        if notifications == .denied { return Permissions.openNotificationSettings() }
+        NSApp.activate()
+        let granted = (try? await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]))
+        event(.permissions, "Asked for Notifications: \(granted.map { "\($0)" } ?? "no answer")")
+        await checkNotifications()
+        if notifications == .denied { Permissions.openNotificationSettings() }
+    }
+
+    /// Remembered between starts: the check takes up to 2 seconds.
+    private(set) var localNetwork: Bool? =
+        UserDefaults.standard.object(forKey: Keys.localNetwork) as? Bool == true ? true : nil
+    private var localNetworkCheckedAt: ContinuousClock.Instant?
+
+    /// Looks again at most every 10 seconds while it isn't allowed.
+    func checkLocalNetwork(force: Bool = false) async {
+        if !force, localNetwork == true { return }
+        if !force, let at = localNetworkCheckedAt, ContinuousClock.now - at < .seconds(10) { return }
+        localNetworkCheckedAt = .now
+        setLocalNetwork(await LocalNetwork.check())
+    }
+
+    /// Starting the check is what makes macOS ask; waits up to a minute for the answer.
+    func allowLocalNetwork() async {
+        let before = await LocalNetwork.check()
+        if before { return setLocalNetwork(true) }
+        NSApp.activate()
+        let allowed = await LocalNetwork.check(wait: .seconds(60))
+        event(.permissions, "Asked for Local Network: \(allowed)")
+        setLocalNetwork(allowed)
+        if !allowed { Permissions.openPrivacySettings("Privacy_LocalNetwork") }
+    }
+
+    private func setLocalNetwork(_ allowed: Bool) {
+        localNetwork = allowed
+        defaults.set(allowed, forKey: Keys.localNetwork)
+    }
+
+    // MARK: Allow All (FR-623)
+
+    private(set) var allowingAll = false
+
+    /// Every question macOS asks with its own dialog, one after another, each waiting for its
+    /// answer; then System Settings for the first approval only it can give. Run at first
+    /// pairing and from setup's Allow All, so nothing is asked later on an unattended Mac.
+    func allowAll() async {
+        guard !allowingAll else { return }
+        allowingAll = true
+        defer { allowingAll = false }
+        event(.permissions, "Allow All: started")
+        await checkApprovals()
+        if notifications == .notAsked { await allowNotifications() }
+        if contactsStatus == .notDetermined { await allowContacts() }
+        if calendarStatus == .notDetermined { await allowEvents(.events) }
+        if remindersStatus == .notDetermined { await allowEvents(.reminders) }
+        if locationAccess == .notAsked {
+            allowLocation()
+            for _ in 0..<600 where AppleMapsBackend.shared.locationAccess() == .notAsked {
+                try? await Task.sleep(for: .milliseconds(100))
+            }
+            checkPersonalData()
+        }
+        for app in Permissions.scriptedApps where control(of: app) == .notAsked { await allowControl(of: app) }
+        if localNetwork != true { await allowLocalNetwork() }
+        if screenRecording, !screenAccess { await confirmScreenAccess() }
+        await checkApprovals()
+        // The rest are switches only System Settings has: open the first one still off.
+        if !fullDiskAccess {
+            Permissions.openFullDiskAccessSettings()
+        } else if !screenRecording {
+            allowScreenRecording()
+        } else if !accessibility {
+            allowAccessibility()
+        } else if helperStatus != .enabled {
+            approveHelper()
+        }
+        event(.permissions, "Allow All: done, missing \(missingSetup.joined(separator: ", "))")
     }
 
     func checkPersonalData() {
@@ -596,7 +687,7 @@ final class AppModel {
                 calendars: calendarStatus == .fullAccess, reminders: remindersStatus == .fullAccess,
                 location: locationAccess,
                 safariJavaScript: safariJavaScript, screenRecording: screenRecording, accessibility: accessibility,
-                level: { [capabilities] in capabilities.level($0) }))
+                notifications: notifications, localNetwork: localNetwork, screenAccess: screenAccess))
     }
 
     /// Re-reads every approval, to notice what the Owner changes in System Settings.
@@ -607,6 +698,8 @@ final class AppModel {
         checkContacts()
         checkPersonalData()
         checkScreenPermissions()
+        await checkNotifications()
+        await checkLocalNetwork()
         logApprovals()
     }
 
@@ -642,6 +735,7 @@ final class AppModel {
             Self.log.notice("Paired through the sign-in window")
             relayURL = relay
             connect(identity)
+            Task { await allowAll() }  // FR-623: every question now, while the Owner is here
         } catch PairingError.cancelled {
             // nothing to report
         } catch {
@@ -696,6 +790,7 @@ final class AppModel {
             Self.log.notice("Paired through a pairing link")
             relayURL = relay
             connect(identity)
+            Task { await allowAll() }  // FR-623: every question now, while the Owner is here
         } catch {
             lastError = error.localizedDescription
             showSetup()
@@ -959,8 +1054,7 @@ final class AppModel {
         default:
             return
         }
-        let center = UNUserNotificationCenter.current()
-        _ = try? await center.requestAuthorization(options: [.alert, .sound])
+        let center = UNUserNotificationCenter.current()  // asked in setup, never here (FR-623)
         try? await center.add(
             UNNotificationRequest(identifier: "\(n.kind)-\(n.at.timeIntervalSince1970)", content: content, trigger: nil)
         )

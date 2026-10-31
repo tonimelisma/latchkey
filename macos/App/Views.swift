@@ -174,10 +174,6 @@ struct PermissionsPane: View {
                     Label("Allowed", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
                 case .missing:
                     Label("Not Allowed", systemImage: "exclamationmark.circle").foregroundStyle(.orange)
-                case .notNeeded:
-                    Text("Not Needed").foregroundStyle(.secondary)
-                case .optional:
-                    Text("Off").foregroundStyle(.secondary)
                 case .checking:
                     Text("Checking…").foregroundStyle(.secondary)
                 }
@@ -195,6 +191,9 @@ struct PermissionsPane: View {
         switch id {
         case "helper": Button("Allow…") { model.approveHelper() }
         case "disk": Button("Allow…") { Permissions.openFullDiskAccessSettings() }
+        case "notifications": Button("Allow…") { Task { await model.allowNotifications() } }
+        case "localNetwork": Button("Allow…") { Task { await model.allowLocalNetwork() } }
+        case "screenAccess": Button("Allow…") { Task { await model.confirmScreenAccess() } }
         case "notes": control(Permissions.notesApp)
         case "messages": control(Permissions.messagesApp)
         case "mail": control(Permissions.mailApp)
@@ -328,10 +327,11 @@ struct SetupView: View {
     @State private var opened: String?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 20) {
+        VStack(alignment: .leading, spacing: 12) {
             VStack(alignment: .leading, spacing: 4) {
                 Text("Set Up Latchkey").font(.title.bold())
-                Text("A few steps, then Claude can reach this Mac from anywhere.").foregroundStyle(.secondary)
+                Text("A few steps, then Claude can reach this Mac from anywhere.").foregroundStyle(.secondary).padding(
+                    .bottom, 8)
             }
             step("helper", "Let Latchkey keep this Mac awake") {
                 Text(
@@ -356,7 +356,20 @@ struct SetupView: View {
                     Text(error).foregroundStyle(.red).fixedSize(horizontal: false, vertical: true)
                 }
             }
-            if model.capabilities.anyOn {
+            if model.isPaired && model.needsSetup {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(
+                        "Allow everything now, so macOS never stops to ask while you’re away. Latchkey asks each question in turn; click Allow in each, then turn on what System Settings shows."
+                    )
+                    .foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                    HStack {
+                        Button("Allow All") { Task { await model.allowAll() } }
+                            .disabled(model.allowingAll)
+                        if model.allowingAll { ProgressView().controlSize(.small) }
+                    }
+                }
+            }
+            do {
                 step("disk", "Let Latchkey read your files, notes, messages, and mail") {
                     Text(
                         "macOS needs you to switch this on yourself. In System Settings, turn on Latchkey under Full Disk Access."
@@ -365,22 +378,29 @@ struct SetupView: View {
                     Button("Open System Settings") { Permissions.openFullDiskAccessSettings() }
                 }
             }
-            if level(CapabilityRegistry.notes) == .readWrite {
+            step("notifications", "Let Latchkey tell you what Claude did") {
+                Text(
+                    "So you see each change Claude makes on this Mac. When macOS asks about notifications, click Allow."
+                )
+                .foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                Button("Continue") { Task { await model.allowNotifications() } }
+            }
+            do {
                 controlStep(
                     "notes", "Let Latchkey change your notes", app: Permissions.notesApp, appName: "Notes",
                     purpose: "So Claude can create, edit, and delete notes.")
             }
-            if model.capabilities.level(CapabilityRegistry.messages) == .readWrite {
+            do {
                 controlStep(
                     "messages", "Let Latchkey send messages", app: Permissions.messagesApp, appName: "Messages",
                     purpose: "So Claude can send messages for you.")
             }
-            if level(CapabilityRegistry.mail) == .readWrite {
+            do {
                 controlStep(
                     "mail", "Let Latchkey organise and send email", app: Permissions.mailApp, appName: "Mail",
                     purpose: "So Claude can file, flag, and delete email, save drafts, and send email for you.")
             }
-            if level(CapabilityRegistry.contacts) != .off {
+            do {
                 step("contacts", "Let Claude see your contacts") {
                     if model.contactsStatus == .notDetermined {
                         Text(
@@ -394,35 +414,19 @@ struct SetupView: View {
                         Button("Open System Settings") { Permissions.openContactsSettings() }
                     }
                 }
-            } else if model.capabilities.level(CapabilityRegistry.messages) != .off {
-                step("contacts", "Show names in Messages") {
-                    if model.contactsStatus == .notDetermined {
-                        Text(
-                            "So Claude sees who wrote each message, not just phone numbers. When macOS asks about Contacts, click Allow."
-                        )
-                        .foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-                        Button("Continue") { Task { await model.allowContacts() } }
-                    } else {
-                        Text(
-                            "Optional. Messages show phone numbers and email addresses. To show names, turn on Latchkey under Contacts in System Settings."
-                        )
-                        .foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-                        Button("Open System Settings") { Permissions.openContactsSettings() }
-                    }
-                }
             }
-            if level(CapabilityRegistry.calendar) != .off {
+            do {
                 eventsStep(
                     "calendars", "Let Claude see your calendars", status: model.calendarStatus, kind: .events,
                     purpose: "So Claude can tell you what's coming up, find free time, and add or change events.",
                     pane: "Calendars")
             }
-            if level(CapabilityRegistry.reminders) != .off {
+            do {
                 eventsStep(
                     "reminders", "Let Claude see your reminders", status: model.remindersStatus, kind: .reminders,
                     purpose: "So Claude can list, add, and complete reminders.", pane: "Reminders")
             }
-            if level(CapabilityRegistry.location) != .off {
+            do {
                 step("location", "Let Claude see where this Mac is") {
                     switch model.locationAccess {
                     case .servicesOff:
@@ -444,7 +448,14 @@ struct SetupView: View {
                     }
                 }
             }
-            if level(CapabilityRegistry.browser) != .off {
+            step("localNetwork", "Let commands reach devices on your network") {
+                Text(
+                    "So commands Claude runs can reach printers, routers, and other devices at home. When macOS asks about the local network, click Allow."
+                )
+                .foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                Button("Continue") { Task { await model.allowLocalNetwork() } }
+            }
+            do {
                 controlStep(
                     "safari", "Let Latchkey use Safari", app: Permissions.safariApp, appName: "Safari",
                     purpose: "So Claude can open and read web pages, signed in as you.")
@@ -462,7 +473,7 @@ struct SetupView: View {
                     }
                 }
             }
-            if level(CapabilityRegistry.computer) != .off {
+            do {
                 step("screen", "Let Claude see the screen") {
                     Text(
                         "For computer control, while the Mac is unlocked. In System Settings, turn on Latchkey under Screen & System Audio Recording."
@@ -470,9 +481,19 @@ struct SetupView: View {
                     .foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                     Button("Continue") { model.allowScreenRecording() }
                 }
+                step("screenAccess", "Answer macOS's screen question now") {
+                    Text(
+                        "macOS asks once more, the first time Latchkey takes a screenshot. Latchkey takes one now; if macOS asks, click Allow."
+                    )
+                    .foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                    Button("Continue") { Task { await model.confirmScreenAccess() } }
+                        .disabled(!model.screenRecording)
+                }
                 step("accessibility", "Let Claude use the mouse and keyboard") {
-                    Text("In System Settings, turn on Latchkey under Accessibility.")
-                        .foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                    Text(
+                        "For computer control, and so Latchkey can write email in Mail's window. In System Settings, turn on Latchkey under Accessibility."
+                    )
+                    .foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                     Button("Continue") { model.allowAccessibility() }
                 }
             }
@@ -495,24 +516,12 @@ struct SetupView: View {
         }
     }
 
-    private func level(_ id: String) -> AccessLevel { model.capabilities.level(id) }
-
-    /// The setup steps showing now, so they're numbered without gaps.
+    /// Every setup step, whatever the levels (FR-623), so they're numbered without gaps.
     private var visibleSteps: [String] {
-        var steps = ["helper", "connect"]
-        if model.capabilities.anyOn { steps.append("disk") }
-        if level(CapabilityRegistry.notes) == .readWrite { steps.append("notes") }
-        if level(CapabilityRegistry.messages) == .readWrite { steps.append("messages") }
-        if level(CapabilityRegistry.mail) == .readWrite { steps.append("mail") }
-        if level(CapabilityRegistry.messages) != .off || level(CapabilityRegistry.contacts) != .off {
-            steps.append("contacts")
-        }
-        if level(CapabilityRegistry.calendar) != .off { steps.append("calendars") }
-        if level(CapabilityRegistry.reminders) != .off { steps.append("reminders") }
-        if level(CapabilityRegistry.location) != .off { steps.append("location") }
-        if level(CapabilityRegistry.browser) != .off { steps += ["safari", "safariJS"] }
-        if level(CapabilityRegistry.computer) != .off { steps += ["screen", "accessibility"] }
-        return steps
+        [
+            "helper", "connect", "disk", "notifications", "notes", "messages", "mail", "contacts", "calendars",
+            "reminders", "location", "localNetwork", "safari", "safariJS", "screen", "screenAccess", "accessibility",
+        ]
     }
 
     private func n(_ step: String) -> Int { (visibleSteps.firstIndex(of: step) ?? 0) + 1 }
@@ -565,7 +574,10 @@ struct SetupView: View {
         case "location": model.locationAccess == .allowed
         case "safari": model.control(of: Permissions.safariApp) == .allowed
         case "safariJS": model.safariJavaScript == true
+        case "notifications": model.notifications == .allowed
+        case "localNetwork": model.localNetwork == true
         case "screen": model.screenRecording
+        case "screenAccess": !model.needsScreenAccess
         case "accessibility": model.accessibility
         default: false
         }

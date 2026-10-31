@@ -231,6 +231,18 @@ Format: EARS ("When <trigger>, the <system> shall <response>"). IDs are stable; 
   wait up to 5 seconds at start for unknown states to settle, and the Permissions tab shall show
   an unknown state as "Checking…". Why: the setup window opened over a finished setup on
   2026-10-27 because Location read "not asked" for a moment at launch.
+- **FR-623** At first run, the setup shall ask for every macOS permission every capability can
+  use, whatever each capability's level, so that macOS never asks the Owner a question during use
+  (Toni, 2026-10-31: "If I tell you to do all the allows on first run then do them"). As soon as a
+  Mac is paired, the app shall ask each question macOS asks in its own dialog, one after another,
+  each waiting for its answer (Notifications, Contacts, Calendars, Reminders, Location, control of
+  Notes, Messages, Mail, and Safari, Local Network, and, once Screen Recording is allowed, one
+  throwaway screenshot for macOS's direct screen access question), then open System Settings for
+  the first switch only it can turn on. Setup shall offer the same as one "Allow All" button
+  whenever a permission is missing. A permission refused or not yet given counts as missing and
+  opens setup. The app shall never ask for a permission during use (no notification request when
+  posting). Why: Toni got "Allow Latchkey to…" questions during use, when the Mac is usually
+  unattended.
 - **FR-622** After every install, the installer shall check the running app and fail when the
   setup window is open on a Mac whose setup is finished, keep-awake isn't what the app wants, or
   the keep-awake helper running isn't the one just installed.
@@ -428,11 +440,13 @@ Why: on 2026-10-25 commands left processes and files on the Mac that nobody list
 - **FR-605** Disconnect This Mac shall ask for confirmation first, with the destructive button
   not the default, since it can only be undone by pairing again.
 - **FR-606** The Settings window shall list every macOS permission Latchkey uses (keep-awake in
-  the background, Full Disk Access, control of Notes, Messages, and Safari, Contacts, Safari's
-  JavaScript setting, Screen Recording, Accessibility) at any time, not only while setup is
-  unfinished (Toni, 2026-10-26). Each shows whether it is allowed, needed by the current levels
-  and missing, not needed, or (Contacts) optional, with a button that does what the setup step
-  does. Changes made in System Settings show within a second while the window is open.
+  the background, Full Disk Access, Notifications, control of Notes, Messages, Mail, and Safari,
+  Contacts, Calendars, Reminders, Location, Local Network, Safari's JavaScript setting, Screen
+  Recording, macOS's direct screen access question, Accessibility) at any time, not only while
+  setup is unfinished (Toni, 2026-10-26). Each shows whether it is allowed or missing (or still
+  being checked), with a button that does what the setup step does. Changes made in System
+  Settings show within a second while the window is open. (Amended 2026-10-31: every permission
+  is needed whatever the levels, FR-623.)
 - **FR-072** The app shall update itself through signed updates.
 - **FR-074** A development or test build of the app shall be a different app from the installed
   one in macOS's eyes: it shall not share the installed app's settings, stored pairing and keys,

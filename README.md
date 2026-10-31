@@ -71,10 +71,12 @@ Claude (web, Desktop, phone)  ──HTTPS──▶  Latchkey relay  ◀──out
 
 1. **Install the Mac app.** Open `Latchkey.dmg`, drag Latchkey to Applications, and open it. The
    setup window walks you through each step, one at a time: allow keep-awake, connect to a relay
-   (you create your account there with a passkey), and the macOS permissions the capabilities
-   you turn on need (Full Disk Access; control of Notes, Messages, Mail, and Safari; Contacts;
-   Calendars; Reminders; Location; Screen Recording; Accessibility; and Safari's "Allow
-   JavaScript from Apple Events"). Later, the
+   (you create your account there with a passkey), and every macOS permission any capability
+   can use, whatever you turn on, so macOS never stops to ask while you're away (Full Disk
+   Access; Notifications; control of Notes, Messages, Mail, and Safari; Contacts; Calendars;
+   Reminders; Location; Local Network; Screen Recording and macOS's follow-up screen question;
+   Accessibility; and Safari's "Allow JavaScript from Apple Events"). Right after you connect,
+   Latchkey asks each macOS question in turn; Allow All in the setup window does it again. Later, the
    Permissions tab in Latchkey's Settings window shows each one and whether it's allowed.
 2. **Connect Claude.** On claude.ai, open Settings → Connectors → Add custom connector, and enter
    your relay's address followed by `/mcp`, for example `https://relay.example.com/mcp`. Sign

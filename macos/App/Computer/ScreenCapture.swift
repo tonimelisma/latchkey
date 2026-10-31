@@ -24,6 +24,20 @@ enum ScreenCapture {
         return try jpeg(image)
     }
 
+    /// One small screenshot, thrown away, so macOS's second question about direct screen access
+    /// comes in setup rather than at Claude's first look (FR-623). True when it went through.
+    static func confirm() async -> Bool {
+        guard let content = try? await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true),
+            let display = content.displays.first
+        else { return false }
+        let config = SCStreamConfiguration()
+        config.width = 64
+        config.height = 40
+        let image = try? await SCScreenshotManager.captureImage(
+            contentFilter: SCContentFilter(display: display, excludingWindows: []), configuration: config)
+        return image != nil
+    }
+
     /// The window of `bundleID` whose title is `title` (Claude's Safari tab).
     static func window(app bundleID: String, title: String) async throws -> PreparedImage {
         let content = try await SCShareableContent.excludingDesktopWindows(true, onScreenWindowsOnly: true)

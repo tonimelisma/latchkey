@@ -22,8 +22,7 @@ import Testing
     @Test func locationNotKnownYetShowsAsChecking() {
         var facts = ApprovalFacts(
             helper: true, fullDiskAccess: true, notes: .allowed, messages: .allowed, safari: .allowed,
-            contacts: .authorized, safariJavaScript: true, screenRecording: true, accessibility: true,
-            level: { _ in .readWrite })
+            contacts: .authorized, safariJavaScript: true, screenRecording: true, accessibility: true)
         facts.location = .unknown
         #expect(Approval.list(facts).first { $0.id == "location" }?.state == .checking)
         facts.location = .notAsked

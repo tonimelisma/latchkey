@@ -1011,6 +1011,31 @@ Pairing comes before the Mac app, so the app connects the real way from its firs
 | M4 | End to end from Claude on phone, web, Desktop | FR-001, SC-02, SC-03, SC-07 |
 | M5 | Packaging: signing, notarization, Sparkle, Docker image | FR-072, FR-080 |
 
+### D20. Every permission at first run (FR-623, FR-606)
+
+Every approval in the Permissions tab is needed whatever the levels, so setup lists every step
+and a missing one opens it. `AppModel.allowAll()` runs right after pairing (both the sign-in
+window and a pairing link) and from setup's Allow All button: it asks, one at a time and
+waiting for each answer, Notifications (`requestAuthorization`), Contacts, Calendars, Reminders,
+Location (waits up to a minute for Core Location's answer), control of every scripted app
+(`Permissions.scriptedApps`, the app opened hidden first), Local Network, and macOS's direct
+screen access question; then it opens System Settings at the first switch still off (Full Disk
+Access, Screen Recording, Accessibility, keep-awake). Nothing asks during use: notifications are
+posted without asking.
+
+- Local Network has no call that reads it. Options: (a) a Bonjour search for a type declared in
+  NSBonjourServices, which runs when allowed and waits with DNS-SD's "policy denied" (-65570)
+  when not, and whose start makes macOS ask; (b) a UDP packet to the router, which says nothing
+  back about the approval; (c) not checking, only asking once. Chosen: (a), remembered between
+  starts and looked at again at most every 10 seconds while not allowed (`LocalNetwork.check`).
+  Shell commands count as Latchkey's own, so this is the question a command reaching a printer
+  or router would raise.
+- macOS asks a second question at an app's first ScreenCaptureKit screenshot. Options: a
+  throwaway 64×40 screenshot in setup (chosen, `ScreenCapture.confirm`), or leaving it to the
+  first `computer_look`. Remembered once it went through.
+- The test host never runs the Local Network check: it is its own app to macOS, and the question
+  would land on the Owner's screen (it did once while this was written).
+
 ## Constitution check
 
 | Article | Status |

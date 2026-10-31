@@ -282,6 +282,14 @@ Live check of sending, 2026-10-31: one test message to Toni's own address went o
 Mail's compose window and was in Sent; its raw copy is plain text (7bit, Mail's own headers),
 the two body lines exactly as asked, with no "> " quoting, indentation, or extra content.
 
+Every permission at first run (0.8.52, Toni 2026-10-31, spec 001 FR-623): every approval any
+capability can use is asked for at first run, whatever the levels, so macOS never asks during
+use. Right after pairing Latchkey asks each macOS question in turn, and setup has Allow All.
+Three approvals were added: Notifications (asked during use until now), Local Network (asked
+when a command reached a device at home), and macOS's direct screen access question (asked at
+the first screenshot). Accessibility is now asked for whatever computer control is set to,
+since sending mail needs it.
+
 ## Waiting on Toni
 
 1. Answer the macOS alert about Latchkey accessing the screen (Allow) whenever it shows (none

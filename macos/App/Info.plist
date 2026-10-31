@@ -30,6 +30,12 @@
 	<string>Apache-2.0</string>
 	<key>NSAppleEventsUsageDescription</key>
 	<string>Latchkey uses Notes, Messages, Mail, and Safari to change notes, send messages, organise and send email, and open web pages when you ask Claude to.</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Commands Claude runs on this Mac can reach printers, routers, and other devices on your network.</string>
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_latchkey-check._tcp</string>
+	</array>
 	<key>NSContactsUsageDescription</key>
 	<string>Latchkey lets Claude look up, add, and change your contacts, and shows names in messages instead of phone numbers.</string>
 	<key>NSCalendarsFullAccessUsageDescription</key>

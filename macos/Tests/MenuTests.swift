@@ -77,59 +77,53 @@ import Testing
         #expect(ActivityFormat.menuItems(Array(all.prefix(2))).count == 2)
     }
 
-    /// Every approval is listed, set up or not; only the ones the levels need count as missing,
-    /// and they match what setup asks for (FR-606).
+    /// Every approval is listed and every one not allowed is missing, whatever the levels: all are
+    /// asked for at first run, so none is asked during use (FR-606, FR-623, Toni 2026-10-31).
     @Test func approvalsList() {
         var facts = ApprovalFacts(
             helper: false, fullDiskAccess: false, notes: .notAsked, messages: .denied, safari: .notAsked,
-            contacts: .notDetermined, safariJavaScript: nil, screenRecording: false, accessibility: false,
-            level: { _ in .off })
+            contacts: .notDetermined, safariJavaScript: nil, screenRecording: false, accessibility: false)
         let all = Approval.list(facts)
+        let ids = [
+            "helper", "disk", "notifications", "notes", "messages", "mail", "contacts", "calendars", "reminders",
+            "location", "localNetwork", "safari", "safariJS", "screen", "screenAccess", "accessibility",
+        ]
+        #expect(all.map(\.id) == ids)
         #expect(
-            all.map(\.id) == [
-                "helper", "disk", "notes", "messages", "mail", "contacts", "calendars", "reminders", "location",
-                "safari",
-                "safariJS", "screen", "accessibility",
-            ])
-        #expect(all.filter { $0.state == .missing }.map(\.id) == ["helper"], "everything off needs only keep-awake")
+            all.filter { $0.state == .missing }.map(\.id) == ids.filter { $0 != "localNetwork" },
+            "everything is needed; Local Network is still being checked")
 
-        facts.level = { [CapabilityRegistry.notes: .readWrite, CapabilityRegistry.messages: .readOnly][$0] ?? .off }
-        facts.fullDiskAccess = true
-        let some = Approval.list(facts)
-        #expect(some.filter { $0.state == .missing }.map(\.id) == ["helper", "notes", "contacts"])
-        #expect(some.first { $0.id == "disk" }?.state == .allowed)
-        #expect(some.first { $0.id == "messages" }?.state == .notNeeded, "reading messages needs no control")
+        facts = ApprovalFacts(
+            helper: true, fullDiskAccess: true, notes: .allowed, messages: .allowed, mail: .allowed, safari: .allowed,
+            contacts: .authorized, calendars: true, reminders: true, location: .allowed, safariJavaScript: true,
+            screenRecording: true, accessibility: true, notifications: .allowed, localNetwork: true, screenAccess: true)
+        #expect(Approval.list(facts).allSatisfy { $0.state == .allowed })
 
-        // Spec 008: organising and sending email need control of Mail; reading doesn't.
-        facts.level = { [CapabilityRegistry.mail: .readOnly][$0] ?? .off }
-        #expect(Approval.list(facts).first { $0.id == "mail" }?.state == .notNeeded)
-        facts.level = { [CapabilityRegistry.mail: .readWrite][$0] ?? .off }
-        #expect(Approval.list(facts).first { $0.id == "mail" }?.state == .missing)
-        facts.mail = .allowed
-        #expect(Approval.list(facts).first { $0.id == "mail" }?.state == .allowed)
-        facts.level = { [CapabilityRegistry.notes: .readWrite, CapabilityRegistry.messages: .readOnly][$0] ?? .off }
-
+        // A refusal is missing too: setup's button then opens System Settings.
         facts.contacts = .denied
-        #expect(Approval.list(facts).first { $0.id == "contacts" }?.state == .optional, "names are optional")
-        facts.level = { _ in .off }
-        facts.screenRecording = true
-        #expect(Approval.list(facts).first { $0.id == "screen" }?.state == .allowed, "allowed shows even if unused")
+        facts.notifications = .denied
+        facts.localNetwork = false
+        #expect(
+            Approval.list(facts).filter { $0.state == .missing }.map(\.id) == [
+                "notifications", "contacts", "localNetwork",
+            ])
 
-        // Spec 007: the Contacts capability needs Contacts; Calendar, Reminders, Location their own.
-        facts.level = {
-            [
-                CapabilityRegistry.contacts: .readOnly, CapabilityRegistry.calendar: .readWrite,
-                CapabilityRegistry.location: .readWrite,
-            ][$0] ?? .off
-        }
-        facts.calendars = true
+        // macOS's second screen question counts only once Screen Recording itself is allowed.
+        facts.screenAccess = false
+        #expect(Approval.list(facts).first { $0.id == "screenAccess" }?.state == .missing)
+        facts.notifications = .unknown
+        #expect(Approval.list(facts).first { $0.id == "notifications" }?.state == .checking)
         facts.location = .servicesOff
-        let personal = Approval.list(facts)
-        #expect(personal.first { $0.id == "contacts" }?.state == .missing, "denied is no longer optional")
-        #expect(personal.first { $0.id == "calendars" }?.state == .allowed)
-        #expect(personal.first { $0.id == "reminders" }?.state == .notNeeded)
-        #expect(personal.first { $0.id == "location" }?.state == .missing)
-        #expect(personal.first { $0.id == "location" }?.purpose.contains("Location Services are off") == true)
+        let off = Approval.list(facts).first { $0.id == "location" }
+        #expect(off?.state == .missing)
+        #expect(off?.purpose.contains("Location Services are off") == true)
+    }
+
+    /// DNS-SD's "policy denied" is how a Bonjour search says Local Network isn't allowed.
+    @Test func localNetworkRefusalIsRecognised() {
+        #expect(LocalNetwork.denied(.dns(-65570)))
+        #expect(!LocalNetwork.denied(.dns(-65537)))
+        #expect(!LocalNetwork.denied(.posix(.ECONNREFUSED)))
     }
 
     /// Pausing stops every running call with the pause answer, and every shell command (FR-603).
