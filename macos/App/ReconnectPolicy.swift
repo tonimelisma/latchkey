@@ -4,10 +4,10 @@ import Foundation
 struct ReconnectPolicy: Sendable {
     enum Action: Equatable, Sendable {
         case reconnect  // with backoff
-        case signInAgain  // 4001 (any reason but "account suspended"): credential rejected; don't retry automatically
+        case signInAgain  // 4001 (any reason but "account suspended"): credential rejected; try again slowly
         case revoked  // 4002: delete the local key, show "Disconnected from account"
-        case stop  // 4003: a newer connection replaced this one
-        case updateRequired  // 4004
+        case replaced  // 4003: a newer connection replaced this one; try again soon
+        case updateRequired  // 4004: try again slowly
         /// 4001 with the reason "account suspended": keep the pairing, try again slowly (FR-204).
         case suspended
     }
@@ -21,8 +21,13 @@ struct ReconnectPolicy: Sendable {
 
     /// The close reason the relay gives a suspended account's Mac (agent-protocol.md).
     static let suspendedReason = "account suspended"
-    /// How often a suspended Mac tries again; a wake or a network change tries at once.
+    /// How often a suspended Mac tries again; a wake or a network change tries at once. Also
+    /// for a refused sign-in and an app too old: the app never stops trying while it is paired
+    /// (Toni, 2026-10-31, FR-206).
     static let suspendedRetry: TimeInterval = 300
+    /// After another connection of this Mac replaced this one (4003). Only one copy of the app
+    /// runs (FR-207), so the other is gone or about to be.
+    static let replacedRetry: TimeInterval = 30
 
     var jitter: @Sendable () -> Double = { Double.random(in: 0.8...1.2) }
 
@@ -36,7 +41,7 @@ struct ReconnectPolicy: Sendable {
         switch code {
         case 4001: reason == suspendedReason ? .suspended : .signInAgain
         case 4002: .revoked
-        case 4003: .stop
+        case 4003: .replaced
         case 4004: .updateRequired
         default: .reconnect
         }
@@ -46,10 +51,11 @@ struct ReconnectPolicy: Sendable {
         switch Self.action(forClose: code, reason: reason) {
         case .reconnect: Next(show: nil, retryAfter: delay(attempt: attempt))
         case .suspended: Next(show: .suspended, retryAfter: Self.suspendedRetry)
-        case .signInAgain: Next(show: .signInAgain, retryAfter: nil)
+        case .signInAgain: Next(show: .signInAgain, retryAfter: Self.suspendedRetry)
+        // The pairing's key is deleted: there is nothing left to connect with.
         case .revoked: Next(show: .revoked, retryAfter: nil)
-        case .stop: Next(show: .replaced, retryAfter: nil)
-        case .updateRequired: Next(show: .updateRequired, retryAfter: nil)
+        case .replaced: Next(show: .replaced, retryAfter: Self.replacedRetry)
+        case .updateRequired: Next(show: .updateRequired, retryAfter: Self.suspendedRetry)
         }
     }
 }
@@ -75,6 +81,8 @@ extension ConnectionStatus {
     var advice: String? {
         switch self {
         case .suspended: "Contact the relay’s operator. Latchkey reconnects by itself when the suspension ends."
+        case .replaced: "Latchkey tries again in 30 seconds."
+        case .signInAgain, .updateRequired: "Latchkey tries again every 5 minutes."
         default: nil
         }
     }

@@ -36,6 +36,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         if ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil { return }  // unit tests
+        // Alone, as nearly always: start at once, before any link the app was opened with arrives.
+        guard SingleCopy.others().isEmpty else {
+            Task {
+                // Before anything is touched: no connection, no keep-awake, no quit steps (FR-207).
+                if await SingleCopy.anotherStays() {
+                    AppModel.log.notice("Another copy of Latchkey is running; this one quits")
+                    exit(0)
+                }
+                begin()
+            }
+            return
+        }
+        begin()
+    }
+
+    private func begin() {
         quitCleanlyOnSIGTERM()
         UNUserNotificationCenter.current().delegate = self
         model.start()

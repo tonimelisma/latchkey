@@ -447,6 +447,19 @@ Why: on 2026-10-25 commands left processes and files on the Mac that nobody list
 - **FR-205** When the app starts and every setup step is already done, it shall open no window
   and shall appear only in the menu bar (not in the Dock or the app switcher). It shall show the
   setup window at start only while a step is really unfinished.
+- **FR-206** While the Mac is paired, the app shall never stop trying to connect (Toni,
+  2026-10-31: "it should never do that"). When another connection of this Mac replaced it, it
+  shall try again after 30 seconds; when the relay refuses its sign-in or its version, it shall
+  keep showing that and try again every 5 minutes, and at once on wake or a network change. Only
+  a Mac removed from the account (its key deleted) stops. The app shall send nothing but its
+  sign-in until the relay has welcomed it. Why: on 2026-10-31 a second copy took over the
+  connection and quit, and the real app, told it was replaced, stopped for good; and every start
+  was refused once, because a state update went out during the sign-in.
+- **FR-207** Only one copy of the app shall run. A copy started while another runs shall wait up
+  to 10 seconds for the other to quit (an update handing over) and otherwise quit at once,
+  before connecting, changing keep-awake, or anything else. Why: the second copy of 2026-10-31,
+  started by another program, ran under that program's permissions and opened setup as if they
+  were missing.
 - **FR-600** The menu bar icon shall show the Mac's state by its shape alone, never by color
   (Toni, 2026-10-26): a solid key while Claude can reach the Mac; a key with a line through it
   while it can't (offline, connecting, not paired, or refused by the relay); a small pause mark

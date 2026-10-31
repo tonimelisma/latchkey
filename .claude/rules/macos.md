@@ -147,4 +147,10 @@ paths:
   program, the installed Latchkey included (2026-10-29). Real-Safari checks run from a
   terminal: `macos/scripts/safari-check.sh`.
 
+- Nothing but the hello goes on the socket before the welcome: `task` in `RelayConnection`
+  is the welcomed connection only. A state update sent while signing in got every start
+  refused with 4005 until 0.8.58. And a program started outside Latchkey (another Claude
+  session running the app's binary) runs under that program's permissions: never take a
+  second copy's "missing" permissions at face value. Only one copy runs (FR-207).
+
 Add new gotchas here as they are discovered.

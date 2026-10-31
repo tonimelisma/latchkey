@@ -1,6 +1,6 @@
 # Status
 
-Last updated: 2026-10-31 (a lost permission is told in a notification; app 0.8.57)
+Last updated: 2026-10-31 (never stops reconnecting; one copy at a time; app 0.8.58)
 
 Xcode signing ready (2026-10-20): Toni's Xcode account has a valid "Apple Development" certificate
 (certificate expires 2027-07-22). Keep the team ID out of committed project files
@@ -320,6 +320,15 @@ on and is now off brings one notification ("Full Disk Access is off"), once per 
 opens setup, and the menu bar icon shows its mark until it's back. Not seen live: that needs a
 permission turned off in System Settings, which only Toni does. The screenshot was checked live
 the same day through the hosted relay (lid open): a clear image of the whole screen.
+
+Offline after a second copy (0.8.58, 2026-10-31, spec 001 FR-206, FR-207): another Claude
+Code session on this Mac started Latchkey's program directly at 16:41; that copy ran under its
+permissions (setup opened, Full Disk Access and others "missing"), took over the relay
+connection, and was quit two minutes later. The real app, told it was replaced, had stopped for
+good, so the Mac stayed offline until restarted. Now a second copy quits at once, the app never
+stops trying while paired, and the state update that got every start refused once (sent
+during the sign-in) waits for the welcome. The permission notice was seen to work in the same
+event: Location turned off at 16:43, notification delivered at 16:44:52.
 
 Shell test fixed (2026-10-31): "a process that left the terminal is stopped too" gave its
 program a fixed half second to start, and failed once while the whole suite ran. It now waits

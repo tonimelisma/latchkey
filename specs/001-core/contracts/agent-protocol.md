@@ -329,11 +329,11 @@ list changed.
 | Code | Meaning | Agent should |
 |---|---|---|
 | 1000 | Normal | Reconnect with backoff unless quitting |
-| 4001, any reason but "account suspended" | Authentication failed (reason "authentication failed") | Show "Sign in again"; do not retry automatically; keep the local key and pairing |
+| 4001, any reason but "account suspended" | Authentication failed (reason "authentication failed") | Show "Sign in again"; keep the local key and pairing; try again every 5 minutes, and at once on wake or a network change (FR-206) |
 | 4001, reason "account suspended" | The account is suspended by the relay's operator (FR-196) | Show "This account is suspended on the relay" and to contact the relay's operator, never "Sign in again"; keep the local key and pairing; try again every 5 minutes, and at once on wake or a network change (FR-204) |
 | 4002 | Device revoked | Delete the local key; show "Disconnected from account" |
-| 4003 | Replaced by a newer connection for this device | Do not reconnect from this connection |
-| 4004 | Protocol version not supported | Show "Update required" |
+| 4003 | Replaced by a newer connection for this device | Show "Replaced"; try again after 30 s (FR-206; only one copy of the app runs, FR-207) |
+| 4004 | Protocol version not supported | Show "Update required"; try again every 5 minutes (FR-206) |
 | 4005 | Protocol violation (malformed or unknown message, invalid or oversized tool list, too many messages) | Reconnect with backoff; report a bug |
 | 4006 | Handshake timeout | Reconnect with backoff |
 

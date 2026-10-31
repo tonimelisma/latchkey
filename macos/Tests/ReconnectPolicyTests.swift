@@ -31,7 +31,7 @@ import Testing
         #expect(ReconnectPolicy.action(forClose: 1000) == .reconnect)
         #expect(ReconnectPolicy.action(forClose: 4001) == .signInAgain)
         #expect(ReconnectPolicy.action(forClose: 4002) == .revoked)
-        #expect(ReconnectPolicy.action(forClose: 4003) == .stop)
+        #expect(ReconnectPolicy.action(forClose: 4003) == .replaced)
         #expect(ReconnectPolicy.action(forClose: 4004) == .updateRequired)
         #expect(ReconnectPolicy.action(forClose: 4005) == .reconnect)
         #expect(ReconnectPolicy.action(forClose: 4006) == .reconnect)
@@ -62,13 +62,17 @@ import Testing
             ReconnectPolicy(jitter: { 1.2 }).next(afterClose: 4001, reason: "account suspended", attempt: 3)
                 == suspended)
 
+        // FR-206 (Toni, 2026-10-31): never stop trying while paired.
         #expect(
             policy.next(afterClose: 4001, reason: "authentication failed", attempt: 0)
-                == Next(show: .signInAgain, retryAfter: nil), "no retry by itself")
-        #expect(policy.next(afterClose: 4001, reason: nil, attempt: 0) == Next(show: .signInAgain, retryAfter: nil))
-        #expect(policy.next(afterClose: 4002, reason: nil, attempt: 0) == Next(show: .revoked, retryAfter: nil))
-        #expect(policy.next(afterClose: 4003, reason: nil, attempt: 0) == Next(show: .replaced, retryAfter: nil))
-        #expect(policy.next(afterClose: 4004, reason: nil, attempt: 0) == Next(show: .updateRequired, retryAfter: nil))
+                == Next(show: .signInAgain, retryAfter: 300), "tries again every 5 minutes")
+        #expect(policy.next(afterClose: 4001, reason: nil, attempt: 9) == Next(show: .signInAgain, retryAfter: 300))
+        #expect(
+            policy.next(afterClose: 4002, reason: nil, attempt: 0) == Next(show: .revoked, retryAfter: nil),
+            "the key is deleted: nothing to connect with")
+        #expect(policy.next(afterClose: 4003, reason: nil, attempt: 0) == Next(show: .replaced, retryAfter: 30))
+        #expect(policy.next(afterClose: 4003, reason: nil, attempt: 20) == Next(show: .replaced, retryAfter: 30))
+        #expect(policy.next(afterClose: 4004, reason: nil, attempt: 0) == Next(show: .updateRequired, retryAfter: 300))
         #expect(policy.next(afterClose: 1006, reason: nil, attempt: 2) == Next(show: nil, retryAfter: 4), "backoff")
         #expect(policy.next(afterClose: 4005, reason: nil, attempt: 0) == Next(show: nil, retryAfter: 1))
     }
@@ -80,7 +84,8 @@ import Testing
             ConnectionStatus.suspended.advice
                 == "Contact the relay’s operator. Latchkey reconnects by itself when the suspension ends.")
         #expect(ConnectionStatus.signInAgain.title() == "Sign in again: the relay didn't accept this Mac")
-        #expect(ConnectionStatus.signInAgain.advice == nil)
+        #expect(ConnectionStatus.signInAgain.advice == "Latchkey tries again every 5 minutes.")
+        #expect(ConnectionStatus.replaced.advice == "Latchkey tries again in 30 seconds.")
         #expect(ConnectionStatus.connected.title() == "Connected")
         #expect(ConnectionStatus.connected.advice == nil)
         let now = Date()

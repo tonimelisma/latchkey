@@ -1101,6 +1101,23 @@ Chosen: (a), in `ScreenReminder` and `AppModel.remindScreenWhileHere`. (c) is op
   opened); (b) macOS's notifications about privacy changes, which don't exist for most of
   these permissions; (c) only when a call fails, which misses losses while Claude isn't used.
 
+### D24. Never stop reconnecting; one copy at a time (FR-206, FR-207)
+
+- `ReconnectPolicy`: 4003 retries after 30 s, showing "Replaced by another connection"; 4001
+  (refused sign-in) and 4004 (version) retry every 5 minutes, showing what the relay said, as a
+  suspension already did (FR-204); only 4002 stops, since the key is gone. Options for 4003 were
+  (a) 30 s, chosen: with one copy per Mac the other connection is gone or about to be; (b) the
+  usual 1–30 s backoff, which would fight a second copy every few seconds; (c) never, the old
+  behavior, which left the Mac offline.
+- `RelayConnection` keeps the socket being opened apart from the welcomed one; state, tools,
+  goodbye, and audit requests go only to the welcomed one, so the relay never sees them before
+  the hello.
+- `SingleCopy`: at launch, other running apps with this bundle identifier. None: start at once
+  (so a link the app was opened with finds it started). Some: wait up to 10 s for them to quit,
+  then quit with `exit(0)` without any quit steps (those would turn off keep-awake for the copy
+  that stays). Options were (a) this, chosen; (b) a lock file, which outlives a crash; (c)
+  letting the relay decide, which is what failed.
+
 ## Constitution check
 
 | Article | Status |

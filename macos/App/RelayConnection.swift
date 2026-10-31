@@ -43,7 +43,12 @@ actor RelayConnection {
     private let session: URLSession
 
     private var loop: Task<Void, Never>?
+    /// The connection once the relay has welcomed this Mac; nothing else is sent before then
+    /// (a state update sent during the handshake was refused with 4005 at every start until
+    /// 2026-10-31).
     private var task: URLSessionWebSocketTask?
+    /// The connection while it is still being opened.
+    private var opening: URLSessionWebSocketTask?
     private let calls = RunningCalls()
     private var wake: CheckedContinuation<Void, Never>?
     private var heartbeat: TimeInterval = 15
@@ -91,6 +96,8 @@ actor RelayConnection {
         loop = nil
         task?.cancel(with: .normalClosure, reason: nil)
         task = nil
+        opening?.cancel(with: .normalClosure, reason: nil)
+        opening = nil
         wake?.resume()
         wake = nil
     }
@@ -106,7 +113,7 @@ actor RelayConnection {
         if let wake {
             self.wake = nil
             wake.resume()
-        } else if task == nil {
+        } else if task == nil, opening == nil {
             start()
         }
     }
@@ -205,19 +212,22 @@ actor RelayConnection {
 
     private func run() async {
         var attempt = 0
-        var suspended = false
+        var showing = false
         while !Task.isCancelled {
-            // A suspended Mac keeps saying so while it tries again (FR-204).
-            if !suspended { await hooks.status(.connecting) }
+            // A Mac shown suspended, replaced, or refused keeps saying so while it tries again
+            // (FR-204, FR-206).
+            if !showing { await hooks.status(.connecting) }
             let t = session.webSocketTask(with: Self.agentURL(relay: identity.relayURL), protocols: ["latchkey.v1"])
             t.maximumMessageSize = 4 << 20
-            task = t
+            opening = t
             t.resume()
             do {
                 try await handshake(t)
+                opening = nil
+                task = t
                 stateFrames.reset()
                 attempt = 0
-                suspended = false
+                showing = false
                 await hooks.status(.connected)
                 EventLog.shared.record(.connection, "Connected to the relay")
                 let connected = hooks.connected
@@ -228,12 +238,13 @@ actor RelayConnection {
                 EventLog.shared.record(.connection, "Connection ended: \(error.localizedDescription)")
             }
             task = nil
+            opening = nil
             endAudits(closeCode: t.closeCode.rawValue)
             await calls.cancelAll()
             if Task.isCancelled { return }
             let reason = t.closeReason.map { String(decoding: $0, as: UTF8.self) }
             let next = policy.next(afterClose: t.closeCode.rawValue, reason: reason, attempt: attempt)
-            suspended = next.show == .suspended
+            showing = next.show != nil
             EventLog.shared.record(
                 .connection,
                 Self.closeLine(
