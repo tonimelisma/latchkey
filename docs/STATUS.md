@@ -307,7 +307,11 @@ permissions already answered clearly; the gaps now are too. Notes, Messages, Mai
 don't run a script when macOS hasn't asked about the app yet (that raised the question during
 use and timed out after 25 seconds); Full Disk Access taken away later, a file macOS protects,
 a Shell command refused by it, Contacts missing for names in Messages, and a refused
-screenshot each say which permission and where to turn it on.
+screenshot each say which permission and where to turn it on. Checked live 2026-10-31 through
+the hosted relay: location, a command reaching the home router, calendars, reminders,
+contacts, notes, mail, messages, and a Safari page all worked (Safari's script ran past the new
+check); the screenshot couldn't be tried (lid closed), nor the monthly screen question (due
+Nov 22).
 
 ## Waiting on Toni
 
