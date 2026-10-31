@@ -8,6 +8,6 @@ cd "$(dirname "$0")/.."
 out=$(mktemp -d)
 trap 'rm -rf "$out"' EXIT
 swiftc -O -D DEBUG -swift-version 6 -o "$out/safari-check" \
-    App/Browser/SafariBrowser.swift App/Browser/PageScripts.swift App/ScriptRunner.swift \
+    App/Browser/SafariBrowser.swift App/Browser/PageScripts.swift App/Browser/PageAnswer.swift App/ScriptRunner.swift \
     App/ResultLimit.swift Shared/AppIdentity.swift scripts/safari-check/main.swift
 "$out/safari-check"

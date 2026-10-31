@@ -345,6 +345,18 @@ final class FakeSafari: ScriptRunner, @unchecked Sendable {
         #expect(rest.contains("Characters \(next)–"))
     }
 
+    /// Security review 2026-10-30: the position and length come from the page; huge or negative
+    /// ones neither crash Latchkey nor name an offset outside the page.
+    @Test func positionsFromThePageAreBounded() {
+        for (offset, total) in [(Int.max, Int.max), (Int.max - 1, 10), (-5, 10), (3, -1)] {
+            var p = Self.longPage()
+            p.offset = offset
+            p.total = total
+            let text = PageScripts.answer(p)
+            #expect(!text.contains("\(Int.max)"), "\(offset), \(total)")
+        }
+    }
+
     @Test func theLastPartSaysNothingMore() {
         let p = PageScripts.Page(
             title: "T", url: "https://a.example/", total: 5, offset: 0, text: "hello", elements: [])
