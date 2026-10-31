@@ -20,6 +20,8 @@ struct MailFile: Sendable {
     var date: Date?
     var from: String
     var messageID: String?
+    /// The Reply-To header's addresses (where Mail's Reply sends), with their names.
+    var replyTo: [(address: String, name: String)] = []
 
     struct Unreadable: Error {}
 
@@ -72,7 +74,8 @@ struct MailFile: Sendable {
         }
         return MailFile(
             text: text, attachments: attachments, partial: partial, date: msg.date?.date, from: from ?? "",
-            messageID: msg.messageId)
+            messageID: msg.messageId,
+            replyTo: msg.replyTo.mailboxes.map { (address: $0.address, name: $0.name ?? "") })
     }
 
     private static func decoded(_ p: MimePart) -> Data? {

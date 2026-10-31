@@ -108,7 +108,7 @@ further back. Messages whose text isn't on the Mac are counted and named in the 
 - Reading never marks read. `mark_read: true` (Read & write only, D1) runs the change script's
   `mark_read` after reading (FR-805).
 
-## D6. Actions through Mail's scripting (FR-810, FR-811, FR-820 to FR-823)
+## D6. Changes through Mail's scripting, writing in Mail's window (FR-810, FR-811, FR-820 to FR-823)
 
 - Scripts run by Latchkey itself with `OSAScriptRunner` (not through Shell; Toni,
   2026-10-29), arguments after `--`, never in the script text. Mail is started by scripting when
@@ -121,23 +121,55 @@ further back. Messages whose text isn't on the Mac are counted and named in the 
   account), `delete` (to the account's own Trash, found as the child of Mail's `trash mailbox`
   whose account is the message's: research "Ids and paths"; never `delete`, which follows each
   account's setting; FR-811). A message not found (moved or deleted meanwhile) is reported by id.
-- `compose` script: a new message (`make new outgoing message`), a reply (`reply … without
-  opening window`, `with reply to all` for all), or a forward (`forward … without opening
-  window`). Then sender, recipients, subject, the text, and attachments (`make new attachment …
-  at after the last paragraph`, then a wait until Mail shows them all, up to 15 s; research
-  "attachments can go out empty"). Then `send`, or `save` for a draft (FR-821).
-- Sender (FR-822): a reply or forward uses the account the original came to; a new message the
-  account Claude names (`from`: name or address), or Mail's default. The script sets `sender`
-  and reads it back; a mismatch stops before sending (research: a wrong sender is silently
-  replaced). An address that isn't one of Mail's accounts' is refused before any script.
-- Quoting: setting a reply's text replaces Mail's own quote, so Latchkey writes the quote
-  itself ("On <date>, <sender> wrote:" and the original's text with "> "); a forward gets
-  "Begin forwarded message:" with the original's headers and text, and the original's
-  attachments re-attached from the Mac (US3.1, FR-820).
-- Known limit, checked live on macOS 27 (research "Live check: scripted text arrives quoted"):
-  Mail wraps text set by scripting in a citation, so other mail apps show it as quoted. The
-  spec's edge case leaves the way to send to Toni; until he chooses, this plan sends through
-  scripting as decided.
+- Writing (Toni, 2026-10-30): new messages, replies, forwards, and drafts are written in Mail's
+  own compose window, driven through Accessibility, so they arrive as ordinary mail (no quote
+  around Claude's text; research "Live check"). Mail's scripting never composes. When the screen
+  is off or locked, or Latchkey lacks Accessibility, the answer says so plainly and nothing is
+  sent; there is no fallback to scripted text. Nothing here is specific to one person's
+  accounts. One email is written at a time (`ComposeQueue`). Steps (`MailCompose.run`):
+  1. Open the window: a new message from a `mailto:` link with recipients and subject only (the
+     text never goes in the link); a response by opening the original with `message://<Message-ID>`
+     and choosing Mail's Reply (⌘R), Reply All (⇧⌘R), or Forward (⇧⌘F), so Mail writes its own
+     quote and, for a forward, carries the original's attachments (US3.1, FR-820).
+  2. A response's window is checked against the message Claude chose before anything is typed
+     (security review 2026-10-30: anyone can send a message with a copied Message-ID, and
+     `message://` opens one of them). Refused before opening when more than one message (not
+     deleted) has that Message-ID, compared with and without angle brackets in any letter case.
+     After opening, the subject must be the original's (ignoring "Re:"/"Fwd:"); To and Cc may hold
+     only the original's own response recipients: for Reply, its Reply-To (from the message file)
+     or else its sender, and for a message the Owner sent, its To; Reply All adds its To and Cc;
+     Forward fills in no one. At least one of the replied-to addresses must be there; Bcc may hold
+     only the Owner's own addresses; a forward may carry only the original's attachments.
+  3. Sender (FR-822): a reply or forward uses the account the original came to (its address the
+     original was sent to); a new message the account Claude names (`from`: name or address), or
+     Mail's default. Chosen in the From pop-up when it shows another; an address that isn't one of
+     Mail's accounts' is refused before any window opens.
+  4. Recipients added to a response, the text, and files. Text and recipients are put in through
+     Accessibility (the selected text set at the cursor; recipients at the end of the field), not
+     the clipboard. Only files, and text Mail didn't take that way, go by Edit → Paste, with the
+     clipboard lent for that one paste (`ClipboardLoan`): Latchkey's items are marked
+     `org.nspasteboard.TransientType`, `ConcealedType`, and `AutoGeneratedType`; the Owner's
+     clipboard is saved first and put back right after; the change count is compared right
+     before Paste, and if anything else wrote to the clipboard meanwhile nothing is pasted, the
+     step fails, and their copy is kept.
+  5. Every field read back through Accessibility and checked (`MailCompose.check`): the subject
+     (exact for a new message); each recipient field holds exactly the requested addresses (a
+     token is the address, "Name <address>", or the name Mail shows for it: the name in the
+     original's header or the contact's name in Contacts; exact addresses are paired first, one
+     to one, case-insensitively), plus for a response Mail's own recipients unchanged, and for a
+     new message the Owner's own address only where Mail put it when the window opened
+     ("Automatically Cc/Bcc myself"); the From; Claude's text at the top of the body and not
+     marked as quoted; every file attached (Mail gets up to 15 s), and no other attachment. Then
+     the fields are read once more and must not have changed, and a call cancelled meanwhile
+     stops here.
+  6. Send, or Save for a draft (FR-821). Send counts only when Mail closes the window; an alert
+     from Mail is reported with its text.
+- On any failure the window is closed without sending or saving (Mail's alert dismissed only by
+  its Cancel button, then Don't Save), even when the call was cancelled; a compose window Mail
+  opens after Latchkey stopped waiting is closed the same way. If a window can't be closed, the
+  answer says it is still open, unsent. The Owner's front app is put back after.
+- Activity and notifications as for every write: a send (confirmed or not, D7) and a saved draft
+  each record "Claude sent an email …" / "Claude saved a draft …"; refusals record nothing sent.
 
 ## D7. Sending confirmed in Sent (FR-823, FR-824)
 
@@ -183,8 +215,15 @@ can pose as the end of the quote.
   without `mark_read`; Off none); every filter; paging; text search with its time limit and its
   "how far back"; HTML-only mail as text; partial and missing files said so; attachments as
   image, text, or name; others' text marked; unknown layout; change actions' script arguments
-  and activity; delete to Trash; send confirmed, unconfirmed, wrong sender refused, reply quote,
-  draft. Every script compiles against Mail's dictionary (`ScriptSyntaxTests`).
+  and activity; delete to Trash; send confirmed, unconfirmed, wrong sender refused, draft.
+  Every script compiles against Mail's dictionary (`ScriptSyntaxTests`).
+- Writing (D6) against stand-ins for Mail's windows (`FakeWindows`) and the clipboard
+  (`FakePasteboard`): tests never open, show, or drive a window, never touch the clipboard, and
+  never send. A copied Message-ID refused; a response window for another message (subject,
+  recipients, Bcc, attachments) closed unsent; added recipients exactly the request; a contact's
+  name for its address; Mail's "Bcc myself" allowed, any other Bcc refused; a change between the
+  check and Send; a cancelled call; a window that won't close; text marked as quoted; the
+  clipboard marked, given back, and left alone when someone copied meanwhile.
 - Live, on Toni's Mac, after install (parent session): find, read, and the change actions on a
   test message; one send to Toni's own address.
 
@@ -195,7 +234,7 @@ can pose as the end of the quote.
 | I. No inbound connections | Pass: same outbound connection |
 | II. Fail fast | Pass: every tool has a deadline; text search stops itself at 20 s; scripts end at 25 s; no prompt at call time (Automation checked without asking when reading) |
 | III. Disabled means nonexistent | Pass: levels filter the tools; `mark_read` exists only at Read & write |
-| IV. Good macOS citizen | Pass: Mail's own scripting and standard Automation and Full Disk Access approvals; Mail's database only read |
+| IV. Good macOS citizen | Pass: Mail's own scripting and compose window, standard Automation, Accessibility, and Full Disk Access approvals; Mail's database only read; the Owner's clipboard lent only for a paste, marked transient, and given back |
 | V. Self-hostable | Pass: nothing new on the relay |
 | VI. Store the minimum | Pass: no copy of mail; attachment files written for reading are deleted at once; account names kept in memory 10 minutes |
 | VII. Test-first | Pass: tests above written first, against fixtures |

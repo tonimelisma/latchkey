@@ -81,8 +81,14 @@ in the Mac's time zone). Numbers are checked with `JSONValue.integer` (whole, no
   (Message-ID <…>).`
 - Not confirmed in time: `Mail took the message but its copy isn't in Sent yet. Don't send it
   again; check with mail_find (mailbox Sent) in a minute.` (not an error; FR-823)
-- Refused before sending: an address in `from` that isn't one of Mail's accounts; a file that
-  isn't readable; a sender Mail didn't take.
+- Refused before sending (`Nothing was sent: …`, plan D6): an address in `from` that isn't one of
+  Mail's accounts; a file that isn't readable; a sender Mail didn't take; the screen off or
+  locked, or Accessibility missing; for a reply or forward, more than one message with the
+  original's Message-ID, or a window Mail opened that doesn't match the original (subject,
+  recipients, attachments); any recipient field not exactly as asked; text marked as quoted; a
+  file Mail didn't attach; the window changing before Send; the clipboard changing during a
+  paste. Mail's window is then closed unsent; if it can't be, the answer says it is still open.
+- `draft` (in `mail_change`) is written the same way and saved instead of sent.
 - Activity: "Claude sent an email to Sarah: «Subject»".
 
 ## Errors (all tools)

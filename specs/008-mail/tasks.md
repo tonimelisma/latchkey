@@ -21,3 +21,15 @@ From `plan.md`. `[P]` = parallel-safe.
   Automation of Mail, Full Disk Access check, script syntax tests. *FR-830, FR-833, D8.*
 - **T809** Install and live check through the hosted relay (parent session; Toni's approval for
   any send). *SC-801 to SC-804.*
+- **T810** ✅ Tests first (stand-ins for Mail's windows and the clipboard; nothing opened, shown,
+  or sent), then writing in Mail's compose window (Toni, 2026-10-30): new message, reply, reply
+  all, forward, draft; screen off or no Accessibility refused; every field checked before Send.
+  *FR-820 to FR-823, D6.*
+- **T811** ✅ Security review 2026-10-30, tests first: a copied Message-ID refused and the
+  response window compared with the original; recipients exactly the request (before and after
+  adding); text through Accessibility and the clipboard only lent (marked, given back, change
+  count checked); no window left open after a failure, even when cancelled. *D6.*
+- **T812** Live check of writing in Mail's window, on Toni's Mac with the screen on and his OK
+  (parent session): a new message, a reply, a forward with a file, and a draft to his own
+  address; the Accessibility parts (selected text in the body and the token fields, the From
+  pop-up, Save, Mail's alerts) are untested until then. *SC-801 to SC-804.*

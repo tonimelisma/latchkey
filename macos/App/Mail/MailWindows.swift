@@ -3,15 +3,19 @@ import ApplicationServices
 
 /// Mail's compose windows through Accessibility (plan D6; research "Compose window"). Fields are
 /// found by Mail's own identifiers (`Mail.toField`, `popup_from`, `send`), menu items by their
-/// key equivalents (⌘V, ⌘R, ⇧⌘R, ⇧⌘F, ⌘S), so a different language doesn't matter; text and
-/// files arrive by Edit → Paste, and the Owner's clipboard is put back after.
+/// key equivalents (⌘V, ⌘R, ⇧⌘R, ⇧⌘F, ⌘S), so a different language doesn't matter. Text and
+/// recipients go in through Accessibility (the selected text set at the cursor); only files, and
+/// text Mail didn't take that way, go by Edit → Paste with the clipboard lent (`ClipboardLoan`).
 final class AXMailWindows: ComposeWindows, @unchecked Sendable {
     private let screen: any ScreenStateSource
+    let pasteboard: any Pasteboard
     private let lock = NSLock()
     private var previous: NSRunningApplication?
-    private var savedClipboard: [NSPasteboardItem]?
 
-    init(screen: any ScreenStateSource = SystemScreen()) { self.screen = screen }
+    init(screen: any ScreenStateSource = SystemScreen(), pasteboard: any Pasteboard = GeneralPasteboard()) {
+        self.screen = screen
+        self.pasteboard = pasteboard
+    }
 
     static let needsAccessibility =
         "Nothing was sent: Latchkey writes email in Mail's own window, which needs Accessibility. The Mac's owner can turn on Latchkey in System Settings → Privacy & Security → Accessibility."
@@ -44,6 +48,7 @@ final class AXMailWindows: ComposeWindows, @unchecked Sendable {
         case .new(let url):
             _ = try? await NSWorkspace.shared.open([url], withApplicationAt: mailURL, configuration: config)
             guard let w = await AX.waitForNew(app, before: before, compose: true) else {
+                await closeLate(app, before: before)
                 throw ComposeFailure(message: "Mail didn't open a new message window.")
             }
             return AXComposeWindow(app: app, window: w, owner: self)
@@ -85,41 +90,31 @@ final class AXMailWindows: ComposeWindows, @unchecked Sendable {
             let withViewer = AX.windows(app)
             AXUIElementPerformAction(item, kAXPressAction as CFString)
             guard let w = await AX.waitForNew(app, before: withViewer, compose: true) else {
+                await closeLate(app, before: withViewer)
                 throw ComposeFailure(message: "Mail didn't open the \(kind == .forward ? "forward" : "reply") window.")
             }
             return AXComposeWindow(app: app, window: w, owner: self)
         }
     }
 
-    func finish() async {
-        let (front, clip) = lock.withLock {
-            defer {
-                previous = nil
-                savedClipboard = nil
+    /// A compose window Mail opens after Latchkey stopped waiting is closed unsent, so none is
+    /// left on the screen.
+    private func closeLate(_ app: AXUIElement, before: [AXUIElement]) async {
+        for _ in 0..<12 {
+            try? await Task.sleep(for: .milliseconds(250))
+            for w in AX.windows(app) where AX.isCompose(w) && !before.contains(where: { CFEqual($0, w) }) {
+                _ = await AXComposeWindow(app: app, window: w, owner: self).discard()
+                return
             }
-            return (previous, savedClipboard)
         }
-        if let clip {
-            NSPasteboard.general.clearContents()
-            NSPasteboard.general.writeObjects(clip)
-        }
-        front?.activate()
     }
 
-    /// Puts things on the clipboard for one paste, keeping the Owner's clipboard to put back.
-    func setClipboard(_ write: (NSPasteboard) -> Void) {
-        let pb = NSPasteboard.general
-        lock.withLock {
-            if savedClipboard == nil {
-                savedClipboard = (pb.pasteboardItems ?? []).map { item in
-                    let copy = NSPasteboardItem()
-                    for t in item.types { if let d = item.data(forType: t) { copy.setData(d, forType: t) } }
-                    return copy
-                }
-            }
+    func finish() async {
+        let front = lock.withLock {
+            defer { previous = nil }
+            return previous
         }
-        pb.clearContents()
-        write(pb)
+        front?.activate()
     }
 
     static func mailApp() async throws -> NSRunningApplication {
@@ -207,8 +202,22 @@ final class AXComposeWindow: ComposeWindow, @unchecked Sendable {
         guard let target = element(id) else {
             throw ComposeFailure(message: "Mail's window has no \(field.rawValue.capitalized) field.")
         }
-        try await paste(into: target) { $0.setString(addresses.joined(separator: ", ") + ", ", forType: .string) }
+        let before = AX.children(target).count
+        let text = addresses.joined(separator: ", ") + ", "
+        // At the end of the field, so Mail's own recipients stay (MailCompose checks they did).
+        if !insert(text, into: target, atEnd: true) || AX.children(target).count == before {
+            try await paste(into: target, ClipboardLoan.text(text), atEnd: true)
+        }
         AXUIElementPerformAction(target, kAXConfirmAction as CFString)
+    }
+
+    /// Sets the selected text of the element (at its end, or where Mail put the cursor) through
+    /// Accessibility, without the clipboard; false when Mail doesn't take it that way.
+    private func insert(_ text: String, into target: AXUIElement, atEnd: Bool) -> Bool {
+        AX.makeMain(window)
+        AXUIElementSetAttributeValue(target, kAXFocusedAttribute as CFString, kCFBooleanTrue)
+        if atEnd { AX.moveCursorToEnd(target) }
+        return AXUIElementSetAttributeValue(target, kAXSelectedTextAttribute as CFString, text as CFString) == .success
     }
 
     /// The message text area, which Mail fills in a moment after the window opens.
@@ -220,19 +229,44 @@ final class AXComposeWindow: ComposeWindow, @unchecked Sendable {
         throw ComposeFailure(message: "Mail's window has no message text area.")
     }
 
-    func pasteText(_ text: String) async throws {
-        let body = try await loadedBody()
-        try await paste(into: body) { $0.setString(text, forType: .string) }
+    /// The body's text, to see whether Accessibility put the text in.
+    private func bodyText() -> String {
+        guard let body else { return "" }
+        var runs: [String] = []
+        AX.walk(body, depth: 12) { e in
+            if AX.string(e, kAXRoleAttribute) == "AXStaticText", let t = AX.string(e, kAXValueAttribute) {
+                runs.append(t)
+            }
+        }
+        return MailCompose.collapse(runs.joined(separator: "\n"))
     }
 
-    func pasteFiles(_ files: [URL]) async throws {
+    func insertText(_ text: String) async throws {
         let body = try await loadedBody()
-        try await paste(into: body) { $0.writeObjects(files.map { $0 as NSURL }) }
+        let wanted = MailCompose.collapse(text)
+        let before = bodyText()
+        if insert(text, into: body, atEnd: false) {
+            // Mail shows the change a moment later.
+            for _ in 0..<8 {
+                try await Task.sleep(for: .milliseconds(125))
+                let now = bodyText()
+                if now != before { return }  // MailCompose checks it is the text, unquoted
+            }
+        }
+        guard bodyText() == before, !wanted.isEmpty else { return }
+        try await paste(into: body, ClipboardLoan.text(text), atEnd: false)
     }
 
-    /// Edit → Paste into the element, with Mail in front and this window its main one.
-    private func paste(into target: AXUIElement, _ write: (NSPasteboard) -> Void) async throws {
-        owner.setClipboard(write)
+    func attachFiles(_ files: [URL]) async throws {
+        let body = try await loadedBody()
+        try await paste(into: body, ClipboardLoan.files(files), atEnd: false)
+    }
+
+    /// Edit → Paste into the element, with Mail in front and this window its main one, the
+    /// clipboard lent for just this paste (`ClipboardLoan`).
+    private func paste(into target: AXUIElement, _ items: [[String: Data]], atEnd: Bool) async throws {
+        let loan = ClipboardLoan(owner.pasteboard, items: items)
+        defer { loan.giveBack() }
         var pid: pid_t = 0
         AXUIElementGetPid(app, &pid)
         var paste: AXUIElement?
@@ -242,8 +276,11 @@ final class AXComposeWindow: ComposeWindow, @unchecked Sendable {
             NSRunningApplication(processIdentifier: pid)?.activate()
             AX.makeMain(window)
             AXUIElementSetAttributeValue(target, kAXFocusedAttribute as CFString, kCFBooleanTrue)
+            if atEnd { AX.moveCursorToEnd(target) }
             try await Task.sleep(for: .milliseconds(250))
-            if let item = AX.menuItem(app, key: "V", modifiers: 0), (AX.value(item, kAXEnabledAttribute) as? Bool) == true {
+            if let item = AX.menuItem(app, key: "V", modifiers: 0),
+                (AX.value(item, kAXEnabledAttribute) as? Bool) == true
+            {
                 paste = item
                 break
             }
@@ -251,6 +288,10 @@ final class AXComposeWindow: ComposeWindow, @unchecked Sendable {
         guard let paste else {
             throw ComposeFailure(
                 message: "Mail wouldn't paste into its window (someone may have switched to another app meanwhile).")
+        }
+        // Someone copied something meanwhile: Mail would paste theirs, so nothing is pasted.
+        guard loan.intact else {
+            throw ComposeFailure(message: "the clipboard changed while Latchkey was using it, so nothing was pasted")
         }
         AXUIElementPerformAction(paste, kAXPressAction as CFString)
         try await Task.sleep(for: .milliseconds(400))
@@ -290,22 +331,24 @@ final class AXComposeWindow: ComposeWindow, @unchecked Sendable {
         throw ComposeFailure(message: "Mail's window stayed open after saving the draft.")
     }
 
-    func discard() async {
-        guard AX.alive(window) else { return }
-        if let sheet = AX.sheet(window),
-            let other = AX.children(sheet).last(where: { AX.string($0, kAXRoleAttribute) == "AXButton" })
+    func discard() async -> Bool {
+        guard AX.alive(window) else { return true }
+        // Mail's alert first, by its Cancel button only: another button could be "Send Anyway".
+        if let sheet = AX.sheet(window), let cancel = AX.value(sheet, kAXCancelButtonAttribute),
+            CFGetTypeID(cancel) == AXUIElementGetTypeID()
         {
-            AXUIElementPerformAction(other, kAXPressAction as CFString)  // dismiss Mail's alert first
+            AXUIElementPerformAction(cancel as! AXUIElement, kAXPressAction as CFString)
             try? await Task.sleep(for: .milliseconds(300))
         }
         AX.close(window)
         for _ in 0..<12 {
             try? await Task.sleep(for: .milliseconds(250))
-            if !AX.alive(window) { return }
+            if !AX.alive(window) { return true }
             if let sheet = AX.sheet(window), let dont = AX.button(sheet, id: "action-button-3") {
                 AXUIElementPerformAction(dont, kAXPressAction as CFString)  // Don't Save
             }
         }
+        return !AX.alive(window)
     }
 }
 
@@ -359,6 +402,17 @@ enum AX {
             }
         }
         return nil
+    }
+
+    /// Puts the cursor after the element's last character.
+    static func moveCursorToEnd(_ e: AXUIElement) {
+        let count =
+            (value(e, kAXNumberOfCharactersAttribute) as? NSNumber)?.intValue
+            ?? (string(e, kAXValueAttribute) as NSString?)?.length ?? 0
+        var range = CFRange(location: count, length: 0)
+        if let v = AXValueCreate(.cfRange, &range) {
+            AXUIElementSetAttributeValue(e, kAXSelectedTextRangeAttribute as CFString, v)
+        }
     }
 
     static func makeMain(_ w: AXUIElement) {

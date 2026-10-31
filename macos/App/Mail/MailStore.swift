@@ -363,6 +363,23 @@ final class MailStore: @unchecked Sendable {
         }
     }
 
+    /// How many messages (not deleted) carry this Message-ID, with or without its angle brackets,
+    /// in any letter case. Mail's `message://` link opens one of them, and anyone can send a
+    /// message with a copied Message-ID (security review 2026-10-30).
+    func messagesSharing(messageID: String) throws -> Int {
+        let bare = messageID.trimmingCharacters(in: CharacterSet(charactersIn: "<> "))
+        return try locked {
+            Int(
+                try SQLite.rows(
+                    db,
+                    """
+                    SELECT COUNT(*) FROM messages m JOIN message_global_data g ON g.ROWID = m.global_message_id
+                    WHERE m.deleted = 0 AND (g.message_id_header = ? COLLATE NOCASE OR g.message_id_header = ? COLLATE NOCASE)
+                    """, bind: [.text("<\(bare)>"), .text(bare)]
+                ).first?[0].int ?? 0)
+        }
+    }
+
     /// A message just sent: in one of `mailboxes` (or listed there by a label), received at or
     /// after `since`, with this subject (ignoring Mail's "Re:"/"Fwd:") and a recipient with
     /// this address (plan D7).

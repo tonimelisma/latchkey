@@ -134,14 +134,15 @@ struct MailFixture: @unchecked Sendable {
     func add(
         _ id: Int64, _ box: Box, _ sender: (String, String), _ subject: String, _ minutes: Int64, read: Bool,
         flagged: Bool = false, deleted: Bool = false, conversation: Int64 = 0, labels: [Box] = [],
-        to: [(String, String)], cc: [(String, String)] = [], file: Body?, attachmentNames: [String] = []
+        to: [(String, String)], cc: [(String, String)] = [], replyTo: String? = nil, file: Body?,
+        attachmentNames: [String] = [], messageID: String? = nil
     ) {
         func address(_ a: (String, String)) -> String {
             exec("INSERT OR IGNORE INTO addresses (address, comment) VALUES (\(Self.sql(a.0)), \(Self.sql(a.1)))")
             return "(SELECT ROWID FROM addresses WHERE address = \(Self.sql(a.0)) AND comment = \(Self.sql(a.1)))"
         }
         let date = Self.t0 + minutes * 60
-        let messageID = "<m\(id)@example.com>"
+        let messageID = messageID ?? "<m\(id)@example.com>"
         exec("INSERT OR IGNORE INTO subjects (subject) VALUES (\(Self.sql(subject)))")
         exec("INSERT INTO message_global_data (message_id, message_id_header) VALUES (\(id), \(Self.sql(messageID)))")
         exec(
@@ -166,7 +167,7 @@ struct MailFixture: @unchecked Sendable {
         let headers = """
             From: \(sender.1.isEmpty ? sender.0 : "\(sender.1) <\(sender.0)>")\r
             To: \(to.map(\.0).joined(separator: ", "))\r
-            Subject: \(subject)\r
+            \(replyTo.map { "Reply-To: \($0)\r\n" } ?? "")Subject: \(subject)\r
             Message-Id: \(messageID)\r
             Date: Thu, 22 Oct 2026 18:00:00 +0000\r
             Mime-Version: 1.0\r

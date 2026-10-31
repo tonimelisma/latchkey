@@ -126,5 +126,7 @@ my landlord", tell what's new in the inbox, answer a message, or file it away.
 - A message deleted or moved between finding it and acting on it.
 - Text written by Claude through Mail's scripting arriving in other mail apps marked as quoted
   (reported since Mail 16): checked live before building sending; if it happens on macOS 27,
-  Toni chooses how to send ([NEEDS CLARIFICATION: the live check of 2026-10-29 shows it happens
-  on macOS 27, research.md "Live check"; sending is built through scripting until Toni chooses]).
+  Toni chooses how to send. The live check of 2026-10-29 shows it happens on macOS 27; Toni chose
+  (2026-10-30) to write every message, reply, forward, and draft in Mail's own compose window,
+  so it arrives as ordinary mail, and, when that isn't possible (screen off or locked, no
+  Accessibility), to refuse plainly instead of sending scripted text.

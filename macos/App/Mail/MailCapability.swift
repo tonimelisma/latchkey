@@ -24,6 +24,13 @@ enum MailCapability {
         var poll: Duration = .milliseconds(500)
         /// How long Mail gets to attach pasted files.
         var attachWait: Duration = MailCompose.attachWait
+        /// Contacts' names for addresses: Mail shows a contact's name in place of the address.
+        var contacts: any ContactsLookup = NoContacts()
+    }
+
+    struct NoContacts: ContactsLookup {
+        func name(for handle: String) -> String? { nil }
+        func people(matching name: String) -> [ContactPerson] { [] }
     }
 
     static let mailApp = "com.apple.mail"
@@ -36,7 +43,8 @@ enum MailCapability {
             store: { try opener.store() }, scripts: scripts, accounts: MailAccounts(scripts: scripts, mayScript: may),
             mayScript: may,
             scratch: FileManager.default.temporaryDirectory.appending(path: "Latchkey Mail"),
-            downloads: URL.homeDirectory.appending(path: "Downloads"), windows: AXMailWindows())
+            downloads: URL.homeDirectory.appending(path: "Downloads"), windows: AXMailWindows(), contacts: ContactBook()
+        )
         return Capability(
             id: CapabilityRegistry.mail, title: "Mail", summary: "Find, read, organise, and send email",
             readTools: readTools(env), writeTools: writeTools(env))

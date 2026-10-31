@@ -1,6 +1,6 @@
 import Foundation
 
-/// Organising, drafts, and sending through Mail's scripting (spec 008 plan D6, D7).
+/// Organising through Mail's scripting; drafts and sending in Mail's own compose window (spec 008 plan D6, D7).
 enum MailWrite {
     typealias Env = MailCapability.Env
 
@@ -141,6 +141,35 @@ enum MailWrite {
         return String(a[a.index(after: open)..<close])
     }
 
+    /// What Mail's Reply, Reply All, or Forward of this message fills in, from the store and the
+    /// message's file (security review 2026-10-30). Reply goes to Reply-To when there is one,
+    /// else to the sender, and for a message the Owner sent, to its recipients; Reply All adds
+    /// the original's To and Cc; Forward fills in no one and carries the original's attachments.
+    static func expectedPrefill(
+        _ m: MailStore.Summary, _ kind: ResponseKind, _ s: MailStore, own: [KnownAddress],
+        known: (String, [String]) -> KnownAddress
+    ) throws -> ResponsePrefill {
+        var p = ResponsePrefill(subject: m.subject, own: own)
+        if kind == .forward {
+            p.attachments = try s.attachmentParts(m.id).map(\.name)
+            return p
+        }
+        let recipients = try s.recipients(m.id)
+        // Without the file, Reply-To is unknown: only the sender counts, and a window addressed
+        // elsewhere is refused.
+        let replyTo = s.file(for: m).flatMap { try? MailFile.read($0) }?.replyTo ?? []
+        var targets = replyTo.map { known($0.address, [$0.name]) } + [known(m.senderAddress, [m.senderName])]
+        if own.contains(where: { $0.matches(m.senderAddress) }) {
+            targets += recipients.filter { $0.kind == .to }.map { known($0.address, [$0.name]) }
+        }
+        p.required = targets
+        p.allowed = targets
+        if kind == .replyAll {
+            p.allowed += recipients.filter { $0.kind != .bcc }.map { known($0.address, [$0.name]) }
+        }
+        return p
+    }
+
     /// A new message, reply, or forward written in Mail's own window (plan D6, Toni 2026-10-30),
     /// then sent and confirmed in Sent (plan D7), or saved as a draft.
     static func compose(_ args: JSONValue, _ s: MailStore, _ env: Env, draft: Bool) async throws -> ToolResult {
@@ -193,13 +222,32 @@ enum MailWrite {
             account = a
             sender = a.addresses.first { $0.caseInsensitiveCompare(bare(from)) == .orderedSame } ?? a.addresses[0]
         }
+        // What Mail may show for an address: the address, a name it came with, or the contact's name.
+        func known(_ address: String, _ names: [String] = []) -> KnownAddress {
+            let a = bare(address)
+            let given = address.firstIndex(of: "<").map { [String(address[..<$0])] } ?? []
+            let all = (names + given + [env.contacts.name(for: a.lowercased())].compactMap { $0 })
+                .map { $0.trimmingCharacters(in: CharacterSet(charactersIn: " \"")) }.filter { !$0.isEmpty }
+            return KnownAddress(address: a, names: all)
+        }
+        let own = accounts.flatMap(\.addresses).map { known($0) }
         let opening: ComposeOpening
+        var prefill: ResponsePrefill?
         if let original, let kind {
             guard let messageID = try s.messageIDHeader(original.id), !messageID.isEmpty else {
                 return .text(
                     "\(nothing): Mail has no Message-ID for that message, so it can't be opened.", isError: true)
             }
+            // Mail opens the original by its Message-ID, which anyone can copy into a message of
+            // their own (security review 2026-10-30): with two, the wrong one could open.
+            let sharing = try s.messagesSharing(messageID: messageID)
+            if sharing > 1 {
+                return .text(
+                    "\(nothing): \(sharing) messages in Mail have that message's Message-ID \(messageID), so Latchkey can't be sure Mail would open the one chosen. Answer it in Mail instead.",
+                    isError: true)
+            }
             opening = .respond(messageID: messageID, kind: kind)
+            prefill = try expectedPrefill(original, kind, s, own: own, known: known)
         } else {
             guard let url = MailCompose.mailto(to: to, cc: cc, bcc: bcc, subject: subject) else {
                 return .text("\(nothing): those addresses can't go into a new message.", isError: true)
@@ -207,8 +255,9 @@ enum MailWrite {
             opening = .new(mailto: url)
         }
         let request = MailCompose.Request(
-            opening: opening, to: to, cc: cc, bcc: bcc, subject: kind == nil ? subject : nil,
-            sender: sender, text: text, files: files, draft: draft)
+            opening: opening, to: to.map { known($0) }, cc: cc.map { known($0) }, bcc: bcc.map { known($0) },
+            subject: kind == nil ? subject : nil, prefill: prefill, own: own, sender: sender, text: text,
+            files: files, draft: draft)
         let start = Date().addingTimeInterval(-2)
         let shownSubject: String
         do {
@@ -220,6 +269,8 @@ enum MailWrite {
             return .text(
                 draft ? why.replacingOccurrences(of: "Nothing was sent", with: "No draft was saved") : why,
                 isError: true)
+        } catch is CancellationError {
+            return .text("\(nothing): the request was stopped before it went.", isError: true)
         }
         let finalSubject = shownSubject.isEmpty ? subject : shownSubject
         let who = (to + cc + bcc).first ?? (kind == .forward ? "" : original?.senderAddress ?? "")
