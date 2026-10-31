@@ -68,7 +68,8 @@ final class AppModel {
     /// Every capability, in menu order.
     static func makeCapabilities() -> [Capability] {
         [
-            NotesCapability.make(), MessagesCapability.make(), FilesCapability.make(), ShellCapability.make(),
+            NotesCapability.make(), MessagesCapability.make(), MailCapability.make(), FilesCapability.make(),
+            ShellCapability.make(),
             BrowserCapability.make(), ComputerCapability.make(), CalendarCapability.make(),
             RemindersCapability.make(), ContactsCapability.make(), LocationCapability.make(),
         ]
@@ -422,6 +423,7 @@ final class AppModel {
     /// The app each capability drives when it changes things.
     static let controlledApps = [
         CapabilityRegistry.notes: Permissions.notesApp, CapabilityRegistry.messages: Permissions.messagesApp,
+        CapabilityRegistry.mail: Permissions.mailApp,
     ]
 
     func control(of app: String) -> Permissions.Automation { appControl[app] ?? .notAsked }
@@ -589,6 +591,7 @@ final class AppModel {
             ApprovalFacts(
                 helper: helperStatus == .enabled, fullDiskAccess: fullDiskAccess,
                 notes: control(of: Permissions.notesApp), messages: control(of: Permissions.messagesApp),
+                mail: control(of: Permissions.mailApp),
                 safari: control(of: Permissions.safariApp), contacts: contactsStatus,
                 calendars: calendarStatus == .fullAccess, reminders: remindersStatus == .fullAccess,
                 location: locationAccess,

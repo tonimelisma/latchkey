@@ -12,6 +12,11 @@ packages:
     # `revision` when a version is also given, so the version lives in the comment only;
     # scripts/sparkle-advisories.sh reads it from there.
     revision: eef1a539a373c1f1a320624b1130fc5de7b2e100  # 2.10.0
+  MimeFoundation:
+    url: https://github.com/migueldeicaza/MimeFoundation
+    # Reads mail's MIME structure (spec 008 plan D2, Toni 2026-10-29). The project has no release
+    # tags, so it is pinned by commit like Sparkle: 2026-02-11 "Fix for iOS".
+    revision: dcb6746729d20cf00c42ad6453b4637a075f7d0b
 configFiles:
   Debug: Config/Base.xcconfig
   Release: Config/Base.xcconfig
@@ -57,6 +62,7 @@ targets:
         copy:
           destination: executables
       - package: Sparkle
+      - package: MimeFoundation
     # The helper's launchd plist, made from the one template with this configuration's
     # identifiers and named after the helper (Release: net.melisma.latchkey.helper.plist, exactly
     # the file that used to be copied in). Runs before the app is signed.
