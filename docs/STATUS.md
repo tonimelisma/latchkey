@@ -1,6 +1,6 @@
 # Status
 
-Last updated: 2026-10-29 (Safari tab hardened; Safari restarts; Shell scripts withdrawn; faster tests; app 0.8.47)
+Last updated: 2026-10-30 (Safari works in the real Safari; relay dependencies; Mail sending chosen; app 0.8.48)
 
 Xcode signing ready (2026-10-20): Toni's Xcode account has a valid "Apple Development" certificate
 (certificate expires 2027-07-22). Keep the team ID out of committed project files
@@ -251,6 +251,21 @@ that the fence still refuses a write and that a program in a fence is found by i
 a macOS update breaks either, commands still run, every Shell answer says so, and Toni gets
 one notification. Specs 003 to 006 reviewed and approved by Toni (2026-10-29); spec 005 gets
 Claude's tab in Toni's own Safari window as the default (in progress).
+
+Browser in the real Safari (app 0.8.48, 2026-10-30): a same-site click, typing, or back keeps
+Claude's tab (the page's note is read in the script's own run; the clicked link's and back's
+address count; a short wait for late notes); long pages come in parts within Claude's result
+size, the answer naming the offset to read on from; page positions are bounded and the tab's
+token is spliced as a JSON literal (security review). Checked in the real Safari with
+`macos/scripts/safari-check.sh` (a window of its own; all checks pass). A script that sends
+the page elsewhere, or a click to another site, still loses the tab by design.
+Relay: dependency updates (chromedp/cdproto, x/net, modernc sqlite) and a test of the
+fosite carry-over that froze a time the MCP SDK checks against the real clock.
+Mail (spec 008, approved): built on branch `008-mail` (find, read, change, send; reading from
+Mail's own database read-only). Toni chose (2026-10-30) sending through Mail's compose window
+with Accessibility, since Mail's scripting makes the text arrive indented as a quote in other
+mail apps (checked live); being finished on branch `008-mail-compose`, then a live check with
+the screen on.
 
 ## Waiting on Toni
 

@@ -941,48 +941,48 @@ actor SafariBrowser {
         /// Safari fires the `navigate` event of a link, a form, or back only after the script
         /// returned (real Safari, 2026-10-29). It stops at a note, at a page without Latchkey's
         /// note (the new page), or when the window's tabs changed.
-        static let tabJavaScript = """
-            on run argv
-            \(tabGuard)
-            set theAnswer to do JavaScript (item 6 of argv) in t
-            if theAnswer is missing value then set theAnswer to ""
-            set theGoal to ""
-            set theNothing to quote & quote
-            if (item 8 of argv) is "yes" then
-            repeat 12 times
-            set thePolled to "null"
-            try
-            if (count of tabs of w) is n then set thePolled to (do JavaScript (item 7 of argv) in t) as text
-            end try
-            if thePolled is not theNothing then
-            if thePolled is not "null" and thePolled is not "missing value" then set theGoal to thePolled
-            exit repeat
-            end if
-            delay 0.05
-            end repeat
-            end if
-            -- The note is the page's: it must not add lines to the answer.
-            set AppleScript's text item delimiters to {return, linefeed}
-            set theGoalParts to text items of theGoal
-            set AppleScript's text item delimiters to ""
-            set theGoal to theGoalParts as text
-            set theAddress to ""
-            try
-            set theAddress to (URL of t) as text
-            end try
-            return theAddress & linefeed & theGoal & linefeed & (theAnswer as text)
-            end tell
-            end run
-            """
+        static let tabJavaScript =
+            "on run argv\n" + tabGuard + "\n"
+                + """
+                set theAnswer to do JavaScript (item 6 of argv) in t
+                if theAnswer is missing value then set theAnswer to ""
+                set theGoal to ""
+                set theNothing to quote & quote
+                if (item 8 of argv) is "yes" then
+                repeat 12 times
+                set thePolled to "null"
+                try
+                if (count of tabs of w) is n then set thePolled to (do JavaScript (item 7 of argv) in t) as text
+                end try
+                if thePolled is not theNothing then
+                if thePolled is not "null" and thePolled is not "missing value" then set theGoal to thePolled
+                exit repeat
+                end if
+                delay 0.05
+                end repeat
+                end if
+                -- The note is the page's: it must not add lines to the answer.
+                set AppleScript's text item delimiters to {return, linefeed}
+                set theGoalParts to text items of theGoal
+                set AppleScript's text item delimiters to ""
+                set theGoal to theGoalParts as text
+                set theAddress to ""
+                try
+                set theAddress to (URL of t) as text
+                end try
+                return theAddress & linefeed & theGoal & linefeed & (theAnswer as text)
+                end tell
+                end run
+                """
         /// argv: the guard's five, url.
-        static let tabLoad = """
-            on run argv
-            \(tabGuard)
-            set URL of t to (item 6 of argv)
-            return ""
-            end tell
-            end run
-            """
+        static let tabLoad =
+            "on run argv\n" + tabGuard + "\n"
+                + """
+                set URL of t to (item 6 of argv)
+                return ""
+                end tell
+                end run
+                """
         /// argv: url. A new tab at the end of the Owner's front Safari window, behind the tab the
         /// Owner has in front (FR-413); a new window when Safari has none (FR-414). Answers
         /// "window id<TAB>tab index<TAB>tab count".
@@ -1017,20 +1017,20 @@ actor SafariBrowser {
             """
         /// argv: the guard's five. Brings Claude's tab to the front of its window;
         /// answers the tab that was in front and Claude's page title.
-        static let tabShow = """
-            on run argv
-            \(tabGuard)
-            set sep to character id 9
-            set previousIndex to index of current tab of w
-            set current tab of w to t
-            set theTitle to ""
-            try
-            set theTitle to (name of t) as text
-            end try
-            return (previousIndex as text) & sep & theTitle
-            end tell
-            end run
-            """
+        static let tabShow =
+            "on run argv\n" + tabGuard + "\n"
+                + """
+                set sep to character id 9
+                set previousIndex to index of current tab of w
+                set current tab of w to t
+                set theTitle to ""
+                try
+                set theTitle to (name of t) as text
+                end try
+                return (previousIndex as text) & sep & theTitle
+                end tell
+                end run
+                """
         /// argv: window id, Claude's tab index, the tab to bring back, the yes/no mark check. Only
         /// while Claude's tab, still marked, is in front: a tab the Owner chose meanwhile stays.
         static let tabRestore = """
@@ -1054,14 +1054,14 @@ actor SafariBrowser {
             end run
             """
         /// argv: the guard's five. Closes Claude's tab only.
-        static let tabClose = """
-            on run argv
-            \(tabGuard)
-            close t
-            return ""
-            end tell
-            end run
-            """
+        static let tabClose =
+            "on run argv\n" + tabGuard + "\n"
+                + """
+                close t
+                return ""
+                end tell
+                end run
+                """
         static let probe = """
             on run argv
             tell application "Safari"
