@@ -204,7 +204,14 @@ enum MailCompose {
     }
 
     static func missingFiles(_ files: [URL], _ f: ComposeFields) -> Int {
-        files.filter { url in !f.attachments.contains { $0.hasPrefix(url.lastPathComponent) } }.count
+        files.filter { url in !f.attachments.contains { attachmentName($0) == url.lastPathComponent } }.count
+    }
+
+    /// The file name in Mail's attachment token ("lease.pdf, 2 KB"): compared whole, never by its
+    /// start, so "lease.pdf.exe" isn't taken for "lease.pdf" (security review, 2026-10-30).
+    static func attachmentName(_ token: String) -> String {
+        guard let m = token.firstMatch(of: /^(.*), [0-9][0-9.,]* ?(bytes|byte|KB|kB|MB|GB|TB)$/) else { return token }
+        return String(m.output.1)
     }
 
     /// Mail's Reply, Reply All, or Forward opened the message Claude chose: its subject, and
@@ -226,7 +233,7 @@ enum MailCompose {
             try fail("it isn't addressed to \(p.required.map(\.address).joined(separator: " or "))")
         }
         if let names = p.attachments {
-            for a in f.attachments where !names.contains(where: { !$0.isEmpty && a.hasPrefix($0) }) {
+            for a in f.attachments where !names.contains(where: { !$0.isEmpty && attachmentName(a) == $0 }) {
                 try fail("it carries an attachment the message doesn't have, \(a)")
             }
         }
@@ -312,7 +319,7 @@ enum MailCompose {
         }
         if let names = r.prefill?.attachments {
             let ours = r.files.map(\.lastPathComponent)
-            for a in f.attachments where !(names + ours).contains(where: { !$0.isEmpty && a.hasPrefix($0) }) {
+            for a in f.attachments where !(names + ours).contains(where: { !$0.isEmpty && attachmentName(a) == $0 }) {
                 try fail("Mail's window has an attachment that wasn't asked for, \(a)")
             }
         } else if case .new = r.opening, f.attachments.count != r.files.count {

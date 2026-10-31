@@ -487,6 +487,11 @@ final class FakePasteboard: Pasteboard, @unchecked Sendable {
                 ComposeFields(subject: "Fwd: Photos and lease", attachments: ["payroll.xlsx, 9 KB"]),
                 "attachment the message doesn't have"
             ),
+            // Security review 2026-10-30: a name that only starts like one of the original's.
+            (
+                ComposeFields(subject: "Fwd: Photos and lease", attachments: ["lease.pdf.exe, 2 KB"]),
+                "attachment the message doesn't have"
+            ),
             (ComposeFields(subject: "Fwd: Salaries"), "its subject is"),
             (ComposeFields(to: ["eve@evil.example"], subject: "Fwd: Photos and lease"), "addressed to eve"),
         ] {

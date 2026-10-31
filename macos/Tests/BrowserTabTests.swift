@@ -340,11 +340,11 @@ final class Notes: @unchecked Sendable {
         let fake = FakeSafariTabs()
         let b = browser(fake)
         _ = try await b.open("https://shop.example.com", newTab: false)
-        let deadline = Date().addingTimeInterval(2.5)  // past the allowance (settle limit + 1 s)
-        while Date() < deadline {
-            _ = try await b.read(offset: 0)  // every call is an Apple Event
-            try await Task.sleep(for: .milliseconds(200))
-        }
+        // Reads (every one an Apple Event) before and after the allowance has run out; the clock
+        // is moved, not waited out, so the test doesn't depend on the settle limit.
+        for _ in 0..<3 { _ = try await b.read(offset: 0) }
+        await b.age(by: 60)
+        for _ in 0..<3 { _ = try await b.read(offset: 0) }
         fake.ownerCloses(tab: 3)
         fake.ownerOpens("https://shop.example.com")
         await #expect(throws: SafariBrowser.Failure.noWindow) { try await b.read(offset: 0) }

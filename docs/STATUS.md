@@ -1,6 +1,6 @@
 # Status
 
-Last updated: 2026-10-30 (Safari works in the real Safari; relay dependencies; Mail sending chosen; app 0.8.48)
+Last updated: 2026-10-30 (Mail: find, read, organise, send through the compose window; app 0.8.49)
 
 Xcode signing ready (2026-10-20): Toni's Xcode account has a valid "Apple Development" certificate
 (certificate expires 2027-07-22). Keep the team ID out of committed project files
@@ -261,16 +261,22 @@ token is spliced as a JSON literal (security review). Checked in the real Safari
 the page elsewhere, or a click to another site, still loses the tab by design.
 Relay: dependency updates (chromedp/cdproto, x/net, modernc sqlite) and a test of the
 fosite carry-over that froze a time the MCP SDK checks against the real clock.
-Mail (spec 008, approved): built on branch `008-mail` (find, read, change, send; reading from
-Mail's own database read-only). Toni chose (2026-10-30) sending through Mail's compose window
-with Accessibility, since Mail's scripting makes the text arrive indented as a quote in other
-mail apps (checked live); being finished on branch `008-mail-compose`, then a live check with
-the screen on.
+Mail (spec 008, approved by Toni; app 0.8.49): `mail_find`, `mail_read`, `mail_change`,
+`mail_send`, 27 tools in all. Finding and reading come from Mail's own database (read-only)
+and message files (MimeFoundation), so they work with the screen off; reading never marks a
+message read unless Claude asks. Organising goes through Mail's scripting; delete moves to the
+account's Trash. Sending and drafts are written in Mail's own compose window through
+Accessibility (Toni, 2026-10-30: Mail's scripting makes the text arrive indented as a quote in
+other mail apps, checked live), and are refused while the screen is off or locked. Security
+review: a copied Message-ID is refused and the window compared with the original before typing,
+recipients must be exactly as asked, the clipboard is only lent (marked, given back), and
+attachment names never become paths. Tested with stand-ins; the live check of the compose
+window needs the screen on.
 
 ## Waiting on Toni
 
-0. Review the Mail spec draft (specs/008-mail/spec.md, branch `008-mail`): the choices of
-   2026-10-29 are in it; no plan, tasks, or code until Toni approves it.
+0. With the screen on and unlocked, Mail's compose-window sending is checked live (one test
+   message to Toni's own address, approved 2026-10-29); Accessibility for Latchkey must be on.
 
 1. Answer the macOS alert about Latchkey accessing the screen (Allow) whenever it shows (none
    showing and none in macOS's log on 2026-10-29).

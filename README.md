@@ -46,6 +46,7 @@ Claude (web, Desktop, phone)  ──HTTPS──▶  Latchkey relay  ◀──out
   | Calendar (every account on the Mac) | `calendar_find` (events, free time) | `calendar_change` (create, move, repeat, delete) |
   | Reminders | `reminders_find` | `reminders_change` (create, complete, change, delete; new and deleted lists) |
   | Contacts | `contacts_find` (cards, photos) | `contacts_change` (create, change, delete; groups and their members) |
+  | Mail (every account in Apple Mail) | `mail_find`, `mail_read` | `mail_change` (read, flag, move, junk, delete to Trash, draft), `mail_send` (new, reply, forward, with files; through Mail's own window, so the screen must be on) |
   | Location & Maps | `location_read`, `maps_find` (places, directions, travel times) | |
 
 - **You see what Claude did:** a notification for every change and every new Claude connection,
@@ -71,7 +72,7 @@ Claude (web, Desktop, phone)  ──HTTPS──▶  Latchkey relay  ◀──out
 1. **Install the Mac app.** Open `Latchkey.dmg`, drag Latchkey to Applications, and open it. The
    setup window walks you through each step, one at a time: allow keep-awake, connect to a relay
    (you create your account there with a passkey), and the macOS permissions the capabilities
-   you turn on need (Full Disk Access; control of Notes, Messages, and Safari; Contacts;
+   you turn on need (Full Disk Access; control of Notes, Messages, Mail, and Safari; Contacts;
    Calendars; Reminders; Location; Screen Recording; Accessibility; and Safari's "Allow
    JavaScript from Apple Events"). Later, the
    Permissions tab in Latchkey's Settings window shows each one and whether it's allowed.
@@ -156,6 +157,7 @@ specs/004-shell/                Shell.
 specs/005-browser/              Browser control (Safari).
 specs/006-computer-control/     Computer control.
 specs/007-calendar-reminders-contacts-location/  Calendar, Reminders, Contacts, Location & Maps.
+specs/008-mail/                 Mail.
 docs/best-practices.md          Research on best practices, checked against Latchkey.
 docs/threat-model.md            What is protected, attackers, trust boundaries, accepted risks.
 docs/self-hosting.md            Run your own relay.
