@@ -278,10 +278,11 @@ message whose text ended in raw HTML table markup: since 0.8.50 a plain part tha
 HTML is converted, and HTML comments (Outlook's conditional ones) are dropped first. Since 0.8.51
 both in time that grows only with the message (security review).
 
-## Waiting on Toni
+Live check of sending, 2026-10-31: one test message to Toni's own address went out through
+Mail's compose window and was in Sent; its raw copy is plain text (7bit, Mail's own headers),
+the two body lines exactly as asked, with no "> " quoting, indentation, or extra content.
 
-0. With the screen on and unlocked, Mail's compose-window sending is checked live (one test
-   message to Toni's own address, approved 2026-10-29); Accessibility for Latchkey must be on.
+## Waiting on Toni
 
 1. Answer the macOS alert about Latchkey accessing the screen (Allow) whenever it shows (none
    showing and none in macOS's log on 2026-10-29).
