@@ -105,10 +105,24 @@ enum HTMLText {
         "p", "pre", "section", "table", "tr", "ul",
     ]
 
+    /// The HTML without its comments, in one pass: an opener with no end drops the rest
+    /// (a regular expression took time with the square of a crafted message, security review
+    /// 2026-10-30).
+    static func withoutComments(_ html: String) -> String {
+        var out = ""
+        var rest = html[...]
+        while let open = rest.range(of: "<!--") {
+            out += rest[..<open.lowerBound]
+            guard let close = rest.range(of: "-->", range: open.upperBound..<rest.endIndex) else { return out }
+            rest = rest[close.upperBound...]
+        }
+        return out + rest
+    }
+
     static func fromHTML(_ html: String) -> String {
         // Comments go first, Outlook's conditional ones (<!--[if mso]> … <![endif]-->) too: the
         // tidying parser can keep their markup as text (live check of a mail, 2026-10-30).
-        let html = html.replacingOccurrences(of: "<!--[\\s\\S]*?-->", with: "", options: .regularExpression)
+        let html = withoutComments(html)
         guard
             let doc = try? XMLDocument(
                 xmlString: html, options: [.documentTidyHTML, .nodeLoadExternalEntitiesNever])

@@ -343,3 +343,19 @@ enum MailTestEnv {
         #expect(!text.contains("<table") && !text.contains("<td") && !text.contains("endif"), "\(text)")
     }
 }
+
+/// Security review 2026-10-30: a crafted message can't make the text conversion slow.
+@Suite struct MailTextSpeedTests {
+    @Test func unclosedCommentsAndTagsStayFast() {
+        let comments = String(repeating: "<!-- ", count: 200_000)
+        let tags = String(repeating: "<td ", count: 200_000)
+        let start = ContinuousClock.now
+        _ = HTMLText.fromHTML("<p>Hi</p>" + comments)
+        _ = MailFile.looksLikeHTML(tags)
+        #expect(ContinuousClock.now - start < .seconds(2))
+    }
+
+    @Test func commentsAreStillDropped() {
+        #expect(HTMLText.withoutComments("a<!-- x -->b<!--[if mso]><td>y</td><![endif]-->c<!-- open") == "abc")
+    }
+}

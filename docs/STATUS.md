@@ -1,6 +1,6 @@
 # Status
 
-Last updated: 2026-10-30 (Mail checked live: reading with the lid closed; HTML mail as clean text; app 0.8.50)
+Last updated: 2026-10-30 (Mail text conversion fast on crafted messages; app 0.8.51)
 
 Xcode signing ready (2026-10-20): Toni's Xcode account has a valid "Apple Development" certificate
 (certificate expires 2027-07-22). Keep the team ID out of committed project files
@@ -275,7 +275,8 @@ window needs the screen on.
 Checked live 2026-10-30 (lid closed): accounts, mailboxes and unread counts found, the newest
 unread message read and left unread, and sending refused with the reason (screen off). A
 message whose text ended in raw HTML table markup: since 0.8.50 a plain part that is itself
-HTML is converted, and HTML comments (Outlook's conditional ones) are dropped first.
+HTML is converted, and HTML comments (Outlook's conditional ones) are dropped first. Since 0.8.51
+both in time that grows only with the message (security review).
 
 ## Waiting on Toni
 

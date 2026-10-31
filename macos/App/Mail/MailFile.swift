@@ -56,10 +56,23 @@ struct MailFile: Sendable {
 
     /// True when text is mostly markup: an html or body tag, or several table, paragraph, or
     /// break tags. A stray "<" in ordinary text is not.
+    private static let tagPattern = try! NSRegularExpression(
+        pattern: #"</?\s{0,8}(table|tr|td|div|p|br|span|font)\b[^>]{0,500}>"#, options: [.caseInsensitive])
+
     static func looksLikeHTML(_ s: String) -> Bool {
-        if s.range(of: #"<\s*(html|body)\b"#, options: [.regularExpression, .caseInsensitive]) != nil { return true }
-        let tags = s.matches(of: /(?i)<\/?\s*(table|tr|td|div|p|br|span|font)\b[^>]*>/).count
-        return tags >= 3
+        // The first 64 KB, a bounded tag, and three are enough: a crafted message can't make
+        // this slow (security review, 2026-10-30).
+        let head = s.prefix(65_536)
+        if head.range(of: #"<\s*(html|body)\b"#, options: [.regularExpression, .caseInsensitive]) != nil {
+            return true
+        }
+        let text = String(head)
+        var found = 0
+        tagPattern.enumerateMatches(in: text, range: NSRange(text.startIndex..., in: text)) { _, _, stop in
+            found += 1
+            if found >= 3 { stop.pointee = true }
+        }
+        return found >= 3
     }
 
     static func parse(_ emlx: Data, partial: Bool) throws -> MailFile {
