@@ -317,7 +317,14 @@ command that can't reach a device nearby says when Local Network isn't allowed.
 A lost permission is told (0.8.57, Toni 2026-10-31, spec 001 FR-626): the app looks every
 minute, and after any failed call, at every permission and setting setup asks for. One that was
 on and is now off brings one notification ("Full Disk Access is off"), once per loss; a click
-opens setup, and the menu bar icon shows its mark until it's back.
+opens setup, and the menu bar icon shows its mark until it's back. Not seen live: that needs a
+permission turned off in System Settings, which only Toni does. The screenshot was checked live
+the same day through the hosted relay (lid open): a clear image of the whole screen.
+
+Shell test fixed (2026-10-31): "a process that left the terminal is stopped too" gave its
+program a fixed half second to start, and failed once while the whole suite ran. It now waits
+until the program says it has left its session; then passed 40 runs under CPU load and 11 full
+suites (704 tests each, before and after), and its checks print what they saw.
 
 ## Waiting on Toni
 
