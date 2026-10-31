@@ -263,6 +263,17 @@ Format: EARS ("When <trigger>, the <system> shall <response>"). IDs are stable; 
   a device nearby. An app that isn't open is opened hidden to be looked at, as its script
   would open it anyway. Why: an audit on 2026-10-31 found these answered with
   a 25-second timeout, a raw error, or a silently empty result.
+- **FR-626** While the app runs, it shall look every minute (Local Network every ten minutes),
+  and after any call that fails, at every permission and setting setup asks for. When one that
+  was on is found off, the app shall post one macOS notification naming it and what it is
+  needed for (several found together share one notification); a click on it shall open setup.
+  It shall be told once per loss, and again only after it was on again; the menu bar icon shall
+  show its mark while anything is missing. It shall never ask a question or open an app to
+  look (a closed app is looked at when it next runs or is used). Notifications itself and
+  macOS's direct screen access question are not told: a notice can't arrive without the first,
+  and macOS doesn't take back the second. Why: Toni asked (2026-10-31) to be told when a
+  permission or setting goes missing; until now a lost permission showed only at the next
+  start or in Claude's answers.
 - **FR-622** After every install, the installer shall check the running app and fail when the
   setup window is open on a Mac whose setup is finished, keep-awake isn't what the app wants, or
   the keep-awake helper running isn't the one just installed.

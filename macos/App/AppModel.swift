@@ -25,6 +25,9 @@ final class AppModel {
     private var permanentWatch: PermanentWatch?
     /// macOS's monthly screen question, brought on while the Owner is here (FR-624).
     private var screenReminder: Task<Void, Never>?
+    /// A permission or setting that goes off while the app runs (FR-626).
+    private var permissionWatch: Task<Void, Never>?
+    private var losses = PermissionLoss()
     private(set) var relayURL: URL?
     private(set) var helperStatus: SMAppService.Status = .notRegistered
     /// What went wrong, as the Owner is shown it; each one is an event too (FR-633).
@@ -138,6 +141,7 @@ final class AppModel {
         leftoverTimer = Self.tidyEveryMinute()
         if ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil {
             screenReminder = remindScreenWhileHere()
+            permissionWatch = watchPermissions()
             permanentWatch = PermanentWatch(home: .homeDirectory) { url in
                 Task {
                     let jobs = ShellCapability.jobs
@@ -203,6 +207,7 @@ final class AppModel {
                 waited += 1
             }
             await checkApprovals()
+            _ = losses.update(approvals)  // what is on now; losses are told from here (FR-626)
             let steps = setupSteps
             let missing = SetupDecision.missing(steps)
             let unknown = SetupDecision.unknown(steps)
@@ -479,6 +484,37 @@ final class AppModel {
                 )
             }
         }
+    }
+
+    /// Every minute (Local Network every ten, its check takes up to 2 s), and after a call that
+    /// failed: what was on and is now off is told to the Owner once, in a notification that
+    /// opens setup; the menu bar icon shows its mark meanwhile (FR-626, plan D23).
+    private func watchPermissions() -> Task<Void, Never> {
+        Task { [weak self] in
+            var pass = 0
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(60))
+                guard let self else { return }
+                pass += 1
+                await self.lookForLosses(network: pass % 10 == 0)
+            }
+        }
+    }
+
+    private func lookForLosses(network: Bool = false) async {
+        guard permissionWatch != nil else { return }  // not under unit tests
+        if network { await checkLocalNetwork(force: true) }
+        await checkApprovals()
+        let lost = losses.update(approvals)
+        guard let notice = PermissionLoss.notice(lost) else { return }
+        event(.permissions, "Told the Owner these are off: \(lost.map(\.title).joined(separator: ", "))", error: true)
+        let content = UNMutableNotificationContent()
+        content.title = notice.title
+        content.body = notice.body
+        content.categoryIdentifier = PermissionLoss.category
+        // Asked in setup, never here (FR-623).
+        try? await UNUserNotificationCenter.current().add(
+            UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil))
     }
 
     func checkScreenPermissions() {
@@ -966,6 +1002,7 @@ final class AppModel {
         loadRecentActivity()
         if let activity = result.activity, !result.isError { Notifier.post(activity) }  // FR-130
         if let also = result.alsoDone { Notifier.post(also) }
+        if result.isError { Task { await lookForLosses() } }  // a permission may be why (FR-626)
         if let made = result.made, !result.isError {  // FR-641
             let by = entry.client.map { " (\($0))" } ?? ""
             EventLog.shared.record(.leftovers, "Claude made \(made)\(by)", systemLog: false)

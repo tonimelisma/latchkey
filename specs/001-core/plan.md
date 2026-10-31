@@ -1082,6 +1082,25 @@ Chosen: (a), in `ScreenReminder` and `AppModel.remindScreenWhileHere`. (c) is op
 - Messages: a name that matches nobody says when Contacts isn't allowed.
 - Screenshots: ScreenCaptureKit's `userDeclined` gets its own answer.
 
+### D23. A lost permission is told to the Owner (FR-626)
+
+- Every minute the app runs `checkApprovals` (the same look the Settings and Setup windows run
+  every second) and compares the Permissions tab's list with the last look
+  (`PermissionLoss`): an id allowed then and missing now is a loss. "Checking…" is neither, and
+  what was missing from the start is setup's (FR-621). Local Network's check sends a probe and
+  takes up to 2 seconds, so it is forced only every tenth minute; a failed Shell call looks
+  sooner. A failed call of any tool triggers the same look, so a loss is told as it is felt.
+- One notification per look, category `permissionLost`; the app delegate, now the
+  notification centre's delegate, opens setup on a click on that category only. Other notices
+  are unchanged.
+- Options for telling: (a) a notification, chosen: it waits in Notification Center while the
+  Mac is unattended; (b) opening the setup window at once, which would pop up in front of
+  whatever the Owner is doing, or over an empty desk; (c) only the menu bar mark, easy to miss.
+  The mark comes with (a) anyway.
+- Options for looking: (a) every minute, chosen: the checks are cheap (no prompt, no app
+  opened); (b) macOS's notifications about privacy changes, which don't exist for most of
+  these permissions; (c) only when a call fails, which misses losses while Claude isn't used.
+
 ## Constitution check
 
 | Article | Status |

@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import UserNotifications
 
 @main
 struct LatchkeyApp: App {
@@ -28,7 +29,7 @@ struct LatchkeyApp: App {
 }
 
 @MainActor
-final class AppDelegate: NSObject, NSApplicationDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelegate {
     let model = AppModel()
     private let presence = WindowPresence()
     private var terminateSignal: DispatchSourceSignal?
@@ -36,7 +37,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         if ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil { return }  // unit tests
         quitCleanlyOnSIGTERM()
+        UNUserNotificationCenter.current().delegate = self
         model.start()
+    }
+
+    /// A click on "… is off" opens setup at what's missing (FR-626); other notices just bring
+    /// the app forward, as before.
+    nonisolated func userNotificationCenter(
+        _ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse
+    ) async {
+        guard response.notification.request.content.categoryIdentifier == PermissionLoss.category else { return }
+        await MainActor.run { model.showSetup() }
     }
 
     /// The installer (macos/scripts/install.sh) quits the app with SIGTERM; quit as if from the

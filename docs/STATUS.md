@@ -1,6 +1,6 @@
 # Status
 
-Last updated: 2026-10-30 (Mail text conversion fast on crafted messages; app 0.8.51)
+Last updated: 2026-10-31 (a lost permission is told in a notification; app 0.8.57)
 
 Xcode signing ready (2026-10-20): Toni's Xcode account has a valid "Apple Development" certificate
 (certificate expires 2027-07-22). Keep the team ID out of committed project files
@@ -313,6 +313,11 @@ contacts, notes, mail, messages, and a Safari page all worked (Safari's script r
 check); the screenshot couldn't be tried (lid closed), nor the monthly screen question (due
 Nov 22). Since 0.8.56 an app that isn't open is opened hidden to be checked first, and a Shell
 command that can't reach a device nearby says when Local Network isn't allowed.
+
+A lost permission is told (0.8.57, Toni 2026-10-31, spec 001 FR-626): the app looks every
+minute, and after any failed call, at every permission and setting setup asks for. One that was
+on and is now off brings one notification ("Full Disk Access is off"), once per loss; a click
+opens setup, and the menu bar icon shows its mark until it's back.
 
 ## Waiting on Toni
 
