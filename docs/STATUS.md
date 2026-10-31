@@ -288,7 +288,10 @@ use. Right after pairing Latchkey asks each macOS question in turn, and setup ha
 Three approvals were added: Notifications (asked during use until now), Local Network (asked
 when a command reached a device at home), and macOS's direct screen access question (asked at
 the first screenshot). Accessibility is now asked for whatever computer control is set to,
-since sending mail needs it.
+since sending mail needs it. Checked live 2026-10-31 after Toni's Allow All: a screenshot,
+location, a command reaching the home router, calendars, reminders, contacts, notes, mail,
+messages, and a Safari page all worked through the hosted relay, with no macOS question on the
+screen and the setup window closed.
 
 ## Waiting on Toni
 
