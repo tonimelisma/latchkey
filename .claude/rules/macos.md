@@ -136,4 +136,15 @@ paths:
   (a process gone, a file event, output arriving) looks repeatedly up to a few seconds instead
   of sleeping a fixed time.
 
+- Real Safari isn't the WebKit view (2026-10-29): a link's, a form's, and back's Navigation API
+  `navigate` event fires only after the `do JavaScript` that clicked has returned, often after
+  the new page replaced the old one, and after `location.href = …` the next `do JavaScript`
+  already runs in the new page. Anything a page script must learn about its own navigation is
+  learned in the same run. A stand-in Safari must be timed the same way.
+- Never send Apple Events to Safari from the test host (or a Debug build) to try something: it
+  is its own app to macOS, its first event opens an Automation prompt, and while that prompt
+  waits (behind a locked screen, for ever) Safari answers no window or tab scripting from any
+  program, the installed Latchkey included (2026-10-29). Real-Safari checks run from a
+  terminal: `macos/scripts/safari-check.sh`.
+
 Add new gotchas here as they are discovered.

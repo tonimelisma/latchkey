@@ -314,3 +314,78 @@ final class FakeSafari: ScriptRunner, @unchecked Sendable {
         #expect(!reopen.isError)
     }
 }
+
+/// FR-405 (live check 2026-10-29): a Wikipedia article came back as 71,455 characters in one
+/// answer, its 40,000 characters of text plus 400 links.
+@Suite struct BrowserPagingTests {
+    static func longPage(offset: Int = 0) -> PageScripts.Page {
+        let text = String(repeating: "Mac mini is a small desktop computer. ", count: 1_900)
+        let part = String(text.utf16.dropFirst(offset).prefix(PageScripts.pageSize))!
+        let links = (1...400).map {
+            PageScripts.Element(
+                ref: "e\($0)", kind: "link", label: "Article number \($0) about computers",
+                href: "https://en.wikipedia.org/wiki/Article_number_\($0)")
+        }
+        return PageScripts.Page(
+            title: "Mac mini - Wikipedia", url: "https://en.wikipedia.org/wiki/Mac_mini", total: text.utf16.count,
+            offset: offset, text: part, elements: links)
+    }
+
+    @Test func aLongPageFitsClaudesResultSize() throws {
+        let page = Self.longPage()
+        let answer = PageScripts.answer(page)
+        #expect(answer.count <= ResultLimit.characters, "\(answer.count) characters")
+        #expect(answer.contains("[e1] link: Article number 1 about computers → /wiki/Article_number_1"))
+        let match = try #require(answer.firstMatch(of: /offset (\d+)\.\)/), "names where to read on")
+        let next = try #require(Int(match.output.1))
+        #expect(next > 10_000)
+        #expect(answer.contains(String(page.text.prefix(next).suffix(20))), "the text up to there is in the answer")
+        let rest = PageScripts.answer(Self.longPage(offset: next))
+        #expect(rest.count <= ResultLimit.characters)
+        #expect(rest.contains("Characters \(next)–"))
+    }
+
+    /// Security review 2026-10-30: the position and length come from the page; huge or negative
+    /// ones neither crash Latchkey nor name an offset outside the page.
+    @Test func positionsFromThePageAreBounded() {
+        for (offset, total) in [(Int.max, Int.max), (Int.max - 1, 10), (-5, 10), (3, -1)] {
+            var p = Self.longPage()
+            p.offset = offset
+            p.total = total
+            let text = PageScripts.answer(p)
+            #expect(!text.contains("\(Int.max)"), "\(offset), \(total)")
+        }
+    }
+
+    @Test func theLastPartSaysNothingMore() {
+        let p = PageScripts.Page(
+            title: "T", url: "https://a.example/", total: 5, offset: 0, text: "hello", elements: [])
+        #expect(!PageScripts.answer(p).contains("Read on"))
+    }
+
+    @Test func linksOnTheSameHostShowTheirPath() {
+        let page = "https://en.wikipedia.org/wiki/Mac_mini"
+        #expect(
+            PageScripts.shortHref("https://en.wikipedia.org/wiki/Mac_Studio#History", on: page)
+                == "/wiki/Mac_Studio#History")
+        #expect(
+            PageScripts.shortHref("https://en.wikipedia.org/w/index.php?title=X", on: page) == "/w/index.php?title=X")
+        #expect(PageScripts.shortHref("https://example.com/", on: page) == "https://example.com/")
+        #expect(PageScripts.shortHref("http://en.wikipedia.org/wiki/A", on: page) == "http://en.wikipedia.org/wiki/A")
+        #expect(
+            PageScripts.shortHref("https://user@en.wikipedia.org/wiki/A", on: page)
+                == "https://user@en.wikipedia.org/wiki/A")
+    }
+
+    /// The offset reaches the page script, also when Claude gives a url with it.
+    @Test func offsetReadsOnAlsoWithAURL() async {
+        let fake = FakeSafari()
+        let b = SafariBrowser(scripts: fake, settleLimit: .milliseconds(600))
+        let tools = Dictionary(uniqueKeysWithValues: BrowserCapability.readTools(browser: b).map { ($0.tool.name, $0) })
+        let read = tools["browser_read"]!
+        _ = await read.handler(.object(["url": .string("https://shop.example.com/"), "offset": .number(1234)]))
+        #expect(fake.calls.last?.args.last?.contains("(1234, ") == true, "url and offset read from the offset")
+        _ = await read.handler(.object(["offset": .number(2345)]))
+        #expect(fake.calls.last?.args.last?.contains("(2345, ") == true)
+    }
+}

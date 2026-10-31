@@ -11,3 +11,8 @@
 - **T406** ✅ Tests first (stand-in Safari with windows and tabs, WebKit view for the mark), then
   Claude's page as a background tab in the Owner's window, the Settings choice, finding the tab
   again, screenshot and back, idle close (2026-10-29). *FR-403, FR-411 to FR-418, D6.*
+- **T407** Tests first (stand-in Safari timed like real Safari, WebKit view, paging), then the
+  note taken in the script's own run, the clicked link's and back's address, the acting script's
+  short wait for the note, and answers within Claude's result size with the offset named
+  (2026-10-29). Checked against real Safari with `macos/scripts/safari-check.sh`. *FR-403,
+  FR-405, FR-418, D3, D6.*

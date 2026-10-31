@@ -36,9 +36,22 @@ final class FakeSafariTabs: ScriptRunner, @unchecked Sendable {
     /// Latchkey found it), the Owner closes Claude's tab and opens one at that address in its
     /// place, so the tab count stays the same.
     var slideIn: String?
-    /// Set to an address: the next click in Claude's tab goes to that page.
+    /// Set to an address: the next click in Claude's tab is on a link to that page. As in real
+    /// Safari (2026-10-29), the link's `navigate` event comes only after the click script
+    /// returned, and the new page has replaced the old one before Latchkey's next script, so
+    /// no note of it is ever read: only the click script's own answer names the address.
     var clickGoesTo: String?
-    /// Set to an address: every script in Claude's tab reports that its page is going there.
+    /// Set to an address: the next click in Claude's tab is on a button that sends the page
+    /// there; the `navigate` event comes after the click script, while the acting script waits
+    /// for it, then the new page replaces the old one.
+    var buttonGoesTo: String?
+    /// Set to an address: the next script in Claude's tab sets `location.href` to it; the
+    /// `navigate` event fires during the script, and the page is replaced right after.
+    var scriptGoesTo: String?
+    /// Set to an address: going back goes there, its `navigate` event too late, as for a link.
+    var backGoesTo: String?
+    /// Set to an address: every script in Claude's tab reports that its page is going there,
+    /// in the script's own run and whenever asked afterwards (a page forging its note).
     var pageGoal: String?
 
     init(userTabs: [String] = ["https://mail.example.com/", "https://news.example.com/"]) {
@@ -64,7 +77,7 @@ final class FakeSafariTabs: ScriptRunner, @unchecked Sendable {
     }
 
     private func marked(_ tab: FakeTab, _ checkJS: String) -> Bool {
-        tab.mark.map { checkJS.contains("'\($0)'") } ?? false
+        tab.mark.map { checkJS.contains("\"\($0)\"") } ?? false
     }
 
     /// Like the tab scripts' guard: the count is the same, and the tab carries Claude's mark or
@@ -88,11 +101,12 @@ final class FakeSafariTabs: ScriptRunner, @unchecked Sendable {
     }
 
     private static func token(in js: String) -> String? {
-        guard let r = js.range(of: #"__latchkeyTab', \{ value: '([0-9a-f]+)'"#, options: .regularExpression) else {
+        // The token is spliced in as a JSON string literal (Semgrep rule, 2026-10-30).
+        guard let r = js.range(of: #"__latchkeyTab', \{ value: "([0-9a-f]+)""#, options: .regularExpression) else {
             return nil
         }
         let found = js[r]
-        return found.split(separator: "'").dropFirst(2).first.map(String.init)
+        return found.split(separator: "\"").dropFirst().first.map(String.init)
     }
 
     func run(_ script: String, _ args: [String]) async throws -> String {
@@ -129,20 +143,14 @@ final class FakeSafariTabs: ScriptRunner, @unchecked Sendable {
             case SafariBrowser.Script.tabJavaScript:
                 let (w, i) = try guarded(args)
                 let js = args[5]
+                let waits = args.count > 7 && args[7] == "yes"
                 windows[w].tabs[i].scriptsRun += 1
                 if let token = Self.token(in: js) { windows[w].tabs[i].mark = token }
-                var destination = ""
-                if js.contains("e.click()"), let next = clickGoesTo {
-                    clickGoesTo = nil
-                    destination = next
-                }
                 let tab = windows[w].tabs[i]
-                if !destination.isEmpty {
-                    loads += 1
-                    windows[w].tabs[i].url = destination
-                    windows[w].tabs[i].mark = nil
-                }
-                let answer: String
+                func encoded(_ s: String) -> String { String(data: try! JSONEncoder().encode(s), encoding: .utf8)! }
+                var answer: String
+                var goesTo: String?
+                var late = false  // the navigate event comes after the script returned
                 if js.contains("timeOrigin") {
                     answer = "\(loads)|complete|\(tab.url)"
                 } else if js.contains("latchkeyRead") {
@@ -153,10 +161,43 @@ final class FakeSafariTabs: ScriptRunner, @unchecked Sendable {
                 } else {
                     answer = "ok"
                 }
-                if destination.isEmpty, let goal = pageGoal { destination = goal }
-                // As the script answers: the noted address JSON-encoded, on one line.
-                let note = String(data: try! JSONEncoder().encode(destination), encoding: .utf8)!
-                return tab.url + "\n" + note + "\n" + answer
+                var inRun = pageGoal ?? ""
+                if js.contains("e.click()"), let next = clickGoesTo {
+                    clickGoesTo = nil
+                    goesTo = next
+                    // Only a click script that reports the link's address (Latchkey's own) does.
+                    if js.contains("closest('a[href]')") { answer += "\n" + encoded(next) }
+                } else if js.contains("e.click()"), let next = buttonGoesTo {
+                    buttonGoesTo = nil
+                    goesTo = next
+                    late = true
+                } else if js.contains("history.back()"), let next = backGoesTo {
+                    backGoesTo = nil
+                    goesTo = next
+                    if js.contains("entries()") { answer += "\n" + encoded(next) }
+                } else if let next = scriptGoesTo {
+                    scriptGoesTo = nil
+                    goesTo = next
+                    inRun = next
+                }
+                // The note asked for after the script: by an acting script that waits, the
+                // button's (the old page is still there when its event comes); a link's page
+                // is already gone; with no navigation, whatever the page reports.
+                let wrapped = js.contains("JSON.stringify([r === undefined")
+                let asked = wrapped ? waits : true
+                var later = ""
+                if asked {
+                    if goesTo == nil { later = pageGoal ?? "" } else if late && wrapped { later = goesTo! }
+                }
+                if let goesTo {
+                    loads += 1
+                    windows[w].tabs[i].url = goesTo
+                    windows[w].tabs[i].mark = nil
+                }
+                let run =
+                    wrapped
+                    ? String(data: try! JSONEncoder().encode([answer, encoded(inRun)]), encoding: .utf8)! : answer
+                return windows[w].tabs[i].url + "\n" + encoded(later) + "\n" + run
             case SafariBrowser.Script.tabLoad:
                 let (w, i) = try guarded(args)
                 loads += 1
@@ -385,14 +426,89 @@ final class Notes: @unchecked Sendable {
         #expect(SafariBrowser.goal(fromNote: #""https://a.example/ x""#) == nil, "a space")
     }
 
-    @Test func aClickToAnotherPageKeepsTheTab() async throws {
+    /// Live check 2026-10-29: in real Safari a link's `navigate` event comes after the click
+    /// script, and the new page has replaced the old one before Latchkey asks for the note, so
+    /// a same-site click lost Claude's tab. The click script's own answer names the link.
+    @Test func aLinkClickToAnotherPageKeepsTheTab() async throws {
         let fake = FakeSafariTabs()
-        let b = browser(fake)
+        let notes = Notes()
+        let b = browser(fake, notes: notes)
         _ = try await b.open("https://shop.example.com", newTab: false)
+        await b.age(by: 60)  // Claude's own load is long over
         fake.clickGoesTo = "https://shop.example.com/checkout"
         let page = try await b.click("e1")
         #expect(page.url == "https://shop.example.com/checkout")
         #expect(fake.claudeTabs.first?.mark != nil, "marked again on the new page")
+        let again = try await b.read(offset: 0)
+        #expect(again.url == "https://shop.example.com/checkout")
+        #expect(notes.all.isEmpty, "\(notes.all)")
+        #expect(fake.ownerTabs.allSatisfy { $0.scriptsRun == 0 && $0.mark == nil })
+    }
+
+    /// A button that sends the page elsewhere: its note comes after the click script, while
+    /// the acting script waits for it.
+    @Test func aButtonThatGoesToAnotherPageKeepsTheTab() async throws {
+        let fake = FakeSafariTabs()
+        let b = browser(fake)
+        _ = try await b.open("https://shop.example.com", newTab: false)
+        await b.age(by: 60)
+        fake.buttonGoesTo = "https://shop.example.com/done"
+        let page = try await b.click("e1")
+        #expect(page.url == "https://shop.example.com/done")
+    }
+
+    /// Back to the previous page: the entry's address comes from the back script itself.
+    @Test func goingBackKeepsTheTab() async throws {
+        let fake = FakeSafariTabs()
+        let b = browser(fake)
+        _ = try await b.open("https://shop.example.com", newTab: false)
+        await b.age(by: 60)
+        fake.backGoesTo = "https://shop.example.com/before"
+        let page = try await b.back()
+        #expect(page.url == "https://shop.example.com/before")
+    }
+
+    /// Security review 2026-10-29: a link to another site loses the tab (it stays open and is
+    /// named), and nothing of the Owner's is touched.
+    @Test func aLinkClickToAnotherSiteLosesTheTab() async throws {
+        let fake = FakeSafariTabs()
+        let notes = Notes()
+        let b = browser(fake, notes: notes)
+        _ = try await b.open("https://shop.example.com", newTab: false)
+        await b.age(by: 60)
+        fake.clickGoesTo = "https://pay.example.net/"
+        await #expect(throws: SafariBrowser.Failure.noWindow) { _ = try await b.click("e1") }
+        #expect(fake.claudeTabs.count == 1, "Claude's tab stays open")
+        #expect(notes.all.contains { $0.contains("lost track") })
+        #expect(fake.ownerTabs.allSatisfy { $0.scriptsRun == 0 && $0.mark == nil })
+    }
+
+    /// Security review 2026-10-29 (fourth round): a script of Claude's never opens the
+    /// allowance, so a script that sends the page to another page loses the tab, even on the
+    /// same site, although its note is now read in the script's own run.
+    @Test func aScriptThatGoesToAnotherPageLosesTheTab() async throws {
+        let fake = FakeSafariTabs()
+        let notes = Notes()
+        let b = browser(fake, notes: notes)
+        _ = try await b.open("https://shop.example.com", newTab: false)
+        await b.age(by: 60)
+        fake.scriptGoesTo = "https://shop.example.com/next"
+        _ = try await b.run("location.href = '/next'")
+        await #expect(throws: SafariBrowser.Failure.noWindow) { _ = try await b.read(offset: 0) }
+        #expect(notes.all.contains { $0.contains("lost track") })
+    }
+
+    /// The note a script's own run takes counts during Claude's click: a button whose handler
+    /// sets `location.href` fires the `navigate` event inside the click script.
+    @Test func aNoteInTheClickScriptsOwnRunCounts() async throws {
+        let fake = FakeSafariTabs()
+        let b = browser(fake)
+        _ = try await b.open("https://shop.example.com", newTab: false)
+        await b.age(by: 60)
+        fake.pageGoal = "https://shop.example.com/cart"
+        _ = try await b.click("e1")
+        #expect(await b.navigationState()?.addresses.contains("https://shop.example.com/cart") == true)
+        fake.pageGoal = nil
     }
 
     /// Security review 2026-10-29: an Owner's tab that slides into Claude's place between
@@ -630,6 +746,49 @@ final class PlaceBox: @unchecked Sendable {
             _ = try await page.run(PageScripts.tabMark("abc123") + "'ok'")
             #expect(try await page.run(PageScripts.takeDestination) == #""""#, "\(setup)")
         }
+    }
+
+    /// Real Safari, 2026-10-29: a script that sends the page elsewhere fires `navigate` during
+    /// the script, and the page is gone by the next script, so the note is taken in the same run.
+    @MainActor @Test func theNoteIsTakenInTheScriptsOwnRun() async throws {
+        let page = TestPage()
+        try await page.load()
+        let out = try await page.run(
+            PageScripts.tabMark("abc123") + PageScripts.inTab("(location.hash = 'next', 'done')"))
+        let both = try JSONDecoder().decode([String].self, from: Data(out.utf8))
+        #expect(both == ["done", #""https://shop.example.com/#next""#])
+        let none = try await page.run(PageScripts.tabMark("abc123") + PageScripts.inTab("undefined"))
+        #expect(try JSONDecoder().decode([String].self, from: Data(none.utf8)) == ["", #""""#])
+        let thrown = try await page.run(
+            PageScripts.tabMark("abc123") + PageScripts.inTab("(function () { throw 1; })()"))
+        #expect(try JSONDecoder().decode([String].self, from: Data(thrown.utf8)) == ["", #""""#])
+    }
+
+    /// A page without Latchkey's note at all (a new page) answers null, so waiting stops.
+    @MainActor @Test func aNewPageHasNoNote() async throws {
+        let page = TestPage()
+        try await page.load()
+        #expect(try await page.run(PageScripts.takeDestination) == "null")
+    }
+
+    /// The click script names the link it clicked, read after the page's own click handlers.
+    @MainActor @Test func theClickScriptNamesTheLink() async throws {
+        let page = TestPage()
+        try await page.load(
+            """
+            <html><body>
+            <a id="a" href="/next" onclick="this.href = '/tracked'; return false;">Next</a>
+            <a id="b" href="/other" target="_blank" onclick="return false;">Elsewhere</a>
+            <button id="c" onclick="return false;">Buy</button>
+            </body></html>
+            """)
+        _ = try await page.run(PageScripts.read(offset: 0))
+        let refs = try PageScripts.decode(try await page.run(PageScripts.read(offset: 0))).elements.map(\.ref)
+        #expect(refs.count == 3)
+        #expect(try await page.run(PageScripts.click(refs[0])) == "ok\n\"https://shop.example.com/tracked\"")
+        #expect(try await page.run(PageScripts.click(refs[1])) == "ok", "a new tab isn't Claude's tab")
+        #expect(try await page.run(PageScripts.click(refs[2])) == "ok")
+        #expect(try await page.run(PageScripts.back) == "ok", "no entry to go back to")
     }
 
     @Test func spellsAddressesAsRedirectsDo() {

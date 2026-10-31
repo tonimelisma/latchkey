@@ -158,3 +158,62 @@ script ran, and only Claude's own click, typing, or back may open the allowance;
 script of Claude's never does. What remains: a page can name one address on its own site per
 click of Claude's, and using it against the Owner would still need an Owner's tab at that
 address to slide into Claude's place, with the same tab count, within 16 s. Accepted.
+
+## Real Safari check (2026-10-29)
+
+The live check with app 0.8.47 (Claude's page a background tab in the Owner's window) found two
+faults the stand-in Safari didn't show.
+
+**A same-site click lost Claude's tab.** Reproduced with scripts against real Safari 27.0.1, in
+a window opened for the purpose, timing the Navigation API `navigate` event with
+`performance.now()`:
+
+- A link (`a.click()` on a Wikipedia article link): the click script returned, then the page
+  fired `beforeunload`, then `navigate` (`push`, the new address). The separate
+  `do JavaScript` that took the note right after the click sometimes ran before the event (note
+  empty, old page still marked) and sometimes after the new page had already replaced the old
+  one (no note, no mark); 0.5 s later the tab showed the new page, unmarked. With no note and no
+  mark, the next survey found no tab of Claude's: lost, as the Owner saw.
+- `location.href = …` in a script: `navigate` fired during the script, but by the next
+  `do JavaScript` Safari had replaced the page (new `timeOrigin`, no getter): the note was gone.
+- `history.back()`: no `navigate` in the old page before it went; the page came back from
+  Safari's back-forward cache with its mark (so back usually kept the tab, by luck).
+- The stand-in delivered every note in the separate step, so its tests passed.
+
+Options: (a) take the note in the same `do JavaScript` as the script (catches what fires during
+the script: `location.href`, handlers that navigate); (b) the click script answers the address
+of the link it clicked, read after the page's click handlers (Google and others rewrite links
+on click), and the back script the address of the entry back goes to (`navigation.entries()`);
+(c) the acting AppleScript asks again for the note for a short while after a click, typing, or
+back (catches buttons and forms whose event comes after the script, while the old page is
+still there); (d) accept any address on the same site for a while after Claude's click (no
+note needed, but an Owner's tab at any address of that site sliding into Claude's place would
+count: wider than the security review accepted). Chosen: (a), (b), and (c) together; (d)
+rejected. All three are the page's word, like the note, and count only as notes do: an address
+on the site Claude's tab showed, one per action, and only in Claude's click, typing, or back.
+The wait asks every 0.05 s for up to about 0.6 s and stops at a note, at a page without
+Latchkey's getter (`takeDestination` answers `null` there), or when the window's tab count
+changed, so it runs only in Claude's tab as the guard found it. Cost: a click that doesn't go
+anywhere takes about 0.6 s longer (the 1.5 s wait for a click that may navigate was already
+there). What still loses the tab: a redirect other than the usual spellings (a search form
+that redirects to an article), a page that navigates later by itself, a script of Claude's that
+navigates (the fourth round's rule), and a link to another site.
+
+**A long page came back in one piece.** The page script cut the text at 40,000 characters, but
+the answer added the list of links, buttons, and fields: on the Wikipedia article, 400 links
+(about 31,000 characters, most of it full `https://en.wikipedia.org/wiki/…` addresses), so
+71,455 characters in all, over Claude's result size. The answer said only "read on with an
+offset", not which, and compared JavaScript's length (UTF-16) with Swift's character count;
+and `browser_read` with a url ignored an offset given with it (it opened the page from the
+start). Options for fitting: page the links too (needs their place in the text; more code), cut
+the list at a share of the answer and give the text the rest (chosen: 20,000 for the list, a
+link on the page's own host shown by its path, those left out counted), or drop the list from
+later parts (Claude loses the references it needs to click). The answer now names the offset
+to read on from, positions count in UTF-16 as `offset` does, and a url with an offset reads from
+the offset.
+
+How it was checked: `macos/scripts/safari-check.sh` builds Latchkey's own `SafariBrowser` and
+page scripts into a small program and runs them against real Safari from a terminal. A test in
+the test host was tried first: the test host is its own app to macOS, and its first Apple Event
+to Safari opened an Automation prompt; while that prompt waited (behind the locked screen),
+Safari answered no window or tab scripting from any program.
