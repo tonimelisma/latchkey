@@ -40,7 +40,8 @@ terminal, and the hosted relay is Toni's alone.
 1. Given my relay is only for me, then it needs no email server: I claim it with a setup code
    Claude gives me, and nobody else can sign up.
 2. Given I lose my passkey, then I ask Claude Code, and it lets me make a new one for my same
-   account, so my Mac stays connected and nothing is lost (Toni, 2026-10-31).
+   account, so my Mac stays connected and nothing is lost (Toni, 2026-10-31); as with any
+   recovery, my old passkeys stop working and Claude asks me to sign in again.
 
 ### US3 (P1): It stays up to date and costs what I was told
 1. Given a new relay version is released, then my relay updates itself, and goes back to the
@@ -85,7 +86,8 @@ terminal, and the hosted relay is Toni's alone.
 - **FR-914** When the Owner has lost every passkey, Claude Code, signed in to the host as the
   Owner, shall be able to give the relay a new one-time recovery code; whoever enters it with the
   account's email address on the relay's page shall make a new passkey for that same account,
-  keeping its Mac pairing, approvals, and records. The code shall work once and expire within an
+  keeping its Mac pairing and records; as with email recovery, the old passkeys and Claude's
+  access end. The code shall work once and expire within an
   hour, and the relay shall record its use (FR-631). Why: no email server means no recovery link
   (Toni, 2026-10-31: "Claude Code resets it"); only someone who controls the host can do this.
 - **FR-909** A relay set up this way shall install new released versions by itself, check that

@@ -1,15 +1,22 @@
 # Run your own Latchkey relay
 
-The relay is one container with one data volume. It needs an email server for sign-up and
-recovery links, and an HTTPS address that Claude can reach.
+The relay is one container with one data volume, at an HTTPS address that Claude can reach.
+
+No technical background? Ask Claude Code to set one up for you on Google Cloud's free server: it
+follows [setup-with-claude.md](setup-with-claude.md) and asks you only for what only you can do.
+Everything that guide chooses (host, address, email, updates) is a setting described here.
 
 ## What you need
 
 - A server that is reachable from the internet, or a tunnel to one (see "HTTPS" below).
-- A domain name pointing at it, for example `relay.example.com`.
-- An SMTP account for sending email (your email provider, or a service such as Postmark,
-  Amazon SES, or Fastmail).
-- Docker.
+- A host name pointing at it: your own domain (`relay.example.com`) or, with no domain, a name
+  made from the server's fixed address such as `192-0-2-10.sslip.io`. Passkeys and Claude's
+  connector are tied to this name; moving to another later means new passkeys and adding the
+  connector again.
+- Either an SMTP account for sending email (your email provider, or a service such as Postmark,
+  Amazon SES, or Fastmail), or, for a relay that's only yours, a setup code instead (see "A
+  relay without an email server").
+- Docker or Podman.
 
 ## Start it
 
@@ -45,6 +52,7 @@ Then open `https://relay.example.com`, create your account, and continue with "C
 | `OPERATOR_LAW` | no | The law your terms are under, for example `California, USA`. The terms say so only when this is set. |
 | `OPERATOR_PROVIDERS` | no | The companies that handle your relay's data for you, in your own words, for example `Example Cloud (hosting) and Example Mail (email delivery)`. Shown in the privacy policy; without it the policy says "the operator's hosting and email providers". |
 | `BACKUP_DAYS` | no | How many days you keep backups of the server. The privacy policy mentions backups only when this is set. |
+| `SETUP_CODE` | with no email server | At least 12 letters and digits (dashes and spaces ignored). The first account is created by whoever enters it, with no email; then it opens nothing. Makes `SMTP_*` optional. See "A relay without an email server". |
 | `PORT` | no | Port inside the container, default 8080. |
 | `DATA_DIR` | no | Already `/data` in the image. |
 
@@ -215,6 +223,7 @@ docker exec latchkey-relay /relay account list
 | `account suspend <email> [reason]` | Signs the account out everywhere, removes Claude's access, disconnects its Mac, and refuses its sign-ins and its Mac until you lift it. Nothing is deleted, and the Mac stays paired. |
 | `account unsuspend <email>` | Lifts a suspension. The owner can sign in again and has to approve Claude again. |
 | `account delete <email>` | Deletes the account and everything stored about it, like the Delete account button. |
+| `account recovery-code <email>` | Prints a one-time code (one hour) its owner enters on "Lost your passkey?" to make a new passkey, for a relay without an email server. |
 | `block <email> [reason]` | The address can no longer sign up or sign in. If it has an account, the account is suspended. |
 | `unblock <email>` | Removes the block. An account that was suspended with it stays suspended until you run `account unsuspend`. |
 | `block list` | The blocked addresses, with when and why. |
@@ -237,6 +246,24 @@ docker exec latchkey-relay /relay account list
   `docker exec` passes along by itself. They need the key file the server uses (see "The key
   file"); without it they stop and change nothing.
 
+## A relay without an email server
+
+For a relay that's only yours, leave out every `SMTP_*` setting and set `SETUP_CODE` instead:
+
+```sh
+  -e SETUP_CODE=K7PQ-M2XD-9RTA \
+```
+
+- On the relay's page, enter your email address; the next step asks for the setup code instead
+  of sending one. After you make your passkey, sign-up is closed: the code opens nothing more,
+  and no one else can create an account.
+- With an email server as well, the first account still needs the setup code; later ones get
+  emailed codes as usual (`ALLOWED_EMAILS` decides who).
+- **Lost passkey:** nobody can email you a recovery code, so make one on the server and enter it
+  on "Lost your passkey?": `docker exec latchkey-relay /relay account recovery-code you@example.com`.
+  It works once, for an hour. As with any recovery, your old passkeys stop working and Claude
+  asks you to sign in again; your Mac stays connected.
+
 ## Connect
 
 1. **Claude:** in Claude, open Settings → Connectors → Add custom connector, and enter
@@ -254,5 +281,16 @@ docker rm -f latchkey-relay
 # run the same docker run command again
 ```
 
-The database is migrated automatically on start. The first start of a version with the key
-file encrypts the relay's stored keys (see "The key file").
+The database is migrated automatically on start. When a new version changes the database's
+layout, the relay first copies it to `/data/backups/relay-<time>-v<version>.db` and keeps the
+newest three. To go back to the version before, stop the relay, put that copy in place of
+`/data/relay.db`, and start the older image. The first start of a version with the key file
+encrypts the relay's stored keys (see "The key file").
+
+### Updating by itself (Podman)
+
+On a server with Podman, a Quadlet unit with `AutoUpdate=registry` keeps the relay on the newest
+release: `podman-auto-update.timer` checks daily, restarts the relay with the new image, and goes
+back to the previous image if the new one doesn't start. Add `Notify=true`, so the relay tells
+Podman when it's ready (it sends `READY=1` once it accepts connections) and a release that
+doesn't start is rolled back. [setup-with-claude.md](setup-with-claude.md) has a complete unit.

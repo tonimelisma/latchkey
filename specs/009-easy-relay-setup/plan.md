@@ -30,8 +30,9 @@ Mac app's choice (D9).
   instead of the emailed code's 15 minutes, since it passes through a person and Claude Code.
 - Without an email server, "Lost your passkey?" asks for the email address and goes straight to
   the code step ("Enter the recovery code you were given"), sending nothing. The existing code
-  step then lets the person make a new passkey for the same account: pairing, approvals, and
-  records stay (already the behavior of email recovery, plan 001 D5).
+  step then lets the person make a new passkey for the same account, as email recovery does
+  (plan 001 D5): the Mac's pairing and the records stay; the old passkeys stop working and
+  Claude's apps sign in again.
 - Using it is recorded as recovery is today (event `account_recovered`, FR-631), and the Mac is
   told on its next connection (existing notice).
 
@@ -54,10 +55,10 @@ Mac app's choice (D9).
 
 ## D5. Session cookie bound to the host (FR-912)
 
-- On HTTPS the session cookie is named `__Host-latchkey_session` (Path `/`, no Domain, Secure),
-  so no other site under a shared parent name (sslip.io) can set or read it. Over plain HTTP
-  (local development) the name stays `latchkey_session`. Changing the name signs everyone out
-  once; the deploy notes it.
+- Already the case (found while building, 2026-10-31): on HTTPS the session cookie is named
+  `__Host-latchkey_session` (Path `/`, no Domain, Secure), so no other site under a shared parent
+  name (sslip.io) can set or read it; over plain HTTP (local development) it is
+  `latchkey_session`. Nothing to change, and no one is signed out.
 
 ## D6. Public images with every deploy (FR-911)
 

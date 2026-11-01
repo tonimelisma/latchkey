@@ -33,6 +33,10 @@ milliseconds. Device public keys are stored as PKIX DER.
 - With built-in TLS (`ACME_EMAIL` set): TLS certificates and the ACME account key, in
   `DATA_DIR/certs`. Nothing about users.
 
+- Copies of the database made before a version changes its layout (spec 009 plan D4):
+  `DATA_DIR/backups/relay-<time>-v<version>.db`, the newest three, holding what the database
+  held then (its relay keys still encrypted under the key file). Deleted as newer copies are made.
+
 ## Not stored
 
 - Tool arguments or results.

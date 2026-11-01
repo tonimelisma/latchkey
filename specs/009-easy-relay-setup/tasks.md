@@ -19,8 +19,8 @@ side. Order: relay (T1–T7), guide (T8–T9), app (T10), wrap-up (T11).
   (a new small file).
 - **T4** [P] Database copy before migrations (D4, FR-909): tests that a copy is written only when
   migrations are pending and that three are kept; then the copy in `relay/internal/store/`.
-- **T5** [P] Host-bound cookie (D5, FR-912): tests for the cookie name on HTTPS and HTTP; then the
-  name. Files: `relay/internal/account/account.go` (after T1 and T2 if they touch it).
+- **T5** Host-bound cookie (D5, FR-912): already in place (`__Host-latchkey_session` on HTTPS);
+  nothing to do.
 - **T6** Browser test (D1, D8): the headless-Chrome test claims a fresh relay with a setup code
   and a virtual passkey, and recovers with a recovery code. Files: `relay/internal/e2e/`.
 - **T7** Images with every deploy (D6, FR-911): `deploy/tests` for tags and the refusal on a failed

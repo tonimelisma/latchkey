@@ -97,7 +97,8 @@ When someone comes back saying they can't sign in to their relay any more: sign 
 Then open the relay's page and say:
 
 > Click "Lost your passkey?", enter your email address and this code: **<code>**. Then save the
-> new passkey. Your Mac stays connected; nothing else changes. The code works once, for an hour.
+> new passkey. Your Mac stays connected. Claude will ask you to sign in to Latchkey again; do
+> it with the new passkey. The code works once, for an hour.
 
 ## Google Cloud (the default host)
 
