@@ -144,6 +144,48 @@ func (b *Browser) SignUp(base, email string, codeFor func(email string) (string,
 	return err
 }
 
+// Claim creates a fresh relay's account with its setup code instead of an emailed one (spec 009
+// FR-907): the code step must ask for the setup code, which doesn't submit by itself.
+func (b *Browser) Claim(base, email, setupCode string) error {
+	b.email = email
+	if err := b.enterEmail(base + "/signin"); err != nil {
+		return fmt.Errorf("sign-in page: %w", err)
+	}
+	if err := b.run(chromedp.WaitVisible(`//h1[@data-code="setup" and not(@hidden)]`)); err != nil {
+		return fmt.Errorf("setup code step: %w", err)
+	}
+	if err := b.run(
+		chromedp.SendKeys(chromedp.ID("code"), setupCode),
+		chromedp.Click(chromedp.CSS(`#code-form button[type=submit]`)),
+		chromedp.WaitVisible(chromedp.CSS(`button[data-action=create]`)),
+		chromedp.Click(chromedp.CSS(`button[data-action=create]`)),
+	); err != nil {
+		return fmt.Errorf("create passkey: %w", err)
+	}
+	_, err := b.waitURL(base + "/account")
+	return err
+}
+
+// RecoverWithCode makes a new passkey on "Lost your passkey?" with a recovery code given by the
+// relay's operator (spec 009 FR-914): the code step must ask for that code, not an email.
+func (b *Browser) RecoverWithCode(base, code string) error {
+	if err := b.enterEmail(base + "/signin?recover=1"); err != nil {
+		return fmt.Errorf("recovery page: %w", err)
+	}
+	if err := b.run(chromedp.WaitVisible(`//h1[@data-code="recovery" and not(@hidden)]`)); err != nil {
+		return fmt.Errorf("recovery code step: %w", err)
+	}
+	if err := b.run(
+		chromedp.SendKeys(chromedp.ID("code"), code), // six digits submit by themselves
+		chromedp.WaitVisible(chromedp.CSS(`button[data-action=create]`)),
+		chromedp.Click(chromedp.CSS(`button[data-action=create]`)),
+	); err != nil {
+		return fmt.Errorf("create passkey: %w", err)
+	}
+	_, err := b.waitURL(base + "/account")
+	return err
+}
+
 // enterEmail opens the sign-in page at url and continues with the Browser's email.
 func (b *Browser) enterEmail(url string) error {
 	return b.run(

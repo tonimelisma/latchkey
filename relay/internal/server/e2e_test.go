@@ -32,21 +32,30 @@ var codeRE = regexp.MustCompile(`\b\d{6}\b`)
 // startRelay runs the fully assembled relay on localhost.
 func startRelay(t *testing.T) (base string, mail *account.MemoryMailer) {
 	t.Helper()
+	mail = &account.MemoryMailer{}
+	base, _ = startRelayWith(t, func(o *Options) { o.Mailer = mail })
+	return base, mail
+}
+
+// startRelayWith runs the assembled relay with other options, and returns its database too.
+func startRelayWith(t *testing.T, tweak func(*Options)) (string, *store.Store) {
+	t.Helper()
 	ctx := context.Background()
 	db, err := store.Open(ctx, filepath.Join(t.TempDir(), "relay.db"))
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = db.Close() })
 	srv := httptest.NewUnstartedServer(nil)
 	_, port, _ := net.SplitHostPort(srv.Listener.Addr().String())
-	base = "http://localhost:" + port
+	base := "http://localhost:" + port
 	public, _ := url.Parse(base)
-	mail = &account.MemoryMailer{}
-	r, err := New(ctx, Options{PublicURL: public, Store: db, Mailer: mail, Logger: slog.Default(), AllowedClients: oauth.AnyClientHost()})
+	o := Options{PublicURL: public, Store: db, Logger: slog.Default(), AllowedClients: oauth.AnyClientHost()}
+	tweak(&o)
+	r, err := New(ctx, o)
 	require.NoError(t, err)
 	srv.Config.Handler = r.Handler
 	srv.Start()
 	t.Cleanup(func() { r.Hub.Close(); srv.Close() })
-	return base, mail
+	return base, db
 }
 
 func codeFrom(mail *account.MemoryMailer) func(string) (string, error) {
@@ -59,6 +68,30 @@ func codeFrom(mail *account.MemoryMailer) func(string) (string, error) {
 		}
 		return "", errors.New("no email sent")
 	}
+}
+
+// A relay with no email server, as Claude Code sets one up (spec 009): claimed in real Chrome with
+// its setup code, then recovered with a code from the operator's command.
+func TestClaimAndRecoverInBrowser(t *testing.T) {
+	if testing.Short() {
+		t.Skip("browser test")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+	b, err := e2e.NewBrowser(ctx)
+	if errors.Is(err, e2e.ErrNoChrome) {
+		t.Skip("Chrome is not installed; set CHROME_PATH to run the browser test")
+	}
+	require.NoError(t, err)
+	defer b.Close()
+
+	base, db := startRelayWith(t, func(o *Options) { o.SetupCode = "K7PQ-M2XD-9RTA" })
+	require.NoError(t, b.Claim(base, "owner@example.com", "k7pq-m2xd-9rta"), "claim with the setup code")
+	require.NoError(t, b.SignOut())
+
+	code, err := account.RecoveryCode(ctx, db, "owner@example.com", time.Now())
+	require.NoError(t, err)
+	require.NoError(t, b.RecoverWithCode(base, code), "recover with the operator's code")
 }
 
 // TestEndToEndInBrowser is the Owner's whole first-run path in real Chrome with a passkey:
