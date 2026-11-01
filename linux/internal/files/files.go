@@ -216,7 +216,7 @@ func (f *Files) search(ctx context.Context, root, query string, limit int) tools
 	slices.SortFunc(hits, func(a, b hit) int { return b.mod.Compare(a.mod) })
 	var b strings.Builder
 	if len(hits) == 0 {
-		b.WriteString(fmt.Sprintf("No file under %s has %q in its name or text.", root, query))
+		fmt.Fprintf(&b, "No file under %s has %q in its name or text.", root, query)
 	} else {
 		fmt.Fprintf(&b, "Files under %s with %q, newest first:\n", root, query)
 		for i, h := range hits {
@@ -228,7 +228,7 @@ func (f *Files) search(ctx context.Context, root, query string, limit int) tools
 	}
 	switch stopped {
 	case "time":
-		b.WriteString(fmt.Sprintf("\n(The search stopped after %s; search a smaller folder with path to see more.)", f.SearchTime))
+		fmt.Fprintf(&b, "\n(The search stopped after %s; search a smaller folder with path to see more.)", f.SearchTime)
 	case "count":
 		b.WriteString("\n(Many more files match; narrow the query or the folder.)")
 	}
@@ -241,7 +241,7 @@ func containsText(path, needle string) bool {
 	if err != nil || info.Size() > 2<<20 || info.Size() == 0 {
 		return false
 	}
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(path) //nolint:gosec // search reads the files it walks, by design (FR-1040)
 	if err != nil || isBinary(data) {
 		return false
 	}

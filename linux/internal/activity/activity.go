@@ -46,7 +46,7 @@ func Open(path string) (*Log, error) {
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return nil, err
 	}
-	f, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600) //nolint:gosec // the program's own log, in its data folder
 	if err != nil {
 		return nil, err
 	}
@@ -93,7 +93,7 @@ func cut(s string, n int) string {
 
 // Read returns the entries at or after since, oldest first.
 func Read(path string, since time.Time) ([]Entry, error) {
-	f, err := os.Open(path)
+	f, err := os.Open(path) //nolint:gosec // the program's own log, in its data folder
 	if err != nil {
 		return nil, err
 	}

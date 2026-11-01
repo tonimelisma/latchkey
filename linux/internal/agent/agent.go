@@ -59,7 +59,9 @@ type closeError struct {
 	reason string
 }
 
-func (e closeError) Error() string { return fmt.Sprintf("closed by the relay (%d %s)", e.code, e.reason) }
+func (e closeError) Error() string {
+	return fmt.Sprintf("closed by the relay (%d %s)", e.code, e.reason)
+}
 
 // Run keeps the server connected until ctx ends, then says goodbye.
 func (a *Agent) Run(ctx context.Context) error {
@@ -231,6 +233,7 @@ func (a *Agent) session(ctx context.Context, s config.Settings, key *devicekey.K
 	}
 	a.mu.Lock()
 	a.settings, a.toolset, a.running = s, toolset, map[string]context.CancelFunc{}
+	enableShell(a.Shell, s)
 	a.mu.Unlock()
 	name := s.MachineName()
 	if welcome.Name != "" {
@@ -426,6 +429,18 @@ func (a *Agent) heartbeat(ctx context.Context, c *conn, every time.Duration) err
 	}
 }
 
+// enableShell sets Shell's own switch from the settings.
+func enableShell(sh *shell.Shell, s config.Settings) {
+	sh.SetEnabled(s.Shell == config.On && !s.Paused, shellOffReason(s))
+}
+
+func shellOffReason(s config.Settings) string {
+	if s.Paused {
+		return "the server's owner paused Claude's access"
+	}
+	return "the server's owner turned Shell off"
+}
+
 // errReconnect ends a session so the next hello carries a new name.
 var errReconnect = errors.New("the name changed: reconnecting")
 
@@ -453,12 +468,9 @@ func (a *Agent) watchSettings(ctx context.Context, c *conn) error {
 		if s.DeviceID != old.DeviceID || s.Relay != old.Relay || s.MachineName() != old.MachineName() {
 			return errReconnect
 		}
+		enableShell(a.Shell, s) // first refuse new commands, then stop the running ones
 		if (old.Shell == config.On && s.Shell != config.On) || (!old.Paused && s.Paused) {
-			why := "the server's owner turned Shell off"
-			if s.Paused {
-				why = "the server's owner paused Claude's access"
-			}
-			a.Shell.StopAll(why)
+			a.Shell.StopAll(shellOffReason(s))
 		}
 		toolset := a.toolsFor(s)
 		a.mu.Lock()

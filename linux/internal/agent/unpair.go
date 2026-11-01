@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -59,7 +60,8 @@ func Unpair(ctx context.Context, s config.Settings, key *devicekey.Key, version 
 	}
 	for { // the relay answers by closing with 4002
 		if _, err := c.read(ctx); err != nil {
-			if ce, ok := err.(closeError); ok && ce.code == agentproto.CloseRevoked {
+			var ce closeError
+			if errors.As(err, &ce) && ce.code == agentproto.CloseRevoked {
 				return nil
 			}
 			return fmt.Errorf("the relay didn't confirm the removal: %w", err)

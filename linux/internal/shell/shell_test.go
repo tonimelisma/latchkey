@@ -122,6 +122,19 @@ func TestKeptLeftoversHaveALease(t *testing.T) {
 	assert.Empty(t, e.sh.Footer(), "turning Shell off removes kept leftovers too")
 }
 
+// With Shell switched off, no command starts, whatever a call read before (security review,
+// 2026-10-31).
+func TestSwitchedOffRefusesCommands(t *testing.T) {
+	e := setup(t)
+	e.sh.SetEnabled(false, "the server's owner turned Shell off")
+	out := e.do(e.run, tools.Args{"command": "echo should-not-run"})
+	assert.Contains(t, out, "the server's owner turned Shell off")
+	assert.NotContains(t, out, "should-not-run\n")
+	e.sh.SetEnabled(true, "")
+	out = e.do(e.run, tools.Args{"command": "echo runs"})
+	assert.Contains(t, out, "runs\n")
+}
+
 // sudo never waits for a password: the wrapper runs it with -n, and the answer says how the
 // owner can allow it (FR-1031). -k makes sudo ignore cached credentials, so a password is always
 // needed here; nothing runs as root.
@@ -129,7 +142,7 @@ func TestSudoAnswersAtOnce(t *testing.T) {
 	if _, err := os.Stat("/usr/bin/sudo"); err != nil {
 		t.Skip("no sudo here")
 	}
-	if exec.Command("/usr/bin/sudo", "-n", "true").Run() == nil {
+	if exec.CommandContext(context.Background(), "/usr/bin/sudo", "-n", "true").Run() == nil {
 		t.Skip("this user has passwordless sudo, so sudo never needs a password here")
 	}
 	e := setup(t)

@@ -40,7 +40,7 @@ func Load(path string) (*Key, error) {
 	if info.Mode().Perm()&0o077 != 0 {
 		return nil, fmt.Errorf("%s can be read by other users (mode %o); it must be 600", path, info.Mode().Perm())
 	}
-	der, err := os.ReadFile(path)
+	der, err := os.ReadFile(path) //nolint:gosec // the program's own key file, in its data folder
 	if err != nil {
 		return nil, err
 	}

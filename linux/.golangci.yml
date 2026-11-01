@@ -1,0 +1,29 @@
+version: "2"
+
+linters:
+  default: standard
+  enable:
+    - bodyclose
+    - errorlint
+    - gocritic
+    - gosec
+    - misspell
+    - noctx
+    - testifylint
+    - unconvert
+    - unparam
+  exclusions:
+    rules:
+      - path: _test\.go
+        linters: [gosec, bodyclose] # test helpers close bodies in t.Cleanup
+      - path: cmd/(maccheck|localcheck)/
+        linters: [gosec] # local check tools; they only touch their own temporary files
+
+formatters:
+  enable:
+    - gofumpt
+    - goimports
+  settings:
+    goimports:
+      local-prefixes:
+        - github.com/tonimelisma/latchkey

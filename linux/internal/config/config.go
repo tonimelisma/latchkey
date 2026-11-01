@@ -95,6 +95,7 @@ type Paths struct {
 	Update   string // Data/update.json
 	Jobs     string // Cache/jobs: each command's scratch folder
 	Bin      string // Cache/bin: the sudo wrapper, first on every command's PATH
+	Command  string // ~/.local/bin/latchkey: a link to the program, for the Owner's shell
 }
 
 // ServiceFile is the systemd unit's path.
@@ -131,6 +132,7 @@ func PathsFor(home, xdgConfig, xdgData, xdgCache string) Paths {
 	p.Update = filepath.Join(p.Data, "update.json")
 	p.Jobs = filepath.Join(p.Cache, "jobs")
 	p.Bin = filepath.Join(p.Cache, "bin")
+	p.Command = filepath.Join(home, ".local", "bin", "latchkey")
 	return p
 }
 

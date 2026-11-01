@@ -8,6 +8,7 @@ package update
 import (
 	"context"
 	"crypto/ed25519"
+	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -177,14 +178,21 @@ func (u *Updater) download(ctx context.Context, url string, limit int64) ([]byte
 	return data, nil
 }
 
-// Verify checks a release file against its signature (base64 Ed25519 over the file's bytes).
-func Verify(pub ed25519.PublicKey, data, sig []byte) error {
+// Signed is what a release signature covers: the program's architecture, its version, and its
+// SHA-256, so a signed older program can't be passed off under a newer release's tag (security
+// review, 2026-10-31).
+func Signed(arch, version string, data []byte) []byte {
+	return fmt.Appendf(nil, "latchkey-linux-%s %s %x\n", arch, version, sha256.Sum256(data))
+}
+
+// Verify checks a release program against its signature (base64 Ed25519 over Signed).
+func Verify(pub ed25519.PublicKey, arch, version string, data, sig []byte) error {
 	raw, err := base64.StdEncoding.DecodeString(strings.TrimSpace(string(sig)))
 	if err != nil || len(raw) != ed25519.SignatureSize {
 		return errors.New("the signature is malformed")
 	}
-	if !ed25519.Verify(pub, data, raw) {
-		return errors.New("the signature doesn't match: the download isn't a release signed by Latchkey's key")
+	if !ed25519.Verify(pub, Signed(arch, version, data), raw) {
+		return fmt.Errorf("the signature doesn't match: the download isn't Latchkey's signed release %s for %s", version, arch)
 	}
 	return nil
 }
@@ -211,11 +219,11 @@ func (u *Updater) Update(ctx context.Context) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if err := Verify(u.PubKey, bin, sig); err != nil {
+	if err := Verify(u.PubKey, runtime.GOARCH, rel.Version, bin, sig); err != nil {
 		return "", err
 	}
 	program := filepath.Join(u.Paths.Program, "latchkey")
-	if err := os.MkdirAll(u.Paths.Program, 0o755); err != nil {
+	if err := os.MkdirAll(u.Paths.Program, 0o755); err != nil { //nolint:gosec // the program's folder; the program must be runnable
 		return "", err
 	}
 	if err := copyFile(program, program+".previous"); err != nil {
@@ -229,7 +237,7 @@ func (u *Updater) Update(ctx context.Context) (string, error) {
 }
 
 func copyFile(from, to string) error {
-	data, err := os.ReadFile(from)
+	data, err := os.ReadFile(from) //nolint:gosec // the program's own file, being kept as the previous version
 	if err != nil {
 		return err
 	}

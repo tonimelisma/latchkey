@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 	"time"
 
@@ -47,9 +48,14 @@ func newGitHub(t *testing.T) *fakeGitHub {
 
 // release publishes a version whose program is body, signed with priv.
 func (g *fakeGitHub) release(tag string, body []byte, priv ed25519.PrivateKey) {
+	g.releaseSignedAs(tag, strings.TrimPrefix(tag, update.TagPrefix), body, priv)
+}
+
+// releaseSignedAs publishes under tag a program signed as version signedAs.
+func (g *fakeGitHub) releaseSignedAs(tag, signedAs string, body []byte, priv ed25519.PrivateKey) {
 	name := "latchkey-linux-" + runtime.GOARCH
 	g.files["/dl/"+tag+"/"+name] = body
-	g.files["/dl/"+tag+"/"+name+".sig"] = []byte(base64.StdEncoding.EncodeToString(ed25519.Sign(priv, body)) + "\n")
+	g.files["/dl/"+tag+"/"+name+".sig"] = []byte(base64.StdEncoding.EncodeToString(ed25519.Sign(priv, update.Signed(runtime.GOARCH, signedAs, body))) + "\n")
 	g.releases = append(g.releases, map[string]any{"tag_name": tag, "assets": []map[string]any{
 		{"name": name, "browser_download_url": g.srv.URL + "/dl/" + tag + "/" + name},
 		{"name": name + ".sig", "browser_download_url": g.srv.URL + "/dl/" + tag + "/" + name + ".sig"},
@@ -113,6 +119,17 @@ func TestUpdateRefusesABadSignature(t *testing.T) {
 	require.ErrorContains(t, err, "signature doesn't match")
 	data, _ := os.ReadFile(program)
 	assert.Equal(t, "old program", string(data), "nothing replaced")
+}
+
+// An old signed program relabeled with a newer release's tag is refused: the signature covers the
+// version (security review, 2026-10-31).
+func TestUpdateRefusesARelabeledOldRelease(t *testing.T) {
+	u, g, priv, program := setup(t, "0.1.5")
+	g.releaseSignedAs("server-v0.2.0", "0.1.0", []byte("old vulnerable program"), priv)
+	_, err := u.Update(context.Background())
+	require.ErrorContains(t, err, "isn't Latchkey's signed release 0.2.0")
+	data, _ := os.ReadFile(program)
+	assert.Equal(t, "old program", string(data))
 }
 
 func TestRollBackAfterThreeUnconfirmedStarts(t *testing.T) {

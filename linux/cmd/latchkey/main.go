@@ -123,7 +123,7 @@ func fail(err error) {
 func change(p config.Paths, f func(*config.Settings)) error {
 	s, err := config.Load(p)
 	if errors.Is(err, os.ErrNotExist) {
-		return errors.New("Latchkey isn't set up here yet: run latchkey install --relay https://your-relay")
+		return errors.New("this server isn't set up yet: run latchkey install --relay https://your-relay")
 	}
 	if err != nil {
 		return err
@@ -171,7 +171,7 @@ func install(p config.Paths, args []string) error {
 		r := strings.TrimRight(strings.TrimSpace(*relay), "/")
 		// Plain http only for a relay on this machine, or a test relay when asked for explicitly.
 		if !strings.HasPrefix(r, "https://") && !strings.HasPrefix(r, "http://localhost") &&
-			!(strings.HasPrefix(r, "http://") && os.Getenv("LATCHKEY_TEST_INSECURE_RELAY") == "1") {
+			(!strings.HasPrefix(r, "http://") || os.Getenv("LATCHKEY_TEST_INSECURE_RELAY") != "1") {
 			return errors.New("the relay's address starts with https://")
 		}
 		if r != s.Relay {
@@ -225,8 +225,9 @@ func install(p config.Paths, args []string) error {
 	if err := setup.InstallService(p, setup.Terminal); err != nil {
 		return err
 	}
-	fmt.Printf("\nDone. Claude can reach this server through your Latchkey connector.\nShell is %s and Files is %s; change them with latchkey shell and latchkey files.\nProgram: %s\n",
-		s.Shell, filesWord(s.Files), program)
+	fmt.Printf("\nDone. Claude can reach this server through your Latchkey connector.\nShell is %s and Files is %s; change them with latchkey shell and latchkey files.\n"+
+		"Program: %s (the latchkey command is in %s; log in again if your shell doesn't find it yet)\n",
+		s.Shell, filesWord(s.Files), program, p.Command)
 	return nil
 }
 
@@ -257,7 +258,7 @@ func status(p config.Paths) error {
 	if s.Paused {
 		fmt.Println("Paused: every call is answered \"paused\" (latchkey resume)")
 	}
-	if out, err := exec.Command("systemctl", "is-active", "latchkey").Output(); err == nil || len(out) > 0 {
+	if out, err := exec.CommandContext(context.Background(), "systemctl", "is-active", "latchkey").Output(); err == nil || len(out) > 0 {
 		fmt.Println("Service: " + strings.TrimSpace(string(out)))
 	}
 	if entries, err := activity.Read(p.Activity, time.Time{}); err == nil {
@@ -365,7 +366,7 @@ func run(p config.Paths) error {
 		Shell: shell.New(p), Files: files.New(p),
 		OnWelcome: up.Confirm,
 		Stopping: func() bool {
-			out, _ := exec.Command("systemctl", "is-system-running").Output()
+			out, _ := exec.CommandContext(context.Background(), "systemctl", "is-system-running").Output()
 			return strings.TrimSpace(string(out)) == "stopping"
 		},
 	}

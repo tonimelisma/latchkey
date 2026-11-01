@@ -68,7 +68,7 @@ func (f *Files) change(_ context.Context, a tools.Args) tools.Result {
 		find, _ := a.String("find")
 		return editFile(path, find, text)
 	case "create_folder":
-		if err := os.MkdirAll(path, 0o755); err != nil {
+		if err := os.MkdirAll(path, 0o755); err != nil { //nolint:gosec // the Owner's own folder, made as mkdir makes it (the umask applies)
 			return tools.Failf("%s", describeErr(path, err))
 		}
 		return tools.Text("Created the folder " + path + ".")
@@ -149,14 +149,14 @@ func writeFile(path, text string, existingOK, appendTo bool) tools.Result {
 	if exists && !existingOK {
 		return tools.Failf("%s already exists; pass overwrite to replace it, or use append or edit.", path)
 	}
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil { //nolint:gosec // the Owner's own folder, made as mkdir makes it (the umask applies)
 		return tools.Failf("%s", describeErr(filepath.Dir(path), err))
 	}
 	flags := os.O_WRONLY | os.O_CREATE | os.O_TRUNC
 	if appendTo {
 		flags = os.O_WRONLY | os.O_CREATE | os.O_APPEND
 	}
-	file, err := os.OpenFile(path, flags, 0o644)
+	file, err := os.OpenFile(path, flags, 0o644) //nolint:gosec // Files opens the paths Claude names, by design (FR-1043)
 	if err != nil {
 		return tools.Failf("%s", describeErr(path, err))
 	}
@@ -181,7 +181,7 @@ func editFile(path, find, text string) tools.Result {
 	if err != nil {
 		return tools.Failf("%s", describeErr(path, err))
 	}
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(path) //nolint:gosec // Files opens the paths Claude names, by design (FR-1043)
 	if err != nil {
 		return tools.Failf("%s", describeErr(path, err))
 	}
@@ -193,7 +193,7 @@ func editFile(path, find, text string) tools.Result {
 		return tools.Failf("The passage appears %d times in %s; give a longer one that appears once.", n, path)
 	}
 	out := strings.Replace(string(data), find, text, 1)
-	if err := os.WriteFile(path, []byte(out), info.Mode().Perm()); err != nil {
+	if err := os.WriteFile(path, []byte(out), info.Mode().Perm()); err != nil { //nolint:gosec // Files writes the paths Claude names, by design (FR-1043)
 		return tools.Failf("%s", describeErr(path, err))
 	}
 	return tools.Text("Changed the passage in " + path + ".")
@@ -206,7 +206,7 @@ func move(from, to string) tools.Result {
 	if _, err := os.Lstat(to); err == nil {
 		return tools.Failf("%s already exists; moving never replaces a file.", to)
 	}
-	if err := os.MkdirAll(filepath.Dir(to), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(to), 0o755); err != nil { //nolint:gosec // the Owner's own folder, made as mkdir makes it (the umask applies)
 		return tools.Failf("%s", describeErr(filepath.Dir(to), err))
 	}
 	err := os.Rename(from, to)
@@ -253,7 +253,7 @@ func copyAny(from, to string) tools.Result {
 				return err
 			}
 			n++
-			return os.Symlink(target, dest)
+			return os.Symlink(target, dest) //nolint:gosec // copying what Claude names; another program racing it could change it anyway (no fence, FR-1032)
 		case d.Type().IsRegular():
 			n++
 			return copyFile(p, dest, info.Mode().Perm())
@@ -270,15 +270,15 @@ func copyAny(from, to string) tools.Result {
 }
 
 func copyFile(from, to string, mode os.FileMode) error {
-	if err := os.MkdirAll(filepath.Dir(to), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(to), 0o755); err != nil { //nolint:gosec // the Owner's own folder, made as mkdir makes it (the umask applies)
 		return err
 	}
-	src, err := os.Open(from)
+	src, err := os.Open(from) //nolint:gosec // Files opens the paths Claude names, by design (FR-1043)
 	if err != nil {
 		return err
 	}
 	defer func() { _ = src.Close() }()
-	dst, err := os.OpenFile(to, os.O_WRONLY|os.O_CREATE|os.O_EXCL, mode)
+	dst, err := os.OpenFile(to, os.O_WRONLY|os.O_CREATE|os.O_EXCL, mode) //nolint:gosec // Files opens the paths Claude names, by design (FR-1043)
 	if err != nil {
 		return err
 	}

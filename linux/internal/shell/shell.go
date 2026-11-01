@@ -43,9 +43,23 @@ type Shell struct {
 	sudo   string // the real sudo, "" if none
 	now    func() time.Time
 
-	mu   sync.Mutex
-	jobs map[string]*job
-	quit chan struct{}
+	mu       sync.Mutex
+	jobs     map[string]*job
+	quit     chan struct{}
+	disabled string // why commands are refused (Shell off or paused); "" while they may start
+}
+
+// SetEnabled lets commands start, or refuses them from now on with the reason, under the same
+// lock start takes: a call that read the settings just before Shell was turned off can't start a
+// command after it (security review, 2026-10-31). Turning Shell off then stops what runs.
+func (s *Shell) SetEnabled(on bool, why string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if on {
+		s.disabled = ""
+	} else {
+		s.disabled = why
+	}
 }
 
 type job struct {
@@ -200,6 +214,11 @@ func (s *Shell) run(ctx context.Context, a tools.Args) tools.Result {
 // start launches a command.
 func (s *Shell) start(command, folder string, keep time.Duration) (*job, error) {
 	s.mu.Lock()
+	if s.disabled != "" {
+		why := s.disabled
+		s.mu.Unlock()
+		return nil, errors.New(why)
+	}
 	running := 0
 	for _, j := range s.jobs {
 		if j.finished.IsZero() {
@@ -238,7 +257,7 @@ func (s *Shell) start(command, folder string, keep time.Duration) (*job, error) 
 			j.group, groupFile = path, f
 		}
 	}
-	cmd := exec.Command(s.bash, "-l", "-c", `PATH="$LATCHKEY_BIN:$PATH"; export PATH; eval "$LATCHKEY_COMMAND"`)
+	cmd := exec.CommandContext(context.Background(), s.bash, "-l", "-c", `PATH="$LATCHKEY_BIN:$PATH"; export PATH; eval "$LATCHKEY_COMMAND"`) //nolint:gosec // Shell runs the Owner's commands for Claude, by design (FR-1030); the command is passed in the environment, not spliced in
 	cmd.Dir = dir
 	cmd.Env = append(baseEnv(),
 		"LATCHKEY_COMMAND="+command, "LATCHKEY_BIN="+s.paths.Bin, "LATCHKEY_JOB="+id,
@@ -259,8 +278,12 @@ func (s *Shell) start(command, folder string, keep time.Duration) (*job, error) 
 	j.cmd, j.pty = cmd, f
 	s.mu.Lock()
 	s.jobs[id] = j
+	turnedOff := s.disabled // turned off while it was starting: StopAll may have missed it
 	s.mu.Unlock()
 	go s.follow(j)
+	if turnedOff != "" {
+		s.stop(j, turnedOff)
+	}
 	return j, nil
 }
 

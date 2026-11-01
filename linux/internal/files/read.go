@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/xml"
+	"errors"
 	"fmt"
 	"image"
 	_ "image/gif" // decodes GIF for scaling
@@ -82,7 +83,7 @@ func (f *Files) read(_ context.Context, a tools.Args) tools.Result {
 		return tools.Failf("%s isn't a regular file (it's a %s).", path, info.Mode().Type())
 	}
 	head := make([]byte, 512)
-	file, err := os.Open(path)
+	file, err := os.Open(path) //nolint:gosec // Files opens the paths Claude names, by design (FR-1040)
 	if err != nil {
 		return tools.Failf("%s", describeErr(path, err))
 	}
@@ -109,7 +110,7 @@ func (f *Files) read(_ context.Context, a tools.Args) tools.Result {
 	if info.Size() > maxTextFile {
 		return tools.Failf("%s is %s, too large to read as text; read a part of it with Shell (head, tail, grep).", path, size(info.Size()))
 	}
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(path) //nolint:gosec // Files reads the paths Claude names, by design (FR-1040)
 	if err != nil {
 		return tools.Failf("%s", describeErr(path, err))
 	}
@@ -202,7 +203,7 @@ func documentText(path, ext string) (string, error) {
 	inText := textTag == ""
 	for {
 		tok, err := dec.Token()
-		if err == io.EOF {
+		if errors.Is(err, io.EOF) {
 			break
 		}
 		if err != nil {
@@ -243,7 +244,7 @@ func isImage(head []byte) bool {
 // readImage answers with the picture, scaled down when it is larger than Claude takes.
 func readImage(path string, fileSize int64, head []byte) tools.Result {
 	mime := http.DetectContentType(head)
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(path) //nolint:gosec // Files reads the paths Claude names, by design (FR-1040)
 	if err != nil {
 		return tools.Failf("%s", describeErr(path, err))
 	}
