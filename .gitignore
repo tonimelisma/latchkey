@@ -42,3 +42,4 @@ __pycache__/
 
 # Claude Code worktrees (one per session or task)
 .claude/worktrees/
+plugin/evals/results/

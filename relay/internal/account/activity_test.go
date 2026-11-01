@@ -20,7 +20,7 @@ var olderRE = regexp.MustCompile(`href="(/account/activity\?before=\d+)"`)
 func entries(body string) int { return strings.Count(body, `<li class="entry`) }
 
 // FR-651, FR-654, FR-655: the account page shows the last 10 entries, a link to the rest, how to
-// add a machine with this relay's install line, and the connector address.
+// add a machine with this relay's install line, the connector address, and the plugin.
 func TestAccountPageParts(t *testing.T) {
 	e := setup(t)
 	b := e.browser()
@@ -40,6 +40,7 @@ func TestAccountPageParts(t *testing.T) {
 	assert.Contains(t, strings.ReplaceAll(page.body, "<wbr>", ""), "linux/install.sh | sh -s -- "+e.base)
 	assert.Contains(t, strings.ReplaceAll(page.body, "<wbr>", ""), e.base+"/mcp", "the connector address, even with no Claude app yet")
 	assert.Contains(t, page.body, "data-copy", "copy buttons")
+	assert.Regexp(t, `Add marketplace</strong>[^<]*<code>tonimelisma/latchkey</code>`, page.body, "the plugin's catalog to add (spec 011 FR-1112)")
 	for _, part := range []string{"Machines", "Add a machine", "Claude", "Recent activity", "Account"} {
 		assert.Contains(t, page.body, ">"+part+"</h2>")
 	}

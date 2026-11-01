@@ -74,7 +74,7 @@ Mac app's choice (D9).
 
 ## D7. The guide (FR-901, FR-902, FR-904, FR-905, FR-906, FR-910)
 
-- `docs/setup-with-claude.md` as drafted: Google Cloud's free e2-micro in us-central1-a (other
+- `docs/setup-with-claude.md` (moved to `plugin/skills/set-up-latchkey/own-relay.md` by spec 011) as drafted: Google Cloud's free e2-micro in us-central1-a (other
   US zones if unavailable), Ubuntu 24.04, a reserved static address, firewall open on 443 only,
   the relay's own Let's Encrypt certificate (TLS-ALPN on 443), name `<ip-with-dashes>.sslip.io`,
   Podman Quadlet with `AutoUpdate=registry` and `Notify=true`, `podman-auto-update.timer`, a $1
@@ -97,7 +97,7 @@ Mac app's choice (D9).
 
 - In setup's first step, under the relay address field: "Don't have a relay? Claude can set one
   up for you." with a Copy Request button. The request: "Set up a Latchkey relay for me. Follow
-  the instructions at https://raw.githubusercontent.com/tonimelisma/latchkey/main/docs/setup-with-claude.md".
+  the instructions at https://raw.githubusercontent.com/tonimelisma/latchkey/main/plugin/skills/set-up-latchkey/own-relay.md" (spec 011; first docs/setup-with-claude.md).
   A line says to paste it into Claude Code (the Code tab in Claude Desktop). Wording and layout
   reviewed against Apple's guidelines; README picture redrawn.
 

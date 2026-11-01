@@ -129,7 +129,9 @@ IMPORTANT: every working increment, however small, is published and installed. I
 3. Update specs, `docs/STATUS.md`, `docs/decisions.md`, and `README.md` in the same commit.
 4. Commit (files by name) and fast-forward `main` (above).
 5. If `relay/` changed: `deploy/deploy.sh`. If `linux/` changed: bump `linux/VERSION`, then
-   `make -C linux release` (installed servers update themselves within a day).
+   `make -C linux release` (installed servers update themselves within a day). If `plugin/`
+   changed: raise `version` in `plugin/.claude-plugin/plugin.json`, `make -C plugin test` and
+   `make -C plugin measure`; pushing to main publishes it.
 6. If `macos/` changed: `make -C macos install` builds the disk image, quits the running app
    cleanly, replaces `/Applications/Latchkey.app`, starts it, and checks it reports the new
    version (pairing and permissions carry over). Toni never installs by hand.
@@ -236,6 +238,13 @@ Linux server program (run in `linux/`, its own Go module; spec 010):
   Debian container, a real MCP client (`-claude` in `relay/cmd/linuxcheck` adds Claude Code)
 - `make release`: build, sign (`SERVER_SIGNING_KEY` in `.env`), publish `server-v$(cat VERSION)`;
   bump `linux/VERSION` when anything in `linux/` changed (every increment ships)
+
+Plugin for Claude (run in `plugin/`; spec 011; skills only, published by
+`.claude-plugin/marketplace.json` at the root):
+- `make test`: content checks (contracts/plugin.md) and their tests, `claude plugin validate --strict`
+- `make measure`: eval cases with real Claude, with and without the plugin, on pretend Latchkey
+  tools (about $1.30 a run on Toni's account); `CASE=<name> RUNS=1` for one case. The worktree
+  guard refuses any command line with the word "eval", so run it through make.
 
 <!-- Maintainers: keep this file under ~100 lines. Status and decisions live in docs/, topic
 knowledge in .claude/rules/, multi-step procedures in docs/. Test each line: would removing it

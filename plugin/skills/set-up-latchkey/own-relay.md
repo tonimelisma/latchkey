@@ -1,6 +1,6 @@
 # Set up a Latchkey relay: instructions for Claude Code
 
-Spec 009. Run for real on Google Cloud on 2026-10-31: claimed with its setup code, a Mac paired,
+Part of the set-up-latchkey skill (spec 011); the Mac app's Copy Request points here. Spec 009. Run for real on Google Cloud on 2026-10-31: claimed with its setup code, a Mac paired,
 Claude Code called a tool through it, recovery worked, and Podman installed an update and rolled
 back a broken one.
 
@@ -80,6 +80,10 @@ Say:
 > Last step. On claude.ai, open Settings, then Connectors, then "Add custom connector". Name it
 > Latchkey and paste https://<host name>/mcp. Click Connect, sign in with your passkey, and click
 > Allow. It then works in Claude on the web, in Claude Desktop, and on your phone.
+>
+> One more thing that helps: in Claude, open Customize, then Plugins, then Add marketplace, and
+> enter tonimelisma/latchkey; then add the Latchkey plugin. It teaches Claude how to use your
+> machines well.
 
 ## Step 7: Check and finish
 
@@ -109,8 +113,8 @@ Then open the relay's page and say:
 - Cost: "Google's free server costs nothing as long as it stays small, and a relay does. Google
   asks for a card to check you're a real person. I'll set an alert that emails you if anything
   ever costs more than $1." The free limits: one e2-micro server in Oregon, Iowa, or South
-  Carolina, a 30 GB standard disk, and 1 GB of data out of North America a month (screenshots
-  Claude takes count toward it; beyond it, a few cents per GB).
+  Carolina, a 30 GB standard disk, and 1 GB of data out of North America a month (pictures
+  and files Claude fetches count toward it; beyond it, a few cents per GB).
 - Account: open https://console.cloud.google.com/freetrial. They sign in with a Google account,
   accept the terms, and enter a card. If they have a Google Cloud account already, use it.
   [To verify on a fresh account: whether the free trial's billing account must be upgraded to a
@@ -178,4 +182,5 @@ systemctl enable --now podman-auto-update.timer
 Everything above is a default. Oracle Cloud's Always Free server (also $0, harder sign-up),
 Railway, or any other host works too. The same image runs on any server or host with a persistent
 `/data` volume, under your own domain, with your own email server (`SMTP_*`), behind your own
-proxy (`TRUSTED_PROXIES`). See docs/self-hosting.md.
+proxy (`TRUSTED_PROXIES`). See
+https://github.com/tonimelisma/latchkey/blob/main/docs/self-hosting.md.

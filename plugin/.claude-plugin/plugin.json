@@ -1,0 +1,10 @@
+{
+  "name": "latchkey",
+  "version": "0.1.0",
+  "description": "Teaches Claude to use Latchkey, which reaches your own Macs and Linux servers from anywhere, and to help you set it up.",
+  "author": { "name": "Toni Melisma", "url": "https://github.com/tonimelisma" },
+  "homepage": "https://github.com/tonimelisma/latchkey",
+  "repository": "https://github.com/tonimelisma/latchkey",
+  "license": "Apache-2.0",
+  "keywords": ["mac", "linux", "remote", "mcp", "latchkey"]
+}

@@ -106,12 +106,18 @@ redraws them).
    after another, as you turn Latchkey on. Later, the
    Permissions tab in Latchkey's Settings window shows each one and whether it's allowed. No
    relay yet? The first step's Copy Request gives you a request to paste into Claude Code, which
-   sets one up for you on a free server ([docs/setup-with-claude.md](docs/setup-with-claude.md)).
+   sets one up for you on a free server ([its guide](plugin/skills/set-up-latchkey/own-relay.md)).
 2. **Connect Claude.** On claude.ai, open Settings → Connectors → Add custom connector, and enter
    your relay's address followed by `/mcp`, for example `https://relay.example.com/mcp`. Sign
    in with your passkey and click Allow. The connector then appears in Claude Desktop and the
    phone apps too.
-3. **Ask Claude:** "What's in my grocery note?", "What did Sarah say about dinner?", "How much
+3. **Add the Latchkey plugin (recommended).** In Claude, open Customize → Plugins → Add
+   marketplace, enter `tonimelisma/latchkey`, and add Latchkey. It teaches Claude how to use your
+   machines well (which machine, what to do when one is asleep) and how to help you set up or fix
+   Latchkey; it works with any relay. In Claude Code:
+   `/plugin install latchkey --marketplace tonimelisma/latchkey`. Details:
+   [plugin/README.md](plugin/README.md).
+4. **Ask Claude:** "What's in my grocery note?", "What did Sarah say about dinner?", "How much
    disk space is free?".
 
 The full checklist is in [specs/001-core/quickstart.md](specs/001-core/quickstart.md).
@@ -183,6 +189,7 @@ scripts (ShellCheck).
 | Relay (Go) | `relay/` | `make test`, `make lint`, `make run`, `make claude-check`, `make mac-check` |
 | Linux server program (Go) | `linux/` | `make test`, `make lint`, `make test-linux` (every test on Debian with systemd in Docker), `make check` (end to end: relay, pretend Mac, the program installed in a container, a real MCP client), `make release` |
 | Mac app and helper (Swift) | `macos/` | `make test`, `make lint`, `make run`, `make dmg`, `make install` (build, install into Applications, start, and fail if the update lost the pairing), `scripts/readme-shots.sh` (redraws the README's pictures) |
+| Plugin for Claude (skills) | `plugin/` | `make test` (contract checks and Claude Code's validator), `make measure` (eval cases with real Claude, with and without the plugin) |
 | Hosted relay deployment | `deploy/` | `deploy/deploy.sh` |
 | Cleanup after merging | `scripts/` | `scripts/tidy.sh` (runs automatically after every push and at every session start from Claude Code; removes worktrees as soon as their work is merged); `scripts/loose-ends.sh` lists work not yet on main (checked when a Claude Code session starts and before each turn ends) |
 
@@ -207,6 +214,8 @@ specs/001-core/
 relay/                          The relay (Go). `make test`, `make run`; see CLAUDE.md for commands.
 macos/                          The Mac app and its helper (Swift, XcodeGen). `make test`, `make run`.
 linux/                          The Linux server program (Go). `make test`, `make test-linux`.
+plugin/                         The plugin for Claude: two skills, their evals. `make test`, `make measure`.
+.claude-plugin/marketplace.json The plugin catalog people add as `tonimelisma/latchkey`.
 specs/002-notes-messages/       Notes and Messages (same structure for each capability).
 specs/003-files/                Files.
 specs/004-shell/                Shell.
@@ -216,6 +225,7 @@ specs/007-calendar-reminders-contacts-location/  Calendar, Reminders, Contacts, 
 specs/008-mail/                 Mail.
 specs/009-easy-relay-setup/     A relay set up by Claude Code.
 specs/010-multi-host/           Several machines and Linux servers.
+specs/011-claude-plugin/        The plugin for Claude.
 docs/best-practices.md          Research on best practices, checked against Latchkey.
 docs/threat-model.md            What is protected, attackers, trust boundaries, accepted risks.
 docs/self-hosting.md            Run your own relay.

@@ -1,6 +1,6 @@
 # Status
 
-Last updated: 2026-11-01 (relay web pages redone; purkki paired; spec 010 shipped)
+Last updated: 2026-11-01 (Latchkey plugin for Claude, spec 011; relay web pages redone; purkki paired; spec 010 shipped)
 
 Xcode signing ready (2026-10-20): Toni's Xcode account has a valid "Apple Development" certificate
 (certificate expires 2027-07-22). Keep the team ID out of committed project files
@@ -33,6 +33,24 @@ after the app was quit.
 ## Next steps
 
 Releases, terms and privacy, and the directory listing are much later (Toni, 2026-10-22).
+
+Latchkey plugin for Claude (spec 011; Toni asked on 2026-11-01 for the spec from a blank slate,
+the repository arranged for it, and everything finished without questions). Built 2026-11-01: a
+plugin of two skills only, `latchkey` (how Claude works on the machines: no tools, choosing a
+machine, offline, refusals, where things run) and `set-up-latchkey` (connecting Claude, pairing a
+Mac or a server, the relay guide, fixing a connection), in `plugin/`, published by the catalog
+`.claude-plugin/marketplace.json` at the root: people add `tonimelisma/latchkey` on claude.ai
+(Customize → Plugins → Add marketplace) or in Claude Code. The relay guide moved from
+`docs/setup-with-claude.md` into the setup skill; the Mac app's Copy Request (0.8.62) points
+there. The relay's account page and the README say to add the plugin. Checked: content checks
+(no capability or tool names, no addresses, nothing that runs, version raised) with their own
+tests, Claude Code's validator in strict mode, and evals with real Claude on pretend Latchkey
+tools: with the plugin every case passes; it turns "I can't" into the right setup steps (+1.00 on
+both setup cases) and changes nothing where the tool descriptions already work (offline, two
+machines, refusals). For Toni: review plan.md "Choices made for Toni" (skills only, layout,
+names, guide moved, versioning, account-page line, evals, and reading Constitution VIII as not
+counting the plugin as a fifth project); add the catalog on his own claude.ai account (one step:
+Customize → Plugins → Add marketplace → `tonimelisma/latchkey`, then add Latchkey).
 
 Several machines and Linux servers (spec 010; Toni asked on 2026-10-31 for plan and build in one
 go). Built 2026-11-01: one account pairs any number of Macs and headless Linux servers behind the
@@ -88,7 +106,7 @@ on platform addresses on the Public Suffix List; moving to a custom domain later
 passkeys) and the free-cloud research are in specs/009-easy-relay-setup/research.md. Toni added: one path
 that works end to end with minimal hassle for non-technical people, and everything customizable
 for technical ones (own VPS, domain, Railway, email server); Podman runs and updates the relay
-on a server. Spec 009 and the guide Claude Code follows (docs/setup-with-claude.md) are drafted
+on a server. Spec 009 and the guide Claude Code follows (docs/setup-with-claude.md, now plugin/skills/set-up-latchkey/own-relay.md) are drafted
 for Toni's review. Default host: Google Cloud's free server (Toni, 2026-10-31). Lost passkeys are
 replaced through Claude Code with a one-time recovery code (Toni). The repository is public
 (2026-10-31). Plan and tasks written
