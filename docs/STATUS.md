@@ -41,8 +41,12 @@ needs no email server (the first sign-up enters a setup code; email stays option
 relays); relay images on ghcr.io; Apple's Developer Program (signed, notarized app that updates
 itself) later. Research so far (one-click hosts compared: Railway, Render, Fly.io; passkeys work
 on platform addresses on the Public Suffix List; moving to a custom domain later invalidates
-passkeys) is in the 2026-10-31 session; the free-cloud research is under way. Next: spec 009
-with research.md, then Toni's review before a plan.
+passkeys) and the free-cloud research are in specs/009-easy-relay-setup/research.md. Toni added: one path
+that works end to end with minimal hassle for non-technical people, and everything customizable
+for technical ones (own VPS, domain, Railway, email server); Podman runs and updates the relay
+on a server. Spec 009 and the guide Claude Code follows (docs/setup-with-claude.md) are drafted
+for Toni's review; open: the default host, recovery without email, and when the guide and
+images go public.
 
 Nothing left behind (Toni, 2026-10-27; app 0.8.32): after headless Chrome ran two days and
 `/tmp` filled with a session's downloads, a Shell command's leftovers are stopped when it
