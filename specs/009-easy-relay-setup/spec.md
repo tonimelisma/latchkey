@@ -39,9 +39,8 @@ terminal, and the hosted relay is Toni's alone.
 ### US2 (P1): No email server for a relay that's just mine
 1. Given my relay is only for me, then it needs no email server: I claim it with a setup code
    Claude gives me, and nobody else can sign up.
-2. Given I lose my passkey, then I can still get back in [NEEDS CLARIFICATION: how, without
-   email: recovery codes shown at sign-up, a second passkey (iCloud Keychain syncs passkeys
-   across the Owner's Apple devices), or Claude Code resetting the account on the server?].
+2. Given I lose my passkey, then I ask Claude Code, and it lets me make a new one for my same
+   account, so my Mac stays connected and nothing is lost (Toni, 2026-10-31).
 
 ### US3 (P1): It stays up to date and costs what I was told
 1. Given a new relay version is released, then my relay updates itself, and goes back to the
@@ -81,9 +80,14 @@ terminal, and the hosted relay is Toni's alone.
   person who enters that code create an account; once that account exists, sign-up shall be
   closed (unless the operator allows more people). Claude Code shall create the code, put it in
   the relay's settings, and give it to the Owner, so nobody reads server logs.
-- **FR-908** A relay with no email server configured shall run, with sign-up by setup code only
-  and account recovery as in US2.2; an email server stays an option for relays shared with
-  others.
+- **FR-908** A relay with no email server configured shall run, with sign-up by setup code only;
+  an email server stays an option for relays shared with others.
+- **FR-914** When the Owner has lost every passkey, Claude Code, signed in to the host as the
+  Owner, shall be able to give the relay a new one-time recovery code; whoever enters it with the
+  account's email address on the relay's page shall make a new passkey for that same account,
+  keeping its Mac pairing, approvals, and records. The code shall work once and expire within an
+  hour, and the relay shall record its use (FR-631). Why: no email server means no recovery link
+  (Toni, 2026-10-31: "Claude Code resets it"); only someone who controls the host can do this.
 - **FR-909** A relay set up this way shall install new released versions by itself, check that
   the new one starts, and go back to the version before when it doesn't; before a version that
   changes the database starts, a copy of the database shall be kept.

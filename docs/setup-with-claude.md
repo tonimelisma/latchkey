@@ -89,6 +89,15 @@ Ask them to ask Claude, in a new chat: "What's my Mac's battery level?" When it 
 Tell them where things are: the relay's address, the hosting company's page, and that the setup
 code is no longer needed (sign-up is now closed).
 
+## If they lose their passkey (later)
+
+When someone comes back saying they can't sign in to their relay any more: sign in to Google
+(`gcloud auth login`), make a new recovery code, and give it to the relay as its spec says
+(spec 009 FR-914; the exact command comes with the plan). Then open the relay's page and say:
+
+> Click "Lost your passkey?", enter your email address and this code: **<code>**. Then save the
+> new passkey. Your Mac stays connected; nothing else changes. The code works once, for an hour.
+
 ## Google Cloud (the default host)
 
 - Cost: "Google's free server costs nothing as long as it stays small, and a relay does. Google
