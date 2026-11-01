@@ -6,7 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
-	"net/url"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -134,13 +134,15 @@ func (s *Service) devicePair(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, http.StatusInternalServerError, "Something went wrong. Try again.")
 		return
 	}
+	// No verification_uri_complete (RFC 8628 §3.3.1): a link carrying the code would let someone
+	// who started a pairing on their own machine send it to the Owner for a one-click approval.
+	// The Owner types the code the machine in front of them shows (security review, 2026-10-31).
 	writeJSON(w, http.StatusOK, map[string]any{
-		"device_code":               deviceCode,
-		"user_code":                 userCode,
-		"verification_uri":          s.link("/link", nil),
-		"verification_uri_complete": s.link("/link", url.Values{"code": {userCode}}),
-		"interval":                  int(devicePollInterval / time.Second),
-		"expires_in":                int(devicePairingLifetime / time.Second),
+		"device_code":      deviceCode,
+		"user_code":        userCode,
+		"verification_uri": s.link("/link", nil),
+		"interval":         int(devicePollInterval / time.Second),
+		"expires_in":       int(devicePairingLifetime / time.Second),
 	})
 }
 
@@ -175,22 +177,20 @@ func (s *Service) devicePairToken(w http.ResponseWriter, r *http.Request) {
 }
 
 type linkView struct {
-	Code    string
-	Error   string
-	Pairing *store.DevicePairing
+	Code      string
+	Error     string
+	Pairing   *store.DevicePairing
+	Requested string // how long ago the machine asked, "just now", "3 minutes ago"
 }
 
-// linkPage is GET /link: the code form, or, with a valid ?code=, the confirmation.
+// linkPage is GET /link: the form for the code the machine shows. A code in the address is
+// ignored: it must be typed (see devicePair).
 func (s *Service) linkPage(w http.ResponseWriter, r *http.Request) {
 	u, tok, ok := s.requireUser(w, r)
 	if !ok {
 		return
 	}
-	v := linkView{Code: r.URL.Query().Get("code")}
-	if v.Code != "" {
-		s.lookUpLink(r, u.ID, &v)
-	}
-	s.render(w, http.StatusOK, "link.html", page{Title: "Connect a machine", Email: u.Email, CSRF: s.csrfFor(tok), Data: v})
+	s.render(w, http.StatusOK, "link.html", page{Title: "Connect a machine", Email: u.Email, CSRF: s.csrfFor(tok), Data: linkView{}})
 }
 
 // lookUpLink fills the view's pairing for its code, or its error.
@@ -207,6 +207,14 @@ func (s *Service) lookUpLink(r *http.Request, userID string, v *linkView) {
 		return
 	}
 	v.Pairing = &p
+	switch ago := now.Sub(p.CreatedAt); {
+	case ago < time.Minute:
+		v.Requested = "just now"
+	case ago < 2*time.Minute:
+		v.Requested = "1 minute ago"
+	default:
+		v.Requested = strconv.Itoa(int(ago/time.Minute)) + " minutes ago"
+	}
 }
 
 // link is POST /link: a code typed in the form (answered with the confirmation), or the

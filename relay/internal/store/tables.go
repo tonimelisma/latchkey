@@ -161,6 +161,21 @@ func (s *Store) RenameDevice(ctx context.Context, id, wanted string) (string, er
 
 // freeName is wanted, or wanted with the first free number appended, compared without regard to
 // letter case among the user's active devices other than except.
+//
+// NameKey is the one comparison of machine names, used both here and when a call names its
+// machine, so the two can never disagree (security review, 2026-10-31): each letter is replaced
+// by the smallest letter Unicode's case folding equates it with (K, k, and the Kelvin sign alike),
+// which is exactly strings.EqualFold's sameness.
+func NameKey(name string) string {
+	return strings.Map(func(r rune) rune {
+		smallest := r
+		for f := unicode.SimpleFold(r); f != r; f = unicode.SimpleFold(f) {
+			smallest = min(smallest, f)
+		}
+		return smallest
+	}, strings.TrimSpace(name))
+}
+
 func (s *Store) freeName(ctx context.Context, userID, except, wanted string) (string, error) {
 	rows, err := s.db.QueryContext(ctx,
 		`SELECT name FROM devices WHERE user_id = ? AND revoked_at IS NULL AND id != ?`, userID, except)
@@ -174,13 +189,13 @@ func (s *Store) freeName(ctx context.Context, userID, except, wanted string) (st
 		if err := rows.Scan(&n); err != nil {
 			return "", err
 		}
-		taken[strings.ToLower(n)] = true
+		taken[NameKey(n)] = true
 	}
 	if err := rows.Err(); err != nil {
 		return "", err
 	}
 	name := wanted
-	for i := 2; taken[strings.ToLower(name)]; i++ {
+	for i := 2; taken[NameKey(name)]; i++ {
 		name = fmt.Sprintf("%s %d", wanted, i)
 	}
 	return name, nil

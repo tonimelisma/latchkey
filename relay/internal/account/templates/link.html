@@ -2,7 +2,8 @@
 {{with .Data.Pairing}}
 <h1>Connect “{{.Name}}”?</h1>
 <p class="lead">Claude will be able to reach this {{if eq .Kind "linux"}}Linux server{{else}}machine{{end}} through <strong>{{$.Email}}</strong>, using only the tools turned on with Latchkey on that machine.</p>
-<p class="warning">Only connect a machine you just set up yourself. If someone sent you this code, don't connect it.</p>
+<p class="small">Requested {{$.Data.Requested}}. The name “{{.Name}}” was chosen by that machine.</p>
+<p class="warning">Only connect a machine you just set up yourself. If someone sent you this code, don't connect it: they would see what Claude asks that machine to do.</p>
 <form method="post" action="/link">
   <input type="hidden" name="csrf" value="{{$.CSRF}}">
   <input type="hidden" name="code" value="{{$.Data.Code}}">

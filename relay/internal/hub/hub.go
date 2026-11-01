@@ -372,7 +372,7 @@ func (h *Hub) start(ctx context.Context, c *conn, hello *agentproto.Hello) bool 
 	c.toolsStored = err == nil
 	c.setState(hello.State)
 	c.setTools(hello.Tools)
-	c.clientsFeature = hello.Has(agentproto.FeatureClients)
+	c.clientsFeature = hello.Has(agentproto.FeatureClients) && c.device.Kind == store.KindMac // only a Mac lists and removes apps (spec 010)
 	c.auditFeature = hello.Has(agentproto.FeatureAudit)
 	c.keepAwake = hello.State.KeepAwake
 
@@ -717,6 +717,10 @@ func (c *conn) handle(ctx context.Context, msg agentproto.Message) bool {
 		}
 		c.persist(ctx)
 	case *agentproto.RevokeClient:
+		if c.device.Kind != store.KindMac { // a server has no list of apps to remove from (spec 010)
+			c.closeWith(ErrDisconnected, agentproto.CloseProtocolViolation, "revoke_client from a machine that isn't a Mac")
+			return false
+		}
 		c.revokeClient(ctx, m)
 	case *agentproto.AuditRequest:
 		if !c.auditFeature {

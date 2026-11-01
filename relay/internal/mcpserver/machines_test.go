@@ -191,18 +191,5 @@ func TestMachinesResult(t *testing.T) {
 		"- homeserver · Linux server (Ubuntu 24.04.1 LTS) · online · up 3 days · offers: shell_run\n"+
 		"- nas · Linux server · offline, last seen 1 hour ago · offers no tools (all turned off on it)\n"+
 		"Pass a machine's name as machine when more than one offers a tool.", text)
-	var structured struct {
-		Machines []struct {
-			Name   string   `json:"name"`
-			Kind   string   `json:"kind"`
-			Online bool     `json:"online"`
-			Tools  []string `json:"tools"`
-		} `json:"machines"`
-	}
-	data, err := json.Marshal(res.StructuredContent)
-	require.NoError(t, err)
-	require.NoError(t, json.Unmarshal(data, &structured))
-	require.Len(t, structured.Machines, 3)
-	assert.Equal(t, "linux", structured.Machines[1].Kind)
-	assert.Equal(t, []string{}, structured.Machines[2].Tools)
+	assert.Nil(t, res.StructuredContent, "text only: Claude's apps would show structured content instead of the text")
 }

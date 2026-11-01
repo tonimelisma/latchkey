@@ -157,7 +157,12 @@ func TestMachineNameAndKindFromHello(t *testing.T) {
 	server.Name = "  nas\x00  "
 	c = dialAgent(t, e, server)
 	assert.Equal(t, "nas", c.Welcome.Name, "cleaned")
-	require.NoError(t, c.Close())
+
+	// Only a Mac lists and removes Claude apps: a server asking to remove one is refused
+	// (security review, 2026-10-31).
+	require.NoError(t, c.Send(ctx(t), &agentproto.RevokeClient{ID: "grt_x"}))
+	code, _ := c.Wait(ctx(t))
+	assert.Equal(t, agentproto.CloseProtocolViolation, code)
 
 	// The Mac's pairing, a Linux hello: refused.
 	e.agent.Kind = agentproto.KindLinux

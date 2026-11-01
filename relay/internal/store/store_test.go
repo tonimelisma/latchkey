@@ -171,6 +171,13 @@ func TestMachineNamesStayUnique(t *testing.T) {
 	assert.Equal(t, "nas", got.Name)
 	_, err = s.RenameDevice(ctx, "dev_missing", "x")
 	require.ErrorIs(t, err, store.ErrNotFound)
+
+	// One sameness for uniqueness and for naming a machine in a call: Unicode case folding, so
+	// the Kelvin sign is a K (security review, 2026-10-31).
+	assert.Equal(t, "kitchen", pair(u.ID, "kitchen").Name)
+	assert.Equal(t, "Kitchen 2", pair(u.ID, "Kitchen").Name, "the Kelvin sign's K is taken by k")
+	assert.Equal(t, store.NameKey("Kitchen"), store.NameKey("Kitchen "))
+	assert.NotEqual(t, store.NameKey("kitchen"), store.NameKey("kitchen 2"))
 }
 
 func TestDevicePairing(t *testing.T) {

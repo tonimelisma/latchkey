@@ -324,7 +324,7 @@ func choose(ms []machine, tool, named string, now time.Time) (machine, string) {
 	}
 	if named != "" {
 		for _, m := range ms {
-			if !strings.EqualFold(m.Device.Name, named) {
+			if store.NameKey(m.Device.Name) != store.NameKey(named) {
 				continue
 			}
 			if m.tool(tool) == nil {
@@ -364,32 +364,20 @@ func list(ms []machine, now time.Time) string {
 	return strings.Join(parts, ", ")
 }
 
-// machinesResult answers the machines tool.
+// machinesResult answers the machines tool, as text only: with structured content present,
+// Claude's apps show that instead of the text (live check 2026-10-22, .claude/rules/macos.md).
 func machinesResult(ms []machine, now time.Time) *mcp.CallToolResult {
-	type entry struct {
-		Name      string   `json:"name"`
-		Kind      string   `json:"kind"`
-		OSVersion string   `json:"os_version,omitempty"`
-		Online    bool     `json:"online"`
-		LastSeen  string   `json:"last_seen,omitempty"`
-		Tools     []string `json:"tools"`
-	}
 	var b strings.Builder
-	entries := make([]entry, 0, len(ms))
 	if len(ms) == 1 {
 		b.WriteString("Your machine:\n")
 	} else {
 		fmt.Fprintf(&b, "Your machines (%d):\n", len(ms))
 	}
 	for _, m := range ms {
-		e := entry{Name: m.Device.Name, Kind: m.Device.Kind, OSVersion: m.Device.OSVersion, Online: m.Online, Tools: []string{}}
+		var tools []string
 		for _, t := range m.Tools {
-			e.Tools = append(e.Tools, t.Name)
+			tools = append(tools, t.Name)
 		}
-		if !m.LastSeen.IsZero() {
-			e.LastSeen = m.LastSeen.UTC().Format(time.RFC3339)
-		}
-		entries = append(entries, e)
 		fmt.Fprintf(&b, "- %s · %s", m.Device.Name, kindPhrase(m.Device.Kind))
 		if m.Device.OSVersion != "" {
 			if m.Device.Kind == store.KindMac {
@@ -404,20 +392,16 @@ func machinesResult(ms []machine, now time.Time) *mcp.CallToolResult {
 		} else {
 			b.WriteString(" · " + onlineWord(m, now))
 		}
-		if len(e.Tools) == 0 {
+		if len(tools) == 0 {
 			b.WriteString(" · offers no tools (all turned off on it)\n")
 		} else {
-			b.WriteString(" · offers: " + strings.Join(e.Tools, ", ") + "\n")
+			b.WriteString(" · offers: " + strings.Join(tools, ", ") + "\n")
 		}
 	}
 	if len(ms) > 1 {
 		b.WriteString("Pass a machine's name as machine when more than one offers a tool.")
 	}
-	structured, _ := json.Marshal(map[string]any{"machines": entries})
-	return &mcp.CallToolResult{
-		Content:           []mcp.Content{&mcp.TextContent{Text: strings.TrimRight(b.String(), "\n")}},
-		StructuredContent: json.RawMessage(structured),
-	}
+	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: strings.TrimRight(b.String(), "\n")}}}
 }
 
 // instructions is what the relay tells Claude's apps at initialize (plan "How Claude uses it");

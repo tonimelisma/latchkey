@@ -32,7 +32,7 @@ func TestHeadlessPairing(t *testing.T) {
 	assert.Regexp(t, userCodeRE, userCode)
 	assert.NotEmpty(t, deviceCode)
 	assert.Equal(t, e.base+"/link", start["verification_uri"])
-	assert.Equal(t, e.base+"/link?code="+url.QueryEscape(userCode), start["verification_uri_complete"])
+	assert.NotContains(t, start, "verification_uri_complete", "no link that carries the code: it must be typed")
 	assert.InDelta(t, 5, start["interval"], 0)
 	assert.InDelta(t, 600, start["expires_in"], 0)
 
@@ -43,12 +43,20 @@ func TestHeadlessPairing(t *testing.T) {
 	assert.Equal(t, http.StatusBadRequest, status)
 	assert.Equal(t, "slow_down", poll["error"], "polled faster than the interval")
 
-	// The Owner opens the link, sees the machine named, with the warning, and connects it.
+	// A code in the address is ignored: no one-click approval from a link someone sent.
 	page := b.get("/link?code=" + url.QueryEscape(userCode))
 	require.Equal(t, http.StatusOK, page.status)
-	assert.Contains(t, page.body, "Connect “homeserver”?")
-	assert.Contains(t, page.body, "Only connect a machine you just set up yourself")
-	r := b.form("/link", url.Values{"csrf": {csrf(t, page.body)}, "code": {userCode}, "confirm": {"1"}})
+	assert.NotContains(t, page.body, "homeserver")
+	assert.NotContains(t, page.body, userCode)
+
+	// The Owner types the code, sees the machine named, when it asked, and the warning, and connects it.
+	e.clock.advance(3 * time.Minute)
+	r := b.form("/link", url.Values{"csrf": {csrf(t, page.body)}, "code": {userCode}})
+	require.Equal(t, http.StatusOK, r.status)
+	assert.Contains(t, r.body, "Connect “homeserver”?")
+	assert.Contains(t, r.body, "Requested 3 minutes ago. The name “homeserver” was chosen by that machine.")
+	assert.Contains(t, r.body, "Only connect a machine you just set up yourself")
+	r = b.form("/link", url.Values{"csrf": {csrf(t, r.body)}, "code": {userCode}, "confirm": {"1"}})
 	require.Equal(t, http.StatusOK, r.status, r.body)
 	assert.Contains(t, r.body, "“homeserver” is connected")
 	assert.Contains(t, e.changed, u.ID)
@@ -69,8 +77,8 @@ func TestHeadlessPairing(t *testing.T) {
 	assert.Equal(t, "expired_token", poll["error"], "collected once")
 
 	// The approved code is used up.
-	page = b.get("/link?code=" + url.QueryEscape(userCode))
-	assert.Contains(t, page.body, "That code isn&#39;t right, or it expired")
+	r = b.form("/link", url.Values{"csrf": {csrf(t, page.body)}, "code": {userCode}})
+	assert.Contains(t, r.body, "That code isn&#39;t right, or it expired")
 }
 
 func TestHeadlessPairingRules(t *testing.T) {
