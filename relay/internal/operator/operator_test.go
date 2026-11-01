@@ -188,10 +188,22 @@ func TestAccountList(t *testing.T) {
 }
 
 // Every failure is an error (the command exits non-zero) and changes nothing.
+// A relay without an email server: whoever runs it gives the Owner a recovery code (spec 009
+// FR-914). The code itself is checked by the account package's tests.
+func TestAccountRecoveryCode(t *testing.T) {
+	e := setup(t)
+	e.user("owner@example.com")
+	line := e.ok("account", "recovery-code", "Owner@Example.com")
+	assert.Regexp(t, `^Recovery code for owner@example\.com: \d{6} \(works once, until 13:00 UTC\)\. `, line)
+	assert.Contains(t, line, "Lost your passkey?")
+}
+
 func TestFailures(t *testing.T) {
 	e := setup(t)
 	e.user("owner@example.com")
 	cases := map[string][]string{
+		"recovery code no account": {"account", "recovery-code", "nobody@example.com"},
+		"recovery code no address": {"account", "recovery-code"},
 		"no such account":         {"account", "suspend", "nobody@example.com"},
 		"unsuspend no account":    {"account", "unsuspend", "nobody@example.com"},
 		"delete no account":       {"account", "delete", "nobody@example.com"},

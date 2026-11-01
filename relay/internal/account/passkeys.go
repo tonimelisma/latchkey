@@ -334,9 +334,11 @@ func (s *Service) completeRecovery(ctx context.Context, u store.User, keep []byt
 		return err
 	}
 	s.cfg.AccessRemoved(u.ID)
-	if err := s.cfg.Mailer.Send(ctx, u.Email, "Your Latchkey account was recovered",
-		emailRecovered(now, s.link("/recover", nil), s.link("/account", nil))); err != nil {
-		s.cfg.Logger.Error("recovery notice email", "err", err)
+	if s.cfg.Mailer != nil {
+		if err := s.cfg.Mailer.Send(ctx, u.Email, "Your Latchkey account was recovered",
+			emailRecovered(now, s.link("/recover", nil), s.link("/account", nil))); err != nil {
+			s.cfg.Logger.Error("recovery notice email", "err", err)
+		}
 	}
 	if d, err := s.cfg.Store.ActiveDevice(ctx, u.ID); err == nil && s.cfg.Macs.Online(d.ID) {
 		n := &agentproto.Notice{Kind: agentproto.NoticeAccountRecovered, At: now.Truncate(time.Second)}

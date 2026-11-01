@@ -84,7 +84,7 @@ async function createPasskey(ticket, next) {
 function setupFlow(flow) {
   const next = flow.dataset.next || "/account";
   const recover = flow.dataset.recover === "1";
-  const state = { email: "", purpose: "", ticket: "" };
+  const state = { email: "", purpose: "", ticket: "", kind: "emailed" };
   let autofill = null; // AbortController of the waiting autofill request
 
   flow.querySelectorAll("[data-title-normal],[data-text-normal]").forEach((el) => (el.hidden = recover));
@@ -142,6 +142,14 @@ function setupFlow(flow) {
         const r = await post("/auth/email", { email: state.email, recover });
         stopAutofill();
         state.purpose = r.purpose || "";
+        state.kind = !r.given ? "emailed" : state.purpose === "verify" ? "setup" : "recovery";
+        flow.querySelectorAll("[data-code]").forEach((el) => (el.hidden = !el.dataset.code.split(" ").includes(state.kind)));
+        // A setup code has letters; emailed and recovery codes are 6 digits.
+        const field = flow.querySelector("#code");
+        field.inputMode = state.kind === "setup" ? "text" : "numeric";
+        field.maxLength = state.kind === "setup" ? 40 : 7;
+        if (state.kind === "setup") field.removeAttribute("pattern"); else field.setAttribute("pattern", "[0-9 ]*");
+        field.autocomplete = state.kind === "setup" ? "off" : "one-time-code";
         show(r.step);
       } catch (err) {
         error("email", friendly(err));
@@ -164,7 +172,7 @@ function setupFlow(flow) {
   });
   const code = flow.querySelector("#code");
   code.addEventListener("input", () => {
-    if (code.value.replace(/\D/g, "").length === 6) flow.querySelector("#code-form").requestSubmit();
+    if (state.kind !== "setup" && code.value.replace(/\D/g, "").length === 6) flow.querySelector("#code-form").requestSubmit();
   });
 
   flow.querySelectorAll("[data-action]").forEach((button) => {

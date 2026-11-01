@@ -46,6 +46,7 @@ type Options struct {
 	PublicURL     *url.URL
 	Store         *store.Store
 	Mailer        account.Mailer
+	SetupCode     string // spec 009 FR-907
 	AllowedEmails []string
 	Logger        *slog.Logger
 	Version       string
@@ -107,7 +108,7 @@ func New(ctx context.Context, o Options) (*Relay, error) {
 		return nil, err
 	}
 	acc, err = account.New(ctx, account.Config{
-		PublicURL: o.PublicURL, Store: o.Store, Macs: h, Mailer: o.Mailer, OAuth: oa,
+		PublicURL: o.PublicURL, Store: o.Store, Macs: h, Mailer: o.Mailer, SetupCode: o.SetupCode, OAuth: oa,
 		AllowedEmails: o.AllowedEmails, Logger: o.Logger, Operator: o.Operator, Events: rec,
 		DevicesChanged: func(userID string) { ms.ToolsChanged(userID) },
 		AccessRemoved:  func(userID string) { ms.Forget(userID) },

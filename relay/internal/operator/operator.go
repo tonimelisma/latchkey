@@ -25,6 +25,8 @@ const Usage = `Commands for the person running this relay:
                                           refuse its Mac and its sign-ins; deletes nothing
   relay account unsuspend <email>         lift a suspension
   relay account delete <email>            delete the account and everything stored about it
+  relay account recovery-code <email>     a one-time code (one hour) for its owner to make a new
+                                          passkey, for a relay without an email server
   relay block <email> [reason]            refuse sign-up and sign-in for an address, and suspend
                                           its account if it has one
   relay unblock <email>                   remove a block (a suspended account stays suspended)
@@ -71,6 +73,8 @@ func Run(ctx context.Context, env Env, args []string) error {
 			return env.withEmail(rest[1:], false, func(email, _ string) error { return env.unsuspend(ctx, email) })
 		case "delete":
 			return env.withEmail(rest[1:], false, func(email, _ string) error { return env.delete(ctx, email) })
+		case "recovery-code":
+			return env.withEmail(rest[1:], false, func(email, _ string) error { return env.recoveryCode(ctx, email) })
 		}
 		return ErrUsage
 	case "block":
@@ -117,6 +121,18 @@ func (e Env) suspend(ctx context.Context, email, reason string) error {
 		return e.say("%s is already suspended; nothing changed.", email)
 	}
 	return e.say("Suspended %s: it is signed out everywhere, Claude's access is removed, and its Mac and its sign-ins are refused until you run: relay account unsuspend %s", email, email)
+}
+
+// recoveryCode gives the Owner of a relay without an email server a way back in (spec 009
+// FR-914): the code works on the relay's "Lost your passkey?" page, once, for an hour.
+func (e Env) recoveryCode(ctx context.Context, email string) error {
+	now := e.Now()
+	code, err := account.RecoveryCode(ctx, e.Store, email, now)
+	if err != nil {
+		return noAccount(email, err)
+	}
+	until := now.Add(account.RecoveryCodeLifetime).UTC().Format("15:04")
+	return e.say("Recovery code for %s: %s (works once, until %s UTC). On the relay's page, choose \"Lost your passkey?\" and enter it.", email, code, until)
 }
 
 func (e Env) unsuspend(ctx context.Context, email string) error {

@@ -37,7 +37,14 @@ type config struct {
 	AllowedClientHosts oauth.AllowedHosts
 	// KeyFile holds the key the relay's stored signing keys are encrypted under (FR-186).
 	KeyFile string
+	// SetupCode lets the first account be created without email (spec 009 FR-907); with it, the
+	// email server is optional (FR-908).
+	SetupCode string
 }
+
+// minSetupCode is the shortest setup code accepted, letters and digits counted without dashes
+// and spaces: a short one could be guessed within the relay's limits.
+const minSetupCode = 12
 
 func loadConfig(getenv func(string) string) (config, error) {
 	c := config{
@@ -47,6 +54,7 @@ func loadConfig(getenv func(string) string) (config, error) {
 		SMTPPassword: getenv("SMTP_PASSWORD"),
 		SMTPFrom:     getenv("SMTP_FROM"),
 		ACMEEmail:    getenv("ACME_EMAIL"),
+		SetupCode:    strings.TrimSpace(getenv("SETUP_CODE")),
 	}
 	var errs []error
 	u, err := parsePublicURL(getenv("PUBLIC_URL"))
@@ -54,13 +62,27 @@ func loadConfig(getenv func(string) string) (config, error) {
 		errs = append(errs, err)
 	}
 	c.PublicURL = u
-	for name, v := range map[string]string{"DATA_DIR": c.DataDir, "SMTP_HOST": c.SMTPHost, "SMTP_FROM": c.SMTPFrom} {
-		if v == "" {
-			errs = append(errs, fmt.Errorf("%s is required", name))
-		}
+	if c.DataDir == "" {
+		errs = append(errs, errors.New("DATA_DIR is required"))
 	}
-	if c.SMTPPort, err = strconv.Atoi(getenv("SMTP_PORT")); err != nil || c.SMTPPort <= 0 || c.SMTPPort > 65535 {
-		errs = append(errs, errors.New("SMTP_PORT must be a port number"))
+	// An email server, or a setup code for a relay without one (spec 009 FR-908). Any part of an
+	// email server set means all of it is required.
+	mail := c.SMTPHost != "" || c.SMTPFrom != "" || getenv("SMTP_PORT") != "" || c.SMTPUser != ""
+	switch {
+	case mail:
+		for name, v := range map[string]string{"SMTP_HOST": c.SMTPHost, "SMTP_FROM": c.SMTPFrom} {
+			if v == "" {
+				errs = append(errs, fmt.Errorf("%s is required", name))
+			}
+		}
+		if c.SMTPPort, err = strconv.Atoi(getenv("SMTP_PORT")); err != nil || c.SMTPPort <= 0 || c.SMTPPort > 65535 {
+			errs = append(errs, errors.New("SMTP_PORT must be a port number"))
+		}
+	case c.SetupCode == "":
+		errs = append(errs, errors.New("set SMTP_HOST, SMTP_PORT, and SMTP_FROM for an email server, or SETUP_CODE for a relay without one"))
+	}
+	if c.SetupCode != "" && len(strings.Join(strings.FieldsFunc(c.SetupCode, func(r rune) bool { return r == '-' || r == ' ' }), "")) < minSetupCode {
+		errs = append(errs, fmt.Errorf("SETUP_CODE must have at least %d letters and digits", minSetupCode))
 	}
 	c.Port = 8080
 	if p := getenv("PORT"); p != "" {

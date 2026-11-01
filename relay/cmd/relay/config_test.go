@@ -21,6 +21,28 @@ func env(overrides map[string]string) func(string) string {
 	return func(k string) string { return base[k] }
 }
 
+// A personal relay needs no email server when it has a setup code (spec 009 FR-907, FR-908).
+func TestLoadConfigSetupCode(t *testing.T) {
+	noMail := map[string]string{"SMTP_HOST": "", "SMTP_PORT": "", "SMTP_FROM": ""}
+	_, err := loadConfig(env(noMail))
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "SETUP_CODE", "neither an email server nor a setup code")
+
+	noMail["SETUP_CODE"] = "K7PQ-M2XD-9RTA"
+	c, err := loadConfig(env(noMail))
+	require.NoError(t, err)
+	assert.Equal(t, "K7PQ-M2XD-9RTA", c.SetupCode)
+	assert.Empty(t, c.SMTPHost)
+
+	_, err = loadConfig(env(map[string]string{"SMTP_HOST": "", "SMTP_PORT": "", "SMTP_FROM": "", "SETUP_CODE": "abc123"}))
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "12", "a short code could be guessed")
+
+	_, err = loadConfig(env(map[string]string{"SMTP_FROM": "", "SETUP_CODE": "K7PQ-M2XD-9RTA"}))
+	require.Error(t, err, "an email server half set up is still an error")
+	assert.Contains(t, err.Error(), "SMTP_FROM")
+}
+
 func TestLoadConfig(t *testing.T) {
 	c, err := loadConfig(env(map[string]string{"SMTP_USER": "u", "SMTP_PASSWORD": "p", "ACME_EMAIL": "a@example.com"}))
 	require.NoError(t, err)

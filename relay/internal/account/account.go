@@ -48,6 +48,13 @@ const (
 	// Recovery codes are sent in the background: at most this many at once, each given this long.
 	maxBackgroundSends    = 16
 	backgroundSendTimeout = 30 * time.Second
+	// SetupCodeTries wrong setup codes are allowed at once, then one more every setupCodeRefill
+	// (spec 009 plan D1).
+	SetupCodeTries  = 5
+	setupCodeRefill = 10 * time.Minute
+	// RecoveryCodeLifetime is how long a recovery code from the operator works: it passes
+	// through a person and Claude Code, so longer than an emailed one (spec 009 FR-914).
+	RecoveryCodeLifetime = time.Hour
 )
 
 //go:embed templates/*.html
@@ -65,10 +72,13 @@ type Macs interface {
 
 // Config configures the service.
 type Config struct {
-	PublicURL     *url.URL
-	Store         *store.Store
-	Macs          Macs
-	Mailer        Mailer
+	PublicURL *url.URL
+	Store     *store.Store
+	Macs      Macs
+	Mailer    Mailer // nil: no email server; then SetupCode is required (spec 009 FR-908)
+	// SetupCode lets the first account be created without email, by whoever enters it; once an
+	// account exists it opens nothing (spec 009 FR-907).
+	SetupCode     string
 	OAuth         *oauth.Server
 	AllowedEmails []string // empty: open sign-up (FR-046)
 	Now           func() time.Time
@@ -108,10 +118,14 @@ type Service struct {
 	lastEmail  map[string]time.Time
 	perAddress *limit.Keyed // codes per address: guessing and inbox flooding
 	allSends   *limit.Keyed // emails from the relay: the sending service's quota
+	setupTries *limit.Keyed // setup codes tried, relay-wide
 }
 
 // New creates the service.
 func New(ctx context.Context, cfg Config) (*Service, error) {
+	if cfg.Mailer == nil && cfg.SetupCode == "" {
+		return nil, errors.New("no email server and no SETUP_CODE: nobody could create an account")
+	}
 	if cfg.Now == nil {
 		cfg.Now = time.Now
 	}
@@ -161,6 +175,7 @@ func New(ctx context.Context, cfg Config) (*Service, error) {
 		sending:    make(chan struct{}, maxBackgroundSends),
 		ceremonies: map[string]*ceremony{}, tickets: map[string]*ticket{}, lastEmail: map[string]time.Time{},
 		perAddress: limit.NewKeyed(emailBurst, emailRefill), allSends: limit.NewKeyed(sendBurst, sendRefill),
+		setupTries: limit.NewKeyed(SetupCodeTries, setupCodeRefill),
 	}, nil
 }
 
@@ -377,7 +392,7 @@ func (s *Service) home(w http.ResponseWriter, r *http.Request) {
 func (s *Service) signinPage(w http.ResponseWriter, r *http.Request) {
 	s.render(w, http.StatusOK, "signin.html", page{
 		Title: "Sign in to Latchkey", Next: safeNext(r.URL.Query().Get("next")),
-		Data: map[string]bool{"Recover": r.URL.Query().Get("recover") == "1"},
+		Data: map[string]bool{"Recover": r.URL.Query().Get("recover") == "1", "Mail": s.cfg.Mailer != nil},
 	})
 }
 
@@ -482,6 +497,11 @@ func (s *Service) authEmail(w http.ResponseWriter, r *http.Request) {
 		// The answer never reveals whether the account exists: the same words, and the same
 		// speed, because the code is stored and emailed after the answer, not before it
 		// (talking to the mail server takes far longer than finding no account).
+		if s.cfg.Mailer == nil {
+			// No email server: the code comes from whoever runs the relay (FR-914).
+			writeJSON(w, http.StatusOK, map[string]any{"step": "code", "purpose": store.PurposeRecover, "given": true})
+			return
+		}
 		if known {
 			s.sendCodeInBackground(ctx, u, store.PurposeRecover)
 		}
@@ -497,6 +517,12 @@ func (s *Service) authEmail(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, http.StatusForbidden, "This relay only accepts sign-ups from approved email addresses.")
 		return
 	}
+	claim := s.claimable(ctx)
+	if !claim && s.cfg.Mailer == nil {
+		s.attempt(ctx, events.SignInCode, "", "refused: sign-up closed (the relay has its account)")
+		jsonError(w, http.StatusForbidden, "Sign-up on this relay is closed.")
+		return
+	}
 	if errors.Is(err, store.ErrNotFound) {
 		if u, err = s.cfg.Store.CreateUser(ctx, email, s.now()); err != nil {
 			jsonError(w, http.StatusInternalServerError, "Something went wrong. Try again.")
@@ -504,6 +530,11 @@ func (s *Service) authEmail(w http.ResponseWriter, r *http.Request) {
 		}
 	} else if err != nil {
 		jsonError(w, http.StatusInternalServerError, "Something went wrong. Try again.")
+		return
+	}
+	if claim {
+		s.attempt(ctx, events.SignInCode, "", "sign-up with the setup code started")
+		writeJSON(w, http.StatusOK, map[string]any{"step": "code", "purpose": store.PurposeVerify, "given": true})
 		return
 	}
 	if !s.sendCode(ctx, u, store.PurposeVerify) {
@@ -538,6 +569,9 @@ func (s *Service) sendCodeInBackground(ctx context.Context, u store.User, purpos
 // sending failed; a rate-limited request keeps the earlier code valid. While codes for the
 // address are refused (FR-042a), none is sent; entering any code then says why.
 func (s *Service) sendCode(ctx context.Context, u store.User, purpose string) bool {
+	if s.cfg.Mailer == nil {
+		return false
+	}
 	if s.cfg.Store.EmailCodesLocked(ctx, u.ID, s.now()) || !s.allowEmail(u.Email) {
 		return true
 	}
@@ -591,6 +625,10 @@ func (s *Service) authCode(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, http.StatusForbidden, msg)
 		return
 	}
+	if req.Purpose == store.PurposeVerify && s.claimable(ctx) {
+		s.checkSetupCode(w, r, u, req.Code)
+		return
+	}
 	code := strings.Join(strings.Fields(req.Code), "")
 	switch err := s.cfg.Store.CheckEmailCode(ctx, u.ID, req.Purpose, codeHash(u.ID, code), s.now()); {
 	case errors.Is(err, store.ErrCodesLocked):
@@ -614,6 +652,58 @@ func (s *Service) authCode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"ticket": ticket})
+}
+
+// claimable reports whether the setup code still opens sign-up: it is set and no account has
+// been created yet (spec 009 FR-907).
+func (s *Service) claimable(ctx context.Context) bool {
+	if s.cfg.SetupCode == "" {
+		return false
+	}
+	taken, err := s.cfg.Store.AnyVerifiedUser(ctx)
+	return err == nil && !taken
+}
+
+// checkSetupCode stands in for the emailed code when the relay is claimed with its setup code.
+// Tries are limited relay-wide; case, spaces, and dashes don't matter.
+func (s *Service) checkSetupCode(w http.ResponseWriter, r *http.Request, u store.User, given string) {
+	ctx := r.Context()
+	if !s.setupTries.AllowAt("", s.now()) {
+		s.attempt(ctx, events.SignInCode, "", "setup code refused: too many tries")
+		jsonError(w, http.StatusTooManyRequests, "Too many wrong setup codes. Try again in 10 minutes.")
+		return
+	}
+	if subtle.ConstantTimeCompare([]byte(normalizeSetupCode(given)), []byte(normalizeSetupCode(s.cfg.SetupCode))) != 1 {
+		s.attempt(ctx, events.SignInCode, "", "setup code refused: wrong code")
+		jsonError(w, http.StatusBadRequest, "That setup code isn't right. Check it and try again.")
+		return
+	}
+	s.attempt(ctx, events.SignInCode, "", "setup code accepted")
+	ticket, ok := s.putTicket(u.ID, store.PurposeVerify)
+	if !ok {
+		busy(w)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"ticket": ticket})
+}
+
+func normalizeSetupCode(c string) string {
+	return strings.ToUpper(strings.Join(strings.FieldsFunc(c, func(r rune) bool { return r == '-' || r == ' ' || r == '\t' }), ""))
+}
+
+// RecoveryCode makes a one-time recovery code for an account and returns it, for whoever runs the
+// relay to give to its Owner when there is no email server (spec 009 FR-914). It works like an
+// emailed recovery code, for an hour.
+func RecoveryCode(ctx context.Context, st *store.Store, email string, now time.Time) (string, error) {
+	u, err := st.UserByEmail(ctx, normalizeEmail(email))
+	if err != nil {
+		return "", err
+	}
+	code := newCode()
+	if err := st.CreateEmailCode(ctx, u.ID, store.PurposeRecover, codeHash(u.ID, code), now.Add(RecoveryCodeLifetime)); err != nil {
+		return "", err
+	}
+	return code, nil
 }
 
 func (s *Service) signout(w http.ResponseWriter, r *http.Request) {

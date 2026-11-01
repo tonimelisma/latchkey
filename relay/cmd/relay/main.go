@@ -65,9 +65,7 @@ func run(ctx context.Context) error {
 	r, err := server.New(ctx, server.Options{
 		PublicURL: cfg.PublicURL, Store: db, AllowedEmails: cfg.AllowedEmails, Logger: logger, Version: version,
 		TrustedProxies: cfg.TrustedProxies, AllowedClients: cfg.AllowedClientHosts, Operator: cfg.Operator,
-		Mailer: account.NewSMTPMailer(account.SMTPConfig{
-			Host: cfg.SMTPHost, Port: cfg.SMTPPort, User: cfg.SMTPUser, Password: cfg.SMTPPassword, From: cfg.SMTPFrom,
-		}),
+		Mailer: mailer(cfg), SetupCode: cfg.SetupCode,
 	})
 	if err != nil {
 		return err
@@ -146,4 +144,15 @@ func healthcheck() int {
 		return 1
 	}
 	return 0
+}
+
+// mailer is the relay's email server, or nil when it has none (a setup code instead, spec 009
+// FR-908).
+func mailer(cfg config) account.Mailer {
+	if cfg.SMTPHost == "" {
+		return nil
+	}
+	return account.NewSMTPMailer(account.SMTPConfig{
+		Host: cfg.SMTPHost, Port: cfg.SMTPPort, User: cfg.SMTPUser, Password: cfg.SMTPPassword, From: cfg.SMTPFrom,
+	})
 }

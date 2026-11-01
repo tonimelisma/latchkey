@@ -19,6 +19,15 @@ func (s *Store) UserByEmail(ctx context.Context, email string) (User, error) {
 	return s.User(ctx, id)
 }
 
+// AnyVerifiedUser reports whether any account has been created (its email verified), so a setup
+// code no longer opens sign-up (spec 009 FR-907).
+func (s *Store) AnyVerifiedUser(ctx context.Context) (bool, error) {
+	var any bool
+	err := s.db.QueryRowContext(ctx,
+		`SELECT EXISTS(SELECT 1 FROM users WHERE email_verified_at IS NOT NULL AND deleted_at IS NULL)`).Scan(&any)
+	return any, err
+}
+
 // VerifyEmail marks the user's email verified, keeping the first verification time.
 func (s *Store) VerifyEmail(ctx context.Context, userID string, at time.Time) error {
 	res, err := s.db.ExecContext(ctx,
