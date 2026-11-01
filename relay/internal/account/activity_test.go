@@ -37,8 +37,8 @@ func TestAccountPageParts(t *testing.T) {
 	assert.Equal(t, 10, entries(page.body), "the last 10 only")
 	assert.Contains(t, page.body, `href="/account/activity"`)
 	assert.Contains(t, page.body, "Add a machine")
-	assert.Contains(t, page.body, "linux/install.sh | sh -s -- "+e.base)
-	assert.Contains(t, page.body, e.base+"/mcp", "the connector address, even with no Claude app yet")
+	assert.Contains(t, strings.ReplaceAll(page.body, "<wbr>", ""), "linux/install.sh | sh -s -- "+e.base)
+	assert.Contains(t, strings.ReplaceAll(page.body, "<wbr>", ""), e.base+"/mcp", "the connector address, even with no Claude app yet")
 	assert.Contains(t, page.body, "data-copy", "copy buttons")
 	for _, part := range []string{"Machines", "Add a machine", "Claude", "Recent activity", "Account"} {
 		assert.Contains(t, page.body, ">"+part+"</h2>")

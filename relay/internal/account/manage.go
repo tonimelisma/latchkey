@@ -73,7 +73,7 @@ func (s *Service) accountPage(w http.ResponseWriter, r *http.Request) {
 		}
 		if d.ID == newID {
 			mv.New = true
-			v.Done = "“" + d.Name + "” is connected. Latchkey on it finishes setting up by itself; Claude can reach it through your Latchkey connector."
+			v.Done = "“" + d.Name + "” is connected. It shows Online once it finishes setting up, in a few seconds."
 		}
 		v.Machines = append(v.Machines, mv)
 	}
@@ -239,6 +239,19 @@ func (s *Service) deleteAccount(w http.ResponseWriter, r *http.Request) {
 
 func cleanName(n string) string { return store.CleanDeviceName(n, "Mac") }
 
+// joinNames lists names as a sentence does: "a", "a and b", "a, b, and c".
+func joinNames(names []string) string {
+	switch len(names) {
+	case 0:
+		return ""
+	case 1:
+		return names[0]
+	case 2:
+		return names[0] + " and " + names[1]
+	}
+	return strings.Join(names[:len(names)-1], ", ") + ", and " + names[len(names)-1]
+}
+
 func (s *Service) pairPage(w http.ResponseWriter, r *http.Request) {
 	u, tok, ok := s.requireUser(w, r)
 	if !ok {
@@ -248,9 +261,9 @@ func (s *Service) pairPage(w http.ResponseWriter, r *http.Request) {
 	if devices, err := s.cfg.Store.ActiveDevices(r.Context(), u.ID); err == nil && len(devices) > 0 {
 		names := make([]string, len(devices))
 		for i, d := range devices {
-			names[i] = "“" + d.Name + "”"
+			names[i] = d.Name
 		}
-		data["Others"] = strings.Join(names, ", ") // pairing adds this Mac (spec 010 FR-1012)
+		data["Others"] = joinNames(names) // pairing adds this Mac (spec 010 FR-1012)
 	}
 	s.render(w, http.StatusOK, "pair.html", page{Title: "Connect your Mac", Email: u.Email, CSRF: s.csrfFor(tok), Data: data})
 }

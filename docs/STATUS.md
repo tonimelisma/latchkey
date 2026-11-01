@@ -72,7 +72,7 @@ to the top; the account page has Machines, Add a machine (the Linux install line
 address with copy buttons), Claude, Recent activity (last 10), and Account; the activity page lists
 tool calls and the Owner's account events together, 50 at a time; connecting a machine lands on the
 account page with the machine named and marked; times in the viewer's time zone. The browser test
-checks every page at 320, 375, and 1280 px. There is no Mac app download yet, so Add a machine
+checks every page at 320, 375, and 1280 px. Then two visual reviews (Claude's and an independent reviewer's, from screenshots of every page) led to contrast fixes, distinct success/warning/error messages, confirmations before removing, Cancel on approval pages, day headings in the activity, and honest status for a just-connected machine (research.md). There is no Mac app download yet, so Add a machine
 links to the README's Get started.
 Open (later, for Toni): service, container, package, process, and network tools for servers
 (left out of this spec); a direct machine-to-machine file copy; distributions whose sudo uses

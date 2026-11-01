@@ -163,6 +163,12 @@ func New(ctx context.Context, cfg Config) (*Service, error) {
 		"iso":     func(t time.Time) string { return t.UTC().Format(time.RFC3339) },
 		"outcome": outcomeWords,
 		"took":    took,
+		"slow":    func(d time.Duration) bool { return d >= slowCall },
+		"surface": surfaceName,
+		// breakable lets a long command or address wrap after a slash rather than mid-word.
+		"breakable": func(s string) template.HTML {
+			return template.HTML(strings.ReplaceAll(template.HTMLEscapeString(s), "/", "/<wbr>")) //nolint:gosec // escaped above; only <wbr> is added
+		},
 	}).ParseFS(templateFS, "templates/*.html")
 	if err != nil {
 		return nil, err

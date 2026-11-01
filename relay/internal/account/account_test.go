@@ -327,7 +327,7 @@ func TestPairing(t *testing.T) {
 
 	// A second Mac is added; the first stays (spec 010 FR-1001, FR-1012).
 	page = b.get("/pair?name=New+MacBook")
-	assert.Contains(t, page.body, "Your other machines stay connected: “Toni&#39;s MacBook”")
+	assert.Contains(t, page.body, "Your other machines stay connected: Toni&#39;s MacBook.")
 	code = b.pairCode("New MacBook")
 	status, _ = mac.json("/pair/exchange", map[string]string{"code": code, "public_key": p256DER(t), "name": "New MacBook"})
 	require.Equal(t, http.StatusOK, status)

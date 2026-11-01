@@ -722,6 +722,42 @@ Claude:
   pages' policy already allows its own scripts, and without it the page still shows UTC and the
   text can be selected) versus the server guessing a time zone (it can't know the viewer's).
 - A badge only on calls that went wrong (chosen: a "Done" badge on every row was noise).
+- Two visual reviews followed (Toni asked, 2026-11-01): one of Claude's own, one by an
+  independent reviewer working from screenshots of every page (phone and desktop, light and dark)
+  with contrast computed from the stylesheet. Fixed from them:
+  - Contrast:
+    - Dark-mode buttons: white on the system blue was 3.6:1; buttons now use `#0071e3` (4.7:1).
+    - Field outlines: 1.5:1, now `#8e8e93` (3.3:1 light, 4.8:1 dark).
+    - Links: on the gray page they were 4.3:1, now `#0066cc` (5.3:1).
+    - Muted text on the new-machine tint: 4.48:1, now darker.
+  - Messages: success, caution, and failure each have their own color, a left rule, and a
+    symbol, instead of one pale blue box (WCAG 1.4.1, 3.3.1). A wrong code marks the field
+    invalid.
+  - Safety:
+    - Removing a machine or a Claude app asks first (in `page.js`; without the script the form
+      goes ahead, as before).
+    - A row's Remove is quiet red text, no longer a bordered button.
+    - The approval pages have Cancel.
+  - Honesty: the "connected" notice no longer claims Claude can reach a machine whose row says
+    Offline. A new machine shows "Finishing setup…" and a New tag.
+  - Account events are drawn in plain text with a marker, not in the link color (they aren't
+    links).
+  - Wording:
+    - Details no longer repeat the event's title.
+    - "claude-code" shows as Claude Code.
+    - A duration shows only when a call was slow (2 s or more) or failed.
+  - Activity: a heading for each local day (added by `page.js`), and rows show only the time.
+  - Decision pages: the sentence the decision rests on is full color and left aligned, and the
+    machine-chosen name moves into the warning.
+  - Copy fields: an install command wraps only after a slash or space (`<wbr>` added by the
+    template), rather than mid-word or cut off in a scrolling box.
+  - Targets and focus:
+    - Text links get 44 px targets.
+    - The notice after a redirect takes the focus.
+    - Copying is announced to screen readers.
+  - Layout: on phones the card pages sit near the top, rather than mid-screen.
+  Not done: a "Get started" panel for a new account (it would change the account page's order,
+  which Toni chose: FR-651).
 - Checked by `CheckLayout` in the browser test: each page at 320, 375, and 1280 px for sideways
   scrolling, the heading out of reach, anything sticking out, and a field narrower than its
   button. Run against the old stylesheet it fails at 320 px (the heading started 349 px above the

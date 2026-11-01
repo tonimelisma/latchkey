@@ -1,23 +1,24 @@
 {{template "head" .}}
 {{with .Data.Pairing}}
 <h1>Connect “{{.Name}}”?</h1>
-<p class="lead">Claude will be able to reach this {{if eq .Kind "linux"}}Linux server{{else}}machine{{end}} through <strong>{{$.Email}}</strong>, using only the tools turned on with Latchkey on that machine.</p>
-<p class="small">Requested {{$.Data.Requested}}. The name “{{.Name}}” was chosen by that machine.</p>
-<p class="warning">Only connect a machine you just set up yourself. If someone sent you this code, don't connect it: they would see what Claude asks that machine to do.</p>
+<p class="lead decision">Claude will be able to reach this {{if eq .Kind "linux"}}Linux server{{else}}machine{{end}} through <strong>{{$.Email}}</strong>, using only the tools turned on with Latchkey on that machine.</p>
+<p class="small">Requested {{$.Data.Requested}}.</p>
+<p class="warning">The name “{{.Name}}” was chosen by that machine. Only connect it if you just set it up yourself. If someone sent you this code, don't connect it: they would see what Claude asks that machine to do.</p>
 <form method="post" action="/link">
   <input type="hidden" name="csrf" value="{{$.CSRF}}">
   <input type="hidden" name="code" value="{{$.Data.Code}}">
   <input type="hidden" name="confirm" value="1">
   <button class="primary wide" type="submit">Connect</button>
+  <a class="button wide" href="/account">Cancel</a>
 </form>
 {{else}}
 <h1>Connect a machine</h1>
 <p class="lead">Enter the code Latchkey shows on the machine you're setting up.</p>
-{{with $.Data.Error}}<p class="warning" role="alert">{{.}}</p>{{end}}
+{{with $.Data.Error}}<p class="error-box" role="alert">{{.}}</p>{{end}}
 <form method="post" action="/link">
   <input type="hidden" name="csrf" value="{{$.CSRF}}">
   <label for="code">Code</label>
-  <input id="code" name="code" type="text" class="code" maxlength="20" value="{{$.Data.Code}}" autocomplete="off" autocapitalize="characters" spellcheck="false" inputmode="text" placeholder="ABCD-EFGH" required>
+  <input id="code" name="code" type="text" class="code" maxlength="20" value="{{$.Data.Code}}" autocomplete="off" autocapitalize="characters" spellcheck="false" inputmode="text" placeholder="ABCD-EFGH" required autofocus{{if $.Data.Error}} aria-invalid="true"{{end}}>
   <button class="primary wide" type="submit">Continue</button>
 </form>
 {{end}}

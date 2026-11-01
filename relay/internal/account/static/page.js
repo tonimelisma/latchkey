@@ -15,15 +15,51 @@
     if (isNaN(t)) continue;
     const ago = (today - day(t)) / 86400000;
     let text;
-    if (ago === 0) text = clock.format(t);
+    if (ago === 0 || el.closest("ol.activity")) text = clock.format(t); // the list has day headings
     else if (ago === 1) text = "Yesterday, " + clock.format(t);
     else text = (t.getFullYear() === now.getFullYear() ? date : dateYear).format(t) + ", " + clock.format(t);
     el.title = t.toString();
     el.textContent = text;
   }
+
+  // The activity list gets a heading for each day, so a long list can be scanned by day.
+  const dayName = new Intl.DateTimeFormat(undefined, { weekday: "long", month: "short", day: "numeric" });
+  const dayNameYear = new Intl.DateTimeFormat(undefined, { weekday: "long", month: "short", day: "numeric", year: "numeric" });
+  for (const list of document.querySelectorAll("ol.activity")) {
+    let last = null;
+    for (const item of [...list.querySelectorAll(":scope > li.entry")]) {
+      const el = item.querySelector("time[datetime]");
+      const t = el && new Date(el.getAttribute("datetime"));
+      if (!t || isNaN(t)) continue;
+      const d = day(t);
+      if (d === last) continue;
+      last = d;
+      const ago = (today - d) / 86400000;
+      const head = document.createElement("li");
+      head.className = "day";
+      head.textContent = ago === 0 ? "Today" : ago === 1 ? "Yesterday"
+        : (t.getFullYear() === now.getFullYear() ? dayName : dayNameYear).format(t);
+      list.insertBefore(head, item);
+    }
+  }
 })();
 
-// Copy buttons: data-copy names the element whose text is copied.
+// Removals ask first (data-confirm holds the question); without the script they go ahead.
+for (const form of document.querySelectorAll("form[data-confirm]")) {
+  form.addEventListener("submit", (event) => {
+    if (!window.confirm(form.dataset.confirm)) event.preventDefault();
+  });
+}
+
+// A message saying what just happened takes the focus, so screen readers read it on arrival.
+document.querySelector("[data-focus]")?.focus();
+
+// Copy buttons: data-copy names the element whose text is copied. A hidden live region tells
+// screen readers it worked.
+const copyStatus = document.createElement("span");
+copyStatus.className = "visually-hidden";
+copyStatus.setAttribute("aria-live", "polite");
+document.body.append(copyStatus);
 for (const button of document.querySelectorAll("button[data-copy]")) {
   button.addEventListener("click", async () => {
     const source = document.getElementById(button.dataset.copy);
@@ -32,6 +68,7 @@ for (const button of document.querySelectorAll("button[data-copy]")) {
     try {
       await navigator.clipboard.writeText(source.textContent.trim());
       button.textContent = "Copied";
+      copyStatus.textContent = "Copied to the clipboard.";
     } catch {
       // No clipboard access: select the text so the viewer can copy it themselves.
       const range = document.createRange();

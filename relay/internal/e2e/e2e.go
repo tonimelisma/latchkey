@@ -315,7 +315,14 @@ const layoutProblem = `(() => {
   if (!first) return "no heading";
   const top = first.getBoundingClientRect().top;
   if (top < 0) return "the top is out of reach: the heading starts at " + top + " px";
+  const inScroller = (el) => {
+    for (let p = el.parentElement; p; p = p.parentElement) {
+      if (/(auto|scroll)/.test(getComputedStyle(p).overflowX)) return true;
+    }
+    return false;
+  };
   for (const el of document.querySelectorAll("main *")) {
+    if (/(auto|scroll)/.test(getComputedStyle(el).overflowX) || inScroller(el)) continue; // scrolls in its own box, as code may
     const r = el.getBoundingClientRect();
     if (r.width > 0 && r.right > window.innerWidth + 1) return el.tagName + "." + el.className + " sticks out to " + r.right + " px";
   }

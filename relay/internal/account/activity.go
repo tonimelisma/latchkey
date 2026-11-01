@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/tonimelisma/latchkey/relay/internal/events"
@@ -87,7 +88,7 @@ func (s *Service) activity(ctx context.Context, userID string, before time.Time,
 		out = append(out, entry{At: c.At, What: c.Tool, Machine: machine(c.DeviceID), Outcome: c.Outcome, Duration: c.Duration, Surface: c.Surface})
 	}
 	for _, e := range evs {
-		out = append(out, entry{At: e.At, Event: true, What: ownerEvents[e.Kind], Machine: machine(e.DeviceID), Detail: e.Detail, Count: e.Count})
+		out = append(out, entry{At: e.At, Event: true, What: ownerEvents[e.Kind], Machine: machine(e.DeviceID), Detail: ownerDetail(e.Detail), Count: e.Count})
 	}
 	sort.SliceStable(out, func(i, j int) bool { return out[i].At.After(out[j].At) })
 	more := len(out) > limit
@@ -129,6 +130,39 @@ func (s *Service) activityPage(w http.ResponseWriter, r *http.Request) {
 		v.Older = "/account/activity?before=" + strconv.FormatInt(list[len(list)-1].At.UnixMilli(), 10)
 	}
 	s.render(w, http.StatusOK, "activity.html", page{Title: "Activity", Email: u.Email, CSRF: s.csrfFor(tok), Data: v, Wide: true})
+}
+
+// ownerDetail is an event's detail without the words its title already says: "signed in" adds
+// nothing to "Signed in with a passkey", and "signed up: address confirmed…" keeps only what
+// follows the colon.
+func ownerDetail(d string) string {
+	switch {
+	case d == "signed in":
+		return ""
+	case strings.HasPrefix(d, "signed up: "):
+		return strings.TrimPrefix(d, "signed up: ")
+	case strings.HasPrefix(d, "account recovered: "):
+		return strings.TrimPrefix(d, "account recovered: ")
+	}
+	return d
+}
+
+// slowCall is how long a call takes before the activity shows its duration; quicker ones that
+// went well show none, which keeps the list short to read.
+const slowCall = 2 * time.Second
+
+// surfaceName is a Claude app's name as the activity shows it: "claude-code" is "Claude Code".
+// The name comes from the client, cleaned when stored (FR-022a); unknown ones are shown as given.
+func surfaceName(s string) string {
+	switch strings.ToLower(s) {
+	case "claude-code":
+		return "Claude Code"
+	case "claude-ai", "claude.ai":
+		return "Claude"
+	case "claude-desktop":
+		return "Claude Desktop"
+	}
+	return s
 }
 
 // outcomeWords is a call's outcome as the activity shows it.

@@ -1,14 +1,31 @@
+/* Colors are checked against WCAG 2.2 AA: text 4.5:1, a control's outline 3:1 (ratios noted). */
 :root {
   color-scheme: light dark;
   --page: #f5f5f7; --card: #ffffff; --fg: #1d1d1f; --muted: #6e6e73; --line: #d2d2d7;
-  --field: #ffffff; --accent: #0071e3; --accent-fg: #ffffff; --danger: #d70015; --ok: #1a7f37;
-  --note: #e8f2fd; --code: #f5f5f7; --new: #e8f2fd; --shadow: 0 1px 2px rgba(0,0,0,.04), 0 8px 28px rgba(0,0,0,.08);
+  --field: #ffffff; --field-line: #8e8e93; /* 3.3:1 on white */
+  --accent: #0066cc; /* links 5.6:1 on white, 5.3:1 on the page */
+  --accent-fill: #0066cc; --accent-fg: #ffffff; /* button label 5.6:1 */
+  --danger: #c4000f; --ok: #1a7f37;
+  --code: #f0f0f2; --button-on-code: #ffffff;
+  --notice: #e7f5ec; --notice-fg: #0f5c2a; --notice-line: #1a7f37;
+  --warn: #fff5e0; --warn-fg: #6b4300; --warn-line: #b07000;
+  --error: #fdecee; --error-fg: #a5000f; --error-line: #c4000f;
+  --new: #eaf3fe; --new-muted: #55555a;
+  --shadow: 0 1px 2px rgba(0,0,0,.04), 0 8px 28px rgba(0,0,0,.08);
 }
 @media (prefers-color-scheme: dark) {
   :root {
     --page: #000000; --card: #1c1c1e; --fg: #f5f5f7; --muted: #a1a1a6; --line: #38383a;
-    --field: #2c2c2e; --accent: #0a84ff; --danger: #ff453a; --ok: #30d158; --note: #0a2a4a;
-    --code: #2c2c2e; --new: #0a2a4a; --shadow: none;
+    --field: #2c2c2e; --field-line: #8e8e93; /* 4.8:1 on the field */
+    --accent: #4da3ff; /* links 6.4:1 on the card */
+    --accent-fill: #0071e3; --accent-fg: #ffffff; /* 4.7:1; the bright system blue is 3.6:1 */
+    --danger: #ff6961; --ok: #30d158;
+    --code: #2c2c2e; --button-on-code: #000000;
+    --notice: #10301c; --notice-fg: #7ee2a0; --notice-line: #30d158;
+    --warn: #3a2a05; --warn-fg: #ffd27a; --warn-line: #e0a020;
+    --error: #3a1013; --error-fg: #ff8a84; --error-line: #ff6961;
+    --new: #0d2a47; --new-muted: #c0c0c5;
+    --shadow: none;
   }
 }
 * { box-sizing: border-box; }
@@ -19,37 +36,38 @@ body {
   -webkit-font-smoothing: antialiased;
   display: flex; flex-direction: column;
 }
+.visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 /* The page sits in the middle when it fits and starts at the top when it doesn't: auto margins
    never push content above the scrollable area, as centering with justify-content does. */
 .page { width: 100%; margin: auto; padding: 24px 16px; display: flex; flex-direction: column; align-items: center; }
 .page > main, .page > footer { width: 100%; }
 .card {
-  max-width: 400px; background: var(--card); border-radius: 18px;
+  max-width: 420px; background: var(--card); border-radius: 18px;
   padding: 32px 28px 24px; box-shadow: var(--shadow); border: 1px solid var(--line);
 }
-.page > footer { max-width: 400px; text-align: center; }
+.page > footer { max-width: 420px; text-align: center; }
 
 /* Wide pages (account, activity, legal): a page of grouped panels rather than one card. */
 .page.wide { margin: 0 auto; max-width: 760px; align-items: stretch; padding-top: 0; }
 .page.wide > footer { max-width: none; }
-.top { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px 0 8px; flex-wrap: wrap; }
-.brand { display: inline-flex; align-items: center; gap: 8px; font-weight: 600; color: var(--fg); }
+.top { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 0 4px; flex-wrap: wrap; }
+.brand { display: inline-flex; align-items: center; gap: 8px; font-weight: 600; color: var(--fg); min-height: 44px; }
 .brand:hover { text-decoration: none; }
-.who { font-size: 13px; color: var(--muted); overflow-wrap: anywhere; }
-.page.wide h1 { text-align: left; font-size: 28px; margin: 16px 0 12px; }
+.who { font-size: 13px; color: var(--muted); overflow-wrap: anywhere; display: inline-flex; align-items: center; min-height: 44px; }
+.page.wide h1 { text-align: left; font-size: 28px; margin: 12px 0 12px; }
 .page.wide section { margin: 28px 0 0; }
 .page.wide h2 { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 0 0 8px 4px; }
 .panel { background: var(--card); border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--shadow); overflow: hidden; }
 .panel > :last-child { margin-bottom: 0; }
 .howto { padding: 14px 16px; border-top: 1px solid var(--line); }
 .howto:first-child { border-top: 0; }
-.howto h3 { font-size: 15px; margin: 0 0 4px; }
+.howto h3 { font-size: 17px; font-weight: 600; margin: 0 0 4px; }
 .howto p { margin: 0 0 10px; }
 .howto > :last-child, .howto form:last-child { margin-bottom: 0; }
 .empty { color: var(--muted); padding: 14px 16px; margin: 0; }
 .hint { font-size: 13px; color: var(--muted); margin: 8px 4px 0; }
 .after-panel { margin: 12px 0 0; }
-.back { margin: 16px 0 0; font-size: 15px; }
+.back { margin: 8px 0 0; font-size: 15px; }
 .pager { display: flex; justify-content: space-between; gap: 12px; margin: 16px 0 0; }
 .pager a:only-child { margin-left: auto; }
 
@@ -58,20 +76,26 @@ h1 { font-size: 24px; line-height: 1.2; letter-spacing: -0.01em; margin: 0 0 8px
 h2 { font-size: 17px; margin: 0 0 6px; }
 p { margin: 0 0 16px; }
 .lead { color: var(--muted); text-align: center; }
+/* A decision's explanation is what the choice rests on: full color, left aligned for reading. */
+.lead.decision { color: var(--fg); text-align: left; }
 .page.wide .lead { text-align: left; }
 .host { text-align: center; }
 .small { font-size: 13px; color: var(--muted); }
 .center { text-align: center; }
 a { color: var(--accent); text-decoration: none; }
 a:hover { text-decoration: underline; }
+/* Text links get a 44 px tall target without moving the text. */
+.small a, .hint a, .back a, .footer a { display: inline-block; padding: 12px 4px; margin: -12px -4px; }
 label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; }
 input[type=email], input[type=text] {
   display: block; width: 100%; font: inherit; font-size: 17px; padding: 11px 14px; margin: 0 0 16px;
-  border: 1px solid var(--line); border-radius: 10px; background: var(--field); color: var(--fg);
+  border: 1px solid var(--field-line); border-radius: 10px; background: var(--field); color: var(--fg);
 }
-input.code { font-size: 24px; letter-spacing: .2em; text-align: center; font-variant-numeric: tabular-nums; text-transform: uppercase; }
-input.code::placeholder { color: var(--muted); opacity: .5; }
+input[aria-invalid=true] { border-color: var(--error-line); }
+input.code { font-size: 24px; letter-spacing: .2em; padding-left: calc(14px + .2em); text-align: center; font-variant-numeric: tabular-nums; text-transform: uppercase; }
+input.code::placeholder { color: var(--muted); opacity: 1; letter-spacing: .2em; }
 input:focus-visible, button:focus-visible, .button:focus-visible, a:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+[data-focus]:focus { outline: none; }
 button, .button {
   display: inline-block; font: inherit; font-weight: 600; padding: 11px 18px; min-height: 44px;
   border-radius: 10px; border: 1px solid var(--line); background: transparent; color: var(--fg);
@@ -79,48 +103,67 @@ button, .button {
 }
 .button:hover { text-decoration: none; }
 button.wide, .button.wide { display: block; width: 100%; margin: 0 0 10px; }
-button.primary, .button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); }
+button.primary, .button.primary { background: var(--accent-fill); border-color: var(--accent-fill); color: var(--accent-fg); }
 button.destructive { color: var(--danger); }
+/* A row's Remove is quiet: red text, no outline, still a 44 px target. */
+ul.rows button.destructive { border-color: transparent; padding: 8px 10px; }
+ul.rows button.destructive:hover { background: var(--error); }
 button.link { border: 0; padding: 0; min-height: 0; font-weight: inherit; color: var(--accent); background: none; }
 .small-button { font-size: 15px; padding: 8px 14px; }
 button:disabled { opacity: .5; cursor: default; }
 form { margin: 0 0 12px; }
 .error { color: var(--danger); font-size: 14px; }
-.warning, .notice { background: var(--note); border-radius: 10px; padding: 10px 14px; font-size: 15px; }
+
+/* Messages: success, caution, and failure each look their own, with a symbol as well as a color. */
+.notice, .warning, .error-box { border-radius: 10px; padding: 10px 14px 10px 40px; font-size: 15px; border-left: 4px solid; position: relative; }
+.notice::before, .warning::before, .error-box::before { position: absolute; left: 14px; top: 10px; font-weight: 700; }
+.notice { background: var(--notice); color: var(--notice-fg); border-color: var(--notice-line); }
+.notice::before { content: "✓"; }
+.warning { background: var(--warn); color: var(--warn-fg); border-color: var(--warn-line); }
+.warning::before { content: "!"; }
+.error-box { background: var(--error); color: var(--error-fg); border-color: var(--error-line); }
+.error-box::before { content: "×"; font-size: 18px; top: 7px; }
 
 /* Rows of things you manage: name and details, with the row's action on the right. */
 ul.rows { list-style: none; padding: 0; margin: 0; border-top: 1px solid var(--line); }
-.howto:only-child + ul.rows, .panel > ul.rows:first-child { border-top: 0; }
+.panel > ul.rows:first-child { border-top: 0; }
 ul.rows li { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--line); }
 ul.rows li:last-child { border-bottom: 0; }
 ul.rows li.new { background: var(--new); }
+ul.rows li.new .row-sub { color: var(--new-muted); }
 ul.rows form { margin: 0; flex: none; }
 .row-main { min-width: 0; }
-.row-title { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; overflow-wrap: anywhere; }
+.row-title { overflow-wrap: anywhere; }
 .row-sub { font-size: 13px; color: var(--muted); overflow-wrap: anywhere; }
-.status { font-size: 13px; font-weight: 600; }
+.tag { display: inline-block; font-size: 12px; font-weight: 700; padding: 0 7px; border-radius: 999px; background: var(--accent-fill); color: var(--accent-fg); vertical-align: 2px; }
+.status { font-weight: 600; white-space: nowrap; }
 .status::before { content: ""; display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 5px; background: currentColor; vertical-align: 1px; }
 .online { color: var(--ok); }
 .offline { color: var(--muted); }
 
-/* Text to copy, such as the install command: wraps on narrow screens instead of widening the page. */
-.copyfield { display: flex; align-items: flex-start; gap: 8px; background: var(--code); border-radius: 10px; padding: 8px 8px 8px 12px; }
-.copyfield code { flex: 1; min-width: 0; padding: 6px 0; overflow-wrap: anywhere; font-size: 13px; }
-.copyfield button { flex: none; background: var(--card); }
+/* Text to copy, such as the install command: wraps only after a slash or a space (the template
+   adds the break points), so no word is split and the whole command stays visible. */
+.copyfield { display: flex; align-items: center; gap: 8px; background: var(--code); border-radius: 10px; padding: 6px 6px 6px 12px; }
+.copyfield code { flex: 1; min-width: 0; padding: 8px 0; overflow-wrap: break-word; font-size: 13px; }
+.copyfield button { flex: none; background: var(--button-on-code); border-color: var(--field-line); }
 
-/* The activity list: one entry per row, reflowing on narrow screens (no table to scroll). */
+/* The activity list: one entry per row, reflowing on narrow screens (no table to scroll); page.js
+   adds a heading for each day. */
 ol.activity { list-style: none; margin: 0; padding: 0; }
+.activity .day { padding: 8px 16px 6px; font-size: 13px; font-weight: 600; color: var(--muted); background: var(--page); border-bottom: 1px solid var(--line); position: sticky; top: 0; }
 .entry { display: grid; grid-template-columns: 1fr auto; column-gap: 12px; padding: 10px 16px; border-bottom: 1px solid var(--line); }
 .entry:last-child { border-bottom: 0; }
 .entry-what { min-width: 0; overflow-wrap: anywhere; }
-.entry-what .what { font-weight: 600; }
 .entry-what code.what { font-weight: 500; }
 .entry-what .on { color: var(--muted); }
 .entry-sub { grid-column: 1 / -1; font-size: 13px; color: var(--muted); overflow-wrap: anywhere; }
-.entry.event .entry-what .what { color: var(--accent); }
-.badge { align-self: start; font-size: 12px; font-weight: 600; padding: 1px 8px; border-radius: 999px; color: var(--muted); border: 1px solid var(--line); white-space: nowrap; }
-.badge.error, .badge.timeout { color: var(--danger); border-color: currentColor; }
-.badge.offline { color: var(--muted); }
+/* Account events are not links: plain text with a marker, not the link color. */
+.entry.event .what { font-weight: 600; }
+.entry.event .entry-what::before { content: ""; display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 8px; background: var(--muted); vertical-align: 1px; }
+.badge { align-self: start; font-size: 13px; font-weight: 600; padding: 0 8px; border-radius: 999px; white-space: nowrap; border: 1px solid; }
+.badge.error { color: var(--error-fg); background: var(--error); border-color: var(--error-line); }
+.badge.timeout { color: var(--warn-fg); background: var(--warn); border-color: var(--warn-line); }
+.badge.offline { color: var(--fg); background: var(--code); border-color: var(--field-line); }
 
 table { width: 100%; border-collapse: collapse; font-size: 13px; margin-bottom: 12px; }
 th, td { text-align: left; padding: 6px 8px 6px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
@@ -131,6 +174,8 @@ ul { padding-left: 20px; }
 code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .9em; }
 .footer { margin: 16px 0 0; font-size: 13px; }
 @media (max-width: 600px) {
+  /* On a phone the card sits near the top, within the thumb's reach, rather than mid-screen. */
+  .page:not(.wide) { margin: 0 auto auto; padding-top: 8vh; }
   .card { padding: 24px 18px; }
   .page.wide h1 { font-size: 24px; }
   ul.rows li { align-items: flex-start; }

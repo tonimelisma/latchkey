@@ -1,6 +1,6 @@
 {{template "head" .}}
 <h1>Your account</h1>
-{{with .Data.Done}}<p class="notice" role="status">{{.}}</p>{{end}}
+{{with .Data.Done}}<p class="notice" role="status" tabindex="-1" data-focus>{{.}}</p>{{end}}
 
 <section aria-labelledby="machines">
   <h2 id="machines">Machines</h2>
@@ -9,11 +9,10 @@
     <ul class="rows">{{range .Data.Machines}}
       <li class="machine{{if .New}} new{{end}}">
         <div class="row-main">
-          <div class="row-title"><strong>{{.Name}}</strong>
-            {{if .Online}}<span class="status online">Online</span>{{else}}<span class="status offline">Offline</span>{{end}}</div>
-          <div class="row-sub">{{if eq .Kind "linux"}}Linux server{{if .AppVersion}} · Latchkey {{.AppVersion}}{{if .OSVersion}} on {{.OSVersion}}{{end}}{{end}}{{else}}Mac{{if .AppVersion}} · Latchkey {{.AppVersion}}{{if .OSVersion}} on macOS {{.OSVersion}}{{end}}{{end}}{{end}}{{if and (not .Online) (not .LastSeen.IsZero)}} · last seen <time datetime="{{iso .LastSeen}}">{{when .LastSeen}}</time>{{end}}</div>
+          <div class="row-title"><strong>{{.Name}}</strong>{{if .New}} <span class="tag">New</span>{{end}}</div>
+          <div class="row-sub">{{if .Online}}<span class="status online">Online</span>{{else if .New}}<span class="status offline">Finishing setup…</span>{{else}}<span class="status offline">Offline</span>{{end}} · {{if eq .Kind "linux"}}Linux server{{if .AppVersion}} · Latchkey {{.AppVersion}}{{if .OSVersion}} on {{.OSVersion}}{{end}}{{end}}{{else}}Mac{{if .AppVersion}} · Latchkey {{.AppVersion}}{{if .OSVersion}} on macOS {{.OSVersion}}{{end}}{{end}}{{end}}{{if and (not .Online) (not .LastSeen.IsZero)}} · last seen <time datetime="{{iso .LastSeen}}">{{when .LastSeen}}</time>{{end}}</div>
         </div>
-        <form method="post" action="/account/machines/remove">
+        <form method="post" action="/account/machines/remove" data-confirm="Remove “{{.Name}}”? Claude can no longer reach it until you connect it again.">
           <input type="hidden" name="csrf" value="{{$.CSRF}}">
           <input type="hidden" name="id" value="{{.ID}}">
           <button type="submit" class="destructive small-button" aria-label="Remove {{.Name}}">Remove</button>
@@ -37,7 +36,7 @@
     <div class="howto">
       <h3>A Linux server</h3>
       <p>Run this on the server, signed in as the account Claude should use. It shows a code to enter here.</p>
-      <div class="copyfield"><code id="install-line">{{.Data.InstallLine}}</code><button type="button" class="small-button" data-copy="install-line">Copy</button></div>
+      <div class="copyfield"><code id="install-line">{{breakable .Data.InstallLine}}</code><button type="button" class="small-button" data-copy="install-line">Copy</button></div>
     </div>
   </div>
 </section>
@@ -47,7 +46,7 @@
   <div class="panel">
     <div class="howto">
       <p>To connect Claude, open <strong>Settings → Connectors → Add custom connector</strong> in Claude and paste this address:</p>
-      <div class="copyfield"><code id="connector">{{.Data.Connector}}</code><button type="button" class="small-button" data-copy="connector">Copy</button></div>
+      <div class="copyfield"><code id="connector">{{breakable .Data.Connector}}</code><button type="button" class="small-button" data-copy="connector">Copy</button></div>
     </div>
   {{if .Data.Clients}}
     <ul class="rows">{{range .Data.Clients}}
@@ -56,7 +55,7 @@
           <div class="row-title"><strong>{{.Name}}</strong></div>
           <div class="row-sub">Allowed <time datetime="{{iso .Approved}}">{{when .Approved}}</time>{{if eq .Redirect "this computer"}}, on this computer{{end}} · {{if .LastUsed.IsZero}}not used yet{{else}}last used <time datetime="{{iso .LastUsed}}">{{when .LastUsed}}</time>{{end}}</div>
         </div>
-        <form method="post" action="/account/revoke-client">
+        <form method="post" action="/account/revoke-client" data-confirm="Remove {{.Name}}'s access? It will ask you to allow it again next time.">
           <input type="hidden" name="csrf" value="{{$.CSRF}}">
           <input type="hidden" name="id" value="{{.ID}}">
           <button type="submit" class="destructive small-button" aria-label="Remove {{.Name}}">Remove</button>
@@ -68,7 +67,7 @@
   {{end}}
   </div>
   {{if .Data.Clients}}
-  <form method="post" action="/account/revoke-claude" class="after-panel">
+  <form method="post" action="/account/revoke-claude" class="after-panel" data-confirm="Remove every Claude app's access? Each will ask you to allow it again.">
     <input type="hidden" name="csrf" value="{{.CSRF}}">
     <button type="submit" class="destructive">Remove Claude's access</button>
     <p class="hint">Removes every app listed above.</p>
@@ -81,7 +80,7 @@
   <div class="panel">
   {{if .Data.Recent}}{{template "entries" .Data.Recent}}{{else}}<p class="empty">Nothing yet. Claude's tool calls and changes to your account appear here.</p>{{end}}
   </div>
-  <p class="hint"><a href="/account/activity">See all activity</a> · Arguments and results are never stored here; each machine keeps its own full log.</p>
+  <p class="hint"><a href="/account/activity">See all activity ›</a></p>
 </section>
 
 <section aria-labelledby="acct">

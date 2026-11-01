@@ -14,7 +14,7 @@
 {{if .Wide}}<div class="page wide">
 <header class="top">
   <a class="brand" href="{{if .Email}}/account{{else}}/{{end}}"><img src="/static/icon.svg" alt="" width="28" height="28"> Latchkey</a>
-  {{with .Email}}<span class="who">{{.}}</span>{{end}}
+  {{with .Email}}<a class="who" href="/account#acct">{{.}}</a>{{end}}
 </header>
 <main>
 {{else}}<div class="page">
@@ -39,6 +39,6 @@
   <li class="entry{{if .Event}} event{{end}}">
     <div class="entry-what">{{if .Event}}<span class="what">{{.What}}</span>{{with .Machine}}<span class="on">: {{.}}</span>{{end}}{{else}}<code class="what">{{.What}}</code>{{with .Machine}} <span class="on">on {{.}}</span>{{end}}{{end}}</div>
     {{if and (not .Event) (ne .Outcome "ok")}}<span class="badge {{.Outcome}}">{{outcome .Outcome}}</span>{{end}}
-    <div class="entry-sub"><time datetime="{{iso .At}}">{{when .At}}</time>{{if .Event}}{{with .Detail}} · {{.}}{{end}}{{if gt .Count 1}} · {{.Count}} times{{end}}{{else}} · {{took .Duration}}{{with .Surface}} · {{.}}{{end}}{{end}}</div>
+    <div class="entry-sub"><time datetime="{{iso .At}}">{{when .At}}</time>{{if .Event}}{{with .Detail}} · {{.}}{{end}}{{if gt .Count 1}} · {{.Count}} times{{end}}{{else}}{{with .Surface}} · {{surface .}}{{end}}{{if or (ne .Outcome "ok") (slow .Duration)}} · took {{took .Duration}}{{end}}{{end}}</div>
   </li>{{end}}
 </ol>{{end}}
