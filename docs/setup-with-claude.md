@@ -92,8 +92,9 @@ code is no longer needed (sign-up is now closed).
 ## If they lose their passkey (later)
 
 When someone comes back saying they can't sign in to their relay any more: sign in to Google
-(`gcloud auth login`), make a new recovery code, and give it to the relay as its spec says
-(spec 009 FR-914; the exact command comes with the plan). Then open the relay's page and say:
+(`gcloud auth login`), then make a code on the server:
+`gcloud compute ssh latchkey-relay --zone <zone> --command "sudo podman exec latchkey-relay /relay account recovery-code <their email>"`.
+Then open the relay's page and say:
 
 > Click "Lost your passkey?", enter your email address and this code: **<code>**. Then save the
 > new passkey. Your Mac stays connected; nothing else changes. The code works once, for an hour.
@@ -149,7 +150,9 @@ mkdir -p /etc/containers/systemd
 cat > /etc/containers/systemd/latchkey-relay.container <<'UNIT'
 [Container]
 Image=ghcr.io/tonimelisma/latchkey-relay:latest
+ContainerName=latchkey-relay
 AutoUpdate=registry
+Notify=true
 Volume=latchkey-data:/data
 PublishPort=443:8080
 Environment=PUBLIC_URL=https://<name> ACME_EMAIL=<email> SETUP_CODE=<code>
