@@ -93,7 +93,9 @@ redraws them).
    Accessibility; and Safari's "Allow JavaScript from Apple Events"). Right after you connect,
    Latchkey asks each macOS question in turn, then opens each System Settings page you need, one
    after another, as you turn Latchkey on. Later, the
-   Permissions tab in Latchkey's Settings window shows each one and whether it's allowed.
+   Permissions tab in Latchkey's Settings window shows each one and whether it's allowed. No
+   relay yet? The first step's Copy Request gives you a request to paste into Claude Code, which
+   sets one up for you on a free server ([docs/setup-with-claude.md](docs/setup-with-claude.md)).
 2. **Connect Claude.** On claude.ai, open Settings → Connectors → Add custom connector, and enter
    your relay's address followed by `/mcp`, for example `https://relay.example.com/mcp`. Sign
    in with your passkey and click Allow. The connector then appears in Claude Desktop and the

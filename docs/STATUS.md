@@ -48,8 +48,15 @@ on a server. Spec 009 and the guide Claude Code follows (docs/setup-with-claude.
 for Toni's review. Default host: Google Cloud's free server (Toni, 2026-10-31). Lost passkeys are
 replaced through Claude Code with a one-time recovery code (Toni). The repository is public
 (2026-10-31). Plan and tasks written
-(specs/009-easy-relay-setup/plan.md, tasks.md); next: the relay tasks T1–T7, then the guide's real
-run on Google Cloud, then the app's "Set one up with Claude". Open: checking on a fresh Google
+(specs/009-easy-relay-setup/plan.md, tasks.md). Built (0.8.60, 2026-10-31): the relay's setup
+code (no email server needed), the operator's recovery-code command, the ready signal for
+Podman's update rollback, a database copy before migrations, the deploy publishing images for
+Intel and Arm servers, the self-hosting docs, and the app's "Copy Request" for Claude Code in
+setup; the session cookie was already host-bound. Tested: unit tests, and real Chrome claiming a
+relay with its setup code and recovering with the operator's code. Waiting on Toni: one browser
+click to let the GitHub CLI publish images (`gh auth refresh -s write:packages`), then making the
+package public; until then the relay isn't deployed (publishing is part of every deploy) and the
+guide's real run on Google Cloud (T9) can't start. Open: checking on a fresh Google
 account that the free server's address costs nothing and whether the trial must be upgraded.
 
 Nothing left behind (Toni, 2026-10-27; app 0.8.32): after headless Chrome ran two days and

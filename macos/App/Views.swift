@@ -325,6 +325,7 @@ struct SetupView: View {
     @State private var relay = ""
     @State private var working = false
     @State private var opened: String?
+    @State private var copiedRequest = false
     /// A step shown open whatever its state, for the size test.
     var showing: String?
     /// The relay address shown in place of the default, for pictures (the default is private).
@@ -352,6 +353,20 @@ struct SetupView: View {
                 }
                 if let error = model.lastError {
                     Text(error).foregroundStyle(.red).fixedSize(horizontal: false, vertical: true)
+                }
+                // Spec 009 FR-903: Claude Code sets up a relay by following the guide.
+                Text(
+                    "Don’t have a relay? Claude Code can set one up for you on a free server. Copy this request and paste it into Claude Code, in Claude Desktop’s Code tab."
+                )
+                .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                HStack {
+                    Button("Copy Request") {
+                        SetupRequest.copy()
+                        copiedRequest = true
+                    }
+                    if copiedRequest {
+                        Label("Copied", systemImage: "checkmark").foregroundStyle(.secondary)
+                    }
                 }
             }
             step("questions", "Answer macOS’s questions") {
