@@ -29,6 +29,28 @@ address, and every free server needs a card (Azure for Students excepted).
 | Fly.io | Yes after trial | No | Paid, ≈ $2.35/mo | https://docs.fly.io/about/pricing |
 | Cloud Run, Cloudflare, DO App Platform | — | — | No | No disk for SQLite, or disk wiped on sleep. https://docs.cloud.google.com/run/docs/triggering/websockets, https://developers.cloudflare.com/containers/platform-details/, https://docs.digitalocean.com/products/app-platform/details/limits/ |
 
+AWS and Azure, checked again with secondary sources (2026-10-31): neither has a server that is
+free for good. AWS's Free plan (accounts from 2025-07-15) is $100–200 of credits for 6 months,
+then the account closes; EC2 isn't on the always-free list; public IPv4 is $0.005/h
+(https://aws.amazon.com/blogs/aws/aws-free-tier-update-new-customers-can-get-started-and-explore-aws-with-up-to-200-in-credits/,
+https://aws.amazon.com/vpc/pricing/). Lambda with API Gateway WebSockets can't hold the Mac's
+connection (2 h maximum, 10 min idle;
+https://docs.aws.amazon.com/apigateway/latest/developerguide/apigateway-execution-service-websocket-limits-table.html).
+Azure's VMs are free for 12 months only; App Service F1 is free for good but unloads idle apps,
+allows 5 WebSockets and 60 CPU minutes a day; Container Apps' monthly grant covers about 28% of
+one always-on replica, and SQLite on its Azure Files storage is unreliable
+(https://azure.microsoft.com/en-us/pricing/free-services,
+https://learn.microsoft.com/en-us/azure/azure-resource-manager/management/azure-subscription-service-limits#app-service-limits,
+https://learn.microsoft.com/en-us/azure/container-apps/billing). No credible report of a $0
+always-on server on either was found.
+
+Google's free server in practice: on Toni's own bill (October 2026, the relay's e2-micro in
+us-central1 with a reserved IPv4 address in use), the server's processor ($3.98) and memory
+($2.13) at list price are covered, and no public-IPv4 charge appears; the month cost $0.23, all
+disk backups. Google's price list says $0.005/h with one free hour a month
+(https://cloud.google.com/vpc/network-pricing), and community reports conflict. To be confirmed
+on a fresh account before the guide promises $0.
+
 No cloud offers a hard spending cap on these; Oracle's and Google's budgets only send email
 (https://docs.oracle.com/en-us/iaas/Content/Billing/Concepts/budgetsoverview.htm,
 https://docs.cloud.google.com/billing/docs/how-to/budgets).
