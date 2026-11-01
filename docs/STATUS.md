@@ -1,6 +1,6 @@
 # Status
 
-Last updated: 2026-10-31 (never stops reconnecting; one copy at a time; app 0.8.58)
+Last updated: 2026-10-31 (README pictures; app 0.8.59)
 
 Xcode signing ready (2026-10-20): Toni's Xcode account has a valid "Apple Development" certificate
 (certificate expires 2027-07-22). Keep the team ID out of committed project files
@@ -329,6 +329,12 @@ good, so the Mac stayed offline until restarted. Now a second copy quits at once
 stops trying while paired, and the state update that got every start refused once (sent
 during the sign-in) waits for the welcome. The permission notice was seen to work in the same
 event: Location turned off at 16:43, notification delivered at 16:44:52.
+
+README pictures (0.8.59, 2026-10-31): the README shows the setup window (connect, macOS's
+questions) and Settings (What Claude Can Do, Permissions), drawn by the app's own views with
+sample data (`macos/scripts/readme-shots.sh`; never this Mac's data or the hosted relay's
+address). The menu bar menu isn't pictured: it can't be drawn off-screen, and a real capture
+would show real activity.
 
 Shell test fixed (2026-10-31): "a process that left the terminal is stopped too" gave its
 program a fixed half second to start, and failed once while the whole suite ran. It now waits

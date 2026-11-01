@@ -327,6 +327,8 @@ struct SetupView: View {
     @State private var opened: String?
     /// A step shown open whatever its state, for the size test.
     var showing: String?
+    /// The relay address shown in place of the default, for pictures (the default is private).
+    var relayShown: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -402,7 +404,7 @@ struct SetupView: View {
         }
         .padding(24)
         .frame(width: 500)
-        .onAppear { relay = model.relayURL?.absoluteString ?? AppModel.hostedRelay }
+        .onAppear { relay = relayShown ?? model.relayURL?.absoluteString ?? AppModel.hostedRelay }
         .task {
             while !Task.isCancelled {  // notice the approvals in System Settings
                 await model.checkApprovals()

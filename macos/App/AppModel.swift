@@ -1194,3 +1194,26 @@ final class AppModel {
 
     var icon: MenuIcon { MenuIcon(status: status, paused: paused, needsSetup: needsSetup, busy: busy > 0) }
 }
+
+#if DEBUG
+    extension AppModel {
+        /// A Mac with every approval given and connected, for the README's pictures
+        /// (ReadmeShotTests); not in Release builds.
+        func showEverythingAllowed() {
+            status = .connected
+            helperStatus = .enabled
+            fullDiskAccess = true
+            for app in Permissions.scriptedApps { appControl[app] = .allowed }
+            safariJavaScript = true
+            screenRecording = true
+            accessibility = true
+            screenAccess = true
+            contactsStatus = .authorized
+            calendarStatus = .fullAccess
+            remindersStatus = .fullAccess
+            locationAccess = .allowed
+            notifications = .allowed
+            localNetwork = true
+        }
+    }
+#endif

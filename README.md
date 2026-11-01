@@ -54,6 +54,10 @@ Claude (web, Desktop, phone)  ──HTTPS──▶  Latchkey relay  ◀──out
 - **You see at a glance whether Claude can reach your Mac:** a solid key in the menu bar when it
   can, a key with a line through it when it can't, and a small mark when paused or when setup
   isn't finished.
+- **It stays connected by itself:** after a dropped network, a sleep, or a relay restart, the app
+  reconnects on its own and never gives up while it's paired; only one copy of it runs at a time.
+- **You hear when a permission goes missing:** if one of Latchkey's macOS permissions or settings
+  is turned off later, a notification says which one; click it to turn it back on.
 - **You can pause Claude in one click:** Pause Claude's Access in the menu stops everything that
   is running and answers every request with "paused" until you resume, even across restarts.
 - **Every answer carries the Mac's state** (battery, power, keep-awake), so Claude can warn you
@@ -67,6 +71,17 @@ Claude (web, Desktop, phone)  ──HTTPS──▶  Latchkey relay  ◀──out
   connection the Mac checks its log against the relay's list, call by call. Text written
   by others (messages, web pages, files) is marked as content, not instructions.
 
+## What it looks like
+
+| Setup: connect, then answer macOS's questions | |
+|---|---|
+| <img src="docs/images/setup-connect.png" width="400" alt="The setup window's first step: enter your relay's address and click Connect. Three more steps follow: macOS's questions, System Settings, and Safari's setting."> | <img src="docs/images/setup-questions.png" width="400" alt="The second setup step: a checklist of macOS's questions (Notifications, Contacts, Calendars, Reminders, Location, Local network, Notes, Messages, Mail, Safari) with an Ask Now button."> |
+| **Settings → What Claude Can Do:** a level for each capability | **Settings → Permissions:** every macOS approval and whether it's given |
+| <img src="docs/images/settings-capabilities.png" width="400" alt="The What Claude Can Do tab: Notes, Messages, Mail, Files, Browser, Computer Control, Calendar, Reminders, and Contacts at Read & Write; Shell and Location & Maps On."> | <img src="docs/images/settings-permissions.png" width="400" alt="The Permissions tab: Keep This Mac Awake, Full Disk Access, Notifications, control of Notes, Messages, Mail, and Safari, Contacts, Calendars, Reminders, Location, Local Network, Safari JavaScript, Screen Recording, Direct Screen Access, and Accessibility, each Allowed."> |
+
+The pictures are drawn by the app's own views with sample data (`macos/scripts/readme-shots.sh`
+redraws them).
+
 ## Get started
 
 1. **Install the Mac app.** Open `Latchkey.dmg`, drag Latchkey to Applications, and open it. The
@@ -78,8 +93,7 @@ Claude (web, Desktop, phone)  ──HTTPS──▶  Latchkey relay  ◀──out
    Accessibility; and Safari's "Allow JavaScript from Apple Events"). Right after you connect,
    Latchkey asks each macOS question in turn, then opens each System Settings page you need, one
    after another, as you turn Latchkey on. Later, the
-   Permissions tab in Latchkey's Settings window shows each one and whether it's allowed, and if
-   one is turned off later, Latchkey tells you in a notification; click it to turn it on again.
+   Permissions tab in Latchkey's Settings window shows each one and whether it's allowed.
 2. **Connect Claude.** On claude.ai, open Settings → Connectors → Add custom connector, and enter
    your relay's address followed by `/mcp`, for example `https://relay.example.com/mcp`. Sign
    in with your passkey and click Allow. The connector then appears in Claude Desktop and the
@@ -131,7 +145,7 @@ scripts (ShellCheck).
 | Part | Where | Commands |
 |---|---|---|
 | Relay (Go) | `relay/` | `make test`, `make lint`, `make run`, `make claude-check`, `make mac-check` |
-| Mac app and helper (Swift) | `macos/` | `make test`, `make lint`, `make run`, `make dmg`, `make install` (build, install into Applications, start, and fail if the update lost the pairing) |
+| Mac app and helper (Swift) | `macos/` | `make test`, `make lint`, `make run`, `make dmg`, `make install` (build, install into Applications, start, and fail if the update lost the pairing), `scripts/readme-shots.sh` (redraws the README's pictures) |
 | Hosted relay deployment | `deploy/` | `deploy/deploy.sh` |
 | Cleanup after merging | `scripts/` | `scripts/tidy.sh` (runs automatically after every push and at every session start from Claude Code; removes worktrees as soon as their work is merged); `scripts/loose-ends.sh` lists work not yet on main (checked when a Claude Code session starts and before each turn ends) |
 
@@ -165,6 +179,7 @@ specs/008-mail/                 Mail.
 docs/best-practices.md          Research on best practices, checked against Latchkey.
 docs/threat-model.md            What is protected, attackers, trust boundaries, accepted risks.
 docs/self-hosting.md            Run your own relay.
+docs/images/                    The README's pictures (drawn by macos/scripts/readme-shots.sh).
 SECURITY.md                     How to report vulnerabilities.
 ```
 
