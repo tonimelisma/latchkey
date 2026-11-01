@@ -47,7 +47,9 @@ there. The relay's account page and the README say to add the plugin. Checked: c
 tests, Claude Code's validator in strict mode, and evals with real Claude on pretend Latchkey
 tools: with the plugin every case passes; it turns "I can't" into the right setup steps (+1.00 on
 both setup cases) and changes nothing where the tool descriptions already work (offline, two
-machines, refusals). For Toni: review plan.md "Choices made for Toni" (skills only, layout,
+machines, refusals). Shipped 2026-11-01: on main, relay deployed, app 0.8.62 installed; a fresh
+Claude Code session with the plugin from GitHub's main used the real connector and the setup
+skill correctly. For Toni: review plan.md "Choices made for Toni" (skills only, layout,
 names, guide moved, versioning, account-page line, evals, and reading Constitution VIII as not
 counting the plugin as a fifth project); add the catalog on his own claude.ai account (one step:
 Customize → Plugins → Add marketplace → `tonimelisma/latchkey`, then add Latchkey).
