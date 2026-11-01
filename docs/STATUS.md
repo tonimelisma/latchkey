@@ -34,6 +34,16 @@ after the app was quit.
 
 Releases, terms and privacy, and the directory listing are much later (Toni, 2026-10-22).
 
+Easy relay setup (Toni, 2026-10-31; to become its own spec, 009): a person with no technical
+background but a Claude subscription gets their own relay. Decided: Claude Code sets it up and
+guides them, on free hosting where possible (Google Cloud, AWS, or similar); a personal relay
+needs no email server (the first sign-up enters a setup code; email stays optional for shared
+relays); relay images on ghcr.io; Apple's Developer Program (signed, notarized app that updates
+itself) later. Research so far (one-click hosts compared: Railway, Render, Fly.io; passkeys work
+on platform addresses on the Public Suffix List; moving to a custom domain later invalidates
+passkeys) is in the 2026-10-31 session; the free-cloud research is under way. Next: spec 009
+with research.md, then Toni's review before a plan.
+
 Nothing left behind (Toni, 2026-10-27; app 0.8.32): after headless Chrome ran two days and
 `/tmp` filled with a session's downloads, a Shell command's leftovers are stopped when it
 finishes (its terminal session, its family followed every half second, and programs using its
