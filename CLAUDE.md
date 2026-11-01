@@ -116,7 +116,7 @@ IMPORTANT: every session or task that changes files works in its own git worktre
   That check is the only thing that makes the override safe; without it, never use it.
 - Stage files by name, never `git add -A` or `git add .` (unfinished work of others was committed
   that way on 2026-10-23). Never stash (the stash is shared between worktrees; see below).
-- Private remote `github.com/tonimelisma/latchkey`, default branch `main`. Small commits. Open
+- Public remote `github.com/tonimelisma/latchkey` (public since 2026-10-31), default branch `main`. Small commits. Open
   PRs only when asked.
 
 ## Every increment ships (Toni, 2026-10-23)

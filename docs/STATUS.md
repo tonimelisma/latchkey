@@ -46,8 +46,8 @@ that works end to end with minimal hassle for non-technical people, and everythi
 for technical ones (own VPS, domain, Railway, email server); Podman runs and updates the relay
 on a server. Spec 009 and the guide Claude Code follows (docs/setup-with-claude.md) are drafted
 for Toni's review. Default host: Google Cloud's free server (Toni, 2026-10-31). Lost passkeys are
-replaced through Claude Code with a one-time recovery code (Toni). Open: when the guide and
-images go public, and checking on a fresh Google account
+replaced through Claude Code with a one-time recovery code (Toni). The repository is public
+(2026-10-31). Open: checking on a fresh Google account
 that the free server's address costs nothing and whether the trial must be upgraded.
 
 Nothing left behind (Toni, 2026-10-27; app 0.8.32): after headless Chrome ran two days and

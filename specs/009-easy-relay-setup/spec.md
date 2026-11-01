@@ -117,5 +117,5 @@ terminal, and the hosted relay is Toni's alone.
 - The Mac app is signed only for Toni's Macs until Apple's Developer Program (later): anyone else
   must open it once through System Settings → Privacy & Security → Open Anyway. The document
   says so; it is the one step before Claude Code can help.
-- The repository is private: the document and the images must be public before anyone else can
-  use them [NEEDS CLARIFICATION: when the repository (or only the guide and images) go public].
+- The repository is public since 2026-10-31 (Toni: "everything public now"), so the document
+  is reachable; the relay images (FR-911) are published once built.

@@ -126,8 +126,11 @@ port on `127.0.0.1` only (or use a private Docker network), so nothing reaches i
 
 ## Status
 
-Version 0.8 is in private testing: every capability is built and checked live on a real Mac.
-Releases are not notarized yet, so the app installs on the developer's own Macs only. See
+Version 0.8 is in testing: every capability is built and checked live on a real Mac. The source
+is public; there are no releases yet. The app isn't notarized, so a copy built by someone else
+opens only after System Settings → Privacy & Security → Open Anyway, and the relay's image isn't
+published yet; a setup that Claude Code runs for you on a free server is being specified
+([specs/009-easy-relay-setup](specs/009-easy-relay-setup/spec.md)). See
 [docs/STATUS.md](docs/STATUS.md).
 
 ## Security
