@@ -63,8 +63,9 @@ recovery command and code worked; Podman's updater installed a new image and rol
 one by itself. The project and its budget alert were deleted. Found and fixed in the guide:
 Compute Engine needs a minute after it is turned on, the first start takes about 3 minutes, and
 `gcloud compute ssh` needs `--quiet`. Still to check on a fresh Google account: whether the free
-server's address costs nothing, and whether the trial must be upgraded. Left over: the test's
-nine image versions (tag `guidetest`) in the registry, whose deletion needs Toni's OK. Open: checking on a fresh Google
+server's address costs nothing, and whether the trial must be upgraded. The test's nine image
+versions (tag `guidetest`) were deleted with Toni's OK (the GitHub CLI now also has
+`delete:packages`); the registry holds only real releases. Open: checking on a fresh Google
 account that the free server's address costs nothing and whether the trial must be upgraded.
 
 Nothing left behind (Toni, 2026-10-27; app 0.8.32): after headless Chrome ran two days and
