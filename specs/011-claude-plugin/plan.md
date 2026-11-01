@@ -110,7 +110,7 @@ page: tests, deploy) and the Mac app (Copy Request address: version 0.8.62, test
 Live check: a fresh Claude Code session outside the repository with the plugin from the
 published catalog, asked which machines it can reach and how to pair a server.
 
-## Choices made for Toni (he asked for no questions; each is his to change)
+## Choices made for Toni (he asked for no questions; shown to him for approval 2026-11-01)
 
 1. Skills only, no connector in the plugin; the hosted-relay variant waits for the directory.
 2. Repository layout of D2 (catalog at the root, plugin in `plugin/`, its own Makefile).
@@ -119,7 +119,7 @@ published catalog, asked which machines it can reach and how to pair a server.
 5. Versioning of D5, enforced by the content check.
 6. A line on the relay's account page and a README step about the plugin.
 7. Measuring with `claude plugin eval` on pretend tools, Sonnet, before each plugin release.
-8. Constitution VIII reading below.
+8. Constitution VIII: Toni dropped its project count instead (below).
 
 ## Constitution check
 
@@ -129,8 +129,7 @@ published catalog, asked which machines it can reach and how to pair a server.
 - V: works with every relay; no vendor.
 - VI: the plugin stores nothing; the relay stores nothing new.
 - VII: content checks written first and seen failing; behavior measured with real Claude.
-- VIII: "Four projects at most: the relay, the Mac app, the Linux server program, and the
-  specs." The plugin is text for Claude, with no program, build, or dependency, like the specs;
-  this plan reads it as documentation, not a fifth project, and the check forbids anything that
-  runs in it. **For Toni:** confirm that reading, or amend VIII to name the plugin.
+- VIII: the plugin serves FR-1101 to FR-1121 and adds no program, layer, or dependency; the
+  check forbids anything that runs in it. (VIII's project count, copied from Spec Kit's template
+  on 2026-10-19, was dropped by Toni on 2026-11-01.)
 - IX: Apache-2.0, as the repository.

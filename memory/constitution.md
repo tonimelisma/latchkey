@@ -38,9 +38,9 @@ are written and fail before implementation. Integration tests run against a real
 mocks of one.
 
 ## VIII. Simplicity
-Four projects at most: the relay, the Mac app (including its helper), the Linux server program,
-and the specs. Use framework
-and SDK features directly instead of wrapping them. One capability at a time.
+A new program, service, or package exists only when a plan names the requirement it serves; no
+layers or splits for later. Use framework and SDK features directly instead of wrapping them.
+One capability at a time.
 
 ## IX. Open source
 MIT or Apache-2.0. Dependencies must have compatible licenses (no GPL in the relay or app).

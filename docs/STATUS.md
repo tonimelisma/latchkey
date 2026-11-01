@@ -49,10 +49,9 @@ tools: with the plugin every case passes; it turns "I can't" into the right setu
 both setup cases) and changes nothing where the tool descriptions already work (offline, two
 machines, refusals). Shipped 2026-11-01: on main, relay deployed, app 0.8.62 installed; a fresh
 Claude Code session with the plugin from GitHub's main used the real connector and the setup
-skill correctly. For Toni: review plan.md "Choices made for Toni" (skills only, layout,
-names, guide moved, versioning, account-page line, evals, and reading Constitution VIII as not
-counting the plugin as a fifth project); add the catalog on his own claude.ai account (one step:
-Customize → Plugins → Add marketplace → `tonimelisma/latchkey`, then add Latchkey).
+skill correctly. Toni added the catalog and the plugin on his claude.ai account (2026-11-01);
+Constitution VIII no longer counts projects (Toni). The plan's "Choices made for Toni" were put
+to him in chat for approval.
 
 Several machines and Linux servers (spec 010; Toni asked on 2026-10-31 for plan and build in one
 go). Built 2026-11-01: one account pairs any number of Macs and headless Linux servers behind the
