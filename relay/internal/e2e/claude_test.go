@@ -1,4 +1,4 @@
-package main
+package e2e
 
 import (
 	"os"
@@ -20,7 +20,7 @@ func TestAskClaudeRunsInAFreshPrivateDirectory(t *testing.T) {
 	require.NoError(t, os.WriteFile(fake, []byte(script), 0o700)) //nolint:gosec // test script
 	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
 
-	out, err := askClaude(t.Context(), "m", "cfg.json", "tool", "prompt")
+	out, err := AskClaude(t.Context(), "m", "cfg.json", "tool", "prompt")
 	require.NoError(t, err)
 	lines := strings.Split(strings.TrimSpace(out), "\n")
 	require.Len(t, lines, 2)

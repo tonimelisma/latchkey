@@ -166,6 +166,10 @@ func (b *Browser) Claim(base, email, setupCode string) error {
 	return err
 }
 
+// SetEmail sets the account's address for steps that don't take it, such as RecoverWithCode in a
+// fresh browser.
+func (b *Browser) SetEmail(email string) { b.email = email }
+
 // RecoverWithCode makes a new passkey on "Lost your passkey?" with a recovery code given by the
 // relay's operator (spec 009 FR-914): the code step must ask for that code, not an email.
 func (b *Browser) RecoverWithCode(base, code string) error {
