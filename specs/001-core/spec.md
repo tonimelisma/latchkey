@@ -18,7 +18,7 @@ waiting on a stalled request.
 - **Owner**: installs the Mac app, owns the account, uses Claude on web, desktop, and phone.
 - **Self-hoster**: an Owner who runs their own relay instead of the hosted one.
 
-One Owner has one Mac in this spec (several Macs and Linux servers: spec 010, draft).
+One Owner has one Mac in this spec (several Macs and Linux servers since spec 010).
 
 ## User stories
 
@@ -396,10 +396,8 @@ Why: on 2026-10-25 commands left processes and files on the Mac that nobody list
 - **FR-052** When a Mac is revoked, the relay shall close its connection and reject its credential.
 - **FR-052a** When a Mac is revoked while it is connecting, the relay shall close that connection
   as revoked as soon as it is established (2026-10-25, security review).
-- **FR-053** When an Owner pairs a Mac while another Mac is paired, the relay shall name the
+- **FR-053** (withdrawn 2026-11-01 by spec 010 FR-1001: pairing another machine adds it; the same Mac pairing again replaces only its own earlier pairing) When an Owner pairs a Mac while another Mac is paired, the relay shall name the
   current Mac, ask the Owner to confirm the replacement, and on confirmation revoke the current Mac.
-  To be withdrawn when spec 010 is built: pairing another machine adds it (spec 010 FR-1001, Toni,
-  2026-10-31).
 - **FR-054** When a pairing link reaches the Mac app other than through the app's own sign-in
   window, the app shall connect only after the Owner confirms in a dialog that names the relay and
   the email address of the account the link belongs to, and says that it replaces the current

@@ -1,7 +1,7 @@
 # Spec 010: Several machines and Linux servers — WHAT and WHY
 
-Status: Draft for Toni's review (2026-10-31); his open questions answered the same day. No plan,
-tasks, or code before the review.
+Status: Built (2026-11-01; Toni asked on 2026-10-31 for the plan and the build in one go, without
+a review stop). Plan, contracts, and tasks in this folder.
 Scope: one Owner pairs several machines with one account (Macs, and Linux servers without a
 screen), and Claude reaches all of them through the one connector. On a Linux server Claude gets
 Shell and Files, the same tools as on the Mac.
@@ -89,7 +89,10 @@ and pairing a second Mac replaces the first (spec 001 FR-053).
   starts, and keep running with nobody logged in (Toni, 2026-10-31).
 - **FR-1022** When the Owner runs setup on the server, it shall show a link and a short code; the
   Owner approves it in a browser on any device, signed in to the relay, on a page that names the
-  server; the code shall expire after a short time and work once (Toni, 2026-10-31).
+  server; the code shall expire after a short time and work once (Toni, 2026-10-31). The code
+  shall be typed on that page, never carried in a link, and the page shall say when the machine
+  asked and that the machine chose its name, so a code someone else sent can't be approved with
+  one click (security review, 2026-10-31).
 - **FR-1023** The server shall only connect out to the relay, never accept connections
   (Constitution I).
 - **FR-1024** The Owner shall turn Shell and Files on and off on the server itself, with a command
@@ -104,6 +107,10 @@ and pairing a second Mac replaces the first (spec 001 FR-053).
   back to the previous version when the new one doesn't connect to the relay (Toni, 2026-10-31).
 - **FR-1027** The Owner shall be able to uninstall Latchkey from a server with one command that
   removes its service, program, settings, and data, and unpairs the server (Constitution IV).
+- **FR-1028** After installing, the `latchkey` command shall be on the Owner's path in a new login
+  shell (found missing by the end-to-end check, 2026-11-01).
+- **FR-1029** A release's signature shall cover its version and processor type as well as its
+  contents, so an older release can't be offered as a newer one (security review, 2026-10-31).
 
 ### Linux server: Shell
 
@@ -121,6 +128,8 @@ and pairing a second Mac replaces the first (spec 001 FR-053).
   server (Toni, 2026-10-31: a fence blocks sudo); spec 004 FR-317 to FR-320, FR-325, FR-328 to
   FR-330 are for the Mac only.
 - **FR-1033** A removed scratch folder shall be deleted, not kept in a trash (as FR-1042).
+- **FR-1034** When Shell is turned off or access paused, no command shall start afterwards, even
+  one whose call arrived just before (security review, 2026-10-31).
 
 ### Linux server: Files
 

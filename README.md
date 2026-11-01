@@ -1,6 +1,6 @@
 # Latchkey
 
-**Your Mac, at Claude's fingertips from anywhere.**
+**Your Mac, and your Linux servers, at Claude's fingertips from anywhere.**
 
 Latchkey lets Claude on the web, Claude Desktop, and the Claude phone apps use your Mac, even
 when it sits at home behind a router with the lid closed. From your phone, ask Claude to add eggs
@@ -8,17 +8,28 @@ to your grocery note, find what Sarah said about Saturday, send a text, read a P
 run a command, check a site you're signed in to in Safari, or look at your screen. When the Mac is
 asleep or offline, Claude says so right away, and why, instead of hanging.
 
-Free and open source (Apache-2.0). Apple silicon Macs, macOS 26 or later.
+Linux servers can join too: a home server, a Raspberry Pi, or a rented server, all behind the
+same connector. Claude lists your machines, picks the one you mean, and runs commands or reads
+and changes files there.
+
+Free and open source (Apache-2.0). Apple silicon Macs, macOS 26 or later; 64-bit Linux with
+systemd (Intel or Arm).
 
 ## How it works
 
 ```
-Claude (web, Desktop, phone)  ──HTTPS──▶  Latchkey relay  ◀──outbound WebSocket──  Mac app
-                                          (always on)                               (menu bar)
+Claude (web, Desktop, phone)  ──HTTPS──▶  Latchkey relay  ◀──outbound WebSocket──  Mac app (menu bar)
+                                          (always on)     ◀──outbound WebSocket──  Linux server program
 ```
 
 - The **Mac app** lives in the menu bar and keeps one outbound connection to the relay. Nothing
   connects in to your Mac: no open ports, no router settings, no tunnels.
+- The **Linux server program** is one file, run by systemd as your own account. It too only
+  connects out.
+- **Several machines, one connector.** Pair as many Macs and servers as you like with one
+  account. A tool both kinds offer appears once, with a `machine` argument; Claude's `machines`
+  tool lists your machines, whether each is online, and what each offers, and every answer
+  names the machine that answered and your other machines.
 - The **relay** is the MCP server Claude connects to as a custom connector. It handles sign-in
   (passkeys, no passwords), remembers your Mac's last state, and answers instantly when the Mac
   is away. Claude asks for your approval every time it connects: Latchkey's Allow page appears on
@@ -33,7 +44,7 @@ Claude (web, Desktop, phone)  ──HTTPS──▶  Latchkey relay  ◀──out
   your Mac, and you can remove any one of them.
 - **You choose what Claude can do.** Each capability has a level in Latchkey's Settings window; a capability that's
   off doesn't exist as far as Claude knows. Most have Off, Read only, and Read & write; Shell and
-  Location & Maps are Off or On. Claude sees 23 tools:
+  Location & Maps are Off or On. Claude sees 23 tools from a Mac, plus the relay's `machines`:
 
   | Capability | Read only | Read & write adds |
   |---|---|---|
@@ -108,6 +119,25 @@ The full checklist is in [specs/001-core/quickstart.md](specs/001-core/quickstar
 **Uninstall:** move Latchkey to the Trash. It disconnects from your account, restores normal
 sleep, removes its background items and local data, and quits.
 
+### Add a Linux server
+
+On the server, as yourself (not root), with your relay's address:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/tonimelisma/latchkey/main/linux/install.sh | sh -s -- https://relay.example.com
+```
+
+It shows a code: open your relay's `/link` page on any device where you're signed in, type the
+code, and click Connect. The service starts (sudo asks for your password once if it needs one),
+comes back after every reboot, and updates itself, checking each update's signature. On the
+server, `latchkey shell on|off` and `latchkey files off|read|write` choose what Claude can do
+there (Shell on and Files read & write to start), `latchkey pause` stops everything, `latchkey
+activity` shows what Claude did, and `latchkey uninstall` removes it all. Commands run in bash
+as you; sudo works for what you allowed without a password and otherwise answers at once (it
+never waits for one); whatever a command leaves running is stopped when it finishes, sudo's too.
+Deleting a file on a server deletes it for good. Details:
+[specs/010-multi-host/contracts/server-program.md](specs/010-multi-host/contracts/server-program.md).
+
 ## Run your own relay
 
 One container with one data volume, behind HTTPS. See
@@ -150,6 +180,7 @@ scripts (ShellCheck).
 | Part | Where | Commands |
 |---|---|---|
 | Relay (Go) | `relay/` | `make test`, `make lint`, `make run`, `make claude-check`, `make mac-check` |
+| Linux server program (Go) | `linux/` | `make test`, `make lint`, `make test-linux` (every test on Debian with systemd in Docker), `make check` (end to end: relay, pretend Mac, the program installed in a container, a real MCP client), `make release` |
 | Mac app and helper (Swift) | `macos/` | `make test`, `make lint`, `make run`, `make dmg`, `make install` (build, install into Applications, start, and fail if the update lost the pairing), `scripts/readme-shots.sh` (redraws the README's pictures) |
 | Hosted relay deployment | `deploy/` | `deploy/deploy.sh` |
 | Cleanup after merging | `scripts/` | `scripts/tidy.sh` (runs automatically after every push and at every session start from Claude Code; removes worktrees as soon as their work is merged); `scripts/loose-ends.sh` lists work not yet on main (checked when a Claude Code session starts and before each turn ends) |
@@ -174,6 +205,7 @@ specs/001-core/
   tasks.md                      Ordered, testable tasks generated from plan + contracts.
 relay/                          The relay (Go). `make test`, `make run`; see CLAUDE.md for commands.
 macos/                          The Mac app and its helper (Swift, XcodeGen). `make test`, `make run`.
+linux/                          The Linux server program (Go). `make test`, `make test-linux`.
 specs/002-notes-messages/       Notes and Messages (same structure for each capability).
 specs/003-files/                Files.
 specs/004-shell/                Shell.
@@ -181,6 +213,8 @@ specs/005-browser/              Browser control (Safari).
 specs/006-computer-control/     Computer control.
 specs/007-calendar-reminders-contacts-location/  Calendar, Reminders, Contacts, Location & Maps.
 specs/008-mail/                 Mail.
+specs/009-easy-relay-setup/     A relay set up by Claude Code.
+specs/010-multi-host/           Several machines and Linux servers.
 docs/best-practices.md          Research on best practices, checked against Latchkey.
 docs/threat-model.md            What is protected, attackers, trust boundaries, accepted risks.
 docs/self-hosting.md            Run your own relay.

@@ -46,7 +46,7 @@ Content-Type: application/json
 POST /pair/exchange
 Content-Type: application/json
 
-{"code": "<code>", "public_key": "<PKIX DER, base64url unpadded>", "name": "Toni's MacBook Pro"}
+{"code": "<code>", "public_key": "<PKIX DER, base64url unpadded>", "name": "Toni's MacBook Pro", "replaces": "dev_old..."}
 ```
 
 ```json
@@ -54,8 +54,15 @@ Content-Type: application/json
 ```
 
 Errors are `400` with `{"error": "<sentence for the Owner>"}` (expired or used code, key not
-P-256). On success, any previously paired Mac is revoked (closed with 4002). The app stores the
-relay URL and `device_id` in its settings and the key in the Secure Enclave, then connects.
+P-256). On success the Mac is added to the account; the account's other machines stay paired
+(spec 010 FR-1001; until spec 010 the previous Mac was revoked). `replaces` (optional, spec 010)
+is this Mac's own earlier device ID when it pairs again with the same relay: that device is
+revoked (closed with 4002) if, and only if, it belongs to the code's account. The name is kept
+unique among the account's machines (" 2", " 3", … appended). The app stores the relay URL and
+`device_id` in its settings and the key in the Secure Enclave, then connects.
+
+A Linux server pairs without a browser of its own, with a code the Owner types on the relay's
+`/link` page (spec 010; `specs/010-multi-host/contracts/server-program.md`, "Headless pairing").
 
 ## Connection
 
@@ -310,7 +317,33 @@ refused tool out.
 
 The relay caps `deadline_ms` at 60000 (a declared deadline below 1 ms counts as 1 ms; one that
 is not a positive number as the default). Tool names must not collide with relay tools
-(`laptop_status`); the relay rejects a `tools` list that contains one (close 4005).
+(`laptop_status`, and since spec 010 `machines`); the relay rejects a `tools` list that contains
+one (close 4005). Since spec 010 no tool may define a top-level input property `machine`: the
+relay adds it to every tool to name the machine, and takes it out of a call's arguments before
+forwarding (close 4005; fixtures `invalid/tools-machine-property.json`,
+`invalid/tools-machines-name.json`).
+
+## Several machines (spec 010)
+
+`hello` may carry `kind` (`"mac"`, the default when missing, or `"linux"`) and `name` (the name
+the machine asks to be shown by; cleaned, at most 100 characters). Another `kind` is a protocol
+violation (close 4005, fixture `invalid/hello-bad-kind.json`); a `kind` other than the one the
+device was paired as closes the connection with 4005 ("machine kind doesn't match the pairing").
+With a `name`, the relay renames the device, unique among the account's machines without regard
+to Unicode letter case (" 2", " 3", … appended), and `welcome` carries the name it kept:
+
+```json
+{"type": "welcome", "heartbeat_interval_s": 15, "server_time": "...", "name": "homeserver 2"}
+```
+
+A Linux server's state adds `uptime_s` (seconds, optional) and sends the Mac-only fields with
+fixed values the relay ignores for it: `battery_percent` 0, `power_source` "unknown", `charging`
+and `low_power_mode` false, `time_remaining_min` and `lid_closed` null, `thermal_state` "nominal",
+`keep_awake` "on" (fixtures `valid/hello-linux.json`, `valid/state-linux.json`,
+`valid/welcome-name.json`). A Linux server announces only the `audit` feature; `clients` and
+`notice` go only to Macs, and a `revoke_client` from a machine that isn't a Mac closes it with 4005.
+Its `goodbye` reasons are `user_quit` (the service stopped), `system_shutdown`, and
+`user_disconnected` (uninstall).
 
 A tool list (in `hello` or `tools`) holds at most 256 tools and at most 512 KiB of JSON (the
 `tools` value as sent); a larger one is a protocol violation (close 4005; added 2026-10-25,

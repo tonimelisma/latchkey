@@ -7,7 +7,7 @@ https://<relay>/mcp
 ```
 
 The Owner adds this once at claude.ai → Settings → Connectors → Add custom connector. Every user of
-a relay uses the same URL; the OAuth token identifies the Owner and therefore the Mac.
+a relay uses the same URL; the OAuth token identifies the Owner and therefore their machines (spec 010).
 
 ## HTTP endpoints
 
@@ -160,53 +160,107 @@ account with a message naming the operator's contact address when one is set.
 
 ## Tools
 
-The relay offers no tools of its own (status tool withdrawn 2026-10-22, spec 001 FR-021). The tool
-list is the Mac's last reported list (FR-013): the tools of each capability at its current level
-(spec 002). With no Mac paired, or every capability off, the list is empty.
+Since spec 010 the tool list is the union of the account's paired machines' last reported lists
+(FR-013; spec 010 FR-1004, plan D2), plus the relay's own `machines` tool while at least one
+machine is paired. With nothing paired the list is empty. (Until spec 010: the one Mac's list,
+and no relay tool; the 2026-10-22 status tool stays withdrawn.)
 
-### The Mac's state in every answer (FR-065)
-
-Every result from a Mac tool, success or the Mac's own error, ends with one extra text block,
-built by the relay from the state it holds:
+- A name offered by one kind of machine: that kind's definition, from its most recently seen
+  machine. Offered by Macs and Linux servers with different definitions: one tool whose
+  description is "On a Mac: …" then, after a blank line, "On a Linux server: …"; the input
+  properties united (a property only one kind has ends its description with "(Mac only)" or
+  "(Linux servers only)"; enum values united; required only what both require); read-only and
+  idempotent only if both are, destructive and open-world if either is; the longer deadline;
+  the output schema only if both are equal.
+- Every machine tool gets the optional property `machine` (string): "The machine to use, by name,
+  as the machines tool lists it. Leave it out when only one machine offers this tool." The relay
+  removes it before forwarding.
+- `machines` (read-only, no arguments) answers in text only (structured content would hide it in
+  Claude's apps):
 
 ```
-Mac: online · 64% battery, on battery power · keep-awake on
+Your machines (2):
+- Toni's MacBook Pro · Mac (macOS 26.1) · online · 64% battery, on battery power · keep-awake on · offers: shell_run, notes_find, …
+- homeserver · Linux server (Debian GNU/Linux 12 (bookworm)) · online · up 12 days · offers: files_change, files_find, files_read, shell_check, shell_run
+Pass a machine's name as machine when more than one offers a tool.
 ```
 
-The line always starts on a line of its own (FR-200). Claude's apps join a result's text blocks
-with nothing between them, so the relay puts one line break at the start of the added block
-unless the result's last block that shows something is text already ending in a line break
-(empty text blocks are skipped; a result with nothing in it needs none). After an image or any
-other non-text block the line break is always added. The Mac's own blocks are never changed.
+An offline machine shows "offline, last seen 3 hours ago" (or "offline, never connected"); a
+machine with every capability off shows "offers no tools (all turned off on it)".
 
-- Power: "on battery power", "plugged in", "charging", or "on UPS power".
-- Keep-awake: "keep-awake on", "keep-awake off", "keep-awake off (battery low)", "keep-awake off
-  (too hot)", "keep-awake off (not approved in System Settings)".
-- Warnings appended: "battery low: the Mac goes to sleep at 15%" (on battery at 25% or less), "the
-  Mac is too hot and may go to sleep" (thermal serious or critical).
+The `initialize` result carries these instructions: "Latchkey reaches the owner's own machines:
+Macs and Linux servers. The machines tool lists them, whether each is online, and what each
+offers. When more than one machine offers a tool, pass the machine's name as machine; when only
+one does, leave it out. Every answer ends with the answering machine's state and the other
+machines."
 
-When the Mac cannot answer, the result is the explanation below instead, which carries the last
-known state.
+### Choosing the machine (spec 010 FR-1005, FR-1007)
 
-## Results when a Mac tool cannot run
-
-All are normal `tools/call` results with `isError: true`, so Claude can explain them to the user.
-They are never transport errors or HTTP failures.
+Named (letter case and surrounding spaces aside): that machine; one that doesn't offer the tool
+is answered as if the tool didn't exist there. Not named: the only machine offering the tool, or
+the only online one among several; otherwise no guess. Refusals are results with `isError: true`
+and no state line:
 
 | Situation | Text returned |
 |---|---|
-| Paired, never connected | "Your Mac is offline. It hasn't connected to Latchkey yet." |
-| Offline, reason known | "Your Mac is offline. It went to sleep for low battery at 14%, at 2:02 PM (3 hours ago)." |
-| Offline, reason unknown | "Your Mac is offline. It was last seen at 2:02 PM (3 hours ago) with 62% battery, on battery power." |
-| Deadline passed | "Your Mac didn't answer within 5 seconds. It may be busy or losing its connection." |
-| Revoked during call | "Your Mac was disconnected from this account while the request was running." |
-| Connection lost during call | "Your Mac lost its connection while the request was running." |
-| Unreadable result from the Mac | "Your Mac sent a result the relay couldn't read." |
+| Several offer it, not one alone online | "Several machines offer shell_run: Toni's MacBook Pro (Mac, online), homeserver (Linux, online). Name one with machine." |
+| Unknown name | "No machine is called "pi". Your machines: Toni's MacBook Pro (Mac, online), homeserver (Linux, offline, last seen 2 hours ago)." |
+| Named machine lacks the tool | "homeserver doesn't offer notes_find. It's offered by: Toni's MacBook Pro (Mac, online)." |
+| No machine offers it | "No machine offers shell_run." |
+| Nothing paired | "No machine is connected to this account yet. Open the Latchkey app on your Mac and click Connect, or install Latchkey on a Linux server." |
 
-Other known offline reasons: too hot ("It went to sleep because it was too hot, at …"), system
+### The machine's state in every answer (FR-065, spec 010 FR-1009)
+
+Every result from a machine tool, success or the machine's own error, ends with one extra text
+block, built by the relay from the state it holds: the answering machine's line and, when the
+account has other machines, a second line naming them (Toni, 2026-10-31):
+
+```
+Toni's MacBook Pro (Mac): online · 64% battery, on battery power · keep-awake on
+Other machines: homeserver (Linux, online)
+```
+
+```
+homeserver (Linux): online · up 12 days
+Other machines: Toni's MacBook Pro (Mac, offline, last seen 3 hours ago)
+```
+
+The block always starts on a line of its own (FR-200). Claude's apps join a result's text blocks
+with nothing between them, so the relay puts one line break at the start of the added block
+unless the result's last block that shows something is text already ending in a line break
+(empty text blocks are skipped; a result with nothing in it needs none). After an image or any
+other non-text block the line break is always added. The machine's own blocks are never changed.
+
+- Mac power: "on battery power", "plugged in", "charging", or "on UPS power".
+- Mac keep-awake: "keep-awake on", "keep-awake off", "keep-awake off (battery low)", "keep-awake
+  off (too hot)", "keep-awake off (not approved in System Settings)".
+- Mac warnings appended: "battery low: the Mac goes to sleep at 15%" (on battery at 25% or less),
+  "the Mac is too hot and may go to sleep" (thermal serious or critical).
+- Linux uptime: "up 12 days" (two days or more), "up 5 hours" (two hours or more), "up 20 minutes".
+
+When the machine cannot answer, the result is the explanation below instead, which carries the
+last known state (and, when offline, the other machines' line).
+
+## Results when a machine tool cannot run
+
+All are normal `tools/call` results with `isError: true`, so Claude can explain them to the user.
+They are never transport errors or HTTP failures. Since spec 010 they name the machine (until
+then: "Your Mac").
+
+| Situation | Text returned |
+|---|---|
+| Paired, never connected | "Toni's MacBook Pro is offline. It hasn't connected to Latchkey yet." |
+| Offline, reason known | "Toni's MacBook Pro is offline. It went to sleep for low battery at 14%, at 2:02 PM (3 hours ago)." |
+| Offline, reason unknown | "Toni's MacBook Pro is offline. It was last seen at 2:02 PM (3 hours ago) with 62% battery, on battery power." |
+| Linux server offline | "homeserver is offline. It shut down at 2:02 PM (3 hours ago)." / "… Latchkey was stopped on it at …" / "… It was last seen at …" |
+| Deadline passed | "homeserver didn't answer within 5 seconds. It may be busy or losing its connection." |
+| Revoked during call | "homeserver was disconnected from this account while the request was running." |
+| Connection lost during call | "homeserver lost its connection while the request was running." |
+| Unreadable result | "homeserver sent a result the relay couldn't read." |
+
+Other known Mac offline reasons: too hot ("It went to sleep because it was too hot, at …"), system
 sleep ("It went to sleep at …"), shutdown ("It shut down at …"), app quit ("The Latchkey app was
-quit at …"). Power phrases: "on battery power", "plugged in", "charging", "on UPS power". A time on
-an earlier day adds the date: "at 3:02 PM on Oct 17 (2 days ago)".
+quit at …"). A time on an earlier day adds the date: "at 3:02 PM on Oct 17 (2 days ago)".
 
-Times are rendered in the Mac's time zone (reported in state, FR-037) plus a relative time, for
-example "at 2:02 PM (3 hours ago)". If the time zone is unknown, UTC is used and labeled.
+Times are rendered in the machine's time zone (reported in state, FR-037) plus a relative time,
+for example "at 2:02 PM (3 hours ago)". If the time zone is unknown, UTC is used and labeled.

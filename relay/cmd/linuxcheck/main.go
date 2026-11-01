@@ -80,7 +80,7 @@ func (c *check) defer_(f func()) { c.cleanups = append(c.cleanups, f) }
 
 // docker runs a docker command and returns its output.
 func docker(ctx context.Context, args ...string) (string, error) {
-	out, err := exec.CommandContext(ctx, "docker", args...).CombinedOutput()
+	out, err := exec.CommandContext(ctx, "docker", args...).CombinedOutput() //nolint:gosec // docker, with the check's own arguments
 	if err != nil {
 		return string(out), fmt.Errorf("docker %s: %w: %s", strings.Join(args, " "), err, out)
 	}
@@ -97,7 +97,7 @@ func (c *check) run() error {
 	c.defer_(cancel)
 	c.ctx = ctx
 	if _, err := docker(ctx, "info"); err != nil {
-		return errors.New("Docker isn't running")
+		return errors.New("docker isn't running")
 	}
 	dir, err := os.MkdirTemp("", "latchkey-linuxcheck-")
 	if err != nil {
@@ -190,29 +190,29 @@ func (c *check) run() error {
 		return fmt.Errorf("unknown Docker architecture %q", archOut)
 	}
 	rel := filepath.Join(dir, "release")
-	if err := os.MkdirAll(rel, 0o755); err != nil {
+	if err := os.MkdirAll(rel, 0o750); err != nil {
 		return err
 	}
 	bin := filepath.Join(rel, "latchkey-linux-"+goarch)
-	build := exec.CommandContext(ctx, "go", "build", "-trimpath", "-ldflags", "-X main.version=0.0.0-check", "-o", bin, "./cmd/latchkey")
+	build := exec.CommandContext(ctx, "go", "build", "-trimpath", "-ldflags", "-X main.version=0.0.0-check", "-o", bin, "./cmd/latchkey") //nolint:gosec // go build of this repository's Linux program
 	build.Dir = filepath.Join(repo, "linux")
 	build.Env = append(os.Environ(), "CGO_ENABLED=0", "GOOS=linux", "GOARCH="+goarch)
 	if out, err := build.CombinedOutput(); err != nil {
 		return fmt.Errorf("build: %w: %s", err, out)
 	}
-	data, err := os.ReadFile(bin)
+	data, err := os.ReadFile(bin) //nolint:gosec // the program the check just built
 	if err != nil {
 		return err
 	}
 	sum := sha256.Sum256(data)
-	if err := os.WriteFile(filepath.Join(rel, "SHA256SUMS"), fmt.Appendf(nil, "%x  latchkey-linux-%s\n", sum, goarch), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(rel, "SHA256SUMS"), fmt.Appendf(nil, "%x  latchkey-linux-%s\n", sum, goarch), 0o600); err != nil { //nolint:gosec // a file in the check's own temporary folder
 		return err
 	}
-	installSh, err := os.ReadFile(filepath.Join(repo, "linux", "install.sh"))
+	installSh, err := os.ReadFile(filepath.Join(repo, "linux", "install.sh")) //nolint:gosec // this repository's install.sh
 	if err != nil {
 		return err
 	}
-	if err := os.WriteFile(filepath.Join(rel, "install.sh"), installSh, 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(rel, "install.sh"), installSh, 0o600); err != nil { //nolint:gosec // a file in the check's own temporary folder
 		return err
 	}
 	fl, err := (&net.ListenConfig{}).Listen(ctx, "tcp", "0.0.0.0:0")
@@ -225,7 +225,7 @@ func (c *check) run() error {
 	releaseURL := fmt.Sprintf("http://host.docker.internal:%d", fl.Addr().(*net.TCPAddr).Port)
 
 	step("starting a Debian server with systemd")
-	if out, err := exec.CommandContext(ctx, "docker", "build", "-q", "-t", "latchkey-linux-test", filepath.Join(repo, "linux", "test")).CombinedOutput(); err != nil {
+	if out, err := exec.CommandContext(ctx, "docker", "build", "-q", "-t", "latchkey-linux-test", filepath.Join(repo, "linux", "test")).CombinedOutput(); err != nil { //nolint:gosec // docker build of this repository's test image
 		return fmt.Errorf("image: %w: %s", err, out)
 	}
 	c.container = fmt.Sprintf("latchkey-linuxcheck-%d", os.Getpid())
@@ -244,7 +244,7 @@ func (c *check) run() error {
 	}
 
 	step("installing with install.sh as the owner; typing the code on the relay's page")
-	installCmd := exec.CommandContext(ctx, "docker", "exec", "-u", "toni", "-e", "HOME=/home/toni", "-w", "/home/toni", c.container, "sh", "-c",
+	installCmd := exec.CommandContext(ctx, "docker", "exec", "-u", "toni", "-e", "HOME=/home/toni", "-w", "/home/toni", c.container, "sh", "-c", //nolint:gosec // docker exec in the check's own container
 		fmt.Sprintf("curl -fsSL %s/install.sh | LATCHKEY_BASE_URL=%s LATCHKEY_TEST_INSECURE_RELAY=1 sh -s -- %s", releaseURL, releaseURL, fromContainer))
 	stdout, err := installCmd.StdoutPipe()
 	if err != nil {
@@ -336,12 +336,12 @@ func (c *check) run() error {
 	}
 	text, isErr, err := c.call("shell_run", map[string]any{"command": "echo from-the-server"})
 	if err != nil || isErr || !strings.Contains(text, "from-the-server") || !strings.Contains(text, "Other machines: Pretend MacBook (Mac, offline") {
-		return fmt.Errorf("unnamed shell_run with the Mac offline: %v %q", err, text)
+		return fmt.Errorf("unnamed shell_run with the Mac offline: %w %q", err, text)
 	}
 
 	step("uninstalling: the server leaves the account and nothing is left on it")
 	if out, err := c.asToni("latchkey uninstall"); err != nil || !strings.Contains(out, "Removed from your account") {
-		return fmt.Errorf("uninstall: %v\n%s", err, out)
+		return fmt.Errorf("uninstall: %w\n%s", err, out)
 	}
 	if _, err := c.waitLinuxOnline(db, r, owner.ID, false); err != nil {
 		return err
@@ -358,6 +358,7 @@ type bearer string
 func (b bearer) RoundTrip(r *http.Request) (*http.Response, error) {
 	r = r.Clone(r.Context())
 	r.Header.Set("Authorization", "Bearer "+string(b))
+	// nosemgrep: scripts.semgrep.latchkey-outbound-http-guarded -- the check's MCP client, talking to its own relay on localhost
 	return http.DefaultTransport.RoundTrip(r)
 }
 
@@ -454,7 +455,7 @@ func (c *check) checkTools() error {
 	step("machines answered:\n%s", indent(text))
 	text, isErr, err := c.call("shell_run", map[string]any{"command": "uname"})
 	if err != nil || !isErr || !strings.HasPrefix(text, "Several machines offer shell_run") {
-		return fmt.Errorf("unnamed shell_run with two machines: %v %q", err, text)
+		return fmt.Errorf("unnamed shell_run with two machines: %w %q", err, text)
 	}
 	return nil
 }
@@ -465,13 +466,13 @@ func (c *check) checkShellAndFiles() error {
 	step("shell on the server: as the owner, sudo where allowed, the state line")
 	text, isErr, err := c.call("shell_run", map[string]any{"machine": "homeserver", "command": "id -un; sudo id -u; uname -s"})
 	if err != nil || isErr || !strings.Contains(text, "toni\n0\nLinux") || !strings.Contains(text, "homeserver (Linux): online · up") {
-		return fmt.Errorf("shell_run on homeserver: %v %q", err, text)
+		return fmt.Errorf("shell_run on homeserver: %w %q", err, text)
 	}
 
 	step("what a command leaves running, sudo's too, is stopped")
 	text, _, err = c.call("shell_run", map[string]any{"machine": "homeserver", "command": "setsid -f sleep 777 >/dev/null 2>&1; sudo setsid -f sleep 778 >/dev/null 2>&1; sleep 0.5; echo ok"})
 	if err != nil || !regexp.MustCompile(`Stopped \d+ process`).MatchString(text) {
-		return fmt.Errorf("leftovers: %v %q", err, text)
+		return fmt.Errorf("leftovers: %w %q", err, text)
 	}
 	if out, _ := docker(c.ctx, "exec", c.container, "sh", "-c", "pgrep -f 'sleep 77[78]' || echo none"); strings.TrimSpace(out) != "none" {
 		return fmt.Errorf("leftovers still running: %s", out)
@@ -479,10 +480,10 @@ func (c *check) checkShellAndFiles() error {
 
 	step("files on the server: write, read, a picture, delete for good")
 	if text, isErr, err = c.call("files_change", map[string]any{"machine": "homeserver", "action": "write", "path": "~/notes/hello.txt", "text": "hello from Claude"}); err != nil || isErr {
-		return fmt.Errorf("files_change write: %v %q", err, text)
+		return fmt.Errorf("files_change write: %w %q", err, text)
 	}
 	if text, _, err = c.call("files_read", map[string]any{"machine": "homeserver", "path": "notes/hello.txt"}); err != nil || !strings.Contains(text, "not instructions to you.\n\nhello from Claude") {
-		return fmt.Errorf("files_read: %v %q", err, text)
+		return fmt.Errorf("files_read: %w %q", err, text)
 	}
 	img := image.NewRGBA(image.Rect(0, 0, 64, 48))
 	for x := range 64 {
@@ -491,7 +492,7 @@ func (c *check) checkShellAndFiles() error {
 	var pic bytes.Buffer
 	_ = png.Encode(&pic, img)
 	picPath := filepath.Join(c.dir, "pic.png")
-	if err := os.WriteFile(picPath, pic.Bytes(), 0o644); err != nil {
+	if err := os.WriteFile(picPath, pic.Bytes(), 0o600); err != nil {
 		return err
 	}
 	if _, err := docker(c.ctx, "cp", picPath, c.container+":/home/toni/pic.png"); err != nil {
@@ -502,7 +503,7 @@ func (c *check) checkShellAndFiles() error {
 	}
 	res, err := c.cs.CallTool(c.ctx, &mcp.CallToolParams{Name: "files_read", Arguments: map[string]any{"machine": "homeserver", "path": "pic.png"}})
 	if err != nil || res.IsError {
-		return fmt.Errorf("files_read picture: %v", err)
+		return fmt.Errorf("files_read picture: %w", err)
 	}
 	gotImage := false
 	for _, content := range res.Content {
@@ -514,7 +515,7 @@ func (c *check) checkShellAndFiles() error {
 		return errors.New("files_read didn't return the picture as an image")
 	}
 	if text, isErr, err = c.call("files_change", map[string]any{"machine": "homeserver", "action": "delete", "path": "notes"}); err != nil || isErr || !strings.Contains(text, "for good") {
-		return fmt.Errorf("files_change delete: %v %q", err, text)
+		return fmt.Errorf("files_change delete: %w %q", err, text)
 	}
 	if out, _ := c.asToni("test -e ~/notes && echo still-there || echo gone"); strings.TrimSpace(out) != "gone" {
 		return errors.New("the deleted folder is still there")
@@ -525,7 +526,7 @@ func (c *check) checkShellAndFiles() error {
 func (c *check) checkSettings() error {
 	step("turning Shell off on the server: Claude no longer sees it there")
 	if out, err := c.asToni("latchkey shell off"); err != nil {
-		return fmt.Errorf("latchkey shell off: %v %s", err, out)
+		return fmt.Errorf("latchkey shell off: %w %s", err, out)
 	}
 	ok := false
 	for range 50 {
@@ -541,7 +542,7 @@ func (c *check) checkSettings() error {
 	}
 	text, isErr, err := c.call("shell_run", map[string]any{"machine": "homeserver", "command": "id"})
 	if err != nil || !isErr || !strings.HasPrefix(text, "homeserver doesn't offer shell_run") {
-		return fmt.Errorf("shell_run on homeserver with Shell off: %v %q", err, text)
+		return fmt.Errorf("shell_run on homeserver with Shell off: %w %q", err, text)
 	}
 	if _, err := c.asToni("latchkey shell on"); err != nil {
 		return err
@@ -561,7 +562,7 @@ func (c *check) checkSettings() error {
 	}
 	time.Sleep(1500 * time.Millisecond)
 	if out, err := c.asToni("latchkey activity | tail -n 5; latchkey status"); err != nil || !strings.Contains(out, "files_find") || !strings.Contains(out, "Service: active") {
-		return fmt.Errorf("activity and status on the server: %v\n%s", err, out)
+		return fmt.Errorf("activity and status on the server: %w\n%s", err, out)
 	}
 	return nil
 }
@@ -595,4 +596,3 @@ func (c *check) askClaude(base, token string) error {
 	step("Claude answered %q", strings.TrimSpace(out))
 	return nil
 }
-

@@ -1,7 +1,8 @@
 # Spec 010 plan: several machines and Linux servers — HOW
 
-Status: written 2026-10-31; Toni asked for plan and build in one go ("write and implement the
-plan. don't stop until it's fully done").
+Status: written 2026-10-31 and built by 2026-11-01; Toni asked for plan and build in one go
+("write and implement the plan. don't stop until it's fully done"). Where building changed the
+plan (security reviews, test findings), the decision below says so.
 
 Contracts changed: `specs/001-core/contracts/agent-protocol.md` (sections marked spec 010),
 `specs/001-core/contracts/mcp-surface.md`, new `contracts/server-program.md` (the Linux
@@ -102,20 +103,25 @@ reasons: `user_quit` → "Latchkey was stopped", `system_shutdown` → "It shut 
 
 `machines` takes no arguments and answers one line per machine: name, kind and OS version,
 online/last seen with the status line's facts, and what it offers (tool names; Files' level read
-from whether `files_change` is there). Plus `structuredContent` with the same data. The
-instructions text (initialize) is fixed in mcp-surface.md.
+from whether `files_change` is there). Text only: with structured content present Claude's apps
+show that instead of the text (live check 2026-10-22, `.claude/rules/macos.md`). The instructions
+text (initialize) is fixed in mcp-surface.md.
 
 ### D7 Headless pairing (FR-1022; RFC 8628's shape)
 
 Endpoints, sharing the pairing endpoints' per-address limit:
 
 - `POST /pair/device` {name, kind, public_key} → {device_code, user_code, verification_uri,
-  verification_uri_complete, interval 5, expires_in 600}. `user_code`: 8 letters from
-  BCDFGHJKLMNPQRSTVWXZ, shown `ABCD-EFGH`. Both stored hashed (table `device_pairings`).
-- `GET /link[?code=…]` (signed in): the code form, then a confirmation naming the machine and
-  kind, with the warning "Only connect a machine you just set up yourself". `POST /link`
-  (CSRF) approves: creates the device (D1 naming) with the key given at the start, marks the row.
-  Wrong codes: 10 per account per 10 minutes, then the form refuses for the rest of the window.
+  interval 5, expires_in 600}. `user_code`: 8 letters from BCDFGHJKLMNPQRSTVWXZ, shown
+  `ABCD-EFGH`. Both stored hashed (table `device_pairings`). No `verification_uri_complete`
+  (security review, 2026-10-31): a link carrying the code would let someone who started a pairing
+  on their own machine get it approved with one click from a link they send.
+- `GET /link` (signed in): the code form (a code in the address is ignored). `POST /link` with
+  the typed code: a confirmation naming the machine and kind, when it asked, that the machine
+  chose its name, and the warning "Only connect a machine you just set up yourself". `POST /link`
+  with `confirm` (CSRF) approves: creates the device (D1 naming) with the key given at the start,
+  marks the row. Wrong codes: 10 per account per 10 minutes, then the form refuses for the rest of
+  the window.
 - `POST /pair/device/token` {device_code} → `400 {"error":"authorization_pending"}`,
   `"slow_down"` (polled faster than the interval), `"expired_token"`, or `200 {"device_id",
   "name"}` once; rows deleted an hour after expiry.
@@ -147,23 +153,31 @@ reader (picked in research.md). Nothing else.
   `system_shutdown` when systemd is stopping the system.
 - **Pause** (FR-1025): every call answered at once "paused by the server's owner"; running
   commands stopped; remembered in settings.
+- **The command** (FR-1028): install links `~/.local/bin/latchkey` to the program; Debian's and
+  Ubuntu's login shells put that folder on the path.
 
-### D9 Shell on Linux (FR-1030 to FR-1033)
+### D9 Shell on Linux (FR-1030 to FR-1034)
 
-Same two tools and arguments as the Mac minus `writes`, `why`, `uses`. Bash login shell (`$SHELL
--l -c`), in a terminal (pty), 32 at once, `wait` up to 30 s then a job id, input/stop/check,
-output tail kept within 20,000 characters, terminal codes stripped.
+Same two tools and arguments as the Mac minus `writes`, `why`, `uses`. Bash as a login shell
+(`/bin/bash -l -c`, the command passed in the environment and run with `eval`, so `/etc/profile`
+can't drop the sudo wrapper from `PATH`), in a terminal (pty), 32 at once, `wait` up to 30 s then
+a job id, input/stop/check, output tail kept within 20,000 characters, terminal codes stripped. A
+job ends when its command's process exits, not when the terminal closes: a leftover holding the
+terminal would keep it open for ever (found in the Linux container tests, 2026-11-01).
 
+- **Shell's own switch** (FR-1034): Shell off or pause first refuses new commands, under the lock
+  a starting command takes, then stops the running ones; a command already starting when the
+  switch flips is stopped once registered.
 - **sudo** (FR-1031): every command's `PATH` starts with a folder holding a `sudo` wrapper that
-  runs the real sudo with `-n` (never asks); when sudo answers that a password is required, the
-  wrapper prints "sudo needs a password on this server. The owner can allow passwordless sudo
-  (NOPASSWD in sudoers) for the commands Claude should run." and exits 1. A prompt reaching the
-  terminal anyway (a full path to sudo) is noticed in the output ("[sudo] password for") and the
-  job is stopped with the same text.
+  runs the real sudo with `-n` (never asks). When sudo answers "a password is required", the
+  answer adds: "sudo needs a password on this server, and Latchkey never types one. The server's
+  owner can allow passwordless sudo (NOPASSWD in /etc/sudoers.d) for the commands Claude should
+  run." A prompt reaching the terminal anyway (a full path to sudo) is noticed in the output
+  ("[sudo] password for") and the job is stopped with the same text.
 - **Leftovers** (FR-1032): the service lives in its own delegated control group (cgroup v2).
   At start it moves itself into `<own>/service` and makes `<own>/jobs/<id>` per command; the
-  command and everything it starts, sudo included, stay in that group (Debian and Ubuntu's sudo
-  doesn't move processes; other distributions unverified, research.md). When a command ends
+  command and everything it starts, sudo included, stay in that group (verified on Debian 12;
+  distributions whose sudo uses pam_systemd unverified, research.md). When a command ends
   without a lease, the job's group is killed (`cgroup.kill`, which the kernel applies to every
   process in it whatever its user) and its scratch folder deleted; with `keep_minutes`, at the
   lease's end (checking renews it, 24 h at most). Groups and scratch folders from an earlier run
@@ -189,14 +203,16 @@ files (program, settings, data, service file) refused for change, after resolvin
 
 `activity.jsonl` (0600): one line per call (time, call id, tool, arguments, result summary
 truncated to 2,000 characters, error, duration) and per leftover action. `latchkey activity`
-prints the last 50; `--check` runs the audit comparison (agent-protocol "Audit comparison") the
-service also runs after each connection, logging the outcome. No notifications.
+prints the last 50; `--check` prints the last audit comparison (agent-protocol "Audit
+comparison"), which the service runs after each connection and logs. (A comparison of its own
+would need a second connection, which would replace the service's.) No notifications.
 
 ### D12 Install, updates, uninstall (FR-1026, FR-1027)
 
 - **Releases**: GitHub releases tagged `server-vX.Y.Z` with `latchkey-linux-amd64`,
-  `latchkey-linux-arm64`, each with `.sig` (Ed25519 over the file's bytes, base64; Toni,
-  2026-10-31) and `SHA256SUMS`. The private key lives in the gitignored `.env`
+  `latchkey-linux-arm64`, each with `.sig` (base64 Ed25519, Toni, 2026-10-31, over
+  `latchkey-linux-<arch> <version> <sha256>`: the version and architecture are signed too, so an
+  older program can't be relabelled as newer, FR-1029) and `SHA256SUMS`. The private key lives in the gitignored `.env`
   (`SERVER_SIGNING_KEY`, base64 seed); the public key is in `linux/internal/update/key.go`.
   `linux/scripts/release.sh` builds, signs, and publishes. A fork sets its own key and
   `update_repo` in settings.

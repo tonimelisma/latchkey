@@ -128,7 +128,8 @@ IMPORTANT: every working increment, however small, is published and installed. I
    Mac app changed.
 3. Update specs, `docs/STATUS.md`, `docs/decisions.md`, and `README.md` in the same commit.
 4. Commit (files by name) and fast-forward `main` (above).
-5. If `relay/` changed: `deploy/deploy.sh`.
+5. If `relay/` changed: `deploy/deploy.sh`. If `linux/` changed: bump `linux/VERSION`, then
+   `make -C linux release` (installed servers update themselves within a day).
 6. If `macos/` changed: `make -C macos install` builds the disk image, quits the running app
    cleanly, replaces `/Applications/Latchkey.app`, starts it, and checks it reports the new
    version (pairing and permissions carry over). Toni never installs by hand.
@@ -227,6 +228,14 @@ Mac app (run in `macos/`; `project.yml` is the source, the `.xcodeproj` is gener
 - `make dmg`: the installable disk image, `build/Latchkey-<version>.dmg`
 - `make install`: the disk image, installed into /Applications and started (every increment)
 - Signing: copy `Config/Local.xcconfig.example` to `Config/Local.xcconfig` and set your team ID
+
+Linux server program (run in `linux/`, its own Go module; spec 010):
+- `make test` / `make lint`: tests that run anywhere (Linux-only ones skip), golangci-lint
+- `make test-linux`: every test on Debian with systemd in Docker (Docker must run)
+- `make check`: end to end: private relay, pretend Mac, the program installed by install.sh in a
+  Debian container, a real MCP client (`-claude` in `relay/cmd/linuxcheck` adds Claude Code)
+- `make release`: build, sign (`SERVER_SIGNING_KEY` in `.env`), publish `server-v$(cat VERSION)`;
+  bump `linux/VERSION` when anything in `linux/` changed (every increment ships)
 
 <!-- Maintainers: keep this file under ~100 lines. Status and decisions live in docs/, topic
 knowledge in .claude/rules/, multi-step procedures in docs/. Test each line: would removing it
