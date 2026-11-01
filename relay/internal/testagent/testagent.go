@@ -39,6 +39,11 @@ type Agent struct {
 
 	// Features is announced in hello; nil means an app from before features existed.
 	Features []string
+	// Kind, Name, and OSVersion are sent in hello (spec 010): an empty Kind is a Mac's hello from
+	// before kinds, an empty Name keeps the name the machine has, an empty OSVersion is "26.1".
+	Kind      string
+	Name      string
+	OSVersion string
 
 	// Misbehavior for tests.
 	NoSubprotocol bool   // dial without latchkey.v1
@@ -198,9 +203,16 @@ func (c *Conn) sendHello(ctx context.Context, nonce string) error {
 	}
 	return c.Send(ctx, &agentproto.Hello{
 		DeviceID: c.agent.DeviceID, Signature: base64.RawURLEncoding.EncodeToString(der),
-		AppVersion: "0.1.0-test", OSVersion: "26.1", Tools: c.agent.Tools, State: c.agent.State,
-		Features: c.agent.Features,
+		AppVersion: "0.1.0-test", OSVersion: c.agent.osVersion(), Tools: c.agent.Tools, State: c.agent.State,
+		Features: c.agent.Features, Kind: c.agent.Kind, Name: c.agent.Name,
 	})
+}
+
+func (a *Agent) osVersion() string {
+	if a.OSVersion != "" {
+		return a.OSVersion
+	}
+	return "26.1"
 }
 
 func (c *Conn) read(ctx context.Context) (agentproto.Message, error) {

@@ -93,7 +93,7 @@ func TestMacSeesAppsWithAccessAndRemovesOne(t *testing.T) {
 	assert.True(t, h.relay.Hub.Online(mac.Agent().DeviceID))
 }
 
-var grantFormRE = regexp.MustCompile(`name="id" value="([^"]+)"`)
+var grantFormRE = regexp.MustCompile(`name="id" value="(grt_[^"]+)"`)
 
 // The account page has the same per-app Remove, and still "Remove Claude's access" for all; the
 // Mac's list follows both, and a client's own revocation too.

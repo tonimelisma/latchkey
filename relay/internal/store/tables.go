@@ -3,7 +3,12 @@ package store
 import (
 	"context"
 	"database/sql"
+	"fmt"
+	"strings"
+	"sync"
 	"time"
+	"unicode"
+	"unicode/utf8"
 )
 
 // User is an Owner account.
@@ -45,11 +50,13 @@ func (s *Store) User(ctx context.Context, id string) (User, error) {
 	return u, nil
 }
 
-// Device is a paired Mac. PublicKey is a PKIX DER P-256 key, nil once revoked.
+// Device is a paired machine: a Mac or a Linux server (spec 010). PublicKey is a PKIX DER P-256
+// key, nil once revoked.
 type Device struct {
 	ID         string
 	UserID     string
 	Name       string
+	Kind       string // "mac" or "linux"
 	PublicKey  []byte
 	AppVersion string
 	OSVersion  string
@@ -57,34 +64,136 @@ type Device struct {
 	RevokedAt  time.Time
 }
 
+// Device kinds.
+const (
+	KindMac   = "mac"
+	KindLinux = "linux"
+)
+
 // NewDevice is what pairing supplies.
 type NewDevice struct {
 	UserID    string
 	Name      string
+	Kind      string // KindMac when empty
 	PublicKey []byte
 }
 
-// CreateDevice pairs a device. A user with an active device already is ErrConflict.
+// MaxDeviceName is the longest machine name kept, in characters.
+const MaxDeviceName = 100
+
+// CleanDeviceName makes a machine's self-chosen name safe to store and show: trimmed, without
+// control or formatting characters, at most MaxDeviceName characters; fallback when nothing is
+// left.
+func CleanDeviceName(n, fallback string) string {
+	if !utf8.ValidString(n) {
+		return fallback
+	}
+	var b strings.Builder
+	count := 0
+	for _, r := range strings.TrimSpace(n) {
+		if unicode.IsControl(r) || unicode.Is(unicode.Cf, r) {
+			continue
+		}
+		if count == MaxDeviceName {
+			break
+		}
+		b.WriteRune(r)
+		count++
+	}
+	if s := strings.TrimSpace(b.String()); s != "" {
+		return s
+	}
+	return fallback
+}
+
+// deviceNames serializes choosing a name, so two machines paired at once can't both take it.
+var deviceNames sync.Mutex
+
+// CreateDevice pairs a machine; the account's other machines stay paired (spec 010 FR-1001). Its
+// name is nd.Name, or that name with " 2", " 3", … when another active machine of the account
+// has it (FR-1002).
 func (s *Store) CreateDevice(ctx context.Context, nd NewDevice, now time.Time) (Device, error) {
+	kind := nd.Kind
+	if kind == "" {
+		kind = KindMac
+	}
+	deviceNames.Lock()
+	defer deviceNames.Unlock()
+	name, err := s.freeName(ctx, nd.UserID, "", nd.Name)
+	if err != nil {
+		return Device{}, err
+	}
 	d := Device{
-		ID: newID("dev_"), UserID: nd.UserID, Name: nd.Name, PublicKey: nd.PublicKey,
+		ID: newID("dev_"), UserID: nd.UserID, Name: name, Kind: kind, PublicKey: nd.PublicKey,
 		CreatedAt: now.UTC().Truncate(time.Millisecond),
 	}
-	_, err := s.db.ExecContext(ctx,
-		`INSERT INTO devices (id, user_id, name, public_key, created_at) VALUES (?, ?, ?, ?, ?)`,
-		d.ID, d.UserID, d.Name, d.PublicKey, toMS(d.CreatedAt))
+	_, err = s.db.ExecContext(ctx,
+		`INSERT INTO devices (id, user_id, name, kind, public_key, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
+		d.ID, d.UserID, d.Name, d.Kind, d.PublicKey, toMS(d.CreatedAt))
 	if err != nil {
 		return Device{}, mapErr(err)
 	}
 	return d, nil
 }
 
-const deviceColumns = `id, user_id, name, public_key, app_version, os_version, created_at, revoked_at`
+// RenameDevice gives the device the wanted name, made unique among the account's active machines
+// as in CreateDevice, and returns the name it kept. A name the device already has is kept as is.
+func (s *Store) RenameDevice(ctx context.Context, id, wanted string) (string, error) {
+	deviceNames.Lock()
+	defer deviceNames.Unlock()
+	d, err := s.Device(ctx, id)
+	if err != nil {
+		return "", err
+	}
+	name, err := s.freeName(ctx, d.UserID, d.ID, wanted)
+	if err != nil {
+		return "", err
+	}
+	if name == d.Name {
+		return name, nil
+	}
+	res, err := s.db.ExecContext(ctx, `UPDATE devices SET name = ? WHERE id = ?`, name, id)
+	if err != nil {
+		return "", err
+	}
+	return name, requireOneRow(res)
+}
 
-func scanDevice(row *sql.Row) (Device, error) {
+// freeName is wanted, or wanted with the first free number appended, compared without regard to
+// letter case among the user's active devices other than except.
+func (s *Store) freeName(ctx context.Context, userID, except, wanted string) (string, error) {
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT name FROM devices WHERE user_id = ? AND revoked_at IS NULL AND id != ?`, userID, except)
+	if err != nil {
+		return "", err
+	}
+	defer func() { _ = rows.Close() }()
+	taken := map[string]bool{}
+	for rows.Next() {
+		var n string
+		if err := rows.Scan(&n); err != nil {
+			return "", err
+		}
+		taken[strings.ToLower(n)] = true
+	}
+	if err := rows.Err(); err != nil {
+		return "", err
+	}
+	name := wanted
+	for i := 2; taken[strings.ToLower(name)]; i++ {
+		name = fmt.Sprintf("%s %d", wanted, i)
+	}
+	return name, nil
+}
+
+const deviceColumns = `id, user_id, name, kind, public_key, app_version, os_version, created_at, revoked_at`
+
+type scanner interface{ Scan(dest ...any) error }
+
+func scanDevice(row scanner) (Device, error) {
 	var d Device
 	var created, revoked sql.NullInt64
-	err := row.Scan(&d.ID, &d.UserID, &d.Name, &d.PublicKey, &d.AppVersion, &d.OSVersion, &created, &revoked)
+	err := row.Scan(&d.ID, &d.UserID, &d.Name, &d.Kind, &d.PublicKey, &d.AppVersion, &d.OSVersion, &created, &revoked)
 	if err != nil {
 		return Device{}, mapErr(err)
 	}
@@ -97,10 +206,23 @@ func (s *Store) Device(ctx context.Context, id string) (Device, error) {
 	return scanDevice(s.db.QueryRowContext(ctx, `SELECT `+deviceColumns+` FROM devices WHERE id = ?`, id))
 }
 
-// ActiveDevice returns the user's unrevoked device.
-func (s *Store) ActiveDevice(ctx context.Context, userID string) (Device, error) {
-	return scanDevice(s.db.QueryRowContext(ctx,
-		`SELECT `+deviceColumns+` FROM devices WHERE user_id = ? AND revoked_at IS NULL`, userID))
+// ActiveDevices returns the user's paired machines, oldest pairing first (spec 010).
+func (s *Store) ActiveDevices(ctx context.Context, userID string) ([]Device, error) {
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT `+deviceColumns+` FROM devices WHERE user_id = ? AND revoked_at IS NULL ORDER BY created_at, id`, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	var out []Device
+	for rows.Next() {
+		d, err := scanDevice(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, d)
+	}
+	return out, rows.Err()
 }
 
 // UpdateDeviceVersions records the versions the device reported in hello.

@@ -23,8 +23,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/tonimelisma/latchkey/relay/internal/account"
 	"github.com/tonimelisma/latchkey/relay/agentproto"
+	"github.com/tonimelisma/latchkey/relay/internal/account"
 	"github.com/tonimelisma/latchkey/relay/internal/oauth"
 	"github.com/tonimelisma/latchkey/relay/internal/store"
 )
@@ -307,31 +307,61 @@ func TestPairing(t *testing.T) {
 
 	page := b.get("/pair?name=Toni%27s+MacBook")
 	assert.Contains(t, page.body, "Toni&#39;s MacBook")
-	assert.NotContains(t, page.body, "disconnects")
+	assert.NotContains(t, page.body, "other machines stay connected")
 
 	code := b.pairCode("Toni's MacBook")
 	mac := e.browser() // the app calls exchange without cookies
 	status, m := mac.json("/pair/exchange", map[string]string{"code": code, "public_key": p256DER(t), "name": "Toni's MacBook"})
 	require.Equal(t, http.StatusOK, status, m)
-	first, err := e.store.ActiveDevice(context.Background(), u.ID)
+	devices, err := e.store.ActiveDevices(context.Background(), u.ID)
 	require.NoError(t, err)
+	require.Len(t, devices, 1)
+	first := devices[0]
 	assert.Equal(t, m["device_id"], first.ID)
 	assert.Equal(t, "Toni's MacBook", first.Name)
+	assert.Equal(t, store.KindMac, first.Kind)
 	assert.Contains(t, e.changed, u.ID)
 
 	status, _ = mac.json("/pair/exchange", map[string]string{"code": code, "public_key": p256DER(t)})
 	assert.Equal(t, http.StatusBadRequest, status, "codes are single-use")
 
-	// A second Mac: the page names the one it replaces (FR-053).
+	// A second Mac is added; the first stays (spec 010 FR-1001, FR-1012).
 	page = b.get("/pair?name=New+MacBook")
-	assert.Contains(t, page.body, "disconnects “Toni&#39;s MacBook”")
+	assert.Contains(t, page.body, "Your other machines stay connected: “Toni&#39;s MacBook”")
 	code = b.pairCode("New MacBook")
 	status, _ = mac.json("/pair/exchange", map[string]string{"code": code, "public_key": p256DER(t), "name": "New MacBook"})
 	require.Equal(t, http.StatusOK, status)
-	assert.Contains(t, e.macs.revoked, first.ID)
-	now, err := e.store.ActiveDevice(context.Background(), u.ID)
+	assert.NotContains(t, e.macs.revoked, first.ID)
+	devices, err = e.store.ActiveDevices(context.Background(), u.ID)
 	require.NoError(t, err)
-	assert.Equal(t, "New MacBook", now.Name)
+	require.Len(t, devices, 2)
+	second := devices[0]
+	if second.ID == first.ID {
+		second = devices[1]
+	}
+	assert.Equal(t, "New MacBook", second.Name)
+
+	// The same Mac pairing again names its old pairing, which goes; another account's machine
+	// can't be named that way.
+	code = b.pairCode("New MacBook")
+	status, m = mac.json("/pair/exchange", map[string]string{"code": code, "public_key": p256DER(t), "name": "New MacBook", "replaces": second.ID})
+	require.Equal(t, http.StatusOK, status)
+	assert.Contains(t, e.macs.revoked, second.ID)
+	again, err := e.store.Device(context.Background(), m["device_id"].(string))
+	require.NoError(t, err)
+	assert.Equal(t, "New MacBook", again.Name, "its name is free again")
+	devices, err = e.store.ActiveDevices(context.Background(), u.ID)
+	require.NoError(t, err)
+	require.Len(t, devices, 2)
+
+	other, err := e.store.CreateUser(context.Background(), "other@example.com", e.clock.now())
+	require.NoError(t, err)
+	theirs, err := e.store.CreateDevice(context.Background(), store.NewDevice{UserID: other.ID, Name: "Theirs", PublicKey: []byte("k")}, e.clock.now())
+	require.NoError(t, err)
+	code = b.pairCode("Third")
+	status, _ = mac.json("/pair/exchange", map[string]string{"code": code, "public_key": p256DER(t), "name": "Third", "replaces": theirs.ID})
+	require.Equal(t, http.StatusOK, status)
+	assert.NotContains(t, e.macs.revoked, theirs.ID, "only the code's own account's machines")
 }
 
 func TestPairingRules(t *testing.T) {
@@ -401,15 +431,17 @@ func TestRevokeMacAndClaude(t *testing.T) {
 	}))
 
 	page := b.get("/account")
-	assert.Contains(t, page.body, "Disconnect Mac")
+	assert.Contains(t, page.body, "Machines")
+	assert.Contains(t, page.body, `aria-label="Remove Mac"`)
 	assert.Contains(t, page.body, "Remove Claude")
 	token := csrf(t, page.body)
 
 	r := b.form("/account/revoke-mac", url.Values{"csrf": {token}})
 	assert.Equal(t, http.StatusSeeOther, r.status)
 	assert.Contains(t, e.macs.revoked, d.ID)
-	_, err = e.store.ActiveDevice(context.Background(), u.ID)
-	require.ErrorIs(t, err, store.ErrNotFound)
+	left, err := e.store.ActiveDevices(context.Background(), u.ID)
+	require.NoError(t, err)
+	assert.Empty(t, left)
 
 	r = b.form("/account/revoke-claude", url.Values{"csrf": {token}})
 	assert.Equal(t, http.StatusSeeOther, r.status)

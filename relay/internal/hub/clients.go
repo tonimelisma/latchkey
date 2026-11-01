@@ -14,18 +14,20 @@ const (
 	auditSurfaceApp   = "Latchkey app"
 )
 
-// ClientsChanged sends the user's Mac the list of apps with access, if it is connected,
-// announced the feature, and the list differs from the last one sent (FR-192).
+// ClientsChanged sends each of the user's connected machines that announced the feature (Macs)
+// the list of apps with access, if it differs from the last one sent (FR-192).
 func (h *Hub) ClientsChanged(ctx context.Context, userID string) {
 	if h.cfg.Clients == nil {
 		return
 	}
-	d, err := h.store.ActiveDevice(ctx, userID)
+	devices, err := h.store.ActiveDevices(ctx, userID)
 	if err != nil {
-		return // no Mac paired (or the account is gone)
+		return // the account is gone
 	}
-	if c := h.conn(d.ID); c != nil {
-		c.sendClients(ctx, false)
+	for _, d := range devices {
+		if c := h.conn(d.ID); c != nil {
+			c.sendClients(ctx, false)
+		}
 	}
 }
 

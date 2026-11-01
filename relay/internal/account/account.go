@@ -105,6 +105,7 @@ type Service struct {
 	csrfKey  []byte
 	secure   bool
 	cookie   string
+	links    linkAttempts // wrong headless-pairing codes per account (spec 010 plan D7)
 
 	// Recovery codes are emailed in the background (FR-042b): background counts the sends in
 	// flight, sending bounds them.
@@ -198,6 +199,11 @@ func (s *Service) Register(mux *http.ServeMux) {
 	mux.HandleFunc("POST /passkey/login/finish", s.loginFinish)
 	mux.HandleFunc("GET /account", s.accountPage)
 	mux.HandleFunc("POST /account/revoke-mac", s.revokeMac)
+	mux.HandleFunc("POST /account/machines/remove", s.removeMachine)
+	mux.HandleFunc("POST /pair/device", s.devicePair)
+	mux.HandleFunc("POST /pair/device/token", s.devicePairToken)
+	mux.HandleFunc("GET /link", s.linkPage)
+	mux.HandleFunc("POST /link", s.linkPost)
 	mux.HandleFunc("POST /account/revoke-claude", s.revokeClaude)
 	mux.HandleFunc("POST /account/revoke-client", s.revokeClient)
 	mux.HandleFunc("POST /account/delete", s.deleteAccount)
@@ -721,6 +727,9 @@ func (s *Service) signout(w http.ResponseWriter, r *http.Request) {
 // NoticesOnConnect tells a Mac about recoveries since it last connected (plan D5), and about
 // Claude clients given access that it hasn't been told about.
 func (s *Service) NoticesOnConnect(ctx context.Context, d store.Device, previous time.Time) []*agentproto.Notice {
+	if d.Kind != store.KindMac { // only a Mac shows notices; a server must not take them (spec 010)
+		return nil
+	}
 	var out []*agentproto.Notice
 	if previous.IsZero() {
 		previous = d.CreatedAt
@@ -738,14 +747,32 @@ func (s *Service) NoticesOnConnect(ctx context.Context, d store.Device, previous
 	return out
 }
 
-// ClientAuthorized tells the Owner's Mac that a Claude client was given access: now if it's
-// online, otherwise on its next connection.
+// onlineMacs are the user's connected Macs: the machines that show notices (a Linux server has
+// no screen, spec 010 FR-1050).
+func (s *Service) onlineMacs(ctx context.Context, userID string) []store.Device {
+	devices, err := s.cfg.Store.ActiveDevices(ctx, userID)
+	if err != nil {
+		return nil
+	}
+	var out []store.Device
+	for _, d := range devices {
+		if d.Kind == store.KindMac && s.cfg.Macs.Online(d.ID) {
+			out = append(out, d)
+		}
+	}
+	return out
+}
+
+// ClientAuthorized tells the Owner's Macs that a Claude client was given access: now if one is
+// online, otherwise on the next connection.
 func (s *Service) ClientAuthorized(ctx context.Context, userID, clientName string) {
 	now := s.now()
 	told := false
-	if d, err := s.cfg.Store.ActiveDevice(ctx, userID); err == nil && s.cfg.Macs.Online(d.ID) {
+	for _, d := range s.onlineMacs(ctx, userID) {
 		n := &agentproto.Notice{Kind: agentproto.NoticeClientAuthorized, At: now.Truncate(time.Second), Client: clientName}
-		told = s.cfg.Macs.SendNotice(ctx, d.ID, n) == nil
+		if s.cfg.Macs.SendNotice(ctx, d.ID, n) == nil {
+			told = true
+		}
 	}
 	if err := s.cfg.Store.AddClientAuthorization(ctx, userID, clientName, now, told); err != nil {
 		s.cfg.Logger.Error("record client authorization", "err", err)

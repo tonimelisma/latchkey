@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/tonimelisma/latchkey/relay/internal/account"
 	"github.com/tonimelisma/latchkey/relay/agentproto"
+	"github.com/tonimelisma/latchkey/relay/internal/account"
 	"github.com/tonimelisma/latchkey/relay/internal/events"
 	"github.com/tonimelisma/latchkey/relay/internal/hub"
 	"github.com/tonimelisma/latchkey/relay/internal/limit"
@@ -195,6 +195,9 @@ func (r *Relay) Daily(ctx context.Context, now time.Time, logger *slog.Logger) {
 	db := r.Store
 	if err := db.PurgeClientAuthorizations(ctx, now.Add(-ClientAuthorizationRetention)); err != nil {
 		logger.Error("purge client authorizations", "err", err)
+	}
+	if err := db.PurgeDevicePairings(ctx, now); err != nil {
+		logger.Error("purge device pairings", "err", err)
 	}
 	ended, err := db.PurgeExpired(ctx, now)
 	if err != nil {

@@ -165,13 +165,13 @@ func TestEndToEndInBrowser(t *testing.T) {
 	require.NoError(t, err)
 	assert.False(t, res.IsError)
 	assert.Contains(t, textOf(res), `"battery_percent":82`)
-	assert.Contains(t, textOf(res), "Mac: online · 82% battery", "the state line rides along (FR-065)")
+	assert.Contains(t, textOf(res), "Test MacBook (Mac): online · 82% battery", "the state line rides along (FR-065)")
 
 	// The Mac goes away: Claude gets the offline answer right away.
 	require.NoError(t, conn.Close())
 	require.Eventually(t, func() bool {
 		res, err := cs.CallTool(ctx, &mcp.CallToolParams{Name: "battery_status", Arguments: map[string]any{}})
-		return err == nil && res.IsError && strings.HasPrefix(textOf(res), "Your Mac is offline.")
+		return err == nil && res.IsError && strings.HasPrefix(textOf(res), "Test MacBook is offline.")
 	}, 10*time.Second, 50*time.Millisecond)
 }
 

@@ -23,12 +23,13 @@
 <li>The codes we email you for sign-up and recovery, in hashed form, for 15 minutes. That a recovery code was used is kept for 30 days, so your Mac can tell you about it.</li>
 </ul>
 
-<p><strong>About your Mac</strong></p>
+<p><strong>About your machines</strong></p>
 <ul>
-<li>Your Mac's name, the public key it identifies itself with, the versions of the Latchkey app and of macOS it reported, and when it was connected to your account. Its private key never leaves your Mac.</li>
-<li>Your Mac's last reported state: whether it is connected, when it connected and was last seen, why it went offline if it said so, its battery level, power source, whether it is charging and how long the battery should last, how warm it is running, low power mode, whether the lid is closed, its time zone, and whether keep-awake is on. Only the latest state is kept, not a history.</li>
-<li>The list of tools your Mac offers to Claude (their names and descriptions), which follows what you turned on in the Latchkey app.</li>
+<li>Each machine's name, whether it is a Mac or a Linux server, the public key it identifies itself with, the versions of Latchkey and of its operating system it reported, and when it was connected to your account. Its private key never leaves the machine.</li>
+<li>Each machine's last reported state: whether it is connected, when it connected and was last seen, and why it went offline if it said so; for a Mac also its battery level, power source, whether it is charging and how long the battery should last, how warm it is running, low power mode, whether the lid is closed, its time zone, and whether keep-awake is on; for a Linux server how long it has been running and its time zone. Only the latest state is kept, not a history.</li>
+<li>The list of tools each machine offers to Claude (their names and descriptions), which follows what you turned on with Latchkey on that machine.</li>
 <li>The one-time code that connects your Mac to your account, in hashed form, for 5 minutes.</li>
+<li>The request a Linux server makes to be connected: the name, kind, and public key it sent, the codes it showed you (in hashed form), and whether and by whom it was approved, for an hour after its 10 minutes run out.</li>
 </ul>
 
 <p><strong>About Claude's access</strong></p>

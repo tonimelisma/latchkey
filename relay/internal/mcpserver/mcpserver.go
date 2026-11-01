@@ -202,16 +202,17 @@ type Server struct {
 	// request and session ("server connecting", "session connected") stay out (FR-635).
 	sdkLog *slog.Logger
 
-	// loadTools reads an Owner's current Mac tools (macTools); a field so a test can interleave
-	// two syncs.
+	// loadTools reads the tools an Owner's server offers (ownerTools); a field so a test can
+	// interleave two syncs.
 	loadTools func(ctx context.Context, userID string) []*mcp.Tool
 }
 
-// userServer is one Owner's MCP server; its tool list is that Owner's Mac tools.
+// userServer is one Owner's MCP server; its tool list is the union of that Owner's machines'
+// tools (spec 010 plan D2).
 type userServer struct {
 	mu     sync.Mutex
 	server *mcp.Server
-	tools  map[string]*mcp.Tool // Mac tools currently registered
+	tools  map[string]*mcp.Tool // tools currently registered
 	grants map[string]string    // session ID → the grant that opened it, where the token named one
 }
 
@@ -230,7 +231,7 @@ func New(st *store.Store, h *hub.Hub, opts Options) *Server {
 		opts.SessionTimeout = DefaultSessionTimeout
 	}
 	s := &Server{store: st, hub: h, opts: opts, users: map[string]*userServer{}, sdkLog: sdkLogger(opts.Logger)}
-	s.loadTools = s.macTools
+	s.loadTools = s.ownerTools
 	sdkLog := s.sdkLog
 	// An idle session is closed by the SDK (its next request gets 404 and the client starts a new
 	// one, as the MCP transport specifies); without this, sessions lived until restart.
@@ -305,7 +306,7 @@ func (s *Server) user(ctx context.Context, id string) *userServer {
 	if !ok {
 		u = &userServer{
 			server: mcp.NewServer(&mcp.Implementation{Name: "latchkey", Title: "Latchkey", Version: s.opts.Version},
-				&mcp.ServerOptions{Logger: s.sdkLog}),
+				&mcp.ServerOptions{Logger: s.sdkLog, Instructions: instructions}),
 			tools: map[string]*mcp.Tool{}, grants: map[string]string{},
 		}
 		s.users[id] = u
@@ -328,27 +329,13 @@ func (s *Server) ToolsChanged(userID string) {
 	}
 }
 
-func (s *Server) macTools(ctx context.Context, userID string) []*mcp.Tool {
-	d, err := s.store.ActiveDevice(ctx, userID)
-	if err != nil {
-		return nil
-	}
-	st, err := s.store.DeviceState(ctx, d.ID)
-	if err != nil || st.ToolsJSON == nil {
-		return nil
-	}
-	var tools []*mcp.Tool
-	if err := json.Unmarshal(st.ToolsJSON, &tools); err != nil {
-		s.opts.Logger.Error("stored tools unreadable", "device", d.ID, "err", err)
-		return nil
-	}
-	if agentproto.ValidateTools(tools) != nil {
-		return nil // validated on arrival, including a trial AddTool; never hand the SDK a tool it would panic on
-	}
-	return tools
+// ownerTools is the union of the Owner's machines' stored tools, plus the machines tool (spec
+// 010 plan D2).
+func (s *Server) ownerTools(ctx context.Context, userID string) []*mcp.Tool {
+	return mergedTools(s.machines(ctx, userID))
 }
 
-// syncTools makes the Owner's server offer exactly the Mac's stored tool list. The lock is taken
+// syncTools makes the Owner's server offer exactly the merged tool list. The lock is taken
 // before the list is read: two syncs then apply their lists in the order they read them, so an
 // older list can never overwrite a newer one.
 func (s *Server) syncTools(ctx context.Context, userID string, u *userServer) {
@@ -374,8 +361,12 @@ func (s *Server) syncTools(ctx context.Context, userID string, u *userServer) {
 		if old, ok := u.tools[name]; ok && reflect.DeepEqual(old, t) {
 			continue
 		}
-		if err := addToolSafely(u.server, t, s.forward(userID, t)); err != nil {
-			s.opts.Logger.Error("Mac tool left out", "user", userID, "tool", name, "err", err)
+		handler := s.forward(userID, t.Name)
+		if name == agentproto.RelayToolMachines {
+			handler = s.listMachines(userID)
+		}
+		if err := addToolSafely(u.server, t, handler); err != nil {
+			s.opts.Logger.Error("machine tool left out", "user", userID, "tool", name, "err", err)
 			continue
 		}
 		u.tools[name] = t
@@ -388,74 +379,92 @@ func addToolSafely(srv *mcp.Server, t *mcp.Tool, h mcp.ToolHandler) error {
 	return agentproto.TryAddTool(srv, t, h)
 }
 
-// status gathers what the relay knows about the user's Mac.
-func (s *Server) status(ctx context.Context, userID string) (status, store.Device) {
-	d, err := s.store.ActiveDevice(ctx, userID)
-	if err != nil {
-		return status{}, store.Device{}
-	}
-	st := status{Paired: true, Online: s.hub.Online(d.ID)}
-	ds, err := s.store.DeviceState(ctx, d.ID)
-	if err != nil {
-		return st, d
-	}
-	st.LastSeen, st.OfflineReason = ds.LastSeenAt, ds.OfflineReason
-	if ds.StateJSON != nil {
-		var state agentproto.State
-		if json.Unmarshal(ds.StateJSON, &state) == nil {
-			st.State = &state
-		}
-	}
-	return st, d
-}
-
 func errorResult(text string) *mcp.CallToolResult {
 	return &mcp.CallToolResult{IsError: true, Content: []mcp.Content{&mcp.TextContent{Text: text}}}
 }
 
-// forward sends a Mac tool call through the hub. The hub bounds it by the tool's deadline.
-func (s *Server) forward(userID string, tool *mcp.Tool) mcp.ToolHandler {
-	deadline := agentproto.ToolDeadline(tool)
-	return func(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		start := s.opts.Now()
-		callID := agentproto.NewCallID() // made here, so a call that never reaches the Mac has one too (FR-632)
-		client := surface(req)           // the same name in the call and in the audit (FR-637)
-		st, d := s.status(ctx, userID)
-		if !st.Paired {
-			s.audit(ctx, userID, "", callID, client, tool.Name, store.OutcomeOffline, start)
+// listMachines answers the relay's machines tool (spec 010 FR-1006).
+func (s *Server) listMachines(userID string) mcp.ToolHandler {
+	return func(ctx context.Context, _ *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		ms := s.machines(ctx, userID)
+		if len(ms) == 0 {
 			return errorResult(neverPairedText), nil
 		}
-		res, err := s.hub.CallWithID(ctx, d.ID, callID, client, tool.Name, req.Params.Arguments, deadline, progressFunc(ctx, req))
+		return machinesResult(ms, s.opts.Now()), nil
+	}
+}
+
+// forward sends a machine tool call through the hub to the machine the call names, or the only
+// one that can run it (spec 010 plan D4). The hub bounds it by that machine's deadline for the
+// tool.
+func (s *Server) forward(userID, toolName string) mcp.ToolHandler {
+	return func(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		start := s.opts.Now()
+		callID := agentproto.NewCallID() // made here, so a call that never reaches a machine has one too (FR-632)
+		client := surface(req)           // the same name in the call and in the audit (FR-637)
+		ms := s.machines(ctx, userID)
+		if len(ms) == 0 {
+			s.audit(ctx, userID, "", callID, client, toolName, store.OutcomeOffline, start)
+			return errorResult(neverPairedText), nil
+		}
+		named, args := takeMachine(req.Params.Arguments)
+		m, refusal := choose(ms, toolName, named, start)
+		if refusal != "" {
+			s.audit(ctx, userID, "", callID, client, toolName, store.OutcomeError, start)
+			return errorResult(refusal), nil
+		}
+		d := m.Device
+		deadline := agentproto.ToolDeadline(m.tool(toolName))
+		res, err := s.hub.CallWithID(ctx, d.ID, callID, client, toolName, args, deadline, progressFunc(ctx, req))
 		var result *mcp.CallToolResult
 		outcome := store.OutcomeOK
 		switch {
 		case errors.Is(err, hub.ErrOffline):
-			st, _ = s.status(ctx, userID) // re-read: the Mac may have just said goodbye
-			result, outcome = errorResult(offlineText(st, s.opts.Now())), store.OutcomeOffline
+			now := s.opts.Now()
+			for _, fresh := range s.machines(ctx, userID) { // re-read: the machine may have just said goodbye
+				if fresh.Device.ID == d.ID {
+					m = fresh
+				}
+			}
+			result, outcome = errorResult(offlineText(m, now)), store.OutcomeOffline
+			if others := othersLine(ms, d.ID, now); others != "" {
+				appendStatusLine(result, others)
+			}
 		case errors.Is(err, hub.ErrTimeout):
-			result, outcome = errorResult(timeoutText(deadline)), store.OutcomeTimeout
+			result, outcome = errorResult(timeoutText(d.Name, deadline)), store.OutcomeTimeout
 		case errors.Is(err, hub.ErrRevoked):
-			result, outcome = errorResult(revokedText), store.OutcomeError
+			result, outcome = errorResult(revokedText(d.Name)), store.OutcomeError
 		case errors.Is(err, hub.ErrDisconnected):
-			result, outcome = errorResult(disconnectedText), store.OutcomeError
+			result, outcome = errorResult(disconnectedText(d.Name)), store.OutcomeError
 		case err != nil: // the client went away
 			result, outcome = errorResult("The request was cancelled."), store.OutcomeError
 		default:
-			result = toResult(res)
+			result = toResult(d.Name, res)
 			if result.IsError {
 				outcome = store.OutcomeError
 			}
-			// The Mac answered: add its state, read after the call so it is current (FR-065).
-			now, _ := s.status(ctx, userID)
-			appendStatusLine(result, statusLine(now.State))
+			// The machine answered: add its state, read after the call so it is current (FR-065),
+			// and the other machines (spec 010 FR-1009).
+			now := s.opts.Now()
+			fresh := s.machines(ctx, userID)
+			line := statusLine(d.Name, d.Kind, nil)
+			for _, f := range fresh {
+				if f.Device.ID == d.ID {
+					line = statusLine(f.Device.Name, f.Device.Kind, f.State)
+				}
+			}
+			if others := othersLine(fresh, d.ID, now); others != "" {
+				line += "\n" + others
+			}
+			appendStatusLine(result, line)
 		}
-		s.audit(ctx, userID, d.ID, callID, client, tool.Name, outcome, start)
+		s.audit(ctx, userID, d.ID, callID, client, toolName, outcome, start)
 		return result, nil
 	}
 }
 
-// toResult converts the Mac's result into an MCP result without interpreting it.
-func toResult(res *agentproto.Result) *mcp.CallToolResult {
+// toResult converts the machine's result into an MCP result without interpreting it.
+func toResult(name string, res *agentproto.Result) *mcp.CallToolResult {
 	raw := map[string]json.RawMessage{"content": res.Content}
 	if res.StructuredContent != nil {
 		raw["structuredContent"] = res.StructuredContent
@@ -466,7 +475,7 @@ func toResult(res *agentproto.Result) *mcp.CallToolResult {
 		err = json.Unmarshal(data, &out)
 	}
 	if err != nil || out.Content == nil {
-		return errorResult("Your Mac sent a result the relay couldn't read.")
+		return errorResult(unreadableText(name))
 	}
 	out.IsError = res.IsError
 	return &out

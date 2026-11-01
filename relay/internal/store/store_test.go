@@ -83,13 +83,20 @@ func TestDevices(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, d, got)
 
-	active, err := s.ActiveDevice(ctx, u.ID)
+	active, err := s.ActiveDevices(ctx, u.ID)
 	require.NoError(t, err)
-	assert.Equal(t, d.ID, active.ID)
+	require.Len(t, active, 1)
+	assert.Equal(t, d.ID, active[0].ID)
+	assert.Equal(t, store.KindMac, active[0].Kind, "a pairing without a kind is a Mac")
 
-	// One active device per user.
-	_, err = s.CreateDevice(ctx, store.NewDevice{UserID: u.ID, Name: "x", PublicKey: []byte("k")}, t0)
-	require.ErrorIs(t, err, store.ErrConflict)
+	// Several machines per account (spec 010 FR-1001): a second pairing adds one.
+	second, err := s.CreateDevice(ctx, store.NewDevice{UserID: u.ID, Name: "homeserver", Kind: store.KindLinux, PublicKey: []byte("k")}, t0.Add(time.Second))
+	require.NoError(t, err)
+	active, err = s.ActiveDevices(ctx, u.ID)
+	require.NoError(t, err)
+	require.Len(t, active, 2)
+	assert.Equal(t, []string{d.ID, second.ID}, []string{active[0].ID, active[1].ID}, "oldest pairing first")
+	assert.Equal(t, store.KindLinux, active[1].Kind)
 
 	require.NoError(t, s.UpdateDeviceVersions(ctx, d.ID, "0.2.0", "26.2"))
 	got, err = s.Device(ctx, d.ID)
@@ -116,12 +123,108 @@ func TestRevokeDeletesPublicKey(t *testing.T) {
 	assert.Nil(t, got.PublicKey)
 	assert.Equal(t, revokedAt, got.RevokedAt)
 
-	_, err = s.ActiveDevice(ctx, u.ID)
-	require.ErrorIs(t, err, store.ErrNotFound)
+	active, err := s.ActiveDevices(ctx, u.ID)
+	require.NoError(t, err)
+	assert.Empty(t, active)
 	require.ErrorIs(t, s.RevokeDevice(ctx, d.ID, revokedAt), store.ErrNotFound)
 
 	// A new device can be paired after revocation.
 	newDevice(t, s, u.ID)
+}
+
+// Names are unique among an account's paired machines, without regard to case; a revoked
+// machine's name is free again, and another account's names don't count (spec 010 FR-1002).
+func TestMachineNamesStayUnique(t *testing.T) {
+	ctx := context.Background()
+	s := open(t)
+	u := newUser(t, s)
+	other, err := s.CreateUser(ctx, "other@example.com", t0)
+	require.NoError(t, err)
+	pair := func(userID, name string) store.Device {
+		d, err := s.CreateDevice(ctx, store.NewDevice{UserID: userID, Name: name, Kind: store.KindLinux, PublicKey: []byte("k")}, t0)
+		require.NoError(t, err)
+		return d
+	}
+	a := pair(u.ID, "homeserver")
+	assert.Equal(t, "homeserver", a.Name)
+	b := pair(u.ID, "HomeServer")
+	assert.Equal(t, "HomeServer 2", b.Name)
+	c := pair(u.ID, "homeserver")
+	assert.Equal(t, "homeserver 3", c.Name)
+	assert.Equal(t, "homeserver", pair(other.ID, "homeserver").Name, "another account's machines don't count")
+
+	require.NoError(t, s.RevokeDevice(ctx, a.ID, t0))
+	assert.Equal(t, "homeserver", pair(u.ID, "homeserver").Name, "a removed machine's name is free")
+
+	// Renaming follows the same rule, and keeps a name the machine already has.
+	kept, err := s.RenameDevice(ctx, c.ID, "HomeServer 2")
+	require.NoError(t, err)
+	assert.Equal(t, "HomeServer 2 2", kept)
+	kept, err = s.RenameDevice(ctx, b.ID, "HomeServer 2")
+	require.NoError(t, err)
+	assert.Equal(t, "HomeServer 2", kept)
+	kept, err = s.RenameDevice(ctx, b.ID, "nas")
+	require.NoError(t, err)
+	assert.Equal(t, "nas", kept)
+	got, err := s.Device(ctx, b.ID)
+	require.NoError(t, err)
+	assert.Equal(t, "nas", got.Name)
+	_, err = s.RenameDevice(ctx, "dev_missing", "x")
+	require.ErrorIs(t, err, store.ErrNotFound)
+}
+
+func TestDevicePairing(t *testing.T) {
+	ctx := context.Background()
+	s := open(t)
+	u := newUser(t, s)
+	dc, uc := []byte("device-code-hash"), []byte("user-code-hash")
+	p := store.DevicePairing{Name: "homeserver", Kind: store.KindLinux, PublicKey: []byte("pkix"), CreatedAt: t0, ExpiresAt: t0.Add(10 * time.Minute)}
+	require.NoError(t, s.CreateDevicePairing(ctx, dc, uc, p))
+	require.ErrorIs(t, s.CreateDevicePairing(ctx, []byte("other"), uc, p), store.ErrConflict, "user codes are unique")
+
+	_, last, err := s.PollDevicePairing(ctx, dc, t0.Add(5*time.Second))
+	require.ErrorIs(t, err, store.ErrPairingPending)
+	assert.True(t, last.IsZero(), "first poll")
+	_, last, err = s.PollDevicePairing(ctx, dc, t0.Add(10*time.Second))
+	require.ErrorIs(t, err, store.ErrPairingPending)
+	assert.Equal(t, t0.Add(5*time.Second), last)
+
+	got, err := s.DevicePairingByUserCode(ctx, uc, t0.Add(time.Minute))
+	require.NoError(t, err)
+	assert.Equal(t, "homeserver", got.Name)
+	assert.Equal(t, store.KindLinux, got.Kind)
+	_, err = s.DevicePairingByUserCode(ctx, []byte("wrong"), t0.Add(time.Minute))
+	require.ErrorIs(t, err, store.ErrNotFound)
+
+	d, err := s.ApproveDevicePairing(ctx, uc, u.ID, t0.Add(time.Minute))
+	require.NoError(t, err)
+	assert.Equal(t, "homeserver", d.Name)
+	assert.Equal(t, store.KindLinux, d.Kind)
+	assert.Equal(t, []byte("pkix"), d.PublicKey)
+	_, err = s.ApproveDevicePairing(ctx, uc, u.ID, t0.Add(time.Minute))
+	require.ErrorIs(t, err, store.ErrNotFound, "approved once")
+	_, err = s.DevicePairingByUserCode(ctx, uc, t0.Add(time.Minute))
+	require.ErrorIs(t, err, store.ErrNotFound, "no longer offered for approval")
+
+	collected, _, err := s.PollDevicePairing(ctx, dc, t0.Add(70*time.Second))
+	require.NoError(t, err)
+	assert.Equal(t, d.ID, collected.ID)
+	_, _, err = s.PollDevicePairing(ctx, dc, t0.Add(75*time.Second))
+	require.ErrorIs(t, err, store.ErrPairingExpired, "collected once")
+
+	// An unapproved request expires; an unknown one is expired.
+	require.NoError(t, s.CreateDevicePairing(ctx, []byte("dc2"), []byte("uc2"), p))
+	_, _, err = s.PollDevicePairing(ctx, []byte("dc2"), t0.Add(10*time.Minute))
+	require.ErrorIs(t, err, store.ErrPairingExpired)
+	_, err = s.ApproveDevicePairing(ctx, []byte("uc2"), u.ID, t0.Add(10*time.Minute))
+	require.ErrorIs(t, err, store.ErrNotFound)
+	_, _, err = s.PollDevicePairing(ctx, []byte("nope"), t0)
+	require.ErrorIs(t, err, store.ErrPairingExpired)
+
+	// Purged an hour after expiry.
+	require.NoError(t, s.PurgeDevicePairings(ctx, t0.Add(70*time.Minute)))
+	_, _, err = s.PollDevicePairing(ctx, dc, t0)
+	require.ErrorIs(t, err, store.ErrPairingExpired)
 }
 
 func TestDeviceState(t *testing.T) {

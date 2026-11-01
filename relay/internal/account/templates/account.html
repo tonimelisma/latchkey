@@ -4,16 +4,22 @@
 {{with .Data.Done}}<p class="notice" role="status">{{.}}</p>{{end}}
 
 <section>
-  <h2>Mac</h2>
-  {{with .Data.Mac}}
-    <p><strong>{{.Name}}</strong> · {{if .Online}}<span class="online">Online</span>{{else}}<span class="offline">Offline</span>{{if not .LastSeen.IsZero}}, last seen {{when .LastSeen}}{{end}}{{end}}</p>
-    {{if .AppVersion}}<p class="small">Latchkey {{.AppVersion}} on macOS {{.OSVersion}}</p>{{end}}
-    <form method="post" action="/account/revoke-mac">
-      <input type="hidden" name="csrf" value="{{$.CSRF}}">
-      <button type="submit" class="destructive">Disconnect Mac</button>
-    </form>
+  <h2>Machines</h2>
+  {{if .Data.Machines}}
+    <ul class="apps">{{range .Data.Machines}}
+      <li>
+        <div><strong>{{.Name}}</strong> · {{if .Online}}<span class="online">Online</span>{{else}}<span class="offline">Offline</span>{{if not .LastSeen.IsZero}}, last seen {{when .LastSeen}}{{end}}{{end}}<br>
+        <span class="small">{{if eq .Kind "linux"}}Linux server{{if .AppVersion}} · Latchkey {{.AppVersion}}{{if .OSVersion}} on {{.OSVersion}}{{end}}{{end}}{{else}}Mac{{if .AppVersion}} · Latchkey {{.AppVersion}}{{if .OSVersion}} on macOS {{.OSVersion}}{{end}}{{end}}{{end}}</span></div>
+        <form method="post" action="/account/machines/remove">
+          <input type="hidden" name="csrf" value="{{$.CSRF}}">
+          <input type="hidden" name="id" value="{{.ID}}">
+          <button type="submit" class="destructive" aria-label="Remove {{.Name}}">Remove</button>
+        </form>
+      </li>{{end}}
+    </ul>
+    <p class="small">Removing a machine disconnects it at once; Claude can no longer reach it. Add another Mac with the Latchkey app's Connect, or a Linux server with Latchkey's install command on that server.</p>
   {{else}}
-    <p>No Mac is connected. Open the Latchkey app on your Mac and click Connect.</p>
+    <p>No machine is connected. Open the Latchkey app on your Mac and click Connect, or run Latchkey's install command on a Linux server.</p>
   {{end}}
 </section>
 
@@ -44,10 +50,10 @@
   <h2>Activity</h2>
   {{if .Data.Audit}}
   <table>
-    <thead><tr><th scope="col">When</th><th scope="col">Tool</th><th scope="col">Result</th><th scope="col">Time taken</th><th scope="col">From</th></tr></thead>
-    <tbody>{{range .Data.Audit}}<tr><td>{{when .At}}</td><td><code>{{.Tool}}</code></td><td>{{.Outcome}}</td><td>{{ms .Duration}} ms</td><td>{{.Surface}}</td></tr>{{end}}</tbody>
+    <thead><tr><th scope="col">When</th><th scope="col">Machine</th><th scope="col">Tool</th><th scope="col">Result</th><th scope="col">Time taken</th><th scope="col">From</th></tr></thead>
+    <tbody>{{range .Data.Audit}}<tr><td>{{when .At}}</td><td>{{index $.Data.MachineNames .DeviceID}}</td><td><code>{{.Tool}}</code></td><td>{{.Outcome}}</td><td>{{ms .Duration}} ms</td><td>{{.Surface}}</td></tr>{{end}}</tbody>
   </table>
-  <p class="small">The last 100 calls from the past 30 days. Arguments and results are never stored here; your Mac keeps the full log.</p>
+  <p class="small">The last 100 calls. Arguments and results are never stored here; each machine keeps its own full log.</p>
   {{else}}<p>No tool calls yet.</p>{{end}}
 </section>
 
@@ -61,7 +67,7 @@
     <input type="hidden" name="csrf" value="{{.CSRF}}">
     {{template "error" .}}
     <button type="submit" class="destructive">Delete account…</button>
-    <p class="small">Deletes everything this relay stores about you and disconnects your Mac. You'll confirm with your passkey.</p>
+    <p class="small">Deletes everything this relay stores about you and disconnects your machines. You'll confirm with your passkey.</p>
   </form>
 </section>
 {{template "foot" .}}

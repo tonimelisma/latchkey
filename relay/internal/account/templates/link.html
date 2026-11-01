@@ -1,0 +1,24 @@
+{{template "head" .}}
+{{with .Data.Pairing}}
+<h1>Connect “{{.Name}}”?</h1>
+<p class="lead">Claude will be able to reach this {{if eq .Kind "linux"}}Linux server{{else}}machine{{end}} through <strong>{{$.Email}}</strong>, using only the tools turned on with Latchkey on that machine.</p>
+<p class="warning">Only connect a machine you just set up yourself. If someone sent you this code, don't connect it.</p>
+<form method="post" action="/link">
+  <input type="hidden" name="csrf" value="{{$.CSRF}}">
+  <input type="hidden" name="code" value="{{$.Data.Code}}">
+  <input type="hidden" name="confirm" value="1">
+  <button class="primary wide" type="submit">Connect</button>
+</form>
+{{else}}
+<h1>Connect a machine</h1>
+<p class="lead">Enter the code Latchkey shows on the machine you're setting up.</p>
+{{with $.Data.Error}}<p class="warning" role="alert">{{.}}</p>{{end}}
+<form method="post" action="/link">
+  <input type="hidden" name="csrf" value="{{$.CSRF}}">
+  <label for="code">Code</label>
+  <input id="code" name="code" value="{{$.Data.Code}}" autocomplete="off" autocapitalize="characters" spellcheck="false" inputmode="text" placeholder="ABCD-EFGH" required>
+  <button class="primary wide" type="submit">Continue</button>
+</form>
+{{end}}
+<p class="small center">Not you? <a href="/signin?next=/link">Use a different account</a></p>
+{{template "foot" .}}

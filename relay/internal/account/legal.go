@@ -9,7 +9,7 @@ import (
 
 // LegalEffectiveDate is shown on the terms of service and the privacy policy. Change it whenever
 // the text of either document (templates/terms.html, templates/privacy.html) changes.
-const LegalEffectiveDate = "October 27, 2026"
+const LegalEffectiveDate = "October 31, 2026"
 
 // Operator is the person or organization running this relay, from its settings. Nothing about
 // an operator is written into the software (FR-194): a self-hosted relay publishes its own

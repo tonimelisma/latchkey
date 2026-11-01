@@ -12,15 +12,16 @@ import (
 	"net/url"
 	"strings"
 	"time"
-	"unicode/utf8"
 
 	"github.com/tonimelisma/latchkey/relay/internal/events"
 	"github.com/tonimelisma/latchkey/relay/internal/oauth"
 	"github.com/tonimelisma/latchkey/relay/internal/store"
 )
 
-type macView struct {
+type machineView struct {
+	ID         string // the device ID, for its Remove button
 	Name       string
+	Kind       string
 	Online     bool
 	LastSeen   time.Time
 	AppVersion string
@@ -36,10 +37,11 @@ type clientView struct {
 }
 
 type accountView struct {
-	Mac     *macView
-	Clients []clientView
-	Audit   []store.AuditEntry
-	Done    string
+	Machines     []machineView
+	MachineNames map[string]string // device ID → name, for the activity table (removed machines too)
+	Clients      []clientView
+	Audit        []store.AuditEntry
+	Done         string
 }
 
 func (s *Service) accountPage(w http.ResponseWriter, r *http.Request) {
@@ -48,13 +50,15 @@ func (s *Service) accountPage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ctx := r.Context()
-	v := accountView{Done: doneMessage(r.URL.Query().Get("done"))}
-	if d, err := s.cfg.Store.ActiveDevice(ctx, u.ID); err == nil {
-		mv := &macView{Name: d.Name, Online: s.cfg.Macs.Online(d.ID), AppVersion: d.AppVersion, OSVersion: d.OSVersion}
+	v := accountView{Done: doneMessage(r.URL.Query().Get("done")), MachineNames: map[string]string{}}
+	devices, _ := s.cfg.Store.ActiveDevices(ctx, u.ID)
+	for _, d := range devices {
+		mv := machineView{ID: d.ID, Name: d.Name, Kind: d.Kind, Online: s.cfg.Macs.Online(d.ID), AppVersion: d.AppVersion, OSVersion: d.OSVersion}
 		if st, err := s.cfg.Store.DeviceState(ctx, d.ID); err == nil {
 			mv.LastSeen = st.LastSeenAt
 		}
-		v.Mac = mv
+		v.Machines = append(v.Machines, mv)
+		v.MachineNames[d.ID] = d.Name
 	}
 	if grants, err := s.cfg.OAuth.Grants(ctx, u.ID); err == nil {
 		for _, g := range grants {
@@ -64,13 +68,22 @@ func (s *Service) accountPage(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	v.Audit, _ = s.cfg.Store.AuditForUser(ctx, u.ID, 100)
+	for _, e := range v.Audit {
+		if _, ok := v.MachineNames[e.DeviceID]; !ok && e.DeviceID != "" {
+			if d, err := s.cfg.Store.Device(ctx, e.DeviceID); err == nil {
+				v.MachineNames[e.DeviceID] = d.Name + " (removed)"
+			}
+		}
+	}
 	s.render(w, http.StatusOK, "account.html", page{Title: "Your account", Email: u.Email, CSRF: s.csrfFor(tok), Data: v, Wide: true})
 }
 
 func doneMessage(code string) string {
 	switch code {
 	case "mac":
-		return "Your Mac was disconnected. Claude can no longer reach it."
+		return "Your machines were disconnected. Claude can no longer reach them."
+	case "machine":
+		return "The machine was removed. Claude can no longer reach it."
 	case "claude":
 		return "Claude's access was removed. Claude will ask you to connect again next time."
 	case "client":
@@ -93,17 +106,18 @@ func (s *Service) postedUser(w http.ResponseWriter, r *http.Request) (store.Sess
 	return sess, true
 }
 
-// revokeActiveMac revokes the user's paired Mac, if any, and closes its connection (FR-052). by
-// says why, for the event record.
-func (s *Service) revokeActiveMac(ctx context.Context, userID, by string) error {
-	d, err := s.cfg.Store.ActiveDevice(ctx, userID)
-	if errors.Is(err, store.ErrNotFound) {
+// revokeDevice revokes one of the user's machines and closes its connection (FR-052, spec 010
+// FR-1011). A device that isn't the user's, or is already removed, changes nothing. by says why,
+// for the event record.
+func (s *Service) revokeDevice(ctx context.Context, userID, deviceID, by string) error {
+	d, err := s.cfg.Store.Device(ctx, deviceID)
+	if errors.Is(err, store.ErrNotFound) || (err == nil && (d.UserID != userID || d.PublicKey == nil)) {
 		return nil
 	}
 	if err != nil {
 		return err
 	}
-	if err := s.cfg.Store.RevokeDevice(ctx, d.ID, s.now()); err != nil {
+	if err := s.cfg.Store.RevokeDevice(ctx, d.ID, s.now()); err != nil && !errors.Is(err, store.ErrNotFound) {
 		return err
 	}
 	s.cfg.Events.Record(ctx, store.Event{Kind: events.MacUnpaired, UserID: userID, DeviceID: d.ID, Detail: by})
@@ -111,17 +125,46 @@ func (s *Service) revokeActiveMac(ctx context.Context, userID, by string) error 
 	return nil
 }
 
+// revokeAllDevices revokes every machine of the user.
+func (s *Service) revokeAllDevices(ctx context.Context, userID, by string) error {
+	devices, err := s.cfg.Store.ActiveDevices(ctx, userID)
+	if err != nil {
+		return err
+	}
+	for _, d := range devices {
+		if err := s.revokeDevice(ctx, userID, d.ID, by); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// revokeMac is the account page's older "Disconnect Mac" form: it removes every machine.
 func (s *Service) revokeMac(w http.ResponseWriter, r *http.Request) {
 	sess, ok := s.postedUser(w, r)
 	if !ok {
 		return
 	}
-	if err := s.revokeActiveMac(r.Context(), sess.UserID, "on the account page"); err != nil {
+	if err := s.revokeAllDevices(r.Context(), sess.UserID, "on the account page"); err != nil {
 		s.errorPage(w, http.StatusInternalServerError, "Something went wrong", "Try again.")
 		return
 	}
 	s.cfg.DevicesChanged(sess.UserID)
 	http.Redirect(w, r, "/account?done=mac", http.StatusSeeOther)
+}
+
+// removeMachine removes one machine from the account page (spec 010 FR-1011).
+func (s *Service) removeMachine(w http.ResponseWriter, r *http.Request) {
+	sess, ok := s.postedUser(w, r)
+	if !ok {
+		return
+	}
+	if err := s.revokeDevice(r.Context(), sess.UserID, r.PostFormValue("id"), "on the account page"); err != nil {
+		s.errorPage(w, http.StatusInternalServerError, "Something went wrong", "Try again.")
+		return
+	}
+	s.cfg.DevicesChanged(sess.UserID)
+	http.Redirect(w, r, "/account?done=machine", http.StatusSeeOther)
 }
 
 func (s *Service) revokeClaude(w http.ResponseWriter, r *http.Request) {
@@ -162,7 +205,7 @@ func (s *Service) deleteAccount(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ctx := r.Context()
-	if err := s.revokeActiveMac(ctx, sess.UserID, "with the account's deletion"); err != nil {
+	if err := s.revokeAllDevices(ctx, sess.UserID, "with the account's deletion"); err != nil {
 		s.errorPage(w, http.StatusInternalServerError, "Something went wrong", "Try again.")
 		return
 	}
@@ -176,23 +219,12 @@ func (s *Service) deleteAccount(w http.ResponseWriter, r *http.Request) {
 	s.cfg.AccessRemoved(sess.UserID)
 	s.clearSession(w)
 	s.errorPage(w, http.StatusOK, "Your account was deleted",
-		"Everything this relay stored about you is gone, and your Mac was disconnected. You can remove the Latchkey connector from Claude's settings.")
+		"Everything this relay stored about you is gone, and your machines were disconnected. You can remove the Latchkey connector from Claude's settings.")
 }
 
 // --- pairing (plan D6) ---
 
-const maxMacName = 100
-
-func cleanName(n string) string {
-	n = strings.TrimSpace(n)
-	if n == "" || !utf8.ValidString(n) {
-		return "Mac"
-	}
-	if utf8.RuneCountInString(n) > maxMacName {
-		n = string([]rune(n)[:maxMacName])
-	}
-	return n
-}
+func cleanName(n string) string { return store.CleanDeviceName(n, "Mac") }
 
 func (s *Service) pairPage(w http.ResponseWriter, r *http.Request) {
 	u, tok, ok := s.requireUser(w, r)
@@ -200,8 +232,12 @@ func (s *Service) pairPage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	data := map[string]string{"Name": cleanName(r.URL.Query().Get("name"))}
-	if d, err := s.cfg.Store.ActiveDevice(r.Context(), u.ID); err == nil {
-		data["Replaces"] = d.Name
+	if devices, err := s.cfg.Store.ActiveDevices(r.Context(), u.ID); err == nil && len(devices) > 0 {
+		names := make([]string, len(devices))
+		for i, d := range devices {
+			names[i] = "“" + d.Name + "”"
+		}
+		data["Others"] = strings.Join(names, ", ") // pairing adds this Mac (spec 010 FR-1012)
 	}
 	s.render(w, http.StatusOK, "pair.html", page{Title: "Connect your Mac", Email: u.Email, CSRF: s.csrfFor(tok), Data: data})
 }
@@ -256,6 +292,9 @@ type exchangeRequest struct {
 	Code      string `json:"code"`
 	PublicKey string `json:"public_key"` // PKIX DER, base64url without padding
 	Name      string `json:"name"`
+	// Replaces is the device ID this Mac was paired as before, if it has one (spec 010): that
+	// pairing is removed, so pairing the same Mac again doesn't leave its old entry behind.
+	Replaces string `json:"replaces,omitempty"`
 }
 
 // pairExchange is called by the Mac app with the code from the latchkey:// redirect.
@@ -283,11 +322,15 @@ func (s *Service) pairExchange(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, http.StatusForbidden, "This account can't connect a Mac right now.")
 		return
 	}
-	if err := s.revokeActiveMac(ctx, userID, "replaced by a newly paired Mac"); err != nil { // FR-053: the Owner confirmed on the pair page
-		jsonError(w, http.StatusInternalServerError, "Something went wrong. Try again.")
-		return
+	// Pairing adds a machine (spec 010 FR-1001); only this Mac's own earlier pairing goes, and only
+	// within the account the code belongs to.
+	if req.Replaces != "" {
+		if err := s.revokeDevice(ctx, userID, req.Replaces, "replaced by the same Mac pairing again"); err != nil {
+			jsonError(w, http.StatusInternalServerError, "Something went wrong. Try again.")
+			return
+		}
 	}
-	d, err := s.cfg.Store.CreateDevice(ctx, store.NewDevice{UserID: userID, Name: cleanName(req.Name), PublicKey: der}, s.now())
+	d, err := s.cfg.Store.CreateDevice(ctx, store.NewDevice{UserID: userID, Name: cleanName(req.Name), Kind: store.KindMac, PublicKey: der}, s.now())
 	if err != nil {
 		jsonError(w, http.StatusInternalServerError, "Something went wrong. Try again.")
 		return

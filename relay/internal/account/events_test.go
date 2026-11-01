@@ -140,15 +140,16 @@ func TestPairingEventsAreRecorded(t *testing.T) {
 	status, m := mac.json("/pair/exchange", map[string]string{"code": b.pairCode("Mac"), "public_key": p256DER(t), "name": "Mac"})
 	require.Equal(t, http.StatusOK, status, m)
 	assert.True(t, e.has(u.ID, events.MacPaired, ""))
-	assert.Contains(t, out.String(), `msg="Mac paired"`)
+	assert.Contains(t, out.String(), `msg="Machine paired"`)
 
-	status, _ = mac.json("/pair/exchange", map[string]string{"code": b.pairCode("New Mac"), "public_key": p256DER(t), "name": "New Mac"})
+	deviceID, _ := m["device_id"].(string)
+	status, _ = mac.json("/pair/exchange", map[string]string{"code": b.pairCode("Mac"), "public_key": p256DER(t), "name": "Mac", "replaces": deviceID})
 	require.Equal(t, http.StatusOK, status)
-	assert.True(t, e.has(u.ID, events.MacUnpaired, "replaced by a newly paired Mac"))
+	assert.True(t, e.has(u.ID, events.MacUnpaired, "replaced by the same Mac pairing again"))
 
 	page := b.get("/account")
 	r := b.form("/account/revoke-mac", url.Values{"csrf": {csrf(t, page.body)}})
 	require.Equal(t, http.StatusSeeOther, r.status)
 	assert.True(t, e.has(u.ID, events.MacUnpaired, "on the account page"))
-	assert.Contains(t, out.String(), `msg="Mac unpaired"`)
+	assert.Contains(t, out.String(), `msg="Machine unpaired"`)
 }

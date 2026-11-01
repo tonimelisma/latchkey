@@ -350,7 +350,21 @@ func (h *Hub) start(ctx context.Context, c *conn, hello *agentproto.Hello) bool 
 	if err := h.store.UpdateDeviceVersions(ctx, c.device.ID, hello.AppVersion, hello.OSVersion); err != nil {
 		h.cfg.Logger.Error("update device versions", "device", c.device.ID, "err", err)
 	}
+	if hello.MachineKind() != c.device.Kind { // a pairing is for one kind of machine (spec 010)
+		_ = c.ws.Close(agentproto.CloseProtocolViolation, "machine kind doesn't match the pairing")
+		return false
+	}
+	welcome := &agentproto.Welcome{HeartbeatIntervalS: int(h.cfg.HeartbeatInterval / time.Second)}
+	if hello.Name != "" { // the machine's own name for itself (spec 010 FR-1002)
+		name, err := h.store.RenameDevice(ctx, c.device.ID, store.CleanDeviceName(hello.Name, c.device.Name))
+		if err != nil {
+			h.cfg.Logger.Error("rename device", "device", c.device.ID, "err", err)
+			name = c.device.Name
+		}
+		c.device.Name, welcome.Name = name, name
+	}
 	now := h.now()
+	welcome.ServerTime = now.Truncate(time.Second)
 	// The tool list already stored is kept unless hello's differs (see conn.save).
 	c.state = store.DeviceState{
 		DeviceID: c.device.ID, Online: true, ConnectedAt: now, LastSeenAt: now, ToolsJSON: previous.ToolsJSON,
@@ -362,9 +376,7 @@ func (h *Hub) start(ctx context.Context, c *conn, hello *agentproto.Hello) bool 
 	c.auditFeature = hello.Has(agentproto.FeatureAudit)
 	c.keepAwake = hello.State.KeepAwake
 
-	err = write(ctx, c.ws, &agentproto.Welcome{
-		HeartbeatIntervalS: int(h.cfg.HeartbeatInterval / time.Second), ServerTime: now.Truncate(time.Second),
-	})
+	err = write(ctx, c.ws, welcome)
 	if err != nil {
 		_ = c.ws.CloseNow()
 		return false

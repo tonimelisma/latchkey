@@ -316,7 +316,8 @@ func TestResetKeys(t *testing.T) {
 	keys, err := s.Passkeys(ctx, u.ID)
 	require.NoError(t, err)
 	assert.Len(t, keys, 1, "the passkey stays")
-	got, err := s.ActiveDevice(ctx, u.ID)
+	got, err := s.ActiveDevices(ctx, u.ID)
 	require.NoError(t, err)
-	assert.Equal(t, d.ID, got.ID, "the Mac stays paired")
+	require.Len(t, got, 1, "the Mac stays paired")
+	assert.Equal(t, d.ID, got[0].ID, "the Mac stays paired")
 }

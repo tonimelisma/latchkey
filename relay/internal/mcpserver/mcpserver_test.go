@@ -89,7 +89,7 @@ func (e *env) pair() {
 	e.agent = testagent.New("ws"+strings.TrimPrefix(e.srv.URL, "http")+"/agent/v1", "")
 	var err error
 	e.device, err = e.store.CreateDevice(context.Background(),
-		store.NewDevice{UserID: e.user.ID, Name: "Mac", PublicKey: e.agent.PublicKeyDER()}, time.Now())
+		store.NewDevice{UserID: e.user.ID, Name: "Toni's MacBook Pro", PublicKey: e.agent.PublicKeyDER()}, time.Now())
 	require.NoError(e.t, err)
 	e.agent.DeviceID = e.device.ID
 }
@@ -200,7 +200,7 @@ func TestOnline(t *testing.T) {
 			e.pair()
 			e.connectMac()
 			cs := e.client(v, nil)
-			assert.Equal(t, []string{"battery_status"}, toolNames(t, cs))
+			assert.Equal(t, []string{"battery_status", "machines"}, toolNames(t, cs))
 
 			res := call(t, cs, "battery_status")
 			assert.False(t, res.IsError)
@@ -210,7 +210,7 @@ func TestOnline(t *testing.T) {
 			last, ok := res.Content[1].(*mcp.TextContent)
 			require.True(t, ok)
 			// FR-200: the Mac's text has no line break at its end, so the line brings its own.
-			assert.Equal(t, "\nMac: online · 82% battery, on battery power · keep-awake on", last.Text)
+			assert.Equal(t, "\nToni's MacBook Pro (Mac): online · 82% battery, on battery power · keep-awake on", last.Text)
 		})
 	}
 }
@@ -247,13 +247,13 @@ func TestOffline(t *testing.T) {
 			require.Eventually(t, func() bool { return !e.hub.Online(e.device.ID) }, 5*time.Second, 10*time.Millisecond)
 
 			cs := e.client(v, nil)
-			assert.Equal(t, []string{"battery_status"}, toolNames(t, cs), "last reported tools stay listed (FR-013)")
+			assert.Equal(t, []string{"battery_status", "machines"}, toolNames(t, cs), "last reported tools stay listed (FR-013)")
 
 			start := time.Now()
 			res := call(t, cs, "battery_status")
 			assert.Less(t, time.Since(start), time.Second, "SC-03")
 			assert.True(t, res.IsError)
-			assert.Regexp(t, `^Your Mac is offline\. It went to sleep for low battery at 14%, at \d{1,2}:\d\d [AP]M \(just now\)\.$`, text(t, res))
+			assert.Regexp(t, `^Toni's MacBook Pro is offline\. It went to sleep for low battery at 14%, at \d{1,2}:\d\d [AP]M \(just now\)\.$`, text(t, res))
 		})
 	}
 }
@@ -282,7 +282,7 @@ func TestDeadline(t *testing.T) {
 	res := call(t, cs, "slow")
 	assert.Less(t, time.Since(start), 2*time.Second)
 	assert.True(t, res.IsError)
-	assert.Equal(t, "Your Mac didn't answer within 0.3 seconds. It may be busy or losing its connection.", text(t, res))
+	assert.Equal(t, "Toni's MacBook Pro didn't answer within 0.3 seconds. It may be busy or losing its connection.", text(t, res))
 	select {
 	case m := <-c.Cancels:
 		assert.Equal(t, agentproto.CancelDeadline, m.Reason)
@@ -303,7 +303,7 @@ func TestRevokedDuringCall(t *testing.T) {
 	cs := e.client(stateful, nil)
 	res := call(t, cs, "battery_status")
 	assert.True(t, res.IsError)
-	assert.Equal(t, "Your Mac was disconnected from this account while the request was running.", text(t, res))
+	assert.Equal(t, "Toni's MacBook Pro was disconnected from this account while the request was running.", text(t, res))
 	require.Eventually(t, func() bool {
 		return len(toolNames(t, cs)) == 0
 	}, 5*time.Second, 20*time.Millisecond, "a revoked Mac's tools disappear")
@@ -322,7 +322,7 @@ func TestToolListChanged(t *testing.T) {
 			mu.Unlock()
 		},
 	})
-	require.Equal(t, []string{"battery_status"}, toolNames(t, cs))
+	require.Equal(t, []string{"battery_status", "machines"}, toolNames(t, cs))
 
 	// The Owner turns System info off: its tool must vanish (FR-061, FR-062, SC-08).
 	require.NoError(t, c.Send(ctx(t), &agentproto.ToolsUpdate{Tools: []*mcp.Tool{}}))
@@ -331,7 +331,7 @@ func TestToolListChanged(t *testing.T) {
 		defer mu.Unlock()
 		return notified > 0
 	}, 5*time.Second, 10*time.Millisecond, "list_changed sent")
-	assert.Empty(t, toolNames(t, cs))
+	assert.Equal(t, []string{"machines"}, toolNames(t, cs), "only the relay's list of machines stays while one is paired")
 
 	res, err := cs.CallTool(ctx(t), &mcp.CallToolParams{Name: "battery_status"})
 	if err == nil {

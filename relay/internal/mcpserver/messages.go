@@ -10,12 +10,13 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/tonimelisma/latchkey/relay/agentproto"
+	"github.com/tonimelisma/latchkey/relay/internal/store"
 )
 
 // appendStatusLine adds the state line as the result's last block (FR-065), starting on its own
 // line (FR-200): Claude's apps join a result's text blocks with nothing between them, so a
 // result not ending in a line break ran straight into it ("live checkMac: online", live check
-// 2026-10-25). The line break goes in the added block; the Mac's own blocks are never changed.
+// 2026-10-25). The line break goes in the added block; the machine's own blocks are never changed.
 func appendStatusLine(res *mcp.CallToolResult, line string) {
 	if needsLineBreak(res.Content) {
 		line = "\n" + line
@@ -39,61 +40,77 @@ func needsLineBreak(content []mcp.Content) bool {
 	return false
 }
 
-// status is what the relay knows about a user's Mac (FR-020).
-type status struct {
-	Paired        bool
-	Online        bool
-	LastSeen      time.Time
-	OfflineReason string
-	State         *agentproto.State // last reported; nil if never reported
-}
-
 // Texts for calls that cannot complete (contracts/mcp-surface.md). Claude relays them to the user.
 const (
-	neverPairedText  = "No Mac is connected to this account yet. Open the Latchkey app on your Mac and click Connect."
-	revokedText      = "Your Mac was disconnected from this account while the request was running."
-	disconnectedText = "Your Mac lost its connection while the request was running."
+	neverPairedText = "No machine is connected to this account yet. Open the Latchkey app on your Mac and click Connect, or install Latchkey on a Linux server."
 )
 
-func timeoutText(d time.Duration) string {
+func revokedText(name string) string {
+	return name + " was disconnected from this account while the request was running."
+}
+
+func disconnectedText(name string) string {
+	return name + " lost its connection while the request was running."
+}
+
+func unreadableText(name string) string {
+	return name + " sent a result the relay couldn't read."
+}
+
+func timeoutText(name string, d time.Duration) string {
 	s := strconv.FormatFloat(d.Seconds(), 'f', -1, 64)
 	unit := "seconds"
 	if d == time.Second {
 		unit = "second"
 	}
-	return fmt.Sprintf("Your Mac didn't answer within %s %s. It may be busy or losing its connection.", s, unit)
+	return fmt.Sprintf("%s didn't answer within %s %s. It may be busy or losing its connection.", name, s, unit)
 }
 
-// offlineText explains why a Mac tool cannot run right now (FR-010).
-func offlineText(s status, now time.Time) string {
-	if !s.Paired {
-		return neverPairedText
+// kindWord is how a machine's kind reads in a sentence.
+func kindWord(kind string) string {
+	if kind == store.KindLinux {
+		return "Linux"
 	}
-	if s.LastSeen.IsZero() {
-		return "Your Mac is offline. It hasn't connected to Latchkey yet."
+	return "Mac"
+}
+
+// offlineText explains why a machine can't run a tool right now (FR-010, spec 010 FR-1008).
+func offlineText(m machine, now time.Time) string {
+	head := m.Device.Name + " is offline."
+	if m.LastSeen.IsZero() {
+		return head + " It hasn't connected to Latchkey yet."
 	}
 	var tz *string
-	if s.State != nil {
-		tz = s.State.TimeZone
+	if m.State != nil {
+		tz = m.State.TimeZone
 	}
-	at := when(s.LastSeen, tz, now)
+	at := when(m.LastSeen, tz, now)
+	if m.Device.Kind == store.KindLinux {
+		switch m.OfflineReason {
+		case agentproto.ReasonSystemShutdown:
+			return fmt.Sprintf("%s It shut down %s.", head, at)
+		case agentproto.ReasonUserQuit:
+			return fmt.Sprintf("%s Latchkey was stopped on it %s.", head, at)
+		}
+		return fmt.Sprintf("%s It was last seen %s.", head, at)
+	}
 	switch {
-	case s.OfflineReason == agentproto.ReasonLowBattery && s.State != nil:
-		return fmt.Sprintf("Your Mac is offline. It went to sleep for low battery at %d%%, %s.", s.State.BatteryPercent, at)
-	case s.OfflineReason == agentproto.ReasonTooHot:
-		return fmt.Sprintf("Your Mac is offline. It went to sleep because it was too hot, %s.", at)
-	case s.OfflineReason == agentproto.ReasonSystemSleep:
-		return fmt.Sprintf("Your Mac is offline. It went to sleep %s.", at)
-	case s.OfflineReason == agentproto.ReasonSystemShutdown:
-		return fmt.Sprintf("Your Mac is offline. It shut down %s.", at)
-	case s.OfflineReason == agentproto.ReasonUserQuit:
-		return fmt.Sprintf("Your Mac is offline. The Latchkey app was quit %s.", at)
+	case m.OfflineReason == agentproto.ReasonLowBattery && m.State != nil:
+		return fmt.Sprintf("%s It went to sleep for low battery at %d%%, %s.", head, m.State.BatteryPercent, at)
+	case m.OfflineReason == agentproto.ReasonTooHot:
+		return fmt.Sprintf("%s It went to sleep because it was too hot, %s.", head, at)
+	case m.OfflineReason == agentproto.ReasonSystemSleep:
+		return fmt.Sprintf("%s It went to sleep %s.", head, at)
+	case m.OfflineReason == agentproto.ReasonSystemShutdown:
+		return fmt.Sprintf("%s It shut down %s.", head, at)
+	case m.OfflineReason == agentproto.ReasonUserQuit:
+		return fmt.Sprintf("%s The Latchkey app was quit %s.", head, at)
 	}
-	if s.State == nil {
-		return fmt.Sprintf("Your Mac is offline. It was last seen %s.", at)
+	if m.State == nil {
+		return fmt.Sprintf("%s It was last seen %s.", head, at)
 	}
-	text := fmt.Sprintf("Your Mac is offline. It was last seen %s with %d%% battery", at, s.State.BatteryPercent)
-	if p := powerPhrase(s.State); p != "" {
+	text := fmt.Sprintf("%s It was last seen %s with %d%% battery", head, at, m.State.BatteryPercent)
+	if p := powerPhrase(m.State); p != "" {
 		text += ", " + p
 	}
 	return text + "."
@@ -113,13 +130,20 @@ func powerPhrase(s *agentproto.State) string {
 	return ""
 }
 
-// statusLine is the Mac's state, appended to every Mac tool result so Claude knows the laptop's
-// condition as a byproduct of real work (spec 001 FR-065).
-func statusLine(s *agentproto.State) string {
+// statusLine is the answering machine's state, appended to every machine tool result so Claude
+// knows its condition as a byproduct of real work (spec 001 FR-065, spec 010 FR-1009).
+func statusLine(name, kind string, s *agentproto.State) string {
+	head := fmt.Sprintf("%s (%s): online", name, kindWord(kind))
 	if s == nil {
-		return "Mac: online"
+		return head
 	}
-	line := fmt.Sprintf("Mac: online · %d%% battery", s.BatteryPercent)
+	if kind == store.KindLinux {
+		if s.UptimeS != nil {
+			return head + " · up " + uptime(time.Duration(*s.UptimeS)*time.Second)
+		}
+		return head
+	}
+	line := fmt.Sprintf("%s · %d%% battery", head, s.BatteryPercent)
 	if p := powerPhrase(s); p != "" {
 		line += ", " + p
 	}
@@ -131,6 +155,43 @@ func statusLine(s *agentproto.State) string {
 		line += " · the Mac is too hot and may go to sleep"
 	}
 	return line
+}
+
+// othersLine names the account's other machines, so any answer tells Claude what else it can
+// reach (Toni, 2026-10-31); "" when there are none.
+func othersLine(ms []machine, except string, now time.Time) string {
+	var parts []string
+	for _, m := range ms {
+		if m.Device.ID != except {
+			parts = append(parts, fmt.Sprintf("%s (%s, %s)", m.Device.Name, kindWord(m.Device.Kind), onlineWord(m, now)))
+		}
+	}
+	if len(parts) == 0 {
+		return ""
+	}
+	return "Other machines: " + strings.Join(parts, ", ")
+}
+
+// onlineWord is "online", or how long ago an offline machine was last seen.
+func onlineWord(m machine, now time.Time) string {
+	switch {
+	case m.Online:
+		return "online"
+	case m.LastSeen.IsZero():
+		return "offline, never connected"
+	}
+	return "offline, last seen " + ago(now.Sub(m.LastSeen))
+}
+
+// uptime reads "12 days", "5 hours", or "20 minutes".
+func uptime(d time.Duration) string {
+	switch {
+	case d >= 48*time.Hour:
+		return plural(int(d/(24*time.Hour)), "day")
+	case d >= 2*time.Hour:
+		return plural(int(d/time.Hour), "hour")
+	}
+	return plural(int(d/time.Minute), "minute")
 }
 
 // lowBatteryWarning is 10 points above the Mac's 15% sleep threshold (spec 001 FR-032).
@@ -150,8 +211,9 @@ func keepAwakePhrase(k string) string {
 	return "keep-awake off"
 }
 
-// when renders a past time in the Mac's time zone, with a relative time: "at 2:02 PM (3 hours
-// ago)", "at 3:02 PM on Oct 17 (2 days ago)". Unknown time zones fall back to labeled UTC (FR-037).
+// when renders a past time in the machine's time zone, with a relative time: "at 2:02 PM (3
+// hours ago)", "at 3:02 PM on Oct 17 (2 days ago)". Unknown time zones fall back to labeled UTC
+// (FR-037).
 func when(t time.Time, tz *string, now time.Time) string {
 	loc, label := time.UTC, " UTC"
 	if tz != nil && *tz != "" {

@@ -299,8 +299,11 @@ func activeDevice(ctx context.Context, db *store.Store) (func() (string, error),
 		return nil, err
 	}
 	return func() (string, error) {
-		d, err := db.ActiveDevice(ctx, u.ID)
-		return d.ID, err
+		devices, err := db.ActiveDevices(ctx, u.ID)
+		if err != nil || len(devices) == 0 {
+			return "", errors.Join(err, store.ErrNotFound)
+		}
+		return devices[len(devices)-1].ID, nil // the newest pairing: the app's
 	}, nil
 }
 

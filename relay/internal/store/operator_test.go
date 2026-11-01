@@ -63,8 +63,10 @@ func TestSuspendUser(t *testing.T) {
 		"a recovery code already sent no longer works")
 
 	// Nothing else is deleted: the Mac stays paired, the passkey and the activity log stay.
-	dev, err := s.ActiveDevice(ctx, u.ID)
+	devs, err := s.ActiveDevices(ctx, u.ID)
 	require.NoError(t, err)
+	require.Len(t, devs, 1)
+	dev := devs[0]
 	assert.Equal(t, d.ID, dev.ID)
 	assert.NotNil(t, dev.PublicKey)
 	keys, err := s.Passkeys(ctx, u.ID)

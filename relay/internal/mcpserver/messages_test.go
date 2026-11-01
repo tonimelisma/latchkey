@@ -10,9 +10,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/tonimelisma/latchkey/relay/agentproto"
+	"github.com/tonimelisma/latchkey/relay/internal/store"
 )
-
-func ptr[T any](v T) *T { return &v }
 
 // now is 5:02 PM in Los Angeles on 2026-10-19.
 var now = time.Date(2026, 10, 20, 0, 2, 0, 0, time.UTC)
@@ -24,79 +23,99 @@ func lastState(percent int, power string) *agentproto.State {
 	}
 }
 
+func mac(name string) store.Device {
+	return store.Device{ID: "dev_" + name, Name: name, Kind: store.KindMac}
+}
+
+func linux(name string) store.Device {
+	return store.Device{ID: "dev_" + name, Name: name, Kind: store.KindLinux}
+}
+
 func TestOfflineText(t *testing.T) {
 	threeHoursAgo := now.Add(-3 * time.Hour)
+	m := mac("Toni's MacBook Pro")
 	tests := []struct {
 		name string
-		s    status
+		m    machine
 		want string
 	}{
 		{
-			"never paired",
-			status{},
-			"No Mac is connected to this account yet. Open the Latchkey app on your Mac and click Connect.",
-		},
-		{
 			"paired, never connected",
-			status{Paired: true},
-			"Your Mac is offline. It hasn't connected to Latchkey yet.",
+			machine{Device: m},
+			"Toni's MacBook Pro is offline. It hasn't connected to Latchkey yet.",
 		},
 		{
 			"low battery",
-			status{Paired: true, LastSeen: threeHoursAgo, OfflineReason: agentproto.ReasonLowBattery, State: lastState(14, "battery")},
-			"Your Mac is offline. It went to sleep for low battery at 14%, at 2:02 PM (3 hours ago).",
+			machine{Device: m, LastSeen: threeHoursAgo, OfflineReason: agentproto.ReasonLowBattery, State: lastState(14, "battery")},
+			"Toni's MacBook Pro is offline. It went to sleep for low battery at 14%, at 2:02 PM (3 hours ago).",
 		},
 		{
 			"too hot",
-			status{Paired: true, LastSeen: threeHoursAgo, OfflineReason: agentproto.ReasonTooHot, State: lastState(60, "ac")},
-			"Your Mac is offline. It went to sleep because it was too hot, at 2:02 PM (3 hours ago).",
+			machine{Device: m, LastSeen: threeHoursAgo, OfflineReason: agentproto.ReasonTooHot, State: lastState(60, "ac")},
+			"Toni's MacBook Pro is offline. It went to sleep because it was too hot, at 2:02 PM (3 hours ago).",
 		},
 		{
 			"system sleep",
-			status{Paired: true, LastSeen: threeHoursAgo, OfflineReason: agentproto.ReasonSystemSleep, State: lastState(60, "ac")},
-			"Your Mac is offline. It went to sleep at 2:02 PM (3 hours ago).",
+			machine{Device: m, LastSeen: threeHoursAgo, OfflineReason: agentproto.ReasonSystemSleep, State: lastState(60, "ac")},
+			"Toni's MacBook Pro is offline. It went to sleep at 2:02 PM (3 hours ago).",
 		},
 		{
 			"shutdown",
-			status{Paired: true, LastSeen: threeHoursAgo, OfflineReason: agentproto.ReasonSystemShutdown, State: lastState(60, "ac")},
-			"Your Mac is offline. It shut down at 2:02 PM (3 hours ago).",
+			machine{Device: m, LastSeen: threeHoursAgo, OfflineReason: agentproto.ReasonSystemShutdown, State: lastState(60, "ac")},
+			"Toni's MacBook Pro is offline. It shut down at 2:02 PM (3 hours ago).",
 		},
 		{
 			"app quit",
-			status{Paired: true, LastSeen: threeHoursAgo, OfflineReason: agentproto.ReasonUserQuit, State: lastState(60, "ac")},
-			"Your Mac is offline. The Latchkey app was quit at 2:02 PM (3 hours ago).",
+			machine{Device: m, LastSeen: threeHoursAgo, OfflineReason: agentproto.ReasonUserQuit, State: lastState(60, "ac")},
+			"Toni's MacBook Pro is offline. The Latchkey app was quit at 2:02 PM (3 hours ago).",
 		},
 		{
 			"reason unknown, battery",
-			status{Paired: true, LastSeen: threeHoursAgo, State: lastState(62, "battery")},
-			"Your Mac is offline. It was last seen at 2:02 PM (3 hours ago) with 62% battery, on battery power.",
+			machine{Device: m, LastSeen: threeHoursAgo, State: lastState(62, "battery")},
+			"Toni's MacBook Pro is offline. It was last seen at 2:02 PM (3 hours ago) with 62% battery, on battery power.",
 		},
 		{
 			"reason unknown, plugged in",
-			status{Paired: true, LastSeen: threeHoursAgo, State: lastState(100, "ac")},
-			"Your Mac is offline. It was last seen at 2:02 PM (3 hours ago) with 100% battery, plugged in.",
+			machine{Device: m, LastSeen: threeHoursAgo, State: lastState(100, "ac")},
+			"Toni's MacBook Pro is offline. It was last seen at 2:02 PM (3 hours ago) with 100% battery, plugged in.",
 		},
 		{
 			"reason unknown, power unknown",
-			status{Paired: true, LastSeen: threeHoursAgo, State: lastState(50, "unknown")},
-			"Your Mac is offline. It was last seen at 2:02 PM (3 hours ago) with 50% battery.",
+			machine{Device: m, LastSeen: threeHoursAgo, State: lastState(50, "unknown")},
+			"Toni's MacBook Pro is offline. It was last seen at 2:02 PM (3 hours ago) with 50% battery.",
 		},
 		{
 			"unrecognized reason",
-			status{Paired: true, LastSeen: threeHoursAgo, OfflineReason: "future_reason", State: lastState(62, "ups")},
-			"Your Mac is offline. It was last seen at 2:02 PM (3 hours ago) with 62% battery, on UPS power.",
+			machine{Device: m, LastSeen: threeHoursAgo, OfflineReason: "future_reason", State: lastState(62, "ups")},
+			"Toni's MacBook Pro is offline. It was last seen at 2:02 PM (3 hours ago) with 62% battery, on UPS power.",
 		},
 		{
 			"no state",
-			status{Paired: true, LastSeen: threeHoursAgo},
-			"Your Mac is offline. It was last seen at 9:02 PM UTC on Oct 19 (3 hours ago).",
+			machine{Device: m, LastSeen: threeHoursAgo},
+			"Toni's MacBook Pro is offline. It was last seen at 9:02 PM UTC on Oct 19 (3 hours ago).",
+		},
+		{
+			"Linux server shut down",
+			machine{Device: linux("homeserver"), LastSeen: threeHoursAgo, OfflineReason: agentproto.ReasonSystemShutdown, State: &agentproto.State{TimeZone: ptr("America/Los_Angeles")}},
+			"homeserver is offline. It shut down at 2:02 PM (3 hours ago).",
+		},
+		{
+			"Linux service stopped",
+			machine{Device: linux("homeserver"), LastSeen: threeHoursAgo, OfflineReason: agentproto.ReasonUserQuit},
+			"homeserver is offline. Latchkey was stopped on it at 9:02 PM UTC on Oct 19 (3 hours ago).",
+		},
+		{
+			"Linux server gone silent: no battery talk",
+			machine{Device: linux("homeserver"), LastSeen: threeHoursAgo, State: lastState(0, "unknown")},
+			"homeserver is offline. It was last seen at 2:02 PM (3 hours ago).",
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.want, offlineText(tt.s, now))
+			assert.Equal(t, tt.want, offlineText(tt.m, now))
 		})
 	}
+	assert.Equal(t, "No machine is connected to this account yet. Open the Latchkey app on your Mac and click Connect, or install Latchkey on a Linux server.", neverPairedText)
 }
 
 func TestWhen(t *testing.T) {
@@ -127,34 +146,56 @@ func TestWhen(t *testing.T) {
 }
 
 func TestCallFailureTexts(t *testing.T) {
-	assert.Equal(t, "Your Mac didn't answer within 5 seconds. It may be busy or losing its connection.", timeoutText(5*time.Second))
-	assert.Equal(t, "Your Mac didn't answer within 1 second. It may be busy or losing its connection.", timeoutText(time.Second))
-	assert.Equal(t, "Your Mac didn't answer within 1.5 seconds. It may be busy or losing its connection.", timeoutText(1500*time.Millisecond))
-	assert.Equal(t, "Your Mac was disconnected from this account while the request was running.", revokedText)
-	assert.Equal(t, "Your Mac lost its connection while the request was running.", disconnectedText)
+	assert.Equal(t, "homeserver didn't answer within 5 seconds. It may be busy or losing its connection.", timeoutText("homeserver", 5*time.Second))
+	assert.Equal(t, "Old Mac didn't answer within 1 second. It may be busy or losing its connection.", timeoutText("Old Mac", time.Second))
+	assert.Equal(t, "Old Mac didn't answer within 1.5 seconds. It may be busy or losing its connection.", timeoutText("Old Mac", 1500*time.Millisecond))
+	assert.Equal(t, "Old Mac was disconnected from this account while the request was running.", revokedText("Old Mac"))
+	assert.Equal(t, "Old Mac lost its connection while the request was running.", disconnectedText("Old Mac"))
+	assert.Equal(t, "Old Mac sent a result the relay couldn't read.", unreadableText("Old Mac"))
 }
 
 func TestStatusLine(t *testing.T) {
+	const n = "Toni's MacBook Pro"
 	s := lastState(64, "battery")
-	assert.Equal(t, "Mac: online · 64% battery, on battery power · keep-awake on", statusLine(s))
+	assert.Equal(t, n+" (Mac): online · 64% battery, on battery power · keep-awake on", statusLine(n, store.KindMac, s))
 
 	s = lastState(82, "ac")
 	s.Charging = true
-	assert.Equal(t, "Mac: online · 82% battery, charging · keep-awake on", statusLine(s))
+	assert.Equal(t, n+" (Mac): online · 82% battery, charging · keep-awake on", statusLine(n, store.KindMac, s))
 
 	s = lastState(22, "battery")
-	assert.Equal(t, "Mac: online · 22% battery, on battery power · keep-awake on · battery low: the Mac goes to sleep at 15%", statusLine(s))
+	assert.Equal(t, n+" (Mac): online · 22% battery, on battery power · keep-awake on · battery low: the Mac goes to sleep at 15%", statusLine(n, store.KindMac, s))
 
 	s = lastState(70, "ac")
 	s.ThermalState = "serious"
 	s.KeepAwake = agentproto.KeepAwakeOffTooHot
-	assert.Equal(t, "Mac: online · 70% battery, plugged in · keep-awake off (too hot) · the Mac is too hot and may go to sleep", statusLine(s))
+	assert.Equal(t, n+" (Mac): online · 70% battery, plugged in · keep-awake off (too hot) · the Mac is too hot and may go to sleep", statusLine(n, store.KindMac, s))
 
 	s = lastState(90, "ac")
 	s.KeepAwake = agentproto.KeepAwakeOffHelperUnusable
-	assert.Equal(t, "Mac: online · 90% battery, plugged in · keep-awake off (not approved in System Settings)", statusLine(s))
+	assert.Equal(t, n+" (Mac): online · 90% battery, plugged in · keep-awake off (not approved in System Settings)", statusLine(n, store.KindMac, s))
 
-	assert.Equal(t, "Mac: online", statusLine(nil))
+	assert.Equal(t, n+" (Mac): online", statusLine(n, store.KindMac, nil))
+
+	// A Linux server: its uptime, never battery or keep-awake (spec 010 plan D5).
+	up := int64(12*24*3600 + 3600)
+	assert.Equal(t, "homeserver (Linux): online · up 12 days", statusLine("homeserver", store.KindLinux, &agentproto.State{UptimeS: &up}))
+	up = 5 * 3600
+	assert.Equal(t, "homeserver (Linux): online · up 5 hours", statusLine("homeserver", store.KindLinux, &agentproto.State{UptimeS: &up}))
+	up = 20 * 60
+	assert.Equal(t, "homeserver (Linux): online · up 20 minutes", statusLine("homeserver", store.KindLinux, &agentproto.State{UptimeS: &up}))
+	assert.Equal(t, "homeserver (Linux): online", statusLine("homeserver", store.KindLinux, &agentproto.State{}))
+}
+
+func TestOthersLine(t *testing.T) {
+	ms := []machine{
+		{Device: mac("Toni's MacBook Pro"), Online: true},
+		{Device: linux("homeserver"), LastSeen: now.Add(-3 * time.Hour)},
+		{Device: mac("Old Mac")},
+	}
+	assert.Equal(t, "Other machines: homeserver (Linux, offline, last seen 3 hours ago), Old Mac (Mac, offline, never connected)",
+		othersLine(ms, "dev_Toni's MacBook Pro", now))
+	assert.Empty(t, othersLine(ms[:1], "dev_Toni's MacBook Pro", now), "one machine: no line")
 }
 
 // FR-200: whatever a result ends with, the state line starts on its own line, the result's own

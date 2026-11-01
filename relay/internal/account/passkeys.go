@@ -340,7 +340,7 @@ func (s *Service) completeRecovery(ctx context.Context, u store.User, keep []byt
 			s.cfg.Logger.Error("recovery notice email", "err", err)
 		}
 	}
-	if d, err := s.cfg.Store.ActiveDevice(ctx, u.ID); err == nil && s.cfg.Macs.Online(d.ID) {
+	for _, d := range s.onlineMacs(ctx, u.ID) {
 		n := &agentproto.Notice{Kind: agentproto.NoticeAccountRecovered, At: now.Truncate(time.Second)}
 		if err := s.cfg.Macs.SendNotice(ctx, d.ID, n); err != nil {
 			s.cfg.Logger.Warn("recovery notice to Mac", "err", err)

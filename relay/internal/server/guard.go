@@ -76,7 +76,7 @@ func defaultRules() []rule {
 	}
 	return []rule{
 		// Sign-in, passkeys, pairing, account changes: 20 at once, then one every 3 s.
-		{post("/auth/", "/passkey/", "/pair", "/account/", "/signout"), limit.NewKeyed(20, 3*time.Second)},
+		{post("/auth/", "/passkey/", "/pair", "/link", "/account/", "/signout"), limit.NewKeyed(20, 3*time.Second)},
 		// Client registration (RFC 7591): 10 at once, then one a minute.
 		{post("/register"), limit.NewKeyed(10, time.Minute)},
 		// Consent page.
