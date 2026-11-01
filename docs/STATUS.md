@@ -50,8 +50,8 @@ both setup cases) and changes nothing where the tool descriptions already work (
 machines, refusals). Shipped 2026-11-01: on main, relay deployed, app 0.8.62 installed; a fresh
 Claude Code session with the plugin from GitHub's main used the real connector and the setup
 skill correctly. Toni added the catalog and the plugin on his claude.ai account (2026-11-01);
-Constitution VIII no longer counts projects (Toni). The plan's "Choices made for Toni" were put
-to him in chat for approval.
+Constitution VIII no longer counts projects (Toni). Toni approved all eight choices made for
+him (plan.md "Choices made for Toni") in chat on 2026-11-01.
 
 Several machines and Linux servers (spec 010; Toni asked on 2026-10-31 for plan and build in one
 go). Built 2026-11-01: one account pairs any number of Macs and headless Linux servers behind the

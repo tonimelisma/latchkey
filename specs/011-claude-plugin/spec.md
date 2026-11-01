@@ -3,7 +3,7 @@
 Status: Built (2026-11-01). Toni asked on 2026-11-01 for the spec started "as if from a blank
 slate", the repository arranged for it, and everything as finished as possible while he was
 away, with no questions in between. The choices Claude made for him (plan.md "Choices made for
-Toni") were put to him for approval on 2026-11-01; none is his decision until he answers.
+Toni") were put to him in chat and approved by him, all eight, on 2026-11-01.
 Scope: a Claude plugin that teaches Claude how to use Latchkey and how to set it up, published
 from this repository so people can add it on claude.ai, in Claude Desktop and Cowork (and then
 on their phones), and in Claude Code.

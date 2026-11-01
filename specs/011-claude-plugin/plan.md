@@ -110,7 +110,7 @@ page: tests, deploy) and the Mac app (Copy Request address: version 0.8.62, test
 Live check: a fresh Claude Code session outside the repository with the plugin from the
 published catalog, asked which machines it can reach and how to pair a server.
 
-## Choices made for Toni (he asked for no questions; shown to him for approval 2026-11-01)
+## Choices made for Toni (he asked for no questions; all eight approved by him in chat, 2026-11-01)
 
 1. Skills only, no connector in the plugin; the hosted-relay variant waits for the directory.
 2. Repository layout of D2 (catalog at the root, plugin in `plugin/`, its own Makefile).
