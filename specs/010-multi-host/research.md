@@ -83,12 +83,30 @@ apps behind a router, which is what the relay adds. Their service and log tools 
 ## Constitution wording
 
 Principles I ("The Mac never accepts inbound connections") and IV ("Good macOS citizen") name the
-Mac. Proposed for Toni's approval: I becomes "A paired machine never accepts inbound
+Mac. Approved by Toni, 2026-10-31: I becomes "A paired machine never accepts inbound
 connections"; IV gains "and a good Linux citizen: a systemd service, the distribution's own
-conventions, nothing outside the Owner's home folder and the service file".
+conventions, sudo set up only by the Owner, an uninstall that leaves nothing"; II and III say "machine" for
+"Mac"; VIII allows four projects (below).
+
+## Where the server program's code lives
+
+Chosen: its own Go module, with the protocol package moved out of the relay's internals so both
+use it (Toni, 2026-10-31). The relay already has the protocol in Go
+(`relay/internal/agentproto`) and a pretend Mac in Go (`relay/internal/testagent`); Go lets
+`internal/` packages be used only inside their module, which is why "inside the relay" was the
+cheapest first answer.
+
+| Option | For | Against |
+|---|---|---|
+| Inside the relay's module (second program) | Shares protocol and pretend Mac directly; one build runs both ends; one set of checks | Its module lists the relay's web, sign-in, passkey, and database libraries (not built in, but in every vulnerability report and update); invites assuming both ends share a version though they release apart; only a lint rule keeps relay internals out; endpoint code under `relay/` |
+| Own module, shared protocol package | Dependency list holds only what it uses, easier to audit for a program that can run sudo; compiler keeps relay internals out; own version and releases; same separation as the Mac app, held together by the shared example messages (`contracts/fixtures/`) | One more module to build and check, a workspace file; the protocol package becomes public; Constitution VIII says four projects |
+| Own module, copied protocol code | Least coupling | Two copies drift; only the fixtures catch it |
+
+The deciding points: the server program's security boundary and release line differ from the
+relay's, and the example messages, not shared code, are what already keep the Mac and the relay
+compatible.
 
 ## Other choices
 
-- The server program is Go (Toni, 2026-10-31), so it shares the connection protocol code with
-  the relay; one static file per architecture.
+- The server program is Go (Toni, 2026-10-31); one static file per architecture.
 - Reading PDFs and documents on Linux needs a library in Go instead of PDFKit; picked in the plan.

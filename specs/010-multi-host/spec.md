@@ -1,6 +1,7 @@
 # Spec 010: Several machines and Linux servers — WHAT and WHY
 
-Status: Draft for Toni's review (2026-10-31). No plan, tasks, or code before the review.
+Status: Draft for Toni's review (2026-10-31); his open questions answered the same day. No plan,
+tasks, or code before the review.
 Scope: one Owner pairs several machines with one account (Macs, and Linux servers without a
 screen), and Claude reaches all of them through the one connector. On a Linux server Claude gets
 Shell and Files, the same tools as on the Mac.
@@ -75,8 +76,8 @@ and pairing a second Mac replaces the first (spec 001 FR-053).
 - **FR-1010** Every audit record and activity entry shall name the machine (spec 001 FR-630 to
   FR-637).
 - **FR-1011** The Owner shall be able to see their paired machines and remove one, on the machine
-  itself and [NEEDS CLARIFICATION: also on the relay's account page, for a lost or stolen
-  server? Removing only takes access away].
+  itself and on the relay's account page, for a lost, stolen, or wiped machine (Toni,
+  2026-10-31); removing only takes access away.
 - **FR-1012** Pairing a Mac while other machines are paired shall say it adds this Mac (spec 001
   FR-054's warning that it replaces the current pairing changes accordingly).
 
@@ -93,12 +94,16 @@ and pairing a second Mac replaces the first (spec 001 FR-053).
   (Constitution I).
 - **FR-1024** The Owner shall turn Shell and Files on and off on the server itself, with a command
   and its settings file; the relay shall never be able to turn anything on (Toni, 2026-10-31).
-  Shell has Off and On; Files has Off, Read only, and Read & write. [NEEDS CLARIFICATION:
-  defaults on a server: the Mac starts with both fully on (spec 003 FR-209, spec 004 FR-308).]
+  Shell has Off and On; Files has Off, Read only, and Read & write. A newly paired server starts
+  with Shell On and Files Read & write, as the Mac (spec 003 FR-209, spec 004 FR-308), with no
+  question at setup (Toni, 2026-10-31).
 - **FR-1025** The Owner shall be able to pause all of Claude's access on the server with a command,
   as the Mac's Pause (spec 001 FR-602 to FR-604).
-- **FR-1026** [NEEDS CLARIFICATION: how Latchkey gets onto a server (a one-line install command, a
-  package, or a download) and how it stays up to date.]
+- **FR-1026** Latchkey shall be installed on a server with one command that downloads a signed
+  release. It shall check for a new release daily, check its signature, update itself, and go
+  back to the previous version when the new one doesn't connect to the relay (Toni, 2026-10-31).
+- **FR-1027** The Owner shall be able to uninstall Latchkey from a server with one command that
+  removes its service, program, settings, and data, and unpairs the server (Constitution IV).
 
 ### Linux server: Shell
 

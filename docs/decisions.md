@@ -204,6 +204,10 @@ Add a row when a decision is made; never delete one, mark it "superseded by" ins
 | 2026-10-31 | A server pairs by showing a link and short code that the Owner approves in any browser; its Shell and Files are switched on the server only (command and settings file), never from the relay | Toni, spec 010 FR-1022, FR-1024 |
 | 2026-10-31 | On a server commands may use sudo; sudo never waits for a password and says how to allow it; no write fence there (it blocks sudo), leftovers still stopped and scratch removed | Toni, spec 010 FR-1031, FR-1032 |
 | 2026-10-31 | On a server deleting a file deletes it for good; activity is logged on the server and in the relay's audit, with no notifications; a machine's name is its own name, renamable on the machine | Toni, spec 010 FR-1042, FR-1050, FR-1002 |
+| 2026-10-31 | A machine can be removed on the machine and on the relay's account page; a new server starts with Shell On and Files Read & write, no question at setup | Toni, spec 010 FR-1011, FR-1024 |
+| 2026-10-31 | A server installs with one command from a signed release, updates itself daily after checking the signature, and goes back if the new version doesn't connect; one command uninstalls | Toni, spec 010 FR-1026, FR-1027 |
+| 2026-10-31 | The Linux server program is its own Go module; the relay's protocol package moves out of its internals so both use it | Toni, specs/010-multi-host/research.md |
+| 2026-10-31 | Constitution amended for Linux: I covers every paired machine; II and III say machine for Mac; IV becomes Good citizen with a Linux part; VIII allows four projects | Toni, memory/constitution.md |
 | 2026-10-30 | Mail sends through Mail's compose window with Accessibility, never Mail's scripted content (which arrives indented as a quote in other mail apps); with the screen off or locked, sending is refused and says why | Toni, spec 008 |
 | 2026-10-29 | MimeFoundation decodes mail (pinned by commit) | Toni, spec 008 |
 | 2026-10-29 | Test suites run side by side; the large-log test uses 30,000 entries; every test still runs on every change | Toni, .claude/rules/macos.md |
