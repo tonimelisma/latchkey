@@ -191,6 +191,22 @@ docker image inspect latchkey-relay:$1 >/dev/null
   rm -f "$2/image.tar.gz"
 }
 
+# IMAGE_REPO is where the public relay image is published (spec 009 FR-911).
+IMAGE_REPO=ghcr.io/tonimelisma/latchkey-relay
+
+# publish_image TAG: builds the relay for Intel and Arm servers and pushes it as TAG and latest,
+# signing in with the GitHub CLI's token (it needs the write:packages scope: once,
+# `gh auth refresh -s write:packages`). Relays set up by docs/setup-with-claude.md update to
+# latest by themselves, so this runs with every deploy, after the checks (spec 009 plan D6).
+publish_image() {
+  _user=$(gh api user --jq .login) || return 1
+  gh auth token | docker login ghcr.io -u "$_user" --password-stdin >/dev/null ||
+    { echo "FAIL: couldn't sign in to ghcr.io (does the GitHub CLI's token have write:packages? gh auth refresh -s write:packages)" >&2; return 1; }
+  docker buildx build -q --platform linux/amd64,linux/arm64 --build-arg VERSION="$1" \
+    -t "$IMAGE_REPO:$1" -t "$IMAGE_REPO:latest" --push relay >/dev/null ||
+    { echo "FAIL: couldn't build or publish the image" >&2; return 1; }
+}
+
 # caddyfile_with_block HOST SNIPPET_FILE: prints the Caddyfile on stdin with HOST's site block
 # replaced by the snippet (or added when missing). The block is the lines between the snippet's
 # BEGIN and END markers, or, as written by earlier deploys, from the line "HOST {" to the next

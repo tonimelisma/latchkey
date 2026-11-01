@@ -71,6 +71,9 @@ check_ip "$IP"
 HOST="$HOST" ZONE_NAME="$ZONE_NAME" IP="$IP" CLOUDFLARE_API_TOKEN="$CLOUDFLARE_API_TOKEN" \
   RESEND_ADMIN_KEY="${RESEND_ADMIN_KEY-}" python3 deploy/dns_and_email.py
 
+echo "• public image $TAG for Intel and Arm servers"
+publish_image "$TAG"
+
 echo "• image $TAG"
 docker buildx build -q --platform linux/amd64 -t "latchkey-relay:$TAG" --build-arg VERSION="$TAG" --load relay >/dev/null
 upload_image "$TAG" "$tmp"

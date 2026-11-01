@@ -187,6 +187,49 @@ expect 1 "upload damaged on the way fails the deploy" run_upload
 grep -q 'docker load' "$work/docker.log" && bad "a damaged upload is never loaded" || ok "a damaged upload is never loaded"
 [ -z "$(ls -A "$work/remote")" ] && ok "no damaged upload left on the server" || bad "no damaged upload left on the server"
 
+# --- the public image for Intel and Arm servers, with every deploy (spec 009 FR-911) ---
+cat >"$work/bin/gh" <<'EOF'
+#!/bin/sh
+case "$*" in
+"auth token") echo gho_test-token ;;
+"api user --jq .login") echo tonimelisma ;;
+*) exit 1 ;;
+esac
+EOF
+cat >"$work/bin/docker" <<'EOF'
+#!/bin/sh
+echo "docker $*" >>"$DOCKER_LOG"
+case "$1" in
+save) [ -z "${FAIL_SAVE-}" ] || exit 1; printf 'image-bytes' >"$3" ;;
+load) [ -z "${FAIL_LOAD-}" ] || exit 1 ;;
+login) read -r token; [ "$token" = gho_test-token ] || exit 1; [ -z "${FAIL_LOGIN-}" ] || exit 1 ;;
+buildx) [ -z "${FAIL_PUSH-}" ] || exit 1 ;;
+esac
+exit 0
+EOF
+chmod +x "$work/bin/"*
+run_publish() {
+  (
+    PATH="$work/bin:$PATH"
+    DOCKER_LOG="$work/docker.log"
+    export DOCKER_LOG FAIL_LOGIN FAIL_PUSH
+    : >"$DOCKER_LOG"
+    publish_image abc1234
+  )
+}
+FAIL_LOGIN='' FAIL_PUSH=''
+expect 0 "image published" run_publish
+grep -q 'login ghcr.io -u tonimelisma --password-stdin' "$work/docker.log" && ok "signed in to the registry with the GitHub CLI's token" || bad "signed in to the registry with the GitHub CLI's token"
+grep 'buildx build' "$work/docker.log" | grep -q -- '--platform linux/amd64,linux/arm64' && ok "built for Intel and Arm servers" || bad "built for Intel and Arm servers"
+grep 'buildx build' "$work/docker.log" | grep -q -- '-t ghcr.io/tonimelisma/latchkey-relay:abc1234 -t ghcr.io/tonimelisma/latchkey-relay:latest' && ok "tagged with the version and latest" || bad "tagged with the version and latest"
+grep 'buildx build' "$work/docker.log" | grep -q -- '--push' && ok "pushed" || bad "pushed"
+FAIL_LOGIN=1
+expect 1 "a refused registry sign-in fails the deploy" run_publish
+grep -q 'buildx' "$work/docker.log" && bad "nothing is built after a refused sign-in" || ok "nothing is built after a refused sign-in"
+FAIL_LOGIN='' FAIL_PUSH=1
+expect 1 "a failed push fails the deploy" run_publish
+FAIL_PUSH=''
+
 # --- the server's Caddyfile: checked by Caddy, put back if refused ---
 run_caddy() {
   (
