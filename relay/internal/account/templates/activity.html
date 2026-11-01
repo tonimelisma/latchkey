@@ -1,0 +1,12 @@
+{{template "head" .}}
+<p class="back"><a href="/account">‹ Your account</a></p>
+<h1>Activity</h1>
+<p class="lead">Every tool call Claude made through this relay, and every change to your account, newest first. Arguments and results are never stored here; each machine keeps its own full log.</p>
+<div class="panel">
+{{if .Data.Entries}}{{template "entries" .Data.Entries}}{{else}}<p class="empty">{{if .Data.Newest}}Nothing yet.{{else}}No older activity.{{end}}</p>{{end}}
+</div>
+<nav class="pager" aria-label="Pages">
+  {{if not .Data.Newest}}<a class="button small-button" href="/account/activity">Newest</a>{{end}}
+  {{with .Data.Older}}<a class="button small-button" href="{{.}}">Older activity</a>{{end}}
+</nav>
+{{template "foot" .}}

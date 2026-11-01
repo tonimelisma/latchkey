@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/chromedp/cdproto/cdp"
+	"github.com/chromedp/cdproto/emulation"
 	"github.com/chromedp/cdproto/network"
 	"github.com/chromedp/cdproto/webauthn"
 	"github.com/chromedp/chromedp"
@@ -295,9 +296,63 @@ func (b *Browser) LinkCode(base, code, machine string) error {
 		chromedp.Click(chromedp.CSS(`form[action="/link"] button[type=submit]`)),
 		chromedp.WaitVisible(`//h1[contains(., "Connect “`+machine+`”?")]`),
 		chromedp.Click(chromedp.CSS(`form[action="/link"] button[type=submit]`)),
-		chromedp.WaitVisible(`//h1[contains(., "is connected")]`),
+		// FR-656: back on the account page, the machine named at the top and marked in the list.
+		chromedp.WaitVisible(`//p[@class="notice" and contains(., "“`+machine+`” is connected")]`),
+		chromedp.WaitVisible(chromedp.CSS(`li.machine.new`)),
 	); err != nil {
 		return fmt.Errorf("link page: %w", err)
+	}
+	return nil
+}
+
+// layoutProblem finds what FR-650 forbids on the page shown: the page wider than the window, its
+// top out of reach, or a field narrower than the button under it.
+const layoutProblem = `(() => {
+  const doc = document.documentElement;
+  if (doc.scrollWidth > window.innerWidth + 1) return "the page scrolls sideways: " + doc.scrollWidth + " px in a " + window.innerWidth + " px window";
+  window.scrollTo(0, 0);
+  const first = document.querySelector("h1");
+  if (!first) return "no heading";
+  const top = first.getBoundingClientRect().top;
+  if (top < 0) return "the top is out of reach: the heading starts at " + top + " px";
+  for (const el of document.querySelectorAll("main *")) {
+    const r = el.getBoundingClientRect();
+    if (r.width > 0 && r.right > window.innerWidth + 1) return el.tagName + "." + el.className + " sticks out to " + r.right + " px";
+  }
+  const field = document.querySelector("input[type=text], input[type=email]");
+  const button = field && field.form && field.form.querySelector("button.wide");
+  if (field && button && Math.abs(field.getBoundingClientRect().width - button.getBoundingClientRect().width) > 1) return "the field and its button differ in width";
+  return "";
+})()`
+
+// CheckLayout opens each page at a phone's width (320 and 375 px, short and tall) and a
+// desktop's, and reports the first layout problem (FR-650).
+func (b *Browser) CheckLayout(base string, paths ...string) error {
+	sizes := []struct {
+		w, h   int64
+		mobile bool
+	}{{320, 568, true}, {375, 812, true}, {1280, 720, false}}
+	defer func() {
+		_, _ = chromedp.Call(b.ctx, emulation.ClearDeviceMetricsOverride, cdp.Empty{})
+	}()
+	for _, s := range sizes {
+		if _, err := chromedp.Call(b.ctx, emulation.SetDeviceMetricsOverride, emulation.SetDeviceMetricsOverrideParams{
+			Width: s.w, Height: s.h, DeviceScaleFactor: 1, Mobile: s.mobile,
+		}); err != nil {
+			return fmt.Errorf("window size: %w", err)
+		}
+		for _, p := range paths {
+			if err := b.run(chromedp.Navigate(base+p), chromedp.WaitVisible(chromedp.CSS("h1"))); err != nil {
+				return fmt.Errorf("%s at %d px: %w", p, s.w, err)
+			}
+			problem, err := value(b, 5*time.Second, chromedp.Evaluate[string](layoutProblem))
+			if err != nil {
+				return fmt.Errorf("%s at %d px: %w", p, s.w, err)
+			}
+			if problem != "" {
+				return fmt.Errorf("%s at %d px: %s", p, s.w, problem)
+			}
+		}
 	}
 	return nil
 }

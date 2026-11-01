@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"database/sql"
+	"strings"
 	"time"
 )
 
@@ -59,9 +60,33 @@ func (s *Store) CountEvent(ctx context.Context, e Event) (first bool, err error)
 // Events returns the account's most recent events, newest first; userID "" returns the events
 // without an account.
 func (s *Store) Events(ctx context.Context, userID string, limit int) ([]Event, error) {
-	rows, err := s.db.QueryContext(ctx, `
+	return s.queryEvents(ctx, `
 		SELECT id, at, kind, coalesce(user_id, ''), device_id, detail, count, last_at
 		FROM events WHERE user_id IS ? ORDER BY at DESC, id DESC LIMIT ?`, nullString(userID), limit)
+}
+
+// EventsBefore returns the account's most recent events of the given kinds from before the given
+// time (all of them when it is zero), newest first: the account events on the Owner's activity
+// page (FR-652, FR-653).
+func (s *Store) EventsBefore(ctx context.Context, userID string, kinds []string, before time.Time, limit int) ([]Event, error) {
+	if userID == "" || len(kinds) == 0 {
+		return nil, nil
+	}
+	args := []any{userID, beforeMS(before)}
+	marks := make([]string, len(kinds))
+	for i, k := range kinds {
+		marks[i] = "?"
+		args = append(args, k)
+	}
+	args = append(args, limit)
+	return s.queryEvents(ctx, `
+		SELECT id, at, kind, coalesce(user_id, ''), device_id, detail, count, last_at
+		FROM events WHERE user_id = ? AND at < ? AND kind IN (`+strings.Join(marks, ", ")+`)
+		ORDER BY at DESC, id DESC LIMIT ?`, args...)
+}
+
+func (s *Store) queryEvents(ctx context.Context, query string, args ...any) ([]Event, error) {
+	rows, err := s.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}

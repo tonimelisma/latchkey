@@ -121,7 +121,8 @@ sleep, removes its background items and local data, and quits.
 
 ### Add a Linux server
 
-On the server, as yourself (not root), with your relay's address:
+On the server, as yourself (not root), with your relay's address (your relay's account page,
+under Add a machine, shows this line with the address filled in, ready to copy):
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/tonimelisma/latchkey/main/linux/install.sh | sh -s -- https://relay.example.com

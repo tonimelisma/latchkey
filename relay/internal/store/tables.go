@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"math"
 	"strings"
 	"sync"
 	"time"
@@ -351,6 +352,22 @@ func (s *Store) AuditForUser(ctx context.Context, userID string, limit int) ([]A
 	return s.queryAudit(ctx, `
 		SELECT user_id, device_id, at, tool, surface, outcome, duration_ms, call_id
 		FROM audit_log WHERE user_id = ? ORDER BY at DESC, id DESC LIMIT ?`, userID, limit)
+}
+
+// AuditForUserBefore returns the user's most recent entries from before the given time (all of
+// them when it is zero), newest first: one page of the account's activity page (FR-652).
+func (s *Store) AuditForUserBefore(ctx context.Context, userID string, before time.Time, limit int) ([]AuditEntry, error) {
+	return s.queryAudit(ctx, `
+		SELECT user_id, device_id, at, tool, surface, outcome, duration_ms, call_id
+		FROM audit_log WHERE user_id = ? AND at < ? ORDER BY at DESC, id DESC LIMIT ?`, userID, beforeMS(before), limit)
+}
+
+// beforeMS is a page's upper bound in Unix milliseconds; zero means no bound.
+func beforeMS(before time.Time) int64 {
+	if before.IsZero() {
+		return math.MaxInt64
+	}
+	return before.UnixMilli()
 }
 
 func (s *Store) queryAudit(ctx context.Context, query string, args ...any) ([]AuditEntry, error) {

@@ -113,6 +113,7 @@ func TestEndToEndInBrowser(t *testing.T) {
 	require.NoError(t, b.SignUp(base, "owner@example.com", codeFrom(mail)), "sign up with a passkey")
 	require.NoError(t, b.SignOut())
 	require.NoError(t, b.SignIn(base), "sign in with the passkey")
+	require.NoError(t, b.CheckLayout(base, "/account", "/account/activity", "/link", "/", "/signin"), "FR-650")
 
 	// Claude connects: discovery, registration, consent in the browser, token exchange.
 	cb, err := e2e.NewCallback(ctx)

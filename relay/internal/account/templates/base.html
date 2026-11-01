@@ -8,18 +8,37 @@
 <link rel="icon" href="/static/icon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="/static/style.css">
 {{if not .Plain}}<script src="/static/passkey.js" defer></script>
+<script src="/static/page.js" defer></script>
 {{end}}</head>
 <body>
-<main class="card{{if .Wide}} wide{{end}}">
+{{if .Wide}}<div class="page wide">
+<header class="top">
+  <a class="brand" href="{{if .Email}}/account{{else}}/{{end}}"><img src="/static/icon.svg" alt="" width="28" height="28"> Latchkey</a>
+  {{with .Email}}<span class="who">{{.}}</span>{{end}}
+</header>
+<main>
+{{else}}<div class="page">
+<main class="card">
 <div class="mark" aria-hidden="true"><img src="/static/icon.svg" alt="" width="44" height="44"></div>
-{{end}}
+{{end}}{{end}}
 
 {{define "foot"}}
 </main>
+<footer>
 {{if .SignedIn}}<p class="footer"><a href="/account">Your account</a></p>{{end}}
 {{if .Legal}}<p class="footer"><a href="/terms">Terms</a> · <a href="/privacy">Privacy</a></p>{{end}}
+</footer>
+</div>
 </body>
 </html>
 {{end}}
 
 {{define "error"}}<p class="error" role="alert" id="error"{{if not .Error}} hidden{{end}}>{{.Error}}</p>{{end}}
+
+{{define "entries"}}<ol class="activity">{{range .}}
+  <li class="entry{{if .Event}} event{{end}}">
+    <div class="entry-what">{{if .Event}}<span class="what">{{.What}}</span>{{with .Machine}}<span class="on">: {{.}}</span>{{end}}{{else}}<code class="what">{{.What}}</code>{{with .Machine}} <span class="on">on {{.}}</span>{{end}}{{end}}</div>
+    {{if and (not .Event) (ne .Outcome "ok")}}<span class="badge {{.Outcome}}">{{outcome .Outcome}}</span>{{end}}
+    <div class="entry-sub"><time datetime="{{iso .At}}">{{when .At}}</time>{{if .Event}}{{with .Detail}} · {{.}}{{end}}{{if gt .Count 1}} · {{.Count}} times{{end}}{{else}} · {{took .Duration}}{{with .Surface}} · {{.}}{{end}}{{end}}</div>
+  </li>{{end}}
+</ol>{{end}}

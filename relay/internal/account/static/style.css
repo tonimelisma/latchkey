@@ -2,74 +2,137 @@
   color-scheme: light dark;
   --page: #f5f5f7; --card: #ffffff; --fg: #1d1d1f; --muted: #6e6e73; --line: #d2d2d7;
   --field: #ffffff; --accent: #0071e3; --accent-fg: #ffffff; --danger: #d70015; --ok: #1a7f37;
-  --note: #f5f5f7; --shadow: 0 1px 2px rgba(0,0,0,.04), 0 8px 28px rgba(0,0,0,.08);
+  --note: #e8f2fd; --code: #f5f5f7; --new: #e8f2fd; --shadow: 0 1px 2px rgba(0,0,0,.04), 0 8px 28px rgba(0,0,0,.08);
 }
 @media (prefers-color-scheme: dark) {
   :root {
     --page: #000000; --card: #1c1c1e; --fg: #f5f5f7; --muted: #a1a1a6; --line: #38383a;
-    --field: #2c2c2e; --accent: #0a84ff; --danger: #ff453a; --ok: #30d158; --note: #2c2c2e;
-    --shadow: none;
+    --field: #2c2c2e; --accent: #0a84ff; --danger: #ff453a; --ok: #30d158; --note: #0a2a4a;
+    --code: #2c2c2e; --new: #0a2a4a; --shadow: none;
   }
 }
 * { box-sizing: border-box; }
-html, body { height: 100%; }
+html { height: 100%; }
 body {
-  margin: 0; background: var(--page); color: var(--fg);
+  margin: 0; min-height: 100%; background: var(--page); color: var(--fg);
   font: 16px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
-  display: flex; flex-direction: column; align-items: center; justify-content: center;
-  padding: 24px 16px;
+  display: flex; flex-direction: column;
 }
+/* The page sits in the middle when it fits and starts at the top when it doesn't: auto margins
+   never push content above the scrollable area, as centering with justify-content does. */
+.page { width: 100%; margin: auto; padding: 24px 16px; display: flex; flex-direction: column; align-items: center; }
+.page > main, .page > footer { width: 100%; }
 .card {
-  width: 100%; max-width: 400px; background: var(--card); border-radius: 18px;
+  max-width: 400px; background: var(--card); border-radius: 18px;
   padding: 32px 28px 24px; box-shadow: var(--shadow); border: 1px solid var(--line);
 }
-.card.wide { max-width: 680px; }
+.page > footer { max-width: 400px; text-align: center; }
+
+/* Wide pages (account, activity, legal): a page of grouped panels rather than one card. */
+.page.wide { margin: 0 auto; max-width: 760px; align-items: stretch; padding-top: 0; }
+.page.wide > footer { max-width: none; }
+.top { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px 0 8px; flex-wrap: wrap; }
+.brand { display: inline-flex; align-items: center; gap: 8px; font-weight: 600; color: var(--fg); }
+.brand:hover { text-decoration: none; }
+.who { font-size: 13px; color: var(--muted); overflow-wrap: anywhere; }
+.page.wide h1 { text-align: left; font-size: 28px; margin: 16px 0 12px; }
+.page.wide section { margin: 28px 0 0; }
+.page.wide h2 { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 0 0 8px 4px; }
+.panel { background: var(--card); border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--shadow); overflow: hidden; }
+.panel > :last-child { margin-bottom: 0; }
+.howto { padding: 14px 16px; border-top: 1px solid var(--line); }
+.howto:first-child { border-top: 0; }
+.howto h3 { font-size: 15px; margin: 0 0 4px; }
+.howto p { margin: 0 0 10px; }
+.howto > :last-child, .howto form:last-child { margin-bottom: 0; }
+.empty { color: var(--muted); padding: 14px 16px; margin: 0; }
+.hint { font-size: 13px; color: var(--muted); margin: 8px 4px 0; }
+.after-panel { margin: 12px 0 0; }
+.back { margin: 16px 0 0; font-size: 15px; }
+.pager { display: flex; justify-content: space-between; gap: 12px; margin: 16px 0 0; }
+.pager a:only-child { margin-left: auto; }
+
 .mark { display: flex; justify-content: center; margin-bottom: 16px; }
 h1 { font-size: 24px; line-height: 1.2; letter-spacing: -0.01em; margin: 0 0 8px; text-align: center; }
-.card.wide h1 { text-align: left; }
 h2 { font-size: 17px; margin: 0 0 6px; }
 p { margin: 0 0 16px; }
 .lead { color: var(--muted); text-align: center; }
+.page.wide .lead { text-align: left; }
 .host { text-align: center; }
-.card.wide .lead { text-align: left; }
 .small { font-size: 13px; color: var(--muted); }
 .center { text-align: center; }
 a { color: var(--accent); text-decoration: none; }
 a:hover { text-decoration: underline; }
 label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; }
 input[type=email], input[type=text] {
-  width: 100%; font: inherit; font-size: 17px; padding: 11px 14px; margin-bottom: 14px;
+  display: block; width: 100%; font: inherit; font-size: 17px; padding: 11px 14px; margin: 0 0 16px;
   border: 1px solid var(--line); border-radius: 10px; background: var(--field); color: var(--fg);
 }
-input.code { font-size: 28px; letter-spacing: .35em; text-align: center; font-variant-numeric: tabular-nums; }
-input:focus-visible, button:focus-visible, .button:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+input.code { font-size: 24px; letter-spacing: .2em; text-align: center; font-variant-numeric: tabular-nums; text-transform: uppercase; }
+input.code::placeholder { color: var(--muted); opacity: .5; }
+input:focus-visible, button:focus-visible, .button:focus-visible, a:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
 button, .button {
   display: inline-block; font: inherit; font-weight: 600; padding: 11px 18px; min-height: 44px;
   border-radius: 10px; border: 1px solid var(--line); background: transparent; color: var(--fg);
   cursor: pointer; text-decoration: none; text-align: center;
 }
+.button:hover { text-decoration: none; }
 button.wide, .button.wide { display: block; width: 100%; margin: 0 0 10px; }
 button.primary, .button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); }
 button.destructive { color: var(--danger); }
 button.link { border: 0; padding: 0; min-height: 0; font-weight: inherit; color: var(--accent); background: none; }
+.small-button { font-size: 15px; padding: 8px 14px; }
 button:disabled { opacity: .5; cursor: default; }
 form { margin: 0 0 12px; }
 .error { color: var(--danger); font-size: 14px; }
-.warning, .notice { background: var(--note); border-radius: 10px; padding: 10px 14px; font-size: 14px; }
-section { padding: 20px 0; border-top: 1px solid var(--line); }
-#flow section, .card > section:first-of-type { border-top: 0; padding-top: 0; }
-.online { color: var(--ok); font-weight: 600; }
-.offline { color: var(--muted); font-weight: 600; }
+.warning, .notice { background: var(--note); border-radius: 10px; padding: 10px 14px; font-size: 15px; }
+
+/* Rows of things you manage: name and details, with the row's action on the right. */
+ul.rows { list-style: none; padding: 0; margin: 0; border-top: 1px solid var(--line); }
+.howto:only-child + ul.rows, .panel > ul.rows:first-child { border-top: 0; }
+ul.rows li { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--line); }
+ul.rows li:last-child { border-bottom: 0; }
+ul.rows li.new { background: var(--new); }
+ul.rows form { margin: 0; flex: none; }
+.row-main { min-width: 0; }
+.row-title { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; overflow-wrap: anywhere; }
+.row-sub { font-size: 13px; color: var(--muted); overflow-wrap: anywhere; }
+.status { font-size: 13px; font-weight: 600; }
+.status::before { content: ""; display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 5px; background: currentColor; vertical-align: 1px; }
+.online { color: var(--ok); }
+.offline { color: var(--muted); }
+
+/* Text to copy, such as the install command: wraps on narrow screens instead of widening the page. */
+.copyfield { display: flex; align-items: flex-start; gap: 8px; background: var(--code); border-radius: 10px; padding: 8px 8px 8px 12px; }
+.copyfield code { flex: 1; min-width: 0; padding: 6px 0; overflow-wrap: anywhere; font-size: 13px; }
+.copyfield button { flex: none; background: var(--card); }
+
+/* The activity list: one entry per row, reflowing on narrow screens (no table to scroll). */
+ol.activity { list-style: none; margin: 0; padding: 0; }
+.entry { display: grid; grid-template-columns: 1fr auto; column-gap: 12px; padding: 10px 16px; border-bottom: 1px solid var(--line); }
+.entry:last-child { border-bottom: 0; }
+.entry-what { min-width: 0; overflow-wrap: anywhere; }
+.entry-what .what { font-weight: 600; }
+.entry-what code.what { font-weight: 500; }
+.entry-what .on { color: var(--muted); }
+.entry-sub { grid-column: 1 / -1; font-size: 13px; color: var(--muted); overflow-wrap: anywhere; }
+.entry.event .entry-what .what { color: var(--accent); }
+.badge { align-self: start; font-size: 12px; font-weight: 600; padding: 1px 8px; border-radius: 999px; color: var(--muted); border: 1px solid var(--line); white-space: nowrap; }
+.badge.error, .badge.timeout { color: var(--danger); border-color: currentColor; }
+.badge.offline { color: var(--muted); }
+
 table { width: 100%; border-collapse: collapse; font-size: 13px; margin-bottom: 12px; }
 th, td { text-align: left; padding: 6px 8px 6px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
 th { color: var(--muted); font-weight: 500; }
 ul { padding-left: 20px; }
-ul.apps { list-style: none; padding: 0; margin: 0 0 16px; }
-ul.apps li { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--line); }
-ul.apps form { margin: 0; flex: none; }
 .legal h2 { margin-top: 22px; }
 .legal li { margin-bottom: 6px; }
 code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .9em; }
-.footer { margin-top: 16px; font-size: 13px; }
-@media (max-width: 600px) { table { display: block; overflow-x: auto; } .card { padding: 24px 18px; } }
+.footer { margin: 16px 0 0; font-size: 13px; }
+@media (max-width: 600px) {
+  .card { padding: 24px 18px; }
+  .page.wide h1 { font-size: 24px; }
+  ul.rows li { align-items: flex-start; }
+  table { display: block; overflow-x: auto; }
+}

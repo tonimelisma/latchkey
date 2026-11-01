@@ -695,3 +695,34 @@ image in the details pane as one line ("image/jpeg image, 180 KB, not shown") an
 text at 10,000 characters, clips menu text from its first characters only, and logs "Show All
 Activity chosen", "Activity window shown", and the first page's time in the `activity` category,
 so the next slow open shows where the time went.
+
+## The relay's web pages (FR-650 to FR-658, 2026-11-01)
+
+Toni decided what the account page holds (FR-651 to FR-656). Sources for the design: GOV.UK's
+patterns (one question per page for the approval pages; a list with an action on each row for things
+one manages, a table only for tabular data), WCAG 2.2 Reflow (320 px wide, no sideways page
+scrolling), Apple's Human Interface Guidelines (44 pt buttons, grouped panels as in Settings), and
+Nielsen's "visibility of system status" (say what just happened, where it is seen). The cut-off top
+was the stylesheet centering the page with `justify-content: center` on a full-height body: when
+the page is taller than the window, the overflow goes above the scrollable area. Choices left to
+Claude:
+
+- Centering: auto margins on the page (chosen: centered when it fits, starts at the top when it
+  doesn't, in every browser) versus `justify-content: safe center` (the same result, but Safari
+  only since 17.6) versus never centering (the short sign-in pages would sit at the top).
+- The activity list: a list with one entry per row that reflows (chosen: fits 320 px with no
+  sideways scrolling, and an event and a call share one shape) versus a table (six columns broke
+  dates and timings over two lines at 680 px and scrolled sideways on a phone).
+- Paging: a "before" time in the address, and a page never ends inside a millisecond (chosen: no
+  state on the server, and entries sharing the last time all stay on the page, so none is skipped
+  or repeated) versus page numbers (an entry arriving between pages shifts every page by one).
+- Account events shown (FR-653): the ones the Owner did or should know of; connection drops and
+  keep-awake changes are many and the machine's own state already says them.
+- Local times and copy buttons: a small script, `page.js`, served from the relay (chosen: the
+  pages' policy already allows its own scripts, and without it the page still shows UTC and the
+  text can be selected) versus the server guessing a time zone (it can't know the viewer's).
+- A badge only on calls that went wrong (chosen: a "Done" badge on every row was noise).
+- Checked by `CheckLayout` in the browser test: each page at 320, 375, and 1280 px for sideways
+  scrolling, the heading out of reach, anything sticking out, and a field narrower than its
+  button. Run against the old stylesheet it fails at 320 px (the heading started 349 px above the
+  top).

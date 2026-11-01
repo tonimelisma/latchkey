@@ -641,6 +641,38 @@ Why: on 2026-10-25 commands left processes and files on the Mac that nobody list
   Mac's, and Claude's open sessions) within 5 seconds.
 - **FR-199** The relay shall delete the record of an operator's action after one year.
 
+### The relay's web pages (Toni, 2026-11-01)
+
+The pages do six jobs: sign in (FR-043a), approve (a Claude app FR-049a, a Mac FR-050, a Linux
+server spec 010 FR-1022), look after machines and Claude's access (FR-044), see what happened
+(FR-022), and the account itself (FR-045). Toni found the account page's top cut off and the code
+field misdrawn after pairing a server (2026-11-01); these requirements give the pages one design.
+
+- **FR-650** Every relay page shall work from 320 CSS pixels wide upward without the page
+  scrolling sideways, and shall let the whole page be scrolled to, its top included, however
+  tall it is (WCAG 2.2 Reflow).
+- **FR-651** The account page shall show, in order: what just happened, if anything; Machines;
+  Add a machine; Claude; Recent activity (the last 10 entries, with a link to the activity page);
+  and Account.
+- **FR-652** The activity page shall show the account's tool calls and account events in one
+  list, newest first, 50 at a time, with a link to older entries until the first, never skipping
+  or repeating one.
+- **FR-653** The account events in the Owner's activity shall be: sign-ins (refused ones for the
+  account too), sign-up, recovery, Claude apps allowed, not allowed, and removed, and machines
+  connected and removed. Connection changes, keep-awake changes, and refused requests stay in the
+  operator's record (FR-631) only.
+- **FR-654** Add a machine shall say how to connect a Mac (Connect in the app, with a link to how
+  to get it) and give a Linux server's install command filled in with this relay's address, with
+  a button that copies it.
+- **FR-655** The Claude part of the account page shall always show the connector address, with a
+  button that copies it.
+- **FR-656** When the Owner connects a machine with its code, the relay shall show the account
+  page with a confirmation naming the machine at the top and that machine marked in the list.
+- **FR-657** The pages shall show times in the viewer's own time zone when the browser runs the
+  page's script, and in UTC otherwise.
+- **FR-658** Pages that apply to every kind of machine (home, Claude's consent) shall speak of
+  machines, not only of a Mac.
+
 ## Success criteria
 
 Measurable, technology-free. Each one has a test.

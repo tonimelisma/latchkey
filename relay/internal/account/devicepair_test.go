@@ -57,9 +57,13 @@ func TestHeadlessPairing(t *testing.T) {
 	assert.Contains(t, r.body, "Requested 3 minutes ago. The name “homeserver” was chosen by that machine.")
 	assert.Contains(t, r.body, "Only connect a machine you just set up yourself")
 	r = b.form("/link", url.Values{"csrf": {csrf(t, r.body)}, "code": {userCode}, "confirm": {"1"}})
-	require.Equal(t, http.StatusOK, r.status, r.body)
-	assert.Contains(t, r.body, "“homeserver” is connected")
+	require.Equal(t, http.StatusSeeOther, r.status, r.body)
 	assert.Contains(t, e.changed, u.ID)
+	// FR-656: back to the account page, the machine named at the top and marked in the list.
+	r = b.get(r.header.Get("Location"))
+	require.Equal(t, http.StatusOK, r.status)
+	assert.Contains(t, r.body, "“homeserver” is connected")
+	assert.Contains(t, r.body, `class="machine new"`)
 
 	e.clock.advance(6 * time.Second)
 	status, poll = server.json("/pair/device/token", map[string]string{"device_code": deviceCode})

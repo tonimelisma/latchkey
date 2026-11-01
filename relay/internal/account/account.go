@@ -159,6 +159,10 @@ func New(ctx context.Context, cfg Config) (*Service, error) {
 	pages, err := template.New("").Funcs(template.FuncMap{
 		"when": func(t time.Time) string { return t.UTC().Format("Jan 2, 2006, 3:04 PM") + " UTC" },
 		"ms":   func(d time.Duration) int64 { return d.Milliseconds() },
+		// iso is a <time> element's datetime; page.js shows it in the viewer's own time zone (FR-657).
+		"iso":     func(t time.Time) string { return t.UTC().Format(time.RFC3339) },
+		"outcome": outcomeWords,
+		"took":    took,
 	}).ParseFS(templateFS, "templates/*.html")
 	if err != nil {
 		return nil, err
@@ -198,6 +202,7 @@ func (s *Service) Register(mux *http.ServeMux) {
 	mux.HandleFunc("POST /passkey/login/begin", s.loginBegin)
 	mux.HandleFunc("POST /passkey/login/finish", s.loginFinish)
 	mux.HandleFunc("GET /account", s.accountPage)
+	mux.HandleFunc("GET /account/activity", s.activityPage)
 	mux.HandleFunc("POST /account/revoke-mac", s.revokeMac)
 	mux.HandleFunc("POST /account/machines/remove", s.removeMachine)
 	mux.HandleFunc("POST /pair/device", s.devicePair)

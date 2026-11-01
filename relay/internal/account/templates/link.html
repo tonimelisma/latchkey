@@ -17,7 +17,7 @@
 <form method="post" action="/link">
   <input type="hidden" name="csrf" value="{{$.CSRF}}">
   <label for="code">Code</label>
-  <input id="code" name="code" value="{{$.Data.Code}}" autocomplete="off" autocapitalize="characters" spellcheck="false" inputmode="text" placeholder="ABCD-EFGH" required>
+  <input id="code" name="code" type="text" class="code" maxlength="20" value="{{$.Data.Code}}" autocomplete="off" autocapitalize="characters" spellcheck="false" inputmode="text" placeholder="ABCD-EFGH" required>
   <button class="primary wide" type="submit">Continue</button>
 </form>
 {{end}}

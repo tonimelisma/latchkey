@@ -1,6 +1,6 @@
 # Status
 
-Last updated: 2026-11-01 (spec 010 built: several machines and Linux servers; app 0.8.61, server 0.1.0)
+Last updated: 2026-11-01 (relay web pages redone; purkki paired; spec 010 shipped)
 
 Xcode signing ready (2026-10-20): Toni's Xcode account has a valid "Apple Development" certificate
 (certificate expires 2027-07-22). Keep the team ID out of committed project files
@@ -56,15 +56,24 @@ Spec 010 shipped 2026-11-01: relay deployed (d242688); `server-v0.1.0` published
 calls match the relay's audit). Live check through the hosted relay with a fresh Claude Code
 session: `machines` lists Toni's Mac, and `shell_run` without a machine name ran on it and ended
 with the Mac's state line. On Toni's Google VM (Ubuntu 24.04, Intel) the install line from GitHub
-downloaded the release, checked it, and showed a pairing code; approving it needs Toni's passkey
-on the relay's `/link` page, so the VM isn't paired yet (the unfinished install was removed, so
-nothing is left on the VM).
+downloaded the release, checked it, and showed a pairing code; it was not approved and the
+unfinished install was removed (nothing is left on the VM; it can be paired the same way any
+time).
 
-Waiting on Toni: one action. When he is at a browser where he's signed in to the relay, Claude
-starts the install on the VM (`curl -fsSL
-https://raw.githubusercontent.com/tonimelisma/latchkey/main/linux/install.sh | sh -s --
-https://<relay>`, run in a lasting session so it survives SSH) and gives him the code; he types it
-on `/link` and clicks Connect. Then Claude runs the live check with the Mac and the VM together.
+Toni's home server purkki (Ubuntu 26.10, Intel, passwordless sudo) paired 2026-11-01 with the
+install line and the code typed on `/link`; its service runs. Live check through the hosted relay
+with a fresh Claude Code session: `machines` lists the Mac and purkki, both online; on purkki
+`uname`, `uptime`, and `sudo -n whoami` (root) ran, and nothing was left running; a command without
+a machine name was refused with both machines listed.
+
+Relay web pages redone 2026-11-01 (spec 001 FR-650 to FR-658), after Toni found the account page's
+top cut off and the code field misdrawn: pages center with auto margins and can always be scrolled
+to the top; the account page has Machines, Add a machine (the Linux install line and the connector
+address with copy buttons), Claude, Recent activity (last 10), and Account; the activity page lists
+tool calls and the Owner's account events together, 50 at a time; connecting a machine lands on the
+account page with the machine named and marked; times in the viewer's time zone. The browser test
+checks every page at 320, 375, and 1280 px. There is no Mac app download yet, so Add a machine
+links to the README's Get started.
 Open (later, for Toni): service, container, package, process, and network tools for servers
 (left out of this spec); a direct machine-to-machine file copy; distributions whose sudo uses
 pam_systemd are unverified for stopping sudo's leftovers.

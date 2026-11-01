@@ -20,6 +20,7 @@ import (
 
 type machineView struct {
 	ID         string // the device ID, for its Remove button
+	New        bool   // just connected: marked in the list (FR-656)
 	Name       string
 	Kind       string
 	Online     bool
@@ -37,12 +38,17 @@ type clientView struct {
 }
 
 type accountView struct {
-	Machines     []machineView
-	MachineNames map[string]string // device ID → name, for the activity table (removed machines too)
-	Clients      []clientView
-	Audit        []store.AuditEntry
-	Done         string
+	Machines    []machineView
+	Clients     []clientView
+	Recent      []entry // the last few calls and account events (FR-651)
+	MoreRecent  bool    // there are older entries on the activity page
+	Done        string
+	Connector   string // the address to add in Claude (FR-655)
+	InstallLine string // a Linux server's install command for this relay (FR-654)
 }
+
+// installScript is where a Linux server's install command downloads the installer.
+const installScript = "https://raw.githubusercontent.com/tonimelisma/latchkey/main/linux/install.sh"
 
 func (s *Service) accountPage(w http.ResponseWriter, r *http.Request) {
 	u, tok, ok := s.requireUser(w, r)
@@ -50,15 +56,26 @@ func (s *Service) accountPage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ctx := r.Context()
-	v := accountView{Done: doneMessage(r.URL.Query().Get("done")), MachineNames: map[string]string{}}
+	origin := strings.TrimSuffix(s.cfg.PublicURL.String(), "/")
+	v := accountView{
+		Done: doneMessage(r.URL.Query().Get("done")), Connector: origin + "/mcp",
+		InstallLine: "curl -fsSL " + installScript + " | sh -s -- " + origin,
+	}
+	newID := ""
+	if r.URL.Query().Get("done") == "linked" {
+		newID = r.URL.Query().Get("machine")
+	}
 	devices, _ := s.cfg.Store.ActiveDevices(ctx, u.ID)
 	for _, d := range devices {
 		mv := machineView{ID: d.ID, Name: d.Name, Kind: d.Kind, Online: s.cfg.Macs.Online(d.ID), AppVersion: d.AppVersion, OSVersion: d.OSVersion}
 		if st, err := s.cfg.Store.DeviceState(ctx, d.ID); err == nil {
 			mv.LastSeen = st.LastSeenAt
 		}
+		if d.ID == newID {
+			mv.New = true
+			v.Done = "“" + d.Name + "” is connected. Latchkey on it finishes setting up by itself; Claude can reach it through your Latchkey connector."
+		}
 		v.Machines = append(v.Machines, mv)
-		v.MachineNames[d.ID] = d.Name
 	}
 	if grants, err := s.cfg.OAuth.Grants(ctx, u.ID); err == nil {
 		for _, g := range grants {
@@ -67,13 +84,9 @@ func (s *Service) accountPage(w http.ResponseWriter, r *http.Request) {
 			})
 		}
 	}
-	v.Audit, _ = s.cfg.Store.AuditForUser(ctx, u.ID, 100)
-	for _, e := range v.Audit {
-		if _, ok := v.MachineNames[e.DeviceID]; !ok && e.DeviceID != "" {
-			if d, err := s.cfg.Store.Device(ctx, e.DeviceID); err == nil {
-				v.MachineNames[e.DeviceID] = d.Name + " (removed)"
-			}
-		}
+	v.Recent, v.MoreRecent, _ = s.activity(ctx, u.ID, time.Time{}, recentEntries)
+	if len(v.Recent) > recentEntries {
+		v.Recent, v.MoreRecent = v.Recent[:recentEntries], true
 	}
 	s.render(w, http.StatusOK, "account.html", page{Title: "Your account", Email: u.Email, CSRF: s.csrfFor(tok), Data: v, Wide: true})
 }
@@ -352,5 +365,5 @@ func isP256(der []byte) bool {
 // Consent implements oauth.Authenticator.
 func (s *Service) Consent(w http.ResponseWriter, r *http.Request, c oauth.ConsentRequest) {
 	tok := s.sessionToken(r)
-	s.render(w, http.StatusOK, "consent.html", page{Title: "Allow access to your Mac", CSRF: s.csrfFor(tok), Data: c})
+	s.render(w, http.StatusOK, "consent.html", page{Title: "Allow access to your machines", CSRF: s.csrfFor(tok), Data: c})
 }

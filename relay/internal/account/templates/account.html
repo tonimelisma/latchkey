@@ -1,73 +1,107 @@
 {{template "head" .}}
 <h1>Your account</h1>
-<p class="small">Signed in as <strong>{{.Email}}</strong></p>
 {{with .Data.Done}}<p class="notice" role="status">{{.}}</p>{{end}}
 
-<section>
-  <h2>Machines</h2>
+<section aria-labelledby="machines">
+  <h2 id="machines">Machines</h2>
+  <div class="panel">
   {{if .Data.Machines}}
-    <ul class="apps">{{range .Data.Machines}}
-      <li>
-        <div><strong>{{.Name}}</strong> · {{if .Online}}<span class="online">Online</span>{{else}}<span class="offline">Offline</span>{{if not .LastSeen.IsZero}}, last seen {{when .LastSeen}}{{end}}{{end}}<br>
-        <span class="small">{{if eq .Kind "linux"}}Linux server{{if .AppVersion}} · Latchkey {{.AppVersion}}{{if .OSVersion}} on {{.OSVersion}}{{end}}{{end}}{{else}}Mac{{if .AppVersion}} · Latchkey {{.AppVersion}}{{if .OSVersion}} on macOS {{.OSVersion}}{{end}}{{end}}{{end}}</span></div>
+    <ul class="rows">{{range .Data.Machines}}
+      <li class="machine{{if .New}} new{{end}}">
+        <div class="row-main">
+          <div class="row-title"><strong>{{.Name}}</strong>
+            {{if .Online}}<span class="status online">Online</span>{{else}}<span class="status offline">Offline</span>{{end}}</div>
+          <div class="row-sub">{{if eq .Kind "linux"}}Linux server{{if .AppVersion}} · Latchkey {{.AppVersion}}{{if .OSVersion}} on {{.OSVersion}}{{end}}{{end}}{{else}}Mac{{if .AppVersion}} · Latchkey {{.AppVersion}}{{if .OSVersion}} on macOS {{.OSVersion}}{{end}}{{end}}{{end}}{{if and (not .Online) (not .LastSeen.IsZero)}} · last seen <time datetime="{{iso .LastSeen}}">{{when .LastSeen}}</time>{{end}}</div>
+        </div>
         <form method="post" action="/account/machines/remove">
           <input type="hidden" name="csrf" value="{{$.CSRF}}">
           <input type="hidden" name="id" value="{{.ID}}">
-          <button type="submit" class="destructive" aria-label="Remove {{.Name}}">Remove</button>
+          <button type="submit" class="destructive small-button" aria-label="Remove {{.Name}}">Remove</button>
         </form>
       </li>{{end}}
     </ul>
-    <p class="small">Removing a machine disconnects it at once; Claude can no longer reach it. Add another Mac with the Latchkey app's Connect, or a Linux server with Latchkey's install command on that server.</p>
   {{else}}
-    <p>No machine is connected. Open the Latchkey app on your Mac and click Connect, or run Latchkey's install command on a Linux server.</p>
+    <p class="empty">No machine is connected yet. Add one below.</p>
   {{end}}
+  </div>
+  {{if .Data.Machines}}<p class="hint">Removing a machine disconnects it at once, and Claude can no longer reach it.</p>{{end}}
 </section>
 
-<section>
-  <h2>Claude</h2>
+<section aria-labelledby="add">
+  <h2 id="add">Add a machine</h2>
+  <div class="panel">
+    <div class="howto">
+      <h3>A Mac</h3>
+      <p>Open Latchkey on the Mac and click <strong>Connect</strong>. <a href="https://github.com/tonimelisma/latchkey#get-started">How to get Latchkey for Mac</a></p>
+    </div>
+    <div class="howto">
+      <h3>A Linux server</h3>
+      <p>Run this on the server, signed in as the account Claude should use. It shows a code to enter here.</p>
+      <div class="copyfield"><code id="install-line">{{.Data.InstallLine}}</code><button type="button" class="small-button" data-copy="install-line">Copy</button></div>
+    </div>
+  </div>
+</section>
+
+<section aria-labelledby="claude">
+  <h2 id="claude">Claude</h2>
+  <div class="panel">
+    <div class="howto">
+      <p>To connect Claude, open <strong>Settings → Connectors → Add custom connector</strong> in Claude and paste this address:</p>
+      <div class="copyfield"><code id="connector">{{.Data.Connector}}</code><button type="button" class="small-button" data-copy="connector">Copy</button></div>
+    </div>
   {{if .Data.Clients}}
-    <ul class="apps">{{range .Data.Clients}}
+    <ul class="rows">{{range .Data.Clients}}
       <li>
-        <div><strong>{{.Name}}</strong><br><span class="small">Approved {{when .Approved}}{{if eq .Redirect "this computer"}}, on this computer{{end}} · {{if .LastUsed.IsZero}}not used yet{{else}}last used {{when .LastUsed}}{{end}}</span></div>
+        <div class="row-main">
+          <div class="row-title"><strong>{{.Name}}</strong></div>
+          <div class="row-sub">Allowed <time datetime="{{iso .Approved}}">{{when .Approved}}</time>{{if eq .Redirect "this computer"}}, on this computer{{end}} · {{if .LastUsed.IsZero}}not used yet{{else}}last used <time datetime="{{iso .LastUsed}}">{{when .LastUsed}}</time>{{end}}</div>
+        </div>
         <form method="post" action="/account/revoke-client">
           <input type="hidden" name="csrf" value="{{$.CSRF}}">
           <input type="hidden" name="id" value="{{.ID}}">
-          <button type="submit" class="destructive" aria-label="Remove {{.Name}}">Remove</button>
+          <button type="submit" class="destructive small-button" aria-label="Remove {{.Name}}">Remove</button>
         </form>
       </li>{{end}}
     </ul>
-    <form method="post" action="/account/revoke-claude">
-      <input type="hidden" name="csrf" value="{{.CSRF}}">
-      <button type="submit" class="destructive">Remove Claude's access</button>
-      <p class="small">Removes every app listed above.</p>
-    </form>
   {{else}}
-    <p>Claude isn't connected yet. In Claude, open Settings → Connectors → Add custom connector, and paste this relay's address followed by <code>/mcp</code>.</p>
+    <p class="empty">No Claude app has access yet.</p>
+  {{end}}
+  </div>
+  {{if .Data.Clients}}
+  <form method="post" action="/account/revoke-claude" class="after-panel">
+    <input type="hidden" name="csrf" value="{{.CSRF}}">
+    <button type="submit" class="destructive">Remove Claude's access</button>
+    <p class="hint">Removes every app listed above.</p>
+  </form>
   {{end}}
 </section>
 
-<section>
-  <h2>Activity</h2>
-  {{if .Data.Audit}}
-  <table>
-    <thead><tr><th scope="col">When</th><th scope="col">Machine</th><th scope="col">Tool</th><th scope="col">Result</th><th scope="col">Time taken</th><th scope="col">From</th></tr></thead>
-    <tbody>{{range .Data.Audit}}<tr><td>{{when .At}}</td><td>{{index $.Data.MachineNames .DeviceID}}</td><td><code>{{.Tool}}</code></td><td>{{.Outcome}}</td><td>{{ms .Duration}} ms</td><td>{{.Surface}}</td></tr>{{end}}</tbody>
-  </table>
-  <p class="small">The last 100 calls. Arguments and results are never stored here; each machine keeps its own full log.</p>
-  {{else}}<p>No tool calls yet.</p>{{end}}
+<section aria-labelledby="recent">
+  <h2 id="recent">Recent activity</h2>
+  <div class="panel">
+  {{if .Data.Recent}}{{template "entries" .Data.Recent}}{{else}}<p class="empty">Nothing yet. Claude's tool calls and changes to your account appear here.</p>{{end}}
+  </div>
+  <p class="hint"><a href="/account/activity">See all activity</a> · Arguments and results are never stored here; each machine keeps its own full log.</p>
 </section>
 
-<section>
-  <h2>Account</h2>
-  <form method="post" action="/signout">
-    <input type="hidden" name="csrf" value="{{.CSRF}}">
-    <button type="submit">Sign out</button>
-  </form>
-  <form method="post" action="/account/delete" data-reauth>
-    <input type="hidden" name="csrf" value="{{.CSRF}}">
-    {{template "error" .}}
-    <button type="submit" class="destructive">Delete account…</button>
-    <p class="small">Deletes everything this relay stores about you and disconnects your machines. You'll confirm with your passkey.</p>
-  </form>
+<section aria-labelledby="acct">
+  <h2 id="acct">Account</h2>
+  <div class="panel">
+    <div class="howto">
+      <p>Signed in as <strong>{{.Email}}</strong></p>
+      <form method="post" action="/signout">
+        <input type="hidden" name="csrf" value="{{.CSRF}}">
+        <button type="submit">Sign out</button>
+      </form>
+    </div>
+    <div class="howto">
+      <form method="post" action="/account/delete" data-reauth>
+        <input type="hidden" name="csrf" value="{{.CSRF}}">
+        {{template "error" .}}
+        <button type="submit" class="destructive">Delete account…</button>
+        <p class="hint">Deletes everything this relay stores about you and disconnects your machines. You'll confirm with your passkey.</p>
+      </form>
+    </div>
+  </div>
 </section>
 {{template "foot" .}}
