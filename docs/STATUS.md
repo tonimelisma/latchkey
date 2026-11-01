@@ -1,6 +1,6 @@
 # Status
 
-Last updated: 2026-10-31 (README pictures; app 0.8.59)
+Last updated: 2026-10-31 (spec 010 drafted: several machines and Linux servers)
 
 Xcode signing ready (2026-10-20): Toni's Xcode account has a valid "Apple Development" certificate
 (certificate expires 2027-07-22). Keep the team ID out of committed project files
@@ -33,6 +33,15 @@ after the app was quit.
 ## Next steps
 
 Releases, terms and privacy, and the directory listing are much later (Toni, 2026-10-22).
+
+Several machines and Linux servers (Toni, 2026-10-31; spec 010, drafted for Toni's review):
+one account pairs several Macs and headless Linux servers, all behind the one connector; shared
+tools take a machine name. Servers get Shell and Files only, in a Go program running as the
+Owner's account under systemd, paired with a code approved in a browser, switched on the server
+only, sudo allowed without waiting for a password, no write fence, deletes for good, activity
+logged without notifications. Research in specs/010-multi-host/research.md. Open for Toni:
+removing a machine from the relay's page, a server's default levels, install and updates, and
+the constitution's wording for Linux (principles I and IV). Then plan, contracts, tasks.
 
 Easy relay setup (Toni, 2026-10-31; to become its own spec, 009): a person with no technical
 background but a Claude subscription gets their own relay. Decided: Claude Code sets it up and
