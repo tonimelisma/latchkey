@@ -33,5 +33,13 @@ Written with the plan and built in one go (Toni, 2026-11-01). ✅ done.
   skill didn't load for "my Mac's battery" (its description now names such requests). The tool
   descriptions already make Sonnet handle offline machines, two machines, and refusals well:
   the skill doesn't change those, and doesn't make them worse.
-- **T1109** Ship (D9): checks, commit, main, relay deploy, Mac app install, live check with
-  Claude Code from the published catalog.
+- **T1109** ✅ Ship (D9), 2026-11-01: plugin, relay (tests, lint, ShellCheck) and Mac app checks;
+  the Mac suite's only failures are the page-script, shell-job, and leftovers tests already
+  failing on unchanged main on this Mac (docs/STATUS.md), plus the large-log test, which passes
+  alone (9.8 s) and timed out only under the full parallel run. Main at 03639ff; relay deployed;
+  app 0.8.62 installed (paired, keep-awake on, helper running, all calls match the audit). Live,
+  from a fresh clone of GitHub's main: the guide's raw address answers, the validator passes, and
+  a fresh Claude Code session outside the repository with the plugin and the hosted connector
+  listed both of Toni's machines with `machines`, gave the server pairing steps from
+  set-up-latchkey, and answered "is my Mac awake" from `machines`. Adding the catalog on Toni's
+  claude.ai account is his step (his account settings).
