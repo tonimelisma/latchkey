@@ -15,21 +15,26 @@ import Testing
         #expect(c.canConnect)
         #expect(c.title == "Connect this Mac to relay.example.com?")
         #expect(c.message.hasPrefix("relay.example.com says this is the account owner@example.com."))
-        #expect(!c.message.contains("replaces"), "nothing to replace")
+        #expect(
+            c.message.hasSuffix("The account’s other machines stay connected."), "pairing adds a machine (spec 010)")
         #expect(!c.message.contains("different relay"), "the relay this app suggests")
     }
 
-    @Test func saysItReplacesTheCurrentPairingOnAnotherRelay() {
+    @Test func saysThisMacMovesFromAnotherRelay() {
         let c = PairingConfirmation(
             relay: relay, email: "owner@example.com", current: URL(string: "https://old.example.org")!, hosted: nil)
         #expect(c.canConnect)
-        #expect(c.message.contains("This replaces this Mac’s current connection to old.example.org."))
+        #expect(
+            c.message.contains(
+                "This Mac leaves old.example.org and joins this account; machines already on it stay connected."))
         #expect(c.message.contains("This is a different relay from the one this Mac uses now (old.example.org)."))
     }
 
-    @Test func sameRelayReplacementSaysNothingAboutADifferentRelay() {
+    @Test func pairingAgainOnTheSameRelayRenewsThisMacOnly() {
         let c = PairingConfirmation(relay: relay, email: "owner@example.com", current: relay, hosted: nil)
-        #expect(c.message.contains("replaces"))
+        #expect(
+            c.message.contains("This Mac’s current connection is renewed; the account’s other machines stay connected.")
+        )
         #expect(!c.message.contains("different relay"))
     }
 

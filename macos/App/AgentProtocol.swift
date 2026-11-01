@@ -37,13 +37,15 @@ struct AgentState: Codable, Equatable, Sendable {
     var lidClosed: Bool?
     var timeZone: String?
     var keepAwake: KeepAwake
+    /// A Linux server's uptime (spec 010); a Mac never sends it, but the shared fixtures carry it.
+    var uptimeS: Int64? = nil
     var observedAt: Date
 
     enum CodingKeys: String, CodingKey {
         case batteryPercent = "battery_percent", powerSource = "power_source", charging
         case timeRemainingMin = "time_remaining_min", thermalState = "thermal_state"
         case lowPowerMode = "low_power_mode", lidClosed = "lid_closed", timeZone = "time_zone"
-        case keepAwake = "keep_awake", observedAt = "observed_at"
+        case keepAwake = "keep_awake", uptimeS = "uptime_s", observedAt = "observed_at"
     }
 
     func encode(to encoder: Encoder) throws {
@@ -57,6 +59,7 @@ struct AgentState: Codable, Equatable, Sendable {
         try c.encode(lidClosed, forKey: .lidClosed)
         try c.encode(timeZone, forKey: .timeZone)
         try c.encode(keepAwake, forKey: .keepAwake)
+        try c.encodeIfPresent(uptimeS, forKey: .uptimeS)  // left out when nil
         try c.encode(observedAt, forKey: .observedAt)
     }
 }
@@ -105,28 +108,37 @@ struct Hello: Codable, Sendable {
     var state: AgentState
     /// Optional things this app understands; a relay that doesn't know the field ignores it.
     var features: [String]?
+    /// "mac" for this app; a Linux server sends "linux" (spec 010).
+    var kind: String?
+    /// The name the Mac asks to be shown by to Claude; the relay keeps it unique (spec 010 FR-1002).
+    var name: String?
     enum CodingKeys: String, CodingKey {
         case deviceID = "device_id", signature, appVersion = "app_version", osVersion = "os_version", tools, state
-        case features
+        case features, kind, name
     }
 
     /// `clients`: send the list of Claude apps with access, and keep it current (FR-190, FR-192).
     /// `audit`: answer `audit_request` with this Mac's audit (FR-634).
     static let supportedFeatures = ["clients", "audit"]
 
-    /// The hello this app sends: always with the features it supports.
+    /// The hello this app sends: always with the features it supports, its kind, and its name.
     static func make(
-        deviceID: String, signature: String, appVersion: String, osVersion: String, tools: [Tool], state: AgentState
+        deviceID: String, signature: String, appVersion: String, osVersion: String, tools: [Tool], state: AgentState,
+        name: String? = nil
     ) -> Hello {
         Hello(
             deviceID: deviceID, signature: signature, appVersion: appVersion, osVersion: osVersion, tools: tools,
-            state: state, features: supportedFeatures)
+            state: state, features: supportedFeatures, kind: "mac", name: name)
     }
 }
 
 struct Welcome: Codable, Sendable {
     var heartbeatIntervalS: Int; var serverTime: Date
-    enum CodingKeys: String, CodingKey { case heartbeatIntervalS = "heartbeat_interval_s", serverTime = "server_time" }
+    /// The name the relay kept for this Mac, when the hello asked for one (spec 010 FR-1002).
+    var name: String?
+    enum CodingKeys: String, CodingKey {
+        case heartbeatIntervalS = "heartbeat_interval_s", serverTime = "server_time", name
+    }
 }
 
 struct StateUpdate: Codable, Sendable { var state: AgentState }
@@ -304,6 +316,9 @@ enum AgentMessage: Sendable {
             case "challenge": return .challenge(try dec.decode(Challenge.self, from: data))
             case "hello":
                 let h = try dec.decode(Hello.self, from: data)
+                if let kind = h.kind, kind != "mac", kind != "linux" {
+                    throw ProtocolError.violation("unknown machine kind")
+                }
                 try validate(tools: h.tools)
                 return .hello(h)
             case "welcome": return .welcome(try dec.decode(Welcome.self, from: data))
@@ -372,10 +387,17 @@ enum AgentMessage: Sendable {
             guard !t.name.isEmpty, t.name.count <= 128, t.name.unicodeScalars.allSatisfy(allowed.contains) else {
                 throw ProtocolError.violation("invalid tool name")
             }
-            guard t.name != "laptop_status" else { throw ProtocolError.violation("reserved tool name") }
+            // laptop_status and machines are the relay's own tools (spec 010 FR-1006).
+            guard t.name != "laptop_status", t.name != "machines" else {
+                throw ProtocolError.violation("reserved tool name")
+            }
             guard seen.insert(t.name).inserted else { throw ProtocolError.violation("duplicate tool \(t.name)") }
             guard t.inputSchema["type"] == .string("object") else {
                 throw ProtocolError.violation("inputSchema must be an object")
+            }
+            // The relay adds the machine argument to every tool (spec 010 plan D2).
+            if case .object(let props) = t.inputSchema["properties"], props["machine"] != nil {
+                throw ProtocolError.violation("the input property machine is the relay's")
             }
             if let out = t.outputSchema, out["type"] != .string("object") {
                 throw ProtocolError.violation("outputSchema must be an object")

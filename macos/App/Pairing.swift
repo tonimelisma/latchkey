@@ -17,8 +17,8 @@ enum PairingError: LocalizedError {
 
 /// What the Owner is asked when a pairing link arrives other than through the app's own sign-in
 /// window (FR-054): the relay, the account's email, whether the relay differs from the one this
-/// Mac uses (or, unpaired, the one the app suggests), and whether it replaces the current
-/// pairing. The link controls only the relay; the email is what that relay says, so the title
+/// Mac uses (or, unpaired, the one the app suggests), and that the account's other machines stay
+/// connected (spec 010 FR-1012). The link controls only the relay; the email is what that relay says, so the title
 /// names the relay and the text attributes the email to it. Without the email (the lookup
 /// failed) there is no Connect button.
 struct PairingConfirmation: Equatable {
@@ -43,8 +43,13 @@ struct PairingConfirmation: Equatable {
         } else if current == nil, let hosted, Self.name(hosted) != host {
             text += " This is a different relay from the one this app suggests (\(Self.name(hosted)))."
         }
-        if let current {
-            text += " This replaces this Mac’s current connection to \(Self.name(current))."
+        if let current, Self.name(current) == host {
+            text += " This Mac’s current connection is renewed; the account’s other machines stay connected."
+        } else if let current {
+            text +=
+                " This Mac leaves \(Self.name(current)) and joins this account; machines already on it stay connected."
+        } else {
+            text += " The account’s other machines stay connected."
         }
         message = text
         canConnect = true
@@ -148,7 +153,7 @@ final class PairingFlow: NSObject, ASWebAuthenticationPresentationContextProvidi
         return c.url
     }
 
-    func pair(relay: URL, macName: String) async throws -> DeviceIdentity {
+    func pair(relay: URL, macName: String, replaces: String? = nil) async throws -> DeviceIdentity {
         var c = URLComponents(url: relay, resolvingAgainstBaseURL: false)!
         c.path = "/pair"
         c.queryItems = [URLQueryItem(name: "name", value: macName)]
@@ -170,7 +175,7 @@ final class PairingFlow: NSObject, ASWebAuthenticationPresentationContextProvidi
                 .queryItems?.first(where: { $0.name == "code" })?.value
         else { throw PairingError.relay("The relay didn't send a connection code.") }
         ownCode = code
-        return try await Self.exchange(relay: relay, code: code, macName: macName)
+        return try await Self.exchange(relay: relay, code: code, macName: macName, replaces: replaces)
     }
 
     /// The code the sign-in window last delivered. If a browser also hands the same link to the
@@ -211,17 +216,19 @@ final class PairingFlow: NSObject, ASWebAuthenticationPresentationContextProvidi
         return t
     }
 
-    /// Registers this Mac's new Secure Enclave key with the relay and saves the pairing.
-    static func exchange(relay: URL, code: String, macName: String, save: Bool = true) async throws
-        -> DeviceIdentity
-    {
+    /// Registers this Mac's new Secure Enclave key with the relay and saves the pairing. `replaces`
+    /// is this Mac's earlier device ID on the same relay, if it had one: the relay removes that
+    /// pairing, so the account's other machines stay and this Mac isn't listed twice (spec 010).
+    static func exchange(
+        relay: URL, code: String, macName: String, replaces: String? = nil, save: Bool = true
+    ) async throws -> DeviceIdentity {
         let key = try SecureEnclaveSigningKey.create()
         var req = URLRequest(url: relay.appending(path: "pair/exchange"))
         req.httpMethod = "POST"
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        req.httpBody = try JSONEncoder().encode([
-            "code": code, "public_key": key.publicKeyDER.base64URLEncodedString(), "name": macName,
-        ])
+        var request = ["code": code, "public_key": key.publicKeyDER.base64URLEncodedString(), "name": macName]
+        if let replaces { request["replaces"] = replaces }
+        req.httpBody = try JSONEncoder().encode(request)
         req.timeoutInterval = 15
         let (data, resp) = try await URLSession.shared.data(for: req)
         let body = (try? JSONDecoder().decode([String: String].self, from: data)) ?? [:]

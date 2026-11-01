@@ -29,6 +29,12 @@ final class AppModel {
     private var permissionWatch: Task<Void, Never>?
     private var losses = PermissionLoss()
     private(set) var relayURL: URL?
+    /// The name the Owner chose for this Mac in Settings; empty means the computer's name (spec 010
+    /// FR-1002).
+    private(set) var machineName = UserDefaults.standard.string(forKey: Keys.machineName) ?? ""
+    /// The name the relay kept for this Mac at the last welcome (unique among the account's
+    /// machines), nil before the first.
+    private(set) var shownName: String?
     private(set) var helperStatus: SMAppService.Status = .notRegistered
     /// What went wrong, as the Owner is shown it; each one is an event too (FR-633).
     var lastError: String? {
@@ -88,6 +94,32 @@ final class AppModel {
         static let safariJavaScript = "safariJavaScriptAllowed"
         static let localNetwork = LocalNetwork.defaultsKey
         static let screenAccess = "screenAccessConfirmed"
+        static let machineName = "machineName"
+    }
+
+    /// The name this Mac asks to be shown by to Claude.
+    var nameForClaude: String {
+        let n = machineName.trimmingCharacters(in: .whitespacesAndNewlines)
+        return n.isEmpty ? (Host.current().localizedName ?? "Mac") : n
+    }
+
+    /// Changes the name shown to Claude; the connection starts again so the relay hears it at once.
+    func setMachineName(_ name: String) {
+        let n = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard n != machineName else { return }
+        machineName = n
+        UserDefaults.standard.set(n, forKey: Keys.machineName)
+        event(.pairing, "The name shown to Claude changed to \"\(nameForClaude)\"")
+        Task { await connection?.reconnectNow() }
+    }
+
+    /// This Mac's device ID, when it is paired with the given relay: pairing again there replaces
+    /// it rather than listing the Mac twice (spec 010).
+    private func ownDevice(on relay: URL) -> String? {
+        guard isPaired, let current = relayURL,
+            PairingConfirmation.name(current) == PairingConfirmation.name(relay)
+        else { return nil }
+        return device
     }
 
     init() {
@@ -840,7 +872,7 @@ final class AppModel {
             return
         }
         do {
-            let identity = try await pairing.pair(relay: relay, macName: Host.current().localizedName ?? "Mac")
+            let identity = try await pairing.pair(relay: relay, macName: nameForClaude, replaces: ownDevice(on: relay))
             EventLog.shared.record(
                 .pairing, "Paired with \(relay.absoluteString) as \(identity.deviceID)", systemLog: false)
             Self.log.notice("Paired through the sign-in window")
@@ -895,7 +927,7 @@ final class AppModel {
             EventLog.shared.record(.pairing, "Pairing link confirmed for \(relay.absoluteString)", systemLog: false)
             pairing.cancelPending()  // the sign-in window's pairing, if one is open, gives way
             let identity = try await PairingFlow.exchange(
-                relay: relay, code: code, macName: Host.current().localizedName ?? "Mac")
+                relay: relay, code: code, macName: nameForClaude, replaces: ownDevice(on: relay))
             EventLog.shared.record(
                 .pairing, "Paired with \(relay.absoluteString) as \(identity.deviceID)", systemLog: false)
             Self.log.notice("Paired through a pairing link")
@@ -954,7 +986,9 @@ final class AppModel {
             status: { [weak self] s in await self?.connectionChanged(s) },
             notice: { [weak self] n in await self?.show(n) },
             clients: { [weak self] list in await self?.clientsChanged(list) },
-            connected: { [weak self] in await self?.checkAudit() })
+            connected: { [weak self] in await self?.checkAudit() },
+            name: { [weak self] in await MainActor.run { self?.nameForClaude } },
+            welcomed: { [weak self] name in await MainActor.run { self?.shownName = name } })
         device = identity.deviceID
         let c = RelayConnection(identity: identity, hooks: hooks)
         connection = c

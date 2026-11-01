@@ -226,6 +226,7 @@ struct PermissionsPane: View {
 
 struct ConnectionPane: View {
     let model: AppModel
+    @State private var name = ""
 
     var body: some View {
         Form {
@@ -233,6 +234,22 @@ struct ConnectionPane: View {
             if model.isPaired {
                 if let relay = model.relayURL {
                     LabeledContent("Relay") { Text(verbatim: relay.host() ?? relay.absoluteString) }
+                }
+                // Spec 010 FR-1002: the name Claude knows this Mac by among the account's machines.
+                Section {
+                    TextField(
+                        "Name shown to Claude", text: $name,
+                        prompt: Text(verbatim: Host.current().localizedName ?? "Mac")
+                    )
+                    .onSubmit { model.setMachineName(name) }
+                } footer: {
+                    if let shown = model.shownName, shown != model.nameForClaude {
+                        Text(
+                            verbatim:
+                                "Claude knows this Mac as “\(shown)”: another machine on the account has that name.")
+                    } else {
+                        Text("Claude uses it to tell this Mac from your other machines. Press Return to save.")
+                    }
                 }
                 LabeledContent("This Mac") {
                     Button("Disconnect This Mac") { model.confirmDisconnect() }
@@ -244,6 +261,7 @@ struct ConnectionPane: View {
             }
         }
         .formStyle(.grouped)
+        .onAppear { name = model.machineName }
     }
 }
 

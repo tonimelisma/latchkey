@@ -32,6 +32,10 @@ struct ConnectionHooks: Sendable {
     var clients: @Sendable ([ClientEntry]) async -> Void = { _ in }
     /// Each time a connection is established (after `welcome`); not awaited by the connection.
     var connected: @Sendable () async -> Void = {}
+    /// The name to ask for in hello (spec 010 FR-1002); nil keeps the relay's.
+    var name: @Sendable () async -> String? = { nil }
+    /// The name the relay kept, from each welcome.
+    var welcomed: @Sendable (String?) async -> Void = { _ in }
 }
 
 /// The one outbound WebSocket to the relay (plan D1, agent-protocol.md). Reconnects by itself
@@ -302,12 +306,13 @@ actor RelayConnection {
             appVersion: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0",
             osVersion: v.patchVersion > 0
                 ? "\(v.majorVersion).\(v.minorVersion).\(v.patchVersion)" : "\(v.majorVersion).\(v.minorVersion)",
-            tools: await hooks.tools(), state: await hooks.state())
+            tools: await hooks.tools(), state: await hooks.state(), name: await hooks.name())
         try await send(.hello(hello), on: t)
         guard case .welcome(let welcome) = try await receive(t) else {
             throw ProtocolError.violation("expected welcome")
         }
         heartbeat = TimeInterval(max(welcome.heartbeatIntervalS, 1))
+        await hooks.welcomed(welcome.name)
     }
 
     private func serve(_ t: URLSessionWebSocketTask) async throws {
