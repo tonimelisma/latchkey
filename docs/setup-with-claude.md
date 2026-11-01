@@ -25,26 +25,26 @@ Say:
 > Claude and your Mac. It takes about 20 minutes. You'll create an account with a hosting
 > company and click Allow a few times; I'll do everything else.
 >
-> [Host-specific cost sentence, see "Hosts".]
+> [The cost sentence from "Google Cloud" below.]
 >
 > Ready?
 
 ## Step 2: Hosting account
 
-Follow the host's section below to get the person an account and sign Claude Code in. Say what
-they'll see before they see it ("a page will ask for your card; Oracle only checks it and won't
-charge it unless you upgrade").
+Follow "Google Cloud" below to get the person an account and sign Claude Code in. Say what
+they'll see before they see it ("a page will ask for your card; Google checks it and charges
+nothing while the relay stays within the free limits").
 
 ## Step 3: Create the relay
 
 1. Make a setup code: 12 random letters and digits in groups of four (for example
    `K7PQ-M2XD-9RTA`). Keep it; the person needs it in step 4.
-2. Create the server or service as the host's section says, with these settings:
+2. Create the server as "Google Cloud" says, with these settings:
    - image `ghcr.io/tonimelisma/latchkey-relay:latest`, kept up to date automatically
    - a persistent volume at `/data`
    - `PUBLIC_URL` = `https://` plus the relay's host name
    - `SETUP_CODE` = the code from 1
-   - on a plain server: `ACME_EMAIL` = the person's email (Let's Encrypt's notices), port 443 open
+   - `ACME_EMAIL` = the person's email (Let's Encrypt's notices), port 443 open
 3. Wait until `https://<host name>/` answers (up to 5 minutes for the certificate). Check with
    `curl -fsS https://<host name>/healthz`.
 
@@ -82,67 +82,81 @@ Say:
 
 Ask them to ask Claude, in a new chat: "What's my Mac's battery level?" When it answers, say:
 
-> Done. Your relay updates itself when a new version comes out. [Host-specific cost and alert
-> sentence.] If you ever move it to another address, you'll make a new passkey and add the
+> Done. Your relay updates itself when a new version comes out. It runs on Google's free server;
+> if anything ever costs more than $1, Google emails you. If you ever move it to another address, you'll make a new passkey and add the
 > connector again; everything else stays.
 
 Tell them where things are: the relay's address, the hosting company's page, and that the setup
 code is no longer needed (sign-up is now closed).
 
-## Hosts
+## Google Cloud (the default host)
 
-[NEEDS CLARIFICATION: which is the default (spec 009 FR-904). Both are sketched.]
+- Cost: "Google's free server costs nothing as long as it stays small, and a relay does. Google
+  asks for a card to check you're a real person. I'll set an alert that emails you if anything
+  ever costs more than $1." The free limits: one e2-micro server in Oregon, Iowa, or South
+  Carolina, a 30 GB standard disk, and 1 GB of data out of North America a month (screenshots
+  Claude takes count toward it; beyond it, a few cents per GB).
+- Account: open https://console.cloud.google.com/freetrial. They sign in with a Google account,
+  accept the terms, and enter a card. If they have a Google Cloud account already, use it.
+  [To verify on a fresh account: whether the free trial's billing account must be upgraded to a
+  full account for the free server to keep running after the trial's 90 days; if so, ask them to
+  click "Activate full account" now and say it still costs nothing within the free limits.]
+- Install Google's command-line tool, with no administrator password: download
+  `https://dl.google.com/dl/cloudsdk/channels/rapid/google-cloud-cli-darwin-arm.tar.gz` (Intel
+  Macs: `-darwin-x86_64`), unpack it in the home folder, and run
+  `~/google-cloud-sdk/install.sh --quiet --path-update=false`; call `~/google-cloud-sdk/bin/gcloud`
+  by its full path.
+- Sign in: `gcloud auth login` (opens the browser; they choose their account and click Allow).
+- Create, checking each command's result before the next:
+  1. A project: `gcloud projects create latchkey-relay-<6 random letters>`; make it the default.
+  2. Link billing: `gcloud billing accounts list`, then
+     `gcloud billing projects link <project> --billing-account <id>`.
+  3. Turn on the services: `gcloud services enable compute.googleapis.com billingbudgets.googleapis.com`.
+  4. A fixed address, so the relay's name never changes:
+     `gcloud compute addresses create latchkey-ip --region us-central1`.
+  5. Open HTTPS only: `gcloud compute firewall-rules create latchkey-https --allow tcp:443
+     --target-tags latchkey-relay`.
+  6. The server, with the start-up script below:
+     `gcloud compute instances create latchkey-relay --zone us-central1-a --machine-type e2-micro
+     --image-family ubuntu-2404-lts-amd64 --image-project ubuntu-os-cloud --boot-disk-size 30GB
+     --boot-disk-type pd-standard --address latchkey-ip --tags latchkey-relay
+     --metadata-from-file startup-script=latchkey-start.sh`.
+     The relay's name is the fixed address with dots as dashes plus `.sslip.io` (for 192.0.2.10:
+     `192-0-2-10.sslip.io`). Ubuntu 24.04 because its Podman runs Quadlet units; Debian 12's is
+     too old.
+  7. The alert: `gcloud billing budgets create --billing-account <id> --display-name "Latchkey
+     relay" --budget-amount 1USD --threshold-rule percent=1.0` (it emails the account's owner).
+- If a step fails because the free server isn't available in that zone, try us-central1-b or
+  us-west1-a (and the address in the same region), and say so.
 
-### Railway
+The start-up script (`latchkey-start.sh`), with `<name>`, `<email>`, and `<code>` filled in:
 
-- Cost: "Railway's free plan gives $1 of use a month, which a relay normally stays under. If it
-  ever runs out, Railway stops the relay until next month; their Hobby plan is $5 a month."
-- Account: open https://railway.com and ask them to sign up with GitHub or email. No card for the
-  trial.
-- Sign in: `railway login` (opens the browser; they click Allow).
-- Create: deploy the Latchkey template (image, volume at `/data`, `SETUP_CODE`, image updates
-  on); generate the `*.up.railway.app` domain; set `PUBLIC_URL` from it.
-
-### Oracle Cloud Always Free (Google Cloud if Oracle fails)
-
-- Cost: "Oracle's Always Free server costs nothing. They'll ask for a card to check you're a real
-  person; it isn't charged unless you choose to upgrade."
-- Account: open https://signup.cloud.oracle.com; they enter name, email, phone, and a card
-  (not prepaid or virtual). Ask them to pick the home region nearest to them. If sign-up is
-  refused or a later step says "out of capacity", switch to Google Cloud and say why and that it
-  costs about $3.65 a month.
-- Sign in: install the `oci` command-line tool, then `oci session authenticate` (browser).
-- Create: a network with internet access and only port 443 open; one `VM.Standard.E2.1.Micro`
-  server with Oracle Linux, a public IPv4 address, and this start-up script, where `<name>` is
-  the address with dots as dashes plus `.sslip.io` (for 192.0.2.10: `192-0-2-10.sslip.io`):
-
-  ```yaml
-  #cloud-config
-  packages: [podman]
-  write_files:
-    - path: /etc/containers/systemd/latchkey-relay.container
-      content: |
-        [Container]
-        Image=ghcr.io/tonimelisma/latchkey-relay:latest
-        AutoUpdate=registry
-        Volume=latchkey-data:/data
-        PublishPort=443:8080
-        Environment=PUBLIC_URL=https://<name> ACME_EMAIL=<email> SETUP_CODE=<code>
-        [Service]
-        Restart=always
-        [Install]
-        WantedBy=multi-user.target
-  runcmd:
-    - systemctl daemon-reload
-    - systemctl start latchkey-relay.service
-    - systemctl enable --now podman-auto-update.timer
-  ```
-- Alert: create a budget of $1 that emails them, and say so.
-- Idle servers: suggest upgrading the account to pay-as-you-go (still $0 within the free limits)
-  so Oracle doesn't reclaim a quiet server; explain it in one sentence and let them decide.
+```sh
+#!/bin/sh
+# Runs at every start; installs Podman once and keeps the relay running and up to date.
+set -eu
+command -v podman >/dev/null || { apt-get update && apt-get install -y podman; }
+mkdir -p /etc/containers/systemd
+cat > /etc/containers/systemd/latchkey-relay.container <<'UNIT'
+[Container]
+Image=ghcr.io/tonimelisma/latchkey-relay:latest
+AutoUpdate=registry
+Volume=latchkey-data:/data
+PublishPort=443:8080
+Environment=PUBLIC_URL=https://<name> ACME_EMAIL=<email> SETUP_CODE=<code>
+[Service]
+Restart=always
+[Install]
+WantedBy=multi-user.target
+UNIT
+systemctl daemon-reload
+systemctl start latchkey-relay.service
+systemctl enable --now podman-auto-update.timer
+```
 
 ## For technical users
 
-Everything above is a default. The same image runs on any server or host with a persistent
+Everything above is a default. Oracle Cloud's Always Free server (also $0, harder sign-up),
+Railway, or any other host works too. The same image runs on any server or host with a persistent
 `/data` volume, under your own domain, with your own email server (`SMTP_*`), behind your own
 proxy (`TRUSTED_PROXIES`). See docs/self-hosting.md.

@@ -65,11 +65,11 @@ terminal, and the hosted relay is Toni's alone.
   what it does when the step fails. The Owner shall never be asked to type a command.
 - **FR-903** The setup window shall offer, next to entering a relay's address, a way to set one
   up with Claude: a request to copy into Claude Code that points it at the document.
-- **FR-904** The default host shall be [NEEDS CLARIFICATION: Railway (fewest steps: no card for
-  the trial and Free plan, but the Free plan is $1 of usage a month with unclear limits; Hobby $5
-  a month with a card) or Oracle Cloud's Always Free tier ($0 for good; card and phone required,
-  harder sign-up, capacity waits, idle servers may be reclaimed unless the account is upgraded to
-  pay-as-you-go) with Google Cloud (about $3.65 a month, easy sign-up) when Oracle fails?].
+- **FR-904** The default host shall be Google Cloud's free server (one e2-micro in us-west1,
+  us-central1, or us-east1 with a 30 GB standard disk; Toni, 2026-10-31: "default to google, not
+  oracle"). Claude Code shall install Google's command-line tool itself, into the Owner's home
+  folder, with no administrator password. Other hosts (Oracle, Railway, any server) are the
+  technical operator's choice (FR-913).
 - **FR-905** The relay's address shall be a host name that doesn't change, because passkeys and
   Claude's connector are tied to it; on a server without a name of its own, a name derived from
   its fixed public address shall be used (sslip.io), with no sign-up. The document shall tell the
