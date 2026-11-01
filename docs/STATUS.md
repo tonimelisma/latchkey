@@ -53,10 +53,18 @@ code (no email server needed), the operator's recovery-code command, the ready s
 Podman's update rollback, a database copy before migrations, the deploy publishing images for
 Intel and Arm servers, the self-hosting docs, and the app's "Copy Request" for Claude Code in
 setup; the session cookie was already host-bound. Tested: unit tests, and real Chrome claiming a
-relay with its setup code and recovering with the operator's code. Waiting on Toni: one browser
-click to let the GitHub CLI publish images (`gh auth refresh -s write:packages`), then making the
-package public; until then the relay isn't deployed (publishing is part of every deploy) and the
-guide's real run on Google Cloud (T9) can't start. Open: checking on a fresh Google
+relay with its setup code and recovering with the operator's code. Toni granted image publishing
+and made the image public (2026-10-31); the relay is deployed and `ghcr.io/tonimelisma/latchkey-relay`
+has `latest` for Intel and Arm. The guide ran for real (T9, `relay/cmd/guidecheck`) in a throwaway
+Google Cloud project: the relay answered with a Let's Encrypt certificate for its sslip.io name
+about 3 minutes after the server was created; claimed with its setup code in headless Chrome, a
+pretend Mac paired, Claude Code read the battery through it; sign-up then closed; the guide's
+recovery command and code worked; Podman's updater installed a new image and rolled back a broken
+one by itself. The project and its budget alert were deleted. Found and fixed in the guide:
+Compute Engine needs a minute after it is turned on, the first start takes about 3 minutes, and
+`gcloud compute ssh` needs `--quiet`. Still to check on a fresh Google account: whether the free
+server's address costs nothing, and whether the trial must be upgraded. Left over: the test's
+nine image versions (tag `guidetest`) in the registry, whose deletion needs Toni's OK. Open: checking on a fresh Google
 account that the free server's address costs nothing and whether the trial must be upgraded.
 
 Nothing left behind (Toni, 2026-10-27; app 0.8.32): after headless Chrome ran two days and

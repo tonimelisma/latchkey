@@ -1,6 +1,8 @@
 # Set up a Latchkey relay: instructions for Claude Code
 
-Draft for Toni's review (2026-10-31, spec 009). Not yet tested end to end.
+Spec 009. Run for real on Google Cloud on 2026-10-31: claimed with its setup code, a Mac paired,
+Claude Code called a tool through it, recovery worked, and Podman installed an update and rolled
+back a broken one.
 
 You are Claude Code, helping someone set up their own Latchkey relay so Claude can use their
 Mac from anywhere. Assume they have never used a terminal. Follow these steps in order.
@@ -45,7 +47,8 @@ nothing while the relay stays within the free limits").
    - `PUBLIC_URL` = `https://` plus the relay's host name
    - `SETUP_CODE` = the code from 1
    - `ACME_EMAIL` = the person's email (Let's Encrypt's notices), port 443 open
-3. Wait until `https://<host name>/` answers (up to 5 minutes for the certificate). Check with
+3. Wait until `https://<host name>/` answers: about 3 minutes on a new server, which installs
+   Podman, downloads the relay, and gets its certificate; give up after 10. Check with
    `curl -fsS https://<host name>/healthz`.
 
 Say:
@@ -93,7 +96,8 @@ code is no longer needed (sign-up is now closed).
 
 When someone comes back saying they can't sign in to their relay any more: sign in to Google
 (`gcloud auth login`), then make a code on the server:
-`gcloud compute ssh latchkey-relay --zone <zone> --command "sudo podman exec latchkey-relay /relay account recovery-code <their email>"`.
+`gcloud compute ssh latchkey-relay --zone <zone> --quiet --command "sudo podman exec latchkey-relay /relay account recovery-code <their email>"`
+(`--quiet`: the first time, gcloud makes an SSH key for them without asking for a passphrase).
 Then open the relay's page and say:
 
 > Click "Lost your passkey?", enter your email address and this code: **<code>**. Then save the
@@ -123,6 +127,8 @@ Then open the relay's page and say:
   2. Link billing: `gcloud billing accounts list`, then
      `gcloud billing projects link <project> --billing-account <id>`.
   3. Turn on the services: `gcloud services enable compute.googleapis.com billingbudgets.googleapis.com`.
+     Compute Engine answers only a minute or two later: repeat `gcloud compute addresses list`
+     every 10 seconds until it stops saying the service is disabled.
   4. A fixed address, so the relay's name never changes:
      `gcloud compute addresses create latchkey-ip --region us-central1`.
   5. Open HTTPS only: `gcloud compute firewall-rules create latchkey-https --allow tcp:443
