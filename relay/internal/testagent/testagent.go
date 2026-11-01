@@ -21,7 +21,7 @@ import (
 	"github.com/coder/websocket"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/tonimelisma/latchkey/relay/internal/agentproto"
+	"github.com/tonimelisma/latchkey/relay/agentproto"
 )
 
 // Handler answers a call. Returning nil sends no result (the call never finishes). The context

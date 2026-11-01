@@ -22,7 +22,7 @@ import (
 	"time"
 
 	"github.com/tonimelisma/latchkey/relay/internal/account"
-	"github.com/tonimelisma/latchkey/relay/internal/agentproto"
+	"github.com/tonimelisma/latchkey/relay/agentproto"
 	"github.com/tonimelisma/latchkey/relay/internal/e2e"
 	"github.com/tonimelisma/latchkey/relay/internal/oauth"
 	"github.com/tonimelisma/latchkey/relay/internal/server"

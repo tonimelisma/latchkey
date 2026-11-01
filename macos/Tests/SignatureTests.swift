@@ -45,7 +45,7 @@ import Testing
         }
     }
 
-    /// Writes a Swift-made signature once for the Go tests to verify (relay/internal/agentproto).
+    /// Writes a Swift-made signature once for the Go tests to verify (relay/agentproto).
     @Test func swiftSignatureFixtureForGo() throws {
         let file = Self.dir.appendingPathComponent("swift.json")
         if !FileManager.default.fileExists(atPath: file.path) {

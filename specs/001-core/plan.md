@@ -949,7 +949,7 @@ latchkey/
   relay/                      Go module
     cmd/relay/main.go
     internal/hub/             live device connections, deadlines, offline answers
-    internal/agentproto/      message types for contracts/agent-protocol.md
+    agentproto/               message types (public since spec 010; was internal/agentproto) for contracts/agent-protocol.md
     internal/mcpserver/       MCP surface, laptop_status, forwarding
     internal/oauth/           zitadel/oidc wiring, token storage, CIMD, DCR, metadata
     internal/account/         passkeys, recovery, pairing, web pages

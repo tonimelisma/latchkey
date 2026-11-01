@@ -1,0 +1,16 @@
+{
+  "type": "state",
+  "state": {
+    "battery_percent": 0,
+    "power_source": "unknown",
+    "charging": false,
+    "time_remaining_min": null,
+    "thermal_state": "nominal",
+    "low_power_mode": false,
+    "lid_closed": null,
+    "time_zone": "UTC",
+    "keep_awake": "on",
+    "uptime_s": 86400,
+    "observed_at": "2026-10-31T17:02:25Z"
+  }
+}

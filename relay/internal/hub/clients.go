@@ -4,7 +4,7 @@ import (
 	"context"
 	"slices"
 
-	"github.com/tonimelisma/latchkey/relay/internal/agentproto"
+	"github.com/tonimelisma/latchkey/relay/agentproto"
 	"github.com/tonimelisma/latchkey/relay/internal/store"
 )
 

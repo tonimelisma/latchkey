@@ -1,0 +1,6 @@
+{
+  "type": "welcome",
+  "heartbeat_interval_s": 15,
+  "server_time": "2026-10-31T17:02:12Z",
+  "name": "homeserver 2"
+}

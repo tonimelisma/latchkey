@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/tonimelisma/latchkey/relay/internal/account"
-	"github.com/tonimelisma/latchkey/relay/internal/agentproto"
+	"github.com/tonimelisma/latchkey/relay/agentproto"
 	"github.com/tonimelisma/latchkey/relay/internal/events"
 	"github.com/tonimelisma/latchkey/relay/internal/hub"
 	"github.com/tonimelisma/latchkey/relay/internal/limit"

@@ -30,6 +30,20 @@ const (
 // RelayToolLaptopStatus is answered by the relay itself; a Mac tool must not use the name.
 const RelayToolLaptopStatus = "laptop_status"
 
+// RelayToolMachines is the relay's list of the Owner's machines (spec 010 FR-1006); no agent may
+// offer a tool of that name.
+const RelayToolMachines = "machines"
+
+// MachineArgument is the input property the relay adds to every machine tool to name the machine
+// (spec 010 plan D2); no agent may define it.
+const MachineArgument = "machine"
+
+// Machine kinds (Hello.Kind).
+const (
+	KindMac   = "mac"
+	KindLinux = "linux"
+)
+
 // Close codes from the contract.
 const (
 	CloseNormal             = 1000
@@ -94,16 +108,18 @@ type Message interface {
 
 // State is the Mac's reported condition, sent in hello, state, and goodbye.
 type State struct {
-	BatteryPercent   int       `json:"battery_percent"`
-	PowerSource      string    `json:"power_source"`
-	Charging         bool      `json:"charging"`
-	TimeRemainingMin *int      `json:"time_remaining_min"`
-	ThermalState     string    `json:"thermal_state"`
-	LowPowerMode     bool      `json:"low_power_mode"`
-	LidClosed        *bool     `json:"lid_closed"`
-	TimeZone         *string   `json:"time_zone"`
-	KeepAwake        string    `json:"keep_awake"`
-	ObservedAt       time.Time `json:"observed_at"`
+	BatteryPercent   int     `json:"battery_percent"`
+	PowerSource      string  `json:"power_source"`
+	Charging         bool    `json:"charging"`
+	TimeRemainingMin *int    `json:"time_remaining_min"`
+	ThermalState     string  `json:"thermal_state"`
+	LowPowerMode     bool    `json:"low_power_mode"`
+	LidClosed        *bool   `json:"lid_closed"`
+	TimeZone         *string `json:"time_zone"`
+	KeepAwake        string  `json:"keep_awake"`
+	// UptimeS is how long a Linux server has been up, in seconds (spec 010); a Mac leaves it out.
+	UptimeS    *int64    `json:"uptime_s,omitempty"`
+	ObservedAt time.Time `json:"observed_at"`
 }
 
 // Values of State.PowerSource.
@@ -163,15 +179,30 @@ type Hello struct {
 	// Features names the later additions to the protocol the agent understands; unknown names
 	// are ignored.
 	Features []string `json:"features,omitempty"`
+	// Kind is KindMac (also when empty) or KindLinux (spec 010).
+	Kind string `json:"kind,omitempty"`
+	// Name is the name the machine asks to be shown by; empty keeps the one it has (spec 010).
+	Name string `json:"name,omitempty"`
 }
 
 // Has reports whether the agent announced the feature.
 func (h *Hello) Has(feature string) bool { return slices.Contains(h.Features, feature) }
 
+// MachineKind is the hello's kind, KindMac when it named none.
+func (h *Hello) MachineKind() string {
+	if h.Kind == "" {
+		return KindMac
+	}
+	return h.Kind
+}
+
 // Welcome accepts the agent.
 type Welcome struct {
 	HeartbeatIntervalS int       `json:"heartbeat_interval_s"`
 	ServerTime         time.Time `json:"server_time"`
+	// Name is the name the relay kept for the machine, sent when the hello asked for one (spec
+	// 010 FR-1002).
+	Name string `json:"name,omitempty"`
 }
 
 // StateUpdate is the heartbeat and change report.
@@ -344,6 +375,9 @@ func Decode(data []byte) (Message, error) {
 	}
 	switch m := msg.(type) {
 	case *Hello:
+		if m.Kind != "" && m.Kind != KindMac && m.Kind != KindLinux {
+			return msg, fmt.Errorf("%w: unknown machine kind %q", ErrProtocolViolation, m.Kind)
+		}
 		return msg, ValidateTools(m.Tools)
 	case *ToolsUpdate:
 		return msg, ValidateTools(m.Tools)
@@ -427,7 +461,7 @@ func ValidateTools(tools []*mcp.Tool) error {
 		switch {
 		case t == nil || !toolName.MatchString(t.Name):
 			return fmt.Errorf("%w: invalid tool name", ErrProtocolViolation)
-		case t.Name == RelayToolLaptopStatus:
+		case t.Name == RelayToolLaptopStatus || t.Name == RelayToolMachines:
 			return fmt.Errorf("%w: tool name %q is reserved by the relay", ErrProtocolViolation, t.Name)
 		case seen[t.Name]:
 			return fmt.Errorf("%w: duplicate tool %q", ErrProtocolViolation, t.Name)
@@ -435,6 +469,8 @@ func ValidateTools(tools []*mcp.Tool) error {
 			return fmt.Errorf("%w: tool %q: inputSchema must have type \"object\"", ErrProtocolViolation, t.Name)
 		case t.OutputSchema != nil && !isObjectSchema(t.OutputSchema):
 			return fmt.Errorf("%w: tool %q: outputSchema must have type \"object\"", ErrProtocolViolation, t.Name)
+		case definesMachine(t.InputSchema):
+			return fmt.Errorf("%w: tool %q: the input property %q is the relay's", ErrProtocolViolation, t.Name, MachineArgument)
 		}
 		if trial == nil {
 			trial = mcp.NewServer(&mcp.Implementation{Name: "validate", Version: "0"}, nil)
@@ -461,6 +497,13 @@ func TryAddTool(srv *mcp.Server, t *mcp.Tool, h mcp.ToolHandler) (err error) {
 
 func refuseCalls(context.Context, *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return nil, errors.New("validation only")
+}
+
+func definesMachine(schema any) bool {
+	m, _ := schema.(map[string]any)
+	props, _ := m["properties"].(map[string]any)
+	_, ok := props[MachineArgument]
+	return ok
 }
 
 func isObjectSchema(schema any) bool {

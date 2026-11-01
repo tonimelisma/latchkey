@@ -175,7 +175,7 @@ Ordered by how directly an outside attacker reaches the crown jewel:
 
 1. `relay/internal/oauth/` (tokens, consent, clients, CIMD fetch) and `relay/internal/server/`
    (`perUser`, guards, limits).
-2. `relay/internal/hub/` and `relay/internal/agentproto/` (device authentication, routing calls to
+2. `relay/internal/hub/` and `relay/agentproto/` (device authentication, routing calls to
    the right Mac, deadlines) and `macos/App/RelayConnection.swift`, `AgentProtocol.swift`,
    `DeviceIdentity.swift`, `Pairing.swift`.
 3. `relay/internal/account/` and `relay/internal/store/signin.go` (sign-in codes, passkeys,

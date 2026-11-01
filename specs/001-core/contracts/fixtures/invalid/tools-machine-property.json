@@ -1,0 +1,15 @@
+{
+  "type": "tools",
+  "tools": [
+    {
+      "name": "shell_run",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "command": {"type": "string"},
+          "machine": {"type": "string"}
+        }
+      }
+    }
+  ]
+}

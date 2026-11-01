@@ -21,10 +21,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/tonimelisma/latchkey/relay/internal/agentproto"
+	"github.com/tonimelisma/latchkey/relay/agentproto"
 )
 
-const fixtureDir = "../../../specs/001-core/contracts/fixtures"
+const fixtureDir = "../../specs/001-core/contracts/fixtures"
 
 func fixtures(t *testing.T, kind string) map[string][]byte {
 	t.Helper()

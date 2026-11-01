@@ -1,0 +1,9 @@
+{
+  "type": "tools",
+  "tools": [
+    {
+      "name": "machines",
+      "inputSchema": {"type": "object"}
+    }
+  ]
+}

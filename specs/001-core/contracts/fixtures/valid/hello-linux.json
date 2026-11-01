@@ -1,0 +1,45 @@
+{
+  "type": "hello",
+  "device_id": "dev_4k9pz2w8qm",
+  "signature": "MEUCIQDexampleexampleexampleexampleexampleexampleexAIgexampleexampleexampleexampleexampleexample",
+  "app_version": "0.1.0",
+  "os_version": "Ubuntu 24.04.1 LTS",
+  "kind": "linux",
+  "name": "homeserver",
+  "tools": [
+    {
+      "name": "shell_check",
+      "title": "Check Commands",
+      "description": "Lists running jobs, or shows one job's new output.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "job": {
+            "type": "string",
+            "description": "The job id from shell_run"
+          }
+        }
+      },
+      "annotations": {
+        "readOnlyHint": true,
+        "idempotentHint": false
+      },
+      "_meta": {
+        "latchkey/deadline_ms": 45000
+      }
+    }
+  ],
+  "state": {
+    "battery_percent": 0,
+    "power_source": "unknown",
+    "charging": false,
+    "time_remaining_min": null,
+    "thermal_state": "nominal",
+    "low_power_mode": false,
+    "lid_closed": null,
+    "time_zone": "Europe/Helsinki",
+    "keep_awake": "on",
+    "uptime_s": 1036800,
+    "observed_at": "2026-10-31T17:02:10Z"
+  }
+}
