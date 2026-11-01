@@ -1,6 +1,6 @@
 # Status
 
-Last updated: 2026-10-31 (spec 010 drafted: several machines and Linux servers)
+Last updated: 2026-11-01 (spec 010 built: several machines and Linux servers; app 0.8.61, server 0.1.0)
 
 Xcode signing ready (2026-10-20): Toni's Xcode account has a valid "Apple Development" certificate
 (certificate expires 2027-07-22). Keep the team ID out of committed project files
@@ -34,16 +34,30 @@ after the app was quit.
 
 Releases, terms and privacy, and the directory listing are much later (Toni, 2026-10-22).
 
-Several machines and Linux servers (Toni, 2026-10-31; spec 010, drafted for Toni's review):
-one account pairs several Macs and headless Linux servers, all behind the one connector; shared
-tools take a machine name. Servers get Shell and Files only, in a Go program running as the
-Owner's account under systemd, paired with a code approved in a browser, switched on the server
-only, sudo allowed without waiting for a password, no write fence, deletes for good, activity
-logged without notifications. Research in specs/010-multi-host/research.md. Also decided the
-same day: machines removable on the relay's page too; a new server starts fully on; one-command
-install with signed self-updates and one-command uninstall; the server program is its own Go
-module sharing the relay's protocol package; constitution amended for Linux. Next: Toni's review
-of the spec, then plan, contracts, and tasks.
+Several machines and Linux servers (spec 010; Toni asked on 2026-10-31 for plan and build in one
+go). Built 2026-11-01: one account pairs any number of Macs and headless Linux servers behind the
+one connector; a tool both kinds offer is one tool with "On a Mac" / "On a Linux server" parts
+and a `machine` argument; the relay's `machines` tool lists the machines; every answer names the
+machine and the others. The Linux program (`linux/`, Go) gives Shell and Files, runs under systemd
+as the Owner, pairs with a code typed on the relay's `/link` page, stops what commands leave
+running (sudo's too) through delegated control groups, never waits for a sudo password, installs
+with one line and updates itself from releases signed with Latchkey's Ed25519 key. The Mac app
+(0.8.61) sends its name and kind and has "Name shown to Claude" in Settings. Tested: relay and
+Linux unit tests; every Linux test on Debian 12 with systemd in Docker; the end-to-end check
+(private relay, pretend Mac, the program installed with install.sh in a container, a real MCP
+client, and real Claude Code running a command on the server). Eight security review findings
+fixed while building (research.md). Mac tests: everything this change touches passes; page-script,
+shell-job, and leftovers tests time out on this Mac today, and fail the same way on unchanged
+main (macOS isn't reporting process ends or loading test pages; looks like this Mac's state, not
+the code; rerun after a restart). Shipping: see the next item.
+
+Spec 010 shipping, in order: relay deploy (needs Docker on this Mac, which is stuck since the
+tests: Docker Desktop's processes won't stop and the auto mode refused ending them); server
+release `server-v0.1.0`; app 0.8.61 install; then the live check: the server program installed
+on Toni's Google VM with the install line against the hosted relay, and a fresh Claude Code
+session using the Mac and the VM. Open (later, for Toni): service, container, package, process,
+and network tools for servers (left out of this spec); a direct machine-to-machine file copy;
+distributions whose sudo uses pam_systemd are unverified for stopping sudo's leftovers.
 
 Easy relay setup (Toni, 2026-10-31; to become its own spec, 009): a person with no technical
 background but a Claude subscription gets their own relay. Decided: Claude Code sets it up and
