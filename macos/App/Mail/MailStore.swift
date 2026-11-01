@@ -174,6 +174,7 @@ final class MailStore: @unchecked Sendable {
             let ids = sent.map { String($0.rowid) }.joined(separator: ",")
             return try SQLite.rows(
                 db,
+                // nosemgrep: scripts.semgrep.latchkey-sql-bound -- ids are mailbox row numbers (Int64); every other value is bound
                 """
                 SELECT a.address FROM messages m JOIN addresses a ON a.ROWID = m.sender
                 WHERE m.mailbox IN (\(ids)) OR m.ROWID IN (SELECT message_id FROM labels WHERE mailbox_id IN (\(ids)))
@@ -202,6 +203,7 @@ final class MailStore: @unchecked Sendable {
             guard let (condition, bind) = try conditions(q, boxes) else { return [] }
             return try SQLite.rows(
                 db,
+                // nosemgrep: scripts.semgrep.latchkey-sql-bound -- columns and condition are fixed SQL; every value is bound
                 "SELECT \(Self.columns) WHERE \(condition) ORDER BY m.date_received DESC, m.ROWID DESC LIMIT ? OFFSET ?",
                 bind: bind + [.int(Int64(limit)), .int(Int64(offset))]
             ).map { try summary($0, boxes) }
@@ -220,6 +222,7 @@ final class MailStore: @unchecked Sendable {
                 bind += [.int(t), .int(t), .int(id)]
             }
             return try SQLite.rows(
+                // nosemgrep: scripts.semgrep.latchkey-sql-bound -- columns and condition are fixed SQL; every value is bound
                 db, "SELECT \(Self.columns) WHERE \(condition) ORDER BY m.date_received DESC, m.ROWID DESC LIMIT ?",
                 bind: bind + [.int(Int64(limit))]
             ).map { try summary($0, boxes) }
@@ -316,6 +319,7 @@ final class MailStore: @unchecked Sendable {
     func message(_ id: Int64) throws -> Summary {
         try locked {
             let boxes = try loadMailboxes()
+            // nosemgrep: scripts.semgrep.latchkey-sql-bound -- columns and condition are fixed SQL; every value is bound
             guard let r = try SQLite.rows(db, "SELECT \(Self.columns) WHERE m.ROWID = ?", bind: [.int(id)]).first,
                 r[0].int != nil
             else { throw Failure.noSuchMessage(id) }
@@ -347,6 +351,7 @@ final class MailStore: @unchecked Sendable {
             let boxes = try loadMailboxes()
             return try SQLite.rows(
                 db,
+                // nosemgrep: scripts.semgrep.latchkey-sql-bound -- columns and condition are fixed SQL; every value is bound
                 "SELECT \(Self.columns) WHERE m.conversation_id = ? AND m.deleted = 0 ORDER BY m.date_received DESC LIMIT ?",
                 bind: [.int(m.conversation), .int(Int64(limit))]
             ).map { try summary($0, boxes) }
@@ -391,6 +396,7 @@ final class MailStore: @unchecked Sendable {
             let ids = mailboxes.map { String($0.rowid) }.joined(separator: ",")
             let rows = try SQLite.rows(
                 db,
+                // nosemgrep: scripts.semgrep.latchkey-sql-bound -- ids are mailbox row numbers (Int64); every other value is bound
                 """
                 SELECT m.ROWID, s.subject, g.message_id_header,
                   (SELECT COUNT(*) FROM attachments t WHERE t.message = m.ROWID)
