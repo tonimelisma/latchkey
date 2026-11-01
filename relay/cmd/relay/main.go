@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -61,6 +62,9 @@ func run(ctx context.Context) error {
 		logger.Info("created the key file that encrypts the relay's stored keys; keep a copy of it apart from the database", "key_file", path)
 	}
 	defer func() { _ = db.Close() }()
+	if backup := db.MigrationBackup(); backup != "" {
+		logger.Info("copied the database before updating its layout; to go back to the previous version, stop the relay and put this copy in place of relay.db", "copy", backup)
+	}
 
 	r, err := server.New(ctx, server.Options{
 		PublicURL: cfg.PublicURL, Store: db, AllowedEmails: cfg.AllowedEmails, Logger: logger, Version: version,
@@ -93,21 +97,31 @@ func run(ctx context.Context) error {
 	go server.Purge(ctx, r, logger)
 	go r.WatchOperator(ctx, server.OperatorPoll)
 
+	// Listen first, so the service manager is told the relay is ready only once it accepts
+	// connections (spec 009 plan D3).
+	ln, err := new(net.ListenConfig).Listen(ctx, "tcp", srv.Addr)
+	if err != nil {
+		return err
+	}
 	errc := make(chan error, 1)
 	go func() {
 		logger.Info("relay listening", "port", cfg.Port, "public_url", cfg.PublicURL.String(), "tls", cfg.ACMEEmail != "", "trusted_proxies", cfg.TrustedProxies.Strings(), "allowed_client_hosts", cfg.AllowedClientHosts.Strings(), "version", version)
 		if srv.TLSConfig != nil {
-			errc <- srv.ListenAndServeTLS("", "")
+			errc <- srv.ServeTLS(ln, "", "")
 		} else {
-			errc <- srv.ListenAndServe()
+			errc <- srv.Serve(ln)
 		}
 	}()
+	if err := notifySystemd(os.Getenv, "READY=1"); err != nil {
+		logger.Warn("couldn't tell the service manager the relay is ready", "err", err)
+	}
 	select {
 	case err := <-errc:
 		return err
 	case <-ctx.Done():
 	}
 	logger.Info("shutting down")
+	_ = notifySystemd(os.Getenv, "STOPPING=1")
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	r.Hub.Close()

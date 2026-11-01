@@ -12,7 +12,9 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -38,6 +40,8 @@ type Store struct {
 	aead           cipher.AEAD
 	keyFile        string
 	keyFileCreated bool
+	// backup is the copy made before this open's migrations, if any (spec 009 plan D4).
+	backup string
 }
 
 // Open opens (creating if needed) the database at path, with its key file next to it (see
@@ -53,26 +57,75 @@ func openDB(ctx context.Context, path string) (*Store, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := migrate(ctx, db); err != nil {
+	backup, err := migrate(ctx, db, path)
+	if err != nil {
 		_ = db.Close()
 		return nil, err
 	}
-	return &Store{db: db}, nil
+	return &Store{db: db, backup: backup}, nil
 }
 
-func migrate(ctx context.Context, db *sql.DB) error {
+// MigrationBackup is the copy of the database made before this open applied migrations, or ""
+// when nothing was pending (spec 009 plan D4).
+func (s *Store) MigrationBackup() string { return s.backup }
+
+// keptBackups is how many copies made before migrations are kept in the backups folder.
+const keptBackups = 3
+
+// migrate applies pending migrations. When the database already has data of an older version,
+// it first writes a copy next to it, in backups/, keeping the newest three, and returns its path:
+// going back to an older relay means putting that copy in place (spec 009 FR-909, plan D4).
+func migrate(ctx context.Context, db *sql.DB, path string) (string, error) {
 	dir, err := fs.Sub(migrations, "migrations")
 	if err != nil {
-		return err
+		return "", err
 	}
 	p, err := goose.NewProvider(goose.DialectSQLite3, db, dir)
 	if err != nil {
-		return err
+		return "", err
+	}
+	backup := ""
+	pending, err := p.HasPending(ctx)
+	if err != nil {
+		return "", fmt.Errorf("migrate: %w", err)
+	}
+	if pending {
+		version, err := p.GetDBVersion(ctx)
+		if err != nil {
+			return "", fmt.Errorf("migrate: %w", err)
+		}
+		if version > 0 {
+			if backup, err = copyBefore(ctx, db, path, version); err != nil {
+				return "", fmt.Errorf("copy the database before migrating: %w", err)
+			}
+		}
 	}
 	if _, err := p.Up(ctx); err != nil {
-		return fmt.Errorf("migrate: %w", err)
+		return "", fmt.Errorf("migrate: %w", err)
 	}
-	return nil
+	return backup, nil
+}
+
+// copyBefore writes a consistent copy of the database (VACUUM INTO) to backups/ beside it and
+// removes all but the newest keptBackups.
+func copyBefore(ctx context.Context, db *sql.DB, path string, version int64) (string, error) {
+	folder := filepath.Join(filepath.Dir(path), "backups")
+	if err := os.MkdirAll(folder, 0o700); err != nil {
+		return "", err
+	}
+	target := filepath.Join(folder, fmt.Sprintf("relay-%s-v%d.db", time.Now().UTC().Format("20060102T150405Z"), version))
+	if _, err := db.ExecContext(ctx, `VACUUM INTO ?`, target); err != nil {
+		return "", err
+	}
+	old, err := filepath.Glob(filepath.Join(folder, "relay-*.db"))
+	if err != nil {
+		return "", err
+	}
+	sort.Strings(old) // the names start with the time
+	for _, f := range old[:max(0, len(old)-keptBackups)] {
+		_ = os.Remove(f)
+	}
+	return target, nil
 }
 
 // Close closes the database.

@@ -118,7 +118,7 @@ func TestRecoveryCodeFromTheOperator(t *testing.T) {
 	status, ticket := lost.confirmCode(code, store.PurposeRecover)
 	require.Equal(t, http.StatusOK, status, ticket)
 	status, done := lost.createPasskey(ticket["ticket"].(string))
-	require.Equal(t, http.StatusOK, status, done, "recovered without any email")
+	require.Equal(t, http.StatusOK, status, "recovered without any email: %v", done)
 	assert.Equal(t, http.StatusOK, lost.get("/account").status)
 
 	status, _ = e.browser().confirmCode(code, store.PurposeRecover)
