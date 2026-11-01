@@ -108,9 +108,22 @@ func (f *Files) isOwn(path string, holding bool) bool {
 	return false
 }
 
-// realPath resolves links in the longest part of path that exists.
+// realPath resolves links in the longest part of path that exists, and a link whose target
+// doesn't exist yet as that target (writing through it would create the target; security
+// review, 2026-10-31). Another program swapping a link between this check and the change isn't
+// guarded against: Shell, which has no write fence on a server, can change these files anyway.
 func realPath(path string) string {
 	path = filepath.Clean(path)
+	for range 40 { // links to links, but not forever
+		target, err := os.Readlink(path)
+		if err != nil {
+			break
+		}
+		if !filepath.IsAbs(target) {
+			target = filepath.Join(filepath.Dir(path), target)
+		}
+		path = filepath.Clean(target)
+	}
 	rest := ""
 	for p := path; ; p = filepath.Dir(p) {
 		if r, err := filepath.EvalSymlinks(p); err == nil {

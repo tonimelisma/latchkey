@@ -5,6 +5,8 @@ go 1.26.0
 replace github.com/tonimelisma/latchkey/relay => ../relay
 
 require (
+	github.com/coder/websocket v1.8.15
+	github.com/creack/pty v1.1.24
 	github.com/ledongthuc/pdf v0.0.0-20261020125853-5e46805f718e
 	github.com/modelcontextprotocol/go-sdk v1.8.0
 	github.com/stretchr/testify v1.12.1

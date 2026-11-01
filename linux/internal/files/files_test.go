@@ -272,6 +272,14 @@ func TestOwnFilesAreNotChanged(t *testing.T) {
 		assert.True(t, isErr, "%v", args)
 		assert.Contains(t, text, "Latchkey's own files", "%v", args)
 	}
+	// A link to a file that doesn't exist yet in Latchkey's folder: writing through it would
+	// create that file (security review, 2026-10-31).
+	require.NoError(t, os.Symlink(filepath.Join(e.paths.Config, "planted.json"), filepath.Join(e.home, "dangling")))
+	text, isErr = e.call("files_change", tools.Args{"action": "write", "path": "dangling", "text": "{}"})
+	assert.True(t, isErr)
+	assert.Contains(t, text, "Latchkey's own files")
+	assert.NoFileExists(t, filepath.Join(e.paths.Config, "planted.json"))
+
 	e.write("note.txt", "x")
 	text, isErr = e.call("files_change", tools.Args{"action": "copy", "path": "note.txt", "to": "~/.config/latchkey"})
 	assert.True(t, isErr)

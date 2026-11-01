@@ -284,6 +284,24 @@ func (b *Browser) Approve(base, authorizeURL, redirectPrefix string) (*url.URL, 
 	return nil, errors.New("authorization did not finish")
 }
 
+// LinkCode does what the Owner does for a Linux server's pairing (spec 010 FR-1022): opens
+// /link, types the code the server showed, checks the confirmation names the machine, and
+// connects it.
+func (b *Browser) LinkCode(base, code, machine string) error {
+	if err := b.run(
+		chromedp.Navigate(base+"/link"),
+		chromedp.WaitVisible(chromedp.ID("code")),
+		chromedp.SendKeys(chromedp.ID("code"), code),
+		chromedp.Click(chromedp.CSS(`form[action="/link"] button[type=submit]`)),
+		chromedp.WaitVisible(`//h1[contains(., "Connect “`+machine+`”?")]`),
+		chromedp.Click(chromedp.CSS(`form[action="/link"] button[type=submit]`)),
+		chromedp.WaitVisible(`//h1[contains(., "is connected")]`),
+	); err != nil {
+		return fmt.Errorf("link page: %w", err)
+	}
+	return nil
+}
+
 // PairCode opens the pairing page, checks it, and returns the pairing code the Connect button
 // would hand to the Mac app. The latchkey:// redirect itself is read over HTTP with the
 // browser's session, since Chrome cannot follow an unknown scheme.

@@ -38,6 +38,8 @@ const (
 	maxImageSide   = 1568
 	maxImagePixels = 1_150_000
 	maxImageBytes  = 2_500_000
+	// maxDecodedPixels is the largest picture decoded at all (about 200 MB in memory).
+	maxDecodedPixels = 50_000_000
 )
 
 func (f *Files) readTool() tools.Tool {
@@ -151,7 +153,14 @@ func toUTF8(data []byte) string {
 	return string(runes)
 }
 
-func pdfText(path string) (string, error) {
+// pdfText reads a PDF's text. The parser panics on some malformed files; that becomes an error
+// (security review, 2026-10-31).
+func pdfText(path string) (text string, err error) {
+	defer func() {
+		if p := recover(); p != nil {
+			text, err = "", fmt.Errorf("the PDF is malformed (%v)", p)
+		}
+	}()
 	file, r, err := pdf.Open(path)
 	if err != nil {
 		return "", err
@@ -165,7 +174,7 @@ func pdfText(path string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	text := strings.TrimSpace(string(data))
+	text = strings.TrimSpace(string(data))
 	if text == "" {
 		return "", fmt.Errorf("it has no text (a scan?)")
 	}
@@ -241,6 +250,9 @@ func readImage(path string, fileSize int64, head []byte) tools.Result {
 	cfg, _, err := image.DecodeConfig(bytes.NewReader(data))
 	if err != nil {
 		return tools.Failf("%s can't be read as a picture: %v", path, err)
+	}
+	if int64(cfg.Width)*int64(cfg.Height) > maxDecodedPixels { // decoding would take gigabytes (security review, 2026-10-31)
+		return tools.Failf("%s is a %d × %d picture, too large to prepare; make a smaller copy with Shell (convert, for example).", path, cfg.Width, cfg.Height)
 	}
 	fits := cfg.Width <= maxImageSide && cfg.Height <= maxImageSide && cfg.Width*cfg.Height <= maxImagePixels
 	if fits && fileSize <= maxImageBytes && mime != "image/webp" {
