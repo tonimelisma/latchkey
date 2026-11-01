@@ -46,6 +46,7 @@ Written with the plan and built in one go (Toni, 2026-10-31). Each ends with its
 
 ## Ship
 
-- **T1012** Deploy the relay; publish `server-v0.1.0`; install the app; install the server
-  program on Toni's Google VM through the install line; live check with a fresh Claude Code session
-  using the Mac and the VM.
+- **T1012** ✅ Deploy the relay; ✅ publish `server-v0.1.0`; ✅ install the app; ✅ live check of the
+  Mac through the hosted relay with a fresh Claude Code session. Waiting on Toni's passkey: pair
+  his Google VM through the install line (it ran up to the code), then the live check with the Mac
+  and the VM together.

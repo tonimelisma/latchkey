@@ -51,13 +51,23 @@ shell-job, and leftovers tests time out on this Mac today, and fail the same way
 main (macOS isn't reporting process ends or loading test pages; looks like this Mac's state, not
 the code; rerun after a restart). Shipping: see the next item.
 
-Spec 010 shipping, in order: relay deploy (needs Docker on this Mac, which is stuck since the
-tests: Docker Desktop's processes won't stop and the auto mode refused ending them); server
-release `server-v0.1.0`; app 0.8.61 install; then the live check: the server program installed
-on Toni's Google VM with the install line against the hosted relay, and a fresh Claude Code
-session using the Mac and the VM. Open (later, for Toni): service, container, package, process,
-and network tools for servers (left out of this spec); a direct machine-to-machine file copy;
-distributions whose sudo uses pam_systemd are unverified for stopping sudo's leftovers.
+Spec 010 shipped 2026-11-01: relay deployed (d242688); `server-v0.1.0` published on GitHub
+(Intel and Arm, signed); app 0.8.61 installed (paired, keep-awake on, helper running, all 689
+calls match the relay's audit). Live check through the hosted relay with a fresh Claude Code
+session: `machines` lists Toni's Mac, and `shell_run` without a machine name ran on it and ended
+with the Mac's state line. On Toni's Google VM (Ubuntu 24.04, Intel) the install line from GitHub
+downloaded the release, checked it, and showed a pairing code; approving it needs Toni's passkey
+on the relay's `/link` page, so the VM isn't paired yet (the unfinished install was removed, so
+nothing is left on the VM).
+
+Waiting on Toni: one action. When he is at a browser where he's signed in to the relay, Claude
+starts the install on the VM (`curl -fsSL
+https://raw.githubusercontent.com/tonimelisma/latchkey/main/linux/install.sh | sh -s --
+https://<relay>`, run in a lasting session so it survives SSH) and gives him the code; he types it
+on `/link` and clicks Connect. Then Claude runs the live check with the Mac and the VM together.
+Open (later, for Toni): service, container, package, process, and network tools for servers
+(left out of this spec); a direct machine-to-machine file copy; distributions whose sudo uses
+pam_systemd are unverified for stopping sudo's leftovers.
 
 Easy relay setup (Toni, 2026-10-31; to become its own spec, 009): a person with no technical
 background but a Claude subscription gets their own relay. Decided: Claude Code sets it up and
