@@ -26,7 +26,8 @@ Documents, downloads, photos and projects live on the Mac. From a phone, Claude 
 
 - **FR-201** While Files is Read only or Read & write, Claude shall be able to search files by
   name and content, list a folder, see a file's details, and read a file: text, the text of PDFs
-  and documents, and images as images.
+  and documents, and images as images; a PDF without text (a scan) as a picture of the page asked
+  for (2026-11-01: it read as nothing).
 - **FR-202** While Files is Read & write, Claude shall be able to create and change text files,
   edit a passage of a text file, create folders, move, rename, and copy files and folders, and
   delete them.

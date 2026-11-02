@@ -45,6 +45,16 @@ enum FileReader {
             return .notReadable(
                 "not text, a PDF, a document, or an image (\(type.localizedDescription ?? type.identifier))")
         }
+        // A PDF without text, such as a scan, is shown as a picture of a page; offset picks the
+        // page (2026-11-01: such a PDF read as nothing at all).
+        if type.conforms(to: .pdf), text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            guard let doc = PDFDocument(url: target), doc.pageCount > 0 else { return .notReadable("an empty PDF") }
+            let index = min(max(offset, 0), doc.pageCount - 1)
+            guard let page = doc.page(at: index), let png = Self.png(of: page),
+                let image = try? ImagePrep.prepare(data: png)
+            else { return .notReadable("a PDF without text whose page couldn't be drawn") }
+            return .image(image)
+        }
         let (page, next) = ResultLimit.page(text, offset: offset)
         return .text(page, total: text.count, next: next)
     }
@@ -79,6 +89,16 @@ enum FileReader {
             return nil
         }
         return decode(data)
+    }
+
+    /// A PDF page drawn at about 150 dots per inch (at most 2000 pixels on its long side), as PNG.
+    private static func png(of page: PDFPage) -> Data? {
+        let box = page.bounds(for: .mediaBox)
+        guard box.width > 0, box.height > 0 else { return nil }
+        let scale = min(150.0 / 72.0, 2000 / max(box.width, box.height))
+        let image = page.thumbnail(of: CGSize(width: box.width * scale, height: box.height * scale), for: .mediaBox)
+        guard let tiff = image.tiffRepresentation, let rep = NSBitmapImageRep(data: tiff) else { return nil }
+        return rep.representation(using: .png, properties: [:])
     }
 
     private static func decode(_ data: Data) -> String? {

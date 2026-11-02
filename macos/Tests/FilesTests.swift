@@ -118,6 +118,32 @@ final class ConnectionCounter: @unchecked Sendable {
         #expect(text == "Grüße aus Köln")
     }
 
+    /// 2026-11-01: a PDF without text (a scan) read as nothing; it is shown as a page picture.
+    @Test func aScannedPDFIsShownAsAPicture() throws {
+        let f = try FilesFixture()
+        let data = NSMutableData()
+        var box = CGRect(x: 0, y: 0, width: 400, height: 200)
+        let ctx = CGContext(consumer: CGDataConsumer(data: data)!, mediaBox: &box, nil)!
+        for _ in 0..<2 {
+            ctx.beginPDFPage(nil)
+            ctx.setFillColor(CGColor(gray: 0.2, alpha: 1))
+            ctx.fill(CGRect(x: 20, y: 20, width: 200, height: 100))  // a "scan": shapes, no text
+            ctx.endPDFPage()
+        }
+        ctx.closePDF()
+        let url = URL(filePath: f.path("Documents/scan.pdf"))
+        try (data as Data).write(to: url)
+        guard case .image(let first) = try FileReader.read(url, offset: 0) else {
+            Issue.record("not shown as a picture")
+            return
+        }
+        #expect(!first.data.isEmpty)
+        guard case .image = try FileReader.read(url, offset: 9) else {
+            Issue.record("a page past the end shows the last page")
+            return
+        }
+    }
+
     @Test func readsPDFsAndDocuments() throws {
         let f = try FilesFixture()
         guard

@@ -105,7 +105,7 @@ enum FilesCapability {
                 tool: .make(
                     "files_read", title: "Read a File",
                     description:
-                        "Reads a file: text, the text of PDFs and documents (Word, RTF, HTML), or an image, which is shown. Long text comes in pages; pass offset to read on.",
+                        "Reads a file: text, the text of PDFs and documents (Word, RTF, HTML), or an image, which is shown. Long text comes in pages; pass offset to read on. A PDF without text (a scan) is shown as a picture of a page; offset picks the page (from 0).",
                     input: [
                         "path": .stringParam("The file"),
                         "offset": .integerParam("Start at this character, from a previous answer"),
