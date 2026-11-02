@@ -177,7 +177,12 @@ is made it reads Safari's `Cookies.binarycookies` (Full Disk Access, which setup
 `BrowserCapability.lockedRoute` on each call: locked, the built-in browser; unlocked, it is
 discarded with its cookies and Safari answers. It runs the same `PageScripts`, so answers look
 the same; one page, no tabs; screenshots are its own drawing (no screen permission needed).
-Risks: Safari's cookie file format isn't documented (a change shows as no sign-ins, not as a
+Since 0.8.79: a page's dialogs are answered by Latchkey (alert dismissed, confirm Cancel so a page
+never gets a yes, prompt nothing) and told to Claude before the next page; a link or script that
+opens a new window opens in the one page; the view identifies as the installed Safari (Google's
+sign-in refuses embedded browsers; checked live locked: signed in to Google and GitHub); a load
+cancelled by the next one or back from memory (-999) isn't a failure; a page that changes without
+loading (pushState) counts as loaded once its address changed. Risks: Safari's cookie file format isn't documented (a change shows as no sign-ins, not as a
 failure); a site that ties a session to Safari itself may ask to sign in.
 
 ## Testing

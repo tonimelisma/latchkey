@@ -10,8 +10,12 @@ import WebKit
 /// over again. It runs the same page scripts as Safari (`PageScripts`), so Claude's answers look
 /// the same; it has one page and no tabs.
 @MainActor
-final class LockedBrowser: NSObject, WKNavigationDelegate {
+final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate {
     private var web: WKWebView?
+    /// What the page's own dialogs said since the last answer (alert, confirm, prompt), told
+    /// to Claude with the next page; a confirm is answered Cancel and a prompt with nothing, so a
+    /// page never gets a yes from Latchkey on its own (2026-11-02).
+    private(set) var dialogs: [String] = []
     private var finished: CheckedContinuation<Bool, Never>?
     /// Where a load failed, for the answer.
     private var failure: String?
@@ -27,6 +31,10 @@ final class LockedBrowser: NSObject, WKNavigationDelegate {
         config.websiteDataStore = .nonPersistent()  // memory only: nothing written to disk
         let w = WKWebView(frame: NSRect(x: 0, y: 0, width: 1280, height: 900), configuration: config)
         w.navigationDelegate = self
+        w.uiDelegate = self
+        // Sites see Safari, as they do in the Owner's Safari: some refuse an app's own web view
+        // (Google's sign-in, for one).
+        w.customUserAgent = Self.safariUserAgent
         let store = config.websiteDataStore.httpCookieStore
         let data = (try? Data(contentsOf: SafariCookies.file)) ?? Data()
         for cookie in SafariCookies.parse(data).compactMap(SafariCookies.httpCookie) {
@@ -36,11 +44,75 @@ final class LockedBrowser: NSObject, WKNavigationDelegate {
         return w
     }
 
+    /// Safari's own user agent, built from its installed version.
+    static let safariUserAgent: String = {
+        let info =
+            NSDictionary(
+                contentsOfFile: "/Applications/Safari.app/Contents/Info.plist") as? [String: Any]
+        let safari = (info?["CFBundleShortVersionString"] as? String) ?? "18.0"
+        return
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/\(safari) Safari/605.1.15"
+    }()
+
+    /// Takes the dialogs noted since the last call.
+    func takeDialogs() -> [String] {
+        defer { dialogs = [] }
+        return dialogs
+    }
+
+    // MARK: the page's dialogs and new windows
+
+    nonisolated func webView(
+        _ webView: WKWebView, runJavaScriptAlertPanelWithMessage message: String,
+        initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping @MainActor @Sendable () -> Void
+    ) {
+        MainActor.assumeIsolated {
+            dialogs.append("The page showed an alert: «\(message)» (dismissed).")
+            completionHandler()
+        }
+    }
+
+    nonisolated func webView(
+        _ webView: WKWebView, runJavaScriptConfirmPanelWithMessage message: String,
+        initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping @MainActor @Sendable (Bool) -> Void
+    ) {
+        MainActor.assumeIsolated {
+            dialogs.append("The page asked to confirm: «\(message)»; Latchkey answered Cancel.")
+            completionHandler(false)
+        }
+    }
+
+    nonisolated func webView(
+        _ webView: WKWebView, runJavaScriptTextInputPanelWithPrompt prompt: String, defaultText: String?,
+        initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping @MainActor @Sendable (String?) -> Void
+    ) {
+        MainActor.assumeIsolated {
+            dialogs.append("The page asked for text: «\(prompt)»; Latchkey gave none.")
+            completionHandler(nil)
+        }
+    }
+
+    /// A link that opens a new window or tab (target=_blank, window.open) opens here instead:
+    /// this browser has one page.
+    nonisolated func webView(
+        _ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration,
+        for navigationAction: WKNavigationAction, windowFeatures: WKWindowFeatures
+    ) -> WKWebView? {
+        MainActor.assumeIsolated {
+            if let url = navigationAction.request.url, ["http", "https"].contains(url.scheme?.lowercased() ?? "") {
+                webView.load(navigationAction.request)
+            }
+        }
+        return nil
+    }
+
     /// Drops the page and its cookies (the Mac was unlocked, or Claude closed it).
     func discard() {
         web?.stopLoading()
         web?.navigationDelegate = nil
+        web?.uiDelegate = nil
         web = nil
+        dialogs = []
         finished?.resume(returning: false)
         finished = nil
     }
@@ -52,19 +124,24 @@ final class LockedBrowser: NSObject, WKNavigationDelegate {
     }
 
     nonisolated func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: any Error) {
-        MainActor.assumeIsolated {
-            failure = error.localizedDescription
-            done(false)
+        MainActor.assumeIsolated { failed(error) }
+    }
+
+    /// "Cancelled" (-999) is a page replaced by the next one, or back served from memory (seen live
+    /// 2026-11-02: back said -999 and showed the page): not a failure.
+    private func failed(_ error: any Error) {
+        if (error as NSError).code == NSURLErrorCancelled {
+            done(true)
+            return
         }
+        failure = error.localizedDescription
+        done(false)
     }
 
     nonisolated func webView(
         _ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: any Error
     ) {
-        MainActor.assumeIsolated {
-            failure = error.localizedDescription
-            done(false)
-        }
+        MainActor.assumeIsolated { failed(error) }
     }
 
     private func done(_ ok: Bool) {
@@ -77,11 +154,22 @@ final class LockedBrowser: NSObject, WKNavigationDelegate {
         let w = await view()
         failure = nil
         finished?.resume(returning: false)
+        let before = w.url
         let ok = await withCheckedContinuation { (c: CheckedContinuation<Bool, Never>) in
             finished = c
             start(w)
+            // A page that changes without loading (history.pushState, back within one page) never
+            // says it finished: done once its address changed and nothing loads (2026-11-02).
             Task { @MainActor [weak self] in
-                try? await Task.sleep(for: Self.loadLimit)
+                let deadline = ContinuousClock.now + Self.loadLimit
+                while ContinuousClock.now < deadline {
+                    try? await Task.sleep(for: .milliseconds(200))
+                    guard let self, self.finished != nil else { return }
+                    if w.url != before, !w.isLoading {
+                        self.done(true)
+                        return
+                    }
+                }
                 self?.done(false)
             }
         }
@@ -127,6 +215,12 @@ final class LockedBrowser: NSObject, WKNavigationDelegate {
         return try await page(offset: 0)
     }
 
+    /// A page from text, at `base` (tests: the real WebKit view, no network).
+    func open(html: String, base: URL) async throws -> PageScripts.Page {
+        try await navigate { $0.loadHTMLString(html, baseURL: base) }
+        return try await page(offset: 0)
+    }
+
     func read(offset: Int) async throws -> PageScripts.Page {
         guard web != nil else { throw SafariBrowser.Failure.noWindow }
         return try await page(offset: offset)
@@ -163,8 +257,16 @@ final class LockedBrowser: NSObject, WKNavigationDelegate {
 
     func back() async throws -> PageScripts.Page {
         guard let w = web else { throw SafariBrowser.Failure.noWindow }
-        guard w.canGoBack else { throw SafariBrowser.Failure.failed("There's no page to go back to.") }
-        try await navigate { _ = $0.goBack() }
+        let before = w.url
+        if w.canGoBack {
+            try await navigate { _ = $0.goBack() }
+        } else {
+            // WebKit's own list may not have an entry the page made (history.pushState): the
+            // page's history goes back then.
+            _ = try? await w.evaluateJavaScript("history.back(); 1")
+            await settle(from: before?.absoluteString)
+            guard w.url != before else { throw SafariBrowser.Failure.failed("There's no page to go back to.") }
+        }
         return try await page(offset: 0)
     }
 

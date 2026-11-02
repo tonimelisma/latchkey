@@ -52,7 +52,7 @@ enum BrowserCapability {
                         let offset = try args.integer("offset", in: 0...Int.max) ?? 0
                         if let l = await locked() {
                             let opened = try await l.open(url)
-                            return page(offset > 0 ? try await l.read(offset: offset) : opened)
+                            return await told(page(offset > 0 ? try await l.read(offset: offset) : opened), l)
                         }
                         let opened = try await browser.open(url, newTab: args["new_tab"] == .bool(true))
                         // With an offset too, the page Claude opened is read on from there.
@@ -69,7 +69,7 @@ enum BrowserCapability {
                 handler: { args in
                     await run {
                         let offset = try args.integer("offset", in: 0...Int.max) ?? 0
-                        if let l = await locked() { return page(try await l.read(offset: offset)) }
+                        if let l = await locked() { return await told(page(try await l.read(offset: offset)), l) }
                         return page(try await browser.read(offset: offset))
                     }
                 }),
@@ -100,7 +100,7 @@ enum BrowserCapability {
                     readOnly: true, openWorld: true, deadlineMS: 30_000),
                 handler: { _ in
                     await run {
-                        if let l = await locked() { return page(try await l.back()) }
+                        if let l = await locked() { return await told(page(try await l.back()), l) }
                         return page(try await browser.back())
                     }
                 }),
@@ -144,12 +144,9 @@ enum BrowserCapability {
                     await run {
                         guard let ref = args["ref"]?.stringValue else { throw Failure.failed("Give the reference.") }
                         let p: PageScripts.Page
-                        if let l = await locked() {
-                            p = try await l.click(ref)
-                        } else {
-                            p = try await browser.click(ref)
-                        }
-                        var r = page(p)
+                        let l = await locked()
+                        if let l { p = try await l.click(ref) } else { p = try await browser.click(ref) }
+                        var r = await told(page(p), l)
                         r.activity = "Clicked \(ref) on \(host(p.url))"
                         return r
                     }
@@ -174,12 +171,13 @@ enum BrowserCapability {
                         }
                         let submit = args["submit"] == .bool(true)
                         let p: PageScripts.Page
-                        if let l = await locked() {
+                        let l = await locked()
+                        if let l {
                             p = try await l.type(ref, text: text, submit: submit)
                         } else {
                             p = try await browser.type(ref, text: text, submit: submit)
                         }
-                        var r = page(p)
+                        var r = await told(page(p), l)
                         r.activity = "Typed into \(ref) on \(host(p.url))"
                         return r
                     }
@@ -230,6 +228,20 @@ enum BrowserCapability {
     }
 
     typealias Failure = SafariBrowser.Failure
+
+    /// The page's own dialogs since the last answer, before the page (the browser used while
+    /// locked answers them itself: alerts dismissed, confirms Cancel).
+    static func told(_ r: ToolResult, _ l: LockedBrowser?) async -> ToolResult {
+        guard let l else { return r }
+        let dialogs = await l.takeDialogs()
+        guard !dialogs.isEmpty, case .array(let parts) = r.content, case .object(var first)? = parts.first,
+            let text = first["text"]?.stringValue
+        else { return r }
+        first["text"] = .string(dialogs.joined(separator: "\n") + "\n\n" + text)
+        var out = r
+        out.content = .array([.object(first)] + parts.dropFirst())
+        return out
+    }
 
     /// The page as Claude's answer, within Claude's result size (FR-405).
     static func page(_ p: PageScripts.Page) -> ToolResult { .text(PageScripts.answer(p)) }
