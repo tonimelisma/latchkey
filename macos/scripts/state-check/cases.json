@@ -69,7 +69,7 @@
         {"id": "files.details", "case": "See a file's details", "steps": "files_find path to that file."},
         {"id": "files.copy", "case": "Copy a file", "steps": "files_change copy it to ~/Downloads/latchkey-check/b.txt."},
         {"id": "files.move", "case": "Move or rename a file", "steps": "files_change move b.txt to ~/Downloads/latchkey-check/c.txt."},
-        {"id": "files.read_pdf", "case": "Read a PDF", "steps": "files_find query \"kMDItemContentType == com.adobe.pdf\" or \"pdf\", limit 1; files_read the first .pdf found (only check text comes back)."},
+        {"id": "files.read_pdf", "case": "Read a PDF", "steps": "files_find query \"kMDItemContentType == com.adobe.pdf\" or \"pdf\", limit 1; files_read the first .pdf found (check its text comes back, or for a PDF without text, a picture of its page)."},
         {"id": "files.read_image", "case": "See an image", "steps": "files_find query \"png\", limit 1; files_read the first .png found (only check an image comes back)."},
         {"id": "files.trash", "case": "Move to the Trash", "steps": "files_change trash ~/Downloads/latchkey-check."}
       ],
