@@ -351,33 +351,53 @@ struct AddToClaudeSteps: View {
     var body: some View {
         if let relay = relayShown.flatMap(URL.init(string:)) ?? model.relayURL {
             VStack(alignment: .leading, spacing: 8) {
-                Text(
-                    "Click Add to Claude. Claude opens in your browser with Latchkey and your relay’s address filled in. Click Add, Add again, then Connect. Then sign in with your passkey and click Allow."
-                )
-                .foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                 Button("Add to Claude") { AddToClaude.open(relay: relay) }
                     .keyboardShortcut(.defaultAction)
-                Text(
-                    "If the button doesn’t work: in Claude, open Customize → Connectors and click Add custom connector. Name it Latchkey, paste this address, and click Add, Add again, and Connect. Then sign in and click Allow."
+                numbered(
+                    1,
+                    "Claude opens in your browser (sign in to Claude if it asks), with a form already filled in. Claude notes that the details came from a link; that’s expected."
                 )
-                .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-                HStack {
-                    Text(verbatim: AddToClaude.connector(relay: relay)).textSelection(.enabled)
-                        .font(.callout.monospaced())
-                    Button("Copy Address") {
-                        AddToClaude.copy(relay: relay)
-                        copied = true
-                    }
-                    .controlSize(.small)
-                    if copied { Label("Copied", systemImage: "checkmark").foregroundStyle(.secondary) }
-                }
+                numbered(
+                    2,
+                    "Click Add. Claude shows the settings it found: change nothing, click Add once more, then Connect.")
+                numbered(
+                    3,
+                    "A Latchkey page opens: sign in with your passkey (Touch ID), then click Allow. That lets Claude use this Mac."
+                )
                 if showsDone {
-                    Text("This step ticks itself off once Claude is connected.")
-                        .font(.footnote).foregroundStyle(.secondary)
+                    Text("This step gets a checkmark when Claude is connected. Claude on your phone then has it too.")
+                        .font(.footnote).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                 }
+                DisclosureGroup("If Add to Claude doesn’t work") {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(
+                            "On claude.ai, click Customize in the column on the left, then Connectors, then Add custom connector. For the name, type Latchkey. For the address, click Copy Address and paste it. Then follow steps 2 and 3."
+                        )
+                        .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                        HStack {
+                            Text(verbatim: AddToClaude.connector(relay: relay)).textSelection(.enabled)
+                                .font(.callout.monospaced())
+                            Button("Copy Address") {
+                                AddToClaude.copy(relay: relay)
+                                copied = true
+                            }
+                            .controlSize(.small)
+                            if copied { Label("Copied", systemImage: "checkmark").foregroundStyle(.secondary) }
+                        }
+                    }
+                    .padding(.top, 4)
+                }
+                .font(.callout)
             }
         } else {
             Text("Connect to your account first.").foregroundStyle(.secondary)
+        }
+    }
+
+    private func numbered(_ n: Int, _ text: String) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 6) {
+            Text(verbatim: "\(n).").foregroundStyle(.secondary).monospacedDigit()
+            Text(text).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
         }
     }
 }
@@ -477,10 +497,12 @@ struct SetupView: View {
             }
             Divider()
             HStack {
-                Text("Latchkey lives in the menu bar. To uninstall, move it to the Trash.")
-                    .font(.footnote).foregroundStyle(.secondary)
+                Text(
+                    "Latchkey lives in the menu bar; its key shows a mark until setup is finished. To uninstall, move it to the Trash."
+                )
+                .font(.footnote).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                 Spacer()
-                Button(model.needsSetup ? "Later" : "Done", action: close)
+                Button(model.needsSetup ? "Finish Later" : "Done", action: close)
                     .keyboardShortcut(model.needsSetup ? .cancelAction : .defaultAction)
             }
         }

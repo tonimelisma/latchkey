@@ -61,7 +61,8 @@ Open `https://<host name>/` in their browser (`open https://<host name>/`). Say:
 
 > A page opened. Click "Create account", enter your email address and this setup code:
 > **<code>**. Then your Mac asks to save a passkey; click Continue. That's your key to the relay,
-> kept in your iCloud Keychain.
+> kept in your iCloud Keychain. If your browser offers somewhere else to save it, choose iCloud
+> Keychain or This Mac.
 
 Wait until they say it worked. If the page says the code is wrong, read it to them again.
 
@@ -69,39 +70,62 @@ Wait until they say it worked. If the page says the code is wrong, read it to th
 
 Say:
 
-> Now open Latchkey from the menu bar (the key icon) and choose Set Up. In the first step, enter
-> https://<host name> and click Connect. Your browser opens; sign in with your passkey and click
-> Allow. Then Latchkey asks macOS for its permissions one by one; click Allow in each.
+> Now go back to Latchkey's setup window. If you closed it, click the key icon in the menu bar
+> at the top of your screen, then "Connect to a Relay…". In step 1, paste
+> https://<host name> and click Connect. Your browser opens: sign in with your passkey and click
+> Allow. Then do steps 2, 3, and 4 in that window; each one says what to click. Stop when you
+> reach step 5, "Add Latchkey to Claude", and tell me. I'll do that one with you.
+
+Wait until they say they reached step 5.
 
 ## Step 6: Connect Claude
 
 Say:
 
-> Last step: adding Latchkey to Claude. I'm opening Claude in your browser with Latchkey and your
-> relay's address already filled in. Check that the address is https://<host name>/mcp and click
-> Add. Claude then shows the settings it found: leave them as they are, click Add again, then
-> Connect. Sign in with your passkey and click Allow.
+> Next: adding Latchkey to Claude. Latchkey's window has an "Add to Claude" button; you don't
+> need it, I'm doing the same thing for you now. Claude opens in your browser (sign in to Claude
+> if it asks) with a form titled "Add custom connector", already filled in: the name Latchkey
+> and the address https://<host name>/mcp. Claude notes that the details came from a link;
+> that's expected. Click Add. Claude then shows the settings it found: change nothing, click
+> Add once more, then Connect. A Latchkey page opens: sign in with your passkey (Touch ID, the
+> one you made a moment ago), then click Allow. That lets Claude use your Mac.
 
-Then open Claude's add-connector dialog with the address filled in (spec 009 FR-914): run
-`open` with this link, where `<encoded>` is `https://<host name>/mcp` with `:` written `%3A`
-and `/` written `%2F`:
+Then open Claude's add-connector dialog with the address filled in (spec 009 FR-915). Put the
+link in single quotes, since an unquoted `&` ends the command early. `<encoded>` is the
+connector address with every `:` written `%3A` and every `/` written `%2F`; for
+`https://1-2-3-4.sslip.io/mcp` it is `https%3A%2F%2F1-2-3-4.sslip.io%2Fmcp`:
 
 ```
-https://claude.ai/customize/connectors?modal=add-custom-connector&connectorName=Latchkey&connectorUrl=<encoded>
+open 'https://claude.ai/customize/connectors?modal=add-custom-connector&connectorName=Latchkey&connectorUrl=<encoded>'
 ```
 
 Also say, so they have it if the link doesn't work:
 
-> If nothing opens, or Claude doesn't show the dialog: in Claude, open Customize, then
-> Connectors, then click "Add custom connector". Name it Latchkey, paste
-> https://<host name>/mcp, and click Add, Add again, and Connect. Then sign in with your passkey
-> and click Allow.
-> Latchkey's setup window ticks off its last step, "Add Latchkey to Claude", once Claude is
-> connected. It then works in Claude on the web, in Claude Desktop, and on your phone.
+> If nothing opens, or you don't see a form titled "Add custom connector": go to claude.ai in
+> your browser and sign in. In the column on the left, click Customize, then Connectors, then
+> the "Add custom connector" button. For the name, type Latchkey. For the address, paste
+> https://<host name>/mcp. Then click Add, Add once more, and Connect, sign in with your
+> passkey, and click Allow.
+
+Then ask: "Does Latchkey's setup window now show a checkmark next to 'Add Latchkey to Claude'?"
+Go on only when it does (it can take a few seconds). If not, ask what they see. If Claude showed
+its own sign-in page instead of the form, have them sign in to Claude and run the `open` command
+again. If the form still doesn't appear, walk them through the way by hand above. Once it's
+there, say:
+
+> Done: Claude on the web, in Claude Desktop, and on your phone can now reach your Mac.
 
 ## Step 7: Check and finish
 
-Ask them to ask Claude, in a new chat: "What's my Mac's battery level?" When it answers, say:
+Say:
+
+> Last check. Open a new chat in Claude (on claude.ai, or in Claude Desktop's Chat tab, not here
+> where we're talking) and type: What's my Mac's battery level? Claude may ask whether it can use
+> Latchkey; click Allow. Tell me what Claude answers.
+
+If Claude says it has no such tool, have them click the + or tools button under the chat box and
+turn Latchkey on. If it says the Mac is offline, check that the key icon in the menu bar has no
+mark beside it. When it answers, say:
 
 > Done. Your relay updates itself when a new version comes out. It runs on Google's free server;
 > if anything ever costs more than $1, Google emails you. If you ever move it to another address, you'll make a new passkey and add the

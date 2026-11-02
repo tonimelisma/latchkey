@@ -95,30 +95,34 @@ redraws them).
 
 ## Setting up the Mac app in detail
 
-1. **Install the Mac app.** Open `Latchkey.dmg`, drag Latchkey to Applications, and open it. The
-   setup window walks you through each step, one at a time: allow keep-awake, connect to a relay
-   (you create your account there with a passkey), and every macOS permission any capability
-   can use, whatever you turn on, so macOS never stops to ask while you're away (Full Disk
-   Access; Notifications; control of Notes, Messages, Mail, and Safari; Contacts; Calendars;
-   Reminders; Location; Local Network; Screen Recording and macOS's follow-up screen question;
-   Accessibility; and Safari's "Allow JavaScript from Apple Events"). Right after you connect,
-   Latchkey asks each macOS question in turn, then opens each System Settings page you need, one
-   after another, as you turn Latchkey on. Later, the
-   Permissions tab in Latchkey's Settings window shows each one and whether it's allowed. No
-   relay yet? The first step's Copy Request gives you a request to paste into Claude Code, which
-   sets one up for you on a free server ([its guide](setup-with-claude.md)).
-2. **Add Latchkey to Claude.** The setup window's last step, and your relay's account page, have
-   an **Add to Claude** button. It opens Claude with Latchkey and your relay's address filled
-   in: click Add; Claude shows the settings it found, so leave them and click Add again, then
-   Connect; sign in with your passkey and click Allow. The step stays open, and the menu bar icon
-   keeps its mark, until Claude is connected; it then ticks itself off. By hand: in Claude, open
-   Customize → Connectors → Add custom connector, and enter your relay's address followed by
-   `/mcp`, for example `https://relay.example.com/mcp`. The connector belongs to your Claude
-   account, so it appears in Claude on the web, in Claude Desktop, and in the phone apps.
-3. **Ask Claude:** "What's in my grocery note?", "What did Sarah say about dinner?", "How much
+1. **Install the Mac app.** Open `Latchkey.dmg`, drag Latchkey to Applications, and open it
+   (there's no release yet). The setup window has five steps, one open at a time.
+2. **A relay.** No relay yet? The first step's **Copy Request** gives you a request to paste into
+   the Code tab of the Claude app (Claude Code, part of Claude's paid plans). Claude Code then
+   sets up a relay for you on Google Cloud's free tier, about 20 minutes, and walks you through
+   every step below ([its guide](setup-with-claude.md)). To run one yourself, see
+   [self-hosting.md](self-hosting.md).
+3. **Connect** (setup step 1). Paste your relay's address and click Connect. Your browser opens:
+   sign in with your passkey, or create your account on a new relay, and click Allow.
+4. **macOS's permissions** (setup steps 2 to 4). Latchkey asks every macOS question any
+   capability can use, whatever you turn on, so macOS never stops to ask while you're away:
+   Notifications, Contacts, Calendars, Reminders, Location, Local Network, and control of Notes,
+   Messages, Mail, and Safari. Then it opens each System Settings page you need, one after
+   another: keep-awake, Full Disk Access, Screen Recording, and Accessibility. Last, Safari's
+   "Allow JavaScript from Apple Events". You choose later what Claude may actually do, in
+   Latchkey's Settings window; the Permissions tab there shows each approval.
+5. **Add Latchkey to Claude** (setup step 5). Click **Add to Claude**: Claude opens in your
+   browser (sign in to Claude if it asks) with its "Add custom connector" form filled in, noting
+   that the details came from a link. Click Add; Claude shows the settings it found, so change
+   nothing, click Add once more, then Connect. On the Latchkey page that opens, sign in with your
+   passkey and click Allow. The step gets a checkmark once Claude is connected; until then the
+   menu bar icon keeps its mark and setup opens at start. Your relay's account page has the same
+   button. By hand: on claude.ai, click Customize, then Connectors, then Add custom connector,
+   and paste your relay's address with `/mcp` right after it, for example
+   `https://relay.example.com/mcp`. The connector belongs to your Claude account, so Claude on
+   the web, in Claude Desktop, and in the phone apps all have it.
+6. **Ask Claude:** "What's in my grocery note?", "What did Sarah say about dinner?", "How much
    disk space is free?".
-
-The full checklist is in [specs/001-core/quickstart.md](../specs/001-core/quickstart.md).
 
 **Uninstall:** move Latchkey to the Trash. It disconnects from your account, restores normal
 sleep, removes its background items and local data, and quits.

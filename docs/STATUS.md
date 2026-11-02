@@ -35,7 +35,7 @@ after the app was quit.
 Releases, terms and privacy, and the directory listing are much later (Toni, 2026-10-22).
 
 Add Latchkey to Claude (Toni, 2026-11-01; spec 001 FR-627, FR-628, FR-659, FR-660, spec 009
-FR-914, plan D25): an Add to Claude button opens Claude's add-connector dialog with Latchkey and
+FR-915, plan D25): an Add to Claude button opens Claude's add-connector dialog with Latchkey and
 the relay's address filled in (claude.ai's documented install link; the Owner still clicks Add,
 Add, Connect, signs in, and clicks Allow), next to written steps and the way by hand. It is the
 setup window's fifth step, done only once Claude on the web, desktop, and phone has access, and
