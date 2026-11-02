@@ -131,7 +131,8 @@ turn Latchkey on. If it says the Mac is offline, check that the key icon in the 
 mark beside it. When it answers, say:
 
 > Done. Your relay updates itself when a new version comes out. It runs on Google's free server;
-> if anything ever costs more than $1, Google emails you. If you ever move it to another address, you'll make a new passkey and add Latchkey
+> if anything ever costs more than $1, Google emails you. If you started a Google free trial
+> today, remember to click Activate full account within 90 days, or Google stops the relay. If you ever move it to another address, you'll make a new passkey and add Latchkey
 > to Claude again; everything else stays.
 
 Tell them where things are: the relay's address, the hosting company's page, and that the setup
@@ -158,9 +159,13 @@ Then open the relay's page and say:
   and files Claude fetches count toward it; beyond it, a few cents per GB).
 - Account: open https://console.cloud.google.com/freetrial. They sign in with a Google account,
   accept the terms, and enter a card. If they have a Google Cloud account already, use it.
-  [To verify on a fresh account: whether the free trial's billing account must be upgraded to a
-  full account for the free server to keep running after the trial's 90 days; if so, ask them to
-  click "Activate full account" now and say it still costs nothing within the free limits.]
+  If their billing account is a new free trial, tell them, without asking them to act: "One
+  thing to know: Google's free trial ends after 90 days, and Google then stops anything made
+  during the trial unless the account was upgraded. Upgrading is one click, Activate full
+  account at the top of Google Cloud's pages, and the relay still costs nothing within the free
+  limits. You can do it any time before then; Google also emails you before the trial ends."
+  (Google: docs.cloud.google.com/free/docs/free-cloud-features, "resources you created during the
+  trial are stopped" unless upgraded first.)
 - Install Google's command-line tool, with no administrator password: download
   `https://dl.google.com/dl/cloudsdk/channels/rapid/google-cloud-cli-darwin-arm.tar.gz` (Intel
   Macs: `-darwin-x86_64`), unpack it in the home folder, and run

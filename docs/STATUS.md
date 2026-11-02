@@ -49,8 +49,8 @@ window, account page, the relay guide as heard and as followed) in two rounds; t
 in: the README starts with the app and Claude Code (no relay first), the guide quotes the link
 for `open`, copies the address for the person, names the real menu items, and checks the step's
 checkmark, and the app and page number the steps and say what each Add and passkey is.
-Open for Toni: whether Google's free trial must be upgraded to a full account for the server to
-outlive the trial's 90 days (the guide's "To verify" note; needs a fresh Google account).
+Google's free trial: Google stops what was made during a trial at day 90 unless the account
+was upgraded (Google's docs); the guide tells the Owner so, without making them upgrade (Toni).
 Flaky: relay `hub` TestToolsAreStoredOnlyWhenTheyChange fails under `-count=5` and in one full
 run, passes alone (code unchanged since spec 010).
 
