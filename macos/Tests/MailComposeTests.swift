@@ -395,6 +395,23 @@ final class FakePasteboard: Pasteboard, @unchecked Sendable {
         #expect(w.opened.isEmpty)
     }
 
+    /// 2026-11-01: a second copy of the same message (same sender and subject, sent within
+    /// minutes: Inbox and Sent of a message to oneself) doesn't block an answer; another
+    /// sender's copy still does.
+    @Test func aSecondCopyOfTheSameMessageCanBeAnswered() async throws {
+        let f = try MailFixture()
+        defer { f.close() }
+        f.add(
+            4001, .archive, ("landlord@example.com", "Pat Landlord"), "Lease renewal", 61, read: true,
+            to: [("owner@work.example", "")], file: .plain("Hello"), messageID: "<M1001@example.com>")
+        let store = try MailStore(root: f.root)
+        #expect(try store.messagesSharing(messageID: "<m1001@example.com>") == 1)
+        f.add(
+            4002, .inbox, ("landlord@example.com", "Pat Landlord"), "Lease renewal", 200, read: true,
+            to: [("owner@work.example", "")], file: .plain("Later"), messageID: "<M1001@example.com>")
+        #expect(try store.messagesSharing(messageID: "<m1001@example.com>") == 3, "sent hours apart: not one message")
+    }
+
     @Test func replyGoesToReplyTo() async throws {
         let f = try MailFixture()
         defer { f.close() }

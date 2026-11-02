@@ -140,7 +140,10 @@ further back. Messages whose text isn't on the Mac are counted and named in the 
   2. A response's window is checked against the message Claude chose before anything is typed
      (security review 2026-10-30: anyone can send a message with a copied Message-ID, and
      `message://` opens one of them). Refused before opening when more than one message (not
-     deleted) has that Message-ID, compared with and without angle brackets in any letter case.
+     deleted) has that Message-ID, compared with and without angle brackets in any letter case;
+     copies with the same sender and subject sent within 5 minutes count as one message (Inbox
+     and Sent of a message to oneself, two mailboxes; 2026-11-01: 2% of a month's mail had such
+     copies, differing only by seconds in the send time).
      After opening, the subject must be the original's (ignoring "Re:"/"Fwd:"); To and Cc may hold
      only the original's own response recipients: for Reply, its Reply-To (from the message file)
      or else its sender, and for a message the Owner sent, its To; Reply All adds its To and Cc;

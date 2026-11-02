@@ -368,20 +368,29 @@ final class MailStore: @unchecked Sendable {
         }
     }
 
-    /// How many messages (not deleted) carry this Message-ID, with or without its angle brackets,
-    /// in any letter case. Mail's `message://` link opens one of them, and anyone can send a
-    /// message with a copied Message-ID (security review 2026-10-30).
+    /// How many different messages (not deleted) carry this Message-ID, with or without its angle
+    /// brackets, in any letter case. Mail's `message://` link opens one of them, and anyone can
+    /// send a message with a copied Message-ID (security review 2026-10-30). Copies of one message
+    /// (Inbox and Sent of a message to oneself, two mailboxes) count once: same sender and subject,
+    /// sent within 5 minutes (2026-11-01: 2% of a month's mail had such copies, differing only by
+    /// seconds in the send time, and couldn't be answered).
     func messagesSharing(messageID: String) throws -> Int {
         let bare = messageID.trimmingCharacters(in: CharacterSet(charactersIn: "<> "))
         return try locked {
-            Int(
-                try SQLite.rows(
+            guard
+                let r = try SQLite.rows(
                     db,
                     """
-                    SELECT COUNT(*) FROM messages m JOIN message_global_data g ON g.ROWID = m.global_message_id
+                    SELECT COUNT(*), COUNT(DISTINCT m.sender), COUNT(DISTINCT m.subject),
+                    MAX(m.date_sent) - MIN(m.date_sent)
+                    FROM messages m JOIN message_global_data g ON g.ROWID = m.global_message_id
                     WHERE m.deleted = 0 AND (g.message_id_header = ? COLLATE NOCASE OR g.message_id_header = ? COLLATE NOCASE)
                     """, bind: [.text("<\(bare)>"), .text(bare)]
-                ).first?[0].int ?? 0)
+                ).first
+            else { return 0 }
+            let count = Int(r[0].int ?? 0)
+            let oneMessage = r[1].int == 1 && r[2].int == 1 && (r[3].int ?? 0) <= 300
+            return count > 1 && oneMessage ? 1 : count
         }
     }
 
