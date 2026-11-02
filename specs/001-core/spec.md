@@ -366,6 +366,12 @@ Why: on 2026-10-25 commands left processes and files on the Mac that nobody list
   (security review, 2026-10-25).
 - **FR-037** The Mac app shall report its IANA time zone in its state, and the relay shall render
   times in offline messages in that time zone, falling back to UTC when unknown.
+- **FR-038** While keep-awake is on and the lid is closed with no other monitor on, the Mac app
+  shall keep the session as it was when the lid closed (an unlocked session stays unlocked), so
+  that what needs the screen keeps working behind the closed lid. (Toni, 2026-11-01: lid closed
+  is the common case; working functionality first.)
+- **FR-039** When the lid opens, a monitor appears, or keep-awake goes off while the Mac app is
+  keeping a session unlocked behind the closed lid, the Mac app shall lock the Mac at once.
 
 ### Accounts and sign-in
 - **FR-040** The relay shall authenticate Claude using OAuth as required by Claude's connector

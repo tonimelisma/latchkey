@@ -152,7 +152,10 @@ the page's). So a note counts only for an address on the site of the page Claude
 (http or https, with or without www., the same port), and once a note opened the allowance it
 can't move it forward until it closes, so interleaved calls can't keep it open. Cost: a click
 that takes Claude's tab to another site loses the tab; it stays open, is named in Left Behind,
-and Claude's next page opens in a fresh tab.
+and Claude's next page opens in a fresh tab. Changed 2026-11-01 (Toni: the use case must
+work): the address of the link Claude clicked, which Latchkey's own click script reads from the
+link (not a note the page writes), counts on any site; the tab is still taken only at Claude's
+position, with as many tabs as before, while it shows that address loading.
 Fourth round (2026-10-29): the note is compared with the site Claude's tab showed before the
 script ran, and only Claude's own click, typing, or back may open the allowance; a read or a
 script of Claude's never does. What remains: a page can name one address on its own site per

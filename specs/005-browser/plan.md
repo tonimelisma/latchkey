@@ -183,8 +183,9 @@ AppleScript compiles (`ScriptSyntaxTests`).
 
 The stand-in Safari times notes as real Safari does (2026-10-29): a link's and back's note never
 arrives (the page is gone first), a button's arrives only to the acting script's wait, a
-script's only in its own run. Tests: a same-site link, a button, and back keep the tab; a link
-to another site and a script that navigates lose it; a note in the click script's own run
+script's only in its own run. Tests: a same-site link, a link to another site (since
+2026-11-01: the clicked link's address counts on any site), a button, and back keep the tab; a
+note of another site and a script that navigates lose it; a note in the click script's own run
 counts. The WebKit view checks the note taken in the script's own run, `null` on a page
 without the note, and the addresses the click and back scripts answer. Paging: a page like
 the Wikipedia article stays within Claude's result size and names the offset, and a url with
@@ -193,7 +194,8 @@ an offset reads from it.
 What only real Safari can show is checked by `macos/scripts/safari-check.sh`: Latchkey's own
 `SafariBrowser` against real Safari, in a window the check opens and closes, never touching
 the Owner's: a same-site click keeps the tab and the new page reads (and back, and a second
-click), a script's navigation and a cross-site click lose it as designed, a long page comes in
+click), a cross-site click keeps it (since 2026-11-01), a script's navigation loses it as
+designed, a long page comes in
 parts with a working offset. It runs from a terminal that may control Safari, not from the
 test host: the test host is its own app to macOS, and its first Apple Event to Safari opens an
 Automation prompt, during which Safari answers no window or tab scripting from anyone (seen

@@ -125,17 +125,14 @@ await withTab("A script that sends the page elsewhere loses Claude's tab, as des
     check(notes.all.contains { $0.contains("lost track") }, "noted as lost")
 }
 
-await withTab("A cross-site click loses Claude's tab, as designed") { b, notes in
+await withTab("A cross-site click keeps Claude's tab (since 2026-11-01)") { b, notes in
     let first = try await open(b, "https://en.wikipedia.org/wiki/Example.com")
     let r = try ref(first) { $0.hasPrefix("https://example.com") || $0.hasPrefix("http://example.com") }
-    _ = try? await b.click(r)
-    var lost = false
-    for _ in 0..<20 where !lost {
-        do { _ = try await b.read(offset: 0) } catch SafariBrowser.Failure.noWindow { lost = true }
-        if !lost { try await Task.sleep(for: .milliseconds(500)) }
-    }
-    check(lost, "Latchkey no longer uses the tab")
-    check(notes.all.contains { $0.contains("lost track") }, "noted as lost")
+    let page = try await b.click(r)
+    check(page.url.contains("example.com") && !page.url.contains("wikipedia"), "the new page reads: \(page.url)")
+    let again = try await b.read(offset: 0)
+    check(again.url.contains("example.com") && !again.url.contains("wikipedia"), "and reads again")
+    check(!notes.all.contains { $0.contains("lost track") }, "not lost")
 }
 
 await withTab("A long page comes in parts") { b, _ in

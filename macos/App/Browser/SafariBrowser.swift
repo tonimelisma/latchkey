@@ -257,15 +257,18 @@ actor SafariBrowser {
 
     /// Takes the page's note of where it is going: once per action. In an action that already
     /// began a navigation, the address joins it without moving its start.
-    /// Only an address on the site of the page Claude's tab shows counts: what the page can
-    /// name is its own site (security review, 2026-10-29); a click to another site loses the
-    /// tab, which stays open and is named in Left Behind.
+    /// A note the page wrote counts only for an address on the site of the page Claude's tab
+    /// shows: what the page can name is its own site (security review, 2026-10-29). The address
+    /// of the link Claude clicked (or of the entry back goes to), read by Latchkey's own script,
+    /// counts on any site (2026-11-01: a click to another site lost the tab until then); the tab
+    /// is still taken only at Claude's position, with as many tabs as before, while it shows that
+    /// address loading (`TabSurvey.pick`).
     /// One script's notes count as one: the note taken in the script's own run, the one the
-    /// acting script waited for, and the address of the link Claude clicked (or of the entry
-    /// back goes to), each JSON-encoded.
-    private func take(notes: [String], here: String?) {
+    /// acting script waited for, and the clicked address, each JSON-encoded.
+    private func take(notes: [String], here: String?, clicked: String? = nil) {
         guard !noteTaken, let here else { return }
         var goals: [String] = []
+        if let clicked, let goal = Self.goal(fromNote: clicked) { goals.append(goal) }
         for note in notes {
             if let goal = Self.goal(fromNote: note), Self.sameSite(goal, here), !goals.contains(goal) {
                 goals.append(goal)
@@ -499,12 +502,13 @@ actor SafariBrowser {
                     notes.append(both[1])
                 }
                 if parts.count > 1 { notes.append(parts[1]) }
+                var clicked: String?
                 if acting, let line = answer.firstIndex(of: "\n") {
-                    notes.append(String(answer[answer.index(after: line)...]))
+                    clicked = String(answer[answer.index(after: line)...])
                     answer = String(answer[..<line])
                 }
                 // Claude's own page said it is going to another page (a click, a form, back).
-                take(notes: notes, here: before)
+                take(notes: notes, here: before, clicked: clicked)
                 return answer
             } catch Failure.moved where attempt == 1 {
                 continue

@@ -468,18 +468,20 @@ final class Notes: @unchecked Sendable {
         #expect(page.url == "https://shop.example.com/before")
     }
 
-    /// Security review 2026-10-29: a link to another site loses the tab (it stays open and is
-    /// named), and nothing of the Owner's is touched.
-    @Test func aLinkClickToAnotherSiteLosesTheTab() async throws {
+    /// 2026-11-01: a link to another site keeps the tab (until then it lost it, from the security
+    /// review of 2026-10-29): the address comes from Latchkey's own click script, not a note the
+    /// page wrote, and nothing of the Owner's is touched.
+    @Test func aLinkClickToAnotherSiteKeepsTheTab() async throws {
         let fake = FakeSafariTabs()
         let notes = Notes()
         let b = browser(fake, notes: notes)
         _ = try await b.open("https://shop.example.com", newTab: false)
         await b.age(by: 60)
         fake.clickGoesTo = "https://pay.example.net/"
-        await #expect(throws: SafariBrowser.Failure.noWindow) { _ = try await b.click("e1") }
-        #expect(fake.claudeTabs.count == 1, "Claude's tab stays open")
-        #expect(notes.all.contains { $0.contains("lost track") })
+        let page = try await b.click("e1")
+        #expect(page.url == "https://pay.example.net/")
+        #expect(fake.claudeTabs.count == 1)
+        #expect(!notes.all.contains { $0.contains("lost track") }, "\(notes.all)")
         #expect(fake.ownerTabs.allSatisfy { $0.scriptsRun == 0 && $0.mark == nil })
     }
 
