@@ -66,7 +66,7 @@ itself, and Claude Code where the catalog came from claude.ai or auto-update is 
 
 ## D6. Telling the Owner (FR-1112)
 
-README's Get started gets a step after Connect Claude; the relay's account page, under Claude,
+README's Get started gets a line right after Connect Claude (an optional step since the README became a short product page, Toni, 2026-11-01); the relay's account page, under Claude,
 gets one line with the catalog name to add. The Mac app shows nothing new (its setup ends when
 the Mac is connected; the account page is where Claude is connected).
 

@@ -1,6 +1,6 @@
 # Status
 
-Last updated: 2026-11-01 (Latchkey plugin for Claude, spec 011; relay web pages redone; purkki paired; spec 010 shipped)
+Last updated: 2026-11-01 (README rewritten as a short product page; Latchkey plugin for Claude, spec 011; relay web pages redone; purkki paired; spec 010 shipped)
 
 Xcode signing ready (2026-10-20): Toni's Xcode account has a valid "Apple Development" certificate
 (certificate expires 2027-07-22). Keep the team ID out of committed project files
@@ -52,6 +52,12 @@ Claude Code session with the plugin from GitHub's main used the real connector a
 skill correctly. Toni added the catalog and the plugin on his claude.ai account (2026-11-01);
 Constitution VIII no longer counts projects (Toni). Toni approved all eight choices made for
 him (plan.md "Choices made for Toni") in chat on 2026-11-01.
+
+README rewritten as a short product page (Toni, 2026-11-01): the promise, a drawing of a phone
+chat (docs/images/phone-chat.svg), three steps, what you can ask, how you stay in charge, links.
+The details moved to docs/how-it-works.md and docs/development.md. Until the first release it asks
+people to watch the repository for releases; the journey it describes (download, Touch ID
+account, add to Claude) needs the notarized download and open sign-up on the hosted relay.
 
 Several machines and Linux servers (spec 010; Toni asked on 2026-10-31 for plan and build in one
 go). Built 2026-11-01: one account pairs any number of Macs and headless Linux servers behind the

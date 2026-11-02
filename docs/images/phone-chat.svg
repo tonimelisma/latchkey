@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="360" height="560" viewBox="0 0 360 560" role="img" aria-labelledby="t d">
+  <title id="t">Asking Claude on a phone about a Mac at home</title>
+  <desc id="d">A drawing of a phone chat. The person asks: Find the lease PDF on my Mac and tell me when it ends. Claude answers that it found Lease-2026.pdf in Downloads on the MacBook at home, and the lease ends on August 31, 2027, with notice due 60 days before.</desc>
+  <style>
+    .frame { fill: #1d1d1f; }
+    .screen { fill: #faf9f5; }
+    .bar { fill: #8e8e93; font: 600 13px -apple-system, system-ui, sans-serif; }
+    .title { fill: #1d1d1f; font: 600 15px -apple-system, system-ui, sans-serif; }
+    .me { fill: #e8e4da; }
+    .me-text { fill: #1d1d1f; font: 15px -apple-system, system-ui, sans-serif; }
+    .tool { fill: #f0eee6; stroke: #d9d5c9; }
+    .tool-text { fill: #5e5d59; font: 13px -apple-system, system-ui, sans-serif; }
+    .text { fill: #1d1d1f; font: 15px -apple-system, system-ui, sans-serif; }
+    .strong { font-weight: 600; }
+    .input { fill: #ffffff; stroke: #d9d5c9; }
+    .hint { fill: #8e8e93; font: 15px -apple-system, system-ui, sans-serif; }
+  </style>
+  <rect class="frame" x="0" y="0" width="360" height="560" rx="48"/>
+  <rect class="screen" x="12" y="12" width="336" height="536" rx="38"/>
+  <text class="bar" x="44" y="44">9:41</text>
+  <rect class="frame" x="130" y="26" width="100" height="26" rx="13"/>
+  <text class="title" x="180" y="86" text-anchor="middle">Claude</text>
+
+  <rect class="me" x="72" y="112" width="252" height="66" rx="18"/>
+  <text class="me-text" x="90" y="140">Find the lease PDF on my Mac</text>
+  <text class="me-text" x="90" y="162">and tell me when it ends.</text>
+
+  <rect class="tool" x="36" y="200" width="214" height="32" rx="10"/>
+  <text class="tool-text" x="50" y="221">Latchkey · MacBook at home</text>
+
+  <text class="text" x="36" y="264">Found <tspan class="strong">Lease-2026.pdf</tspan> in your</text>
+  <text class="text" x="36" y="286">Downloads. The lease ends on</text>
+  <text class="text strong" x="36" y="308">August 31, 2027.</text>
+  <text class="text" x="36" y="340">To move out or renew, give notice</text>
+  <text class="text" x="36" y="362">60 days before: by <tspan class="strong">July 2, 2027</tspan>.</text>
+
+  <rect class="input" x="28" y="476" width="304" height="46" rx="23"/>
+  <text class="hint" x="50" y="505">Reply to Claude</text>
+</svg>
