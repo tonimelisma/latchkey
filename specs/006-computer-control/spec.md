@@ -33,8 +33,9 @@ Claude can use them the way the Owner would.
 - **FR-502** While Read & write, Claude shall be able to move the pointer, click (left, right,
   double), drag, scroll, type text, press keys and shortcuts, and open apps.
 - **FR-503** Coordinates shall refer to the pixels of the screenshot Claude saw.
-- **FR-504** When the screen is locked, the display is asleep and can't be woken, or there is
-  no display, the tools shall answer with the reason instead of acting.
+- **FR-504** When the screen is locked, the display is asleep, or there is no display, the
+  tools shall answer with the reason instead of acting. A sleeping display is not woken (Toni,
+  2026-11-02: Latchkey never gets around the Mac's idle lock, lid open or closed).
 - **FR-505** Latchkey shall never type the Owner's password or unlock the Mac.
 - **FR-506** When Screen Recording or Accessibility permission is missing, the setup window
   shall show the step and the tools shall explain what to turn on.

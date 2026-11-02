@@ -16,16 +16,10 @@ final class FakeScreen: ScreenStateSource, @unchecked Sendable {
     var list = [Displays.main, Displays.side]
     var locked = false
     var asleep = false
-    var wakesUp = true
-    private(set) var woke = 0
 
     func displays() -> [DisplayInfo] { list }
     func isLocked() -> Bool { locked }
     func isAsleep(_ id: CGDirectDisplayID) -> Bool { asleep }
-    func wake() {
-        woke += 1
-        if wakesUp { asleep = false }
-    }
 }
 
 final class FakePoster: InputPoster, @unchecked Sendable {
@@ -82,43 +76,15 @@ final class FakePoster: InputPoster, @unchecked Sendable {
         #expect(none?.contains("shell") == true, "says what still works")
     }
 
-    /// The waits between looks are counted, not slept: the test used to sleep 2 s of real time
-    /// and failed once in a full run (2026-10-28).
-    @Test func wakesASleepingDisplay() async {
-        let s = FakeScreen()
-        let pauses = PauseCounter()
-        s.asleep = true
-        #expect(await ScreenCheck.problem(s, pause: { pauses.add() }) == nil)
-        #expect(s.woke == 1)
-        #expect(pauses.value == 0, "awake at once: no waiting")
-        s.asleep = true
-        s.wakesUp = false
-        #expect(await ScreenCheck.problem(s, pause: { pauses.add() })?.contains("asleep") == true)
-        #expect(s.woke == 2)
-        #expect(pauses.value == ScreenCheck.wakeChecks, "looks again for 2 s before giving up")
-    }
-
-    @Test func waitsOnlyUntilTheDisplayWakes() async {
+    /// Toni, 2026-11-02: a sleeping display isn't woken, so the Mac's idle lock comes as usual.
+    @Test func aSleepingDisplayIsLeftAsleep() async {
         let s = FakeScreen()
         s.asleep = true
-        s.wakesUp = false
-        let pauses = PauseCounter()
-        let problem = await ScreenCheck.problem(
-            s,
-            pause: {
-                pauses.add()
-                if pauses.value == 3 { s.asleep = false }  // wakes a moment later, as a real display does
-            })
-        #expect(problem == nil)
-        #expect(pauses.value == 3)
+        let problem = await ScreenCheck.problem(s)
+        #expect(problem?.contains("asleep") == true)
+        #expect(problem?.contains("locks itself as usual") == true)
+        #expect(problem?.contains("shell") == true, "says what still works")
     }
-}
-
-final class PauseCounter: @unchecked Sendable {
-    private let lock = NSLock()
-    private var count = 0
-    func add() { lock.withLock { count += 1 } }
-    var value: Int { lock.withLock { count } }
 }
 
 @Suite struct ComputerActionTests {

@@ -48,8 +48,6 @@ protocol ScreenStateSource: Sendable {
     func displays() -> [DisplayInfo]
     func isLocked() -> Bool
     func isAsleep(_ id: CGDirectDisplayID) -> Bool
-    /// Wakes a sleeping display, as a key press would.
-    func wake()
 }
 
 struct SystemScreen: ScreenStateSource {
@@ -74,37 +72,24 @@ struct SystemScreen: ScreenStateSource {
     }
 
     func isAsleep(_ id: CGDirectDisplayID) -> Bool { CGDisplayIsAsleep(id) != 0 }
-
-    func wake() {
-        var assertion: IOPMAssertionID = 0
-        IOPMAssertionDeclareUserActivity(
-            "Latchkey: Claude looks at the screen" as CFString, kIOPMUserActiveLocal, &assertion)
-    }
 }
 
 /// Plain reasons the screen can't be used now (FR-504); nil when it can.
+/// A sleeping display is never woken (Toni, 2026-11-02: Latchkey doesn't get around the Mac's
+/// idle lock, lid open or closed; waking it reset the idle time, so Claude's looks could keep an
+/// idle Mac from locking).
 enum ScreenCheck {
     static let stillWorks = "Files, shell, Notes, Messages, and the browser still work."
 
-    /// How often, and how long apart, a sleeping display is looked at again after waking it: 2 s.
-    static let wakeChecks = 20
-
-    /// `pause` waits between looks; tests pass one that doesn't sleep.
-    static func problem(
-        _ s: any ScreenStateSource,
-        pause: @Sendable () async -> Void = { try? await Task.sleep(for: .milliseconds(100)) }
-    ) async -> String? {
+    static func problem(_ s: any ScreenStateSource) async -> String? {
         let displays = s.displays()
         guard let main = displays.first else {
             return
                 "The Mac has no screen on right now (the lid is closed and no monitor is connected), so Claude can't see or use the screen. \(stillWorks)"
         }
         if s.isAsleep(main.id) {
-            s.wake()
-            for _ in 0..<wakeChecks where s.isAsleep(main.id) { await pause() }
-            if s.isAsleep(main.id) {
-                return "The Mac's display is asleep and didn't wake, so Claude can't see the screen. \(stillWorks)"
-            }
+            return
+                "The Mac's display is asleep because no one has used the Mac for a while, so Claude can't see the screen; Latchkey doesn't wake it, so the Mac locks itself as usual. \(stillWorks)"
         }
         if s.isLocked() {
             return

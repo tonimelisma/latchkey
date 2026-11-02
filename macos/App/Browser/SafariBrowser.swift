@@ -755,7 +755,7 @@ actor SafariBrowser {
         } catch ScriptError.timedOut where SystemScreen().isLocked() {
             // Seen live 2026-11-01: with the Mac locked, Safari stops answering scripts after a page.
             throw Failure.failed(
-                "Safari stopped answering while the Mac is locked. It answers again once someone unlocks the Mac; with keep-awake on and the lid closed, Latchkey keeps the Mac from locking."
+                "Safari stopped answering while the Mac is locked. It answers again once someone unlocks the Mac."
             )
         }
     }

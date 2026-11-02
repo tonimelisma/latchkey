@@ -449,7 +449,7 @@ Serves FR-030, FR-031, FR-035, FR-073; Constitution IV.
   (research.md), with conflicting reports about power-source changes on Apple silicon. The
   re-apply-and-read-back above is the mitigation. No separate spike or hardware test run
   (Toni, 2026-10-20).
-- The session behind a closed lid (FR-038, FR-039; `LidSession`, 2026-11-01). Seen live with
+- The session behind a closed lid (FR-038, FR-039 withdrawn; FR-661). Seen live with
   `SleepDisabled` on: after the lid closes, macOS keeps drawing the built-in screen and the
   session unlocked until a few minutes after the last activity, then drops the display and
   locks; locked, Mail's window, the screen, and Safari's scripting stop working. Options, least
@@ -458,11 +458,11 @@ Serves FR-030, FR-031, FR-035, FR-073; Constitution IV.
   unlocked, and lock with macOS's own shortcut (Control-Command-Q, through the Accessibility
   setup already asks for) the moment the lid opens; (d) a virtual or plug-in monitor plus never
   requiring a password (private `CGVirtualDisplay` or hardware; weakens the lock for everyone).
-  Chose (c): public API, and a closed lid is as safe as a locked Mac, since opening it locks.
-  Not taken while a monitor is on (a desk setup), and a monitor that appears locks the Mac. A
-  session already locked when the lid closes stays locked (Latchkey never types a password).
-  What remains: a paired Bluetooth keyboard or mouse, or Screen Sharing, reaches the unlocked
-  session while the lid is closed.
+  Chose (c) on 2026-11-01 (0.8.66); withdrawn 2026-11-02 (0.8.73, Toni: "we're not
+  circumventing security"): it kept the Mac's idle lock from coming, lid open or closed being
+  no different. Now (a): what needs an unlocked session refuses plainly while locked (FR-661:
+  Latchkey never holds off the idle lock), and ways to do some of it while locked are looked
+  for capability by capability.
 
 ### D8. Power and thermal monitoring
 Serves FR-032, FR-033, FR-034, FR-036, FR-063.

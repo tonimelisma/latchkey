@@ -33,8 +33,9 @@ second call. Deadline 20 s.
 ## D2. Screen state (FR-504, FR-505)
 
 Before every tool: no active display → "no screen" (lid closed without a monitor); locked
-(`CGSSessionScreenIsLocked`) → "locked"; display asleep → wake it with a user-activity
-assertion, wait up to 2 s, check again (it may now be locked). Each reason is a plain sentence
+(`CGSSessionScreenIsLocked`) → "locked"; display asleep → "asleep", left asleep (until
+2026-11-02 it was woken with a user-activity assertion, which reset the idle time, so Claude's
+looks could keep an idle Mac from locking; Toni: never get around the idle lock). Each reason is a plain sentence
 that also says files, shell, Notes, Messages, and the browser still work.
 
 ## D3. Seeing

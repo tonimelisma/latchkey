@@ -58,8 +58,6 @@ final class AppModel {
     var trace: TraceStore? { activityLog.store }
     let updates = Updates()
     private let keepAwakeController = KeepAwakeController()
-    /// Keeps the session usable behind a closed lid, and locks the Mac when the lid opens.
-    private let lidSession = LidSession()
     private var connection: RelayConnection?
     private var powerMonitor: PowerMonitor?
     private var pathMonitor: NWPathMonitor?
@@ -167,7 +165,6 @@ final class AppModel {
             Task { await self?.movedToTrash(installedPath: installedPath) }
         }
         powerMonitor = PowerMonitor { [weak self] in Task { await self?.refresh() } }
-        lidSession.report = { [weak self] text, error in self?.event(.keepAwake, text, error: error) }
         // Core Location reports the permission in a callback just after its manager is made;
         // until then it is unknown (FR-621).
         LocationFixer.shared.onAccessChange = { [weak self] _ in self?.checkPersonalData() }
@@ -321,7 +318,6 @@ final class AppModel {
         await connection?.stop(goodbye: .userDisconnected, state: agentState)
         connection = nil
         await keepAwakeController.restore()
-        lidSession.release()
         await BackgroundItems.unregisterAll()
         event(.app, "Uninstalling: removing the local files, the activity log included")
         EventLog.shared.discard()  // nothing more can be kept once the log is gone
@@ -335,7 +331,6 @@ final class AppModel {
         await connection?.stop(goodbye: .userQuit, state: agentState)
         await ShellCapability.jobs.stopAll()  // spec 004 FR-309
         await keepAwakeController.restore()
-        lidSession.release()
     }
 
     private func watchSystem() {
@@ -401,7 +396,6 @@ final class AppModel {
                 userEnabled: keepAwakeEnabled, helperAvailable: keepAwakeController.helperApproved))
         let ok = await keepAwakeController.apply(decision)
         keepAwake = (decision == .on && !ok) ? .offHelperUnavailable : decision
-        lidSession.update(keepAwakeOn: keepAwake == .on, lidClosed: power.lidClosed)
         // A helper that just ended itself after an install is restarted by launchd only after its
         // 10-second wait (seen 2026-10-27), so try again a little later, a few times.
         if decision == .on && !ok && keepAwakeRetries < 5 {
