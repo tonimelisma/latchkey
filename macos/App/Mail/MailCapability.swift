@@ -275,11 +275,13 @@ enum MailCapability {
 
     /// Sends what is queued, oldest first (FR-837), telling `report` about each: its summary,
     /// whether it was sent, and Latchkey's answer.
+    /// `allowed` is asked before each message; when it says no, the rest stays queued.
     static func sendQueued(
-        _ q: MailQueue = .shared, env given: Env? = nil, report: @Sendable (String, Bool, String) async -> Void
+        _ q: MailQueue = .shared, env given: Env? = nil, allowed: @Sendable () async -> Bool = { true },
+        report: @Sendable (String, Bool, String) async -> Void
     ) async {
         guard let env = given ?? liveEnv.value else { return }
-        while let item = try? await q.next() {
+        while await allowed(), let item = try? await q.next() {
             let r = await run(env) { s in try await MailWrite.send(item.args, s, env) }
             await report(item.summary, !r.isError, r.content.jsonText)
         }

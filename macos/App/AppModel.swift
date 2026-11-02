@@ -337,10 +337,13 @@ final class AppModel {
     /// Sends the email queued while the Mac was locked (spec 008 FR-837), once it is unlocked and
     /// while Mail is Read & write, telling the Owner about each.
     func sendQueuedMail() async {
-        guard capabilities.level(CapabilityRegistry.mail) == .readWrite, !SystemScreen().isLocked() else { return }
+        guard mayStillSendQueuedMail else { return }
         // A moment for the unlocked session to settle before Mail opens windows.
         try? await Task.sleep(for: .seconds(3))
-        await MailCapability.sendQueued { [weak self] summary, sent, answer in
+        await MailCapability.sendQueued(allowed: { [weak self] in
+            await MainActor.run { self?.mayStillSendQueuedMail ?? false }
+        }) {
+            [weak self] summary, sent, answer in
             await MainActor.run {
                 self?.event(.app, "Queued email \(sent ? "sent" : "not sent"): \(summary)", error: !sent)
             }
@@ -350,6 +353,12 @@ final class AppModel {
             try? await UNUserNotificationCenter.current().add(
                 UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil))
         }
+    }
+
+    /// Checked before each queued message (security review 2026-11-02): paired, not paused, Mail
+    /// still Read & write, and unlocked. Otherwise the queue waits.
+    private var mayStillSendQueuedMail: Bool {
+        isPaired && !paused && capabilities.level(CapabilityRegistry.mail) == .readWrite && !SystemScreen().isLocked()
     }
 
     private func watchSystem() {

@@ -66,6 +66,27 @@ import Testing
         #expect(await q.items().isEmpty)
     }
 
+    /// Security review 2026-11-02: paused, unpaired, Mail turned down, or locked again: the rest waits.
+    @Test func sendingStopsWhenNoLongerAllowed() async throws {
+        let f = try MailFixture()
+        defer { f.close() }
+        let (q, _) = queue()
+        _ = await MailCapability.queue(message, q)
+        _ = await MailCapability.queue(message, q)
+        let w = FakeWindows()
+        let env = try MailTestEnv.make(f, scripts: MailWriteTests.scripts(), confirmWait: .zero, windows: w)
+        let asked = Locked(0)
+        await MailCapability.sendQueued(
+            q, env: env,
+            allowed: {
+                asked.mutate { $0 += 1 }
+                return asked.value == 1
+            }
+        ) { _, _, _ in }
+        #expect(w.opened.count == 1)
+        #expect(await q.items().count == 1, "the second stays queued")
+    }
+
     @Test func theLockedRefusalPointsToTheQueue() {
         #expect(AXMailWindows.whileLocked.contains("mail_queue"))
     }
