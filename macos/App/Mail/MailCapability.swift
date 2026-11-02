@@ -219,6 +219,13 @@ enum MailCapability {
             if case .object(var o) = send {
                 o["action"] = nil
                 o["id"] = nil
+                // An address given as text, not a list (seen live: Claude's first try), is one list.
+                for field in ["to", "cc", "bcc"] {
+                    if case .string(let s) = o[field] {
+                        o[field] = .array(
+                            s.split(separator: ",").map { .string($0.trimmingCharacters(in: .whitespaces)) })
+                    }
+                }
                 send = .object(o)
             }
             let to = send["to"].map { v -> String in

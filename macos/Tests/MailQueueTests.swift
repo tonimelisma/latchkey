@@ -34,6 +34,17 @@ import Testing
         #expect(unknown.isError)
     }
 
+    @Test func anAddressAsTextIsTaken() async {
+        let (q, _) = queue()
+        let r = await MailCapability.queue(
+            .object([
+                "action": .string("add"), "to": .string("sam@example.com, bob@example.com"),
+                "subject": .string("Hi"),
+            ]), q)
+        #expect(!r.isError, "\(r.content.jsonText)")
+        #expect(await q.items().first?.args["to"] == .array([.string("sam@example.com"), .string("bob@example.com")]))
+    }
+
     @Test func refusesWhatCouldNeverBeSent() async {
         let (q, _) = queue()
         let nobody = await MailCapability.queue(.object(["action": .string("add"), "subject": .string("Hi")]), q)
