@@ -85,6 +85,10 @@ enum SafariCookies {
         ]
         if c.secure { p[.secure] = "TRUE" }
         if c.httpOnly { p[HTTPCookiePropertyKey("HttpOnly")] = "TRUE" }
+        // The file doesn't keep a cookie's SameSite; without one WebKit would send it with requests
+        // other sites start. Lax: sent when Claude opens a page, not with another site's forms
+        // (security review 2026-11-02).
+        p[.sameSitePolicy] = HTTPCookieStringPolicy.sameSiteLax.rawValue
         return HTTPCookie(properties: p)
     }
 }

@@ -64,6 +64,7 @@ import Testing
         #expect(cookies[1].path == "/basket" && !cookies[1].secure && !cookies[1].httpOnly)
         let http = SafariCookies.httpCookie(cookies[0])
         #expect(http?.isSecure == true && http?.isHTTPOnly == true && http?.domain == ".example.com")
+        #expect(http?.sameSitePolicy == .sameSiteLax, "never sent with another site's requests")
     }
 
     @Test func nonsenseGivesNothing() {

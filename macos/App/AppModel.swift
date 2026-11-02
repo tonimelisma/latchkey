@@ -366,7 +366,12 @@ final class AppModel {
             DistributedNotificationCenter.default().addObserver(
                 forName: .init("com.apple.screenIsUnlocked"), object: nil, queue: .main
             ) { [weak self] _ in
-                MainActor.assumeIsolated { Task { await self?.sendQueuedMail() } }
+                MainActor.assumeIsolated {
+                    // The browser used while locked goes at once, with its copy of Safari's cookies
+                    // (spec 005 FR-422; security review 2026-11-02).
+                    BrowserCapability.lockedBrowser.discard()
+                    Task { await self?.sendQueuedMail() }
+                }
             })
         let ws = NSWorkspace.shared.notificationCenter
         observers.append(
@@ -465,6 +470,7 @@ final class AppModel {
 
     func setLevel(_ id: String, _ level: AccessLevel) {
         capabilities.setLevel(id, level)
+        if id == CapabilityRegistry.browser { BrowserCapability.lockedBrowser.discard() }
         defaults.set(capabilities.levels.mapValues(\.rawValue), forKey: Keys.levels)
         let registry = capabilities
         Task { [connection] in
@@ -480,6 +486,7 @@ final class AppModel {
 
     func setPaused(_ on: Bool) {
         paused = on
+        if on { BrowserCapability.lockedBrowser.discard() }
         Pause.set(on, defaults)
         event(.pause, "\(on ? "Paused" : "Resumed") Claude's access")
         guard on else { return }
