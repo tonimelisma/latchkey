@@ -78,6 +78,13 @@ phone, Claude can't check a reservation in the Owner's account or fill in a form
   saying it lost track of Claude's tab, and open a new tab for Claude's next page (2026-10-29).
 - **FR-419** While Browser is Read & write, Claude shall be able to close its own tab or window,
   never one of the Owner's (Toni, 2026-11-01: "open tabs and close").
+- **FR-420** While the Mac is locked, the browser tools shall work in a browser of Latchkey's
+  own, signed in with the Owner's Safari cookies as they are when it starts (Toni, 2026-11-02:
+  Safari stops answering while locked).
+- **FR-421** The copy of Safari's cookies shall be kept only in memory: never written to disk,
+  logged, shown to Claude, or sent off the Mac.
+- **FR-422** When the Mac is unlocked, Latchkey's own browser shall be closed with its cookies,
+  and the browser tools shall use Safari again.
 
 ## Success criteria
 

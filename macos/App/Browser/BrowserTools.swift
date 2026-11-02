@@ -2,8 +2,8 @@ import Foundation
 
 /// The Browser tools Claude sees: read and act (consolidated 2026-10-23).
 extension BrowserCapability {
-    static func readTools(browser: SafariBrowser) -> [ToolEntry] {
-        let ops = Operations(readOperations(browser: browser))
+    static func readTools(browser: SafariBrowser, locked: @escaping LockedRoute = noLocked) -> [ToolEntry] {
+        let ops = Operations(readOperations(browser: browser, locked: locked))
         return [
             ToolEntry(
                 tool: .make(
@@ -15,7 +15,9 @@ extension BrowserCapability {
                         With tab: switches to that tab. With nothing: reads the page showing. Answers with the page's text and the links, \
                         buttons, and fields on it, each with a reference like e12 for browser_act. Long pages come \
                         in parts; pass offset to read on. tabs: lists the tabs. screenshot: shows the page as an \
-                        image (needs the Mac unlocked with its screen on).
+                        image. While the Mac is locked, Safari doesn't answer, so Latchkey uses a browser of its \
+                        own instead, signed in with the owner's Safari cookies: one page, no tabs, its own history; \
+                        it is closed when the Mac is unlocked, and Safari is used again.
                         """,
                     input: [
                         "url": .stringParam("A page to open"),
@@ -43,8 +45,8 @@ extension BrowserCapability {
 
     static let actions = ["click", "type", "script", "close"]
 
-    static func writeTools(browser: SafariBrowser) -> [ToolEntry] {
-        let ops = Operations(writeOperations(browser: browser))
+    static func writeTools(browser: SafariBrowser, locked: @escaping LockedRoute = noLocked) -> [ToolEntry] {
+        let ops = Operations(writeOperations(browser: browser, locked: locked))
         return [
             ToolEntry(
                 tool: .make(

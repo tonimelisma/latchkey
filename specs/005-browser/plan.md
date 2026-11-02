@@ -161,6 +161,25 @@ window at the next page Claude opens (FR-417).
 - **Tabs** (FR-416): the tab list shows Claude's tab alone as tab 1; switching to another number
   is refused with a hint to open a page instead.
 
+## D7. While the Mac is locked: a browser of Latchkey's own (FR-420 to FR-422, Toni 2026-11-02)
+
+Seen live 2026-11-01: with the Mac locked, Safari answers the first script and then no more (every
+script times out). Latchkey never gets around the lock (spec 001 FR-661). Tried live while locked
+on 2026-11-02: an off-screen `WKWebView` in a process of its own loaded a page, ran its scripts,
+went to an address and back, and drew a full picture of the page (`takeSnapshot`); a link
+clicked by a script didn't navigate there, so the click follows the link's address itself.
+Options Toni was shown: nothing while locked; the built-in browser for public pages; the same
+with Safari's sign-ins. Chosen: with Safari's sign-ins. `LockedBrowser` (main actor) is one
+off-screen `WKWebView` with a `.nonPersistent()` data store, so nothing reaches the disk; when it
+is made it reads Safari's `Cookies.binarycookies` (Full Disk Access, which setup asks for;
+`SafariCookies`: the long-known format, bounds-checked, expired ones left out; read live
+2026-11-02: all 3,530 cookies of 1,393 sites) into that store. The browser tools ask
+`BrowserCapability.lockedRoute` on each call: locked, the built-in browser; unlocked, it is
+discarded with its cookies and Safari answers. It runs the same `PageScripts`, so answers look
+the same; one page, no tabs; screenshots are its own drawing (no screen permission needed).
+Risks: Safari's cookie file format isn't documented (a change shows as no sign-ins, not as a
+failure); a site that ties a session to Safari itself may ask to sign in.
+
 ## Testing
 
 A stand-in script runner answers like Safari: open, read (page JSON), click, type, missing
@@ -208,9 +227,9 @@ Automation prompt, during which Safari answers no window or tab scripting from a
 | I. Outbound only | Pass |
 | II. Fail fast | Pass: 25 s script deadline, 15 s page wait |
 | III. Disabled means nonexistent | Pass |
-| IV. Good macOS citizen | Pass: Apple Events with the Owner's consent; the Owner turns on Safari's setting |
+| IV. Good macOS citizen | Pass: Apple Events with the Owner's consent; the Owner turns on Safari's setting; WebKit's public API while locked (Safari's cookie file is read under Full Disk Access; its format is undocumented) |
 | V. Self-hostable | Pass |
-| VI. Store the minimum | Pass: the window id, and for a tab its position, count, address, and token, deleted when it closes |
+| VI. Store the minimum | Pass: the window id, and for a tab its position, count, address, and token, deleted when it closes; while locked, a copy of Safari's cookies in memory only, dropped at unlock |
 | VII. Test-first | Planned |
 | VIII. Simplicity | Pass: AppleScript and a page script; no driver or extension |
 | IX. Open source | Pass |

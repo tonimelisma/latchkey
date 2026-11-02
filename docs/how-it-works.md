@@ -52,7 +52,7 @@ Claude (web, Desktop, phone)  ──HTTPS──▶  Latchkey relay  ◀──out
   | Messages | `messages_find`, `messages_read` | `messages_send` (text and files) |
   | Files | `files_find`, `files_read` (text, PDFs, documents, images) | `files_change` (write, edit, folders, move, copy, Trash) |
   | Shell | | `shell_run`, `shell_check` (long and interactive commands; writes fenced, leftovers removed) |
-  | Browser (your Safari, your logins) | `browser_read` | `browser_act` (click, type, script, close Claude's page) |
+  | Browser (your Safari, your logins; while locked, Latchkey's own browser with your Safari logins) | `browser_read` | `browser_act` (click, type, script, close Claude's page) |
   | Computer control (while unlocked) | `computer_look` | `computer_act` (mouse, keyboard, apps) |
   | Calendar (every account on the Mac) | `calendar_find` (events, free time) | `calendar_change` (create, move, repeat, delete) |
   | Reminders | `reminders_find` | `reminders_change` (create, complete, change, delete; new and deleted lists) |
