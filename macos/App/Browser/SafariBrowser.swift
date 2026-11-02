@@ -744,6 +744,11 @@ actor SafariBrowser {
             if message.contains("LATCHKEY_MOVED") { throw Failure.moved }
             if message.contains("Allow JavaScript from Apple Events") { throw Failure.javaScriptOff }
             throw Failure.failed("Safari reported a problem: \(message)")
+        } catch ScriptError.timedOut where SystemScreen().isLocked() {
+            // Seen live 2026-11-01: with the Mac locked, Safari stops answering scripts after a page.
+            throw Failure.failed(
+                "Safari stopped answering while the Mac is locked. It answers again once someone unlocks the Mac; with keep-awake on and the lid closed, Latchkey keeps the Mac from locking."
+            )
         }
     }
 

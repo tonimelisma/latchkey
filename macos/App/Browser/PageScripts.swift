@@ -124,16 +124,18 @@ enum PageScripts {
     static func click(_ ref: String) -> String {
         """
         (function () { \(find(ref))
+          var hrefOf = Object.getOwnPropertyDescriptor(HTMLAnchorElement.prototype, 'href').get;
+          var enc = JSON.stringify;
+          var a0 = e.closest ? e.closest('a[href]') : null;
+          var before = a0 instanceof HTMLAnchorElement ? hrefOf.call(a0) : null;
           if (e.scrollIntoView) e.scrollIntoView({ block: 'center' });
           if (e.focus) e.focus();
-          var a0 = e.closest ? e.closest('a[href]') : null;
-          var before = a0 ? String(a0.href) : null;
           e.click();
           var a = e.closest ? e.closest('a[href]') : null;
           var t = a ? (a.getAttribute('target') || '').toLowerCase() : '';
           if (a && !a.hasAttribute('download') && (t === '' || t === '_self' || t === '_top' || t === '_parent')) {
-            var after = String(a.href);
-            return 'ok\\n' + JSON.stringify(after) + (after === before ? '\\n' + JSON.stringify('same') : '');
+            var after = a instanceof HTMLAnchorElement ? hrefOf.call(a) : String(a.href);
+            return 'ok\\n' + enc(after) + (a === a0 && after === before ? '\\n' + enc('same') : '');
           }
           return 'ok';
         })()

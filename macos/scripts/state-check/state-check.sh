@@ -72,7 +72,8 @@ run_all() {
     if (($#)); then printf '%s\n' "$@"; else jq -r '.groups[].id' "$cases"; fi |
         xargs -P 2 -I{} "$0" group "$dir" "$state" {} "$tag"
     jq -s --arg s "$state" --arg t "$(date '+%F %T')" \
-        '{state: $s, finished: $t, cases: (map(.seen as $seen | .cases[] | . + {seen: $seen}))}' \
+        --arg v "$(defaults read /Applications/Latchkey.app/Contents/Info.plist CFBundleShortVersionString 2>/dev/null || echo unknown)" \
+        '{state: $s, finished: $t, app: $v, cases: (map(.seen as $seen | .cases[] | . + {seen: $seen}))}' \
         "$dir/$state"/*.json >"$dir/$state.result.json"
     jq -r '.cases | group_by(.result) | map("\(.[0].result): \(length)") | join(", ")' "$dir/$state.result.json"
 }
@@ -99,7 +100,7 @@ EOF
             [inputs] as $runs |
             ["unlocked", "locked", "screen_asleep", "lid_closed", "lid_closed_locked"] as $order |
             ($runs | map({key: .state, value: .}) | from_entries) as $by |
-            "Checked: " + ([$order[] | "\(.): \($by[.].finished // "not yet")"] | join("; ")) + ".\n",
+            "Checked: " + ([$order[] | "\(.): \($by[.].finished // "not yet")\($by[.].app // null | if . then " (app \(.))" else "" end)"] | join("; ")) + ".\n",
             "| Use case | Unlocked | Locked | Screen asleep | Lid closed | Lid closed, locked |\n|---|---|---|---|---|---|",
             ($c[0].groups[] | . as $g |
                 "| **\($g.name)** | | | | | |",

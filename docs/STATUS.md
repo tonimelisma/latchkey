@@ -68,13 +68,24 @@ doesn't know; fixed in 0.8.64, checked live); Mail refused to write with the dis
 although its window works with the lid closed while unlocked (checked live with
 `macos/scripts/mail-check.sh`: sent, with a file, and a draft; since 0.8.65 only the lock stops
 it, with a plain answer); Mail refused a recipient shown by the account's full name (fixed in
-0.8.64); a Safari click to another site loses Claude's tab (by design in tab mode; open).
+0.8.64); a Safari click to another site lost Claude's tab (since 0.8.66 the clicked link's
+address counts on any site when the page didn't change it in the click; checked with the
+stand-in Safari, not yet in real Safari).
 With the lid closed and keep-awake on, macOS keeps drawing the built-in screen and the session
 unlocked for a few minutes after the last activity (Latchkey's own screen calls count as
 activity), then the display goes and the session locks (seen at 22:23, 6 minutes after the last
-screenshot). Lid closed and locked: Mail's window can't be used, computer control refuses, and
-Safari stopped answering scripts after its first page; a sixth state, "lid closed, locked", is
-in the check. The full suite's web-page and shell
+screenshot). Lid closed and locked (check run, app 0.8.65): Mail's window can't be used,
+computer control and screenshots refuse, Safari stops answering scripts after a page; the rest
+works. Since 0.8.66 (spec 001 FR-038, FR-039) Latchkey keeps the session as it was behind a
+closed lid (a public display-sleep assertion, the lid, monitors, and lock read every second)
+and locks the Mac the moment the lid opens; not yet seen live, since the Mac was already locked
+when it was installed. Since 0.8.67 Notes can create folders, move notes, and rename notes
+(spec 002 FR-154; checked live, lid closed and locked). Since 0.8.68 a Safari script that
+times out while the Mac is locked says so.
+Next: with the lid open and unlocked, run `safari-check.sh` (cross-site click in real Safari)
+and the check in the unlocked state; close the lid and run it after 20 minutes in the lid-closed
+state (the session should still be unlocked); the locked and screen-asleep states are caught by
+`state-check.sh wait`. The full suite's web-page and shell
 timing tests fail while the Mac is under heavy load (load average 50–180 from another project),
 and pass run alone. Both sessions shipped a 0.8.63 the same evening (Add to Claude, and these
 fixes); 0.8.64 has both.
