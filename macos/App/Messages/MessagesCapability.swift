@@ -337,7 +337,33 @@ enum MessagesCapability {
             end repeat
             tell application "Messages"
             if targetKind is "chat" then
-            set dest to chat id targetID
+            -- The database files newer conversations as any;-;… or any;+;…, which Messages'
+            -- scripting doesn't know: try the id with each service in turn, and for one person
+            -- fall back to their address over iMessage.
+            set AppleScript's text item delimiters to ";"
+            set idParts to text items of targetID
+            set idCandidates to {targetID}
+            if (count of idParts) ≥ 3 then
+            set idRest to (items 2 thru -1 of idParts) as text
+            set idHandle to (items 3 thru -1 of idParts) as text
+            repeat with idService in {"iMessage", "SMS", "RCS", "any"}
+            set end of idCandidates to (idService as text) & ";" & idRest
+            end repeat
+            end if
+            set AppleScript's text item delimiters to ""
+            set dest to missing value
+            repeat with idCandidate in idCandidates
+            try
+            set candidateChat to chat id (idCandidate as text)
+            get id of candidateChat
+            set dest to candidateChat
+            exit repeat
+            end try
+            end repeat
+            if dest is missing value and (count of idParts) ≥ 3 and item 2 of idParts is "-" then
+            set dest to participant idHandle of (1st account whose service type = iMessage)
+            end if
+            if dest is missing value then error "Messages has no conversation " & targetID number -1728
             else
             set dest to participant targetID of (1st account whose service type = iMessage)
             end if

@@ -222,11 +222,17 @@ enum MailWrite {
             account = a
             sender = a.addresses.first { $0.caseInsensitiveCompare(bare(from)) == .orderedSame } ?? a.addresses[0]
         }
-        // What Mail may show for an address: the address, a name it came with, or the contact's name.
+        // What Mail may show for an address: the address, a name it came with, the contact's name,
+        // or, for one of the Owner's own addresses, the account's full name (Mail shows that,
+        // seen live 2026-11-01: "Toni Melisma" for the Owner's own address, which Contacts lacked).
         func known(_ address: String, _ names: [String] = []) -> KnownAddress {
             let a = bare(address)
             let given = address.firstIndex(of: "<").map { [String(address[..<$0])] } ?? []
-            let all = (names + given + [env.contacts.name(for: a.lowercased())].compactMap { $0 })
+            let accountNames = accounts.filter {
+                $0.addresses.contains { $0.caseInsensitiveCompare(a) == .orderedSame }
+            }
+            .compactMap(\.fullName)
+            let all = (names + given + [env.contacts.name(for: a.lowercased())].compactMap { $0 } + accountNames)
                 .map { $0.trimmingCharacters(in: CharacterSet(charactersIn: " \"")) }.filter { !$0.isEmpty }
             return KnownAddress(address: a, names: all)
         }

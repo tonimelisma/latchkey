@@ -203,13 +203,14 @@ final class FakePasteboard: Pasteboard, @unchecked Sendable {
         )
     }
 
-    @Test func refusedWhileTheScreenIsOffOrLocked() async throws {
+    @Test func refusedWithoutAccessibility() async throws {
         let f = try MailFixture()
         defer { f.close() }
         let w = FakeWindows()
-        w.blocked = "Nothing was sent: Latchkey can't write email while the Mac's screen is off or locked."
+        w.blocked = AXMailWindows.needsAccessibility
         let r = try await Self.send(f, w, ["to": .array([.string("sam@example.com")]), "subject": .string("Hi")])
-        #expect(r.isError && MailTestEnv.text(r).hasPrefix("Nothing was sent: Latchkey can't write email while"))
+        #expect(
+            r.isError && MailTestEnv.text(r).hasPrefix("Nothing was sent: Latchkey writes email in Mail's own window"))
         #expect(w.opened.isEmpty && w.window.log.isEmpty, "no window, no scripting")
         let draft = try await MailTestEnv.tool(
             "mail_change", MailTestEnv.make(f, scripts: MailWriteTests.scripts(), windows: w)
@@ -477,6 +478,30 @@ final class FakePasteboard: Pasteboard, @unchecked Sendable {
         #expect(MailTestEnv.text(r).contains("isn't in Sent yet. Don't send it again"))
         let none = try await Self.send(f, FakeWindows(), ["forward": .string("1003")])
         #expect(none.isError && MailTestEnv.text(none).contains("say who to send it to"))
+    }
+
+    /// Mail shows the account's full name, not the address, for the Owner's own address (seen live
+    /// 2026-11-01 with the lid closed); a name that is no one's asked address is still refused.
+    @Test func ownAddressShownAsTheAccountsNameIsAccepted() async throws {
+        let f = try MailFixture()
+        defer { f.close() }
+        let w = FakeWindows()
+        w.response = ComposeFields(
+            subject: "Fwd: Photos and lease", attachments: ["photo.png, 1 KB", "lease.pdf, 2 KB"])
+        w.window.addsInstead = "Owner Person"
+        let r = try await Self.send(
+            f, w, ["forward": .string("1003"), "to": .array([.string("owner@work.example")]), "text": .string("FYI")],
+            confirm: .zero)
+        #expect(!r.isError, "\(MailTestEnv.text(r))")
+        #expect(w.window.log.last == "send")
+        let other = FakeWindows()
+        other.response = w.response
+        other.window.addsInstead = "Owner Person"
+        let r2 = try await Self.send(
+            f, other, ["forward": .string("1003"), "to": .array([.string("bob@example.com")]), "text": .string("FYI")],
+            confirm: .zero)
+        #expect(r2.isError && MailTestEnv.text(r2).contains("Owner Person, which wasn't asked for"))
+        #expect(!other.window.log.contains("send"))
     }
 
     @Test func aForwardOfAnotherMessageIsNeverSent() async throws {

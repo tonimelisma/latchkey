@@ -111,6 +111,16 @@ forwards, and drafts alike (plan D6): text and recipients set through Accessibil
 pasted; refused plainly when the screen is off or locked or Accessibility is missing, never
 falling back to scripted text.
 
+## Live check: the compose window with the lid closed (2026-11-01, macOS 27.0.1)
+
+`macos/scripts/mail-check.sh` ran Latchkey's own compose code from a terminal with
+Accessibility, the lid closed. A window opened, its fields read, a draft saved, and a message
+sent, with a file too; the sent copy is plain text (7bit), the two lines exactly as given, the
+same as with the lid open. Mail's To field showed the account's full name ("Toni Melisma"), not
+the address; Accessibility gives no address for a recipient token. A window closed before its
+text area loaded shows "Unable to Load Window … Are you sure you want to close it?" (OK,
+Cancel). The screen check was dropped (Toni, 2026-11-01).
+
 ## Ids and paths (checked live 2026-10-29, read-only)
 
 - Mail's scripting `id` of a message is its `messages.ROWID`; `first message of mailbox "Sent

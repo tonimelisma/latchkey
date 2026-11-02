@@ -6,14 +6,14 @@ import ApplicationServices
 /// key equivalents (⌘V, ⌘R, ⇧⌘R, ⇧⌘F, ⌘S), so a different language doesn't matter. Text and
 /// recipients go in through Accessibility (the selected text set at the cursor); only files, and
 /// text Mail didn't take that way, go by Edit → Paste with the clipboard lent (`ClipboardLoan`).
+/// All of it works with the screen off, locked, or the lid closed (checked live 2026-11-01:
+/// a message with a file sent and a draft saved with the lid closed, exactly as with it open).
 final class AXMailWindows: ComposeWindows, @unchecked Sendable {
-    private let screen: any ScreenStateSource
     let pasteboard: any Pasteboard
     private let lock = NSLock()
     private var previous: NSRunningApplication?
 
-    init(screen: any ScreenStateSource = SystemScreen(), pasteboard: any Pasteboard = GeneralPasteboard()) {
-        self.screen = screen
+    init(pasteboard: any Pasteboard = GeneralPasteboard()) {
         self.pasteboard = pasteboard
     }
 
@@ -21,12 +21,7 @@ final class AXMailWindows: ComposeWindows, @unchecked Sendable {
         "Nothing was sent: Latchkey writes email in Mail's own window, which needs Accessibility. The Mac's owner can turn on Latchkey in System Settings → Privacy & Security → Accessibility."
 
     func unavailable() async -> String? {
-        guard AXIsProcessTrusted() else { return Self.needsAccessibility }
-        if let problem = await ScreenCheck.problem(screen) {
-            return
-                "Nothing was sent: Latchkey can't write email while the Mac's screen is off or locked, because Mail writes it in a window on the screen. (\(problem))"
-        }
-        return nil
+        AXIsProcessTrusted() ? nil : Self.needsAccessibility
     }
 
     func open(_ how: ComposeOpening) async throws -> any ComposeWindow {
@@ -344,8 +339,17 @@ final class AXComposeWindow: ComposeWindow, @unchecked Sendable {
         for _ in 0..<12 {
             try? await Task.sleep(for: .milliseconds(250))
             if !AX.alive(window) { return true }
-            if let sheet = AX.sheet(window), let dont = AX.button(sheet, id: "action-button-3") {
+            guard let sheet = AX.sheet(window) else { continue }
+            if let dont = AX.button(sheet, id: "action-button-3") {
                 AXUIElementPerformAction(dont, kAXPressAction as CFString)  // Don't Save
+            } else if body == nil,
+                AX.children(sheet).filter({ AX.string($0, kAXRoleAttribute) == "AXButton" }).count == 2,
+                let ok = AX.button(sheet, id: "action-button-1")
+            {
+                // "Unable to Load Window … Are you sure you want to close it?" (OK, Cancel): a
+                // window closed before its text area loaded, seen with the lid closed. Only for a
+                // window with no text area, which holds no text to send or lose (security review).
+                AXUIElementPerformAction(ok, kAXPressAction as CFString)
             }
         }
         return !AX.alive(window)

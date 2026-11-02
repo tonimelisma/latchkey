@@ -59,6 +59,22 @@ The Latchkey plugin (spec 011) was built and shipped on 2026-11-01, then withdra
 The plugin and its catalog are deleted; the relay guide is back at docs/setup-with-claude.md.
 Toni removed the plugin and the `tonimelisma/latchkey` marketplace from his Claude account.
 
+Every use case in every screen state (Toni, 2026-11-01: "half of Latchkey doesn't work with the
+lid closed"). `macos/scripts/state-check/` lists 98 use cases (`cases.json`) and tries them all
+through the hosted relay with real Claude Code in the state the Mac is in; results go to
+`docs/use-cases.md`. First runs, lid open and lid closed, found: Messages couldn't send to any
+existing conversation (the database now files them as `any;-;…`, which Messages' scripting
+doesn't know; fixed in 0.8.64, checked live); Mail refused to write with the screen off
+although its window works with the lid closed (checked live with `macos/scripts/mail-check.sh`:
+sent, with a file, and a draft; the screen check is gone in 0.8.64); Mail refused a recipient
+shown by the account's full name (fixed in 0.8.64); a Safari click to another site loses
+Claude's tab (by design in tab mode; open). With the lid closed and keep-awake on, macOS keeps
+drawing the built-in screen and the session unlocked until the display sleeps (10 idle minutes
+here) and then locks 5 minutes later: being investigated. The full suite's web-page and shell
+timing tests fail while the Mac is under heavy load (load average 50–180 from another project),
+and pass run alone. Both sessions shipped a 0.8.63 the same evening (Add to Claude, and these
+fixes); 0.8.64 has both.
+
 README rewritten as a short product page (Toni, 2026-11-01): the promise, a drawing of a phone
 chat (docs/images/phone-chat.svg), five steps (get a relay, sign up, macOS's permissions, add
 to Claude, ask), what you can ask, how you stay in charge, links.

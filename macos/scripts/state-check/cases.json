@@ -1,0 +1,183 @@
+{
+  "groups": [
+    {
+      "id": "notes",
+      "name": "Notes",
+      "cases": [
+        {"id": "notes.folders", "case": "List folders and recent notes", "steps": "notes_find with nothing."},
+        {"id": "notes.search", "case": "Search notes", "steps": "notes_find with query \"the\", limit 3."},
+        {"id": "notes.read", "case": "Read a note", "steps": "notes_read the first note notes.search found."},
+        {"id": "notes.create_in_folder", "case": "Create a note in a chosen folder", "steps": "notes_change create, title \"{TAG}\", text \"First line\", folder \"Notes\"."},
+        {"id": "notes.create", "case": "Create a note in the default folder", "steps": "notes_change create, title \"{TAG} default\", text \"Hello\"."},
+        {"id": "notes.append", "case": "Add text to the end of a note", "steps": "Find the note \"{TAG}\" with notes_find (query \"{TAG}\"), then notes_change append, text \"Appended line\"."},
+        {"id": "notes.edit", "case": "Change one passage in a note", "steps": "notes_change edit on \"{TAG}\", find \"Appended line\", text \"Edited line\"."},
+        {"id": "notes.replace", "case": "Replace a note's text", "steps": "notes_change replace on \"{TAG}\", text \"- one\\n- two\"; then notes_read it and check it shows the two list items."},
+        {"id": "notes.delete", "case": "Delete a note", "steps": "notes_change delete both \"{TAG}\" notes (the default-folder one too)."},
+        {"id": "notes.delete_folder", "case": "Delete a folder", "steps": "Record skipped with note \"needs a test folder, and Latchkey cannot create folders\"; call nothing."}
+      ],
+      "missing": [
+        "Move a note to another folder",
+        "Rename a note (change its title)",
+        "Create an empty folder on its own (only by creating a note in it)"
+      ]
+    },
+    {
+      "id": "messages",
+      "name": "Messages",
+      "cases": [
+        {"id": "messages.conversations", "case": "List recent conversations", "steps": "messages_find with nothing, limit 5."},
+        {"id": "messages.search", "case": "Search all messages", "steps": "messages_find with text \"ok\", limit 3."},
+        {"id": "messages.read", "case": "Read a conversation", "steps": "messages_read the first conversation from messages.conversations, limit 5."},
+        {"id": "messages.send", "case": "Send a text", "steps": "messages_send to \"{TO}\", text \"{TAG}: text (please ignore)\"."},
+        {"id": "messages.send_file", "case": "Send a file", "steps": "files_change write ~/Downloads/latchkey-check.txt with text \"{TAG}\" (overwrite true), then messages_send to \"{TO}\" with that path as the attachment and text \"{TAG}: file\", then files_change trash the file."}
+      ],
+      "missing": ["Delete or react to a message"]
+    },
+    {
+      "id": "mail",
+      "name": "Mail",
+      "cases": [
+        {"id": "mail.accounts", "case": "List accounts and mailboxes", "steps": "mail_find with nothing."},
+        {"id": "mail.find", "case": "Find mail by sender, date, unread", "steps": "mail_find unread true, limit 3."},
+        {"id": "mail.text_search", "case": "Search mail text", "steps": "mail_find text \"invoice\", limit 3."},
+        {"id": "mail.read", "case": "Read a message (left unread)", "steps": "mail_read the first message mail.find found (mark_read false)."},
+        {"id": "mail.conversation", "case": "Read a whole conversation", "steps": "mail_read that message with conversation true."},
+        {"id": "mail.attachment", "case": "Read an attachment", "steps": "mail_find has_attachments true, limit 1; mail_read its attachment 1."},
+        {"id": "mail.send", "case": "Send a new email", "steps": "mail_send to [\"{TO}\"], subject \"{TAG}\", text \"Automated Latchkey check, please ignore.\"."},
+        {"id": "mail.reply", "case": "Reply to an email", "steps": "THE MESSAGE means the newest message whose subject contains \"Latchkey check\" (mail_find subject \"Latchkey check\", limit 1, any mailbox). If mail.send worked, wait until THE MESSAGE is the one it sent (shell_run \"sleep 20\" between tries, up to 4 tries). mail_send reply_to THE MESSAGE, text \"{TAG}: reply\"."},
+        {"id": "mail.forward", "case": "Forward an email", "steps": "mail_send forward THE MESSAGE to [\"{TO}\"], text \"{TAG}: forward\"."},
+        {"id": "mail.draft", "case": "Save a draft", "steps": "mail_change draft to [\"{TO}\"], subject \"{TAG} draft\", text \"Draft\"."},
+        {"id": "mail.mark", "case": "Mark read and unread", "steps": "On THE MESSAGE (search again): mail_change mark_read, then mark_unread."},
+        {"id": "mail.flag", "case": "Flag and unflag", "steps": "On THE MESSAGE: mail_change flag, then unflag."},
+        {"id": "mail.junk", "case": "Mark as junk and not junk", "steps": "On THE MESSAGE: mail_change junk, then search for THE MESSAGE again and not_junk."},
+        {"id": "mail.move", "case": "Move to another mailbox", "steps": "On THE MESSAGE (search again): mail_change move to mailbox \"Archive\" (or another mailbox of its account if there is none)."},
+        {"id": "mail.delete", "case": "Delete (to Trash)", "steps": "mail_change delete every message from the last 7 days whose subject contains \"Latchkey check\" (search with limit 50), except THE MESSAGE, which later checks use."}
+      ],
+      "missing": ["Create, rename, or delete mailboxes", "Delete a draft"]
+    },
+    {
+      "id": "files",
+      "name": "Files",
+      "cases": [
+        {"id": "files.list", "case": "List a folder", "steps": "files_find path \"~/Downloads\"."},
+        {"id": "files.search", "case": "Search with Spotlight", "steps": "files_find query \"invoice\", limit 3."},
+        {"id": "files.create_folder", "case": "Create a folder", "steps": "files_change create_folder ~/Downloads/latchkey-check."},
+        {"id": "files.write", "case": "Write a new file", "steps": "files_change write ~/Downloads/latchkey-check/a.txt, text \"one\"."},
+        {"id": "files.append", "case": "Add to a file", "steps": "files_change append to it, text \"\\ntwo\"."},
+        {"id": "files.edit", "case": "Change one passage in a file", "steps": "files_change edit it, find \"two\", text \"three\"."},
+        {"id": "files.read", "case": "Read a text file", "steps": "files_read it and check it says one and three."},
+        {"id": "files.details", "case": "See a file's details", "steps": "files_find path to that file."},
+        {"id": "files.copy", "case": "Copy a file", "steps": "files_change copy it to ~/Downloads/latchkey-check/b.txt."},
+        {"id": "files.move", "case": "Move or rename a file", "steps": "files_change move b.txt to ~/Downloads/latchkey-check/c.txt."},
+        {"id": "files.read_pdf", "case": "Read a PDF", "steps": "files_find query \"kMDItemContentType == com.adobe.pdf\" or \"pdf\", limit 1; files_read the first .pdf found (only check text comes back)."},
+        {"id": "files.read_image", "case": "See an image", "steps": "files_find query \"png\", limit 1; files_read the first .png found (only check an image comes back)."},
+        {"id": "files.trash", "case": "Move to the Trash", "steps": "files_change trash ~/Downloads/latchkey-check."}
+      ],
+      "missing": []
+    },
+    {
+      "id": "shell",
+      "name": "Shell",
+      "cases": [
+        {"id": "shell.run", "case": "Run a command", "steps": "shell_run \"echo hello && sw_vers -productVersion\"."},
+        {"id": "shell.long", "case": "Run a long command and check on it", "steps": "shell_run \"sleep 40; echo done\" with wait 5 (it becomes a job), then shell_check that job with wait 30, again until it says done."},
+        {"id": "shell.input", "case": "Type into a running command", "steps": "shell_run \"read x; echo got $x\" with wait 2, then shell_run with that job and input \"abc\", then shell_check it shows got abc."},
+        {"id": "shell.stop", "case": "Stop a running command", "steps": "shell_run \"sleep 300\" with wait 2, then shell_run with that job and stop true."},
+        {"id": "shell.list_jobs", "case": "List running commands", "steps": "shell_check with nothing."},
+        {"id": "shell.write_declared", "case": "Write outside the allowed places (declared)", "steps": "shell_run \"mkdir -p ~/latchkey-check-dir && echo x > ~/latchkey-check-dir/f && rm -r ~/latchkey-check-dir\" with writes [\"~/latchkey-check-dir\"] and why \"automated check\"."},
+        {"id": "shell.local_network", "case": "Reach a device on the home network", "steps": "shell_run \"r=$(route -n get default | awk '/gateway/{print $2}'); nc -z -G 3 $r 80 && echo reached $r || ping -c1 -t3 $r\"."},
+        {"id": "shell.internet", "case": "Reach the internet", "steps": "shell_run \"curl -sS -o /dev/null -w '%{http_code}' https://example.com\"."},
+        {"id": "shell.open", "case": "Open an app through macOS", "steps": "shell_run \"open -g -j -a Calculator && sleep 2 && pkill -x Calculator; echo ok\" with uses [\"open\"]."}
+      ],
+      "missing": ["Scripting other apps (osascript) or starting background services (by design)"]
+    },
+    {
+      "id": "browser",
+      "name": "Browser (Safari)",
+      "cases": [
+        {"id": "browser.open", "case": "Open a page", "steps": "browser_read url \"https://en.wikipedia.org/wiki/Apple_Inc.\"."},
+        {"id": "browser.read", "case": "Read the page showing", "steps": "browser_read with nothing."},
+        {"id": "browser.click", "case": "Click a link on the same site", "steps": "browser_act click a link to another Wikipedia article (its ref from browser.read)."},
+        {"id": "browser.back", "case": "Go back", "steps": "browser_read back true; check it's the Apple Inc. article again."},
+        {"id": "browser.script", "case": "Run JavaScript in the page", "steps": "browser_act script, code \"document.title\"."},
+        {"id": "browser.click_other_site", "case": "Click a link to another site", "steps": "browser_read url \"https://example.com\", then browser_act click its only link (it goes to iana.org), then browser_read with nothing to check Claude's page shows iana.org."},
+        {"id": "browser.type", "case": "Type into a field and submit", "steps": "browser_read url \"https://html.duckduckgo.com/html/\"; browser_act type into the search field, text \"latchkey\", submit true; check results appear."},
+        {"id": "browser.tabs", "case": "List tabs", "steps": "browser_read tabs true."},
+        {"id": "browser.screenshot", "case": "Screenshot of the page", "steps": "browser_read screenshot true."}
+      ],
+      "missing": []
+    },
+    {
+      "id": "computer",
+      "name": "Computer control",
+      "cases": [
+        {"id": "computer.screenshot", "case": "See the screen", "steps": "computer_look show screenshot."},
+        {"id": "computer.ui", "case": "Read the front window's buttons and text", "steps": "computer_look show ui."},
+        {"id": "computer.apps", "case": "List running apps", "steps": "computer_look show apps."},
+        {"id": "computer.key", "case": "Press a key", "steps": "computer_act key, keys \"f12\" (no effect in most apps). Do not click, move, type, or open apps."}
+      ],
+      "missing": []
+    },
+    {
+      "id": "calendar",
+      "name": "Calendar",
+      "cases": [
+        {"id": "calendar.overview", "case": "List calendars and the week ahead", "steps": "calendar_find with nothing."},
+        {"id": "calendar.search", "case": "Search events", "steps": "calendar_find query \"meeting\", limit 3."},
+        {"id": "calendar.free", "case": "Find free time", "steps": "calendar_find free true, from {TOMORROW}, to {TOMORROW}."},
+        {"id": "calendar.create", "case": "Create an event with an alert", "steps": "calendar_change create, title \"{TAG}\", start \"{TOMORROW}T03:00\", end \"{TOMORROW}T03:15\", alarms [5]."},
+        {"id": "calendar.read", "case": "Read an event in full", "steps": "calendar_find query \"{TAG}\" from {TOMORROW} to {TOMORROW}, then calendar_find with its id."},
+        {"id": "calendar.move", "case": "Move an event", "steps": "calendar_change update that id, start \"{TOMORROW}T04:00\" (check it still lasts 15 minutes)."},
+        {"id": "calendar.repeat", "case": "Make an event repeat", "steps": "calendar_change update that id, repeat daily, repeat_count 3."},
+        {"id": "calendar.delete", "case": "Delete an event", "steps": "calendar_change delete that id, span future; then check calendar_find query \"{TAG}\" over the next 5 days finds nothing (delete any left)."}
+      ],
+      "missing": ["Invite people or answer invitations (macOS doesn't allow apps to)"]
+    },
+    {
+      "id": "reminders",
+      "name": "Reminders",
+      "cases": [
+        {"id": "reminders.overview", "case": "List lists and open reminders", "steps": "reminders_find with nothing, limit 5."},
+        {"id": "reminders.create_list", "case": "Create a list", "steps": "reminders_change create_list, title \"{TAG}\"."},
+        {"id": "reminders.create", "case": "Create a reminder with a due time", "steps": "reminders_change create, title \"{TAG} item\", list \"{TAG}\", due \"{TOMORROW}T09:00\"."},
+        {"id": "reminders.update", "case": "Change a reminder", "steps": "reminders_find list \"{TAG}\" for its id, then reminders_change update, priority high, notes \"changed\"."},
+        {"id": "reminders.complete", "case": "Complete and reopen", "steps": "reminders_change complete it, then uncomplete it."},
+        {"id": "reminders.completed", "case": "List completed reminders", "steps": "reminders_find completed true, limit 3."},
+        {"id": "reminders.delete", "case": "Delete a reminder", "steps": "reminders_change delete it."},
+        {"id": "reminders.delete_list", "case": "Delete a list", "steps": "reminders_find list \"{TAG}\" for its count, then reminders_change delete_list, list \"{TAG}\", reminder_count that count."}
+      ],
+      "missing": ["Flags, tags, and subtasks (macOS doesn't allow apps to)"]
+    },
+    {
+      "id": "contacts",
+      "name": "Contacts",
+      "cases": [
+        {"id": "contacts.overview", "case": "List groups and count", "steps": "contacts_find with nothing."},
+        {"id": "contacts.search", "case": "Search contacts", "steps": "contacts_find query \"a\", limit 3."},
+        {"id": "contacts.read", "case": "Read a card in full", "steps": "contacts_find with the first id contacts.search found."},
+        {"id": "contacts.create", "case": "Create a card", "steps": "contacts_change create, given_name \"Latchkey\", family_name \"{TAG}\", phones [{\"label\":\"mobile\",\"value\":\"+15550100\"}]."},
+        {"id": "contacts.update", "case": "Change a card", "steps": "contacts_find query \"{TAG}\" for its id, then contacts_change update, organization \"Check Co\"."},
+        {"id": "contacts.create_group", "case": "Create a group", "steps": "contacts_change create_group, name \"{TAG}\"."},
+        {"id": "contacts.add_to_group", "case": "Add a card to a group", "steps": "contacts_change add_to_group, group \"{TAG}\", id the card."},
+        {"id": "contacts.remove_from_group", "case": "Remove a card from a group", "steps": "contacts_change remove_from_group, same group and card."},
+        {"id": "contacts.rename_group", "case": "Rename a group", "steps": "contacts_change rename_group, group \"{TAG}\", name \"{TAG} renamed\"."},
+        {"id": "contacts.delete_group", "case": "Delete a group", "steps": "contacts_change delete_group, group \"{TAG} renamed\"."},
+        {"id": "contacts.delete", "case": "Delete a card", "steps": "contacts_change delete the card (search again by \"{TAG}\" if its id changed)."}
+      ],
+      "missing": []
+    },
+    {
+      "id": "location",
+      "name": "Location & Maps",
+      "cases": [
+        {"id": "location.read", "case": "Where the Mac is", "steps": "location_read."},
+        {"id": "maps.places", "case": "Find places nearby", "steps": "maps_find query \"coffee\", limit 3."},
+        {"id": "maps.directions", "case": "Directions and driving time", "steps": "maps_find to \"San Francisco City Hall\"."},
+        {"id": "maps.transit", "case": "Transit time", "steps": "maps_find to \"San Francisco City Hall\", mode transit."},
+        {"id": "maps.address", "case": "Look up an address", "steps": "maps_find address \"1 Infinite Loop, Cupertino\"."},
+        {"id": "maps.reverse", "case": "Name a place from coordinates", "steps": "maps_find address \"37.3318,-122.0312\"."}
+      ],
+      "missing": []
+    }
+  ]
+}

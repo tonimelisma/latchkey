@@ -120,7 +120,7 @@ import Testing
 /// Builds the capability's environment over a fixture, with a stand-in for Mail's scripting.
 enum MailTestEnv {
     static let accountsAnswer =
-        "\(MailFixture.exchange)\tWork\tunknown\ttrue\towner@work.example\tSent Items\n"
+        "\(MailFixture.exchange)\tWork\tunknown\ttrue\towner@work.example\tSent Items\tOwner Person\n"
         + "\(MailFixture.gmail)\tPersonal\timap\ttrue\towner@gmail.example,owner@alias.example\tSent Mail\n"
 
     static func make(

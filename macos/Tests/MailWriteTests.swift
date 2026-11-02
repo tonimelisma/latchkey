@@ -93,5 +93,6 @@ import Testing
         let list = MailAccounts.parse(MailTestEnv.accountsAnswer + "bad line\n")
         #expect(list.count == 2 && list[1].addresses == ["owner@gmail.example", "owner@alias.example"])
         #expect(list[0].label == "Work (owner@work.example)" && list[0].sentName == "Sent Items")
+        #expect(list[0].fullName == "Owner Person" && list[1].fullName == nil, "an older answer has no full name")
     }
 }

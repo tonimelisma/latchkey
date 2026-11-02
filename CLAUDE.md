@@ -237,6 +237,14 @@ Linux server program (run in `linux/`, its own Go module; spec 010):
 - `make release`: build, sign (`SERVER_SIGNING_KEY` in `.env`), publish `server-v$(cat VERSION)`;
   bump `linux/VERSION` when anything in `linux/` changed (every increment ships)
 
+Screen states (`macos/scripts/state-check/`): `state-check.sh run|wait|report <folder outside the
+repo>` tries every use case in `cases.json` through the hosted relay with real Claude Code, in
+the screen state the Mac is in (unlocked, locked, screen asleep, lid closed); `report` writes
+`docs/use-cases.md`. Needs `LATCHKEY_CHECK_TO` (Toni's own address, from `CLAUDE.local.md`).
+Claude Code here runs on Toni's Claude subscription; the dollar cost it prints is only what the
+same use would cost paid per use. `macos/scripts/mail-check.sh <to> <draft|send|probe>` runs the
+app's Mail compose code against the real Mail in the current screen state.
+
 <!-- Maintainers: keep this file under ~100 lines. Status and decisions live in docs/, topic
 knowledge in .claude/rules/, multi-step procedures in docs/. Test each line: would removing it
 cause Claude to make mistakes? -->

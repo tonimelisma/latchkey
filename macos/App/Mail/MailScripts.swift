@@ -46,7 +46,7 @@ enum MailScript {
         set AppleScript's text item delimiters to ","
         set addrText to (email addresses of acct) as text
         set AppleScript's text item delimiters to ""
-        set out to out & acctID & tab & (name of acct) & tab & (account type of acct as text) & tab & (enabled of acct as text) & tab & addrText & tab & sentName & linefeed
+        set out to out & acctID & tab & (name of acct) & tab & (account type of acct as text) & tab & (enabled of acct as text) & tab & addrText & tab & sentName & tab & (full name of acct) & linefeed
         end repeat
         return out
         end tell
@@ -143,6 +143,8 @@ final class MailAccounts: @unchecked Sendable {
         var enabled: Bool
         var addresses: [String]
         var sentName: String?
+        /// The name Mail shows for the account's own addresses (its "Full Name").
+        var fullName: String? = nil
 
         var label: String {
             let first = addresses.first ?? ""
@@ -181,7 +183,7 @@ final class MailAccounts: @unchecked Sendable {
             return Account(
                 id: f[0], name: f[1], kind: f[2], enabled: f[3] == "true",
                 addresses: f[4].split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) },
-                sentName: f[5].isEmpty ? nil : f[5])
+                sentName: f[5].isEmpty ? nil : f[5], fullName: f.count > 6 && !f[6].isEmpty ? f[6] : nil)
         }
     }
 }

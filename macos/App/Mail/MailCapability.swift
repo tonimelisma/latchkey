@@ -170,8 +170,8 @@ enum MailCapability {
                         Changes email in Apple Mail: mark_read, mark_unread, flag, unflag, junk, not_junk, \
                         move (to mailbox, in the same account), delete (moves it to its account's Trash), for id \
                         or several ids. draft saves a new message, a reply (reply_to), or a forward (forward) \
-                        in the account's Drafts without sending it (written in Mail's window: the Mac must be \
-                        unlocked with its screen on).
+                        in the account's Drafts without sending it (written in Mail's own window; works with \
+                        the screen off or the lid closed).
                         """, input: change, required: ["action"], readOnly: false, destructive: true,
                     deadlineMS: 60_000),
                 handler: { args in await run(env) { s in try await MailWrite.change(args, s, env) } }),
@@ -181,8 +181,8 @@ enum MailCapability {
                     description: """
                         Sends an email from Apple Mail: a new message (to, subject, text), a reply (reply_to, \
                         optionally reply_all; Mail quotes the original below the text), or a forward (forward \
-                        and to), with attachments from the Mac. Mail writes it in its own window on the screen, \
-                        so it works only while the Mac is unlocked with its screen on. A reply or forward goes \
+                        and to), with attachments from the Mac. Mail writes it in its own window, which works \
+                        with the screen off or the lid closed too. A reply or forward goes \
                         from the account the original came to; a new message from from or Mail's default \
                         account. Answers once the message is in the account's Sent mailbox.
                         """, input: composeInput(), readOnly: false, openWorld: true, deadlineMS: 90_000),
@@ -199,6 +199,7 @@ enum MailCapability {
         var kind: String
         var addresses: [String]
         var sentName: String?
+        var fullName: String? = nil
     }
 
     /// Every account with mailboxes, named by Mail when it can be asked (plan D2).
@@ -210,7 +211,8 @@ enum MailCapability {
         return try ids.map { id in
             if let a = mail.first(where: { $0.id == id }) {
                 return AccountInfo(
-                    id: id, label: a.label, name: a.name, kind: a.kind, addresses: a.addresses, sentName: a.sentName)
+                    id: id, label: a.label, name: a.name, kind: a.kind, addresses: a.addresses, sentName: a.sentName,
+                    fullName: a.fullName)
             }
             let mine = boxes.filter { $0.accountID == id }
             let kind =
