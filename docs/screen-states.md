@@ -12,7 +12,8 @@ FR-661, Toni 2026-11-02: "we're not circumventing security").
 | Files, shell, Notes, Messages, reminders, contacts, location, maps | all | |
 | Calendar | 7 of 8 | "repeat" inconclusive in the check (didn't re-read); passed unlocked |
 | Browser (Latchkey's own WebKit view, Safari's cookies) | all | signed in to Google and GitHub; dialogs answered and told; pop-ups in its page |
-| Mail: find, read, organise | all (night of 2026-11-01) | all failed 2026-11-02 while Mail was frozen by a modal alert (below) |
+| Mail: find, read | all | since 0.8.81 also while Mail itself is frozen (account names from Mail's files after 4 s; checked live) |
+| Mail: organise (read, flag, move, junk, delete) | all (night of 2026-11-01) | through Mail's scripting: not while Mail is frozen |
 | Mail: write, send, draft | no: queued with `mail_queue` | Mail's window can't be used while locked |
 | Computer control, screen pictures | no | see below |
 

@@ -92,6 +92,12 @@ SameSite=Lax copy of Safari's cookies (0.8.75 to 0.8.78; checked live locked: op
 to another site, back, scripts, picture, signed in to GitHub), and email can be queued with
 `mail_queue` and goes out at the next unlock (queued live; the send at unlock not yet seen).
 Computer control and screen pictures stay unavailable while locked (tested: macOS draws nothing).
+Every alternative tried while locked, what takes focus while the Owner works, and what other
+tools do: `docs/screen-states.md` (2026-11-02). Since 0.8.79/0.8.80 the locked browser answers
+page dialogs (capped, labelled), follows only Claude's own pop-ups, and identifies as Safari
+(signed in to Google and GitHub, checked live); since 0.8.81 finding and reading mail work while
+Mail is frozen. Mail froze on 2026-11-02 when a scripted send was tried while locked (a modal
+alert behind the lock screen); Toni closes it, and three stale message windows, at unlock.
 Next: with the lid open and unlocked, run `safari-check.sh` (cross-site click in real Safari);
 find why a Mail reply failed while unlocked on 0.8.62 ("the text in Mail's window isn't the
 text given", then "Mail's window stayed open after Send"); close any empty message windows the
