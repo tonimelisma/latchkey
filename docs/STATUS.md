@@ -85,6 +85,13 @@ times out while the Mac is locked says so (checked live). 0.8.70: Mail answers a
 identical copy in another mailbox (2% of a month's mail was blocked). 0.8.71: a PDF without text
 is shown as a page picture (checked live). 0.8.72: Claude can close its own Safari page
 (spec 005 FR-419).
+2026-11-02 (Toni: "we're not circumventing security"): the closed-lid hold is gone (0.8.73) and a
+sleeping display is no longer woken; Latchkey never holds off the idle lock (spec 001 FR-661).
+Instead, while locked: the browser tools use Latchkey's own WebKit browser with a memory-only,
+SameSite=Lax copy of Safari's cookies (0.8.75 to 0.8.78; checked live locked: open, read, link
+to another site, back, scripts, picture, signed in to GitHub), and email can be queued with
+`mail_queue` and goes out at the next unlock (queued live; the send at unlock not yet seen).
+Computer control and screen pictures stay unavailable while locked (tested: macOS draws nothing).
 Next: with the lid open and unlocked, run `safari-check.sh` (cross-site click in real Safari);
 find why a Mail reply failed while unlocked on 0.8.62 ("the text in Mail's window isn't the
 text given", then "Mail's window stayed open after Send"); close any empty message windows the

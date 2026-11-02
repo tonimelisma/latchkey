@@ -171,7 +171,18 @@ final class LockedBrowser: NSObject, WKNavigationDelegate {
     func run(_ code: String) async throws -> String {
         guard let w = web else { throw SafariBrowser.Failure.noWindow }
         let before = w.url?.absoluteString
-        do { return try await script(PageScripts.custom(code)) } catch {
+        do {
+            // Given to WebKit as it is: a page's Content Security Policy forbids the eval that
+            // Safari's wrapper uses (seen live on GitHub), but not a script the app itself runs.
+            let value = try await w.evaluateJavaScript(code)
+            if let s = value as? String { return s }
+            if let v = value, JSONSerialization.isValidJSONObject(v),
+                let data = try? JSONSerialization.data(withJSONObject: v)
+            {
+                return String(decoding: data, as: UTF8.self)
+            }
+            return value.map { "\($0)" } ?? "undefined"
+        } catch {
             // A script that sends the page elsewhere ends with the page it ran in (seen live).
             await settle(from: before)
             if let now = w.url?.absoluteString, now != before { return "The page went to \(now)." }
