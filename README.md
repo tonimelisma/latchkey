@@ -114,7 +114,8 @@ redraws them).
 3. **Add the Latchkey plugin (recommended).** In Claude, open Customize → Plugins → Add
    marketplace, enter `tonimelisma/latchkey`, and add Latchkey. It teaches Claude how to use your
    machines well (which machine, what to do when one is asleep) and how to help you set up or fix
-   Latchkey; it works with any relay. In Claude Code:
+   Latchkey; it works with any relay. Its skills need code execution turned on (Settings →
+   Capabilities). In Claude Code:
    `/plugin install latchkey --marketplace tonimelisma/latchkey`. Details:
    [plugin/README.md](plugin/README.md).
 4. **Ask Claude:** "What's in my grocery note?", "What did Sarah say about dinner?", "How much
