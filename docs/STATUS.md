@@ -81,11 +81,17 @@ closed lid (a public display-sleep assertion, the lid, monitors, and lock read e
 and locks the Mac the moment the lid opens; not yet seen live, since the Mac was already locked
 when it was installed. Since 0.8.67 Notes can create folders, move notes, and rename notes
 (spec 002 FR-154; checked live, lid closed and locked). Since 0.8.68 a Safari script that
-times out while the Mac is locked says so.
-Next: with the lid open and unlocked, run `safari-check.sh` (cross-site click in real Safari)
-and the check in the unlocked state; close the lid and run it after 20 minutes in the lid-closed
-state (the session should still be unlocked); the locked and screen-asleep states are caught by
-`state-check.sh wait`. The full suite's web-page and shell
+times out while the Mac is locked says so (checked live). 0.8.70: Mail answers a message with an
+identical copy in another mailbox (2% of a month's mail was blocked). 0.8.71: a PDF without text
+is shown as a page picture (checked live). 0.8.72: Claude can close its own Safari page
+(spec 005 FR-419).
+Next: with the lid open and unlocked, run `safari-check.sh` (cross-site click in real Safari);
+find why a Mail reply failed while unlocked on 0.8.62 ("the text in Mail's window isn't the
+text given", then "Mail's window stayed open after Send"); close any empty message windows the
+locked attempts before 0.8.65 left hidden in Mail; close the lid and check after 20 minutes that
+the session is still unlocked. `state-check.sh wait` (running from the night's session) tries
+every state with the new app as the Mac passes through it; then `report` refreshes
+`docs/use-cases.md`. The full suite's web-page and shell
 timing tests fail while the Mac is under heavy load (load average 50–180 from another project),
 and pass run alone. Both sessions shipped a 0.8.63 the same evening (Add to Claude, and these
 fixes); 0.8.64 has both.
