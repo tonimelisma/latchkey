@@ -54,7 +54,7 @@ Constitution VIII no longer counts projects (Toni). Toni approved all eight choi
 him (plan.md "Choices made for Toni") in chat on 2026-11-01.
 
 README rewritten as a short product page (Toni, 2026-11-01): the promise, a drawing of a phone
-chat (docs/images/phone-chat.svg), four steps (sign up, macOS's permissions, add to Claude, ask), what you can ask, how you stay in charge, links.
+chat (docs/images/phone-chat.svg), five steps (get a relay, sign up, macOS's permissions, add to Claude, ask), what you can ask, how you stay in charge, links.
 The details moved to docs/how-it-works.md and docs/development.md. Until the first release it asks
 people to watch the repository for releases; the journey it describes (download, Touch ID
 account, add to Claude) needs the notarized download and open sign-up on the hosted relay.

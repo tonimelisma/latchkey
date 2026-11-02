@@ -15,13 +15,18 @@ and nothing set up on your router. If your Mac is asleep, Claude tells you right
 
 ## Get started
 
-1. **Download Latchkey and open it.** Sign up with your email and a passkey (Touch ID).
-2. **Give Latchkey macOS's permissions.** Latchkey asks for each one in turn and opens the right
+1. **Get a relay**, the small always-on service your Mac and Claude meet at. The hosted relay
+   takes invited people only, for now. Or have Claude Code set up your own on Google Cloud's free
+   tier: about 20 minutes, and you only create the account and click Allow
+   ([how](docs/self-hosting.md)).
+2. **Download Latchkey and open it.** Enter your relay's address and sign up with your email and
+   a passkey (Touch ID).
+3. **Give Latchkey macOS's permissions.** Latchkey asks for each one in turn and opens the right
    System Settings page, so macOS never stops Claude to ask while you're away.
-3. **Add Latchkey to Claude.** Your account page shows an address: paste it into Claude's
+4. **Add Latchkey to Claude.** Your account page shows an address: paste it into Claude's
    Settings → Connectors → Add custom connector, sign in, and click Allow. It works in Claude on
    the web, on your desktop, and on your phone.
-4. **Ask Claude something about your Mac**, from anywhere.
+5. **Ask Claude something about your Mac**, from anywhere.
 
 [Every step in detail](docs/how-it-works.md#setting-up-the-mac-app-in-detail).
 
@@ -56,8 +61,8 @@ command line, location and maps, and the screen, but only what you turn on.
 
 - **[Linux servers](docs/how-it-works.md#add-a-linux-server):** add a home server, a Raspberry
   Pi, or a rented server with one command.
-- **[Run your own relay](docs/self-hosting.md):** the small always-on service your Mac and
-  Claude meet at. Claude Code can set one up for you on a free server.
+- **[Run your own relay](docs/self-hosting.md):** on Google Cloud with Claude Code's help, or
+  anywhere that runs a container.
 - **[How it works](docs/how-it-works.md):** what runs where, every tool, privacy in detail.
 - **[Security](SECURITY.md):** report a problem privately; the
   [threat model](docs/threat-model.md) says what is protected and how.

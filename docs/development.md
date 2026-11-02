@@ -2,8 +2,8 @@
 
 Latchkey is in testing (version 0.8): every capability is built and checked live on a real Mac.
 There are no releases yet. The app isn't notarized, so a copy built by someone else opens only
-after System Settings → Privacy & Security → Open Anyway. The relay's image isn't published yet;
-run it from source ([self-hosting.md](self-hosting.md)). Current work: [STATUS.md](STATUS.md).
+after System Settings → Privacy & Security → Open Anyway. The relay's image is published
+at `ghcr.io/tonimelisma/latchkey-relay` ([self-hosting.md](self-hosting.md)). Current work: [STATUS.md](STATUS.md).
 How the product works: [how-it-works.md](how-it-works.md).
 
 
