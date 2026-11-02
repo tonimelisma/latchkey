@@ -57,7 +57,7 @@ run, passes alone (code unchanged since spec 010).
 The Latchkey plugin (spec 011) was built and shipped on 2026-11-01, then withdrawn the same day
 (Toni): it didn't help anyone get started and made no difference once Latchkey was connected.
 The plugin and its catalog are deleted; the relay guide is back at docs/setup-with-claude.md.
-Toni removes the plugin and the `tonimelisma/latchkey` marketplace from his Claude account.
+Toni removed the plugin and the `tonimelisma/latchkey` marketplace from his Claude account.
 
 README rewritten as a short product page (Toni, 2026-11-01): the promise, a drawing of a phone
 chat (docs/images/phone-chat.svg), five steps (get a relay, sign up, macOS's permissions, add
