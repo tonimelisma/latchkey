@@ -147,6 +147,21 @@ enum BrowserCapability {
                         return r
                     }
                 }),
+            ToolEntry(
+                tool: .make(
+                    "browser_close", title: "Close Claude's Page",
+                    description:
+                        "Closes Claude's Safari tab or window (never the Owner's); the next page opens a new one.",
+                    readOnly: false, destructive: true, openWorld: true, deadlineMS: 30_000),
+                handler: { _ in
+                    await run {
+                        var r = ToolResult.text(
+                            await browser.closePage()
+                                ? "Closed Claude's Safari page." : "Claude has no Safari page open.")
+                        r.activity = "Closed Claude's Safari page"
+                        return r
+                    }
+                }),
         ]
     }
 

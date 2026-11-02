@@ -76,6 +76,8 @@ phone, Claude can't check a reservation in the Owner's account or fill in a form
 - **FR-418** When Browser can't tell for sure which tab is Claude's (the Owner closed it, or
   tabs moved while its page changed), it shall leave every tab alone, record a Left Behind entry
   saying it lost track of Claude's tab, and open a new tab for Claude's next page (2026-10-29).
+- **FR-419** While Browser is Read & write, Claude shall be able to close its own tab or window,
+  never one of the Owner's (Toni, 2026-11-01: "open tabs and close").
 
 ## Success criteria
 

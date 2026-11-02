@@ -491,6 +491,18 @@ final class Notes: @unchecked Sendable {
         #expect(fake.ownerTabs.allSatisfy { $0.scriptsRun == 0 && $0.mark == nil })
     }
 
+    /// 2026-11-01: Claude can close its own page; the Owner's tabs stay.
+    @Test func claudeClosesItsOwnTab() async throws {
+        let fake = FakeSafariTabs()
+        let b = browser(fake)
+        _ = try await b.open("https://shop.example.com", newTab: false)
+        let owners = fake.ownerTabs.count
+        #expect(await b.closePage())
+        #expect(fake.claudeTabs.isEmpty)
+        #expect(fake.ownerTabs.count == owners && fake.ownerTabs.allSatisfy { $0.scriptsRun == 0 })
+        #expect(await b.closePage() == false, "nothing left to close")
+    }
+
     /// Security review 2026-11-01: a page whose click handler changes the link's address can't
     /// name another site; the tab is lost, as before.
     @Test func aLinkChangedByThePageInTheClickLosesTheTab() async throws {

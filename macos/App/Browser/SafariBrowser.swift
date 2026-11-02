@@ -701,6 +701,14 @@ actor SafariBrowser {
         }
     }
 
+    /// Closes Claude's tab or window when Claude asks (2026-11-01); a tab Latchkey can't surely
+    /// find is left open, as when idle. True when Claude had a page.
+    func closePage() async -> Bool {
+        let had = window != nil
+        await closeClaudesPage()
+        return had
+    }
+
     /// Closes Claude's tab or window once it has gone `after` unused (FR-411), and notes it for
     /// the Left Behind list. True when it closed one, or found its tab gone.
     func closeIfIdle(after: TimeInterval = 1800, now: Date = Date()) async -> Bool {

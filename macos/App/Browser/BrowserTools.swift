@@ -41,7 +41,7 @@ extension BrowserCapability {
         ]
     }
 
-    static let actions = ["click", "type", "script"]
+    static let actions = ["click", "type", "script", "close"]
 
     static func writeTools(browser: SafariBrowser) -> [ToolEntry] {
         let ops = Operations(writeOperations(browser: browser))
@@ -53,7 +53,7 @@ extension BrowserCapability {
                         Acts on Claude's page in Safari, then answers with the page. action: \
                         click (ref: a link or button), type (ref: a field, text; or a list and the option's \
                         text; submit sends the form), script (code: JavaScript run in the page; its result is \
-                        returned).
+                        returned), close (closes Claude's tab or window; never the Owner's).
                         """,
                     input: [
                         "action": .enumParam(actions, "What to do"),
@@ -68,6 +68,7 @@ extension BrowserCapability {
                     case "click": return await ops.call("browser_click", args)
                     case "type": return await ops.call("browser_type", args)
                     case "script": return await ops.call("browser_script", args)
+                    case "close": return await ops.call("browser_close", args)
                     default: return .unknown("action", action, allowed: actions)
                     }
                 })

@@ -244,3 +244,4 @@ Add a row when a decision is made; never delete one, mark it "superseded by" ins
 | 2026-11-01 | Notes can create folders, move notes between folders, and rename notes; a note created or moved into a missing folder makes it (default account) | Toni ("move note into folder"), spec 002 FR-154 |
 | 2026-11-01 | Mail can answer a message that has copies in other mailboxes (same sender and subject, sent within 5 minutes count as one message); a copy from another sender or time still blocks it (2% of a month's mail was blocked) | spec 008 plan D6 |
 | 2026-11-01 | A PDF without text (a scan) is read as a picture of one page (offset picks the page) instead of nothing | spec 003 FR-201 |
+| 2026-11-01 | Claude can close its own Safari tab or window (browser_act close); never the Owner's | Toni ("open tabs and close"), spec 005 FR-419 |
