@@ -15,11 +15,15 @@ and nothing set up on your router. If your Mac is asleep, Claude tells you right
 
 ## Get started
 
-1. **Download Latchkey and open it.** Make your account with Touch ID, and the Mac is connected.
-2. **Add Latchkey to Claude.** Your account page shows an address: paste it into Claude's
-   Settings → Connectors → Add custom connector, then click Allow. It works in Claude on the
-   web, on your desktop, and on your phone.
-3. **Ask Claude something about your Mac**, from anywhere.
+1. **Download Latchkey and open it.** Sign up with your email and a passkey (Touch ID).
+2. **Give Latchkey macOS's permissions.** Latchkey asks for each one in turn and opens the right
+   System Settings page, so macOS never stops Claude to ask while you're away.
+3. **Add Latchkey to Claude.** Your account page shows an address: paste it into Claude's
+   Settings → Connectors → Add custom connector, sign in, and click Allow. It works in Claude on
+   the web, on your desktop, and on your phone.
+4. **Ask Claude something about your Mac**, from anywhere.
+
+[Every step in detail](docs/how-it-works.md#setting-up-the-mac-app-in-detail).
 
 Optional: add the Latchkey plugin so Claude knows its way around (Customize → Plugins → Add
 marketplace, enter `tonimelisma/latchkey`; it needs code execution turned on in Settings →
