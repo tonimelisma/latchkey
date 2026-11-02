@@ -124,10 +124,12 @@ further back. Messages whose text isn't on the Mac are counted and named in the 
 - Writing (Toni, 2026-10-30): new messages, replies, forwards, and drafts are written in Mail's
   own compose window, driven through Accessibility, so they arrive as ordinary mail (no quote
   around Claude's text; research "Live check"). Mail's scripting never composes. The window works
-  with the lid closed and the screen off (checked live 2026-11-01: a message with a file sent and
-  a draft saved with the lid closed, arriving exactly as with it open), so there is no screen
-  check (Toni, 2026-11-01: working functionality first). When Latchkey lacks Accessibility, the
-  answer says so plainly and nothing is sent; there is no fallback to scripted text. Closing a
+  with the lid closed while the session is unlocked (checked live 2026-11-01: a message with a
+  file sent and a draft saved, arriving exactly as with the lid open), but while the session is
+  locked Mail opens no window Accessibility can use. So the only screen check is the lock (Toni,
+  2026-11-01: working functionality first); the display being off or the lid closed is fine.
+  When the Mac is locked or Latchkey lacks Accessibility, the answer says so plainly and nothing
+  is sent; there is no fallback to scripted text. Closing a
   window also answers Mail's "Unable to Load Window" alert (OK), shown when a window is closed
   before its text area loaded. Nothing here is specific to one person's
   accounts. One email is written at a time (`ComposeQueue`). Steps (`MailCompose.run`):

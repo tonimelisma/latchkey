@@ -1,6 +1,8 @@
-// Prints the Mac's screen state as one word, for state-check.sh:
-// lid_closed (lid shut), screen_asleep (main display off), locked (display on, session locked),
-// or unlocked. Uses the same calls as the app's ScreenCheck (App/Computer/Screen.swift).
+// Prints the Mac's screen state as one word, for state-check.sh: lid_closed (lid shut, session
+// still unlocked: macOS keeps drawing the screen for a few minutes after the last activity),
+// lid_closed_locked (lid shut and locked), screen_asleep (lid open, main display off), locked
+// (display on, session locked), or unlocked. Uses the same calls as the app's ScreenCheck
+// (App/Computer/Screen.swift).
 import CoreGraphics
 import Foundation
 import IOKit
@@ -19,7 +21,7 @@ func locked() -> Bool {
 }
 
 if lidClosed() {
-    print("lid_closed")
+    print(locked() ? "lid_closed_locked" : "lid_closed")
 } else if CGDisplayIsAsleep(CGMainDisplayID()) != 0 {
     print("screen_asleep")
 } else if locked() {

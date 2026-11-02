@@ -6,8 +6,8 @@ import ApplicationServices
 /// key equivalents (⌘V, ⌘R, ⇧⌘R, ⇧⌘F, ⌘S), so a different language doesn't matter. Text and
 /// recipients go in through Accessibility (the selected text set at the cursor); only files, and
 /// text Mail didn't take that way, go by Edit → Paste with the clipboard lent (`ClipboardLoan`).
-/// All of it works with the screen off, locked, or the lid closed (checked live 2026-11-01:
-/// a message with a file sent and a draft saved with the lid closed, exactly as with it open).
+/// All of it works with the display off or the lid closed, but not while locked (checked live 2026-11-01:
+/// sent with a file and a draft saved with the lid closed and unlocked; nothing opens while locked).
 final class AXMailWindows: ComposeWindows, @unchecked Sendable {
     let pasteboard: any Pasteboard
     private let lock = NSLock()
@@ -20,8 +20,14 @@ final class AXMailWindows: ComposeWindows, @unchecked Sendable {
     static let needsAccessibility =
         "Nothing was sent: Latchkey writes email in Mail's own window, which needs Accessibility. The Mac's owner can turn on Latchkey in System Settings → Privacy & Security → Accessibility."
 
+    static let whileLocked =
+        "Nothing was sent: the Mac is locked, and Mail can't open its message window until someone unlocks it (with the lid closed, macOS locks a few minutes after the last use). Reading, finding, and organising email still work."
+
     func unavailable() async -> String? {
-        AXIsProcessTrusted() ? nil : Self.needsAccessibility
+        guard AXIsProcessTrusted() else { return Self.needsAccessibility }
+        // With the lid closed or the display off Mail's window works, but while the session is
+        // locked Mail opens no window Accessibility can use (checked live 2026-11-01).
+        return SystemScreen().isLocked() ? Self.whileLocked : nil
     }
 
     func open(_ how: ComposeOpening) async throws -> any ComposeWindow {

@@ -64,13 +64,17 @@ lid closed"). `macos/scripts/state-check/` lists 98 use cases (`cases.json`) and
 through the hosted relay with real Claude Code in the state the Mac is in; results go to
 `docs/use-cases.md`. First runs, lid open and lid closed, found: Messages couldn't send to any
 existing conversation (the database now files them as `any;-;…`, which Messages' scripting
-doesn't know; fixed in 0.8.64, checked live); Mail refused to write with the screen off
-although its window works with the lid closed (checked live with `macos/scripts/mail-check.sh`:
-sent, with a file, and a draft; the screen check is gone in 0.8.64); Mail refused a recipient
-shown by the account's full name (fixed in 0.8.64); a Safari click to another site loses
-Claude's tab (by design in tab mode; open). With the lid closed and keep-awake on, macOS keeps
-drawing the built-in screen and the session unlocked until the display sleeps (10 idle minutes
-here) and then locks 5 minutes later: being investigated. The full suite's web-page and shell
+doesn't know; fixed in 0.8.64, checked live); Mail refused to write with the display off
+although its window works with the lid closed while unlocked (checked live with
+`macos/scripts/mail-check.sh`: sent, with a file, and a draft; since 0.8.65 only the lock stops
+it, with a plain answer); Mail refused a recipient shown by the account's full name (fixed in
+0.8.64); a Safari click to another site loses Claude's tab (by design in tab mode; open).
+With the lid closed and keep-awake on, macOS keeps drawing the built-in screen and the session
+unlocked for a few minutes after the last activity (Latchkey's own screen calls count as
+activity), then the display goes and the session locks (seen at 22:23, 6 minutes after the last
+screenshot). Lid closed and locked: Mail's window can't be used, computer control refuses, and
+Safari stopped answering scripts after its first page; a sixth state, "lid closed, locked", is
+in the check. The full suite's web-page and shell
 timing tests fail while the Mac is under heavy load (load average 50–180 from another project),
 and pass run alone. Both sessions shipped a 0.8.63 the same evening (Add to Claude, and these
 fixes); 0.8.64 has both.

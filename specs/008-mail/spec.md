@@ -128,9 +128,10 @@ my landlord", tell what's new in the inbox, answer a message, or file it away.
   (reported since Mail 16): checked live before building sending; if it happens on macOS 27,
   Toni chooses how to send. The live check of 2026-10-29 shows it happens on macOS 27; Toni chose
   (2026-10-30) to write every message, reply, forward, and draft in Mail's own compose window,
-  so it arrives as ordinary mail, and, when that isn't possible (no Accessibility), to refuse
-  plainly instead of sending scripted text. That window works with the lid closed and the screen
-  off (live check 2026-11-01), so sending no longer depends on the screen (Toni, 2026-11-01).
+  so it arrives as ordinary mail, and, when that isn't possible (the Mac locked, no
+  Accessibility), to refuse plainly instead of sending scripted text. That window works with the
+  lid closed and the display off as long as the Mac isn't locked (live check 2026-11-01), so only
+  the lock stops sending (Toni, 2026-11-01).
 - Mail showing a name instead of an address in the To field (the account's full name for the
   Owner's own address, or a name Mail remembers): the account's full name counts for its own
   addresses (2026-11-01).

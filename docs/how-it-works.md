@@ -57,7 +57,7 @@ Claude (web, Desktop, phone)  ──HTTPS──▶  Latchkey relay  ◀──out
   | Calendar (every account on the Mac) | `calendar_find` (events, free time) | `calendar_change` (create, move, repeat, delete) |
   | Reminders | `reminders_find` | `reminders_change` (create, complete, change, delete; new and deleted lists) |
   | Contacts | `contacts_find` (cards, photos) | `contacts_change` (create, change, delete; groups and their members) |
-  | Mail (every account in Apple Mail) | `mail_find`, `mail_read` | `mail_change` (read, flag, move, junk, delete to Trash, draft), `mail_send` (new, reply, forward, with files; through Mail's own window, which works with the lid closed) |
+  | Mail (every account in Apple Mail) | `mail_find`, `mail_read` | `mail_change` (read, flag, move, junk, delete to Trash, draft), `mail_send` (new, reply, forward, with files; through Mail's own window: works with the lid closed, not while the Mac is locked) |
   | Location & Maps | `location_read`, `maps_find` (places, directions, travel times) | |
 
 - **You see what Claude did:** a notification for every change and every new Claude connection,

@@ -119,7 +119,11 @@ sent, with a file too; the sent copy is plain text (7bit), the two lines exactly
 same as with the lid open. Mail's To field showed the account's full name ("Toni Melisma"), not
 the address; Accessibility gives no address for a recipient token. A window closed before its
 text area loaded shows "Unable to Load Window … Are you sure you want to close it?" (OK,
-Cancel). The screen check was dropped (Toni, 2026-11-01).
+Cancel). Those runs turned out to be while the session was still unlocked: with the lid closed,
+macOS keeps drawing the screen until a few minutes after the last activity, then locks. Once
+locked, Mail opened no window Accessibility could use ("Mail didn't open a new message window";
+its windows showed only as "Mail" with nothing inside), with the display off or woken. So the
+screen check became a lock check (Toni, 2026-11-01).
 
 ## Ids and paths (checked live 2026-10-29, read-only)
 
