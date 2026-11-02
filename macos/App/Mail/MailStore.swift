@@ -382,14 +382,19 @@ final class MailStore: @unchecked Sendable {
                     db,
                     """
                     SELECT COUNT(*), COUNT(DISTINCT m.sender), COUNT(DISTINCT m.subject),
-                    MAX(m.date_sent) - MIN(m.date_sent)
+                    MAX(m.date_sent) - MIN(m.date_sent),
+                    SUM(m.sender IS NULL) + SUM(m.subject IS NULL) + SUM(m.date_sent IS NULL)
                     FROM messages m JOIN message_global_data g ON g.ROWID = m.global_message_id
                     WHERE m.deleted = 0 AND (g.message_id_header = ? COLLATE NOCASE OR g.message_id_header = ? COLLATE NOCASE)
                     """, bind: [.text("<\(bare)>"), .text(bare)]
                 ).first
             else { return 0 }
             let count = Int(r[0].int ?? 0)
-            let oneMessage = r[1].int == 1 && r[2].int == 1 && (r[3].int ?? 0) <= 300
+            // A missing sender, subject, or date counts as a different message (security review).
+            // A forged copy that matches all three is still caught after opening: the window's
+            // subject, recipients, and a forward's attachments are compared with Claude's choice.
+            let oneMessage =
+                r[1].int == 1 && r[2].int == 1 && r[4].int == 0 && r[3].int.map { $0 <= 300 } == true
             return count > 1 && oneMessage ? 1 : count
         }
     }
