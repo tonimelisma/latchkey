@@ -214,6 +214,21 @@ Every result starts with the marking line Messages uses and puts every sender na
 subject, message text, and attachment name in «» (`MessagesCapability.quote`), so nothing inside
 can pose as the end of the quote.
 
+## D10. Queued email while the Mac is locked (FR-835 to FR-837, Toni 2026-11-02)
+
+Mail's window can't be used while the session is locked (checked live 2026-11-01), and Latchkey
+never gets around the lock (spec 001 FR-661). Options Toni was shown: refuse; queue until the
+next unlock; send at once through Mail's scripting (text shows as quoted in other apps). Chosen:
+a tool of its own, `mail_queue` (add with mail_send's inputs, list, cancel), so Claude decides
+with the Owner whether waiting is fine; mail_send's locked answer names it. The queue
+(`MailQueue`) is one JSON file in the app's support folder, mode 0600, removed when empty and
+by uninstalling; ids q1, q2. On macOS's `com.apple.screenIsUnlocked` (and at start when
+unlocked), while Mail is Read & write, `AppModel.sendQueuedMail` waits 3 s, then sends each
+item, oldest first, through `MailWrite.send` (all of D6 and D7's checks), removing it first so
+it is never sent twice, and notifies the Owner and the activity log of each result. Low-level
+choices: no expiry (a queued message waits however long the Mac stays locked; the Owner can ask
+Claude to cancel it); attachments are checked when queued and again when sent.
+
 ## Testing (Constitution VII)
 
 - Tests first, against a generated Envelope Index (the real tables and columns, in a temporary
@@ -245,7 +260,7 @@ can pose as the end of the quote.
 | III. Disabled means nonexistent | Pass: levels filter the tools; `mark_read` exists only at Read & write |
 | IV. Good macOS citizen | Pass: Mail's own scripting and compose window, standard Automation, Accessibility, and Full Disk Access approvals; Mail's database only read; the Owner's clipboard lent only for a paste, marked transient, and given back |
 | V. Self-hostable | Pass: nothing new on the relay |
-| VI. Store the minimum | Pass: no copy of mail; attachment files written for reading are deleted at once; account names kept in memory 10 minutes |
+| VI. Store the minimum | Pass: no copy of mail; attachment files written for reading are deleted at once; account names kept in memory 10 minutes; a queued message only until it is sent, fails, or is cancelled |
 | VII. Test-first | Pass: tests above written first, against fixtures |
 | VIII. Simplicity | Pass: one dependency, MimeFoundation (Toni's choice), for MIME parsing |
 | IX. Open source | Pass: MimeFoundation is MIT (its swift-crypto and swift-certificates dependencies Apache-2.0) |

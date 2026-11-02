@@ -172,6 +172,7 @@ final class AppModel {
         attachmentSweeper = MessagesCapability.sweepCopies(in: MessagesCapability.staging)
         leftoverTimer = Self.tidyEveryMinute()
         if ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil {
+            Task { await sendQueuedMail() }  // queued before a restart, and the Mac is unlocked now
             screenReminder = remindScreenWhileHere()
             permissionWatch = watchPermissions()
             permanentWatch = PermanentWatch(home: .homeDirectory) { url in
@@ -333,7 +334,31 @@ final class AppModel {
         await keepAwakeController.restore()
     }
 
+    /// Sends the email queued while the Mac was locked (spec 008 FR-837), once it is unlocked and
+    /// while Mail is Read & write, telling the Owner about each.
+    func sendQueuedMail() async {
+        guard capabilities.level(CapabilityRegistry.mail) == .readWrite, !SystemScreen().isLocked() else { return }
+        // A moment for the unlocked session to settle before Mail opens windows.
+        try? await Task.sleep(for: .seconds(3))
+        await MailCapability.sendQueued { [weak self] summary, sent, answer in
+            await MainActor.run {
+                self?.event(.app, "Queued email \(sent ? "sent" : "not sent"): \(summary)", error: !sent)
+            }
+            let content = UNMutableNotificationContent()
+            content.title = sent ? "Queued email sent" : "Queued email not sent"
+            content.body = sent ? summary : "\(summary): \(answer)"
+            try? await UNUserNotificationCenter.current().add(
+                UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil))
+        }
+    }
+
     private func watchSystem() {
+        observers.append(
+            DistributedNotificationCenter.default().addObserver(
+                forName: .init("com.apple.screenIsUnlocked"), object: nil, queue: .main
+            ) { [weak self] _ in
+                MainActor.assumeIsolated { Task { await self?.sendQueuedMail() } }
+            })
         let ws = NSWorkspace.shared.notificationCenter
         observers.append(
             ws.addObserver(forName: NSWorkspace.willSleepNotification, object: nil, queue: .main) { [weak self] _ in

@@ -44,7 +44,7 @@ Claude (web, Desktop, phone)  ──HTTPS──▶  Latchkey relay  ◀──out
   your Mac, and you can remove any one of them.
 - **You choose what Claude can do.** Each capability has a level in Latchkey's Settings window; a capability that's
   off doesn't exist as far as Claude knows. Most have Off, Read only, and Read & write; Shell and
-  Location & Maps are Off or On. Claude sees 23 tools from a Mac, plus the relay's `machines`:
+  Location & Maps are Off or On. Claude sees 28 tools from a Mac, plus the relay's `machines`:
 
   | Capability | Read only | Read & write adds |
   |---|---|---|
@@ -57,7 +57,7 @@ Claude (web, Desktop, phone)  ──HTTPS──▶  Latchkey relay  ◀──out
   | Calendar (every account on the Mac) | `calendar_find` (events, free time) | `calendar_change` (create, move, repeat, delete) |
   | Reminders | `reminders_find` | `reminders_change` (create, complete, change, delete; new and deleted lists) |
   | Contacts | `contacts_find` (cards, photos) | `contacts_change` (create, change, delete; groups and their members) |
-  | Mail (every account in Apple Mail) | `mail_find`, `mail_read` | `mail_change` (read, flag, move, junk, delete to Trash, draft), `mail_send` (new, reply, forward, with files; through Mail's own window: works with the lid closed, not while the Mac is locked) |
+  | Mail (every account in Apple Mail) | `mail_find`, `mail_read` | `mail_change` (read, flag, move, junk, delete to Trash, draft), `mail_send` (new, reply, forward, with files; through Mail's own window: works with the lid closed, not while the Mac is locked), `mail_queue` (while locked: sent at the next unlock) |
   | Location & Maps | `location_read`, `maps_find` (places, directions, travel times) | |
 
 - **You see what Claude did:** a notification for every change and every new Claude connection,

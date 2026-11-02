@@ -91,6 +91,16 @@ my landlord", tell what's new in the inbox, answer a message, or file it away.
   Latchkey.
 - **FR-824** Latchkey shall not add its own confirmations or limits to sending (as spec 002
   FR-115); Claude's apps handle approvals.
+- **FR-835** While the Mac is locked, sending and saving drafts shall answer that the Mac is
+  locked, and that the message can be queued to go out when the Mac is next unlocked (FR-836),
+  so Claude can decide with the Owner (Toni, 2026-11-02).
+- **FR-836** While Mail is Read & write, Claude shall be able, in a tool of its own, to queue a
+  new message, a reply, or a forward (the same inputs as sending), list what is queued, and
+  cancel a queued message (Toni, 2026-11-02: "separate tool for queued emails").
+- **FR-837** When the Mac is next unlocked, Latchkey shall send each queued message, oldest
+  first, the same way as sending (FR-820 to FR-823), tell the Owner in a notification and the
+  activity log whether each was sent, and remove it from the queue. A queued message is kept only
+  on the Mac, readable only by the Owner's account, until it is sent, fails, or is cancelled.
 
 ### Level, visibility, permissions
 - **FR-830** Mail shall have the levels Off, Read only, Read & write, where Read & write includes

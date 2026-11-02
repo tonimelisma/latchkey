@@ -45,6 +45,7 @@ enum MailCapability {
             scratch: FileManager.default.temporaryDirectory.appending(path: "Latchkey Mail"),
             downloads: URL.homeDirectory.appending(path: "Downloads"), windows: AXMailWindows(), contacts: ContactBook()
         )
+        liveEnv.mutate { $0 = env }
         return Capability(
             id: CapabilityRegistry.mail, title: "Mail", summary: "Find, read, organise, and send email",
             readTools: readTools(env), writeTools: writeTools(env))
@@ -187,7 +188,101 @@ enum MailCapability {
                         account. Answers once the message is in the account's Sent mailbox.
                         """, input: composeInput(), readOnly: false, openWorld: true, deadlineMS: 90_000),
                 handler: { args in await run(env) { s in try await MailWrite.send(args, s, env) } }),
+            ToolEntry(
+                tool: .make(
+                    "mail_queue", title: "Queue Email for When the Mac Is Unlocked",
+                    description: """
+                        While the Mac is locked, mail_send can't write email. This queues a message instead, \
+                        to be sent the next time someone unlocks the Mac (ask the Owner whether waiting is \
+                        fine). action: add (the same inputs as mail_send), list, cancel (id from list). The \
+                        Owner is told when each queued message is sent.
+                        """, input: queueInput(), required: ["action"], readOnly: false, openWorld: true,
+                    deadlineMS: 30_000),
+                handler: { args in await queue(args, MailQueue.shared) }),
         ]
+    }
+
+    static let queueActions = ["add", "list", "cancel"]
+
+    static func queueInput() -> [String: JSONValue] {
+        var input = composeInput()
+        input["action"] = .enumParam(queueActions, "What to do")
+        input["id"] = .stringParam("For cancel: the queued message's id, from list")
+        return input
+    }
+
+    /// The queue tool (spec 008 FR-836): add, list, cancel.
+    static func queue(_ args: JSONValue, _ q: MailQueue) async -> ToolResult {
+        switch args["action"]?.stringValue {
+        case "add":
+            var send = args
+            if case .object(var o) = send {
+                o["action"] = nil
+                o["id"] = nil
+                send = .object(o)
+            }
+            let to = send["to"].map { v -> String in
+                if case .array(let a) = v { return a.compactMap(\.stringValue).joined(separator: ", ") }
+                return ""
+            }
+            guard send["reply_to"]?.stringValue != nil || send["forward"]?.stringValue != nil || !(to ?? "").isEmpty
+            else { return .text("Nothing was queued: say who it goes to (to), or reply_to or forward.", isError: true) }
+            if case .array(let files) = send["attachments"] {
+                for f in files.compactMap(\.stringValue)
+                where !FileManager.default.isReadableFile(atPath: (f as NSString).expandingTildeInPath) {
+                    return .text("Nothing was queued: there's no readable file at \(f).", isError: true)
+                }
+            }
+            let what =
+                send["reply_to"].map { _ in "a reply" } ?? send["forward"].map { _ in "a forward" }
+                ?? "«\(send["subject"]?.stringValue ?? "")»"
+            let summary = what + ((to ?? "").isEmpty ? "" : " to \(to!)")
+            do {
+                let item = try await q.add(send, summary: summary)
+                var r = ToolResult.text(
+                    "Queued \(summary) (id \(item.id)). It is sent the next time someone unlocks the Mac, and the Owner is told."
+                )
+                r.activity = "Claude queued an email: \(summary)"
+                return r
+            } catch {
+                return .text("Nothing was queued: \(error.localizedDescription)", isError: true)
+            }
+        case "list":
+            let items = await q.items()
+            guard !items.isEmpty else { return .text("Nothing is queued.") }
+            let f = DateFormatter()
+            f.dateStyle = .short
+            f.timeStyle = .short
+            return .text(
+                "Queued, sent at the next unlock:\n"
+                    + items.map { "- \($0.id): \($0.summary), queued \(f.string(from: $0.created))" }.joined(
+                        separator: "\n"))
+        case "cancel":
+            guard let id = args["id"]?.stringValue else { return .text("Give the id, from list.", isError: true) }
+            guard let item = try? await q.cancel(id) else {
+                return .text("Nothing queued has the id \(id). See list.", isError: true)
+            }
+            var r = ToolResult.text("Cancelled \(item.summary); it won't be sent.")
+            r.activity = "Claude cancelled a queued email: \(item.summary)"
+            return r
+        default:
+            return .unknown("action", args["action"]?.stringValue, allowed: queueActions)
+        }
+    }
+
+    /// Set by `make()`, so the queue can be sent when the Mac is unlocked.
+    private static let liveEnv = Locked<Env?>(nil)
+
+    /// Sends what is queued, oldest first (FR-837), telling `report` about each: its summary,
+    /// whether it was sent, and Latchkey's answer.
+    static func sendQueued(
+        _ q: MailQueue = .shared, env given: Env? = nil, report: @Sendable (String, Bool, String) async -> Void
+    ) async {
+        guard let env = given ?? liveEnv.value else { return }
+        while let item = try? await q.next() {
+            let r = await run(env) { s in try await MailWrite.send(item.args, s, env) }
+            await report(item.summary, !r.isError, r.content.jsonText)
+        }
     }
 
     // MARK: accounts
