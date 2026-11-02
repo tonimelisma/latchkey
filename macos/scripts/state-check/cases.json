@@ -103,7 +103,8 @@
         {"id": "browser.click_other_site", "case": "Click a link to another site", "steps": "browser_read url \"https://example.com\", then browser_act click its only link (it goes to iana.org), then browser_read with nothing to check Claude's page shows iana.org."},
         {"id": "browser.type", "case": "Type into a field and submit", "steps": "browser_read url \"https://html.duckduckgo.com/html/\"; browser_act type into the search field, text \"latchkey\", submit true; check results appear."},
         {"id": "browser.tabs", "case": "List tabs", "steps": "browser_read tabs true."},
-        {"id": "browser.screenshot", "case": "Screenshot of the page", "steps": "browser_read screenshot true."}
+        {"id": "browser.screenshot", "case": "Screenshot of the page", "steps": "browser_read screenshot true."},
+        {"id": "browser.close", "case": "Close Claude's page", "steps": "browser_act close; then browser_read tabs true shows Claude has no page or a fresh one."}
       ],
       "missing": []
     },
