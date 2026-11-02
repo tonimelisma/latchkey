@@ -344,10 +344,12 @@ struct AccessView: View {
 struct AddToClaudeSteps: View {
     let model: AppModel
     var showsDone = true
+    /// The relay address shown in place of the paired one, for pictures.
+    var relayShown: String?
     @State private var copied = false
 
     var body: some View {
-        if let relay = model.relayURL {
+        if let relay = relayShown.flatMap(URL.init(string:)) ?? model.relayURL {
             VStack(alignment: .leading, spacing: 8) {
                 Text(
                     "Click Add to Claude. Claude opens in your browser with Latchkey and your relay’s address filled in. Click Add, Add again, then Connect. Then sign in with your passkey and click Allow."
@@ -471,7 +473,7 @@ struct SetupView: View {
                 }
             }
             step("claude", "Add Latchkey to Claude") {
-                AddToClaudeSteps(model: model)
+                AddToClaudeSteps(model: model, relayShown: relayShown)
             }
             Divider()
             HStack {

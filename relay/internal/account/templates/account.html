@@ -15,7 +15,7 @@
 {{template "head" .}}
 <h1>Your account</h1>
 {{with .Data.Done}}<p class="notice" role="status" tabindex="-1" data-focus>{{.}}</p>{{end}}
-{{if not .Data.HasClaude}}
+{{if and .Data.Machines (not .Data.HasClaude)}}
 <section id="next-claude" class="next-step" aria-labelledby="next-claude-title">
   <h2 id="next-claude-title">Next: add Latchkey to Claude</h2>
   <div class="panel">
@@ -69,8 +69,11 @@
   <h2 id="claude">Claude</h2>
   <div class="panel">
     <div class="howto">
+{{if and .Data.Machines (not .Data.HasClaude)}}
+      <p>Not added yet: follow <a href="#next-claude">Next: add Latchkey to Claude</a> at the top of this page.</p>
+{{else}}
 {{template "add-to-claude" .Data.AddHere}}
-    </div>
+{{end}}    </div>
   {{if .Data.Clients}}
     <ul class="rows">{{range .Data.Clients}}
       <li>

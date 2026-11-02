@@ -1098,8 +1098,8 @@ func TestCeremoniesAreCapped(t *testing.T) {
 
 // FR-659, FR-660: Add to Claude opens Claude's dialog with Latchkey's name and this relay's
 // address filled in, next to written steps and the way by hand. Until Claude on the web, desktop,
-// and phone has access, the page starts with it as the next step; a Claude Code sign-in doesn't
-// count.
+// and phone has access, a page with a machine starts with it as the next step; a Claude Code
+// sign-in doesn't count.
 func TestAccountPageAddToClaude(t *testing.T) {
 	e := setup(t)
 	b := e.browser()
@@ -1110,7 +1110,14 @@ func TestAccountPageAddToClaude(t *testing.T) {
 		url.QueryEscape(e.base+"/mcp")
 
 	page := b.get("/account")
-	assert.Equal(t, 2, strings.Count(page.body, `href="`+link+`"`), "the button in the next step and in the Claude section")
+	assert.NotContains(t, page.body, `id="next-claude"`, "no machine yet: connecting one comes first")
+	assert.Equal(t, 1, strings.Count(page.body, `href="`+link+`"`), "the Claude section has the button")
+	_, err := e.store.CreateDevice(ctx, store.NewDevice{UserID: u.ID, Name: "Mac", PublicKey: []byte("k")}, e.clock.now())
+	require.NoError(t, err)
+
+	page = b.get("/account")
+	assert.Equal(t, 1, strings.Count(page.body, `href="`+link+`"`), "once, in the next step; the Claude section points to it")
+	assert.Contains(t, page.body, `href="#next-claude"`)
 	assert.Contains(t, page.body, `id="next-claude"`, "next step while Claude has no access")
 	assert.Contains(t, page.body, "Add custom connector", "the way by hand")
 	assert.Contains(t, strings.ReplaceAll(page.body, "<wbr>", ""), e.base+"/mcp")

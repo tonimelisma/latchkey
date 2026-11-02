@@ -694,9 +694,10 @@ field misdrawn after pairing a server (2026-11-01); these requirements give the 
   with the passkey, Allow), and the way by hand: Claude's Customize → Connectors → Add custom
   connector with the address of FR-655. Why: Toni, 2026-11-01; copying an address into a
   settings page was the step people get wrong.
-- **FR-660** While no approval for Claude on the web, desktop, and phone exists on the account,
-  the account page shall start with adding Latchkey to Claude as the next step, with the same
-  button and steps; once one exists, it shall not. Why: Toni wanted the step to nag until Claude
+- **FR-660** While a machine is connected to the account and no approval for Claude on the web,
+  desktop, and phone exists, the account page shall start with adding Latchkey to Claude as the
+  next step, with the same button and steps (the Claude part then points to it rather than
+  repeating it); once one exists, it shall not. With no machine yet, connecting one comes first. Why: Toni wanted the step to nag until Claude
   has connected (2026-11-01).
 
 ## Success criteria

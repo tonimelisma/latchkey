@@ -48,6 +48,12 @@ import Testing
         try Self.shot(view, "setup-questions", width: 500)
     }
 
+    @Test func setupAddToClaude() throws {
+        let view = SetupView(model: AppModel(), close: {}, showing: "claude", relayShown: Self.exampleRelay)
+            .background(Color(nsColor: .windowBackgroundColor))
+        try Self.shot(view, "setup-add-to-claude", width: 500)
+    }
+
     @Test func whatClaudeCanDo() throws {
         try Self.shot(CapabilitiesPane(model: AppModel()), "settings-capabilities", width: 560, height: 620)
     }
