@@ -359,7 +359,8 @@ struct AddToClaudeSteps: View {
                 )
                 numbered(
                     2,
-                    "Check that the address is \(AddToClaude.connector(relay: relay)), then click Add. Claude shows the settings it found: change nothing, click Add once more, then Connect.")
+                    "Check that the address is \(AddToClaude.connector(relay: relay)), then click Add. Claude shows the settings it found: change nothing, click Add once more, then Connect."
+                )
                 numbered(
                     3,
                     "A Latchkey page opens: sign in with your Latchkey passkey (the one you made when you created your account), then click Allow. That lets Claude use this Mac and your other machines."

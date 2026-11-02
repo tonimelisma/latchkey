@@ -25,7 +25,8 @@ Say:
 
 > I'll set up your own Latchkey relay: a small always-on server that passes messages between
 > Claude and your Mac. It takes about 20 minutes. You'll create an account with a hosting
-> company and click Allow a few times; I'll do everything else.
+> company and click Allow a few times; I'll do everything else. Claude will ask you to approve
+> each command I run here; click Allow, and I'll say what each one does.
 >
 > [The cost sentence from "Google Cloud" below.]
 >
@@ -68,11 +69,12 @@ Wait until they say it worked. If the page says the code is wrong, read it to th
 
 ## Step 5: Connect the Mac
 
-Say:
+Copy the address for them first: `printf %s 'https://<host name>' | pbcopy`. Then say:
 
 > Now go back to Latchkey's setup window. If you closed it, click the key icon in the menu bar
-> at the top of your screen, then "Connect to a Relay…". In step 1, paste
-> https://<host name> and click Connect. Your browser opens: sign in with your passkey and click
+> at the top of your screen, then "Connect to a Relay…" (or "Finish Setting Up…" if you
+> already connected). I've copied your relay's address: in step 1, paste it (⌘V) and click
+> Connect. Your browser opens: sign in with your passkey and click
 > Allow. Then do steps 2, 3, and 4 in that window; each one says what to click. Stop when you
 > reach step 5, "Add Latchkey to Claude", and tell me. I'll do that one with you.
 
@@ -108,7 +110,8 @@ Also say, so they have it if the link doesn't work:
 > passkey, and click Allow.
 
 Then ask: "Does Latchkey's setup window now show a checkmark next to 'Add Latchkey to Claude'?"
-Go on only when it does (it can take a few seconds). If not, ask what they see. If Claude showed
+(If they closed the window: the key icon in the menu bar, then "Finish Setting Up…"; if that
+item isn't in the menu, setup is finished.) Go on only when it does (it can take a few seconds). If not, ask what they see. If Claude showed
 its own sign-in page instead of the form, have them sign in to Claude and run the `open` command
 again. If the form still doesn't appear, walk them through the way by hand above. Once it's
 there, say:
@@ -124,12 +127,12 @@ Say:
 > Latchkey; click Allow. Tell me what Claude answers.
 
 If Claude says it has no such tool, have them click the + or tools button under the chat box and
-turn Latchkey on. If it says the Mac is offline, check that the key icon in the menu bar has no
+turn Latchkey on. If it says the Mac is offline, check that the key icon in the menu bar isn't crossed out and has no
 mark beside it. When it answers, say:
 
 > Done. Your relay updates itself when a new version comes out. It runs on Google's free server;
-> if anything ever costs more than $1, Google emails you. If you ever move it to another address, you'll make a new passkey and add the
-> connector again; everything else stays.
+> if anything ever costs more than $1, Google emails you. If you ever move it to another address, you'll make a new passkey and add Latchkey
+> to Claude again; everything else stays.
 
 Tell them where things are: the relay's address, the hosting company's page, and that the setup
 code is no longer needed (sign-up is now closed).
@@ -164,6 +167,8 @@ Then open the relay's page and say:
   `~/google-cloud-sdk/install.sh --quiet --path-update=false`; call `~/google-cloud-sdk/bin/gcloud`
   by its full path.
 - Sign in: `gcloud auth login` (opens the browser; they choose their account and click Allow).
+  Say first: "Google will ask whether Google Cloud SDK may manage your Google Cloud account.
+  That's the tool I use to build your relay; click Allow."
 - Create, checking each command's result before the next:
   1. A project: `gcloud projects create latchkey-relay-<6 random letters>`; make it the default.
   2. Link billing: `gcloud billing accounts list`, then

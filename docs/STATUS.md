@@ -44,6 +44,15 @@ Settings window's Claude Apps tab offers it too. The relay's account page starts
 Claude has access, and the relay guide ends by opening it. Claude's menu is Customize →
 Connectors (Settings → Connectors in older docs, fixed everywhere). Not yet seen: the dialog
 itself, which needs a signed-in claude.ai (a signed-out visit keeps the link through sign-in).
+Five confused-user reviews (agents playing a non-technical Owner: README, detail page, setup
+window, account page, the relay guide as heard and as followed) in two rounds; their fixes are
+in: the README starts with the app and Claude Code (no relay first), the guide quotes the link
+for `open`, copies the address for the person, names the real menu items, and checks the step's
+checkmark, and the app and page number the steps and say what each Add and passkey is.
+Open for Toni: whether Google's free trial must be upgraded to a full account for the server to
+outlive the trial's 90 days (the guide's "To verify" note; needs a fresh Google account).
+Flaky: relay `hub` TestToolsAreStoredOnlyWhenTheyChange fails under `-count=5` and in one full
+run, passes alone (code unchanged since spec 010).
 
 The Latchkey plugin (spec 011) was built and shipped on 2026-11-01, then withdrawn the same day
 (Toni): it didn't help anyone get started and made no difference once Latchkey was connected.

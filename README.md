@@ -16,20 +16,20 @@ and nothing set up on your router. If your Mac is asleep, Claude tells you right
 ## Get started
 
 1. **Install Latchkey on your Mac** (once it's released) and open it.
-2. **Let Claude set it up with you** (about 20 minutes). In Latchkey's first setup step, click
+2. **Let Claude set it up with you** (about 20 minutes; needs Claude Pro or Max, for the Code
+   tab). In Latchkey's first setup step, click
    **Copy Request**. Open the Claude app on your Mac, click the **Code** tab, paste, and press
    Return. Claude builds your relay, a small always-on service on the internet where Claude and
    your Mac meet, and walks you through the rest one click at a time:
    - sign in to Google Cloud and add a card (Google asks for one; the relay stays within its
      free tier, and Google emails you if anything ever costs more than $1);
-   - connect Latchkey to your relay and make a passkey with Touch ID;
+   - create your relay account on a page Claude opens, with a code Claude gives you, and save a
+     passkey with Touch ID; then connect Latchkey to it;
    - allow macOS's permissions, so macOS never stops Claude to ask while you're away (you can
      turn any ability off later);
    - add Latchkey to Claude: Claude opens a form already filled in; click **Add**, then **Add**
      once more and **Connect**; on the Latchkey page that opens, use Touch ID and click
      **Allow**.
-
-   The Code tab comes with Claude's paid plans (Pro or Max).
 3. **Ask Claude something about your Mac**, from your phone or anywhere.
 
 Already have a relay? Paste its address in Latchkey's first setup step and click Connect;
