@@ -119,17 +119,21 @@ enum PageScripts {
     /// opens in the same tab: Safari fires the Navigation API's `navigate` event for a link only
     /// after this script has returned, often after the page is gone (real Safari, 2026-10-29),
     /// so the link's own address is how Latchkey knows where Claude's click went. Read after the
-    /// click, as the page's own click handlers may change it.
+    /// click, as the page's own click handlers may change it; a third line, "same" (JSON), says the
+    /// address didn't change in the click, which another site's address needs (2026-11-01).
     static func click(_ ref: String) -> String {
         """
         (function () { \(find(ref))
           if (e.scrollIntoView) e.scrollIntoView({ block: 'center' });
           if (e.focus) e.focus();
+          var a0 = e.closest ? e.closest('a[href]') : null;
+          var before = a0 ? String(a0.href) : null;
           e.click();
           var a = e.closest ? e.closest('a[href]') : null;
           var t = a ? (a.getAttribute('target') || '').toLowerCase() : '';
           if (a && !a.hasAttribute('download') && (t === '' || t === '_self' || t === '_top' || t === '_parent')) {
-            return 'ok\\n' + JSON.stringify(String(a.href));
+            var after = String(a.href);
+            return 'ok\\n' + JSON.stringify(after) + (after === before ? '\\n' + JSON.stringify('same') : '');
           }
           return 'ok';
         })()

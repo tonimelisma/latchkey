@@ -12,14 +12,14 @@
         {"id": "notes.append", "case": "Add text to the end of a note", "steps": "Find the note \"{TAG}\" with notes_find (query \"{TAG}\"), then notes_change append, text \"Appended line\"."},
         {"id": "notes.edit", "case": "Change one passage in a note", "steps": "notes_change edit on \"{TAG}\", find \"Appended line\", text \"Edited line\"."},
         {"id": "notes.replace", "case": "Replace a note's text", "steps": "notes_change replace on \"{TAG}\", text \"- one\\n- two\"; then notes_read it and check it shows the two list items."},
-        {"id": "notes.delete", "case": "Delete a note", "steps": "notes_change delete both \"{TAG}\" notes (the default-folder one too)."},
-        {"id": "notes.delete_folder", "case": "Delete a folder", "steps": "Record skipped with note \"needs a test folder, and Latchkey cannot create folders\"; call nothing."}
+        {"id": "notes.rename", "case": "Rename a note", "steps": "notes_change rename \"{TAG}\" to title \"{TAG} renamed\"; notes_read it and check the title."},
+        {"id": "notes.create_folder", "case": "Create a folder", "steps": "notes_change create_folder, folder \"{TAG} folder\"."},
+        {"id": "notes.move", "case": "Move a note to another folder", "steps": "notes_change move \"{TAG} renamed\" to folder \"{TAG} folder\"; notes_find folder \"{TAG} folder\" shows it."},
+        {"id": "notes.create_in_new_folder", "case": "Create a note in a folder that doesn't exist yet", "steps": "notes_change create, title \"{TAG} new\", text \"Hi\", folder \"{TAG} new folder\"; check the answer says the folder was made."},
+        {"id": "notes.delete", "case": "Delete a note", "steps": "notes_change delete the \"{TAG} default\" note."},
+        {"id": "notes.delete_folder", "case": "Delete a folder", "steps": "notes_change delete_folder \"{TAG} folder\" and \"{TAG} new folder\" (their notes go to Recently Deleted)."}
       ],
-      "missing": [
-        "Move a note to another folder",
-        "Rename a note (change its title)",
-        "Create an empty folder on its own (only by creating a note in it)"
-      ]
+      "missing": []
     },
     {
       "id": "messages",

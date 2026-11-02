@@ -41,6 +41,8 @@ final class FakeSafariTabs: ScriptRunner, @unchecked Sendable {
     /// returned, and the new page has replaced the old one before Latchkey's next script, so
     /// no note of it is ever read: only the click script's own answer names the address.
     var clickGoesTo: String?
+    /// Plays a page whose click handler changes the link's address as it is clicked.
+    var clickChangesLink = false
     /// Set to an address: the next click in Claude's tab is on a button that sends the page
     /// there; the `navigate` event comes after the click script, while the acting script waits
     /// for it, then the new page replaces the old one.
@@ -166,7 +168,11 @@ final class FakeSafariTabs: ScriptRunner, @unchecked Sendable {
                     clickGoesTo = nil
                     goesTo = next
                     // Only a click script that reports the link's address (Latchkey's own) does.
-                    if js.contains("closest('a[href]')") { answer += "\n" + encoded(next) }
+                    if js.contains("closest('a[href]')") {
+                        answer += "\n" + encoded(next)
+                        // Latchkey's script adds "same" when the link's address didn't change in the click.
+                        if js.contains("after === before"), !clickChangesLink { answer += "\n" + encoded("same") }
+                    }
                 } else if js.contains("e.click()"), let next = buttonGoesTo {
                     buttonGoesTo = nil
                     goesTo = next
@@ -482,6 +488,21 @@ final class Notes: @unchecked Sendable {
         #expect(page.url == "https://pay.example.net/")
         #expect(fake.claudeTabs.count == 1)
         #expect(!notes.all.contains { $0.contains("lost track") }, "\(notes.all)")
+        #expect(fake.ownerTabs.allSatisfy { $0.scriptsRun == 0 && $0.mark == nil })
+    }
+
+    /// Security review 2026-11-01: a page whose click handler changes the link's address can't
+    /// name another site; the tab is lost, as before.
+    @Test func aLinkChangedByThePageInTheClickLosesTheTab() async throws {
+        let fake = FakeSafariTabs()
+        let notes = Notes()
+        let b = browser(fake, notes: notes)
+        _ = try await b.open("https://shop.example.com", newTab: false)
+        await b.age(by: 60)
+        fake.clickGoesTo = "https://pay.example.net/"
+        fake.clickChangesLink = true
+        await #expect(throws: SafariBrowser.Failure.noWindow) { _ = try await b.click("e1") }
+        #expect(notes.all.contains { $0.contains("lost track") })
         #expect(fake.ownerTabs.allSatisfy { $0.scriptsRun == 0 && $0.mark == nil })
     }
 

@@ -1,3 +1,4 @@
+import ApplicationServices
 import CoreGraphics
 import Foundation
 import IOKit.pwr_mgt
@@ -35,35 +36,82 @@ enum LidSessionPolicy {
 final class LidSession {
     private var assertion: IOPMAssertionID = 0
     var holding: Bool { assertion != 0 }
+    private var keepAwakeOn = false
+    /// While keep-awake is on or the session is held, the lid, the lock, and the monitors are read
+    /// every second (security review 2026-11-01: power notifications don't come with a lid
+    /// change, so the hold could start late and the lock could lag). Reading them is cheap.
+    private var watch: Timer?
+    /// Where what was done goes (the activity log).
+    var report: (@MainActor (String, Bool) -> Void)?
 
-    /// Applies the policy; returns what was done, for the log, or nil when nothing changed.
-    func update(keepAwakeOn: Bool, lidClosed: Bool?) -> String? {
+    /// Applies the policy with keep-awake's latest decision.
+    func update(keepAwakeOn: Bool, lidClosed: Bool?) {
+        self.keepAwakeOn = keepAwakeOn
+        check(lidClosed: lidClosed)
+    }
+
+    private func keepWatching() {
+        if keepAwakeOn || holding {
+            guard watch == nil else { return }
+            watch = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { _ in
+                MainActor.assumeIsolated { [weak self] in self?.check(lidClosed: PowerReader.lidClosed()) }
+            }
+        } else {
+            watch?.invalidate()
+            watch = nil
+        }
+    }
+
+    private func check(lidClosed: Bool?) {
+        defer { keepWatching() }
+        // Holding is only safe when the lock can be sent (Accessibility).
+        let canLock = AXIsProcessTrusted()
         let d = LidSessionPolicy.decide(
-            keepAwakeOn: keepAwakeOn, lidClosed: lidClosed, locked: SystemScreen().isLocked(), holding: holding,
-            externalDisplay: Self.externalDisplay())
+            keepAwakeOn: keepAwakeOn && canLock, lidClosed: lidClosed, locked: SystemScreen().isLocked(),
+            holding: holding, externalDisplay: Self.externalDisplay())
         if d.hold, !holding {
             IOPMAssertionCreateWithName(
                 kIOPMAssertionTypePreventUserIdleDisplaySleep as CFString, IOPMAssertionLevel(kIOPMAssertionLevelOn),
                 "Latchkey keeps the Mac usable for Claude with the lid closed" as CFString, &assertion)
-            return "Lid closed: the session stays as it is (display-sleep assertion held)"
+            report?("Lid closed: the session stays as it is (display-sleep assertion held)", false)
+        } else if !d.hold, holding {
+            stop()
+            if d.lockNow { lock() } else { report?("Display-sleep assertion released", false) }
         }
-        if !d.hold, holding {
-            IOPMAssertionRelease(assertion)
-            assertion = 0
-            if d.lockNow {
-                Self.lockScreen()
-                return "Lid opened: the Mac was locked at once"
-            }
-            return "Display-sleep assertion released"
-        }
-        return nil
     }
 
-    /// Releases the assertion without locking (quit, Disconnect: macOS's own rules take over).
-    func release() {
-        guard holding else { return }
+    private func stop() {
+        watch?.invalidate()
+        watch = nil
         IOPMAssertionRelease(assertion)
         assertion = 0
+    }
+
+    /// Locks, checks that the Mac is locked, and tries once more (security review 2026-11-01).
+    private func lock() {
+        Self.lockScreen()
+        Task { @MainActor in
+            for attempt in 1...2 {
+                try? await Task.sleep(for: .seconds(1))
+                if SystemScreen().isLocked() {
+                    report?("Lid opened: the Mac was locked at once", false)
+                    return
+                }
+                if attempt == 1 { Self.lockScreen() }
+            }
+            report?("Lid opened, but locking the Mac didn't take: it may be unlocked", true)
+        }
+    }
+
+    /// Quit, Disconnect, uninstall: lets go, and locks a session kept unlocked behind the lid.
+    func release() {
+        keepAwakeOn = false
+        watch?.invalidate()
+        watch = nil
+        guard holding else { return }
+        let behindLid = PowerReader.lidClosed() == true && !SystemScreen().isLocked()
+        stop()
+        if behindLid { Self.lockScreen() }
     }
 
     static func externalDisplay() -> Bool {

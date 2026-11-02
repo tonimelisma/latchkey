@@ -212,18 +212,14 @@ enum NotesCapability {
                             return .text("Give the note a title.", isError: true)
                         }
                         var folder = ""
+                        var newFolder = false
                         if let wanted = args["folder"]?.stringValue, !wanted.isEmpty {
-                            let folders = try await s.folders()
-                            guard
-                                let match = folders.first(where: {
-                                    $0.name.caseInsensitiveCompare(wanted) == .orderedSame
-                                })
-                            else {
-                                return .text(
-                                    "There is no folder named \(wanted). The folders are: "
-                                        + folders.map(\.name).joined(separator: ", ") + ".", isError: true)
+                            // A folder that doesn't exist yet is made in the default account.
+                            let match = try await s.folders().first {
+                                $0.name.caseInsensitiveCompare(wanted) == .orderedSame
                             }
-                            folder = match.name
+                            folder = match?.name ?? wanted
+                            newFolder = match == nil
                         }
                         let text = args["text"]?.stringValue ?? ""
                         let html = NoteHTML.title(title) + (text.isEmpty ? "" : NoteHTML.from(text))
@@ -234,10 +230,11 @@ enum NotesCapability {
                             if id != nil { break }
                             try? await Task.sleep(for: .milliseconds(200))
                         }
+                        let made = newFolder ? " The folder “\(folder)” was new and has been made." : ""
                         var result = ToolResult.data(
                             .object(["id": id.map(JSONValue.string) ?? .null, "title": .string(title)]),
-                            text: id.map { "Created “\(title)” (id \($0))." }
-                                ?? "Created “\(title)”. It will show up in notes_find in a moment.")
+                            text: (id.map { "Created “\(title)” (id \($0))." }
+                                ?? "Created “\(title)”. It will show up in notes_find in a moment.") + made)
                         result.activity = "Claude created the note “\(title)”"
                         result.made = "the note “\(title)”" + (folder.isEmpty ? "" : " in \(folder)")
                         return result
@@ -302,6 +299,96 @@ enum NotesCapability {
                             mode == "append"
                             ? "Claude added to the note “\(note.title)”" : "Claude changed the note “\(note.title)”"
                         return result
+                    }
+                }),
+            ToolEntry(
+                tool: .make(
+                    "notes_move", title: "Move a Note",
+                    description: "Moves a note to another folder (made first if it doesn't exist).",
+                    input: [
+                        "id": .stringParam("The note's id, from notes_find"),
+                        "folder": .stringParam("The folder to move it to"),
+                    ], required: ["id", "folder"], readOnly: false, deadlineMS: 30_000),
+                handler: { args in
+                    await run(store, scripts) { s in
+                        guard let id = args["id"]?.stringValue, let wanted = args["folder"]?.stringValue,
+                            !wanted.isEmpty
+                        else { return .text("Give the note's id and the folder.", isError: true) }
+                        let note = try await s.read(id: id)
+                        let match = try await s.folders().first {
+                            $0.name.caseInsensitiveCompare(wanted) == .orderedSame
+                        }
+                        let folder = match?.name ?? wanted
+                        _ = try await scripts.run(Script.move, [note.scriptID, folder])
+                        var result = ToolResult.text(
+                            "Moved “\(note.title)” to “\(folder)”."
+                                + (match == nil ? " The folder was new and has been made." : ""))
+                        result.activity = "Claude moved the note “\(note.title)” to “\(folder)”"
+                        return result
+                    }
+                }),
+            ToolEntry(
+                tool: .make(
+                    "notes_rename", title: "Rename a Note",
+                    description:
+                        "Changes a note's title (its first line), leaving the rest of the note as it is. Notes with checklists, images, or tables are refused, as for notes_update.",
+                    input: [
+                        "id": .stringParam("The note's id, from notes_find"),
+                        "title": .stringParam("The new title"),
+                    ], required: ["id", "title"], readOnly: false, deadlineMS: 30_000),
+                handler: { args in
+                    await run(store, scripts) { s in
+                        guard let id = args["id"]?.stringValue, let title = args["title"]?.stringValue,
+                            !title.isEmpty, !title.contains("\n")
+                        else { return .text("Give the note's id and a one-line title.", isError: true) }
+                        let note = try await s.read(id: id)
+                        // Notes shows a note's first line as its title, so that line is changed,
+                        // with the same care as edit (checked live 2026-11-01: setting only the
+                        // note's name left the first line as it was).
+                        guard s.knowsContents else {
+                            return .text(
+                                "Latchkey can't check this note for checklists or images with this version of Notes, so it doesn't change existing notes.",
+                                isError: true)
+                        }
+                        if let why = refusal(note) { return .text(why, isError: true) }
+                        let body = try await scripts.run(Script.getBody, [note.scriptID])
+                        let old = NoteHTML.escape(note.title)
+                        let firstLineEnd = body.range(of: "</div>")?.lowerBound ?? body.endIndex
+                        guard let at = body.range(of: old), at.upperBound <= firstLineEnd else {
+                            return .text(
+                                "The first line of “\(note.title)” isn't its title as plain text, so it wasn't renamed.",
+                                isError: true)
+                        }
+                        _ = try await scripts.run(
+                            Script.setBody,
+                            [note.scriptID, body.replacingCharacters(in: at, with: NoteHTML.escape(title))])
+                        var result = ToolResult.text("Renamed “\(note.title)” to “\(title)”.")
+                        result.activity = "Claude renamed the note “\(note.title)” to “\(title)”"
+                        return result
+                    }
+                }),
+            ToolEntry(
+                tool: .make(
+                    "notes_create_folder", title: "Create a Note Folder",
+                    description: "Creates an empty folder in the default Notes account.",
+                    input: ["folder": .stringParam("The new folder's name")], required: ["folder"],
+                    readOnly: false, deadlineMS: 30_000),
+                handler: { args in
+                    guard let folder = args["folder"]?.stringValue, !folder.isEmpty else {
+                        return .text("Give the folder's name.", isError: true)
+                    }
+                    do {
+                        _ = try await scripts.run(Script.createFolder, [folder])
+                        var result = ToolResult.text("Created the folder “\(folder)”.")
+                        result.activity = "Claude created the Notes folder “\(folder)”"
+                        result.made = "the Notes folder “\(folder)”"
+                        return result
+                    } catch ScriptError.failed(let message) where message.contains("LATCHKEY_FOLDER_EXISTS") {
+                        return .text("There's already a folder named “\(folder)”.", isError: true)
+                    } catch let failure as ScriptError {
+                        return .text(explain(failure), isError: true)
+                    } catch {
+                        return .text("Notes couldn't create the folder: \(error.localizedDescription)", isError: true)
                     }
                 }),
             ToolEntry(
@@ -386,6 +473,7 @@ enum NotesCapability {
             if folderName is "" then
             set n to make new note with properties {body:theBody}
             else
+            if not (exists folder folderName) then make new folder at default account with properties {name:folderName}
             set n to make new note at folder folderName with properties {body:theBody}
             end if
             return id of n
@@ -413,6 +501,27 @@ enum NotesCapability {
             on run argv
             set theID to item 1 of argv
             tell application "Notes" to return body of note id theID
+            end run
+            """
+        /// argv: note id, folder name (made in the default account when no folder has that name).
+        static let move = """
+            on run argv
+            set theID to item 1 of argv
+            set folderName to item 2 of argv
+            tell application "Notes"
+            if not (exists folder folderName) then make new folder at default account with properties {name:folderName}
+            move note id theID to folder folderName
+            end tell
+            end run
+            """
+        static let createFolder = """
+            on run argv
+            set folderName to item 1 of argv
+            tell application "Notes"
+            set acc to default account
+            if exists folder folderName of acc then error "LATCHKEY_FOLDER_EXISTS"
+            make new folder at acc with properties {name:folderName}
+            end tell
             end run
             """
         static let delete = """

@@ -52,7 +52,13 @@ final class FakeScripts: ScriptRunner, @unchecked Sendable {
 
     @Test func toolsDeclareTheirHints() throws {
         let (_, _, tools) = try setup()
-        #expect(Set(tools.keys) == ["notes_create", "notes_update", "notes_delete", "notes_delete_folder"])
+        #expect(
+            Set(tools.keys) == [
+                "notes_create", "notes_update", "notes_move", "notes_rename", "notes_create_folder", "notes_delete",
+                "notes_delete_folder",
+            ])
+        #expect(tools["notes_move"]?.tool.annotations?.destructiveHint == false)
+        #expect(tools["notes_create_folder"]?.tool.annotations?.destructiveHint == false)
         #expect(tools["notes_delete_folder"]?.tool.annotations?.destructiveHint == true)
         #expect(tools["notes_create"]?.tool.annotations?.destructiveHint == false)
         #expect(tools["notes_update"]?.tool.annotations?.destructiveHint == true)
@@ -102,12 +108,42 @@ final class FakeScripts: ScriptRunner, @unchecked Sendable {
         #expect(fake.lastArgs == ["<div><h1>Ideas</h1></div><ul><li>☐ soil</li></ul>", "Notes"])
     }
 
-    @Test func unknownFolderIsRefusedBeforeNotesIsTouched() async throws {
+    /// Spec 002 FR-154 (2026-11-01): a folder that doesn't exist is made, not refused.
+    @Test func aNewFolderIsMadeForTheNote() async throws {
         let (_, fake, tools) = try setup()
         let result = await tools["notes_create"]!.handler(.object(["title": .string("X"), "folder": .string("Nope")]))
-        #expect(result.isError)
-        #expect(result.content.jsonText.contains("Trips"), "lists the folders that exist")
-        #expect(fake.calls.isEmpty)
+        #expect(!result.isError, "\(result.content.jsonText)")
+        #expect(result.content.jsonText.contains("The folder “Nope” was new and has been made"))
+        #expect(fake.lastArgs.last == "Nope")
+        let existing = await tools["notes_create"]!.handler(
+            .object(["title": .string("Y"), "folder": .string("trips")]))
+        #expect(!existing.content.jsonText.contains("was new"), "an existing folder, in any case")
+        #expect(fake.lastArgs.last == "Trips")
+    }
+
+    /// Spec 002 FR-154: move and rename go to Notes with the note's own id.
+    @Test func movesAndRenamesANote() async throws {
+        let (_, fake, tools) = try setup()
+        let moved = await tools["notes_move"]!.handler(.object(["id": .string("N-IDEAS"), "folder": .string("trips")]))
+        #expect(!moved.isError, "\(moved.content.jsonText)")
+        #expect(fake.lastArgs == ["x-coredata://STORE-UUID/ICNote/p14", "Trips"])
+        // The title is the note's first line (seen live: setting only the name left that line).
+        fake.answer = { _, _ in "<div><h1>Ideas</h1></div><div>Ideas for the garden</div>" }
+        let renamed = await tools["notes_rename"]!.handler(
+            .object(["id": .string("N-IDEAS"), "title": .string("Garden & ideas")]))
+        #expect(!renamed.isError, "\(renamed.content.jsonText)")
+        #expect(
+            fake.lastArgs == [
+                "x-coredata://STORE-UUID/ICNote/p14",
+                "<div><h1>Garden &amp; ideas</h1></div><div>Ideas for the garden</div>",
+            ], "only the first line changes")
+        fake.answer = { _, _ in "<div><b>Other</b></div><div>Ideas</div>" }
+        let notTitle = await tools["notes_rename"]!.handler(
+            .object(["id": .string("N-IDEAS"), "title": .string("New")]))
+        #expect(notTitle.isError, "the title isn't in the first line as plain text")
+        let twoLines = await tools["notes_rename"]!.handler(
+            .object(["id": .string("N-IDEAS"), "title": .string("a\nb")]))
+        #expect(twoLines.isError)
     }
 
     @Test func appendsToAPlainNote() async throws {

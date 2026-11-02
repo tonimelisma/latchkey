@@ -167,6 +167,7 @@ final class AppModel {
             Task { await self?.movedToTrash(installedPath: installedPath) }
         }
         powerMonitor = PowerMonitor { [weak self] in Task { await self?.refresh() } }
+        lidSession.report = { [weak self] text, error in self?.event(.keepAwake, text, error: error) }
         // Core Location reports the permission in a callback just after its manager is made;
         // until then it is unknown (FR-621).
         LocationFixer.shared.onAccessChange = { [weak self] _ in self?.checkPersonalData() }
@@ -400,9 +401,7 @@ final class AppModel {
                 userEnabled: keepAwakeEnabled, helperAvailable: keepAwakeController.helperApproved))
         let ok = await keepAwakeController.apply(decision)
         keepAwake = (decision == .on && !ok) ? .offHelperUnavailable : decision
-        if let done = lidSession.update(keepAwakeOn: keepAwake == .on, lidClosed: power.lidClosed) {
-            event(.keepAwake, done)
-        }
+        lidSession.update(keepAwakeOn: keepAwake == .on, lidClosed: power.lidClosed)
         // A helper that just ended itself after an install is restarted by launchd only after its
         // 10-second wait (seen 2026-10-27), so try again a little later, a few times.
         if decision == .on && !ok && keepAwakeRetries < 5 {

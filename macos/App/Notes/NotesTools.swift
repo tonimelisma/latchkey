@@ -40,7 +40,9 @@ extension NotesCapability {
         ]
     }
 
-    static let changeActions = ["create", "append", "replace", "edit", "delete", "delete_folder"]
+    static let changeActions = [
+        "create", "append", "replace", "edit", "rename", "move", "delete", "create_folder", "delete_folder",
+    ]
 
     static func writeTools(store: @escaping StoreSource, scripts: any ScriptRunner) -> [ToolEntry] {
         let ops = Operations(writeOperations(store: store, scripts: scripts))
@@ -52,7 +54,9 @@ extension NotesCapability {
                         Creates, changes, or deletes a note in Apple Notes. action: create (title, text, folder), \
                         append (id, text: added at the end), replace (id, text: everything below the title), \
                         edit (id, find: an exact passage in one paragraph, text: its replacement), \
-                        delete (id: moves the note to Recently Deleted for 30 days), delete_folder (folder: \
+                        rename (id, title), move (id, folder: made if it doesn't exist, as for create), \
+                        delete (id: moves the note to Recently Deleted for 30 days), create_folder (folder), \
+                        delete_folder (folder: \
                         deletes that folder, its notes to Recently Deleted; not the default folder). Text is Markdown-like: \
                         # headings, - lists, 1. numbered lists; - [ ] items become ☐ (Notes doesn't let other apps \
                         make real checklists). Notes with checklists, images, tables, or mentions can't be changed \
@@ -61,11 +65,11 @@ extension NotesCapability {
                     input: [
                         "action": .enumParam(changeActions, "What to do"),
                         "id": .stringParam("The note's id, from notes_find (not for create)"),
-                        "title": .stringParam("For create: the note's title"),
+                        "title": .stringParam("For create and rename: the note's title"),
                         "text": .stringParam("The text to write"),
                         "find": .stringParam("For edit: the exact passage to replace"),
                         "folder": .stringParam(
-                            "For create: the folder (the default folder if left out); for delete_folder: the folder to delete"
+                            "For create and move: the folder (made if it doesn't exist; create uses the default folder if left out); for create_folder and delete_folder: the folder"
                         ),
                     ], required: ["action"], readOnly: false, destructive: true, deadlineMS: 30_000),
                 handler: { args in
@@ -74,6 +78,9 @@ extension NotesCapability {
                     case "create": return await ops.call("notes_create", args)
                     case "append", "replace", "edit":
                         return await ops.call("notes_update", args.with(["mode": args["action"]]))
+                    case "rename": return await ops.call("notes_rename", args)
+                    case "move": return await ops.call("notes_move", args)
+                    case "create_folder": return await ops.call("notes_create_folder", args)
                     case "delete": return await ops.call("notes_delete", args)
                     case "delete_folder": return await ops.call("notes_delete_folder", args)
                     default: return .unknown("action", action, allowed: changeActions)

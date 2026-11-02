@@ -75,6 +75,9 @@ As an Owner, I set Notes and Messages each to Off, Read only, or Read & write in
 - **FR-152** While Notes is Read & write, Claude shall be able to delete a folder; its notes shall
   move to Recently Deleted (FR-103). The account's default folder and a folder with folders
   inside it shall not be deleted (Toni, 2026-10-27: an empty "Latchkey Check" folder was left).
+- **FR-154** While Notes is Read & write, Claude shall be able to create a folder, move a note to
+  another folder, and rename a note; creating or moving a note into a folder that doesn't exist
+  shall make that folder in the default account (Toni, 2026-11-01: "move note into folder").
 - **FR-104** Claude shall be able to view an image attached to a note.
 - **FR-105** Password-locked notes shall be listed as locked, with no content.
 - **FR-106** When a change would lose part of a note (checklists, images, tables, or a locked

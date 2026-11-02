@@ -48,7 +48,7 @@ Claude (web, Desktop, phone)  ──HTTPS──▶  Latchkey relay  ◀──out
 
   | Capability | Read only | Read & write adds |
   |---|---|---|
-  | Notes | `notes_find`, `notes_read` | `notes_change` (create, append, replace, edit, delete notes or folders to Recently Deleted) |
+  | Notes | `notes_find`, `notes_read` | `notes_change` (create, append, replace, edit, rename, move between folders, create folders, delete notes or folders to Recently Deleted) |
   | Messages | `messages_find`, `messages_read` | `messages_send` (text and files) |
   | Files | `files_find`, `files_read` (text, PDFs, documents, images) | `files_change` (write, edit, folders, move, copy, Trash) |
   | Shell | | `shell_run`, `shell_check` (long and interactive commands; writes fenced, leftovers removed) |
