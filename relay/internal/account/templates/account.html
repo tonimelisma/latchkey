@@ -1,14 +1,14 @@
 {{define "add-to-claude"}}
       <p><a class="button primary" href="{{.AddLink}}" target="_blank" rel="noopener">Add to Claude</a></p>
       <ol class="steps">
-        <li>Click <strong>Add to Claude</strong>. Claude opens in a new tab (sign in to Claude if it asks) with a form titled “Add custom connector”, already filled in. Claude notes that the details came from a link; that’s expected.</li>
+        <li>Click <strong>Add to Claude</strong>. Claude opens in a new tab (sign in to Claude if it asks) with a form titled “Add custom connector”, already filled in. Claude cautions that the details came from a link; that’s expected, since the link came from Latchkey.</li>
         <li>Check that the address is <code>{{breakable .Connector}}</code>, then click <strong>Add</strong>. Claude shows the settings it found: change nothing, click <strong>Add</strong> once more, then <strong>Connect</strong>.</li>
-        <li>A Latchkey page opens: sign in with your passkey (the one you use for this page), then click <strong>Allow</strong>. That lets Claude use your machines.</li>
+        <li>A Latchkey page opens: sign in with your Latchkey passkey (the one you made when you created your account), then click <strong>Allow</strong>. That lets Claude use your machines.</li>
       </ol>
-      <p>When Latchkey is listed under Connectors in Claude, you’re done: Claude on the web, on your desktop, and on your phone can reach your machines. Try asking it: “What’s my Mac’s battery level?”</p>
+      <p>You’re done once you click Allow. Reload this page: the Claude section then lists Claude. Claude on the web, on your desktop, and on your phone can now reach your machines. Try asking it: “What’s my Mac’s battery level?”</p>
       <details class="by-hand">
         <summary>If Add to Claude doesn’t work, add it by hand</summary>
-        <p>On claude.ai, click <strong>Customize</strong> in the column on the left, then <strong>Connectors</strong>, then <strong>Add custom connector</strong>. For the name, type Latchkey. For the address, paste this one. Then follow steps 2 and 3 above.</p>
+        <p>On claude.ai, click <strong>Customize</strong> in the column on the left, then <strong>Connectors</strong>, then <strong>Add custom connector</strong>. For the name, type Latchkey. For the address, paste this one. Then click <strong>Add</strong> and go on as in the steps above.</p>
         <div class="copyfield"><code id="connector{{.Suffix}}">{{breakable .Connector}}</code><button type="button" class="small-button" data-copy="connector{{.Suffix}}">Copy</button></div>
       </details>
 {{end}}

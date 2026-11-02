@@ -355,14 +355,14 @@ struct AddToClaudeSteps: View {
                     .keyboardShortcut(.defaultAction)
                 numbered(
                     1,
-                    "Claude opens in your browser (sign in to Claude if it asks), with a form already filled in. Claude notes that the details came from a link; that’s expected."
+                    "Claude opens in your browser (sign in to Claude if it asks) with a form titled “Add custom connector”, already filled in. Claude cautions that the details came from a link; that’s expected, since the link came from Latchkey."
                 )
                 numbered(
                     2,
-                    "Click Add. Claude shows the settings it found: change nothing, click Add once more, then Connect.")
+                    "Check that the address is \(AddToClaude.connector(relay: relay)), then click Add. Claude shows the settings it found: change nothing, click Add once more, then Connect.")
                 numbered(
                     3,
-                    "A Latchkey page opens: sign in with your passkey (Touch ID), then click Allow. That lets Claude use this Mac."
+                    "A Latchkey page opens: sign in with your Latchkey passkey (the one you made when you created your account), then click Allow. That lets Claude use this Mac and your other machines."
                 )
                 if showsDone {
                     Text("This step gets a checkmark when Claude is connected. Claude on your phone then has it too.")
@@ -371,7 +371,7 @@ struct AddToClaudeSteps: View {
                 DisclosureGroup("If Add to Claude doesn’t work") {
                     VStack(alignment: .leading, spacing: 6) {
                         Text(
-                            "On claude.ai, click Customize in the column on the left, then Connectors, then Add custom connector. For the name, type Latchkey. For the address, click Copy Address and paste it. Then follow steps 2 and 3."
+                            "On claude.ai, click Customize in the column on the left, then Connectors, then Add custom connector. For the name, type Latchkey. For the address, click Copy Address and paste it. Then click Add and go on as in the steps above."
                         )
                         .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                         HStack {
@@ -498,7 +498,7 @@ struct SetupView: View {
             Divider()
             HStack {
                 Text(
-                    "Latchkey lives in the menu bar; its key shows a mark until setup is finished. To uninstall, move it to the Trash."
+                    "Latchkey lives in the menu bar (the key icon), which shows an exclamation mark until setup is finished. To uninstall, move the app to the Trash."
                 )
                 .font(.footnote).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                 Spacer()
