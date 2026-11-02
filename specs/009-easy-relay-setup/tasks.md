@@ -31,7 +31,7 @@ side. Order: relay (T1–T7), guide (T8–T9), app (T10), wrap-up (T11).
 
 - **T8** Docs (D1, D2, D7, FR-913): docs/self-hosting.md gains `SETUP_CODE`, the recovery command,
   running without an email server, the backups (D4), and each guide default as a setting;
-  docs/setup-with-claude.md final (now plugin/skills/set-up-latchkey/own-relay.md, spec 011).
+  docs/setup-with-claude.md final.
 - **T9** Done 2026-10-31 (`relay/cmd/guidecheck`). Real run on Google Cloud (D8, SC-902, SC-903): a new project in Toni's account; relay up
   with a valid certificate; claimed through headless Chrome; a stand-in Mac paired; a tool called
   by a fresh Claude Code session; an image update taken and a broken one rolled back; project

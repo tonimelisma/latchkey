@@ -64,6 +64,13 @@ body {
 .howto h3 { font-size: 17px; font-weight: 600; margin: 0 0 4px; }
 .howto p { margin: 0 0 10px; }
 .howto > :last-child, .howto form:last-child { margin-bottom: 0; }
+/* Add to Claude (FR-659, FR-660): numbered steps, the way by hand folded below. */
+.next-step .panel { border: 2px solid var(--accent); }
+ol.steps { margin: 0 0 10px; padding-left: 22px; }
+ol.steps li { margin-bottom: 6px; }
+details.by-hand { margin-top: 4px; }
+details.by-hand summary { cursor: pointer; color: var(--accent); min-height: 44px; display: flex; align-items: center; }
+details.by-hand[open] summary { margin-bottom: 6px; }
 .empty { color: var(--muted); padding: 14px 16px; margin: 0; }
 .hint { font-size: 13px; color: var(--muted); margin: 8px 4px 0; }
 .after-panel { margin: 12px 0 0; }

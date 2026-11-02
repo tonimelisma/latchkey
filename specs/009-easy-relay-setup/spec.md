@@ -103,6 +103,11 @@ terminal, and the hosted relay is Toni's alone.
 - **FR-913** Every choice the default path makes (host, address, HTTPS, email, updates, backups)
   shall be a setting a technical operator can change, documented in docs/self-hosting.md; the
   default path shall need no code the operator path lacks.
+- **FR-914** At its end, the guide shall have Claude Code open Claude's add-connector dialog with
+  the name Latchkey and the new relay's connector address filled in, tell the Owner what to click
+  there, and give the way by hand (Customize → Connectors → Add custom connector, the address) in
+  case the dialog doesn't open; the Mac app's own last setup step stays until Claude has
+  connected (spec 001 FR-627). Why: Toni, 2026-11-01.
 
 ## Success criteria
 

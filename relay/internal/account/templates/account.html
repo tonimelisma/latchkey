@@ -1,6 +1,30 @@
+{{define "add-to-claude"}}
+      <p><a class="button primary" href="{{.AddLink}}" target="_blank" rel="noopener">Add to Claude</a></p>
+      <ol class="steps">
+        <li>Click <strong>Add to Claude</strong>. Claude opens with Latchkey and your relay’s address already filled in (sign in to Claude first if it asks).</li>
+        <li>Check the address, then click <strong>Add</strong>. Claude shows the settings it found: leave them as they are and click <strong>Add</strong> again, then <strong>Connect</strong>.</li>
+        <li>Latchkey’s page opens: sign in with your passkey and click <strong>Allow</strong>.</li>
+      </ol>
+      <p>Claude on the web, on your desktop, and on your phone can then reach your machines.</p>
+      <details class="by-hand">
+        <summary>If the button doesn’t work, add it by hand</summary>
+        <p>In Claude, open <strong>Customize → Connectors</strong> and click <strong>Add custom connector</strong>. Name it Latchkey, paste this address, and click <strong>Add</strong>, <strong>Add</strong> again, and <strong>Connect</strong>. Then sign in with your passkey and click <strong>Allow</strong>.</p>
+        <div class="copyfield"><code id="connector{{.Suffix}}">{{breakable .Connector}}</code><button type="button" class="small-button" data-copy="connector{{.Suffix}}">Copy</button></div>
+      </details>
+{{end}}
 {{template "head" .}}
 <h1>Your account</h1>
 {{with .Data.Done}}<p class="notice" role="status" tabindex="-1" data-focus>{{.}}</p>{{end}}
+{{if not .Data.HasClaude}}
+<section id="next-claude" class="next-step" aria-labelledby="next-claude-title">
+  <h2 id="next-claude-title">Next: add Latchkey to Claude</h2>
+  <div class="panel">
+    <div class="howto">
+{{template "add-to-claude" .Data.AddNext}}
+    </div>
+  </div>
+</section>
+{{end}}
 
 <section aria-labelledby="machines">
   <h2 id="machines">Machines</h2>
@@ -45,9 +69,7 @@
   <h2 id="claude">Claude</h2>
   <div class="panel">
     <div class="howto">
-      <p>To connect Claude, open <strong>Settings → Connectors → Add custom connector</strong> in Claude and paste this address:</p>
-      <div class="copyfield"><code id="connector">{{breakable .Data.Connector}}</code><button type="button" class="small-button" data-copy="connector">Copy</button></div>
-      <p class="hint">To help Claude use your machines well, also add the Latchkey plugin: in Claude, open <strong>Customize → Plugins → Add marketplace</strong>, enter <code>tonimelisma/latchkey</code>, and add Latchkey.</p>
+{{template "add-to-claude" .Data.AddHere}}
     </div>
   {{if .Data.Clients}}
     <ul class="rows">{{range .Data.Clients}}

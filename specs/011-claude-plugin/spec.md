@@ -1,6 +1,11 @@
 # Spec 011: Latchkey plugin for Claude — WHAT and WHY
 
-Status: Built (2026-11-01). Toni asked on 2026-11-01 for the spec started "as if from a blank
+Status: Withdrawn (Toni, 2026-11-01): the plugin and its catalog were deleted. It didn't help
+anyone get started (its setup help reached only people who had already found it, with code
+execution on), Claude did as well without it once Latchkey was connected (spec 011 tasks:
+Δ 0 on four of six cases), and every change cost a version, tests, and paid test runs. The
+relay guide went back to docs/setup-with-claude.md; adding Latchkey to Claude became a button
+(spec 001 FR-627, FR-659). What follows is the record. Built (2026-11-01). Toni asked on 2026-11-01 for the spec started "as if from a blank
 slate", the repository arranged for it, and everything as finished as possible while he was
 away, with no questions in between. The choices Claude made for him (plan.md "Choices made for
 Toni") were put to him in chat and approved by him, all eight, on 2026-11-01.

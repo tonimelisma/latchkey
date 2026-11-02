@@ -15,24 +15,23 @@ and nothing set up on your router. If your Mac is asleep, Claude tells you right
 
 ## Get started
 
-1. **Get a relay**, the small always-on service your Mac and Claude meet at. The hosted relay
-   takes invited people only, for now. Or have Claude Code set up your own on Google Cloud's free
-   tier: about 20 minutes, and you only create the account and click Allow
-   ([how](docs/self-hosting.md)).
+1. **Get a relay**, the small always-on service your Mac and Claude meet at. Claude Code sets
+   one up for you on Google Cloud's free tier: about 20 minutes, and you only create the account
+   and click Allow a few times ([how](docs/self-hosting.md)). Latchkey's first setup step has
+   the request to paste into Claude Code.
 2. **Download Latchkey and open it.** Enter your relay's address and sign up with your email and
    a passkey (Touch ID).
 3. **Give Latchkey macOS's permissions.** Latchkey asks for each one in turn and opens the right
    System Settings page, so macOS never stops Claude to ask while you're away.
-4. **Add Latchkey to Claude.** Your account page shows an address: paste it into Claude's
-   Settings → Connectors → Add custom connector, sign in, and click Allow. It works in Claude on
-   the web, on your desktop, and on your phone.
+4. **Add Latchkey to Claude.** Click **Add to Claude** in Latchkey's last setup step. Claude
+   opens with Latchkey filled in: click Add, Add again, and Connect, then sign in with your
+   passkey and click Allow. Latchkey keeps reminding you until Claude is connected. If the button
+   doesn't work, add it by hand: in Claude, open Customize → Connectors → Add custom connector,
+   and paste your relay's address followed by `/mcp`. It works in Claude on the web, on your
+   desktop, and on your phone.
 5. **Ask Claude something about your Mac**, from anywhere.
 
 [Every step in detail](docs/how-it-works.md#setting-up-the-mac-app-in-detail).
-
-Optional: add the Latchkey plugin so Claude knows its way around (Customize → Plugins → Add
-marketplace, enter `tonimelisma/latchkey`; it needs code execution turned on in Settings →
-Capabilities). [More about the plugin](plugin/README.md).
 
 ## What you can ask
 

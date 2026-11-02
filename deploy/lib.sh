@@ -196,7 +196,7 @@ IMAGE_REPO=ghcr.io/tonimelisma/latchkey-relay
 
 # publish_image TAG: builds the relay for Intel and Arm servers and pushes it as TAG and latest,
 # signing in with the GitHub CLI's token (it needs the write:packages scope: once,
-# `gh auth refresh -s write:packages`). Relays set up by plugin/skills/set-up-latchkey/own-relay.md update to
+# `gh auth refresh -s write:packages`). Relays set up by docs/setup-with-claude.md update to
 # latest by themselves, so this runs with every deploy, after the checks (spec 009 plan D6).
 publish_image() {
   _user=$(gh api user --jq .login) || return 1

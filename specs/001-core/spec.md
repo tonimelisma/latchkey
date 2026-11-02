@@ -243,7 +243,8 @@ Format: EARS ("When <trigger>, the <system> shall <response>"). IDs are stable; 
   guidelines found seventeen steps unwieldy): connect; answer macOS's questions (a checklist,
   with Ask Now to ask again and, for a question refused, a way to System Settings); turn on
   Latchkey in System Settings (a checklist and one button that opens the pages in turn); and
-  Safari's setting. A permission refused or not yet given counts as missing and
+  Safari's setting; a fifth, adding Latchkey to Claude, followed on 2026-11-01 (FR-627).
+  A permission refused or not yet given counts as missing and
   opens setup. The app shall never ask for a permission during use (no notification request when
   posting). Why: Toni got "Allow Latchkey to…" questions during use, when the Mac is usually
   unattended.
@@ -274,6 +275,21 @@ Format: EARS ("When <trigger>, the <system> shall <response>"). IDs are stable; 
   and macOS doesn't take back the second. Why: Toni asked (2026-10-31) to be told when a
   permission or setting goes missing; until now a lost permission showed only at the next
   start or in Claude's answers.
+- **FR-627** The setup shall end with a fifth step, "Add Latchkey to Claude": an Add to Claude
+  button that opens Claude's own add-connector dialog with the name Latchkey and this relay's
+  connector address filled in (FR-659), written steps for what to click there, and the way by
+  hand (Claude's Customize → Connectors → Add custom connector, the address with a Copy button).
+  The step shall be done while Claude on the web, desktop, and phone (one approval, FR-190) has
+  access to the Owner's account, missing while the Mac is connected and it hasn't (never added,
+  or removed later), and not known while the Mac isn't connected. Like any missing step, it shows the
+  menu bar icon's mark (FR-626) until it is done, and opens setup at start when the list of
+  approvals arrives within the wait of FR-621; it ticks
+  itself off when the approval arrives. A program on a computer such as Claude Code doesn't
+  count: the step is about reaching the Mac from anywhere. Why: Toni (2026-11-01) wanted the
+  step to nag "until it sees claude has connected", with instructions and a way by hand in case
+  the button doesn't work; pasting the address was the one step setup didn't follow up.
+- **FR-628** While the step of FR-627 is missing, the Settings window's list of Claude apps with
+  access shall offer the same Add to Claude button, steps, address, and Copy button.
 - **FR-622** After every install, the installer shall check the running app and fail when the
   setup window is open on a Mac whose setup is finished, keep-awake isn't what the app wants, or
   the keep-awake helper running isn't the one just installed.
@@ -672,6 +688,16 @@ field misdrawn after pairing a server (2026-11-01); these requirements give the 
   page's script, and in UTC otherwise.
 - **FR-658** Pages that apply to every kind of machine (home, Claude's consent) shall speak of
   machines, not only of a Mac.
+- **FR-659** The Claude part of the account page shall offer an Add to Claude button that opens
+  Claude's add-connector dialog (claude.ai's documented install link) with the name Latchkey and
+  this relay's connector address filled in, written steps for what to click there (Add, sign in
+  with the passkey, Allow), and the way by hand: Claude's Customize → Connectors → Add custom
+  connector with the address of FR-655. Why: Toni, 2026-11-01; copying an address into a
+  settings page was the step people get wrong.
+- **FR-660** While no approval for Claude on the web, desktop, and phone exists on the account,
+  the account page shall start with adding Latchkey to Claude as the next step, with the same
+  button and steps; once one exists, it shall not. Why: Toni wanted the step to nag until Claude
+  has connected (2026-11-01).
 
 ## Success criteria
 

@@ -1,6 +1,6 @@
 # Status
 
-Last updated: 2026-11-01 (README rewritten as a short product page; Latchkey plugin for Claude, spec 011; relay web pages redone; purkki paired; spec 010 shipped)
+Last updated: 2026-11-01 (Add to Claude button; plugin withdrawn; README rewritten as a short product page; relay web pages redone; purkki paired; spec 010 shipped)
 
 Xcode signing ready (2026-10-20): Toni's Xcode account has a valid "Apple Development" certificate
 (certificate expires 2027-07-22). Keep the team ID out of committed project files
@@ -34,30 +34,29 @@ after the app was quit.
 
 Releases, terms and privacy, and the directory listing are much later (Toni, 2026-10-22).
 
-Latchkey plugin for Claude (spec 011; Toni asked on 2026-11-01 for the spec from a blank slate,
-the repository arranged for it, and everything finished without questions). Built 2026-11-01: a
-plugin of two skills only, `latchkey` (how Claude works on the machines: no tools, choosing a
-machine, offline, refusals, where things run) and `set-up-latchkey` (connecting Claude, pairing a
-Mac or a server, the relay guide, fixing a connection), in `plugin/`, published by the catalog
-`.claude-plugin/marketplace.json` at the root: people add `tonimelisma/latchkey` on claude.ai
-(Customize → Plugins → Add marketplace) or in Claude Code. The relay guide moved from
-`docs/setup-with-claude.md` into the setup skill; the Mac app's Copy Request (0.8.62) points
-there. The relay's account page and the README say to add the plugin. Checked: content checks
-(no capability or tool names, no addresses, nothing that runs, version raised) with their own
-tests, Claude Code's validator in strict mode, and evals with real Claude on pretend Latchkey
-tools: with the plugin every case passes; it turns "I can't" into the right setup steps (+1.00 on
-both setup cases) and changes nothing where the tool descriptions already work (offline, two
-machines, refusals). Shipped 2026-11-01: on main, relay deployed, app 0.8.62 installed; a fresh
-Claude Code session with the plugin from GitHub's main used the real connector and the setup
-skill correctly. Toni added the catalog and the plugin on his claude.ai account (2026-11-01);
-Constitution VIII no longer counts projects (Toni). Toni approved all eight choices made for
-him (plan.md "Choices made for Toni") in chat on 2026-11-01.
+Add Latchkey to Claude (Toni, 2026-11-01; spec 001 FR-627, FR-628, FR-659, FR-660, spec 009
+FR-914, plan D25): an Add to Claude button opens Claude's add-connector dialog with Latchkey and
+the relay's address filled in (claude.ai's documented install link; the Owner still clicks Add,
+Add, Connect, signs in, and clicks Allow), next to written steps and the way by hand. It is the
+setup window's fifth step, done only once Claude on the web, desktop, and phone has access, and
+until then it keeps the menu bar icon's mark (and opens setup at start when known in time); the
+Settings window's Claude Apps tab offers it too. The relay's account page starts with it until
+Claude has access, and the relay guide ends by opening it. Claude's menu is Customize →
+Connectors (Settings → Connectors in older docs, fixed everywhere). Not yet seen: the dialog
+itself, which needs a signed-in claude.ai (a signed-out visit keeps the link through sign-in).
+
+The Latchkey plugin (spec 011) was built and shipped on 2026-11-01, then withdrawn the same day
+(Toni): it didn't help anyone get started and made no difference once Latchkey was connected.
+The plugin and its catalog are deleted; the relay guide is back at docs/setup-with-claude.md.
+Toni removes the plugin and the `tonimelisma/latchkey` marketplace from his Claude account.
 
 README rewritten as a short product page (Toni, 2026-11-01): the promise, a drawing of a phone
-chat (docs/images/phone-chat.svg), five steps (get a relay, sign up, macOS's permissions, add to Claude, ask), what you can ask, how you stay in charge, links.
+chat (docs/images/phone-chat.svg), five steps (get a relay, sign up, macOS's permissions, add
+to Claude, ask), what you can ask, how you stay in charge, links.
 The details moved to docs/how-it-works.md and docs/development.md. Until the first release it asks
 people to watch the repository for releases; the journey it describes (download, Touch ID
-account, add to Claude) needs the notarized download and open sign-up on the hosted relay.
+account, add to Claude) needs the notarized download. Nobody else signs up on Toni's relay
+(Toni, 2026-11-01): everyone sets up their own with Claude Code.
 
 Several machines and Linux servers (spec 010; Toni asked on 2026-10-31 for plan and build in one
 go). Built 2026-11-01: one account pairs any number of Macs and headless Linux servers behind the
@@ -113,7 +112,7 @@ on platform addresses on the Public Suffix List; moving to a custom domain later
 passkeys) and the free-cloud research are in specs/009-easy-relay-setup/research.md. Toni added: one path
 that works end to end with minimal hassle for non-technical people, and everything customizable
 for technical ones (own VPS, domain, Railway, email server); Podman runs and updates the relay
-on a server. Spec 009 and the guide Claude Code follows (docs/setup-with-claude.md, now plugin/skills/set-up-latchkey/own-relay.md) are drafted
+on a server. Spec 009 and the guide Claude Code follows (docs/setup-with-claude.md) are drafted
 for Toni's review. Default host: Google Cloud's free server (Toni, 2026-10-31). Lost passkeys are
 replaced through Claude Code with a one-time recovery code (Toni). The repository is public
 (2026-10-31). Plan and tasks written

@@ -1,6 +1,6 @@
 # Set up a Latchkey relay: instructions for Claude Code
 
-Part of the set-up-latchkey skill (spec 011); the Mac app's Copy Request points here. Spec 009. Run for real on Google Cloud on 2026-10-31: claimed with its setup code, a Mac paired,
+The Mac app's Copy Request points here. Spec 009. Run for real on Google Cloud on 2026-10-31: claimed with its setup code, a Mac paired,
 Claude Code called a tool through it, recovery worked, and Podman installed an update and rolled
 back a broken one.
 
@@ -77,13 +77,27 @@ Say:
 
 Say:
 
-> Last step. On claude.ai, open Settings, then Connectors, then "Add custom connector". Name it
-> Latchkey and paste https://<host name>/mcp. Click Connect, sign in with your passkey, and click
-> Allow. It then works in Claude on the web, in Claude Desktop, and on your phone.
->
-> One more thing that helps: in Claude, open Customize, then Plugins, then Add marketplace, and
-> enter tonimelisma/latchkey; then add the Latchkey plugin. It teaches Claude how to use your
-> machines well.
+> Last step: adding Latchkey to Claude. I'm opening Claude in your browser with Latchkey and your
+> relay's address already filled in. Check that the address is https://<host name>/mcp and click
+> Add. Claude then shows the settings it found: leave them as they are, click Add again, then
+> Connect. Sign in with your passkey and click Allow.
+
+Then open Claude's add-connector dialog with the address filled in (spec 009 FR-914): run
+`open` with this link, where `<encoded>` is `https://<host name>/mcp` with `:` written `%3A`
+and `/` written `%2F`:
+
+```
+https://claude.ai/customize/connectors?modal=add-custom-connector&connectorName=Latchkey&connectorUrl=<encoded>
+```
+
+Also say, so they have it if the link doesn't work:
+
+> If nothing opens, or Claude doesn't show the dialog: in Claude, open Customize, then
+> Connectors, then click "Add custom connector". Name it Latchkey, paste
+> https://<host name>/mcp, and click Add, Add again, and Connect. Then sign in with your passkey
+> and click Allow.
+> Latchkey's setup window ticks off its last step, "Add Latchkey to Claude", once Claude is
+> connected. It then works in Claude on the web, in Claude Desktop, and on your phone.
 
 ## Step 7: Check and finish
 

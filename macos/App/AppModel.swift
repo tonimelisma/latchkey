@@ -279,6 +279,7 @@ final class AppModel {
         let notified = step(notifications == .unknown ? nil : notifications == .allowed)
         return known.map { ($0.0, $0.1 ? SetupStep.missing : .done) } + [
             ("location", location), ("notifications", notified), ("local network", step(localNetwork)),
+            ("Claude", AddToClaude.step(entries: access.entries)),  // FR-627
         ]
     }
 

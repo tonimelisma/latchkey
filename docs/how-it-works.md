@@ -106,19 +106,16 @@ redraws them).
    after another, as you turn Latchkey on. Later, the
    Permissions tab in Latchkey's Settings window shows each one and whether it's allowed. No
    relay yet? The first step's Copy Request gives you a request to paste into Claude Code, which
-   sets one up for you on a free server ([its guide](../plugin/skills/set-up-latchkey/own-relay.md)).
-2. **Connect Claude.** On claude.ai, open Settings → Connectors → Add custom connector, and enter
-   your relay's address followed by `/mcp`, for example `https://relay.example.com/mcp`. Sign
-   in with your passkey and click Allow. The connector then appears in Claude Desktop and the
-   phone apps too.
-3. **Add the Latchkey plugin (recommended).** In Claude, open Customize → Plugins → Add
-   marketplace, enter `tonimelisma/latchkey`, and add Latchkey. It teaches Claude how to use your
-   machines well (which machine, what to do when one is asleep) and how to help you set up or fix
-   Latchkey; it works with any relay. Its skills need code execution turned on (Settings →
-   Capabilities). In Claude Code:
-   `/plugin install latchkey --marketplace tonimelisma/latchkey`. Details:
-   [plugin/README.md](../plugin/README.md).
-4. **Ask Claude:** "What's in my grocery note?", "What did Sarah say about dinner?", "How much
+   sets one up for you on a free server ([its guide](setup-with-claude.md)).
+2. **Add Latchkey to Claude.** The setup window's last step, and your relay's account page, have
+   an **Add to Claude** button. It opens Claude with Latchkey and your relay's address filled
+   in: click Add; Claude shows the settings it found, so leave them and click Add again, then
+   Connect; sign in with your passkey and click Allow. The step stays open, and the menu bar icon
+   keeps its mark, until Claude is connected; it then ticks itself off. By hand: in Claude, open
+   Customize → Connectors → Add custom connector, and enter your relay's address followed by
+   `/mcp`, for example `https://relay.example.com/mcp`. The connector belongs to your Claude
+   account, so it appears in Claude on the web, in Claude Desktop, and in the phone apps.
+3. **Ask Claude:** "What's in my grocery note?", "What did Sarah say about dinner?", "How much
    disk space is free?".
 
 The full checklist is in [specs/001-core/quickstart.md](../specs/001-core/quickstart.md).

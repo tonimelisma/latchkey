@@ -37,14 +37,23 @@ type clientView struct {
 	LastUsed time.Time
 }
 
+// addClaudeView is one Add to Claude block: the button, the steps, and the way by hand.
+type addClaudeView struct {
+	AddLink   string // Claude's add-connector dialog with Latchkey filled in (FR-659)
+	Connector string // the address to add in Claude (FR-655)
+	Suffix    string // keeps the two blocks' element IDs apart
+}
+
 type accountView struct {
 	Machines    []machineView
 	Clients     []clientView
 	Recent      []entry // the last few calls and account events (FR-651)
 	MoreRecent  bool    // there are older entries on the activity page
 	Done        string
-	Connector   string // the address to add in Claude (FR-655)
-	InstallLine string // a Linux server's install command for this relay (FR-654)
+	HasClaude   bool          // Claude on the web, desktop, and phone has access (FR-660)
+	AddNext     addClaudeView // the next step at the top, while !HasClaude (FR-660)
+	AddHere     addClaudeView // in the Claude section, always (FR-655, FR-659)
+	InstallLine string        // a Linux server's install command for this relay (FR-654)
 }
 
 // installScript is where a Linux server's install command downloads the installer.
@@ -57,9 +66,12 @@ func (s *Service) accountPage(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx := r.Context()
 	origin := strings.TrimSuffix(s.cfg.PublicURL.String(), "/")
+	connector := origin + "/mcp"
 	v := accountView{
-		Done: doneMessage(r.URL.Query().Get("done")), Connector: origin + "/mcp",
+		Done:        doneMessage(r.URL.Query().Get("done")),
 		InstallLine: "curl -fsSL " + installScript + " | sh -s -- " + origin,
+		AddNext:     addClaudeView{AddLink: addToClaudeLink(connector), Connector: connector, Suffix: "-next"},
+		AddHere:     addClaudeView{AddLink: addToClaudeLink(connector), Connector: connector},
 	}
 	newID := ""
 	if r.URL.Query().Get("done") == "linked" {
@@ -82,6 +94,7 @@ func (s *Service) accountPage(w http.ResponseWriter, r *http.Request) {
 			v.Clients = append(v.Clients, clientView{
 				ID: g.ID, Name: g.Label(), Redirect: g.Redirect, Approved: g.ApprovedAt, LastUsed: g.LastUsedAt,
 			})
+			v.HasClaude = v.HasClaude || hostedClaude(g.Host, g.Redirect)
 		}
 	}
 	v.Recent, v.MoreRecent, _ = s.activity(ctx, u.ID, time.Time{}, recentEntries)
@@ -89,6 +102,19 @@ func (s *Service) accountPage(w http.ResponseWriter, r *http.Request) {
 		v.Recent, v.MoreRecent = v.Recent[:recentEntries], true
 	}
 	s.render(w, http.StatusOK, "account.html", page{Title: "Your account", Email: u.Email, CSRF: s.csrfFor(tok), Data: v, Wide: true})
+}
+
+// addToClaudeLink opens Claude's Add custom connector dialog with Latchkey's name and address
+// filled in: claude.ai's documented install link (plan D25). The Owner still clicks Add.
+func addToClaudeLink(connector string) string {
+	return "https://claude.ai/customize/connectors?modal=add-custom-connector&connectorName=Latchkey&connectorUrl=" +
+		url.QueryEscape(connector)
+}
+
+// hostedClaude reports whether an approval is Claude on the web, desktop, and phone, the one that
+// reaches the machines from anywhere; a program signed in on a computer, such as Claude Code, isn't.
+func hostedClaude(host, redirect string) bool {
+	return (host == "claude.ai" || host == "claude.com") && redirect != "this computer"
 }
 
 func doneMessage(code string) string {

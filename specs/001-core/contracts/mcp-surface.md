@@ -6,7 +6,7 @@
 https://<relay>/mcp
 ```
 
-The Owner adds this once at claude.ai → Settings → Connectors → Add custom connector. Every user of
+The Owner adds this once at claude.ai → Customize → Connectors → Add custom connector. Every user of
 a relay uses the same URL; the OAuth token identifies the Owner and therefore their machines (spec 010).
 
 ## HTTP endpoints

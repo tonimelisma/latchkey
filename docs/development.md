@@ -12,7 +12,6 @@ How the product works: [how-it-works.md](how-it-works.md).
 | Relay (Go) | `relay/` | `make test`, `make lint`, `make run`, `make claude-check`, `make mac-check` |
 | Linux server program (Go) | `linux/` | `make test`, `make lint`, `make test-linux` (every test on Debian with systemd in Docker), `make check` (end to end: relay, pretend Mac, the program installed in a container, a real MCP client), `make release` |
 | Mac app and helper (Swift) | `macos/` | `make test`, `make lint`, `make run`, `make dmg`, `make install` (build, install into Applications, start, and fail if the update lost the pairing), `scripts/readme-shots.sh` (redraws the app's pictures in docs/images) |
-| Plugin for Claude (skills) | `plugin/` | `make test` (contract checks and Claude Code's validator), `make measure` (eval cases with real Claude, with and without the plugin) |
 | Hosted relay deployment | `deploy/` | `deploy/deploy.sh` |
 | Cleanup after merging | `scripts/` | `scripts/tidy.sh` (runs automatically after every push and at every session start from Claude Code; removes worktrees as soon as their work is merged); `scripts/loose-ends.sh` lists work not yet on main (checked when a Claude Code session starts and before each turn ends) |
 
@@ -37,8 +36,6 @@ specs/001-core/
 relay/                          The relay (Go). `make test`, `make run`; see CLAUDE.md for commands.
 macos/                          The Mac app and its helper (Swift, XcodeGen). `make test`, `make run`.
 linux/                          The Linux server program (Go). `make test`, `make test-linux`.
-plugin/                         The plugin for Claude: two skills, their evals. `make test`, `make measure`.
-.claude-plugin/marketplace.json The plugin catalog people add as `tonimelisma/latchkey`.
 specs/002-notes-messages/       Notes and Messages (same structure for each capability).
 specs/003-files/                Files.
 specs/004-shell/                Shell.
@@ -48,10 +45,11 @@ specs/007-calendar-reminders-contacts-location/  Calendar, Reminders, Contacts, 
 specs/008-mail/                 Mail.
 specs/009-easy-relay-setup/     A relay set up by Claude Code.
 specs/010-multi-host/           Several machines and Linux servers.
-specs/011-claude-plugin/        The plugin for Claude.
+specs/011-claude-plugin/        The plugin for Claude (withdrawn 2026-11-01).
 docs/best-practices.md          Research on best practices, checked against Latchkey.
 docs/threat-model.md            What is protected, attackers, trust boundaries, accepted risks.
 docs/self-hosting.md            Run your own relay.
+docs/setup-with-claude.md       The guide Claude Code follows to set up a relay.
 docs/how-it-works.md            The details: what runs where, every tool, privacy, Linux servers, setup.
 docs/development.md             This page: commands and repository layout.
 docs/images/                    Pictures (the app's views drawn by macos/scripts/readme-shots.sh).

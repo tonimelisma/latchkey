@@ -303,6 +303,9 @@ struct AccessView: View {
                 Text(verbatim: failure).foregroundStyle(.red).padding([.horizontal, .top], 8)
                     .fixedSize(horizontal: false, vertical: true)
             }
+            if AddToClaude.step(entries: model.access.entries) == .missing {
+                AddToClaudeSteps(model: model, showsDone: false).padding([.horizontal, .top], 8)
+            }
             Text(
                 "Each entry is one approval you gave on Latchkey’s Allow page. Claude on the web, desktop, and phone share one entry; each sign-in from a program such as Claude Code has its own."
             )
@@ -336,6 +339,47 @@ struct AccessView: View {
     }
 }
 
+/// Add Latchkey to Claude (FR-627, FR-628): the button, what to click in Claude, and the way by
+/// hand in case the button doesn't work. In setup's last step and the Claude Apps tab.
+struct AddToClaudeSteps: View {
+    let model: AppModel
+    var showsDone = true
+    @State private var copied = false
+
+    var body: some View {
+        if let relay = model.relayURL {
+            VStack(alignment: .leading, spacing: 8) {
+                Text(
+                    "Click Add to Claude. Claude opens in your browser with Latchkey and your relay’s address filled in. Click Add, Add again, then Connect. Then sign in with your passkey and click Allow."
+                )
+                .foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                Button("Add to Claude") { AddToClaude.open(relay: relay) }
+                    .keyboardShortcut(.defaultAction)
+                Text(
+                    "If the button doesn’t work: in Claude, open Customize → Connectors and click Add custom connector. Name it Latchkey, paste this address, and click Add, Add again, and Connect. Then sign in and click Allow."
+                )
+                .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                HStack {
+                    Text(verbatim: AddToClaude.connector(relay: relay)).textSelection(.enabled)
+                        .font(.callout.monospaced())
+                    Button("Copy Address") {
+                        AddToClaude.copy(relay: relay)
+                        copied = true
+                    }
+                    .controlSize(.small)
+                    if copied { Label("Copied", systemImage: "checkmark").foregroundStyle(.secondary) }
+                }
+                if showsDone {
+                    Text("This step ticks itself off once Claude is connected.")
+                        .font(.footnote).foregroundStyle(.secondary)
+                }
+            }
+        } else {
+            Text("Connect to your account first.").foregroundStyle(.secondary)
+        }
+    }
+}
+
 /// The setup window shown at first launch and whenever a step is missing (FR-078).
 struct SetupView: View {
     @Bindable var model: AppModel
@@ -353,7 +397,7 @@ struct SetupView: View {
         VStack(alignment: .leading, spacing: 16) {
             VStack(alignment: .leading, spacing: 4) {
                 Text("Set Up Latchkey").font(.title.bold())
-                Text("Four steps, then Claude can reach this Mac from anywhere, even while you’re away.")
+                Text("Five steps, then Claude can reach this Mac from anywhere, even while you’re away.")
                     .foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             }
             step("connect", "Connect to your account") {
@@ -426,6 +470,9 @@ struct SetupView: View {
                         .keyboardShortcut(.defaultAction)
                 }
             }
+            step("claude", "Add Latchkey to Claude") {
+                AddToClaudeSteps(model: model)
+            }
             Divider()
             HStack {
                 Text("Latchkey lives in the menu bar. To uninstall, move it to the Trash.")
@@ -446,7 +493,7 @@ struct SetupView: View {
         }
     }
 
-    private static let steps = ["connect", "questions", "switches", "safari"]
+    private static let steps = ["connect", "questions", "switches", "safari", "claude"]
 
     /// One line of a step's checklist: done, or what to do about it.
     private struct Row: Identifiable {
@@ -528,6 +575,7 @@ struct SetupView: View {
         case "questions": model.questionsAnswered
         case "switches": model.switchesOn
         case "safari": model.safariJavaScript == true
+        case "claude": AddToClaude.step(entries: model.access.entries) == .done
         default: false
         }
     }

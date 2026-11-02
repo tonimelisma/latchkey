@@ -1,4 +1,4 @@
-// Command guidecheck checks a relay set up by plugin/skills/set-up-latchkey/own-relay.md (spec 009 plan D8): it
+// Command guidecheck checks a relay set up by docs/setup-with-claude.md (spec 009 plan D8): it
 // claims the fresh relay with its setup code in headless Chrome, pairs a pretend Mac, approves a
 // client, and has real Claude Code call the Mac's battery tool through the relay. With
 // -recovery-code it instead makes a new passkey with a code from the relay's operator command.

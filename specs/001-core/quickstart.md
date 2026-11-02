@@ -17,7 +17,7 @@ Each numbered step is one action by the Owner. The relay address is shown as
 
 ## In Claude
 
-7. On claude.ai: Settings → Connectors → **Add custom connector**, paste
+7. On claude.ai: Customize → Connectors → **Add custom connector**, paste
    `https://relay.example.com/mcp`, and press Add. Claude then shows the settings it detected
    ("Sign in now", "Use Claude's published identity"); that review screen is Claude's standard
    step for every custom connector and cannot be skipped by the server. Leave them as they are

@@ -3,7 +3,7 @@
 The relay is one container with one data volume, at an HTTPS address that Claude can reach.
 
 No technical background? Ask Claude Code to set one up for you on Google Cloud's free server: it
-follows [its guide](../plugin/skills/set-up-latchkey/own-relay.md) and asks you only for what only you can do.
+follows [its guide](setup-with-claude.md) and asks you only for what only you can do.
 Everything that guide chooses (host, address, email, updates) is a setting described here.
 
 ## What you need
@@ -266,7 +266,7 @@ For a relay that's only yours, leave out every `SMTP_*` setting and set `SETUP_C
 
 ## Connect
 
-1. **Claude:** in Claude, open Settings → Connectors → Add custom connector, and enter
+1. **Claude:** in Claude, open Customize → Connectors → Add custom connector, and enter
    `https://relay.example.com/mcp`. Sign in with your passkey when asked and click Allow.
    Adding it once on claude.ai makes it available in Claude on the web, Desktop, and the phone
    apps.
@@ -293,4 +293,4 @@ On a server with Podman, a Quadlet unit with `AutoUpdate=registry` keeps the rel
 release: `podman-auto-update.timer` checks daily, restarts the relay with the new image, and goes
 back to the previous image if the new one doesn't start. Add `Notify=true`, so the relay tells
 Podman when it's ready (it sends `READY=1` once it accepts connections) and a release that
-doesn't start is rolled back. [The guide](../plugin/skills/set-up-latchkey/own-relay.md) has a complete unit.
+doesn't start is rolled back. [The guide](setup-with-claude.md) has a complete unit.
