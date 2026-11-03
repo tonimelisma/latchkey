@@ -30,6 +30,33 @@ final class AXMailWindows: ComposeWindows, @unchecked Sendable {
         return SystemScreen().isLocked() ? Self.whileLocked : nil
     }
 
+    /// An app-modal alert holds Mail's scripting until it's answered: "could not be moved to the
+    /// mailbox … Invalid base64 string for MIME content" after a send with the lid closed
+    /// (2026-11-01). One with a single button only tells something, so pressing it loses nothing;
+    /// one with more is a choice, left for someone at the Mac. Mail isn't started for this.
+    func alert() async -> MailAlert? {
+        guard AXIsProcessTrusted(),
+            let mail = NSRunningApplication.runningApplications(withBundleIdentifier: MailCapability.mailApp).first
+        else { return nil }
+        let app = AXUIElementCreateApplication(mail.processIdentifier)
+        AXUIElementSetMessagingTimeout(app, 3)
+        let alerts = AX.windows(app).compactMap { w -> AXUIElement? in
+            if ["AXDialog", "AXSystemDialog"].contains(AX.string(w, kAXSubroleAttribute)) { return w }
+            return AX.isCompose(w) ? nil : AX.sheet(w)
+        }
+        guard let alert = alerts.first else { return nil }
+        let buttons = AX.children(alert).filter { AX.string($0, kAXRoleAttribute) == "AXButton" }
+        let titles = buttons.compactMap { AX.string($0, kAXTitleAttribute) }
+        let text = AX.texts(alert).joined(separator: " ")
+        var closed = false
+        if buttons.count == 1 {
+            AXUIElementPerformAction(buttons[0], kAXPressAction as CFString)
+            try? await Task.sleep(for: .milliseconds(300))
+            closed = !AX.alive(alert)
+        }
+        return MailAlert(text: text, buttons: titles, closed: closed)
+    }
+
     func open(_ how: ComposeOpening) async throws -> any ComposeWindow {
         let mail = try await Self.mailApp()
         lock.withLock {

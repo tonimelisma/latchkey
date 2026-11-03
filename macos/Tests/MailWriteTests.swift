@@ -89,6 +89,40 @@ import Testing
         #expect(r.isError && MailTestEnv.text(r).contains("moved or deleted"))
     }
 
+    /// 2026-11-01: Mail couldn't save a sent copy to Exchange, showed an alert, and answered no
+    /// script until someone pressed OK (FR-839). An alert with one button is closed; any other is
+    /// named, with its buttons, for someone at the Mac.
+    @Test func mailsAlertIsReportedWhenMailDoesNotAnswer() async throws {
+        let f = try MailFixture()
+        defer { f.close() }
+        let s = FakeScripts()
+        s.answer = { script, _ in
+            if script == MailScript.accounts { return MailTestEnv.accountsAnswer }
+            throw ScriptError.timedOut
+        }
+        let w = FakeWindows()
+        w.alert = MailAlert(
+            text: "The message “Check” could not be moved to the mailbox “Work”. Invalid base64 string.",
+            buttons: ["OK"], closed: true)
+        let change = try MailTestEnv.tool("mail_change", MailTestEnv.make(f, scripts: s, windows: w))
+        let r = await change.handler(.object(["action": .string("flag"), "id": .string("1001")]))
+        let text = MailTestEnv.text(r)
+        #expect(r.isError)
+        #expect(text.hasPrefix("Mail didn't answer within 25 seconds."), "\(text)")
+        #expect(text.contains("«The message “Check” could not be moved to the mailbox “Work”. Invalid base64 string.»"))
+        #expect(text.contains("Latchkey pressed its only button, «OK»; try again."), "\(text)")
+        #expect(w.alertChecks == 1)
+
+        w.alert = MailAlert(text: "Send anyway?", buttons: ["Cancel", "Send Anyway"], closed: false)
+        let two = MailTestEnv.text(await change.handler(.object(["action": .string("flag"), "id": .string("1001")])))
+        #expect(two.contains("«Send anyway?» (buttons «Cancel», «Send Anyway»)"), "\(two)")
+        #expect(two.contains("Someone at the Mac needs to answer it"), "\(two)")
+
+        w.alert = nil
+        let none = MailTestEnv.text(await change.handler(.object(["action": .string("flag"), "id": .string("1001")])))
+        #expect(none == "Mail didn't answer within 25 seconds.")
+    }
+
     @Test func accountsParse() {
         let list = MailAccounts.parse(MailTestEnv.accountsAnswer + "bad line\n")
         #expect(list.count == 2 && list[1].addresses == ["owner@gmail.example", "owner@alias.example"])

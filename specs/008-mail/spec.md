@@ -108,6 +108,13 @@ my landlord", tell what's new in the inbox, answer a message, or file it away.
   in plain sentences, what happened and whether it will be tried again; the queue's list shows
   the last failure (Toni, 2026-11-02: a frozen Mail failed the first queued message, and the
   queue lost it).
+- **FR-839** When Mail doesn't answer Latchkey's scripting in time, Latchkey shall look for an
+  alert Mail is showing in a window of its own; when the alert has a single button, Latchkey
+  shall press it and tell Claude and the Owner (in a notification) what it said, so Claude can
+  try again; otherwise it shall tell Claude what the alert says, its buttons, and that someone
+  at the Mac needs to answer it. Latchkey never starts Mail to look (Toni, 2026-11-02, "if
+  exchange doesn't accept our messages, that's our issue": an alert that Mail couldn't save a
+  sent copy, with the lid closed, held Mail until someone pressed OK).
 
 ### Level, visibility, permissions
 - **FR-830** Mail shall have the levels Off, Read only, Read & write, where Read & write includes

@@ -258,3 +258,4 @@ Add a row when a decision is made; never delete one, mark it "superseded by" ins
 | 2026-11-02 | WhatsApp sends to people and groups, with photos and files | spec 012 FR-1214 |
 | 2026-11-02 | WhatsApp reads from the desktop app's database when present, else Latchkey's own linked device | spec 012 FR-1221 |
 | 2026-11-02 | WhatsApp setup says in one sentence that WhatsApp's terms forbid automated messaging and a ban is possible | spec 012 FR-1232 |
+| 2026-11-02 | When Mail doesn't answer, Latchkey looks for Mail's own alert: one with a single button is pressed and the Owner told; any other is named, with its buttons, for someone at the Mac | Toni ("if exchange doesn't accept our messages, that's our issue"; "just do things without asking"), spec 008 FR-839, plan D11 |

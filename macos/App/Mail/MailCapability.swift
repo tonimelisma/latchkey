@@ -673,6 +673,11 @@ enum MailCapability {
             return try await body(store)
         } catch let f as MailStore.Failure {
             return .text(explain(f), isError: true)
+        } catch ScriptError.timedOut {
+            let alert = await env.windows.alert()
+            var r = ToolResult.text(explain(.timedOut, alert: alert), isError: true)
+            if let alert, alert.closed { r.alsoDone = "Latchkey closed Mail's alert «\(alert.text)»" }
+            return r
         } catch let f as ScriptError {
             return .text(explain(f), isError: true)
         } catch let a as ArgumentError {
@@ -698,6 +703,19 @@ enum MailCapability {
         case .timedOut: "Mail didn't answer within 25 seconds."
         case .failed(let message): "Mail reported an error: \(message)"
         }
+    }
+
+    /// Mail held by an alert of its own answers no script until it's answered (FR-839).
+    static func explain(_ f: ScriptError, alert: MailAlert?) -> String {
+        guard let alert else { return explain(f) }
+        let quoted = "«\(alert.text)»"
+        if alert.closed {
+            return
+                "\(explain(f)) It was showing an alert, \(quoted). Latchkey pressed its only button, «\(alert.buttons.first ?? "OK")»; try again."
+        }
+        let buttons = alert.buttons.map { "«\($0)»" }.joined(separator: ", ")
+        return
+            "\(explain(f)) It is showing an alert, \(quoted) (buttons \(buttons)), and answers nothing until it's answered. Someone at the Mac needs to answer it."
     }
 
     /// Opens the index once, on first use, so a later grant of Full Disk Access takes effect.

@@ -33,3 +33,6 @@ From `plan.md`. `[P]` = parallel-safe.
   (parent session): a new message, a reply, a forward with a file, and a draft to his own
   address; the Accessibility parts (selected text in the body and the token fields, the From
   pop-up, Save, Mail's alerts) are untested until then. *SC-801 to SC-804.*
+- **T813** [x] Mail held by its own alert (2026-11-02): when a Mail script times out, Latchkey
+  reads Mail's alert, presses it when it has one button, and otherwise names it and its buttons
+  for someone at the Mac (`mailsAlertIsReportedWhenMailDoesNotAnswer`). *FR-839, D11.*

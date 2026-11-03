@@ -121,15 +121,16 @@ wait, and when Mail doesn't answer the last list it gave is used); calendar repe
 inconclusive: the repeat is set (read back live), but the change answer didn't say so; since 0.8.85 creating and changing an event say how it repeats. Only Mail put windows on top and used the clipboard; Safari (tab mode, Safari
 behind) didn't come forward. The three groups (gets in the way, background, works locked) and the experiments for moving the first into the second are in `docs/screen-states.md`; `docs/use-cases.md` now has the unlocked run on 0.8.83 and the lid-closed-locked run on 0.8.78 (the older lid-closed column, app 0.8.62, wasn't kept). Toni chose (2026-11-02) to move all four "gets in the way" items to the background: shell open behind (0.8.86), Safari pictures only while hidden, Mail in two short moments, computer control per app.
 Mail's alert "could not be moved to the mailbox <the Owner's account> … Invalid base64 string for MIME
-content" (2026-11-02, after `mail-check.sh send` with a file at 22:12 PT) is Mail and Exchange,
-not Latchkey: Latchkey never writes MIME, it only hands Mail the file, and both copies (ids 104292,
-104293) are well formed. Mail's own copy has the attachment as plain 7-bit text (no base64 at all);
-the copy Exchange delivered has `TGF0Y2hrZXkgYXR0YWNobWVudCBjaGVjaw0K`, valid base64 of the
-27-byte file. The text is Exchange Web Services' answer when the MIME a client uploads in a save
-or move is badly encoded, so Mail's upload of its sent copy failed, not the message. Proposal for
-Toni (not decided): when Mail doesn't answer, Latchkey looks for Mail's alert window and says
-what it reads and that someone at the Mac must answer it, instead of only "Mail didn't answer
-within 25 seconds"; such alerts froze Mail's scripting twice on 2026-11-02.
+content" (after `mail-check.sh send` with a file at 22:12 PT on 2026-11-01, lid closed) came from
+Mail saving its own sent copy to Exchange after the message was delivered; Latchkey never writes
+MIME, and both copies (ids 104292, 104293) are well formed (Mail's own copy has the file as plain
+7-bit text, which Mail had rewritten before the upload; Exchange's has valid base64). Repeated
+2026-11-02 20:48 unlocked: the same file through Latchkey and through Mail's own scripting both
+saved their sent copy, no alert, so it shows up only with Mail's later upload (lid closed); it
+can't be repeated without closing the lid. Since 0.8.87 (spec 008 FR-839, plan D11), when Mail
+doesn't answer, Latchkey looks for Mail's alert: one with a single button (like this one) is
+pressed, Claude is told to try again and the Owner gets a notification; any other is named,
+with its buttons, for someone at the Mac. Not seen live yet (needs Mail to show such an alert).
 Next: with the lid open and unlocked, run `safari-check.sh` (cross-site click in real Safari);
 find why a Mail reply failed while unlocked on 0.8.62 ("the text in Mail's window isn't the
 text given", then "Mail's window stayed open after Send"); close any empty message windows the

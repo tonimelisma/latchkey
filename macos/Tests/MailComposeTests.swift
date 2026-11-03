@@ -123,6 +123,16 @@ final class FakeWindows: ComposeWindows, @unchecked Sendable {
     }
 
     func finish() async { lock.withLock { finished += 1 } }
+
+    /// Plays an alert Mail shows in a window of its own.
+    var alert: MailAlert?
+    private(set) var alertChecks = 0
+    func alert() async -> MailAlert? {
+        lock.withLock {
+            alertChecks += 1
+            return alert
+        }
+    }
 }
 
 /// Plays the clipboard.

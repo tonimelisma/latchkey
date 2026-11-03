@@ -238,6 +238,24 @@ share an id with one put back. Low-level
 choices: no expiry (a queued message waits however long the Mac stays locked; the Owner can ask
 Claude to cancel it); attachments are checked when queued and again when sent.
 
+## D11. Mail held by an alert (FR-839)
+
+Mail's app-modal alerts (seen 2026-11-01, with the lid closed: "The message … could not be moved
+to the mailbox … Invalid base64 string for MIME content", Mail failing to save its own sent copy
+to Exchange after the message was delivered) block every script until answered, and Mail keeps
+answering Accessibility meanwhile. So when a Mail script times out (`MailCapability.run`, which
+every Mail tool and the queue go through), `AXMailWindows.alert()` looks at Mail's windows, only
+if Mail is running and Accessibility is on: the first `AXDialog`/`AXSystemDialog` window, or a
+sheet on a window that isn't a compose window (a compose window's sheets are D6's). One button:
+pressed, since an alert with one button only informs; the answer says what it said and to try
+again, and `alsoDone` notifies the Owner. More buttons: a choice (it could be "Send Anyway"),
+named with its buttons for someone at the Mac. Options weighed: report only (leaves Mail held
+until the Owner is back, which is what happened); press any alert's default button (could
+choose for the Owner); press only a lone button (chosen). Found by repeating the send: the same
+file through Latchkey and through Mail's own scripting both saved their sent copy while
+unlocked; Mail's failed copy had been rewritten by Mail before its upload, so the cause is in
+Mail's later upload, not in what Latchkey hands it.
+
 ## Testing (Constitution VII)
 
 - Tests first, against a generated Envelope Index (the real tables and columns, in a temporary

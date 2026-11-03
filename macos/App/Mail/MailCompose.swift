@@ -71,6 +71,16 @@ protocol ComposeWindows: Sendable {
     func open(_ how: ComposeOpening) async throws -> any ComposeWindow
     /// Puts the Owner's front app back once the window work is done.
     func finish() async
+    /// The alert Mail shows in a window of its own, if any, closed when its only button is
+    /// pressed (FR-839). Asked only when Mail didn't answer a script.
+    func alert() async -> MailAlert?
+}
+
+/// An alert Mail showed (FR-839): its text, its buttons, and whether Latchkey closed it.
+struct MailAlert: Sendable, Equatable {
+    var text: String
+    var buttons: [String]
+    var closed: Bool
 }
 
 struct ComposeFailure: Error, Equatable {
