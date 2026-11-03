@@ -516,7 +516,9 @@ final class AXComposeWindow: ComposeWindow, @unchecked Sendable {
             throw ComposeFailure(message: "Mail's window has no \(field.rawValue.capitalized) field.")
         }
         let before = AX.children(target).count
-        let text = addresses.joined(separator: ", ") + ", "
+        // No separator after the last: Mail took a trailing ", " as an empty address and refused
+        // to send (2026-11-02: "“ ” does not appear to be a valid email address"); confirming ends it.
+        let text = addresses.joined(separator: ", ")
         // At the end of the field, so Mail's own recipients stay (MailCompose checks they did).
         // Mail makes the typed text an address only when the field is confirmed (seen live
         // 2026-11-02 with a window behind): each way is confirmed, then looked at, before the
