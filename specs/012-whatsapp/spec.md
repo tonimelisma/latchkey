@@ -1,6 +1,6 @@
 # Spec 012: WhatsApp — WHAT and WHY
 
-Status: Draft for Toni's review (2026-11-02). Questions for Toni are marked NEEDS CLARIFICATION.
+Status: Spec approved by Toni's answers (2026-11-02); plan next.
 Scope: Claude reads, searches, and sends the Owner's WhatsApp messages from any Claude app,
 through the Mac, including while the Mac is locked.
 Out of scope: calls, status updates, communities and channels, changing WhatsApp settings.
@@ -69,18 +69,17 @@ Mac is locked.
   FR-011) saying why, and shall not send the message later on its own.
 - **FR-1213** When the recipient matches more than one chat or contact, the system shall not send,
   and shall answer with the candidates so Claude can ask the Owner.
-- **FR-1214** [NEEDS CLARIFICATION: Can Claude send to groups, and send photos and files, in the
-  first version, or text to one person only?]
+- **FR-1214** The system shall send to a person or a group, and shall send photos and files from
+  the Mac as attachments, as well as text (Toni, 2026-11-02).
 
 ### Reading
 
 - **FR-1220** When Claude asks for chats or messages, the system shall find them by person, chat,
   words, date, and unread, and show names from the Owner's contacts and WhatsApp's own names
   rather than numbers.
-- **FR-1221** [NEEDS CLARIFICATION: Where reading comes from. The desktop WhatsApp app's database
-  (tested: complete history, works locked, but needs the desktop app installed and running), or
-  Latchkey's own linked device (works without the desktop app; history limited to what WhatsApp
-  syncs to a new device), or the database when present and the linked device otherwise?]
+- **FR-1221** When the desktop WhatsApp app's database is on the Mac, the system shall read from
+  it; otherwise it shall read through its own linked device, and say when its history is shorter
+  than the phone's (Toni, 2026-11-02).
 
 ### Permissions and visibility
 
@@ -88,8 +87,9 @@ Mac is locked.
   write; Read only shall offer no sending tool (spec 002 pattern, Constitution III).
 - **FR-1231** When Claude sends a WhatsApp message, the system shall show a notification and list
   it in the menu bar activity, as for Messages.
-- **FR-1232** [NEEDS CLARIFICATION: WhatsApp's terms forbid automated messaging, and accounts can
-  be banned. Does setup tell the Owner this in a sentence before linking, or not at all?]
+- **FR-1232** Before linking, setup shall tell the Owner in one plain sentence that WhatsApp's
+  terms forbid automated messaging and that a ban, though unlikely for personal use, is possible
+  (Toni, 2026-11-02).
 
 ## Success criteria
 
@@ -102,4 +102,5 @@ Mac is locked.
 
 ## Open questions
 
-All questions for Toni are the NEEDS CLARIFICATION items above (FR-1214, FR-1221, FR-1232).
+None in the spec. The plan decides how the hidden page runs (kept open between calls or
+started per call; research.md, timing).

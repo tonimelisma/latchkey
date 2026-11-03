@@ -38,8 +38,9 @@ throwaway test programs (research.md). Latchkey can read the desktop WhatsApp ap
 WhatsApp Web in a hidden WebKit page of a signed app, linked once by QR code; it stayed logged in
 after a restart and sent to Toni's own chat both unlocked and with the Mac locked (20:42:47). Safari's
 cookies alone, or a copy of Safari's whole WhatsApp storage, don't log in (WebKit's per-app
-Keychain key). Test device logged out and deleted. Next: Toni answers the spec's three questions
-(groups and files; where reading comes from; a ban-risk sentence at setup), then the plan.
+Keychain key). Test device logged out and deleted. Toni answered the spec's three questions
+(people, groups, and files; read the desktop app's database, else Latchkey's own device; one
+sentence on ban risk at setup). Next: the plan.
 
 Releases, terms and privacy, and the directory listing are much later (Toni, 2026-10-22).
 

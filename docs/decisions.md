@@ -255,3 +255,6 @@ Add a row when a decision is made; never delete one, mark it "superseded by" ins
 | 2026-11-02 | While the Mac is locked, the browser tools use a browser of Latchkey's own (WebKit, off-screen) signed in with a copy of Safari's cookies kept only in memory and dropped at unlock; Safari again once unlocked | Toni, spec 005 FR-420 to FR-422, plan D7 |
 | 2026-11-02 | The browser used while locked answers a page's dialogs itself (alert dismissed, confirm Cancel, prompt nothing) and tells Claude what they said; pop-ups open in its one page; it identifies as the installed Safari; a cancelled load (back from memory) isn't an error | spec 005 plan D7 |
 | 2026-11-02 | WhatsApp sends right away, Mac locked or not; never queued until the next unlock | spec 012 FR-1210, FR-1212 |
+| 2026-11-02 | WhatsApp sends to people and groups, with photos and files | spec 012 FR-1214 |
+| 2026-11-02 | WhatsApp reads from the desktop app's database when present, else Latchkey's own linked device | spec 012 FR-1221 |
+| 2026-11-02 | WhatsApp setup says in one sentence that WhatsApp's terms forbid automated messaging and a ban is possible | spec 012 FR-1232 |
