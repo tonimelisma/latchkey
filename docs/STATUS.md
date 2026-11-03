@@ -124,7 +124,7 @@ and group, and test emails had piled up; all removed and checked in each app's o
 doesn't save the deletion of a folder that still holds notes (it comes back after Notes
 restarts); since 0.8.89 Latchkey deletes the notes first and says "deleted" only once Notes'
 database agrees, and every `state-check.sh run` ends with a "Nothing left behind" group that
-finds and removes anything with the run's tag. Toni chose (2026-11-02) to move all four "gets in the way" items to the background: shell open behind (0.8.86), Safari pictures only while hidden, Mail in two short moments, computer control per app.
+finds and removes anything with the run's tag. Toni chose (2026-11-02) to move all four "gets in the way" items to the background: shell open behind (0.8.86), Safari pictures only while hidden (0.8.90, spec 005 FR-423), Mail in two short moments, computer control per app.
 Mail's alert "could not be moved to the mailbox <the Owner's account> … Invalid base64 string for MIME
 content" (after `mail-check.sh send` with a file at 22:12 PT on 2026-11-01, lid closed) came from
 Mail saving its own sent copy to Exchange after the message was delivered; Latchkey never writes

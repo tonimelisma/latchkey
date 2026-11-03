@@ -85,6 +85,10 @@ phone, Claude can't check a reservation in the Owner's account or fill in a form
   logged, shown to Claude, or sent off the Mac.
 - **FR-422** When the Mac is unlocked, Latchkey's own browser shall be closed with its cookies,
   and the browser tools shall use Safari again.
+- **FR-423** When a picture of Claude's page needs Claude's tab brought to the front of the
+  Owner's Safari window, Latchkey shall do so only while the Owner can't see that window
+  (covered, or on another desktop); while they can, the picture shall be of the same address in
+  Latchkey's own browser, saying so (Toni, 2026-11-02: "Switch only when hidden").
 
 ## Success criteria
 

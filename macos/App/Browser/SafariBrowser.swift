@@ -632,6 +632,19 @@ actor SafariBrowser {
         navigation = nil
     }
 
+    /// What a picture of Claude's page would take (spec 005 FR-423): whether Claude's tab must
+    /// first come to the front of the Owner's window, the title that window shows now, and the
+    /// page's address. Claude's own window needs no switch.
+    func pictureSwitch() async throws -> (needed: Bool, shownTitle: String, address: String) {
+        guard tab != nil else { return (false, "", "") }
+        let found = try await locate()
+        let f = try await call(Script.tabFront, guardArguments(found)).trimmingCharacters(in: .newlines).split(
+            separator: "\t", maxSplits: 2, omittingEmptySubsequences: false
+        ).map(String.init)
+        guard f.count == 3 else { throw Failure.failed("Safari answered: \(f.joined(separator: " "))") }
+        return (f[0] != "true", f[1], f[2])
+    }
+
     /// Shows Claude's page for a screenshot (spec 006 FR-509): `body` gets the title Safari's
     /// window then shows. In a tab of the Owner's window, Claude's tab comes to the front for the
     /// shot and the tab the Owner had in front comes back afterwards, also when the shot failed
@@ -1040,6 +1053,25 @@ actor SafariBrowser {
             end tell
             end run
             """
+        /// argv: the guard's five. Answers, without changing anything, whether Claude's tab is
+        /// the one in front, the title the window shows, and Claude's page address.
+        static let tabFront =
+            "on run argv\n" + tabGuard + "\n"
+                + """
+                set sep to character id 9
+                set isFront to ((index of current tab of w) is idx)
+                set shownTitle to ""
+                try
+                set shownTitle to (name of current tab of w) as text
+                end try
+                set theURL to ""
+                try
+                set theURL to (URL of t) as text
+                end try
+                return (isFront as text) & sep & shownTitle & sep & theURL
+                end tell
+                end run
+                """
         /// argv: the guard's five. Brings Claude's tab to the front of its window;
         /// answers the tab that was in front and Claude's page title.
         static let tabShow =

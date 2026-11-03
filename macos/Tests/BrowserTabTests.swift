@@ -211,6 +211,10 @@ final class FakeSafariTabs: ScriptRunner, @unchecked Sendable {
                 windows[w].tabs[i].mark = nil
                 windows[w].tabs[i].scriptsRun += 1
                 return ""
+            case SafariBrowser.Script.tabFront:
+                let (w, i) = try guarded(args)
+                let shown = windows[w].tabs[windows[w].current - 1].title
+                return "\(windows[w].current == i + 1)\t\(shown)\t\(windows[w].tabs[i].url)"
             case SafariBrowser.Script.tabShow:
                 let (w, i) = try guarded(args)
                 let previous = windows[w].current
@@ -592,6 +596,17 @@ final class Notes: @unchecked Sendable {
             try await b.showing { _ -> String in throw SafariBrowser.Failure.failed("no screen") }
         }
         #expect(fake.userWindow.current == 1, "back also when the shot failed")
+    }
+
+    /// FR-423: whether a picture needs Claude's tab brought forward, asked without changing anything.
+    @Test func picturesAskBeforeSwitchingTabs() async throws {
+        let fake = FakeSafariTabs()
+        let b = browser(fake)
+        _ = try await b.open("https://shop.example.com", newTab: false)
+        let plan = try await b.pictureSwitch()
+        #expect(plan.needed, "the Owner's tab is in front")
+        #expect(plan.address == "https://shop.example.com")
+        #expect(fake.userWindow.current == 1, "nothing switched by asking")
     }
 
     /// FR-411 in a tab: 30 minutes unused closes Claude's tab only, noted as Left Behind.

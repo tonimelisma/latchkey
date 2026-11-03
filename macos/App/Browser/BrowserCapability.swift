@@ -123,6 +123,20 @@ enum BrowserCapability {
                             )
                         }
                         if let problem = await ScreenCheck.problem(SystemScreen()) { throw Failure.failed(problem) }
+                        // FR-423: Claude's tab comes to the front of the Owner's window for the
+                        // picture only while the Owner can't see that window; otherwise the
+                        // picture is of the same address in Latchkey's own browser.
+                        let plan = try await browser.pictureSwitch()
+                        if plan.needed, !plan.address.isEmpty,
+                            ScreenCapture.windowVisible(app: "Safari", title: plan.shownTitle)
+                        {
+                            let image = try await ownPicture(plan.address)
+                            var r = ToolResult.image(image.data, mimeType: image.mimeType)
+                            r.appendText(
+                                "The Mac's owner can see the Safari window, so Claude's tab wasn't brought to the front: this is \(plan.address) loaded fresh in Latchkey's own browser (signed in with Safari's cookies), not Safari's tab itself."
+                            )
+                            return r
+                        }
                         let image = try await browser.showing { title in
                             try await ScreenCapture.window(app: Permissions.safariApp, title: title)
                         }
@@ -130,6 +144,14 @@ enum BrowserCapability {
                     }
                 }),
         ]
+    }
+
+    /// A picture of `address` from a browser of Latchkey's own, made for this one picture.
+    @MainActor static func ownPicture(_ address: String) async throws -> PreparedImage {
+        let own = LockedBrowser()
+        defer { own.discard() }
+        _ = try await own.open(address)
+        return try await own.screenshot()
     }
 
     static func writeOperations(browser: SafariBrowser, locked: @escaping LockedRoute = noLocked) -> [ToolEntry] {

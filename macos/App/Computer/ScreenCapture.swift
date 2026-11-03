@@ -69,6 +69,44 @@ enum ScreenCapture {
         return try jpeg(image)
     }
 
+    /// Whether the Owner can see any of the window of `app` titled `title`: it is on screen, on
+    /// this Space, and some of it isn't under another window (spec 005 FR-423). Sampled on a grid.
+    static func windowVisible(app: String, title: String) -> Bool {
+        let list =
+            (CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID)
+                as? [[String: Any]]) ?? []
+        func rect(_ w: [String: Any]) -> CGRect? {
+            guard let b = w[kCGWindowBounds as String] as? [String: Double] else { return nil }
+            return CGRect(x: b["X"] ?? 0, y: b["Y"] ?? 0, width: b["Width"] ?? 0, height: b["Height"] ?? 0)
+        }
+        guard
+            let i = list.firstIndex(where: {
+                ($0[kCGWindowOwnerName as String] as? String) == app && ($0[kCGWindowLayer as String] as? Int) == 0
+                    && ($0[kCGWindowName as String] as? String ?? "").contains(title)
+            }), let target = rect(list[i])
+        else { return false }
+        let above = list[..<i].filter {
+            ($0[kCGWindowLayer as String] as? Int ?? 0) >= 0 && ($0[kCGWindowAlpha as String] as? Double ?? 1) > 0
+        }.compactMap(rect)
+        // NSScreen is bottom-left based; window bounds are top-left based.
+        let top = NSScreen.screens.first?.frame.height ?? 0
+        let screens = NSScreen.screens.map {
+            CGRect(x: $0.frame.minX, y: top - $0.frame.maxY, width: $0.frame.width, height: $0.frame.height)
+        }
+        let steps = 12
+        for a in 0...steps {
+            for b in 0...steps {
+                let p = CGPoint(
+                    x: target.minX + target.width * CGFloat(a) / CGFloat(steps),
+                    y: target.minY + target.height * CGFloat(b) / CGFloat(steps))
+                if screens.contains(where: { $0.contains(p) }), !above.contains(where: { $0.contains(p) }) {
+                    return true
+                }
+            }
+        }
+        return false
+    }
+
     private static func jpeg(_ image: CGImage) throws -> PreparedImage {
         let out = NSMutableData()
         guard let dest = CGImageDestinationCreateWithData(out, UTType.jpeg.identifier as CFString, 1, nil) else {
