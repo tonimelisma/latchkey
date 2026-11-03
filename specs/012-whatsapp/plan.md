@@ -15,6 +15,9 @@ Serves FR-1201, FR-1202, FR-1210, FR-1211.
   `WKWebsiteDataStore(forIdentifier:)` with a fixed identifier, apart from Safari and from the
   locked browser. WebKit wraps the page's stored keys with a Keychain key of Latchkey's own
   (`com.apple.WebKit.WebCrypto.master+<bundle id>`), so the store works only for the signed app.
+- The page's main frame may only be `https://web.whatsapp.com` (other navigations are cancelled),
+  and every call into it checks that first, so messages and files go to WhatsApp Web alone
+  (security review 2026-11-03).
 - `WKPreferences.inactiveSchedulingPolicy = .none` (public since macOS 14): a hidden page's timers
   are otherwise slowed tenfold (research: 3.4 s of steps took 30 s).
 - The page runs while WhatsApp is on and linked, so sends are warm (about 1 s). Options weighed:

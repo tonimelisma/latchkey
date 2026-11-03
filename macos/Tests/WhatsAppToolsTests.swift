@@ -189,6 +189,16 @@ import Testing
         #expect(await link.handler(.object(["number": .string("12")])).isError)
     }
 
+    /// Security review 2026-11-03: only WhatsApp Web over https gets messages and files.
+    @Test func onlyWhatsAppWebIsThePage() {
+        #expect(WhatsAppPage.isWhatsApp(URL(string: "https://web.whatsapp.com/")))
+        #expect(WhatsAppPage.isWhatsApp(URL(string: "https://web.whatsapp.com/send?phone=1")))
+        #expect(!WhatsAppPage.isWhatsApp(URL(string: "http://web.whatsapp.com/")))
+        #expect(!WhatsAppPage.isWhatsApp(URL(string: "https://web.whatsapp.com.example.com/")))
+        #expect(!WhatsAppPage.isWhatsApp(URL(string: "https://example.com/web.whatsapp.com")))
+        #expect(!WhatsAppPage.isWhatsApp(nil))
+    }
+
     @Test func offHasNoToolsAndReadOnlyCannotSend() {
         let registry = CapabilityRegistry(
             capabilities: [WhatsAppCapability.make()], levels: [CapabilityRegistry.whatsapp: .readOnly])

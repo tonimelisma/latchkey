@@ -32,7 +32,8 @@ after the app was quit.
 
 ## Next steps
 
-WhatsApp (spec 012) built and installed in 0.8.101 (2026-11-03). Four tools: `whatsapp_find`
+WhatsApp (spec 012) built and installed in 0.8.101, with the page kept to WhatsApp Web in 0.8.102
+(2026-11-03). Four tools: `whatsapp_find`
 and `whatsapp_read` read WhatsApp for Mac's database when it is on the Mac (works locked; current
 only while that app is open; pinned chats and privacy-id senders handled), else Latchkey's own
 linked device; `whatsapp_send` sends to people and groups, text, photos, and files, through

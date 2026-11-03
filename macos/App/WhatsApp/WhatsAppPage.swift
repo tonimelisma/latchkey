@@ -242,6 +242,8 @@ final class WhatsAppPage: NSObject, WKNavigationDelegate {
 
     func call(_ function: String, _ args: JSONValue, timeout: Duration) async throws -> JSONValue {
         guard let web else { throw WhatsAppPageError.failed("the page isn't running") }
+        // Messages and files go only to WhatsApp Web itself (security review 2026-11-03).
+        guard Self.isWhatsApp(web.url) else { throw WhatsAppPageError.failed("the page isn't WhatsApp Web") }
         let body = """
             if (!window.__latchkey) return JSON.stringify({ __notLoaded: true });
             return JSON.stringify(await window.__latchkey[name](JSON.parse(args)));
@@ -315,6 +317,27 @@ final class WhatsAppPage: NSObject, WKNavigationDelegate {
     }
 
     // MARK: WKNavigationDelegate
+
+    /// The page is WhatsApp Web, over https, and nothing else.
+    nonisolated static func isWhatsApp(_ url: URL?) -> Bool {
+        url?.scheme == "https" && url?.host == "web.whatsapp.com"
+    }
+
+    /// The main frame stays on WhatsApp Web; any other place (a link, a redirect) isn't loaded.
+    /// Frames inside the page (WhatsApp's own media and workers) load as WhatsApp asks.
+    nonisolated func webView(
+        _ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction,
+        decisionHandler: @escaping @MainActor @Sendable (WKNavigationActionPolicy) -> Void
+    ) {
+        let main = navigationAction.targetFrame?.isMainFrame ?? true
+        let allowed = !main || Self.isWhatsApp(navigationAction.request.url)
+        MainActor.assumeIsolated {
+            if !allowed {
+                EventLog.shared.record(.app, "WhatsApp: the page tried to leave WhatsApp Web; not loaded")
+            }
+            decisionHandler(allowed ? .allow : .cancel)
+        }
+    }
 
     nonisolated func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
         MainActor.assumeIsolated {
