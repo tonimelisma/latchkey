@@ -33,7 +33,11 @@ struct AppControl: Sendable {
 
     static let live = AppControl(
         find: { name in
-            let apps = NSWorkspace.shared.runningApplications.filter { $0.activationPolicy == .regular }
+            // Never Latchkey itself: its windows set what Claude may do (security review 2026-11-02).
+            let apps = NSWorkspace.shared.runningApplications.filter {
+                $0.activationPolicy == .regular && $0.processIdentifier != getpid()
+                    && $0.bundleIdentifier != Bundle.main.bundleIdentifier
+            }
             let wanted = name.lowercased()
             guard
                 let app = apps.first(where: { ($0.localizedName ?? "").lowercased() == wanted })

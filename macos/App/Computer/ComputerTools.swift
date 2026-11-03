@@ -194,7 +194,7 @@ extension ComputerCapability {
             } else {
                 r = .text(done + ", in the background.")
             }
-            r.activity = done
+            r.activity = activity(env, done)  // the notice after a quiet spell, as for the pointer (FR-507)
             return r
         }
     }

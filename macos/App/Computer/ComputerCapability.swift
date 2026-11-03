@@ -261,7 +261,7 @@ enum ComputerCapability {
     /// FR-507: the first action after 5 minutes idle also notifies.
     private static let idle = IdleClock()
 
-    private static func activity(_ env: ComputerEnvironment, _ done: String) -> String {
+    static func activity(_ env: ComputerEnvironment, _ done: String) -> String {
         if idle.touch() > 300 { env.notify("Claude is using your screen") }
         return done
     }
