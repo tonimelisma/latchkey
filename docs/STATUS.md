@@ -144,7 +144,7 @@ with its buttons, for someone at the Mac. Not seen live yet (needs Mail to show 
 2026-11-03: a send started seconds before the Mac locked froze Mail (its compose engine waits
 for a window it can't draw behind the lock) until Mail was restarted; since 0.8.100 the lock is
 checked again right before making, sending, or saving the message. `screen-state.swift` now calls
-a locked Mac with its display asleep "locked", not "screen asleep".
+a locked Mac with its display asleep "locked", not "screen asleep". Locked run on 0.8.100 (lid open, display asleep, 2026-11-03): all 89 cases outside Mail and computer control work, and the closing sweep found nothing left behind.
 Next: with the Mac unlocked, try a reply with a file by Mail's scripting (today a reply or
 forward with files still brings Mail forward for the paste, since scripted attaching rewrites
 a new message's text and might rewrite a quoted original); run `state-check.sh run` locked with
