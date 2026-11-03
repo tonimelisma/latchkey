@@ -128,6 +128,9 @@ struct CapabilitiesPane: View {
                     }
                 }
             }
+            if model.capabilities.level(CapabilityRegistry.whatsapp) != .off {
+                Section("WhatsApp") { WhatsAppLinkRow() }
+            }
             Section("Browser") {
                 Picker(selection: $browserPlace) {
                     Text("A Tab in Your Safari Window").tag(BrowserPlace.tab)
@@ -683,7 +686,7 @@ enum ActivityFormat {
     static let capabilityNames = [
         "shell": "Shell", "files": "Files", "notes": "Notes", "messages": "Messages", "browser": "Browser",
         "computer": "Computer", "calendar": "Calendar", "reminders": "Reminders", "contacts": "Contacts",
-        "location": "Location", "maps": "Maps", "mail": "Mail",
+        "location": "Location", "maps": "Maps", "mail": "Mail", "whatsapp": "WhatsApp",
     ]
     /// The argument that names what was acted on, first found wins.
     static let targetKeys = [

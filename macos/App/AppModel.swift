@@ -79,7 +79,8 @@ final class AppModel {
     /// Every capability, in menu order.
     static func makeCapabilities() -> [Capability] {
         [
-            NotesCapability.make(), MessagesCapability.make(), MailCapability.make(), FilesCapability.make(),
+            NotesCapability.make(), MessagesCapability.make(), WhatsAppCapability.make(), MailCapability.make(),
+            FilesCapability.make(),
             ShellCapability.make(),
             BrowserCapability.make(), ComputerCapability.make(), CalendarCapability.make(),
             RemindersCapability.make(), ContactsCapability.make(), LocationCapability.make(),
@@ -170,6 +171,7 @@ final class AppModel {
         LocationFixer.shared.onAccessChange = { [weak self] _ in self?.checkPersonalData() }
         watchSystem()
         attachmentSweeper = MessagesCapability.sweepCopies(in: MessagesCapability.staging)
+        if ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil { updateWhatsApp() }
         leftoverTimer = Self.tidyEveryMinute()
         if ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil {
             Task { await sendQueuedMail() }  // queued before a restart, and the Mac is unlocked now
@@ -517,6 +519,7 @@ final class AppModel {
     func setLevel(_ id: String, _ level: AccessLevel) {
         capabilities.setLevel(id, level)
         if id == CapabilityRegistry.browser { BrowserCapability.lockedBrowser.discard() }
+        if id == CapabilityRegistry.whatsapp { updateWhatsApp() }
         defaults.set(capabilities.levels.mapValues(\.rawValue), forKey: Keys.levels)
         let registry = capabilities
         Task { [connection] in
@@ -526,6 +529,16 @@ final class AppModel {
                 registry, calls: { reason in await connection?.stopCalls(reason) }, shell: ShellCapability.jobs)
         }
         if needsSetup { showSetup() }
+    }
+
+    /// Off unlinks Latchkey's WhatsApp device and deletes its data (spec 012 FR-1203); on, a device
+    /// linked before starts again (FR-1202).
+    private func updateWhatsApp() {
+        if capabilities.level(CapabilityRegistry.whatsapp) == .off {
+            Task { if await WhatsAppPage.hasStore() { await WhatsAppPage.shared.unlink() } }
+        } else {
+            Task { if await WhatsAppPage.hasStore() { WhatsAppPage.shared.start() } }
+        }
     }
 
     // MARK: pause (FR-602 to FR-604)

@@ -1,0 +1,135 @@
+import Foundation
+import SQLite3
+import Testing
+
+@testable import Latchkey
+
+/// Spec 012 FR-1220, FR-1221: reading WhatsApp for Mac's database, in its layout as seen on
+/// 2026-11-03 (Core Data, seconds since 2001), with a person, a group, a status row, a group event,
+/// and names marked with invisible direction characters.
+@Suite struct WhatsAppStoreTests {
+    /// 2026-11-02 18:00 UTC as seconds since 2001.
+    static let t0 = Date(timeIntervalSince1970: 1_794_160_800).timeIntervalSinceReferenceDate
+
+    static func make() throws -> URL {
+        let dir = FileManager.default.temporaryDirectory.appending(path: "whatsapp-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let url = dir.appending(path: "ChatStorage.sqlite")
+        var h: OpaquePointer?
+        sqlite3_open(url.path, &h)
+        defer { sqlite3_close(h) }
+        let t = t0
+        let sql = """
+            CREATE TABLE ZWACHATSESSION (Z_PK INTEGER PRIMARY KEY, ZCONTACTJID TEXT, ZPARTNERNAME TEXT, ZSESSIONTYPE INTEGER,
+              ZUNREADCOUNT INTEGER, ZLASTMESSAGEDATE REAL, ZLASTMESSAGE INTEGER, ZREMOVED INTEGER, ZHIDDEN INTEGER);
+            CREATE TABLE ZWAMESSAGE (Z_PK INTEGER PRIMARY KEY, ZCHATSESSION INTEGER, ZMESSAGEDATE REAL, ZISFROMME INTEGER,
+              ZMESSAGETYPE INTEGER, ZTEXT TEXT, ZFROMJID TEXT, ZGROUPMEMBER INTEGER, ZMEDIAITEM INTEGER, ZSTANZAID TEXT);
+            CREATE TABLE ZWAGROUPMEMBER (Z_PK INTEGER PRIMARY KEY, ZCONTACTNAME TEXT, ZFIRSTNAME TEXT, ZMEMBERJID TEXT);
+            CREATE TABLE ZWAMEDIAITEM (Z_PK INTEGER PRIMARY KEY, ZTITLE TEXT, ZMEDIALOCALPATH TEXT);
+            CREATE TABLE ZWAPROFILEPUSHNAME (Z_PK INTEGER PRIMARY KEY, ZJID TEXT, ZPUSHNAME TEXT);
+            INSERT INTO ZWACHATSESSION VALUES
+              (1, '15550001111@s.whatsapp.net', 'Sarah Lee', 0, 0, \(t + 300), 2, 0, 0),
+              (2, '120363000@g.us', 'Family', 1, 2, \(t + 500 + 6000 * 365.25 * 86400), 6, 0, 0),
+              (3, '99900011122233@lid', '\u{200E}You', 0, 0, \(t + 100), NULL, 0, 0),
+              (4, 'status@broadcast', NULL, 2, 0, \(t + 900), NULL, 0, 0),
+              (5, '15550004444@s.whatsapp.net', 'Old Friend', 0, 0, \(t - 900), NULL, 1, 0);
+            INSERT INTO ZWAGROUPMEMBER VALUES (1, 'Mum', NULL, '15550002222@s.whatsapp.net'), (2, NULL, NULL, '15550003333@s.whatsapp.net'),
+              (3, NULL, NULL, '88800011122244@lid');
+            INSERT INTO ZWAPROFILEPUSHNAME VALUES (1, '15550003333@s.whatsapp.net', 'Dad');
+            INSERT INTO ZWAMEDIAITEM VALUES (1, 'plan.pdf', 'Media/plan.pdf');
+            INSERT INTO ZWAMESSAGE VALUES
+              (1, 1, \(t + 290), 0, 0, 'see you at six', '15550001111@s.whatsapp.net', NULL, NULL, 'A'),
+              (2, 1, \(t + 300), 1, 0, 'ok', NULL, NULL, NULL, 'B'),
+              (3, 2, \(t + 400), 0, 6, NULL, NULL, 1, NULL, 'C'),
+              (4, 2, \(t + 450), 0, 0, 'dinner saturday?', NULL, 1, NULL, 'D'),
+              (5, 2, \(t + 480), 0, 8, NULL, NULL, 2, 1, 'E'),
+              (6, 2, \(t + 500), 0, 0, 'yes 100%', NULL, 2, NULL, 'F'),
+              (7, 2, \(t + 200), 0, 0, 'hearts', NULL, 3, NULL, 'G');
+            """
+        #expect(sqlite3_exec(h, sql, nil, nil, nil) == SQLITE_OK)
+        // WhatsApp's address book: a name for a sender ChatStorage knows only by privacy id.
+        var c: OpaquePointer?
+        sqlite3_open(dir.appending(path: "ContactsV2.sqlite").path, &c)
+        defer { sqlite3_close(c) }
+        let book = """
+            CREATE TABLE ZWAADDRESSBOOKCONTACT (Z_PK INTEGER PRIMARY KEY, ZFULLNAME TEXT, ZLID TEXT, ZWHATSAPPID TEXT);
+            INSERT INTO ZWAADDRESSBOOKCONTACT VALUES (1, 'Pat Example', '88800011122244@lid', NULL);
+            """
+        #expect(sqlite3_exec(c, book, nil, nil, nil) == SQLITE_OK)
+        return url
+    }
+
+    @Test func chatsAreNewestFirstWithoutStatusOrRemoved() throws {
+        let s = try WhatsAppStore(url: try Self.make())
+        let r = try s.chats(query: nil, unread: false, limit: 10, offset: 0)
+        #expect(r.total == 3)
+        #expect(r.chats.map(\.name) == ["Family", "Sarah Lee", "You"], "invisible marks removed")
+        #expect(r.chats[0].isGroup && r.chats[0].unread == 2 && !r.chats[1].isGroup)
+        // A pinned chat: the real time and text of its last message, marked pinned.
+        #expect(r.chats[0].pinned && !r.chats[1].pinned)
+        #expect(r.chats[0].last == Date(timeIntervalSinceReferenceDate: Self.t0 + 500))
+        #expect(r.chats[0].lastText == "yes 100%" && r.chats[1].lastText == "ok")
+        #expect(try s.chats(query: nil, unread: true, limit: 10, offset: 0).chats.map(\.name) == ["Family"])
+        #expect(try s.chats(query: "sarah", unread: false, limit: 10, offset: 0).total == 1)
+        #expect(try s.chats(query: "555-0001", unread: false, limit: 10, offset: 0).chats.first?.name == "Sarah Lee")
+        #expect(try s.chats(query: nil, unread: false, limit: 1, offset: 1).chats.map(\.name) == ["Sarah Lee"])
+    }
+
+    @Test func aChatIsFoundByIdOrName() throws {
+        let s = try WhatsAppStore(url: try Self.make())
+        #expect(
+            try s.chat("120363000@g.us")
+                == .one(try #require(s.chats(query: "Family", unread: false, limit: 1, offset: 0).chats.first)))
+        guard case .one(let c) = try s.chat("sarah lee") else { Issue.record("not found"); return }
+        #expect(c.id == "15550001111@s.whatsapp.net")
+        #expect(try s.chat("nobody") == .none)
+        #expect(try s.chat("old friend") == .none, "a removed chat isn't offered")
+    }
+
+    @Test func messagesHaveSendersKindsAndNoGroupEvents() throws {
+        let s = try WhatsAppStore(url: try Self.make())
+        let m = try s.messages(chat: "120363000@g.us", before: nil, limit: 10)
+        #expect(m.map(\.kind) == ["text", "document", "text", "text"], "newest first; the group event is left out")
+        #expect(m[3].sender == "Pat Example", "a privacy id's name from WhatsApp's address book")
+        #expect(m[0].sender == "Dad" && m[2].sender == "Mum", "a member's name, else their WhatsApp name")
+        #expect(m[1].fileName == "plan.pdf")
+        let person = try s.messages(chat: "15550001111@s.whatsapp.net", before: nil, limit: 10)
+        #expect(person.map(\.sender) == ["You", "Sarah Lee"])
+        #expect(person[0].date == Date(timeIntervalSinceReferenceDate: Self.t0 + 300))
+        let older = try s.messages(
+            chat: "120363000@g.us", before: Date(timeIntervalSinceReferenceDate: Self.t0 + 480), limit: 10)
+        #expect(older.map(\.text) == ["dinner saturday?", "hearts"])
+    }
+
+    @Test func searchMatchesTextLiterallyWithinDates() throws {
+        let s = try WhatsAppStore(url: try Self.make())
+        #expect(
+            try s.search(text: "SIX", chat: nil, since: nil, until: nil, limit: 10, offset: 0).map(\.text) == [
+                "see you at six"
+            ])
+        #expect(try s.search(text: "100%", chat: nil, since: nil, until: nil, limit: 10, offset: 0).count == 1)
+        #expect(
+            try s.search(text: "%", chat: nil, since: nil, until: nil, limit: 10, offset: 0).count == 1,
+            "% is a character, not a wildcard")
+        let since = Date(timeIntervalSinceReferenceDate: Self.t0 + 400)
+        #expect(
+            try s.search(text: nil, chat: "120363000@g.us", since: since, until: nil, limit: 10, offset: 0).count == 3)
+        #expect(try s.newest() == Date(timeIntervalSinceReferenceDate: Self.t0 + 500))
+    }
+
+    @Test func anotherLayoutIsSaidPlainly() throws {
+        let dir = FileManager.default.temporaryDirectory.appending(path: "whatsapp-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let url = dir.appending(path: "ChatStorage.sqlite")
+        var h: OpaquePointer?
+        sqlite3_open(url.path, &h)
+        sqlite3_exec(h, "CREATE TABLE ZWACHATSESSION (Z_PK INTEGER PRIMARY KEY)", nil, nil, nil)
+        sqlite3_close(h)
+        #expect {
+            _ = try WhatsAppStore(url: url)
+        } throws: { error in
+            if case WhatsAppStore.Failure.unknownLayout = error { return true }
+            return false
+        }
+    }
+}

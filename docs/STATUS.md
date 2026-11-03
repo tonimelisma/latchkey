@@ -1,6 +1,6 @@
 # Status
 
-Last updated: 2026-11-02 (WhatsApp spec started; Add to Claude button; plugin withdrawn; README rewritten as a short product page; relay web pages redone; purkki paired; spec 010 shipped)
+Last updated: 2026-11-03 (WhatsApp built; Add to Claude button; plugin withdrawn; README rewritten as a short product page; relay web pages redone; purkki paired; spec 010 shipped)
 
 Xcode signing ready (2026-10-20): Toni's Xcode account has a valid "Apple Development" certificate
 (certificate expires 2027-07-22). Keep the team ID out of committed project files
@@ -32,20 +32,23 @@ after the app was quit.
 
 ## Next steps
 
-WhatsApp (spec 012, started 2026-11-02, draft for Toni's review): proven on Toni's Mac with
-throwaway test programs (research.md). Latchkey can read the desktop WhatsApp app's database
-(27,131 messages, current, works locked). Sending works through Latchkey's own linked device:
-WhatsApp Web in a hidden WebKit page of a signed app, linked once by QR code; it stayed logged in
-after a restart and sent to Toni's own chat both unlocked and with the Mac locked (20:42:47). Safari's
-cookies alone, or a copy of Safari's whole WhatsApp storage, don't log in (WebKit's per-app
-Keychain key). Test device logged out and deleted. Toni answered the spec's three questions
-(people, groups, and files; read the desktop app's database, else Latchkey's own device; one
-sentence on ban risk at setup). Second round of tests (research.md): linking by an 8-character code
-typed on the phone (no QR scan); chats and groups opened through WhatsApp Web's own modules; a
-locked send confirmed by WhatsApp's own record in 1.2 s; photos not yet working. An overnight
-check runs until 11:00 on 2026-11-03, then logs itself out and deletes itself, leaving logs in
-`~/Library/Caches/walink-poc-results/`. Next: read those logs into research.md and delete them,
-make photos send, then the plan.
+WhatsApp (spec 012) built and installed in 0.8.101 (2026-11-03). Four tools: `whatsapp_find`
+and `whatsapp_read` read WhatsApp for Mac's database when it is on the Mac (works locked; current
+only while that app is open; pinned chats and privacy-id senders handled), else Latchkey's own
+linked device; `whatsapp_send` sends to people and groups, text, photos, and files, through
+Latchkey's own linked device (WhatsApp Web in a hidden page, driven through WhatsApp Web's own
+functions), right away, locked or not; `whatsapp_link` links from anywhere with a code typed on
+the phone. Settings → Capabilities has Link WhatsApp… and Unlink…; Off unlinks. Proven in tests
+on this Mac (research.md): locked sends of text, photo, and file read within about a second; a
+page stuck "Connecting" overnight for 7 hours was fixed by a reload (the watchdog now reloads).
+Checked live through the hosted relay: listing chats, reading a group, getting a link code. Not
+yet checked live: sending through Latchkey's own device, because Toni hasn't typed a link code
+yet (the first code expired unused). Next: Toni links (in any Claude app: "link my WhatsApp to
+Latchkey" with his number, then types the code), then a live send unlocked and locked. The test
+devices of 2026-11-02 and 2026-11-03 are logged out and deleted. Install note: the audit check
+now reports one `mail_find` from another session (16:29:15Z) as missing on the Mac: it was
+running when an install quit the app, and a call cut off by a quit never reaches the activity
+log (a gap that predates WhatsApp).
 
 Releases, terms and privacy, and the directory listing are much later (Toni, 2026-10-22).
 
@@ -183,21 +186,6 @@ hosted relay (email via Resend); real Claude called
 after the app was quit.
 
 ## Next steps
-
-WhatsApp (spec 012, started 2026-11-02, draft for Toni's review): proven on Toni's Mac with
-throwaway test programs (research.md). Latchkey can read the desktop WhatsApp app's database
-(27,131 messages, current, works locked). Sending works through Latchkey's own linked device:
-WhatsApp Web in a hidden WebKit page of a signed app, linked once by QR code; it stayed logged in
-after a restart and sent to Toni's own chat both unlocked and with the Mac locked (20:42:47). Safari's
-cookies alone, or a copy of Safari's whole WhatsApp storage, don't log in (WebKit's per-app
-Keychain key). Test device logged out and deleted. Toni answered the spec's three questions
-(people, groups, and files; read the desktop app's database, else Latchkey's own device; one
-sentence on ban risk at setup). Second round of tests (research.md): linking by an 8-character code
-typed on the phone (no QR scan); chats and groups opened through WhatsApp Web's own modules; a
-locked send confirmed by WhatsApp's own record in 1.2 s; photos not yet working. An overnight
-check runs until 11:00 on 2026-11-03, then logs itself out and deletes itself, leaving logs in
-`~/Library/Caches/walink-poc-results/`. Next: read those logs into research.md and delete them,
-make photos send, then the plan.
 
 Releases, terms and privacy, and the directory listing are much later (Toni, 2026-10-22).
 

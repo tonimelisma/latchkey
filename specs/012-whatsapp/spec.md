@@ -1,6 +1,7 @@
 # Spec 012: WhatsApp — WHAT and WHY
 
-Status: Spec approved by Toni's answers (2026-11-02); plan next.
+Status: Built and installed in 0.8.101 (2026-11-03); sending through Latchkey's own device not yet
+checked live (waits for the Owner to type a link code).
 Scope: Claude reads, searches, and sends the Owner's WhatsApp messages from any Claude app,
 through the Mac, including while the Mac is locked.
 Out of scope: calls, status updates, communities and channels, changing WhatsApp settings.
@@ -54,6 +55,10 @@ Mac is locked.
   asking the Owner to scan again, until the Owner or WhatsApp unlinks it.
 - **FR-1203** When the Owner turns WhatsApp off, the system shall log its linked device out and
   delete what it stored for WhatsApp.
+- **FR-1205** When Claude asks to link with the Owner's phone number, the system shall get WhatsApp's
+  8-character link code and give it to Claude for the Owner to type on their phone, so linking
+  works with the Owner away from the Mac; an unused link attempt shall end after 10 minutes
+  (2026-11-03: the Owner was away when linking was first needed).
 - **FR-1204** When WhatsApp unlinks the system (removed on the phone, logged out by WhatsApp),
   the system shall tell the Owner on the Mac and answer every WhatsApp tool call by saying
   WhatsApp needs linking again.

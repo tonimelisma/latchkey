@@ -97,17 +97,40 @@ A signed test app kept the page open and took commands; it logged the page's sta
   is loaded. How far back history goes for a new linked device: not yet measured.
 - **Desktop app not always running:** WhatsApp for Mac was not running from 20:42 on, so its
   database stopped there: reading from it needs the app open, which supports FR-1221's fallback.
-- **Photos: not working yet.** While locked the page gets no animation frames at all (unlocked,
-  off-screen: it does). Unlocked or locked, a picture put in the file input opens WhatsApp's
-  preview, but neither a script click on its Send button, Enter in the message box, nor a native
-  mouse event delivered to the web view sends it; the preview's controls lie outside the page's
-  width (x 1387 of 1200, x 1935 of 1680). Next to try: WhatsApp Web's own media functions
-  (`WAWebMediaPrep` exists; `whatsapp-web.js` sends media this way), or a page that is drawn.
+- **Photos through the preview don't work.** While locked the page gets no animation frames at all
+  (unlocked, off-screen: it does). A picture put in the file input opens WhatsApp's preview, but
+  neither a script click on its Send button, Enter in the message box, nor a native mouse event
+  delivered to the web view sends it; the preview's controls lie outside the page's width.
+- **Photos and files through WhatsApp Web's own functions work, locked (2026-11-03):**
+  `require('WAWebMediaOpaqueData').createFromData(file, type)`, then
+  `require('WAWebPrepRawMedia').prepRawMedia(data, {asDocument})`, `waitForPrep()`, and
+  `prep.sendToChat({chat, options: {caption}})`. A PNG was read at 1.0 s, a text file sent as a
+  document (`asDocument: true`, file name kept) at 0.8 s.
 - **Snapshots** of the page are blank while the Mac is locked (nothing is drawn).
-- Running overnight (started 21:27): heartbeat every 30 s, a text to the own chat every 2 hours;
-  at 11:00 on 2026-11-03 the test logs itself out, deletes itself, and leaves its logs in
-  `~/Library/Caches/walink-poc-results/` to be read into this file.
-- Not yet tested: the lid closed; many hours idle; the phone offline for long.
+
+## Overnight (2026-11-02 21:27 to 2026-11-03 07:36, Mac locked from 23:18)
+
+- The page stayed signed in all night: 1,214 heartbeats, all with the chat list, none late.
+- Sends at 21:27 and 23:27 (locked) were read within 2 s. From 00:36 the page showed "Connecting
+  to WhatsApp / Retrying… Retry now" and stayed so for 7 hours, while Latchkey's own connection
+  and the network were fine (`navigator.onLine` true). Sends at 01:27, 03:28, 05:29, 07:31 never
+  finished (WebKit later dropped the calls: "Completion handler … no longer reachable"). Earlier
+  short drops (22:49 to 23:06, unlocked) recovered by themselves within minutes.
+- "Retry now" (a script click) didn't help; **reloading the page did: connected 10 s later, still
+  locked**, and a send was read at 0.6 s.
+- WhatsApp Web's own connection state: `require('WAWebSocketModel').Socket.state` (`CONNECTED`
+  when up); the on-screen banner says the same in words. The heartbeat that only looked for the
+  chat list missed the outage: the chat list stays on screen while disconnected.
+- Consequence for the plan: watch `Socket.state`, reload when it isn't `CONNECTED` for a while,
+  and check it before every send (reload and wait when needed).
+
+## History through the page (2026-11-03)
+
+- `require('WAWebChatLoadMessages').loadEarlierMsgs({chat})` loads older messages a page at a
+  time. Toni's family group: 317 messages back to 2026-08-05 on the new linked device; the desktop
+  app's database has 757 back to 2025-11-03. So the desktop database is the better reading source
+  when present (FR-1221), and the page is a shorter fallback.
+- Not yet tested: the lid closed; the phone offline for long.
 
 ## Timing against Claude's limits
 

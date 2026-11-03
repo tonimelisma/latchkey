@@ -49,7 +49,7 @@ space), like `https://relay.example.com/mcp`. Do this once; Claude on your phone
 - "Check my order status on that site I'm signed in to."
 - "Add milk to my shopping list and remind me at 6."
 
-Claude can use your Notes, Messages, Mail, Calendar, Reminders, Contacts, files, Safari, the
+Claude can use your Notes, Messages, WhatsApp, Mail, Calendar, Reminders, Contacts, files, Safari, the
 command line, location and maps, and the screen, but only what you turn on.
 
 ## You stay in charge
