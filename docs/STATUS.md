@@ -119,7 +119,12 @@ the Owner's own address was refused because Mail took over 4 s to name the accou
 list from Mail's files has no full names (fixed in 0.8.84: sending asks Mail with its usual
 wait, and when Mail doesn't answer the last list it gave is used); calendar repeat again
 inconclusive: the repeat is set (read back live), but the change answer didn't say so; since 0.8.85 creating and changing an event say how it repeats. Only Mail put windows on top and used the clipboard; Safari (tab mode, Safari
-behind) didn't come forward. The three groups (gets in the way, background, works locked) and the experiments for moving the first into the second are in `docs/screen-states.md`; `docs/use-cases.md` now has the unlocked run on 0.8.83 and the lid-closed-locked run on 0.8.78 (the older lid-closed column, app 0.8.62, wasn't kept). Toni chose (2026-11-02) to move all four "gets in the way" items to the background: shell open behind (0.8.86), Safari pictures only while hidden, Mail in two short moments, computer control per app.
+behind) didn't come forward. The three groups (gets in the way, background, works locked) and the experiments for moving the first into the second are in `docs/screen-states.md`; `docs/use-cases.md` now has the unlocked run on 0.8.83 and the lid-closed-locked run on 0.8.78 (the older lid-closed column, app 0.8.62, wasn't kept). Test leftovers (2026-11-02, Toni: "this is production data"): ten Notes folders, a contact card
+and group, and test emails had piled up; all removed and checked in each app's own data. Notes
+doesn't save the deletion of a folder that still holds notes (it comes back after Notes
+restarts); since 0.8.89 Latchkey deletes the notes first and says "deleted" only once Notes'
+database agrees, and every `state-check.sh run` ends with a "Nothing left behind" group that
+finds and removes anything with the run's tag. Toni chose (2026-11-02) to move all four "gets in the way" items to the background: shell open behind (0.8.86), Safari pictures only while hidden, Mail in two short moments, computer control per app.
 Mail's alert "could not be moved to the mailbox <the Owner's account> … Invalid base64 string for MIME
 content" (after `mail-check.sh send` with a file at 22:12 PT on 2026-11-01, lid closed) came from
 Mail saving its own sent copy to Exchange after the message was delivered; Latchkey never writes

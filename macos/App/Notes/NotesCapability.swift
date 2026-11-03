@@ -424,6 +424,23 @@ enum NotesCapability {
                     do {
                         let count = try await scripts.run(Script.deleteFolder, [folder])
                         let notes = Int(count.trimmingCharacters(in: .whitespacesAndNewlines)) ?? 0
+                        // Said deleted only once Notes' own database says so (2026-11-02: ten
+                        // folders answered "deleted" stayed in Notes).
+                        if let s = try? store() {
+                            var saved = false
+                            for _ in 0..<20 {
+                                if let list = try? s.folders(), !list.contains(where: { $0.name == folder }) {
+                                    saved = true
+                                    break
+                                }
+                                try await Task.sleep(for: .milliseconds(250))
+                            }
+                            if !saved {
+                                return .text(
+                                    "Notes took the folder “\(folder)” off its list, but hasn't saved that yet, so it may come back. Check with notes_find in a minute.",
+                                    isError: true)
+                            }
+                        }
                         var result = ToolResult.text(
                             notes == 0
                                 ? "Deleted the empty folder “\(folder)”."
@@ -541,6 +558,11 @@ enum NotesCapability {
             if (id of f) is (id of (default folder of acc)) then error "LATCHKEY_DEFAULT_FOLDER"
             if (count of folders of f) > 0 then error "LATCHKEY_HAS_FOLDERS"
             set noteCount to count of notes of f
+            -- Each note first, then the empty folder: a folder deleted with notes inside is gone
+            -- from Notes' window but not saved, and comes back (2026-11-02, checked in its database).
+            repeat with n in (get notes of f)
+            delete n
+            end repeat
             delete f
             return noteCount as text
             end tell

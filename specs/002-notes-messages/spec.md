@@ -75,6 +75,9 @@ As an Owner, I set Notes and Messages each to Off, Read only, or Read & write in
 - **FR-152** While Notes is Read & write, Claude shall be able to delete a folder; its notes shall
   move to Recently Deleted (FR-103). The account's default folder and a folder with folders
   inside it shall not be deleted (Toni, 2026-10-27: an empty "Latchkey Check" folder was left).
+  A folder shall be answered as deleted only once Notes' own database no longer lists it; a
+  folder deleted with notes inside isn't saved by Notes and comes back, so its notes are deleted
+  first (2026-11-02: ten test folders answered "deleted" stayed in Toni's Notes).
 - **FR-154** While Notes is Read & write, Claude shall be able to create a folder, move a note to
   another folder, and rename a note; creating or moving a note into a folder that doesn't exist
   shall make that folder in the default account (Toni, 2026-11-01: "move note into folder").

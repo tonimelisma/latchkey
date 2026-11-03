@@ -78,6 +78,17 @@ final class FakeScripts: ScriptRunner, @unchecked Sendable {
         #expect(result.activity == "Claude deleted the Notes folder “Latchkey Check”")
     }
 
+    /// 2026-11-02: ten folders answered "deleted" stayed in Notes, because Notes hadn't saved the
+    /// deletion. "Deleted" only once Notes' database no longer lists the folder.
+    @Test func aFolderStillInNotesDatabaseIsNotSaidDeleted() async throws {
+        let (_, fake, tools) = try setup()
+        fake.answer = { _, _ in "1" }
+        let result = await tools["notes_delete_folder"]!.handler(.object(["folder": .string("Trips")]))
+        #expect(result.isError)
+        #expect(result.content.jsonText.contains("hasn't saved that yet"), "\(result.content.jsonText)")
+        #expect(fake.calls.last?.script.contains("delete n") == true, "the notes first, then the folder")
+    }
+
     @Test func refusesTheDefaultFolder() async throws {
         let (_, fake, tools) = try setup()
         fake.answer = { _, _ in throw ScriptError.failed("execution error: LATCHKEY_DEFAULT_FOLDER (-2700)") }

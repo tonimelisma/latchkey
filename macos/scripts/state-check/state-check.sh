@@ -77,8 +77,11 @@ run_all() {
     swiftc -O -o "$dir/focus-watch" "$here/focus-watch.swift"
     "$dir/focus-watch" >"$dir/$state/focus.log" 2>&1 &
     local watcher=$!
-    if (($#)); then printf '%s\n' "$@"; else jq -r '.groups[].id' "$cases"; fi |
+    if (($#)); then printf '%s\n' "$@"; else jq -r '.groups[].id' "$cases"; fi | grep -vx sweep |
         xargs -P "${LATCHKEY_CHECK_PARALLEL:-2}" -I{} "$0" group "$dir" "$state" {} "$tag"
+    # Last, every time: whatever the run left in the Owner's apps is found and removed, looked up
+    # again afterwards (2026-11-02: ten Notes folders a run had "deleted" were still there).
+    "$0" group "$dir" "$state" sweep "$tag"
     kill "$watcher" 2>/dev/null || true
     jq -s --arg s "$state" --arg t "$(date '+%F %T')" \
         --arg v "$(defaults read /Applications/Latchkey.app/Contents/Info.plist CFBundleShortVersionString 2>/dev/null || echo unknown)" \
