@@ -178,6 +178,11 @@ actor ShellJobs {
         self.setup = setup
     }
 
+    /// `open` in a command opens apps, files, and links behind the app the Owner is using
+    /// (`open -g`), so Claude's work doesn't take the front (Toni, 2026-11-02: "Background");
+    /// `/usr/bin/open` brings it to the front when the Owner wants to see it.
+    static let openInBackground = "open() { /usr/bin/open -g \"$@\"; }\n"
+
     func run(
         _ command: String, folder: String?, wait: Duration, writes: [String] = [], why: String? = nil,
         keepMinutes: Int = 0, uses: Set<Fence.Use> = []
@@ -213,7 +218,8 @@ actor ShellJobs {
         p.executableURL = URL(filePath: "/usr/bin/script")
         // "--": a command starting with "-" is the command, not more options for zsh.
         p.arguments = [
-            "-q", "/dev/null", "/usr/bin/sandbox-exec", "-p", fence, "/bin/zsh", "-l", "-c", "--", command,
+            "-q", "/dev/null", "/usr/bin/sandbox-exec", "-p", fence, "/bin/zsh", "-l", "-c", "--",
+            uses.contains(.open) ? Self.openInBackground + command : command,
         ]
         p.currentDirectoryURL = URL(filePath: dir)
         var env = ProcessInfo.processInfo.environment

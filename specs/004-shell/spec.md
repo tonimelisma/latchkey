@@ -99,6 +99,9 @@ what is left is on one list.
   be found at the next start when Latchkey quit first.
 - **FR-328** When a command opens apps, files, or links through macOS (`open`), it shall be
   refused unless Claude declared it (`uses`: `open`), and the answer shall say how to declare it.
+- **FR-331** What a command opens through macOS shall open behind the app the Owner is using,
+  unless Claude asks for the front (`/usr/bin/open`), so Claude's work doesn't take the front
+  (Toni, 2026-11-02: "Background").
   When a command tells other apps what to do (AppleScript, `osascript`), it shall always be
   refused, and the answer shall point to Latchkey's own tools (Toni, 2026-10-29: a script must
   run outside the fence to reach an app and could then run anything; `app_scripts` withdrawn). Starting

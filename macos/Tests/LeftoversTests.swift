@@ -139,6 +139,11 @@ final class Reports: @unchecked Sendable {
         let declared = try await jobs.run(
             "osascript -e 'return 41 + 1'", folder: nil, wait: .seconds(15), uses: [.open])
         #expect(!declared.output.contains("42"), "\(declared.output)")
+        // Toni, 2026-11-02: open goes behind the Owner's app unless /usr/bin/open is asked for.
+        let opener = try await jobs.run("whence -f open", folder: nil, wait: .seconds(15), uses: [.open])
+        #expect(opener.output.contains("/usr/bin/open -g"), "\(opener.output)")
+        let plain = try await jobs.run("whence -f open", folder: nil, wait: .seconds(15))
+        #expect(!plain.output.contains("-g"), "only with uses open: \(plain.output)")
         let refused = await tool.handler(
             .object(["command": .string("true"), "uses": .array([.string("app_scripts")])]))
         #expect(refused.isError && refused.content.jsonText.contains("uses takes open"), "\(refused.content.jsonText)")
