@@ -17,6 +17,8 @@ struct ComputerEnvironment: Sendable {
     var openApp: @Sendable (String) async throws -> Void
     /// How long to wait after an action before looking again.
     var settle: Duration = .milliseconds(500)
+    /// One named app, in the background (FR-510).
+    var appControl: AppControl = .live
 
     static let live = ComputerEnvironment(
         screen: SystemScreen(), poster: QuartzPoster(), capture: { try await ScreenCapture.display($0) },
@@ -277,7 +279,7 @@ enum ComputerCapability {
         }
     }
 
-    private static func run(_ env: ComputerEnvironment, needs: Need, _ body: () async throws -> ToolResult) async
+    static func run(_ env: ComputerEnvironment, needs: Need, _ body: () async throws -> ToolResult) async
         -> ToolResult
     {
         let (screen, accessibility) = env.permissions()

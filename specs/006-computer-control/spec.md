@@ -45,6 +45,11 @@ Claude can use them the way the Owner would.
   Read & write (Toni, 2026-10-22).
 - **FR-509** While Browser is on, Claude shall be able to take a screenshot of its Safari window
   (spec 005), under the same screen conditions.
+- **FR-510** Claude shall be able to name one app and, without bringing it forward or moving the
+  pointer, see a picture of just its front window (also while other windows cover it), list its
+  buttons, fields, and text with references, press one, type into it, and press keys in it;
+  clicks, moves, drags, and scrolls at a point still use the pointer (Toni, 2026-11-02:
+  "Background first").
 
 ## Success criteria
 

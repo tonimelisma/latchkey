@@ -58,6 +58,11 @@ enum ScreenCapture {
             throw Failure(
                 message: "Claude's Safari window isn't on screen (it may be minimized or behind a full-screen app).")
         }
+        return try await self.window(window)
+    }
+
+    /// One window alone, also while other windows cover it.
+    static func window(_ window: SCWindow) async throws -> PreparedImage {
         let scale = Double(NSScreen.main?.backingScaleFactor ?? 2)
         let px = (window.frame.width * scale, window.frame.height * scale)
         let fit = min(1, Double(ScreenGeometry.maxSide) / max(px.0, px.1))
