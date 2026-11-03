@@ -119,6 +119,12 @@ final class AXMailWindows: ComposeWindows, @unchecked Sendable {
     static let whileLocked =
         "Nothing was sent: the Mac is locked, and Mail can't open its message window until someone unlocks it. mail_queue can queue it to go out the next time the Mac is unlocked; ask the Owner whether waiting is fine. Reading, finding, and organising email still work."
 
+    /// Checked again right before each step that makes, sends, or saves the message: a send that
+    /// began just before the Mac locked froze Mail until the unlock (2026-11-03).
+    static func stillUnlocked() throws {
+        if SystemScreen().isLocked() { throw ComposeFailure(message: whileLocked) }
+    }
+
     func unavailable() async -> String? {
         guard AXIsProcessTrusted() else { return Self.needsAccessibility }
         // With the lid closed or the display off Mail's window works, but while the session is
@@ -229,6 +235,7 @@ final class AXMailWindows: ComposeWindows, @unchecked Sendable {
         // Made by Mail's scripting, Mail stays behind (FR-840); else Mail in front for the moment.
         if let args = Self.makeArguments(how) {
             let before = AX.windows(app)
+            try Self.stillUnlocked()
             let id = try await scripts.run(Self.makeScript, args).trimmingCharacters(in: .whitespacesAndNewlines)
             guard let w = await AX.waitForNew(app, before: before, compose: true) else {
                 _ = try? await scripts.run(Self.messageScript, [id, "close"])
@@ -652,6 +659,7 @@ final class AXComposeWindow: ComposeWindow, @unchecked Sendable {
     func send() async throws {
         if let scriptID {
             // Mail's scripting sends what MailCompose checked, with Mail behind (FR-840).
+            try AXMailWindows.stillUnlocked()
             _ = try await owner.scripts.run(AXMailWindows.messageScript, [String(scriptID), "send"])
             for _ in 0..<40 {
                 try await Task.sleep(for: .milliseconds(250))
@@ -685,6 +693,7 @@ final class AXComposeWindow: ComposeWindow, @unchecked Sendable {
 
     func saveDraft() async throws {
         if let scriptID {
+            try AXMailWindows.stillUnlocked()
             _ = try await owner.scripts.run(AXMailWindows.messageScript, [String(scriptID), "save"])
             for _ in 0..<20 {
                 try await Task.sleep(for: .milliseconds(250))

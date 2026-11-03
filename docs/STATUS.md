@@ -141,6 +141,158 @@ can't be repeated without closing the lid. Since 0.8.87 (spec 008 FR-839, plan D
 doesn't answer, Latchkey looks for Mail's alert: an alert window whose one control is its
 default button (like this one; 0.8.88 after a security review) is pressed, Claude is told to try again and the Owner gets a notification; any other is named,
 with its buttons, for someone at the Mac. Not seen live yet (needs Mail to show such an alert).
+2026-11-03: a send started seconds before the Mac locked froze Mail (its compose engine waits
+for a window it can't draw behind the lock) until Mail was restarted; since 0.8.100 the lock is
+checked again right before making, sending, or saving the message. `screen-state.swift` now calls
+a locked Mac with its display asleep "locked", not "screen asleep".
+Next: with the Mac unlocked, try a reply with a file by Mail's scripting (today a reply or
+forward with files still brings Mail forward for the paste, since scripted attaching rewrites
+a new message's text and might rewrite a quoted original); run `state-check.sh run` locked with
+the lid open and with the screen asleep on 0.8.100, then `report`; run `safari-check.sh`
+(cross-site click in real Safari). The full suite's web-page and shell timing tests fail while
+the Mac is under heavy load and pass run alone.
+
+README rewritten as a short product page; relay web pages redone; purkki paired; spec 010 shipped)
+
+Xcode signing ready (2026-10-20): Toni's Xcode account has a valid "Apple Development" certificate
+(certificate expires 2027-07-22). Keep the team ID out of committed project files
+(open source); put it in a gitignored `macos/Local.xcconfig` as `DEVELOPMENT_TEAM`.
+
+## Current phase
+
+Spec 001 is built. Everything that doesn't need Toni is done and verified on this Mac
+(2026-10-20):
+
+- Relay: all tests pass (`make test`, including a headless-Chrome sign-up → OAuth → pairing →
+  battery test), lint clean, container check passes (11 MB image).
+- Real Claude Code through a private relay: passes (`make claude-check`).
+- Mac app: 32 Swift tests pass (shared fixtures, Secure Enclave key, policies, trace); the real
+  connection code passes `make mac-check` (battery matches pmset, a turned-off tool disappears,
+  offline noticed in 35 s, reconnect in 0.1 s).
+
+Notes:
+- The OAuth server code was written before its contract tests (Constitution VII asks for tests
+  first). The tests were then written against the contract and run.
+- No keep-awake test runs (Toni, 2026-10-20). The helper runs once Toni approves it during setup.
+
+## Done (2026-10-22)
+
+The first version works end to end: Latchkey 0.1.2 installed on Toni's Mac and paired with the
+hosted relay (email via Resend); real Claude called
+`battery_status` and `laptop_status` through the connector, and got the immediate offline answer
+after the app was quit.
+
+## Next steps
+
+WhatsApp (spec 012, started 2026-11-02, draft for Toni's review): proven on Toni's Mac with
+throwaway test programs (research.md). Latchkey can read the desktop WhatsApp app's database
+(27,131 messages, current, works locked). Sending works through Latchkey's own linked device:
+WhatsApp Web in a hidden WebKit page of a signed app, linked once by QR code; it stayed logged in
+after a restart and sent to Toni's own chat both unlocked and with the Mac locked (20:42:47). Safari's
+cookies alone, or a copy of Safari's whole WhatsApp storage, don't log in (WebKit's per-app
+Keychain key). Test device logged out and deleted. Toni answered the spec's three questions
+(people, groups, and files; read the desktop app's database, else Latchkey's own device; one
+sentence on ban risk at setup). Second round of tests (research.md): linking by an 8-character code
+typed on the phone (no QR scan); chats and groups opened through WhatsApp Web's own modules; a
+locked send confirmed by WhatsApp's own record in 1.2 s; photos not yet working. An overnight
+check runs until 11:00 on 2026-11-03, then logs itself out and deletes itself, leaving logs in
+`~/Library/Caches/walink-poc-results/`. Next: read those logs into research.md and delete them,
+make photos send, then the plan.
+
+Releases, terms and privacy, and the directory listing are much later (Toni, 2026-10-22).
+
+Add Latchkey to Claude (Toni, 2026-11-01; spec 001 FR-627, FR-628, FR-659, FR-660, spec 009
+FR-915, plan D25): an Add to Claude button opens Claude's add-connector dialog with Latchkey and
+the relay's address filled in (claude.ai's documented install link; the Owner still clicks Add,
+Add, Connect, signs in, and clicks Allow), next to written steps and the way by hand. It is the
+setup window's fifth step, done only once Claude on the web, desktop, and phone has access, and
+until then it keeps the menu bar icon's mark (and opens setup at start when known in time); the
+Settings window's Claude Apps tab offers it too. The relay's account page starts with it until
+Claude has access, and the relay guide ends by opening it. Claude's menu is Customize →
+Connectors (Settings → Connectors in older docs, fixed everywhere). Not yet seen: the dialog
+itself, which needs a signed-in claude.ai (a signed-out visit keeps the link through sign-in).
+Five confused-user reviews (agents playing a non-technical Owner: README, detail page, setup
+window, account page, the relay guide as heard and as followed) in two rounds; their fixes are
+in: the README starts with the app and Claude Code (no relay first), the guide quotes the link
+for `open`, copies the address for the person, names the real menu items, and checks the step's
+checkmark, and the app and page number the steps and say what each Add and passkey is.
+Google's free trial: Google stops what was made during a trial at day 90 unless the account
+was upgraded (Google's docs); the guide tells the Owner so, without making them upgrade (Toni).
+Flaky: relay `hub` TestToolsAreStoredOnlyWhenTheyChange fails under `-count=5` and in one full
+run, passes alone (code unchanged since spec 010).
+
+The Latchkey plugin (spec 011) was built and shipped on 2026-11-01, then withdrawn the same day
+(Toni): it didn't help anyone get started and made no difference once Latchkey was connected.
+The plugin and its catalog are deleted; the relay guide is back at docs/setup-with-claude.md.
+Toni removed the plugin and the `tonimelisma/latchkey` marketplace from his Claude account.
+
+Every use case in every screen state (Toni, 2026-11-01: "half of Latchkey doesn't work with the
+lid closed"). `macos/scripts/state-check/` lists 98 use cases (`cases.json`) and tries them all
+through the hosted relay with real Claude Code in the state the Mac is in; results go to
+`docs/use-cases.md`. First runs, lid open and lid closed, found: Messages couldn't send to any
+existing conversation (the database now files them as `any;-;…`, which Messages' scripting
+doesn't know; fixed in 0.8.64, checked live); Mail refused to write with the display off
+although its window works with the lid closed while unlocked (checked live with
+`macos/scripts/mail-check.sh`: sent, with a file, and a draft; since 0.8.65 only the lock stops
+it, with a plain answer); Mail refused a recipient shown by the account's full name (fixed in
+0.8.64); a Safari click to another site lost Claude's tab (since 0.8.66 the clicked link's
+address counts on any site when the page didn't change it in the click; checked with the
+stand-in Safari, not yet in real Safari).
+With the lid closed and keep-awake on, macOS keeps drawing the built-in screen and the session
+unlocked for a few minutes after the last activity (Latchkey's own screen calls count as
+activity), then the display goes and the session locks (seen at 22:23, 6 minutes after the last
+screenshot). Lid closed and locked (check run, app 0.8.65): Mail's window can't be used,
+computer control and screenshots refuse, Safari stops answering scripts after a page; the rest
+works. Since 0.8.66 (spec 001 FR-038, FR-039) Latchkey keeps the session as it was behind a
+closed lid (a public display-sleep assertion, the lid, monitors, and lock read every second)
+and locks the Mac the moment the lid opens; not yet seen live, since the Mac was already locked
+when it was installed. Since 0.8.67 Notes can create folders, move notes, and rename notes
+(spec 002 FR-154; checked live, lid closed and locked). Since 0.8.68 a Safari script that
+times out while the Mac is locked says so (checked live). 0.8.70: Mail answers a message with an
+identical copy in another mailbox (2% of a month's mail was blocked). 0.8.71: a PDF without text
+is shown as a page picture (checked live). 0.8.72: Claude can close its own Safari page
+(spec 005 FR-419).
+2026-11-02 (Toni: "we're not circumventing security"): the closed-lid hold is gone (0.8.73) and a
+sleeping display is no longer woken; Latchkey never holds off the idle lock (spec 001 FR-661).
+Instead, while locked: the browser tools use Latchkey's own WebKit browser with a memory-only,
+SameSite=Lax copy of Safari's cookies (0.8.75 to 0.8.78; checked live locked: open, read, link
+to another site, back, scripts, picture, signed in to GitHub), and email can be queued with
+`mail_queue` and goes out at the next unlock (queued live; the send at unlock not yet seen).
+Computer control and screen pictures stay unavailable while locked (tested: macOS draws nothing).
+Every alternative tried while locked, what takes focus while the Owner works, and what other
+tools do: `docs/screen-states.md` (2026-11-02). Since 0.8.79/0.8.80 the locked browser answers
+page dialogs (capped, labelled), follows only Claude's own pop-ups, and identifies as Safari
+(signed in to Google and GitHub, checked live); since 0.8.81 finding and reading mail work while
+Mail is frozen. Mail froze on 2026-11-02 when a scripted send was tried while locked (a modal
+alert behind the lock screen); it stayed frozen after unlock, so the first queued email failed
+at unlock and the queue dropped it (the notification showed the raw answer). Mail was quit and
+reopened at 19:33. Since 0.8.82 (spec 008 FR-838) a try that sent nothing keeps the email
+queued (again in five minutes and at the next unlock, three tries), and the notification is
+plain sentences; 0.8.83 (security review): a failure after Send was pressed says Mail may have
+sent it and is never tried again. `state-check.sh run` now records what took focus, raised a window, moved the
+pointer, or used the clipboard (`focus-watch.swift`, `focus.log` per state, each group's times).
+Unlocked run on 0.8.83 (2026-11-02 19:49, one group at a time): 101 of 103 work; a forward to
+the Owner's own address was refused because Mail took over 4 s to name the accounts and the
+list from Mail's files has no full names (fixed in 0.8.84: sending asks Mail with its usual
+wait, and when Mail doesn't answer the last list it gave is used); calendar repeat again
+inconclusive: the repeat is set (read back live), but the change answer didn't say so; since 0.8.85 creating and changing an event say how it repeats. Only Mail put windows on top and used the clipboard; Safari (tab mode, Safari
+behind) didn't come forward. The three groups (gets in the way, background, works locked) and the experiments for moving the first into the second are in `docs/screen-states.md`; `docs/use-cases.md` now has the unlocked run on 0.8.83 and the lid-closed-locked run on 0.8.78 (the older lid-closed column, app 0.8.62, wasn't kept). Test leftovers (2026-11-02, Toni: "this is production data"): ten Notes folders, a contact card
+and group, and test emails had piled up; all removed and checked in each app's own data. Notes
+doesn't save the deletion of a folder that still holds notes (it comes back after Notes
+restarts); since 0.8.89 Latchkey deletes the notes first and says "deleted" only once Notes'
+database agrees, and every `state-check.sh run` ends with a "Nothing left behind" group that
+finds and removes anything with the run's tag. Toni chose (2026-11-02) to move all four "gets in the way" items to the background: shell open behind (0.8.86), Safari pictures only while hidden (0.8.90, spec 005 FR-423), Mail without coming forward at all (0.8.96, spec 008 FR-840: the message made, given files, sent, or saved by Mail's scripting, its text typed with Mail behind; 0.8.91 had short moments in front), computer control per app (0.8.93, spec 006 FR-510: computer_look and computer_act take app; press, type, and key go to that app alone, its window pictured while covered).
+Mail's alert "could not be moved to the mailbox <the Owner's account> … Invalid base64 string for MIME
+content" (after `mail-check.sh send` with a file at 22:12 PT on 2026-11-01, lid closed) came from
+Mail saving its own sent copy to Exchange after the message was delivered; Latchkey never writes
+MIME, and both copies (ids 104292, 104293) are well formed (Mail's own copy has the file as plain
+7-bit text, which Mail had rewritten before the upload; Exchange's has valid base64). Repeated
+2026-11-02 20:48 unlocked: the same file through Latchkey and through Mail's own scripting both
+saved their sent copy, no alert, so it shows up only with Mail's later upload (lid closed); it
+can't be repeated without closing the lid. Since 0.8.87 (spec 008 FR-839, plan D11), when Mail
+doesn't answer, Latchkey looks for Mail's alert: an alert window whose one control is its
+default button (like this one; 0.8.88 after a security review) is pressed, Claude is told to try again and the Owner gets a notification; any other is named,
+with its buttons, for someone at the Mac. Not seen live yet (needs Mail to show such an alert).
 Next: with the lid open and unlocked, run `safari-check.sh` (cross-site click in real Safari);
 find why a Mail reply failed while unlocked on 0.8.62 ("the text in Mail's window isn't the
 text given", then "Mail's window stayed open after Send"); close any empty message windows the

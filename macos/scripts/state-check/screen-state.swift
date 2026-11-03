@@ -22,10 +22,12 @@ func locked() -> Bool {
 
 if lidClosed() {
     print(locked() ? "lid_closed_locked" : "lid_closed")
+} else if locked() {
+    // Locked first: a display asleep after the lock is still locked (2026-11-03, a check called a
+    // locked Mac "screen asleep", and a send started just before the lock froze Mail).
+    print("locked")
 } else if CGDisplayIsAsleep(CGMainDisplayID()) != 0 {
     print("screen_asleep")
-} else if locked() {
-    print("locked")
 } else {
     print("unlocked")
 }
