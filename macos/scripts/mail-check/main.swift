@@ -45,20 +45,57 @@ let done = DispatchSemaphore(value: 0)
 Task {
     do {
         if args[2] == "probe" {
-            let windows = AXMailWindows()
+            let windows = AXMailWindows(scripts: HarnessScripts())
             let w = try await windows.open(.new(mailto: url))
             if let ax = w as? AXComposeWindow { probe(ax) }
             print("fields: \(try await w.fields())")
             print(await w.discard() ? "closed unsent" : "COULD NOT CLOSE")
             await windows.finish()
         } else {
-            let shown = try await MailCompose.run(request, AXMailWindows())
+            let shown = try await MailCompose.run(request, AXMailWindows(scripts: HarnessScripts()))
             print("OK: \(draft ? "saved" : "sent") «\(shown)»")
         }
     } catch let f as ComposeFailure {
         print("FAILED: \(f.message)")
     } catch {
         print("FAILED: \(error)")
+    }
+    // The check's own email never stays in the Owner's mailboxes (Toni, 2026-11-02): every copy
+    // with its subject (sent, received, draft) is marked read and moved to Deleted Items as it
+    // arrives, for up to 90 s.
+    if args[2] != "probe" {
+        let cleanup = """
+            on run argv
+            set theSubject to item 1 of argv
+            set n to 0
+            tell application "Mail"
+            repeat with acct in accounts
+            repeat with box in mailboxes of acct
+            set boxName to name of box
+            if boxName is not "Deleted Items" and boxName is not "Trash" and boxName is not "Deleted Messages" then
+            try
+            set found to (get messages of box whose subject is theSubject)
+            repeat with m in found
+            set read status of m to true
+            delete m
+            set n to n + 1
+            end repeat
+            end try
+            end if
+            end repeat
+            end repeat
+            end tell
+            return n as text
+            end run
+            """
+        var removed = 0
+        for _ in 0..<9 {
+            let n = Int((try? await HarnessScripts().run(cleanup, [subject]))?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "") ?? 0
+            removed += n
+            if removed >= (draft ? 1 : 2) { break }
+            try? await Task.sleep(for: .seconds(10))
+        }
+        print("cleaned up: \(removed) cop\(removed == 1 ? "y" : "ies") marked read and moved to Deleted Items")
     }
     done.signal()
 }

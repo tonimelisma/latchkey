@@ -115,11 +115,13 @@ my landlord", tell what's new in the inbox, answer a message, or file it away.
   at the Mac needs to answer it. Latchkey never starts Mail to look (Toni, 2026-11-02, "if
   exchange doesn't accept our messages, that's our issue": an alert that Mail couldn't save a
   sent copy, with the lid closed, held Mail until someone pressed OK).
-- **FR-840** While the Owner uses the Mac, writing an email shall bring Mail to the front only
-  for the moments it must: opening the message window, pasting files, and pressing Send or
-  saving the draft; each after a pause in the Owner's typing, with the app they were using back
-  at once; in between the window stays off-screen and is filled with Mail behind (Toni,
-  2026-11-02: "two short blinks"). Keys go in only while Mail's focus is in the field being
+- **FR-840** While the Owner uses the Mac, writing an email shall not bring Mail to the front:
+  the message (new, reply, reply all, forward) is made by Mail's scripting with its window
+  behind the Owner's apps and moved off-screen, files are attached by scripting, the text is
+  typed into it with Mail behind, and it is sent or saved by scripting (Toni, 2026-11-02: "make
+  the mail less intrusive"; checked live: nothing came forward, the text arrived unquoted, the
+  file attached). Only when scripting can't make it does Mail come forward, for the moments it
+  must (opening, pasting files, Send or saving), each after a pause in the Owner's typing. Keys go in only while Mail's focus is in the field being
   filled; without a pause in the Owner's typing within 30 s nothing is sent; the Owner's own Mail
   window stays the one their keys go to; and the fields are read again in front, just before
   Send (security review 2026-11-02).

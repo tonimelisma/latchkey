@@ -15,11 +15,102 @@ import ApplicationServices
 /// sent with a file and a draft saved with the lid closed and unlocked; nothing opens while locked).
 final class AXMailWindows: ComposeWindows, @unchecked Sendable {
     let pasteboard: any Pasteboard
+    let scripts: any ScriptRunner
     private let lock = NSLock()
     private var previous: NSRunningApplication?
 
-    init(pasteboard: any Pasteboard = GeneralPasteboard()) {
+    init(scripts: any ScriptRunner, pasteboard: any Pasteboard = GeneralPasteboard()) {
         self.pasteboard = pasteboard
+        self.scripts = scripts
+    }
+
+    /// Mail's scripting makes the message (new, reply, reply all, forward) and shows its window
+    /// behind the Owner's apps; Mail builds its text area without coming forward (checked live
+    /// 2026-11-02, unlike a window opened by a link). Answers the outgoing message's id.
+    static let makeScript = """
+        on run argv
+        set theKind to item 1 of argv
+        tell application "Mail"
+        if theKind is "new" then
+        set m to make new outgoing message with properties {subject:(item 2 of argv), visible:true}
+        repeat with i from 3 to (count of argv) by 2
+        set theField to item i of argv
+        set theAddress to item (i + 1) of argv
+        if theField is "to" then
+        tell m to make new to recipient at end of to recipients with properties {address:theAddress}
+        else if theField is "cc" then
+        tell m to make new cc recipient at end of cc recipients with properties {address:theAddress}
+        else
+        tell m to make new bcc recipient at end of bcc recipients with properties {address:theAddress}
+        end if
+        end repeat
+        else
+        try
+        set theBox to mailbox (item 3 of argv) of account id (item 2 of argv)
+        on error
+        set theBox to mailbox (item 3 of argv)
+        end try
+        set theMsg to (first message of theBox whose id is ((item 4 of argv) as integer))
+        if theKind is "reply" then
+        set m to reply theMsg with opening window
+        else if theKind is "replyAll" then
+        set m to reply theMsg with opening window and reply to all
+        else
+        set m to forward theMsg with opening window
+        end if
+        end if
+        return (id of m) as text
+        end tell
+        end run
+        """
+
+    /// argv: the outgoing message's id, then "send", "save", "close", or "attach" and file paths.
+    static let messageScript = """
+        on run argv
+        set theID to (item 1 of argv) as integer
+        set theAction to item 2 of argv
+        tell application "Mail"
+        set m to first outgoing message whose id is theID
+        if theAction is "send" then
+        send m
+        else if theAction is "save" then
+        save m
+        -- Mail writes the draft a moment after save; closing at once lost it (2026-11-02).
+        delay 3
+        close m saving no
+        else if theAction is "close" then
+        close m saving no
+        else
+        repeat with i from 3 to (count of argv)
+        tell m to make new attachment with properties {file name:(POSIX file (item i of argv))} at after the last paragraph of content
+        end repeat
+        end if
+        return "ok"
+        end tell
+        end run
+        """
+
+    /// The arguments for `makeScript`, or nil when this opening can't be made by scripting.
+    static func makeArguments(_ how: ComposeOpening) -> [String]? {
+        switch how {
+        case .new(let url):
+            guard let c = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return nil }
+            func list(_ s: String?) -> [String] {
+                (s ?? "").split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+            }
+            let item = { (name: String) in c.queryItems?.first { $0.name == name }?.value }
+            var args = ["new", item("subject") ?? ""]
+            for a in list(c.path) { args += ["to", a] }
+            for a in list(item("cc")) { args += ["cc", a] }
+            for a in list(item("bcc")) { args += ["bcc", a] }
+            return args
+        case .respond(_, let kind, let place):
+            guard let place else { return nil }
+            return [
+                kind == .reply ? "reply" : kind == .replyAll ? "replyAll" : "forward", place.accountID, place.path,
+                String(place.id),
+            ]
+        }
     }
 
     static let needsAccessibility =
@@ -135,6 +226,21 @@ final class AXMailWindows: ComposeWindows, @unchecked Sendable {
         let mail = try await Self.mailApp()
         let app = AXUIElementCreateApplication(mail.processIdentifier)
         AXUIElementSetMessagingTimeout(app, 3)
+        // Made by Mail's scripting, Mail stays behind (FR-840); else Mail in front for the moment.
+        if let args = Self.makeArguments(how) {
+            let before = AX.windows(app)
+            let id = try await scripts.run(Self.makeScript, args).trimmingCharacters(in: .whitespacesAndNewlines)
+            guard let w = await AX.waitForNew(app, before: before, compose: true) else {
+                _ = try? await scripts.run(Self.messageScript, [id, "close"])
+                throw ComposeFailure(message: "Mail didn't show the message's window.")
+            }
+            for _ in 0..<40 where AX.find(w, depth: 6, { AX.string($0, kAXRoleAttribute) == "AXWebArea" }) == nil {
+                try await Task.sleep(for: .milliseconds(125))
+            }
+            AX.park(w)
+            let isNew = if case .new = how { true } else { false }
+            return AXComposeWindow(app: app, window: w, owner: self, scriptID: Int(id), isNew: isNew)
+        }
         // The Owner's own Mail window, to be the one their keys go to again (security review).
         let ownersMain = AX.value(app, kAXMainWindowAttribute).flatMap {
             CFGetTypeID($0) == AXUIElementGetTypeID() ? ($0 as! AXUIElement) : nil
@@ -173,7 +279,7 @@ final class AXMailWindows: ComposeWindows, @unchecked Sendable {
                 throw ComposeFailure(message: "Mail didn't open a new message window.")
             }
             return w
-        case .respond(let messageID, let kind):
+        case .respond(let messageID, let kind, _):
             let id = messageID.trimmingCharacters(in: CharacterSet(charactersIn: "<> "))
             guard
                 let encoded = id.addingPercentEncoding(
@@ -257,11 +363,19 @@ final class AXComposeWindow: ComposeWindow, @unchecked Sendable {
     let app: AXUIElement
     let window: AXUIElement
     let owner: AXMailWindows
+    /// The outgoing message's id when Mail's scripting made it: then files, Send, and saving go
+    /// through scripting too, with Mail behind (FR-840).
+    let scriptID: Int?
+    /// A new message (not a reply or forward), whose text scripting may rewrite freely.
+    let isNew: Bool
+    private var typed = false
 
-    init(app: AXUIElement, window: AXUIElement, owner: AXMailWindows) {
+    init(app: AXUIElement, window: AXUIElement, owner: AXMailWindows, scriptID: Int? = nil, isNew: Bool = false) {
         self.app = app
         self.window = window
         self.owner = owner
+        self.scriptID = scriptID
+        self.isNew = isNew
     }
 
     private var mail: NSRunningApplication? {
@@ -273,9 +387,19 @@ final class AXComposeWindow: ComposeWindow, @unchecked Sendable {
     /// Whether Mail's focus is in `target` (it, or something inside it).
     private func focused(in target: AXUIElement) -> Bool {
         guard let f = AX.value(app, kAXFocusedUIElementAttribute), CFGetTypeID(f) == AXUIElementGetTypeID() else {
-            return false
+            // No focused element (seen after a scripted attach): Mail's focused window decides.
+            guard let w = AX.value(app, kAXFocusedWindowAttribute), CFGetTypeID(w) == AXUIElementGetTypeID() else {
+                return false
+            }
+            return CFEqual(w, target)
         }
         var e: AXUIElement? = (f as! AXUIElement)
+        // The window it is in, when that is what's asked.
+        if let w = AX.value(f as! AXUIElement, kAXWindowAttribute), CFGetTypeID(w) == AXUIElementGetTypeID(),
+            CFEqual(w, target)
+        {
+            return true
+        }
         for _ in 0..<20 {
             guard let current = e else { return false }
             if CFEqual(current, target) { return true }
@@ -288,14 +412,16 @@ final class AXComposeWindow: ComposeWindow, @unchecked Sendable {
 
     /// Types `text` into `target` with keys sent to Mail alone, so Mail can stay behind (checked
     /// live 2026-11-02: "äö €" arrived exactly in a background window). False, with nothing more
-    /// typed, as soon as Mail's focus isn't in `target` (security review 2026-11-02).
+    /// typed, as soon as Mail's focus isn't in this message's window (security review 2026-11-02).
+    /// Mail reports a window behind as focused on its To field while keys reach the text, so the
+    /// window is what is checked; MailCompose checks every field before anything goes out.
     private func typeToMail(_ text: String, into target: AXUIElement) async throws -> Bool {
         guard let mail else { return false }
         AXUIElementSetAttributeValue(target, kAXFocusedAttribute as CFString, kCFBooleanTrue)
         let source = CGEventSource(stateID: .privateState)
         for (i, line) in text.components(separatedBy: "\n").enumerated() {
             if i > 0 {
-                guard focused(in: target) else { return false }
+                guard focused(in: window) else { return false }
                 for down in [true, false] {
                     CGEvent(keyboardEventSource: source, virtualKey: 36, keyDown: down)?.postToPid(
                         mail.processIdentifier)
@@ -303,7 +429,7 @@ final class AXComposeWindow: ComposeWindow, @unchecked Sendable {
             }
             var units = Array(line.utf16)[...]
             while !units.isEmpty {
-                guard focused(in: target) else { return false }
+                guard focused(in: window) else { return false }
                 let chunk = Array(units.prefix(16))
                 units = units.dropFirst(chunk.count)
                 for down in [true, false] {
@@ -437,6 +563,7 @@ final class AXComposeWindow: ComposeWindow, @unchecked Sendable {
     func insertText(_ text: String) async throws {
         let body = try await loadedBody()
         let wanted = MailCompose.collapse(text)
+        typed = true
         let before = bodyText()
         // Setting the text through Accessibility does nothing in a window behind (2026-11-02);
         // keys sent to Mail alone do.
@@ -456,6 +583,16 @@ final class AXComposeWindow: ComposeWindow, @unchecked Sendable {
 
     func attachFiles(_ files: [URL]) async throws {
         let body = try await loadedBody()
+        // By scripting only before any text is typed (it rewrites the text), and not into a
+        // reply's or forward's quoted original, which it may rewrite too.
+        if let scriptID, isNew, !typed {
+            _ = try await owner.scripts.run(
+                AXMailWindows.messageScript, [String(scriptID), "attach"] + files.map(\.path))
+            for _ in 0..<20 {
+                try await Task.sleep(for: .milliseconds(150))
+                if try await fields().attachments.count >= files.count { return }
+            }
+        }
         try await paste(into: body, ClipboardLoan.files(files), atEnd: false)
     }
 
@@ -500,6 +637,15 @@ final class AXComposeWindow: ComposeWindow, @unchecked Sendable {
     }
 
     func send() async throws {
+        if let scriptID {
+            // Mail's scripting sends what MailCompose checked, with Mail behind (FR-840).
+            _ = try await owner.scripts.run(AXMailWindows.messageScript, [String(scriptID), "send"])
+            for _ in 0..<40 {
+                try await Task.sleep(for: .milliseconds(250))
+                if !AX.alive(window) { return }
+            }
+            throw ComposeFailure(message: "Mail's window stayed open after Send", afterSend: true)
+        }
         guard let button = element("send") else { throw ComposeFailure(message: "Mail's window has no Send button.") }
         guard let mail else { throw ComposeFailure(message: "Mail isn't running.") }
         // Mail ignores Send pressed while behind (2026-11-02); in front for the press only.
@@ -525,6 +671,14 @@ final class AXComposeWindow: ComposeWindow, @unchecked Sendable {
     }
 
     func saveDraft() async throws {
+        if let scriptID {
+            _ = try await owner.scripts.run(AXMailWindows.messageScript, [String(scriptID), "save"])
+            for _ in 0..<20 {
+                try await Task.sleep(for: .milliseconds(250))
+                if !AX.alive(window) { return }
+            }
+            throw ComposeFailure(message: "Mail's window stayed open after saving the draft.")
+        }
         guard let mail else { throw ComposeFailure(message: "Mail isn't running.") }
         try await owner.inFront(mail) {
             AX.makeMain(window)

@@ -5,11 +5,19 @@ import Foundation
 /// arrives marked as quoted (research "Live check"); scripting is never used to compose.
 
 /// How a compose window is opened.
+/// Where a message is, for Mail's scripting: its account, mailbox path, and id.
+struct MessagePlace: Sendable, Equatable {
+    var accountID: String
+    var path: String
+    var id: Int64
+}
+
 enum ComposeOpening: Sendable, Equatable {
     /// A new message from a `mailto:` link (recipients and subject only).
     case new(mailto: URL)
-    /// Mail's Reply, Reply All, or Forward on the original, opened by its Message-ID.
-    case respond(messageID: String, kind: ResponseKind)
+    /// Mail's Reply, Reply All, or Forward on the original, opened by its Message-ID; `place`
+    /// lets Mail's scripting open it without Mail coming to the front (FR-840).
+    case respond(messageID: String, kind: ResponseKind, place: MessagePlace? = nil)
 }
 
 enum ResponseKind: String, Sendable, Equatable {
@@ -180,8 +188,9 @@ enum MailCompose {
                     try await window.addRecipients(r.requested(field).map(\.address), to: field)
                 }
             }
-            if !r.text.isEmpty { try await window.insertText(r.text) }
+            // Files first: attaching by Mail's scripting rewrites the text already typed (2026-11-02).
             if !r.files.isEmpty { try await window.attachFiles(r.files) }
+            if !r.text.isEmpty { try await window.insertText(r.text) }
             // Mail attaches files a moment later; look again until they are all there.
             var f = try await window.fields()
             let deadline = ContinuousClock.now + attachWait
@@ -313,7 +322,7 @@ enum MailCompose {
                 if let m = missing.first { try fail("Mail's \(name) field is missing \(m.address)") }
             }
         }
-        if case .respond(_, let kind) = r.opening, kind == .forward, f.to.isEmpty {
+        if case .respond(_, let kind, _) = r.opening, kind == .forward, f.to.isEmpty {
             try fail("the forward has no recipient")
         }
         if f.to.isEmpty && f.cc.isEmpty && f.bcc.isEmpty, !r.draft { try fail("Mail's window has no recipient") }

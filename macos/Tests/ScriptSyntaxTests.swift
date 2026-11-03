@@ -18,6 +18,7 @@ import Testing
         ("safari find window", SafariBrowser.Script.findWindow),
         ("safari any tab at", SafariBrowser.Script.anyTabAt),
         ("notes delete folder", NotesCapability.Script.deleteFolder),
+        ("mail make message", AXMailWindows.makeScript), ("mail message action", AXMailWindows.messageScript),
         ("safari tab survey", SafariBrowser.Script.tabSurvey),
         ("safari tab javascript", SafariBrowser.Script.tabJavaScript),
         ("safari tab load", SafariBrowser.Script.tabLoad), ("safari tab new", SafariBrowser.Script.tabNew),

@@ -252,7 +252,9 @@ enum MailWrite {
                     "\(nothing): \(sharing) messages in Mail have that message's Message-ID \(messageID), so Latchkey can't be sure Mail would open the one chosen. Answer it in Mail instead.",
                     isError: true)
             }
-            opening = .respond(messageID: messageID, kind: kind)
+            opening = .respond(
+                messageID: messageID, kind: kind,
+                place: MessagePlace(accountID: original.place.accountID, path: original.place.path, id: original.id))
             prefill = try expectedPrefill(original, kind, s, own: own, known: known)
         } else {
             guard let url = MailCompose.mailto(to: to, cc: cc, bcc: bcc, subject: subject) else {

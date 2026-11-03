@@ -48,7 +48,8 @@ enum MailCapability {
                 scripts: OSAScriptRunner(app: mailApp, timeout: .seconds(4)), launchScripts: scripts, mayScript: may),
             mayScript: may,
             scratch: FileManager.default.temporaryDirectory.appending(path: "Latchkey Mail"),
-            downloads: URL.homeDirectory.appending(path: "Downloads"), windows: AXMailWindows(), contacts: ContactBook()
+            downloads: URL.homeDirectory.appending(path: "Downloads"), windows: AXMailWindows(scripts: scripts),
+            contacts: ContactBook()
         )
         liveEnv.mutate { $0 = env }
         return Capability(

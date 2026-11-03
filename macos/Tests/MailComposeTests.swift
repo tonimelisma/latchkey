@@ -195,7 +195,7 @@ final class FakePasteboard: Pasteboard, @unchecked Sendable {
         #expect(url.absoluteString == "mailto:sam@example.com?subject=Lunch%20%26%20co%3F", "no text in the link")
         #expect(
             w.window.log == [
-                "sender owner@work.example", "insert text", "attach files \(note.lastPathComponent)", "send",
+                "sender owner@work.example", "attach files \(note.lastPathComponent)", "insert text", "send",
             ])
         #expect(w.finished == 1)
         #expect(
@@ -359,7 +359,8 @@ final class FakePasteboard: Pasteboard, @unchecked Sendable {
         }
         let r = try await Self.send(f, w, ["reply_to": .string("1001"), "text": .string("Thanks, that works.")])
         #expect(!r.isError, "\(MailTestEnv.text(r))")
-        #expect(w.opened == [.respond(messageID: "<m1001@example.com>", kind: .reply)])
+        #expect(w.opened.map(\.withoutPlace) == [.respond(messageID: "<m1001@example.com>", kind: .reply)])
+        #expect(w.opened.first?.place?.id == 1001, "Mail's scripting can find the original")
         #expect(w.window.log == ["insert text", "send"], "Mail's own From already is the account it came to")
         #expect(
             MailTestEnv.text(r).contains(
@@ -474,7 +475,8 @@ final class FakePasteboard: Pasteboard, @unchecked Sendable {
         w.response = ComposeFields(to: ["Boss"], subject: "Re: Plan", from: "Owner – owner@alias.example")
         _ = try await Self.send(
             f, w, ["reply_to": .string("1004"), "reply_all": .bool(true), "text": .string("ok")], confirm: .zero)
-        #expect(w.opened == [.respond(messageID: "<m1004@example.com>", kind: .replyAll)])
+        #expect(w.opened.map(\.withoutPlace) == [.respond(messageID: "<m1004@example.com>", kind: .replyAll)])
+        #expect(w.opened.first?.place?.id == 1004, "Mail's scripting can find the original")
         #expect(w.window.log.first == "sender owner@gmail.example")
     }
 
@@ -503,7 +505,8 @@ final class FakePasteboard: Pasteboard, @unchecked Sendable {
             f, w, ["forward": .string("1003"), "to": .array([.string("bob@example.com")]), "text": .string("FYI")],
             confirm: .zero)
         #expect(!r.isError, "\(MailTestEnv.text(r))")
-        #expect(w.opened == [.respond(messageID: "<m1003@example.com>", kind: .forward)])
+        #expect(w.opened.map(\.withoutPlace) == [.respond(messageID: "<m1003@example.com>", kind: .forward)])
+        #expect(w.opened.first?.place?.id == 1003, "Mail's scripting can find the original")
         #expect(w.window.log == ["add to bob@example.com", "insert text", "send"])
         #expect(MailTestEnv.text(r).contains("isn't in Sent yet. Don't send it again"))
         let none = try await Self.send(f, FakeWindows(), ["forward": .string("1003")])
@@ -653,5 +656,17 @@ final class FakePasteboard: Pasteboard, @unchecked Sendable {
         #expect(!loan.intact, "checked right before Paste")
         loan.giveBack()
         #expect(pb.contents == [[ClipboardLoan.text: Data("the Owner's new copy".utf8)]])
+    }
+}
+
+extension ComposeOpening {
+    /// The opening without where the original is, to compare with what a test expects.
+    var withoutPlace: ComposeOpening {
+        if case .respond(let id, let kind, _) = self { return .respond(messageID: id, kind: kind) }
+        return self
+    }
+    var place: MessagePlace? {
+        if case .respond(_, _, let place) = self { return place }
+        return nil
     }
 }
