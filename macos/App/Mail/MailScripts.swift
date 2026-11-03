@@ -153,26 +153,39 @@ final class MailAccounts: @unchecked Sendable {
     }
 
     private let scripts: any ScriptRunner
+    private let launchScripts: any ScriptRunner
     private let mayScript: @Sendable () -> Bool
     private let lock = NSLock()
     private var cached: (at: Date, list: [Account])?
 
-    init(scripts: any ScriptRunner, mayScript: @escaping @Sendable () -> Bool) {
+    /// `scripts` asks Mail while reading (briefly, so reading works while Mail doesn't answer);
+    /// `launchScripts` while changing or sending, which need Mail anyway (Mail's usual wait).
+    init(
+        scripts: any ScriptRunner, launchScripts: (any ScriptRunner)? = nil,
+        mayScript: @escaping @Sendable () -> Bool
+    ) {
         self.scripts = scripts
+        self.launchScripts = launchScripts ?? scripts
         self.mayScript = mayScript
     }
 
     /// The accounts, from the cache or Mail; nil when Mail can't be asked. `launch` starts Mail
-    /// (for changes and sending); reading never does and never prompts.
-    func list(launch: Bool) async -> [Account]? {
-        if let c = lock.withLock({ cached }), Date().timeIntervalSince(c.at) < 600 { return c.list }
-        guard launch || mayScript() else { return nil }
-        guard let out = try? await scripts.run(MailScript.accounts, [launch ? "launch" : "if running"]) else {
-            return nil
+    /// (for changes and sending); reading never does and never prompts. When Mail doesn't answer,
+    /// the last list it gave, however old: without it the names Mail shows for the Owner's own
+    /// addresses are unknown (a forward to the Owner failed that way, 2026-11-02).
+    func list(launch: Bool, now: Date = Date()) async -> [Account]? {
+        let last = lock.withLock { cached }
+        if let last, now.timeIntervalSince(last.at) < 600 { return last.list }
+        guard launch || mayScript() else { return last?.list }
+        guard
+            let out = try? await (launch ? launchScripts : scripts).run(
+                MailScript.accounts, [launch ? "launch" : "if running"])
+        else {
+            return last?.list
         }
         let list = Self.parse(out)
         guard !list.isEmpty else { return nil }
-        lock.withLock { cached = (Date(), list) }
+        lock.withLock { cached = (now, list) }
         return list
     }
 

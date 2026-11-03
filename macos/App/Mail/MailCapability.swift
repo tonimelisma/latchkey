@@ -44,7 +44,8 @@ enum MailCapability {
             // Account names are a nicety: asked of Mail for 4 s at most, else taken from Mail's
             // files, so finding and reading mail work while Mail itself doesn't answer (seen
             // 2026-11-02: Mail held by an alert behind the lock screen).
-            accounts: MailAccounts(scripts: OSAScriptRunner(app: mailApp, timeout: .seconds(4)), mayScript: may),
+            accounts: MailAccounts(
+                scripts: OSAScriptRunner(app: mailApp, timeout: .seconds(4)), launchScripts: scripts, mayScript: may),
             mayScript: may,
             scratch: FileManager.default.temporaryDirectory.appending(path: "Latchkey Mail"),
             downloads: URL.homeDirectory.appending(path: "Downloads"), windows: AXMailWindows(), contacts: ContactBook()

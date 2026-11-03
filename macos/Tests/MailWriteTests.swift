@@ -95,4 +95,21 @@ import Testing
         #expect(list[0].label == "Work (owner@work.example)" && list[0].sentName == "Sent Items")
         #expect(list[0].fullName == "Owner Person" && list[1].fullName == nil, "an older answer has no full name")
     }
+
+    /// 2026-11-02: Mail took over 4 s, the list came from Mail's files without the Owner's name,
+    /// and a forward to the Owner was refused. Sending waits as long as Mail's other scripts, and
+    /// when Mail doesn't answer the last list it gave is used.
+    @Test func accountsFallBackToMailsLastAnswer() async {
+        let quick = FakeScripts()
+        quick.answer = { _, _ in MailTestEnv.accountsAnswer }
+        let slow = FakeScripts()
+        slow.answer = { _, _ in throw ScriptError.timedOut }
+        let accounts = MailAccounts(scripts: quick, launchScripts: slow, mayScript: { true })
+        let t0 = Date()
+        #expect(await accounts.list(launch: false, now: t0)?.first?.fullName == "Owner Person")
+        quick.answer = { _, _ in throw ScriptError.timedOut }
+        let later = await accounts.list(launch: true, now: t0.addingTimeInterval(3600))
+        #expect(later?.first?.fullName == "Owner Person", "Mail's last answer, an hour old")
+        #expect(slow.calls.count == 1 && quick.calls.count == 1, "sending asks with Mail's usual wait")
+    }
 }

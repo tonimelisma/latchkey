@@ -65,5 +65,7 @@ while true {
         say("clipboard changed")
         clipboard = c
     }
-    Thread.sleep(forTimeInterval: 0.2)
+    // The run loop, not a sleep: NSWorkspace learns which app is in front from notifications
+    // it receives there (with a sleep, the front app read at start never changed).
+    RunLoop.main.run(until: Date() + 0.2)
 }

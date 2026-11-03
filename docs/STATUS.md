@@ -104,6 +104,12 @@ queued (again in five minutes and at the next unlock, three tries), and the noti
 plain sentences; 0.8.83 (security review): a failure after Send was pressed says Mail may have
 sent it and is never tried again. `state-check.sh run` now records what took focus, raised a window, moved the
 pointer, or used the clipboard (`focus-watch.swift`, `focus.log` per state, each group's times).
+Unlocked run on 0.8.83 (2026-11-02 19:49, one group at a time): 101 of 103 work; a forward to
+the Owner's own address was refused because Mail took over 4 s to name the accounts and the
+list from Mail's files has no full names (fixed in 0.8.84: sending asks Mail with its usual
+wait, and when Mail doesn't answer the last list it gave is used); calendar repeat again
+inconclusive. Only Mail put windows on top and used the clipboard; Safari (tab mode, Safari
+behind) didn't come forward.
 Next: with the lid open and unlocked, run `safari-check.sh` (cross-site click in real Safari);
 find why a Mail reply failed while unlocked on 0.8.62 ("the text in Mail's window isn't the
 text given", then "Mail's window stayed open after Send"); close any empty message windows the
