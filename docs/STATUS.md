@@ -108,7 +108,7 @@ Unlocked run on 0.8.83 (2026-11-02 19:49, one group at a time): 101 of 103 work;
 the Owner's own address was refused because Mail took over 4 s to name the accounts and the
 list from Mail's files has no full names (fixed in 0.8.84: sending asks Mail with its usual
 wait, and when Mail doesn't answer the last list it gave is used); calendar repeat again
-inconclusive. Only Mail put windows on top and used the clipboard; Safari (tab mode, Safari
+inconclusive: the repeat is set (read back live), but the change answer didn't say so; since 0.8.85 creating and changing an event say how it repeats. Only Mail put windows on top and used the clipboard; Safari (tab mode, Safari
 behind) didn't come forward.
 Next: with the lid open and unlocked, run `safari-check.sh` (cross-site click in real Safari);
 find why a Mail reply failed while unlocked on 0.8.62 ("the text in Mail's window isn't the

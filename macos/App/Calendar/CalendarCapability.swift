@@ -232,7 +232,7 @@ enum CalendarCapability {
             d.title = title
             let e = try backend.createEvent(d)
             var r = ToolResult.text(
-                "Added “\(e.title)” to \(e.calendar): \(CalendarDates.span(e.start, e.end, allDay: e.allDay, zone: zone)). id \(e.id)\n"
+                "Added “\(e.title)” to \(e.calendar): \(CalendarDates.span(e.start, e.end, allDay: e.allDay, zone: zone))\(Self.repeating(e, zone: zone)). id \(e.id)\n"
                     + CalendarDates.zoneLine(zone, at: e.start))
             r.activity = "Claude added “\(e.title)” to \(e.calendar)"
             r.made = "the event “\(e.title)” in \(e.calendar)"
@@ -246,7 +246,7 @@ enum CalendarCapability {
             let e = try backend.updateEvent(id: old.id, d, future: future)
             var r = ToolResult.text(
                 "Changed “\(e.title)”\(future && old.repeats != nil ? " and its later occurrences" : ""): "
-                    + "\(CalendarDates.span(e.start, e.end, allDay: e.allDay, zone: zone)) [\(e.calendar)]. id \(e.id)\n"
+                    + "\(CalendarDates.span(e.start, e.end, allDay: e.allDay, zone: zone))\(Self.repeating(e, zone: zone, was: old)) [\(e.calendar)]. id \(e.id)\n"
                     + CalendarDates.zoneLine(zone, at: e.start))
             r.activity = "Claude changed “\(e.title)” in \(e.calendar)"
             return r
@@ -262,6 +262,13 @@ enum CalendarCapability {
         default:
             return .unknown("action", action, allowed: changeActions)
         }
+    }
+
+    /// ", repeats every day, 3 times" (or ", no longer repeats"), so the answer confirms the
+    /// repeat asked for (a check couldn't tell from "Changed …" alone, 2026-11-02).
+    static func repeating(_ e: EventInfo, zone: TimeZone, was old: EventInfo? = nil) -> String {
+        if let r = e.repeats { return ", repeats \(r.describe(zone: zone))" }
+        return old?.repeats != nil ? ", no longer repeats" : ""
     }
 
     private static func span(_ args: JSONValue) throws -> Bool {

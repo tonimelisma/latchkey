@@ -303,6 +303,7 @@ final class FakeEvents: EventsBackend, @unchecked Sendable {
             ]))
         #expect(!repeating.isError)
         #expect(fake.lastDraft?.repeats == .set(Repeat(frequency: "weekly", interval: 1, count: 10)))
+        #expect(text(repeating).contains(", repeats every week"), "the answer confirms the repeat: \(text(repeating))")
     }
 
     @Test func createRefusesBadInput() async throws {
