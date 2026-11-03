@@ -518,25 +518,27 @@ final class AXComposeWindow: ComposeWindow, @unchecked Sendable {
         let before = AX.children(target).count
         let text = addresses.joined(separator: ", ") + ", "
         // At the end of the field, so Mail's own recipients stay (MailCompose checks they did).
-        // Each way is given a moment to show before the next is tried: a window behind shows the
-        // address a little later, and trying again added it twice (2026-11-02, a forward refused).
+        // Mail makes the typed text an address only when the field is confirmed (seen live
+        // 2026-11-02 with a window behind): each way is confirmed, then looked at, before the
+        // next is tried; checking before confirming typed it again, and both were added.
         func added() async throws -> Bool {
+            AXUIElementPerformAction(target, kAXConfirmAction as CFString)
             for _ in 0..<10 {
                 if AX.children(target).count != before { return true }
                 try await Task.sleep(for: .milliseconds(150))
             }
             return false
         }
-        let shown = insert(text, into: target, atEnd: true) ? try await added() : false
-        if !shown {
+        _ = insert(text, into: target, atEnd: true)
+        if try await !added() {
             AXUIElementSetAttributeValue(target, kAXFocusedAttribute as CFString, kCFBooleanTrue)
             AX.moveCursorToEnd(target)
             _ = try await typeToMail(text, into: target)
         }
-        if !(try await added()) {
+        if try await !added() {
             try await paste(into: target, ClipboardLoan.text(text), atEnd: true)
+            AXUIElementPerformAction(target, kAXConfirmAction as CFString)
         }
-        AXUIElementPerformAction(target, kAXConfirmAction as CFString)
     }
 
     /// Sets the selected text of the element (at its end, or where Mail put the cursor) through
