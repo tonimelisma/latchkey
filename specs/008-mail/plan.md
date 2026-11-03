@@ -246,8 +246,9 @@ to Exchange after the message was delivered) block every script until answered, 
 answering Accessibility meanwhile. So when a Mail script times out (`MailCapability.run`, which
 every Mail tool and the queue go through), `AXMailWindows.alert()` looks at Mail's windows, only
 if Mail is running and Accessibility is on: the first `AXDialog`/`AXSystemDialog` window, or a
-sheet on a window that isn't a compose window (a compose window's sheets are D6's). One button:
-pressed, since an alert with one button only informs; the answer says what it said and to try
+sheet on a window that isn't a compose window (a compose window's sheets are D6's). Pressed only
+when it is an alert window (a sheet is only named) whose one control, anywhere inside it, is its
+default button (no text field, checkbox, pop-up; 0.8.88, security review), since such an alert only informs; the answer says what it said and to try
 again, and `alsoDone` notifies the Owner. More buttons: a choice (it could be "Send Anyway"),
 named with its buttons for someone at the Mac. Options weighed: report only (leaves Mail held
 until the Owner is back, which is what happened); press any alert's default button (could

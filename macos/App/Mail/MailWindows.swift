@@ -40,16 +40,29 @@ final class AXMailWindows: ComposeWindows, @unchecked Sendable {
         else { return nil }
         let app = AXUIElementCreateApplication(mail.processIdentifier)
         AXUIElementSetMessagingTimeout(app, 3)
-        let alerts = AX.windows(app).compactMap { w -> AXUIElement? in
-            if ["AXDialog", "AXSystemDialog"].contains(AX.string(w, kAXSubroleAttribute)) { return w }
-            return AX.isCompose(w) ? nil : AX.sheet(w)
+        let windows = AX.windows(app)
+        let dialog = windows.first { ["AXDialog", "AXSystemDialog"].contains(AX.string($0, kAXSubroleAttribute)) }
+        // A sheet on a viewer or settings window is only named, never pressed (security review).
+        let sheet = windows.lazy.filter { !AX.isCompose($0) }.compactMap { AX.sheet($0) }.first
+        guard let alert = dialog ?? sheet else { return nil }
+        var buttons: [AXUIElement] = []
+        var otherControls = 0
+        AX.walk(alert, depth: 6) { e in
+            switch AX.string(e, kAXRoleAttribute) {
+            case "AXButton": buttons.append(e)
+            case "AXTextField", "AXTextArea", "AXCheckBox", "AXRadioButton", "AXPopUpButton", "AXComboBox":
+                otherControls += 1
+            default: break
+            }
         }
-        guard let alert = alerts.first else { return nil }
-        let buttons = AX.children(alert).filter { AX.string($0, kAXRoleAttribute) == "AXButton" }
         let titles = buttons.compactMap { AX.string($0, kAXTitleAttribute) }
         let text = AX.texts(alert).joined(separator: " ")
         var closed = false
-        if buttons.count == 1 {
+        // Pressed only when the alert's one control is its default button: it only informs.
+        if dialog != nil, buttons.count == 1, otherControls == 0,
+            let main = AX.value(alert, kAXDefaultButtonAttribute), CFGetTypeID(main) == AXUIElementGetTypeID(),
+            CFEqual(main, buttons[0])
+        {
             AXUIElementPerformAction(buttons[0], kAXPressAction as CFString)
             try? await Task.sleep(for: .milliseconds(300))
             closed = !AX.alive(alert)

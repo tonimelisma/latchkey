@@ -128,8 +128,8 @@ MIME, and both copies (ids 104292, 104293) are well formed (Mail's own copy has 
 2026-11-02 20:48 unlocked: the same file through Latchkey and through Mail's own scripting both
 saved their sent copy, no alert, so it shows up only with Mail's later upload (lid closed); it
 can't be repeated without closing the lid. Since 0.8.87 (spec 008 FR-839, plan D11), when Mail
-doesn't answer, Latchkey looks for Mail's alert: one with a single button (like this one) is
-pressed, Claude is told to try again and the Owner gets a notification; any other is named,
+doesn't answer, Latchkey looks for Mail's alert: an alert window whose one control is its
+default button (like this one; 0.8.88 after a security review) is pressed, Claude is told to try again and the Owner gets a notification; any other is named,
 with its buttons, for someone at the Mac. Not seen live yet (needs Mail to show such an alert).
 Next: with the lid open and unlocked, run `safari-check.sh` (cross-site click in real Safari);
 find why a Mail reply failed while unlocked on 0.8.62 ("the text in Mail's window isn't the
