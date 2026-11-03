@@ -35,8 +35,7 @@ struct AppControl: Sendable {
         find: { name in
             // Never Latchkey itself: its windows set what Claude may do (security review 2026-11-02).
             let apps = NSWorkspace.shared.runningApplications.filter {
-                $0.activationPolicy == .regular && $0.processIdentifier != getpid()
-                    && $0.bundleIdentifier != Bundle.main.bundleIdentifier
+                $0.activationPolicy == .regular && $0.processIdentifier != getpid() && !AppControl.isLatchkey($0)
             }
             let wanted = name.lowercased()
             guard
@@ -56,6 +55,14 @@ struct AppControl: Sendable {
         },
         poster: { PidPoster(pid: $0.pid) },
         picture: { try await AppWindowReader.picture(of: $0.pid) })
+
+    /// Any copy of Latchkey (installed, test build, helper), by its bundle ID or bundle path.
+    static func isLatchkey(_ app: NSRunningApplication) -> Bool {
+        let id = app.bundleIdentifier ?? ""
+        // The release ID is the start of the development one and of both helpers'.
+        if id == Bundle.main.bundleIdentifier || id.hasPrefix(AppIdentity.release.bundleID) { return true }
+        return app.bundleURL?.lastPathComponent.lowercased().hasPrefix("latchkey") == true
+    }
 
     /// The last listing of each app's window, so a reference stays the element Claude saw.
     static let refs = Locked<[pid_t: [String: AppElement]]>([:])
