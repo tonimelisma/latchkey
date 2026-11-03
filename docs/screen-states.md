@@ -44,23 +44,27 @@ FR-661, Toni 2026-11-02: "we're not circumventing security").
 - **A separate desktop (second user session, macOS VM such as cua's Lume):** isolates the agent
   but has none of the Owner's signed-in apps and data.
 
-## Three groups: what gets in the Owner's way (unlocked run 2026-11-02 19:49, app 0.8.83)
+## Three groups: what gets in the Owner's way (app 0.8.99, 2026-11-02)
 
 Measured by `state-check.sh run` with `focus-watch.swift` (app in front, window on top, new
-windows, pointer, clipboard), one group at a time, plus direct experiments (below).
+windows, pointer, clipboard), one group at a time, plus direct live checks. Unlocked run on
+0.8.95: 107 of 108 use cases worked; the forward that failed was fixed in 0.8.99 (checked live).
 
 1. **Needs the Mac unlocked and gets in the way**
-   - Mail write, send, reply, forward, draft: Mail comes to the front for 5 to 8 s per
-     message, its windows go on top, the clipboard is borrowed for the text and files.
-   - Computer control (computer_act): moves the real pointer, types into the front app.
-   - Browser, page picture in tab mode: Claude's tab is put in front of its window for the
-     picture (seen only when that Safari window is visible).
-   - Browser, window-of-its-own mode: a new Safari window (not measured yet).
-   - Shell with `uses: open`: the opened app may come to the front.
+   - Computer control at a point (click, move, drag, scroll): the real pointer. An app ignores a
+     click sent to it alone, so this can't move to group 2.
+   - Shell with `uses: open`: what opens doesn't take the keyboard (`open -g`), but its new
+     window can still appear above the Owner's.
+   - Mail only when its scripting can't make the message: then Mail comes forward for short
+     moments (opening, pasting files, Send), after a pause in the Owner's typing.
 2. **Needs the Mac unlocked, stays in the background**
-   - Browser in Safari, tab mode (open, read, click, type, scripts, back, tabs, close): a tab is
-     added at the end of the Owner's front Safari window, behind the tab they have in front;
-     nothing came forward in the run.
+   - Mail write, send, reply, reply all, forward, draft, with files (0.8.96 to 0.8.99): made,
+     given files, and sent or saved by Mail's scripting, the window behind and off-screen, the
+     text typed with keys sent to Mail alone; nothing came forward in live checks.
+   - Computer control of a named app (0.8.93): a picture of its window, its buttons and fields,
+     press, type, and keys sent to it alone.
+   - Browser in Safari, tab mode; page pictures switch Claude's tab only while its window can't
+     be seen, else come from Latchkey's own browser (0.8.90).
    - Computer looking (screenshot, front window's UI, apps): reads only.
 3. **Works while locked**
    - Files, shell, Notes, Messages, calendar, reminders, contacts, location and maps; Mail
