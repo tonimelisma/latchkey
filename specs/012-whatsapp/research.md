@@ -63,9 +63,51 @@ Safari user agent.
   desktop app recorded it at 20:42:47, and the Mac was still locked when the run ended.
 - **Logging out:** WhatsApp Web's own menu (Log out, then confirm) from a script returned the page
   to the QR code, which also removes it from the phone's Linked Devices.
-- Not yet tested: the lid closed; hours of idle with the page kept open; what the page does when
-  the phone has been offline for a long time; sending to a group, a file, or a photo; reading
-  from the page.
+## Second round (2026-11-02 evening, a long-running test app, Mac mostly locked)
+
+A signed test app kept the page open and took commands; it logged the page's state every 30 s.
+
+- **Linking without the QR code:** WhatsApp Web's "Log in with phone number" takes the Owner's
+  number (the test read it from the desktop app's `LID.sqlite`, table `ZWAZACCOUNT`) and shows an
+  8-character code; Toni typed it on his phone (Linked Devices, Link with phone number instead)
+  and the page linked in about two minutes. This works with the Owner away from the Mac. The
+  fresh page first said "A database error occurred on your browser. Please relink your device",
+  but linking worked.
+- **Background slowing:** a hidden page's timers are slowed: a send whose own waits added to
+  3.4 s took 30 s. `WKPreferences.inactiveSchedulingPolicy = .none` (public, macOS 14) removes
+  it: the same steps then took under a second.
+- **Opening the right chat:** script clicks and synthetic keys on WhatsApp Web's chat list and
+  search results do nothing; earlier "fast" sends only reached Toni's own chat because it was
+  already open. Loading `https://web.whatsapp.com/send?phone=…&text=…` works for people (13.5 s,
+  reloads the page) but not groups. What works: WhatsApp Web's own modules, the same ones
+  `whatsapp-web.js` uses: `window.require('WAWebCollections').Chat` lists every chat (101, of
+  which 41 groups, `id.server === 'g.us'`; the desktop app has 102 and 41), and
+  `window.require('WAWebCmd').Cmd.openChatBottom({chat})` opens one, groups included (1.9 s).
+- **Typing safely:** the message box is a Lexical editor. A draft left in it is kept, and
+  `insertText` adds to it: one test message went out with the earlier draft glued on (to Toni's
+  own chat). Clearing needs the editor's own `beforeinput` `deleteContentBackward` after its
+  selection catches up (about 150 ms); the send must refuse when the box isn't empty or the typed
+  text isn't exactly the message. Both checks were tested with junk left in the box.
+- **Sending, locked, confirmed by WhatsApp itself:** from a group, open the own chat by command,
+  check the box, type, check, click Send, then find the message in the chat's `msgs` with
+  `id.fromMe` and watch `ack` (1 server, 2 delivered, 3 read): opened 0.14 s, clicked 0.41 s,
+  read 1.16 s, with the Mac locked.
+- **Reading through the page:** WhatsApp Web's chat list and messages are in memory
+  (`Chat.getModelsArray()`, each chat's `msgs`); a group showed one message in memory until more
+  is loaded. How far back history goes for a new linked device: not yet measured.
+- **Desktop app not always running:** WhatsApp for Mac was not running from 20:42 on, so its
+  database stopped there: reading from it needs the app open, which supports FR-1221's fallback.
+- **Photos: not working yet.** While locked the page gets no animation frames at all (unlocked,
+  off-screen: it does). Unlocked or locked, a picture put in the file input opens WhatsApp's
+  preview, but neither a script click on its Send button, Enter in the message box, nor a native
+  mouse event delivered to the web view sends it; the preview's controls lie outside the page's
+  width (x 1387 of 1200, x 1935 of 1680). Next to try: WhatsApp Web's own media functions
+  (`WAWebMediaPrep` exists; `whatsapp-web.js` sends media this way), or a page that is drawn.
+- **Snapshots** of the page are blank while the Mac is locked (nothing is drawn).
+- Running overnight (started 21:27): heartbeat every 30 s, a text to the own chat every 2 hours;
+  at 11:00 on 2026-11-03 the test logs itself out, deletes itself, and leaves its logs in
+  `~/Library/Caches/walink-poc-results/` to be read into this file.
+- Not yet tested: the lid closed; many hours idle; the phone offline for long.
 
 ## Timing against Claude's limits
 

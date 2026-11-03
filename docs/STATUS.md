@@ -40,7 +40,12 @@ after a restart and sent to Toni's own chat both unlocked and with the Mac locke
 cookies alone, or a copy of Safari's whole WhatsApp storage, don't log in (WebKit's per-app
 Keychain key). Test device logged out and deleted. Toni answered the spec's three questions
 (people, groups, and files; read the desktop app's database, else Latchkey's own device; one
-sentence on ban risk at setup). Next: the plan.
+sentence on ban risk at setup). Second round of tests (research.md): linking by an 8-character code
+typed on the phone (no QR scan); chats and groups opened through WhatsApp Web's own modules; a
+locked send confirmed by WhatsApp's own record in 1.2 s; photos not yet working. An overnight
+check runs until 11:00 on 2026-11-03, then logs itself out and deletes itself, leaving logs in
+`~/Library/Caches/walink-poc-results/`. Next: read those logs into research.md and delete them,
+make photos send, then the plan.
 
 Releases, terms and privacy, and the directory listing are much later (Toni, 2026-10-22).
 
