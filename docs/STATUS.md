@@ -1,6 +1,6 @@
 # Status
 
-Last updated: 2026-11-01 (Add to Claude button; plugin withdrawn; README rewritten as a short product page; relay web pages redone; purkki paired; spec 010 shipped)
+Last updated: 2026-11-02 (WhatsApp spec started; Add to Claude button; plugin withdrawn; README rewritten as a short product page; relay web pages redone; purkki paired; spec 010 shipped)
 
 Xcode signing ready (2026-10-20): Toni's Xcode account has a valid "Apple Development" certificate
 (certificate expires 2027-07-22). Keep the team ID out of committed project files
@@ -31,6 +31,15 @@ hosted relay (email via Resend); real Claude called
 after the app was quit.
 
 ## Next steps
+
+WhatsApp (spec 012, started 2026-11-02, draft for Toni's review): proven on Toni's Mac with
+throwaway test programs (research.md). Latchkey can read the desktop WhatsApp app's database
+(27,131 messages, current, works locked). Sending works through Latchkey's own linked device:
+WhatsApp Web in a hidden WebKit page of a signed app, linked once by QR code; it stayed logged in
+after a restart and sent to Toni's own chat both unlocked and with the Mac locked (20:42:47). Safari's
+cookies alone, or a copy of Safari's whole WhatsApp storage, don't log in (WebKit's per-app
+Keychain key). Test device logged out and deleted. Next: Toni answers the spec's three questions
+(groups and files; where reading comes from; a ban-risk sentence at setup), then the plan.
 
 Releases, terms and privacy, and the directory listing are much later (Toni, 2026-10-22).
 
