@@ -240,7 +240,9 @@ Linux server program (run in `linux/`, its own Go module; spec 010):
 Screen states (`macos/scripts/state-check/`): `state-check.sh run|wait|report <folder outside the
 repo>` tries every use case in `cases.json` through the hosted relay with real Claude Code, in
 the screen state the Mac is in (unlocked, locked, screen asleep, lid closed); `report` writes
-`docs/use-cases.md`. Needs `LATCHKEY_CHECK_TO` (Toni's own address, from `CLAUDE.local.md`).
+`docs/use-cases.md`. Each run also logs what took focus, raised a window, moved the pointer, or
+used the clipboard (`<state>/focus.log`; `LATCHKEY_CHECK_PARALLEL=1` runs one group at a time so
+each line belongs to one group). Needs `LATCHKEY_CHECK_TO` (Toni's own address, from `CLAUDE.local.md`).
 Claude Code here runs on Toni's Claude subscription; the dollar cost it prints is only what the
 same use would cost paid per use. `macos/scripts/mail-check.sh <to> <draft|send|probe>` runs the
 app's Mail compose code against the real Mail in the current screen state.

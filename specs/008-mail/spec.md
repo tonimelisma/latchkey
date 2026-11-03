@@ -100,7 +100,14 @@ my landlord", tell what's new in the inbox, answer a message, or file it away.
 - **FR-837** When the Mac is next unlocked, Latchkey shall send each queued message, oldest
   first, the same way as sending (FR-820 to FR-823), tell the Owner in a notification and the
   activity log whether each was sent, and remove it from the queue. A queued message is kept only
-  on the Mac, readable only by the Owner's account, until it is sent, fails, or is cancelled.
+  on the Mac, readable only by the Owner's account, until it is sent, given up on (FR-838), or
+  cancelled.
+- **FR-838** When a queued message's try sent nothing, Latchkey shall keep it queued and try
+  again five minutes later while the Mac stays unlocked, and at the next unlock; after three
+  such tries, or when a try may have sent it, it shall drop it. The Owner's notification says,
+  in plain sentences, what happened and whether it will be tried again; the queue's list shows
+  the last failure (Toni, 2026-11-02: a frozen Mail failed the first queued message, and the
+  queue lost it).
 
 ### Level, visibility, permissions
 - **FR-830** Mail shall have the levels Off, Read only, Read & write, where Read & write includes

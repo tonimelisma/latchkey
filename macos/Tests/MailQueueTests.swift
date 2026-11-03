@@ -71,7 +71,7 @@ import Testing
         let w = FakeWindows()
         let env = try MailTestEnv.make(f, scripts: MailWriteTests.scripts(), confirmWait: .zero, windows: w)
         let reports = Locked<[String]>([])
-        await MailCapability.sendQueued(q, env: env) { summary, _, _ in reports.mutate { $0.append(summary) } }
+        await MailCapability.sendQueued(q, env: env) { item, _ in reports.mutate { $0.append(item.summary) } }
         #expect(reports.value == ["«Lunch» to sam@example.com", "«Second» to bob@example.com"])
         #expect(w.opened.count == 2, "each went through Mail's window")
         #expect(await q.items().isEmpty)
@@ -93,9 +93,52 @@ import Testing
                 asked.mutate { $0 += 1 }
                 return asked.value == 1
             }
-        ) { _, _, _ in }
+        ) { _, _ in }
         #expect(w.opened.count == 1)
         #expect(await q.items().count == 1, "the second stays queued")
+    }
+
+    /// FR-838: Mail froze on 2026-11-02, the send failed, and the queue lost the message.
+    @Test func aTryThatSentNothingKeepsItQueuedUntilTheLastTry() async throws {
+        let f = try MailFixture()
+        defer { f.close() }
+        let (q, _) = queue()
+        _ = await MailCapability.queue(message, q)
+        let w = FakeWindows()
+        w.blocked = "Nothing was sent: Mail didn't open a new message window."
+        let env = try MailTestEnv.make(f, scripts: MailWriteTests.scripts(), confirmWait: .zero, windows: w)
+        let outcomes = Locked<[MailCapability.QueuedOutcome]>([])
+        for _ in 1...MailQueue.tries {
+            await MailCapability.sendQueued(q, env: env) { _, o in outcomes.mutate { $0.append(o) } }
+            let list = await MailCapability.queue(.object(["action": .string("list")]), q)
+            if outcomes.value.count == 1 {
+                #expect(list.plainText.contains("tried 1 of 3 times, last: Nothing was sent: Mail didn't open"))
+            }
+        }
+        let why = "Nothing was sent: Mail didn't open a new message window."
+        #expect(outcomes.value == [.willRetry(why), .willRetry(why), .dropped(why)], "one try per round")
+        #expect(await q.items().isEmpty, "given up after the last try")
+    }
+
+    @Test func notificationsAreSentences() {
+        let item = MailQueue.Item(
+            id: "q1", created: Date(), args: .object([:]), summary: "«Lunch» to sam@example.com", failed: 1,
+            lastError: nil)
+        let sent = AppModel.queuedMailNote(item, .sent)
+        #expect(sent.title == "Queued email sent" && sent.body == "«Lunch» to sam@example.com")
+        let retry = AppModel.queuedMailNote(item, .willRetry("Nothing was sent: Mail didn't open a new message window"))
+        #expect(retry.title == "Queued email not sent yet")
+        #expect(
+            retry.body
+                == "«Lunch» to sam@example.com: Mail didn't open a new message window. Latchkey tries again in five minutes, or the next time you unlock the Mac."
+        )
+        var last = item
+        last.failed = 3
+        let dropped = AppModel.queuedMailNote(last, .dropped("Nothing was sent: Mail didn't answer."))
+        #expect(
+            dropped.body.hasSuffix(
+                "Mail didn't answer. It is no longer queued after 3 tries; Claude can send it again."))
+        #expect(!dropped.body.contains("{"), "no raw answer")
     }
 
     @Test func theLockedRefusalPointsToTheQueue() {

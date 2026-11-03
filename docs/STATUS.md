@@ -97,7 +97,12 @@ tools do: `docs/screen-states.md` (2026-11-02). Since 0.8.79/0.8.80 the locked b
 page dialogs (capped, labelled), follows only Claude's own pop-ups, and identifies as Safari
 (signed in to Google and GitHub, checked live); since 0.8.81 finding and reading mail work while
 Mail is frozen. Mail froze on 2026-11-02 when a scripted send was tried while locked (a modal
-alert behind the lock screen); Toni closes it, and three stale message windows, at unlock.
+alert behind the lock screen); it stayed frozen after unlock, so the first queued email failed
+at unlock and the queue dropped it (the notification showed the raw answer). Mail was quit and
+reopened at 19:33. Since 0.8.82 (spec 008 FR-838) a try that sent nothing keeps the email
+queued (again in five minutes and at the next unlock, three tries), and the notification is
+plain sentences. `state-check.sh run` now records what took focus, raised a window, moved the
+pointer, or used the clipboard (`focus-watch.swift`, `focus.log` per state, each group's times).
 Next: with the lid open and unlocked, run `safari-check.sh` (cross-site click in real Safari);
 find why a Mail reply failed while unlocked on 0.8.62 ("the text in Mail's window isn't the
 text given", then "Mail's window stayed open after Send"); close any empty message windows the

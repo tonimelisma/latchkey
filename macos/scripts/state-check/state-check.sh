@@ -37,8 +37,9 @@ run_group() {
         ([.cases[] | "- \(.id): \(.steps)"] | join("\n") | gsub("\\{TAG\\}"; $tag) | gsub("\\{TO\\}"; $to) | gsub("\\{TOMORROW\\}"; $day)) +
         "\n\nEnd your reply with exactly one ```json block: an array with one object per case, in order: {\"id\": \"...\", \"result\": \"works|refused|failed|skipped\", \"note\": \"...\"}."
     ' "$cases")
-    local before after
+    local before after from
     before=$(screen_state)
+    from=$(date +%T)
     # A Claude Code session sometimes starts without the claude.ai connector's tools; try again.
     prompt="If you have no Latchkey tools at all (search for them first), reply only NO_LATCHKEY_TOOLS.
 $prompt"
@@ -54,9 +55,11 @@ $prompt"
     after=$(screen_state)
     jq -r '.result // empty' "$out/$group.raw.txt" 2>/dev/null |
         awk '/^```json/{on=1; next} /^```/{on=0} on' | jq --arg b "$before" --arg a "$after" \
-        '{seen: [$b, $a] | unique, cases: .}' >"$out/$group.json" 2>/dev/null ||
+        --arg f "$from" --arg t "$(date +%T)" \
+        '{seen: [$b, $a] | unique, from: $f, to: $t, cases: .}' >"$out/$group.json" 2>/dev/null ||
         jq -n --arg b "$before" --arg a "$after" --arg g "$group" --slurpfile c "$cases" \
-            '{seen: [$b, $a] | unique, cases: [$c[0].groups[] | select(.id == $g) | .cases[] |
+            --arg f "$from" --arg t "$(date +%T)" \
+            '{seen: [$b, $a] | unique, from: $f, to: $t, cases: [$c[0].groups[] | select(.id == $g) | .cases[] |
               {id, result: "failed", note: "The check run itself didn'\''t finish or report"}]}' >"$out/$group.json"
 }
 
@@ -69,8 +72,14 @@ run_all() {
     tag="Latchkey check $(date +%m%d-%H%M) $state"
     mkdir -p "$dir/$state"
     echo "$(date '+%F %T') running in state $state"
+    # What disturbed the person at the Mac, with the time; each group's from/to says whose it was.
+    # One group at a time (LATCHKEY_CHECK_PARALLEL=1) makes that unambiguous.
+    swiftc -O -o "$dir/focus-watch" "$here/focus-watch.swift"
+    "$dir/focus-watch" >"$dir/$state/focus.log" 2>&1 &
+    local watcher=$!
     if (($#)); then printf '%s\n' "$@"; else jq -r '.groups[].id' "$cases"; fi |
-        xargs -P 2 -I{} "$0" group "$dir" "$state" {} "$tag"
+        xargs -P "${LATCHKEY_CHECK_PARALLEL:-2}" -I{} "$0" group "$dir" "$state" {} "$tag"
+    kill "$watcher" 2>/dev/null || true
     jq -s --arg s "$state" --arg t "$(date '+%F %T')" \
         --arg v "$(defaults read /Applications/Latchkey.app/Contents/Info.plist CFBundleShortVersionString 2>/dev/null || echo unknown)" \
         '{state: $s, finished: $t, app: $v, cases: (map(.seen as $seen | .cases[] | . + {seen: $seen}))}' \

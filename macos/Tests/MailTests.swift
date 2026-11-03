@@ -163,7 +163,7 @@ enum MailTestEnv {
         #expect(c.entries(at: .readOnly).map(\.tool.name) == ["mail_find", "mail_read"])
         #expect(
             c.entries(at: .readWrite).map(\.tool.name).sorted() == [
-                "mail_change", "mail_find", "mail_read", "mail_send",
+                "mail_change", "mail_find", "mail_queue", "mail_read", "mail_send",
             ])
         let readOnly = try #require(c.entries(at: .readOnly).first { $0.tool.name == "mail_read" })
         let full = try #require(c.entries(at: .readWrite).first { $0.tool.name == "mail_read" })

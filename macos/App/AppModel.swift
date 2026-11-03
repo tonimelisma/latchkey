@@ -335,24 +335,70 @@ final class AppModel {
     }
 
     /// Sends the email queued while the Mac was locked (spec 008 FR-837), once it is unlocked and
-    /// while Mail is Read & write, telling the Owner about each.
+    /// while Mail is Read & write, telling the Owner about each. A message whose try sent nothing
+    /// is tried again in five minutes, or at the next unlock (FR-838).
     func sendQueuedMail() async {
-        guard mayStillSendQueuedMail else { return }
+        guard mayStillSendQueuedMail, !sendingQueuedMail else { return }
+        sendingQueuedMail = true
+        defer { sendingQueuedMail = false }
+        queuedMailRetry?.cancel()
         // A moment for the unlocked session to settle before Mail opens windows.
         try? await Task.sleep(for: .seconds(3))
+        let retry = Locked(false)
         await MailCapability.sendQueued(allowed: { [weak self] in
             await MainActor.run { self?.mayStillSendQueuedMail ?? false }
         }) {
-            [weak self] summary, sent, answer in
+            [weak self] item, outcome in
+            let note = Self.queuedMailNote(item, outcome)
+            if case .willRetry = outcome { retry.mutate { $0 = true } }
             await MainActor.run {
-                self?.event(.app, "Queued email \(sent ? "sent" : "not sent"): \(summary)", error: !sent)
+                self?.event(.app, "\(note.title): \(note.body)", error: outcome != .sent)
             }
             let content = UNMutableNotificationContent()
-            content.title = sent ? "Queued email sent" : "Queued email not sent"
-            content.body = sent ? summary : "\(summary): \(answer)"
+            content.title = note.title
+            content.body = note.body
             try? await UNUserNotificationCenter.current().add(
                 UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil))
         }
+        if retry.value {
+            queuedMailRetry = Task { [weak self] in
+                try? await Task.sleep(for: .seconds(300))
+                guard !Task.isCancelled else { return }
+                await self?.sendQueuedMail()
+            }
+        }
+    }
+    private var sendingQueuedMail = false
+    private var queuedMailRetry: Task<Void, Never>?
+
+    /// The Owner's notification about a queued message, in plain sentences (FR-838).
+    nonisolated static func queuedMailNote(_ item: MailQueue.Item, _ outcome: MailCapability.QueuedOutcome)
+        -> (title: String, body: String)
+    {
+        switch outcome {
+        case .sent:
+            return ("Queued email sent", item.summary.prefix(1).uppercased() + item.summary.dropFirst())
+        case .willRetry(let why):
+            return (
+                "Queued email not sent yet",
+                "\(item.summary): \(reason(why)) Latchkey tries again in five minutes, or the next time you unlock the Mac."
+            )
+        case .dropped(let why):
+            let gaveUp = (item.failed ?? 0) >= MailQueue.tries ? " after \(MailQueue.tries) tries" : ""
+            return (
+                "Queued email not sent",
+                "\(item.summary): \(reason(why)) It is no longer queued\(gaveUp); Claude can send it again."
+            )
+        }
+    }
+
+    /// "Nothing was sent: Mail didn't open …" becomes "Mail didn't open …", ending with a full stop.
+    nonisolated private static func reason(_ why: String) -> String {
+        var s = why
+        let prefix = "Nothing was sent: "
+        if s.hasPrefix(prefix) { s.removeFirst(prefix.count) }
+        s = s.prefix(1).uppercased() + s.dropFirst()
+        return s.hasSuffix(".") ? s : s + "."
     }
 
     /// Checked before each queued message (security review 2026-11-02): paired, not paused, Mail

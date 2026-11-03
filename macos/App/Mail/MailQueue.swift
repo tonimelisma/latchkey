@@ -2,7 +2,7 @@ import Foundation
 
 /// Messages Claude queued while the Mac was locked, to go out when it is next unlocked (spec 008
 /// FR-836, FR-837). Kept in one file readable only by the Owner's account, and removed once sent,
-/// failed, or cancelled.
+/// cancelled, or given up on after `MailQueue.tries` tries that sent nothing (FR-838).
 actor MailQueue {
     struct Item: Codable, Sendable, Equatable {
         var id: String
@@ -11,7 +11,13 @@ actor MailQueue {
         var args: JSONValue
         /// "«subject» to …", for lists and notifications.
         var summary: String
+        /// Tries that sent nothing so far, and why the last one failed (FR-838).
+        var failed: Int?
+        var lastError: String?
     }
+
+    /// Tries before a message that keeps failing is dropped (FR-838).
+    static let tries = 3
 
     /// In the app's support folder, which uninstalling removes (FR-077).
     static let shared = MailQueue(file: AppIdentity.current.supportDirectory.appending(path: "mail-queue.json"))
@@ -54,12 +60,13 @@ actor MailQueue {
         return item
     }
 
-    /// Takes the oldest item off the queue, to be sent now; nil when empty.
-    func next() throws -> Item? {
+    /// Takes an item off the queue, to be sent now; nil when it isn't queued (any more).
+    func take(_ id: String) throws -> Item? { try cancel(id) }
+
+    /// Puts back an item whose try sent nothing, in its place by age (FR-838).
+    func putBack(_ item: Item) throws {
         var list = items()
-        guard !list.isEmpty else { return nil }
-        let item = list.removeFirst()
+        list.insert(item, at: list.firstIndex { $0.created > item.created } ?? list.endIndex)
         try save(list)
-        return item
     }
 }

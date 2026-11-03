@@ -266,8 +266,12 @@ enum MailCapability {
             f.timeStyle = .short
             return .text(
                 "Queued, sent at the next unlock:\n"
-                    + items.map { "- \($0.id): \($0.summary), queued \(f.string(from: $0.created))" }.joined(
-                        separator: "\n"))
+                    + items.map { item in
+                        "- \(item.id): \(item.summary), queued \(f.string(from: item.created))"
+                            + (item.lastError.map {
+                                "; tried \(item.failed ?? 1) of \(MailQueue.tries) times, last: \($0)"
+                            } ?? "")
+                    }.joined(separator: "\n"))
         case "cancel":
             guard let id = args["id"]?.stringValue else { return .text("Give the id, from list.", isError: true) }
             guard let item = try? await q.cancel(id) else {
@@ -284,17 +288,39 @@ enum MailCapability {
     /// Set by `make()`, so the queue can be sent when the Mac is unlocked.
     private static let liveEnv = Locked<Env?>(nil)
 
-    /// Sends what is queued, oldest first (FR-837), telling `report` about each: its summary,
-    /// whether it was sent, and Latchkey's answer.
+    /// What became of one queued message.
+    enum QueuedOutcome: Equatable, Sendable {
+        case sent
+        /// Nothing was sent; it stays queued for another try.
+        case willRetry(String)
+        /// Not sent, and no longer queued: it failed `MailQueue.tries` times, or the answer
+        /// doesn't say that nothing went out, so trying again could send it twice (FR-823).
+        case dropped(String)
+    }
+
+    /// Tries each queued message once, oldest first (FR-837, FR-838), telling `report` about each.
     /// `allowed` is asked before each message; when it says no, the rest stays queued.
     static func sendQueued(
         _ q: MailQueue = .shared, env given: Env? = nil, allowed: @Sendable () async -> Bool = { true },
-        report: @Sendable (String, Bool, String) async -> Void
+        report: @Sendable (MailQueue.Item, QueuedOutcome) async -> Void
     ) async {
         guard let env = given ?? liveEnv.value else { return }
-        while await allowed(), let item = try? await q.next() {
+        for id in await q.items().map(\.id) {
+            guard await allowed() else { return }
+            guard var item = try? await q.take(id) else { continue }
             let r = await run(env) { s in try await MailWrite.send(item.args, s, env) }
-            await report(item.summary, !r.isError, r.content.jsonText)
+            guard r.isError else {
+                await report(item, .sent)
+                continue
+            }
+            let why = r.plainText
+            item.failed = (item.failed ?? 0) + 1
+            item.lastError = why
+            if why.hasPrefix("Nothing was sent"), item.failed! < MailQueue.tries, (try? await q.putBack(item)) != nil {
+                await report(item, .willRetry(why))
+            } else {
+                await report(item, .dropped(why))
+            }
         }
     }
 

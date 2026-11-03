@@ -21,6 +21,12 @@ struct ToolResult: Sendable, Equatable {
         content = .array(items)
     }
 
+    /// The answer's text parts joined, for the Owner's notifications.
+    var plainText: String {
+        guard case .array(let items) = content else { return "" }
+        return items.compactMap { $0["text"]?.stringValue }.joined().trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
     static func text(_ s: String, isError: Bool = false) -> ToolResult {
         ToolResult(content: .array([.object(["type": .string("text"), "text": .string(s)])]), isError: isError)
     }
