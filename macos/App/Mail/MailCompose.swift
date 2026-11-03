@@ -75,6 +75,9 @@ protocol ComposeWindows: Sendable {
 
 struct ComposeFailure: Error, Equatable {
     var message: String
+    /// Failed after Send was pressed, so Mail may have sent it: never "Nothing was sent", and
+    /// never tried again by the queue (spec 008 FR-838, security review 2026-11-02).
+    var afterSend = false
 }
 
 /// An address the window may show, and the names Mail may show for it instead (the name in

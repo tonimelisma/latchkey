@@ -23,6 +23,9 @@ actor MailQueue {
     static let shared = MailQueue(file: AppIdentity.current.supportDirectory.appending(path: "mail-queue.json"))
 
     private let file: URL
+    /// Taken off the file to be sent and not finished yet; `add` doesn't reuse their ids, so a
+    /// message put back can't share an id with one queued meanwhile (security review 2026-11-02).
+    private var sending: Set<String> = []
 
     init(file: URL) { self.file = file }
 
@@ -45,7 +48,7 @@ actor MailQueue {
     func add(_ args: JSONValue, summary: String, now: Date = Date()) throws -> Item {
         var list = items()
         var n = list.count + 1
-        while list.contains(where: { $0.id == "q\(n)" }) { n += 1 }
+        while list.contains(where: { $0.id == "q\(n)" }) || sending.contains("q\(n)") { n += 1 }
         let item = Item(id: "q\(n)", created: now, args: args, summary: summary)
         list.append(item)
         try save(list)
@@ -61,10 +64,18 @@ actor MailQueue {
     }
 
     /// Takes an item off the queue, to be sent now; nil when it isn't queued (any more).
-    func take(_ id: String) throws -> Item? { try cancel(id) }
+    /// Call `finished` or `putBack` after.
+    func take(_ id: String) throws -> Item? {
+        guard let item = try cancel(id) else { return nil }
+        sending.insert(id)
+        return item
+    }
+
+    func finished(_ id: String) { sending.remove(id) }
 
     /// Puts back an item whose try sent nothing, in its place by age (FR-838).
     func putBack(_ item: Item) throws {
+        defer { sending.remove(item.id) }
         var list = items()
         list.insert(item, at: list.firstIndex { $0.created > item.created } ?? list.endIndex)
         try save(list)

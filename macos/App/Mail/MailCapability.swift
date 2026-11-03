@@ -310,6 +310,7 @@ enum MailCapability {
             guard var item = try? await q.take(id) else { continue }
             let r = await run(env) { s in try await MailWrite.send(item.args, s, env) }
             guard r.isError else {
+                await q.finished(id)
                 await report(item, .sent)
                 continue
             }
@@ -319,6 +320,7 @@ enum MailCapability {
             if why.hasPrefix("Nothing was sent"), item.failed! < MailQueue.tries, (try? await q.putBack(item)) != nil {
                 await report(item, .willRetry(why))
             } else {
+                await q.finished(id)
                 await report(item, .dropped(why))
             }
         }

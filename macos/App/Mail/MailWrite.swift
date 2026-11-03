@@ -270,6 +270,10 @@ enum MailWrite {
             shownSubject = try await env.composeQueue.run {
                 try await MailCompose.run(request, env.windows, attachWait: env.attachWait)
             }
+        } catch let f as ComposeFailure where f.afterSend {
+            return .text(
+                "Mail may not have sent it: \(f.message). Check Sent (mail_find, mailbox Sent) before sending it again.",
+                isError: true)
         } catch let f as ComposeFailure {
             let why = f.message.hasPrefix("Nothing was sent") ? f.message : "\(nothing): \(f.message)"
             return .text(

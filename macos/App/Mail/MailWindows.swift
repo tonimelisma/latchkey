@@ -307,10 +307,10 @@ final class AXComposeWindow: ComposeWindow, @unchecked Sendable {
             if !AX.alive(window) { return }
             if let sheet = AX.sheet(window) {
                 let text = AX.texts(sheet).joined(separator: " ")
-                throw ComposeFailure(message: "Mail didn't send it: «\(text)»")
+                throw ComposeFailure(message: "Mail showed «\(text)» after Send", afterSend: true)
             }
         }
-        throw ComposeFailure(message: "Mail's window stayed open after Send.")
+        throw ComposeFailure(message: "Mail's window stayed open after Send", afterSend: true)
     }
 
     func saveDraft() async throws {

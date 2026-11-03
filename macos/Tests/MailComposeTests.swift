@@ -24,6 +24,8 @@ final class FakeComposeWindow: ComposeWindow, @unchecked Sendable {
     var changeOnRead: (Int, @Sendable (inout ComposeFields) -> Void)?
     /// Plays a window that won't close.
     var stuck = false
+    /// What pressing Send throws (Mail's window staying open, a sheet).
+    var sendFails: ComposeFailure?
     var onSend: (@Sendable () -> Void)?
     private var reads = 0
 
@@ -76,6 +78,7 @@ final class FakeComposeWindow: ComposeWindow, @unchecked Sendable {
     func send() async throws {
         note("send")
         onSend?()
+        if let sendFails { throw sendFails }
     }
 
     func saveDraft() async throws { note("save") }

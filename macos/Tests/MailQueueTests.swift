@@ -120,6 +120,38 @@ import Testing
         #expect(await q.items().isEmpty, "given up after the last try")
     }
 
+    /// Security review 2026-11-02: after Send was pressed Mail may have sent it; trying again
+    /// could send it twice.
+    @Test func aFailureAfterSendIsNeverTriedAgain() async throws {
+        let f = try MailFixture()
+        defer { f.close() }
+        let (q, _) = queue()
+        _ = await MailCapability.queue(message, q)
+        let w = FakeWindows()
+        w.window.sendFails = ComposeFailure(message: "Mail's window stayed open after Send", afterSend: true)
+        let env = try MailTestEnv.make(f, scripts: MailWriteTests.scripts(), confirmWait: .zero, windows: w)
+        let outcomes = Locked<[MailCapability.QueuedOutcome]>([])
+        await MailCapability.sendQueued(q, env: env) { _, o in outcomes.mutate { $0.append(o) } }
+        guard case .dropped(let why) = try #require(outcomes.value.first) else {
+            Issue.record("kept for another try: \(outcomes.value)")
+            return
+        }
+        #expect(why.hasPrefix("Mail may not have sent it"), "never «Nothing was sent»")
+        #expect(await q.items().isEmpty)
+    }
+
+    /// Security review 2026-11-02: a message queued while another is being tried gets an id of
+    /// its own, so cancelling one can't hit the other.
+    @Test func anIdBeingSentIsNotGivenOut() async throws {
+        let (q, _) = queue()
+        let first = try await q.add(.object([:]), summary: "first")
+        let taken = try #require(try await q.take(first.id))
+        let second = try await q.add(.object([:]), summary: "second")
+        #expect(second.id != first.id)
+        try await q.putBack(taken)
+        #expect(Set(await q.items().map(\.id)).count == 2)
+    }
+
     @Test func notificationsAreSentences() {
         let item = MailQueue.Item(
             id: "q1", created: Date(), args: .object([:]), summary: "«Lunch» to sam@example.com", failed: 1,

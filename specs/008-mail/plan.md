@@ -230,7 +230,11 @@ answer starting "Nothing was sent" (every check before Send, and Mail's window f
 item back in its place with a count of failed tries and the last reason; anything else (an
 unconfirmed or unreadable Sent copy) drops it, since trying again could send it twice. Each round
 tries each item once; a round that put one back schedules another in 300 s while unlocked
-(unlock and start rounds cancel it; one round at a time). Three failed tries drop it. Low-level
+(unlock and start rounds cancel it; one round at a time). Three failed tries drop it.
+Security review (2026-11-02): a failure after Send was pressed (Mail's window stayed open, or
+showed a sheet) is answered "Mail may not have sent it: …", never "Nothing was sent", so the
+queue drops it; and the ids of items being tried stay reserved, so one queued meanwhile can't
+share an id with one put back. Low-level
 choices: no expiry (a queued message waits however long the Mac stays locked; the Owner can ask
 Claude to cancel it); attachments are checked when queued and again when sent.
 
