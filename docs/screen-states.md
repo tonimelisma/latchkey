@@ -44,16 +44,60 @@ FR-661, Toni 2026-11-02: "we're not circumventing security").
 - **A separate desktop (second user session, macOS VM such as cua's Lume):** isolates the agent
   but has none of the Owner's signed-in apps and data.
 
-## What brings windows forward or takes focus while the Owner uses the Mac
+## Three groups: what gets in the Owner's way (unlocked run 2026-11-02 19:49, app 0.8.83)
 
-| Where | What it does | Alternatives (to test unlocked) |
-|---|---|---|
-| Mail: write, send, draft | activates Mail, raises the compose window, pastes files with Mail in front | open the window without activating; fill it through Accessibility in the background (AXSetValue works on background windows in other tools); move it off-screen; paste only when needed; or SMTP/API with no window |
-| Browser, a window of Claude's own | a new Safari window may cover the Owner's | tab mode (default); or Latchkey's own browser always |
-| Browser, screenshot in tab mode | brings Claude's tab to the front for the picture, then back | Latchkey's own browser draws the page itself (works locked and unlocked, but its cookies are a copy) |
-| Computer control | moves the real pointer and types into the front app | per-app Accessibility actions and per-process events (`CGEventPostToPid`), single-window capture (ScreenCaptureKit), as Claude's own computer use, Codex, cua-driver, Peekaboo do |
-| Shell with `uses: open` | an app opened through macOS may come to the front | `open -g` (background) by default |
-| Notes, Messages, reminders, calendar, contacts, files | none (scripting or frameworks, apps opened hidden) | |
+Measured by `state-check.sh run` with `focus-watch.swift` (app in front, window on top, new
+windows, pointer, clipboard), one group at a time, plus direct experiments (below).
+
+1. **Needs the Mac unlocked and gets in the way**
+   - Mail write, send, reply, forward, draft: Mail comes to the front for 5 to 8 s per
+     message, its windows go on top, the clipboard is borrowed for the text and files.
+   - Computer control (computer_act): moves the real pointer, types into the front app.
+   - Browser, page picture in tab mode: Claude's tab is put in front of its window for the
+     picture (seen only when that Safari window is visible).
+   - Browser, window-of-its-own mode: a new Safari window (not measured yet).
+   - Shell with `uses: open`: the opened app may come to the front.
+2. **Needs the Mac unlocked, stays in the background**
+   - Browser in Safari, tab mode (open, read, click, type, scripts, back, tabs, close): a tab is
+     added at the end of the Owner's front Safari window, behind the tab they have in front;
+     nothing came forward in the run.
+   - Computer looking (screenshot, front window's UI, apps): reads only.
+3. **Works while locked**
+   - Files, shell, Notes, Messages, calendar, reminders, contacts, location and maps; Mail
+     find and read; Mail organise (while Mail answers its scripting).
+   - Browser through Latchkey's own browser (Safari's cookies copied).
+   - Mail sending, queued until the next unlock (`mail_queue`).
+
+## Moving group 1 to group 2: experiments (2026-11-02, unlocked)
+
+- **Mail, window opened without activating Mail:** opens behind the front app, but Mail never
+  builds its message text area (no web area in Accessibility, not after raising, focusing,
+  making it main, uncovering it, or activating later); the window then wouldn't close until
+  Mail came to the front. Dead end.
+- **Mail, in front only while needed:** activating Mail as today, the text area exists after
+  0.5 to 1.1 s; giving the front straight back and moving the window off-screen (macOS keeps
+  40 px on screen), the text **typed as keys sent to Mail alone** (`CGEventPostToPid` with
+  Unicode strings) arrived exactly ("äö €" included) with Mail in the background. Setting the
+  text through Accessibility (`AXSelectedText`) did nothing in the background. Pressing Send
+  through Accessibility in the background did nothing; with Mail in front for 0.9 s it sent
+  (checked in Sent). Pasting a file with Cmd-V sent to Mail alone did nothing; Edit → Paste with
+  Mail in front works (today's code), but the quick 0.9 s try didn't attach the file. So: two
+  short moments in front (opening, sending) instead of 5 to 8 s, the window off-screen, the
+  clipboard only for files. Risk: keys the Owner types during those moments go to Mail; waiting
+  for a pause in their typing (seconds since the last input event) lowers it.
+- **Mail with no window:** only sending directly to the mail server or the provider's API
+  (Microsoft Graph, Gmail) is truly in the background and also works locked; each account
+  needs its own sign-in for Latchkey (research above).
+- **Computer control in the background (Calculator behind other windows):** Accessibility
+  presses worked; keys sent to the app alone worked ("2 × 3 Return" computed); a mouse click
+  sent to the app alone did nothing; a picture of that one window (ScreenCaptureKit, window
+  filter) was complete while covered. The pointer and the front app never changed. An app
+  launched without activating opens behind, but its window is on screen.
+- **Browser picture:** Safari's window is already captured on its own (covered windows
+  work), so the tab can be put in front unseen whenever that window isn't visible to the
+  Owner (covered, another Space, minimised is not capturable); when it is visible, a picture
+  from Latchkey's own browser of the same address, or the brief switch as today.
+- **Shell open:** opening in the background (`open -g`) by default.
 
 ## What others do (research, 2026-11-02)
 
