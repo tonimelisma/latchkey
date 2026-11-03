@@ -119,7 +119,10 @@ my landlord", tell what's new in the inbox, answer a message, or file it away.
   for the moments it must: opening the message window, pasting files, and pressing Send or
   saving the draft; each after a pause in the Owner's typing, with the app they were using back
   at once; in between the window stays off-screen and is filled with Mail behind (Toni,
-  2026-11-02: "two short blinks").
+  2026-11-02: "two short blinks"). Keys go in only while Mail's focus is in the field being
+  filled; without a pause in the Owner's typing within 30 s nothing is sent; the Owner's own Mail
+  window stays the one their keys go to; and the fields are read again in front, just before
+  Send (security review 2026-11-02).
 
 ### Level, visibility, permissions
 - **FR-830** Mail shall have the levels Off, Read only, Read & write, where Read & write includes

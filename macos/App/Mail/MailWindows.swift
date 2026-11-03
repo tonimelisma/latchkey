@@ -83,18 +83,25 @@ final class AXMailWindows: ComposeWindows, @unchecked Sendable {
         return kinds.map { CGEventSource.secondsSinceLastEventType(.combinedSessionState, eventType: $0) }.min() ?? 0
     }
 
-    /// Waits up to 10 s for a 1-second pause in the Owner's typing and pointer, so keys they type
-    /// don't land in Mail while it is in front (FR-840).
-    static func waitForPause() async {
-        for _ in 0..<40 where idleSeconds() < 1 {
-            try? await Task.sleep(for: .milliseconds(250))
+    /// Waits up to 30 s for a 1-second pause in the Owner's typing and pointer, so keys they type
+    /// don't land in Mail while it is in front (FR-840); without one, nothing more is done
+    /// (security review 2026-11-02).
+    static func waitForPause() async throws {
+        for _ in 0..<120 where idleSeconds() < 1 {
+            try await Task.sleep(for: .milliseconds(250))
+        }
+        guard idleSeconds() >= 1 else {
+            throw ComposeFailure(
+                message:
+                    "the Mac's owner kept typing for 30 seconds, so Mail wasn't brought forward (it would have taken their keys)"
+            )
         }
     }
 
     /// Runs `body` with Mail in front, then gives the front back to the app the Owner was using,
     /// unless they switched elsewhere meanwhile (FR-840).
     func inFront<T>(_ mail: NSRunningApplication, _ body: () async throws -> T) async throws -> T {
-        await Self.waitForPause()
+        try await Self.waitForPause()
         let front = NSWorkspace.shared.frontmostApplication
         let other = front?.processIdentifier == mail.processIdentifier ? nil : front
         lock.withLock { if previous == nil, let other { previous = other } }
@@ -128,8 +135,13 @@ final class AXMailWindows: ComposeWindows, @unchecked Sendable {
         let mail = try await Self.mailApp()
         let app = AXUIElementCreateApplication(mail.processIdentifier)
         AXUIElementSetMessagingTimeout(app, 3)
+        // The Owner's own Mail window, to be the one their keys go to again (security review).
+        let ownersMain = AX.value(app, kAXMainWindowAttribute).flatMap {
+            CFGetTypeID($0) == AXUIElementGetTypeID() ? ($0 as! AXUIElement) : nil
+        }
         let w = try await inFront(mail) { try await openInFront(how, mail: mail, app: app) }
         AX.park(w)
+        if let ownersMain, AX.alive(ownersMain), !CFEqual(ownersMain, w) { AX.makeMain(ownersMain) }
         return AXComposeWindow(app: app, window: w, owner: self)
     }
 
@@ -258,13 +270,32 @@ final class AXComposeWindow: ComposeWindow, @unchecked Sendable {
         return NSRunningApplication(processIdentifier: pid)
     }
 
-    /// Types `text` into the focused field with keys sent to Mail alone, so Mail can stay behind
-    /// (checked live 2026-11-02: "äö €" arrived exactly in a background window).
-    private func typeToMail(_ text: String) async throws {
-        guard let mail else { return }
+    /// Whether Mail's focus is in `target` (it, or something inside it).
+    private func focused(in target: AXUIElement) -> Bool {
+        guard let f = AX.value(app, kAXFocusedUIElementAttribute), CFGetTypeID(f) == AXUIElementGetTypeID() else {
+            return false
+        }
+        var e: AXUIElement? = (f as! AXUIElement)
+        for _ in 0..<20 {
+            guard let current = e else { return false }
+            if CFEqual(current, target) { return true }
+            e = AX.value(current, kAXParentAttribute).flatMap {
+                CFGetTypeID($0) == AXUIElementGetTypeID() ? ($0 as! AXUIElement) : nil
+            }
+        }
+        return false
+    }
+
+    /// Types `text` into `target` with keys sent to Mail alone, so Mail can stay behind (checked
+    /// live 2026-11-02: "äö €" arrived exactly in a background window). False, with nothing more
+    /// typed, as soon as Mail's focus isn't in `target` (security review 2026-11-02).
+    private func typeToMail(_ text: String, into target: AXUIElement) async throws -> Bool {
+        guard let mail else { return false }
+        AXUIElementSetAttributeValue(target, kAXFocusedAttribute as CFString, kCFBooleanTrue)
         let source = CGEventSource(stateID: .privateState)
         for (i, line) in text.components(separatedBy: "\n").enumerated() {
             if i > 0 {
+                guard focused(in: target) else { return false }
                 for down in [true, false] {
                     CGEvent(keyboardEventSource: source, virtualKey: 36, keyDown: down)?.postToPid(
                         mail.processIdentifier)
@@ -272,6 +303,7 @@ final class AXComposeWindow: ComposeWindow, @unchecked Sendable {
             }
             var units = Array(line.utf16)[...]
             while !units.isEmpty {
+                guard focused(in: target) else { return false }
                 let chunk = Array(units.prefix(16))
                 units = units.dropFirst(chunk.count)
                 for down in [true, false] {
@@ -282,6 +314,7 @@ final class AXComposeWindow: ComposeWindow, @unchecked Sendable {
                 try await Task.sleep(for: .milliseconds(15))
             }
         }
+        return true
     }
 
     private func element(_ id: String) -> AXUIElement? {
@@ -362,7 +395,7 @@ final class AXComposeWindow: ComposeWindow, @unchecked Sendable {
         if !insert(text, into: target, atEnd: true) || AX.children(target).count == before {
             AXUIElementSetAttributeValue(target, kAXFocusedAttribute as CFString, kCFBooleanTrue)
             AX.moveCursorToEnd(target)
-            try await typeToMail(text)
+            _ = try await typeToMail(text, into: target)
             try await Task.sleep(for: .milliseconds(300))
         }
         if AX.children(target).count == before {
@@ -407,12 +440,15 @@ final class AXComposeWindow: ComposeWindow, @unchecked Sendable {
         let before = bodyText()
         // Setting the text through Accessibility does nothing in a window behind (2026-11-02);
         // keys sent to Mail alone do.
-        AXUIElementSetAttributeValue(body, kAXFocusedAttribute as CFString, kCFBooleanTrue)
-        try await typeToMail(text)
-        // Mail shows the change a moment later.
-        for _ in 0..<16 {
-            try await Task.sleep(for: .milliseconds(125))
-            if bodyText() != before { return }  // MailCompose checks it is the text, unquoted
+        if try await typeToMail(text, into: body) {
+            // Mail shows the change a moment later.
+            for _ in 0..<16 {
+                try await Task.sleep(for: .milliseconds(125))
+                if bodyText() != before { return }  // MailCompose checks it is the text, unquoted
+            }
+        } else if bodyText() != before {
+            // Focus moved mid-text: what went in is incomplete, so nothing goes out.
+            throw ComposeFailure(message: "Mail's focus left the message while its text was typed")
         }
         guard bodyText() == before, !wanted.isEmpty else { return }
         try await paste(into: body, ClipboardLoan.text(text), atEnd: false)
@@ -467,8 +503,13 @@ final class AXComposeWindow: ComposeWindow, @unchecked Sendable {
         guard let button = element("send") else { throw ComposeFailure(message: "Mail's window has no Send button.") }
         guard let mail else { throw ComposeFailure(message: "Mail isn't running.") }
         // Mail ignores Send pressed while behind (2026-11-02); in front for the press only.
+        let checked = try await fields()
         try await owner.inFront(mail) {
             AX.makeMain(window)
+            // What MailCompose checked is still what goes out (security review 2026-11-02).
+            guard try await fields() == checked else {
+                throw ComposeFailure(message: "Mail's window changed just before Send")
+            }
             AXUIElementPerformAction(button, kAXPressAction as CFString)
             try await Task.sleep(for: .milliseconds(150))
         }
