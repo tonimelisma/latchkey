@@ -518,13 +518,22 @@ final class AXComposeWindow: ComposeWindow, @unchecked Sendable {
         let before = AX.children(target).count
         let text = addresses.joined(separator: ", ") + ", "
         // At the end of the field, so Mail's own recipients stay (MailCompose checks they did).
-        if !insert(text, into: target, atEnd: true) || AX.children(target).count == before {
+        // Each way is given a moment to show before the next is tried: a window behind shows the
+        // address a little later, and trying again added it twice (2026-11-02, a forward refused).
+        func added() async throws -> Bool {
+            for _ in 0..<10 {
+                if AX.children(target).count != before { return true }
+                try await Task.sleep(for: .milliseconds(150))
+            }
+            return false
+        }
+        let shown = insert(text, into: target, atEnd: true) ? try await added() : false
+        if !shown {
             AXUIElementSetAttributeValue(target, kAXFocusedAttribute as CFString, kCFBooleanTrue)
             AX.moveCursorToEnd(target)
             _ = try await typeToMail(text, into: target)
-            try await Task.sleep(for: .milliseconds(300))
         }
-        if AX.children(target).count == before {
+        if !(try await added()) {
             try await paste(into: target, ClipboardLoan.text(text), atEnd: true)
         }
         AXUIElementPerformAction(target, kAXConfirmAction as CFString)
