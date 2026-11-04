@@ -316,6 +316,9 @@ func (c *check) run() error {
 	if err := c.checkSettings(); err != nil {
 		return err
 	}
+	if err := c.checkLog(); err != nil {
+		return err
+	}
 
 	step("rebooting the server: Latchkey comes back with nobody logged in")
 	if _, err := docker(ctx, "restart", c.container); err != nil {
@@ -436,7 +439,7 @@ func (c *check) checkTools() error {
 	if err != nil {
 		return err
 	}
-	for _, name := range []string{"machines", "battery_status", "shell_run", "shell_check", "files_find", "files_read", "files_change"} {
+	for _, name := range []string{"machines", "battery_status", "shell_run", "shell_check", "files_find", "files_read", "files_change", "latchkey_log"} {
 		if tools[name] == nil {
 			return fmt.Errorf("no %s in the tool list", name)
 		}
@@ -563,6 +566,36 @@ func (c *check) checkSettings() error {
 	time.Sleep(1500 * time.Millisecond)
 	if out, err := c.asToni("latchkey activity | tail -n 5; latchkey status"); err != nil || !strings.Contains(out, "files_find") || !strings.Contains(out, "Service: active") {
 		return fmt.Errorf("activity and status on the server: %w\n%s", err, out)
+	}
+	return nil
+}
+
+// checkLog reads the server's own log through latchkey_log (spec 010 FR-1052 to FR-1056): its
+// events since install, and nothing private: no relay address, no calls, commands, or paths.
+func (c *check) checkLog() error {
+	step("Latchkey's own log on the server: its events, nothing private")
+	text, isErr, err := c.call("latchkey_log", map[string]any{"machine": "homeserver"})
+	if err != nil || isErr {
+		return fmt.Errorf("latchkey_log: %w %q", err, text)
+	}
+	for _, want := range []string{
+		"Latchkey's own log on this server (Latchkey ", " app: Latchkey ", ` connection: Connected as "homeserver"`,
+		" settings: Tools changed: shell off", " pause: The server's owner paused Claude's access",
+		" pause: The server's owner resumed Claude's access",
+	} {
+		if !strings.Contains(text, want) {
+			return fmt.Errorf("latchkey_log has no %q:\n%s", want, text)
+		}
+	}
+	for _, private := range []string{"host.docker.internal", "localhost:", "shell_run", "files_", "id -un", "hello", "/home/toni", "sleep 77"} {
+		if strings.Contains(text, private) {
+			return fmt.Errorf("latchkey_log shows %q:\n%s", private, text)
+		}
+	}
+	step("latchkey_log answered:\n%s", indent(text))
+	text, isErr, err = c.call("latchkey_log", map[string]any{"machine": "homeserver", "category": "pause", "lines": 1})
+	if err != nil || isErr || !strings.Contains(text, "pause: The server's owner resumed Claude's access") || strings.Contains(text, "paused Claude's access") {
+		return fmt.Errorf("latchkey_log, one pause line: %w %q", err, text)
 	}
 	return nil
 }

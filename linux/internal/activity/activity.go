@@ -6,12 +6,14 @@ package activity
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"sync"
 	"time"
 )
@@ -27,7 +29,20 @@ type Entry struct {
 	Result     string    `json:"result,omitempty"` // text, cut to maxResult
 	IsError    bool      `json:"is_error,omitempty"`
 	DurationMS int64     `json:"duration_ms,omitempty"`
-	Text       string    `json:"text,omitempty"` // an event's words
+	Text       string    `json:"text,omitempty"` // an event's words, for the Owner
+	// Category is an event's kind (latchkey_log's categories: app, connection, pairing,
+	// settings, pause, update, audit).
+	Category string `json:"category,omitempty"`
+	// Public is the event's words Claude may see through latchkey_log (FR-1053): Text itself, or
+	// Text without its private detail; empty: none (so also every event recorded before the
+	// mark, 2026-11-03).
+	Public string `json:"public,omitempty"`
+}
+
+// shown reports whether Claude may see the entry: an event with public words, of the category
+// ("" any).
+func (e Entry) shown(category string) bool {
+	return e.Kind == "event" && e.Public != "" && (category == "" || e.Category == category)
 }
 
 const (
@@ -35,10 +50,14 @@ const (
 	maxResult    = 2000
 )
 
+// MaxRecent is how many of this run's public events the log keeps in memory (FR-1055).
+const MaxRecent = 1000
+
 // Log appends entries.
 type Log struct {
-	mu   sync.Mutex
-	path string
+	mu     sync.Mutex
+	path   string
+	recent []Entry // this run's public events, oldest first
 }
 
 // Open opens (or creates) the log, readable only by the Owner.
@@ -70,6 +89,12 @@ func (l *Log) Add(e Entry) error {
 	}
 	l.mu.Lock()
 	defer l.mu.Unlock()
+	if e.shown("") {
+		if len(l.recent) == MaxRecent {
+			l.recent = append(l.recent[:0], l.recent[1:]...)
+		}
+		l.recent = append(l.recent, e)
+	}
 	f, err := os.OpenFile(l.path, os.O_APPEND|os.O_WRONLY, 0o600)
 	if err != nil {
 		return err
@@ -78,9 +103,73 @@ func (l *Log) Add(e Entry) error {
 	return errors.Join(err, f.Close())
 }
 
-// Event records something that happened (connected, update installed, leftovers stopped).
-func (l *Log) Event(format string, a ...any) {
-	_ = l.Add(Entry{Kind: "event", Text: fmt.Sprintf(format, a...)})
+// Event records something that happened in words with nothing private in them (FR-1053): the
+// Owner and Claude see the same.
+func (l *Log) Event(category, format string, a ...any) {
+	text := fmt.Sprintf(format, a...)
+	_ = l.Add(Entry{Kind: "event", Category: category, Text: text, Public: text})
+}
+
+// Problem records something that went wrong, in words with nothing private in them.
+func (l *Log) Problem(category, format string, a ...any) {
+	text := fmt.Sprintf(format, a...)
+	_ = l.Add(Entry{Kind: "event", Category: category, IsError: true, Text: text, Public: text})
+}
+
+// Private records an event whose words for the Owner hold a private detail (the relay's
+// address, a path, a call ID); public is the version without it that Claude may see, "" none.
+func (l *Log) Private(category string, isError bool, text, public string) {
+	_ = l.Add(Entry{Kind: "event", Category: category, IsError: isError, Text: text, Public: public})
+}
+
+// Recent is this run's newest n public events of the category ("" any), oldest first.
+func (l *Log) Recent(category string, n int) []Entry {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	var out []Entry
+	for i := len(l.recent) - 1; i >= 0 && len(out) < n; i-- {
+		if l.recent[i].shown(category) {
+			out = append(out, l.recent[i])
+		}
+	}
+	slices.Reverse(out)
+	return out
+}
+
+// Public returns the log's newest n events Claude may see, of the category ("" any), oldest
+// first (FR-1053): never a call, never an event without public words.
+func Public(path, category string, n int) ([]Entry, error) {
+	f, err := os.Open(path) //nolint:gosec // the program's own log, in its data folder
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = f.Close() }()
+	if n <= 0 {
+		return nil, nil
+	}
+	ring := make([]Entry, 0, n)
+	oldest := 0 // ring's oldest once it is full
+	r := bufio.NewReader(f)
+	for {
+		line, err := r.ReadBytes('\n')
+		if len(line) > 0 && bytes.Contains(line, []byte(`"public":`)) {
+			var e Entry
+			if json.Unmarshal(line, &e) == nil && e.shown(category) {
+				if len(ring) < n {
+					ring = append(ring, e)
+				} else {
+					ring[oldest] = e
+					oldest = (oldest + 1) % n
+				}
+			}
+		}
+		if err == io.EOF {
+			return append(ring[oldest:], ring[:oldest]...), nil
+		}
+		if err != nil {
+			return nil, err
+		}
+	}
 }
 
 func cut(s string, n int) string {

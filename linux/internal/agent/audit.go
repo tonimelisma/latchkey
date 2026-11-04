@@ -40,7 +40,7 @@ func (a *Agent) auditCheck(ctx context.Context, c *conn, answers <-chan *agentpr
 			return
 		case got = <-answers:
 		case <-time.After(30 * time.Second):
-			a.Log.Event("Audit check: the relay didn't answer")
+			a.Log.Problem("audit", "Audit check: the relay didn't answer")
 			return
 		}
 		for _, e := range got.Entries {
@@ -73,9 +73,12 @@ func (a *Agent) auditCheck(ctx context.Context, c *conn, answers <-chan *agentpr
 	missingHere, missingThere := activity.Compare(recent, settled, running)
 	switch {
 	case len(missingHere) == 0 && len(missingThere) == 0:
-		a.Log.Event("Audit check: all %d calls match the relay's audit", len(settled))
-	default:
-		a.Log.Event("Audit check: %d calls in the relay's audit aren't in this log (%s); %d logged calls aren't in the relay's audit (%s)",
-			len(missingHere), strings.Join(missingHere, ", "), len(missingThere), strings.Join(missingThere, ", "))
+		a.Log.Event("audit", "Audit check: all %d calls match the relay's audit", len(settled))
+	default: // call IDs for the Owner only (FR-1053)
+		a.Log.Private("audit", true,
+			fmt.Sprintf("Audit check: %d calls in the relay's audit aren't in this log (%s); %d logged calls aren't in the relay's audit (%s)",
+				len(missingHere), strings.Join(missingHere, ", "), len(missingThere), strings.Join(missingThere, ", ")),
+			fmt.Sprintf("Audit check: %d calls in the relay's audit aren't in this log; %d logged calls aren't in the relay's audit",
+				len(missingHere), len(missingThere)))
 	}
 }

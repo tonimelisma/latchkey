@@ -24,6 +24,7 @@ import (
 	"github.com/tonimelisma/latchkey/linux/internal/config"
 	"github.com/tonimelisma/latchkey/linux/internal/devicekey"
 	"github.com/tonimelisma/latchkey/linux/internal/files"
+	"github.com/tonimelisma/latchkey/linux/internal/latchkeylog"
 	"github.com/tonimelisma/latchkey/linux/internal/shell"
 	"github.com/tonimelisma/latchkey/linux/internal/tools"
 	"github.com/tonimelisma/latchkey/relay/agentproto"
@@ -48,6 +49,8 @@ type Agent struct {
 	settings config.Settings
 	toolset  map[string]tools.Tool
 	running  map[string]context.CancelFunc // call id → cancel
+
+	lastProblem string // the last reason recorded by once, "" after a connection
 }
 
 // ErrNotPaired: no device ID or key yet; `latchkey install` pairs.
@@ -75,11 +78,14 @@ func (a *Agent) Run(ctx context.Context) error {
 			err = ErrNotPaired
 		}
 		var key *devicekey.Key
+		step := stepSettings
 		if err == nil {
+			step = stepKey
 			key, err = devicekey.Load(a.Paths.Key)
 		}
 		if err != nil {
 			a.Logger.Warn("not connecting", "err", err)
+			a.once("connection", true, "Not connecting: "+err.Error(), notConnecting(step, err))
 			if !sleep(ctx, 5*time.Second) {
 				break
 			}
@@ -94,7 +100,7 @@ func (a *Agent) Run(ctx context.Context) error {
 		var ce closeError
 		switch {
 		case errors.As(err, &ce) && ce.code == agentproto.CloseRevoked:
-			a.Log.Event("Removed from the account on the relay; the device key was deleted. Run latchkey install to pair again.")
+			a.Log.Event("pairing", "Removed from the account on the relay; the device key was deleted. Run latchkey install to pair again.")
 			a.Logger.Warn("revoked by the relay: unpairing")
 			_ = os.Remove(a.Paths.Key)
 			if s2, err := config.Load(a.Paths); err == nil && s2.DeviceID == s.DeviceID {
@@ -114,12 +120,31 @@ func (a *Agent) Run(ctx context.Context) error {
 			backoff = min(backoff*2, time.Minute)
 		}
 		a.Logger.Info("disconnected", "err", err, "retry_in", wait)
+		why := describe(err, s.Relay)
+		a.once("connection", !errors.Is(err, errReconnect),
+			fmt.Sprintf("Disconnected: %v; trying again in %s", err, wait),
+			fmt.Sprintf("Disconnected: %s; trying again in %s", why, wait), why)
 		if !sleep(ctx, wait) {
 			break
 		}
 	}
 	a.Shell.Close()
 	return nil
+}
+
+// once records an event unless the same public words (or key, when given) were the last thing
+// recorded this way since the last connection: a reconnect loop records each reason once
+// (FR-1056).
+func (a *Agent) once(category string, isError bool, text, public string, key ...string) {
+	k := public
+	if len(key) > 0 {
+		k = key[0]
+	}
+	if k == a.lastProblem {
+		return
+	}
+	a.lastProblem = k
+	a.Log.Private(category, isError, text, public)
 }
 
 func sleep(ctx context.Context, d time.Duration) bool {
@@ -240,7 +265,8 @@ func (a *Agent) session(ctx context.Context, s config.Settings, key *devicekey.K
 		name = welcome.Name
 	}
 	a.Logger.Info("connected", "relay", s.Relay, "name", name)
-	a.Log.Event("Connected to %s as %q", s.Relay, name)
+	a.Log.Private("connection", false, fmt.Sprintf("Connected to %s as %q", s.Relay, name), fmt.Sprintf("Connected as %q", name))
+	a.lastProblem = ""
 	if a.OnWelcome != nil {
 		a.OnWelcome()
 	}
@@ -278,6 +304,7 @@ func (a *Agent) toolsFor(s config.Settings) map[string]tools.Tool {
 		list = append(list, a.Shell.Tools()...)
 	}
 	list = append(list, a.Files.Tools(s.Files)...)
+	list = append(list, latchkeylog.Tool(a.Log, a.Paths.Activity, a.Version)) // always (FR-1052)
 	for _, t := range list {
 		out[t.Def.Name] = t
 	}
@@ -368,6 +395,8 @@ func (a *Agent) call(ctx context.Context, c *conn, m *agentproto.Call) {
 	}
 	if err := c.send(ctx, res.Encode(m.ID)); err != nil {
 		a.Logger.Warn("result not sent", "call", m.ID, "err", err)
+		a.Log.Private("connection", true, fmt.Sprintf("The answer to call %s couldn't be sent: %v", m.ID, err),
+			"An answer couldn't be sent to the relay: "+describe(err, s.Relay))
 	}
 	_ = a.Log.Add(activity.Entry{
 		Kind: "call", CallID: m.ID, Tool: m.Tool, Client: m.Client, Arguments: string(m.Arguments),
@@ -468,6 +497,13 @@ func (a *Agent) watchSettings(ctx context.Context, c *conn) error {
 		if s.DeviceID != old.DeviceID || s.Relay != old.Relay || s.MachineName() != old.MachineName() {
 			return errReconnect
 		}
+		if s.Paused != old.Paused {
+			if s.Paused {
+				a.Log.Event("pause", "The server's owner paused Claude's access")
+			} else {
+				a.Log.Event("pause", "The server's owner resumed Claude's access")
+			}
+		}
 		enableShell(a.Shell, s) // first refuse new commands, then stop the running ones
 		if (old.Shell == config.On && s.Shell != config.On) || (!old.Paused && s.Paused) {
 			a.Shell.StopAll(shellOffReason(s))
@@ -478,7 +514,7 @@ func (a *Agent) watchSettings(ctx context.Context, c *conn) error {
 		a.settings, a.toolset = s, toolset
 		a.mu.Unlock()
 		if changed {
-			a.Log.Event("Tools changed: shell %s, files %s", s.Shell, s.Files)
+			a.Log.Event("settings", "Tools changed: shell %s, files %s", s.Shell, s.Files)
 			if err := c.send(ctx, &agentproto.ToolsUpdate{Tools: defs(toolset)}); err != nil {
 				return err
 			}

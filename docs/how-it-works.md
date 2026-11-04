@@ -145,7 +145,9 @@ there (Shell on and Files read & write to start), `latchkey pause` stops everyth
 activity` shows what Claude did, and `latchkey uninstall` removes it all. Commands run in bash
 as you; sudo works for what you allowed without a password and otherwise answers at once (it
 never waits for one); whatever a command leaves running is stopped when it finishes, sudo's too.
-Deleting a file on a server deletes it for good. Details:
+Deleting a file on a server deletes it for good. As on a Mac, Claude can always read
+Latchkey's own recent log on the server (connections, settings, pause, updates), never what it
+did there, file names, or the relay's address. Details:
 [specs/010-multi-host/contracts/server-program.md](../specs/010-multi-host/contracts/server-program.md).
 
 ## Run your own relay

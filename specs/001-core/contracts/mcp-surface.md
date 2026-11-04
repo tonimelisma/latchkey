@@ -187,12 +187,14 @@ Pass a machine's name as machine when more than one offers a tool.
 
 An offline machine shows "offline, last seen 3 hours ago" (or "offline, never connected"); a
 machine with every capability off shows "offers no tools (all turned off on it)" (since
-2026-11-03 a Mac never does: it always offers `latchkey_log`, below).
+2026-11-03 a Mac never does: it always offers `latchkey_log`, below, as a Linux server does).
 
 ### `latchkey_log`: Latchkey's own log on a Mac (FR-662 to FR-665, plan D26)
 
 Offered by every Mac whatever its capabilities' levels; refused while paused like every call.
-Read-only (`readOnlyHint: true`), deadline 10 s. Not offered by Linux servers.
+Read-only (`readOnlyHint: true`), deadline 10 s. Linux servers offer it too, with their own
+categories (spec 010 FR-1052 to FR-1056, contracts/server-program.md); the relay's union gives
+the description a part per kind and the enum both kinds' values.
 
 - Input (both optional): `lines`, a whole number from 1 to 1000 (default 200), the newest that
   many; `category`, one of `app`, `connection`, `keepawake`, `helper`, `power`, `permissions`,

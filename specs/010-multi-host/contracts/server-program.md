@@ -127,6 +127,26 @@ Shell: `shell_run` (`command`, `folder`, `wait` 1–30, `keep_minutes` 0–1440,
 structured content. Every answer ends with `Commands: <id> running, <id> kept until HH:MM` while
 any are, and Shell answers say when cgroups are unusable.
 
+`latchkey_log` (FR-1052 to FR-1056, plan D15): always offered, whatever Shell and Files are;
+refused while paused like every call. Read-only, deadline 10 s. Arguments and answer as the
+Mac's (spec 001 contracts/mcp-surface.md "`latchkey_log`"), "server" in place of "Mac":
+`lines` 1–1000 (default 200), `category` one of `app`, `connection`, `pairing`, `settings`,
+`pause`, `update`, `audit`. Lines are the activity log's events that carry public words (never
+calls, never events from before the mark, made from server 0.1.1 on); without the log, this run's lines from memory
+(at most 1000), and the header says so.
+
+```
+Latchkey's own log on this server (Latchkey 0.1.1): the newest 3 lines, newest last; times in Etc/UTC (UTC+00:00).
+2026-11-03 22:02:09 app: Latchkey 0.1.1 started
+2026-11-03 22:02:11 connection ERROR: Disconnected: the relay refused the connection; trying again in 2s
+2026-11-03 22:02:13 connection: Connected as "homeserver"
+```
+
+Without the log: "… Latchkey's activity log isn't available just now (<why, scrubbed>), so these
+are only the lines since Latchkey started." The time zone is `TZ`, else the name `/etc/localtime`
+points to, else its abbreviation. Activity entries gain `category` and `public` (the words Claude
+may see; absent: none).
+
 ## Releases and updates
 
 GitHub release `server-v<VERSION>` (`linux/VERSION`) with `latchkey-linux-amd64`,

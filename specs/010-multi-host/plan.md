@@ -255,6 +255,33 @@ account"). Fixtures updated; patch version bumped.
 - Live: after deploy, the server program installed on Toni's Google VM through the install
   line against the hosted relay, and a fresh `claude -p` session uses both the Mac and the VM.
 
+### D15 Latchkey's log for Claude on Linux (FR-1052 to FR-1056; Toni, 2026-11-03)
+
+- Tool `latchkey_log` (contracts/server-program.md "Tools"), `internal/latchkeylog`, always in
+  the toolset (`agent.toolsFor`), whatever Shell and Files are; Pause refuses it like every call.
+  Same arguments and answer as the Mac's (spec 001 contracts/mcp-surface.md); the categories are
+  the server's own (`app`, `connection`, `pairing`, `settings`, `pause`, `update`, `audit`), so the
+  relay's union (D2) gives the enum both kinds' values and the description a part per kind. The
+  relay needs no change.
+- Source: the server's activity log (D11), not the systemd journal (research.md "Where the
+  server's log lines come from"). Each event now carries `category` and `public`: the words
+  Claude may see, empty when none. `Event`/`Problem` record words with nothing private (the same
+  for the Owner and Claude); `Private` records the Owner's words and a public version without the
+  detail (or none). Entries without `public` (before this version) and calls are never returned
+  (FR-1053). The log also keeps this run's newest 1000 public events in memory for FR-1055.
+- What is kept out (FR-1053): the relay's address in "Connected to … as …" (public: "Connected
+  as …"); call IDs in the audit check's mismatch and in an answer not sent (public: counts only);
+  raw errors, which carry the relay's address, its IP, URLs, and file paths: the public words
+  name the kind of failure (`agent.describe`: closed by the relay with its code, timed out, name
+  not found, refused, reset, unreachable, certificate refused, dropped), and anything else is
+  scrubbed (`agent.scrub`: the relay's address and host, any URL, IP address, and absolute path
+  replaced by words). Not connecting names the step that failed (not paired, settings, device
+  key), never the error's path.
+- New events (FR-1056): started and stopped (`app`), each disconnect with its reason and the
+  wait (`connection`; the same reason again before a connection is recorded once), not connecting
+  (once per reason), an answer not sent, pause and resume (`pause`), the name changing
+  (`settings`), a failed update check (`update`). The journal keeps its `slog` lines.
+
 ## Milestones (dependency order)
 
 1. Protocol package public; contracts and fixtures (D3).
@@ -269,7 +296,8 @@ account"). Fixtures updated; patch version bumped.
 
 - I: servers dial out only (D8). II: every call still bounded by the hub's deadline; ambiguous or
   unknown machines answered at once (D4). III: a machine's list holds only enabled tools, a call
-  naming a machine without the tool is refused (D4); per-kind notes describe only kinds paired.
+  naming a machine without the tool is refused (D4); `latchkey_log` is no capability, reads only
+  the program's own public events, and is refused while paused (D15); per-kind notes describe only kinds paired.
   IV: one systemd service, the Owner's sudo untouched, uninstall leaves nothing (D8, D12); the
   Mac app unchanged in kind. V: same relay image; server releases from the same repository, fork
   sets its own key (D12). VI: new table `device_pairings` and column `kind` listed in

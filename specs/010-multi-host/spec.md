@@ -155,6 +155,32 @@ and pairing a second Mac replaces the first (spec 001 FR-053).
   Mac's is (spec 001 FR-630 to FR-637).
 - **FR-1051** The activity log shall be readable only by the Owner's account.
 
+### Linux server: Latchkey's log for Claude (Toni, 2026-11-03: "fix everything, properly")
+
+Why: the Mac offers Claude its own recent log lines so Claude can find out why Latchkey isn't
+working (spec 001 FR-662 to FR-665); a server Claude can't diagnose is the same problem.
+
+- **FR-1052** A server shall offer Claude the same read-only tool as the Mac's (spec 001 FR-662),
+  with the same name and arguments, whatever Shell's and Files' levels, while it is connected;
+  while access is paused it shall refuse it like every call.
+- **FR-1053** The tool shall return only the program's own events recorded as public: never
+  Claude's calls, their arguments or results, commands, call IDs, file paths, the relay's address
+  or network addresses, and never an event recorded before the server could tell which of its
+  events were public. When an event's words for the Owner hold such a detail, the server shall
+  record a public version without it, or none.
+- **FR-1054** When Claude asks, the tool shall answer as the Mac's does (spec 001 FR-664): the
+  newest lines, newest last, 200 unless Claude asks for another number up to 1000, optionally of
+  one kind of event only; each line with the time in the server's time zone, the kind, whether it
+  was an error, and the text; the version that answered; and the oldest lines left out, saying
+  how many, when they wouldn't fit in one answer.
+- **FR-1055** When the activity log can't be read, the tool shall return this run's lines from
+  memory instead and say so (as spec 001 FR-665).
+- **FR-1056** The server shall record, as such events, its start and stop, each connection and
+  why it ended, why it isn't connecting, an answer it couldn't send, setting and pause changes,
+  updates and failed update checks, and the audit check, each in words without the details of
+  FR-1053 (so a server that won't connect says why); the same failure repeated while
+  reconnecting shall be recorded once.
+
 ## Success criteria
 
 - **SC-1001** From the phone, with a Mac and a server paired, "how full is homeserver's disk?" is

@@ -124,6 +124,38 @@ compatible.
   `pdftotext` (a package the server may not have). Terminal: `github.com/creack/pty` (MIT).
   Details in contracts/server-program.md.
 
+## Where the server's log lines come from (2026-11-03, for `latchkey_log`, plan D15)
+
+The Mac's `latchkey_log` reads its activity log's events marked public (spec 001 plan D26). The
+server writes two things today: `slog` lines to standard error, which systemd puts in the
+journal, and events in its own activity log (`activity.jsonl`, D11).
+
+| Option | For | Against |
+|---|---|---|
+| Read the unit's journal (`journalctl -u latchkey -o json`) | Holds everything the program printed, systemd's own lines too | Free text: the `slog` lines carry the relay's address and raw errors (IPs, paths), so every line would need filtering after the fact, with no mark of what is public. Whether the Owner may read it depends on the distribution: by default only root and the `systemd-journal`/`adm` groups read the system journal; a user reads "their private per-user journals" (journalctl(1), https://www.freedesktop.org/software/systemd/man/latest/journalctl.html), which exist only with persistent storage ("splitting up journal files by user is only available for journals stored persistently", journald.conf(5), https://www.freedesktop.org/software/systemd/man/latest/journald.conf.html). Tried on Debian 12 (the test container, `/var/log/journal` present, `SplitMode=uid`): the service's user read its unit's lines, with a warning about ACLs. With volatile storage (`Storage=auto` and no `/var/log/journal`) it wouldn't. Kept as long as journald's size limits allow, not as long as Latchkey decides; needs `journalctl` in a child process |
+| A separate bounded file of public lines | Exactly what Claude may see | A second log beside the activity log; two writes per event |
+| **The activity log's events, each marked with its public words (chosen)** | Same design as the Mac (one store, the mark made when the event is recorded, by the code that knows what is private); survives restarts; readable only by the Owner already (FR-1051); no permission or distribution question; old events (no mark) stay out by construction | Events had no category or error flag, and the `slog`-only lines (disconnects, not connecting, update check failed, answer not sent) weren't events: added (FR-1056), with repeats recorded once |
+
+Every log call in `linux/` (2026-11-03) and what Claude may see of it:
+
+| Where | Owner's words | Claude's words |
+|---|---|---|
+| `agent.session` connected | "Connected to <relay> as "name"" | "Connected as "name"" (relay's address out) |
+| `agent.Run` disconnected | the raw error | the kind of failure, else the error scrubbed of addresses, IPs, URLs, paths |
+| `agent.Run` not connecting | the raw error (paths) | the step: not paired, settings unreadable, device key unreadable |
+| `agent.Run` revoked | same | same |
+| `agent.call` answer not sent | call ID and raw error | "An answer couldn't be sent", the kind of failure; no call ID |
+| `agent.watchSettings` tools changed, pause, name | same | same (levels only; no names) |
+| `agent.auditCheck` mismatch | counts and call IDs | counts only |
+| `agent.auditCheck` match, no answer | same | same |
+| `main.run` rollback, update installed, started, stopped | same | same (versions) |
+| `main.dailyUpdates` update check failed | raw error | scrubbed |
+| Tool calls (`kind: call`) | in the log | never |
+
+The journal keeps its `slog` lines for the Owner (`journalctl -u latchkey`). Note: with Files on,
+Claude can read `activity.jsonl` itself (Latchkey's own files can be read, FR-1043), calls
+included; `latchkey_log` doesn't widen that, and doesn't depend on it.
+
 ## End to end: how Claude uses several machines
 
 Asked by Toni, 2026-10-31, before the shared tools' shape was chosen.

@@ -346,14 +346,14 @@ func run(p config.Paths) error {
 	s, _ := config.Load(p)
 	up := update.New(p, s, version)
 	if rollBack, awaiting := up.Started(); rollBack {
-		log.Event("Version %s went back to the previous version: it never connected", version)
+		log.Problem("update", "Version %s went back to the previous version: it never connected", version)
 		os.Exit(1) // systemd starts the previous version
 	} else if awaiting {
 		go func() {
 			time.Sleep(3 * time.Minute)
 			if !up.Confirmed() {
 				if up.RollBack("not welcomed within 3 minutes") == nil {
-					log.Event("Version %s went back to the previous version: the relay didn't welcome it within 3 minutes", version)
+					log.Problem("update", "Version %s went back to the previous version: the relay didn't welcome it within 3 minutes", version)
 					os.Exit(1)
 				}
 			}
@@ -370,8 +370,11 @@ func run(p config.Paths) error {
 			return strings.TrimSpace(string(out)) == "stopping"
 		},
 	}
+	log.Event("app", "Latchkey %s started", version)
 	go dailyUpdates(ctx, p, log, logger, stop)
-	return a.Run(ctx)
+	err = a.Run(ctx)
+	log.Event("app", "Latchkey %s stopped", version)
+	return err
 }
 
 // dailyUpdates checks for a new release 10 minutes after start and then daily; an installed
@@ -394,8 +397,9 @@ func dailyUpdates(ctx context.Context, p config.Paths, log *activity.Log, logger
 		case errors.Is(err, update.ErrUpToDate):
 		case err != nil:
 			logger.Warn("update check failed", "err", err)
+			log.Private("update", true, "The update check failed: "+err.Error(), "The update check failed: "+agent.Scrub(err.Error(), s.Relay))
 		default:
-			log.Event("Updated from %s to %s; restarting", version, v)
+			log.Event("update", "Updated from %s to %s; restarting", version, v)
 			stop()
 			return
 		}

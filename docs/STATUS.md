@@ -94,7 +94,18 @@ something in Latchkey isn't working. Only the app's events that macOS's log has 
 Claude's calls, the relay's address, or file names. Offered whatever the capabilities' levels.
 Lines come from the activity log, so they survive restarts, but only events recorded from this
 version on (older ones can't be told apart). Installed in 0.8.104 and checked live.
-The relay needs no change; Linux servers don't offer it (a separate job).
+The relay needs no change. Linux servers offer it too (below).
+
+Latchkey's log on Linux servers (Toni, 2026-11-03, "fix everything, properly"; spec 010 FR-1052
+to FR-1056, plan D15): servers now offer `latchkey_log` with the Mac's arguments and answer,
+always, refused while paused. Lines come from the server's own activity log, where each event
+now carries a kind and the words Claude may see (the systemd journal was weighed and rejected:
+free text with the relay's address, and readable by the Owner only with persistent storage;
+research.md). Kept from Claude: the relay's address ("Connected as …"), call IDs, raw errors
+(described by kind or scrubbed of addresses, IPs, URLs, paths); new events say why a server
+disconnects or won't connect, pause and resume, and failed update checks. Tests, lint, the
+Debian container tests, and the end-to-end check (a real MCP client reading the server's log)
+pass. Not yet shipped: bump `linux/VERSION`, release, and a live call on a paired server.
 
 Browser reaches the Owner's tabs (Toni, 2026-11-03: "Claude needs to be able to access my tabs
 and windows just like its own"; spec 005 FR-424 to FR-431, plan D8): `browser_read tabs` lists
