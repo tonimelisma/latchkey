@@ -149,6 +149,7 @@ import Testing
             return looks.value == 1
                 ? AppListing(items: [
                     Self.el("e1", "AXWindow", "FormLab"), Self.el("e2", "AXButton", ""), Self.el("e3", "AXButton", ""),
+                    Self.el("e4", "AXStaticText", "", value: "FormLab"),  // the title, as live
                 ]) : AppListing(items: Self.page)
         }
         let r = await look(e)
