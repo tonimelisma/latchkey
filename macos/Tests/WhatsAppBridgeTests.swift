@@ -228,6 +228,25 @@ import WebKit
         #expect(try await call(w, "linkByPhone", .object(["number": .string("12")]))["error"] != nil)
     }
 
+    /// In Latchkey's page the first press did nothing (WhatsApp Web hadn't set up its handlers).
+    @Test func linkByPhonePressesAgainUntilTheFieldShows() async throws {
+        let w = try await page()
+        _ = try await js(
+            w,
+            #"""
+            document.body.innerHTML = '<div role="button" id="by-phone"><span>Log in with phone number</span></div>';
+            let presses = 0;
+            document.getElementById('by-phone').onclick = () => {
+              if (++presses < 3) return;
+              document.body.innerHTML = '<input aria-label="Type your phone number to log in to WhatsApp" value="+1 "><button id="next">Next</button>';
+              document.getElementById('next').onclick = () => { document.body.innerHTML = '<p>Enter code</p><p>WXYZ-1234</p><p>more</p>'; };
+            };
+            """#)
+        #expect(
+            try await call(w, "linkByPhone", .object(["number": .string("14155550100")]))["code"]?.stringValue
+                == "WXYZ-1234")
+    }
+
     @Test func noSuchChatIsAnError() async throws {
         let w = try await page()
         #expect(try await call(w, "send", .object(["chat": .string("x@c.us"), "text": .string("y")]))["error"] != nil)

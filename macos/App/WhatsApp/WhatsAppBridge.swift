@@ -245,8 +245,15 @@ enum WhatsAppBridge {
               const press = (e) => (e.closest('button,[role=button],a,[tabindex]') || e).click();
               const start = await until(() => leaf(/^Log in with phone number$/) || document.querySelector('input[aria-label*="phone number"]'), 20000);
               if (!start) return { error: 'the log-in screen did not show' };
-              if (start.tagName !== 'INPUT') press(start);
-              const input = await until(() => document.querySelector('input[aria-label*="phone number"]'), 8000);
+              // A press before WhatsApp Web has set up its handlers does nothing (2026-11-03, in
+              // Latchkey's page), so it is pressed again until the field shows.
+              const field = () => document.querySelector('input[aria-label*="phone number"]');
+              let input = field();
+              for (let i = 0; i < 16 && !input; i++) {
+                const link = leaf(/^Log in with phone number$/);
+                if (link) press(link);
+                input = await until(field, 1500);
+              }
               if (!input) return { error: 'the phone number field did not show' };
               input.focus();
               document.execCommand('selectAll');

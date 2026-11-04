@@ -33,6 +33,8 @@ after the app was quit.
 ## Next steps
 
 WhatsApp (spec 012) built and installed in 0.8.101, with the page kept to WhatsApp Web in 0.8.102
+and linking by code made reliable in 0.8.103 (the first press of "Log in with phone number" did
+nothing in Latchkey's page; it is now pressed until the field shows; code FH7P-WNWV given live)
 (2026-11-03). Four tools: `whatsapp_find`
 and `whatsapp_read` read WhatsApp for Mac's database when it is on the Mac (works locked; current
 only while that app is open; pinned chats and privacy-id senders handled), else Latchkey's own
