@@ -138,9 +138,10 @@ start them inside one; they write nothing), and `HOMEBREW_TEMP` points at the sc
 (Homebrew's default is `/private/tmp`), and bash's here-document files (`/private/tmp/sh-thd…`,
 deleted as soon as read; Homebrew's bash runs without `TMPDIR`) may be written, from the live
 check of 2026-10-27. zsh writes its here-documents and `=(…)` to `$TMPPREFIX`, `/tmp/zsh` unless
-set, so every one failed until the job got `TMPPREFIX` in its scratch folder, and zsh's own
-names in `/private/tmp` (`zsh…`) are allowed as bash's are, for a zsh started without it (bug
-report 2026-11-03).
+set, so every one failed until the job got `TMPPREFIX` in its scratch folder (a zsh the command
+starts inherits it). zsh's names in `/private/tmp` are not allowed as bash's are: a command
+could then overwrite the Owner's own shells' files there (security review 2026-11-03); a zsh
+started with `TMPPREFIX` cleared fails as before (bug report 2026-11-03).
 
 Programs macOS stopped (FR-332, 2026-11-03): macOS writes a crash report
 (`~/Library/Logs/DiagnosticReports/*.ips`, a one-line header and a JSON body) a few seconds

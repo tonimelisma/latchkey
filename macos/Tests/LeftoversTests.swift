@@ -584,11 +584,11 @@ final class Reports: @unchecked Sendable {
     @Test func zshHereDocumentsWorkInsideTheFence() async throws {
         let r = try await jobs.run(
             "cat > $TMPDIR/x <<'EOF'\nZSH-HEREDOC-OK\nEOF\ncat $TMPDIR/x; cat =(echo ZSH-SUBST-OK); "
-                + "env -u TMPPREFIX /bin/zsh -f -c 'cat <<<ZSH-BARE-OK'",
+                + "/bin/zsh -f -c 'cat <<<ZSH-INNER-OK'",
             folder: nil, wait: .seconds(20))
         #expect(r.output.contains("ZSH-HEREDOC-OK"), "\(r.output)")
         #expect(r.output.contains("ZSH-SUBST-OK"), "\(r.output)")
-        #expect(r.output.contains("ZSH-BARE-OK"), "a zsh started without TMPPREFIX: \(r.output)")
+        #expect(r.output.contains("ZSH-INNER-OK"), "a zsh the command starts: \(r.output)")
         #expect(!r.refusedWrite, "\(r.output)")
     }
 

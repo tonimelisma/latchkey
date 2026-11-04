@@ -127,10 +127,7 @@ enum Fence {
             // bash's here-document files, deleted as soon as read; Homebrew clears TMPDIR before
             // its bash runs, so they land in /tmp (live check 2026-10-27). bash first checks that
             // /tmp itself is writable, which the folder rule allows; files in it stay fenced.
-            // zsh's (here-documents, =(…)) are /tmp/zsh… when a zsh runs without the job's
-            // TMPPREFIX (bug report 2026-11-03).
-            "(allow file-write* (literal \"/private/tmp\") (regex #\"^/private/tmp/sh-thd[^/]*$\")"
-                + " (regex #\"^/private/tmp/zsh[^/]*$\"))",
+            "(allow file-write* (literal \"/private/tmp\") (regex #\"^/private/tmp/sh-thd[^/]*$\"))",
         ]
         let permanentPaths = permanent.map { OwnFiles.real(realHome.appending(path: $0)) }
         rules.append(

@@ -32,6 +32,21 @@ after the app was quit.
 
 ## Next steps
 
+Bug report of 2026-11-03 (a claim form in background Safari, emails to PDF) fixed in 0.8.104:
+zsh here-documents and `=(…)` work in Shell's fence (`TMPPREFIX` in the scratch folder); Shell
+names programs macOS stopped (from its crash reports, also in the answer after; spec 004
+FR-332), and its description says apps start only with `uses` `open` (headless Chrome made a PDF
+that way with `--no-sandbox`); background typing checks the focus really moved (macOS says yes
+even when it didn't: reproduced on a WebKit test page), reads the value back, and names what had
+the focus without a reference; every press, type, or choose names other values that changed; a
+new `choose` picks a dropdown option by name (native menus by typing, web ones by pressing the
+option); an app's window lists each element once (table cells were listed two or three times),
+drops repeated labels, 300 at a time with `after`, `within`, `match` from the same look, and says
+when it was cut (spec 006 FR-511 to FR-514). The two checkboxes checked after one press stay
+unexplained: a background press changed nothing else on the test page; answers now name such
+changes. Toni chose to let Claude reach his own Safari tabs like its own (spec 005, in progress
+on a helper branch) and to add `latchkey_log` (below).
+
 WhatsApp (spec 012) built and installed in 0.8.101, with the page kept to WhatsApp Web in 0.8.102
 and linking by code made reliable in 0.8.103 (the first press of "Log in with phone number" did
 nothing in Latchkey's page; it is now pressed until the field shows; code FH7P-WNWV given live)
