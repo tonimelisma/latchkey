@@ -16,6 +16,8 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate {
     /// to Claude with the next page; a confirm is answered Cancel and a prompt with nothing, so a
     /// page never gets a yes from Latchkey on its own (2026-11-02).
     private(set) var dialogs: [String] = []
+    /// Claude's answers for the action that runs (FR-432); Cancel and no text otherwise.
+    var dialogAnswer = DialogAnswer()
     private var droppedDialogs = 0
     /// True while Claude's own click, typing, or script runs: only then may the page open a new
     /// window (security review 2026-11-02: a page's own pop-up can't take Claude's page away).
@@ -67,17 +69,14 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate {
         return dialogs + (droppedDialogs > 0 ? ["…and \(droppedDialogs) more."] : [])
     }
 
-    /// At most 5 notes of at most 200 characters, on one line, without the «» that frame them
-    /// (security review 2026-11-02: a page could flood Claude or pose as Latchkey's own words).
-    private func note(_ prefix: String, _ text: String, _ suffix: String) {
+    /// At most 5 notes (security review 2026-11-02: a page could flood Claude), worded as in
+    /// Safari (`PageScripts.dialogNote`).
+    private func note(_ kind: String, _ message: String, _ answer: String?) {
         guard dialogs.count < 5 else {
             droppedDialogs += 1
             return
         }
-        let clean = String(
-            text.replacingOccurrences(of: "«", with: "\"").replacingOccurrences(of: "»", with: "\"")
-                .components(separatedBy: .newlines).joined(separator: " ").prefix(200))
-        dialogs.append("\(prefix) «\(clean)»\(suffix)")
+        dialogs.append(PageScripts.dialogNote(kind: kind, message: message, answer: answer))
     }
 
     // MARK: the page's dialogs and new windows
@@ -87,7 +86,7 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate {
         initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping @MainActor @Sendable () -> Void
     ) {
         MainActor.assumeIsolated {
-            note("The page showed an alert:", message, " (dismissed).")
+            note("alert", message, nil)
             completionHandler()
         }
     }
@@ -97,8 +96,9 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate {
         initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping @MainActor @Sendable (Bool) -> Void
     ) {
         MainActor.assumeIsolated {
-            note("The page asked to confirm:", message, "; Latchkey answered Cancel.")
-            completionHandler(false)
+            let ok = acting && dialogAnswer.confirm
+            note("confirm", message, ok ? "ok" : "cancel")
+            completionHandler(ok)
         }
     }
 
@@ -107,8 +107,9 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate {
         initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping @MainActor @Sendable (String?) -> Void
     ) {
         MainActor.assumeIsolated {
-            note("The page asked for text:", prompt, "; Latchkey gave none.")
-            completionHandler(nil)
+            let text = acting ? dialogAnswer.text : nil
+            note("prompt", prompt, text ?? "")
+            completionHandler(text)
         }
     }
 

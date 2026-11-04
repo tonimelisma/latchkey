@@ -59,6 +59,67 @@ enum PageScripts {
 
     static let stamp = "String(performance.timeOrigin) + '|' + document.readyState + '|' + location.href"
 
+    /// Put in the page before each script (spec 005 FR-432): the page's alert, confirm, and
+    /// prompt answer at once, as `a` says (Cancel and no text unless Claude's action says
+    /// otherwise), and note what they said, in the page and its frames Latchkey can reach.
+    /// A page's own dialog would otherwise stop the page, and every script in it, until someone
+    /// answers it in Safari (2026-11-03: a script in a tab with an alert waiting timed out, and so
+    /// did its text and source).
+    static func dialogAnswers(_ a: DialogAnswer) -> String {
+        // nosemgrep: latchkey-page-script-literal -- splices in only a Bool and literal(text).
+        """
+        (function () {
+          var k = '__latchkeyDialogs', ok = \(a.confirm ? "true" : "false"), text = \(a.text.map(literal) ?? "null");
+          function arm(w) {
+            try {
+              var d = w[k];
+              if (!d) {
+                d = w[k] = { log: [], ok: false, text: null };
+                w.alert = function (m) { d.log.push(['alert', String(m)]); };
+                w.confirm = function (m) { d.log.push(['confirm', String(m), d.ok ? 'ok' : 'cancel']); return d.ok; };
+                w.prompt = function (m) { d.log.push(['prompt', String(m), d.text === null ? '' : d.text]); return d.text; };
+              }
+              d.ok = ok; d.text = text;
+            } catch (e) {}
+          }
+          arm(window);
+          for (var i = 0; i < window.frames.length; i++) arm(window.frames[i]);
+        })();
+
+        """
+    }
+
+    /// What the page's dialogs said since the last take, as JSON: [kind, message, answer].
+    static let takeDialogs = """
+        (function () {
+          var out = [];
+          function take(w) { try { var d = w.__latchkeyDialogs; if (d) { out = out.concat(d.log); d.log = []; } } catch (e) {} }
+          take(window);
+          for (var i = 0; i < window.frames.length; i++) take(window.frames[i]);
+          return JSON.stringify(out.slice(0, 20));
+        })()
+        """
+
+    /// One line for Claude, the same in Safari and in Latchkey's own browser: at most 200
+    /// characters of the page's text, on one line, without the «» that frame it (security review
+    /// 2026-11-02: a page could pose as Latchkey's own words).
+    static func dialogNote(kind: String, message: String, answer: String?) -> String {
+        func clean(_ s: String) -> String {
+            String(
+                s.replacingOccurrences(of: "«", with: "\"").replacingOccurrences(of: "»", with: "\"")
+                    .components(separatedBy: .newlines).joined(separator: " ").prefix(200))
+        }
+        switch kind {
+        case "alert": return "The page showed an alert: «\(clean(message))» (dismissed)."
+        case "confirm":
+            return
+                "The page asked to confirm: «\(clean(message))»; Latchkey answered \(answer == "ok" ? "OK" : "Cancel")."
+        default:
+            let given = answer.map { $0.isEmpty ? "gave none" : "answered «\(clean($0))»" } ?? "gave none"
+            return "The page asked for text: «\(clean(message))»; Latchkey \(given)."
+        }
+    }
+
     struct Stamp: Sendable, Equatable {
         var origin: String
         var complete: Bool
@@ -257,4 +318,11 @@ enum PageScripts {
         })()
         """
     }
+}
+
+/// How the page's own dialogs are answered during one of Claude's actions (spec 005 FR-432):
+/// a confirm gets OK only when Claude's action says so, a prompt Claude's text or none.
+struct DialogAnswer: Sendable, Equatable {
+    var confirm = false
+    var text: String?
 }

@@ -131,6 +131,14 @@ phone, Claude can't check a reservation in the Owner's account or fill in a form
 - **FR-431** An answer from one of the Owner's tabs shall say which tab it came from, and the
   tab list shall mark the titles and addresses as written by websites, not instructions
   (FR-404; 2026-11-03).
+- **FR-432** A page's own dialogs (an alert, a confirm, a prompt) shall never make Claude wait,
+  in Safari or in Latchkey's own browser, locked or not: in the tab Claude works in, an alert
+  shall be dismissed, a confirm answered Cancel unless Claude's action says OK, and a prompt
+  given Claude's text or none, and the next answer shall say what each said. When a page
+  already waits on a dialog it showed before Latchkey's answers were in it, Claude shall be told
+  so within about 2 seconds (Claude's own page can then be loaded over or closed; the Owner's
+  tab is left as it is), instead of waiting for Safari's time limit (Toni, 2026-11-03: "25
+  seconds to stall on Claude is too much"; "Answer them, Claude can say OK").
 
 ## Success criteria
 

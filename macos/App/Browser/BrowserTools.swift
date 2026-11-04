@@ -64,7 +64,9 @@ extension BrowserCapability {
                         Claude's own page, or the owner's tab picked with browser_read and tab (or with tab here). \
                         action: click (ref: a link or button), type (ref: a field, text; or a list and the \
                         option's text; submit sends the form), script (code: JavaScript run in the page; its \
-                        result is returned), close (closes the tab Claude works in, the owner's included).
+                        result is returned), close (closes the tab Claude works in, the owner's included). The \
+                        page's own dialogs never wait: an alert is dismissed, a confirm gets Cancel unless confirm \
+                        is true, a prompt gets prompt_text or nothing, and the answer says what each one said.
                         """,
                     input: [
                         "action": .enumParam(actions, "What to do"),
@@ -73,6 +75,8 @@ extension BrowserCapability {
                         "text": .stringParam("For type: the text, or the option to choose"),
                         "submit": .boolParam("For type: send the form afterwards"),
                         "code": .stringParam("For script: the JavaScript"),
+                        "confirm": .boolParam("Answer OK to a confirm dialog this action brings up (default Cancel)"),
+                        "prompt_text": .stringParam("The text for a prompt dialog this action brings up"),
                     ], required: ["action"], readOnly: false, destructive: true, openWorld: true, deadlineMS: 30_000),
                 handler: { args in
                     let action = args["action"]?.stringValue

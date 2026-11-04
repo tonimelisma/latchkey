@@ -139,6 +139,11 @@ final class FakeSafari: ScriptRunner, @unchecked Sendable {
     var lag = 0
     private var stale = 0
     private(set) var stampChecks = 0
+    /// What the page's dialogs said, as the page script that takes them answers; once.
+    var dialogsSaid = "[]"
+    /// The page waits on a dialog of its own, shown before Latchkey's answers were in it.
+    var dialogWaiting = false
+    private(set) var scriptsRun: [String] = []
 
     func run(_ script: String, _ args: [String]) async throws -> String {
         lock.withLock { calls.append((script, args)) }
@@ -156,17 +161,28 @@ final class FakeSafari: ScriptRunner, @unchecked Sendable {
                     "Safari got an error: You must enable the “Allow JavaScript from Apple Events” option in Safari’s Develop menu to use “do JavaScript”. (8)"
                 )
             }
-            let js = args.last ?? ""
-            if js.contains("timeOrigin") {
-                stampChecks += 1
-                if stale > 0 {
-                    stale -= 1
-                    return "\(loads - 1)|complete|https://old.example.com/"
+            // Claude's own window: the script, then the script that takes what dialogs said;
+            // the answer starts with what they said (FR-432).
+            let own = script == SafariBrowser.Script.javaScript
+            let js = own ? args[1] : (args.last ?? "")
+            if own, dialogWaiting { throw ScriptError.failed("execution error: LATCHKEY_DIALOG_WAITING (-2700)") }
+            lock.withLock { scriptsRun.append(js) }
+            func answer() -> String {
+                if js.contains("timeOrigin") {
+                    stampChecks += 1
+                    if stale > 0 {
+                        stale -= 1
+                        return "\(loads - 1)|complete|https://old.example.com/"
+                    }
+                    return "\(loads)|complete|https://shop.example.com/"
                 }
-                return "\(loads)|complete|https://shop.example.com/"
+                if js.contains("latchkeyRead") { return page }
+                return actionAnswer
             }
-            if js.contains("latchkeyRead") { return page }
-            return actionAnswer
+            let a = answer()
+            guard own else { return a }
+            defer { dialogsSaid = "[]" }
+            return dialogsSaid + "\n" + a
         }
         if script.contains("tabs of w") { return "1\n1\tShop\thttps://shop.example.com/\n" }
         return ""

@@ -35,6 +35,8 @@ struct TabSurvey: Equatable {
         var sameAddress: Bool
         var marked: Bool
         var loading = false
+        /// The page didn't answer within 2 s: it waits on a dialog it showed (spec 005 FR-432).
+        var waiting = false
     }
 
     var count: Int
@@ -54,7 +56,8 @@ struct TabSurvey: Equatable {
             let f = line.split(separator: "\t").map { $0.trimmingCharacters(in: .whitespaces) }
             guard f.count >= 3, let i = Int(f[0]) else { return nil }
             return Row(
-                index: i, sameAddress: f[1] == "true", marked: f[2] == "true", loading: f.count > 3 && f[3] == "true")
+                index: i, sameAddress: f[1] == "true", marked: f[2] == "true", loading: f.count > 3 && f[3] == "true",
+                waiting: f.count > 4 && f[4] == "true")
         }
     }
 
@@ -67,6 +70,9 @@ struct TabSurvey: Equatable {
         if let r = s.rows.first(where: { $0.index == t.index }) {
             if r.marked { return r.index }
             if navigating && r.loading && s.count == t.count { return r.index }
+            // A page waiting on its own dialog answers no script, so it can't show the mark: it
+            // is the tab where it was, as many tabs, at its last address (FR-432).
+            if r.waiting && r.sameAddress && s.count == t.count { return r.index }
         }
         return s.rows.first { $0.index != t.index && $0.sameAddress && $0.marked }?.index
     }
@@ -83,10 +89,40 @@ actor SafariBrowser {
         case moved
         /// The Owner's tab Claude was working in isn't surely there any more (FR-429).
         case tabGone
+        /// The page waits on a dialog it showed before Latchkey's answers were in it (FR-432);
+        /// `owners`: one of the Owner's tabs, not Claude's own.
+        case dialogWaiting(owners: Bool)
         case failed(String)
     }
 
     let scripts: any ScriptRunner
+    /// How the next scripts answer the page's own dialogs (FR-432): Cancel and no text unless
+    /// Claude's action says otherwise.
+    private var dialogAnswer = DialogAnswer()
+    /// What the page's dialogs said since the last answer, told to Claude with it.
+    private var dialogs: [String] = []
+
+    /// Claude's answers for the dialogs of the action that follows; `answering(.init())` after it.
+    func answering(_ a: DialogAnswer) { dialogAnswer = a }
+
+    /// Takes the dialogs noted since the last call.
+    func takeDialogs() -> [String] {
+        defer { dialogs = [] }
+        return dialogs
+    }
+
+    /// At most 5 notes, as in Latchkey's own browser (security review 2026-11-02).
+    private func heard(_ json: String) {
+        guard let data = json.data(using: .utf8), let said = try? JSONDecoder().decode([[String]].self, from: data)
+        else { return }
+        for d in said where d.count >= 2 {
+            if dialogs.count < 5 {
+                dialogs.append(PageScripts.dialogNote(kind: d[0], message: d[1], answer: d.count > 2 ? d[2] : nil))
+            } else if dialogs.count == 5 {
+                dialogs.append("…and more.")
+            }
+        }
+    }
     /// Claude's window, or the Owner's window that holds Claude's tab.
     private var window: String? {
         didSet {
@@ -539,7 +575,7 @@ actor SafariBrowser {
         for attempt in 1...2 {
             let found = try await locate(navigating: false)
             do {
-                _ = try await call(Script.tabClose, guardArguments(found))
+                _ = try await call(Script.tabClose, replacingArguments(found))
                 workInOwnPage()
                 return found.tab.address
             } catch Failure.moved where attempt == 1 {
@@ -599,22 +635,28 @@ actor SafariBrowser {
     private func javaScript(_ code: String, acting: Bool = false) async throws -> String {
         if lostPick { throw Failure.tabGone }
         guard let window = workWindow else { throw Failure.noWindow }
+        let answering = PageScripts.dialogAnswers(dialogAnswer)
         guard workTab != nil else {
-            let out = try await call(Script.javaScript, [window, code])
-            return acting ? String(out.prefix { $0 != "\n" }) : out
+            let out = try await call(Script.javaScript, [window, answering + code, PageScripts.takeDialogs])
+            let both = out.split(separator: "\n", maxSplits: 1, omittingEmptySubsequences: false).map(String.init)
+            heard(both.first ?? "[]")
+            let result = both.count > 1 ? both[1] : ""
+            return acting ? String(result.prefix { $0 != "\n" }) : result
         }
         // Safari's tabs may move between finding Claude's tab and using it: the script checks
         // again before acting, and Latchkey finds the tab again once.
         for attempt in 1...2 {
             let found = try await locate()
+            if found.waiting { throw Failure.dialogWaiting(owners: picked != nil) }
             do {
                 let out = try await call(
                     Script.tabJavaScript,
                     guardArguments(found) + [
-                        PageScripts.tabMark(found.tab.token) + PageScripts.inTab(code), PageScripts.takeDestination,
-                        acting ? "yes" : "no",
+                        answering + PageScripts.tabMark(found.tab.token) + PageScripts.inTab(code),
+                        PageScripts.takeDestination, acting ? "yes" : "no", PageScripts.takeDialogs,
                     ])
-                let parts = out.split(separator: "\n", maxSplits: 2, omittingEmptySubsequences: false).map(String.init)
+                var parts = out.split(separator: "\n", maxSplits: 3, omittingEmptySubsequences: false).map(String.init)
+                if parts.count > 2 { heard(parts.remove(at: 2)) }
                 // The site to compare a note with is the one the tab showed before the script.
                 let before = workTab?.address
                 if let address = parts.first, !address.isEmpty, var t = workTab {
@@ -655,6 +697,8 @@ actor SafariBrowser {
         var window: String
         var tab: ClaudeTab
         var loading: [String]
+        /// The page waits on its own dialog (FR-432): it can be loaded over or closed, not read.
+        var waiting = false
     }
 
     /// The addresses Claude's tab may show unmarked now: those of Claude's own navigation, while
@@ -695,7 +739,8 @@ actor SafariBrowser {
         t.index = index
         t.count = survey.count
         if owners { picked?.tab = t } else { tab = t }
-        return Found(window: window, tab: t, loading: loading)
+        let waiting = survey.rows.first { $0.index == index }?.waiting ?? false
+        return Found(window: window, tab: t, loading: loading, waiting: waiting)
     }
 
     private func lost() {
@@ -717,12 +762,22 @@ actor SafariBrowser {
         ]
     }
 
+    /// The same for loading over the page or closing the tab: a page waiting on its own dialog
+    /// answers no script, so it is also known by the address it showed (FR-432).
+    private func replacingArguments(_ f: Found) -> [String] {
+        var a = guardArguments(f)
+        if f.waiting, !f.tab.address.isEmpty, !f.tab.address.contains("\n") {
+            a[4] = (f.loading + [f.tab.address]).joined(separator: "\n")
+        }
+        return a
+    }
+
     /// Loads `address` in Claude's tab, if Latchkey still finds one. False when not.
     private func loadInTab(_ address: String) async throws -> Bool {
         guard tab != nil else { return false }
         let found: Found
         do { found = try await locate() } catch Failure.noWindow { return false }
-        _ = try await call(Script.tabLoad, guardArguments(found) + [address])
+        _ = try await call(Script.tabLoad, replacingArguments(found) + [address])
         tab?.address = address
         navigated(to: address)
         return true
@@ -760,7 +815,7 @@ actor SafariBrowser {
     private func closeClaudesPage() async {
         if tab != nil {
             if let found = try? await locate(navigating: false, claudes: true) {
-                _ = try? await call(Script.tabClose, guardArguments(found))
+                _ = try? await call(Script.tabClose, replacingArguments(found))
             }
         } else if let window {
             _ = try? await scripts.run(Script.close, [window])
@@ -911,6 +966,7 @@ actor SafariBrowser {
                 throw wasPicked ? Failure.tabGone : Failure.noWindow
             }
             if message.contains("LATCHKEY_MOVED") { throw Failure.moved }
+            if message.contains("LATCHKEY_DIALOG_WAITING") { throw Failure.dialogWaiting(owners: picked != nil) }
             if message.contains("Allow JavaScript from Apple Events") { throw Failure.javaScriptOff }
             throw Failure.failed("Safari reported a problem: \(message)")
         } catch ScriptError.timedOut where SystemScreen().isLocked() {
@@ -955,13 +1011,30 @@ actor SafariBrowser {
             end tell
             end run
             """
-        /// argv: window id, script.
+        /// argv: window id, script, the script that takes what the page's dialogs said. Answers
+        /// the dialogs (JSON), then the script's result.
         static let javaScript = """
             on run argv
             set winID to (item 1 of argv) as integer
             tell application "Safari"
             if not (exists window id winID) then error "LATCHKEY_NO_WINDOW"
-            return do JavaScript (item 2 of argv) in current tab of window id winID
+            set t to current tab of window id winID
+            try
+            with timeout of 2 seconds
+            do JavaScript "1" in t
+            end timeout
+            on error number errNum
+            if errNum is -1712 then error "LATCHKEY_DIALOG_WAITING"
+            end try
+            set theAnswer to do JavaScript (item 2 of argv) in t
+            if theAnswer is missing value then set theAnswer to ""
+            set theDialogs to "[]"
+            try
+            with timeout of 2 seconds
+            set theDialogs to (do JavaScript (item 3 of argv) in t) as text
+            end timeout
+            end try
+            return theDialogs & linefeed & (theAnswer as text)
             end tell
             end run
             """
@@ -1076,9 +1149,14 @@ actor SafariBrowser {
             set sameURL to ((URL of t) is lastURL)
             end try
             set isMarked to false
+            set isWaiting to false
             if i is idx or sameURL then
             try
+            with timeout of 2 seconds
             set isMarked to ((do JavaScript checkJS in t) is "yes")
+            end timeout
+            on error number errNum
+            if errNum is -1712 then set isWaiting to true
             end try
             end if
             set isLoading to false
@@ -1087,7 +1165,7 @@ actor SafariBrowser {
             set isLoading to ((URL of t) is in theExpected)
             end try
             end if
-            set out to out & (i as text) & sep & (sameURL as text) & sep & (isMarked as text) & sep & (isLoading as text) & linefeed
+            set out to out & (i as text) & sep & (sameURL as text) & sep & (isMarked as text) & sep & (isLoading as text) & sep & (isWaiting as text) & linefeed
             end repeat
             return out
             end tell
@@ -1110,19 +1188,28 @@ actor SafariBrowser {
             if (count of tabs of w) is not n then error "LATCHKEY_MOVED"
             set t to tab idx of w
             set confirmed to false
+            set waiting to false
             try
+            with timeout of 2 seconds
             set confirmed to ((do JavaScript checkJS in t) is "yes")
+            end timeout
+            on error number errNum
+            if errNum is -1712 then set waiting to true
             end try
             if not confirmed then
             try
             set confirmed to ((URL of t) is in theExpected)
             end try
             end if
-            if not confirmed then error "LATCHKEY_MOVED"
+            if not confirmed then
+            if waiting then error "LATCHKEY_DIALOG_WAITING"
+            error "LATCHKEY_MOVED"
+            end if
             """
         /// argv: the guard's five, the script, the script that answers where the page said it is
-        /// going, "yes" when the script is Claude's click, typing, or back. Answers the tab's
-        /// address, where the page is going (or nothing), and the script's result, one per line.
+        /// going, "yes" when the script is Claude's click, typing, or back, the script that takes
+        /// what the page's dialogs said. Answers the tab's address, where the page is going (or
+        /// nothing), the dialogs (JSON), and the script's result, one per line.
         /// After a click, typing, or back, it asks for the page's note for up to about 0.6 s:
         /// Safari fires the `navigate` event of a link, a form, or back only after the script
         /// returned (real Safari, 2026-10-29). It stops at a note, at a page without Latchkey's
@@ -1130,6 +1217,7 @@ actor SafariBrowser {
         static let tabJavaScript =
             "on run argv\n" + tabGuard + "\n"
                 + """
+                if waiting then error "LATCHKEY_DIALOG_WAITING"
                 set theAnswer to do JavaScript (item 6 of argv) in t
                 if theAnswer is missing value then set theAnswer to ""
                 set theGoal to ""
@@ -1156,7 +1244,13 @@ actor SafariBrowser {
                 try
                 set theAddress to (URL of t) as text
                 end try
-                return theAddress & linefeed & theGoal & linefeed & (theAnswer as text)
+                set theDialogs to "[]"
+                try
+                with timeout of 2 seconds
+                set theDialogs to (do JavaScript (item 9 of argv) in t) as text
+                end timeout
+                end try
+                return theAddress & linefeed & theGoal & linefeed & theDialogs & linefeed & (theAnswer as text)
                 end tell
                 end run
                 """
@@ -1250,7 +1344,9 @@ actor SafariBrowser {
             if (index of current tab of w) is idx and previousIndex is not idx and previousIndex is less than or equal to (count of tabs of w) then
             set isMarked to false
             try
+            with timeout of 2 seconds
             set isMarked to ((do JavaScript checkJS in (tab idx of w)) is "yes")
+            end timeout
             end try
             if isMarked then set current tab of w to tab previousIndex of w
             end if
@@ -1327,7 +1423,9 @@ actor SafariBrowser {
             set t to tab idx of w
             set isMarked to "no"
             try
+            with timeout of 2 seconds
             if (do JavaScript (item 3 of argv) in t) is "yes" then set isMarked to "yes"
+            end timeout
             end try
             set theURL to ""
             try

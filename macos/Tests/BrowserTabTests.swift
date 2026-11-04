@@ -21,6 +21,8 @@ final class FakeSafariTabs: ScriptRunner, @unchecked Sendable {
         var picks = 0
         /// A page Safari lets no script into (an empty tab, Safari's own pages).
         var scriptless = false
+        /// The page waits on a dialog it showed: no script answers (FR-432).
+        var waiting = false
     }
 
     struct FakeWindow {
@@ -45,6 +47,8 @@ final class FakeSafariTabs: ScriptRunner, @unchecked Sendable {
     /// returned, and the new page has replaced the old one before Latchkey's next script, so
     /// no note of it is ever read: only the click script's own answer names the address.
     var clickGoesTo: String?
+    /// What the page's dialogs said, as the script that takes them answers; once (FR-432).
+    var dialogsSaid = "[]"
     /// Plays a page whose click handler changes the link's address as it is clicked.
     var clickChangesLink = false
     /// Set to an address: the next click in Claude's tab is on a button that sends the page
@@ -100,8 +104,10 @@ final class FakeSafariTabs: ScriptRunner, @unchecked Sendable {
         }
         windows[w].tabs[i].checks += 1
         let loading = !args[4].isEmpty && args[4].split(separator: "\n").contains { $0 == windows[w].tabs[i].url }
-        guard marked(windows[w].tabs[i], args[3]) || loading else {
-            throw ScriptError.failed("execution error: LATCHKEY_MOVED (-2700)")
+        let waiting = windows[w].tabs[i].waiting
+        guard (!waiting && marked(windows[w].tabs[i], args[3])) || loading else {
+            throw ScriptError.failed(
+                "execution error: \(waiting ? "LATCHKEY_DIALOG_WAITING" : "LATCHKEY_MOVED") (-2700)")
         }
         return (w, i)
     }
@@ -158,16 +164,20 @@ final class FakeSafariTabs: ScriptRunner, @unchecked Sendable {
                     let same = windows[w].tabs[i].url == args[2]
                     var isMarked = false
                     var loading = false
+                    let waiting = windows[w].tabs[i].waiting && (i + 1 == idx || same)
                     if i + 1 == idx || same {
                         windows[w].tabs[i].checks += 1
-                        isMarked = marked(windows[w].tabs[i], args[3])
+                        isMarked = !waiting && marked(windows[w].tabs[i], args[3])
                     }
                     if i + 1 == idx { loading = expected.contains(windows[w].tabs[i].url) }
-                    out += "\(i + 1)\t\(same)\t\(isMarked)\t\(loading)\n"
+                    out += "\(i + 1)\t\(same)\t\(isMarked)\t\(loading)\t\(waiting)\n"
                 }
                 return out
             case SafariBrowser.Script.tabJavaScript:
                 let (w, i) = try guarded(args)
+                if windows[w].tabs[i].waiting {
+                    throw ScriptError.failed("execution error: LATCHKEY_DIALOG_WAITING (-2700)")
+                }
                 let js = args[5]
                 let waits = args.count > 7 && args[7] == "yes"
                 windows[w].tabs[i].scriptsRun += 1
@@ -227,9 +237,11 @@ final class FakeSafariTabs: ScriptRunner, @unchecked Sendable {
                 let run =
                     wrapped
                     ? String(data: try! JSONEncoder().encode([answer, encoded(inRun)]), encoding: .utf8)! : answer
-                return windows[w].tabs[i].url + "\n" + encoded(later) + "\n" + run
+                defer { dialogsSaid = "[]" }
+                return windows[w].tabs[i].url + "\n" + encoded(later) + "\n" + dialogsSaid + "\n" + run
             case SafariBrowser.Script.tabLoad:
                 let (w, i) = try guarded(args)
+                windows[w].tabs[i].waiting = false  // a new page replaces the one waiting
                 loads += 1
                 windows[w].tabs[i].url = args[5]
                 windows[w].tabs[i].mark = nil
@@ -270,12 +282,15 @@ final class FakeSafariTabs: ScriptRunner, @unchecked Sendable {
                     return "77"
                 }
                 if script.contains("do JavaScript") {
-                    let js = args.last ?? ""
-                    if js.contains("timeOrigin") { return "\(loads)|complete|https://w.example.com/" }
+                    let own = script == SafariBrowser.Script.javaScript
+                    let js = own ? args[1] : (args.last ?? "")
+                    let prefix = own ? "[]\n" : ""
+                    if js.contains("timeOrigin") { return prefix + "\(loads)|complete|https://w.example.com/" }
                     if js.contains("latchkeyRead") {
-                        return #"{"title":"W","url":"https://w.example.com/","total":1,"text":"w","elements":[]}"#
+                        return prefix
+                            + #"{"title":"W","url":"https://w.example.com/","total":1,"text":"w","elements":[]}"#
                     }
-                    return "ok"
+                    return prefix + "ok"
                 }
                 return ""
             }
