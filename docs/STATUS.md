@@ -32,7 +32,17 @@ after the app was quit.
 
 ## Next steps
 
-Full Mac test suite reliable again (2026-11-03, not yet released): the Automation check blocked Swift's shared threads (app bug, fixed: it now waits on a GCD thread), Mail, Messages, and WhatsApp closed a database twice when its layout check failed (app bug, fixed), and test pages now wait for WebKit's own "finished" (spec 001 research.md); 845 pass at load 19 and 86.
+Follow-up of 2026-11-04 (Toni: "fix everything, properly"), in Mac 0.8.109 and Linux 0.1.1:
+a page's own dialogs never make Claude wait (spec 005 FR-432): reproduced in real Safari, a
+dialog waiting in a tab blocks every script, its text, and its source until the 25 s limit
+(the likely cause of the locked-Mac stalls); now Latchkey's answers go into the page with each
+action (`confirm`, `prompt_text`; Cancel otherwise, reset right after; the Owner's tab gets its
+own dialogs back), and a page already waiting is told within 2 s. Also in it: the Mac tests,
+calls cut off by a quit or crash, and `latchkey_log` on Linux (the paragraphs below). #5
+settled from WebKit's source: a background press goes only to the pressed element or inside
+it, and scrolls nothing.
+
+Full Mac test suite reliable again (2026-11-03, released in 0.8.109): the Automation check blocked Swift's shared threads (app bug, fixed: it now waits on a GCD thread), Mail, Messages, and WhatsApp closed a database twice when its layout check failed (app bug, fixed), and test pages now wait for WebKit's own "finished" (spec 001 research.md); 845 pass at load 19 and 86.
 
 Bug report of 2026-11-03 (a claim form in background Safari, emails to PDF) fixed in 0.8.104 (0.8.105 keeps a queued email's recipients and subject out of `latchkey_log`, security review):
 zsh here-documents and `=(…)` work in Shell's fence (`TMPPREFIX` in the scratch folder); Shell
