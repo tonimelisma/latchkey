@@ -11,7 +11,7 @@ enum MailCapability {
         var scripts: any ScriptRunner
         var accounts: MailAccounts
         /// Whether Latchkey may already control Mail (asked without a prompt).
-        var mayScript: @Sendable () -> Bool
+        var mayScript: @Sendable () async -> Bool
         /// Where attachment files are written for a moment to be read.
         var scratch: URL
         /// Where Mail is asked to save an attachment it must download first (Mail is sandboxed).
@@ -38,7 +38,7 @@ enum MailCapability {
     static func make() -> Capability {
         let opener = Opener()
         let scripts = OSAScriptRunner(app: mailApp)
-        let may: @Sendable () -> Bool = { Permissions.automation(of: mailApp, ask: false) == .allowed }
+        let may: @Sendable () async -> Bool = { await Permissions.automation(of: mailApp, ask: false) == .allowed }
         let env = Env(
             store: { try opener.store() }, scripts: scripts,
             // Account names are a nicety: asked of Mail for 4 s at most, else taken from Mail's
@@ -575,11 +575,12 @@ enum MailCapability {
                     + parsed.attachments.map { "\($0.number). \(q($0.name))" }.joined(separator: ", "), isError: true)
         }
         var data = a.data ?? downloaded(a, file, m, s).flatMap { try? Data(contentsOf: $0) }
-        if data == nil, env.mayScript() { data = try await download(a, m, env) }
+        let may = data == nil ? await env.mayScript() : true
+        if data == nil, may { data = try await download(a, m, env) }
         guard let data else {
             return .text(
                 "The attachment \(q(a.name)) isn't on the Mac: Mail hasn't downloaded it. Opening the message in Mail downloads it."
-                    + (env.mayScript() ? "" : " Latchkey would download it itself, but: " + notAllowed)
+                    + (may ? "" : " Latchkey would download it itself, but: " + notAllowed)
             )
         }
         let dir = env.scratch.appending(path: UUID().uuidString)

@@ -800,3 +800,46 @@ low-level details; the first is one Toni may want to revisit.
 - Linux (spec 010): its program writes its own events with `log/slog` to the systemd journal,
   not to an activity log of the same kind; offering the same tool there means reading the
   journal for its unit or keeping a copy of its lines, a separate job not done here.
+
+## Why the full Mac test suite failed under load (2026-11-03)
+
+Three full runs of `make -C macos test` had 12 to 16 failures each while every failing suite
+passed alone. Reproduced here on the first try (14 failures, load 14 rising to 60).
+
+- **Cause 1, a real bug in the app: the Automation check blocked Swift's shared threads.**
+  `Permissions.automation(of:ask:)` calls `AEDeterminePermissionToAutomateTarget`, which waits
+  on a semaphore until macOS answers. `AppModel.checkAppControl` ran it in `Task.detached`, so
+  on Swift's cooperative pool (8 threads on this Mac). Every setup view a test renders
+  (`SetupRenderTests`, `ReadmeShotTests`) starts `checkApprovals`; `sample` of the test host
+  showed 9 threads stuck in that call in every sample for 50 seconds, all 8 pool threads among
+  them. Nothing else async in the process could run: shell jobs whose processes `ps` showed
+  gone were not seen ending within 10 s, and WebKit page loads did not finish within the tests'
+  5 s. The same call ran directly in async code in `automationOpening` (before every
+  `osascript` script) and in Mail's `mayScript`, so in the app a slow answer from macOS held one
+  pool thread per script. Fix: `automation(of:ask:)` is now async and waits for the blocking call
+  on a GCD thread (`DispatchQueue.global(qos: .utility)`, whose pool grows past a blocked
+  thread); `mayScript` became async. Options weighed: a dedicated serial queue (one blocked
+  thread at most, but an ask waiting on the Owner would hold every quick check behind it) or a
+  check skipped under XCTest (hides the app's bug); GCD's global queue chosen.
+- **Cause 2, in the tests: a page load that didn't finish wasn't noticed.** `TestPage.load`
+  and the WhatsApp bridge's page waited at most 5 s while `isLoading`, then carried on, so a
+  slow load ran the test on `about:blank` and failed far from the cause; and
+  `theClickScriptNamesTheLink` indexed `refs[0]` after a non-fatal count check, crashing the
+  test host (which failed every test running at that moment: `aLargeLog`, `stoppingAJob…`,
+  `openingAndScriptingApps…`). Fix: a shared `PageLoad` waits for WebKit's own `didFinish` for
+  that navigation, up to 30 s, and throws otherwise; the count is a `#require`;
+  `aPagesOwnPopUpIsIgnored` looks for the pop-up note for up to 10 s instead of sleeping 0.5 s.
+  No check was removed or loosened.
+- **Cause 3, a real bug in the app: a database closed twice.** With the pool free, a later run
+  crashed the test host in `MailStoreTests.checksTheLayoutAtOpen` ("BUG IN CLIENT OF
+  libsqlite3: illegal multi-threaded access", in `sqlite3_close` called from `MailStore.deinit`
+  inside `MailStore.init`). When a class's init throws after every stored property is set,
+  Swift runs `deinit`; `MailStore`, `MessagesStore`, and `WhatsAppStore` closed the connection in
+  their failed layout check and then again in `deinit`, a use after free that crashes at random.
+  In the app this happens only when Mail, Messages, or WhatsApp has a changed database layout.
+  Fix: each opens into a local, checks it, and sets `db` last (`NotesStore` already did).
+- Ruled out: CPU load alone (shell suites alone passed at load 127), and the WebKit suites
+  running together with the shell suites (passed together). Limiting WebKit concurrency wasn't
+  needed once the pool was free.
+- After the fix: full suite 845 passed, 0 failed, at load 19 and at load 86 (16 `yes`
+  processes added), in about a minute instead of four.

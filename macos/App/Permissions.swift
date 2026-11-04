@@ -35,9 +35,19 @@ enum Permissions {
 
     enum Automation: Sendable, Equatable { case allowed, denied, notAsked }
 
-    /// Whether Latchkey may control the app (Automation). Blocks while macOS asks the Owner, so
-    /// call it off the main thread. Nil when it can't be known (the app isn't running).
-    nonisolated static func automation(of bundleID: String, ask: Bool) -> Automation? {
+    /// Whether Latchkey may control the app (Automation). Nil when it can't be known (the app
+    /// isn't running). macOS's answer blocks its thread, for as long as the Owner takes to answer
+    /// and, on a busy Mac, for many seconds even without a question: so it waits on a thread of
+    /// its own, never one of Swift's shared ones. Run from Swift's pool (as until 0.8.108), the
+    /// test host's setup windows held all 8 of them at once and every other task in the process
+    /// stopped: shell jobs weren't seen ending, WebKit pages didn't load (2026-11-03).
+    nonisolated static func automation(of bundleID: String, ask: Bool) async -> Automation? {
+        await withCheckedContinuation { done in
+            DispatchQueue.global(qos: .utility).async { done.resume(returning: blockingAutomation(bundleID, ask)) }
+        }
+    }
+
+    private nonisolated static func blockingAutomation(_ bundleID: String, _ ask: Bool) -> Automation? {
         var target = AEAddressDesc()
         let id = Array(bundleID.utf8)
         guard AECreateDesc(DescType(typeApplicationBundleID), id, id.count, &target) == noErr else { return nil }
@@ -54,14 +64,14 @@ enum Permissions {
     /// Like `automation(of:ask: false)`, but an app that isn't running is opened hidden first, as
     /// its script would open it anyway, and looked at for up to 5 seconds (spec 001 FR-625).
     nonisolated static func automationOpening(_ bundleID: String) async -> Automation? {
-        if let known = automation(of: bundleID, ask: false) { return known }
+        if let known = await automation(of: bundleID, ask: false) { return known }
         guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) else { return nil }
         let config = NSWorkspace.OpenConfiguration()
         config.activates = false
         config.hides = true
         _ = try? await NSWorkspace.shared.openApplication(at: url, configuration: config)
         for _ in 0..<20 {
-            if let known = automation(of: bundleID, ask: false) { return known }
+            if let known = await automation(of: bundleID, ask: false) { return known }
             try? await Task.sleep(for: .milliseconds(250))
         }
         return nil

@@ -693,7 +693,7 @@ final class AppModel {
 
     func checkAppControl() async {
         for app in Permissions.scriptedApps {
-            let state = await Task.detached { Permissions.automation(of: app, ask: false) }.value
+            let state = await Permissions.automation(of: app, ask: false)
             if let state { setControl(app, state) }
         }
     }
@@ -706,7 +706,7 @@ final class AppModel {
             config.hides = true
             _ = try? await NSWorkspace.shared.openApplication(at: url, configuration: config)
         }
-        let state = await Task.detached { Permissions.automation(of: app, ask: true) }.value
+        let state = await Permissions.automation(of: app, ask: true)
         event(.permissions, "Asked to control \(app): \(state.map { "\($0)" } ?? "unknown (app not running)")")
         if let state { setControl(app, state) }
     }

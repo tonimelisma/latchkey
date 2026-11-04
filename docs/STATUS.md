@@ -32,6 +32,8 @@ after the app was quit.
 
 ## Next steps
 
+Full Mac test suite reliable again (2026-11-03, not yet released): the Automation check blocked Swift's shared threads (app bug, fixed: it now waits on a GCD thread), Mail, Messages, and WhatsApp closed a database twice when its layout check failed (app bug, fixed), and test pages now wait for WebKit's own "finished" (spec 001 research.md); 845 pass at load 19 and 86.
+
 Bug report of 2026-11-03 (a claim form in background Safari, emails to PDF) fixed in 0.8.104 (0.8.105 keeps a queued email's recipients and subject out of `latchkey_log`, security review):
 zsh here-documents and `=(…)` work in Shell's fence (`TMPPREFIX` in the scratch folder); Shell
 names programs macOS stopped (from its crash reports, also in the answer after; spec 004

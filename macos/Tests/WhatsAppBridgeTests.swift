@@ -64,9 +64,8 @@ import WebKit
 
     private func page() async throws -> WKWebView {
         let w = WKWebView(frame: NSRect(x: 0, y: 0, width: 800, height: 600))
-        w.loadHTMLString(
-            "<html><body><div id='app'></div></body></html>", baseURL: URL(string: "https://test.example/"))
-        for _ in 0..<100 where w.isLoading { try await Task.sleep(for: .milliseconds(20)) }
+        try await PageLoad.load(
+            "<html><body><div id='app'></div></body></html>", base: URL(string: "https://test.example/")!, in: w)
         _ = try await w.callAsyncJavaScript(Self.fakeWhatsApp, arguments: [:], in: nil, contentWorld: .page)
         _ = try await w.callAsyncJavaScript(WhatsAppBridge.source, arguments: [:], in: nil, contentWorld: .page)
         return w

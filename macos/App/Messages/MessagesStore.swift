@@ -56,16 +56,25 @@ final class MessagesStore: @unchecked Sendable {
     private let lock = NSLock()
 
     init(url: URL, contacts: any ContactsLookup) throws {
+        // `db` is set last: once every stored property is set, a throw runs `deinit`, which
+        // closes it too, and a second close of a freed connection crashed the test host
+        // (SQLite's "illegal multi-threaded access", 2026-11-03).
+        let db: OpaquePointer
         do { db = try SQLite.openReadOnly(url) } catch { throw Failure.cannotOpen }
         self.contacts = contacts
         // Fail now, not at the first question, if the layout is not the one this reads.
         do {
-            _ = try rows("SELECT ROWID, guid, text, attributedBody, handle_id, date, is_from_me FROM message LIMIT 0")
-            _ = try rows("SELECT ROWID, guid, display_name, style, service_name FROM chat LIMIT 0")
+            _ = try SQLite.rows(
+                db, "SELECT ROWID, guid, text, attributedBody, handle_id, date, is_from_me FROM message LIMIT 0")
+            _ = try SQLite.rows(db, "SELECT ROWID, guid, display_name, style, service_name FROM chat LIMIT 0")
+        } catch let e as SQLite.Failure {
+            SQLite.close(db)
+            throw Failure.unknownLayout(e.message)
         } catch {
             SQLite.close(db)
             throw error
         }
+        self.db = db
     }
 
     deinit { SQLite.close(db) }

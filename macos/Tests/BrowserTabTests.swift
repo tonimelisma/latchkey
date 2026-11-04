@@ -874,7 +874,7 @@ final class PlaceBox: @unchecked Sendable {
             """)
         _ = try await page.run(PageScripts.read(offset: 0))
         let refs = try PageScripts.decode(try await page.run(PageScripts.read(offset: 0))).elements.map(\.ref)
-        #expect(refs.count == 3)
+        try #require(refs.count == 3, "the page's three elements, before any is clicked")
         #expect(try await page.run(PageScripts.click(refs[0])) == "ok\n\"https://shop.example.com/tracked\"")
         #expect(try await page.run(PageScripts.click(refs[1])) == "ok", "a new tab isn't Claude's tab")
         #expect(try await page.run(PageScripts.click(refs[2])) == "ok")

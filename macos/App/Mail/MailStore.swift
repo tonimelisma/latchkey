@@ -89,6 +89,10 @@ final class MailStore: @unchecked Sendable {
 
     init(root: URL) throws {
         self.root = root
+        // `db` is set last: once every stored property is set, a throw runs `deinit`, which
+        // closes it too, and a second close of a freed connection crashed the test host
+        // (SQLite's "illegal multi-threaded access", 2026-11-03).
+        let db: OpaquePointer
         do { db = try SQLite.openReadOnly(Self.indexURL(root)) } catch { throw Failure.cannotOpen }
         do {
             let props = try SQLite.rows(db, "SELECT key, value FROM properties")
@@ -108,6 +112,7 @@ final class MailStore: @unchecked Sendable {
             SQLite.close(db)
             throw Failure.unknownLayout("\(error)")
         }
+        self.db = db
     }
 
     deinit { SQLite.close(db) }

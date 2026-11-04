@@ -154,7 +154,7 @@ final class MailAccounts: @unchecked Sendable {
 
     private let scripts: any ScriptRunner
     private let launchScripts: any ScriptRunner
-    private let mayScript: @Sendable () -> Bool
+    private let mayScript: @Sendable () async -> Bool
     private let lock = NSLock()
     private var cached: (at: Date, list: [Account])?
 
@@ -162,7 +162,7 @@ final class MailAccounts: @unchecked Sendable {
     /// `launchScripts` while changing or sending, which need Mail anyway (Mail's usual wait).
     init(
         scripts: any ScriptRunner, launchScripts: (any ScriptRunner)? = nil,
-        mayScript: @escaping @Sendable () -> Bool
+        mayScript: @escaping @Sendable () async -> Bool
     ) {
         self.scripts = scripts
         self.launchScripts = launchScripts ?? scripts
@@ -176,7 +176,7 @@ final class MailAccounts: @unchecked Sendable {
     func list(launch: Bool, now: Date = Date()) async -> [Account]? {
         let last = lock.withLock { cached }
         if let last, now.timeIntervalSince(last.at) < 600 { return last.list }
-        guard launch || mayScript() else { return last?.list }
+        guard launch ? true : await mayScript() else { return last?.list }
         guard
             let out = try? await (launch ? launchScripts : scripts).run(
                 MailScript.accounts, [launch ? "launch" : "if running"])

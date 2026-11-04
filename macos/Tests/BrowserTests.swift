@@ -25,13 +25,59 @@ final class TestPage {
         """
 
     func load(_ html: String = TestPage.html) async throws {
-        view.loadHTMLString(html, baseURL: URL(string: "https://shop.example.com/"))
-        for _ in 0..<100 where view.isLoading { try await Task.sleep(for: .milliseconds(50)) }
-        try await Task.sleep(for: .milliseconds(100))
+        try await PageLoad.load(html, base: URL(string: "https://shop.example.com/")!, in: view)
     }
 
     func run(_ js: String) async throws -> String {
         (try await view.evaluateJavaScript(js) as? String) ?? ""
+    }
+}
+
+/// Loads a page in a test's WebKit view and waits until WebKit says that load finished, up to
+/// 30 s, or throws. The old wait (5 s while `isLoading`, then on regardless) let a test run on
+/// the empty page when WebKit was slow, and fail far from the cause (2026-11-03).
+@MainActor
+final class PageLoad: NSObject, WKNavigationDelegate {
+    private var waiting: WKNavigation?
+    private var outcome: Result<Void, any Error>?
+
+    struct Failed: Error, CustomStringConvertible {
+        let description: String
+    }
+
+    static func load(_ html: String, base: URL, in view: WKWebView, limit: Duration = .seconds(30)) async throws {
+        let watcher = PageLoad()
+        let previous = view.navigationDelegate
+        view.navigationDelegate = watcher
+        defer { view.navigationDelegate = previous }
+        watcher.waiting = view.loadHTMLString(html, baseURL: base)
+        let deadline = ContinuousClock.now + limit
+        while watcher.outcome == nil, ContinuousClock.now < deadline {
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        switch watcher.outcome {
+        case .success: return
+        case .failure(let error): throw error
+        case nil: throw Failed(description: "WebKit didn't finish loading the test page within \(limit)")
+        }
+    }
+
+    func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+        if navigation === waiting { outcome = .success(()) }
+    }
+
+    func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: any Error) {
+        if navigation === waiting { outcome = .failure(error) }
+    }
+
+    func webView(
+        _ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: any Error
+    ) {
+        if navigation === waiting { outcome = .failure(error) }
+    }
+
+    func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
+        outcome = .failure(Failed(description: "WebKit's page process ended while loading"))
     }
 }
 

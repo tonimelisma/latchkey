@@ -41,8 +41,15 @@ import Testing
         _ = try await b.open(
             html: "<script>setTimeout(function () { window.open('https://elsewhere.example/') }, 50)</script><p>Hi</p>",
             base: base)
-        try await Task.sleep(for: .milliseconds(500))
-        #expect(b.takeDialogs().contains { $0.contains("elsewhere.example") && $0.contains("ignored") })
+        // The page opens it 50 ms after loading: looked for up to 10 s (a fixed 0.5 s was too
+        // short while the suites ran side by side, 2026-11-03).
+        var told: [String] = []
+        let deadline = ContinuousClock.now + .seconds(10)
+        while !told.contains(where: { $0.contains("elsewhere.example") }), ContinuousClock.now < deadline {
+            try await Task.sleep(for: .milliseconds(50))
+            told += b.takeDialogs()
+        }
+        #expect(told.contains { $0.contains("elsewhere.example") && $0.contains("ignored") }, "\(told)")
         #expect(try await b.read(offset: 0).url == "https://test.example/")
     }
 

@@ -52,6 +52,10 @@ final class WhatsAppStore: @unchecked Sendable {
     init(url: URL = WhatsAppStore.database) throws {
         // Next to the database it belongs to (a test's copy has its own).
         addressBookURL = url.deletingLastPathComponent().appending(path: Self.addressBook.lastPathComponent)
+        // `db` is set last: once every stored property is set, a throw runs `deinit`, which
+        // closes it too, and a second close of a freed connection crashed the test host
+        // (SQLite's "illegal multi-threaded access", 2026-11-03).
+        let db: OpaquePointer
         do { db = try SQLite.openReadOnly(url) } catch { throw Failure.cannotOpen }
         // The columns Latchkey reads; another layout is said plainly rather than misread.
         for check in [
@@ -66,6 +70,7 @@ final class WhatsAppStore: @unchecked Sendable {
                 throw Failure.unknownLayout((error as? SQLite.Failure)?.message ?? "\(error)")
             }
         }
+        self.db = db
     }
 
     deinit { SQLite.close(db) }
