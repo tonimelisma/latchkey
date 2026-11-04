@@ -55,11 +55,13 @@ windows, pointer, clipboard), one group at a time, plus direct live checks. Unlo
      click sent to it alone, so this can't move to group 2.
    - Shell with `uses: open`: what opens doesn't take the keyboard (`open -g`), but its new
      window can still appear above the Owner's.
-   - Mail only when its scripting can't make the message: then Mail comes forward for short
-     moments (opening, pasting files, Send), after a pause in the Owner's typing.
+   - Mail, a reply or forward with files: Mail comes forward for under a second to paste them
+     (attaching by scripting erases the quoted original, tried 2026-11-03); and whenever its
+     scripting can't make the message, for short moments (opening, pasting, Send), each after a
+     pause in the Owner's typing.
 2. **Needs the Mac unlocked, stays in the background**
-   - Mail write, send, reply, reply all, forward, draft, with files (0.8.96 to 0.8.99): made,
-     given files, and sent or saved by Mail's scripting, the window behind and off-screen, the
+   - Mail write, send, reply, reply all, forward, draft, and new messages with files (0.8.96 to
+     0.8.100): made, given files, and sent or saved by Mail's scripting, the window behind and off-screen, the
      text typed with keys sent to Mail alone; nothing came forward in live checks.
    - Computer control of a named app (0.8.93): a picture of its window, its buttons and fields,
      press, type, and keys sent to it alone.

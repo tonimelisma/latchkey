@@ -120,7 +120,9 @@ my landlord", tell what's new in the inbox, answer a message, or file it away.
   behind the Owner's apps and moved off-screen, files are attached by scripting, the text is
   typed into it with Mail behind, and it is sent or saved by scripting (Toni, 2026-11-02: "make
   the mail less intrusive"; checked live: nothing came forward, the text arrived unquoted, the
-  file attached). Only when scripting can't make it does Mail come forward, for the moments it
+  file attached). A reply's or forward's files are pasted, since attaching by scripting erases
+  the quoted original (tried 2026-11-03). Only then, or when scripting can't make the message,
+  does Mail come forward, for the moments it
   must (opening, pasting files, Send or saving), each after a pause in the Owner's typing. Keys go in only while Mail's focus is in the field being
   filled; without a pause in the Owner's typing within 30 s nothing is sent; the Owner's own Mail
   window stays the one their keys go to; and the fields are read again in front, just before
