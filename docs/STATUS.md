@@ -78,6 +78,15 @@ now reports one `mail_find` from another session (16:29:15Z) as missing on the M
 running when an install quit the app, and a call cut off by a quit never reaches the activity
 log (a gap that predates WhatsApp).
 
+Calls cut off by the app stopping (bug report follow-up 2026-11-03; spec 001 FR-666 to FR-668,
+plan D27): built on a branch, not yet installed. A quit records every call still running as cut
+off by the quit; a crash or forced quit leaves a sealed mark per running call that the next start
+records as ended by the app stopping; the audit check names a call an older app's quit cut off
+apart ("1 call not on the Mac because Latchkey quit during it, before it recorded such calls")
+instead of as missing, so `call_KBYG…` stops failing installs, without writing anything into
+the log for it. No relay change. Unit tests pass (8 new); whether the old quit falls in the
+call's window is first seen at the next install.
+
 Latchkey's log for Claude (Toni, 2026-11-03; spec 001 FR-662 to FR-665, plan D26): a new
 read-only tool, `latchkey_log`, gives Claude the Mac app's own recent log lines (default 200, up
 to 1000, optionally one kind such as connection or permissions), so Claude can find out why

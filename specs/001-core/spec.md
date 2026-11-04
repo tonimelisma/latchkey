@@ -350,6 +350,23 @@ days; nothing checked that the two sides agree.
   records it in its audit), and the Mac's activity log shall store and show it for that call
   (Toni, 2026-10-27: the audit found no way to tell on the Mac which app did what).
 
+### No call missing because the app stopped (bug report follow-up, 2026-11-03)
+Why: every install after 2026-11-03 failed its audit check on one `mail_find` that was running
+when an install quit the app: a call cut off by a quit never reached the activity log (Toni,
+2026-11-03: "fix everything, properly").
+- **FR-666** When the Mac app quits while calls are running, it shall record each in the activity
+  log as cut off by the quit, with its call id, tool, arguments, Claude app, and start, before it
+  quits; and the quit's event shall say how many calls were running.
+- **FR-667** When the Mac app stops without quitting (a crash, a forced quit) while calls are
+  running, it shall record each, at its next start and before its first comparison with the
+  relay's audit, as ended by the app stopping, with the same details; never a call the log
+  already has.
+- **FR-668** When a call is missing on the Mac, the relay's audit shows it didn't end with the
+  Mac's answer, and the Mac's own log shows that an app from before FR-666 began to quit while
+  the call ran, the comparison (FR-634) shall name it apart as cut off by that quit, not as
+  missing. It shall never record an entry for such a call: the log shows only what was recorded
+  at the time.
+
 ### Left Behind (Toni, 2026-10-27)
 Why: on 2026-10-25 commands left processes and files on the Mac that nobody listed (spec 004).
 - **FR-640** The Activity window shall show Left Behind entries on their own (a choice of the

@@ -684,6 +684,40 @@ struct ActivityReader: Sendable {
         return out
     }
 
+    /// Which of these call ids the log has an action for (FR-667).
+    func logged(_ callIDs: Set<String>) throws -> Set<String> {
+        guard !callIDs.isEmpty else { return [] }
+        let ids = Array(callIDs)
+        let action = ActivityKind.action.rawValue
+        var d = FetchDescriptor<SealedActivity>(predicate: #Predicate { $0.kind == action && ids.contains($0.callID) })
+        d.propertiesToFetch = [\.callID]
+        return Set(try ModelContext(container).fetch(d).map(\.callID))
+    }
+
+    /// The text of the quit event apps from before FR-666 recorded; this app's own quit line
+    /// always says more (`CallsInFlight.quitLine`).
+    static let oldQuitLine = "Quitting"
+
+    /// When an app from before FR-666, which didn't record the calls running at its quit, began
+    /// to quit within one of these windows (FR-668): its app event saying just "Quitting".
+    /// Reads only the events in the windows.
+    func oldQuits(in windows: [ClosedRange<Date>]) throws -> [Date] {
+        let event = ActivityKind.event.rawValue
+        var found: Set<Date> = []
+        for w in windows {
+            let (from, to) = (w.lowerBound, w.upperBound)
+            let rows = try ModelContext(container).fetch(
+                FetchDescriptor<SealedActivity>(
+                    predicate: #Predicate { $0.kind == event && $0.at >= from && $0.at <= to }))
+            for row in rows {
+                if let a = open(row), a.tool == EventCategory.app.rawValue, a.result == Self.oldQuitLine {
+                    found.insert(a.at)
+                }
+            }
+        }
+        return found.sorted()
+    }
+
     /// The newest checked entry under the current key: its number and checksum, where the chain
     /// continues. Walks the numbers down from the newest, a few rows at a time.
     ///

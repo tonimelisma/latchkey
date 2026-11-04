@@ -86,7 +86,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
-        EventLog.shared.record(.app, "Quitting")
+        // Names the calls running, which the shutdown records as cut off (FR-666).
+        EventLog.shared.record(.app, model.inFlight.quitLine)
         // Quit within 6 s even if a step hangs (Constitution II); the helper restores sleep by
         // itself when the app goes away.
         let done = QuitOnce { sender.reply(toApplicationShouldTerminate: true) }

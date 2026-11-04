@@ -843,3 +843,44 @@ passed alone. Reproduced here on the first try (14 failures, load 14 rising to 6
   needed once the pool was free.
 - After the fix: full suite 845 passed, 0 failed, at load 19 and at load 86 (16 `yes`
   processes added), in about a minute instead of four.
+
+## Calls cut off by the app stopping (FR-666 to FR-668, 2026-11-03)
+
+Found: `call_KBYGFNYEZQ734QWVZBHTJG7PGC` (`mail_find`, 2026-11-03 16:29:15 UTC) is in the relay's
+audit and not in the Mac's log. The Mac records a call's entry only when the call returns
+(`AppModel.handle`); the install sent SIGTERM while it ran, the quit said goodbye, closed the
+connection, and the process ended before the call returned. The relay recorded it the way it
+records every call whose Mac connection closes during it: outcome `error`, duration up to the
+close (`hub.ErrDisconnected`, `mcpserver.forward`). `install.sh` also sends SIGKILL to an app
+still running after 10 s, so a forced end has to be covered too.
+
+Recording calls running at a stop, options:
+1. Entries at quit only: `shutdown()` records every call still running. Simple, and the entry
+   is written before the app goes; but a crash or SIGKILL leaves nothing.
+2. A start entry in the activity log before each call, its end after: covers every stop, but the
+   log is chained and never deleted from (FR-612, FR-630), so every call would be two permanent
+   entries, the window, export, menu, and comparison would all have to pair them, and the
+   comparison already counts an id twice as a discrepancy.
+3. Chosen: 1 plus a mark per running call outside the log: one small file per call, sealed with
+   the log's key (tool, arguments, and Claude app are never in the clear, as in the log), bound
+   to its call id, removed when its entry is written. A start finds marks only after a stop that
+   wasn't a quit. Costs one small file write and delete per call; marks are not records, so
+   removing them breaks no rule of the log. User defaults were the other place for marks:
+   rejected, since they'd hold tool names and arguments in the clear in a plist.
+
+Telling the historical call apart (FR-668), options:
+1. Write an entry for it now. Rejected: an entry recorded today as if at the time is a
+   fabricated record, and the chain would date it wrongly.
+2. Relay change: a new outcome or field for "the Mac's connection closed during the call", and
+   rewrite old rows from the event record (a disconnection at the row's end). New rows don't
+   need it (FR-666 and FR-667 log them); old rows could only be rewritten by matching times, the
+   same inference as option 3 but done on the relay and changing rows of an audit that is kept
+   unchanged; and the relay would have to be deployed first.
+3. Chosen: on the Mac, from its own log. Every app before FR-666 recorded the event "Quitting"
+   at the start of a quit; this app never writes that exact text (its line names the calls
+   running). A call missing on the Mac with outcome `error` or `timeout` and such a quit between
+   5 s before its start and 5 s after the relay's end of it was cut off by that quit. It is named
+   in the audit event as such, so the installer passes, but it is never counted as matched and
+   no entry is written. Quits by this app and later never excuse anything, so a call this fix
+   failed to record would still be reported missing. Only events in those windows are read (a
+   few rows), not the whole log.

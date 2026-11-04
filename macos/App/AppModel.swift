@@ -56,6 +56,9 @@ final class AppModel {
     /// The activity log, or why there is none for this launch (FR-201).
     let activityLog: ActivityLog
     var trace: TraceStore? { activityLog.store }
+    /// The calls running now, each with a mark on disk until its entry is written, so a quit or
+    /// a crash never leaves a call out of the log (FR-666, FR-667).
+    let inFlight: CallsInFlight
     let updates = Updates()
     private let keepAwakeController = KeepAwakeController()
     private var connection: RelayConnection?
@@ -131,6 +134,13 @@ final class AppModel {
             if let level = AccessLevel(rawValue: raw) { levels[id] = level }
         }
         activityLog = ActivityLog.open()
+        inFlight = CallsInFlight(
+            marks: activityLog.store.map {
+                CallMarks(
+                    directory: AppIdentity.current.supportDirectory.appending(
+                        path: CallMarks.folderName, directoryHint: .isDirectory),
+                    key: $0.reader.key)
+            })
         // Latchkey's own log for Claude, whatever the levels (FR-662); from the activity log,
         // or this launch's lines when it can't be opened (FR-665).
         let log = LatchkeyLog.entry(
@@ -216,9 +226,26 @@ final class AppModel {
                 .app, "Started \(Self.version), not paired (\(DeviceIdentity.missing))", systemLog: false)
         }
         recordLogProblems()
+        recordCallsLeftRunning()
         Task { await refresh() }
         loadRecentActivity()
         decideSetupAtStart()
+    }
+
+    /// Calls the app was running when it last stopped without quitting (FR-667), recorded before
+    /// the first comparison with the relay's audit.
+    private func recordCallsLeftRunning() {
+        guard let trace, let marks = inFlight.marks else { return }
+        let n = CallsInFlight.recover(marks: marks, logged: { try trace.reader.logged($0) }) {
+            try trace.record($0)
+        }
+        if n > 0 {
+            event(
+                .activity,
+                n == 1
+                    ? "Recorded 1 call that was running when Latchkey last stopped without quitting"
+                    : "Recorded \(n) calls that were running when Latchkey last stopped without quitting")
+        }
     }
 
     /// What the start found about the activity log's own record (FR-613), as an event.
@@ -337,6 +364,8 @@ final class AppModel {
     func shutdown() async {
         if uninstalling { return }
         await connection?.stop(goodbye: .userQuit, state: agentState)
+        // Nothing more can be answered: every call still running is recorded as cut off (FR-666).
+        if let trace, inFlight.recordQuit(record: { try trace.record($0) }) > 0 { loadRecentActivity() }
         await ShellCapability.jobs.stopAll()  // spec 004 FR-309
         await keepAwakeController.restore()
     }
@@ -1126,6 +1155,13 @@ final class AppModel {
         let started = Date()
         busy += 1  // FR-132
         defer { busy -= 1 }
+        // Relay-supplied names (tool, call id, Claude app) are bounded before they're kept.
+        let tool = AuditComparison.clip(call.tool)
+        let client = call.client.flatMap { $0.isEmpty ? nil : AuditComparison.clip($0) }
+        inFlight.begin(
+            CallMark(
+                callID: call.id, at: started, tool: tool, arguments: call.arguments.jsonText, device: device,
+                client: client))
         let registry = capabilities
         let wasPaused = paused
         var result = wasPaused ? Pause.refused : await registry.call(tool: call.tool, arguments: call.arguments)
@@ -1135,13 +1171,15 @@ final class AppModel {
             !wasPaused && paused
             ? .text(Pause.stopped, isError: true)
             : LevelChange.recorded(result, tool: call.tool, before: registry, now: capabilities)
+        // The quit recorded it as cut off already (FR-666): the app is going, nothing more to do.
+        guard inFlight.end(call.id) else { return result }
         let entry = Activity(
-            // Relay-supplied names (tool, call id, Claude app) are bounded before they're kept.
-            at: started, tool: AuditComparison.clip(call.tool), arguments: call.arguments.jsonText,
+            at: started, tool: tool, arguments: call.arguments.jsonText,
             result: told.content.jsonText, isError: told.isError,
             durationMS: Int(Date().timeIntervalSince(started) * 1000), callID: call.id,
-            device: device, client: call.client.flatMap { $0.isEmpty ? nil : AuditComparison.clip($0) })
+            device: device, client: client)
         try? trace?.record(entry)
+        inFlight.recorded(call.id)
         loadRecentActivity()
         if let activity = result.activity, !result.isError { Notifier.post(activity) }  // FR-130
         if let also = result.alsoDone { Notifier.post(also) }
@@ -1253,8 +1291,19 @@ final class AppModel {
         let now = Date()
         let outcome = await Task.detached { () -> (AuditComparison, String)? in
             guard let mine = try? reader.calls() else { return nil }
-            let c = AuditComparison.compare(
+            var c = AuditComparison.compare(
                 relay: relay, mac: mine.calls, macWithoutIDs: mine.withoutIDs, device: device, now: now)
+            // A call missing on the Mac may have been cut off by an older app's quit (FR-668):
+            // look for such quits in those calls' times only, and compare again.
+            if !c.missingOnMac.isEmpty {
+                guard let quits = try? reader.oldQuits(in: c.missingOnMac.map(AuditComparison.quitWindow))
+                else { return nil }
+                if !quits.isEmpty {
+                    c = AuditComparison.compare(
+                        relay: relay, mac: mine.calls, macWithoutIDs: mine.withoutIDs, device: device, now: now,
+                        oldQuits: quits)
+                }
+            }
             let tools = (try? reader.tools(of: Set(c.missingOnRelay.map(\.callID)))) ?? [:]
             return (c, c.summary(tools: tools))
         }.value

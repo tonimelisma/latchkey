@@ -293,6 +293,12 @@ log, nothing is left out that way (2026-10-27). That point is never later than t
 itself, 2026-10-28 05:38:15 UTC (app 0.8.24's first connection), so a wiped and refilled log
 can't excuse later calls.
 
+A relay call missing from the Mac (outcome `error` or `timeout`) during which the Mac's own log
+shows an app from before spec 001 FR-666 beginning to quit (its app event "Quitting", from 5 s
+before the call's `at` to 5 s after `at + duration_ms`) was cut off by that quit: it is named
+apart and doesn't count as missing (FR-668, 2026-11-03). Calls cut off by later quits or crashes
+are in the Mac's log (FR-666, FR-667) and are matched like any other.
+
 ## Tools
 
 Tool objects follow the MCP `Tool` shape (`name`, `title`, `description`, `inputSchema`,

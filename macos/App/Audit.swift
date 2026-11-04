@@ -89,6 +89,9 @@ struct AuditComparison: Equatable, Sendable {
     /// call has one id, so a repeat is a discrepancy (security review, 2026-10-27).
     var twiceOnMac: [String] = []
     var twiceOnRelay: [String] = []
+    /// Calls on the relay only that an app from before FR-666 cut off by quitting while they ran
+    /// (FR-668): that app didn't record such calls. Named, not counted as missing.
+    var cutOffByOldQuit: [AuditEntry] = []
 
     var allMatch: Bool { missingOnMac.isEmpty && missingOnRelay.isEmpty && twiceOnMac.isEmpty && twiceOnRelay.isEmpty }
 
@@ -112,9 +115,25 @@ struct AuditComparison: Equatable, Sendable {
     /// excuse anything (security review, 2026-10-27).
     static let callIDSwitchOver = Date(timeIntervalSince1970: 1_793_165_895)
 
+    /// How far apart the Mac's and the relay's clocks may be when a quit is matched to a call.
+    static let clockSlack: TimeInterval = 5
+
+    /// When an older app's quit must have begun to explain a call missing on the Mac (FR-668):
+    /// while the call ran, from its start to the relay recording its end (the connection
+    /// closing), with `clockSlack` either side.
+    static func quitWindow(_ r: AuditEntry) -> ClosedRange<Date> {
+        let end = r.date.addingTimeInterval(Double(max(0, r.durationMS)) / 1000)
+        return r.date.addingTimeInterval(-clockSlack)...end.addingTimeInterval(clockSlack)
+    }
+
+    /// `oldQuits`: when apps from before FR-666 began to quit (their "Quitting" event in the
+    /// Mac's own log, `ActivityReader.oldQuits`). A relay call missing on the Mac that didn't end
+    /// with the Mac's answer (`error` or `timeout`) and during which such a quit began was cut
+    /// off by it, and is named apart instead of as missing.
     static func compare(
         relay: [AuditEntry], mac: [MacCall], macWithoutIDs: Int, device: String, now: Date,
-        grace: TimeInterval = AuditComparison.grace, switchOver: Date = AuditComparison.callIDSwitchOver
+        grace: TimeInterval = AuditComparison.grace, switchOver: Date = AuditComparison.callIDSwitchOver,
+        oldQuits: [Date] = []
     ) -> AuditComparison {
         var c = AuditComparison()
         c.beforeCallIDs = macWithoutIDs
@@ -156,6 +175,10 @@ struct AuditComparison: Equatable, Sendable {
                 c.stillRunning += 1
             } else if let firstMacID, r.date < firstMacID {
                 c.beforeCallIDs += 1
+            } else if r.outcome == .error || r.outcome == .timeout,
+                case let window = quitWindow(r), oldQuits.contains(where: { window.contains($0) })
+            {
+                c.cutOffByOldQuit.append(r)
             } else {
                 c.missingOnMac.append(r)
             }
@@ -216,6 +239,17 @@ struct AuditComparison: Equatable, Sendable {
                     + Self.listed(
                         missingOnRelay.map {
                             "\(Self.clip($0.callID)) (\(Self.clip(tools[$0.callID] ?? "unknown tool")), \(format.string(from: $0.at)))"
+                        }))
+        }
+        if !cutOffByOldQuit.isEmpty {
+            parts.append(
+                (cutOffByOldQuit.count == 1
+                    ? "1 call not on the Mac because Latchkey quit during it"
+                    : "\(cutOffByOldQuit.count) calls not on the Mac because Latchkey quit during each")
+                    + ", before it recorded such calls: "
+                    + Self.listed(
+                        cutOffByOldQuit.map {
+                            "\(Self.clip($0.callID)) (\(Self.clip($0.tool)), \(format.string(from: $0.date)))"
                         }))
         }
         if !twiceOnMac.isEmpty { parts.append("recorded twice on the Mac: " + Self.listed(twiceOnMac)) }
