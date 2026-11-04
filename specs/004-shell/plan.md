@@ -137,7 +137,24 @@ trashes by at start, where only names it gives (`<launch>-job<n>`, no links) are
 start them inside one; they write nothing), and `HOMEBREW_TEMP` points at the scratch folder
 (Homebrew's default is `/private/tmp`), and bash's here-document files (`/private/tmp/sh-thd…`,
 deleted as soon as read; Homebrew's bash runs without `TMPDIR`) may be written, from the live
-check of 2026-10-27. `shell_run` takes `writes` (paths) and `why`;
+check of 2026-10-27. zsh writes its here-documents and `=(…)` to `$TMPPREFIX`, `/tmp/zsh` unless
+set, so every one failed until the job got `TMPPREFIX` in its scratch folder, and zsh's own
+names in `/private/tmp` (`zsh…`) are allowed as bash's are, for a zsh started without it (bug
+report 2026-11-03).
+
+Programs macOS stopped (FR-332, 2026-11-03): macOS writes a crash report
+(`~/Library/Logs/DiagnosticReports/*.ips`, a one-line header and a JSON body) a few seconds
+after the stop, naming the responsible process (Latchkey's pid) and the time it was taken. Each
+answer looks at reports written since the job began, taken while it ran, whose responsible pid
+is Latchkey's; jobs that finished in the last minute are looked at too, since the report often
+comes after their answer, and each report is told once. Options weighed: watching the job's
+processes end (no exit status for a grandchild; a quick crash is gone before the next look) and
+waiting for the report before answering (seconds on every answer). An app (a program inside a
+`.app` bundle) aborts at start inside the fence because LaunchServices is refused: with `uses`
+`open` headless Chrome made the PDF in a check on 2026-11-03, once given `--no-sandbox` (Chrome's
+own sandbox can't start inside another); `shell_run`'s description and the note say so.
+`/usr/bin/log` refuses to run in any sandbox. `cupsfilter` RTF to PDF fails on this macOS
+outside the fence too (no filter), so it isn't the fence's. `shell_run` takes `writes` (paths) and `why`;
 `~`, the home folder, a folder above it, and `~/Library` itself are refused (FR-318). A refused
 write shows as "Operation not permitted"; when the output has it, the answer adds how to write
 there (FR-320).

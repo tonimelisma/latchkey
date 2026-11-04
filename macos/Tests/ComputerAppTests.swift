@@ -21,10 +21,10 @@ import Testing
         e.appControl = AppControl(
             find: { $0.lowercased() == "calculator" ? AppTarget(name: "Calculator", pid: 42) : nil },
             elements: { _ in
-                [
+                AppListing(items: [
                     AppElement(ref: "e1", role: "AXButton", label: "7", value: nil, element: nil),
                     AppElement(ref: "e2", role: "AXTextField", label: "Name", value: "", element: nil),
-                ]
+                ])
             },
             press: { e in
                 pressed.add(e.ref)

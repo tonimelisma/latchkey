@@ -579,6 +579,40 @@ final class Reports: @unchecked Sendable {
         #expect(r.output.contains("HEREDOC-OK"), "bash here-documents without TMPDIR, as in Homebrew: \(r.output)")
     }
 
+    /// Bug report 2026-11-03: zsh's own here-documents and `=(…)` failed ("can't create temp file
+    /// for here document"), since zsh writes them to /tmp/zsh… unless told otherwise.
+    @Test func zshHereDocumentsWorkInsideTheFence() async throws {
+        let r = try await jobs.run(
+            "cat > $TMPDIR/x <<'EOF'\nZSH-HEREDOC-OK\nEOF\ncat $TMPDIR/x; cat =(echo ZSH-SUBST-OK); "
+                + "env -u TMPPREFIX /bin/zsh -f -c 'cat <<<ZSH-BARE-OK'",
+            folder: nil, wait: .seconds(20))
+        #expect(r.output.contains("ZSH-HEREDOC-OK"), "\(r.output)")
+        #expect(r.output.contains("ZSH-SUBST-OK"), "\(r.output)")
+        #expect(r.output.contains("ZSH-BARE-OK"), "a zsh started without TMPPREFIX: \(r.output)")
+        #expect(!r.refusedWrite, "\(r.output)")
+    }
+
+    /// FR-332: a crash report for a program the job started reaches Claude once, even when it is
+    /// written after the job's answer (the next answer carries it).
+    @Test func aProgramStoppedByMacOSIsToldOnce() async throws {
+        let first = try await jobs.run("sleep 1", folder: nil, wait: .seconds(0))
+        let folder = setup.crashReports
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.dateFormat = "yyyy-MM-dd HH:mm:ss.SSSS Z"
+        let report =
+            #"{"app_name":"Google Chrome","bug_type":"309"}"# + "\n"
+            + #"{"captureTime":"\#(f.string(from: Date()))","procName":"Google Chrome","procPath":"\/Applications\/Google Chrome.app\/Contents\/MacOS\/Google Chrome","responsiblePid":\#(setup.responsible),"exception":{"type":"EXC_CRASH","signal":"SIGABRT"}}"#
+        _ = try await jobs.check(first.job, wait: .seconds(10))
+        try report.write(to: folder.appending(path: "Google Chrome-1.ips"), atomically: true, encoding: .utf8)
+        let next = try await jobs.run("echo next", folder: nil, wait: .seconds(10))
+        #expect(next.stopped.count == 1, "\(next.stopped)")
+        #expect(next.stopped.first?.contains("In \(first.job), macOS stopped") == true, "\(next.stopped)")
+        let again = try await jobs.run("echo again", folder: nil, wait: .seconds(10))
+        #expect(again.stopped.isEmpty)
+    }
+
     @Test func leaseOutOfRangeIsRefused() async {
         await #expect(throws: ShellJobs.Failure.self) {
             _ = try await jobs.run("true", folder: nil, wait: .seconds(5), keepMinutes: 1441)

@@ -115,6 +115,11 @@ what is left is on one list.
   program inside a fence is found by its mark (FR-327). When either fails, commands shall still
   run, every Shell answer shall say that writes may not be fenced and leftovers may not all be
   stopped, and the Owner shall be notified once (Toni, 2026-10-29).
+- **FR-332** When macOS stops a program a command started (a crash report naming Latchkey as
+  responsible, during the command), the next answer shall name the program and why it stopped,
+  even when the command's exit status hides it; for a program with windows it shall say what
+  makes it run inside the fence (bug report 2026-11-03: headless Chrome aborted three times, the
+  command said exit status 0, and only crash dialogs on the Owner's screen told).
 - A scratch shell in a throwaway Linux container was considered and left out (Toni,
   2026-10-27).
 

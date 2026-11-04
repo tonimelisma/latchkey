@@ -143,12 +143,19 @@ enum FrontWindow {
             let window
         else { return [] }
         var out: [UIElementInfo] = []
-        walk(window as! AXUIElement, depth: 0, into: &out)
+        var seen: [Int: [AXUIElement]] = [:]
+        walk(window as! AXUIElement, depth: 0, into: &out, seen: &seen)
         return out
     }
 
-    private static func walk(_ e: AXUIElement, depth: Int, into out: inout [UIElementInfo]) {
+    /// Each element once: a table's cells are also its columns' children (FR-512).
+    private static func walk(
+        _ e: AXUIElement, depth: Int, into out: inout [UIElementInfo], seen: inout [Int: [AXUIElement]]
+    ) {
         guard out.count < maxElements, depth < 15 else { return }
+        let hash = Int(bitPattern: UInt(CFHash(e)))
+        if seen[hash]?.contains(where: { CFEqual($0, e) }) == true { return }
+        seen[hash, default: []].append(e)
         let role = string(e, kAXRoleAttribute) ?? ""
         let label =
             [kAXTitleAttribute, kAXDescriptionAttribute, kAXHelpAttribute].lazy.compactMap { string(e, $0) }
@@ -162,7 +169,7 @@ enum FrontWindow {
         if AXUIElementCopyAttributeValue(e, kAXChildrenAttribute as CFString, &children) == .success,
             let list = children as? [AXUIElement]
         {
-            for c in list { walk(c, depth: depth + 1, into: &out) }
+            for c in list { walk(c, depth: depth + 1, into: &out, seen: &seen) }
         }
     }
 

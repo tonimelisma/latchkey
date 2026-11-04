@@ -50,6 +50,25 @@ Claude can use them the way the Owner would.
   buttons, fields, and text with references, press one, type into it, and press keys in it;
   clicks, moves, drags, and scrolls at a point still use the pointer (Toni, 2026-11-02:
   "Background first").
+- **FR-511** When Claude types into an element of a named app, the keys shall be sent only once
+  that app's keyboard focus is on the element or inside it; otherwise nothing shall be typed and
+  the answer shall say where the focus is. The answer shall give the element's value after
+  typing, and when Claude types or presses keys without an element, where the focus was (bug
+  report 2026-11-03: keys meant for a web page's State dropdown chose a payment method).
+- **FR-512** A list of an app's window shall show each element once and leave out text that only
+  repeats a label next to it; it shall show 300 elements at a time and say when more follow;
+  Claude shall be able to continue after an element, list only what is inside one, or only what
+  has a word, all from the same look so references stay the same; and it shall say when the
+  window has more than one look reads. The front window's list shall say when it stops (bug
+  report 2026-11-03: a form's Submit button was past a silent cut at 300; Toni, 2026-11-03:
+  "Continue, narrow, dedupe").
+- **FR-513** Claude shall be able to choose an option in a named app's dropdown by the option's
+  name, in the background, without a menu opening over the Owner's screen; the answer shall say
+  the dropdown's value afterwards, or that no such option showed (Toni, 2026-11-03: "Yes, a
+  choose action").
+- **FR-514** After pressing, typing, or choosing in a named app, the answer shall name every other
+  field, checkbox, or dropdown from the last look whose value changed (bug report 2026-11-03: a
+  press on one dropdown seemed to check two checkboxes elsewhere).
 
 ## Success criteria
 

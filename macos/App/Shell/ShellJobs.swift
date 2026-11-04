@@ -27,6 +27,8 @@ actor ShellJobs {
         var refusedSettings = false
         /// What the self-check at start found broken (FR-330); nil when all is well.
         var fenceWarning: String?
+        /// Programs a command started that macOS stopped, this job's or a just-finished one's (FR-332).
+        var stopped: [String] = []
     }
 
     struct Summary: Sendable {
@@ -60,6 +62,7 @@ actor ShellJobs {
         let declared: [URL]
         let why: String?
         let keepMinutes: Int
+        let uses: Set<Fence.Use>
         private let lock = NSLock()
         private var bytes = Data()
         private var trimmed = 0
@@ -77,7 +80,7 @@ actor ShellJobs {
 
         init(
             id: String, command: String, process: Process, input: FileHandle, scratch: URL,
-            declared: [URL], why: String?, keepMinutes: Int
+            declared: [URL], why: String?, keepMinutes: Int, uses: Set<Fence.Use> = []
         ) {
             self.id = id
             self.command = command
@@ -89,6 +92,7 @@ actor ShellJobs {
             self.declared = declared
             self.why = why
             self.keepMinutes = keepMinutes
+            self.uses = uses
         }
 
         func append(_ d: Data) {
@@ -170,6 +174,8 @@ actor ShellJobs {
 
     private var jobs: [String: Job] = [:]
     private var counter = 0
+    /// Crash reports already told about (FR-332).
+    private var toldCrashes: Set<String> = []
     private let maxRunning: Int
     let setup: ShellSetup
 
@@ -228,6 +234,8 @@ actor ShellJobs {
             "TMPDIR": scratch.path + "/", "LATCHKEY_SCRATCH": scratch.path,
             // Homebrew's own temporary folder is /private/tmp unless told (live check 2026-10-27).
             "HOMEBREW_TEMP": scratch.path,
+            // zsh's here-documents and =(…) go to /tmp/zsh… otherwise (bug report 2026-11-03).
+            "TMPPREFIX": scratch.path + "/zsh",
         ] { env[k] = v }
         p.environment = env
         let stdin = Pipe()
@@ -237,7 +245,7 @@ actor ShellJobs {
         p.standardError = stdout
         let job = Job(
             id: id, command: command, process: p, input: stdin.fileHandleForWriting, scratch: scratch,
-            declared: declared, why: why, keepMinutes: keepMinutes)
+            declared: declared, why: why, keepMinutes: keepMinutes, uses: uses)
         stdout.fileHandleForReading.readabilityHandler = { @Sendable h in
             let d = h.availableData
             if d.isEmpty { h.readabilityHandler = nil } else { job.append(d) }
@@ -703,7 +711,25 @@ actor ShellJobs {
             job: job.id, command: job.command, output: text, dropped: dropped, finished: finished,
             exitCode: finished ? job.process.terminationStatus : nil, left: left,
             refusedWrite: refused.write, refusedHandoff: refused.handoff, refusedSettings: refused.settings,
-            fenceWarning: fenceWarning)
+            fenceWarning: fenceWarning, stopped: stoppedPrograms(answering: job))
+    }
+
+    /// macOS writes a crash report seconds after the stop, often after the job's answer: so jobs
+    /// that finished in the last minute are looked at too, and told about in the next answer.
+    private func stoppedPrograms(answering job: Job) -> [String] {
+        let now = Date()
+        let recent = jobs.values.filter { $0 === job || now.timeIntervalSince($0.ended ?? now) < 60 }
+            .sorted { $0.started < $1.started }
+        var notes: [String] = []
+        for j in recent {
+            let found = StoppedPrograms.find(
+                in: setup.crashReports, from: j.started, to: j.ended ?? now, responsible: setup.responsible
+            ).filter { !toldCrashes.contains($0.file) }
+            guard !found.isEmpty else { continue }
+            toldCrashes.formUnion(found.map(\.file))
+            notes.append(StoppedPrograms.note(found, job: j === job ? nil : j.id, usesOpen: j.uses.contains(.open)))
+        }
+        return notes
     }
 
     /// Finished jobs stay 10 minutes; at most 20 are kept. Running ones are capped in `run`. A
@@ -734,6 +760,9 @@ struct ShellSetup: Sendable {
     var remove: @Sendable (URL) -> Void
     /// Records a Left Behind entry; `true` also notifies the Owner (FR-325).
     var report: @Sendable (String, Bool) -> Void
+    /// Where macOS writes crash reports, and the process they name as responsible (FR-332).
+    var crashReports: URL = StoppedPrograms.folder
+    var responsible: pid_t = getpid()
 
     /// The app's setup; under tests, a fresh one each time, so runners in tests that run side by
     /// side never share a folder or job names (2026-10-29).
@@ -766,7 +795,8 @@ struct ShellSetup: Sendable {
             launch: newLaunch(), home: OwnFiles.real(home),
             scratchRoot: OwnFiles.real(root).appending(path: "Jobs", directoryHint: .isDirectory), systemTemp: nil,
             own: OwnFiles(folders: [], settingsFolders: [], settingsPrefixes: []),
-            remove: { try? FileManager.default.removeItem(at: $0) }, report: report)
+            remove: { try? FileManager.default.removeItem(at: $0) }, report: report,
+            crashReports: root.appending(path: "DiagnosticReports", directoryHint: .isDirectory))
     }
 
     static func newLaunch() -> String { String(UUID().uuidString.prefix(8)).lowercased() }

@@ -109,7 +109,7 @@ enum ShellCapability {
     /// What shell_run tells Claude about the fence, the scratch folder, and leases (spec 004
     /// FR-314 to FR-318).
     static let writesRule =
-        "A command writes only to its own scratch folder ($LATCHKEY_SCRATCH, also $TMPDIR; moved to the Trash when it finishes), the folder it runs in (unless that is the home folder), Downloads, and package caches; anything else fails unless declared in writes (with why), and so does changing settings (defaults write: declare ~/Library/Preferences/<domain>.plist). Opening apps, files, or links through macOS (open) fails unless declared in uses, and opens them behind the app the owner is using (/usr/bin/open brings it to the front, when the owner wants to see it); scripting other apps (osascript) and starting background services (launchctl, brew services) aren't possible. Whatever it leaves running is stopped when it finishes, unless keep_minutes asks to keep it (checking the job keeps it longer; 24 hours at most)."
+        "A command writes only to its own scratch folder ($LATCHKEY_SCRATCH, also $TMPDIR; moved to the Trash when it finishes), the folder it runs in (unless that is the home folder), Downloads, and package caches; anything else fails unless declared in writes (with why), and so does changing settings (defaults write: declare ~/Library/Preferences/<domain>.plist). Opening apps, files, or links through macOS (open) fails unless declared in uses, and opens them behind the app the owner is using (/usr/bin/open brings it to the front, when the owner wants to see it); a program with windows (an app such as Chrome or Preview, even headless) also starts only with open declared (Chrome needs --no-sandbox too), and /usr/bin/log never runs inside the fence; scripting other apps (osascript) and starting background services (launchctl, brew services) aren't possible. Whatever it leaves running is stopped when it finishes, unless keep_minutes asks to keep it (checking the job keeps it longer; 24 hours at most)."
 
     static let runInput: [String: JSONValue] = [
         "command": .stringParam("The command line"),
@@ -188,6 +188,7 @@ enum ShellCapability {
         if s.refusedHandoff { text += "\n" + Fence.handoffHint }
         if s.refusedSettings { text += "\n" + Fence.settingsHint }
         if let warning = s.fenceWarning { text += "\n" + warning }
+        for note in s.stopped { text += "\n" + note }
         if s.finished {
             text += "\n[\(s.job) finished, exit status \(s.exitCode ?? -1)]"
             if let left = s.left { text += "\n" + left }
