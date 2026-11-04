@@ -142,7 +142,7 @@ Latchkey's own log on this server (Latchkey 0.1.1): the newest 3 lines, newest l
 2026-11-03 22:02:13 connection: Connected as "homeserver"
 ```
 
-Without the log: "… Latchkey's activity log isn't available just now (<why, scrubbed>), so these
+Without the log: "… Latchkey's activity log isn't available just now (<why in fixed words: it isn't there, permission denied, it is a folder, it couldn't be read>), so these
 are only the lines since Latchkey started." The time zone is `TZ`, else the name `/etc/localtime`
 points to, else its abbreviation. Activity entries gain `category` and `public` (the words Claude
 may see; absent: none).

@@ -397,7 +397,7 @@ func dailyUpdates(ctx context.Context, p config.Paths, log *activity.Log, logger
 		case errors.Is(err, update.ErrUpToDate):
 		case err != nil:
 			logger.Warn("update check failed", "err", err)
-			log.Private("update", true, "The update check failed: "+err.Error(), "The update check failed: "+agent.Scrub(err.Error(), s.Relay))
+			log.Private("update", true, "The update check failed: "+err.Error(), "The update check failed: "+agent.DescribeUpdate(err))
 		default:
 			log.Event("update", "Updated from %s to %s; restarting", version, v)
 			stop()

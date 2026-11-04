@@ -271,11 +271,14 @@ account"). Fixtures updated; patch version bumped.
   (FR-1053). The log also keeps this run's newest 1000 public events in memory for FR-1055.
 - What is kept out (FR-1053): the relay's address in "Connected to … as …" (public: "Connected
   as …"); call IDs in the audit check's mismatch and in an answer not sent (public: counts only);
-  raw errors, which carry the relay's address, its IP, URLs, and file paths: the public words
-  name the kind of failure (`agent.describe`: closed by the relay with its code, timed out, name
-  not found, refused, reset, unreachable, certificate refused, dropped), and anything else is
-  scrubbed (`agent.scrub`: the relay's address and host, any URL, IP address, and absolute path
-  replaced by words). Not connecting names the step that failed (not paired, settings, device
+  raw errors, which carry the relay's address, its IP, URLs, host and user names, paths, and
+  tokens: public words are never built from an error's message (security review 2026-11-04;
+  scrubbing with patterns was dropped, as it misses host names, relative paths, and tokens). They
+  name the kind of failure (`agent.describe`: closed by the relay with its code only, timed out,
+  name not found, refused, reset, unreachable, certificate refused, dropped; `DescribeUpdate`
+  for update checks: GitHub timed out, name, network, certificate, permission denied, disk
+  full), and anything else is "an unexpected error (<Go type>)", e.g. `*net.OpError`. The
+  log's own read failure is a fixed phrase too. Not connecting names the step that failed (not paired, settings, device
   key), never the error's path.
 - New events (FR-1056): started and stopped (`app`), each disconnect with its reason and the
   wait (`connection`; the same reason again before a connection is recorded once), not connecting

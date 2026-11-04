@@ -120,7 +120,7 @@ func (a *Agent) Run(ctx context.Context) error {
 			backoff = min(backoff*2, time.Minute)
 		}
 		a.Logger.Info("disconnected", "err", err, "retry_in", wait)
-		why := describe(err, s.Relay)
+		why := describe(err)
 		a.once("connection", !errors.Is(err, errReconnect),
 			fmt.Sprintf("Disconnected: %v; trying again in %s", err, wait),
 			fmt.Sprintf("Disconnected: %s; trying again in %s", why, wait), why)
@@ -396,7 +396,7 @@ func (a *Agent) call(ctx context.Context, c *conn, m *agentproto.Call) {
 	if err := c.send(ctx, res.Encode(m.ID)); err != nil {
 		a.Logger.Warn("result not sent", "call", m.ID, "err", err)
 		a.Log.Private("connection", true, fmt.Sprintf("The answer to call %s couldn't be sent: %v", m.ID, err),
-			"An answer couldn't be sent to the relay: "+describe(err, s.Relay))
+			"An answer couldn't be sent to the relay: "+describe(err))
 	}
 	_ = a.Log.Add(activity.Entry{
 		Kind: "call", CallID: m.ID, Tool: m.Tool, Client: m.Client, Arguments: string(m.Arguments),

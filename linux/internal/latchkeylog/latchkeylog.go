@@ -11,6 +11,7 @@ import (
 	"io/fs"
 	"os"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/tonimelisma/latchkey/linux/internal/activity"
@@ -126,17 +127,16 @@ func contains(list []string, s string) bool {
 	return false
 }
 
-// why says in words why the log couldn't be read, naming no file (FR-1053).
+// why says in fixed words why the log couldn't be read, never from the error's message, which
+// names the file (FR-1053).
 func why(err error) string {
 	switch {
 	case errors.Is(err, fs.ErrNotExist):
 		return "it isn't there"
 	case errors.Is(err, fs.ErrPermission):
 		return "permission denied"
-	}
-	var pe *fs.PathError
-	if errors.As(err, &pe) {
-		return pe.Err.Error()
+	case errors.Is(err, syscall.EISDIR):
+		return "it is a folder"
 	}
 	return "it couldn't be read"
 }

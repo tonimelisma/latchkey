@@ -42,7 +42,7 @@ Written with the plan and built in one go (Toni, 2026-10-31). Each ends with its
 
 - **T1013** ✅ Activity events carry a category and their public words (`Event`, `Problem`,
   `Private`), this run's newest 1000 in memory; `latchkey_log` (`internal/latchkeylog`) always in
-  the toolset; every log call sorted into public or private, raw errors described or scrubbed;
+  the toolset; every log call sorted into public or private, raw errors described by kind, never by their message (security review 2026-11-04);
   new events for start, stop, disconnects, not connecting, answers not sent, pause, update
   failures (tests seen failing first; `make test`, `make lint`, `make test-linux`, and
   `make check` with a `latchkey_log` step pass).

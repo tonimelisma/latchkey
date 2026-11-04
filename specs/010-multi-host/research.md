@@ -141,16 +141,21 @@ Every log call in `linux/` (2026-11-03) and what Claude may see of it:
 | Where | Owner's words | Claude's words |
 |---|---|---|
 | `agent.session` connected | "Connected to <relay> as "name"" | "Connected as "name"" (relay's address out) |
-| `agent.Run` disconnected | the raw error | the kind of failure, else the error scrubbed of addresses, IPs, URLs, paths |
+| `agent.Run` disconnected | the raw error | the kind of failure, else "an unexpected error (<Go type>)": never the error's message |
 | `agent.Run` not connecting | the raw error (paths) | the step: not paired, settings unreadable, device key unreadable |
 | `agent.Run` revoked | same | same |
-| `agent.call` answer not sent | call ID and raw error | "An answer couldn't be sent", the kind of failure; no call ID |
+| `agent.call` answer not sent | call ID and raw error | "An answer couldn't be sent", the kind of failure (as a disconnect); no call ID |
+| `agent.Run` relay's close reason | in the raw error | its code only (the reason is the relay's free text) |
 | `agent.watchSettings` tools changed, pause, name | same | same (levels only; no names) |
 | `agent.auditCheck` mismatch | counts and call IDs | counts only |
 | `agent.auditCheck` match, no answer | same | same |
 | `main.run` rollback, update installed, started, stopped | same | same (versions) |
-| `main.dailyUpdates` update check failed | raw error | scrubbed |
+| `main.dailyUpdates` update check failed | raw error | the kind of failure, else "an unexpected error (<Go type>)" |
 | Tool calls (`kind: call`) | in the log | never |
+
+Security review 2026-11-04: the first version scrubbed unrecognized errors' messages with
+patterns (addresses, IPs, URLs, absolute paths); patterns miss host names outside URLs,
+relative paths, user names, and tokens, so no public word now comes from an error's message.
 
 The journal keeps its `slog` lines for the Owner (`journalctl -u latchkey`). Note: with Files on,
 Claude can read `activity.jsonl` itself (Latchkey's own files can be read, FR-1043), calls

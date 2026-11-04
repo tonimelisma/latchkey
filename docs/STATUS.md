@@ -102,7 +102,7 @@ always, refused while paused. Lines come from the server's own activity log, whe
 now carries a kind and the words Claude may see (the systemd journal was weighed and rejected:
 free text with the relay's address, and readable by the Owner only with persistent storage;
 research.md). Kept from Claude: the relay's address ("Connected as …"), call IDs, raw errors
-(described by kind or scrubbed of addresses, IPs, URLs, paths); new events say why a server
+(described by kind, else only the error's type, never its message; security review); new events say why a server
 disconnects or won't connect, pause and resume, and failed update checks. Tests, lint, the
 Debian container tests, and the end-to-end check (a real MCP client reading the server's log)
 pass. Not yet shipped: bump `linux/VERSION`, release, and a live call on a paired server.

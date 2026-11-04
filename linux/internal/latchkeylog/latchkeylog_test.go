@@ -110,7 +110,7 @@ func TestFromMemoryWhenTheLogCantBeRead(t *testing.T) {
 	r := latchkeylog.New(log, path, "0.1.1", zone).Run(context.Background(), tools.Args{})
 	got := text(t, r)
 	assert.False(t, r.IsError)
-	assert.Contains(t, got, "Latchkey's activity log isn't available just now (")
+	assert.Contains(t, got, "Latchkey's activity log isn't available just now (it is a folder), ")
 	assert.Contains(t, got, "so these are only the lines since Latchkey started.")
 	assert.Contains(t, got, "app: Latchkey 0.1.1 started")
 	assert.NotContains(t, got, path, "the reason names no file (FR-1053)")
