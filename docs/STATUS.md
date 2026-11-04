@@ -40,7 +40,9 @@ action (`confirm`, `prompt_text`; Cancel otherwise, reset right after; the Owner
 own dialogs back), and a page already waiting is told within 2 s. Also in it: the Mac tests,
 calls cut off by a quit or crash, and `latchkey_log` on Linux (the paragraphs below). #5
 settled from WebKit's source: a background press goes only to the pressed element or inside
-it, and scrolls nothing.
+it, and scrolls nothing. Linux 0.1.2: the audit check no longer names the server's first call
+missing (it asked the relay from that call's own time, which the relay records a moment
+earlier; spec 010 research).
 
 Full Mac test suite reliable again (2026-11-03, released in 0.8.109): the Automation check blocked Swift's shared threads (app bug, fixed: it now waits on a GCD thread), Mail, Messages, and WhatsApp closed a database twice when its layout check failed (app bug, fixed), and test pages now wait for WebKit's own "finished" (spec 001 research.md); 845 pass at load 19 and 86.
 

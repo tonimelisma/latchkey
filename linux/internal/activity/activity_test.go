@@ -98,3 +98,21 @@ func TestMemoryKeepsTheNewest1000(t *testing.T) {
 	assert.Equal(t, "line 5", mem[0].Public)
 	assert.Equal(t, "line 1004", mem[999].Public)
 }
+
+// The relay times a call as it sends it, a moment before the server logs it: asked from the
+// server's first logged call exactly, the relay left that call out, and every audit check named
+// it missing (purkki, 2026-11-01 to 2026-11-04). Entries from before the log began count only
+// when the log has them.
+func TestTheLogsFirstCallIsComparedToo(t *testing.T) {
+	start := time.Date(2026, 11, 1, 17, 1, 22, 786_000_000, time.UTC)
+	log := []activity.Entry{{Kind: "call", CallID: "first", At: start}, {Kind: "call", CallID: "later", At: start.Add(time.Hour)}}
+	assert.True(t, activity.AuditSince(start).Before(start.Add(-time.Minute)), "asked from well before")
+	relay := []activity.RelayEntry{
+		{CallID: "before-the-log", At: start.Add(-5 * time.Minute), Outcome: "ok"},
+		{CallID: "first", At: start.Add(-150 * time.Millisecond), Outcome: "ok"},
+		{CallID: "later", At: start.Add(time.Hour), Outcome: "ok"},
+	}
+	missingHere, missingThere := activity.Compare(log, activity.FromLogStart(relay, start, log), nil)
+	assert.Empty(t, missingThere)
+	assert.Empty(t, missingHere, "a call from before the log began isn't this log's to have")
+}

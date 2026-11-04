@@ -263,3 +263,28 @@ type RelayEntry struct {
 	At      time.Time
 	Outcome string
 }
+
+// auditSlack is how much earlier than the log's first call the relay's audit is asked for: the
+// relay times a call as it sends it, before the server logs it (2026-11-04).
+const auditSlack = 10 * time.Minute
+
+// AuditSince is where the relay's audit is read from for a log whose first call is at start.
+func AuditSince(start time.Time) time.Time { return start.Add(-auditSlack) }
+
+// FromLogStart keeps the relay's entries from start on, and earlier ones only when the log has
+// them (the log's first calls, timed a moment later here than at the relay).
+func FromLogStart(relay []RelayEntry, start time.Time, log []Entry) []RelayEntry {
+	logged := map[string]bool{}
+	for _, e := range log {
+		if e.Kind == "call" && e.CallID != "" {
+			logged[e.CallID] = true
+		}
+	}
+	var out []RelayEntry
+	for _, r := range relay {
+		if !r.At.Before(start) || logged[r.CallID] {
+			out = append(out, r)
+		}
+	}
+	return out
+}

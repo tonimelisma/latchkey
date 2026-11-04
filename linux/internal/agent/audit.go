@@ -28,7 +28,7 @@ func (a *Agent) auditCheck(ctx context.Context, c *conn, answers <-chan *agentpr
 		return // nothing logged yet to compare
 	}
 	var relay []activity.RelayEntry
-	next := since.UnixMilli()
+	next := activity.AuditSince(since).UnixMilli()
 	for page := 0; page < 1000; page++ {
 		id := fmt.Sprintf("a%d", page)
 		if err := c.send(ctx, &agentproto.AuditRequest{ID: id, Since: next, Limit: agentproto.MaxAuditEntries}); err != nil {
@@ -51,6 +51,7 @@ func (a *Agent) auditCheck(ctx context.Context, c *conn, answers <-chan *agentpr
 		}
 		next = *got.NextSince
 	}
+	relay = activity.FromLogStart(relay, since, entries)
 	a.mu.Lock()
 	running := map[string]bool{}
 	for id := range a.running {

@@ -204,3 +204,14 @@ The automatic review of each commit found, and the build fixed:
 
 Left as is, with the reason: a file swapped by another program between Files' own-files check and
 the change (Shell, which has no write fence on a server, can change these files anyway).
+
+## The audit check's first call (2026-11-04, fixed in 0.1.2)
+
+On purkki, every audit check since pairing (2026-11-01) named one logged call missing from the
+relay's audit: the first call the server ever logged (17:01:22.786Z). The relay stores a call at
+the moment it sends it, a few milliseconds before the server receives and logs it, and the check
+asked the relay for entries from the log's first call exactly, so the relay's copy of that very
+call fell just before the start. The check now asks from 10 minutes earlier
+(`activity.AuditSince`) and keeps those earlier entries only when the log has them
+(`activity.FromLogStart`), so a call from before the log began is still nobody's gap. The Mac
+reads the whole audit from 0 and never had this.
