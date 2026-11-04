@@ -218,6 +218,13 @@ extension ComputerCapability {
             + ". If you didn't mean that, look at the window and undo it."
     }
 
+    /// What has the keyboard focus: the app's answer, else the last look's element whose flag is set.
+    private static func focusPlace(_ env: ComputerEnvironment, _ t: AppTarget) -> String? {
+        if let f = env.appControl.focused(t) { return f }
+        let shown = AppControl.refs.value[t.pid]?.items.last { env.appControl.isFocused($0) }
+        return shown.map { "\($0.ref) \($0.role) \"\($0.label)\"" }
+    }
+
     /// Takes the keyboard focus for `e` and checks it really went there (FR-511).
     private static func takeFocus(_ env: ComputerEnvironment, _ t: AppTarget, _ e: AppElement) async throws {
         var check = FocusCheck.elsewhere("nothing")
@@ -227,7 +234,8 @@ extension ComputerCapability {
             check = env.appControl.focusCheck(t, e)
             if check == .inside { return }
         }
-        guard case .elsewhere(let other) = check else { return }
+        guard case .elsewhere(var other) = check else { return }
+        if other == "nothing", let place = focusPlace(env, t) { other = place }
         throw Failure(
             message:
                 "\(e.ref) \(e.role) \"\(e.label)\" didn't take the keyboard focus (it is on \(other)); nothing was typed. A custom dropdown takes choose; otherwise press it first or look again."
@@ -276,7 +284,7 @@ extension ComputerCapability {
                     done = "Typed \(text.count) characters into \(e.ref) \(e.role) \"\(e.label)\" in \(t.name)"
                 } else {
                     let focusPlace =
-                        env.appControl.focused(t).map { "where the keyboard focus is: \($0)" } ?? "with nothing focused"
+                        focusPlace(env, t).map { "where the keyboard focus is: \($0)" } ?? "with nothing focused"
                     keys.type(text)
                     done = "Typed \(text.count) characters in \(t.name), \(focusPlace)"
                 }
@@ -290,7 +298,7 @@ extension ComputerCapability {
                 done = try await choose(env, t, e, option, keys)
             default:
                 guard let k = args["keys"]?.stringValue else { throw Failure(message: "Give the keys.") }
-                let focusPlace = env.appControl.focused(t).map { ", where the keyboard focus is: \($0)" } ?? ""
+                let focusPlace = focusPlace(env, t).map { ", where the keyboard focus is: \($0)" } ?? ""
                 try keys.key(k)
                 done = "Pressed \(k) in \(t.name)\(focusPlace)"
             }

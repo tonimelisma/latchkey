@@ -119,6 +119,23 @@ import Testing
         #expect(form.values["e2"] == nil, "the dropdown that had the focus got no keys")
     }
 
+    /// Live check 2026-11-03: an app behind others names no focused element; the flags say.
+    @Test func whereTheFocusIsComesFromTheFlagsWhenTheAppSaysNothing() async {
+        let form = Form(Self.page)
+        form.focusOn = "e1"
+        form.refuseFocus = ["e6"]
+        var (e, poster) = env(form, pid: 9112)
+        e.appControl.focused = { _ in nil }
+        e.appControl.focusCheck = { _, el in form.with { $0.focusOn == el.ref } ? .inside : .elsewhere("nothing") }
+        e.appControl.isFocused = { el in form.with { $0.focusOn == el.ref } }
+        _ = await look(e)
+        let r = await act(e, ["action": .string("type"), "ref": .string("e6"), "text": .string("x")])
+        #expect(r.isError && r.plainText.contains("(it is on e1 AXTextField \"City\")"), "\(r.plainText)")
+        #expect(poster.typed.isEmpty)
+        let k = await act(e, ["action": .string("key"), "keys": .string("tab")])
+        #expect(k.plainText.contains("where the keyboard focus is: e1 AXTextField \"City\""), "\(k.plainText)")
+    }
+
     @Test func typingSaysTheValueNow() async {
         let form = Form(Self.page)
         let (e, _) = env(form, pid: 9102)

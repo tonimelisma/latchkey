@@ -47,6 +47,9 @@ struct AppControl: Sendable {
     var focused: @Sendable (AppTarget) -> String? = { _ in nil }
     /// The element's value now.
     var value: @Sendable (AppElement) -> String? = { $0.value }
+    /// The element's own focus flag, which stays right in an app behind others when the app's
+    /// focused element reads as nothing (FormLab check 2026-11-03).
+    var isFocused: @Sendable (AppElement) -> Bool = { _ in false }
 
     static let live = AppControl(
         find: { name in
@@ -75,7 +78,10 @@ struct AppControl: Sendable {
         focusCheck: { t, e in
             guard let el = e.element else { return .elsewhere("nothing") }
             let app = AXUIElementCreateApplication(t.pid)
-            guard let f = AppWindowReader.focusedElement(app) else { return .elsewhere("nothing") }
+            guard let f = AppWindowReader.focusedElement(app) else {
+                // An app behind others often names no focused element; the flags still say.
+                return AppWindowReader.focusFlag(in: el) ? .inside : .elsewhere("nothing")
+            }
             var current: AXUIElement? = f
             for _ in 0..<40 {
                 guard let c = current else { break }
@@ -87,7 +93,8 @@ struct AppControl: Sendable {
         focused: { t in
             AppWindowReader.focusedElement(AXUIElementCreateApplication(t.pid)).map(AppWindowReader.describe)
         },
-        value: { e in e.element.flatMap { AppWindowReader.string($0, kAXValueAttribute) } })
+        value: { e in e.element.flatMap { AppWindowReader.string($0, kAXValueAttribute) } },
+        isFocused: { e in e.element.map { AppWindowReader.string($0, kAXFocusedAttribute) == "1" } ?? false })
 
     /// Any copy of Latchkey (installed, test build, helper), by its bundle ID or bundle path.
     static func isLatchkey(_ app: NSRunningApplication) -> Bool {
@@ -175,6 +182,25 @@ enum AppWindowReader {
             CFGetTypeID(p) == AXUIElementGetTypeID()
         else { return nil }
         return (p as! AXUIElement)
+    }
+
+    /// The element or one inside it (a combobox's own text field) has its focus flag set.
+    static func focusFlag(in e: AXUIElement) -> Bool {
+        var queue = [(e, 0)]
+        var looked = 0
+        while !queue.isEmpty, looked < 200 {
+            let (current, depth) = queue.removeFirst()
+            looked += 1
+            if string(current, kAXFocusedAttribute) == "1" { return true }
+            guard depth < 4 else { continue }
+            var children: AnyObject?
+            if AXUIElementCopyAttributeValue(current, kAXChildrenAttribute as CFString, &children) == .success,
+                let list = children as? [AXUIElement]
+            {
+                queue += list.map { ($0, depth + 1) }
+            }
+        }
+        return false
     }
 
     /// `AXPopUpButton "Country"`, with its value when it has one.
