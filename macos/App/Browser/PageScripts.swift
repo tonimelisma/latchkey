@@ -74,7 +74,7 @@ enum PageScripts {
             try {
               var d = w[k];
               if (!d) {
-                d = w[k] = { log: [], ok: false, text: null };
+                d = w[k] = { log: [], ok: false, text: null, own: { alert: w.alert, confirm: w.confirm, prompt: w.prompt } };
                 w.alert = function (m) { d.log.push(['alert', String(m)]); };
                 w.confirm = function (m) { d.log.push(['confirm', String(m), d.ok ? 'ok' : 'cancel']); return d.ok; };
                 w.prompt = function (m) { d.log.push(['prompt', String(m), d.text === null ? '' : d.text]); return d.text; };
@@ -89,16 +89,30 @@ enum PageScripts {
         """
     }
 
-    /// What the page's dialogs said since the last take, as JSON: [kind, message, answer].
-    static let takeDialogs = """
+    /// What the page's dialogs said since the last take, as JSON: [kind, message, answer]. Run
+    /// in the same AppleScript run right after Claude's script, so Claude's OK or text never
+    /// outlasts its action (security review 2026-11-03): the answers go back to Cancel and none,
+    /// and with `restore` (one of the Owner's tabs) the page's own dialogs come back, so the
+    /// Owner's page behaves as before.
+    static func takeDialogs(restore: Bool) -> String {
+        // nosemgrep: latchkey-page-script-literal -- splices in only a Bool.
+        """
         (function () {
-          var out = [];
-          function take(w) { try { var d = w.__latchkeyDialogs; if (d) { out = out.concat(d.log); d.log = []; } } catch (e) {} }
+          var out = [], restore = \(restore ? "true" : "false");
+          function take(w) {
+            try {
+              var d = w.__latchkeyDialogs;
+              if (!d) return;
+              out = out.concat(d.log); d.log = []; d.ok = false; d.text = null;
+              if (restore) { w.alert = d.own.alert; w.confirm = d.own.confirm; w.prompt = d.own.prompt; delete w.__latchkeyDialogs; }
+            } catch (e) {}
+          }
           take(window);
           for (var i = 0; i < window.frames.length; i++) take(window.frames[i]);
           return JSON.stringify(out.slice(0, 20));
         })()
         """
+    }
 
     /// One line for Claude, the same in Safari and in Latchkey's own browser: at most 200
     /// characters of the page's text, on one line, without the «» that frame it (security review

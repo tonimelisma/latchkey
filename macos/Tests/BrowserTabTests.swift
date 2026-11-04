@@ -170,7 +170,7 @@ final class FakeSafariTabs: ScriptRunner, @unchecked Sendable {
                         isMarked = !waiting && marked(windows[w].tabs[i], args[3])
                     }
                     if i + 1 == idx { loading = expected.contains(windows[w].tabs[i].url) }
-                    out += "\(i + 1)\t\(same)\t\(isMarked)\t\(loading)\t\(waiting)\n"
+                    out += "\(i + 1)\t\(same)\t\(isMarked)\t\(loading)\t\(waiting)\t\(windows[w].tabs[i].url)\n"
                 }
                 return out
             case SafariBrowser.Script.tabJavaScript:

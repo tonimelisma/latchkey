@@ -16,8 +16,9 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate {
     /// to Claude with the next page; a confirm is answered Cancel and a prompt with nothing, so a
     /// page never gets a yes from Latchkey on its own (2026-11-02).
     private(set) var dialogs: [String] = []
-    /// Claude's answers for the action that runs (FR-432); Cancel and no text otherwise.
-    var dialogAnswer = DialogAnswer()
+    /// Claude's answers for the action that runs (FR-432), set with `acting`; Cancel and no
+    /// text otherwise.
+    private var dialogAnswer = DialogAnswer()
     private var droppedDialogs = 0
     /// True while Claude's own click, typing, or script runs: only then may the page open a new
     /// window (security review 2026-11-02: a page's own pop-up can't take Claude's page away).
@@ -252,9 +253,13 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate {
         return try await page(offset: offset)
     }
 
-    func click(_ ref: String) async throws -> PageScripts.Page {
+    func click(_ ref: String, answer: DialogAnswer = DialogAnswer()) async throws -> PageScripts.Page {
         acting = true
-        defer { acting = false }
+        dialogAnswer = answer
+        defer {
+            acting = false
+            dialogAnswer = DialogAnswer()
+        }
         guard let w = web else { throw SafariBrowser.Failure.noWindow }
         let before = w.url?.absoluteString
         let answer = try await script(PageScripts.click(ref))
@@ -273,9 +278,15 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate {
         return try await page(offset: 0)
     }
 
-    func type(_ ref: String, text: String, submit: Bool) async throws -> PageScripts.Page {
+    func type(_ ref: String, text: String, submit: Bool, answer: DialogAnswer = DialogAnswer()) async throws
+        -> PageScripts.Page
+    {
         acting = true
-        defer { acting = false }
+        dialogAnswer = answer
+        defer {
+            acting = false
+            dialogAnswer = DialogAnswer()
+        }
         guard let w = web else { throw SafariBrowser.Failure.noWindow }
         let before = w.url?.absoluteString
         try check(
@@ -300,9 +311,13 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate {
         return try await page(offset: 0)
     }
 
-    func run(_ code: String) async throws -> String {
+    func run(_ code: String, answer: DialogAnswer = DialogAnswer()) async throws -> String {
         acting = true
-        defer { acting = false }
+        dialogAnswer = answer
+        defer {
+            acting = false
+            dialogAnswer = DialogAnswer()
+        }
         guard let w = web else { throw SafariBrowser.Failure.noWindow }
         let before = w.url?.absoluteString
         do {

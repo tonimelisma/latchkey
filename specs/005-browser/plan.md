@@ -254,14 +254,20 @@ answer); the time limit was 25 s (ScriptRunner).
   they said; the same AppleScript run then takes the notes (`takeDialogs`, 2 s limit) and they
   come with the answer, worded as in Latchkey's own browser (`PageScripts.dialogNote`, at most
   5, 200 characters each, no «»). Latchkey's own browser answers through WebKit's delegate the
-  same way. `browser_act` takes `confirm` (true: OK) and `prompt_text`, for that action only.
-  A page can restore its own functions; then its dialog waits, and the next check below says so.
+  same way. `browser_act` takes `confirm` (true: OK) and `prompt_text`, for that action only:
+  the answer is passed with the action (never kept as state another call could pick up), and
+  the take, in the same AppleScript run right after it, sets the page back to Cancel and no
+  text; in one of the Owner's tabs it also puts the page's own dialogs back, so his page
+  behaves as before once Claude's script is done (security review 2026-11-03). A page can
+  restore its own functions; then its dialog waits, and the next check below says so.
 - A page that already waits (its dialog came before the answers were in, e.g. at load): every
   check of a page (the mark check in the survey and the guard, picking, putting a tab back) has
   a 2 s limit; on -1712 the survey marks the tab waiting, and a script refuses at once
-  (`dialogWaiting`). The tab is still Claude's when it is where it was, the window has as many
-  tabs, and it shows its last address; it can then be loaded over (`tabLoad`) or closed, with
-  that address standing in for the mark. Claude's own window gets a 2 s `do JavaScript "1"`
+  (`dialogWaiting`). The tab is still Claude's only when it is where it was, shows its last
+  address, and the window's tabs (their number, order, and addresses, as one SHA-256
+  fingerprint) are exactly as when Claude's mark was last seen there; it can then be loaded
+  over (`tabLoad`) or closed, with that address standing in for the mark (security review
+  2026-11-03: an address alone could be another tab's). Claude's own window gets a 2 s `do JavaScript "1"`
   first. The Owner's tab is left alone: its dialog shows when he brings the tab forward.
 - Options weighed: a shorter time limit for every script (wrongly fails slow pages; still a
   wait), refusing the Owner's tabs while locked (refuses what works, and dialogs happen unlocked

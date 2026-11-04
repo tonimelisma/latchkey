@@ -1,4 +1,5 @@
 import AppKit
+import CryptoKit
 
 /// Where Claude's pages open (spec 005 FR-412, FR-417): a tab in the Owner's Safari window (the
 /// default, Toni 2026-10-29) or a Safari window of Claude's own. Chosen in Settings.
@@ -23,6 +24,8 @@ struct ClaudeTab: Codable, Equatable, Sendable {
     var count: Int
     var address: String
     var token: String
+    /// The window's tabs when the mark was last seen (`TabSurvey.fingerprint`, FR-432).
+    var fingerprint: String? = nil
 }
 
 /// What Safari reports about a window's tabs before Latchkey uses Claude's: for each tab only
@@ -37,6 +40,15 @@ struct TabSurvey: Equatable {
         var loading = false
         /// The page didn't answer within 2 s: it waits on a dialog it showed (spec 005 FR-432).
         var waiting = false
+        /// The tab's address, only for the window's fingerprint.
+        var address = ""
+    }
+
+    /// The window's tabs, in order, as one value: the same while no tab opened, closed, moved,
+    /// or changed its page (security review 2026-11-03).
+    var fingerprint: String {
+        let all = rows.map(\.address).joined(separator: "\n")
+        return SHA256.hash(data: Data("\(count)\n\(all)".utf8)).map { String(format: "%02x", $0) }.joined()
     }
 
     var count: Int
@@ -57,7 +69,7 @@ struct TabSurvey: Equatable {
             guard f.count >= 3, let i = Int(f[0]) else { return nil }
             return Row(
                 index: i, sameAddress: f[1] == "true", marked: f[2] == "true", loading: f.count > 3 && f[3] == "true",
-                waiting: f.count > 4 && f[4] == "true")
+                waiting: f.count > 4 && f[4] == "true", address: f.count > 5 ? f[5] : "")
         }
     }
 
@@ -71,8 +83,11 @@ struct TabSurvey: Equatable {
             if r.marked { return r.index }
             if navigating && r.loading && s.count == t.count { return r.index }
             // A page waiting on its own dialog answers no script, so it can't show the mark: it
-            // is the tab where it was, as many tabs, at its last address (FR-432).
-            if r.waiting && r.sameAddress && s.count == t.count { return r.index }
+            // is Claude's only while the window's tabs are exactly as when its mark was last
+            // seen (FR-432; security review 2026-11-03: an address alone could be another tab's).
+            if r.waiting && r.sameAddress && s.count == t.count, let seen = t.fingerprint, seen == s.fingerprint {
+                return r.index
+            }
         }
         return s.rows.first { $0.index != t.index && $0.sameAddress && $0.marked }?.index
     }
@@ -96,14 +111,8 @@ actor SafariBrowser {
     }
 
     let scripts: any ScriptRunner
-    /// How the next scripts answer the page's own dialogs (FR-432): Cancel and no text unless
-    /// Claude's action says otherwise.
-    private var dialogAnswer = DialogAnswer()
-    /// What the page's dialogs said since the last answer, told to Claude with it.
+    /// What the page's dialogs said since the last answer, told to Claude with it (FR-432).
     private var dialogs: [String] = []
-
-    /// Claude's answers for the dialogs of the action that follows; `answering(.init())` after it.
-    func answering(_ a: DialogAnswer) { dialogAnswer = a }
 
     /// Takes the dialogs noted since the last call.
     func takeDialogs() -> [String] {
@@ -429,20 +438,23 @@ actor SafariBrowser {
         }
     }
 
-    func click(_ ref: String) async throws -> PageScripts.Page {
+    /// `answer`: how the page's dialogs are answered during this click only (FR-432).
+    func click(_ ref: String, answer: DialogAnswer = DialogAnswer()) async throws -> PageScripts.Page {
         beginAction(mayNavigate: true)
         let before = try? await stamp()
-        try check(try await javaScript(PageScripts.click(ref), acting: true), ref: ref)
+        try check(try await javaScript(PageScripts.click(ref), acting: true, answer: answer), ref: ref)
         _ = try await settle(after: before, expectNavigation: false)
         return try await readPage(offset: 0)
     }
 
-    func type(_ ref: String, text: String, submit: Bool) async throws -> PageScripts.Page {
+    func type(_ ref: String, text: String, submit: Bool, answer: DialogAnswer = DialogAnswer()) async throws
+        -> PageScripts.Page
+    {
         beginAction(mayNavigate: true)
         let before = try? await stamp()
         try check(
-            try await javaScript(PageScripts.type(ref, text: text, submit: submit), acting: true), ref: ref,
-            option: text)
+            try await javaScript(PageScripts.type(ref, text: text, submit: submit), acting: true, answer: answer),
+            ref: ref, option: text)
         if submit { _ = try await settle(after: before, expectNavigation: false) }
         return try await readPage(offset: 0)
     }
@@ -455,9 +467,9 @@ actor SafariBrowser {
         return try await readPage(offset: 0)
     }
 
-    func run(_ code: String) async throws -> String {
+    func run(_ code: String, answer: DialogAnswer = DialogAnswer()) async throws -> String {
         beginAction()
-        return try await javaScript(PageScripts.custom(code))
+        return try await javaScript(PageScripts.custom(code), answer: answer)
     }
 
     /// The tabs of a window of Claude's own (index, title, address) and which is showing;
@@ -632,12 +644,16 @@ actor SafariBrowser {
     /// Runs `code` in Claude's page. `acting`: Claude's click, typing, or back, whose script may
     /// answer the address it sends the page to on a second line (taken here, not returned), and
     /// after which the acting AppleScript waits a moment for the page's note of where it is going.
-    private func javaScript(_ code: String, acting: Bool = false) async throws -> String {
+    private func javaScript(_ code: String, acting: Bool = false, answer: DialogAnswer = DialogAnswer())
+        async throws -> String
+    {
         if lostPick { throw Failure.tabGone }
         guard let window = workWindow else { throw Failure.noWindow }
-        let answering = PageScripts.dialogAnswers(dialogAnswer)
+        let answering = PageScripts.dialogAnswers(answer)
+        // The Owner's tab gets its page's own dialogs back after each script.
+        let taking = PageScripts.takeDialogs(restore: picked != nil)
         guard workTab != nil else {
-            let out = try await call(Script.javaScript, [window, answering + code, PageScripts.takeDialogs])
+            let out = try await call(Script.javaScript, [window, answering + code, taking])
             let both = out.split(separator: "\n", maxSplits: 1, omittingEmptySubsequences: false).map(String.init)
             heard(both.first ?? "[]")
             let result = both.count > 1 ? both[1] : ""
@@ -653,7 +669,7 @@ actor SafariBrowser {
                     Script.tabJavaScript,
                     guardArguments(found) + [
                         answering + PageScripts.tabMark(found.tab.token) + PageScripts.inTab(code),
-                        PageScripts.takeDestination, acting ? "yes" : "no", PageScripts.takeDialogs,
+                        PageScripts.takeDestination, acting ? "yes" : "no", taking,
                     ])
                 var parts = out.split(separator: "\n", maxSplits: 3, omittingEmptySubsequences: false).map(String.init)
                 if parts.count > 2 { heard(parts.remove(at: 2)) }
@@ -738,8 +754,10 @@ actor SafariBrowser {
         }
         t.index = index
         t.count = survey.count
+        let row = survey.rows.first { $0.index == index }
+        if row?.marked == true { t.fingerprint = survey.fingerprint }
         if owners { picked?.tab = t } else { tab = t }
-        let waiting = survey.rows.first { $0.index == index }?.waiting ?? false
+        let waiting = row?.waiting ?? false
         return Found(window: window, tab: t, loading: loading, waiting: waiting)
     }
 
@@ -1130,6 +1148,15 @@ actor SafariBrowser {
         /// check runs only in the tab at Claude's position and tabs at Claude's address, and only
         /// says yes or no.
         static let tabSurvey = """
+            on clean(s)
+            set s to s as text
+            set AppleScript's text item delimiters to {tab, return, linefeed}
+            set parts to text items of s
+            set AppleScript's text item delimiters to " "
+            set s to parts as text
+            set AppleScript's text item delimiters to ""
+            return s
+            end clean
             on run argv
             set winID to (item 1 of argv) as integer
             set idx to (item 2 of argv) as integer
@@ -1165,7 +1192,11 @@ actor SafariBrowser {
             set isLoading to ((URL of t) is in theExpected)
             end try
             end if
-            set out to out & (i as text) & sep & (sameURL as text) & sep & (isMarked as text) & sep & (isLoading as text) & sep & (isWaiting as text) & linefeed
+            set theURL to ""
+            try
+            set theURL to my clean(URL of t)
+            end try
+            set out to out & (i as text) & sep & (sameURL as text) & sep & (isMarked as text) & sep & (isLoading as text) & sep & (isWaiting as text) & sep & theURL & linefeed
             end repeat
             return out
             end tell

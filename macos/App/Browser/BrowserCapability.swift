@@ -195,9 +195,9 @@ enum BrowserCapability {
                         let l = await route(browser, locked)
                         let a = try answer(args)
                         if let l {
-                            p = try await answering(a, l) { try await l.click(ref) }
+                            p = try await l.click(ref, answer: a)
                         } else {
-                            p = try await answering(a, browser) { try await browser.click(ref) }
+                            p = try await browser.click(ref, answer: a)
                         }
                         var r = await told(page(p, l == nil ? await browser.working() : nil), l, browser)
                         r.activity = "Clicked \(ref) on \(host(p.url))"
@@ -227,11 +227,9 @@ enum BrowserCapability {
                         let l = await route(browser, locked)
                         let a = try answer(args)
                         if let l {
-                            p = try await answering(a, l) { try await l.type(ref, text: text, submit: submit) }
+                            p = try await l.type(ref, text: text, submit: submit, answer: a)
                         } else {
-                            p = try await answering(a, browser) {
-                                try await browser.type(ref, text: text, submit: submit)
-                            }
+                            p = try await browser.type(ref, text: text, submit: submit, answer: a)
                         }
                         var r = await told(page(p, l == nil ? await browser.working() : nil), l, browser)
                         r.activity = "Typed into \(ref) on \(host(p.url))"
@@ -252,9 +250,9 @@ enum BrowserCapability {
                         let a = try answer(args)
                         let l = await route(browser, locked)
                         if let l {
-                            result = try await answering(a, l) { try await l.run(code) }
+                            result = try await l.run(code, answer: a)
                         } else {
-                            result = try await answering(a, browser) { try await browser.run(code) }
+                            result = try await browser.run(code, answer: a)
                             if let tab = await browser.working() { result = named(tab) + "\n" + result }
                         }
                         var r = await told(
@@ -362,29 +360,6 @@ enum BrowserCapability {
             a.text = s
         }
         return a
-    }
-
-    /// Runs `body` with `a` answering the page's dialogs, and Cancel and no text again after.
-    static func answering<T: Sendable>(
-        _ a: DialogAnswer, _ browser: SafariBrowser, _ body: () async throws -> T
-    ) async throws -> T {
-        await browser.answering(a)
-        do {
-            let r = try await body()
-            await browser.answering(DialogAnswer())
-            return r
-        } catch {
-            await browser.answering(DialogAnswer())
-            throw error
-        }
-    }
-
-    @MainActor static func answering<T: Sendable>(
-        _ a: DialogAnswer, _ l: LockedBrowser, _ body: () async throws -> T
-    ) async throws -> T {
-        l.dialogAnswer = a
-        defer { l.dialogAnswer = DialogAnswer() }
-        return try await body()
     }
 
     /// The page's own dialogs since the last answer, before the page: both browsers answer them

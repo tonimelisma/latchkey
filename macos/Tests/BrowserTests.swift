@@ -446,8 +446,9 @@ final class FakeSafari: ScriptRunner, @unchecked Sendable {
         let tools = Dictionary(uniqueKeysWithValues: BrowserCapability.readTools(browser: b).map { ($0.tool.name, $0) })
         let read = tools["browser_read"]!
         _ = await read.handler(.object(["url": .string("https://shop.example.com/"), "offset": .number(1234)]))
-        #expect(fake.calls.last?.args.last?.contains("(1234, ") == true, "url and offset read from the offset")
+        #expect(
+            fake.calls.last?.args.contains { $0.contains("(1234, ") } == true, "url and offset read from the offset")
         _ = await read.handler(.object(["offset": .number(2345)]))
-        #expect(fake.calls.last?.args.last?.contains("(2345, ") == true)
+        #expect(fake.calls.last?.args.contains { $0.contains("(2345, ") } == true)
     }
 }

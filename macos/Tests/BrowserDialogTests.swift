@@ -16,8 +16,8 @@ import WebKit
         </body></html>
         """
 
-    func said(_ page: TestPage) async throws -> [[String]] {
-        let json = try await page.run(PageScripts.takeDialogs)
+    func said(_ page: TestPage, restore: Bool = false) async throws -> [[String]] {
+        let json = try await page.run(PageScripts.takeDialogs(restore: restore))
         return try JSONDecoder().decode([[String]].self, from: Data(json.utf8))
     }
 
@@ -34,6 +34,23 @@ import WebKit
         let log = try await said(page)
         #expect(log == [["confirm", "Delete the order?", "cancel"], ["confirm", "Delete the order?", "ok"]])
         #expect(try await said(page).isEmpty, "taken once")
+        // Security review 2026-11-03: Claude's OK ends with its action; the take resets it.
+        _ = try await page.run(PageScripts.dialogAnswers(DialogAnswer(confirm: true)) + "1")
+        _ = try await said(page)
+        _ = try await page.run("document.getElementById('del').click(); 1")
+        #expect(try await page.run("document.title") == "asked:false", "a dialog after the action gets Cancel")
+    }
+
+    /// In one of the Owner's tabs, the page's own dialogs come back after each script.
+    @MainActor @Test func theOwnersPageGetsItsOwnDialogsBack() async throws {
+        let page = TestPage()
+        try await page.load(Self.html)
+        let original = try await page.run("String(window.confirm)")
+        _ = try await page.run(PageScripts.dialogAnswers(DialogAnswer()) + "1")
+        #expect(try await page.run("String(window.confirm)") != original)
+        _ = try await said(page, restore: true)
+        #expect(try await page.run("String(window.confirm)") == original)
+        #expect(try await page.run("String('__latchkeyDialogs' in window)") == "false")
     }
 
     @MainActor @Test func aPromptGetsClaudesTextOrNothingAndAnAlertIsDismissed() async throws {
@@ -64,14 +81,17 @@ import WebKit
     }
 
     @Test func theSurveyTellsAWaitingPage() {
-        let s = TabSurvey(
-            "3\n1\tfalse\tfalse\tfalse\tfalse\n2\ttrue\tfalse\tfalse\ttrue\n3\tfalse\tfalse\tfalse\tfalse\n")
+        let rows =
+            "1\tfalse\tfalse\tfalse\tfalse\thttps://mail.example.com/\n2\ttrue\tfalse\tfalse\ttrue\thttps://shop.example.com/\n"
+        let s = TabSurvey("2\n" + rows)
         #expect(s.rows[1].waiting && !s.rows[0].waiting)
-        let t = ClaudeTab(index: 2, count: 3, address: "https://shop.example.com/", token: "ab")
-        #expect(TabSurvey.pick(s, remembered: t, navigating: false) == 2, "where it was, as many tabs, same address")
-        var moved = t
-        moved.count = 4
-        #expect(TabSurvey.pick(s, remembered: moved, navigating: false) == nil, "tabs changed: not surely Claude's")
+        var t = ClaudeTab(index: 2, count: 2, address: "https://shop.example.com/", token: "ab")
+        #expect(TabSurvey.pick(s, remembered: t, navigating: false) == nil, "never seen marked in this window")
+        t.fingerprint = s.fingerprint
+        #expect(TabSurvey.pick(s, remembered: t, navigating: false) == 2, "the window's tabs as when last marked")
+        // Security review 2026-11-03: another tab's page changed, so the window isn't as it was.
+        let changed = TabSurvey("2\n" + rows.replacingOccurrences(of: "mail.example", with: "bank.example"))
+        #expect(TabSurvey.pick(changed, remembered: t, navigating: false) == nil)
     }
 
     func tabBrowser(_ fake: FakeSafariTabs) -> SafariBrowser {
@@ -82,6 +102,7 @@ import WebKit
         let fake = FakeSafariTabs()
         let b = tabBrowser(fake)
         _ = try await b.open("https://shop.example.com/", newTab: false)
+        _ = try await b.read(offset: 0)  // the mark seen with the window as it is
         fake.windows[0].tabs[2].waiting = true
         await #expect(throws: SafariBrowser.Failure.dialogWaiting(owners: false)) { _ = try await b.read(offset: 0) }
         #expect(BrowserCapability.explain(.dialogWaiting(owners: false)).contains("Opening a page"))
@@ -96,11 +117,17 @@ import WebKit
         let b = tabBrowser(fake)
         _ = try await b.open("https://shop.example.com/", newTab: false)
         fake.dialogsSaid = #"[["confirm","Delete the order?","ok"]]"#
-        await b.answering(DialogAnswer(confirm: true))
-        _ = try await b.read(offset: 0)
+        _ = try await b.run("1", answer: DialogAnswer(confirm: true))
         #expect(await b.takeDialogs() == ["The page asked to confirm: «Delete the order?»; Latchkey answered OK."])
-        let sent = fake.scripts.indices.last { fake.scripts[$0] == SafariBrowser.Script.tabJavaScript }
-        #expect(sent.map { fake.calls[$0].args[5].contains("ok = true") } == true, "Claude's OK went into the page")
+        func last() -> [String] {
+            let i = fake.scripts.indices.last { fake.scripts[$0] == SafariBrowser.Script.tabJavaScript }!
+            return fake.calls[i].args
+        }
+        #expect(last()[5].contains("ok = true"), "Claude's OK went into the page with its script")
+        #expect(last()[8].contains("restore = false"), "Claude's own tab keeps the answers in place")
+        // The answer is the action's alone: the next script, a read, says Cancel.
+        _ = try await b.read(offset: 0)
+        #expect(last()[5].contains("ok = false"))
     }
 
     @Test func browserActTakesConfirmAndPromptText() throws {
