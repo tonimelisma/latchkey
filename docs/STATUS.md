@@ -45,7 +45,12 @@ drops repeated labels, 300 at a time with `after`, `within`, `match` from the sa
 when it was cut (spec 006 FR-511 to FR-514). The two checkboxes checked after one press stay
 unexplained: a background press changed nothing else on the test page; answers now name such
 changes. Toni chose to let Claude reach his own Safari tabs like its own (spec 005, in progress
-on a helper branch) and to add `latchkey_log` (below).
+in 0.8.106, below) and to add `latchkey_log` (below). Checked live through the hosted relay: the
+window list (each table cell once, labels deduped), `match`, zsh here-documents and `=(…)`,
+`latchkey_log`, and in 0.8.104 the focus check refusing every typing (an app behind others names
+no focused element; 0.8.106 asks the element's own focus flag, as the FormLab check showed it
+stays right). Next: once the lid is open, the FormLab check again on 0.8.106 (choose State and
+Country, type into City, the refusal for the Zelle button, a checkbox press's "also changed").
 
 WhatsApp (spec 012) built and installed in 0.8.101, with the page kept to WhatsApp Web in 0.8.102
 and linking by code made reliable in 0.8.103 (the first press of "Log in with phone number" did
@@ -85,7 +90,8 @@ in the background, for reading, back, pictures, clicks, typing, scripts, and clo
 same checks and click rules as its own tab, until it opens a url (always in its own tab) or
 picks another. While locked, Claude's own page stays in Latchkey's own browser and the Owner's
 tabs are tried through Safari. Unit tests and the real Safari check pass (the check also read
-one of Toni's tabs, reading only); not yet installed or checked through the hosted relay.
+one of Toni's tabs, reading only); installed in 0.8.106 and checked through the hosted relay
+while locked: listed Toni's three tabs and read one, nothing brought forward.
 
 Releases, terms and privacy, and the directory listing are much later (Toni, 2026-10-22).
 
