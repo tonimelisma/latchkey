@@ -125,17 +125,21 @@ struct CapabilityRegistry: Sendable {
 
     let capabilities: [Capability]
     private(set) var levels: [String: AccessLevel]
+    /// Tools offered whatever the levels: Latchkey's own log (FR-662). They read only
+    /// Latchkey's own state, never the Owner's data, so no capability holds them.
+    let always: [ToolEntry]
 
-    init(capabilities: [Capability], levels: [String: AccessLevel]) {
+    init(capabilities: [Capability], levels: [String: AccessLevel], always: [ToolEntry] = []) {
         self.capabilities = capabilities
         self.levels = levels
+        self.always = always
     }
 
     func level(_ id: String) -> AccessLevel { levels[id] ?? .off }
 
     mutating func setLevel(_ id: String, _ level: AccessLevel) { levels[id] = level }
 
-    private var entries: [ToolEntry] { capabilities.flatMap { $0.entries(at: level($0.id)) } }
+    private var entries: [ToolEntry] { capabilities.flatMap { $0.entries(at: level($0.id)) } + always }
 
     var tools: [Tool] { entries.map(\.tool) }
 

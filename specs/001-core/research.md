@@ -762,3 +762,41 @@ Claude:
   scrolling, the heading out of reach, anything sticking out, and a field narrower than its
   button. Run against the old stylesheet it fails at 320 px (the heading started 349 px above the
   top).
+
+## Latchkey's log for Claude (FR-662 to FR-665, 2026-11-03)
+
+Toni decided the tool exists ("yes, recent lines"). The choices below were Claude's, as
+low-level details; the first is one Toni may want to revisit.
+
+- Offered always or behind a setting:
+  - (a) Always, outside the capabilities (chosen). Pros: diagnosing is needed exactly when
+    something is off, including with every capability off or a permission lost; it reads only
+    Latchkey's own state, which macOS's log already holds in public; no new row in Settings.
+    Cons: the Owner can't hide it; with every capability off the `machines` tool now shows the
+    Mac offering `latchkey_log` rather than "offers no tools". Constitution III is about the
+    Owner's capabilities; this is none, and Pause still refuses it.
+  - (b) A capability of its own (Off/On, on by default). Pros: the Owner can turn it off. Cons:
+    one more switch for something holding no personal data; turned off, it is gone when needed.
+  - (c) Tied to Shell's level. Rejected: unrelated, and Shell off is a common setting.
+- Where the lines come from:
+  - (a) The activity log's events with a new mark, `inSystemLog`, sealed with the content
+    (chosen). Pros: kept across restarts and installs (an install quits the app; a crash
+    restarts it), so "why did it disconnect last night" can be answered; the activity log is
+    already where every event is kept (FR-633). Cons: events recorded before the mark existed
+    can't be told apart and are left out; one optional field in the sealed content.
+  - (b) An in-memory list of this launch's lines only. Pros: simplest. Cons: empty after every
+    restart, which is often when a problem shows. Kept as the fallback when the activity log
+    can't be opened (FR-665).
+  - (c) `OSLogStore` with `.currentProcessIdentifier`. Cons: this launch only, and it returns
+    every line of the process, including those with private parts, so the filtering would be
+    by trust in macOS's redaction. Reading other launches (`.local()`) needs admin rights.
+  - (d) The events whose category is never private. Rejected: `app`, `pairing`, and `helper`
+    each have both public lines and lines with the relay's address or the device ID.
+- Shape: text only, one line per event (`2026-11-03 14:02:11 connection ERROR: …`), newest last,
+  as Claude reads a log; structured content would hide the text in Claude's apps, as with the
+  `machines` tool. `lines` above 1000 is refused rather than cut silently, like other tools'
+  numbers. The answer stays within `ResultLimit.characters` by leaving out the oldest lines and
+  saying how many.
+- Linux (spec 010): its program writes its own events with `log/slog` to the systemd journal,
+  not to an activity log of the same kind; offering the same tool there means reading the
+  journal for its unit or keeping a copy of its lines, a separate job not done here.

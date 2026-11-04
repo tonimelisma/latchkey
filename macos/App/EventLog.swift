@@ -62,6 +62,9 @@ final class EventLog: @unchecked Sendable {
     private var sink: (@MainActor ([Activity]) throws -> Void)?
     private var flushScheduled = false
     private var discarding = false
+    /// This launch's newest lines that went to macOS's log in public, for Claude when the
+    /// activity log is unavailable (FR-665).
+    private var recentPublic: [Activity] = []
 
     /// `systemLog: false` for a line that must not be public in macOS's log (it carries the
     /// relay's address); the caller logs it there with its own privacy.
@@ -75,9 +78,14 @@ final class EventLog: @unchecked Sendable {
                 category.logger.notice("\(text, privacy: .public)")
             }
         }
+        let event = Activity.event(category, text, error: error, systemLog: systemLog, at: at)
         let kept = lock.withLock { () -> Bool in
+            if systemLog {
+                recentPublic.append(event)
+                if recentPublic.count > LatchkeyLog.maxLines { recentPublic.removeFirst() }
+            }
             guard !discarding else { return false }
-            pending.append(.event(category, text, error: error, at: at))
+            pending.append(event)
             if pending.count > Self.limit {
                 pending.removeFirst()
                 dropped += 1
@@ -94,6 +102,12 @@ final class EventLog: @unchecked Sendable {
             }
             if schedule { Task { @MainActor in self.flush() } }
         }
+    }
+
+    /// This launch's newest public lines (of one category, or all), newest first, at most `limit`.
+    func shown(category: String?, limit: Int) -> [Activity] {
+        let lines = lock.withLock { recentPublic }
+        return Array(lines.reversed().filter { category == nil || $0.tool == category }.prefix(limit))
     }
 
     /// Where events go from now on: the open activity log. Writes what is waiting at once.

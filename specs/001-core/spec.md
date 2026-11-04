@@ -294,6 +294,24 @@ Format: EARS ("When <trigger>, the <system> shall <response>"). IDs are stable; 
   setup window is open on a Mac whose setup is finished, keep-awake isn't what the app wants, or
   the keep-awake helper running isn't the one just installed.
 
+### Latchkey's log for Claude (Toni, 2026-11-03)
+Why: asked to find out why something in Latchkey wasn't working, Claude couldn't read Latchkey's
+log: macOS's `log` command refuses to run inside Shell's sandbox, and the activity log is
+encrypted (Toni, 2026-11-03: "yes, recent lines").
+- **FR-662** The Mac shall offer Claude a read-only tool that returns Latchkey's own recent log
+  lines, whatever each capability's level, while the Mac is connected and not paused.
+- **FR-663** The tool shall return only the app's own events (FR-633) whose line went to macOS's
+  log in public (FR-620): never an event kept out of macOS's log (the relay's address, the device
+  ID, file names, Left Behind entries), never Claude's own tool calls, their arguments, or their
+  results, and never an event recorded before the Mac could tell which of its lines were public.
+- **FR-664** When Claude asks, the tool shall return the newest lines, newest last, 200 unless
+  Claude asks for another number up to 1000, optionally of one kind of event only; each line
+  shall give the time in the Mac's time zone, the kind, whether it was an error, and the text,
+  and the answer shall say which version of Latchkey answered and leave out the oldest lines,
+  saying how many, when they wouldn't fit in one answer.
+- **FR-665** When the activity log can't be opened or read, the tool shall return this launch's
+  lines from memory instead and say so.
+
 ### Audit trail without gaps (Toni, 2026-10-27)
 Why: on 2026-10-27 an audit found the Mac's diagnostic lines discarded by macOS within hours,
 the relay's output holding nothing but request noise, and the relay's audit deleted after 30

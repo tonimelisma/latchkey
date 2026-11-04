@@ -53,6 +53,15 @@ now reports one `mail_find` from another session (16:29:15Z) as missing on the M
 running when an install quit the app, and a call cut off by a quit never reaches the activity
 log (a gap that predates WhatsApp).
 
+Latchkey's log for Claude (Toni, 2026-11-03; spec 001 FR-662 to FR-665, plan D26): a new
+read-only tool, `latchkey_log`, gives Claude the Mac app's own recent log lines (default 200, up
+to 1000, optionally one kind such as connection or permissions), so Claude can find out why
+something in Latchkey isn't working. Only the app's events that macOS's log has in public; never
+Claude's calls, the relay's address, or file names. Offered whatever the capabilities' levels.
+Lines come from the activity log, so they survive restarts, but only events recorded from this
+version on (older ones can't be told apart). Built and tested; not yet installed or checked live.
+The relay needs no change; Linux servers don't offer it (a separate job).
+
 Releases, terms and privacy, and the directory listing are much later (Toni, 2026-10-22).
 
 Add Latchkey to Claude (Toni, 2026-11-01; spec 001 FR-627, FR-628, FR-659, FR-660, spec 009

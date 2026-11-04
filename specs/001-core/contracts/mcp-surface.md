@@ -186,7 +186,38 @@ Pass a machine's name as machine when more than one offers a tool.
 ```
 
 An offline machine shows "offline, last seen 3 hours ago" (or "offline, never connected"); a
-machine with every capability off shows "offers no tools (all turned off on it)".
+machine with every capability off shows "offers no tools (all turned off on it)" (since
+2026-11-03 a Mac never does: it always offers `latchkey_log`, below).
+
+### `latchkey_log`: Latchkey's own log on a Mac (FR-662 to FR-665, plan D26)
+
+Offered by every Mac whatever its capabilities' levels; refused while paused like every call.
+Read-only (`readOnlyHint: true`), deadline 10 s. Not offered by Linux servers.
+
+- Input (both optional): `lines`, a whole number from 1 to 1000 (default 200), the newest that
+  many; `category`, one of `app`, `connection`, `keepawake`, `helper`, `power`, `permissions`,
+  `setup`, `pause`, `pairing`, `activity`, `audit` (`EventCategory`, without `leftovers`).
+- Lines: only the app's own events marked as written to macOS's log in public (FR-620,
+  FR-663); never Claude's calls, never an event recorded with `systemLog: false`, never an event
+  from before the mark (2026-11-03). From the activity log; when it can't be opened or read,
+  this launch's lines from memory (at most 1000), and the header says so.
+- Answer: one text block; `isError` only for a bad argument.
+
+```
+Latchkey's own log on this Mac (Latchkey 0.8.104): the newest 3 lines, newest last; times in America/Los_Angeles (UTC-08:00).
+2026-11-03 14:02:11 connection ERROR: Closed (1006): the network went away
+2026-11-03 14:02:12 power: Woke
+2026-11-03 14:02:13 connection: Connected
+```
+
+With a category the header says "Latchkey's own connection log …". Nothing yet: "Latchkey's
+log on this Mac has no lines yet." (or "no connection lines"). Without the activity log the
+header adds "Latchkey's activity log isn't available at this launch, so these are only the lines
+since Latchkey started." The newest lines that fit within 40,000 characters are shown; then
+"N older lines left out to keep the answer short; ask for fewer lines or one category." A line
+break inside an event's text becomes a space; one line is cut at 2000 characters. Bad
+arguments: "lines must be a whole number from 1 to 1000.", "category must be one of: app, …
+(got "x")."
 
 The `initialize` result carries these instructions: "Latchkey reaches the owner's own machines:
 Macs and Linux servers. The machines tool lists them, whether each is online, and what each

@@ -130,9 +130,14 @@ final class AppModel {
         for (id, raw) in d.dictionary(forKey: Keys.levels) as? [String: String] ?? [:] {
             if let level = AccessLevel(rawValue: raw) { levels[id] = level }
         }
-        capabilities = CapabilityRegistry(
-            capabilities: Self.makeCapabilities(), levels: levels)
         activityLog = ActivityLog.open()
+        // Latchkey's own log for Claude, whatever the levels (FR-662); from the activity log,
+        // or this launch's lines when it can't be opened (FR-665).
+        let log = LatchkeyLog.entry(
+            source: activityLog.store.map { LatchkeyLog.reading($0.reader) },
+            fallback: LatchkeyLog.memory(EventLog.shared), version: Self.version)
+        capabilities = CapabilityRegistry(
+            capabilities: Self.makeCapabilities(), levels: levels, always: [log])
         // The app's own events go into the same log (FR-633); without one there is nowhere to
         // keep them, and macOS's log still has their lines (FR-620).
         if let store = activityLog.store {

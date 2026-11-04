@@ -34,17 +34,26 @@ struct Activity: Identifiable, Sendable, Codable {
     /// The Claude app that made the call, as the relay named it (FR-637); nil when unknown, for
     /// events, and for entries from before. Sealed with the content; text from the network.
     var client: String?
+    /// For an event, whether its line went to macOS's log in public (FR-620): only those are
+    /// ever shown to Claude (FR-663). Sealed with the content; nil for actions and for events
+    /// recorded before 2026-11-03, which are never shown to Claude.
+    var inSystemLog: Bool?
 
     var beforeCheck: Bool { seq == 0 }
 
-    /// The sealed content: everything but the fields kept beside it. `client` is optional, so
-    /// content sealed before it existed opens as before.
-    enum CodingKeys: String, CodingKey { case id, at, tool, arguments, result, isError, durationMS, client }
+    /// The sealed content: everything but the fields kept beside it. `client` and `inSystemLog`
+    /// are optional, so content sealed before they existed opens as before.
+    enum CodingKeys: String, CodingKey {
+        case id, at, tool, arguments, result, isError, durationMS, client, inSystemLog
+    }
 
-    /// One of the app's own events (FR-633).
-    static func event(_ category: EventCategory, _ text: String, error: Bool = false, at: Date = Date()) -> Activity {
+    /// One of the app's own events (FR-633); `systemLog` as given to `EventLog.record`.
+    static func event(
+        _ category: EventCategory, _ text: String, error: Bool = false, systemLog: Bool = true, at: Date = Date()
+    ) -> Activity {
         Activity(
-            at: at, tool: category.rawValue, arguments: "", result: text, isError: error, durationMS: 0, kind: .event)
+            at: at, tool: category.rawValue, arguments: "", result: text, isError: error, durationMS: 0, kind: .event,
+            inSystemLog: systemLog)
     }
 }
 
@@ -339,11 +348,14 @@ struct ActivityQuery: Sendable, Equatable {
     var to: Date?
     /// Claude's actions or the app's events only; nil for both (FR-633).
     var kind: ActivityKind?
+    /// Only the app's events whose line went to macOS's log in public (FR-663).
+    var inSystemLogOnly = false
 
     func matches(_ a: Activity) -> Bool { matches(a, ActivityMatcher(text)) }
 
     func matches(_ a: Activity, _ matcher: ActivityMatcher) -> Bool {
         if let kind, a.kind != kind { return false }
+        if inSystemLogOnly && (a.kind != .event || a.inSystemLog != true) { return false }
         if let tool, a.tool != tool { return false }
         return matcher.isEmpty || matcher.found(in: a.tool) || matcher.found(in: a.arguments)
             || matcher.found(in: a.result) || a.client.map(matcher.found(in:)) == true

@@ -1154,13 +1154,33 @@ Chosen: (a), in `ScreenReminder` and `AppModel.remindScreenWhileHere`. (c) is op
   Claude" panel while `HasClaude` is false, and the Claude section always has the button, the
   steps, and the address by hand.
 
+### D26. Latchkey's log for Claude (FR-662 to FR-665)
+
+- Tool `latchkey_log` (contracts/mcp-surface.md), `App/LatchkeyLog.swift`. It sits in
+  `CapabilityRegistry.always`, offered whatever the levels; Pause refuses it like every call.
+  Why not a capability with its own switch, and why not the activity log's other entries:
+  research.md "Latchkey's log for Claude".
+- Source: the activity log's events (D19), read with `ActivityQuery(kind: .event,
+  inSystemLogOnly: true)`, so lines survive restarts and installs. `EventLog.record` now marks
+  each event with `inSystemLog` (its `systemLog` argument), sealed with the content like
+  `client`, so the mark is encrypted and old entries open as before; entries without the mark
+  (recorded before 2026-11-03) are never returned (FR-663). `kind` is chained (FR-612), so an
+  action can't pass as an event.
+- Without the activity log (FR-665): `EventLog` keeps this launch's newest 1000 public lines in
+  memory (`recentPublic`), filled whether or not the log is open.
+- Size: the newest lines that fit in `ResultLimit.characters` with the header; one line is at
+  most 2000 characters; line breaks in a text become spaces.
+- Relay: none. It forwards the Mac's tool list generically (D2); the `machines` tool now lists
+  `latchkey_log` among what a Mac offers, also with every capability off. Linux (spec 010): not
+  offered; its program logs to the journal, a separate job.
+
 ## Constitution check
 
 | Article | Status |
 |---|---|
 | I. Outbound only | Pass (D1) |
 | II. Fail fast | Pass (D2, D3); hosted Claude timeout to be measured |
-| III. Disabled means nonexistent | Pass (FR-061); Pause leaves levels as they are and answers calls like an offline Mac (D15) |
+| III. Disabled means nonexistent | Pass (FR-061); Pause leaves levels as they are and answers calls like an offline Mac (D15); `latchkey_log` is no capability, reads only Latchkey's own public lines, and is refused while paused (D26) |
 | IV. Good macOS citizen | Pass with one documented exception: no App Sandbox (D9) |
 | V. Self-hostable | Pass (D10) |
 | VI. Store the minimum | Pass (D11, D12, D14, data-model.md): a grant's label and times, and the operator's own actions for a year |
