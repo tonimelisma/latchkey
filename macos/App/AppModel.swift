@@ -359,7 +359,10 @@ final class AppModel {
             let note = Self.queuedMailNote(item, outcome)
             if case .willRetry = outcome { retry.mutate { $0 = true } }
             await MainActor.run {
-                self?.event(.app, "\(note.title): \(note.body)", error: outcome != .sent)
+                // Names the recipients and subject: kept out of macOS's public log and so out
+                // of latchkey_log, which Claude reads even with Mail off (security review 2026-11-03).
+                EventLog.shared.record(.app, "\(note.title): \(note.body)", error: outcome != .sent, systemLog: false)
+                Diagnostics.lifecycle.notice("\(note.title, privacy: .public): \(note.body, privacy: .private)")
             }
             let content = UNMutableNotificationContent()
             content.title = note.title

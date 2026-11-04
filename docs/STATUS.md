@@ -32,7 +32,7 @@ after the app was quit.
 
 ## Next steps
 
-Bug report of 2026-11-03 (a claim form in background Safari, emails to PDF) fixed in 0.8.104:
+Bug report of 2026-11-03 (a claim form in background Safari, emails to PDF) fixed in 0.8.104 (0.8.105 keeps a queued email's recipients and subject out of `latchkey_log`, security review):
 zsh here-documents and `=(…)` work in Shell's fence (`TMPPREFIX` in the scratch folder); Shell
 names programs macOS stopped (from its crash reports, also in the answer after; spec 004
 FR-332), and its description says apps start only with `uses` `open` (headless Chrome made a PDF

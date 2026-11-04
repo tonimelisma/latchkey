@@ -302,8 +302,10 @@ encrypted (Toni, 2026-11-03: "yes, recent lines").
   lines, whatever each capability's level, while the Mac is connected and not paused.
 - **FR-663** The tool shall return only the app's own events (FR-633) whose line went to macOS's
   log in public (FR-620): never an event kept out of macOS's log (the relay's address, the device
-  ID, file names, Left Behind entries), never Claude's own tool calls, their arguments, or their
-  results, and never an event recorded before the Mac could tell which of its lines were public.
+  ID, file names, Left Behind entries, a queued email's recipients and subject), never Claude's
+  own tool calls, their arguments, or their results, and never an event recorded before the Mac
+  could tell which of its lines were public. (Security review 2026-11-03: the queued email's
+  outcome went to macOS's log in public; it now goes there private, and so never to Claude.)
 - **FR-664** When Claude asks, the tool shall return the newest lines, newest last, 200 unless
   Claude asks for another number up to 1000, optionally of one kind of event only; each line
   shall give the time in the Mac's time zone, the kind, whether it was an error, and the text,
