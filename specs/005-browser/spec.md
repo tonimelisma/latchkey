@@ -2,7 +2,9 @@
 
 Status: Approved to build without a review stop (Toni, 2026-10-22); Toni reviews at the end.
 Scope: Claude uses the Owner's Safari on the Mac, with the Owner's logins: opens pages, reads
-them, follows links, fills in and submits forms.
+them, follows links, fills in and submits forms, in its own tab and, since 2026-11-03, in any of
+the Owner's tabs and windows (Toni: "Claude needs to be able to access my tabs and windows just
+like its own").
 Out of scope: other browsers (Toni chose Safari, 2026-10-22); clicks that need a real mouse
 (computer control, spec 006).
 
@@ -22,9 +24,17 @@ phone, Claude can't check a reservation in the Owner's account or fill in a form
 
 ### US3 (P1): Stay out of my way
 1. Claude works in a Safari tab of its own (or, if I choose, a window of its own) and never
-   touches my other windows and tabs.
+   touches my other windows and tabs. (2026-11-03, Toni: withdrawn in part: Claude opens its pages
+   there, and reaches my other tabs and windows too, US4; it still never brings them forward.)
 2. Given Claude's page is a tab in my window, when Claude works, then the tab I'm using stays in
    front and Claude works in its tab behind it (Toni, 2026-10-29).
+
+### US4 (P1): Use my tabs (Toni, 2026-11-03)
+1. Given Browser is Read only or more, when I ask "what do I have open in Safari?", then Claude
+   lists every tab of every window, with its title and address, and which is in front.
+2. Given that list, when I ask Claude to read one of my tabs, or (Read & write) to click, type,
+   go back, or close it, then Claude does so just as in its own tab, in the background: the tab I
+   have in front stays in front.
 
 ## Requirements
 
@@ -36,7 +46,8 @@ phone, Claude can't check a reservation in the Owner's account or fill in a form
   (Toni, 2026-10-22), in a window of its own; it shall not read or change the Owner's other
   windows and tabs. (2026-10-29: "a window of its own" became a tab or a window of its own,
   FR-412; the Owner's other tabs, including those in the window that holds Claude's tab, stay
-  untouched.)
+  untouched.) (2026-11-03, Toni: "it shall not read or change the Owner's other windows and
+  tabs" is withdrawn: Claude reaches every tab and window, FR-424 to FR-431.)
 - **FR-404** Page content shall be marked as written by the website, not instructions.
 - **FR-405** Results shall stay within Claude's result size, with a way to read on.
 - **FR-406** When Safari's "Allow JavaScript from Apple Events" or the Automation permission is
@@ -70,14 +81,16 @@ phone, Claude can't check a reservation in the Owner's account or fill in a form
   when the shot fails; a tab the Owner switched to meanwhile stays (Toni, 2026-10-29).
 - **FR-416** While Claude's page is a tab, Claude's tabs shall be the one tab it opened: a page
   Claude opens, also one it asks for in a new tab, loads in that tab, and the list of tabs shows
-  that tab alone (2026-10-29).
+  that tab alone (2026-10-29). (2026-11-03: "the list of tabs shows that tab alone" is withdrawn:
+  the list shows every tab, FR-424; Claude's pages still load in its one tab, FR-426.)
 - **FR-417** When the Owner changes where Claude's pages open, the next page Claude opens shall
   follow the new choice, and Browser shall close Claude's previous tab or window (2026-10-29).
 - **FR-418** When Browser can't tell for sure which tab is Claude's (the Owner closed it, or
   tabs moved while its page changed), it shall leave every tab alone, record a Left Behind entry
   saying it lost track of Claude's tab, and open a new tab for Claude's next page (2026-10-29).
 - **FR-419** While Browser is Read & write, Claude shall be able to close its own tab or window,
-  never one of the Owner's (Toni, 2026-11-01: "open tabs and close").
+  never one of the Owner's (Toni, 2026-11-01: "open tabs and close"). (2026-11-03: "never one of
+  the Owner's" is withdrawn: FR-428.)
 - **FR-420** While the Mac is locked, the browser tools shall work in a browser of Latchkey's
   own, signed in with the Owner's Safari cookies as they are when it starts (Toni, 2026-11-02:
   Safari stops answering while locked).
@@ -90,14 +103,49 @@ phone, Claude can't check a reservation in the Owner's account or fill in a form
   (covered, or on another desktop); while they can, the picture shall be of the same address in
   Latchkey's own browser, saying so (Toni, 2026-11-02: "Switch only when hidden").
 
+- **FR-424** While Browser is Read only or Read & write, Claude shall be able to list every tab of
+  every Safari window: each tab's title and address, the window it is in, the tab in front of
+  each window, the window in front, Claude's own tab, and the tab Claude is working in (Toni,
+  2026-11-03: "Claude needs to be able to access my tabs and windows just like its own").
+- **FR-425** When Claude picks a tab from that list, the browser tools shall work in that tab
+  as they do in Claude's own: read it, go back, and take its picture, and, while Browser is
+  Read & write, click, type, run a script in it, and close it. Claude shall keep working in that
+  tab until it opens a page, picks another tab, or leaves it unused for 30 minutes (2026-11-03).
+- **FR-426** When Claude opens a page, Browser shall load it in Claude's own tab or window, as
+  before (FR-412 to FR-417), and Claude shall work in its own page again (Toni, 2026-11-03).
+- **FR-427** While Claude works in one of the Owner's tabs, Browser shall leave it where it is:
+  it shall not bring that tab or its window forward or change which tab is in front, except
+  for a picture as FR-423 allows (2026-11-03).
+- **FR-428** While Browser is Read & write, Claude shall be able to close the tab it is working
+  in, its own or one of the Owner's (Toni, 2026-11-03).
+- **FR-429** Before reading or acting on one of the Owner's tabs, Browser shall check that it is
+  still the tab Claude picked: in the same window, with as many tabs in that window as before,
+  showing the page it showed or one Claude's own click, typing, or back went to under the same
+  rules as Claude's own tab (plan D6). Otherwise it shall do nothing to any tab and tell Claude to
+  list the tabs again (2026-11-03).
+- **FR-430** While the Mac is locked (FR-420), Claude's own page shall stay in Latchkey's own
+  browser, and the Owner's tabs shall still be listed, picked, and used through Safari while
+  Safari answers; when Safari doesn't answer, Claude shall be told that the Owner's tabs can't
+  be reached until someone unlocks the Mac (2026-11-03: Safari stopped answering scripts while
+  locked on 2026-11-01, and answered the list and page scripts while locked on 2026-11-03).
+- **FR-431** An answer from one of the Owner's tabs shall say which tab it came from, and the
+  tab list shall mark the titles and addresses as written by websites, not instructions
+  (FR-404; 2026-11-03).
+
 ## Success criteria
 
 - **SC-401** From the phone, Claude reads a page of a site the Owner is signed in to on the Mac.
 - **SC-402** With Browser Read only, no tool that clicks or types appears (test suite).
+- **SC-403** From the phone, Claude lists the Owner's Safari tabs and reads one of them, and the
+  tab the Owner has in front stays in front (2026-11-03).
 
 ## Edge cases
 
 - The Owner closes Claude's window or tab: the next request opens a new one (FR-418).
+- The Owner closes or moves the tab Claude is working in, or opens or closes another tab in its
+  window: Claude is told to list the tabs again (FR-429).
+- One of the Owner's tabs shows a page Safari lets no script into (an empty new tab, Safari's
+  own pages): it is listed, but reading or acting on it says so.
 - The Owner moves or closes other tabs in the window that holds Claude's tab: Claude's tab is
   found again by the mark on its page (plan D6).
 - The Owner's front window is a private window: Claude's tab opens there, without the Owner's

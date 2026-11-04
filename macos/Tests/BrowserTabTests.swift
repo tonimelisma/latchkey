@@ -17,6 +17,10 @@ final class FakeSafariTabs: ScriptRunner, @unchecked Sendable {
         var scriptsRun = 0
         /// Times the yes/no check ran in this tab.
         var checks = 0
+        /// Times Latchkey picked this tab for Claude to work in (2026-11-03).
+        var picks = 0
+        /// A page Safari lets no script into (an empty tab, Safari's own pages).
+        var scriptless = false
     }
 
     struct FakeWindow {
@@ -125,6 +129,26 @@ final class FakeSafariTabs: ScriptRunner, @unchecked Sendable {
                 windows[0].tabs.append(tab)
                 let n = windows[0].tabs.count
                 return "\(windows[0].id)\t\(n)\t\(n)"
+            case SafariBrowser.Script.allTabs:
+                // Every browser window front to back: its id and front tab, then its tabs.
+                var out = ""
+                for w in windows {
+                    out += "W\t\(w.id)\t\(w.current)\n"
+                    for (i, t) in w.tabs.enumerated() { out += "T\t\(i + 1)\t\(t.title)\t\(t.url)\n" }
+                }
+                return out
+            case SafariBrowser.Script.tabPick:
+                let i = Int(args[1])! - 1
+                guard let w = windows.firstIndex(where: { String($0.id) == args[0] }), i >= 0, i < windows[w].tabs.count
+                else {
+                    throw ScriptError.failed("execution error: LATCHKEY_NO_TAB (-2700)")
+                }
+                if let token = Self.token(in: args[2]), !windows[w].tabs[i].scriptless {
+                    windows[w].tabs[i].mark = token
+                }
+                windows[w].tabs[i].picks += 1
+                let marked = windows[w].tabs[i].mark == nil ? "no" : "yes"
+                return "\(windows[w].tabs.count)\t\(marked)\t\(windows[w].tabs[i].url)"
             case SafariBrowser.Script.tabSurvey:
                 let w = try window(args[0])
                 let idx = Int(args[1])!
@@ -654,16 +678,17 @@ final class Notes: @unchecked Sendable {
         #expect(!FileManager.default.fileExists(atPath: file.path))
     }
 
-    /// FR-416: in a tab, Claude's tabs are the one it opened.
-    @Test func listsOnlyItsOwnTab() async throws {
+    /// FR-416 as amended 2026-11-03: Claude's pages load in its one tab, and the list shows every
+    /// tab with Claude's marked (FR-424).
+    @Test func listsEveryTabWithClaudesMarked() async throws {
         let fake = FakeSafariTabs()
         let b = browser(fake)
         _ = try await b.open("https://shop.example.com", newTab: false)
-        let t = try await b.tabs(select: nil)
-        #expect(t.current == 1)
-        #expect(t.tabs.count == 1)
-        #expect(t.tabs.first?.2 == "https://shop.example.com")
-        await #expect(throws: SafariBrowser.Failure.self) { _ = try await b.tabs(select: 2) }
+        _ = try await b.open("https://shop.example.com/b", newTab: true)
+        #expect(fake.claudeTabs.count == 1, "a new tab is still Claude's one tab")
+        let tabs = try await b.listTabs().windows.flatMap(\.tabs)
+        #expect(tabs.count == 3)
+        #expect(tabs.filter(\.claudes).map(\.address) == ["https://shop.example.com/b"])
         #expect(fake.ownerTabs.allSatisfy { $0.scriptsRun == 0 })
     }
 

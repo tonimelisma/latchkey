@@ -3,7 +3,9 @@
 // scripts/safari-check.sh, from a program that may control Safari (a terminal), not from the
 // test host, which would need its own Automation approval. Works only in a Safari window it
 // opens for the purpose, in front so Claude's tab opens there, and closes it afterwards; the
-// Owner's windows and tabs are never read or touched. Needs the network and Safari's
+// Owner's tabs are only listed (titles and addresses, not printed), and read only with
+// LATCHKEY_READ_OWNER_TAB=1 (counts and the host printed); nothing of the Owner's is clicked,
+// typed into, or closed. Needs the network and Safari's
 // "Allow JavaScript from Apple Events". Exit code 0 when every check passed.
 import Foundation
 
@@ -56,6 +58,8 @@ final class Notes: @unchecked Sendable {
 
 /// Runs `body` with a browser whose tab is in a window of the check's own; closes the window.
 @MainActor func withTab(_ name: String, _ body: (SafariBrowser, Notes) async throws -> Void) async {
+    // LATCHKEY_CHECK_ONLY=text runs only the checks whose name contains it.
+    if let only = ProcessInfo.processInfo.environment["LATCHKEY_CHECK_ONLY"], !name.contains(only) { return }
     print(name)
     let opened: String?
     do { opened = try await openWindow() } catch {
@@ -102,8 +106,8 @@ await withTab("A same-site click keeps Claude's tab") { b, notes in
     check(next.url.hasSuffix("/wiki/Mac_Studio"), "the click's answer is the new page (\(next.url))")
     let again = try await b.read(offset: 0)
     check(again.url.hasSuffix("/wiki/Mac_Studio"), "the new page reads (\(again.url))")
-    let tabs = try await b.tabs(select: nil)
-    check(tabs.tabs.first?.2.hasSuffix("/wiki/Mac_Studio") == true, "tabs lists it")
+    let tabs = try await b.listTabs().windows.flatMap(\.tabs)
+    check(tabs.first { $0.claudes }?.address.hasSuffix("/wiki/Mac_Studio") == true, "tabs lists it as Claude's")
     let back = try await b.back()
     check(back.url.contains("/wiki/Mac_") && !back.url.hasSuffix("/wiki/Mac_Studio"), "back (\(back.url))")
     let redirect = try await b.click(try ref(back) { $0.hasSuffix("/wiki/Mac_Pro") || $0.hasSuffix("/wiki/IMac") })
@@ -148,6 +152,77 @@ await withTab("A long page comes in parts") { b, _ in
     check(a1.count <= ResultLimit.characters, "the second part is \(a1.count) characters")
     check(second.offset == next && !second.text.isEmpty && second.text != first.text, "offset \(next) reads on")
     print("  page \(first.total) characters, \(first.elements.count) links and buttons; read on at \(next)")
+}
+
+@MainActor func frontTab(_ id: String) async -> Int {
+    let n = try? await runner.run(
+        """
+        on run argv
+        tell application "Safari"
+        return (index of current tab of window id ((item 1 of argv) as integer)) as text
+        end tell
+        end run
+        """, [id])
+    return n.flatMap { Int($0) } ?? 0
+}
+
+// 2026-11-03 (spec 005 FR-424 to FR-431): the check's own window's first tab plays one of the
+// Owner's tabs: Claude lists it, works in it in the background, and closes it.
+await withTab("Another tab is listed, read, clicked, and closed in the background") { b, notes in
+    _ = try await open(b, "https://en.wikipedia.org/wiki/Example.com")
+    _ = try await runner.run(
+        """
+        on run argv
+        tell application "Safari" to set URL of tab 1 of window id ((item 1 of argv) as integer) to (item 2 of argv)
+        end run
+        """, [currentWindow, article])
+    try await Task.sleep(for: .seconds(4))
+    let list = try await b.listTabs()
+    let mine = list.windows.first { $0.id == currentWindow }
+    check(
+        mine?.tabs.count == 2,
+        "the check's window is listed with both tabs (\(mine?.tabs.map { "\($0.index) \($0.address)" } ?? []))")
+    check(mine?.tabs.first?.front == true && mine?.tabs.last?.claudes == true, "front tab and Claude's tab named")
+    try await b.pick("\(currentWindow).1")
+    let read = try await b.read(offset: 0)
+    check(read.url.lowercased().contains("/wiki/mac_mini"), "the other tab reads (\(read.url))")
+    let next = try await b.click(try ref(read) { $0.hasSuffix("/wiki/Mac_Studio") })
+    check(next.url.hasSuffix("/wiki/Mac_Studio"), "a click in it (\(next.url))")
+    let back = try await b.back()
+    check(back.url.lowercased().contains("/wiki/mac_mini"), "back in it (\(back.url))")
+    check(await frontTab(currentWindow) == 1, "the tab in front stayed in front")
+    check(await b.working() == "\(currentWindow).1", "still working in it")
+    let closed = try await b.closeWorking()
+    check(closed?.lowercased().contains("/wiki/mac_mini") == true, "closed it (\(closed ?? "nothing"))")
+    check(await tabCount(currentWindow) == 1, "only Claude's tab is left")
+    check(try await b.read(offset: 0).url.contains("Example.com"), "Claude works in its own tab again")
+    check(notes.all.isEmpty, "nothing noted: \(notes.all)")
+}
+
+// Reading only (2026-11-03): with LATCHKEY_READ_OWNER_TAB=1, lists the Owner's real tabs and
+// reads one of them; prints only counts and the host, nothing of the page.
+if ProcessInfo.processInfo.environment["LATCHKEY_READ_OWNER_TAB"] == "1" {
+    print("The Owner's tabs are listed and one is read (reading only)")
+    let b = SafariBrowser(scripts: runner, place: { .tab })
+    do {
+        let list = try await b.listTabs()
+        let tabs = list.windows.flatMap(\.tabs)
+        check(!tabs.isEmpty, "\(list.windows.count) windows, \(tabs.count) tabs listed")
+        let hidden = tabs.first { !$0.front && $0.address.hasPrefix("https://") }
+        if let t = hidden ?? tabs.first(where: { $0.address.hasPrefix("https://") }) {
+            let fronts = list.windows.map { w in w.tabs.first { $0.front }?.index ?? 0 }
+            try await b.pick(t.reference)
+            let page = try await b.read(offset: 0)
+            let host = URL(string: page.url)?.host() ?? "?"
+            check(page.total > 0, "read tab \(t.reference) (\(t.front ? "in front" : "behind another")) on \(host): \(page.total) characters, \(page.elements.count) links and fields")
+            let after = try await b.listTabs().windows.map { w in w.tabs.first { $0.front }?.index ?? 0 }
+            check(after == fronts, "every window's front tab stayed in front")
+        } else {
+            check(false, "no web page among the Owner's tabs")
+        }
+    } catch {
+        check(false, "reading the Owner's tab: \(error)")
+    }
 }
 
 print(failures.isEmpty ? "All Safari checks passed." : "\(failures.count) Safari check(s) failed.")

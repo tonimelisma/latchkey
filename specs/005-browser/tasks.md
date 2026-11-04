@@ -16,3 +16,8 @@
   short wait for the note, and answers within Claude's result size with the offset named
   (2026-10-29). Checked against real Safari with `macos/scripts/safari-check.sh`. *FR-403,
   FR-405, FR-418, D3, D6.*
+- **T408** Tests first (stand-in Safari with the Owner's windows and tabs, the tools' answers),
+  then the list of every tab, picking one of the Owner's tabs and working in it as in Claude's
+  own (read, back, picture, click, type, script, close), the check before each use, back to
+  Claude's own tab at the next page, the locked answer (Toni, 2026-11-03). Checked against real
+  Safari with `macos/scripts/safari-check.sh`. *FR-424 to FR-431, D8.*

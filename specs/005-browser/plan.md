@@ -8,8 +8,8 @@ Claude sees consolidated tools (Toni, 2026-10-23: 15 tools in all, from 45): the
 
 | Tool | Level | readOnly | destructive | Operations behind it |
 |---|---|---|---|---|
-| `browser_read` (url?, new_tab?, back?, tab?, tabs?, screenshot?, offset?) | Read only | yes | no | open, back, switch tab, tabs, screenshot, read (FR-412 to FR-416 in a tab) |
-| `browser_act` (action: click, type, script; …) | Read & write | no | yes | click, type, script |
+| `browser_read` (url?, new_tab?, back?, tab?, tabs?, screenshot?, offset?) | Read only | yes | no | open, back, pick a tab, tabs, screenshot, read (FR-412 to FR-416 in a tab; any tab, FR-424 to FR-431, D8) |
+| `browser_act` (action: click, type, script, close; tab?; …) | Read & write | no | yes | click, type, script, close (in the tab Claude works in, D8) |
 
 Operations:
 
@@ -17,7 +17,7 @@ Operations:
 |---|---|---|---|---|
 | `browser_open` (url, new_tab?) | Read only | yes | no | FR-401, FR-409 |
 | `browser_read` (offset?) | Read only | yes | no | FR-401, FR-404, FR-405, FR-410 |
-| `browser_tabs` (select?) | Read only | yes | no | FR-401 |
+| `browser_tabs` (select?: a tab reference like "4213.2", or a number) | Read only | yes | no | FR-401, FR-424, FR-425, FR-430 |
 | `browser_back` | Read only | yes | no | FR-401 |
 | `browser_click` (ref) | Read & write | no | yes | FR-402, FR-408 |
 | `browser_type` (ref, text, submit?) | Read & write | no | yes | FR-402, FR-408 |
@@ -185,6 +185,58 @@ cancelled by the next one or back from memory (-999) isn't a failure; a page tha
 loading (pushState) counts as loaded once its address changed. Risks: Safari's cookie file format isn't documented (a change shows as no sign-ins, not as a
 failure); a site that ties a session to Safari itself may ask to sign in.
 
+## D8. The Owner's tabs and windows (Toni, 2026-11-03)
+
+Serves FR-424 to FR-431, and FR-403, FR-416, FR-419 as amended. Toni, answering a bug report
+(`browser_read tabs:true` said "Claude's Safari page isn't open" when asked about his tabs):
+"Claude needs to be able to access my tabs and windows just like its own."
+
+- **The list** (FR-424, FR-431): one AppleScript (`allTabs`) walks Safari's windows front to
+  back, keeping those with a current tab (browser windows), and answers for each its id, the
+  number of its front tab, and each tab's number, title, and address (tabs and line breaks in
+  titles become spaces). No page script runs for the list. Latchkey adds which tab is Claude's
+  (its tab found as in D6, or the front tab of Claude's own window) and which one Claude works
+  in. Each tab is named by a reference, the window's Safari id and the tab's number:
+  `4213.2`. The answer starts by saying titles and addresses are the websites' (FR-404), stays
+  within Claude's result size (titles cut at 150 characters, addresses at 400; tabs past the
+  limit counted), and ends by saying how to pick one.
+- **Picking a tab** (FR-425): `browser_read` with `tab` (a reference, or a bare number: that
+  tab of the window holding Claude's page, else of the front window), or `browser_act` with
+  `tab` before its action. A tab that is Claude's own tab, or a tab of Claude's own window (where
+  Claude's window switches its front tab, as before), makes Claude work in its own page. Any
+  other tab becomes the tab Claude works in: one script (`tabPick`) checks the window and tab
+  are there, puts Claude's mark (D6) on its page with a token of its own, and answers the
+  window's tab count and the tab's address; nothing comes forward (FR-427).
+- **Working in it** (FR-425, FR-427, FR-429): the tab is kept as Claude's tab is (window id,
+  position, tab count, address, token), and every operation that works in Claude's tab works in
+  it, through the same survey, guard, scripts, and navigation rules (D6): the same-site rule for
+  a page's own note, and since 2026-11-01 the clicked link's address on any site. The one
+  difference in the guard: when Safari let no script mark the tab's page when it was picked (an
+  empty tab, Safari's own pages), the tab passes while it shows the address it had then; that
+  address never changes afterwards, so no navigation can move it. When the tab isn't surely
+  found, Latchkey stops working in it, touches nothing, notes nothing as left behind (the tab
+  is the Owner's), and tells Claude to list the tabs again; the rest of that call never falls
+  back to Claude's own page. A picture follows FR-423 as for Claude's tab: an Owner's tab already in front is
+  pictured at once; one behind another is switched forward only while its window can't be seen.
+- **Opening a page** (FR-426): always in Claude's own tab or window (D2, D6); Claude then works
+  in its own page again.
+- **Closing** (FR-428): `browser_act close` closes the tab Claude works in, through the guard
+  without the navigation allowance; an Owner's tab closed this way is the Owner's request, so it
+  is not a Left Behind entry. Then Claude works in its own page again.
+- **How long** (FR-425): the tab Claude works in is kept in memory only (not in
+  `safari-window.json`): a restart of Latchkey forgets it, and so does 30 minutes unused (the
+  idle timer of FR-411, which only forgets it; it never closes an Owner's tab).
+- **Locked** (FR-430): the Owner's tabs exist only in Safari, so while the Mac is locked the
+  list, a pick, and every call while Claude works in an Owner's tab still go to Safari; only
+  Claude's own page is Latchkey's own browser (D7). The list also names that browser's page.
+  Safari stopped answering while locked on 2026-11-01 but answered the list three times and a
+  page script three times while locked on 2026-11-03 (research.md), so Latchkey tries: a list
+  Safari doesn't answer says the Owner's tabs need the Mac unlocked, and any other call that
+  times out while locked says Safari answers again once someone unlocks the Mac. Opening a page
+  uses Latchkey's own browser (FR-420) and makes Claude work in its own page again.
+- **Answers** (FR-431): every answer from an Owner's tab starts by naming it ("In the owner's
+  Safari tab 4213.2, not Claude's own").
+
 ## Testing
 
 A stand-in script runner answers like Safari: open, read (page JSON), click, type, missing
@@ -205,6 +257,13 @@ never run a script of Claude's, get the mark, load a page, close, or come forwar
 `TabSurvey.pick` has its own table of cases; the mark is checked in a WebKit view. Every new
 AppleScript compiles (`ScriptSyntaxTests`).
 
+For the Owner's tabs (D8), the same stand-in Safari lists every window's tabs, picks one,
+reads, clicks, types, runs a script, goes back, takes a picture, and closes it while the tab in
+front stays in front; a tab that moved, closed, or was replaced between picking and acting is
+left alone and Claude is told to list again; opening a page goes back to Claude's own tab;
+30 minutes unused forgets the pick; while locked the list and a picked tab still go to Safari, and a silent Safari is said plainly. The tools' answers name the
+tab and mark the list as the websites'.
+
 The stand-in Safari times notes as real Safari does (2026-10-29): a link's and back's note never
 arrives (the page is gone first), a button's arrives only to the acting script's wait, a
 script's only in its own run. Tests: a same-site link, a link to another site (since
@@ -220,7 +279,9 @@ What only real Safari can show is checked by `macos/scripts/safari-check.sh`: La
 the Owner's: a same-site click keeps the tab and the new page reads (and back, and a second
 click), a cross-site click keeps it (since 2026-11-01), a script's navigation loses it as
 designed, a long page comes in
-parts with a working offset. It runs from a terminal that may control Safari, not from the
+parts with a working offset, and (2026-11-03) another tab of the check's own window is listed,
+picked, read, clicked, and closed while the tab in front stays in front. With
+`LATCHKEY_READ_OWNER_TAB=1` it also lists the Owner's real tabs and reads one (reading only). It runs from a terminal that may control Safari, not from the
 test host: the test host is its own app to macOS, and its first Apple Event to Safari opens an
 Automation prompt, during which Safari answers no window or tab scripting from anyone (seen
 2026-10-29: the prompt waited behind the locked screen and blocked every Safari script).
@@ -234,7 +295,7 @@ Automation prompt, during which Safari answers no window or tab scripting from a
 | III. Disabled means nonexistent | Pass |
 | IV. Good macOS citizen | Pass: Apple Events with the Owner's consent; the Owner turns on Safari's setting; WebKit's public API while locked (Safari's cookie file is read under Full Disk Access; its format is undocumented) |
 | V. Self-hostable | Pass |
-| VI. Store the minimum | Pass: the window id, and for a tab its position, count, address, and token, deleted when it closes; while locked, a copy of Safari's cookies in memory only, dropped at unlock |
+| VI. Store the minimum | Pass: the window id, and for a tab its position, count, address, and token, deleted when it closes; the Owner's tab Claude works in, in memory only; while locked, a copy of Safari's cookies in memory only, dropped at unlock |
 | VII. Test-first | Planned |
 | VIII. Simplicity | Pass: AppleScript and a page script; no driver or extension |
 | IX. Open source | Pass |

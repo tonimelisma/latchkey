@@ -74,8 +74,18 @@ to 1000, optionally one kind such as connection or permissions), so Claude can f
 something in Latchkey isn't working. Only the app's events that macOS's log has in public; never
 Claude's calls, the relay's address, or file names. Offered whatever the capabilities' levels.
 Lines come from the activity log, so they survive restarts, but only events recorded from this
-version on (older ones can't be told apart). Built and tested; not yet installed or checked live.
+version on (older ones can't be told apart). Installed in 0.8.104 and checked live.
 The relay needs no change; Linux servers don't offer it (a separate job).
+
+Browser reaches the Owner's tabs (Toni, 2026-11-03: "Claude needs to be able to access my tabs
+and windows just like its own"; spec 005 FR-424 to FR-431, plan D8): `browser_read tabs` lists
+every tab of every Safari window (title, address, window, which is in front, Claude's own),
+each named like `4213.2`; `browser_read tab` (or `browser_act tab`) makes Claude work in that tab,
+in the background, for reading, back, pictures, clicks, typing, scripts, and closing, under the
+same checks and click rules as its own tab, until it opens a url (always in its own tab) or
+picks another. While locked, Claude's own page stays in Latchkey's own browser and the Owner's
+tabs are tried through Safari. Unit tests and the real Safari check pass (the check also read
+one of Toni's tabs, reading only); not yet installed or checked through the hosted relay.
 
 Releases, terms and privacy, and the directory listing are much later (Toni, 2026-10-22).
 

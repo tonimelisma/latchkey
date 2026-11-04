@@ -221,3 +221,61 @@ page scripts into a small program and runs them against real Safari from a termi
 the test host was tried first: the test host is its own app to macOS, and its first Apple Event
 to Safari opened an Automation prompt; while that prompt waited (behind the locked screen),
 Safari answered no window or tab scripting from any program.
+
+## The Owner's tabs (2026-11-03)
+
+Toni: "Claude needs to be able to access my tabs and windows just like its own." Low-level
+choices (Claude's), each with the options weighed:
+
+- **Naming a tab.** Safari's tabs have no id, only a position in a window; windows have an id
+  that lasts while the window is open. Options: the window's place front to back and the tab's
+  number (changes whenever the Owner clicks another window), the tab's address (two tabs can
+  show the same page), or the window's id and the tab's number. Chosen: window id and tab
+  number, written `4213.2` (one argument, like the `e12` element references). A bare number
+  still works, meaning that tab of the window that holds Claude's page (the old meaning in a
+  window of Claude's own), else of the front window.
+- **Per call or remembered.** Options: every call names its tab (stateless, but a forgotten
+  `tab` would click `e12` in another tab, where `e12` may mean something else), or picking a tab
+  makes Claude work there until it opens a page or picks another (as switching tabs did in
+  Claude's window). Chosen: remembered, and `browser_act` also takes `tab` so a call can say it
+  outright; every answer names the tab it came from, so Claude always knows.
+- **Knowing the tab again.** The same machinery as Claude's own tab (plan D6): the mark on its
+  page, the survey, the guard in the acting script, the navigation rules. Kept rather than a
+  simpler "same position and address" check, because the same-site and click rules are to apply
+  to the Owner's tabs too, and because a tab that moved must not be clicked by mistake. One
+  addition: a page Safari lets no script into (an empty new tab, Safari's own pages) can't carry
+  the mark and could otherwise never be closed, so such a tab is known by the address it had
+  when picked. A first version accepted the address Latchkey last saw in the tab instead; its
+  test showed that a script of Claude's that sent the page elsewhere then kept the tab (the
+  acting script reports the new address), against the rule for Claude's own tab, so the address
+  is now fixed at the pick and used only for a page that couldn't be marked.
+- **Losing it.** Claude's lost tab is a Left Behind entry (it may still be open, unused). A lost
+  Owner's tab is the Owner's own tab: nothing to report there; Claude is told to list again.
+- **While locked.** Seen 2026-11-01: Safari answered the first script while locked and then no
+  more. Tried again 2026-11-03 at 21:20, the Mac locked: the tab list script (no page script)
+  answered three times in a row at once (1 window, 3 tabs), and a page script
+  (`document.readyState` in a tab) answered three times too. So the earlier stall isn't the
+  rule; when it happens isn't known (perhaps the screen asleep). Options: refuse the Owner's
+  tabs while locked (safe, but refuses what works), show the last list seen while unlocked
+  (stale), load the tab's address in Latchkey's own browser (a fresh copy, not the tab: a form
+  half filled in would be lost), or try Safari and say plainly when it doesn't answer. Chosen:
+  try Safari (closest to "just like its own"), with the existing message on a timeout while
+  locked; the cost of a stuck Safari is one call that waits 25 s. Claude's own page stays in
+  Latchkey's own browser while locked, as before (FR-420). The same evening, still locked, the
+  real Safari check (which opens windows of its own) first got its pages slow to load and then
+  a window that took more than 25 s to appear, after which Safari answered no script, the list
+  included, for a few minutes; by the next try the lock had ended and Safari answered again.
+  So opening windows while locked seems to be what stalls Safari; the Owner's tabs are only
+  read and acted on, never opened, by this change.
+
+**Checked against real Safari (2026-11-03, `macos/scripts/safari-check.sh`, unlocked).** All
+cases passed: the earlier ones (same-site click, a script's navigation lost as designed,
+cross-site click, a long page in parts) and the new one, in the check's own window, whose first
+tab played the Owner's: listed with the front tab and Claude's tab named, picked, read, a link
+clicked, back, the tab in front still in front, closed, and Claude back in its own tab. With
+`LATCHKEY_READ_OWNER_TAB=1`: the Owner's real Safari (1 window, 3 tabs) was listed, a tab behind
+the front one was read (957 characters, 47 links and fields), and every window's front tab
+stayed in front. The check script had stopped building since the screen and permission code
+moved (it now compiles `App/Computer/Screen.swift` and a small stand-in for `Permissions`).
+- **How long a pick lasts.** In memory only; forgotten at 30 minutes unused (the idle timer) and
+  when Latchkey restarts, so a later conversation starts in Claude's own page.
