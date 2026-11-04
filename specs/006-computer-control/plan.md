@@ -105,6 +105,13 @@ driven through Accessibility as Latchkey does:
   checkboxes, radio buttons, and dropdowns are read; any change other than the acted-on element
   is named (10 at most). The pressed combobox in the check changed nothing else, so the
   report's two checked boxes stay unexplained; this is how Claude would see it.
+- A first look (2026-11-03, live): a WebKit app just started lists only its window and title
+  bar buttons until its tree is asked for once, and Chrome and Electron apps build theirs only
+  with `AXManualAccessibility` set on the app. A look that finds only those sets it and looks
+  again after 500 ms (awaited, never a blocked thread).
+- Focus in an app behind others (2026-11-03, live): the app's `AXFocusedUIElement` reads as
+  nothing, while each element's own `AXFocused` flag stays right; the check falls back to the
+  flag on the element or inside it, and names the last look's element whose flag is set.
 - Keys go one event per 16 characters with the first character's key code (the check's page saw
   code 67 for "C"), not "a" for each, as the report feared.
 

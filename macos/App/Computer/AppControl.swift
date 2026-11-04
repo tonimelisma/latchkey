@@ -50,6 +50,10 @@ struct AppControl: Sendable {
     /// The element's own focus flag, which stays right in an app behind others when the app's
     /// focused element reads as nothing (FormLab check 2026-11-03).
     var isFocused: @Sendable (AppElement) -> Bool = { _ in false }
+    /// Asks an app to build its accessibility tree: a WebKit app just started lists only its
+    /// title bar until asked once (FormLab check 2026-11-03); Chrome and Electron apps build it
+    /// only when `AXManualAccessibility` is set.
+    var wake: @Sendable (AppTarget) -> Void = { _ in }
 
     static let live = AppControl(
         find: { name in
@@ -94,7 +98,12 @@ struct AppControl: Sendable {
             AppWindowReader.focusedElement(AXUIElementCreateApplication(t.pid)).map(AppWindowReader.describe)
         },
         value: { e in e.element.flatMap { AppWindowReader.string($0, kAXValueAttribute) } },
-        isFocused: { e in e.element.map { AppWindowReader.string($0, kAXFocusedAttribute) == "1" } ?? false })
+        isFocused: { e in e.element.map { AppWindowReader.string($0, kAXFocusedAttribute) == "1" } ?? false },
+        wake: { t in
+            let app = AXUIElementCreateApplication(t.pid)
+            AXUIElementSetMessagingTimeout(app, 3)
+            _ = AXUIElementSetAttributeValue(app, "AXManualAccessibility" as CFString, kCFBooleanTrue)
+        })
 
     /// Any copy of Latchkey (installed, test build, helper), by its bundle ID or bundle path.
     static func isLatchkey(_ app: NSRunningApplication) -> Bool {

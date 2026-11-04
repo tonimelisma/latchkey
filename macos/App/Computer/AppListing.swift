@@ -13,6 +13,9 @@ struct AppListing: Sendable {
 
     func element(_ ref: String) -> AppElement? { items.first { $0.ref == ref } }
 
+    /// Only the window and its title bar's buttons: the app hasn't built its tree yet.
+    var onlyTitleBar: Bool { items.count <= 5 && items.allSatisfy { ["AXWindow", "AXButton"].contains($0.role) } }
+
     struct Page {
         var shown: [AppElement]
         /// The last shown one's reference, when more follow.

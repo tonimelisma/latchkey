@@ -147,7 +147,13 @@ extension ComputerCapability {
                 if narrowed, let last = AppControl.refs.value[t.pid] {
                     listing = last
                 } else {
-                    listing = env.appControl.elements(t)
+                    var fresh = env.appControl.elements(t)
+                    if fresh.onlyTitleBar {
+                        env.appControl.wake(t)
+                        try await Task.sleep(for: .milliseconds(500))
+                        fresh = env.appControl.elements(t)
+                    }
+                    listing = fresh
                     AppControl.refs.mutate { $0[t.pid] = listing }
                 }
                 guard !listing.items.isEmpty else { return .text("\(t.name)'s window has nothing Latchkey can read.") }

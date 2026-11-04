@@ -136,6 +136,28 @@ import Testing
         #expect(k.plainText.contains("where the keyboard focus is: e1 AXTextField \"City\""), "\(k.plainText)")
     }
 
+    /// Live check 2026-11-03: a WebKit app just started lists only its title bar on the first
+    /// look, its page once asked again; Chrome-style apps need their accessibility switched on.
+    @Test func aFirstLookWithOnlyTheTitleBarLooksAgain() async {
+        let form = Form(Self.page)
+        var (e, _) = env(form, pid: 9113)
+        let woken = Locked(0)
+        let looks = Locked(0)
+        e.appControl.wake = { _ in woken.mutate { $0 += 1 } }
+        e.appControl.elements = { _ in
+            looks.mutate { $0 += 1 }
+            return looks.value == 1
+                ? AppListing(items: [
+                    Self.el("e1", "AXWindow", "FormLab"), Self.el("e2", "AXButton", ""), Self.el("e3", "AXButton", ""),
+                ]) : AppListing(items: Self.page)
+        }
+        let r = await look(e)
+        #expect(r.plainText.contains("AXComboBox \"State\""), "\(r.plainText)")
+        #expect(woken.value == 1 && looks.value == 2)
+        let again = await look(e)  // a full look isn't repeated
+        #expect(!again.isError && looks.value == 3 && woken.value == 1)
+    }
+
     @Test func typingSaysTheValueNow() async {
         let form = Form(Self.page)
         let (e, _) = env(form, pid: 9102)

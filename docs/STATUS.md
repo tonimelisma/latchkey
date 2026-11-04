@@ -49,8 +49,11 @@ in 0.8.106, below) and to add `latchkey_log` (below). Checked live through the h
 window list (each table cell once, labels deduped), `match`, zsh here-documents and `=(…)`,
 `latchkey_log`, and in 0.8.104 the focus check refusing every typing (an app behind others names
 no focused element; 0.8.106 asks the element's own focus flag, as the FormLab check showed it
-stays right). Next: once the lid is open, the FormLab check again on 0.8.106 (choose State and
-Country, type into City, the refusal for the Zelle button, a checkbox press's "also changed").
+stays right). Checked live on 0.8.106 through the hosted relay, the test page's own events
+matching each answer: State chosen (web dropdown), Country chosen (native, no menu shown), City
+typed and read back, typing into a page's text refused with where the focus is, a checkbox press
+changing nothing else, and keys without a reference saying where they went. 0.8.107 looks again
+when a first look finds only the title bar (an app that had not built its tree yet).
 
 WhatsApp (spec 012) built and installed in 0.8.101, with the page kept to WhatsApp Web in 0.8.102
 and linking by code made reliable in 0.8.103 (the first press of "Log in with phone number" did
