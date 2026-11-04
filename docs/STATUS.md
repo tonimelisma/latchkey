@@ -53,7 +53,7 @@ stays right). Checked live on 0.8.106 through the hosted relay, the test page's 
 matching each answer: State chosen (web dropdown), Country chosen (native, no menu shown), City
 typed and read back, typing into a page's text refused with where the focus is, a checkbox press
 changing nothing else, and keys without a reference saying where they went. 0.8.107 and 0.8.108 look again
-when a first look finds only the title bar (an app that had not built its tree yet).
+when a first look finds only the title bar (an app that had not built its tree yet); a cold FormLab's first look listed its whole page live on 0.8.108.
 
 WhatsApp (spec 012) built and installed in 0.8.101, with the page kept to WhatsApp Web in 0.8.102
 and linking by code made reliable in 0.8.103 (the first press of "Log in with phone number" did
