@@ -153,9 +153,11 @@ checked again right before making, sending, or saving the message. `screen-state
 a locked Mac with its display asleep "locked", not "screen asleep". Locked run on 0.8.100 (lid open, display asleep, 2026-11-03): all 89 cases outside Mail and computer control work, and the closing sweep found nothing left behind.
 A reply or forward with files still brings Mail forward for the paste (under a second): tried
 2026-11-03, attaching by Mail's scripting erases a reply's quoted original, so it stays a paste.
-Next: run `state-check.sh run` with the screen asleep but the Mac unlocked, and with the lid
-closed, on 0.8.100, then `report` (each needs the Mac left in that state; the locked run is
-done). A click to another site in real Safari keeps
+Lid closed and still unlocked (2026-11-03 21:08, app 0.8.103): 107 of 108 work, the other
+refused plainly (an attachment Mail hadn't downloaded); Mail never came forward; the sweep left
+four test emails unread in Deleted Items, so it now marks every one read too.
+Next: `state-check.sh run` with the screen asleep but the Mac unlocked (a waiter started
+2026-11-03 runs it when the Mac is in that state), then `report`. A click to another site in real Safari keeps
 Claude's tab, and back returns (checked live through Latchkey on 0.8.100, 2026-11-03;
 `safari-check.sh` itself would ask the Owner to let the terminal control Safari). The full suite's web-page and shell timing tests fail while
 the Mac is under heavy load and pass run alone.

@@ -188,7 +188,7 @@
         {"id": "sweep.contacts", "case": "No test cards or groups left", "steps": "contacts_find with query \"{TAG}\", and with nothing (the groups). Delete each card and group with the tag, then look again. works only when none is left."},
         {"id": "sweep.calendar", "case": "No test events left", "steps": "calendar_find query \"{TAG}\" from 7 days ago to 60 days ahead. Delete each one with span future, then look again. works only when none is left."},
         {"id": "sweep.reminders", "case": "No test reminders or lists left", "steps": "reminders_find with nothing, and with query \"{TAG}\". Delete each reminder with the tag and each list whose name starts with \"{TAG}\", then look again. works only when none is left."},
-        {"id": "sweep.mail", "case": "No test email outside the Trash", "steps": "mail_find subject \"{TAG}\". Delete (to Trash) each message not already in a Trash or Deleted Items mailbox, then look again. works only when every one is in a Trash."}
+        {"id": "sweep.mail", "case": "No test email outside the Trash", "steps": "mail_find subject \"{TAG}\". Mark every one read (mail_change mark_read, also those already in a Trash or Deleted Items), and delete (to Trash) each not already in a Trash or Deleted Items mailbox, then look again. works only when every one is read and in a Trash."}
       ],
       "missing": []
     }
