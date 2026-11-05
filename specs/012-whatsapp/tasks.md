@@ -31,3 +31,6 @@ Rebuilt 2026-11-04 (Toni: no device of Latchkey's own; Safari tab first, window 
   (0.8.117, after chats filed by privacy id were found), through WhatsApp for Mac with the tab
   closed (0.8.117: sent, confirmed in its database). Not yet checked: a send through the tab
   with the Mac locked.
+- [x] T13 WhatsApp for Mac's window removed; with no WhatsApp tab, one is opened in Safari
+  (Toni, 2026-11-04; plan D1)
+- [ ] T14 Live check: with the tab closed and the Mac locked, a send opens the tab and goes out

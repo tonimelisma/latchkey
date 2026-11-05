@@ -50,7 +50,7 @@ Claude (web, Desktop, phone)  ──HTTPS──▶  Latchkey relay  ◀──out
   |---|---|---|
   | Notes | `notes_find`, `notes_read` | `notes_change` (create, append, replace, edit, rename, move between folders, create folders, delete notes or folders to Recently Deleted) |
   | Messages | `messages_find`, `messages_read` | `messages_send` (text and files) |
-  | WhatsApp (WhatsApp for Mac's database while it runs, else the Owner's WhatsApp Web tab in Safari; Latchkey links nothing of its own) | `whatsapp_find`, `whatsapp_read` | `whatsapp_send` (through the Safari tab: people and groups, text, photos, files, also while locked when Safari answers; else WhatsApp for Mac's window: text to a person, Mac unlocked) |
+  | WhatsApp (WhatsApp for Mac's database while it runs, else the Owner's WhatsApp Web tab in Safari; Latchkey links nothing of its own) | `whatsapp_find`, `whatsapp_read` | `whatsapp_send` (through WhatsApp Web in Safari, opened in a background tab when it isn't open: people and groups, text, photos, files) |
   | Files | `files_find`, `files_read` (text, PDFs, documents, images) | `files_change` (write, edit, folders, move, copy, Trash) |
   | Shell | | `shell_run`, `shell_check` (long and interactive commands; writes fenced, leftovers removed) |
   | Browser (your Safari, your logins; while locked, Latchkey's own browser with your Safari logins) | `browser_read` | `browser_act` (click, type, script, close Claude's page) |

@@ -1,9 +1,9 @@
 # Plan 012: WhatsApp — HOW
 
 Spec: `spec.md`. Research and every test behind these choices: `research.md`. Rebuilt on
-2026-11-04 after Toni chose (spec FR-1206, FR-1215, FR-1222): no linked device of Latchkey's own;
-the Owner's WhatsApp Web tab in Safari first, WhatsApp for Mac's window as the fallback for
-sending; WhatsApp for Mac's database for reading while that app runs. The first build (0.8.101 to
+2026-11-04 after Toni chose (spec FR-1206, FR-1208, FR-1215, FR-1222): no linked device of
+Latchkey's own; sending only through WhatsApp Web in Safari, opened in a tab when none is;
+WhatsApp for Mac's database for reading while that app runs. The first build (0.8.101 to
 0.8.114) ran WhatsApp Web in a hidden page of Latchkey's own, linked by QR or code; what it taught
 is kept below where it still applies.
 
@@ -28,6 +28,12 @@ Serves FR-1206, FR-1208, FR-1214, FR-1215, FR-1222.
   answer (seen 2026-11-01 with the Mac locked), the tab counts as unusable with that reason.
 - No watchdog: the tab is the Owner's. A tab stuck connecting is reported, not reloaded.
 - Several WhatsApp tabs: the first one found (window order, then tab order).
+- No WhatsApp tab (FR-1208): Latchkey opens `https://web.whatsapp.com/` at the end of Safari's
+  front window without selecting it (a new window when there is none), then waits up to 25 s for
+  it to connect with Safari's own login (the same linked device as the Owner's tab; nothing new
+  is linked). Options weighed: answer "open WhatsApp Web" (nothing done unasked, but sending from
+  away fails whenever the tab was closed), or open it (works from anywhere; a tab appears).
+  Chosen by Toni: open it.
 
 ## D2 Driving WhatsApp Web: its own functions, not its screen
 
@@ -56,9 +62,10 @@ out (2026-11-03), so the message in the chat with `ack` ≥ 1 is the confirmatio
 the page's words while no chats show (a loading or sync screen), so an unusable tab's answer says
 why; the log-in screen counts only while no chats show (a message's words can't fake it).
 
-## D3 WhatsApp for Mac's window, for sending only
+## D3 WhatsApp for Mac's window (withdrawn 2026-11-04)
 
-Serves FR-1215, FR-1212.
+Withdrawn the same day it was built and checked live (Toni): it works only with the Mac unlocked,
+which is when it is least needed. What it did, for the record:
 
 - Used only when the Safari tab is unusable before anything was sent (FR-1216), the Mac is
   unlocked, and the message is text to a person (a number, or a chat in the database whose id is
@@ -90,8 +97,7 @@ Serves FR-1212 to FR-1232. Names follow Messages (spec 002).
   `limit`, `offset`.
 - `whatsapp_read` (read): one chat's messages by `chat` (name, number, or id), `limit`, `before`.
 - `whatsapp_send` (write): `to`, `text`, `files`. One match is required: several give the
-  candidates and nothing is sent (FR-1213). Through the tab (D1) or the window (D3); the answer
-  says which.
+  candidates and nothing is sent (FR-1213). Only through the tab (D1).
 - Reading source (FR-1222): the database while WhatsApp for Mac runs; else the tab when connected;
   else the database, saying how old its newest message is; else an answer saying neither is there.
   A chat's time and preview come from its last message (`ZLASTMESSAGE`): `ZLASTMESSAGEDATE` is a
@@ -101,7 +107,7 @@ Serves FR-1212 to FR-1232. Names follow Messages (spec 002).
 - After a relink WhatsApp for Mac files most person chats by privacy id (`…@lid`; 47 of 60 on
   2026-11-04). The address book's `ZLID` and `ZWHATSAPPID` give number ↔ privacy id, so a phone
   number finds such a chat, the window (D3) gets the number for one, and its confirmation looks
-  under both ids.
+  under both ids (the confirmation was the withdrawn window's, D3).
 - Files are checked for size and kind before they are read (security review 2026-11-03); at most
   64 MB per call; photos (`image/*`) go as photos, anything else as documents.
 - Settings, WhatsApp section: one line on what WhatsApp needs on the Mac and the warning
@@ -109,8 +115,9 @@ Serves FR-1212 to FR-1232. Names follow Messages (spec 002).
 
 ## D6 Deadline
 
-Serves FR-1212. `whatsapp_send` declares 60 s (spec 001 FR-011's cap): up to 10 s to check the
-tab, 38 s for a send through it, or about 20 s through the window.
+Serves FR-1212. `whatsapp_send` declares 60 s (spec 001 FR-011's cap): 5 s to look at the tab,
+up to 25 s for a tab Latchkey opened to connect, and 25 s for the send (WhatsApp's confirmation
+waited for up to 20 s).
 
 ## D7 Off
 

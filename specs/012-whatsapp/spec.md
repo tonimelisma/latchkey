@@ -1,8 +1,8 @@
 # Spec 012: WhatsApp — WHAT and WHY
 
 Status: Rebuilt 2026-11-04 without a linked device of Latchkey's own (Toni): reading from
-WhatsApp for Mac's database or the Owner's WhatsApp Web tab in Safari, sending through that tab,
-else through WhatsApp for Mac's window. First built in 0.8.101 (2026-11-03) with Latchkey's own
+WhatsApp for Mac's database or the Owner's WhatsApp Web tab in Safari, sending only through that
+tab, opened by Latchkey when none is (Toni, 2026-11-04: the window fallback worked only unlocked). First built in 0.8.101 (2026-11-03) with Latchkey's own
 linked device; on 2026-11-04, after two days of linking that device and test devices by code,
 WhatsApp logged out every linked device of Toni's account (the phone stayed logged in).
 Scope: Claude reads, searches, and sends the Owner's WhatsApp messages from any Claude app,
@@ -26,9 +26,9 @@ As an Owner, I ask Claude to send a WhatsApp message, and it goes out right away
 1. Given WhatsApp is set to Read & write and WhatsApp Web is open in Safari, when I say
    "WhatsApp my wife I'm on my way", then the message is sent within a minute and Claude says it
    was sent, whether the Mac is unlocked or locked (where Safari answers while locked).
-2. Given the Safari tab can't be used and the Mac is unlocked, then the text goes through
-   WhatsApp for Mac's window, which comes to the front for a moment.
-3. Given the message can't be sent (no tab, Mac locked and no tab, Mac offline), then Claude says
+2. Given no WhatsApp tab is open in Safari, then Latchkey opens one behind the others, with
+   Safari's own WhatsApp login, and sends through it.
+3. Given the message can't be sent (logged out in Safari, Safari not answering, Mac offline), then Claude says
    so at once, in plain words, and nothing is sent later without being asked again.
 
 ### US2 (P1): Read and search my WhatsApp
@@ -60,7 +60,9 @@ As an Owner, I ask Claude to send a WhatsApp message, and it goes out right away
 - **FR-1207** When a version without its own device first starts on a Mac where the earlier one
   stored a device, the system shall delete what that device stored.
 - **FR-1208** The system shall not reload, navigate, or close the Owner's WhatsApp Web tab, nor
-  bring Safari to the front.
+  bring Safari to the front; when no WhatsApp Web tab is open, it shall open one at the end of
+  Safari's front window without selecting it (a window when Safari has none), and use it (Toni,
+  2026-11-04).
 
 ### Sending
 
@@ -72,13 +74,11 @@ As an Owner, I ask Claude to send a WhatsApp message, and it goes out right away
   and shall answer with the candidates so Claude can ask the Owner.
 - **FR-1214** Through the Safari tab, the system shall send to a person or a group, and shall send
   photos and files from the Mac as attachments, as well as text (Toni, 2026-11-02).
-- **FR-1215** When Claude asks to send, the system shall send through the Owner's WhatsApp Web
-  tab in Safari, without taking focus; when that tab can't be used (none open, not connected,
-  Safari not answering), and only then, it shall send through WhatsApp for Mac's window: text to
-  a person, with the Mac unlocked, the window coming to the front for a moment and the app the
-  Owner was in coming back after (Toni, 2026-11-04: Safari tab first, the window as fallback).
-- **FR-1216** When a send through the Safari tab may have gone (WhatsApp hasn't confirmed it), the
-  system shall not try the window too, and shall say to check before sending again.
+- **FR-1215** When Claude asks to send, the system shall send only through WhatsApp Web in
+  Safari (FR-1208), without taking focus (Toni, 2026-11-04: WhatsApp for Mac's window, a
+  fallback that day, worked only with the Mac unlocked, and was removed).
+- **FR-1216** When a send may have gone (WhatsApp hasn't confirmed it), the system shall not send
+  it again, and shall say to check before sending again.
 
 ### Reading
 
@@ -98,7 +98,7 @@ As an Owner, I ask Claude to send a WhatsApp message, and it goes out right away
   it in the menu bar activity, as for Messages.
 - **FR-1232** Settings shall tell the Owner in one plain sentence that WhatsApp's terms forbid
   automated messaging and that a ban, though unlikely for personal use, is possible (Toni,
-  2026-11-02), and what WhatsApp needs on the Mac (Safari's tab, or WhatsApp for Mac).
+  2026-11-02), and what WhatsApp needs on the Mac (logged in to WhatsApp Web in Safari).
 
 ## Success criteria
 

@@ -105,15 +105,15 @@ logged out every linked device of Toni's account (his phone stayed logged in), m
 because of two days of link codes and test devices on his number (research.md). Now three
 tools: `whatsapp_find` and `whatsapp_read` read WhatsApp for Mac's database while that app runs,
 else the Owner's WhatsApp Web tab in Safari, else the database marked out of date;
-`whatsapp_send` sends through that Safari tab (people and groups, text, photos, files; never
-selecting, reloading, or closing it), else WhatsApp for Mac's window (text to a person, Mac
-unlocked; the window comes to the front for a moment). The old device's stored data is deleted
+`whatsapp_send` sends only through WhatsApp Web in Safari (people and groups, text, photos,
+files; never selecting, reloading, or closing the tab), opening it in a background tab when none
+is open (Toni: WhatsApp for Mac's window, a fallback for a few hours, worked only unlocked and was
+removed). The old device's stored data is deleted
 at the first start. Checked live through the hosted relay on 2026-11-04 (0.8.116, 0.8.117): a
 send through the Safari tab (read within seconds), reading by number (WhatsApp for Mac now files
 most person chats by privacy id; the address book maps them), and a send through WhatsApp for Mac
-with the tab closed. Not yet checked: a send through the tab with the Mac locked (Safari stopped
-answering scripts while locked on 2026-11-01). A send through the window names the person by the
-number given, not their name.
+with the tab closed (since removed). Not yet checked: a send with the Mac locked, opening the tab
+itself (Safari stopped answering scripts while locked on 2026-11-01).
 
 Calls cut off by the app stopping (bug report follow-up 2026-11-03; spec 001 FR-666 to FR-668,
 plan D27): built on a branch, not yet installed. A quit records every call still running as cut

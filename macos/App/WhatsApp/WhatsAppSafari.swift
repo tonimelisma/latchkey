@@ -3,7 +3,9 @@ import WebKit
 
 /// Where the Owner's WhatsApp Web tab in Safari stands (spec 012 plan D1).
 enum WhatsAppPageState: Equatable, Sendable {
-    /// The tab can't be used now, and why: none open, Safari won't run scripts, or isn't answering.
+    /// No tab at WhatsApp Web is open in Safari.
+    case noTab
+    /// The tab can't be used now, and why: Safari won't run scripts, or isn't answering.
     case unavailable(String)
     /// WhatsApp Web hasn't set itself up yet (loading, or a sync screen).
     case loading
@@ -17,6 +19,7 @@ enum WhatsAppPageState: Equatable, Sendable {
 }
 
 enum WhatsAppPageError: Error, Equatable {
+    case noTab
     case timedOut
     case failed(String)
 }
@@ -28,10 +31,13 @@ protocol WhatsAppPageAPI: Sendable {
     func call(_ function: String, _ args: JSONValue, timeout: Duration) async throws -> JSONValue
     /// Looks at the tab for up to `wait` until WhatsApp is connected (it never reloads the tab).
     func ready(wait: Duration) async -> WhatsAppPageState
+    /// Opens WhatsApp Web in a new Safari tab, behind the others, when none is open (FR-1208).
+    func open() async throws
 }
 
 /// The Owner's WhatsApp Web tab in Safari, driven with Safari's `do JavaScript` (plan D1). The tab
-/// is never selected, reloaded, navigated, or closed, and Safari never comes to the front.
+/// is never selected, reloaded, navigated, or closed, and Safari never comes to the front; when
+/// none is open, one is opened behind the others with Safari's own WhatsApp login.
 struct SafariWhatsApp: WhatsAppPageAPI {
     /// A script runner allowed `limit` in all (a call's own time plus room for Safari to start).
     var runner: @Sendable (Duration) -> any ScriptRunner = { OSAScriptRunner(app: "Safari", timeout: $0) }
@@ -69,7 +75,7 @@ struct SafariWhatsApp: WhatsAppPageAPI {
         } catch ScriptError.notAllowed {
             throw WhatsAppPageError.failed(Self.notAllowed)
         } catch ScriptError.failed(let message) {
-            if message.contains("LATCHKEY_NO_WHATSAPP_TAB") { throw WhatsAppPageError.failed(Self.noTab) }
+            if message.contains("LATCHKEY_NO_WHATSAPP_TAB") { throw WhatsAppPageError.noTab }
             if message.contains("Allow JavaScript from Apple Events") {
                 throw WhatsAppPageError.failed(Self.scriptsOff)
             }
@@ -84,19 +90,59 @@ struct SafariWhatsApp: WhatsAppPageAPI {
         while true {
             do {
                 last = Self.state(from: try await call("state", .object([:]), timeout: .seconds(5)))
+            } catch WhatsAppPageError.noTab {
+                return .noTab
             } catch WhatsAppPageError.failed(let why) {
                 return .unavailable(why)
             } catch {
                 return .unavailable("Safari didn't answer in time")
             }
             switch last {
-            case .connected, .notLinked, .changed, .unavailable: return last
+            case .connected, .notLinked, .changed, .unavailable, .noTab: return last
             case .loading, .connecting: break
             }
             if ContinuousClock.now >= end || Task.isCancelled { return last }
             try? await Task.sleep(for: .seconds(1))
         }
     }
+
+    func open() async throws {
+        do {
+            _ = try await runner(.seconds(15)).run(Self.openScript, ["https://web.whatsapp.com/"])
+        } catch ScriptError.notAllowed {
+            throw WhatsAppPageError.failed(Self.notAllowed)
+        } catch ScriptError.timedOut {
+            throw WhatsAppPageError.failed(
+                locked() ? "Safari didn't answer while the Mac is locked" : "Safari didn't answer in time")
+        } catch ScriptError.failed(let message) {
+            throw WhatsAppPageError.failed("Safari reported a problem: \(message)")
+        }
+    }
+
+    /// argv: WhatsApp Web's address. A new tab at the end of the front window (not selected), or a
+    /// new window when Safari has none; nothing when a WhatsApp tab is already open.
+    static let openScript = """
+        on run argv
+        set theURL to item 1 of argv
+        tell application "Safari"
+        repeat with w in windows
+        repeat with t in tabs of w
+        set theAddress to ""
+        try
+        set theAddress to (URL of t) as text
+        end try
+        if theAddress starts with "https://web.whatsapp.com/" then return "open"
+        end repeat
+        end repeat
+        if (count of windows) is 0 then
+        make new document with properties {URL:theURL}
+        else
+        make new tab at end of tabs of window 1 with properties {URL:theURL}
+        end if
+        return "opened"
+        end tell
+        end run
+        """
 
     /// The bridge's `state()` answer as a state. The log-in screen first: there WhatsApp Web hasn't
     /// loaded its modules, so only a tab showing its chats can say a module is gone (2026-11-03).

@@ -132,7 +132,7 @@ struct CapabilitiesPane: View {
                 Section("WhatsApp") {
                     // Spec 012 FR-1232.
                     Text(
-                        "Claude uses WhatsApp Web in Safari (keep a tab at web.whatsapp.com open and logged in), and WhatsApp for Mac when it's installed. \(WhatsAppCapability.linkWarning)"
+                        "Claude uses WhatsApp Web in Safari: log in once at web.whatsapp.com, and Latchkey opens it in a background tab when it isn't open. While WhatsApp for Mac runs, Claude reads its messages there. \(WhatsAppCapability.linkWarning)"
                     )
                     .font(.callout)
                     .foregroundStyle(.secondary)
