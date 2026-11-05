@@ -37,15 +37,20 @@ with checklists is not supported? … feels frustrating"): until now Latchkey re
 note, which is most real notes. Such changes go through Notes' own window in the background
 (spec 002 plan D3a, FR-155 to FR-159): text in place, real checklists for `- [ ]`/`- [x]`, and
 tick/untick (`notes_change` check/uncheck; Notes comes forward for about a second). Plain notes
-keep the AppleScript route. Open: whether Notes' window works with the Mac locked or the lid
-closed (screen-state cases `notes.checklist_*`). Same day: `notes_find` finds notes whose folder
+keep the AppleScript route. With the Mac locked Notes' window has no note editor, so such
+changes are answered at once with that reason (0.8.122); new notes keep ☐/☑ then. Still open: the
+lid closed while unlocked (screen-state cases `notes.checklist_*`). Deleting a note is said done
+only once Notes saved it (0.8.123): with the Mac locked Notes hadn't saved one test note's
+deletion ("Latchkey check 1104-2355 locked list"); check it's gone after the next unlock. Same day: `notes_find` finds notes whose folder
 was deleted under them (twelve old test notes were invisible to Claude); the screen-state check
 sweeps every "Latchkey check" item on exit, even when stopped, and fails when any is left; the
-end-of-turn hook was removed (Toni). In progress, each in its own worktree branch
-(`worktree-agent-…`, stopped mid-way on 2026-11-04 and to be resumed): Calendar invitations and
-attendees, Mail sending while locked, Messages groups/reactions/replies/edit/unsend/delete,
-WhatsApp fallback (groups, files, more states), Safari uploads/downloads/keys/scroll, Reminders
-flags/tags/subtasks. Left in Toni's apps by those helpers, to remove: a Messages test group, 7
+end-of-turn hook was removed (Toni). Agreed with Toni, not done yet (helpers stopped mid-way on
+2026-11-04): Calendar invitations and attendees (unfinished work on branch
+`worktree-agent-ae40aa4c82831fac1`), Safari uploads/downloads/keys/scroll
+(`worktree-agent-aebd3fa474c7a7146`), Reminders flags/tags/subtasks
+(`worktree-agent-a1c198584ee941fbf`); Mail sending while locked, Messages
+groups/reactions/replies/edit/unsend/delete, and the WhatsApp fallback (groups, files, more
+states) left no code behind and start over. Left in Toni's apps by those helpers, to remove: a Messages test group, 7
 WhatsApp self-chat test messages, possibly a cancelled test calendar event.
 
 Releases are tags on commits (2026-11-04, Toni): parallel sessions bumped the version file to the
