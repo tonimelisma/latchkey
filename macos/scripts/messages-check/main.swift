@@ -32,7 +32,9 @@ let dbURL = URL(
 let ui = LiveMessagesUI()
 
 nonisolated(unsafe) var ownHandles: Set<String> = []
-func store() throws -> MessagesStore { try MessagesStore(url: dbURL, contacts: OwnName(own: ownHandles)) }
+nonisolated func store() throws -> MessagesStore { try MessagesStore(url: dbURL, contacts: OwnName(own: ownHandles)) }
+/// Opened afresh at each look: a copy kept fresh by another program is replaced, not changed.
+nonisolated var s: MessagesStore { get throws { try store() } }
 
 func step(_ name: String) { print("· \(name)") }
 
@@ -61,7 +63,7 @@ func tagged(_ s: MessagesStore, _ tag: String) throws -> [MessagesStore.Message]
 
 func sweep(_ tag: String, own: Set<String>) async -> Bool {
     do {
-        let s = try store()
+
         for _ in 0..<3 {
             let left = try tagged(s, tag)
             if left.isEmpty { break }
@@ -104,7 +106,7 @@ func sweep(_ tag: String, own: Set<String>) async -> Bool {
 
 func run(own address: String, number: String, tag: String) async throws {
     if let why = ui.unavailable() { throw CheckFailure(message: why) }
-    let s = try store()
+
     // A group of the owner's own address and number, named: nobody else gets anything.
     step("new group with \(address) and \(number)")
     var start = try s.lastRow()
@@ -170,6 +172,13 @@ case "run" where args.count >= 4:
     } catch {
         print("FAILED: \((error as? CheckFailure)?.message ?? (error as? MessagesWindowProblem)?.message ?? "\(error)")")
         exit(1)
+    }
+case "read":
+    // read <conversation id>: what the store makes of a real conversation (tapbacks, edits, replies).
+    for m in try store().messages(in: args[2], before: nil, limit: 30) {
+        print(
+            "\(m.id) \(m.fromMe ? "me" : "them") «\(m.text.prefix(60))» edited=\(m.edited) first=\(m.originalText ?? "-") unsent=\(m.unsent) reply=\(m.replyTo ?? "-") reactions=\(m.reactions.map { "\($0.kind)\($0.fromMe ? "(me)" : "")" })"
+        )
     }
 case "sweep" where args.count >= 5:
     exit(await sweep(args[2], own: [args[3], args[4]]) ? 0 : 1)
