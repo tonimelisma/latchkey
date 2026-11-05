@@ -588,7 +588,8 @@ struct WAWindow: @unchecked Sendable {
                 2,
                 {
                     items(in: menuBar, limit: 3000).first {
-                        $0.role == "AXMenuItem" && $0.label == "Paste" && Self.string($0.element, kAXEnabledAttribute) == "1"
+                        $0.role == "AXMenuItem" && $0.label == "Paste"
+                            && Self.string($0.element, kAXEnabledAttribute) == "1"
                     }?.element
                 })
         else { return false }
