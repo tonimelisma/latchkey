@@ -162,7 +162,9 @@ enum BrowserCapability {
                             ScreenCapture.windowVisible(app: "Safari", title: plan.shownTitle)
                         {
                             return try await drawn(
-                                browser, why: "The Mac's owner can see the Safari window, so the tab wasn't brought to the front")
+                                browser,
+                                why: "The Mac's owner can see the Safari window, so the tab wasn't brought to the front"
+                            )
                         }
                         let image = try await browser.showing { title in
                             try await ScreenCapture.window(app: Permissions.safariApp, title: title)

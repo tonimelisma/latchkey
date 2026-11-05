@@ -72,6 +72,9 @@ Every action returns an activity; the first after 5 minutes idle also posts the 
 
 ScreenCaptureKit finds Safari's window whose title is the title of Claude's current tab, and
 captures it at the same size limit.
+Since 2026-11-05, when the screen can't be captured (locked, display asleep, lid closed, no
+permission) or the Owner can see the window, Latchkey draws the page instead (spec 005 plan
+D10).
 
 ## D8. Forms in a named app (FR-511 to FR-514, 2026-11-03)
 

@@ -5,8 +5,8 @@ Scope: Claude uses the Owner's Safari on the Mac, with the Owner's logins: opens
 them, follows links, fills in and submits forms, in its own tab and, since 2026-11-03, in any of
 the Owner's tabs and windows (Toni: "Claude needs to be able to access my tabs and windows just
 like its own").
-Out of scope: other browsers (Toni chose Safari, 2026-10-22); clicks that need a real mouse
-(computer control, spec 006).
+Out of scope: other browsers (Toni chose Safari, 2026-10-22); clicks, keys, and hovering that
+need a real mouse or keyboard (computer control, spec 006).
 
 ## Problem
 
@@ -101,7 +101,9 @@ phone, Claude can't check a reservation in the Owner's account or fill in a form
 - **FR-423** When a picture of Claude's page needs Claude's tab brought to the front of the
   Owner's Safari window, Latchkey shall do so only while the Owner can't see that window
   (covered, or on another desktop); while they can, the picture shall be of the same address in
-  Latchkey's own browser, saying so (Toni, 2026-11-02: "Switch only when hidden").
+  Latchkey's own browser, saying so (Toni, 2026-11-02: "Switch only when hidden") (2026-11-05: "the
+  picture shall be of the same address in Latchkey's own browser" is withdrawn: Latchkey draws
+  it from the tab's page as it is, FR-439.)
 
 - **FR-424** While Browser is Read only or Read & write, Claude shall be able to list every tab of
   every Safari window: each tab's title and address, the window it is in, the tab in front of
@@ -140,12 +142,49 @@ phone, Claude can't check a reservation in the Owner's account or fill in a form
   tab is left as it is), instead of waiting for Safari's time limit (Toni, 2026-11-03: "25
   seconds to stall on Claude is too much"; "Answer them, Claude can say OK").
 
+- **FR-433** While Browser is Read & write, Claude shall be able to press keys in the page it
+  works in, in a field it names or the one with the focus: Return, Escape, Tab, arrows,
+  Backspace, Delete, Home, End, Page Up and Down, Space, single characters, and shortcuts with
+  Command, Control, Option, and Shift; the answer shall say what each key did (Toni,
+  2026-11-05: "all the safari stuff").
+- **FR-434** While Browser is Read & write, Claude shall be able to hover over an element, so
+  menus and hints that open on hover open, and the answer shall say how much more shows.
+- **FR-435** While Browser is Read & write, Claude shall be able to scroll the page, or a part of
+  it that scrolls on its own, up, down, left, right, by an amount, or to the top or bottom, and
+  the answer shall say where it is now; reading a page shall list the parts that scroll.
+- **FR-436** While Browser is Read & write, Claude shall be able to choose one or several
+  options in a list by their text or value, in the page's own lists (`select`) and in lists a
+  page builds itself (combo boxes, list boxes, menus); when an option isn't there, the answer
+  shall name those there are.
+- **FR-437** While Browser is Read & write, Claude shall be able to attach any file on the Mac
+  that the Owner's account can read to a file field of the page (also one the page hides behind
+  a button of its own) or drop it on a place that takes dropped files; nothing is sent until the
+  page's form is. Reading a page shall list its file fields.
+- **FR-438** While Browser is Read & write, Claude shall be able to save the file a link names,
+  an address, or the page itself (a PDF the tab shows) into the Mac's Downloads folder, with the
+  page's sign-in, under the file's own name and never over another file; the answer shall give
+  the saved file's path, and the file shall be marked as downloaded from the web, as Safari
+  marks its downloads.
+- **FR-439** When a picture of the page can't be captured from the screen (the Mac locked, the
+  display asleep, the lid closed, no screen permission) or the Owner can see the Safari window,
+  Latchkey shall draw the picture itself from the page as it is in its tab (what fields hold,
+  what is chosen, how far it is scrolled; never what a password field holds), and say so.
+  (Amends FR-423: the picture no longer loads the same address afresh, which lost what Claude
+  had typed, and spec 006 FR-509's "under the same screen conditions".)
+- **FR-440** The actions of FR-433 to FR-438 shall work as click and type do (FR-413, FR-425 to
+  FR-430): in Claude's background tab or the Owner's tab Claude works in, without bringing a tab
+  or Safari forward, and in Latchkey's own browser while the Mac is locked; each shall appear in
+  the menu's activity (FR-408).
+
 ## Success criteria
 
 - **SC-401** From the phone, Claude reads a page of a site the Owner is signed in to on the Mac.
 - **SC-402** With Browser Read only, no tool that clicks or types appears (test suite).
 - **SC-403** From the phone, Claude lists the Owner's Safari tabs and reads one of them, and the
   tab the Owner has in front stays in front (2026-11-03).
+- **SC-404** On the Mac, in a background tab, Claude presses keys, hovers, scrolls, chooses
+  from lists, attaches a file, and saves a file into Downloads, and the tab the Owner has in
+  front stays in front (2026-11-05).
 
 ## Edge cases
 
@@ -160,7 +199,13 @@ phone, Claude can't check a reservation in the Owner's account or fill in a form
   logins (Safari's scripting can't tell private windows apart).
 - Pages that keep loading or change constantly; very long pages; pages in frames.
 - Sites that ignore script-driven clicks (rare): Claude is told nothing changed and can use
-  computer control when the screen is on.
+  computer control when the screen is on. The same holds for keys and hover (FR-433, FR-434):
+  they reach the page as a script's events, so a page that checks for a real keyboard or mouse,
+  or a menu styled to open only under a real pointer (CSS `:hover`), doesn't react; the answer
+  says so.
+- A file to save that another site serves and the page may not fetch: Latchkey fetches it
+  itself with Safari's cookies (FR-438). A file bigger than 50 MB through the page, or 500 MB
+  directly, is refused.
 - Safari not running: Latchkey starts it.
 - A sign-in form the browser filled in: Claude sees the fields, not the password (FR-410). A
   password a page shows as ordinary text without marking the field is ordinary text.

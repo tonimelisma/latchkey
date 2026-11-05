@@ -57,7 +57,8 @@ extension BrowserCapability {
         _ said: String, _ p: PageScripts.Page, _ l: LockedBrowser?, _ browser: SafariBrowser, activity: String
     ) async -> ToolResult {
         let working = l == nil ? await browser.working() : nil
-        var r = await told(.text(said + "\n\n" + (working.map { named($0) + "\n" } ?? "") + PageScripts.answer(p)), l, browser)
+        var r = await told(
+            .text(said + "\n\n" + (working.map { named($0) + "\n" } ?? "") + PageScripts.answer(p)), l, browser)
         r.activity = activity
         return r
     }
@@ -68,7 +69,10 @@ extension BrowserCapability {
                 tool: .make(
                     "browser_key", title: "Press Keys",
                     description: "Presses keys in the page, in the field ref names or the one with the focus.",
-                    input: ["keys": listParam("Keys, like Enter, Tab, Escape, ArrowDown, cmd+a"), "ref": .stringParam("A field")],
+                    input: [
+                        "keys": listParam("Keys, like Enter, Tab, Escape, ArrowDown, cmd+a"),
+                        "ref": .stringParam("A field"),
+                    ],
                     required: ["keys"], readOnly: false, destructive: true, openWorld: true, deadlineMS: 30_000),
                 handler: { args in
                     await run {
@@ -76,7 +80,9 @@ extension BrowserCapability {
                         let ref = args["ref"]?.stringValue.flatMap { $0.isEmpty ? nil : $0 }
                         let a = try answer(args)
                         let l = await route(browser, locked)
-                        let done = try await either(l, { try await $0.press(keys, ref: ref, answer: a) }, { try await browser.press(keys, ref: ref, answer: a) })
+                        let done = try await either(
+                            l, { try await $0.press(keys, ref: ref, answer: a) },
+                            { try await browser.press(keys, ref: ref, answer: a) })
                         let did = (try? JSONDecoder().decode([String].self, from: Data(done.detail.utf8))) ?? []
                         return await acted(
                             "Pressed (keys a script sends; a site that only takes a real keyboard won't notice them):\n"
@@ -123,8 +129,11 @@ extension BrowserCapability {
                         let ref = args["ref"]?.stringValue.flatMap { $0.isEmpty ? nil : $0 }
                         let l = await route(browser, locked)
                         let done =
-                            try await either(l, { try await $0.scroll(ref, direction: direction, amount: amount) }, { try await browser.scroll(ref, direction: direction, amount: amount) })
-                        let at = try? JSONDecoder().decode(PageScripts.ScrollPosition.self, from: Data(done.detail.utf8))
+                            try await either(
+                                l, { try await $0.scroll(ref, direction: direction, amount: amount) },
+                                { try await browser.scroll(ref, direction: direction, amount: amount) })
+                        let at = try? JSONDecoder().decode(
+                            PageScripts.ScrollPosition.self, from: Data(done.detail.utf8))
                         return await acted(
                             "Scrolled \(direction). " + (at?.said ?? ""), done.page, l, browser,
                             activity: "Scrolled on \(host(done.page.url))")
@@ -133,7 +142,8 @@ extension BrowserCapability {
             ToolEntry(
                 tool: .make(
                     "browser_select", title: "Choose from a List",
-                    description: "Chooses options in a list by their text or value (several in a list that takes several).",
+                    description:
+                        "Chooses options in a list by their text or value (several in a list that takes several).",
                     input: ["ref": .stringParam("The list"), "options": listParam("The options' texts")],
                     required: ["ref", "options"], readOnly: false, destructive: true, openWorld: true,
                     deadlineMS: 30_000),
@@ -144,7 +154,9 @@ extension BrowserCapability {
                         else { throw Failure.failed("Give the list's reference and the options to choose.") }
                         let a = try answer(args)
                         let l = await route(browser, locked)
-                        let done = try await either(l, { try await $0.choose(ref, options: options, answer: a) }, { try await browser.choose(ref, options: options, answer: a) })
+                        let done = try await either(
+                            l, { try await $0.choose(ref, options: options, answer: a) },
+                            { try await browser.choose(ref, options: options, answer: a) })
                         let chosen = (try? JSONDecoder().decode([String].self, from: Data(done.detail.utf8))) ?? options
                         return await acted(
                             "Chose (website text): " + chosen.map { "\"\($0)\"" }.joined(separator: ", "), done.page, l,
@@ -156,7 +168,9 @@ extension BrowserCapability {
                     "browser_upload", title: "Attach Files",
                     description:
                         "Attaches files from the Mac to a file field of the page, or drops them on a place that takes dropped files.",
-                    input: ["ref": .stringParam("The file field or drop place"), "paths": listParam("The files' paths")],
+                    input: [
+                        "ref": .stringParam("The file field or drop place"), "paths": listParam("The files' paths"),
+                    ],
                     required: ["ref", "paths"], readOnly: false, destructive: true, openWorld: true, deadlineMS: 30_000),
                 handler: { args in
                     await run {
@@ -166,12 +180,15 @@ extension BrowserCapability {
                         let files = try BrowserDownloads.attachments(paths)
                         let a = try answer(args)
                         let l = await route(browser, locked)
-                        let done = try await either(l, { try await $0.attach(ref, files: files, answer: a) }, { try await browser.attach(ref, files: files, answer: a) })
+                        let done = try await either(
+                            l, { try await $0.attach(ref, files: files, answer: a) },
+                            { try await browser.attach(ref, files: files, answer: a) })
                         let how = done.detail.contains("dropped") ? "Dropped" : "Attached"
                         let list = files.map { "\($0.name) (\(BrowserDownloads.size($0.data.count)))" }
                         return await acted(
                             "\(how) \(list.joined(separator: ", ")) on \(ref). The page has them as if picked by hand; nothing is sent until the form is.",
-                            done.page, l, browser, activity: "Attached \(files.count) file(s) on \(host(done.page.url))")
+                            done.page, l, browser, activity: "Attached \(files.count) file(s) on \(host(done.page.url))"
+                        )
                     }
                 }),
             ToolEntry(
@@ -201,23 +218,29 @@ extension BrowserCapability {
     /// Saves a file (FR-438): fetched in the page first, with its cookies and session (also a
     /// file the page made itself, blob: and data:); when the page may not fetch it (another
     /// site's), by Latchkey itself with the Owner's Safari cookies.
-    static func download(ref: String?, url: String?, browser: SafariBrowser, locked l: LockedBrowser?) async throws
+    static func download(
+        ref: String?, url: String?, browser: SafariBrowser, locked l: LockedBrowser?,
+        folder: URL = BrowserDownloads.downloads
+    ) async throws
         -> (file: URL, said: String)
     {
         let got =
-            try await either(l, { try await $0.fetchFile(ref: ref, url: url, maxBytes: BrowserDownloads.pageLimit) }, { try await browser.fetchFile(ref: ref, url: url, maxBytes: BrowserDownloads.pageLimit) })
+            try await either(
+                l, { try await $0.fetchFile(ref: ref, url: url, maxBytes: BrowserDownloads.pageLimit) },
+                { try await browser.fetchFile(ref: ref, url: url, maxBytes: BrowserDownloads.pageLimit) })
         let f = got.fetched
         func said(_ file: URL, _ size: Int, _ type: String?, how: String) -> String {
             "Saved \(BrowserDownloads.size(size))\(type.map { ", \($0)" } ?? "") to \(file.path) (\(how)). Read it with files_read and that path; it is marked as downloaded from the web, as Safari marks downloads."
         }
         if f.state == "toobig" {
             throw Failure.failed(
-                "The file is \(BrowserDownloads.size(f.size ?? 0)); Latchkey saves at most \(BrowserDownloads.size(BrowserDownloads.pageLimit)) through the page.")
+                "The file is \(BrowserDownloads.size(f.size ?? 0)); Latchkey saves at most \(BrowserDownloads.size(BrowserDownloads.pageLimit)) through the page."
+            )
         }
         if f.state == "done", let b64 = f.b64, let data = Data(base64Encoded: b64), (f.status ?? 200) < 400 {
             let name = BrowserDownloads.name(
                 disposition: f.disposition, suggested: got.suggested, address: f.final ?? got.address, type: f.type)
-            let file = try BrowserDownloads.save(data, name: name, from: got.address)
+            let file = try BrowserDownloads.save(data, name: name, from: got.address, in: folder)
             return (file, said(file, data.count, f.type, how: "fetched by the page, with its sign-in"))
         }
         if let status = f.status, status >= 400 {
@@ -233,7 +256,9 @@ extension BrowserCapability {
         let size = (try? FileManager.default.attributesOfItem(atPath: direct.file.path)[.size] as? Int) ?? 0
         let name = BrowserDownloads.name(
             disposition: direct.disposition, suggested: got.suggested, address: direct.final, type: direct.type)
-        let file = try BrowserDownloads.move(direct.file, name: name, from: got.address)
-        return (file, said(file, size, direct.type, how: "fetched by Latchkey with Safari's cookies, as the page couldn't"))
+        let file = try BrowserDownloads.move(direct.file, name: name, from: got.address, in: folder)
+        return (
+            file, said(file, size, direct.type, how: "fetched by Latchkey with Safari's cookies, as the page couldn't")
+        )
     }
 }

@@ -5,3 +5,9 @@ enum Permissions {
     static let safariApp = "com.apple.Safari"
     static func automationOpening(_ bundleID: String) async -> Automation? { nil }
 }
+
+/// Latchkey's own browser isn't part of the check; the download code needs only its agent name.
+enum LockedBrowser {
+    static let safariUserAgent =
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Safari/605.1.15"
+}

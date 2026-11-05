@@ -21,3 +21,7 @@
   own (read, back, picture, click, type, script, close), the check before each use, back to
   Claude's own tab at the next page, the locked answer (Toni, 2026-11-03). Checked against real
   Safari with `macos/scripts/safari-check.sh`. *FR-424 to FR-431, D8.*
+- **T409** Tests (WebKit view for every page script, Latchkey's own browser, the stand-in Safari
+  for the tools), then keys, hover, scrolling, lists, attaching files, saving files, and
+  pictures drawn without the screen (2026-11-05). Checked against real Safari with
+  `macos/scripts/safari-check.sh` on a local test page. *FR-433 to FR-440, D10.*

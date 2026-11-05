@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<!-- The local test page of scripts/safari-check (spec 005 FR-433 to FR-439): every action
+     Claude can take, nothing sent anywhere. Served from 127.0.0.1 by safari-check.sh. -->
+<html><head><meta charset="utf-8"><title>Latchkey check actions</title>
+<style>
+  #submenu { display: none; }
+  #box { height: 80px; overflow: auto; border: 1px solid #888; }
+  #box div { height: 900px; }
+  #tall { height: 3000px; }
+  #drop { width: 200px; height: 60px; border: 2px dashed #888; }
+</style></head>
+<body>
+<h1>Latchkey check actions</h1>
+<form id="form" onsubmit="document.title = 'sent:' + document.getElementById('name').value; return false;">
+  <input id="name" name="name" placeholder="Name">
+  <input id="other" name="other" placeholder="Other">
+</form>
+<p id="keys">keys:</p>
+<div id="dialog">An open panel</div>
+<select id="size"><option value="s">Small</option><option value="m">Medium</option><option value="l">Large</option></select>
+<select id="extras" multiple><option>Cheese</option><option>Ham</option><option>Olives</option></select>
+<button id="combo" role="combobox" aria-haspopup="listbox" aria-controls="colors"
+  onclick="document.getElementById('colors').hidden = false">Pick a color</button>
+<ul id="colors" role="listbox" hidden>
+  <li role="option" onclick="document.getElementById('picked').textContent = 'picked:red'">Red</li>
+  <li role="option" onclick="document.getElementById('picked').textContent = 'picked:blue'">Blue</li>
+</ul>
+<p id="picked">picked:</p>
+<div id="menu" aria-haspopup="true" onmouseenter="document.getElementById('submenu').style.display = 'block'">Products menu</div>
+<div id="submenu"><a href="#sub">Hidden product</a></div>
+<div id="box"><div>Inside the scrolling box</div></div>
+<label>Attach <input id="file" type="file" multiple></label>
+<p id="filelog">files:</p>
+<div id="drop" role="button">Drop files here</div>
+<p id="droplog">dropped:</p>
+<a id="dl" href="files/latchkey-check-download.txt" download>Save the text file</a>
+<a id="blob" href="#" download="latchkey-check-blob.txt">Save a file the page makes</a>
+<a id="pdf" href="files/latchkey-check.pdf">The PDF</a>
+<div id="tall">Long part of the page</div>
+<p id="end">The end</p>
+<script>
+  document.addEventListener('keydown', function (e) {
+    document.getElementById('keys').textContent += ' ' + (e.metaKey ? 'cmd+' : '') + e.key;
+    if (e.key === 'Escape' && document.getElementById('dialog')) document.getElementById('dialog').remove();
+  });
+  document.getElementById('file').addEventListener('change', function (e) {
+    var log = document.getElementById('filelog');
+    Array.prototype.forEach.call(e.target.files, function (f) {
+      f.text().then(function (t) { log.textContent += ' ' + f.name + '=' + f.size + ':' + t.slice(0, 20); });
+    });
+  });
+  var drop = document.getElementById('drop');
+  drop.addEventListener('dragover', function (e) { e.preventDefault(); });
+  drop.addEventListener('drop', function (e) {
+    e.preventDefault();
+    document.getElementById('droplog').textContent += ' ' + Array.prototype.map.call(e.dataTransfer.files, function (f) { return f.name; }).join(',');
+  });
+  document.getElementById('blob').href = URL.createObjectURL(new Blob(['made by the page'], { type: 'text/plain' }));
+</script>
+</body></html>

@@ -272,7 +272,8 @@ extension PageScripts {
         var said: String {
             let whereTo =
                 maxY <= 0
-                ? "it doesn't scroll up or down" : y <= 0 ? "at the top" : y >= maxY ? "at the bottom" : "\(y) of \(maxY) pixels down"
+                ? "it doesn't scroll up or down"
+                : y <= 0 ? "at the top" : y >= maxY ? "at the bottom" : "\(y) of \(maxY) pixels down"
             let part = element ? "The part of the page" : "The page"
             let note = pageTook ? " The page handled the scroll itself." : moved ? "" : " Nothing moved."
             return "\(part) is \(whereTo) (\(height) pixels show at a time).\(note)"

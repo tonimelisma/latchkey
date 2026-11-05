@@ -45,7 +45,8 @@ enum BrowserDownloads {
         }
         for part in d.split(separator: ";").map({ $0.trimmingCharacters(in: .whitespaces) }) {
             if part.lowercased().hasPrefix("filename=") {
-                return String(part.dropFirst("filename=".count)).trimmingCharacters(in: CharacterSet(charactersIn: "\"'"))
+                return String(part.dropFirst("filename=".count)).trimmingCharacters(
+                    in: CharacterSet(charactersIn: "\"'"))
             }
         }
         return nil
@@ -140,10 +141,12 @@ enum BrowserDownloads {
         let size = (try? FileManager.default.attributesOfItem(atPath: file.path)[.size] as? Int) ?? 0
         if size > limit {
             try? FileManager.default.removeItem(at: file)
-            throw SafariBrowser.Failure.failed("The file is \(size / 1_000_000) MB; Latchkey saves at most \(limit / 1_000_000) MB.")
+            throw SafariBrowser.Failure.failed(
+                "The file is \(size / 1_000_000) MB; Latchkey saves at most \(limit / 1_000_000) MB.")
         }
         return (
-            file, http?.value(forHTTPHeaderField: "Content-Type"), http?.value(forHTTPHeaderField: "Content-Disposition"),
+            file, http?.value(forHTTPHeaderField: "Content-Type"),
+            http?.value(forHTTPHeaderField: "Content-Disposition"),
             response.url?.absoluteString ?? address
         )
     }

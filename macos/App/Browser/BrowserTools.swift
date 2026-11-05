@@ -18,7 +18,8 @@ extension BrowserCapability {
                         page (new_tab for a new tab, in a window of Claude's own only). With back: goes back. With \
                         nothing: reads the page Claude works in. Answers with the page's text and the links, \
                         buttons, and fields on it, each with a reference like e12 for browser_act. Long pages come \
-                        in parts; pass offset to read on. screenshot: shows the page as an image. While the Mac is \
+                        in parts; pass offset to read on. screenshot: shows the page as an image (captured from the \
+                        screen when it can be, else drawn by Latchkey from the page as it is). While the Mac is \
                         locked, Safari doesn't answer, so Latchkey uses a browser of its own instead, signed in \
                         with the owner's Safari cookies, for the pages Claude opens: one page, its own history \
                         (the owner's tabs are still tried through Safari); it is closed when the Mac is unlocked, \

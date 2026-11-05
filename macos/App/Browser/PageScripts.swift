@@ -162,15 +162,17 @@ enum PageScripts {
         (function latchkeyRead(offset, max) {
           var root = document.documentElement;
           var next = parseInt(root.getAttribute('data-latchkey-next') || '1', 10);
-          var sel = 'a[href], button, input:not([type=hidden]), textarea, select, summary, [role=button], [role=link], [role=tab], [role=menuitem], [role=checkbox], [role=option], [contenteditable=true]';
+          var sel = 'a[href], button, input:not([type=hidden]), textarea, select, summary, [role=button], [role=link], [role=tab], [role=menuitem], [role=checkbox], [role=option], [contenteditable=true], [role=combobox], [role=listbox], [role=menu], [role=radio], [role=switch], [aria-haspopup]';
           var nodes = document.querySelectorAll(sel), out = [];
           for (var i = 0; i < nodes.length && out.length < 400; i++) {
             var e = nodes[i], r = e.getBoundingClientRect(), st = getComputedStyle(e);
-            if (st.display === 'none' || st.visibility === 'hidden' || (r.width === 0 && r.height === 0)) continue;
+            // A file field is listed also when the page hides it behind a button of its own (FR-437).
+            var fileField = e.tagName === 'INPUT' && (e.type || '').toLowerCase() === 'file' && !e.disabled;
+            if (!fileField && (st.display === 'none' || st.visibility === 'hidden' || (r.width === 0 && r.height === 0))) continue;
             var ref = e.getAttribute('data-latchkey');
             if (!ref) { ref = 'e' + (next++); e.setAttribute('data-latchkey', ref); }
             var tag = e.tagName.toLowerCase(), type = (e.getAttribute('type') || 'text').toLowerCase();
-            var label = (e.getAttribute('aria-label') || e.innerText || e.getAttribute('placeholder') || e.getAttribute('title') || e.getAttribute('name') || e.getAttribute('alt') || '').replace(/\\s+/g, ' ').trim().slice(0, 100);
+            var label = (e.getAttribute('aria-label') || e.innerText || e.getAttribute('placeholder') || e.getAttribute('title') || e.getAttribute('name') || e.getAttribute('alt') || (e.labels && e.labels.length ? e.labels[0].innerText : '') || '').replace(/\\s+/g, ' ').trim().slice(0, 100);
             var kind = tag === 'a' ? 'link' : tag === 'input' ? ((type === 'submit' || type === 'button') ? 'button' : 'field:' + type) : tag === 'textarea' ? 'field:text' : tag === 'select' ? 'choice' : (e.getAttribute('role') || tag);
             if (!label && tag === 'input' && (type === 'submit' || type === 'button')) label = e.value || '';
             var item = { ref: ref, kind: kind, label: label };
@@ -181,7 +183,20 @@ enum PageScripts {
               item.value = secret ? (e.value ? '(hidden)' : '') : String(e.value || '').slice(0, 100);
             }
             else if (tag === 'select' && e.selectedIndex >= 0) item.value = e.options[e.selectedIndex].text;
+            if (fileField && (st.display === 'none' || st.visibility === 'hidden' || r.width < 2 || r.height < 2)) item.label = (item.label ? item.label + ' ' : '') + '(hidden file field)';
             out.push(item);
+          }
+          // Parts of the page that scroll on their own (FR-435), at most 20.
+          var boxes = document.body ? document.body.querySelectorAll('div, section, main, aside, nav, ul, ol, article, pre, table, tbody, form') : [];
+          for (var j = 0, found = 0; j < boxes.length && found < 20 && out.length < 400; j++) {
+            var b = boxes[j];
+            if (b.scrollHeight <= b.clientHeight + 20 && b.scrollWidth <= b.clientWidth + 20) continue;
+            var bs = getComputedStyle(b);
+            if (!/(auto|scroll)/.test(bs.overflowY + ' ' + bs.overflowX) || bs.display === 'none' || bs.visibility === 'hidden' || b.clientHeight === 0) continue;
+            var bref = b.getAttribute('data-latchkey');
+            if (!bref) { bref = 'e' + (next++); b.setAttribute('data-latchkey', bref); }
+            out.push({ ref: bref, kind: 'scrollable', label: (b.getAttribute('aria-label') || b.innerText || '').replace(/\\s+/g, ' ').trim().slice(0, 60) });
+            found++;
           }
           root.setAttribute('data-latchkey-next', String(next));
           var text = (document.body && document.body.innerText) || '';

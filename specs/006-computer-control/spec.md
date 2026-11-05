@@ -44,7 +44,9 @@ Claude can use them the way the Owner would.
 - **FR-508** Computer control shall have the levels Off, Read only, Read & write, and start at
   Read & write (Toni, 2026-10-22).
 - **FR-509** While Browser is on, Claude shall be able to take a screenshot of its Safari window
-  (spec 005), under the same screen conditions.
+  (spec 005), under the same screen conditions. (2026-11-05: "under the same screen
+  conditions" is withdrawn: when the screen can't be captured, Latchkey draws the page itself,
+  spec 005 FR-439.)
 - **FR-510** Claude shall be able to name one app and, without bringing it forward or moving the
   pointer, see a picture of just its front window (also while other windows cover it), list its
   buttons, fields, and text with references, press one, type into it, and press keys in it;
