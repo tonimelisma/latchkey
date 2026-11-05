@@ -1,13 +1,16 @@
 import Foundation
 
-/// The JavaScript that runs inside Latchkey's WhatsApp Web page (spec 012 plan D2): it defines
-/// `window.__latchkey`, whose functions use WhatsApp Web's own modules, never its screen.
-/// `WhatsAppBridgeTests` runs it against a stand-in of those modules.
+/// The JavaScript that runs inside the Owner's WhatsApp Web tab in Safari (spec 012 plan D1, D2):
+/// it defines `window.__latchkey`, whose functions use WhatsApp Web's own modules, never its
+/// screen. `WhatsAppBridgeTests` runs it against a stand-in of those modules.
 enum WhatsAppBridge {
+    /// `window.__latchkey.version`; a tab holding another version gets this one.
+    static let version = 2
+
     static let source = #"""
-        // Runs inside Latchkey's hidden WhatsApp Web page (spec 012 plan D2). Defines window.__latchkey,
-        // whose functions use WhatsApp Web's own modules (window.require), never its screen. Every
-        // function returns plain JSON-able values; Swift calls them with callAsyncJavaScript.
+        // Runs inside the Owner's WhatsApp Web tab (spec 012 plan D2). Defines window.__latchkey, whose
+        // functions use WhatsApp Web's own modules (window.require), never its screen. Every function
+        // returns plain JSON-able values; Latchkey starts them through Safari and collects the answer.
         (function () {
           'use strict';
           const MODULES = {
@@ -83,7 +86,7 @@ enum WhatsAppBridge {
           }
 
           window.__latchkey = {
-            version: 1,
+            version: 2,
 
             // The words on screen while no chats show (a loading or sync screen), for answers
             // that say why WhatsApp isn't connected. Never while chats show: no message text.
@@ -234,57 +237,6 @@ enum WhatsAppBridge {
                 if (!ok) return { chat: chatInfo(chat), results, incomplete: true };
               }
               return { chat: chatInfo(chat), results };
-            },
-
-            // On the log-in screen: asks WhatsApp for an 8-character code to type on the phone (Linked
-            // Devices → Link a Device → Link with phone number instead). The only use of the screen: the
-            // log-in screen has no module to call (2026-11-02: these steps linked Toni's phone).
-            async linkByPhone(args) {
-              const number = digits(args.number);
-              if (number.length < 7) return { error: 'a phone number with its country code is needed' };
-              const text = () => (document.body ? document.body.innerText : '');
-              const readCode = () => {
-                const t = text();
-                const spread = t.match(/\n([A-Z0-9])\n([A-Z0-9])\n([A-Z0-9])\n([A-Z0-9])\n-\n([A-Z0-9])\n([A-Z0-9])\n([A-Z0-9])\n([A-Z0-9])(?:\n|$)/);
-                if (spread) return spread.slice(1, 5).join('') + '-' + spread.slice(5, 9).join('');
-                const joined = t.match(/\b([A-Z0-9]{4})-([A-Z0-9]{4})\b/);
-                return joined ? joined[1] + '-' + joined[2] : '';
-              };
-              const until = async (f, ms) => { for (let i = 0; i < ms / 200; i++) { const v = f(); if (v) return v; await wait(200); } return null; };
-              const leaf = (re) => [...document.querySelectorAll('*')].find((e) => e.children.length === 0 && re.test((e.textContent || '').trim()));
-              const press = (e) => (e.closest('button,[role=button],a,[tabindex]') || e).click();
-              const start = await until(() => leaf(/^Log in with phone number$/) || document.querySelector('input[aria-label*="phone number"]'), 20000);
-              if (!start) return { error: 'the log-in screen did not show' };
-              // A press before WhatsApp Web has set up its handlers does nothing (2026-11-03, in
-              // Latchkey's page), so it is pressed again until the field shows.
-              const field = () => document.querySelector('input[aria-label*="phone number"]');
-              let input = field();
-              for (let i = 0; i < 16 && !input; i++) {
-                const link = leaf(/^Log in with phone number$/);
-                if (link) press(link);
-                input = await until(field, 1500);
-              }
-              if (!input) return { error: 'the phone number field did not show' };
-              input.focus();
-              document.execCommand('selectAll');
-              document.execCommand('insertText', false, '+' + number);
-              await wait(600);
-              const next = [...document.querySelectorAll('button,[role=button]')].find((b) => /^Next$/.test((b.innerText || '').trim()));
-              if (!next) return { error: 'the Next button did not show' };
-              next.click();
-              const code = await until(readCode, 20000);
-              return code ? { code } : { error: 'WhatsApp did not show a code' };
-            },
-
-            // WhatsApp Web's own log-out, which also removes this device from the phone's Linked Devices.
-            async logout() {
-              try {
-                // The connection's own log-out (whatsapp-web.js's too); WAWebCmd has none (2026-11-03).
-                await mod('socket').Socket.logout();
-                return { ok: true };
-              } catch (e) {
-                return { ok: false, error: String(e && e.message) };
-              }
             },
           };
         })();

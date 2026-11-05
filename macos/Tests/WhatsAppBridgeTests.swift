@@ -71,7 +71,7 @@ import WebKit
         return w
     }
 
-    /// Calls a bridge function the way `WhatsAppPage.call` does and decodes its answer.
+    /// Calls a bridge function directly and decodes its answer.
     private func call(_ w: WKWebView, _ name: String, _ args: JSONValue = .object([:])) async throws -> JSONValue {
         let r = try await w.callAsyncJavaScript(
             "return JSON.stringify(await window.__latchkey[name](JSON.parse(args)));",
@@ -109,36 +109,47 @@ import WebKit
         #expect(try await call(w, "state")["loginScreen"]?.boolValue == false)
     }
 
-    /// A reload while a code waits throws the code away; the phone then says it couldn't find
-    /// the device (2026-11-04). Outside a link the watchdog still reloads a stuck page.
-    @Test func noReloadWhileALinkIsUnderWay() {
-        let t0 = Date(timeIntervalSince1970: 1_000_000)
-        let later = t0.addingTimeInterval(120)
-        let linking = t0.addingTimeInterval(600)
-        #expect(
-            !WhatsAppPage.shouldReload(.loading, now: later, loadedAt: t0, unconnectedSince: nil, linkingUntil: linking)
-        )
-        #expect(
-            !WhatsAppPage.shouldReload(
-                .connecting, now: later, loadedAt: t0, unconnectedSince: t0, linkingUntil: linking))
-        #expect(
-            WhatsAppPage.shouldReload(
-                .loading, now: later, loadedAt: t0, unconnectedSince: nil, linkingUntil: .distantPast))
-        #expect(
-            WhatsAppPage.shouldReload(
-                .connecting, now: later, loadedAt: t0, unconnectedSince: t0, linkingUntil: .distantPast))
-        #expect(
-            !WhatsAppPage.shouldReload(
-                .loading, now: t0.addingTimeInterval(30), loadedAt: t0, unconnectedSince: nil,
-                linkingUntil: .distantPast))
-        #expect(
-            !WhatsAppPage.shouldReload(
-                .notLinked, now: later, loadedAt: t0, unconnectedSince: nil, linkingUntil: .distantPast))
-        // After the link window the watchdog is back.
-        #expect(
-            WhatsAppPage.shouldReload(
-                .loading, now: linking.addingTimeInterval(1), loadedAt: t0, unconnectedSince: nil, linkingUntil: linking
-            ))
+    /// Plan D1: the scripts Safari runs, in a page at WhatsApp Web's address: the start script puts
+    /// the bridge in and starts a function, the poll script takes its answer once.
+    @Test func safariStartsAFunctionAndCollectsItsAnswer() async throws {
+        let w = WKWebView(frame: NSRect(x: 0, y: 0, width: 800, height: 600))
+        try await PageLoad.load(
+            "<html><body><div id='app'></div></body></html>", base: URL(string: "https://web.whatsapp.com/")!, in: w)
+        _ = try await w.callAsyncJavaScript(Self.fakeWhatsApp, arguments: [:], in: nil, contentWorld: .page)
+        let started = try await w.evaluateJavaScript(
+            SafariWhatsApp.start("resolve", .object(["to": .string("Sarah")]), id: "t1"))
+        #expect(started as? String == "started")
+        var out = ""
+        for _ in 0..<50 where out.isEmpty {
+            out = try await w.evaluateJavaScript(SafariWhatsApp.poll(id: "t1")) as? String ?? ""
+            if out.isEmpty { try await Task.sleep(for: .milliseconds(20)) }
+        }
+        let answer = try SafariWhatsApp.answer(out)
+        #expect(answer["match"]?["name"]?.stringValue == "Sarah Lee")
+        #expect(try await w.evaluateJavaScript(SafariWhatsApp.poll(id: "t1")) as? String == "", "taken once")
+        // The bridge stays in the tab for the next call; a missing function says so.
+        #expect(try await w.evaluateJavaScript("window.__latchkey.version") as? Int == WhatsAppBridge.version)
+        let none = try await w.evaluateJavaScript(SafariWhatsApp.start("nope", .object([:]), id: "t2"))
+        #expect(none as? String == "failed: no such function")
+        #expect(SafariWhatsApp.state(from: try await call(w, "state")) == .connected)
+    }
+
+    /// Messages and files go only to WhatsApp Web: anywhere else the start script does nothing.
+    @Test func safariRefusesAPageThatIsntWhatsAppWeb() async throws {
+        let w = try await page()  // at test.example
+        _ = try await js(w, "window.__latchkey = undefined")
+        let r = try await w.evaluateJavaScript(
+            SafariWhatsApp.start(
+                "send", .object(["chat": .string("15550001111@c.us"), "text": .string("hi")]), id: "x"))
+        #expect(r as? String == "failed: the tab is not WhatsApp Web")
+        #expect(try await js(w, "return window.__sent.length") as? Int == 0)
+        #expect(try await js(w, "return typeof window.__latchkey") as? String == "undefined")
+    }
+
+    @Test func theAnswerSaysTimedOutFailedOrTheValue() throws {
+        #expect(throws: WhatsAppPageError.timedOut) { try SafariWhatsApp.answer("") }
+        #expect(throws: WhatsAppPageError.failed("boom")) { try SafariWhatsApp.answer("ERboom") }
+        #expect(try SafariWhatsApp.answer(#"OK{"a":1}"#)["a"]?.numberValue == 1)
     }
 
     /// The screen's words come back only while no chats show, so no message text leaves.
@@ -259,45 +270,6 @@ import WebKit
 
     /// WhatsApp Web's log-in by phone number as it looked on 2026-11-02: a link, a number field
     /// starting "+1 ", Next, and the code one character per line.
-    @Test func linkByPhoneTypesTheNumberAndReadsTheCode() async throws {
-        let w = try await page()
-        _ = try await js(
-            w,
-            #"""
-            document.body.innerHTML = '<div role="button" id="by-phone"><span>Log in with phone number</span></div>';
-            document.getElementById('by-phone').onclick = () => {
-              document.body.innerHTML = '<input aria-label="Type your phone number to log in to WhatsApp" value="+1 "><button id="next">Next</button>';
-              document.getElementById('next').onclick = () => {
-                window.__typed = document.querySelector('input').value;
-                setTimeout(() => { document.body.innerHTML = '<div>Enter code on phone</div>' + 'ABCD-EFGH'.split('').map((c) => '<div>' + c + '</div>').join(''); }, 300);
-              };
-            };
-            """#)
-        let r = try await call(w, "linkByPhone", .object(["number": .string("+1 (415) 555-0100")]))
-        #expect(r["code"]?.stringValue == "ABCD-EFGH")
-        #expect(try await js(w, "return window.__typed") as? String == "+14155550100")
-        #expect(try await call(w, "linkByPhone", .object(["number": .string("12")]))["error"] != nil)
-    }
-
-    /// In Latchkey's page the first press did nothing (WhatsApp Web hadn't set up its handlers).
-    @Test func linkByPhonePressesAgainUntilTheFieldShows() async throws {
-        let w = try await page()
-        _ = try await js(
-            w,
-            #"""
-            document.body.innerHTML = '<div role="button" id="by-phone"><span>Log in with phone number</span></div>';
-            let presses = 0;
-            document.getElementById('by-phone').onclick = () => {
-              if (++presses < 3) return;
-              document.body.innerHTML = '<input aria-label="Type your phone number to log in to WhatsApp" value="+1 "><button id="next">Next</button>';
-              document.getElementById('next').onclick = () => { document.body.innerHTML = '<p>Enter code</p><p>WXYZ-1234</p><p>more</p>'; };
-            };
-            """#)
-        #expect(
-            try await call(w, "linkByPhone", .object(["number": .string("14155550100")]))["code"]?.stringValue
-                == "WXYZ-1234")
-    }
-
     @Test func noSuchChatIsAnError() async throws {
         let w = try await page()
         #expect(try await call(w, "send", .object(["chat": .string("x@c.us"), "text": .string("y")]))["error"] != nil)

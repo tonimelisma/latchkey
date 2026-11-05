@@ -1,12 +1,13 @@
 import Foundation
+import SQLite3
 import Testing
 
 @testable import Latchkey
 
-/// Spec 012 FR-1210 to FR-1232: the WhatsApp tools against a stand-in page and the fixture
-/// database.
+/// Spec 012 FR-1212 to FR-1232: the WhatsApp tools against a stand-in Safari tab, a stand-in
+/// WhatsApp for Mac window, and the fixture database.
 @Suite struct WhatsAppToolsTests {
-    /// Plays Latchkey's WhatsApp page: a state, and answers per bridge function.
+    /// Plays the Owner's WhatsApp Web tab: a state, and answers per bridge function.
     final class FakePage: WhatsAppPageAPI, @unchecked Sendable {
         private let lock = NSLock()
         var state: WhatsAppPageState = .connected
@@ -21,9 +22,32 @@ import Testing
         }
 
         func ready(wait: Duration) async -> WhatsAppPageState { state }
-        func startForLinking(wait: Duration) async -> WhatsAppPageState { state }
 
         func sent() -> [JSONValue] { lock.withLock { calls.filter { $0.0 == "send" }.map(\.1) } }
+    }
+
+    /// Plays WhatsApp for Mac's window; a send adds the message to `database` as WhatsApp would.
+    final class FakeWindow: WhatsAppWindowAPI, @unchecked Sendable {
+        var why: String?
+        var isRunning = false
+        var database: URL?
+        var lands = true
+        private(set) var sends: [(String, String)] = []
+
+        func unusable() async -> String? { why }
+        func running() -> Bool { isRunning }
+        func send(number: String, text: String) async throws {
+            sends.append((number, text))
+            guard lands, let database else { return }
+            var h: OpaquePointer?
+            sqlite3_open(database.path, &h)
+            defer { sqlite3_close(h) }
+            let now = Date().timeIntervalSinceReferenceDate
+            let escaped = text.replacingOccurrences(of: "'", with: "''")
+            sqlite3_exec(
+                h, "INSERT INTO ZWAMESSAGE VALUES (99, 1, \(now), 1, 0, '\(escaped)', NULL, NULL, NULL, 'Z')", nil, nil,
+                nil)
+        }
     }
 
     static let sarah: JSONValue = .object([
@@ -31,23 +55,28 @@ import Testing
         "time": .number(1_794_160_800),
     ])
 
-    private func send(_ page: FakePage, _ args: JSONValue) async -> ToolResult {
-        let tools = WhatsAppCapability.writeTools(page: page, readyWait: .milliseconds(10))
+    private func send(
+        _ page: FakePage, _ args: JSONValue, window: FakeWindow = FakeWindow(), store: WhatsAppStore? = nil
+    ) async -> ToolResult {
+        let tools = WhatsAppCapability.writeTools(
+            store: { store }, page: page, window: window, readyWait: .milliseconds(10), confirmWait: .milliseconds(600))
         return await tools[0].handler(args)
     }
 
-    @Test func sendsAndSaysWhatWhatsAppConfirmed() async {
+    @Test func sendsThroughTheTabAndSaysWhatWhatsAppConfirmed() async {
         let page = FakePage()
         page.answers["resolve"] = .object(["match": Self.sarah])
         page.answers["send"] = .object([
             "chat": Self.sarah,
             "results": .array([.object(["text": .bool(true), "sent": .bool(true), "ack": .number(2)])]),
         ])
-        let r = await send(page, .object(["to": .string("Sarah"), "text": .string("on my way")]))
+        let window = FakeWindow()
+        let r = await send(page, .object(["to": .string("Sarah"), "text": .string("on my way")]), window: window)
         #expect(!r.isError)
-        #expect(r.plainText == "Sent to «Sarah Lee» «on my way»: the text (delivered).")
+        #expect(r.plainText == "Sent to «Sarah Lee» «on my way» through WhatsApp Web in Safari: the text (delivered).")
         #expect(r.activity == "Claude sent a WhatsApp message to Sarah Lee")
         #expect(page.sent().first?["chat"]?.stringValue == "15550001111@c.us")
+        #expect(window.sends.isEmpty, "the window only when the tab can't be used")
     }
 
     @Test func severalMatchesSendNothing() async {
@@ -58,38 +87,82 @@ import Testing
         #expect(page.sent().isEmpty)
     }
 
-    @Test func notLinkedOrNotConnectedSaysSoAtOnce() async {
+    /// FR-1215: an unusable tab hands text to a person over to WhatsApp for Mac, confirmed in its
+    /// database.
+    @Test func anUnusableTabFallsBackToTheWindow() async throws {
+        let db = try WhatsAppStoreTests.make()
+        let store = try WhatsAppStore(url: db)
         let page = FakePage()
+        page.state = .unavailable(SafariWhatsApp.noTab)
+        let window = FakeWindow()
+        window.database = db
+        let r = await send(
+            page, .object(["to": .string("Sarah Lee"), "text": .string("on my way")]), window: window, store: store)
+        #expect(!r.isError, "\(r.plainText)")
+        #expect(r.plainText == "Sent to «Sarah Lee» «on my way» through WhatsApp for Mac (sent).")
+        #expect(window.sends.first?.0 == "15550001111" && window.sends.first?.1 == "on my way")
+        // A number needs no database to find it.
         page.state = .notLinked
-        var r = await send(page, .object(["to": .string("Sarah"), "text": .string("hi")]))
-        #expect(r.isError && r.plainText == WhatsAppCapability.notLinked)
-        page.state = .connecting
-        r = await send(page, .object(["to": .string("Sarah"), "text": .string("hi")]))
-        #expect(r.isError && r.plainText.hasPrefix("Nothing was sent: Latchkey's WhatsApp isn't connected"))
-        // The page's own screen says why, e.g. a history sync waiting for the phone.
-        page.answers["screen"] = .object(["text": .string("Syncing chats. Keep WhatsApp open on your phone.")])
-        r = await send(page, .object(["to": .string("Sarah"), "text": .string("hi")]))
-        #expect(r.plainText.contains("shows: «Syncing chats. Keep WhatsApp open on your phone.»"))
-        page.answers["screen"] = nil
-        page.state = .changed(["WAWebPrepRawMedia"])
-        r = await send(page, .object(["to": .string("Sarah"), "text": .string("hi")]))
-        #expect(r.isError && r.plainText.contains("WAWebPrepRawMedia") && r.plainText.contains("needs an update"))
-        #expect(page.sent().isEmpty)
+        _ = await send(page, .object(["to": .string("+1 555 000 1111"), "text": .string("again")]), window: window)
+        #expect(window.sends.last?.0 == "15550001111")
     }
 
+    @Test func theWindowSaysWhyItCantAndSendsNothing() async throws {
+        let store = try WhatsAppStore(url: try WhatsAppStoreTests.make())
+        let page = FakePage()
+        page.state = .connecting
+        page.answers["screen"] = .object(["text": .string("Syncing chats. Keep WhatsApp open on your phone.")])
+        let window = FakeWindow()
+        window.why = "WhatsApp for Mac can't be used while the Mac is locked"
+        var r = await send(page, .object(["to": .string("Sarah Lee"), "text": .string("hi")]), window: window)
+        #expect(r.isError)
+        #expect(
+            r.plainText.hasPrefix("Nothing was sent: WhatsApp Web in Safari isn't connected to WhatsApp right now"))
+        #expect(r.plainText.contains("it shows «Syncing chats. Keep WhatsApp open on your phone.»"))
+        #expect(r.plainText.hasSuffix("and WhatsApp for Mac can't be used while the Mac is locked."))
+        window.why = nil
+        // Files and groups don't go through the window.
+        r = await send(
+            page, .object(["to": .string("Sarah Lee"), "files": .array([.string("/etc/hosts")])]), window: window,
+            store: store)
+        #expect(r.isError && r.plainText.contains("can take only text"))
+        r = await send(page, .object(["to": .string("Family"), "text": .string("hi")]), window: window, store: store)
+        #expect(r.isError && r.plainText.contains("only to a person known by phone number"))
+        #expect(window.sends.isEmpty)
+        page.state = .changed(["WAWebPrepRawMedia"])
+        r = await send(page, .object(["to": .string("Sarah"), "text": .string("hi")]), window: window)
+        #expect(r.isError && r.plainText.contains("WAWebPrepRawMedia") && r.plainText.contains("needs an update"))
+        #expect(page.sent().isEmpty && window.sends.isEmpty)
+    }
+
+    @Test func aWindowSendNotInTheDatabaseMayHaveGone() async throws {
+        let db = try WhatsAppStoreTests.make()
+        let store = try WhatsAppStore(url: db)
+        let page = FakePage()
+        page.state = .unavailable(SafariWhatsApp.noTab)
+        let window = FakeWindow()
+        window.lands = false
+        let r = await send(
+            page, .object(["to": .string("Sarah Lee"), "text": .string("hi")]), window: window, store: store)
+        #expect(r.isError && r.plainText.contains("may or may not have gone") && window.sends.count == 1)
+    }
+
+    /// FR-1216: a tab send that may have gone is never tried again, through the window or at all.
     @Test func anUnconfirmedSendMayHaveGoneAndIsNotRetried() async {
         let page = FakePage()
         page.answers["resolve"] = .object(["match": Self.sarah])
         page.answers["send"] = .object([
             "results": .array([.object(["text": .bool(true), "sent": .bool(false)])]), "incomplete": .bool(true),
         ])
-        let r = await send(page, .object(["to": .string("Sarah"), "text": .string("hi")]))
+        let window = FakeWindow()
+        let r = await send(page, .object(["to": .string("Sarah"), "text": .string("hi")]), window: window)
         #expect(r.isError && r.plainText.contains("may or may not have gone"))
         #expect(page.sent().count == 1, "sent once, never again by itself")
         page.answers["send"] = nil
         page.throwing["send"] = .timedOut
-        let t = await send(page, .object(["to": .string("Sarah"), "text": .string("hi")]))
+        let t = await send(page, .object(["to": .string("Sarah"), "text": .string("hi")]), window: window)
         #expect(t.isError && t.plainText.contains("may or may not have gone"))
+        #expect(window.sends.isEmpty)
     }
 
     @Test func filesAreReadAllOrNothing() async throws {
@@ -145,12 +218,15 @@ import Testing
         #expect(r.isError && r.plainText.contains("no WhatsApp chat matches"))
     }
 
-    @Test func readingUsesTheDesktopDatabaseWhenThere() async throws {
+    /// FR-1222: the database while WhatsApp for Mac runs, else the tab, else the database marked old.
+    @Test func readingUsesTheDatabaseWhileTheAppRuns() async throws {
         let store = try WhatsAppStore(url: try WhatsAppStoreTests.make())
         let page = FakePage()
-        let tools = WhatsAppCapability.readTools(store: { store }, page: page)
+        let window = FakeWindow()
+        window.isRunning = true
+        let tools = WhatsAppCapability.readTools(store: { store }, page: page, window: window)
         let chats = await tools[0].handler(.object([:]))
-        #expect(chats.plainText.contains("WhatsApp for Mac's database"))
+        #expect(chats.plainText.contains("that app is running, so it is current"))
         #expect(chats.plainText.contains("- «Family» · group · id 120363000@g.us · pinned · 2 unread"))
         let read = await tools[1].handler(.object(["chat": .string("Family")]))
         #expect(!read.isError)
@@ -160,56 +236,55 @@ import Testing
         #expect(lines.first?.contains("hearts") == true, "oldest first")
         let search = await tools[0].handler(.object(["text": .string("six")]))
         #expect(search.plainText.contains("in «Sarah Lee» (id 15550001111@s.whatsapp.net)"))
-        #expect(page.calls.isEmpty, "the page isn't needed")
+        #expect(page.calls.isEmpty, "the tab isn't needed")
     }
 
-    @Test func readingFallsBackToTheLinkedDevice() async {
+    @Test func readingUsesTheTabWhenTheAppIsntRunning() async throws {
+        let store = try WhatsAppStore(url: try WhatsAppStoreTests.make())
         let page = FakePage()
         page.answers["chats"] = .object(["total": .number(1), "chats": .array([Self.sarah])])
-        let tools = WhatsAppCapability.readTools(store: { nil }, page: page)
+        let window = FakeWindow()
+        let tools = WhatsAppCapability.readTools(store: { store }, page: page, window: window)
         let r = await tools[0].handler(.object([:]))
-        #expect(r.plainText.contains("Latchkey's own WhatsApp device") && r.plainText.contains("«Sarah Lee» · person"))
-        page.state = .notLinked
-        let none = await tools[0].handler(.object([:]))
-        #expect(none.isError && none.plainText.contains("isn't linked to Latchkey either"))
+        #expect(r.plainText.contains("From WhatsApp Web in Safari") && r.plainText.contains("«Sarah Lee» · person"))
+        page.state = .unavailable(SafariWhatsApp.noTab)
+        let old = await tools[0].handler(.object([:]))
+        #expect(old.plainText.contains("which is out of date") && old.plainText.contains("«Family»"))
+        let none = await WhatsAppCapability.readTools(store: { nil }, page: page, window: window)[0].handler(
+            .object([:]))
+        #expect(none.isError && none.plainText.contains("WhatsApp Web isn't open in Safari"))
     }
 
-    @Test func aChatNameMatchingSeveralIsAsked() async throws {
+    @Test func aChatNameMatchingNoneSaysSo() async throws {
         let store = try WhatsAppStore(url: try WhatsAppStoreTests.make())
-        let tools = WhatsAppCapability.readTools(store: { store }, page: FakePage())
+        let window = FakeWindow()
+        window.isRunning = true
+        let tools = WhatsAppCapability.readTools(store: { store }, page: FakePage(), window: window)
         let r = await tools[1].handler(.object(["chat": .string("nobody here")]))
         #expect(r.isError && r.plainText.contains("No WhatsApp chat matches"))
     }
 
-    @Test func linkingGivesTheCodeToType() async {
-        let page = FakePage()
-        page.state = .notLinked
-        page.answers["linkByPhone"] = .object(["code": .string("ABCD-EFGH")])
-        let link = WhatsAppCapability.writeTools(page: page)[1]
-        let r = await link.handler(.object(["number": .string("+1 (415) 555-0100")]))
-        #expect(!r.isError && r.plainText.contains("type the code ABCD-EFGH") && r.plainText.contains("terms forbid"))
-        #expect(page.calls.last?.1["number"]?.stringValue == "14155550100")
-        page.state = .connected
-        #expect(await link.handler(.object(["number": .string("14155550100")])).plainText.contains("already linked"))
-        #expect(await link.handler(.object(["number": .string("12")])).isError)
-    }
-
-    /// Security review 2026-11-03: only WhatsApp Web over https gets messages and files.
-    @Test func onlyWhatsAppWebIsThePage() {
-        #expect(WhatsAppPage.isWhatsApp(URL(string: "https://web.whatsapp.com/")))
-        #expect(WhatsAppPage.isWhatsApp(URL(string: "https://web.whatsapp.com/send?phone=1")))
-        #expect(!WhatsAppPage.isWhatsApp(URL(string: "http://web.whatsapp.com/")))
-        #expect(!WhatsAppPage.isWhatsApp(URL(string: "https://web.whatsapp.com.example.com/")))
-        #expect(!WhatsAppPage.isWhatsApp(URL(string: "https://example.com/web.whatsapp.com")))
-        #expect(!WhatsAppPage.isWhatsApp(nil))
-    }
-
+    /// FR-1206: nothing links a device; the only tools are finding, reading, and sending.
     @Test func offHasNoToolsAndReadOnlyCannotSend() {
         let registry = CapabilityRegistry(
             capabilities: [WhatsAppCapability.make()], levels: [CapabilityRegistry.whatsapp: .readOnly])
         #expect(registry.tools.map(\.name) == ["whatsapp_find", "whatsapp_read"])
+        var all = registry
+        all.setLevel(CapabilityRegistry.whatsapp, .readWrite)
+        #expect(all.tools.map(\.name) == ["whatsapp_find", "whatsapp_read", "whatsapp_send"])
         var off = registry
         off.setLevel(CapabilityRegistry.whatsapp, .off)
         #expect(off.tools.isEmpty)
+    }
+
+    /// The link WhatsApp for Mac opens keeps the text as written.
+    @Test func theWindowsLinkKeepsTheText() {
+        let url = LiveWhatsAppWindow.link(number: "+1 (555) 000-1111", text: "1+1=2 & more?\nyes #1")
+        #expect(url?.absoluteString.hasPrefix("whatsapp://send?phone=15550001111&text=") == true)
+        let text = url.flatMap { URLComponents(url: $0, resolvingAgainstBaseURL: false) }?.queryItems?.first {
+            $0.name == "text"
+        }?.value
+        #expect(text == "1+1=2 & more?\nyes #1")
+        #expect(LiveWhatsAppWindow.same("on  my\nway ", "on my way"))
     }
 }

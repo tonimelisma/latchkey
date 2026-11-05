@@ -1,8 +1,9 @@
 import Foundation
 import UniformTypeIdentifiers
 
-/// WhatsApp (spec 012): reading from WhatsApp for Mac's database when it is on the Mac, otherwise
-/// from Latchkey's own linked device; sending always through that device, locked or not.
+/// WhatsApp (spec 012): through what the Owner linked themself. Reading from WhatsApp for Mac's
+/// database while it runs, else the Owner's WhatsApp Web tab in Safari; sending through that tab,
+/// else WhatsApp for Mac's window (text to a person, Mac unlocked).
 enum WhatsAppCapability {
     /// Opens the desktop app's database on first use; nil when it isn't there or can't be read.
     typealias StoreSource = @Sendable () -> WhatsAppStore?
@@ -11,20 +12,21 @@ enum WhatsAppCapability {
         let opener = Opener()
         return Capability(
             id: CapabilityRegistry.whatsapp, title: "WhatsApp", summary: "Read, search, and send WhatsApp messages",
-            readTools: readTools(store: { opener.store() }, page: LiveWhatsAppPage()),
-            writeTools: writeTools(page: LiveWhatsAppPage()))
+            readTools: readTools(store: { opener.store() }, page: SafariWhatsApp(), window: LiveWhatsAppWindow()),
+            writeTools: writeTools(store: { opener.store() }, page: SafariWhatsApp(), window: LiveWhatsAppWindow()))
     }
 
     static let marking = MessagesCapability.marking
-    static let notLinked =
-        "WhatsApp isn't linked to Latchkey on this Mac. Link it from anywhere with whatsapp_link (ask the Mac's owner for their WhatsApp number), or at the Mac in Latchkey's Settings → Capabilities → WhatsApp → Link WhatsApp…"
+    static let tabLoggedOut = "WhatsApp Web in Safari on the Mac shows its log-in screen"
     static let changed =
         "WhatsApp Web changed in a way this version of Latchkey doesn't know (missing: %@). Latchkey needs an update."
     static let maxFileBytes = 64 * 1024 * 1024
 
     // MARK: reading
 
-    static func readTools(store: @escaping StoreSource, page: any WhatsAppPageAPI) -> [ToolEntry] {
+    static func readTools(store: @escaping StoreSource, page: any WhatsAppPageAPI, window: any WhatsAppWindowAPI)
+        -> [ToolEntry]
+    {
         [
             ToolEntry(
                 tool: .make(
@@ -43,7 +45,7 @@ enum WhatsAppCapability {
                     ], readOnly: true, deadlineMS: 30_000),
                 handler: { args in
                     await run {
-                        let source = try await Source.pick(store: store, page: page)
+                        let source = try await Source.pick(store: store, page: page, window: window)
                         let offset = try args.integer("offset", in: 0...Int.max) ?? 0
                         if args.hasAny("text", "since", "until") || args["chat"]?.stringValue?.isEmpty == false {
                             let limit = try limit(args, 50)
@@ -102,7 +104,7 @@ enum WhatsAppCapability {
                         guard let key = args["chat"]?.stringValue, !key.isEmpty else {
                             return .text("Say which chat to read.", isError: true)
                         }
-                        let source = try await Source.pick(store: store, page: page)
+                        let source = try await Source.pick(store: store, page: page, window: window)
                         let chat: WhatsAppChat
                         switch try await source.chat(key) {
                         case .one(let c): chat = c
@@ -124,13 +126,16 @@ enum WhatsAppCapability {
 
     // MARK: sending
 
-    static func writeTools(page: any WhatsAppPageAPI, readyWait: Duration = .seconds(20)) -> [ToolEntry] {
+    static func writeTools(
+        store: @escaping StoreSource, page: any WhatsAppPageAPI, window: any WhatsAppWindowAPI,
+        readyWait: Duration = .seconds(10), confirmWait: Duration = .seconds(15)
+    ) -> [ToolEntry] {
         [
             ToolEntry(
                 tool: .make(
                     "whatsapp_send", title: "Send a WhatsApp Message",
                     description:
-                        "Sends a WhatsApp message from the Mac owner's account, right away, even while the Mac is locked: text, files, or both. to is a chat's id from whatsapp_find, a person's or group's name, or a phone number with its country code. files are paths of files on the Mac; pictures go as photos, anything else as documents, and the text goes as the first file's caption. If a name matches several chats, nothing is sent and the choices are returned.",
+                        "Sends a WhatsApp message from the Mac owner's account, right away: through their WhatsApp Web tab in Safari (also while the Mac is locked, when Safari answers then), else through WhatsApp for Mac (text to a person, Mac unlocked). Text, files, or both. to is a chat's id from whatsapp_find, a person's or group's name, or a phone number with its country code. files are paths of files on the Mac; pictures go as photos, anything else as documents, and the text goes as the first file's caption. If a name matches several chats, nothing is sent and the choices are returned.",
                     input: [
                         "to": .stringParam("Who or which chat to send to"),
                         "text": .stringParam("The message text"),
@@ -155,117 +160,146 @@ enum WhatsAppCapability {
                         case .success(let f): files = f
                         case .failure(let why): return .text(why.message, isError: true)
                         }
+                        // The Safari tab first (FR-1215); the window only when the tab can't be used.
+                        let why: String
                         switch await page.ready(wait: readyWait) {
-                        case .connected: break
-                        case .notLinked, .notStarted: return .text(notLinked, isError: true)
+                        case .connected:
+                            return try await sendThroughTab(page: page, to: to, text: text, files: files)
                         case .changed(let gone):
                             return .text(String(format: changed, gone.joined(separator: ", ")), isError: true)
+                        case .unavailable(let reason): why = reason
+                        case .notLinked: why = tabLoggedOut
                         case .loading, .connecting:
-                            return .text(
-                                "Nothing was sent: Latchkey's WhatsApp isn't connected to WhatsApp right now (it tried for \(readyWait.components.seconds) seconds). The Mac may be offline, or WhatsApp may be down; try again in a minute."
-                                    + (await shows(page)),
-                                isError: true)
+                            why =
+                                "WhatsApp Web in Safari isn't connected to WhatsApp right now (it was checked for \(readyWait.components.seconds) seconds)"
+                                + (await shows(page))
                         }
-                        let found = try await page.call("resolve", .object(["to": .string(to)]), timeout: .seconds(10))
-                        if case .array(let list) = found["candidates"] {
-                            return .text(several(to, list.map(chatFromPage)), isError: true)
-                        }
-                        guard let match = found["match"], let id = match["id"]?.stringValue else {
-                            return .text(
-                                "Nothing was sent: no WhatsApp chat matches \(quote(to)). Find it with whatsapp_find, or give a phone number with its country code.",
-                                isError: true)
-                        }
-                        let target = chatFromPage(match)
-                        let answer = try await page.call(
-                            "send",
-                            .object([
-                                "chat": .string(id), "text": text.isEmpty ? .null : .string(text),
-                                "files": .array(files),
-                                "timeoutMs": .number(30_000),
-                            ]), timeout: .seconds(38))
-                        let label = "\(target.isGroup ? "the group " : "")\(quote(target.name))"
-                        if let error = answer["error"]?.stringValue {
-                            return .text("WhatsApp refused it for \(label): \(error)", isError: true)
-                        }
-                        var parts: [String] = []
-                        var unconfirmed: [String] = []
-                        if case .array(let results) = answer["results"] {
-                            for r in results {
-                                let what = r["file"]?.stringValue.map { "the file \(quote($0))" } ?? "the text"
-                                if r["sent"]?.boolValue == true {
-                                    parts.append("\(what) (\(ack(r["ack"]?.numberValue ?? 1)))")
-                                } else {
-                                    unconfirmed.append(what)
-                                }
-                            }
-                        }
-                        let what = text.isEmpty ? "" : " «\(text)»"
-                        if !unconfirmed.isEmpty || answer["incomplete"]?.boolValue == true {
-                            var r = ToolResult.text(
-                                "WhatsApp hasn't confirmed \(unconfirmed.joined(separator: " and ")) for \(label). It may or may not have gone; check with whatsapp_read before sending again."
-                                    + (parts.isEmpty ? "" : " Confirmed: \(parts.joined(separator: ", ")).") + "",
-                                isError: true)
-                            r.alsoDone =
-                                parts.isEmpty ? nil : "Claude sent part of a WhatsApp message to \(target.name)"
-                            return r
-                        }
-                        var r = ToolResult.text("Sent to \(label)\(what): \(parts.joined(separator: ", ")).")
-                        r.activity = "Claude sent a WhatsApp message to \(target.name)"
-                        return r
+                        return try await sendThroughWindow(
+                            store: store, window: window, to: to, text: text, files: files, tabProblem: why,
+                            confirmWait: confirmWait)
                     }
-                }),
-            ToolEntry(
-                tool: .make(
-                    "whatsapp_link", title: "Link WhatsApp",
-                    description:
-                        "Links WhatsApp to Latchkey from anywhere, so whatsapp_send works: gets an 8-character code from WhatsApp for the Mac owner to type on their phone. Ask the owner for their WhatsApp phone number with its country code first, and tell them what the answer says. Use only when another WhatsApp tool says WhatsApp isn't linked.",
-                    input: ["number": .stringParam("The Mac owner's WhatsApp phone number, with its country code")],
-                    required: ["number"], readOnly: false, deadlineMS: 60_000),
-                handler: { args in
-                    await run {
-                        let number = (args["number"]?.stringValue ?? "").filter(\.isNumber)
-                        guard number.count >= 7 else {
-                            return .text("Give the owner's WhatsApp number with its country code.", isError: true)
-                        }
-                        switch await page.startForLinking(wait: .seconds(25)) {
-                        case .connected: return .text("WhatsApp is already linked to Latchkey; nothing to do.")
-                        case .changed(let gone):
-                            return .text(String(format: changed, gone.joined(separator: ", ")), isError: true)
-                        case .notLinked: break
-                        default:
-                            return .text(
-                                "WhatsApp Web didn't load on the Mac; try again in a minute." + (await shows(page)),
-                                isError: true)
-                        }
-                        let a = try await page.call(
-                            "linkByPhone", .object(["number": .string(number)]), timeout: .seconds(30))
-                        guard let code = a["code"]?.stringValue else {
-                            return .text(
-                                "WhatsApp didn't give a code: \(a["error"]?.stringValue ?? "no answer"). Try again, or link at the Mac in Latchkey's Settings → Capabilities → WhatsApp.",
-                                isError: true)
-                        }
-                        var r = ToolResult.text(
-                            """
-                            Tell the owner: on your phone, open WhatsApp → Settings → Linked Devices → Link a Device → Link with phone number instead, and type the code \(code). It works for a few minutes; Latchkey is linked once it's typed, and whatsapp_send then works even while the Mac is locked.
-                            Also tell them: \(linkWarning)
-                            """)
-                        r.activity = "Claude asked WhatsApp for a code to link Latchkey"
-                        return r
-                    }
-                }),
+                })
         ]
     }
 
-    /// FR-1232, said before linking (the linking window shows the same).
+    private static func sendThroughTab(page: any WhatsAppPageAPI, to: String, text: String, files: [JSONValue])
+        async throws -> ToolResult
+    {
+        let found = try await page.call("resolve", .object(["to": .string(to)]), timeout: .seconds(10))
+        if case .array(let list) = found["candidates"] {
+            return .text(several(to, list.map(chatFromPage)), isError: true)
+        }
+        guard let match = found["match"], let id = match["id"]?.stringValue else {
+            return .text(
+                "Nothing was sent: no WhatsApp chat matches \(quote(to)). Find it with whatsapp_find, or give a phone number with its country code.",
+                isError: true)
+        }
+        let target = chatFromPage(match)
+        let answer = try await page.call(
+            "send",
+            .object([
+                "chat": .string(id), "text": text.isEmpty ? .null : .string(text), "files": .array(files),
+                "timeoutMs": .number(30_000),
+            ]), timeout: .seconds(38))
+        let label = "\(target.isGroup ? "the group " : "")\(quote(target.name))"
+        if let error = answer["error"]?.stringValue {
+            return .text("WhatsApp refused it for \(label): \(error)", isError: true)
+        }
+        var parts: [String] = []
+        var unconfirmed: [String] = []
+        if case .array(let results) = answer["results"] {
+            for r in results {
+                let what = r["file"]?.stringValue.map { "the file \(quote($0))" } ?? "the text"
+                if r["sent"]?.boolValue == true {
+                    parts.append("\(what) (\(ack(r["ack"]?.numberValue ?? 1)))")
+                } else {
+                    unconfirmed.append(what)
+                }
+            }
+        }
+        let what = text.isEmpty ? "" : " «\(text)»"
+        // A send that may have gone is never tried again through the window (FR-1216).
+        if !unconfirmed.isEmpty || answer["incomplete"]?.boolValue == true {
+            var r = ToolResult.text(
+                "WhatsApp hasn't confirmed \(unconfirmed.joined(separator: " and ")) for \(label). It may or may not have gone; check with whatsapp_read before sending again."
+                    + (parts.isEmpty ? "" : " Confirmed: \(parts.joined(separator: ", ")).") + "",
+                isError: true)
+            r.alsoDone = parts.isEmpty ? nil : "Claude sent part of a WhatsApp message to \(target.name)"
+            return r
+        }
+        var r = ToolResult.text(
+            "Sent to \(label)\(what) through WhatsApp Web in Safari: \(parts.joined(separator: ", ")).")
+        r.activity = "Claude sent a WhatsApp message to \(target.name)"
+        return r
+    }
+
+    /// WhatsApp for Mac's window (plan D3): text to a person, Mac unlocked, confirmed in its database.
+    private static func sendThroughWindow(
+        store: StoreSource, window: any WhatsAppWindowAPI, to: String, text: String, files: [JSONValue],
+        tabProblem: String, confirmWait: Duration
+    ) async throws -> ToolResult {
+        func nothing(_ why: String) -> ToolResult {
+            .text("Nothing was sent: \(tabProblem), and \(why).", isError: true)
+        }
+        guard files.isEmpty else { return nothing("WhatsApp for Mac can take only text from Latchkey") }
+        if let why = await window.unusable() { return nothing(why) }
+        let number: String
+        var name: String
+        if to.range(of: #"^[+\d\s().-]+$"#, options: .regularExpression) != nil, to.filter(\.isNumber).count >= 7 {
+            number = to.filter(\.isNumber)
+            name = to
+        } else {
+            guard let db = store() else {
+                return nothing("WhatsApp for Mac needs a phone number, and its chats can't be read to find one")
+            }
+            switch try db.chat(to) {
+            case .several(let list): return .text(several(to, list), isError: true)
+            case .none:
+                return nothing("no WhatsApp chat matches \(quote(to)); give a phone number with its country code")
+            case .one(let chat):
+                guard !chat.isGroup, chat.id.hasSuffix("@s.whatsapp.net") else {
+                    return nothing(
+                        "WhatsApp for Mac can be sent only to a person known by phone number, and \(quote(chat.name)) isn't one"
+                    )
+                }
+                number = String(chat.id.prefix { $0 != "@" })
+                name = chat.name
+            }
+        }
+        let started = Date()
+        try await window.send(number: number, text: text)
+        // The message from the Owner, with this text, in WhatsApp for Mac's database.
+        let end = ContinuousClock.now + confirmWait
+        while ContinuousClock.now < end {
+            if let db = store(),
+                let recent = try? db.messages(chat: "\(number)@s.whatsapp.net", before: nil, limit: 5),
+                recent.contains(where: {
+                    $0.fromMe && LiveWhatsAppWindow.same($0.text, text) && $0.date >= started.addingTimeInterval(-5)
+                })
+            {
+                var r = ToolResult.text("Sent to \(quote(name)) «\(text)» through WhatsApp for Mac (sent).")
+                r.activity = "Claude sent a WhatsApp message to \(name)"
+                return r
+            }
+            try await Task.sleep(for: .milliseconds(500))
+        }
+        var r = ToolResult.text(
+            "WhatsApp for Mac hasn't confirmed the text for \(quote(name)) (Return was pressed in its chat). It may or may not have gone; check with whatsapp_read before sending again.",
+            isError: true)
+        r.alsoDone = "Claude may have sent a WhatsApp message to \(name)"
+        return r
+    }
+
     /// What the unconnected page shows (WhatsApp's own loading or sync screen), so an answer says
     /// why, e.g. a sync waiting for the phone (2026-11-04). Empty when there is nothing to say.
     static func shows(_ page: any WhatsAppPageAPI) async -> String {
         guard let a = try? await page.call("screen", .object([:]), timeout: .seconds(3)),
             let t = a["text"]?.stringValue, !t.isEmpty
         else { return "" }
-        return " WhatsApp Web on the Mac shows: «\(t)»."
+        return "; it shows «\(t)»"
     }
 
+    /// FR-1232, in Settings.
     static let linkWarning =
         "WhatsApp's terms forbid automated messaging. Latchkey sends only what you ask Claude to send, but WhatsApp could still limit or ban your account, though that is unlikely for personal use."
 
@@ -313,34 +347,47 @@ enum WhatsAppCapability {
 
     // MARK: sources (FR-1221)
 
-    /// Where reading comes from: the desktop app's database, or Latchkey's own device.
+    /// Where reading comes from (FR-1222): WhatsApp for Mac's database while it runs, else the
+    /// Safari tab, else the database marked with its age.
     struct Source: Sendable {
         var store: WhatsAppStore?
         var page: (any WhatsAppPageAPI)?
-        var oldest: Date?
+        var current = true
 
-        static func pick(store: StoreSource, page: any WhatsAppPageAPI) async throws -> Source {
-            if let s = store() { return Source(store: s) }
-            switch await page.ready(wait: .seconds(15)) {
+        static func pick(store: StoreSource, page: any WhatsAppPageAPI, window: any WhatsAppWindowAPI) async throws
+            -> Source
+        {
+            let db = store()
+            if let db, window.running() { return Source(store: db) }
+            let state = await page.ready(wait: .seconds(10))
+            switch state {
             case .connected, .connecting: return Source(page: page)
-            case .changed(let gone): throw Problem(String(format: changed, gone.joined(separator: ", ")))
-            case .notLinked, .notStarted:
-                throw Problem(
-                    "WhatsApp for Mac isn't on this Mac (or Latchkey can't read it: Full Disk Access), and WhatsApp isn't linked to Latchkey either. The Mac's owner can link it in Latchkey's Settings → Capabilities → WhatsApp → Link WhatsApp…"
-                )
-            case .loading:
-                throw Problem("Latchkey's WhatsApp is still starting; try again in a moment." + (await shows(page)))
+            case .changed(let gone) where db == nil:
+                throw Problem(String(format: changed, gone.joined(separator: ", ")))
+            default: break
             }
+            if let db { return Source(store: db, current: false) }
+            let tab: String
+            switch state {
+            case .unavailable(let why): tab = why
+            case .notLinked: tab = tabLoggedOut
+            default: tab = "WhatsApp Web in Safari isn't connected to WhatsApp right now" + (await shows(page))
+            }
+            throw Problem(
+                "WhatsApp can't be read: \(tab), and WhatsApp for Mac isn't on this Mac (or Latchkey can't read it: Full Disk Access)."
+            )
         }
 
         var note: String {
             if let store {
                 let newest =
                     (try? store.newest()).flatMap { $0 }.map { " Its newest message is from \(format($0))." } ?? ""
-                return "(From WhatsApp for Mac's database, which is current only while that app is open.\(newest))"
+                return current
+                    ? "(From WhatsApp for Mac's database; that app is running, so it is current.\(newest))"
+                    : "(From WhatsApp for Mac's database, which is out of date: WhatsApp for Mac isn't running and WhatsApp Web isn't usable in Safari.\(newest))"
             }
             return
-                "(From Latchkey's own WhatsApp device; it holds less history than the phone, often only the last few months.)"
+                "(From WhatsApp Web in Safari; it may hold less history than the phone, often only the last few months.)"
         }
 
         func chats(query: String?, unread: Bool, limit: Int, offset: Int) async throws -> (
@@ -470,10 +517,10 @@ enum WhatsAppCapability {
             return .text(a.message, isError: true)
         } catch WhatsAppPageError.timedOut {
             return .text(
-                "Latchkey's WhatsApp didn't answer in time. If this was a send, it may or may not have gone; check with whatsapp_read before sending again.",
+                "WhatsApp Web in Safari didn't answer in time. If this was a send, it may or may not have gone; check with whatsapp_read before sending again.",
                 isError: true)
         } catch WhatsAppPageError.failed(let why) {
-            return .text("Latchkey's WhatsApp couldn't do it: \(why).", isError: true)
+            return .text("WhatsApp Web in Safari couldn't do it: \(why).", isError: true)
         } catch WhatsAppStore.Failure.unknownLayout(let why) {
             return .text(
                 "This version of WhatsApp for Mac stores messages in a way Latchkey doesn't know yet (\(why)).",

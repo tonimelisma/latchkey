@@ -129,7 +129,14 @@ struct CapabilitiesPane: View {
                 }
             }
             if model.capabilities.level(CapabilityRegistry.whatsapp) != .off {
-                Section("WhatsApp") { WhatsAppLinkRow() }
+                Section("WhatsApp") {
+                    // Spec 012 FR-1232.
+                    Text(
+                        "Claude uses WhatsApp Web in Safari (keep a tab at web.whatsapp.com open and logged in), and WhatsApp for Mac when it's installed. \(WhatsAppCapability.linkWarning)"
+                    )
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                }
             }
             Section("Browser") {
                 Picker(selection: $browserPlace) {

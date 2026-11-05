@@ -155,3 +155,23 @@ A signed test app kept the page open and took commands; it logged the page's sta
 - Linked devices: how many are allowed, whether they keep working while the phone is offline, and
   when they are logged out: not yet checked (WhatsApp's Help Center page didn't load for the
   fetcher).
+
+## 2026-11-04: what linking Latchkey's own device cost
+
+- Five link codes for Toni's number in two days, two test devices linked and deleted, a
+  storage-copy attempt, and Latchkey's device dropping and relinking (a watchdog reload and two
+  app installs during the first history sync, a 10-minute self-delete). After that WhatsApp
+  logged out every linked device of the account; the phone stayed logged in.
+- WhatsApp's help pages: a restricted account (spam, automation) "may also be logged out of some
+  companion devices" (https://faq.whatsapp.com/717472490411581); linking an account to an
+  unofficial app "may result in a temporary or permanent account ban"
+  (https://faq.whatsapp.com/1848531392146538); the Messaging Guidelines list "unofficial clients
+  … auto-messaging … or automation" as abuse (https://www.whatsapp.com/legal/messaging-guidelines).
+- A new linked device's first history sync stops when WhatsApp isn't open on the phone ("Keep app
+  open on both devices"); while it waited, the page wasn't connected and sends failed.
+- So Latchkey links nothing (spec FR-1206). The options weighed with Toni: WhatsApp for Mac's
+  database (no network, safe), its window (the official app, unlocked only), the Owner's Safari
+  tab (no new linking; scripted, medium risk), Latchkey's own device (withdrawn), WhatsApp's
+  business service (not from the Owner's number).
+- Safari while locked: on 2026-11-01 Safari stopped answering scripts with the Mac locked
+  (spec 005); whether a WhatsApp send through the tab works locked is part of the live check.

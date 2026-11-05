@@ -98,27 +98,18 @@ typed and read back, typing into a page's text refused with where the focus is, 
 changing nothing else, and keys without a reference saying where they went. 0.8.107 and 0.8.108 look again
 when a first look finds only the title bar (an app that had not built its tree yet); a cold FormLab's first look listed its whole page live on 0.8.108.
 
-WhatsApp (spec 012) built and installed in 0.8.101, with the page kept to WhatsApp Web in 0.8.102
-and linking by code made reliable in 0.8.103 (the first press of "Log in with phone number" did
-nothing in Latchkey's page; it is now pressed until the field shows; code FH7P-WNWV given live)
-(2026-11-03). Four tools: `whatsapp_find`
-and `whatsapp_read` read WhatsApp for Mac's database when it is on the Mac (works locked; current
-only while that app is open; pinned chats and privacy-id senders handled), else Latchkey's own
-linked device; `whatsapp_send` sends to people and groups, text, photos, and files, through
-Latchkey's own linked device (WhatsApp Web in a hidden page, driven through WhatsApp Web's own
-functions), right away, locked or not; `whatsapp_link` links from anywhere with a code typed on
-the phone. Settings → Capabilities has Link WhatsApp… and Unlink…; Off unlinks. Proven in tests
-on this Mac (research.md): locked sends of text, photo, and file read within about a second; a
-page stuck "Connecting" overnight for 7 hours was fixed by a reload (the watchdog now reloads).
-Checked live through the hosted relay: listing chats, reading a group, getting a link code. Not
-yet checked live: sending through Latchkey's own device, because Toni hasn't typed a link code
-yet: the page's watchdog reloaded it while a code waited, so the phone said it couldn't
-find the device (fixed in 0.8.111: no reload for 10 minutes after a link starts). Next: Toni links (in any Claude app: "link my WhatsApp to
-Latchkey" with his number, then types the code), then a live send unlocked and locked. The test
-devices of 2026-11-02 and 2026-11-03 are logged out and deleted. Install note: the audit check
-now reports one `mail_find` from another session (16:29:15Z) as missing on the Mac: it was
-running when an install quit the app, and a call cut off by a quit never reaches the activity
-log (a gap that predates WhatsApp).
+WhatsApp (spec 012) rebuilt 2026-11-04 without a device of Latchkey's own (Toni). The first
+design (0.8.101 to 0.8.114) linked Latchkey as its own WhatsApp device: it sent text, a photo and
+a file live, then its first history sync paused, it dropped after two app installs, and WhatsApp
+logged out every linked device of Toni's account (his phone stayed logged in), most likely
+because of two days of link codes and test devices on his number (research.md). Now three
+tools: `whatsapp_find` and `whatsapp_read` read WhatsApp for Mac's database while that app runs,
+else the Owner's WhatsApp Web tab in Safari, else the database marked out of date;
+`whatsapp_send` sends through that Safari tab (people and groups, text, photos, files; never
+selecting, reloading, or closing it), else WhatsApp for Mac's window (text to a person, Mac
+unlocked; the window comes to the front for a moment). The old device's stored data is deleted
+at the first start. Tested in unit tests; the live check (one message per way, Toni: today)
+needs Toni to log in to WhatsApp Web in Safari and relink WhatsApp for Mac.
 
 Calls cut off by the app stopping (bug report follow-up 2026-11-03; spec 001 FR-666 to FR-668,
 plan D27): built on a branch, not yet installed. A quit records every call still running as cut

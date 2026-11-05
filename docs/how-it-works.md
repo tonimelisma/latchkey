@@ -44,13 +44,13 @@ Claude (web, Desktop, phone)  ──HTTPS──▶  Latchkey relay  ◀──out
   your Mac, and you can remove any one of them.
 - **You choose what Claude can do.** Each capability has a level in Latchkey's Settings window; a capability that's
   off doesn't exist as far as Claude knows. Most have Off, Read only, and Read & write; Shell and
-  Location & Maps are Off or On. Claude sees 32 tools from a Mac, plus the relay's `machines`:
+  Location & Maps are Off or On. Claude sees 31 tools from a Mac, plus the relay's `machines`:
 
   | Capability | Read only | Read & write adds |
   |---|---|---|
   | Notes | `notes_find`, `notes_read` | `notes_change` (create, append, replace, edit, rename, move between folders, create folders, delete notes or folders to Recently Deleted) |
   | Messages | `messages_find`, `messages_read` | `messages_send` (text and files) |
-  | WhatsApp (reads WhatsApp for Mac's database when it's there, else Latchkey's own linked device) | `whatsapp_find`, `whatsapp_read` | `whatsapp_send` (people and groups, text, photos, files; right away, even while the Mac is locked), `whatsapp_link` (links Latchkey from anywhere with a code typed on the phone) |
+  | WhatsApp (WhatsApp for Mac's database while it runs, else the Owner's WhatsApp Web tab in Safari; Latchkey links nothing of its own) | `whatsapp_find`, `whatsapp_read` | `whatsapp_send` (through the Safari tab: people and groups, text, photos, files, also while locked when Safari answers; else WhatsApp for Mac's window: text to a person, Mac unlocked) |
   | Files | `files_find`, `files_read` (text, PDFs, documents, images) | `files_change` (write, edit, folders, move, copy, Trash) |
   | Shell | | `shell_run`, `shell_check` (long and interactive commands; writes fenced, leftovers removed) |
   | Browser (your Safari, your logins; while locked, Latchkey's own browser with your Safari logins) | `browser_read` | `browser_act` (click, type, script, close Claude's page) |
