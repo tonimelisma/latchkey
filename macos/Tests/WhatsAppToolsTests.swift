@@ -66,6 +66,11 @@ import Testing
         page.state = .connecting
         r = await send(page, .object(["to": .string("Sarah"), "text": .string("hi")]))
         #expect(r.isError && r.plainText.hasPrefix("Nothing was sent: Latchkey's WhatsApp isn't connected"))
+        // The page's own screen says why, e.g. a history sync waiting for the phone.
+        page.answers["screen"] = .object(["text": .string("Syncing chats. Keep WhatsApp open on your phone.")])
+        r = await send(page, .object(["to": .string("Sarah"), "text": .string("hi")]))
+        #expect(r.plainText.contains("shows: «Syncing chats. Keep WhatsApp open on your phone.»"))
+        page.answers["screen"] = nil
         page.state = .changed(["WAWebPrepRawMedia"])
         r = await send(page, .object(["to": .string("Sarah"), "text": .string("hi")]))
         #expect(r.isError && r.plainText.contains("WAWebPrepRawMedia") && r.plainText.contains("needs an update"))

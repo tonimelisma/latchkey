@@ -162,7 +162,8 @@ enum WhatsAppCapability {
                             return .text(String(format: changed, gone.joined(separator: ", ")), isError: true)
                         case .loading, .connecting:
                             return .text(
-                                "Nothing was sent: Latchkey's WhatsApp isn't connected to WhatsApp right now (it tried for \(readyWait.components.seconds) seconds). The Mac may be offline, or WhatsApp may be down; try again in a minute.",
+                                "Nothing was sent: Latchkey's WhatsApp isn't connected to WhatsApp right now (it tried for \(readyWait.components.seconds) seconds). The Mac may be offline, or WhatsApp may be down; try again in a minute."
+                                    + (await shows(page)),
                                 isError: true)
                         }
                         let found = try await page.call("resolve", .object(["to": .string(to)]), timeout: .seconds(10))
@@ -232,7 +233,9 @@ enum WhatsAppCapability {
                             return .text(String(format: changed, gone.joined(separator: ", ")), isError: true)
                         case .notLinked: break
                         default:
-                            return .text("WhatsApp Web didn't load on the Mac; try again in a minute.", isError: true)
+                            return .text(
+                                "WhatsApp Web didn't load on the Mac; try again in a minute." + (await shows(page)),
+                                isError: true)
                         }
                         let a = try await page.call(
                             "linkByPhone", .object(["number": .string(number)]), timeout: .seconds(30))
@@ -254,6 +257,15 @@ enum WhatsAppCapability {
     }
 
     /// FR-1232, said before linking (the linking window shows the same).
+    /// What the unconnected page shows (WhatsApp's own loading or sync screen), so an answer says
+    /// why, e.g. a sync waiting for the phone (2026-11-04). Empty when there is nothing to say.
+    static func shows(_ page: any WhatsAppPageAPI) async -> String {
+        guard let a = try? await page.call("screen", .object([:]), timeout: .seconds(3)),
+            let t = a["text"]?.stringValue, !t.isEmpty
+        else { return "" }
+        return " WhatsApp Web on the Mac shows: «\(t)»."
+    }
+
     static let linkWarning =
         "WhatsApp's terms forbid automated messaging. Latchkey sends only what you ask Claude to send, but WhatsApp could still limit or ban your account, though that is unlikely for personal use."
 
@@ -316,7 +328,8 @@ enum WhatsAppCapability {
                 throw Problem(
                     "WhatsApp for Mac isn't on this Mac (or Latchkey can't read it: Full Disk Access), and WhatsApp isn't linked to Latchkey either. The Mac's owner can link it in Latchkey's Settings → Capabilities → WhatsApp → Link WhatsApp…"
                 )
-            case .loading: throw Problem("Latchkey's WhatsApp is still starting; try again in a moment.")
+            case .loading:
+                throw Problem("Latchkey's WhatsApp is still starting; try again in a moment." + (await shows(page)))
             }
         }
 

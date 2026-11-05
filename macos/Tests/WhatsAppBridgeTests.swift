@@ -141,6 +141,15 @@ import WebKit
             ))
     }
 
+    /// The screen's words come back only while no chats show, so no message text leaves.
+    @Test func screenTellsALoadingPageButNeverChats() async throws {
+        let w = try await page()
+        _ = try await js(w, "document.body.innerHTML = '<div>Loading your chats</div><div>45%</div>'")
+        #expect(try await call(w, "screen")["text"] == .string("Loading your chats 45%"))
+        _ = try await js(w, "document.body.innerHTML = '<div id=\"pane-side\">Sarah: see you</div>'")
+        #expect(try await call(w, "screen")["text"] == .string(""))
+    }
+
     @Test func chatsAreNewestFirstAndFiltered() async throws {
         let w = try await page()
         let all = try await call(w, "chats", .object(["limit": .number(10)]))

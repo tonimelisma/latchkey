@@ -85,6 +85,14 @@ enum WhatsAppBridge {
           window.__latchkey = {
             version: 1,
 
+            // The words on screen while no chats show (a loading or sync screen), for answers
+            // that say why WhatsApp isn't connected. Never while chats show: no message text.
+            screen() {
+              if (document.querySelector('#pane-side')) return { text: '' };
+              const t = (document.body ? document.body.innerText : '').replace(/\s+/g, ' ').trim();
+              return { text: t.slice(0, 200) };
+            },
+
             // Linked, connected, and whether this WhatsApp Web still has what Latchkey uses.
             state() {
               const gone = missing();

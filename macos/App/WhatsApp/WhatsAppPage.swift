@@ -167,6 +167,7 @@ final class WhatsAppPage: NSObject, WKNavigationDelegate {
             if Self.shouldReload(
                 next, now: now, loadedAt: loadedAt, unconnectedSince: unconnectedSince, linkingUntil: linkingUntil)
             {
+                EventLog.shared.record(.app, "WhatsApp: still loading after 90 seconds; reloading the page")
                 load()
             }
         case .notLinked:
@@ -238,6 +239,7 @@ final class WhatsAppPage: NSObject, WKNavigationDelegate {
             case .notLinked, .changed: return s
             case .connecting where !reloaded && Date() >= linkingUntil:
                 reloaded = true
+                EventLog.shared.record(.app, "WhatsApp: not connected when a tool needed it; reloading the page")
                 load()
             default: break
             }
