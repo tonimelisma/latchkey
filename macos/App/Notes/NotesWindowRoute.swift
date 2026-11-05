@@ -28,6 +28,14 @@ extension NotesCapability {
                 "The Mac is locked. Notes lets Latchkey change notes with checklists, links, or images only through its window, and macOS doesn't show a note there while the Mac is locked. Nothing was changed; it works again once someone unlocks the Mac. Plain notes can still be changed, and new notes made."
         )
 
+        /// Why ☐/☑ stayed, for an answer whose change itself did happen.
+        var boxes: String {
+            " Its checklist items are ☐ and ☑ characters for now: "
+                + (message == Self.locked.message
+                    ? "the Mac is locked, and Notes makes real checklists only in its window. Ask again once the Mac is unlocked."
+                    : message)
+        }
+
         static let unavailable = WindowFailure(
             message:
                 "Notes' window couldn't show the note: Notes may be hidden or minimized, the Mac may be locked or asleep, or Latchkey may not be allowed to use Accessibility (Latchkey's Settings → Permissions)."

@@ -73,7 +73,9 @@ As an Owner, I set Notes and Messages each to Off, Read only, or Read & write in
 - **FR-102** While Notes is Read & write, Claude shall be able to create a note (optionally in a
   folder), append to a note, replace a note's text, edit a passage of a note, and delete a note
   (edit added by Toni, 2026-10-22).
-- **FR-103** Deleting a note shall move it to Recently Deleted, never erase it.
+- **FR-103** Deleting a note shall move it to Recently Deleted, never erase it. It shall be
+  answered as deleted only once Notes' own database shows it gone (2026-11-04: with the Mac
+  locked, Notes' scripting dropped a note its database still listed).
 - **FR-152** While Notes is Read & write, Claude shall be able to delete a folder; its notes shall
   move to Recently Deleted (FR-103). The account's default folder and a folder with folders
   inside it shall not be deleted (Toni, 2026-10-27: an empty "Latchkey Check" folder was left).

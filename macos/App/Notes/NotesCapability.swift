@@ -242,7 +242,6 @@ enum NotesCapability {
                         var made = newFolder ? " The folder “\(folder)” was new and has been made." : ""
                         if hasChecklistItems(text) {
                             // FR-156: written as ☐/☑ lines, made real in Notes' window (FR-158: kept so without it).
-                            let boxes = " Its checklist items are ☐ and ☑ characters for now."
                             if let id {
                                 do {
                                     let last = lastShownLine(text)
@@ -260,10 +259,14 @@ enum NotesCapability {
                                         (try? await s.read(id: id))?.hasChecklists == true
                                     }
                                 } catch let f as WindowFailure {
-                                    made += boxes + " " + f.message
+                                    made += f.boxes
                                 }
                             } else {
-                                made += boxes + " Notes hadn't saved the new note yet to make them real ones."
+                                made +=
+                                    WindowFailure(
+                                        message: "Notes hadn't saved the new note yet to make them real ones."
+                                    )
+                                    .boxes
                             }
                         }
                         var result = ToolResult.data(
@@ -529,6 +532,21 @@ enum NotesCapability {
                         }
                         let note = try await s.read(id: id)
                         _ = try await scripts.run(Script.delete, [note.scriptID])
+                        // Said deleted only once Notes' own database says so: with the Mac locked,
+                        // Notes' scripting dropped a note its database still listed (2026-11-04).
+                        var saved = false
+                        for _ in 0..<20 {
+                            do { _ = try await s.read(id: id) } catch NotesStore.Failure.noSuchNote(_) {
+                                saved = true
+                                break
+                            } catch {}
+                            try await Task.sleep(for: .milliseconds(250))
+                        }
+                        guard saved else {
+                            return .text(
+                                "Notes took “\(note.title)” off its list but hasn't saved that yet, so it may come back (with the Mac locked, Notes can wait until it's unlocked). Check with notes_find in a minute.",
+                                isError: true)
+                        }
                         var result = ToolResult.text(
                             "Moved “\(note.title)” to Recently Deleted. Notes keeps it there for 30 days.")
                         result.activity = "Claude deleted the note “\(note.title)”"
@@ -649,7 +667,7 @@ enum NotesCapability {
             }
             return await savedNote(window) { (try? await s.read(id: note.id))?.hasChecklists == true }
         } catch let f as WindowFailure {
-            return " Its checklist items are ☐ and ☑ characters for now. " + f.message
+            return f.boxes
         } catch {
             return " Its checklist items are ☐ and ☑ characters for now: \(error.localizedDescription)"
         }

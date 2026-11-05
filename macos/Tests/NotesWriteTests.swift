@@ -1,4 +1,5 @@
 import Foundation
+import SQLite3
 import Testing
 
 @testable import Latchkey
@@ -213,12 +214,36 @@ final class FakeScripts: ScriptRunner, @unchecked Sendable {
     }
 
     @Test func deletesToRecentlyDeleted() async throws {
-        let (_, fake, tools) = try setup()
+        let url = try NotesFixture.make()
+        let store = try NotesStore(url: url)
+        let fake = FakeScripts()
+        // Notes saves the deletion: the note moves to Recently Deleted (folder 3) in its database.
+        fake.answer = { _, _ in
+            var db: OpaquePointer?
+            sqlite3_open(url.path, &db)
+            sqlite3_exec(
+                db, "UPDATE ZICCLOUDSYNCINGOBJECT SET ZFOLDER = 3 WHERE ZIDENTIFIER = 'N-GROCERIES'", nil, nil, nil)
+            sqlite3_close(db)
+            return ""
+        }
+        let tools = Dictionary(
+            uniqueKeysWithValues: NotesCapability.writeOperations(store: { store }, scripts: fake).map {
+                ($0.tool.name, $0)
+            })
         let result = await tools["notes_delete"]!.handler(.object(["id": .string("N-GROCERIES")]))
-        #expect(!result.isError)
+        #expect(!result.isError, "\(result.content.jsonText)")
         #expect(fake.lastArgs == ["x-coredata://STORE-UUID/ICNote/p10"])
         #expect(result.content.jsonText.contains("Recently Deleted"))
         #expect(result.activity == "Claude deleted the note “Groceries”")
+    }
+
+    /// With the Mac locked Notes' scripting dropped a note its database kept (2026-11-04):
+    /// "deleted" only once the database agrees.
+    @Test func aNoteNotesHasntSavedAsDeletedIsSaidSo() async throws {
+        let (_, _, tools) = try setup()
+        let result = await tools["notes_delete"]!.handler(.object(["id": .string("N-IDEAS")]))
+        #expect(result.isError)
+        #expect(result.content.jsonText.contains("hasn't saved"), "\(result.content.jsonText)")
     }
 
     @Test func missingAutomationPermissionIsExplained() async throws {
