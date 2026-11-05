@@ -88,6 +88,12 @@ in the Mac's time zone). Numbers are checked with `JSONValue.integer` (whole, no
   recipients, attachments); any recipient field not exactly as asked; text marked as quoted; a
   file Mail didn't attach; the window changing before Send; the clipboard changing during a
   paste. Mail's window is then closed unsent; if it can't be, the answer says it is still open.
+- Written by scripting (plan D6a, 2026-11-05): every message without attachments, in any screen
+  state; a new message with attachments when Mail's window can't be used, the answer adding
+  `(written without Mail's window, so the files are above the text)`. Refused then for a reply
+  or forward with attachments: `Nothing was sent: the Mac is locked, and while it is locked Mail
+  can add a file to a reply or forward only by dropping the quoted original. …mail_queue…`
+  (FR-843). A recipient, subject, or From not as asked closes the message unsent (FR-844).
 - `draft` (in `mail_change`) is written the same way and saved instead of sent.
 - Activity: "Claude sent an email to Sarah: «Subject»".
 

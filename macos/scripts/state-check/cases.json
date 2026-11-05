@@ -52,6 +52,8 @@
         {"id": "mail.reply", "case": "Reply to an email", "steps": "THE MESSAGE means the newest message whose subject contains \"Latchkey check\" (mail_find subject \"Latchkey check\", limit 1, any mailbox). If mail.send worked, wait until THE MESSAGE is the one it sent (shell_run \"sleep 20\" between tries, up to 4 tries). mail_send reply_to THE MESSAGE, text \"{TAG}: reply\"."},
         {"id": "mail.forward", "case": "Forward an email", "steps": "mail_send forward THE MESSAGE to [\"{TO}\"], text \"{TAG}: forward\"."},
         {"id": "mail.draft", "case": "Save a draft", "steps": "mail_change draft to [\"{TO}\"], subject \"{TAG} draft\", text \"Draft\"."},
+        {"id": "mail.send_file", "case": "Send a new email with a file", "steps": "mail_send to [\"{TO}\"], subject \"{TAG} file\", text \"Automated Latchkey check with a file, please ignore.\", attachments [\"/System/Library/CoreServices/SystemVersion.plist\"]. works when it says Sent (locked: it may say the files are above the text)."},
+        {"id": "mail.reply_file", "case": "Reply with a file (locked: refused, offers the queue)", "steps": "mail_send reply_to THE MESSAGE (search again), text \"{TAG}: reply with a file\", attachments [\"/System/Library/CoreServices/SystemVersion.plist\"]. While locked the right answer is refused, naming mail_queue; do not queue it."},
         {"id": "mail.mark", "case": "Mark read and unread", "steps": "On THE MESSAGE (search again): mail_change mark_read, then mark_unread."},
         {"id": "mail.flag", "case": "Flag and unflag", "steps": "On THE MESSAGE: mail_change flag, then unflag."},
         {"id": "mail.junk", "case": "Mark as junk and not junk", "steps": "On THE MESSAGE: mail_change junk, then search for THE MESSAGE again and not_junk."},

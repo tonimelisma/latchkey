@@ -126,7 +126,7 @@ enum MailTestEnv {
     static func make(
         _ f: MailFixture, scripts: FakeScripts = FakeScripts(), may: Bool = false, budget: Duration = .seconds(5),
         confirmWait: Duration = .seconds(2), windows: FakeWindows = FakeWindows(),
-        contacts: any ContactsLookup = MailCapability.NoContacts()
+        contacts: any ContactsLookup = MailCapability.NoContacts(), byScript: Bool = false
     ) throws -> MailCapability.Env {
         let store = try MailStore(root: f.root)
         let tmp = FileManager.default.temporaryDirectory.appending(path: "mailtest-\(UUID().uuidString)")
@@ -135,7 +135,7 @@ enum MailTestEnv {
             mayScript: { may }, scratch: tmp.appending(path: "scratch"),
             downloads: tmp.appending(path: "Downloads"), windows: windows, searchBudget: budget,
             confirmWait: confirmWait,
-            poll: .milliseconds(50), attachWait: .milliseconds(300), contacts: contacts)
+            poll: .milliseconds(50), attachWait: .milliseconds(300), contacts: contacts, byScript: byScript)
     }
 
     static func tool(_ name: String, _ env: MailCapability.Env, level: AccessLevel = .readWrite) throws -> ToolEntry {

@@ -31,6 +31,8 @@ import Testing
         ("safari all tabs", SafariBrowser.Script.allTabs), ("safari tab pick", SafariBrowser.Script.tabPick),
         ("mail accounts", MailScript.accounts), ("mail change", MailScript.change),
         ("mail save attachment", MailScript.saveAttachment),
+        ("mail signature make", MailSignatureWriter.makeScript),
+        ("mail signature finish", MailSignatureWriter.finishScript),
     ]
 
     @Test(arguments: scripts.map(\.0))

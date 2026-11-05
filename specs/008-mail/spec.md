@@ -91,9 +91,10 @@ my landlord", tell what's new in the inbox, answer a message, or file it away.
   Latchkey.
 - **FR-824** Latchkey shall not add its own confirmations or limits to sending (as spec 002
   FR-115); Claude's apps handle approvals.
-- **FR-835** While the Mac is locked, sending and saving drafts shall answer that the Mac is
-  locked, and that the message can be queued to go out when the Mac is next unlocked (FR-836),
-  so Claude can decide with the Owner (Toni, 2026-11-02).
+- **FR-835** While the Mac is locked, a reply or forward with attachments shall answer that the
+  Mac is locked, and that the message can be sent without the file now or queued to go out when
+  the Mac is next unlocked (FR-836), so Claude can decide with the Owner (Toni, 2026-11-02;
+  narrowed 2026-11-05 from every send and draft, which now work while locked: FR-841).
 - **FR-836** While Mail is Read & write, Claude shall be able, in a tool of its own, to queue a
   new message, a reply, or a forward (the same inputs as sending), list what is queued, and
   cancel a queued message (Toni, 2026-11-02: "separate tool for queued emails").
@@ -115,7 +116,8 @@ my landlord", tell what's new in the inbox, answer a message, or file it away.
   at the Mac needs to answer it. Latchkey never starts Mail to look (Toni, 2026-11-02, "if
   exchange doesn't accept our messages, that's our issue": an alert that Mail couldn't save a
   sent copy, with the lid closed, held Mail until someone pressed OK).
-- **FR-840** While the Owner uses the Mac, writing an email shall not bring Mail to the front:
+- **FR-840** (Since 2026-11-05 this applies only to messages with attachments, FR-842.) While the
+  Owner uses the Mac, writing an email shall not bring Mail to the front:
   the message (new, reply, reply all, forward) is made by Mail's scripting with its window
   behind the Owner's apps and moved off-screen, files are attached by scripting, the text is
   typed into it with Mail behind, and it is sent or saved by scripting (Toni, 2026-11-02: "make
@@ -127,6 +129,27 @@ my landlord", tell what's new in the inbox, answer a message, or file it away.
   filled; without a pause in the Owner's typing within 30 s nothing is sent; the Owner's own Mail
   window stays the one their keys go to; and the fields are read again in front, just before
   Send (security review 2026-11-02).
+
+- **FR-841** When Claude sends, replies, forwards, or saves a draft without attachments, Latchkey
+  shall write it through Mail's scripting with no window, whether the Mac is unlocked, locked, or
+  its lid closed, and without Accessibility; the text shall arrive as ordinary text, not marked as
+  quoted, and a reply's or forward's text above Mail's quote of the original (2026-11-05: Toni
+  mostly uses Claude from his phone with the Mac locked or the lid closed).
+- **FR-842** While Mail's window can be used, a message with attachments shall be written in Mail's
+  window (FR-840). While it can't (the Mac locked, or no Accessibility), a new message with
+  attachments shall be written through Mail's scripting, and the answer shall say the files are
+  above the text.
+- **FR-843** While Mail's window can't be used, a reply or forward with attachments shall not be
+  sent; the answer shall say why and that it can go without the file now, the file can go in a
+  new message, or it can be queued (FR-836). Mail's scripting can add a file to a reply or forward
+  only by dropping its quoted original (tried 2026-11-05).
+- **FR-844** Before a message written through Mail's scripting is sent or saved, Latchkey shall
+  check its subject, its From, and every recipient (as addresses) as in Mail's window (FR-840,
+  plan D6 step 5), a reply's or forward's own recipients against the original; on any difference
+  it shall close the message unsent.
+- **FR-845** Anything Latchkey adds to Mail's settings to write a message shall be removed before
+  the message is sent or saved, also when writing fails, and anything left by a write that was cut
+  off shall be removed by the next write.
 
 ### Level, visibility, permissions
 - **FR-830** Mail shall have the levels Off, Read only, Read & write, where Read & write includes
@@ -167,7 +190,10 @@ my landlord", tell what's new in the inbox, answer a message, or file it away.
   so it arrives as ordinary mail, and, when that isn't possible (the Mac locked, no
   Accessibility), to refuse plainly instead of sending scripted text. That window works with the
   lid closed and the display off as long as the Mac isn't locked (live check 2026-11-01), so only
-  the lock stops sending (Toni, 2026-11-01).
+  the lock stops sending (Toni, 2026-11-01). Reversed for text without attachments (2026-11-05, Toni's "add everything
+  missing"): text put in as a Mail signature for a moment, instead of as the message's content,
+  arrives unquoted (checked live), so such messages are written through Mail's scripting in every
+  screen state (FR-841); the window is kept for attachments while it can be used (FR-842).
 - Mail showing a name instead of an address in the To field (the account's full name for the
   Owner's own address, or a name Mail remembers): the account's full name counts for its own
   addresses (2026-11-01).

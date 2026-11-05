@@ -26,6 +26,12 @@ enum MailCapability {
     static let mailApp = "com.apple.mail"
 }
 
+enum ScriptError: Error, Equatable {
+    case timedOut
+    case notAllowed
+    case failed(String)
+}
+
 /// Latchkey's script runner, reduced to osascript (the app's also checks its Automation permission).
 protocol ScriptRunner: Sendable {
     func run(_ script: String, _ args: [String]) async throws -> String
