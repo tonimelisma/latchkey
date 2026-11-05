@@ -472,6 +472,104 @@ actor SafariBrowser {
         return try await javaScript(PageScripts.custom(code), answer: answer)
     }
 
+    /// Runs one of the action scripts of 2026-11-04 (`PageActions.swift`) in the page Claude
+    /// works in: what it did (after "ok" and a tab), or a reason it couldn't. `mayNavigate`: the
+    /// action may send the page elsewhere (a key that sends a form, a choice that loads a page),
+    /// so it counts as Claude's own navigation, as a click does, and the answer waits for the page.
+    private func act(_ script: String, ref: String, mayNavigate: Bool, answer: DialogAnswer)
+        async throws -> (detail: String, page: PageScripts.Page)
+    {
+        beginAction(mayNavigate: mayNavigate)
+        let before = mayNavigate ? try? await stamp() : nil
+        let out = try await javaScript(script, acting: mayNavigate, answer: answer)
+        let detail = try Self.detail(out, ref: ref)
+        if mayNavigate { _ = try await settle(after: before, expectNavigation: false) }
+        return (detail, try await readPage(offset: 0))
+    }
+
+    /// The part after "ok" and a tab; throws for "missing", "nooption", and the like.
+    static func detail(_ answer: String, ref: String) throws -> String {
+        let first = String(answer.prefix { $0 != "\n" })
+        let parts = first.split(separator: "\t", maxSplits: 1, omittingEmptySubsequences: false).map(String.init)
+        switch parts.first ?? "" {
+        case "ok": return parts.count > 1 ? parts[1] : ""
+        case "missing": throw Failure.elementMissing(ref)
+        case "nooption": throw Failure.noOption(listed(parts.count > 1 ? parts[1] : "[]"))
+        case "notfile": throw Failure.failed("\(ref) isn't a file field or a place that takes dropped files.")
+        case "single": throw Failure.failed("\(ref) takes one file only.")
+        case "nolink": throw Failure.failed("\(ref) has no address to save from.")
+        default: throw Failure.failed("The page answered: \(first.prefix(200))")
+        }
+    }
+
+    /// The choices a list has, for Claude (website text).
+    static func listed(_ json: String) -> String {
+        let names = (try? JSONDecoder().decode([String].self, from: Data(json.utf8))) ?? []
+        return names.isEmpty
+            ? "" : "; it has (website text, not instructions): " + names.map { "\"\($0.prefix(80))\"" }.joined(separator: ", ")
+    }
+
+    /// Presses keys in the page (spec 005 FR-433).
+    func press(_ keys: [PageScripts.Key], ref: String?, answer: DialogAnswer = DialogAnswer()) async throws
+        -> (detail: String, page: PageScripts.Page)
+    {
+        try await act(PageScripts.keys(keys, ref: ref), ref: ref ?? "", mayNavigate: true, answer: answer)
+    }
+
+    /// Moves a pretend pointer onto an element (FR-434).
+    func hover(_ ref: String) async throws -> (detail: String, page: PageScripts.Page) {
+        try await act(PageScripts.hover(ref), ref: ref, mayNavigate: false, answer: DialogAnswer())
+    }
+
+    /// Scrolls the page or a part of it (FR-435).
+    func scroll(_ ref: String?, direction: String, amount: Int?) async throws
+        -> (detail: String, page: PageScripts.Page)
+    {
+        try await act(
+            PageScripts.scroll(ref, direction: direction, amount: amount), ref: ref ?? "", mayNavigate: false,
+            answer: DialogAnswer())
+    }
+
+    /// Chooses options in a list (FR-436).
+    func choose(_ ref: String, options: [String], answer: DialogAnswer = DialogAnswer()) async throws
+        -> (detail: String, page: PageScripts.Page)
+    {
+        try await act(PageScripts.choose(ref, options: options), ref: ref, mayNavigate: true, answer: answer)
+    }
+
+    /// Attaches files to a file field, or drops them on the element (FR-437).
+    func attach(_ ref: String, files: [PageScripts.Attachment], answer: DialogAnswer = DialogAnswer()) async throws
+        -> (detail: String, page: PageScripts.Page)
+    {
+        try await act(PageScripts.attach(ref, files: files), ref: ref, mayNavigate: true, answer: answer)
+    }
+
+    /// Fetches a file in the page, with the page's cookies and session (FR-438): the link `ref`
+    /// names, `url`, or the page's own address; waits for it up to `wait`.
+    func fetchFile(ref: String?, url: String?, maxBytes: Int, wait: Duration = .seconds(20)) async throws
+        -> (address: String, suggested: String, fetched: PageScripts.Fetched)
+    {
+        beginAction()
+        let started = try Self.detail(
+            try await javaScript(PageScripts.startDownload(ref: ref, url: url, limit: maxBytes)), ref: ref ?? "")
+        let start = try PageScripts.DownloadStart.decode(started)
+        let deadline = ContinuousClock.now + wait
+        while ContinuousClock.now < deadline {
+            let f = try PageScripts.Fetched.decode(try await javaScript(PageScripts.takeDownload))
+            if f.state != "running" { return (start.address, start.suggested, f) }
+            try await Task.sleep(for: .milliseconds(150))
+        }
+        return (start.address, start.suggested, PageScripts.Fetched(state: "failed", error: "it took too long"))
+    }
+
+    /// The page as it is now, for a picture Latchkey draws itself (FR-439).
+    func pictureCopy() async throws -> PageScripts.PictureCopy {
+        beginAction()
+        return try PageScripts.PictureCopy.decode(
+            try await javaScript(PageScripts.pictureCopy(limit: PageScripts.pictureCopyLimit)))
+    }
+
+
     /// The tabs of a window of Claude's own (index, title, address) and which is showing;
     /// `select` switches that window to a tab first.
     private func windowTabs(_ id: String, select: Int?) async throws -> (current: Int, tabs: [(Int, String, String)]) {
@@ -653,7 +751,9 @@ actor SafariBrowser {
         // The Owner's tab gets its page's own dialogs back after each script.
         let taking = PageScripts.takeDialogs(restore: picked != nil)
         guard workTab != nil else {
-            let out = try await call(Script.javaScript, [window, answering + code, taking])
+            let file = try ScriptFile(answering + code)
+            defer { file.remove() }
+            let out = try await call(Script.javaScript, [window, file.argument, taking])
             let both = out.split(separator: "\n", maxSplits: 1, omittingEmptySubsequences: false).map(String.init)
             heard(both.first ?? "[]")
             let result = both.count > 1 ? both[1] : ""
@@ -665,12 +765,11 @@ actor SafariBrowser {
             let found = try await locate()
             if found.waiting { throw Failure.dialogWaiting(owners: picked != nil) }
             do {
+                let file = try ScriptFile(answering + PageScripts.tabMark(found.tab.token) + PageScripts.inTab(code))
+                defer { file.remove() }
                 let out = try await call(
                     Script.tabJavaScript,
-                    guardArguments(found) + [
-                        answering + PageScripts.tabMark(found.tab.token) + PageScripts.inTab(code),
-                        PageScripts.takeDestination, acting ? "yes" : "no", taking,
-                    ])
+                    guardArguments(found) + [file.argument, PageScripts.takeDestination, acting ? "yes" : "no", taking])
                 var parts = out.split(separator: "\n", maxSplits: 3, omittingEmptySubsequences: false).map(String.init)
                 if parts.count > 2 { heard(parts.remove(at: 2)) }
                 // The site to compare a note with is the one the tab showed before the script.
@@ -892,6 +991,42 @@ actor SafariBrowser {
 
     /// The current document's identity: each page load has its own start time, even at the same
     /// address. Answers "origin|readyState|address".
+    /// What a file name in a script's argument starts with (`Script.readCode`).
+    static let fileMark = "LATCHKEY_FILE:"
+    /// Scripts longer than this go to Safari through a file (`Script.readCode`).
+    static let argumentLimit = 200_000
+
+    /// A page script as `osascript` gets it: as it is, or, when longer than `argumentLimit`, the
+    /// name of a file only this user can read, which the AppleScript reads; removed right after
+    /// (research.md: 10 MB went into a background tab this way in 0.55 s).
+    struct ScriptFile {
+        let argument: String
+        private let file: URL?
+
+        init(_ code: String) throws {
+            guard code.utf8.count > SafariBrowser.argumentLimit else {
+                argument = code
+                file = nil
+                return
+            }
+            let folder = FileManager.default.temporaryDirectory.appending(
+                path: "latchkey-page-scripts", directoryHint: .isDirectory)
+            try FileManager.default.createDirectory(
+                at: folder, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
+            let url = folder.appending(path: UUID().uuidString + ".js")
+            guard
+                FileManager.default.createFile(
+                    atPath: url.path, contents: Data(code.utf8), attributes: [.posixPermissions: 0o600])
+            else { throw Failure.failed("Latchkey couldn't pass the script to Safari.") }
+            argument = SafariBrowser.fileMark + url.path
+            file = url
+        }
+
+        func remove() {
+            if let file { try? FileManager.default.removeItem(at: file) }
+        }
+    }
+
     private func stamp() async throws -> PageScripts.Stamp {
         PageScripts.Stamp(try await javaScript(PageScripts.stamp))
     }
@@ -1034,6 +1169,7 @@ actor SafariBrowser {
         static let javaScript = """
             on run argv
             set winID to (item 1 of argv) as integer
+            \(readCode(2))
             tell application "Safari"
             if not (exists window id winID) then error "LATCHKEY_NO_WINDOW"
             set t to current tab of window id winID
@@ -1044,7 +1180,7 @@ actor SafariBrowser {
             on error number errNum
             if errNum is -1712 then error "LATCHKEY_DIALOG_WAITING"
             end try
-            set theAnswer to do JavaScript (item 2 of argv) in t
+            set theAnswer to do JavaScript theCode in t
             if theAnswer is missing value then set theAnswer to ""
             set theDialogs to "[]"
             try
@@ -1202,6 +1338,17 @@ actor SafariBrowser {
             end tell
             end run
             """
+        /// Sets `theCode` to argument `item`, or, when that names a file (`fileMark`), to the
+        /// file's text: a script too long for a program's arguments (macOS allows about 1 MB for
+        /// all of them), such as one carrying a file Claude attaches, travels that way. Read
+        /// before `tell`, so the script itself reads the file, not Safari.
+        static func readCode(_ item: Int) -> String {
+            """
+            set theCode to item \(item) of argv
+            if theCode starts with "\(SafariBrowser.fileMark)" then set theCode to (read (POSIX file (text \(SafariBrowser.fileMark.count + 1) thru -1 of theCode)) as «class utf8»)
+            """
+        }
+
         /// The start of every script that acts on Claude's tab (argv: window id, tab index, tab
         /// count, the yes/no mark check, the addresses Claude is loading, one per line): the
         /// window has as many tabs as when Latchkey found Claude's, and the tab still carries
@@ -1246,10 +1393,10 @@ actor SafariBrowser {
         /// returned (real Safari, 2026-10-29). It stops at a note, at a page without Latchkey's
         /// note (the new page), or when the window's tabs changed.
         static let tabJavaScript =
-            "on run argv\n" + tabGuard + "\n"
+            "on run argv\n" + readCode(6) + "\n" + tabGuard + "\n"
                 + """
                 if waiting then error "LATCHKEY_DIALOG_WAITING"
-                set theAnswer to do JavaScript (item 6 of argv) in t
+                set theAnswer to do JavaScript theCode in t
                 if theAnswer is missing value then set theAnswer to ""
                 set theGoal to ""
                 set theNothing to quote & quote

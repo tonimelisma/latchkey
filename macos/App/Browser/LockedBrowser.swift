@@ -31,12 +31,23 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate {
 
     var isOpen: Bool { web != nil }
 
+    /// The view's size, and whether the page's own scripts run: not in a copy drawn for a
+    /// picture (FR-439), whose page is the markup of a page that already ran them.
+    private let size: CGSize
+    private let pageScripts: Bool
+
+    init(size: CGSize = CGSize(width: 1280, height: 900), pageScripts: Bool = true) {
+        self.size = size
+        self.pageScripts = pageScripts
+    }
+
     /// The view, made on first use with Safari's cookies as they are now.
     private func view() async -> WKWebView {
         if let web { return web }
         let config = WKWebViewConfiguration()
         config.websiteDataStore = .nonPersistent()  // memory only: nothing written to disk
-        let w = WKWebView(frame: NSRect(x: 0, y: 0, width: 1280, height: 900), configuration: config)
+        config.defaultWebpagePreferences.allowsContentJavaScript = pageScripts
+        let w = WKWebView(frame: NSRect(origin: .zero, size: size), configuration: config)
         w.navigationDelegate = self
         w.uiDelegate = self
         // Sites see Safari, as they do in the Owner's Safari: some refuse an app's own web view
@@ -52,7 +63,7 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate {
     }
 
     /// Safari's own user agent, built from its installed version.
-    static let safariUserAgent: String = {
+    nonisolated static let safariUserAgent: String = {
         let info =
             NSDictionary(
                 contentsOfFile: "/Applications/Safari.app/Contents/Info.plist") as? [String: Any]
@@ -337,6 +348,93 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate {
             if let now = w.url?.absoluteString, now != before { return "The page went to \(now)." }
             throw error
         }
+    }
+
+    /// One of the action scripts of 2026-11-04 (`PageActions.swift`), as in Safari: what it did,
+    /// and the page after it. `mayNavigate`: Claude's own action, which may open a page (as a
+    /// click), so the answer waits for it.
+    private func act(_ code: String, ref: String, mayNavigate: Bool, answer: DialogAnswer) async throws
+        -> (detail: String, page: PageScripts.Page)
+    {
+        acting = true
+        dialogAnswer = answer
+        defer {
+            acting = false
+            dialogAnswer = DialogAnswer()
+        }
+        guard let w = web else { throw SafariBrowser.Failure.noWindow }
+        let before = w.url?.absoluteString
+        let detail = try SafariBrowser.detail(try await script(code), ref: ref)
+        if mayNavigate { await settle(from: before) }
+        return (detail, try await page(offset: 0))
+    }
+
+    func press(_ keys: [PageScripts.Key], ref: String?, answer: DialogAnswer = DialogAnswer()) async throws
+        -> (detail: String, page: PageScripts.Page)
+    {
+        try await act(PageScripts.keys(keys, ref: ref), ref: ref ?? "", mayNavigate: true, answer: answer)
+    }
+
+    func hover(_ ref: String) async throws -> (detail: String, page: PageScripts.Page) {
+        try await act(PageScripts.hover(ref), ref: ref, mayNavigate: false, answer: DialogAnswer())
+    }
+
+    func scroll(_ ref: String?, direction: String, amount: Int?) async throws
+        -> (detail: String, page: PageScripts.Page)
+    {
+        try await act(
+            PageScripts.scroll(ref, direction: direction, amount: amount), ref: ref ?? "", mayNavigate: false,
+            answer: DialogAnswer())
+    }
+
+    func choose(_ ref: String, options: [String], answer: DialogAnswer = DialogAnswer()) async throws
+        -> (detail: String, page: PageScripts.Page)
+    {
+        try await act(PageScripts.choose(ref, options: options), ref: ref, mayNavigate: true, answer: answer)
+    }
+
+    func attach(_ ref: String, files: [PageScripts.Attachment], answer: DialogAnswer = DialogAnswer()) async throws
+        -> (detail: String, page: PageScripts.Page)
+    {
+        try await act(PageScripts.attach(ref, files: files), ref: ref, mayNavigate: true, answer: answer)
+    }
+
+    /// A file fetched in the page, as in Safari (FR-438).
+    func fetchFile(ref: String?, url: String?, maxBytes: Int, wait: Duration = .seconds(20)) async throws
+        -> (address: String, suggested: String, fetched: PageScripts.Fetched)
+    {
+        guard web != nil else { throw SafariBrowser.Failure.noWindow }
+        let start = try PageScripts.DownloadStart.decode(
+            try SafariBrowser.detail(
+                try await script(PageScripts.startDownload(ref: ref, url: url, limit: maxBytes)), ref: ref ?? ""))
+        let deadline = ContinuousClock.now + wait
+        while ContinuousClock.now < deadline {
+            let f = try PageScripts.Fetched.decode(try await script(PageScripts.takeDownload))
+            if f.state != "running" { return (start.address, start.suggested, f) }
+            try await Task.sleep(for: .milliseconds(100))
+        }
+        return (start.address, start.suggested, PageScripts.Fetched(state: "failed", error: "it took too long"))
+    }
+
+    /// The address of the page, for saving it when the page can't fetch it itself.
+    var address: String? { web?.url?.absoluteString }
+
+    /// A picture drawn from a copy of a page (FR-439): the copy is loaded, without its scripts,
+    /// in a view of Latchkey's own as big as the page's window, signed in with Safari's cookies
+    /// so its pictures load as in the page, scrolled where the page was, and drawn.
+    static func draw(_ copy: PageScripts.PictureCopy) async throws -> PreparedImage {
+        let width = min(max(copy.width, 320), 2560)
+        let height = min(max(copy.height, 240), 1600)
+        let b = LockedBrowser(size: CGSize(width: width, height: height), pageScripts: false)
+        defer { b.discard() }
+        guard let base = URL(string: copy.url), ["http", "https"].contains(base.scheme?.lowercased() ?? "") else {
+            throw SafariBrowser.Failure.failed("Latchkey can't draw this page (\(copy.url.prefix(60))).")
+        }
+        let w = await b.view()
+        try await b.navigate { $0.loadHTMLString(copy.html, baseURL: base) }
+        _ = try? await w.evaluateJavaScript("window.scrollTo(\(Int(copy.x)), \(Int(copy.y))); 1")
+        try? await Task.sleep(for: .milliseconds(150))
+        return try await b.screenshot()
     }
 
     /// The page as a picture.

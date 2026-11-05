@@ -132,7 +132,7 @@ enum BrowserCapability {
                 tool: .make(
                     "browser_screenshot", title: "Screenshot of the Page",
                     description:
-                        "Shows Claude's Safari window as an image. Needs the Mac unlocked with its screen on; reading pages doesn't.",
+                        "Shows the page Claude works in as an image: captured from the screen when it can be, else drawn by Latchkey from the page as it is (locked, display off, lid closed).",
                     readOnly: true, openWorld: true, deadlineMS: 20_000),
                 handler: { _ in
                     await run {
@@ -141,25 +141,28 @@ enum BrowserCapability {
                             let image = try await l.screenshot()
                             return .image(image.data, mimeType: image.mimeType)
                         }
-                        guard CGPreflightScreenCaptureAccess() else {
-                            throw Failure.failed(
-                                "Latchkey can't see the screen yet: the Mac's owner can turn on Latchkey in System Settings → Privacy & Security → Screen & System Audio Recording."
+                        // FR-439: when the screen can't be captured (locked, display asleep, lid
+                        // closed, no permission), Latchkey draws the page from what it holds now.
+                        if !CGPreflightScreenCaptureAccess() {
+                            return try await drawn(
+                                browser,
+                                why:
+                                    "Latchkey may not capture the screen (the Mac's owner can allow it in System Settings → Privacy & Security → Screen & System Audio Recording)"
                             )
                         }
-                        if let problem = await ScreenCheck.problem(SystemScreen()) { throw Failure.failed(problem) }
+                        if let problem = await ScreenCheck.problem(SystemScreen()) {
+                            return try await drawn(browser, why: String(problem.prefix { $0 != "," && $0 != "." }))
+                        }
                         // FR-423: Claude's tab comes to the front of the Owner's window for the
                         // picture only while the Owner can't see that window; otherwise the
-                        // picture is of the same address in Latchkey's own browser.
+                        // picture is drawn from the tab's page (2026-11-04: before, the same
+                        // address loaded fresh, which lost what Claude had typed or opened).
                         let plan = try await browser.pictureSwitch()
                         if plan.needed, !plan.address.isEmpty,
                             ScreenCapture.windowVisible(app: "Safari", title: plan.shownTitle)
                         {
-                            let image = try await ownPicture(plan.address)
-                            var r = ToolResult.image(image.data, mimeType: image.mimeType)
-                            r.appendText(
-                                "The Mac's owner can see the Safari window, so the tab wasn't brought to the front: this is \(plan.address) loaded fresh in Latchkey's own browser (signed in with Safari's cookies), not Safari's tab itself."
-                            )
-                            return r
+                            return try await drawn(
+                                browser, why: "The Mac's owner can see the Safari window, so the tab wasn't brought to the front")
                         }
                         let image = try await browser.showing { title in
                             try await ScreenCapture.window(app: Permissions.safariApp, title: title)
@@ -170,6 +173,35 @@ enum BrowserCapability {
                     }
                 }),
         ]
+    }
+
+    /// A picture Latchkey draws of the page Claude works in, from a copy of the page as it is now
+    /// (FR-439): needs no screen, works in a background tab and while the Mac is locked (as long
+    /// as Safari answers). A page Safari lets no script into (a PDF, Safari's own pages) is loaded
+    /// fresh from its address instead.
+    static func drawn(_ browser: SafariBrowser, why: String) async throws -> ToolResult {
+        let note =
+            "\(why): this picture is drawn by Latchkey from the page as it is now in Safari (its text, fields, and pictures), not captured from the screen; videos, other sites' frames, and some effects may be missing."
+        var image: PreparedImage
+        var said = note
+        do {
+            let copy = try await browser.pictureCopy()
+            guard copy.html.count > 200 else { throw Failure.failed("empty") }
+            image = try await LockedBrowser.draw(copy)
+        } catch let f as Failure {
+            if case .failed = f {
+                let address = try await browser.read(offset: 0).url
+                image = try await ownPicture(address)
+                said =
+                    "\(why): this is \(address) loaded fresh in Latchkey's own browser (signed in with Safari's cookies), not Safari's tab itself."
+            } else {
+                throw f
+            }
+        }
+        var r = ToolResult.image(image.data, mimeType: image.mimeType)
+        r.appendText(said)
+        if let tab = await browser.working() { r.appendText(named(tab)) }
+        return r
     }
 
     /// A picture of `address` from a browser of Latchkey's own, made for this one picture.
@@ -288,7 +320,7 @@ enum BrowserCapability {
                         return r
                     }
                 }),
-        ]
+        ] + actionOperations(browser: browser, locked: locked)
     }
 
     typealias Failure = SafariBrowser.Failure
@@ -393,7 +425,7 @@ enum BrowserCapability {
     /// Which tab an answer came from, when it is one of the owner's (FR-431).
     static func named(_ tab: String) -> String { "In the owner's Safari tab \(tab), not Claude's own." }
 
-    private static func host(_ url: String) -> String { URL(string: url)?.host() ?? url }
+    static func host(_ url: String) -> String { URL(string: url)?.host() ?? url }
 
     static func explain(_ f: Failure) -> String {
         switch f {
@@ -416,7 +448,7 @@ enum BrowserCapability {
         }
     }
 
-    private static func run(_ body: () async throws -> ToolResult) async -> ToolResult {
+    static func run(_ body: () async throws -> ToolResult) async -> ToolResult {
         do { return try await body() } catch let f as Failure {
             return .text(explain(f), isError: true)
         } catch let a as ArgumentError {

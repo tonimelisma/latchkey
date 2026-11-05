@@ -48,7 +48,9 @@ extension BrowserCapability {
         ]
     }
 
-    static let actions = ["click", "type", "script", "close"]
+    static let actions = [
+        "click", "type", "select", "key", "hover", "scroll", "upload", "download", "script", "close",
+    ]
 
     static func writeTools(browser: SafariBrowser, locked: @escaping LockedRoute = noLocked) -> [ToolEntry] {
         // browser_act's tab picks the tab first, through the tab list's own operation.
@@ -63,8 +65,16 @@ extension BrowserCapability {
                         Acts on the page Claude works in, in Safari, in the background, then answers with the page: \
                         Claude's own page, or the owner's tab picked with browser_read and tab (or with tab here). \
                         action: click (ref: a link or button), type (ref: a field, text; or a list and the \
-                        option's text; submit sends the form), script (code: JavaScript run in the page; its \
-                        result is returned), close (closes the tab Claude works in, the owner's included). The \
+                        option's text; submit sends the form), select (ref: a list, options: the texts to choose, \
+                        several in a list that takes several), key (keys: like "Enter", "Tab Tab", "Escape", \
+                        "ArrowDown", "cmd+a", pressed in ref or the focused field), hover (ref), scroll \
+                        (direction: down, up, left, right, top, bottom; amount in pixels; ref to scroll inside an \
+                        element), upload (ref: a file field or drop place, paths: files on the Mac), download \
+                        (ref: a link, or url, or neither for the page itself, e.g. a PDF: saved to the Mac's \
+                        Downloads folder, and the answer names the path for files_read), script (code: \
+                        JavaScript run in the page; its result is returned), close (closes the tab Claude works \
+                        in, the owner's included). Keys and hover are a script's, not a real keyboard's or \
+                        mouse's: most pages take them; one that doesn't needs computer control. The \
                         page's own dialogs never wait: an alert is dismissed, a confirm gets Cancel unless confirm \
                         is true, a prompt gets prompt_text or nothing, and the answer says what each one said.
                         """,
@@ -77,6 +87,12 @@ extension BrowserCapability {
                         "code": .stringParam("For script: the JavaScript"),
                         "confirm": .boolParam("Answer OK to a confirm dialog this action brings up (default Cancel)"),
                         "prompt_text": .stringParam("The text for a prompt dialog this action brings up"),
+                        "options": listParam("For select: the options' texts or values"),
+                        "keys": listParam("For key: keys like Enter, Tab, Escape, ArrowDown, cmd+a"),
+                        "direction": .enumParam(directions, "For scroll: which way (default down)"),
+                        "amount": .integerParam("For scroll: pixels (default most of what shows)"),
+                        "paths": listParam("For upload: the files' paths on the Mac"),
+                        "url": .stringParam("For download: an address to save instead of a link"),
                     ], required: ["action"], readOnly: false, destructive: true, openWorld: true, deadlineMS: 30_000),
                 handler: { args in
                     let action = args["action"]?.stringValue
@@ -89,6 +105,12 @@ extension BrowserCapability {
                     case "click": return await ops.call("browser_click", args)
                     case "type": return await ops.call("browser_type", args)
                     case "script": return await ops.call("browser_script", args)
+                    case "select": return await ops.call("browser_select", args)
+                    case "key": return await ops.call("browser_key", args)
+                    case "hover": return await ops.call("browser_hover", args)
+                    case "scroll": return await ops.call("browser_scroll", args)
+                    case "upload": return await ops.call("browser_upload", args)
+                    case "download": return await ops.call("browser_download", args)
                     case "close": return await ops.call("browser_close", args)
                     default: return .unknown("action", action, allowed: actions)
                     }
