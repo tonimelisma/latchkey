@@ -160,8 +160,9 @@ Enforced by hooks in `.claude/settings.json` (`scripts/hooks.sh`):
 - `scripts/loose-ends.sh` lists anything not safely on main: this worktree's uncommitted,
   unpushed, or unmerged work; stashes; branches (local or GitHub) not on main and not checked out
   anywhere; unpushed branches; worktrees with uncommitted work untouched for a day; the main
-  checkout off `main` or dirty. It runs when a session starts (Claude is told) and before Claude
-  ends a turn (Claude is sent back once to resolve it).
+  checkout off `main` or dirty. It runs when a session starts (Claude is told). It no longer runs
+  when a turn ends: it sent Claude back again and again while Toni was stopping it (Toni removed
+  that hook, 2026-11-04).
 - Commands that can lose work are refused: `git stash` in any spelling (only `list` and `show`
   are allowed), force-push (`-f`, `--force…`, or a `+refspec`), `git reset --hard`,
   `git clean -f`, `git branch -D`, `git checkout -- .`. A `git push` is also refused while
