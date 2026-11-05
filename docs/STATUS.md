@@ -259,8 +259,9 @@ A reply or forward with files still brings Mail forward for the paste (under a s
 Lid closed and still unlocked (2026-11-03 21:08, app 0.8.103): 107 of 108 work, the other
 refused plainly (an attachment Mail hadn't downloaded); Mail never came forward; the sweep left
 four test emails unread in Deleted Items, so it now marks every one read too.
-Next: `state-check.sh run` with the screen asleep but the Mac unlocked (a waiter started
-2026-11-03 runs it when the Mac is in that state), then `report`. A click to another site in real Safari keeps
+The display asleep on an unlocked Mac is no longer a state of its own: it lasts only the minutes
+before the screen lock and never came up in a day of waiting (Toni dropped it, 2026-11-04), so
+the table is complete with four states. A click to another site in real Safari keeps
 Claude's tab, and back returns (checked live through Latchkey on 0.8.100, 2026-11-03;
 `safari-check.sh` itself would ask the Owner to let the terminal control Safari). The full suite's web-page and shell timing tests fail while
 the Mac is under heavy load and pass run alone.

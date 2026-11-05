@@ -246,7 +246,7 @@ Linux server program (run in `linux/`, its own Go module; spec 010):
 
 Screen states (`macos/scripts/state-check/`): `state-check.sh run|wait|report <folder outside the
 repo>` tries every use case in `cases.json` through the hosted relay with real Claude Code, in
-the screen state the Mac is in (unlocked, locked, screen asleep, lid closed); `report` writes
+the screen state the Mac is in (unlocked, locked, lid closed; Toni dropped display asleep but unlocked, 2026-11-04); `report` writes
 `docs/use-cases.md`. Each run also logs what took focus, raised a window, moved the pointer, or
 used the clipboard (`<state>/focus.log`; `LATCHKEY_CHECK_PARALLEL=1` runs one group at a time so
 each line belongs to one group). Needs `LATCHKEY_CHECK_TO` (Toni's own address, from `CLAUDE.local.md`).
