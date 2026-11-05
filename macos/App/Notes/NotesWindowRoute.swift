@@ -23,6 +23,11 @@ extension NotesCapability {
     struct WindowFailure: Error {
         var message: String
 
+        static let locked = WindowFailure(
+            message:
+                "The Mac is locked. Notes lets Latchkey change notes with checklists, links, or images only through its window, and macOS doesn't show a note there while the Mac is locked. Nothing was changed; it works again once someone unlocks the Mac. Plain notes can still be changed, and new notes made."
+        )
+
         static let unavailable = WindowFailure(
             message:
                 "Notes' window couldn't show the note: Notes may be hidden or minimized, the Mac may be locked or asleep, or Latchkey may not be allowed to use Accessibility (Latchkey's Settings → Permissions)."
@@ -35,7 +40,8 @@ extension NotesCapability {
         ready: @escaping @Sendable (String) -> Bool = { _ in true },
         _ work: @Sendable (String) async throws -> T
     ) async throws -> T {
-        try await windowQueue.run {
+        if window.locked() { throw WindowFailure.locked }
+        return try await windowQueue.run {
             let previous = try await window.show(scriptID).filter { $0 != scriptID }
             do {
                 guard let text = await window.open(noteID, ready) else { throw WindowFailure.unavailable }

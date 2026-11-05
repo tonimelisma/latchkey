@@ -149,5 +149,7 @@ refused all of them. Tried on Toni's Mac with throwaway notes in a "Latchkey che
 - **Pasting rich text** (Edit → Paste with HTML on the pasteboard): would keep headings and
   lists, but needs Notes in front and the owner's clipboard; not used.
 - **Writing Notes' database**: nobody does it; iCloud sync owns that data. Rejected.
-- Open: whether Accessibility reaches Notes' window while the Mac is locked or the lid is
-  closed (screen-state check cases "Change a note with a checklist", "Tick a checklist item").
+- Locked Mac (tried 2026-11-04, Notes' window shown with `show note`): the window is listed but
+  has no note editor at all, and each look took up to 2 s, so the first build waited 25 s and
+  Claude's calls timed out. Latchkey now answers at once that the Mac is locked (FR-158). Still
+  open: the lid closed while unlocked (screen-state cases `notes.checklist_*`).

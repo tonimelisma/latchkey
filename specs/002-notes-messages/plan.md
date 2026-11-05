@@ -121,6 +121,8 @@ Serves FR-106, FR-155 to FR-159; research "Notes' window".
   comes from the database (D2).
 - One change at a time (a queue), since the window is shared. The answer comes once the
   database shows the change (up to 5 s), else says Notes hasn't saved it yet.
+- While the Mac is locked Notes' window has no note editor (tried 2026-11-04), so nothing is
+  tried and the answer says so at once; otherwise the wait for the editor ends after 5 s.
 - When the window can't be used, the change isn't started (FR-158); for create and for plain
   notes the AppleScript part is already done, so its ☐/☑ lines stay as they are and the answer
   says so.

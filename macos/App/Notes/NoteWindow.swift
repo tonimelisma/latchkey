@@ -23,6 +23,9 @@ struct NoteWindow: Sendable {
     var markChecked: @Sendable (_ noteID: String, _ at: [Int]) async -> Bool
     /// Waits until `check` sees the change in Notes' database.
     var saved: @Sendable (_ check: @escaping @Sendable () async -> Bool) async -> Bool
+    /// Whether the Mac is locked: Notes' window then has no note editor (checked live
+    /// 2026-11-04), so nothing is tried.
+    var locked: @Sendable () -> Bool = { false }
 
     /// A window that never shows a note: the AppleScript route only.
     static let unavailable = NoteWindow(
@@ -40,7 +43,9 @@ struct NoteWindow: Sendable {
             _ = try? await OSAScriptRunner(app: Permissions.notesApp).run(Script.restore, [first])
         },
         open: { noteID, ready in
-            for _ in 0..<50 {
+            // At most 5 s however slowly Notes answers (each look took up to 2 s while locked).
+            let deadline = ContinuousClock.now + .seconds(5)
+            while ContinuousClock.now < deadline {
                 if let editor = Live.editor(noteID), let text = AppWindowReader.string(editor, kAXValueAttribute),
                     ready(text)
                 {
@@ -109,7 +114,8 @@ struct NoteWindow: Sendable {
                 try? await Task.sleep(for: .milliseconds(200))
             }
             return false
-        })
+        },
+        locked: { SystemScreen().isLocked() })
 
     enum Script {
         /// argv: the note's scripting id. Answers the notes selected before, one per line.

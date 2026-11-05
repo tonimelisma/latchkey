@@ -12,6 +12,7 @@ final class FakeNoteWindow: @unchecked Sendable {
     var styles: [String: [(Bool, Bool)]] = [:]
     var available = true
     var saved = true
+    var locked = false
     private(set) var shown: [String] = []
     private(set) var restored: [[String]] = []
     private(set) var toggles: [Int] = []
@@ -105,7 +106,8 @@ final class FakeNoteWindow: @unchecked Sendable {
                     return true
                 }
             },
-            saved: { _ in self.lock.withLock { self.saved } })
+            saved: { _ in self.lock.withLock { self.saved } },
+            locked: { self.lock.withLock { self.locked } })
     }
 }
 
@@ -323,6 +325,20 @@ extension Array {
         #expect(result.content.jsonText.contains("Notes' window"), "\(result.content.jsonText)")
         #expect(w.text("N-GROCERIES") == groceries)
         #expect(w.restored.count == 1, "the owner's note is shown again even so")
+    }
+
+    /// A locked Mac has no note editor in Notes' window (checked live 2026-11-04: the window is
+    /// there, its editor isn't), so Latchkey says so at once instead of waiting it out.
+    @Test func aLockedMacIsAnsweredAtOnce() async throws {
+        let w = groceriesWindow()
+        w.locked = true
+        let (_, tools) = try setup(w)
+        let result = await tools["notes_update"]!.handler(
+            .object(["id": .string("N-GROCERIES"), "mode": .string("append"), "text": .string("eggs")]))
+        #expect(result.isError)
+        #expect(result.content.jsonText.contains("locked"), "\(result.content.jsonText)")
+        #expect(w.shown.isEmpty, "Notes wasn't asked to show anything")
+        #expect(w.text("N-GROCERIES") == groceries)
     }
 
     @Test func aNewNoteWithoutTheWindowKeepsItsBoxes() async throws {
