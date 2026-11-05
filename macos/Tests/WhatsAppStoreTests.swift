@@ -57,6 +57,15 @@ import Testing
             INSERT INTO ZWAADDRESSBOOKCONTACT VALUES (2, NULL, '99900011122233@lid', '15550009999@s.whatsapp.net');
             """
         #expect(sqlite3_exec(c, book, nil, nil, nil) == SQLITE_OK)
+        // WhatsApp's own list of accounts it knows by privacy id and number (the Owner's among them).
+        var l: OpaquePointer?
+        sqlite3_open(dir.appending(path: "LID.sqlite").path, &l)
+        defer { sqlite3_close(l) }
+        let lid = """
+            CREATE TABLE ZWAZACCOUNT (Z_PK INTEGER PRIMARY KEY, ZIDENTIFIER TEXT, ZPHONENUMBER TEXT);
+            INSERT INTO ZWAZACCOUNT VALUES (1, '66600011122233@lid', '15550007777');
+            """
+        #expect(sqlite3_exec(l, lid, nil, nil, nil) == SQLITE_OK)
         return url
     }
 
@@ -89,6 +98,9 @@ import Testing
         #expect(s.number(forChat: "15550001111@s.whatsapp.net") == "15550001111")
         #expect(s.number(forChat: "120363000@g.us") == nil && s.number(forChat: "88800011122244@lid") == nil)
         #expect(s.chatIDs(forNumber: "15550009999") == ["15550009999@s.whatsapp.net", "99900011122233@lid"])
+        // A privacy id the address book doesn't know, from WhatsApp's own account list (the Owner's own
+        // number is there, 2026-11-05).
+        #expect(s.number(forChat: "66600011122233@lid") == "15550007777")
         let found = try s.chats(query: "15550009999", unread: false, limit: 5, offset: 0).chats.map(\.id)
         #expect(found == ["99900011122233@lid"])
     }
@@ -133,6 +145,26 @@ import Testing
         #expect(
             try s.search(text: nil, chat: "120363000@g.us", since: since, until: nil, limit: 10, offset: 0).count == 3)
         #expect(try s.newest() == Date(timeIntervalSinceReferenceDate: Self.t0 + 500))
+    }
+
+    /// FR-1240: each message carries WhatsApp's own id (its stanza id), the same on both paths, and is
+    /// found again by it.
+    @Test func messagesCarryWhatsAppsOwnIdAndAreFoundByIt() throws {
+        let s = try WhatsAppStore(url: try Self.make())
+        let m = try s.messages(chat: "15550001111@s.whatsapp.net", before: nil, limit: 10)
+        #expect(m.map(\.key) == ["B", "A"])
+        let found = try #require(try s.message(chat: "15550001111@s.whatsapp.net", key: "A"))
+        #expect(found.text == "see you at six" && !found.fromMe)
+        #expect(try s.message(chat: "120363000@g.us", key: "A") == nil, "only in its own chat")
+    }
+
+    /// FR-1244: "me" is the Owner's own chat ("Message yourself", named You by WhatsApp).
+    @Test func meIsTheOwnersOwnChat() throws {
+        let s = try WhatsAppStore(url: try Self.make())
+        for key in ["me", "myself", "Message yourself"] {
+            guard case .one(let c) = try s.chat(key) else { Issue.record("\(key) not found"); continue }
+            #expect(c.id == "99900011122233@lid")
+        }
     }
 
     @Test func anotherLayoutIsSaidPlainly() throws {

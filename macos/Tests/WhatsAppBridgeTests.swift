@@ -15,7 +15,11 @@ import WebKit
         let seq = 0;
         const key = (fromMe, chat) => { const id = 'K' + (++seq); return { fromMe, remote: chat, id, toString() { return fromMe + '_' + chat + '_' + id; } }; };
         const collection = (items) => ({ items, getModelsArray() { return this.items; }, get length() { return this.items.length; } });
-        function msg(chat, o) { return Object.assign({ id: key(!!o.fromMe, chat), t: o.t, type: o.type || 'chat', body: o.body || '', ack: o.ack || 0 }, o.extra || {}); }
+        function msg(chat, o) {
+          const m = Object.assign({ id: key(!!o.fromMe, chat), t: o.t, type: o.type || 'chat', body: o.body || '', ack: o.ack || 0 }, o.extra || {});
+          m.msgContextInfo = () => ({ quotedMsg: m, quotedStanzaID: m.id.id });
+          return m;
+        }
         function chat(id, name, t, unread, msgs) {
           const c = { id: wid(id), formattedTitle: name, t, unreadCount: unread, contact: { name }, older: [] };
           c.msgs = collection(msgs.map((m) => msg(id, m)));
@@ -26,7 +30,10 @@ import WebKit
           chat('120363000@g.us', 'Family', 500, 2, [{ t: 450, body: 'dinner saturday?', extra: { author: wid('15550002222@c.us') } }, { t: 500, body: 'yes', extra: { author: wid('15550003333@c.us') } }]),
           chat('99900011122233@lid', 'Sam Ito', 100, 0, [{ t: 100, body: 'hi' }]),
           chat('15550004444@c.us', 'Sam Ross', 90, 0, []),
+          chat('15559990000@c.us', 'Toni (You)', 80, 0, [{ t: 80, body: 'note to self', fromMe: true, ack: 3 }]),
         ];
+        window.__reactions = [];
+        window.__deleted = [];
         chats[1].older = [msg('120363000@g.us', { t: 400, body: 'older one' })];
         const contacts = { '15550002222@c.us': { name: 'Mum' }, '15550003333@c.us': { pushname: 'Dad' } };
         window.__sent = [];
@@ -38,11 +45,11 @@ import WebKit
           WAWebWidFactory: { createWid: wid },
           WAWebFindChatAction: { findOrCreateLatestChat: async (w) => { const c = chat(w._serialized, '+' + w.user, 0, 0, []); chats.push(c); return { chat: c }; } },
           WAWebSendTextMsgChatAction: {
-            sendTextMsgToChat: (c, text) => {
-              window.__sent.push({ chat: c.id._serialized, text });
+            sendTextMsgToChat: (c, text, opts) => {
+              window.__sent.push({ chat: c.id._serialized, text, quoted: (opts && opts.quotedStanzaID) || null });
               if (window.__mode === 'reject') return Promise.reject(new Error('blocked'));
               if (window.__mode === 'never') return new Promise(() => {});
-              deliver(c, msg(c.id._serialized, { t: 999, body: text, fromMe: true }), 50);
+              deliver(c, msg(c.id._serialized, { t: 999, body: text, fromMe: true, extra: opts && opts.quotedStanzaID ? { quotedStanzaID: opts.quotedStanzaID } : {} }), 50);
               // WhatsApp's own promise settles much later than the message goes out.
               return new Promise((r) => setTimeout(r, 60000));
             },
@@ -52,11 +59,20 @@ import WebKit
             prepRawMedia: (data, opts) => ({
               waitForPrep: async () => ({ type: opts.asDocument ? 'document' : 'image' }),
               sendToChat: async ({ chat: c, options }) => {
-                window.__sent.push({ chat: c.id._serialized, file: data.file.name, asDocument: opts.asDocument, caption: options.caption || null });
+                window.__sent.push({ chat: c.id._serialized, file: data.file.name, asDocument: opts.asDocument, caption: options.caption || null, quoted: options.quotedStanzaID || null });
                 deliver(c, msg(c.id._serialized, { t: 999, type: opts.asDocument ? 'document' : 'image', fromMe: true, extra: { caption: options.caption, filename: data.file.name } }), 30);
               },
             }),
           },
+          WAWebSendReactionMsgAction: { sendReactionToMsg: async (m, emoji) => { window.__reactions.push({ key: m.id.id, emoji }); } },
+          WAWebMsgActionCapability: { canSenderRevokeMsg: (m) => m.t > 200 },
+          WAWebCmd: {
+            Cmd: {
+              sendDeleteMsgs: (c, { list }) => { window.__deleted.push({ how: 'me', key: list[0].id.id }); setTimeout(() => { c.msgs.items = c.msgs.items.filter((x) => x !== list[0]); }, 30); },
+              sendRevokeMsgs: (c, { list }) => { window.__deleted.push({ how: 'everyone', key: list[0].id.id }); setTimeout(() => { list[0].type = 'revoked'; }, 30); },
+            },
+          },
+          WAWebUserPrefsMeUser: { getMaybeMePnUser: () => wid('15559990000@c.us'), getMaybeMeLidUser: () => null },
           WAWebChatLoadMessages: { loadEarlierMsgs: async ({ chat: c }) => { c.msgs.items = c.older.concat(c.msgs.items); c.older = []; } },
         };
         window.require = (name) => { if (!(name in modules)) throw new Error('no module ' + name); return modules[name]; };
@@ -87,7 +103,7 @@ import WebKit
         let w = try await page()
         let s = try await call(w, "state")
         #expect(s["connected"]?.boolValue == true && s["loaded"]?.boolValue == true)
-        #expect(s["missing"] == .array([]) && s["chats"]?.numberValue == 4)
+        #expect(s["missing"] == .array([]) && s["chats"]?.numberValue == 5)
         _ = try await js(w, "window.require('WAWebSocketModel').Socket.state = 'OPENING'")
         #expect(try await call(w, "state")["connected"]?.boolValue == false)
         // A renamed module is named, so the tools can say Latchkey needs an update.
@@ -183,7 +199,8 @@ import WebKit
         let w = try await page()
         let all = try await call(w, "chats", .object(["limit": .number(10)]))
         guard case .array(let list) = all["chats"] else { Issue.record("no chats"); return }
-        #expect(list.compactMap { $0["name"]?.stringValue } == ["Family", "Sarah Lee", "Sam Ito", "Sam Ross"])
+        #expect(
+            list.compactMap { $0["name"]?.stringValue } == ["Family", "Sarah Lee", "Sam Ito", "Sam Ross", "Toni (You)"])
         #expect(list[0]["group"]?.boolValue == true && list[1]["group"]?.boolValue == false)
         #expect(try await call(w, "chats", .object(["unread": .bool(true)]))["total"]?.numberValue == 1)
         #expect(try await call(w, "chats", .object(["query": .string("sam")]))["total"]?.numberValue == 2)
@@ -293,4 +310,99 @@ import WebKit
         #expect(try await call(w, "send", .object(["chat": .string("x@c.us"), "text": .string("y")]))["error"] != nil)
         #expect(try await call(w, "messages", .object(["chat": .string("x@c.us")]))["none"]?.boolValue == true)
     }
+
+    /// FR-1240: every message carries its key, the id Claude passes to reply, react, or delete.
+    @Test func messagesCarryTheirKey() async throws {
+        let w = try await page()
+        let r = try await call(w, "messages", .object(["chat": .string("15550001111@c.us")]))
+        guard case .array(let m) = r["messages"] else { Issue.record("no messages"); return }
+        #expect(!m.isEmpty && m.allSatisfy { ($0["key"]?.stringValue ?? "").hasPrefix("K") })
+    }
+
+    /// FR-1241: a reply quotes the message and says whether WhatsApp shows the quote.
+    @Test func aReplyQuotesTheMessage() async throws {
+        let w = try await page()
+        let msgs = try await call(w, "messages", .object(["chat": .string("15550001111@c.us")]))
+        guard case .array(let list) = msgs["messages"], let key = list.last?["key"]?.stringValue else {
+            Issue.record("no key")
+            return
+        }
+        let r = try await call(
+            w, "send", .object(["chat": .string("15550001111@c.us"), "text": .string("yes"), "replyTo": .string(key)]))
+        guard case .array(let results) = r["results"] else { Issue.record("no results"); return }
+        #expect(results.first?["quoted"]?.boolValue == true && results.first?["sent"]?.boolValue == true)
+        #expect(try await js(w, "return window.__sent[0].quoted") as? String == key)
+        let none = try await call(
+            w, "send", .object(["chat": .string("15550001111@c.us"), "text": .string("x"), "replyTo": .string("K999")]))
+        #expect(none["error"]?.stringValue?.contains("not in this chat") == true)
+        #expect(try await js(w, "return window.__sent.length") as? Int == 1, "nothing sent without the message")
+    }
+
+    /// FR-1242: a reaction goes on the message by its key, also on an older one loaded from WhatsApp.
+    @Test func reactingFindsTheMessageAndReacts() async throws {
+        let w = try await page()
+        let older = try await js(
+            w, "return window.require('WAWebCollections').Chat.getModelsArray()[1].older[0].id.id")
+        let key = try #require(older as? String)
+        let r = try await call(
+            w, "react", .object(["chat": .string("120363000@g.us"), "message": .string(key), "emoji": .string("👍")]))
+        #expect(r["done"]?.boolValue == true && r["message"]?["text"]?.stringValue == "older one")
+        #expect(try await js(w, "return window.__reactions[0].emoji") as? String == "👍")
+        let gone = try await call(
+            w, "react", .object(["chat": .string("120363000@g.us"), "message": .string("K999"), "emoji": .string("")]))
+        #expect(gone["error"]?.stringValue == "no such message in this chat")
+    }
+
+    /// FR-1243: deleting for the Owner removes it; for everyone only the Owner's own, while allowed.
+    @Test func deletingForMeAndForEveryone() async throws {
+        let w = try await page()
+        let keys = try await js(
+            w, "return window.require('WAWebCollections').Chat.getModelsArray()[0].msgs.items.map((m) => m.id.id)")
+        let k = try #require(keys as? [String])
+        let chat = JSONValue.string("15550001111@c.us")
+        let theirs = try await call(
+            w, "remove", .object(["chat": chat, "message": .string(k[0]), "everyone": .bool(true)]))
+        #expect(theirs["refused"]?.stringValue?.contains("only your own") == true)
+        let mine = try await call(
+            w, "remove", .object(["chat": chat, "message": .string(k[1]), "everyone": .bool(true)]))
+        #expect(mine["done"]?.boolValue == true)
+        let me = try await call(w, "remove", .object(["chat": chat, "message": .string(k[0])]))
+        #expect(me["done"]?.boolValue == true)
+        let how = try await js(w, "return window.__deleted.map((d) => d.how)") as? [String]
+        #expect(how == ["everyone", "me"])
+        // Too old for everyone: WhatsApp's own check says no, and nothing is sent.
+        let own = try #require(
+            try await js(w, "return window.require('WAWebCollections').Chat.getModelsArray()[4].msgs.items[0].id.id")
+                as? String)
+        let old = try await call(
+            w, "remove",
+            .object(["chat": .string("15559990000@c.us"), "message": .string(own), "everyone": .bool(true)]))
+        #expect(old["refused"]?.stringValue?.contains("too old") == true)
+    }
+
+    /// FR-1244: "me" is the Owner's own chat, by WhatsApp Web's own idea of who is logged in.
+    @Test func meIsTheOwnersOwnChat() async throws {
+        let w = try await page()
+        let r = try await call(w, "resolve", .object(["to": .string("me")]))
+        #expect(r["match"]?["id"]?.stringValue == "15559990000@c.us")
+    }
+
+    /// A rename of a module that only reactions use is named there, and the rest keeps working.
+    @Test func aMissingExtraModuleIsNamedOnlyWhereUsed() async throws {
+        let w = try await page()
+        _ = try await js(
+            w,
+            "const r = window.require; window.require = (n) => { if (n === 'WAWebSendReactionMsgAction') throw new Error('gone'); return r(n); }"
+        )
+        #expect(try await call(w, "state")["missing"] == .array([]))
+        let key = try #require(
+            try await js(w, "return window.require('WAWebCollections').Chat.getModelsArray()[0].msgs.items[0].id.id")
+                as? String)
+        await #expect(throws: (any Error).self) {
+            _ = try await call(
+                w, "react",
+                .object(["chat": .string("15550001111@c.us"), "message": .string(key), "emoji": .string("x")]))
+        }
+    }
 }
+

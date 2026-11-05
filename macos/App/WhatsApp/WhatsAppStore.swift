@@ -25,6 +25,9 @@ struct WhatsAppMessage: Equatable, Sendable {
     var kind: String
     var text: String
     var fileName: String?
+    /// WhatsApp's own id for the message (its stanza id), the same in WhatsApp for Mac's database
+    /// and in WhatsApp Web: what Claude passes to reply to, react to, or delete it (FR-1240).
+    var key: String = ""
 }
 
 /// Reads WhatsApp for Mac's own database, read-only (FR-1221). Needs Full Disk Access; works in
@@ -46,6 +49,7 @@ final class WhatsAppStore: @unchecked Sendable {
     private let db: OpaquePointer
     private let lock = NSLock()
     private let addressBookURL: URL
+    private let accountsURL: URL
     private var names: [String: String] = [:]
     /// Phone number ↔ privacy id, from the address book: after a relink WhatsApp for Mac files most
     /// person chats under `…@lid` (47 of 60 on 2026-11-04), so a number alone doesn't find them.
@@ -56,6 +60,7 @@ final class WhatsAppStore: @unchecked Sendable {
     init(url: URL = WhatsAppStore.database) throws {
         // Next to the database it belongs to (a test's copy has its own).
         addressBookURL = url.deletingLastPathComponent().appending(path: Self.addressBook.lastPathComponent)
+        accountsURL = url.deletingLastPathComponent().appending(path: "LID.sqlite")
         // `db` is set last: once every stored property is set, a throw runs `deinit`, which
         // closes it too, and a second close of a freed connection crashed the test host
         // (SQLite's "illegal multi-threaded access", 2026-11-03).
@@ -148,7 +153,8 @@ final class WhatsAppStore: @unchecked Sendable {
     func chat(_ key: String) throws -> Resolution {
         try locked {
             refreshNames()
-            let k = key.trimmingCharacters(in: .whitespaces)
+            var k = key.trimmingCharacters(in: .whitespaces)
+            if Self.meansMe(k) { k = "You" }
             // An id; or a phone number, under its number or its privacy id.
             var ids = [k]
             if k.range(of: #"^[+\d\s().-]+$"#, options: .regularExpression) != nil, k.filter(\.isNumber).count >= 7 {
@@ -188,7 +194,7 @@ final class WhatsAppStore: @unchecked Sendable {
     private static let messageSQL = """
         SELECT m.Z_PK, s.ZCONTACTJID, s.ZPARTNERNAME, m.ZMESSAGEDATE, m.ZISFROMME, m.ZMESSAGETYPE, m.ZTEXT,
           g.ZCONTACTNAME, g.ZFIRSTNAME, p.ZPUSHNAME, IFNULL(g.ZMEMBERJID, m.ZFROMJID), i.ZTITLE, s.ZSESSIONTYPE,
-          i.ZMEDIALOCALPATH
+          i.ZMEDIALOCALPATH, m.ZSTANZAID
         FROM ZWAMESSAGE m JOIN ZWACHATSESSION s ON m.ZCHATSESSION = s.Z_PK
         LEFT JOIN ZWAGROUPMEMBER g ON m.ZGROUPMEMBER = g.Z_PK
         LEFT JOIN ZWAPROFILEPUSHNAME p ON p.ZJID = IFNULL(g.ZMEMBERJID, m.ZFROMJID)
@@ -212,7 +218,25 @@ final class WhatsAppStore: @unchecked Sendable {
             id: "\(r[0].int ?? 0)", chatID: r[1].text ?? "", chatName: partner, date: Self.date(r[3]) ?? .distantPast,
             fromMe: fromMe, sender: sender, kind: kind, text: Self.clean(r[6].text) ?? "",
             fileName: kind == "document"
-                ? (Self.clean(r[11].text) ?? path.map { ($0 as NSString).lastPathComponent }) : nil)
+                ? (Self.clean(r[11].text) ?? path.map { ($0 as NSString).lastPathComponent }) : nil,
+            key: r[14].text ?? "")
+    }
+
+    /// One message of a chat by WhatsApp's own id (FR-1240).
+    func message(chat: String, key: String) throws -> WhatsAppMessage? {
+        try locked {
+            refreshNames()
+            return try SQLite.rows(
+                // nosemgrep: scripts.semgrep.latchkey-sql-bound -- only fixed SQL constants are spliced in; every value is bound
+                db, "\(Self.messageSQL) WHERE s.ZCONTACTJID = ? AND m.ZSTANZAID = ? LIMIT 1",
+                bind: [.text(chat), .text(key)]
+            ).first.map(message)
+        }
+    }
+
+    /// Words that mean the Owner's own chat ("Message yourself"), which WhatsApp names You (FR-1244).
+    static func meansMe(_ s: String) -> Bool {
+        ["me", "myself", "you", "message yourself"].contains(s.trimmingCharacters(in: .whitespaces).lowercased())
     }
 
     /// WhatsApp for Mac's message types (`ZMESSAGETYPE`), as seen in its database.
@@ -322,6 +346,24 @@ final class WhatsAppStore: @unchecked Sendable {
     private func refreshNames() {
         guard Date().timeIntervalSince(namesRead) > 300 else { return }
         namesRead = Date()
+        // WhatsApp's own account list: privacy id and number of accounts it knows, the Owner's own
+        // among them (not in the address book; needed to open "Message yourself", 2026-11-05).
+        var numbers: [String: String] = [:]
+        var lids: [String: String] = [:]
+        if let accounts = try? SQLite.openReadOnly(accountsURL) {
+            defer { SQLite.close(accounts) }
+            for r in (try? SQLite.rows(
+                accounts,
+                "SELECT ZIDENTIFIER, ZPHONENUMBER FROM ZWAZACCOUNT WHERE ZIDENTIFIER LIKE '%@lid' AND ZPHONENUMBER IS NOT NULL"
+            )) ?? [] {
+                guard let lid = r[0].text.map(Self.user), let number = r[1].text?.filter(\.isNumber), !number.isEmpty
+                else { continue }
+                numbers[lid] = number
+                lids[number] = lid
+            }
+        }
+        numberOfLID = numbers
+        lidOfNumber = lids
         guard let book = try? SQLite.openReadOnly(addressBookURL) else { return }
         defer { SQLite.close(book) }
         guard
@@ -334,8 +376,6 @@ final class WhatsAppStore: @unchecked Sendable {
             for id in [r[1].text, r[2].text].compactMap({ $0 }) where !id.isEmpty { out[Self.user(id)] = name }
         }
         names = out
-        var numbers: [String: String] = [:]
-        var lids: [String: String] = [:]
         if let pairs = try? SQLite.rows(
             book,
             "SELECT ZLID, ZWHATSAPPID FROM ZWAADDRESSBOOKCONTACT WHERE ZLID IS NOT NULL AND ZWHATSAPPID IS NOT NULL")
