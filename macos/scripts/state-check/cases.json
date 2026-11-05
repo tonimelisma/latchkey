@@ -186,6 +186,22 @@
       "missing": []
     },
     {
+      "id": "whatsapp",
+      "name": "WhatsApp",
+      "cases": [
+        {"id": "whatsapp.chats", "case": "List recent chats", "steps": "whatsapp_find with nothing, limit 5."},
+        {"id": "whatsapp.search", "case": "Search messages", "steps": "whatsapp_find with text \"the\", limit 3."},
+        {"id": "whatsapp.read", "case": "Read a chat, with message ids", "steps": "whatsapp_read chat \"me\", limit 5; check each message line shows its id (msg …)."},
+        {"id": "whatsapp.send", "case": "Send a text", "steps": "whatsapp_send to \"me\" (the Owner's own chat, WhatsApp's \"Message yourself\"; never any other chat), text \"{TAG}: text (please ignore)\"."},
+        {"id": "whatsapp.send_file", "case": "Send a file", "steps": "files_change write ~/Downloads/latchkey-check.txt with text \"{TAG}\" (overwrite true), then whatsapp_send to \"me\" with files [that path] and text \"{TAG}: file\", then files_change trash the file."},
+        {"id": "whatsapp.reply", "case": "Reply to a message, quoting it", "steps": "whatsapp_read chat \"me\", limit 10; take the msg id of \"{TAG}: text (please ignore)\"; whatsapp_send to \"me\", text \"{TAG}: reply\", reply_to that id; check the answer says it went as a reply."},
+        {"id": "whatsapp.react", "case": "React to a message and take it back", "steps": "whatsapp_change chat \"me\", message the id of \"{TAG}: text (please ignore)\", action react, emoji \"👍\"; then the same with action unreact."},
+        {"id": "whatsapp.delete_everyone", "case": "Delete a sent message for everyone", "steps": "whatsapp_send to \"me\", text \"{TAG}: everyone\"; whatsapp_read chat \"me\" for its msg id; whatsapp_change delete that id with everyone true; then whatsapp_change delete the same id (no everyone) so the \"deleted\" placeholder goes too."},
+        {"id": "whatsapp.delete", "case": "Delete messages for me", "steps": "whatsapp_read chat \"me\", limit 20; whatsapp_change delete (for me) every message whose text starts with \"{TAG}\" or whose file is latchkey-check.txt; then whatsapp_find text \"{TAG}\", chat \"me\" finds none."}
+      ],
+      "missing": ["Calls, status updates, communities, and channels (out of scope)", "WhatsApp for Mac's window while the Mac is locked (macOS shows it to no other app then); only Safari's WhatsApp Web tab can work"]
+    },
+    {
       "id": "sweep",
       "name": "Nothing left behind",
       "cases": [
@@ -194,7 +210,8 @@
         {"id": "sweep.calendar", "case": "No test events left", "steps": "calendar_find query \"{TAG}\" from 7 days ago to 60 days ahead. Delete each one with span future, then look again. works only when none is left."},
         {"id": "sweep.reminders", "case": "No test reminders or lists left", "steps": "reminders_find with nothing, and with query \"{TAG}\". Delete each reminder with the tag and each list whose name starts with \"{TAG}\", then look again. works only when none is left."},
         {"id": "sweep.mail", "case": "No test email outside the Trash", "steps": "mail_find subject \"{TAG}\". Mark every one read (mail_change mark_read, also those already in a Trash or Deleted Items), and delete (to Trash) each not already in a Trash or Deleted Items mailbox, then look again. works only when every one is read and in a Trash."},
-        {"id": "sweep.files", "case": "No test files left", "steps": "files_find path \"~/Downloads\". Trash ~/Downloads/latchkey-check and ~/Downloads/latchkey-check.txt if either is there (files_change trash), then look again. works only when neither is left."}
+        {"id": "sweep.files", "case": "No test files left", "steps": "files_find path \"~/Downloads\". Trash ~/Downloads/latchkey-check and ~/Downloads/latchkey-check.txt if either is there (files_change trash), then look again. works only when neither is left."},
+        {"id": "sweep.whatsapp", "case": "No test WhatsApp messages left", "steps": "Only in the Owner's own chat (chat \"me\"; never touch any other chat): whatsapp_read chat \"me\", limit 50. whatsapp_change delete (for me) each message whose text starts with \"{TAG}\" or whose file is latchkey-check.txt, and each \"deleted\" placeholder an earlier case left, then read again and whatsapp_find text \"{TAG}\", chat \"me\". works only when none is left."}
       ],
       "missing": []
     }

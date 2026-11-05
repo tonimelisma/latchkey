@@ -23,7 +23,9 @@ import Testing
             CREATE TABLE ZWACHATSESSION (Z_PK INTEGER PRIMARY KEY, ZCONTACTJID TEXT, ZPARTNERNAME TEXT, ZSESSIONTYPE INTEGER,
               ZUNREADCOUNT INTEGER, ZLASTMESSAGEDATE REAL, ZLASTMESSAGE INTEGER, ZREMOVED INTEGER, ZHIDDEN INTEGER);
             CREATE TABLE ZWAMESSAGE (Z_PK INTEGER PRIMARY KEY, ZCHATSESSION INTEGER, ZMESSAGEDATE REAL, ZISFROMME INTEGER,
-              ZMESSAGETYPE INTEGER, ZTEXT TEXT, ZFROMJID TEXT, ZGROUPMEMBER INTEGER, ZMEDIAITEM INTEGER, ZSTANZAID TEXT);
+              ZMESSAGETYPE INTEGER, ZTEXT TEXT, ZFROMJID TEXT, ZGROUPMEMBER INTEGER, ZMEDIAITEM INTEGER, ZSTANZAID TEXT,
+              Z_OPT INTEGER DEFAULT 1);
+            CREATE TABLE ZWAMESSAGEINFO (Z_PK INTEGER PRIMARY KEY, Z_OPT INTEGER, ZMESSAGE INTEGER, ZRECEIPTINFO BLOB);
             CREATE TABLE ZWAGROUPMEMBER (Z_PK INTEGER PRIMARY KEY, ZCONTACTNAME TEXT, ZFIRSTNAME TEXT, ZMEMBERJID TEXT);
             CREATE TABLE ZWAMEDIAITEM (Z_PK INTEGER PRIMARY KEY, ZTITLE TEXT, ZMEDIALOCALPATH TEXT);
             CREATE TABLE ZWAPROFILEPUSHNAME (Z_PK INTEGER PRIMARY KEY, ZJID TEXT, ZPUSHNAME TEXT);
@@ -38,13 +40,13 @@ import Testing
             INSERT INTO ZWAPROFILEPUSHNAME VALUES (1, '15550003333@s.whatsapp.net', 'Dad');
             INSERT INTO ZWAMEDIAITEM VALUES (1, 'plan.pdf', 'Media/plan.pdf');
             INSERT INTO ZWAMESSAGE VALUES
-              (1, 1, \(t + 290), 0, 0, 'see you at six', '15550001111@s.whatsapp.net', NULL, NULL, 'A'),
-              (2, 1, \(t + 300), 1, 0, 'ok', NULL, NULL, NULL, 'B'),
-              (3, 2, \(t + 400), 0, 6, NULL, NULL, 1, NULL, 'C'),
-              (4, 2, \(t + 450), 0, 0, 'dinner saturday?', NULL, 1, NULL, 'D'),
-              (5, 2, \(t + 480), 0, 8, NULL, NULL, 2, 1, 'E'),
-              (6, 2, \(t + 500), 0, 0, 'yes 100%', NULL, 2, NULL, 'F'),
-              (7, 2, \(t + 200), 0, 0, 'hearts', NULL, 3, NULL, 'G');
+              (1, 1, \(t + 290), 0, 0, 'see you at six', '15550001111@s.whatsapp.net', NULL, NULL, 'A', 1),
+              (2, 1, \(t + 300), 1, 0, 'ok', NULL, NULL, NULL, 'B', 1),
+              (3, 2, \(t + 400), 0, 6, NULL, NULL, 1, NULL, 'C', 1),
+              (4, 2, \(t + 450), 0, 0, 'dinner saturday?', NULL, 1, NULL, 'D', 1),
+              (5, 2, \(t + 480), 0, 8, NULL, NULL, 2, 1, 'E', 1),
+              (6, 2, \(t + 500), 0, 0, 'yes 100%', NULL, 2, NULL, 'F', 1),
+              (7, 2, \(t + 200), 0, 0, 'hearts', NULL, 3, NULL, 'G', 1);
             """
         #expect(sqlite3_exec(h, sql, nil, nil, nil) == SQLITE_OK)
         // WhatsApp's address book: a name for a sender ChatStorage knows only by privacy id.
@@ -62,8 +64,9 @@ import Testing
         sqlite3_open(dir.appending(path: "LID.sqlite").path, &l)
         defer { sqlite3_close(l) }
         let lid = """
-            CREATE TABLE ZWAZACCOUNT (Z_PK INTEGER PRIMARY KEY, ZIDENTIFIER TEXT, ZPHONENUMBER TEXT);
-            INSERT INTO ZWAZACCOUNT VALUES (1, '66600011122233@lid', '15550007777');
+            CREATE TABLE ZWAZACCOUNT (Z_PK INTEGER PRIMARY KEY, ZIDENTIFIER TEXT, ZPHONENUMBER TEXT, ZCOUNTRYCODE TEXT);
+            INSERT INTO ZWAZACCOUNT VALUES (1, '99900011122233@lid', '15550009999', 'US');
+            INSERT INTO ZWAZACCOUNT VALUES (2, '66600011122233@lid', '15550007777', NULL);
             """
         #expect(sqlite3_exec(l, lid, nil, nil, nil) == SQLITE_OK)
         return url
@@ -165,6 +168,53 @@ import Testing
             guard case .one(let c) = try s.chat(key) else { Issue.record("\(key) not found"); continue }
             #expect(c.id == "99900011122233@lid")
         }
+        #expect(s.ownChatID() == "99900011122233@lid")
+    }
+
+    /// Security review 2026-11-05: "me" is the Owner's own account (WhatsApp's account list), matched
+    /// on the chat's id only; never a chat that is merely named You, and none when the account is unknown.
+    @Test func meIsNeverFoundByName() throws {
+        let url = try Self.make()
+        var l: OpaquePointer?
+        sqlite3_open(url.deletingLastPathComponent().appending(path: "LID.sqlite").path, &l)
+        #expect(sqlite3_exec(l, "UPDATE ZWAZACCOUNT SET ZCOUNTRYCODE = NULL", nil, nil, nil) == SQLITE_OK)
+        sqlite3_close(l)
+        let s = try WhatsAppStore(url: url)
+        #expect(try s.chat("me") == .none, "the chat named You isn't taken for the Owner's own")
+        #expect(s.ownChatID() == nil)
+    }
+
+    /// Security review 2026-11-05: a change through WhatsApp for Mac is confirmed on the message with
+    /// that id: its stamp (row versions and receipts) changes when WhatsApp changes that message.
+    @Test func aMessagesStampChangesWhenItChanges() throws {
+        let url = try Self.make()
+        let s = try WhatsAppStore(url: url)
+        let before = try #require(s.stamp(chat: "15550001111@s.whatsapp.net", key: "A"))
+        #expect(s.stamp(chat: "15550001111@s.whatsapp.net", key: "B") != nil)
+        var h: OpaquePointer?
+        sqlite3_open(url.path, &h)
+        #expect(sqlite3_exec(h, "UPDATE ZWAMESSAGE SET Z_OPT = Z_OPT + 1 WHERE ZSTANZAID = 'A'", nil, nil, nil) == SQLITE_OK)
+        sqlite3_close(h)
+        #expect(s.stamp(chat: "15550001111@s.whatsapp.net", key: "A") != before)
+        #expect(s.stamp(chat: "120363000@g.us", key: "A") == nil, "only in its own chat")
+    }
+
+    /// Security review 2026-11-05: messages that look the same (same chat, sender side, words, minute)
+    /// are counted, so WhatsApp for Mac's window is never acted on when its bubble could be another.
+    @Test func lookalikesAreCounted() throws {
+        let url = try Self.make()
+        var h: OpaquePointer?
+        sqlite3_open(url.path, &h)
+        let t = Self.t0 + 295
+        #expect(
+            sqlite3_exec(
+                h, "INSERT INTO ZWAMESSAGE VALUES (8, 1, \(t), 0, 0, 'see you at six', NULL, NULL, NULL, 'H', 0)", nil,
+                nil, nil) == SQLITE_OK)
+        sqlite3_close(h)
+        let s = try WhatsAppStore(url: url)
+        let a = try #require(try s.message(chat: "15550001111@s.whatsapp.net", key: "A"))
+        let b = try #require(try s.message(chat: "15550001111@s.whatsapp.net", key: "B"))
+        #expect(try s.lookalikes(a) == 2 && s.lookalikes(b) == 1)
     }
 
     @Test func anotherLayoutIsSaidPlainly() throws {

@@ -1,14 +1,28 @@
 import AppKit
 import ApplicationServices
 
+/// The chat Latchkey acts on in WhatsApp for Mac, with what makes opening it certain (security
+/// review 2026-11-05): a person by their number (WhatsApp's own link opens exactly that chat), the
+/// Owner's own chat by the Owner's number, anything else only by a name no other chat has.
+struct WhatsAppDesktopTarget: Equatable, Sendable {
+    var chat: WhatsAppChat
+    /// The person's phone number (the Owner's own for their own chat); nil for groups and unknown ones.
+    var number: String?
+    /// The Owner's own chat ("Message yourself", shown as You), known by its id.
+    var isSelf = false
+    /// No other visible chat in WhatsApp for Mac's database has this name.
+    var nameIsUnique = false
+}
+
 /// What Latchkey asks WhatsApp for Mac to send (spec 012 FR-1245, FR-1246).
 struct WhatsAppDesktopSend: Equatable, Sendable {
-    var chat: WhatsAppChat
-    /// The person's phone number, when known: their chat can then be opened by WhatsApp's own link.
-    var number: String?
+    var target: WhatsAppDesktopTarget
     var text: String
     var files: [URL]
     var replyTo: WhatsAppMessage?
+
+    var chat: WhatsAppChat { target.chat }
+    var number: String? { target.number }
 }
 
 /// How an action through WhatsApp for Mac ended.
@@ -26,8 +40,10 @@ protocol WhatsAppDesktopAPI: Sendable {
     /// Why WhatsApp for Mac's window can't be used now, in words; nil when it can.
     func unusable() -> String?
     func send(_ request: WhatsAppDesktopSend) async -> WhatsAppDesktopResult
-    func react(chat: WhatsAppChat, message: WhatsAppMessage, emoji: String) async -> WhatsAppDesktopResult
-    func delete(chat: WhatsAppChat, message: WhatsAppMessage, everyone: Bool) async -> WhatsAppDesktopResult
+    func react(_ target: WhatsAppDesktopTarget, message: WhatsAppMessage, emoji: String) async
+        -> WhatsAppDesktopResult
+    func delete(_ target: WhatsAppDesktopTarget, message: WhatsAppMessage, everyone: Bool) async
+        -> WhatsAppDesktopResult
 }
 
 /// WhatsApp for Mac driven through Accessibility (plan D3b, research "WhatsApp for Mac's window",
@@ -35,6 +51,8 @@ protocol WhatsAppDesktopAPI: Sendable {
 /// the Mac is unlocked: chats, messages, the message menu (Reply, React, Delete), the selection bar,
 /// and the delete dialog all answer AXPress and AXShowMenu with WhatsApp behind other windows. With
 /// the Mac locked it shows nothing but its menu bar, so nothing works then (checked 2026-11-05).
+/// Every action is bound to the message by its id: the bubble must be the only one that looks like
+/// it, and the database must show that very message changed afterwards.
 struct WhatsAppDesktop: WhatsAppDesktopAPI {
     static let bundleID = "net.whatsapp.WhatsApp"
     var store: @Sendable () -> WhatsAppStore?
@@ -50,9 +68,10 @@ struct WhatsAppDesktop: WhatsAppDesktopAPI {
             return
                 "Latchkey isn't allowed to use Accessibility (System Settings → Privacy & Security → Accessibility)"
         }
-        guard WAWindow(pid: app.processIdentifier).messagePane() != nil || WAWindow(pid: app.processIdentifier)
-            .chatList() != nil
-        else { return "WhatsApp for Mac has no window open (it may be closed or minimized)" }
+        let w = WAWindow(pid: app.processIdentifier)
+        guard w.messagePane() != nil || w.chatList() != nil else {
+            return "WhatsApp for Mac has no window open (it may be closed or minimized)"
+        }
         return nil
     }
 
@@ -60,65 +79,85 @@ struct WhatsAppDesktop: WhatsAppDesktopAPI {
         NSRunningApplication.runningApplications(withBundleIdentifier: bundleID).first
     }
 
+    /// Waits up to 10 s for the database to show `done`.
+    private func confirm(_ done: (WhatsAppStore) -> Bool) async -> Bool {
+        for _ in 0..<40 {
+            try? await Task.sleep(for: .milliseconds(250))
+            if let db = store(), done(db) { return true }
+        }
+        return false
+    }
+
     // MARK: delete (checked 2026-11-05: seven messages deleted for me, in the background)
 
-    func delete(chat: WhatsAppChat, message: WhatsAppMessage, everyone: Bool) async -> WhatsAppDesktopResult {
+    func delete(_ target: WhatsAppDesktopTarget, message: WhatsAppMessage, everyone: Bool) async
+        -> WhatsAppDesktopResult
+    {
         guard let app = Self.app() else { return .notDone("WhatsApp for Mac isn't running") }
         let w = WAWindow(pid: app.processIdentifier)
-        if let why = await w.open(chat, number: store()?.number(forChat: chat.id)) { return .notDone(why) }
-        guard let bubble = await w.find(message) else {
-            return .notDone("WhatsApp for Mac's window doesn't show that message")
+        if let why = await w.open(target) { return .notDone(why) }
+        let bubble: AXUIElement
+        switch await w.find(message) {
+        case .failure(let p): return .notDone(p.message)
+        case .success(let b): bubble = b
         }
         guard await w.menu(on: bubble, choose: "Delete") else {
             return .notDone("WhatsApp for Mac's message menu has no Delete")
         }
         // The chat is now in selection mode with this message selected; its Delete button asks how.
-        guard let selected = await w.poll(3, { w.element(role: "AXStaticText", labelHasPrefix: "1 Selected") }) else {
+        guard await w.poll(3, { w.element(role: "AXStaticText", labelHasPrefix: "1 Selected") }) != nil else {
             await w.leaveSelection()
             return .notDone("WhatsApp for Mac didn't select the message")
         }
-        _ = selected
         guard let button = w.element(role: "AXButton", label: "Delete"), w.press(button) else {
             await w.leaveSelection()
             return .notDone("WhatsApp for Mac shows no Delete button")
         }
         let want = everyone ? "for everyone" : "for me"
         guard
-            let choice = await w.poll(3, {
-                w.element(role: "AXButton") { $0.hasPrefix("Delete") && $0.hasSuffix(want) }
-            })
+            let choice = await w.poll(
+                3, { w.element(role: "AXButton") { $0.hasPrefix("Delete") && $0.hasSuffix(want) } })
         else {
+            w.closeMenus()
             await w.leaveSelection()
             return everyone
                 ? .notDone("WhatsApp no longer offers deleting it for everyone (it may be too old)")
                 : .notDone("WhatsApp for Mac didn't offer Delete for me")
         }
         guard w.press(choice) else { return .notDone("WhatsApp for Mac didn't take the press") }
-        // Confirmed in WhatsApp for Mac's database: gone (for me), or marked deleted (for everyone).
-        for _ in 0..<40 {
-            try? await Task.sleep(for: .milliseconds(250))
-            guard let db = store() else { break }
-            let now = try? db.message(chat: chat.id, key: message.key)
-            if everyone ? (now == nil || now?.kind == "deleted") : now == nil {
-                return .done("confirmed in its database")
-            }
+        // That very message (by its id) gone (for me), or marked deleted (for everyone).
+        let gone = await confirm { db in
+            let now = try? db.message(chat: target.chat.id, key: message.key)
+            return everyone ? (now == nil || now?.kind == "deleted") : now == nil
         }
-        return .unsure("its database doesn't show the deletion yet")
+        return gone ? .done("confirmed in its database") : .unsure("its database doesn't show that message deleted")
     }
 
     // MARK: react
 
-    func react(chat: WhatsAppChat, message: WhatsAppMessage, emoji: String) async -> WhatsAppDesktopResult {
+    func react(_ target: WhatsAppDesktopTarget, message: WhatsAppMessage, emoji: String) async
+        -> WhatsAppDesktopResult
+    {
         guard let app = Self.app() else { return .notDone("WhatsApp for Mac isn't running") }
         let w = WAWindow(pid: app.processIdentifier)
-        if let why = await w.open(chat, number: store()?.number(forChat: chat.id)) { return .notDone(why) }
-        guard let bubble = await w.find(message) else {
-            return .notDone("WhatsApp for Mac's window doesn't show that message")
+        let before = store()?.stamp(chat: target.chat.id, key: message.key)
+        if let why = await w.open(target) { return .notDone(why) }
+        let bubble: AXUIElement
+        switch await w.find(message) {
+        case .failure(let p): return .notDone(p.message)
+        case .success(let b): bubble = b
         }
         guard await w.menu(on: bubble, choose: "React") else {
             return .notDone("WhatsApp for Mac's message menu has no React")
         }
-        return await w.pickReaction(emoji, on: message)
+        let picked = await w.pickReaction(emoji)
+        guard case .done = picked else { return picked }
+        // That very message (by its id) changed in the database.
+        let changed = await confirm { db in
+            let now = db.stamp(chat: target.chat.id, key: message.key)
+            return now != nil && now != before
+        }
+        return changed ? .done("confirmed in its database") : .unsure("its database doesn't show that message changed")
     }
 
     // MARK: send
@@ -127,10 +166,12 @@ struct WhatsAppDesktop: WhatsAppDesktopAPI {
         guard let app = Self.app() else { return .notDone("WhatsApp for Mac isn't running") }
         let w = WAWindow(pid: app.processIdentifier)
         let started = Date()
-        if let why = await w.open(request.chat, number: request.number) { return .notDone(why) }
+        if let why = await w.open(request.target) { return .notDone(why) }
         if let quoted = request.replyTo {
-            guard let bubble = await w.find(quoted) else {
-                return .notDone("WhatsApp for Mac's window doesn't show the message to reply to")
+            let bubble: AXUIElement
+            switch await w.find(quoted) {
+            case .failure(let p): return .notDone(p.message)
+            case .success(let b): bubble = b
             }
             guard await w.menu(on: bubble, choose: "Reply") else {
                 return .notDone("WhatsApp for Mac's message menu has no Reply")
@@ -138,17 +179,18 @@ struct WhatsAppDesktop: WhatsAppDesktopAPI {
         }
         let outcome = await w.compose(text: request.text, files: request.files)
         if case .notDone = outcome { return outcome }
-        // Confirmed in WhatsApp for Mac's database: a new message of the Owner's in that chat.
-        let want = (request.files.isEmpty ? 0 : request.files.count) + (request.files.isEmpty ? 1 : 0)
-        for _ in 0..<60 {
-            try? await Task.sleep(for: .milliseconds(250))
-            guard let db = store(),
-                let recent = try? db.messages(chat: request.chat.id, before: nil, limit: max(want, 1) + 3)
-            else { continue }
+        // A new message of the Owner's in that chat (by its id), with the text or a file.
+        let wanted = request.files.isEmpty ? 1 : request.files.count
+        let text = WhatsAppStore.clean(request.text) ?? ""
+        let sent = await confirm { db in
+            guard let recent = try? db.messages(chat: request.chat.id, before: nil, limit: wanted + 5) else {
+                return false
+            }
             let mine = recent.filter { $0.fromMe && $0.date >= started.addingTimeInterval(-5) }
-            if mine.count >= want { return .done("confirmed in its database") }
+            let withText = text.isEmpty || mine.contains { $0.text == text }
+            return mine.count >= wanted && withText
         }
-        return .unsure("its database doesn't show the message yet")
+        return sent ? .done("confirmed in its database") : .unsure("its database doesn't show the message yet")
     }
 }
 
@@ -188,11 +230,11 @@ struct WAWindow: @unchecked Sendable {
         while i < queue.count, out.count < limit {
             let (e, depth) = queue[i]
             i += 1
-            let role = AppWindowReader.string(e, kAXRoleAttribute) ?? ""
+            let role = WAWindow.string(e, kAXRoleAttribute) ?? ""
             if role == "AXApplication" { continue }
             let label = Self.clean(
-                AppWindowReader.string(e, kAXDescriptionAttribute) ?? AppWindowReader.string(e, kAXTitleAttribute))
-            out.append(Item(element: e, role: role, label: label, value: Self.clean(AppWindowReader.string(e, kAXValueAttribute))))
+                WAWindow.string(e, kAXDescriptionAttribute) ?? WAWindow.string(e, kAXTitleAttribute))
+            out.append(Item(element: e, role: role, label: label, value: Self.clean(WAWindow.string(e, kAXValueAttribute))))
             guard depth < 40 else { continue }
             var children: AnyObject?
             if AXUIElementCopyAttributeValue(e, kAXChildrenAttribute as CFString, &children) == .success,
@@ -238,24 +280,32 @@ struct WAWindow: @unchecked Sendable {
         return nil
     }
 
-    /// Opens a chat without bringing WhatsApp forward: by its row in the chat list (scrolled to when
-    /// needed), or, for a person whose number is known, by WhatsApp's own link. Nil when it is open.
-    func open(_ chat: WhatsAppChat, number: String?) async -> String? {
-        let name = chat.name
-        if isOpen(name) { return nil }
-        if let row = await findRow(name) {
-            press(row)
-            if await poll(3, { isOpen(name) ? true : nil }) != nil { return nil }
+    /// Opens the target's chat without bringing WhatsApp forward, and only when it is certainly that
+    /// chat (security review 2026-11-05): a person, or the Owner's own chat, by WhatsApp's own link
+    /// for their number; a group or a person without a known number by their row in the chat list,
+    /// only when no other chat has that name. Nil when it is open; otherwise why not.
+    func open(_ target: WhatsAppDesktopTarget) async -> String? {
+        let name = target.isSelf ? "You" : target.chat.name
+        guard target.nameIsUnique else {
+            return
+                "another chat in WhatsApp for Mac has the same name, \("«\(target.chat.name)»"), so its window can't tell them apart"
         }
-        if let number, !chat.isGroup, let url = URL(string: "whatsapp://send?phone=\(number)") {
+        if let number = target.number, !target.chat.isGroup {
+            guard let url = URL(string: "whatsapp://send?phone=\(number)") else { return "that number isn't usable" }
             let config = NSWorkspace.OpenConfiguration()
             config.activates = false
             _ = try? await NSWorkspace.shared.open(url, configuration: config)
-            if await poll(5, { messagePane() != nil && isOpen(name) ? true : nil }) != nil { return nil }
-            // The Owner's own chat is named for them in the header; the link opened the right one.
-            if await poll(2, { messagePane() != nil ? true : nil }) != nil, name == "You" { return nil }
+            if await poll(5, { isOpen(name) ? true : nil }) != nil { return nil }
+            return "WhatsApp for Mac didn't open the chat with \("«\(target.chat.name)»")"
         }
-        return "WhatsApp for Mac shows no chat named \(MessagesCapability.quote(name)) in its list"
+        if target.isSelf { return "the Owner's own number isn't known to WhatsApp for Mac" }
+        if isOpen(name) { return nil }
+        guard let row = await uniqueRow(name) else {
+            return "WhatsApp for Mac's chat list doesn't show exactly one chat named \("«\(name)»")"
+        }
+        press(row)
+        if await poll(3, { isOpen(name) ? true : nil }) != nil { return nil }
+        return "WhatsApp for Mac didn't open \("«\(name)»")"
     }
 
     func isOpen(_ name: String) -> Bool {
@@ -263,43 +313,82 @@ struct WAWindow: @unchecked Sendable {
         return Self.clean(String(pane.label.dropFirst("Messages in chat with".count))) == name
     }
 
-    /// The chat list's row for `name`, scrolling down the list a page at a time, then back to the top.
-    func findRow(_ name: String) async -> AXUIElement? {
+    /// A chat row's name: its label up to the first comma ("Family, 3 unread messages").
+    static func rowName(_ label: String) -> String { label.components(separatedBy: ",").first.map(clean) ?? "" }
+
+    /// The chat list's one row named `name`, looking through the whole list a page at a time; nil
+    /// when there is none or more than one. The list goes back to the top afterwards.
+    func uniqueRow(_ name: String) async -> AXUIElement? {
         guard let list = chatList() else { return nil }
-        let rowName = { (label: String) in label.components(separatedBy: ",").first.map(Self.clean) ?? "" }
-        for _ in 0..<25 {
-            if let row = items().first(where: { $0.role == "AXButton" && rowName($0.label) == name }) {
-                return row.element
+        var found: [AXUIElement] = []
+        var lastPage: [String] = []
+        for _ in 0..<40 {
+            let rows = items().filter { $0.role == "AXButton" && $0.label != "Archived" && !$0.label.isEmpty }
+            for row in rows where Self.rowName(row.label) == name && !found.contains(where: { CFEqual($0, row.element) }) {
+                found.append(row.element)
             }
+            let page = rows.map(\.label)
+            if page == lastPage { break }
+            lastPage = page
             guard perform(list, "AXScrollDownByPage") else { break }
             try? await Task.sleep(for: .milliseconds(150))
         }
-        return nil
+        for _ in 0..<40 {
+            guard perform(list, "AXScrollUpByPage") else { break }
+            let page = items().filter { $0.role == "AXButton" }.map(\.label)
+            if page == lastPage { break }
+            lastPage = page
+        }
+        guard found.count == 1 else { return nil }
+        return await poll(2, { items().first { $0.role == "AXButton" && Self.rowName($0.label) == name }?.element })
+            ?? found.first
     }
 
-    /// A message's bubble in the open chat: its text (or file name) and time, scrolling up for older ones.
-    func find(_ m: WhatsAppMessage) async -> AXUIElement? {
-        let time = m.date.formatted(
-            .verbatim(
-                "\(hour: .twoDigits(clock: .twentyFourHour, hourCycle: .zeroBased)):\(minute: .twoDigits)",
-                timeZone: .current, calendar: .current))
-        let words = Self.clean(m.text.isEmpty ? (m.fileName ?? "") : m.text)
-        let start = m.fromMe ? "Your " : ""
+    struct Refusal: Error { var message: String }
+
+    /// Whether a bubble's label is this message's: the same side ("Your …" only for the Owner's own),
+    /// its words or file name, and its date and time ("November 4, at 22:43"; today's carry the time
+    /// alone). Security review 2026-11-05: date and time both, never words alone.
+    static func matches(_ label: String, _ m: WhatsAppMessage, now: Date = Date()) -> Bool {
+        let words = clean(m.text.isEmpty ? (m.fileName ?? "") : m.text)
+        guard !words.isEmpty, label.hasPrefix("Your ") == m.fromMe, label.contains(words) else { return false }
+        let english = Locale(identifier: "en_US_POSIX")
+        let time = m.date.formatted(Date.VerbatimFormatStyle(
+            format: "\(hour: .twoDigits(clock: .twentyFourHour, hourCycle: .zeroBased)):\(minute: .twoDigits)",
+            timeZone: .current, calendar: .current))
+        let day = m.date.formatted(Date.VerbatimFormatStyle(
+            format: "\(month: .wide) \(day: .defaultDigits)", locale: english, timeZone: .current, calendar: .current))
+        let year = m.date.formatted(Date.VerbatimFormatStyle(
+            format: "\(year: .defaultDigits)", locale: english, timeZone: .current, calendar: .current))
+        if label.contains("\(day), at \(time)") || label.contains("\(day), \(year), at \(time)") { return true }
+        // Today's messages: the time alone, with no other day named.
+        guard Calendar.current.isDate(m.date, inSameDayAs: now), label.contains(time) else { return false }
+        var gregorian = Calendar(identifier: .gregorian)
+        gregorian.locale = english
+        let months = gregorian.monthSymbols
+        return !months.contains { label.contains("\($0) ") } || label.contains("Today")
+    }
+
+    /// The message's bubble in the open chat, scrolling up for older ones. Refused when the message
+    /// has no words or file name, or when more than one bubble matches.
+    func find(_ m: WhatsAppMessage) async -> Result<AXUIElement, Refusal> {
+        guard !(m.text.isEmpty && (m.fileName ?? "").isEmpty) else {
+            return .failure(Refusal(message: "that message has no words or file name WhatsApp for Mac's window can be matched on"))
+        }
         for _ in 0..<30 {
-            let hits = items().filter {
-                $0.role == "AXStaticText" && $0.label.hasPrefix(start) && $0.label.contains(", ")
-                    && (words.isEmpty || $0.label.contains(words)) && $0.label.contains(time)
+            let hits = items().filter { $0.role == "AXStaticText" && Self.matches($0.label, m) }
+            if hits.count > 1 {
+                return .failure(Refusal(message: "more than one message in WhatsApp for Mac's window looks like that one"))
             }
-            if hits.count == 1 {
-                _ = perform(hits[0].element, "AXScrollToVisible")
+            if let hit = hits.first {
+                _ = perform(hit.element, "AXScrollToVisible")
                 try? await Task.sleep(for: .milliseconds(200))
-                return hits[0].element
+                return .success(hit.element)
             }
-            if hits.count > 1 { return nil }
             guard let pane = messagePane(), perform(pane.element, "AXScrollUpByPage") else { break }
             try? await Task.sleep(for: .milliseconds(250))
         }
-        return nil
+        return .failure(Refusal(message: "WhatsApp for Mac's window doesn't show that message"))
     }
 
     /// Opens an element's menu (AXShowMenu) and chooses an item by its title; closes it otherwise.
@@ -327,11 +416,11 @@ struct WAWindow: @unchecked Sendable {
         while i < queue.count, i < 4000 {
             let (e, depth) = queue[i]
             i += 1
-            let role = AppWindowReader.string(e, kAXRoleAttribute) ?? ""
+            let role = WAWindow.string(e, kAXRoleAttribute) ?? ""
             if role == "AXMenuBar" || (role == "AXApplication" && depth > 0) { continue }
             if role == "AXMenuItem" {
                 out.append(
-                    Item(element: e, role: role, label: Self.clean(AppWindowReader.string(e, kAXTitleAttribute)), value: ""))
+                    Item(element: e, role: role, label: Self.clean(WAWindow.string(e, kAXTitleAttribute)), value: ""))
             }
             guard depth < 12 else { continue }
             var c: AnyObject?
@@ -346,10 +435,35 @@ struct WAWindow: @unchecked Sendable {
 
     func closeMenus() {
         for item in menuItems() {
-            if let parent = AppWindowReader.parent(item.element) { _ = perform(parent, "AXCancel") }
+            if let parent = WAWindow.parent(item.element) { _ = perform(parent, "AXCancel") }
         }
-        PidPoster(pid: pid).post(.key(53, down: true, []))
-        PidPoster(pid: pid).post(.key(53, down: false, []))
+        key(53)
+    }
+
+    /// A key (a virtual key code) sent to WhatsApp alone.
+    func key(_ code: CGKeyCode, _ flags: CGEventFlags = []) {
+        let source = CGEventSource(stateID: .privateState)
+        for down in [true, false] {
+            let event = CGEvent(keyboardEventSource: source, virtualKey: code, keyDown: down)
+            event?.flags = flags
+            event?.postToPid(pid)
+        }
+    }
+
+    static func string(_ e: AXUIElement, _ attribute: String) -> String? {
+        var v: AnyObject?
+        guard AXUIElementCopyAttributeValue(e, attribute as CFString, &v) == .success else { return nil }
+        if let s = v as? String { return s }
+        if let n = v as? NSNumber { return n.stringValue }
+        return nil
+    }
+
+    static func parent(_ e: AXUIElement) -> AXUIElement? {
+        var p: AnyObject?
+        guard AXUIElementCopyAttributeValue(e, kAXParentAttribute as CFString, &p) == .success, let p,
+            CFGetTypeID(p) == AXUIElementGetTypeID()
+        else { return nil }
+        return (p as! AXUIElement)
     }
 
     /// Leaves the selection mode Delete opened, without deleting.
@@ -358,7 +472,7 @@ struct WAWindow: @unchecked Sendable {
     }
 
     /// After the message menu's React: the emoji, from the quick row or WhatsApp's own picker.
-    func pickReaction(_ emoji: String, on m: WhatsAppMessage) async -> WhatsAppDesktopResult {
+    func pickReaction(_ emoji: String) async -> WhatsAppDesktopResult {
         let target = emoji.isEmpty ? nil : emoji
         guard
             let button = await poll(3, {

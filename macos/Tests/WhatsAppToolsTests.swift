@@ -235,11 +235,18 @@ import Testing
             lock.withLock { sends.append(request) }
             return answer
         }
-        func react(chat: WhatsAppChat, message: WhatsAppMessage, emoji: String) async -> WhatsAppDesktopResult {
+        private(set) var targets: [WhatsAppDesktopTarget] = []
+        func react(_ target: WhatsAppDesktopTarget, message: WhatsAppMessage, emoji: String) async
+            -> WhatsAppDesktopResult
+        {
+            lock.withLock { targets.append(target) }
             lock.withLock { reactions.append((message.key, emoji)) }
             return answer
         }
-        func delete(chat: WhatsAppChat, message: WhatsAppMessage, everyone: Bool) async -> WhatsAppDesktopResult {
+        func delete(_ target: WhatsAppDesktopTarget, message: WhatsAppMessage, everyone: Bool) async
+            -> WhatsAppDesktopResult
+        {
+            lock.withLock { targets.append(target) }
             lock.withLock { deletions.append((message.key, everyone)) }
             return answer
         }
@@ -372,6 +379,46 @@ import Testing
     }
 
     /// FR-1247: with the tab unusable, reacting and deleting go through WhatsApp for Mac.
+    /// Security review 2026-11-05: WhatsApp for Mac is told how to open the chat with certainty (the
+    /// Owner's own by their number, known by id), and messages it can't tell apart are refused.
+    @Test func whatsAppForMacIsBoundToTheChatAndMessage() async throws {
+        let url = try WhatsAppStoreTests.make()
+        var h: OpaquePointer?
+        sqlite3_open(url.path, &h)
+        let t = WhatsAppStoreTests.t0
+        let extra = """
+            INSERT INTO ZWAMESSAGE VALUES (20, 3, \(t + 50), 1, 0, 'note', NULL, NULL, NULL, 'N1', 1),
+              (21, 3, \(t + 55), 1, 0, 'note', NULL, NULL, NULL, 'N2', 1),
+              (22, 3, \(t + 70), 1, 1, NULL, NULL, NULL, NULL, 'P1', 1),
+              (23, 3, \(t + 80), 1, 0, 'only one', NULL, NULL, NULL, 'O1', 1);
+            INSERT INTO ZWACHATSESSION VALUES (6, '15550005555@s.whatsapp.net', 'Family', 0, 0, \(t), NULL, 0, 0);
+            """
+        #expect(sqlite3_exec(h, extra, nil, nil, nil) == SQLITE_OK)
+        sqlite3_close(h)
+        let store = try WhatsAppStore(url: url)
+        let page = FakePage()
+        page.state = .unavailable("Safari isn't answering")
+        let desktop = FakeDesktop()
+        let change = tools(page, desktop, store)[1]
+        let ok = await change.handler(
+            .object(["chat": .string("me"), "message": .string("O1"), "action": .string("delete")]))
+        #expect(!ok.isError, "\(ok.plainText)")
+        let target = try #require(desktop.targets.first)
+        #expect(target.isSelf && target.number == "15550009999" && target.chat.id == "99900011122233@lid")
+        let twin = await change.handler(
+            .object(["chat": .string("me"), "message": .string("N1"), "action": .string("delete")]))
+        #expect(twin.isError && twin.plainText.contains("can't tell them apart"))
+        let photo = await change.handler(
+            .object(["chat": .string("me"), "message": .string("P1"), "action": .string("delete")]))
+        #expect(photo.isError && photo.plainText.contains("no words or file name"))
+        #expect(desktop.targets.count == 1, "nothing refused reached WhatsApp for Mac")
+        // Two chats named Family: the group is still sent to, but WhatsApp for Mac is told the name isn't
+        // unique, so it never opens it by name.
+        _ = await tools(page, desktop, store)[0].handler(
+            .object(["to": .string("120363000@g.us"), "text": .string("x")]))
+        #expect(desktop.sends.last?.target.nameIsUnique == false)
+    }
+
     @Test func changeFallsBackToWhatsAppForMac() async throws {
         let store = try WhatsAppStore(url: try WhatsAppStoreTests.make())
         let page = FakePage()

@@ -153,8 +153,18 @@ final class WhatsAppStore: @unchecked Sendable {
     func chat(_ key: String) throws -> Resolution {
         try locked {
             refreshNames()
-            var k = key.trimmingCharacters(in: .whitespaces)
-            if Self.meansMe(k) { k = "You" }
+            let k = key.trimmingCharacters(in: .whitespaces)
+            // The Owner's own chat only by its id, never by a name (security review 2026-11-05).
+            if Self.meansMe(k) {
+                guard let own = ownChatIDUnlocked(),
+                    let r = try SQLite.rows(
+                        // nosemgrep: scripts.semgrep.latchkey-sql-bound -- only fixed SQL constants are spliced in; every value is bound
+                        db, "SELECT \(Self.chatColumns) \(Self.chatFrom) WHERE s.ZCONTACTJID = ? AND \(Self.visible)",
+                        bind: [.text(own)]
+                    ).first
+                else { return .none }
+                return .one(chat(r))
+            }
             // An id; or a phone number, under its number or its privacy id.
             var ids = [k]
             if k.range(of: #"^[+\d\s().-]+$"#, options: .regularExpression) != nil, k.filter(\.isNumber).count >= 7 {
@@ -232,6 +242,77 @@ final class WhatsAppStore: @unchecked Sendable {
                 bind: [.text(chat), .text(key)]
             ).first.map(message)
         }
+    }
+
+    /// The Owner's own chat ("Message yourself"): the account WhatsApp marks as this device's own in
+    /// its account list (the one row with a country code, LID.sqlite, 2026-11-05), matched on a chat's
+    /// id only. Nil when that isn't known.
+    func ownChatID() -> String? { locked { ownChatIDUnlocked() } }
+
+    private func ownChatIDUnlocked() -> String? {
+        guard let accounts = try? SQLite.openReadOnly(accountsURL) else { return nil }
+        defer { SQLite.close(accounts) }
+        guard
+            let rows = try? SQLite.rows(
+                accounts,
+                "SELECT ZIDENTIFIER, ZPHONENUMBER FROM ZWAZACCOUNT WHERE ZCOUNTRYCODE IS NOT NULL AND ZCOUNTRYCODE != ''"),
+            rows.count == 1
+        else { return nil }
+        var ids: [String] = []
+        if let lid = rows[0][0].text, lid.hasSuffix("@lid") { ids.append(lid) }
+        if let number = rows[0][1].text?.filter(\.isNumber), !number.isEmpty { ids.append("\(number)@s.whatsapp.net") }
+        for id in ids {
+            if let found = try? SQLite.rows(
+                db, "SELECT ZCONTACTJID FROM ZWACHATSESSION WHERE ZCONTACTJID = ? AND IFNULL(ZREMOVED, 0) = 0",
+                bind: [.text(id)]), !found.isEmpty
+            {
+                return id
+            }
+        }
+        return nil
+    }
+
+    /// How many visible chats have exactly this name: WhatsApp for Mac's window is opened by name only
+    /// when it is the only one (security review 2026-11-05).
+    func chatsNamed(_ name: String) throws -> Int {
+        try locked {
+            // nosemgrep: scripts.semgrep.latchkey-sql-bound -- only fixed SQL constants are spliced in; every value is bound
+            try SQLite.rows(db, "SELECT \(Self.chatColumns) \(Self.chatFrom) WHERE \(Self.visible)").map(chat)
+                .filter { $0.name == name }.count
+        }
+    }
+
+    /// A version stamp of one message (its row and its receipts, where reactions are kept): it
+    /// changes when WhatsApp changes that message. Nil when the message isn't in that chat.
+    func stamp(chat: String, key: String) -> String? {
+        locked {
+            guard
+                let r = try? SQLite.rows(
+                    db,
+                    "SELECT m.Z_PK, m.Z_OPT, m.ZMESSAGETYPE FROM ZWAMESSAGE m JOIN ZWACHATSESSION s ON m.ZCHATSESSION = s.Z_PK WHERE s.ZCONTACTJID = ? AND m.ZSTANZAID = ? LIMIT 1",
+                    bind: [.text(chat), .text(key)]
+                ).first
+            else { return nil }
+            var stamp = "\(r[1].int ?? 0)/\(r[2].int ?? 0)"
+            if let info = try? SQLite.rows(
+                db, "SELECT Z_OPT, hex(ZRECEIPTINFO) FROM ZWAMESSAGEINFO WHERE ZMESSAGE = ?", bind: [.int(r[0].int ?? 0)]
+            ).first {
+                stamp += "/\(info[0].int ?? 0)/\(info[1].text ?? "")"
+            }
+            return stamp
+        }
+    }
+
+    /// How many messages of the chat look like this one in WhatsApp for Mac's window: the same side,
+    /// words (or file name), and minute.
+    func lookalikes(_ m: WhatsAppMessage) throws -> Int {
+        let minute = floor(m.date.timeIntervalSinceReferenceDate / 60) * 60
+        let words = m.text.isEmpty ? (m.fileName ?? "") : m.text
+        return try messages(chat: m.chatID, before: Date(timeIntervalSinceReferenceDate: minute + 60), limit: 400)
+            .filter {
+                $0.fromMe == m.fromMe && $0.date.timeIntervalSinceReferenceDate >= minute
+                    && ($0.text.isEmpty ? ($0.fileName ?? "") : $0.text) == words
+            }.count
     }
 
     /// Words that mean the Owner's own chat ("Message yourself"), which WhatsApp names You (FR-1244).

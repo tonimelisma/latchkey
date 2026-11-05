@@ -293,6 +293,29 @@ enum WhatsAppCapability {
         }
     }
 
+    /// What WhatsApp for Mac needs to open the chat with certainty (security review 2026-11-05).
+    static func desktopTarget(_ store: WhatsAppStore, _ chat: WhatsAppChat, number: String?) throws
+        -> WhatsAppDesktopTarget
+    {
+        let isSelf = store.ownChatID() == chat.id
+        return WhatsAppDesktopTarget(
+            chat: chat, number: isSelf ? store.number(forChat: chat.id) : number, isSelf: isSelf,
+            nameIsUnique: try store.chatsNamed(chat.name) <= 1)
+    }
+
+    /// Why a message can't be acted on in WhatsApp for Mac's window, which finds it by what it shows:
+    /// nil when its words (or file name) and minute are its own in that chat.
+    static func unmatchable(_ store: WhatsAppStore, _ m: WhatsAppMessage) throws -> String? {
+        if m.text.isEmpty && (m.fileName ?? "").isEmpty {
+            return "that message has no words or file name, so WhatsApp for Mac's window can't be matched to it"
+        }
+        if try store.lookalikes(m) > 1 {
+            return
+                "another message in that chat has the same words and minute, so WhatsApp for Mac's window can't tell them apart"
+        }
+        return nil
+    }
+
     private static func sendThroughDesktop(
         _ desktop: any WhatsAppDesktopAPI, store: WhatsAppStore?, tabWhy: String, to: String, text: String,
         files: [URL], replyTo: String?
@@ -321,13 +344,15 @@ enum WhatsAppCapability {
                     "Nothing was sent: there's no message \(replyTo) in \(quote(chat.name)) to reply to (ids come from whatsapp_read).",
                     isError: true)
             }
+            if let why = try unmatchable(store, m) { return .text("Nothing was sent: \(why).", isError: true) }
             quoted = m
         }
         let label = "\(chat.isGroup ? "the group " : "")\(quote(chat.name))"
         let what = text.isEmpty ? "" : " «\(text)»"
         let attached = files.isEmpty ? "" : " with \(files.count == 1 ? "a file" : "\(files.count) files")"
         switch await desktop.send(
-            WhatsAppDesktopSend(chat: chat, number: number, text: text, files: files, replyTo: quoted))
+            WhatsAppDesktopSend(
+                target: try desktopTarget(store, chat, number: number), text: text, files: files, replyTo: quoted))
         {
         case .done(let how):
             var r = ToolResult.text(
@@ -388,8 +413,9 @@ enum WhatsAppCapability {
                 "Nothing was done: \(tabPart), and WhatsApp for Mac can't be used either: \(reason).", isError: true)
         }
         let chat: WhatsAppChat
+        let number: String?
         switch try desktopChat(db, chatKey) {
-        case .success(let found): chat = found.0
+        case .success(let found): (chat, number) = found
         case .failure(let p):
             return .text(p.message.hasPrefix("Nothing") ? p.message : "Nothing was done: \(p.message).", isError: true)
         }
@@ -401,10 +427,12 @@ enum WhatsAppCapability {
         if action == "delete", everyone, !message.fromMe {
             return .text("Nothing was done: only your own messages can be deleted for everyone.", isError: true)
         }
+        if let why = try unmatchable(db, message) { return .text("Nothing was done: \(why).", isError: true) }
+        let target = try desktopTarget(db, chat, number: number)
         let outcome =
             action == "delete"
-            ? await desktop.delete(chat: chat, message: message, everyone: everyone)
-            : await desktop.react(chat: chat, message: message, emoji: emoji)
+            ? await desktop.delete(target, message: message, everyone: everyone)
+            : await desktop.react(target, message: message, emoji: emoji)
         let about = message.text.isEmpty ? "the message" : "«\(message.text.prefix(80))»"
         switch outcome {
         case .done(let how):
