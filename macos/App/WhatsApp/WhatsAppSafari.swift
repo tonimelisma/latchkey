@@ -20,6 +20,9 @@ enum WhatsAppPageState: Equatable, Sendable {
 
 enum WhatsAppPageError: Error, Equatable {
     case noTab
+    /// The tab's address is WhatsApp Web's but its page isn't yet: a tab still loading (2026-11-04,
+    /// a tab Latchkey had just opened).
+    case notYet
     case timedOut
     case failed(String)
 }
@@ -76,6 +79,7 @@ struct SafariWhatsApp: WhatsAppPageAPI {
             throw WhatsAppPageError.failed(Self.notAllowed)
         } catch ScriptError.failed(let message) {
             if message.contains("LATCHKEY_NO_WHATSAPP_TAB") { throw WhatsAppPageError.noTab }
+            if message.contains("the tab is not WhatsApp Web") { throw WhatsAppPageError.notYet }
             if message.contains("Allow JavaScript from Apple Events") {
                 throw WhatsAppPageError.failed(Self.scriptsOff)
             }
@@ -92,6 +96,8 @@ struct SafariWhatsApp: WhatsAppPageAPI {
                 last = Self.state(from: try await call("state", .object([:]), timeout: .seconds(5)))
             } catch WhatsAppPageError.noTab {
                 return .noTab
+            } catch WhatsAppPageError.notYet {
+                last = .loading
             } catch WhatsAppPageError.failed(let why) {
                 return .unavailable(why)
             } catch {

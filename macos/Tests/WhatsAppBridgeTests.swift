@@ -146,6 +146,24 @@ import WebKit
         #expect(try await js(w, "return typeof window.__latchkey") as? String == "undefined")
     }
 
+    /// A tab still loading (its address WhatsApp Web's, its page not yet) is waited for, not taken
+    /// as a failure (2026-11-04: a tab Latchkey had just opened was given up on at once).
+    @Test func aTabStillLoadingIsWaitedFor() async {
+        final class Runner: ScriptRunner, @unchecked Sendable {
+            var answers: [Result<String, ScriptError>]
+            init(_ a: [Result<String, ScriptError>]) { answers = a }
+            func run(_ script: String, _ args: [String]) async throws -> String {
+                try answers.removeFirst().get()
+            }
+        }
+        let runner = Runner([
+            .failure(.failed("execution error: LATCHKEY_NOT_STARTED failed: the tab is not WhatsApp Web (-2700)")),
+            .success(#"OK{"connected":true,"chats":3,"missing":[],"chatList":true,"loginScreen":false}"#),
+        ])
+        let tab = SafariWhatsApp(runner: { _ in runner }, locked: { false })
+        #expect(await tab.ready(wait: .seconds(5)) == .connected)
+    }
+
     @Test func theAnswerSaysTimedOutFailedOrTheValue() throws {
         #expect(throws: WhatsAppPageError.timedOut) { try SafariWhatsApp.answer("") }
         #expect(throws: WhatsAppPageError.failed("boom")) { try SafariWhatsApp.answer("ERboom") }

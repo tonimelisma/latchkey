@@ -485,6 +485,10 @@ enum WhatsAppCapability {
                 isError: true)
         } catch WhatsAppPageError.failed(let why) {
             return .text("WhatsApp Web in Safari couldn't do it: \(why).", isError: true)
+        } catch WhatsAppPageError.notYet, WhatsAppPageError.noTab {
+            return .text(
+                "Nothing was done: WhatsApp Web in Safari changed while Latchkey used it (closed, or loading again); try again.",
+                isError: true)
         } catch WhatsAppStore.Failure.unknownLayout(let why) {
             return .text(
                 "This version of WhatsApp for Mac stores messages in a way Latchkey doesn't know yet (\(why)).",
