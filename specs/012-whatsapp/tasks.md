@@ -44,5 +44,9 @@ Extended 2026-11-05 (Toni: "add everything missing"):
 - [x] T17 Tools: `reply_to`, `whatsapp_change`, older history while reading through the tab,
   WhatsApp for Mac as the fallback (plan D3b, D5)
 - [x] T18 WhatsApp for Mac's window through Accessibility: open chats with certainty, find
-  messages, delete, react, reply, send text and files (plan D3b)
+  messages, delete, react, reply, send text and files (plan D3b); unit-tested, with deleting
+  checked live by hand (seven messages, 2026-11-05)
+- [ ] T20 Live check of WhatsApp for Mac's window unlocked (the Mac was locked all afternoon of
+  2026-11-05): text in the background, briefly in front with Paste, files, React, Reply, Delete
+  for everyone; then the lid closed while unlocked
 - [x] T19 Screen-state cases `whatsapp.*` and `sweep.whatsapp`

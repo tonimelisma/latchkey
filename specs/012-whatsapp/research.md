@@ -211,6 +211,12 @@ Mac's database.
   message box. Setting the message box's `AXValue` shows the text but WhatsApp doesn't take it:
   the microphone stays, Send (menu) does nothing.
 
+- Not yet tried live (the Mac stayed locked from 13:40 to past 15:30 that day): putting text in
+  with `AXSelectedText` in the background, and WhatsApp briefly in front with Paste for text and
+  files (plan D3b options 1 and 4), React's emoji choice, Reply, and "Delete for everyone" in
+  WhatsApp for Mac's dialog. The code follows what was seen; the screen-state cases
+  `whatsapp.*` check it with the Safari tab unusable.
+
 ### WhatsApp for Mac with the Mac locked
 
 - Locked, WhatsApp for Mac shows Accessibility nothing but its menu bar: its one "window" is
