@@ -23,7 +23,7 @@ import Testing
         let staging = FileManager.default.temporaryDirectory.appending(path: "staging-\(UUID().uuidString)")
         let tools = MessagesCapability.writeOperations(
             store: { store }, contacts: MessagesFixture.FakeContacts(), scripts: fake, staging: staging,
-            confirmWait: .milliseconds(600))
+            ui: FakeMessagesUI(), confirmWait: .milliseconds(600))
         return Setup(db: db, fake: fake, staging: staging, send: try #require(tools.first))
     }
 
@@ -72,12 +72,24 @@ import Testing
         let sam = await send(s, ["to": .string("Sam"), "text": .string("Hi")])
         #expect(sam.isError)
         #expect(sam.content.jsonText.contains("Sam Ito") && sam.content.jsonText.contains("Sam Ross"))
-        let ann = await send(s, ["to": .string("Ann"), "text": .string("Hi")])
-        #expect(ann.isError, "one person, two numbers, no conversation yet")
-        #expect(ann.content.jsonText.contains("ann@example.com"))
         let nobody = await send(s, ["to": .string("Zed"), "text": .string("Hi")])
         #expect(nobody.isError)
         #expect(s.fake.calls.isEmpty, "nothing was sent")
+    }
+
+    /// FR-171: one person with several numbers and no conversation: the one Messages already knows
+    /// on iMessage, else a mobile number, else the first number, else an address; the answer says
+    /// which was used.
+    @Test func choosesAmongAPersonsNumbers() async throws {
+        let s = try setup(recordIn: nil)
+        let ann = await send(s, ["to": .string("Ann"), "text": .string("Hi")])
+        #expect(!ann.isError, "\(ann.content.jsonText)")
+        #expect(s.fake.lastArgs.prefix(2) == ["participant", "+15550003333"], "known to Messages on iMessage")
+        #expect(ann.content.jsonText.contains("+15550003333"))
+        #expect(ann.content.jsonText.contains("ann@example.com"), "names the others")
+        let kim = await send(s, ["to": .string("Kim"), "text": .string("Hi")])
+        #expect(s.fake.lastArgs.prefix(2) == ["participant", "+15550005555"], "the mobile number")
+        #expect(kim.content.jsonText.contains("mobile"))
     }
 
     @Test func sendsAttachmentsFromPictures() async throws {

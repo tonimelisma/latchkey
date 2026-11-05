@@ -41,6 +41,43 @@ final class MessagesStore: @unchecked Sendable {
         var sender: Participant?
         var text: String
         var attachments: [Attachment]
+        /// Changed after sending (FR-170); `originalText` is what it said first, when known.
+        var edited = false
+        var originalText: String? = nil
+        /// Taken back by its sender ("Undo Send").
+        var unsent = false
+        /// The message this one replies to (an inline reply), and that message's text.
+        var replyTo: String? = nil
+        var replyToText: String? = nil
+        /// Each person's current tapback: one per person, the latest, unless taken back.
+        var reactions: [Reaction] = []
+    }
+
+    /// A tapback, as Messages records it (`associated_message_type` 2000–2007; 3000–3007 take it back).
+    struct Reaction: Sendable, Equatable {
+        enum Kind: Sendable, Equatable {
+            case love, like, dislike, laugh, emphasize, question
+            case emoji(String)
+            case sticker
+
+            init?(code: Int, emoji: String?) {
+                switch code % 1000 {
+                case 0: self = .love
+                case 1: self = .like
+                case 2: self = .dislike
+                case 3: self = .laugh
+                case 4: self = .emphasize
+                case 5: self = .question
+                case 6: self = .emoji(emoji ?? "")
+                case 7: self = .sticker
+                default: return nil
+                }
+            }
+        }
+        var kind: Kind
+        var fromMe: Bool
+        /// Who reacted, when not the Mac's owner.
+        var from: Participant?
     }
 
     enum Failure: Error, Equatable {
@@ -54,6 +91,8 @@ final class MessagesStore: @unchecked Sendable {
     private let db: OpaquePointer
     private let contacts: any ContactsLookup
     private let lock = NSLock()
+    /// The message table's columns: those for reactions, replies, and edits are read when there.
+    private let columns: Set<String>
 
     init(url: URL, contacts: any ContactsLookup) throws {
         // `db` is set last: once every stored property is set, a throw runs `deinit`, which
@@ -74,6 +113,7 @@ final class MessagesStore: @unchecked Sendable {
             SQLite.close(db)
             throw error
         }
+        columns = Set(((try? SQLite.rows(db, "PRAGMA table_info(message)")) ?? []).compactMap { $0[1].text })
         self.db = db
     }
 
@@ -214,6 +254,200 @@ final class MessagesStore: @unchecked Sendable {
         }
     }
 
+    // MARK: changing in Messages' window (plan D3b)
+
+    /// A message as Messages' window shows it, to find it there.
+    struct Located: Sendable, Equatable {
+        var id: String
+        var conversationID: String
+        var isGroup: Bool
+        var service: String
+        var text: String
+        var attachmentNames: [String]
+        var fromMe: Bool
+        var date: Date
+        var unsent: Bool
+        /// Later messages in the same conversation on the same side with the same text: the window
+        /// shows them below this one.
+        var laterSame: Int
+        /// The Mac owner's current tapback on it.
+        var myReaction: Reaction.Kind?
+    }
+
+    func locate(_ guid: String) throws -> Located? {
+        let found: (Located, Int64)? = try locked {
+            guard
+                let r = try rows(
+                    """
+                    SELECT m.ROWID, c.guid, c.style, COALESCE(m.service, c.service_name, ''), m.text, m.attributedBody,
+                      m.is_from_me, \(Self.seconds("m.date")), c.ROWID
+                    FROM message m JOIN chat_message_join j ON j.message_id = m.ROWID JOIN chat c ON c.ROWID = j.chat_id
+                    WHERE m.guid = ? AND COALESCE(m.associated_message_type, 0) = 0 LIMIT 1
+                    """, bind: [.text(guid)]
+                ).first
+            else { return nil }
+            var text = r[4].text ?? ""
+            if text.isEmpty || text == "\u{FFFC}", let body = r[5].blob { text = AttributedBody.text(body) ?? text }
+            let names = try rows(
+                """
+                SELECT a.transfer_name FROM attachment a JOIN message_attachment_join x ON x.attachment_id = a.ROWID
+                WHERE x.message_id = ?
+                """, bind: [.int(r[0].int ?? 0)]
+            ).compactMap { $0[0].text }
+            return (
+                Located(
+                    id: guid, conversationID: r[1].text ?? "", isGroup: r[2].int == 43, service: r[3].text ?? "",
+                    text: Self.clean(text), attachmentNames: names, fromMe: r[6].int == 1,
+                    date: Date(timeIntervalSinceReferenceDate: r[7].double ?? 0), unsent: false, laterSame: 0,
+                    myReaction: nil), r[8].int ?? 0
+            )
+        }
+        guard var (loc, chat) = found else { return nil }
+        let decorated = try locked {
+            try messageRows(where: "m.guid = ?", bind: [.text(guid)], limit: 1, titles: [:]).first
+        }
+        loc.unsent = decorated?.unsent ?? false
+        loc.myReaction = decorated?.reactions.first(where: \.fromMe)?.kind
+        // Same text, same side, later: counted in Swift, since much text is only in attributedBody.
+        let later = try locked {
+            try messageRows(
+                where: "j.chat_id = ? AND m.is_from_me = ? AND \(Self.seconds("m.date")) > ?",
+                bind: [.int(chat), .int(loc.fromMe ? 1 : 0), .double(loc.date.timeIntervalSinceReferenceDate)],
+                limit: 500, titles: [:], keep: { Self.clean($0) == loc.text })
+        }
+        loc.laterSame = later.count
+        return loc
+    }
+
+    /// The newest row in the message table, to tell what Messages records after it.
+    func lastRow() throws -> Int64 {
+        try locked { try rows("SELECT COALESCE(MAX(ROWID), 0) FROM message").first?[0].int ?? 0 }
+    }
+
+    /// A tapback of this type (2000–2007 given, 3000–3007 taken back) on the message, recorded after
+    /// `row`, by anyone: in a conversation with oneself Messages keeps only the copy that came back.
+    func reactionRecorded(on guid: String, type: Int, after row: Int64) throws -> Bool {
+        try locked {
+            try rows(
+                """
+                SELECT associated_message_guid FROM message WHERE ROWID > ? AND associated_message_type = ?
+                """, bind: [.int(row), .int(Int64(type))]
+            ).contains { Self.reactionTarget($0[0].text ?? "") == guid }
+        }
+    }
+
+    /// The outgoing message after `row` in a conversation (a reply when `replyingTo` is given), and
+    /// whether it was sent.
+    func outgoingRecorded(after row: Int64, conversation: String?, replyingTo: String?) throws -> (
+        guid: String, outcome: Outcome?
+    )? {
+        try locked {
+            var sql = """
+                SELECT m.guid, \(columns.contains("error") ? "m.error" : "0"), \(columns.contains("is_sent") ? "m.is_sent" : "1")
+                FROM message m JOIN chat_message_join j ON j.message_id = m.ROWID JOIN chat c ON c.ROWID = j.chat_id
+                WHERE m.ROWID > ? AND m.is_from_me = 1 AND COALESCE(m.associated_message_type, 0) = 0
+                """
+            var bind: [SQLite.Value] = [.int(row)]
+            if let conversation {
+                sql += " AND c.guid = ?"
+                bind.append(.text(conversation))
+            }
+            if let replyingTo, columns.contains("thread_originator_guid") {
+                sql += " AND m.thread_originator_guid = ?"
+                bind.append(.text(replyingTo))
+            }
+            guard let r = try rows(sql + " ORDER BY m.ROWID DESC LIMIT 1", bind: bind).first else { return nil }
+            let outcome: Outcome? = (r[1].int ?? 0) != 0 ? .failed : ((r[2].int ?? 0) == 1 ? .sent : nil)
+            return (r[0].text ?? "", outcome)
+        }
+    }
+
+    /// The message now reads `text` and is marked edited.
+    func editRecorded(_ guid: String, text: String) throws -> Bool {
+        let m = try locked { try messageRows(where: "m.guid = ?", bind: [.text(guid)], limit: 1, titles: [:]).first }
+        return m.map { $0.edited && $0.text == Self.clean(text) } ?? false
+    }
+
+    func isUnsent(_ guid: String) throws -> Bool {
+        try locked { try messageRows(where: "m.guid = ?", bind: [.text(guid)], limit: 1, titles: [:]).first?.unsent }
+            ?? false
+    }
+
+    /// No longer in any conversation: Messages moves deleted messages to Recently Deleted (their
+    /// row stays, outside every conversation) or removes them.
+    func isDeleted(_ guid: String) throws -> Bool {
+        try locked {
+            try rows(
+                "SELECT 1 FROM message m JOIN chat_message_join j ON j.message_id = m.ROWID WHERE m.guid = ?",
+                bind: [.text(guid)]
+            ).isEmpty
+        }
+    }
+
+    /// The conversation shows no messages any more (deleted, or moved to Recently Deleted).
+    func conversationIsEmpty(_ id: String) throws -> Bool {
+        try locked {
+            try rows(
+                "SELECT 1 FROM chat c JOIN chat_message_join j ON j.chat_id = c.ROWID WHERE c.guid = ? LIMIT 1",
+                bind: [.text(id)]
+            ).isEmpty
+        }
+    }
+
+    /// The newest message in a conversation, to show the conversation by.
+    func latestMessage(in id: String) throws -> String? {
+        try locked {
+            try rows(
+                """
+                SELECT m.guid FROM message m JOIN chat_message_join j ON j.message_id = m.ROWID
+                JOIN chat c ON c.ROWID = j.chat_id WHERE c.guid = ? AND COALESCE(m.associated_message_type, 0) = 0
+                ORDER BY \(Self.seconds("m.date")) DESC, m.ROWID DESC LIMIT 1
+                """, bind: [.text(id)]
+            ).first?[0].text
+        }
+    }
+
+    /// The group whose members are exactly these numbers or addresses that got a message from this
+    /// Mac after `row`.
+    func groupRecorded(with handles: [String], after row: Int64) throws -> String? {
+        let wanted = try locked { try handles.map { Set(try handleRows(matching: $0)) } }
+        return try locked {
+            let chats = try rows(
+                """
+                SELECT DISTINCT c.ROWID, c.guid FROM message m JOIN chat_message_join j ON j.message_id = m.ROWID
+                JOIN chat c ON c.ROWID = j.chat_id WHERE m.ROWID > ? AND m.is_from_me = 1 AND c.style = 43
+                """, bind: [.int(row)])
+            for c in chats {
+                let members = Set(
+                    try rows("SELECT handle_id FROM chat_handle_join WHERE chat_id = ?", bind: [.int(c[0].int ?? 0)])
+                        .compactMap { $0[0].int })
+                if members.count == wanted.count, wanted.allSatisfy({ !$0.isDisjoint(with: members) }) {
+                    return c[1].text
+                }
+            }
+            return nil
+        }
+    }
+
+    func groupName(_ id: String) throws -> String? {
+        try locked {
+            try rows("SELECT display_name FROM chat WHERE guid = ?", bind: [.text(id)]).first?[0].text
+                .flatMap { $0.isEmpty ? nil : $0 }
+        }
+    }
+
+    /// The service Messages has seen this number or address on ("iMessage", "SMS", …), if any.
+    func knownService(for handle: String) throws -> String? {
+        try locked {
+            let ids = try handleRows(matching: handle)
+            guard !ids.isEmpty else { return nil }
+            let services = try rows(
+                "SELECT service FROM handle WHERE ROWID IN (\(ids.map(String.init).joined(separator: ",")))"
+            ).compactMap { $0[0].text }
+            return services.contains("iMessage") ? "iMessage" : services.first
+        }
+    }
+
     enum Outcome: Equatable { case sent, failed }
 
     /// What Messages recorded for a message this Mac sent since `since` to the conversation or
@@ -346,7 +580,103 @@ final class MessagesStore: @unchecked Sendable {
                     text: Self.clean(text), attachments: r[8].int == 1 ? try attachments(of: r[0].int ?? 0) : []))
             return out.count < limit
         }
+        return try decorate(out)
+    }
+
+    /// Adds reactions, replies, edits, and unsending to messages read (FR-170).
+    private func decorate(_ msgs: [Message]) throws -> [Message] {
+        guard !msgs.isEmpty else { return msgs }
+        let has = { self.columns.contains($0) }
+        var out = msgs
+        let ids = msgs.map(\.id)
+        let marks = Array(repeating: "?", count: ids.count).joined(separator: ",")
+        if has("date_edited") {
+            let summary = has("message_summary_info") ? "message_summary_info" : "NULL"
+            let rows = try rows(
+                "SELECT guid, date_edited, \(summary), text IS NULL AND attributedBody IS NULL FROM message WHERE guid IN (\(marks)) AND COALESCE(date_edited, 0) <> 0",
+                bind: ids.map { .text($0) })
+            for r in rows {
+                guard let i = out.firstIndex(where: { $0.id == r[0].text }) else { continue }
+                let info = r[2].blob.flatMap {
+                    try? PropertyListSerialization.propertyList(from: $0, format: nil) as? [String: Any]
+                }
+                if info?["rp"] != nil || (r[3].int == 1 && out[i].attachments.isEmpty) {
+                    out[i].unsent = true
+                } else {
+                    out[i].edited = true
+                    let versions = ((info?["ec"] as? [String: Any])?["0"] as? [[String: Any]]) ?? []
+                    if versions.count > 1, let first = versions.first?["t"] as? Data,
+                        let text = AttributedBody.text(first).map(Self.clean), text != out[i].text
+                    {
+                        out[i].originalText = text
+                    }
+                }
+            }
+        }
+        if has("thread_originator_guid") {
+            let rows = try rows(
+                "SELECT guid, thread_originator_guid FROM message WHERE guid IN (\(marks)) AND thread_originator_guid IS NOT NULL",
+                bind: ids.map { .text($0) })
+            let targets = Array(Set(rows.compactMap { $0[1].text }))
+            var texts: [String: String] = [:]
+            if !targets.isEmpty {
+                let q = Array(repeating: "?", count: targets.count).joined(separator: ",")
+                for r in try self.rows(
+                    "SELECT guid, text, attributedBody FROM message WHERE guid IN (\(q))", bind: targets.map { .text($0) })
+                {
+                    var text = r[1].text ?? ""
+                    if text.isEmpty || text == "\u{FFFC}", let body = r[2].blob { text = AttributedBody.text(body) ?? text }
+                    texts[r[0].text ?? ""] = Self.clean(text)
+                }
+            }
+            for r in rows {
+                guard let i = out.firstIndex(where: { $0.id == r[0].text }), let target = r[1].text else { continue }
+                out[i].replyTo = target
+                out[i].replyToText = texts[target]
+            }
+        }
+        if has("associated_message_guid") {
+            let emoji = has("associated_message_emoji") ? "m.associated_message_emoji" : "NULL"
+            let chats = Array(Set(msgs.map(\.conversationID)))
+            let earliest = msgs.map(\.date).min() ?? .distantPast
+            let q = Array(repeating: "?", count: chats.count).joined(separator: ",")
+            // Only reactions in these conversations since the earliest message shown, oldest first,
+            // so the latest per person wins.
+            let rows = try rows(
+                """
+                SELECT m.associated_message_guid, m.associated_message_type, \(emoji), m.is_from_me, h.id
+                FROM message m JOIN chat_message_join j ON j.message_id = m.ROWID JOIN chat c ON c.ROWID = j.chat_id
+                LEFT JOIN handle h ON h.ROWID = m.handle_id
+                WHERE m.associated_message_type BETWEEN 2000 AND 3007 AND c.guid IN (\(q))
+                  AND \(Self.seconds("m.date")) >= ?
+                ORDER BY \(Self.seconds("m.date")), m.ROWID
+                """,
+                bind: chats.map { .text($0) } + [.double(earliest.timeIntervalSinceReferenceDate)])
+            var current: [String: [(key: String, reaction: Reaction)]] = [:]
+            for r in rows {
+                guard let assoc = r[0].text, let code = r[1].int.map(Int.init) else { continue }
+                let target = Self.reactionTarget(assoc)
+                let fromMe = r[3].int == 1
+                let handle = r[4].text
+                let key = fromMe ? "me" : (handle ?? "?")
+                var list = current[target] ?? []
+                list.removeAll { $0.key == key }
+                if code < 3000, let kind = Reaction.Kind(code: code, emoji: r[2].text) {
+                    let from = fromMe ? nil : handle.map { Participant(handle: $0, name: contacts.name(for: $0)) }
+                    list.append((key, Reaction(kind: kind, fromMe: fromMe, from: from)))
+                }
+                current[target] = list
+            }
+            for i in out.indices { out[i].reactions = (current[out[i].id] ?? []).map(\.reaction) }
+        }
         return out
+    }
+
+    /// `p:0/GUID` (a part of the message) or `bp:GUID` names the message a reaction is on.
+    static func reactionTarget(_ assoc: String) -> String {
+        if let slash = assoc.firstIndex(of: "/") { return String(assoc[assoc.index(after: slash)...]) }
+        if assoc.hasPrefix("bp:") { return String(assoc.dropFirst(3)) }
+        return assoc
     }
 
     private static func clean(_ text: String) -> String {

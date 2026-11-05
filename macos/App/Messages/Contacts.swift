@@ -11,6 +11,8 @@ protocol ContactsLookup: Sendable {
 struct ContactPerson: Sendable, Equatable {
     var name: String
     var handles: [String]
+    /// The numbers labelled mobile or iPhone, to choose among several (spec 002 FR-171).
+    var mobiles: [String] = []
 }
 
 /// The Mac's Contacts, read once and refreshed every few minutes. Without the Contacts
@@ -77,7 +79,9 @@ final class ContactBook: ContactsLookup, @unchecked Sendable {
             people.append(
                 ContactPerson(
                     name: name,
-                    handles: c.phoneNumbers.map { $0.value.stringValue } + c.emailAddresses.map { $0.value as String }))
+                    handles: c.phoneNumbers.map { $0.value.stringValue } + c.emailAddresses.map { $0.value as String },
+                    mobiles: c.phoneNumbers.filter { [CNLabelPhoneNumberMobile, CNLabelPhoneNumberiPhone].contains($0.label) }
+                        .map { $0.value.stringValue }))
             for e in c.emailAddresses { email[(e.value as String).lowercased()] = name }
             for p in c.phoneNumbers {
                 let d = Self.digits(p.value.stringValue)
