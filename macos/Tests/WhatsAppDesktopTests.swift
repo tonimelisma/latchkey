@@ -14,7 +14,8 @@ import Testing
 
     static func message(_ text: String, _ date: Date, fromMe: Bool = true, file: String? = nil) -> WhatsAppMessage {
         WhatsAppMessage(
-            id: "1", chatID: "c", chatName: nil, date: date, fromMe: fromMe, sender: "", kind: file == nil ? "text" : "document",
+            id: "1", chatID: "c", chatName: nil, date: date, fromMe: fromMe, sender: "",
+            kind: file == nil ? "text" : "document",
             text: text, fileName: file, key: "K")
     }
 

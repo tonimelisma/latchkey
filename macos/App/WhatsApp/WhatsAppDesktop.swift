@@ -217,11 +217,13 @@ struct WAWindow: @unchecked Sendable {
 
     /// Every element of the window (and open menus), once. While the Mac is locked WhatsApp lists
     /// itself as its own child; that loop is cut.
-    func items(limit: Int = 6000) -> [Item] {
+    func items(in root: AXUIElement? = nil, limit: Int = 6000) -> [Item] {
         var out: [Item] = []
         var queue: [(AXUIElement, Int)] = []
         var windows: AnyObject?
-        if AXUIElementCopyAttributeValue(app, kAXWindowsAttribute as CFString, &windows) == .success,
+        if let root {
+            queue = [(root, 0)]
+        } else if AXUIElementCopyAttributeValue(app, kAXWindowsAttribute as CFString, &windows) == .success,
             let list = windows as? [AXUIElement]
         {
             queue = list.map { ($0, 0) }
@@ -232,9 +234,10 @@ struct WAWindow: @unchecked Sendable {
             i += 1
             let role = WAWindow.string(e, kAXRoleAttribute) ?? ""
             if role == "AXApplication" { continue }
-            let label = Self.clean(
-                WAWindow.string(e, kAXDescriptionAttribute) ?? WAWindow.string(e, kAXTitleAttribute))
-            out.append(Item(element: e, role: role, label: label, value: Self.clean(WAWindow.string(e, kAXValueAttribute))))
+            let description = Self.clean(WAWindow.string(e, kAXDescriptionAttribute))
+            let label = description.isEmpty ? Self.clean(WAWindow.string(e, kAXTitleAttribute)) : description
+            out.append(
+                Item(element: e, role: role, label: label, value: Self.clean(WAWindow.string(e, kAXValueAttribute))))
             guard depth < 40 else { continue }
             var children: AnyObject?
             if AXUIElementCopyAttributeValue(e, kAXChildrenAttribute as CFString, &children) == .success,
@@ -261,7 +264,9 @@ struct WAWindow: @unchecked Sendable {
     func chatList() -> AXUIElement? { element(role: "AXGroup", label: "List of chats") }
 
     /// The open chat's messages, labelled "Messages in chat with <name>".
-    func messagePane() -> Item? { items().first { $0.role == "AXGroup" && $0.label.hasPrefix("Messages in chat with") } }
+    func messagePane() -> Item? {
+        items().first { $0.role == "AXGroup" && $0.label.hasPrefix("Messages in chat with") }
+    }
 
     @discardableResult
     func press(_ e: AXUIElement) -> Bool { AXUIElementPerformAction(e, kAXPressAction as CFString) == .success }
@@ -324,7 +329,8 @@ struct WAWindow: @unchecked Sendable {
         var lastPage: [String] = []
         for _ in 0..<40 {
             let rows = items().filter { $0.role == "AXButton" && $0.label != "Archived" && !$0.label.isEmpty }
-            for row in rows where Self.rowName(row.label) == name && !found.contains(where: { CFEqual($0, row.element) }) {
+            for row in rows
+            where Self.rowName(row.label) == name && !found.contains(where: { CFEqual($0, row.element) }) {
                 found.append(row.element)
             }
             let page = rows.map(\.label)
@@ -353,13 +359,17 @@ struct WAWindow: @unchecked Sendable {
         let words = clean(m.text.isEmpty ? (m.fileName ?? "") : m.text)
         guard !words.isEmpty, label.hasPrefix("Your ") == m.fromMe, label.contains(words) else { return false }
         let english = Locale(identifier: "en_US_POSIX")
-        let time = m.date.formatted(Date.VerbatimFormatStyle(
-            format: "\(hour: .twoDigits(clock: .twentyFourHour, hourCycle: .zeroBased)):\(minute: .twoDigits)",
-            timeZone: .current, calendar: .current))
-        let day = m.date.formatted(Date.VerbatimFormatStyle(
-            format: "\(month: .wide) \(day: .defaultDigits)", locale: english, timeZone: .current, calendar: .current))
-        let year = m.date.formatted(Date.VerbatimFormatStyle(
-            format: "\(year: .defaultDigits)", locale: english, timeZone: .current, calendar: .current))
+        let time = m.date.formatted(
+            Date.VerbatimFormatStyle(
+                format: "\(hour: .twoDigits(clock: .twentyFourHour, hourCycle: .zeroBased)):\(minute: .twoDigits)",
+                timeZone: .current, calendar: .current))
+        let day = m.date.formatted(
+            Date.VerbatimFormatStyle(
+                format: "\(month: .wide) \(day: .defaultDigits)", locale: english, timeZone: .current,
+                calendar: .current))
+        let year = m.date.formatted(
+            Date.VerbatimFormatStyle(
+                format: "\(year: .defaultDigits)", locale: english, timeZone: .current, calendar: .current))
         if label.contains("\(day), at \(time)") || label.contains("\(day), \(year), at \(time)") { return true }
         // Today's messages: the time alone, with no other day named.
         guard Calendar.current.isDate(m.date, inSameDayAs: now), label.contains(time) else { return false }
@@ -373,19 +383,23 @@ struct WAWindow: @unchecked Sendable {
     /// has no words or file name, or when more than one bubble matches.
     func find(_ m: WhatsAppMessage) async -> Result<AXUIElement, Refusal> {
         guard !(m.text.isEmpty && (m.fileName ?? "").isEmpty) else {
-            return .failure(Refusal(message: "that message has no words or file name WhatsApp for Mac's window can be matched on"))
+            return .failure(
+                Refusal(message: "that message has no words or file name WhatsApp for Mac's window can be matched on"))
         }
         for _ in 0..<30 {
-            let hits = items().filter { $0.role == "AXStaticText" && Self.matches($0.label, m) }
+            // Only the open chat's messages: never the chat list or anything else in the window.
+            guard let pane = messagePane() else { break }
+            let hits = items(in: pane.element).filter { $0.role == "AXStaticText" && Self.matches($0.label, m) }
             if hits.count > 1 {
-                return .failure(Refusal(message: "more than one message in WhatsApp for Mac's window looks like that one"))
+                return .failure(
+                    Refusal(message: "more than one message in WhatsApp for Mac's window looks like that one"))
             }
             if let hit = hits.first {
                 _ = perform(hit.element, "AXScrollToVisible")
                 try? await Task.sleep(for: .milliseconds(200))
                 return .success(hit.element)
             }
-            guard let pane = messagePane(), perform(pane.element, "AXScrollUpByPage") else { break }
+            guard perform(pane.element, "AXScrollUpByPage") else { break }
             try? await Task.sleep(for: .milliseconds(250))
         }
         return .failure(Refusal(message: "WhatsApp for Mac's window doesn't show that message"))
@@ -475,12 +489,14 @@ struct WAWindow: @unchecked Sendable {
     func pickReaction(_ emoji: String) async -> WhatsAppDesktopResult {
         let target = emoji.isEmpty ? nil : emoji
         guard
-            let button = await poll(3, {
-                items().first { item in
-                    item.role == "AXButton"
-                        && (target.map { t in item.label == t || item.label.hasPrefix(t) } ?? false)
-                }?.element
-            })
+            let button = await poll(
+                3,
+                {
+                    items().first { item in
+                        item.role == "AXButton"
+                            && (target.map { t in item.label == t || item.label.hasPrefix(t) } ?? false)
+                    }?.element
+                })
         else {
             closeMenus()
             return .notDone(
