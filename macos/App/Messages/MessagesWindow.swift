@@ -532,6 +532,9 @@ enum MessagesAX {
     static func setGroupName(_ name: String) async throws {
         guard let title = element(id: "ConversationTitle"), performNamed(title, "Conversation Details") || press(title)
         else { throw MessagesWindowProblem(message: "Messages didn't show the group's details.") }
-        throw MessagesWindowProblem(message: "Naming a group isn't done yet.")
+        // Not found yet on this macOS (research "Messages' window"): close what was opened and say so.
+        _ = AXUIElementPerformAction(title, kAXCancelAction as CFString)
+        throw MessagesWindowProblem(
+            message: "Latchkey can't name groups in Messages' window yet; the group keeps its people as its name.")
     }
 }

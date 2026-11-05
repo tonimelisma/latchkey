@@ -151,7 +151,8 @@ Messages' own window through Accessibility, in the background (`MessagesWindow.s
   tapback already there isn't pressed (FR-174). Edit and unsend are checked against Messages'
   limits first (own iMessage; 15 min, 2 min) so Claude hears why at once (FR-175).
 - A new group: `sms://open?addresses=<a>,<b>` opens a new message to them; the text goes in as
-  above. A name goes in through the conversation's details.
+  above. A name would go in through the conversation's details; until that field is found
+  (research), naming answers plainly that it can't be done yet and the group stays unnamed.
 - Deleting a conversation: its row in the conversation list (the selected one once it is shown)
   has Messages' "Delete…" action, then the same question.
 - Locked Mac: Messages' window isn't readable at all (tried 2026-11-05, lid closed and locked), so

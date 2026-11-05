@@ -134,10 +134,16 @@ every test item deleted afterwards. Options, least to most intrusive:
   with identifier `Sticker` carrying Messages' own actions, named "Tapback Details…" (opens the
   tapback picker), "Reply…", "Edit" and "Undo Send" (only while Messages allows them), "Copy",
   "Delete…". The picker's buttons have identifiers `heart`, `thumbsUp`, `thumbsDown`, `ha`,
-  `exclamation`, `questionMark` (then recent emoji). Pressing them, and typing into
-  `messageBodyField` with Return sent to Messages' process, worked with another app in front;
-  Messages never came forward and the pointer didn't move (checked with the front app before
-  and after each step). Conversation rows in the list have "Delete…" too; deleting asks "Delete
+  `exclamation`, `questionMark` (then recent emoji). Tried live, with another app in front:
+  a like tapback (recorded as type 2001), an inline reply (Reply…, then text into
+  `messageBodyField` and Return sent to Messages' process; recorded with
+  `thread_originator_guid`), and deleting a conversation (its row's Delete…, then the sheet's
+  Delete): Messages never came forward and the pointer didn't move (the front app checked
+  before and after each step). Not yet tried live, because the Mac locked (lid closed) before
+  they could be: taking a tapback back, Edit, Undo Send, deleting one message, a new group from
+  `sms://open?addresses=`, and the "Reply transcript" check; `macos/scripts/messages-check.sh`
+  runs them all, with a sweep. Naming a group: the conversation details' name field wasn't
+  found yet, so naming is answered plainly as not possible yet. Conversation rows in the list have "Delete…" too; deleting asks "Delete
   from all your devices?" in a sheet. Deleted messages and conversations move to Recently
   Deleted (`chat_recoverable_message_join`) for 30 days. Messages' action names are in the Mac's
   language; English is matched (Toni's Mac), and on another language the answer says Messages
