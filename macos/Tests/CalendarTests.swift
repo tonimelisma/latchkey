@@ -109,6 +109,17 @@ final class FakeEvents: EventsBackend, @unchecked Sendable {
         return r
     }
 
+    func moveReminders(_ ids: [String], list: String) throws -> [ReminderInfo] {
+        let to = try resolveCalendar(list, .reminders)
+        return try ids.map { id in
+            var r = try reminder(id: id)
+            r.list = to.title
+            r.listID = to.id
+            reminderList[reminderList.firstIndex { $0.id == id }!] = r
+            return r
+        }
+    }
+
     func deleteReminder(id: String) throws {
         deleted.append(id)
         reminderList.removeAll { $0.id == id }

@@ -306,6 +306,25 @@ final class EventKitBackend: EventsBackend, @unchecked Sendable {
         }
     }
 
+    func moveReminders(_ ids: [String], list: String) throws -> [ReminderInfo] {
+        try check(.reminders)
+        let items = try ids.map(ekReminder)
+        guard let cal = try ekCalendar(list, .reminders) else { throw EventsFailure.notFound(list) }
+        return try locked {
+            do {
+                for r in items {
+                    r.calendar = cal
+                    try store.save(r, commit: false)
+                }
+                try store.commit()
+            } catch {
+                store.reset()
+                throw EventsFailure.failed(error.localizedDescription)
+            }
+            return items.map(Self.info)
+        }
+    }
+
     func deleteReminder(id: String) throws {
         try check(.reminders)
         let r = try ekReminder(id)

@@ -147,12 +147,15 @@
         {"id": "reminders.create_list", "case": "Create a list", "steps": "reminders_change create_list, title \"{TAG}\"."},
         {"id": "reminders.create", "case": "Create a reminder with a due time", "steps": "reminders_change create, title \"{TAG} item\", list \"{TAG}\", due \"{TOMORROW}T09:00\"."},
         {"id": "reminders.update", "case": "Change a reminder", "steps": "reminders_find list \"{TAG}\" for its id, then reminders_change update, priority high, notes \"changed\"."},
+        {"id": "reminders.subtask", "case": "Add a flagged, tagged subtask", "steps": "reminders_change create, title \"{TAG} subtask\", parent the id of \"{TAG} item\", tags [\"latchkeycheck\"], flagged true. Then reminders_find id of \"{TAG} item\": works only when it lists \"{TAG} subtask\" under Subtasks, and reminders_find id of the subtask says Flagged: yes and Tags: #latchkeycheck."},
+        {"id": "reminders.keeps_extras", "case": "Change a reminder that has subtasks, a flag, and tags", "steps": "reminders_change update the subtask, notes \"still tagged\", due \"{TOMORROW}\"; then update \"{TAG} item\", title \"{TAG} item renamed\". Then reminders_find id of each: works only when the item still has its subtask and the subtask is still flagged, tagged #latchkeycheck, and a subtask of the item."},
+        {"id": "reminders.unflag_outdent", "case": "Unflag a subtask and make it a reminder of its own", "steps": "reminders_change update the subtask, flagged false, parent \"\". Then reminders_find id of it: works only when Flagged: no and it is no longer a subtask."},
         {"id": "reminders.complete", "case": "Complete and reopen", "steps": "reminders_change complete it, then uncomplete it."},
         {"id": "reminders.completed", "case": "List completed reminders", "steps": "reminders_find completed true, limit 3."},
         {"id": "reminders.delete", "case": "Delete a reminder", "steps": "reminders_change delete it."},
         {"id": "reminders.delete_list", "case": "Delete a list", "steps": "reminders_find list \"{TAG}\" for its count, then reminders_change delete_list, list \"{TAG}\", reminder_count that count."}
       ],
-      "missing": ["Flags, tags, and subtasks (macOS doesn't allow apps to)"]
+      "missing": ["Removing a tag (the Reminders app offers no way Latchkey can reach)"]
     },
     {
       "id": "contacts",
@@ -192,7 +195,7 @@
         {"id": "sweep.notes", "case": "No test notes or folders left", "steps": "notes_find with query \"{TAG}\", and notes_find with nothing (the folder list). Delete every note whose title starts with \"{TAG}\" (notes_change delete) and every folder whose name starts with \"{TAG}\" (notes_change delete_folder), then look again. works only when nothing with the tag is left; otherwise failed, with what stayed."},
         {"id": "sweep.contacts", "case": "No test cards or groups left", "steps": "contacts_find with query \"{TAG}\", and with nothing (the groups). Delete each card and group with the tag, then look again. works only when none is left."},
         {"id": "sweep.calendar", "case": "No test events left", "steps": "calendar_find query \"{TAG}\" from 7 days ago to 60 days ahead. Delete each one with span future, then look again. works only when none is left."},
-        {"id": "sweep.reminders", "case": "No test reminders or lists left", "steps": "reminders_find with nothing, and with query \"{TAG}\". Delete each reminder with the tag and each list whose name starts with \"{TAG}\", then look again. works only when none is left."},
+        {"id": "sweep.reminders", "case": "No test reminders or lists left", "steps": "reminders_find with nothing, and with query \"{TAG}\". Delete each reminder with the tag (subtasks included) and each list whose name starts with \"{TAG}\", then look again. works only when none is left."},
         {"id": "sweep.mail", "case": "No test email outside the Trash", "steps": "mail_find subject \"{TAG}\". Mark every one read (mail_change mark_read, also those already in a Trash or Deleted Items), and delete (to Trash) each not already in a Trash or Deleted Items mailbox, then look again. works only when every one is read and in a Trash."},
         {"id": "sweep.files", "case": "No test files left", "steps": "files_find path \"~/Downloads\". Trash ~/Downloads/latchkey-check and ~/Downloads/latchkey-check.txt if either is there (files_change trash), then look again. works only when neither is left."}
       ],

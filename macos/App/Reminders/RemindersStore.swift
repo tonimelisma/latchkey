@@ -89,13 +89,20 @@ struct RemindersStore: RemindersExtrasSource {
         let reminderColumns = columns.filter { $0.range(of: #"^ZREMINDER\d*$"#, options: .regularExpression) != nil }
             .sorted()
         if !reminderColumns.isEmpty {
-            let owner = reminderColumns.count == 1 ? reminderColumns[0] : "COALESCE(\(reminderColumns.joined(separator: ", ")))"
+            let owner =
+                reminderColumns.count == 1 ? reminderColumns[0] : "COALESCE(\(reminderColumns.joined(separator: ", ")))"
             if let tag = entity["REMCDHashtag"] {
                 let nameColumns = ["ZNAME1", "ZNAME"].filter(columns.contains)
-                let label = columns.contains("ZHASHTAGLABEL") ? "(SELECT l.ZNAME FROM ZREMCDHASHTAGLABEL l WHERE l.Z_PK = o.ZHASHTAGLABEL)" : nil
-                let name = "COALESCE(" + ([label].compactMap { $0 } + nameColumns.map { "o.\($0)" } + ["NULL"]).joined(separator: ", ") + ")"
+                let label =
+                    columns.contains("ZHASHTAGLABEL")
+                    ? "(SELECT l.ZNAME FROM ZREMCDHASHTAGLABEL l WHERE l.Z_PK = o.ZHASHTAGLABEL)" : nil
+                let name =
+                    "COALESCE("
+                    + ([label].compactMap { $0 } + nameColumns.map { "o.\($0)" } + ["NULL"]).joined(separator: ", ")
+                    + ")"
                 // nosemgrep: scripts.semgrep.latchkey-sql-bound -- column names come from the database's own table list; the value is bound
-                let sql = "SELECT \(owner), \(name) FROM ZREMCDOBJECT o WHERE o.Z_ENT = ? AND o.ZMARKEDFORDELETION = 0 ORDER BY o.Z_PK"
+                let sql =
+                    "SELECT \(owner), \(name) FROM ZREMCDOBJECT o WHERE o.Z_ENT = ? AND o.ZMARKEDFORDELETION = 0 ORDER BY o.Z_PK"
                 for r in (try? SQLite.rows(db, sql, bind: [.int(tag)])) ?? [] {
                     guard let id = r[0].int.flatMap({ idOf[$0] }), let n = r[1].text, !n.isEmpty else { continue }
                     if extras[id]?.tags.contains(n) == false { extras[id]?.tags.append(n) }
