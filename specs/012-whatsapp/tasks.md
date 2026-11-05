@@ -26,4 +26,8 @@ Rebuilt 2026-11-04 (Toni: no device of Latchkey's own; Safari tab first, window 
   its database (plan D3)
 - [x] T10 Tools: Safari first, window fallback, reading order; `whatsapp_link` removed (plan D5)
 - [x] T11 Old device's data deleted once at start; Settings says what WhatsApp needs (plan D4)
-- [ ] T12 Live check, one message per way, to the Owner's own chat (Toni: today)
+- [x] T12 Live check through the hosted relay, 2026-11-04, to the Owner's own chat: through the
+  Safari tab (0.8.116: sent, read within seconds, Safari stayed behind), reading by number
+  (0.8.117, after chats filed by privacy id were found), through WhatsApp for Mac with the tab
+  closed (0.8.117: sent, confirmed in its database). Not yet checked: a send through the tab
+  with the Mac locked.
