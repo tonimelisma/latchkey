@@ -20,6 +20,7 @@ import Testing
         ("whatsapp safari call", SafariWhatsApp.script),
         ("whatsapp safari open", SafariWhatsApp.openScript),
         ("notes delete folder", NotesCapability.Script.deleteFolder),
+        ("notes show in window", NoteWindow.Script.show), ("notes show again", NoteWindow.Script.restore),
         ("mail make message", AXMailWindows.makeScript), ("mail message action", AXMailWindows.messageScript),
         ("safari tab survey", SafariBrowser.Script.tabSurvey),
         ("safari tab javascript", SafariBrowser.Script.tabJavaScript),

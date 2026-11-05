@@ -17,7 +17,12 @@
         {"id": "notes.move", "case": "Move a note to another folder", "steps": "notes_change move \"{TAG} renamed\" to folder \"{TAG} folder\"; notes_find folder \"{TAG} folder\" shows it."},
         {"id": "notes.create_in_new_folder", "case": "Create a note in a folder that doesn't exist yet", "steps": "notes_change create, title \"{TAG} new\", text \"Hi\", folder \"{TAG} new folder\"; check the answer says the folder was made."},
         {"id": "notes.delete", "case": "Delete a note", "steps": "notes_change delete the \"{TAG} default\" note."},
-        {"id": "notes.delete_folder", "case": "Delete a folder", "steps": "notes_change delete_folder \"{TAG} folder\" and \"{TAG} new folder\" (their notes go to Recently Deleted)."}
+        {"id": "notes.delete_folder", "case": "Delete a folder", "steps": "notes_change delete_folder \"{TAG} folder\" and \"{TAG} new folder\" (their notes go to Recently Deleted)."},
+        {"id": "notes.checklist_create", "case": "Create a note with a real checklist", "steps": "notes_change create, title \"{TAG} list\", text \"- [ ] eggs\\n- [x] milk\"; notes_read it and check eggs shows as - [ ] and milk as - [x]."},
+        {"id": "notes.checklist_append", "case": "Add to a note that has a checklist", "steps": "notes_change append on \"{TAG} list\", text \"- [ ] bread\\nPlain line\"; notes_read it and check bread shows as - [ ], Plain line is not a checklist item, and milk is still - [x]."},
+        {"id": "notes.checklist_edit", "case": "Change a passage in a note with a checklist", "steps": "notes_change edit on \"{TAG} list\", find \"eggs\", text \"brown eggs\"; notes_read it and check it shows - [ ] brown eggs."},
+        {"id": "notes.checklist_tick", "case": "Tick and untick a checklist item", "steps": "notes_change check on \"{TAG} list\", find \"bread\"; then notes_change uncheck, find \"milk\"; notes_read it and check bread is - [x] and milk is - [ ]."},
+        {"id": "notes.checklist_delete", "case": "Delete the checklist note", "steps": "notes_change delete the \"{TAG} list\" note."}
       ],
       "missing": []
     },

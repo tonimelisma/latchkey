@@ -51,7 +51,8 @@ struct NoteWindow: Sendable {
             return nil
         },
         replace: { noteID, range, text in
-            guard let editor = Live.editor(noteID), Live.select(editor, NSRange(location: range.location, length: range.length))
+            guard let editor = Live.editor(noteID),
+                Live.select(editor, NSRange(location: range.location, length: range.length))
             else { return false }
             return AXUIElementSetAttributeValue(editor, kAXSelectedTextAttribute as CFString, text as CFString)
                 == .success
@@ -210,13 +211,17 @@ struct NoteWindow: Sendable {
 
         /// The toolbar's Checklist button: named like the Format menu's ⇧⌘L item.
         static func checklistButton() -> AXUIElement? {
-            let name = menuItem(char: "L", modifiers: 1).flatMap { AppWindowReader.string($0, kAXTitleAttribute) }
+            let name =
+                menuItem(char: "L", modifiers: 1).flatMap { AppWindowReader.string($0, kAXTitleAttribute) }
                 ?? "Checklist"
             for w in windows() {
-                if let b = first(in: w, {
-                    AppWindowReader.string($0, kAXRoleAttribute) == "AXButton"
-                        && AppWindowReader.string($0, kAXDescriptionAttribute) == name
-                }) {
+                if let b = first(
+                    in: w,
+                    {
+                        AppWindowReader.string($0, kAXRoleAttribute) == "AXButton"
+                            && AppWindowReader.string($0, kAXDescriptionAttribute) == name
+                    })
+                {
                     return b
                 }
             }

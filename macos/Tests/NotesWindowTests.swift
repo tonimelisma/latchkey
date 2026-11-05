@@ -144,7 +144,9 @@ extension Array {
         let plan = try NoteWindowEdit.edit(text, find: "Bread", with: "Rye bread").get()
         #expect(plan.range == NSRange(location: 15, length: 5))
         #expect(plan.text == "Rye bread")
-        #expect(throws: NoteWindowEdit.Problem.notFound) { try NoteWindowEdit.edit(text, find: "Eggs", with: "x").get() }
+        #expect(throws: NoteWindowEdit.Problem.notFound) {
+            try NoteWindowEdit.edit(text, find: "Eggs", with: "x").get()
+        }
         #expect(throws: NoteWindowEdit.Problem.several(2)) {
             try NoteWindowEdit.edit("a\na\n", find: "a", with: "b").get()
         }

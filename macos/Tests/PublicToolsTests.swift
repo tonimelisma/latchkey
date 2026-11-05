@@ -54,7 +54,7 @@ import Testing
         #expect(fake.lastArgs.last == "<div>Plant tulips</div>")
         let bad = await change.handler(.object(["action": .string("archive")]))
         #expect(bad.isError)
-        #expect(bad.content.jsonText.contains("create, append, replace, edit, rename, move, delete"))
+        #expect(bad.content.jsonText.contains("create, append, replace, edit, rename, check, uncheck, move, delete"))
         let moved = await change.handler(
             .object(["action": .string("move"), "id": .string("N-IDEAS"), "folder": .string("Garden")]))
         #expect(!moved.isError, "\(moved.content.jsonText)")

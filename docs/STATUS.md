@@ -1,6 +1,6 @@
 # Status
 
-Last updated: 2026-11-04 (releases are tags on commits; cloud-only files read again; machine list shows Latchkey versions; WhatsApp built; Add to Claude button; plugin withdrawn; README rewritten as a short product page; relay web pages redone; purkki paired; spec 010 shipped)
+Last updated: 2026-11-04 (Notes edits in Notes' window with real checklists; test sweep on exit; releases are tags on commits; cloud-only files read again; machine list shows Latchkey versions; WhatsApp built; Add to Claude button; plugin withdrawn; README rewritten as a short product page; relay web pages redone; purkki paired; spec 010 shipped)
 
 Xcode signing ready (2026-10-20): Toni's Xcode account has a valid "Apple Development" certificate
 (certificate expires 2027-07-22). Keep the team ID out of committed project files
@@ -31,6 +31,22 @@ hosted relay (email via Resend); real Claude called
 after the app was quit.
 
 ## Next steps
+
+Notes with checklists, links, or images can be changed now (2026-11-04, Toni: "editing notes
+with checklists is not supported? … feels frustrating"): until now Latchkey refused every such
+note, which is most real notes. Such changes go through Notes' own window in the background
+(spec 002 plan D3a, FR-155 to FR-159): text in place, real checklists for `- [ ]`/`- [x]`, and
+tick/untick (`notes_change` check/uncheck; Notes comes forward for about a second). Plain notes
+keep the AppleScript route. Open: whether Notes' window works with the Mac locked or the lid
+closed (screen-state cases `notes.checklist_*`). Same day: `notes_find` finds notes whose folder
+was deleted under them (twelve old test notes were invisible to Claude); the screen-state check
+sweeps every "Latchkey check" item on exit, even when stopped, and fails when any is left; the
+end-of-turn hook was removed (Toni). In progress, each in its own worktree branch
+(`worktree-agent-…`, stopped mid-way on 2026-11-04 and to be resumed): Calendar invitations and
+attendees, Mail sending while locked, Messages groups/reactions/replies/edit/unsend/delete,
+WhatsApp fallback (groups, files, more states), Safari uploads/downloads/keys/scroll, Reminders
+flags/tags/subtasks. Left in Toni's apps by those helpers, to remove: a Messages test group, 7
+WhatsApp self-chat test messages, possibly a cancelled test calendar event.
 
 Releases are tags on commits (2026-11-04, Toni): parallel sessions bumped the version file to the
 same number, and a rebase drops the second, identical bump without a conflict, so two different

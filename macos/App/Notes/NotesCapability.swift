@@ -199,7 +199,9 @@ enum NotesCapability {
 
     /// Notes with checklists, links, or images, and checklists Claude writes, go through Notes'
     /// window (plan D3a); `window` stands in for it in tests.
-    static func writeOperations(store: @escaping StoreSource, scripts: any ScriptRunner, window: NoteWindow = .unavailable)
+    static func writeOperations(
+        store: @escaping StoreSource, scripts: any ScriptRunner, window: NoteWindow = .unavailable
+    )
         -> [ToolEntry]
     {
         [
@@ -345,7 +347,8 @@ enum NotesCapability {
                                     [note.scriptID, body.replacingOccurrences(of: needle, with: NoteHTML.escape(text))])
                             }
                             if mode != "edit", hasChecklistItems(text) {
-                                ending = await realChecklists(note, written: text, replace: mode == "replace", window, s)
+                                ending = await realChecklists(
+                                    note, written: text, replace: mode == "replace", window, s)
                             }
                         }
                         var result = ToolResult.text(
