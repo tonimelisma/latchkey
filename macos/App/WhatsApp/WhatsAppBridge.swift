@@ -5,7 +5,7 @@ import Foundation
 /// screen. `WhatsAppBridgeTests` runs it against a stand-in of those modules.
 enum WhatsAppBridge {
     /// `window.__latchkey.version`; a tab holding another version gets this one.
-    static let version = 3
+    static let version = 5
 
     static let source = #"""
         // Runs inside the Owner's WhatsApp Web tab (spec 012 plan D2). Defines window.__latchkey, whose
@@ -126,7 +126,7 @@ enum WhatsAppBridge {
           }
 
           window.__latchkey = {
-            version: 3,
+            version: 5,
 
             // The words on screen while no chats show (a loading or sync screen), for answers
             // that say why WhatsApp isn't connected. Never while chats show: no message text.
@@ -256,13 +256,14 @@ enum WhatsAppBridge {
                 }
                 return null;
               };
-              // A reply quotes the message, as WhatsApp's own Reply does (msgContextInfo).
+              // A reply quotes the message: WhatsApp's own senders take the message itself as quotedMsg
+              // (checked 2026-11-05: they call quotedMsg.msgContextInfo themselves).
               let quote = {};
               let quoted = null;
               if (args.replyTo) {
                 quoted = await findMsg(chat, args.replyTo);
                 if (!quoted) return { error: 'the message to reply to (' + args.replyTo + ') is not in this chat' };
-                quote = typeof quoted.msgContextInfo === 'function' ? quoted.msgContextInfo(chat) : { quotedMsg: quoted };
+                quote = { quotedMsg: quoted };
               }
               const quotes = (ok) => !quoted || (ok && ok.quoted === quoted.id.id);
               const files = args.files || [];
@@ -322,7 +323,7 @@ enum WhatsAppBridge {
                 if (!m.id.fromMe) return { refused: 'only your own messages can be deleted for everyone' };
                 const cap = extra('capability');
                 if (typeof cap.canSenderRevokeMsg === 'function' && !cap.canSenderRevokeMsg(m)) {
-                  return { refused: 'WhatsApp no longer allows deleting this message for everyone (it is too old)' };
+                  return { refused: 'WhatsApp doesn\'t allow deleting this message for everyone (it is too old, or WhatsApp doesn\'t allow it in this chat, as in your own chat)' };
                 }
                 cmd.sendRevokeMsgs(chat, { list: [m], type: 'message' }, { clearMedia: true });
               } else {

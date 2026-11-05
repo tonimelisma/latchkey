@@ -17,7 +17,6 @@ import WebKit
         const collection = (items) => ({ items, getModelsArray() { return this.items; }, get length() { return this.items.length; } });
         function msg(chat, o) {
           const m = Object.assign({ id: key(!!o.fromMe, chat), t: o.t, type: o.type || 'chat', body: o.body || '', ack: o.ack || 0 }, o.extra || {});
-          m.msgContextInfo = () => ({ quotedMsg: m, quotedStanzaID: m.id.id });
           return m;
         }
         function chat(id, name, t, unread, msgs) {
@@ -46,10 +45,10 @@ import WebKit
           WAWebFindChatAction: { findOrCreateLatestChat: async (w) => { const c = chat(w._serialized, '+' + w.user, 0, 0, []); chats.push(c); return { chat: c }; } },
           WAWebSendTextMsgChatAction: {
             sendTextMsgToChat: (c, text, opts) => {
-              window.__sent.push({ chat: c.id._serialized, text, quoted: (opts && opts.quotedStanzaID) || null });
+              window.__sent.push({ chat: c.id._serialized, text, quoted: (opts && opts.quotedMsg && opts.quotedMsg.id.id) || null });
               if (window.__mode === 'reject') return Promise.reject(new Error('blocked'));
               if (window.__mode === 'never') return new Promise(() => {});
-              deliver(c, msg(c.id._serialized, { t: 999, body: text, fromMe: true, extra: opts && opts.quotedStanzaID ? { quotedStanzaID: opts.quotedStanzaID } : {} }), 50);
+              deliver(c, msg(c.id._serialized, { t: 999, body: text, fromMe: true, extra: opts && opts.quotedMsg ? { quotedStanzaID: opts.quotedMsg.id.id } : {} }), 50);
               // WhatsApp's own promise settles much later than the message goes out.
               return new Promise((r) => setTimeout(r, 60000));
             },
@@ -59,7 +58,7 @@ import WebKit
             prepRawMedia: (data, opts) => ({
               waitForPrep: async () => ({ type: opts.asDocument ? 'document' : 'image' }),
               sendToChat: async ({ chat: c, options }) => {
-                window.__sent.push({ chat: c.id._serialized, file: data.file.name, asDocument: opts.asDocument, caption: options.caption || null, quoted: options.quotedStanzaID || null });
+                window.__sent.push({ chat: c.id._serialized, file: data.file.name, asDocument: opts.asDocument, caption: options.caption || null, quoted: options.quotedMsg ? options.quotedMsg.id.id : null });
                 deliver(c, msg(c.id._serialized, { t: 999, type: opts.asDocument ? 'document' : 'image', fromMe: true, extra: { caption: options.caption, filename: data.file.name } }), 30);
               },
             }),
