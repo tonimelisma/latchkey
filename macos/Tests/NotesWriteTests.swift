@@ -54,8 +54,8 @@ final class FakeScripts: ScriptRunner, @unchecked Sendable {
         let (_, _, tools) = try setup()
         #expect(
             Set(tools.keys) == [
-                "notes_create", "notes_update", "notes_move", "notes_rename", "notes_create_folder", "notes_delete",
-                "notes_delete_folder",
+                "notes_create", "notes_update", "notes_move", "notes_rename", "notes_check", "notes_create_folder",
+                "notes_delete", "notes_delete_folder",
             ])
         #expect(tools["notes_move"]?.tool.annotations?.destructiveHint == false)
         #expect(tools["notes_create_folder"]?.tool.annotations?.destructiveHint == false)
@@ -197,15 +197,19 @@ final class FakeScripts: ScriptRunner, @unchecked Sendable {
         #expect(fake.calls.count == 1, "read the body, changed nothing")
     }
 
-    @Test func refusesChangesThatWouldLoseChecklistsOrImages() async throws {
+    /// FR-155, FR-158: notes with checklists or images go to Notes' window, never through a
+    /// rewrite; without the window nothing changes. A locked note is refused (FR-106).
+    @Test func notesThatWouldLoseThingsNeverGetRewritten() async throws {
         let (_, fake, tools) = try setup()
         for id in ["N-GROCERIES", "N-LISBON", "N-SECRET"] {
             let result = await tools["notes_update"]!.handler(
                 .object(["id": .string(id), "mode": .string("append"), "text": .string("eggs")]))
             #expect(result.isError, "\(id)")
-            #expect(result.content.jsonText.contains("new note"), "suggests a way forward")
+            #expect(
+                result.content.jsonText.contains(id == "N-SECRET" ? "locked" : "Notes' window"),
+                "\(result.content.jsonText)")
         }
-        #expect(fake.calls.isEmpty, "FR-106: Notes was never asked")
+        #expect(fake.calls.isEmpty, "Notes was never asked to rewrite")
     }
 
     @Test func deletesToRecentlyDeleted() async throws {

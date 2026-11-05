@@ -73,8 +73,8 @@ Serves FR-102, FR-103, FR-112.
 - Append adds HTML to the existing body; replace keeps the title and sets the rest; edit
   replaces one exact passage (it must occur once in the note's text). All three rewrite the
   body, which AppleScript can't do without losing checklists, attachments (images, tables), so
-  before any change the app checks the database and refuses notes that have them, or are
-  locked, saying why (FR-106).
+  before any change the app checks the database; notes that have them go through Notes'
+  window instead (D3a), and locked notes are refused (FR-106).
 - New notes: the id Notes returns (`x-coredata://<store>/ICNote/p<row>`) is mapped back to the
   note's id in the database (waits up to 3 s for Notes to write it). Changes find the note's
   scripting id the same way in reverse.
@@ -95,6 +95,35 @@ Serves FR-102, FR-103, FR-112.
 - After sending, the app watches `chat.db` for the new outgoing message (up to 5 s) and reports
   sent, failed (Messages' error flag), or not yet confirmed.
 - Needs the Automation permission for Notes and for Messages (D5).
+
+## D3a. Changing in Notes' window (2026-11-04)
+
+Serves FR-106, FR-155 to FR-159; research "Notes' window".
+- Route: a note with nothing AppleScript would lose (no checklists, links, mentions, tags,
+  images, tables) is changed with AppleScript as in D3, which keeps headings and lists. Any
+  other note is changed in Notes' window. Text with checklist items goes in as ☐/☑ lines either
+  way, then each of those lines, and only those, becomes a real checklist item in the window.
+- The window: AppleScript `show note id …` puts the note in Notes' main window without making
+  Notes the front app (and answers the note shown before, shown again at the end). The note's
+  editor is the `AXTextArea` whose `AXIdentifier` is `Note[id=<the note's id>]`, so Latchkey
+  knows it has the right note; it waits up to 5 s for it.
+- Text: the editor's `AXSelectedTextRange` is set to the passage and `AXSelectedText` to the
+  new text, which Notes treats like typing there: checklists, links, and images elsewhere stay.
+  Images show in the editor's text as U+FFFC. Headings, bullets, and numbered lines written into
+  such a note are plain lines (`• ` for bullets): the format panel's buttons don't answer
+  Accessibility presses in the background (tried 2026-11-04).
+- Checklists: the toolbar's Checklist button (found by the name of the Format menu item with
+  ⇧⌘L, so it works in any language) is pressed for each ☐/☑ line after the ☐/☑ is removed; its
+  value says whether the line already is one. Pressing it works in the background.
+- Ticking: Format → Mark as Checked (⇧⌘U) is disabled while Notes isn't the front app, so for
+  ticking Notes is made active, the caret put in each item, the menu item pressed, and the app
+  that was in front activated again (about 1.3 s, tried 2026-11-04). Whether an item is ticked
+  comes from the database (D2).
+- One change at a time (a queue), since the window is shared. The answer comes once the
+  database shows the change (up to 5 s), else says Notes hasn't saved it yet.
+- When the window can't be used, the change isn't started (FR-158); for create and for plain
+  notes the AppleScript part is already done, so its ☐/☑ lines stay as they are and the answer
+  says so.
 
 ## D4. People: Contacts
 

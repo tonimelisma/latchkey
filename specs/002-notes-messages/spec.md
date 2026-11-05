@@ -87,10 +87,27 @@ As an Owner, I set Notes and Messages each to Off, Read only, or Read & write in
 - **FR-105** Password-locked notes shall be listed as locked, with no content.
 - **FR-106** When a change would lose part of a note (checklists, images, tables, or a locked
   note), Latchkey shall not change it and shall tell Claude why, so Claude can create a new note
-  instead (Toni, 2026-10-22).
+  instead (Toni, 2026-10-22). Narrowed 2026-11-04 (Toni: "add everything missing"): only a
+  locked note, a replace of a note with images or tables, or a change Notes' window can't take
+  (FR-158) is refused; everything else goes through Notes' window (FR-155).
 - **FR-107** Checklists in text Claude writes shall appear as ☐ and ☑ items, because Notes offers
   no way for other apps to make real checklists without Shortcuts (Toni chose AppleScript only,
-  2026-10-22).
+  2026-10-22). Withdrawn 2026-11-04: replaced by FR-156; ☐ and ☑ remain only when Notes' window
+  can't be used (FR-158).
+- **FR-155** When Claude appends to, edits a passage of, renames, or replaces the text of a note
+  that has checklists, links, mentions, tags, images, or tables, Latchkey shall make the change
+  in Notes' own window, in place, leaving everything else in the note as it was, without
+  bringing Notes forward (Toni, 2026-11-04).
+- **FR-156** Checklist items in text Claude writes (`- [ ]`, `- [x]`) shall become real Notes
+  checklist items, ticked where written `- [x]` (Toni, 2026-11-04).
+- **FR-157** While Notes is Read & write, Claude shall be able to tick and untick a checklist
+  item. Notes ticks only while it is in front, so Notes comes forward for about a second and the
+  app that was in front gets it back (Toni, 2026-11-04: "ticking with a brief Notes flash").
+- **FR-158** When Notes' window can't show the note (Notes hidden or minimized, the Mac locked
+  or asleep, Accessibility not allowed), the change shall not be made halfway: Claude is told
+  why, and text written to a new or plain note keeps its checklist items as ☐ and ☑.
+- **FR-159** After a change in Notes' window, Latchkey shall show again the note the Mac's owner
+  had open in Notes, and shall answer "changed" only once Notes' database shows the change.
 
 ### Messages
 - **FR-110** While Messages is Read only or Read & write, Claude shall be able to list recent

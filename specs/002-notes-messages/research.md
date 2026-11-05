@@ -125,3 +125,29 @@ others solved the same problems; check their current code before relying on deta
   **Contacts** prompts with `NSContactsUsageDescription`.
   https://developer.apple.com/forums/thread/107546?page=2, https://mjtsai.com/blog/?p=22551
 - Latchkey is not sandboxed (plan 001 D9), which these require.
+
+## Notes' window (2026-11-04)
+
+Asked by Toni after Claude couldn't change a note with a checklist ("feels frustrating to find
+use cases this broken"). Most real notes have a checklist, a link, or an image, and FR-106
+refused all of them. Tried on Toni's Mac with throwaway notes in a "Latchkey check" folder:
+
+- **AppleScript HTML** (`<ul class="checklist">`, `<input type="checkbox">`): Notes keeps a plain
+  bulleted list. No route.
+- **Accessibility, background**: the note's editor is an `AXTextArea` (`AXIdentifier`
+  `Note[id=<ZIDENTIFIER>]`). Setting `AXSelectedTextRange` then `AXSelectedText` replaced one
+  passage in place with Safari in front; nothing else in the note changed. Pressing the
+  toolbar's Checklist button (`AXPress`) made the line at the caret a real checklist, still in
+  the background. Chosen for text and checklists.
+- **Format menu in the background**: every item is disabled while Notes isn't active
+  (`AXEnabled` false; `AXPress` "succeeds" and does nothing); keys sent to Notes' process
+  (⇧⌘L) do nothing either. The format panel (Aa) opens with a press, but its buttons answer
+  `kAXErrorActionUnsupported`, so headings and list styles can't be set in the background.
+- **Ticking**: no toolbar button or accessibility action; Format → Mark as Checked works once
+  Notes is active. Activate, press, activate the previous app: 1.3 s, Safari got the front back.
+  Chosen (Toni: "Yes, build it", with the brief Notes flash).
+- **Pasting rich text** (Edit → Paste with HTML on the pasteboard): would keep headings and
+  lists, but needs Notes in front and the owner's clipboard; not used.
+- **Writing Notes' database**: nobody does it; iCloud sync owns that data. Rejected.
+- Open: whether Accessibility reaches Notes' window while the Mac is locked or the lid is
+  closed (screen-state check cases "Change a note with a checklist", "Tick a checklist item").
