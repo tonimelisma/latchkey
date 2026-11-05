@@ -67,6 +67,8 @@ final class WhatsAppPage: NSObject, WKNavigationDelegate {
     /// Since when the page has been linked but not connected (plan D4).
     private var unconnectedSince: Date?
     private var loadedAt = Date.distantPast
+    /// Until when a link is under way (a code waits to be typed, then the first sync).
+    private var linkingUntil = Date.distantPast
     /// True once the page has been connected; a later log-in screen means WhatsApp unlinked it.
     private var wasLinked = false
 
@@ -152,14 +154,21 @@ final class WhatsAppPage: NSObject, WKNavigationDelegate {
             wasLinked = true
             Self.setLinked(true)
             unconnectedSince = nil
+            linkingUntil = .distantPast
         case .connecting:
             if unconnectedSince == nil { unconnectedSince = now }
-            if let since = unconnectedSince, now.timeIntervalSince(since) >= 60 {
+            if Self.shouldReload(
+                next, now: now, loadedAt: loadedAt, unconnectedSince: unconnectedSince, linkingUntil: linkingUntil)
+            {
                 EventLog.shared.record(.app, "WhatsApp: not connected for a minute; reloading the page")
                 load()
             }
         case .loading:
-            if now.timeIntervalSince(loadedAt) >= 90 { load() }
+            if Self.shouldReload(
+                next, now: now, loadedAt: loadedAt, unconnectedSince: unconnectedSince, linkingUntil: linkingUntil)
+            {
+                load()
+            }
         case .notLinked:
             if wasLinked {
                 wasLinked = false
@@ -181,6 +190,20 @@ final class WhatsAppPage: NSObject, WKNavigationDelegate {
         }
         state = next
         if next == .connected, linkWindow != nil { closeLinkWindow() }
+    }
+
+    /// Whether the watchdog reloads the page now (plan D4): linked but unconnected for a minute,
+    /// or still loading after 90 s. Never while a link is under way: a reload throws the code
+    /// away, and the phone then says it couldn't find the device (2026-11-04).
+    nonisolated static func shouldReload(
+        _ s: WhatsAppPageState, now: Date, loadedAt: Date, unconnectedSince: Date?, linkingUntil: Date
+    ) -> Bool {
+        if now < linkingUntil { return false }
+        switch s {
+        case .connecting: return unconnectedSince.map { now.timeIntervalSince($0) >= 60 } ?? false
+        case .loading: return now.timeIntervalSince(loadedAt) >= 90
+        default: return false
+        }
     }
 
     private func readState() async -> WhatsAppPageState {
@@ -213,7 +236,7 @@ final class WhatsAppPage: NSObject, WKNavigationDelegate {
                 Self.setLinked(true)
                 return s
             case .notLinked, .changed: return s
-            case .connecting where !reloaded:
+            case .connecting where !reloaded && Date() >= linkingUntil:
                 reloaded = true
                 load()
             default: break
@@ -225,6 +248,8 @@ final class WhatsAppPage: NSObject, WKNavigationDelegate {
 
     func startForLinking(wait: Duration) async -> WhatsAppPageState {
         start()
+        // A code lasts a few minutes; the first sync after it can take a few more.
+        linkingUntil = Date().addingTimeInterval(600)
         let end = ContinuousClock.now + wait
         while true {
             let s = await readState()

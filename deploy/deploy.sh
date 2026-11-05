@@ -25,6 +25,11 @@
 # possible without signing everyone out (docs/self-hosting.md, "The key file").
 # The parts that need no server are tested by deploy/tests/lib_test.sh.
 set -eu
+# One deploy at a time from this Mac, waiting up to 15 minutes for another (2026-11-04).
+LOCK=$HOME/Library/Caches/net.melisma.latchkey.deploy.lock
+if [ "${LATCHKEY_DEPLOY_LOCKED:-}" != "$LOCK" ]; then
+  LATCHKEY_DEPLOY_LOCKED=$LOCK exec /usr/bin/lockf -t 900 "$LOCK" "$0" "$@"
+fi
 LC_ALL=C
 export LC_ALL
 cd "$(dirname "$0")/.."

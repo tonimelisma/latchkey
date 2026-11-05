@@ -91,6 +91,9 @@ Serves FR-1202, FR-1212, SC-1202.
   message itself in the chat, with `ack` ≥ 1, is the confirmation; a rejected promise ends the
   wait at once.
 - Log-out is the connection's own `WAWebSocketModel.Socket.logout()` (`WAWebCmd` has none).
+- No reload for 10 minutes after a link starts: a reload throws the waiting code away, and the
+  phone then says it couldn't find the device (2026-11-04, 0.8.111). The code screen counts as
+  the log-in screen.
 
 ## D5 Tools
 

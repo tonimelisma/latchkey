@@ -88,13 +88,15 @@ enum WhatsAppBridge {
             // Linked, connected, and whether this WhatsApp Web still has what Latchkey uses.
             state() {
               const gone = missing();
-              const loginScreen = !!document.querySelector('canvas[aria-label], [data-ref]') ||
-                /Scan to log in|Log in with phone number|Steps to log in/.test(document.body ? document.body.innerText.slice(0, 3000) : '');
+              // Never while chats show: a message's words must not make the page look logged out.
+              const chatList = !!document.querySelector('#pane-side');
+              const loginScreen = !chatList && (!!document.querySelector('canvas[aria-label], [data-ref]') ||
+                /Scan to log in|Log in with phone number|Steps to log in|Enter code on phone|Log in with QR code/.test(document.body ? document.body.innerText.slice(0, 3000) : ''));
               let socket = '';
               let chats = 0;
               try { socket = String(mod('socket').Socket.state || ''); } catch (e) { socket = ''; }
               try { chats = chatsArray().length; } catch (e) { chats = 0; }
-              return { loaded: typeof window.require === 'function', chatList: !!document.querySelector('#pane-side'), missing: gone, loginScreen, socket, chats, connected: socket === 'CONNECTED' };
+              return { loaded: typeof window.require === 'function', chatList, missing: gone, loginScreen, socket, chats, connected: socket === 'CONNECTED' };
             },
 
             // Chats newest first; query matches a name or a number.

@@ -9,7 +9,21 @@
 # as the Owner meets it: no setup window over a finished setup, keep-awake as wanted, the new
 # helper running (spec 001 FR-622), and the activity log agreeing with the relay's audit (FR-636).
 set -eu
+# One install at a time on this Mac, waiting up to 15 minutes for another to finish (2026-11-04:
+# two sessions installed at once and one swapped the app out from under the other).
+LOCK=$HOME/Library/Caches/net.melisma.latchkey.install.lock
+if [ "${LATCHKEY_INSTALL_LOCKED:-}" != "$LOCK" ]; then
+  LATCHKEY_INSTALL_LOCKED=$LOCK exec /usr/bin/lockf -t 900 "$LOCK" "$0" "$@"
+fi
 cd "$(dirname "$0")/.."
+# Never replace newer work: the build must contain everything already on GitHub's main, so an
+# install can't take back what another session shipped. Checked inside the lock, after a fetch.
+git fetch -q origin main
+if ! git merge-base --is-ancestor refs/remotes/origin/main HEAD; then
+  echo "install: this checkout lacks commits already on origin/main (another session shipped);" >&2
+  echo "install: rebase onto origin/main, bump the version, rebuild, then install" >&2
+  exit 1
+fi
 # shellcheck source=macos/scripts/install-lib.sh
 . scripts/install-lib.sh
 VERSION=$(sed -n 's/^ *MARKETING_VERSION: *"\(.*\)"/\1/p' project.yml)

@@ -98,6 +98,49 @@ import WebKit
         #expect(try await call(w, "state")["missing"] == .array([.string("WAWebPrepRawMedia")]))
     }
 
+    /// The screen with the link code is a log-in screen too, so nothing takes it for a page
+    /// that is stuck loading (2026-11-04).
+    @Test func theCodeScreenIsALogInScreen() async throws {
+        let w = try await page()
+        _ = try await js(w, "document.body.innerHTML = '<div>Enter code on phone</div><div>A</div>'")
+        #expect(try await call(w, "state")["loginScreen"]?.boolValue == true)
+        // With the chats showing, a message saying the same words is just a message.
+        _ = try await js(w, "document.body.innerHTML = '<div id=\"pane-side\"></div><div>Log in with QR code</div>'")
+        #expect(try await call(w, "state")["loginScreen"]?.boolValue == false)
+    }
+
+    /// A reload while a code waits throws the code away; the phone then says it couldn't find
+    /// the device (2026-11-04). Outside a link the watchdog still reloads a stuck page.
+    @Test func noReloadWhileALinkIsUnderWay() {
+        let t0 = Date(timeIntervalSince1970: 1_000_000)
+        let later = t0.addingTimeInterval(120)
+        let linking = t0.addingTimeInterval(600)
+        #expect(
+            !WhatsAppPage.shouldReload(.loading, now: later, loadedAt: t0, unconnectedSince: nil, linkingUntil: linking)
+        )
+        #expect(
+            !WhatsAppPage.shouldReload(
+                .connecting, now: later, loadedAt: t0, unconnectedSince: t0, linkingUntil: linking))
+        #expect(
+            WhatsAppPage.shouldReload(
+                .loading, now: later, loadedAt: t0, unconnectedSince: nil, linkingUntil: .distantPast))
+        #expect(
+            WhatsAppPage.shouldReload(
+                .connecting, now: later, loadedAt: t0, unconnectedSince: t0, linkingUntil: .distantPast))
+        #expect(
+            !WhatsAppPage.shouldReload(
+                .loading, now: t0.addingTimeInterval(30), loadedAt: t0, unconnectedSince: nil,
+                linkingUntil: .distantPast))
+        #expect(
+            !WhatsAppPage.shouldReload(
+                .notLinked, now: later, loadedAt: t0, unconnectedSince: nil, linkingUntil: .distantPast))
+        // After the link window the watchdog is back.
+        #expect(
+            WhatsAppPage.shouldReload(
+                .loading, now: linking.addingTimeInterval(1), loadedAt: t0, unconnectedSince: nil, linkingUntil: linking
+            ))
+    }
+
     @Test func chatsAreNewestFirstAndFiltered() async throws {
         let w = try await page()
         let all = try await call(w, "chats", .object(["limit": .number(10)]))

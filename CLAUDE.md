@@ -132,7 +132,9 @@ IMPORTANT: every working increment, however small, is published and installed. I
    `make -C linux release` (installed servers update themselves within a day).
 6. If `macos/` changed: `make -C macos install` builds the disk image, quits the running app
    cleanly, replaces `/Applications/Latchkey.app`, starts it, and checks it reports the new
-   version (pairing and permissions carry over). Toni never installs by hand.
+   version (pairing and permissions carry over). Toni never installs by hand. Installs and
+   deploys run one at a time (a lock; the next waits), and an install refuses a checkout that
+   lacks commits already on origin/main, so merge first, then install (2026-11-04).
 7. If behavior changed: a live check through the hosted relay with a fresh Claude Code session
    (`claude -p --allowedTools mcp__claude_ai_Latchkey`); this session's own connector keeps the
    tool list it started with.

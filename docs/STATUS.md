@@ -89,7 +89,8 @@ on this Mac (research.md): locked sends of text, photo, and file read within abo
 page stuck "Connecting" overnight for 7 hours was fixed by a reload (the watchdog now reloads).
 Checked live through the hosted relay: listing chats, reading a group, getting a link code. Not
 yet checked live: sending through Latchkey's own device, because Toni hasn't typed a link code
-yet (the first code expired unused). Next: Toni links (in any Claude app: "link my WhatsApp to
+yet: the page's watchdog reloaded it while a code waited, so the phone said it couldn't
+find the device (fixed in 0.8.111: no reload for 10 minutes after a link starts). Next: Toni links (in any Claude app: "link my WhatsApp to
 Latchkey" with his number, then types the code), then a live send unlocked and locked. The test
 devices of 2026-11-02 and 2026-11-03 are logged out and deleted. Install note: the audit check
 now reports one `mail_find` from another session (16:29:15Z) as missing on the Mac: it was
