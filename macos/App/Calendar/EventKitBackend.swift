@@ -112,6 +112,7 @@ final class EventKitBackend: EventsBackend, @unchecked Sendable {
             guard e.calendar != nil else { throw EventsFailure.failed("This Mac has no calendar to add events to.") }
             try apply(draft, to: e)
             try save(e, span: .thisEvent)
+            try EventKitInvitations.checkPeople(draft, on: e)
             return Self.info(e)
         }
     }
@@ -124,6 +125,7 @@ final class EventKitBackend: EventsBackend, @unchecked Sendable {
             if let calendar { e.calendar = calendar }
             try apply(draft, to: e)
             try save(e, span: future ? .futureEvents : .thisEvent)
+            try EventKitInvitations.checkPeople(draft, on: e)
             return Self.info(e)
         }
     }
@@ -135,6 +137,20 @@ final class EventKitBackend: EventsBackend, @unchecked Sendable {
             do { try store.remove(e, span: future ? .futureEvents : .thisEvent, commit: true) } catch {
                 throw EventsFailure.failed(error.localizedDescription)
             }
+        }
+    }
+
+    func respond(id: String, _ answer: InvitationAnswer, comment: String?, future: Bool) throws -> EventInfo {
+        try check(.events)
+        let e = try ekEvent(id)
+        return try locked {
+            let status = EventKitInvitations.status(answer)
+            try EventKitInvitations.setAnswer(status, comment: comment, on: e)
+            try save(e, span: future ? .futureEvents : .thisEvent)
+            guard EventKitInvitations.answer(of: e) == status else {
+                throw EventsFailure.failed("the calendar didn't keep the answer. \(EventKitInvitations.elsewhere)")
+            }
+            return Self.info(e)
         }
     }
 
@@ -180,6 +196,8 @@ final class EventKitBackend: EventsBackend, @unchecked Sendable {
         case .clear: e.recurrenceRules = nil
         case .set(let r): e.recurrenceRules = [Self.rule(r)]
         }
+        try EventKitInvitations.uninvite(d.uninvite, from: e)
+        try EventKitInvitations.invite(d.invite, to: e)
     }
 
     static func rule(_ r: Repeat) -> EKRecurrenceRule {
@@ -232,7 +250,8 @@ final class EventKitBackend: EventsBackend, @unchecked Sendable {
                     : nil,
                 status: status(p.participantStatus), isOwner: p.isCurrentUser)
         }
-        return EventInfo(
+        let own = e.organizer == nil || e.organizer?.isCurrentUser == true || attendees.isEmpty
+        var info = EventInfo(
             identifier: e.eventIdentifier ?? e.calendarItemIdentifier, title: e.title ?? "(no title)",
             start: e.startDate, end: e.endDate, allDay: e.isAllDay, calendar: e.calendar?.title ?? "",
             calendarID: e.calendar?.calendarIdentifier ?? "", location: e.location?.nilIfEmpty,
@@ -241,9 +260,19 @@ final class EventKitBackend: EventsBackend, @unchecked Sendable {
                 $0.absoluteDate == nil ? Int((-$0.relativeOffset / 60).rounded()) : nil
             },
             repeats: repeats(e.recurrenceRules), attendees: attendees, organizer: e.organizer?.name,
-            ownEvent: e.organizer == nil || e.organizer?.isCurrentUser == true || attendees.isEmpty,
+            ownEvent: own,
             writable: e.calendar?.allowsContentModifications ?? false, markedFree: e.availability == .free,
             cancelled: e.status == .canceled)
+        let flag = { (key: String) in EventKitInvitations.flag(key, of: e) }
+        info.canRespond =
+            !own && attendees.contains(where: \.isOwner) && !info.cancelled
+            && (flag("allowsParticipationStatusModifications") ?? true)
+        let sendsInvitations = [EKSourceType.calDAV, .exchange, .mobileMe].contains(e.calendar?.source?.sourceType)
+        info.canInvite =
+            own ? sendsInvitations && (flag("allowsAttendeesModifications") ?? true)
+            : (flag("allowsAttendeesModifications") ?? false)
+        info.changesReachOthers = own || flag("currentUserMayActAsOrganizer") == true
+        return info
     }
 
     // MARK: reminders

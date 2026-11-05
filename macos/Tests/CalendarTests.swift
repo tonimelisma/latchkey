@@ -22,6 +22,8 @@ final class FakeEvents: EventsBackend, @unchecked Sendable {
     var lastReminderDraft: ReminderDraft?
     var lastFuture: Bool?
     var deleted: [String] = []
+    var lastAnswer: InvitationAnswer?
+    var lastComment: String?
 
     func allowed(_ kind: EventsKind) -> Bool { access }
     func calendars(_ kind: EventsKind) throws -> [CalendarInfo] { kind == .events ? calendarList : lists }
@@ -44,7 +46,8 @@ final class FakeEvents: EventsBackend, @unchecked Sendable {
         let e = EventInfo(
             identifier: "E\(stored.count + 1)", title: draft.title ?? "", start: draft.start!, end: draft.end!,
             allDay: draft.allDay ?? false, calendar: cal.title, calendarID: cal.id, location: draft.location.value,
-            notes: draft.notes.value, alarms: draft.alarms.value ?? [], repeats: draft.repeats.value)
+            notes: draft.notes.value, alarms: draft.alarms.value ?? [], repeats: draft.repeats.value,
+            attendees: draft.invite.map { Attendee(name: $0, email: $0, status: "not answered", isOwner: false) })
         stored.append(e)
         return e
     }
@@ -62,6 +65,18 @@ final class FakeEvents: EventsBackend, @unchecked Sendable {
             e.end = end
         }
         if let l = draft.location.value { e.location = l } else if draft.location == .clear { e.location = nil }
+        e.attendees.removeAll { a in draft.uninvite.contains { $0.lowercased() == a.email?.lowercased() } }
+        e.attendees += draft.invite.map { Attendee(name: $0, email: $0, status: "not answered", isOwner: false) }
+        stored[stored.firstIndex { $0.identifier == e.identifier }!] = e
+        return e
+    }
+
+    func respond(id: String, _ answer: InvitationAnswer, comment: String?, future: Bool) throws -> EventInfo {
+        lastAnswer = answer
+        lastComment = comment
+        lastFuture = future
+        var e = try event(id: id)
+        for i in e.attendees.indices where e.attendees[i].isOwner { e.attendees[i].status = answer.status }
         stored[stored.firstIndex { $0.identifier == e.identifier }!] = e
         return e
     }
@@ -231,6 +246,22 @@ final class FakeEvents: EventsBackend, @unchecked Sendable {
                 organizer: own ? nil : "Sarah", ownEvent: own))
     }
 
+    /// An invitation from Sarah that the Owner hasn't answered.
+    func addInvitation(_ title: String, canRespond: Bool = true, canInvite: Bool = false) throws -> String {
+        var e = EventInfo(
+            identifier: "I\(fake.stored.count)", title: title, start: try date("2026-10-27T15:00"),
+            end: try date("2026-10-27T16:00"), allDay: false, calendar: "Home", calendarID: "C-HOME",
+            attendees: [
+                Attendee(name: "Sarah", email: "sarah@example.com", status: "accepted", isOwner: false),
+                Attendee(name: "Toni", email: "toni@example.com", status: "not answered", isOwner: true),
+            ], organizer: "Sarah", ownEvent: false)
+        e.canRespond = canRespond
+        e.canInvite = canInvite
+        e.changesReachOthers = false
+        fake.stored.append(e)
+        return e.id
+    }
+
     @Test func findListsEventsInARangeWithTheirZone() async throws {
         try addEvent("Dentist", "2026-10-27T15:00", "2026-10-27T16:00")
         try addEvent("Standup", "2026-10-28T09:00", "2026-10-28T09:15", calendar: "C-WORK")
@@ -329,7 +360,8 @@ final class FakeEvents: EventsBackend, @unchecked Sendable {
                 "repeat": .string("daily"), "repeat_count": .number(3), "repeat_until": .string("2026-11-01"),
             ]))
         #expect(both.isError)
-        #expect(text(await change.handler(.object(["action": .string("invite")]))).contains("create, update, delete"))
+        #expect(
+            text(await change.handler(.object(["action": .string("invite")]))).contains("create, update, delete, respond"))
     }
 
     @Test func updateMovesKeepingLengthAndDeleteRemoves() async throws {
@@ -351,20 +383,114 @@ final class FakeEvents: EventsBackend, @unchecked Sendable {
         #expect(fake.stored.isEmpty)
     }
 
-    @Test func refusesInvitationsAndReadOnlyCalendars() async throws {
-        try addEvent("Board meeting", "2026-10-27T15:00", "2026-10-27T16:00", own: false)
+    @Test func refusesReadOnlyCalendars() async throws {
         var holiday = EventInfo(
             identifier: "H", title: "Thanksgiving", start: try date("2026-11-26"), end: try date("2026-11-26T23:59"),
             allDay: true, calendar: "US Holidays", calendarID: "C-HOL")
         holiday.writable = false
         fake.stored.append(holiday)
         let change = try tool("calendar_change")
-        let invite = await change.handler(.object(["action": .string("delete"), "id": .string(fake.stored[0].id)]))
-        #expect(invite.isError && text(invite).contains("only the organizer"))
         let ro = await change.handler(
             .object(["action": .string("update"), "id": .string(holiday.id), "title": .string("X")]))
         #expect(ro.isError && text(ro).contains("read-only"))
-        #expect(fake.stored.count == 2)
+        let answer = await change.handler(
+            .object(["action": .string("respond"), "id": .string(holiday.id), "answer": .string("accept")]))
+        #expect(answer.isError && text(answer).contains("read-only"))
+        #expect(fake.stored.count == 1)
+    }
+
+    @Test func answersInvitations() async throws {
+        let id = try addInvitation("Board meeting")
+        let change = try tool("calendar_change")
+        let yes = await change.handler(
+            .object([
+                "action": .string("respond"), "id": .string(id), "answer": .string("accept"),
+                "comment": .string("See you there"),
+            ]))
+        #expect(!yes.isError, "\(text(yes))")
+        #expect(fake.lastAnswer == .accepted && fake.lastComment == "See you there" && fake.lastFuture == false)
+        #expect(text(yes).contains("Accepted «Board meeting»"), "\(text(yes))")
+        #expect(yes.activity == "Claude accepted “Board meeting” in Home")
+        let maybe = await change.handler(
+            .object([
+                "action": .string("respond"), "id": .string(id), "answer": .string("maybe"), "span": .string("future"),
+            ]))
+        #expect(!maybe.isError && fake.lastAnswer == .tentative && fake.lastFuture == true)
+        let no = await change.handler(
+            .object(["action": .string("respond"), "id": .string(id), "answer": .string("decline")]))
+        #expect(!no.isError && fake.lastAnswer == .declined)
+        #expect(text(no).contains("Declined"))
+        let bad = await change.handler(
+            .object(["action": .string("respond"), "id": .string(id), "answer": .string("perhaps")]))
+        #expect(bad.isError && text(bad).contains("accept, maybe, or decline"))
+        let none = await change.handler(.object(["action": .string("respond"), "id": .string(id)]))
+        #expect(none.isError && text(none).contains("accept, maybe, or decline"))
+    }
+
+    @Test func refusesAnswersWhereThereIsNoInvitation() async throws {
+        try addEvent("Dentist", "2026-10-27T15:00", "2026-10-27T16:00")
+        let change = try tool("calendar_change")
+        let own = await change.handler(
+            .object(["action": .string("respond"), "id": .string(fake.stored[0].id), "answer": .string("accept")]))
+        #expect(own.isError && text(own).contains("isn't an invitation"), "\(text(own))")
+        let id = try addInvitation("Old meeting", canRespond: false)
+        let closed = await change.handler(
+            .object(["action": .string("respond"), "id": .string(id), "answer": .string("accept")]))
+        #expect(closed.isError && text(closed).contains("can't be answered"), "\(text(closed))")
+        #expect(fake.lastAnswer == nil)
+    }
+
+    @Test func invitesPeopleToNewAndOwnEvents() async throws {
+        let change = try tool("calendar_change")
+        let made = await change.handler(
+            .object([
+                "action": .string("create"), "title": .string("Planning"), "start": .string("2026-10-27T15:00"),
+                "invite": .array([.string("ann@example.com"), .string(" bob@example.com ")]),
+            ]))
+        #expect(!made.isError, "\(text(made))")
+        #expect(fake.lastDraft?.invite == ["ann@example.com", "bob@example.com"])
+        #expect(text(made).contains("Invited ann@example.com, bob@example.com"), "\(text(made))")
+        let id = fake.stored[0].id
+        let changed = await change.handler(
+            .object([
+                "action": .string("update"), "id": .string(id), "invite": .array([.string("cy@example.com")]),
+                "uninvite": .array([.string("ANN@example.com")]),
+            ]))
+        #expect(!changed.isError, "\(text(changed))")
+        #expect(fake.stored[0].attendees.compactMap(\.email) == ["bob@example.com", "cy@example.com"])
+        #expect(text(changed).contains("Invited cy@example.com") && text(changed).contains("Uninvited ANN@example.com"))
+        let unknown = await change.handler(
+            .object(["action": .string("update"), "id": .string(id), "uninvite": .array([.string("zed@example.com")])]))
+        #expect(unknown.isError && text(unknown).contains("zed@example.com isn't invited"), "\(text(unknown))")
+        let bad = await change.handler(
+            .object(["action": .string("update"), "id": .string(id), "invite": .array([.string("not an address")])]))
+        #expect(bad.isError && text(bad).contains("email address"))
+    }
+
+    @Test func changesInvitationsFromOthers() async throws {
+        let id = try addInvitation("Board meeting")
+        let change = try tool("calendar_change")
+        let moved = await change.handler(
+            .object(["action": .string("update"), "id": .string(id), "title": .string("Board meeting (bring slides)")]))
+        #expect(!moved.isError, "\(text(moved))")
+        #expect(fake.stored[0].title == "Board meeting (bring slides)")
+        #expect(text(moved).contains("your copy"), "says others keep theirs: \(text(moved))")
+        let invite = await change.handler(
+            .object(["action": .string("update"), "id": .string(id), "invite": .array([.string("cy@example.com")])]))
+        #expect(invite.isError && text(invite).contains("doesn't let guests invite"), "\(text(invite))")
+        let id2 = try addInvitation("Offsite", canInvite: true)
+        let invite2 = await change.handler(
+            .object(["action": .string("update"), "id": .string(id2), "invite": .array([.string("cy@example.com")])]))
+        #expect(!invite2.isError, "\(text(invite2))")
+        let gone = await change.handler(.object(["action": .string("delete"), "id": .string(id)]))
+        #expect(!gone.isError, "\(text(gone))")
+        #expect(text(gone).contains("decline"), "points to answering instead: \(text(gone))")
+    }
+
+    @Test func readingAnInvitationSaysItCanBeAnswered() async throws {
+        let id = try addInvitation("Board meeting")
+        let t = text(try await tool("calendar_find").handler(.object(["id": .string(id)])))
+        #expect(t.contains("Your answer: not answered (calendar_change respond answers it)"), "\(t)")
     }
 
     @Test func saysWhatToAllowWithoutAccess() async throws {
