@@ -47,6 +47,10 @@ final class WhatsAppStore: @unchecked Sendable {
     private let lock = NSLock()
     private let addressBookURL: URL
     private var names: [String: String] = [:]
+    /// Phone number ↔ privacy id, from the address book: after a relink WhatsApp for Mac files most
+    /// person chats under `…@lid` (47 of 60 on 2026-11-04), so a number alone doesn't find them.
+    private var numberOfLID: [String: String] = [:]
+    private var lidOfNumber: [String: String] = [:]
     private var namesRead = Date.distantPast
 
     init(url: URL = WhatsAppStore.database) throws {
@@ -116,6 +120,12 @@ final class WhatsAppStore: @unchecked Sendable {
             if digits.count >= 4 {
                 whereSQL += " OR s.ZCONTACTJID LIKE ?"
                 bind.append(.text("%\(digits)%@%"))
+                if let lid = locked({
+                    refreshNames(); return lidOfNumber[digits]
+                }) {
+                    whereSQL += " OR s.ZCONTACTJID = ?"
+                    bind.append(.text("\(lid)@lid"))
+                }
             }
             whereSQL += ")"
         }
@@ -137,13 +147,21 @@ final class WhatsAppStore: @unchecked Sendable {
     /// The chat for an id from `chats`, or by name: exact, else the only one containing it.
     func chat(_ key: String) throws -> Resolution {
         try locked {
+            refreshNames()
             let k = key.trimmingCharacters(in: .whitespaces)
-            if let r = try SQLite.rows(
-                // nosemgrep: scripts.semgrep.latchkey-sql-bound -- only fixed SQL constants are spliced in; every value is bound
-                db, "SELECT \(Self.chatColumns) \(Self.chatFrom) WHERE s.ZCONTACTJID = ? AND \(Self.visible)",
-                bind: [.text(k)]
-            ).first {
-                return .one(chat(r))
+            // An id; or a phone number, under its number or its privacy id.
+            var ids = [k]
+            if k.range(of: #"^[+\d\s().-]+$"#, options: .regularExpression) != nil, k.filter(\.isNumber).count >= 7 {
+                ids = chatIDsUnlocked(forNumber: k.filter(\.isNumber))
+            }
+            for id in ids {
+                if let r = try SQLite.rows(
+                    // nosemgrep: scripts.semgrep.latchkey-sql-bound -- only fixed SQL constants are spliced in; every value is bound
+                    db, "SELECT \(Self.chatColumns) \(Self.chatFrom) WHERE s.ZCONTACTJID = ? AND \(Self.visible)",
+                    bind: [.text(id)]
+                ).first {
+                    return .one(chat(r))
+                }
             }
             // nosemgrep: scripts.semgrep.latchkey-sql-bound -- only fixed SQL constants are spliced in; every value is bound
             let all = try SQLite.rows(db, "SELECT \(Self.chatColumns) \(Self.chatFrom) WHERE \(Self.visible)")
@@ -275,6 +293,30 @@ final class WhatsAppStore: @unchecked Sendable {
     /// A WhatsApp id's user part, the key both databases share ("88800011122244@lid" → "88800011122244").
     static func user(_ jid: String) -> String { jid.components(separatedBy: "@").first ?? jid }
 
+    /// The ids a person's chat may have, by phone number: `<number>@s.whatsapp.net`, and its
+    /// privacy id when the address book knows it.
+    func chatIDs(forNumber number: String) -> [String] {
+        locked {
+            refreshNames()
+            return chatIDsUnlocked(forNumber: number)
+        }
+    }
+
+    private func chatIDsUnlocked(forNumber number: String) -> [String] {
+        ["\(number)@s.whatsapp.net"] + (lidOfNumber[number].map { ["\($0)@lid"] } ?? [])
+    }
+
+    /// A person's phone number for a chat id (by number or privacy id); nil for a group, or a privacy
+    /// id the address book doesn't know.
+    func number(forChat id: String) -> String? {
+        if id.hasSuffix("@s.whatsapp.net") { return Self.user(id) }
+        guard id.hasSuffix("@lid") else { return nil }
+        return locked {
+            refreshNames()
+            return numberOfLID[Self.user(id)]
+        }
+    }
+
     /// Reads the address book's names, at most every five minutes; without it, names come from
     /// ChatStorage alone.
     private func refreshNames() {
@@ -292,6 +334,22 @@ final class WhatsAppStore: @unchecked Sendable {
             for id in [r[1].text, r[2].text].compactMap({ $0 }) where !id.isEmpty { out[Self.user(id)] = name }
         }
         names = out
+        var numbers: [String: String] = [:]
+        var lids: [String: String] = [:]
+        if let pairs = try? SQLite.rows(
+            book,
+            "SELECT ZLID, ZWHATSAPPID FROM ZWAADDRESSBOOKCONTACT WHERE ZLID IS NOT NULL AND ZWHATSAPPID IS NOT NULL")
+        {
+            for r in pairs {
+                guard let lid = r[0].text.map(Self.user), let jid = r[1].text, jid.hasSuffix("@s.whatsapp.net") else {
+                    continue
+                }
+                numbers[lid] = Self.user(jid)
+                lids[Self.user(jid)] = lid
+            }
+        }
+        numberOfLID = numbers
+        lidOfNumber = lids
     }
 
     /// WhatsApp marks names with invisible direction characters ("\u{200E}You").

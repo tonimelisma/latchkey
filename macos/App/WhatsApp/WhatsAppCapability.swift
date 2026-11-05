@@ -257,12 +257,12 @@ enum WhatsAppCapability {
             case .none:
                 return nothing("no WhatsApp chat matches \(quote(to)); give a phone number with its country code")
             case .one(let chat):
-                guard !chat.isGroup, chat.id.hasSuffix("@s.whatsapp.net") else {
+                guard !chat.isGroup, let n = db.number(forChat: chat.id) else {
                     return nothing(
                         "WhatsApp for Mac can be sent only to a person known by phone number, and \(quote(chat.name)) isn't one"
                     )
                 }
-                number = String(chat.id.prefix { $0 != "@" })
+                number = n
                 name = chat.name
             }
         }
@@ -272,7 +272,9 @@ enum WhatsAppCapability {
         let end = ContinuousClock.now + confirmWait
         while ContinuousClock.now < end {
             if let db = store(),
-                let recent = try? db.messages(chat: "\(number)@s.whatsapp.net", before: nil, limit: 5),
+                let recent = try? db.chatIDs(forNumber: number).flatMap({
+                    try db.messages(chat: $0, before: nil, limit: 5)
+                }),
                 recent.contains(where: {
                     $0.fromMe && LiveWhatsAppWindow.same($0.text, text) && $0.date >= started.addingTimeInterval(-5)
                 })

@@ -54,6 +54,7 @@ import Testing
         let book = """
             CREATE TABLE ZWAADDRESSBOOKCONTACT (Z_PK INTEGER PRIMARY KEY, ZFULLNAME TEXT, ZLID TEXT, ZWHATSAPPID TEXT);
             INSERT INTO ZWAADDRESSBOOKCONTACT VALUES (1, 'Pat Example', '88800011122244@lid', NULL);
+            INSERT INTO ZWAADDRESSBOOKCONTACT VALUES (2, NULL, '99900011122233@lid', '15550009999@s.whatsapp.net');
             """
         #expect(sqlite3_exec(c, book, nil, nil, nil) == SQLITE_OK)
         return url
@@ -73,6 +74,23 @@ import Testing
         #expect(try s.chats(query: "sarah", unread: false, limit: 10, offset: 0).total == 1)
         #expect(try s.chats(query: "555-0001", unread: false, limit: 10, offset: 0).chats.first?.name == "Sarah Lee")
         #expect(try s.chats(query: nil, unread: false, limit: 1, offset: 1).chats.map(\.name) == ["Sarah Lee"])
+    }
+
+    /// After a relink most person chats are filed by privacy id (2026-11-04): a phone number finds
+    /// them through WhatsApp's address book, and a privacy id gives its number back.
+    @Test func aNumberFindsAChatFiledByPrivacyId() throws {
+        let s = try WhatsAppStore(url: try Self.make())
+        guard case .one(let c) = try s.chat("+1 (555) 000-9999") else {
+            Issue.record("not found by number")
+            return
+        }
+        #expect(c.id == "99900011122233@lid")
+        #expect(s.number(forChat: "99900011122233@lid") == "15550009999")
+        #expect(s.number(forChat: "15550001111@s.whatsapp.net") == "15550001111")
+        #expect(s.number(forChat: "120363000@g.us") == nil && s.number(forChat: "88800011122244@lid") == nil)
+        #expect(s.chatIDs(forNumber: "15550009999") == ["15550009999@s.whatsapp.net", "99900011122233@lid"])
+        let found = try s.chats(query: "15550009999", unread: false, limit: 5, offset: 0).chats.map(\.id)
+        #expect(found == ["99900011122233@lid"])
     }
 
     @Test func aChatIsFoundByIdOrName() throws {

@@ -98,6 +98,10 @@ Serves FR-1212 to FR-1232. Names follow Messages (spec 002).
   sort key WhatsApp moves thousands of years ahead for a pinned chat, and `ZLASTMESSAGETEXT` is
   encoded. Senders known only by privacy id (`…@lid`) get their names from WhatsApp's copy of the
   address book, `ContactsV2.sqlite`.
+- After a relink WhatsApp for Mac files most person chats by privacy id (`…@lid`; 47 of 60 on
+  2026-11-04). The address book's `ZLID` and `ZWHATSAPPID` give number ↔ privacy id, so a phone
+  number finds such a chat, the window (D3) gets the number for one, and its confirmation looks
+  under both ids.
 - Files are checked for size and kind before they are read (security review 2026-11-03); at most
   64 MB per call; photos (`image/*`) go as photos, anything else as documents.
 - Settings, WhatsApp section: one line on what WhatsApp needs on the Mac and the warning
