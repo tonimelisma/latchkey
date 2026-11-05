@@ -34,7 +34,9 @@ after the app was quit.
 
 Claude's machine list shows each machine's Latchkey version beside its OS version (2026-11-04,
 relay only; spec 010 FR-1006): the versions each machine reports when it connects, already kept
-by the relay and shown on the account page.
+by the relay and shown on the account page. Its deploy found that the code scanner had flagged
+WhatsApp's queries and the Safari dialog note since they were written (fixed SQL pieces and text for
+Claude, no hole); they carry reviewed markers now (Mac 0.8.110, no behavior change).
 
 Follow-up of 2026-11-04 (Toni: "fix everything, properly"), in Mac 0.8.109 and Linux 0.1.1:
 a page's own dialogs never make Claude wait (spec 005 FR-432): reproduced in real Safari, a

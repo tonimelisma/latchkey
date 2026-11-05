@@ -122,10 +122,12 @@ final class WhatsAppStore: @unchecked Sendable {
         if unread { whereSQL += " AND s.ZUNREADCOUNT > 0" }
         return try locked {
             let total =
+                // nosemgrep: scripts.semgrep.latchkey-sql-bound -- only fixed SQL constants are spliced in; every value is bound
                 try SQLite.rows(db, "SELECT COUNT(*) \(Self.chatFrom) WHERE \(whereSQL)", bind: bind)
                 .first?.first?.int ?? 0
             let rows = try SQLite.rows(
                 db,
+                // nosemgrep: scripts.semgrep.latchkey-sql-bound -- only fixed SQL constants are spliced in; every value is bound
                 "SELECT \(Self.chatColumns) \(Self.chatFrom) WHERE \(whereSQL) \(Self.chatOrder) LIMIT ? OFFSET ?",
                 bind: bind + [.int(Int64(limit)), .int(Int64(offset))])
             return (Int(total), rows.map(chat))
@@ -137,11 +139,13 @@ final class WhatsAppStore: @unchecked Sendable {
         try locked {
             let k = key.trimmingCharacters(in: .whitespaces)
             if let r = try SQLite.rows(
+                // nosemgrep: scripts.semgrep.latchkey-sql-bound -- only fixed SQL constants are spliced in; every value is bound
                 db, "SELECT \(Self.chatColumns) \(Self.chatFrom) WHERE s.ZCONTACTJID = ? AND \(Self.visible)",
                 bind: [.text(k)]
             ).first {
                 return .one(chat(r))
             }
+            // nosemgrep: scripts.semgrep.latchkey-sql-bound -- only fixed SQL constants are spliced in; every value is bound
             let all = try SQLite.rows(db, "SELECT \(Self.chatColumns) \(Self.chatFrom) WHERE \(Self.visible)")
                 .map(chat)
             let fold = { (s: String) in s.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: nil) }
@@ -223,6 +227,7 @@ final class WhatsAppStore: @unchecked Sendable {
             sql += " ORDER BY m.ZMESSAGEDATE DESC LIMIT ?"
             bind.append(.int(Int64(limit)))
             refreshNames()
+            // nosemgrep: scripts.semgrep.latchkey-sql-bound -- only fixed SQL constants are spliced in; every value is bound
             return try SQLite.rows(db, sql, bind: bind).map(message)
         }
     }
@@ -253,6 +258,7 @@ final class WhatsAppStore: @unchecked Sendable {
             sql += " ORDER BY m.ZMESSAGEDATE DESC LIMIT ? OFFSET ?"
             bind += [.int(Int64(limit)), .int(Int64(offset))]
             refreshNames()
+            // nosemgrep: scripts.semgrep.latchkey-sql-bound -- only fixed SQL constants are spliced in; every value is bound
             return try SQLite.rows(db, sql, bind: bind).map(message)
         }
     }

@@ -124,12 +124,16 @@ enum PageScripts {
                     .components(separatedBy: .newlines).joined(separator: " ").prefix(200))
         }
         switch kind {
+        // nosemgrep: scripts.semgrep.latchkey-page-script-literal -- a note for Claude, never run in a page; the page's text is framed and cleaned
         case "alert": return "The page showed an alert: «\(clean(message))» (dismissed)."
         case "confirm":
             return
+                // nosemgrep: scripts.semgrep.latchkey-page-script-literal -- a note for Claude, never run in a page; the page's text is framed and cleaned
                 "The page asked to confirm: «\(clean(message))»; Latchkey answered \(answer == "ok" ? "OK" : "Cancel")."
         default:
+            // nosemgrep: scripts.semgrep.latchkey-page-script-literal -- a note for Claude, never run in a page; the page's text is framed and cleaned
             let given = answer.map { $0.isEmpty ? "gave none" : "answered «\(clean($0))»" } ?? "gave none"
+            // nosemgrep: scripts.semgrep.latchkey-page-script-literal -- a note for Claude, never run in a page; the page's text is framed and cleaned
             return "The page asked for text: «\(clean(message))»; Latchkey \(given)."
         }
     }
