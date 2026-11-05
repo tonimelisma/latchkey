@@ -1,6 +1,6 @@
 # Status
 
-Last updated: 2026-11-03 (WhatsApp built; Add to Claude button; plugin withdrawn; README rewritten as a short product page; relay web pages redone; purkki paired; spec 010 shipped)
+Last updated: 2026-11-04 (machine list shows Latchkey versions; WhatsApp built; Add to Claude button; plugin withdrawn; README rewritten as a short product page; relay web pages redone; purkki paired; spec 010 shipped)
 
 Xcode signing ready (2026-10-20): Toni's Xcode account has a valid "Apple Development" certificate
 (certificate expires 2027-07-22). Keep the team ID out of committed project files
@@ -31,6 +31,10 @@ hosted relay (email via Resend); real Claude called
 after the app was quit.
 
 ## Next steps
+
+Claude's machine list shows each machine's Latchkey version beside its OS version (2026-11-04,
+relay only; spec 010 FR-1006): the versions each machine reports when it connects, already kept
+by the relay and shown on the account page.
 
 Follow-up of 2026-11-04 (Toni: "fix everything, properly"), in Mac 0.8.109 and Linux 0.1.1:
 a page's own dialogs never make Claude wait (spec 005 FR-432): reproduced in real Safari, a

@@ -180,8 +180,8 @@ and no relay tool; the 2026-10-22 status tool stays withdrawn.)
 
 ```
 Your machines (2):
-- Toni's MacBook Pro · Mac (macOS 26.1) · online · 64% battery, on battery power · keep-awake on · offers: shell_run, notes_find, …
-- homeserver · Linux server (Debian GNU/Linux 12 (bookworm)) · online · up 12 days · offers: files_change, files_find, files_read, shell_check, shell_run
+- Toni's MacBook Pro · Mac (Latchkey 0.8.109, macOS 26.1) · online · 64% battery, on battery power · keep-awake on · offers: shell_run, notes_find, …
+- homeserver · Linux server (Latchkey 0.1.2, Debian GNU/Linux 12 (bookworm)) · online · up 12 days · offers: files_change, files_find, files_read, shell_check, shell_run
 Pass a machine's name as machine when more than one offers a tool.
 ```
 

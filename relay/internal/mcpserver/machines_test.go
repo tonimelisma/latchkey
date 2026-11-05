@@ -183,12 +183,14 @@ func TestMachinesResult(t *testing.T) {
 		{Device: linux("nas"), LastSeen: now.Add(-time.Hour)},
 	}
 	ms[0].Device.OSVersion = "26.1"
+	ms[0].Device.AppVersion = "0.8.109"
 	ms[1].Device.OSVersion = "Ubuntu 24.04.1 LTS"
+	ms[1].Device.AppVersion = "0.1.2"
 	res := machinesResult(ms, now)
 	text := res.Content[0].(*mcp.TextContent).Text
 	assert.Equal(t, "Your machines (3):\n"+
-		"- Toni's MacBook Pro · Mac (macOS 26.1) · online · 64% battery, on battery power · keep-awake on · offers: shell_run, notes_find\n"+
-		"- homeserver · Linux server (Ubuntu 24.04.1 LTS) · online · up 3 days · offers: shell_run\n"+
+		"- Toni's MacBook Pro · Mac (Latchkey 0.8.109, macOS 26.1) · online · 64% battery, on battery power · keep-awake on · offers: shell_run, notes_find\n"+
+		"- homeserver · Linux server (Latchkey 0.1.2, Ubuntu 24.04.1 LTS) · online · up 3 days · offers: shell_run\n"+
 		"- nas · Linux server · offline, last seen 1 hour ago · offers no tools (all turned off on it)\n"+
 		"Pass a machine's name as machine when more than one offers a tool.", text)
 	assert.Nil(t, res.StructuredContent, "text only: Claude's apps would show structured content instead of the text")

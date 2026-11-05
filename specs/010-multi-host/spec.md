@@ -64,7 +64,8 @@ and pairing a second Mac replaces the first (spec 001 FR-053).
   offers it, that machine shall run it. Otherwise the relay shall answer at once with the
   machines that offer the tool, each with whether it is online (Toni, 2026-10-31).
 - **FR-1006** Claude shall be able to list the Owner's machines: name, kind (Mac or Linux),
-  online or last seen, and the tools each offers.
+  the Latchkey and operating system versions it last reported (Toni, 2026-11-04), online or
+  last seen, and the tools each offers.
 - **FR-1007** When Claude names a machine that has the tool turned off, or that doesn't offer it,
   the answer shall be as if the tool didn't exist on that machine; the machine shall not be named
   among those offering it (Constitution III, per machine).

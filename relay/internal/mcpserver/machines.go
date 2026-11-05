@@ -379,12 +379,19 @@ func machinesResult(ms []machine, now time.Time) *mcp.CallToolResult {
 			tools = append(tools, t.Name)
 		}
 		fmt.Fprintf(&b, "- %s · %s", m.Device.Name, kindPhrase(m.Device.Kind))
+		var about []string
+		if m.Device.AppVersion != "" {
+			about = append(about, "Latchkey "+m.Device.AppVersion)
+		}
 		if m.Device.OSVersion != "" {
 			if m.Device.Kind == store.KindMac {
-				fmt.Fprintf(&b, " (macOS %s)", m.Device.OSVersion)
+				about = append(about, "macOS "+m.Device.OSVersion)
 			} else {
-				fmt.Fprintf(&b, " (%s)", m.Device.OSVersion)
+				about = append(about, m.Device.OSVersion)
 			}
+		}
+		if len(about) > 0 {
+			fmt.Fprintf(&b, " (%s)", strings.Join(about, ", "))
 		}
 		if m.Online {
 			line := statusLine(m.Device.Name, m.Device.Kind, m.State)

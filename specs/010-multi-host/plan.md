@@ -101,7 +101,7 @@ reasons: `user_quit` → "Latchkey was stopped", `system_shutdown` → "It shut 
 
 ### D6 The machines tool and instructions (FR-1006)
 
-`machines` takes no arguments and answers one line per machine: name, kind and OS version,
+`machines` takes no arguments and answers one line per machine: name, kind, Latchkey and OS version (as last reported in hello),
 online/last seen with the status line's facts, and what it offers (tool names; Files' level read
 from whether `files_change` is there). Text only: with structured content present Claude's apps
 show that instead of the text (live check 2026-10-22, `.claude/rules/macos.md`). The instructions

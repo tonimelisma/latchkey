@@ -96,8 +96,8 @@ func TestTwoMachinesBehindOneConnector(t *testing.T) {
 
 	// Claude finds out what's there.
 	_, text := callWith(t, cs, "machines", map[string]any{})
-	assert.Contains(t, text, "- Toni's MacBook Pro · Mac (macOS 26.1) · online")
-	assert.Contains(t, text, "- homeserver · Linux server (Ubuntu 24.04.1 LTS) · online · up 3 days · offers: shell_run")
+	assert.Contains(t, text, "- Toni's MacBook Pro · Mac (Latchkey 0.1.0-test, macOS 26.1) · online")
+	assert.Contains(t, text, "- homeserver · Linux server (Latchkey 0.1.0-test, Ubuntu 24.04.1 LTS) · online · up 3 days · offers: shell_run")
 
 	// Two machines offer shell_run: no guess.
 	res, text := callWith(t, cs, "shell_run", map[string]any{"command": "df -h"})
