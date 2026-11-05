@@ -279,3 +279,69 @@ stayed in front. The check script had stopped building since the screen and perm
 moved (it now compiles `App/Computer/Screen.swift` and a small stand-in for `Permissions`).
 - **How long a pick lasts.** In memory only; forgotten at 30 minutes unused (the idle timer) and
   when Latchkey restarts, so a later conversation starts in Claude's own page.
+
+## Keys, hover, scrolling, files, and pictures (2026-11-05)
+
+Toni asked for "all the safari stuff": keys, hover, scrolling, lists, attaching files,
+downloading, and pictures while the Mac is locked or its display off, all in the background tab
+like the existing actions. Owner-level choices were his (do all of it; working functionality
+outranks older limits); the options and low-level choices below are Claude's, least intrusive
+first.
+
+- **Keys.** (a) Keyboard events dispatched in the page by a script, with what the browser
+  would do by default done by the script where the page didn't take the key (chosen): runs in
+  a background tab, in the Owner's tabs, and in Latchkey's own browser while locked; a page
+  sees `isTrusted` false, so the rare page that checks it (some games, a few banking widgets)
+  ignores the keys, and Command shortcuts that are Safari's own (Command-L, Command-T) aren't
+  Safari's then. (b) `CGEvent.postToPid` to Safari: real keys, but Safari sends them to its key
+  window's front tab, which is the Owner's, needs Accessibility, and does nothing while locked;
+  not tried, as it would type into whatever the Owner has in front. (c) System Events
+  `keystroke`: brings Safari forward; rejected without trying for the same reason. Computer
+  control (spec 006) stays the way for a page that needs real keys.
+- **Hover.** (a) Pointer and mouse events at the element's middle (chosen): opens menus driven
+  by `mouseenter`/`mouseover` scripts, which is most of them. A menu that opens only by CSS
+  `:hover` can't be opened by any script (the state belongs to the real pointer); the answer
+  says nothing new shows and that clicking often works. (b) Moving the real pointer: needs the
+  tab in front and the screen; rejected (computer control already does it).
+- **Scrolling.** A wheel event first, then the nearest part that scrolls (chosen); the answer
+  says where it is. Reading a page lists up to 20 parts that scroll on their own, so Claude has
+  a reference to scroll inside; looking at every `div` and the like costs about as much as
+  listing links (one layout already done).
+- **Lists.** A `select`'s value with input and change (as typing into a list already did, now
+  also several options at once), and for lists a page builds itself, a click on the opener and
+  on the item whose text matches. Reading lists combo boxes, list boxes, menus, and
+  `aria-haspopup` elements so Claude can name them.
+- **Attaching files.** (a) A `DataTransfer` of `File`s built in the page from the file's bytes,
+  set as the file field's `files`, then input and change (chosen): exactly what a page sees when
+  the Owner picks a file, works in a background tab and while locked, and the same objects make
+  a drop on a drop place. (b) Clicking the field and answering Safari's open panel through
+  Accessibility: real, but the panel is a sheet of the front tab (the tab has to come forward),
+  needs the screen and the Mac unlocked; rejected. (c) WebDriver (`safaridriver`): its own
+  automation window, without the Owner's tabs, and it needs "Allow Remote Automation";
+  rejected. The bytes travel as base64 in the page script; a script longer than 200 KB goes
+  through a file only the Owner's account can read, which the AppleScript reads (macOS allows
+  about 1 MB for all of a program's arguments). Limit 30 MB together. Reading lists hidden
+  file fields too, since most sites hide theirs behind a styled button.
+- **Saving files.** (a) `fetch` in the page, with its cookies and session, handed over as
+  base64 by a second script (chosen): gets what the page's own link would, also files the page
+  made itself (`blob:`, `data:`), in the background, locked included; at most 50 MB. (b)
+  Latchkey fetching the address itself with Safari's cookies (`URLSession`): for a file the page
+  may not fetch (another site's without its permission); kept as the fallback (500 MB). (c)
+  Letting Safari download it (a click on a `download` link): Safari asks per site whether to
+  allow downloads, in the front tab, and the saved name isn't known to the script; not tried.
+  The file is written new (never over another), named as the server says, else the link, else
+  the address, cleaned so it can't leave Downloads or hide itself, and marked with
+  `com.apple.quarantine` as Safari's downloads are, so Gatekeeper checks it before it opens.
+- **Pictures without the screen.** Tried 2026-11-05 with the Mac locked: `screencapture -l` of
+  a Safari window answered "could not create image from window", so no capture of Safari's
+  window is possible while locked (ScreenCaptureKit gives the same; Latchkey never gets around
+  the lock, spec 001 FR-661). Options: (a) a copy of the page as it is (markup, what fields
+  hold, what is chosen, canvases, current picture sources; scripts removed and forbidden;
+  passwords as dots) drawn by a WebKit view of Latchkey's own at the window's size and the
+  page's scroll position (chosen): a background tab, the Owner's tab, locked, display asleep,
+  and lid closed alike, and it keeps what Claude typed; videos, other sites' frames, and some
+  effects may be missing, which the answer says. (b) The same address loaded afresh in
+  Latchkey's own browser (FR-423 until now): loses what the page holds now; kept for pages
+  Safari lets no script into (PDFs, Safari's own pages). (c) Waking the display or unlocking:
+  never (FR-661). The copy is also used when the Owner can see the window (FR-423), where
+  bringing Claude's tab forward would show in front of him.

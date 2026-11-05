@@ -10,6 +10,8 @@ enum BrowserDownloads {
     static let directLimit = 500_000_000
     /// The most the files attached in one action may be together: they go into the page as text.
     static let attachLimit = 30_000_000
+    /// What a fetch in the page answers when the file didn't arrive in time.
+    static let tooLong = "it took too long"
 
     static var downloads: URL { FileManager.default.homeDirectoryForCurrentUser.appending(path: "Downloads") }
 
@@ -123,8 +125,8 @@ enum BrowserDownloads {
             throw SafariBrowser.Failure.failed("Only web addresses (http and https) can be saved.")
         }
         let config = URLSessionConfiguration.ephemeral
-        config.timeoutIntervalForRequest = 20
-        config.timeoutIntervalForResource = 25
+        config.timeoutIntervalForRequest = 15
+        config.timeoutIntervalForResource = 20
         config.httpAdditionalHeaders = ["User-Agent": LockedBrowser.safariUserAgent]
         let jar = HTTPCookieStorage()
         jar.cookieAcceptPolicy = .always

@@ -246,7 +246,14 @@ extension BrowserCapability {
         if let status = f.status, status >= 400 {
             throw Failure.failed("The site answered \(status) for \(host(got.address)); nothing was saved.")
         }
-        // The page may not fetch it (another site's file): Latchkey fetches it with Safari's cookies.
+        // The page may not fetch it (another site's file): Latchkey fetches it with Safari's
+        // cookies. Not after the page's fetch took all its time: the call's deadline (30 s)
+        // would pass (Constitution II).
+        if f.error == BrowserDownloads.tooLong {
+            throw Failure.failed(
+                "The file didn't arrive within 20 seconds; nothing was saved. A big file may need the owner to download it."
+            )
+        }
         guard got.address.lowercased().hasPrefix("http") else {
             throw Failure.failed("The page couldn't hand over the file (\(f.error ?? f.state)); nothing was saved.")
         }

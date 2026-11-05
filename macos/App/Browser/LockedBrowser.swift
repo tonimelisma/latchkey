@@ -413,7 +413,7 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate {
             if f.state != "running" { return (start.address, start.suggested, f) }
             try await Task.sleep(for: .milliseconds(100))
         }
-        return (start.address, start.suggested, PageScripts.Fetched(state: "failed", error: "it took too long"))
+        return (start.address, start.suggested, PageScripts.Fetched(state: "failed", error: BrowserDownloads.tooLong))
     }
 
     /// The address of the page, for saving it when the page can't fetch it itself.

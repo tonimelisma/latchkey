@@ -424,6 +424,11 @@ final class DownloadSafari: ScriptRunner, @unchecked Sendable {
         await #expect(throws: SafariBrowser.Failure.self) {
             _ = try await BrowserCapability.download(ref: "e1", url: nil, browser: b, locked: nil, folder: folder)
         }
+        // A fetch that took all its time isn't tried again by Latchkey: the deadline would pass.
+        runner.fetched = #"{"state":"failed","error":"it took too long"}"#
+        await #expect(throws: SafariBrowser.Failure.self) {
+            _ = try await BrowserCapability.download(ref: "e1", url: nil, browser: b, locked: nil, folder: folder)
+        }
         #expect(try FileManager.default.contentsOfDirectory(atPath: folder.path) == ["r.txt"], "nothing more saved")
     }
 }

@@ -419,11 +419,11 @@ Automation prompt, during which Safari answers no window or tab scripting from a
 | Article | Status |
 |---|---|
 | I. Outbound only | Pass |
-| II. Fail fast | Pass: 25 s script deadline, 15 s page wait |
+| II. Fail fast | Pass: 25 s script deadline, 15 s page wait; a file saved through the page waits at most 20 s, one Latchkey fetches at most 20 s (and only when the page answered sooner) |
 | III. Disabled means nonexistent | Pass |
 | IV. Good macOS citizen | Pass: Apple Events with the Owner's consent; the Owner turns on Safari's setting; WebKit's public API while locked (Safari's cookie file is read under Full Disk Access; its format is undocumented) |
 | V. Self-hostable | Pass |
-| VI. Store the minimum | Pass: the window id, and for a tab its position, count, address, and token, deleted when it closes; the Owner's tab Claude works in, in memory only; while locked, a copy of Safari's cookies in memory only, dropped at unlock |
+| VI. Store the minimum | Pass: the window id, and for a tab its position, count, address, and token, deleted when it closes; the Owner's tab Claude works in, in memory only; while locked, a copy of Safari's cookies in memory only, dropped at unlock; a long page script (an attachment) in a 0600 file removed right after; saved files go to the Owner's Downloads, where he keeps them |
 | VII. Test-first | Planned |
 | VIII. Simplicity | Pass: AppleScript and a page script; no driver or extension |
 | IX. Open source | Pass |

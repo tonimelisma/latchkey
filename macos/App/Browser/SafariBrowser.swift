@@ -561,7 +561,7 @@ actor SafariBrowser {
             if f.state != "running" { return (start.address, start.suggested, f) }
             try await Task.sleep(for: .milliseconds(150))
         }
-        return (start.address, start.suggested, PageScripts.Fetched(state: "failed", error: "it took too long"))
+        return (start.address, start.suggested, PageScripts.Fetched(state: "failed", error: BrowserDownloads.tooLong))
     }
 
     /// The page as it is now, for a picture Latchkey draws itself (FR-439).
