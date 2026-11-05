@@ -11,7 +11,6 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-	"strings"
 	"testing"
 	"time"
 
@@ -48,7 +47,8 @@ func newGitHub(t *testing.T) *fakeGitHub {
 
 // release publishes a version whose program is body, signed with priv.
 func (g *fakeGitHub) release(tag string, body []byte, priv ed25519.PrivateKey) {
-	g.releaseSignedAs(tag, strings.TrimPrefix(tag, update.TagPrefix), body, priv)
+	v, _ := update.TagVersion(tag)
+	g.releaseSignedAs(tag, v, body, priv)
 }
 
 // releaseSignedAs publishes under tag a program signed as version signedAs.
@@ -109,6 +109,28 @@ func TestUpdateInstallsASignedNewerRelease(t *testing.T) {
 
 	_, err = u.Update(context.Background())
 	require.ErrorIs(t, err, update.ErrUpToDate)
+}
+
+// Releases were tagged server-v<x.y.z> until 2026-11-04 and linux-<x.y.z> since (Toni: "v1.0 and
+// server-v1.0 doesn't make sense"); the newest under either name wins, never the Mac app's.
+func TestUpdateReadsBothTagNames(t *testing.T) {
+	u, g, priv, program := setup(t, "0.1.0")
+	g.release("server-v0.1.4", []byte("bridge program"), priv)
+	g.release("linux-0.1.5", []byte("renamed program"), priv)
+	g.release("mac-9.9.9", []byte("the Mac app, not ours"), priv)
+
+	v, err := u.Update(context.Background())
+	require.NoError(t, err)
+	assert.Equal(t, "0.1.5", v)
+	data, _ := os.ReadFile(program)
+	assert.Equal(t, "renamed program", string(data))
+
+	u2, g2, priv2, _ := setup(t, "0.1.0")
+	g2.release("linux-0.1.5", []byte("renamed program"), priv2)
+	g2.release("server-v0.1.6", []byte("newer under the old name"), priv2)
+	v, err = u2.Update(context.Background())
+	require.NoError(t, err)
+	assert.Equal(t, "0.1.6", v)
 }
 
 func TestUpdateRefusesABadSignature(t *testing.T) {

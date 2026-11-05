@@ -26,14 +26,14 @@ if ! git merge-base --is-ancestor refs/remotes/origin/main HEAD; then
 fi
 # shellcheck source=macos/scripts/install-lib.sh
 . scripts/install-lib.sh
-# The version is this commit's release tag, v<x.y.z> on GitHub, given or reused here (Toni,
+# The version is this commit's release tag, mac-<x.y.z> on GitHub, given or reused here (Toni,
 # 2026-11-04: releases are tags on commits, so two sessions never ship the same number). The
 # image is built inside the lock, for this number.
-VERSION=$(../scripts/release-tag.sh v)
+VERSION=$(../scripts/release-tag.sh mac-)
 VERSION=$VERSION ./scripts/package.sh >/dev/null
 DMG=build/Latchkey-$VERSION.dmg
 [ -f "$DMG" ] || { echo "install: $DMG not found after building it" >&2; exit 1; }
-echo "install: building and installing Latchkey $VERSION (tag v$VERSION)"
+echo "install: building and installing Latchkey $VERSION (tag mac-$VERSION)"
 DEST=/Applications/Latchkey.app
 OLD=/Applications/.Latchkey-replaced.app
 NEW=/Applications/.Latchkey-new.app

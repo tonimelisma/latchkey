@@ -35,11 +35,15 @@ after the app was quit.
 Releases are tags on commits (2026-11-04, Toni): parallel sessions bumped the version file to the
 same number, and a rebase drops the second, identical bump without a conflict, so two different
 builds could both be 0.8.112. Now `make -C macos install` and `make -C linux release` tag the
-commit (which must be origin/main) with the highest `v` / `server-v` tag + 1 and push the tag;
+commit (which must be origin/main) with the highest `mac-` / `linux-` tag + 1 and push the tag;
 GitHub refuses a taken name and the next number is tried; a commit already tagged keeps its number.
 No version lives in files any more. Tested in `scripts/tests/release_tag_test.sh` (two sessions
 racing for one number). The installed 0.8.112 was tagged by hand as the starting point, so the
-first install with tags is 0.8.113.
+first install with tags is 0.8.113. Tags are named for their program (Toni): `mac-0.8.113`,
+`linux-0.1.5`; the first Mac tags were renamed from `v…`. Linux 0.1.4 is the bridge: published
+as `server-v0.1.4` (the only name 0.1.3 looks for) with an updater that reads both names, and
+tagged `linux-0.1.4` too so the count goes on; from 0.1.5 Linux releases are `linux-…`. Check
+that purkki reports 0.1.4 within a day (Claude's machine list shows its version).
 
 Reading cloud-only files fixed in Mac 0.8.112 (2026-11-04, bug report: Claude couldn't read a
 green card photo in OneDrive): `files_read` asked macOS to download such files with the iCloud

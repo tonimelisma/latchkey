@@ -33,7 +33,7 @@ type Settings struct {
 	Shell    string `json:"shell"`               // On or Off
 	Files    string `json:"files"`               // FilesOff, FilesRead, FilesWrite
 	Paused   bool   `json:"paused,omitempty"`    // every call answered "paused" (FR-1025)
-	// UpdateRepo is the GitHub repository whose server-v* releases the program updates from.
+	// UpdateRepo is the GitHub repository whose linux-* (formerly server-v*) releases the program updates from.
 	UpdateRepo string `json:"update_repo,omitempty"`
 	// AutoUpdate turns the daily update off when false.
 	AutoUpdate *bool `json:"auto_update,omitempty"`

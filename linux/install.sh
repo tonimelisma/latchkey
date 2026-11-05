@@ -9,7 +9,8 @@
 # enter on your relay's page and starts the service (sudo asks for your password once if it
 # needs one). From then on Latchkey updates itself, checking each update's signature.
 #
-# For a fork or a test: LATCHKEY_REPO=owner/name, LATCHKEY_VERSION=0.1.0, or LATCHKEY_BASE_URL
+# For a fork or a test: LATCHKEY_REPO=owner/name, LATCHKEY_VERSION=0.1.5 (from 0.1.5; older ones are
+# tagged server-v, so name them by LATCHKEY_BASE_URL), or LATCHKEY_BASE_URL
 # (a folder with latchkey-linux-<arch> and SHA256SUMS, used as is).
 set -eu
 
@@ -37,10 +38,11 @@ command -v sudo >/dev/null || die "sudo is needed to install the service"
 if [ -n "${LATCHKEY_BASE_URL:-}" ]; then
   base=$LATCHKEY_BASE_URL
 else
-  tag=${LATCHKEY_VERSION:+server-v$LATCHKEY_VERSION}
+  # Releases are tagged linux-<x.y.z>; until 2026-11-04 they were server-v<x.y.z>.
+  tag=${LATCHKEY_VERSION:+linux-$LATCHKEY_VERSION}
   if [ -z "$tag" ]; then # GitHub lists releases newest first
     tag=$(curl -fsSL "https://api.github.com/repos/$repo/releases?per_page=50" |
-      grep -o '"tag_name": *"server-v[0-9.]*"' | head -n 1 | sed 's/.*"\(server-v[0-9.]*\)"/\1/') || true
+      grep -o '"tag_name": *"\(linux-\|server-v\)[0-9.]*"' | head -n 1 | sed 's/.*"\([a-z-]*[0-9.]*\)"/\1/') || true
   fi
   [ -n "$tag" ] || die "no Latchkey server release found in $repo"
   base=https://github.com/$repo/releases/download/$tag

@@ -95,11 +95,11 @@ git worktree prune
 git remote prune origin >/dev/null 2>&1
 
 # Mac build leftovers. A disk image or built app of another version must never be what gets
-# installed or opened by mistake, so only the image of the newest release (the highest v<x.y.z>
+# installed or opened by mistake, so only the image of the newest release (the highest mac-<x.y.z>
 # tag, scripts/release-tag.sh) stays. When there is no such tag, no image is deleted.
 clean_builds() { # <checkout>
   [ -d "$1/macos/build" ] || return 0
-  version=$(git -C "$1" tag --list 'v[0-9]*' --sort=-v:refname 2>/dev/null | head -1 | sed 's/^v//')
+  version=$(git -C "$1" tag --list 'mac-[0-9]*' --sort=-v:refname 2>/dev/null | head -1 | sed 's/^mac-//')
   if [ -n "$version" ]; then
     for f in "$1"/macos/build/*.dmg; do
       [ -e "$f" ] || continue

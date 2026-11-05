@@ -2,8 +2,9 @@
 SHELL := /bin/bash
 .SHELLFLAGS := -o pipefail -c
 GOLANGCI := github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.15.0
-# The commit's release tag, server-v<x.y.z> (scripts/release.sh passes it); dev otherwise.
-VERSION ?= $(or $(shell git describe --tags --exact-match --match 'server-v[0-9]*' HEAD 2>/dev/null | sed 's/^server-v//'),dev)
+# The commit's release tag, linux-<x.y.z> (server-v<x.y.z> before 2026-11-04; scripts/release.sh
+# passes it); dev otherwise.
+VERSION ?= $(or $(shell git describe --tags --exact-match --match 'linux-[0-9]*' --match 'server-v[0-9]*' HEAD 2>/dev/null | sed 's/^linux-//; s/^server-v//'),dev)
 
 .PHONY: test test-linux lint fmt build release check
 
@@ -30,7 +31,7 @@ build:
 	    -o build/latchkey-linux-$$arch ./cmd/latchkey; \
 	done
 
-## release: build, sign, and publish server-v<next number> on GitHub (needs SERVER_SIGNING_KEY in ../.env)
+## release: build, sign, and publish linux-<next number> on GitHub (needs SERVER_SIGNING_KEY in ../.env)
 release:
 	sh scripts/release.sh
 

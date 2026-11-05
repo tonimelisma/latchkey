@@ -1,5 +1,5 @@
 // Package update keeps the server program up to date (spec 010 FR-1026, plan D12): it looks for
-// the newest server-v* release of the repository daily, checks the download's Ed25519 signature
+// the newest linux-* (formerly server-v*) release of the repository daily, checks the download's Ed25519 signature
 // against the key built into the program, replaces itself, and exits so systemd starts the new
 // version. A new version that isn't welcomed by the relay within 3 minutes, or crashes 3 times,
 // puts the previous one back; a version rolled back is skipped until a newer one appears.
@@ -32,8 +32,19 @@ type Release struct {
 	Signature string // download address of its .sig
 }
 
-// TagPrefix starts every server release's tag.
-const TagPrefix = "server-v"
+// TagPrefix starts every server release's tag: linux-<x.y.z>. Releases until 2026-11-04 were
+// tagged server-v<x.y.z>; those still count, so no server misses a release across the rename.
+const TagPrefix = "linux-"
+
+const oldTagPrefix = "server-v"
+
+// TagVersion is the version a release's tag names, and whether it is a server release at all.
+func TagVersion(tag string) (string, bool) {
+	if v, ok := strings.CutPrefix(tag, TagPrefix); ok {
+		return v, true
+	}
+	return strings.CutPrefix(tag, oldTagPrefix)
+}
 
 // Updater does the work; its fields are set for tests.
 type Updater struct {
@@ -131,7 +142,7 @@ func (u *Updater) Latest(ctx context.Context) (Release, error) {
 	want := "latchkey-linux-" + runtime.GOARCH
 	var best Release
 	for _, r := range list {
-		v, ok := strings.CutPrefix(r.Tag, TagPrefix)
+		v, ok := TagVersion(r.Tag)
 		if !ok || r.Draft || r.Prerelease || (best.Version != "" && !Newer(v, best.Version)) {
 			continue
 		}

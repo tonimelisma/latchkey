@@ -33,27 +33,27 @@ clone a
 commit a one
 
 # --- the first release of a series needs its number named ---
-is "with no tag yet and no number named, nothing is released" "$(release a v)" ""
-is "the first number can be named" "$(cd "$work/a" && NEXT_VERSION=0.8.9 scripts/release-tag.sh v)" "0.8.9"
-is "its tag is on GitHub's copy, on that commit" "$(tag_of v0.8.9)" "$(g -C "$work/a" rev-parse HEAD)"
+is "with no tag yet and no number named, nothing is released" "$(release a mac-)" ""
+is "the first number can be named" "$(cd "$work/a" && NEXT_VERSION=0.8.9 scripts/release-tag.sh mac-)" "0.8.9"
+is "its tag is on GitHub's copy, on that commit" "$(tag_of mac-0.8.9)" "$(g -C "$work/a" rev-parse HEAD)"
 
 # --- the same commit keeps its number ---
-is "releasing the same commit again reuses its number" "$(release a v)" "0.8.9"
+is "releasing the same commit again reuses its number" "$(release a mac-)" "0.8.9"
 
 # --- the next commit gets the next number, compared as numbers ---
 commit a two
-is "the next commit is the next patch (9 to 10, not text order)" "$(release a v)" "0.8.10"
+is "the next commit is the next patch (9 to 10, not text order)" "$(release a mac-)" "0.8.10"
 commit a three
-is "and the one after" "$(release a v)" "0.8.11"
+is "and the one after" "$(release a mac-)" "0.8.11"
 
 # --- each kind of release counts on its own ---
-is "another prefix counts separately" "$(cd "$work/a" && NEXT_VERSION=0.1.0 scripts/release-tag.sh server-v)" "0.1.0"
-is "and does not move the first" "$(release a v)" "0.8.11"
+is "another prefix counts separately" "$(cd "$work/a" && NEXT_VERSION=0.1.0 scripts/release-tag.sh linux-)" "0.1.0"
+is "and does not move the first" "$(release a mac-)" "0.8.11"
 
 # --- only code that is on main is released ---
 echo local >>"$work/a/file.txt"
 g -C "$work/a" commit -q -am "not pushed"
-is "a commit not on GitHub's main gets no number" "$(release a v)" ""
+is "a commit not on GitHub's main gets no number" "$(release a mac-)" ""
 grep -q "isn't GitHub's main" "$work/err" && ok "and says why" || bad "and says why"
 g -C "$work/a" push -q origin HEAD:main
 
@@ -72,23 +72,23 @@ EOF
 chmod +x "$work/bin/git"
 commit a four
 g -C "$work/b" pull -q origin main
-first=$(release a v)
+first=$(release a mac-)
 is "a releases first" "$first" "0.8.12"
-g -C "$work/b" tag -d v0.8.12 >/dev/null 2>&1
+g -C "$work/b" tag -d mac-0.8.12 >/dev/null 2>&1
 touch "$work/stale"
-second=$(cd "$work/b" && PATH="$work/bin:$PATH" scripts/release-tag.sh v 2>"$work/err")
+second=$(cd "$work/b" && PATH="$work/bin:$PATH" scripts/release-tag.sh mac- 2>"$work/err")
 is "b, on the same commit, finds a's tag and reuses it" "$second" "0.8.12"
 
 # a releases its commit; b's next release starts from a list of tags without a's.
 commit a five
-is "a releases its commit" "$(release a v)" "0.8.13"
+is "a releases its commit" "$(release a mac-)" "0.8.13"
 commit a six
 g -C "$work/b" pull -q origin main
-g -C "$work/b" tag -d v0.8.13 >/dev/null 2>&1
+g -C "$work/b" tag -d mac-0.8.13 >/dev/null 2>&1
 touch "$work/stale"
-got=$(cd "$work/b" && PATH="$work/bin:$PATH" scripts/release-tag.sh v 2>"$work/err")
+got=$(cd "$work/b" && PATH="$work/bin:$PATH" scripts/release-tag.sh mac- 2>"$work/err")
 is "a number taken meanwhile is refused by GitHub and the next one is used" "$got" "0.8.14"
-is "the taken number still points at a's commit" "$(tag_of v0.8.13)" "$(g -C "$work/b" rev-parse HEAD~1)"
-is "the new number points at b's commit" "$(tag_of v0.8.14)" "$(g -C "$work/b" rev-parse HEAD)"
+is "the taken number still points at a's commit" "$(tag_of mac-0.8.13)" "$(g -C "$work/b" rev-parse HEAD~1)"
+is "the new number points at b's commit" "$(tag_of mac-0.8.14)" "$(g -C "$work/b" rev-parse HEAD)"
 
 [ "$fails" -eq 0 ] && echo "release_tag_test: all passed" || { echo "release_tag_test: $fails failed"; exit 1; }

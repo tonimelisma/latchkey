@@ -124,8 +124,8 @@ IMPORTANT: every session or task that changes files works in its own git worktre
 IMPORTANT: every working increment, however small, is published and installed. In order:
 
 1. Tests and lint pass for what changed (`make test` / `make lint` in `relay/` and `macos/`).
-2. Never write a version number by hand: a release is a tag on a commit on main (`v<x.y.z>` for the
-   Mac app, `server-v<x.y.z>` for Linux), given at install or release time by
+2. Never write a version number by hand: a release is a tag on a commit on main (`mac-<x.y.z>` for the
+   Mac app, `linux-<x.y.z>` for Linux; Linux was `server-v<x.y.z>` until 0.1.4), given at install or release time by
    `scripts/release-tag.sh` (the highest tag + 1; GitHub refuses a taken one, so sessions never
    share a number; Toni, 2026-11-04). A commit already tagged keeps its number.
 3. Update specs, `docs/STATUS.md`, `docs/decisions.md`, and `README.md` in the same commit.
@@ -172,7 +172,7 @@ Enforced by hooks in `.claude/settings.json` (`scripts/hooks.sh`):
 - After every push and at every session start, `scripts/tidy.sh` runs automatically (Claude Code
   hook in `.claude/settings.json`): branches merged into main (local and GitHub; never main, the
   current branch, or a branch checked out in a worktree), finished worktrees (as soon as merged),
-  stale refs, every disk image except the newest release's (highest `v` tag), built apps
+  stale refs, every disk image except the newest release's (highest `mac-` tag), built apps
   under `macos/build/DerivedData/Build/Products` (in the main checkout and in removed worktrees),
   and all but the newest relay Docker image. Last, it fast-forwards the main checkout when it is
   on `main`, clean, and only behind. Run it by hand after a push made outside Claude Code.
@@ -242,7 +242,7 @@ Linux server program (run in `linux/`, its own Go module; spec 010):
 - `make check`: end to end: private relay, pretend Mac, the program installed by install.sh in a
   Debian container, a real MCP client (`-claude` in `relay/cmd/linuxcheck` adds Claude Code)
 - `make release`: build, sign (`SERVER_SIGNING_KEY` in `.env`), tag the commit (must be origin/main)
-  `server-v<next number>` and publish it there (every increment ships)
+  `linux-<next number>` and publish it there (every increment ships)
 
 Screen states (`macos/scripts/state-check/`): `state-check.sh run|wait|report <folder outside the
 repo>` tries every use case in `cases.json` through the hosted relay with real Claude Code, in

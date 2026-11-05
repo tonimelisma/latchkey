@@ -32,7 +32,7 @@ printf 'build/\n.claude/worktrees/\n' >"$main/.gitignore"
 g -C "$main" add scripts/tidy.sh macos/project.yml .gitignore
 g -C "$main" commit -q -m start
 g -C "$main" push -q origin main
-g -C "$main" tag v1.2.2 && g -C "$main" tag v1.2.3 # the newest release is 1.2.3
+g -C "$main" tag mac-1.2.2 && g -C "$main" tag mac-1.2.3 # the newest release is 1.2.3
 tidy() { "$main/scripts/tidy.sh" >"$work/out" 2>&1; }
 products() { mkdir -p "$1/macos/build/DerivedData/Build/Products/Debug/Latchkey.app" && touch "$1/macos/build/DerivedData/Build/Products/Debug/Latchkey.app/Latchkey"; }
 
@@ -125,7 +125,7 @@ g -C "$main" reset -q --soft HEAD~1
 g -C "$main" rm -q --cached ahead.txt
 rm "$main/ahead.txt"
 touch "$main/macos/build/Latchkey-0.0.1.dmg"
-g -C "$main" tag -d v1.2.2 v1.2.3 >/dev/null
+g -C "$main" tag -d mac-1.2.2 mac-1.2.3 >/dev/null
 tidy
 yes "without a release tag no disk image is deleted" test -f "$main/macos/build/Latchkey-0.0.1.dmg"
 

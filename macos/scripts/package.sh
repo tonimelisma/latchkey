@@ -12,9 +12,9 @@ grep -q '^ *DEVELOPMENT_TEAM *= *[A-Z0-9]' Config/Local.xcconfig 2>/dev/null || 
 }
 # The version comes from the release tag (install.sh passes it); a commit already released keeps
 # its tag's number.
-VERSION=${VERSION:-$(git describe --tags --exact-match --match 'v[0-9]*' HEAD 2>/dev/null | sed 's/^v//')}
+VERSION=${VERSION:-$(git describe --tags --exact-match --match 'mac-[0-9]*' HEAD 2>/dev/null | sed 's/^mac-//')}
 [ -n "$VERSION" ] || {
-  echo "package: this commit has no release tag v<x.y.z>; make install gives it one" >&2
+  echo "package: this commit has no release tag mac-<x.y.z>; make install gives it one" >&2
   exit 1
 }
 OUT=build/package

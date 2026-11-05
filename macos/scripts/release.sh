@@ -38,7 +38,7 @@ ditto -c -k --keepParent "$OUT/Latchkey.app" "$ZIP"
 mkdir -p "$OUT/feed"
 cp "$ZIP" "$OUT/feed/"
 "$SPARKLE_BIN/generate_appcast" --download-url-prefix \
-  "https://github.com/tonimelisma/latchkey/releases/download/v$VERSION/" "$OUT/feed"
+  "https://github.com/tonimelisma/latchkey/releases/download/mac-$VERSION/" "$OUT/feed"
 
-gh release create "v$VERSION" "$ZIP" "$OUT/feed/appcast.xml" --title "Latchkey $VERSION" --generate-notes
-echo "Released v$VERSION"
+gh release create "mac-$VERSION" "$ZIP" "$OUT/feed/appcast.xml" --title "Latchkey $VERSION" --generate-notes
+echo "Released mac-$VERSION"
