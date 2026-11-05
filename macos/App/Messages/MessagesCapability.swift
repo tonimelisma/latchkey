@@ -287,7 +287,8 @@ enum MessagesCapability {
             var label = "\(p.name) (\(h))"
             let others = p.handles.filter { $0 != h }
             if !others.isEmpty {
-                label += " — \(why); \(p.name) also has \(others.joined(separator: ", ")), to use instead if that was wrong"
+                label +=
+                    " — \(why); \(p.name) also has \(others.joined(separator: ", ")), to use instead if that was wrong"
             }
             return .success(Target(kind: "participant", id: handle, name: p.name, label: label))
         default:
@@ -438,7 +439,8 @@ enum MessagesCapability {
                 line += " (edited)"
             }
             if let reply = m.replyTo {
-                line += " (replying to message \(reply)\(m.replyToText.map { " " + quote(String($0.prefix(80))) } ?? ""))"
+                line +=
+                    " (replying to message \(reply)\(m.replyToText.map { " " + quote(String($0.prefix(80))) } ?? ""))"
             }
             if !m.reactions.isEmpty { line += " (reactions: \(m.reactions.map(describe).joined(separator: ", ")))" }
             // Every message's id, so Claude can react to it, reply to it, or change it (FR-170).

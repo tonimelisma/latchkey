@@ -80,8 +80,10 @@ final class ContactBook: ContactsLookup, @unchecked Sendable {
                 ContactPerson(
                     name: name,
                     handles: c.phoneNumbers.map { $0.value.stringValue } + c.emailAddresses.map { $0.value as String },
-                    mobiles: c.phoneNumbers.filter { [CNLabelPhoneNumberMobile, CNLabelPhoneNumberiPhone].contains($0.label) }
-                        .map { $0.value.stringValue }))
+                    mobiles: c.phoneNumbers.filter {
+                        [CNLabelPhoneNumberMobile, CNLabelPhoneNumberiPhone].contains($0.label)
+                    }
+                    .map { $0.value.stringValue }))
             for e in c.emailAddresses { email[(e.value as String).lowercased()] = name }
             for p in c.phoneNumbers {
                 let d = Self.digits(p.value.stringValue)
