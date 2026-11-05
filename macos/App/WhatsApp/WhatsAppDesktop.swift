@@ -509,6 +509,89 @@ struct WAWindow: @unchecked Sendable {
 
     /// Puts the text (and files) in the message box and sends it.
     func compose(text: String, files: [URL]) async -> WhatsAppDesktopResult {
-        .notDone("WhatsApp for Mac can't be typed into from the background")
+        guard let box = await poll(2, { element(role: "AXTextArea", label: "Compose message") }) else {
+            return .notDone("WhatsApp for Mac shows no message box for that chat")
+        }
+        // 1. In the background: text put in as if typed (AXSelectedText goes through the text view's
+        // own insertion, unlike AXValue, which WhatsApp doesn't take).
+        if files.isEmpty, Self.string(box, kAXValueAttribute).map(Self.clean)?.isEmpty ?? true {
+            _ = AXUIElementSetAttributeValue(box, kAXSelectedTextAttribute as CFString, text as CFString)
+            if let send = await poll(1.5, { element(role: "AXButton", label: "Send") }) {
+                return press(send) ? .done("") : .notDone("WhatsApp for Mac didn't take the press on Send")
+            }
+            _ = AXUIElementSetAttributeValue(box, kAXValueAttribute as CFString, "" as CFString)
+        }
+        // 2. WhatsApp comes forward for a moment: only then do Paste and keys reach it. What the
+        // Owner had on the clipboard is put back, and the app they were in comes back to the front.
+        return await briefly { await pasteAndSend(box: box, text: text, files: files) }
+    }
+
+    /// Brings WhatsApp forward, runs `body`, then brings back the app that was in front.
+    func briefly(_ body: () async -> WhatsAppDesktopResult) async -> WhatsAppDesktopResult {
+        guard let whatsapp = NSRunningApplication(processIdentifier: pid) else {
+            return .notDone("WhatsApp for Mac isn't running")
+        }
+        let previous = NSWorkspace.shared.frontmostApplication
+        whatsapp.activate()
+        guard await poll(2, { NSWorkspace.shared.frontmostApplication == whatsapp ? true : nil }) != nil else {
+            return .notDone("WhatsApp for Mac didn't come to the front")
+        }
+        let result = await body()
+        if let previous, previous != whatsapp { previous.activate() }
+        return result
+    }
+
+    /// With WhatsApp in front: pastes the files (each opens WhatsApp's preview, sent with Return),
+    /// then the text, and sends it.
+    private func pasteAndSend(box: AXUIElement, text: String, files: [URL]) async -> WhatsAppDesktopResult {
+        let board = NSPasteboard.general
+        let saved: [NSPasteboardItem] = (board.pasteboardItems ?? []).map { item in
+            let copy = NSPasteboardItem()
+            for type in item.types { if let data = item.data(forType: type) { copy.setData(data, forType: type) } }
+            return copy
+        }
+        defer {
+            board.clearContents()
+            if !saved.isEmpty { board.writeObjects(saved) }
+        }
+        _ = AXUIElementSetAttributeValue(box, kAXFocusedAttribute as CFString, kCFBooleanTrue)
+        for file in files {
+            board.clearContents()
+            board.writeObjects([file as NSURL])
+            guard await pasteMenu() else { return .notDone("WhatsApp for Mac's Paste wasn't available") }
+            // The preview sheet takes Return as Send.
+            try? await Task.sleep(for: .milliseconds(800))
+            key(36)
+            try? await Task.sleep(for: .milliseconds(800))
+        }
+        guard !text.isEmpty else { return .done("") }
+        _ = AXUIElementSetAttributeValue(box, kAXFocusedAttribute as CFString, kCFBooleanTrue)
+        board.clearContents()
+        board.setString(text, forType: .string)
+        guard await pasteMenu() else { return .notDone("WhatsApp for Mac's Paste wasn't available") }
+        if let send = await poll(2, { element(role: "AXButton", label: "Send") }) {
+            return press(send) ? .done("") : .notDone("WhatsApp for Mac didn't take the press on Send")
+        }
+        key(36)
+        return .done("")
+    }
+
+    /// Edit → Paste in WhatsApp's menu bar, once it is enabled (it is only while WhatsApp is in front).
+    private func pasteMenu() async -> Bool {
+        var bar: AnyObject?
+        guard AXUIElementCopyAttributeValue(app, kAXMenuBarAttribute as CFString, &bar) == .success, let bar,
+            CFGetTypeID(bar) == AXUIElementGetTypeID()
+        else { return false }
+        let menuBar = bar as! AXUIElement
+        guard
+            let paste = await poll(
+                2,
+                {
+                    items(in: menuBar, limit: 3000).first {
+                        $0.role == "AXMenuItem" && $0.label == "Paste" && Self.string($0.element, kAXEnabledAttribute) == "1"
+                    }?.element
+                })
+        else { return false }
+        return press(paste)
     }
 }

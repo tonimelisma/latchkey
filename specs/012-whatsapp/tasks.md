@@ -33,4 +33,16 @@ Rebuilt 2026-11-04 (Toni: no device of Latchkey's own; Safari tab first, window 
   with the Mac locked.
 - [x] T13 WhatsApp for Mac's window removed; with no WhatsApp tab, one is opened in Safari
   (Toni, 2026-11-04; plan D1)
-- [ ] T14 Live check: with the tab closed and the Mac locked, a send opens the tab and goes out
+- [x] T14 Live check: with the tab closed and the Mac locked, a send opens the tab and goes out
+  (2026-11-05, 14:15, to the Owner's own chat; message deleted afterwards)
+
+Extended 2026-11-05 (Toni: "add everything missing"):
+
+- [x] T15 Bridge: message keys, replies, reactions, deleting, "me" (plan D2, D5); checked live in
+  Safari's WhatsApp Web tab with the Mac locked, in the Owner's own chat, every message deleted
+- [x] T16 Database: message by id, the Owner's own chat by account, stamps, lookalikes (plan D5)
+- [x] T17 Tools: `reply_to`, `whatsapp_change`, older history while reading through the tab,
+  WhatsApp for Mac as the fallback (plan D3b, D5)
+- [x] T18 WhatsApp for Mac's window through Accessibility: open chats with certainty, find
+  messages, delete, react, reply, send text and files (plan D3b)
+- [x] T19 Screen-state cases `whatsapp.*` and `sweep.whatsapp`
