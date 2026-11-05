@@ -45,7 +45,7 @@ extension MessagesCapability {
         let action = args["action"]?.stringValue ?? ""
         let text = args["text"]?.stringValue?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         if action == "delete_conversation" || action == "name_group" {
-            guard let id = args["conversation"]?.stringValue, try s.conversationExists(id),
+            guard let id = args["conversation"]?.stringValue, let who = try s.identity(of: id),
                 let newest = try s.latestMessage(in: id)
             else { return .text("Give a conversation's id from messages_find.", isError: true) }
             if action == "name_group" {
@@ -57,16 +57,17 @@ extension MessagesCapability {
             if let why = ui.unavailable() { return .text("Nothing was changed. " + why, isError: true) }
             return try await windowQueue.run {
                 if action == "delete_conversation" {
-                    try await ui.deleteConversation(showing: newest)
+                    try await ui.deleteConversation(who, showing: newest)
                     let gone = await confirmed(confirmWait) { (try? s.conversationIsEmpty(id)) == true }
                     var r = ToolResult.text(
                         gone
                             ? "Deleted the conversation \(id). Messages keeps it in Recently Deleted for up to 30 days."
-                            : "Messages was asked to delete the conversation \(id) but hasn't recorded it yet. Check with messages_find in a moment.")
+                            : "Messages was asked to delete the conversation \(id) but hasn't recorded it yet. Check with messages_find in a moment."
+                    )
                     r.activity = "Claude deleted a conversation in Messages"
                     return r
                 }
-                try await ui.nameGroup(showing: newest, name: text)
+                try await ui.nameGroup(who, showing: newest, name: text)
                 let named = await confirmed(confirmWait) { (try? s.groupName(id)) == text }
                 var r = ToolResult.text(
                     named
@@ -121,9 +122,9 @@ extension MessagesCapability {
             op = .delete
             expected = { (try? s.isDeleted(id)) == true }
         }
+        if m.laterSame > 0 { return .text(MessagesAX.ambiguous, isError: true) }
         if let why = ui.unavailable() { return .text("Nothing was changed. " + why, isError: true) }
-        let target = BalloonTarget(
-            message: id, text: m.text, attachmentNames: m.attachmentNames, fromMe: m.fromMe, laterSame: m.laterSame)
+        let target = try balloon(m, store: s)
         return try await windowQueue.run {
             try await ui.act(op, on: target)
             let done = await confirmed(confirmWait, expected)
@@ -137,10 +138,22 @@ extension MessagesCapability {
             default: said = "Deleted \(about). Messages keeps it in Recently Deleted for up to 30 days."
             }
             var r = ToolResult.text(
-                done ? said : "Messages was asked, but hasn't recorded it yet: \(said) Check with messages_read in a moment.")
+                done
+                    ? said
+                    : "Messages was asked, but hasn't recorded it yet: \(said) Check with messages_read in a moment.")
             r.activity = "Claude changed a message in Messages"
             return r
         }
+    }
+
+    /// How the window shows the message, and its conversation.
+    static func balloon(_ m: MessagesStore.Located, store s: MessagesStore) throws -> BalloonTarget {
+        guard let who = try s.identity(of: m.conversationID) else {
+            throw MessagesStore.Failure.noSuchConversation(m.conversationID)
+        }
+        return BalloonTarget(
+            message: m.id, text: m.text, attachmentNames: m.attachmentNames, fromMe: m.fromMe, laterSame: m.laterSame,
+            conversation: who)
     }
 
     /// Messages edits and unsends only its owner's iMessages, for a while after sending.
@@ -177,7 +190,8 @@ extension MessagesCapability {
         to id: String, text: String, store s: MessagesStore, ui: any MessagesUI, confirmWait: Duration
     ) async throws -> ToolResult {
         guard let m = try s.locate(id) else {
-            return .text("Nothing was sent: there is no message with id \(id). Find it with messages_read.", isError: true)
+            return .text(
+                "Nothing was sent: there is no message with id \(id). Find it with messages_read.", isError: true)
         }
         guard !text.isEmpty else { return .text("Give the reply's text.", isError: true) }
         if let why = ui.unavailable() {
@@ -186,9 +200,9 @@ extension MessagesCapability {
                     + " To answer now without quoting the message, send to conversation \(m.conversationID) instead.",
                 isError: true)
         }
+        if m.laterSame > 0 { return .text("Nothing was sent. " + MessagesAX.ambiguous, isError: true) }
         let start = try s.lastRow()
-        let target = BalloonTarget(
-            message: id, text: m.text, attachmentNames: m.attachmentNames, fromMe: m.fromMe, laterSame: m.laterSame)
+        let target = try balloon(m, store: s)
         return try await windowQueue.run {
             try await ui.act(.reply(text), on: target)
             let outcome = await poll(confirmWait) {
@@ -248,9 +262,9 @@ extension MessagesCapability {
                 return r
             }
             var answer = "Started a group with \(names) (conversation \(chat)): «\(text)»."
-            if let name, !name.isEmpty, let newest = try s.latestMessage(in: chat) {
+            if let name, !name.isEmpty, let newest = try s.latestMessage(in: chat), let who = try s.identity(of: chat) {
                 do {
-                    try await ui.nameGroup(showing: newest, name: name)
+                    try await ui.nameGroup(who, showing: newest, name: name)
                     let named = await confirmed(confirmWait) { (try? s.groupName(chat)) == name }
                     answer += named ? " Named it «\(name)»." : " Asked Messages to name it «\(name)»; not recorded yet."
                 } catch let p as MessagesWindowProblem {

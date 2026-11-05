@@ -13,7 +13,8 @@ Claude sees consolidated tools (Toni, 2026-10-23: 15 tools in all, from 45): the
 | `notes_change` (action: create, append, replace, edit, delete; …) | Read & write | no | yes | create, update, delete |
 | `messages_find` (text?, person?, since?, until?, limit) | Read only | yes | no | with text or dates: search; otherwise conversations |
 | `messages_read` (conversation, before?, limit; message + image) | Read only | yes | no | read; with image, the image |
-| `messages_send` (to, text?, attachments?) | Read & write | no | no | send |
+| `messages_send` (to, text?, attachments?; people + name; reply_to) | Read & write | no | no | send; a new group (FR-172); an inline reply (FR-173) |
+| `messages_change` (action: react, unreact, edit, unsend, delete, delete_conversation, name_group; message, reaction, text, conversation) | Read & write | no | yes | tapbacks, edits, unsending, deleting, naming (FR-172, FR-174 to FR-176) |
 
 Operations:
 
@@ -85,8 +86,8 @@ Serves FR-102, FR-103, FR-112.
 - Messages send via AppleScript to Messages.app. The recipient is resolved in this order: a
   conversation id; a group's name; a number or email address (its existing conversation if
   there is one, so Messages keeps the same service, else a new iMessage); a name in Contacts
-  (the person's most recent conversation; several matching people, or one person with several
-  numbers and no conversation, return the choices instead of guessing).
+  (the person's most recent conversation; several matching people return the choices instead of
+  guessing; one person with several numbers and no conversation gets one chosen, FR-171, D3b).
 - Attachments: any file the Mac can read is copied to `~/Pictures/Latchkey/` and sent from there
   as `POSIX file`, because Messages reliably delivers scripted attachments only from Pictures
   (Toni chose the visible folder, 2026-10-22). Each send's copies sit in a folder of their own,
@@ -127,11 +128,53 @@ Serves FR-106, FR-155 to FR-159; research "Notes' window".
   notes the AppleScript part is already done, so its ☐/☑ lines stay as they are and the answer
   says so.
 
+## D3b. Changing in Messages' window (2026-11-05)
+
+Serves FR-170 to FR-178; research "Messages' window". Messages' scripting has only `send`, so
+everything beyond sending text and files to one person or an existing conversation is done in
+Messages' own window through Accessibility, in the background (`MessagesWindow.swift`):
+- Showing a message: the link `sms://open?message-guid=<id>` opened with `activates = false`
+  shows its conversation, scrolled to it, without bringing Messages forward (Messages starts
+  hidden if it wasn't running). A conversation is shown by its newest message.
+- Finding the message: the window shows no ids. Each message is the element with identifier
+  `Sticker`; its text is its `CKBalloonTextView`'s value (attachments: the description, which
+  names the file); the owner's are right of the transcript's middle. The one asked for is the
+  match counted from the bottom past the later ones on the same side with the same text
+  (`laterSame`, counted in chat.db).
+- Actions: Messages' own accessibility actions on the message, by name (English: "Tapback
+  Details…", "Reply…", "Edit", "Undo Send", "Delete…"); the tapback picker's buttons by
+  identifier (`heart`, `thumbsUp`, `thumbsDown`, `ha`, `exclamation`, `questionMark`); text goes
+  into the field with identifier `messageBodyField` (or the message being edited) and Return is
+  sent to Messages' process alone; Messages' question ("Delete from all your devices?") is
+  answered with its button that isn't the sheet's cancel button.
+- Taking a tapback back presses the owner's current one again; the store says which it is, and a
+  tapback already there isn't pressed (FR-174). Edit and unsend are checked against Messages'
+  limits first (own iMessage; 15 min, 2 min) so Claude hears why at once (FR-175).
+- A new group: `sms://open?addresses=<a>,<b>` opens a new message to them; the text goes in as
+  above. A name goes in through the conversation's details.
+- Deleting a conversation: its row in the conversation list (the selected one once it is shown)
+  has Messages' "Delete…" action, then the same question.
+- Locked Mac: Messages' window isn't readable at all (tried 2026-11-05, lid closed and locked), so
+  nothing is started and the answer says so at once (FR-177).
+- Answers: each change is checked in chat.db (every 250 ms, up to 5 s) by rows Messages adds
+  after the newest row before the change: a tapback row of the type on that message (by anyone,
+  since in a conversation with oneself Messages keeps only the copy that came back), an outgoing
+  row with `thread_originator_guid`, `date_edited` with the new text, `message_summary_info`'s
+  `rp` (unsent), the message no longer joined to a conversation (deleted: Messages moves it to
+  `chat_recoverable_message_join`, Recently Deleted). One change at a time (a queue).
+- People with several numbers (FR-171): Contacts' labels give mobile and iPhone numbers; chat.db's
+  `handle.service` says which numbers Messages has seen on iMessage.
+- Reading (FR-170): tapbacks are `associated_message_type` 2000–2007 (3000–3007 take one back) on
+  `associated_message_guid` `p:<part>/<id>` or `bp:<id>`, read for the conversations shown since
+  the earliest message shown, the latest per person winning; replies are
+  `thread_originator_guid`; edits are `date_edited` with the versions in `message_summary_info`
+  (`ec`, first is the original); unsent messages have `rp` there and no text.
+
 ## D4. People: Contacts
 
 Serves FR-111, FR-112. The Contacts framework maps phone numbers and emails to names, and names to
-handles for sending. An ambiguous name (two Sarahs, or one Sarah with several numbers) returns the
-choices instead of guessing. Contacts access is asked for in setup ("Show names in Messages"),
+handles for sending. An ambiguous name (two Sarahs) returns the choices instead of guessing; one
+Sarah with several numbers and no conversation gets one chosen (FR-171, D3b). Contacts access is asked for in setup ("Show names in Messages"),
 never at call time; without it, messages show numbers and addresses. A number matches a contact
 when one ends with the other (compared on the last 9 digits), so "+1 555…" and "(555) …" agree;
 a number two contacts share gets no name.
@@ -204,9 +247,9 @@ capability's level; a level change sends a new list (FR-062). No protocol change
 | Article | Status |
 |---|---|
 | I. Outbound only | Pass: no change |
-| II. Fail fast | Pass: deadlines on every tool; sends confirm within 5 s or report pending |
+| II. Fail fast | Pass: deadlines on every tool; sends and window changes confirm within 5 s or report pending; a locked Mac is answered at once (D3b) |
 | III. Disabled means nonexistent | Pass: tools only for the current level (D9) |
-| IV. Good macOS citizen | Pass: Apple Events and Contacts prompts; Full Disk Access by the Owner in System Settings; databases read-only |
+| IV. Good macOS citizen | Pass: Apple Events and Contacts prompts; Full Disk Access by the Owner in System Settings; databases read-only; Messages' window through public Accessibility (D3b), no private frameworks (IMCore rejected) |
 | V. Self-hostable | Pass: relay unchanged except the status line |
 | VI. Store the minimum | Pass: relay stores nothing new; the Mac keeps its local trace only |
 | VII. Test-first | Planned (fixture databases, tool-list tests) |

@@ -9,22 +9,33 @@ protocol MessagesUI: Sendable {
     func unavailable() -> String?
     /// Does `op` to the message the window shows for `target`.
     func act(_ op: MessageOp, on target: BalloonTarget) async throws
-    /// Deletes the conversation that `message` (its newest) is in.
-    func deleteConversation(showing message: String) async throws
+    /// Deletes `conversation`, shown by `message` (its newest), once the window shows it.
+    func deleteConversation(_ conversation: ConversationIdentity, showing message: String) async throws
     /// Starts a group with these numbers and addresses and sends `text` to it.
     func startGroup(_ handles: [String], text: String) async throws
-    /// Names the group that `message` is in.
-    func nameGroup(showing message: String, name: String) async throws
+    /// Names the group `conversation`, shown by `message`, once the window shows it.
+    func nameGroup(_ conversation: ConversationIdentity, showing message: String, name: String) async throws
 }
 
-/// How to find one message in the window: Messages shows no ids there, so by its text (or file
-/// name), its side, and how many later messages on that side read the same.
+/// What the window must show before anything is pressed: the conversation's name, or its
+/// people's names and numbers (security review 2026-11-05: never act on whatever is shown).
+struct ConversationIdentity: Sendable, Equatable {
+    var id: String
+    /// The group's own name, if it has one.
+    var name: String?
+    var participants: [MessagesStore.Participant]
+}
+
+/// How to find one message in the window: Messages shows no ids there, so by its conversation,
+/// its text (or file name), and its side. Only a single match is acted on.
 struct BalloonTarget: Sendable, Equatable {
     var message: String
     var text: String
     var attachmentNames: [String] = []
     var fromMe: Bool
+    /// Later messages in the conversation on the same side that read the same.
     var laterSame: Int = 0
+    var conversation: ConversationIdentity
 }
 
 enum Tapback: String, Sendable, CaseIterable {
@@ -97,7 +108,8 @@ struct LiveMessagesUI: MessagesUI {
     }
 
     func act(_ op: MessageOp, on target: BalloonTarget) async throws {
-        try await show(message: target.message)
+        if target.laterSame > 0 { throw problem(MessagesAX.ambiguous) }
+        try await show(message: target.message, in: target.conversation)
         let balloon = try await find(target)
         switch op {
         case .tapback(let t):
@@ -106,7 +118,10 @@ struct LiveMessagesUI: MessagesUI {
             guard MessagesAX.press(button) else { throw problem("Messages didn't take the tapback.") }
         case .reply(let text):
             try perform(balloon, MessagesAX.Action.reply)
-            try await MessagesAX.sendTyped(text)
+            // Only into the replies view's field: never the conversation's own (that would send
+            // the text as an ordinary message).
+            let replies = try await MessagesAX.wait("the replies view") { MessagesAX.repliesView() }
+            try await MessagesAX.sendTyped(text, in: replies)
             MessagesAX.closeReplies()
         case .edit(let text):
             try perform(balloon, MessagesAX.Action.edit, unavailable: Self.editLimit)
@@ -124,9 +139,13 @@ struct LiveMessagesUI: MessagesUI {
     static let unsendLimit =
         "Messages doesn't offer unsending this message: it allows unsending only iMessages, within 2 minutes of sending."
 
-    func deleteConversation(showing message: String) async throws {
-        try await show(message: message)
+    func deleteConversation(_ conversation: ConversationIdentity, showing message: String) async throws {
+        try await show(message: message, in: conversation)
         let row = try await MessagesAX.wait("the conversation in the list") { MessagesAX.selectedConversationRow() }
+        // The row itself must name the conversation too.
+        guard MessagesAX.rowNames(MessagesAX.string(row, kAXDescriptionAttribute) ?? "", conversation) else {
+            throw problem(MessagesAX.otherConversation)
+        }
         guard MessagesAX.performNamed(row, MessagesAX.Action.delete) else {
             throw problem("Messages doesn't offer deleting this conversation.")
         }
@@ -141,16 +160,17 @@ struct LiveMessagesUI: MessagesUI {
         guard let url = parts.url else { throw problem("Those numbers and addresses can't be put in a link.") }
         try await MessagesAX.open(url)
         try await MessagesAX.waitForRecipients(handles.count)
-        try await MessagesAX.sendTyped(text)
+        try await MessagesAX.sendTyped(text, in: nil)
     }
 
-    func nameGroup(showing message: String, name: String) async throws {
-        try await show(message: message)
+    func nameGroup(_ conversation: ConversationIdentity, showing message: String, name: String) async throws {
+        try await show(message: message, in: conversation)
         try await MessagesAX.setGroupName(name)
     }
 
-    /// Shows the conversation with this message, scrolled to it, without bringing Messages forward.
-    func show(message: String) async throws {
+    /// Shows the conversation with this message, scrolled to it, without bringing Messages
+    /// forward, and checks the window shows that conversation.
+    func show(message: String, in conversation: ConversationIdentity) async throws {
         var parts = URLComponents()
         parts.scheme = "sms"
         parts.host = "open"
@@ -158,6 +178,13 @@ struct LiveMessagesUI: MessagesUI {
         guard let url = parts.url else { throw problem("That message id can't be shown.") }
         MessagesAX.closeReplies()
         try await MessagesAX.open(url)
+        do {
+            _ = try await MessagesAX.wait("the conversation") {
+                MessagesAX.shows(conversation) ? true : nil
+            }
+        } catch {
+            throw problem(MessagesAX.otherConversation)
+        }
     }
 
     private func find(_ target: BalloonTarget) async throws -> AXUIElement {
@@ -165,9 +192,10 @@ struct LiveMessagesUI: MessagesUI {
         let deadline = ContinuousClock.now + .seconds(5)
         while ContinuousClock.now < deadline {
             last = MessagesAX.balloons()
-            if let hit = MessagesAX.pick(target, in: last) { return hit }
+            if let i = MessagesAX.pick(target, in: last.map(\.shown)) { return last[i].element }
             try? await Task.sleep(for: .milliseconds(150))
         }
+        if last.filter({ MessagesAX.matches(target, $0.shown) }).count > 1 { throw problem(MessagesAX.ambiguous) }
         throw problem(
             "Messages' window didn't show this message, so nothing was changed. If it's old, it may not be loaded in the window."
         )
@@ -196,11 +224,21 @@ enum MessagesAX {
 
     struct Balloon {
         var element: AXUIElement
+        var shown: Shown
+    }
+
+    /// What the window shows of one message.
+    struct Shown: Sendable, Equatable {
         /// The message's text, or its description (attachments) when it has no text.
         var text: String
         var description: String
         var fromMe: Bool
     }
+
+    static let ambiguous =
+        "Messages' window shows more than one message that reads the same on that side of the conversation, and it shows no ids, so Latchkey can't tell which one is meant. Nothing was changed."
+    static let otherConversation =
+        "Messages' window didn't show that conversation (its title or people didn't match), so nothing was changed."
 
     static func app() -> NSRunningApplication? {
         NSRunningApplication.runningApplications(withBundleIdentifier: LiveMessagesUI.bundleID).first
@@ -227,8 +265,10 @@ enum MessagesAX {
 
     static func window() -> AXUIElement? {
         guard let app = application() else { return nil }
-        return children(app, kAXWindowsAttribute).first { AppWindowReader.string($0, kAXIdentifierAttribute) == "SceneWindow" }
-            ?? children(app, kAXWindowsAttribute).first { AppWindowReader.string($0, kAXRoleAttribute) == "AXWindow" }
+        return children(app, kAXWindowsAttribute).first {
+            MessagesAX.string($0, kAXIdentifierAttribute) == "SceneWindow"
+        }
+            ?? children(app, kAXWindowsAttribute).first { MessagesAX.string($0, kAXRoleAttribute) == "AXWindow" }
     }
 
     static func children(_ e: AXUIElement, _ attribute: String = kAXChildrenAttribute) -> [AXUIElement] {
@@ -257,15 +297,16 @@ enum MessagesAX {
 
     static func element(id: String) -> AXUIElement? {
         guard let w = window() else { return nil }
-        return first(in: w) { AppWindowReader.string($0, kAXIdentifierAttribute) == id }
+        return first(in: w) { MessagesAX.string($0, kAXIdentifierAttribute) == id }
     }
 
-    /// The main transcript (not the replies one, which comes first while it is open).
+    /// The conversation's transcript, never the replies view's.
     static func transcript() -> AXUIElement? {
         guard let w = window() else { return nil }
-        var list: [AXUIElement] = []
-        all(in: w, { AppWindowReader.string($0, kAXIdentifierAttribute) == "TranscriptCollectionView" }, into: &list)
-        return list.last
+        return first(in: w) {
+            MessagesAX.string($0, kAXIdentifierAttribute) == "TranscriptCollectionView"
+                && MessagesAX.string($0, kAXDescriptionAttribute) != "Reply transcript"
+        }
     }
 
     /// The messages shown, top to bottom. A message is the element with identifier "Sticker"
@@ -275,30 +316,76 @@ enum MessagesAX {
         guard let t = transcript() else { return [] }
         let middle = frame(t).map { $0.midX } ?? 0
         var list: [AXUIElement] = []
-        all(in: t, { AppWindowReader.string($0, kAXIdentifierAttribute) == "Sticker" }, into: &list)
+        all(in: t, { MessagesAX.string($0, kAXIdentifierAttribute) == "Sticker" }, into: &list)
         return list.map { e in
-            let text = first(in: e) { AppWindowReader.string($0, kAXIdentifierAttribute) == "CKBalloonTextView" }
-                .flatMap { AppWindowReader.string($0, kAXValueAttribute) }
-            let description = AppWindowReader.string(e, kAXDescriptionAttribute) ?? ""
+            let text = first(in: e) { MessagesAX.string($0, kAXIdentifierAttribute) == "CKBalloonTextView" }
+                .flatMap { MessagesAX.string($0, kAXValueAttribute) }
+            let description = MessagesAX.string(e, kAXDescriptionAttribute) ?? ""
             return Balloon(
-                element: e, text: text ?? description, description: description,
-                fromMe: (frame(e).map { $0.midX } ?? 0) > middle)
+                element: e,
+                shown: Shown(
+                    text: text ?? description, description: description,
+                    fromMe: (frame(e).map { $0.midX } ?? 0) > middle))
         }
     }
 
-    static func matches(_ target: BalloonTarget, _ b: Balloon) -> Bool {
+    static func matches(_ target: BalloonTarget, _ b: Shown) -> Bool {
         guard b.fromMe == target.fromMe else { return false }
         let wanted = target.text.trimmingCharacters(in: .whitespacesAndNewlines)
         if !wanted.isEmpty { return b.text.trimmingCharacters(in: .whitespacesAndNewlines) == wanted }
         return target.attachmentNames.contains { !$0.isEmpty && b.description.contains($0) }
     }
 
-    /// The matching message, counting from the bottom past the later ones that read the same
-    /// (the window shows a run of messages in order, around the one asked for).
-    static func pick(_ target: BalloonTarget, in list: [Balloon]) -> AXUIElement? {
-        let same = list.filter { matches(target, $0) }
-        guard same.count > target.laterSame else { return nil }
-        return same[same.count - 1 - target.laterSame].element
+    /// The one message shown that matches; none when no message or several do.
+    static func pick(_ target: BalloonTarget, in list: [Shown]) -> Int? {
+        let hits = list.indices.filter { matches(target, list[$0]) }
+        return hits.count == 1 && target.laterSame == 0 ? hits[0] : nil
+    }
+
+    /// Whether the window's title names this conversation: the group's name, or each of its
+    /// people (by name from Contacts, or by number or address) and no one else.
+    static func shows(_ c: ConversationIdentity) -> Bool {
+        guard let w = window(), let title = string(w, kAXTitleAttribute) else { return false }
+        return titleNames(title, c)
+    }
+
+    static func titleNames(_ title: String, _ c: ConversationIdentity) -> Bool {
+        let t = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !t.isEmpty else { return false }
+        if let name = c.name, !name.isEmpty { return t == name }
+        let parts = t.components(separatedBy: " & ").flatMap { $0.components(separatedBy: ", ") }
+            .map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+        guard parts.count == c.participants.count else { return false }
+        var left = c.participants
+        for part in parts {
+            guard let i = left.firstIndex(where: { names(part, $0) }) else { return false }
+            left.remove(at: i)
+        }
+        return left.isEmpty
+    }
+
+    /// A conversation list row's description starts with the conversation's title ("Name, last
+    /// message, time").
+    static func rowNames(_ description: String, _ c: ConversationIdentity) -> Bool {
+        if let name = c.name, !name.isEmpty {
+            return description == name || description.hasPrefix(name + ",")
+        }
+        // The title is everything before the first ", " that isn't inside the names themselves:
+        // try each cut.
+        var cut = description.startIndex
+        while let r = description.range(of: ", ", range: cut..<description.endIndex) {
+            if titleNames(String(description[..<r.lowerBound]), c) { return true }
+            cut = r.upperBound
+        }
+        return titleNames(description, c)
+    }
+
+    static func names(_ part: String, _ p: MessagesStore.Participant) -> Bool {
+        if let name = p.name, part == name { return true }
+        if p.handle.contains("@") { return part.caseInsensitiveCompare(p.handle) == .orderedSame }
+        let a = part.filter(\.isASCII).filter(\.isNumber)
+        let b = p.handle.filter(\.isASCII).filter(\.isNumber)
+        return a.count >= 7 && b.count >= 7 && (a.hasSuffix(b) || b.hasSuffix(a))
     }
 
     static func frame(_ e: AXUIElement) -> CGRect? {
@@ -324,6 +411,15 @@ enum MessagesAX {
 
     static func press(_ e: AXUIElement) -> Bool { AXUIElementPerformAction(e, kAXPressAction as CFString) == .success }
 
+    /// A text or number attribute, as text.
+    static func string(_ e: AXUIElement, _ attribute: String) -> String? {
+        var v: AnyObject?
+        guard AXUIElementCopyAttributeValue(e, attribute as CFString, &v) == .success else { return nil }
+        if let s = v as? String { return s }
+        if let n = v as? NSNumber { return n.stringValue }
+        return nil
+    }
+
     static func wait<T>(_ what: String, seconds: Double = 5, _ look: () -> T?) async throws -> T {
         let deadline = ContinuousClock.now + .milliseconds(Int(seconds * 1000))
         while ContinuousClock.now < deadline {
@@ -333,10 +429,13 @@ enum MessagesAX {
         throw MessagesWindowProblem(message: "Messages' window didn't show \(what) in time, so nothing more was done.")
     }
 
-    /// Puts text in the entry field (the reply one while replies show) and presses Return, sent
-    /// to Messages alone.
-    static func sendTyped(_ text: String) async throws {
-        let field = try await wait("the message field") { element(id: "messageBodyField") }
+    /// Puts text in the entry field and presses Return, sent to Messages alone. With `replies`,
+    /// only the field that belongs with that replies view.
+    static func sendTyped(_ text: String, in replies: AXUIElement?) async throws {
+        let field = try await wait("the message field") { () -> AXUIElement? in
+            guard let replies else { return element(id: "messageBodyField") }
+            return replyField(replies)
+        }
         _ = AXUIElementSetAttributeValue(field, kAXFocusedAttribute as CFString, kCFBooleanTrue)
         guard AXUIElementSetAttributeValue(field, kAXValueAttribute as CFString, text as CFString) == .success else {
             throw MessagesWindowProblem(message: "Messages' message field didn't take the text; nothing was sent.")
@@ -345,7 +444,7 @@ enum MessagesAX {
         pressReturn()
         // The field empties once Messages has taken the message.
         _ = try await wait("the message as sent") {
-            (AppWindowReader.string(field, kAXValueAttribute) ?? "").isEmpty ? true : nil
+            (MessagesAX.string(field, kAXValueAttribute) ?? "").isEmpty ? true : nil
         }
     }
 
@@ -362,8 +461,8 @@ enum MessagesAX {
         let editor = try await wait("the message being edited") { () -> AXUIElement? in
             guard let w = window() else { return nil }
             return first(in: w) {
-                AppWindowReader.string($0, kAXIdentifierAttribute) == "CKBalloonTextView"
-                    && AppWindowReader.string($0, kAXFocusedAttribute) == "1"
+                MessagesAX.string($0, kAXIdentifierAttribute) == "CKBalloonTextView"
+                    && MessagesAX.string($0, kAXFocusedAttribute) == "1"
             }
         }
         guard AXUIElementSetAttributeValue(editor, kAXValueAttribute as CFString, text as CFString) == .success else {
@@ -377,31 +476,51 @@ enum MessagesAX {
     static func confirmSheet() async throws {
         let sheet = try await wait("its question") { () -> AXUIElement? in
             guard let w = window() else { return nil }
-            return children(w).first { AppWindowReader.string($0, kAXRoleAttribute) == "AXSheet" }
+            return children(w).first { MessagesAX.string($0, kAXRoleAttribute) == "AXSheet" }
         }
         var cancel: AnyObject?
         AXUIElementCopyAttributeValue(sheet, kAXCancelButtonAttribute as CFString, &cancel)
-        let buttons = children(sheet).filter { AppWindowReader.string($0, kAXRoleAttribute) == "AXButton" }
+        let buttons = children(sheet).filter { MessagesAX.string($0, kAXRoleAttribute) == "AXButton" }
         guard
             let yes = buttons.last(where: { b in
-                cancel.map { !CFEqual($0, b) } ?? (AppWindowReader.string(b, kAXTitleAttribute) != "Cancel")
+                cancel.map { !CFEqual($0, b) } ?? (MessagesAX.string(b, kAXTitleAttribute) != "Cancel")
             }), press(yes)
         else { throw MessagesWindowProblem(message: "Messages asked something Latchkey couldn't answer.") }
     }
 
+    /// The replies view's transcript, while it shows (Messages describes it "Reply transcript").
+    static func repliesView() -> AXUIElement? {
+        guard let w = window() else { return nil }
+        return first(in: w) {
+            MessagesAX.string($0, kAXIdentifierAttribute) == "TranscriptCollectionView"
+                && MessagesAX.string($0, kAXDescriptionAttribute) == "Reply transcript"
+        }
+    }
+
+    /// The entry field beside the replies view: in the same container.
+    static func replyField(_ replies: AXUIElement) -> AXUIElement? {
+        guard let box = parent(replies) else { return nil }
+        return first(in: box) { MessagesAX.string($0, kAXIdentifierAttribute) == "messageBodyField" }
+    }
+
+    static func parent(_ e: AXUIElement) -> AXUIElement? {
+        var p: AnyObject?
+        guard AXUIElementCopyAttributeValue(e, kAXParentAttribute as CFString, &p) == .success, let p,
+            CFGetTypeID(p) == AXUIElementGetTypeID()
+        else { return nil }
+        return (p as! AXUIElement)
+    }
+
     /// Leaves the replies view, if it shows.
     static func closeReplies() {
-        guard let w = window() else { return }
-        var list: [AXUIElement] = []
-        all(in: w, { AppWindowReader.string($0, kAXIdentifierAttribute) == "TranscriptCollectionView" }, into: &list)
-        guard list.count > 1, let replies = list.first else { return }
+        guard let replies = repliesView() else { return }
         _ = AXUIElementPerformAction(replies, kAXCancelAction as CFString)
     }
 
     /// The conversation list's row for the conversation shown.
     static func selectedConversationRow() -> AXUIElement? {
         guard let list = element(id: "ConversationList") else { return nil }
-        return children(list).first { AppWindowReader.string($0, kAXSelectedAttribute) == "1" }
+        return children(list).first { MessagesAX.string($0, kAXSelectedAttribute) == "1" }
     }
 
     /// Waits until a new conversation's recipients are in place.

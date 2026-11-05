@@ -319,6 +319,16 @@ final class MessagesStore: @unchecked Sendable {
         return loc
     }
 
+    /// What Messages' window shows for a conversation: its name, or its people.
+    func identity(of id: String) throws -> ConversationIdentity? {
+        try locked {
+            guard let c = try rows("SELECT ROWID, display_name FROM chat WHERE guid = ?", bind: [.text(id)]).first
+            else { return nil }
+            let people = try participants()[c[0].int ?? 0] ?? []
+            return ConversationIdentity(id: id, name: c[1].text.flatMap { $0.isEmpty ? nil : $0 }, participants: people)
+        }
+    }
+
     /// The newest row in the message table, to tell what Messages records after it.
     func lastRow() throws -> Int64 {
         try locked { try rows("SELECT COALESCE(MAX(ROWID), 0) FROM message").first?[0].int ?? 0 }
@@ -622,10 +632,13 @@ final class MessagesStore: @unchecked Sendable {
             if !targets.isEmpty {
                 let q = Array(repeating: "?", count: targets.count).joined(separator: ",")
                 for r in try self.rows(
-                    "SELECT guid, text, attributedBody FROM message WHERE guid IN (\(q))", bind: targets.map { .text($0) })
+                    "SELECT guid, text, attributedBody FROM message WHERE guid IN (\(q))",
+                    bind: targets.map { .text($0) })
                 {
                     var text = r[1].text ?? ""
-                    if text.isEmpty || text == "\u{FFFC}", let body = r[2].blob { text = AttributedBody.text(body) ?? text }
+                    if text.isEmpty || text == "\u{FFFC}", let body = r[2].blob {
+                        text = AttributedBody.text(body) ?? text
+                    }
                     texts[r[0].text ?? ""] = Self.clean(text)
                 }
             }
