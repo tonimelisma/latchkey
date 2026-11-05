@@ -217,6 +217,20 @@ func run() async throws {
     check(await window.menu(["Edit", "Flag"]), "pressed Edit → Flag again")
     check(waitDB { !$0.extra(p).flagged }, "parent is unflagged")
 
+    // Removing the tag: Edit → Tags, or the title field when it shows the tag as text.
+    check(await window.show(p), "window shows the parent to remove the tag")
+    say("Edit → Tags: \(window.menuItems(["Edit", "Tags"]))")
+    let field = window.title() ?? ""
+    say("title field: \(field)")
+    if field.contains("#latchkeycheck") {
+        _ = window.retitle(field.replacingOccurrences(of: " #latchkeycheck", with: ""))
+        say("tag after retitling without it: \(waitDB { !$0.extra(p).tags.contains("latchkeycheck") } ? "gone" : "still there")")
+    }
+    if db.snapshot()?.extra(p).tags.contains("latchkeycheck") == true {
+        let pressed = await window.menu(["Edit", "Tags", "latchkeycheck"])
+        say("Edit → Tags → latchkeycheck pressed: \(pressed); tag \(waitDB { !$0.extra(p).tags.contains("latchkeycheck") } ? "gone" : "still there")")
+    }
+
     // Deleting the parent: what happens to the subtask.
     store.reset()
     try store.remove(store.calendarItem(withIdentifier: p) as! EKReminder, commit: true)

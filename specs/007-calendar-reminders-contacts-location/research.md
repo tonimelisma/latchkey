@@ -246,3 +246,14 @@ Choices:
 - **Tags in arguments.** `tags` is the whole set after the change (Claude reads them first), as
   a JSON list or a comma-separated string, "#" optional, spaces become "-" (Reminders' tags
   have no spaces).
+
+Still open (2026-11-05): the Mac stayed locked for the rest of the session, so these were built
+from the unlocked observations above and tested against an in-memory window, not yet run live:
+selecting a reminder through Reminders' link without bringing it forward, the Move Up / Move Down
+steps, Edit → Flag and File → Move to Section with the brief activation, and putting subtasks
+back after a list move. `macos/scripts/reminders-check.sh` runs all of them against the real
+Reminders (run the built program through Latchkey's shell tool, which has Reminders access,
+Accessibility, and Full Disk Access) and also looks for a way to remove a tag (Edit → Tags, or the
+title field); until one is found, removing a tag is refused with that reason (FR-716). Run on
+the locked Mac it passed: the window showed no reminders, and its list was deleted and checked
+gone through EventKit and the database.
