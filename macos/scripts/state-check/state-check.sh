@@ -64,6 +64,23 @@ $prompt"
               {id, result: "failed", note: "The check run itself didn'\''t finish or report"}]}' >"$out/$group.json"
 }
 
+# Removes every test item any run left (the sweep group, by the tag's common start, "Latchkey
+# check"), and fails loudly, naming what stayed, unless the sweep found everything gone.
+sweep() {
+    local state=$1 watcher=$2
+    trap - EXIT
+    "$0" group "$dir" "$state" sweep "Latchkey check"
+    kill "$watcher" 2>/dev/null || true
+    local left
+    left=$(jq -r '.cases[] | select(.result != "works") | "- \(.id): \(.note)"' "$dir/$state/sweep.json" 2>/dev/null ||
+        echo "- the sweep didn't report")
+    if [[ -n $left ]]; then
+        echo "TEST ITEMS LEFT IN THE OWNER'S APPS:" >&2
+        echo "$left" >&2
+        return 1
+    fi
+}
+
 # Runs the groups given (all when none) in the current state, then merges that state's results.
 run_all() {
     : "${LATCHKEY_CHECK_TO:?set LATCHKEY_CHECK_TO to the address to send checks to}"
@@ -78,17 +95,23 @@ run_all() {
     swiftc -O -o "$dir/focus-watch" "$here/focus-watch.swift"
     "$dir/focus-watch" >"$dir/$state/focus.log" 2>&1 &
     local watcher=$!
+    # Last, every time, also when the run fails or is stopped: whatever this or an earlier run left
+    # in the Owner's apps is found by the tag's common start and removed, then looked up again
+    # (2026-11-02: ten Notes folders a run had "deleted" were still there; 2026-11-04: stopped
+    # runs had left notes, mail, and reminders, since the sweep ran only after a whole run).
+    trap 'sweep "$state" "$watcher"' EXIT
+    trap 'exit 130' INT TERM
     if (($#)); then printf '%s\n' "$@"; else jq -r '.groups[].id' "$cases"; fi | grep -vx sweep |
         xargs -P "${LATCHKEY_CHECK_PARALLEL:-2}" -I{} "$0" group "$dir" "$state" {} "$tag"
-    # Last, every time: whatever the run left in the Owner's apps is found and removed, looked up
-    # again afterwards (2026-11-02: ten Notes folders a run had "deleted" were still there).
-    "$0" group "$dir" "$state" sweep "$tag"
-    kill "$watcher" 2>/dev/null || true
+    trap - EXIT INT TERM
+    local swept=0
+    sweep "$state" "$watcher" || swept=1
     jq -s --arg s "$state" --arg t "$(date '+%F %T')" \
         --arg v "$(defaults read /Applications/Latchkey.app/Contents/Info.plist CFBundleShortVersionString 2>/dev/null || echo unknown)" \
         '{state: $s, finished: $t, app: $v, cases: (map(.seen as $seen | .cases[] | . + {seen: $seen}))}' \
         "$dir/$state"/*.json >"$dir/$state.result.json"
     jq -r '.cases | group_by(.result) | map("\(.[0].result): \(length)") | join(", ")' "$dir/$state.result.json"
+    return "$swept"
 }
 
 report() {
