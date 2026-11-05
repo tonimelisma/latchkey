@@ -149,7 +149,7 @@ may see; absent: none).
 
 ## Releases and updates
 
-GitHub release `server-v<VERSION>` (`linux/VERSION`) with `latchkey-linux-amd64`,
+GitHub release `server-v<x.y.z>` (the commit's tag, given by `scripts/release-tag.sh`) with `latchkey-linux-amd64`,
 `latchkey-linux-arm64`, each `.sig`, `SHA256SUMS`, and `install.sh`. A `.sig` is base64 Ed25519
 over the text `latchkey-linux-<arch> <version> <sha256 hex>\n` (the version and architecture are
 signed, so an older program can't be relabelled as newer; security review, 2026-10-31). The key:

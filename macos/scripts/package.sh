@@ -10,7 +10,13 @@ grep -q '^ *DEVELOPMENT_TEAM *= *[A-Z0-9]' Config/Local.xcconfig 2>/dev/null || 
   echo "package: Config/Local.xcconfig with DEVELOPMENT_TEAM is missing; a build signed otherwise would lose the installed app's permissions and pairing" >&2
   exit 1
 }
-VERSION=$(sed -n 's/^ *MARKETING_VERSION: *"\(.*\)"/\1/p' project.yml)
+# The version comes from the release tag (install.sh passes it); a commit already released keeps
+# its tag's number.
+VERSION=${VERSION:-$(git describe --tags --exact-match --match 'v[0-9]*' HEAD 2>/dev/null | sed 's/^v//')}
+[ -n "$VERSION" ] || {
+  echo "package: this commit has no release tag v<x.y.z>; make install gives it one" >&2
+  exit 1
+}
 OUT=build/package
 rm -rf "$OUT"
 mkdir -p "$OUT/stage"
@@ -20,7 +26,7 @@ xcodegen generate --quiet
 # the app.
 rm -rf build/DerivedData/Build/Products/Release
 xcodebuild -project Latchkey.xcodeproj -scheme Latchkey -configuration Release \
-  -destination 'platform=macOS' -derivedDataPath build/DerivedData build -quiet
+  -destination 'platform=macOS' -derivedDataPath build/DerivedData MARKETING_VERSION="$VERSION" build -quiet
 APP=build/DerivedData/Build/Products/Release/Latchkey.app
 
 codesign --verify --deep --strict "$APP"

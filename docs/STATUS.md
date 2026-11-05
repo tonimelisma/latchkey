@@ -1,6 +1,6 @@
 # Status
 
-Last updated: 2026-11-04 (cloud-only files read again; machine list shows Latchkey versions; WhatsApp built; Add to Claude button; plugin withdrawn; README rewritten as a short product page; relay web pages redone; purkki paired; spec 010 shipped)
+Last updated: 2026-11-04 (releases are tags on commits; cloud-only files read again; machine list shows Latchkey versions; WhatsApp built; Add to Claude button; plugin withdrawn; README rewritten as a short product page; relay web pages redone; purkki paired; spec 010 shipped)
 
 Xcode signing ready (2026-10-20): Toni's Xcode account has a valid "Apple Development" certificate
 (certificate expires 2027-07-22). Keep the team ID out of committed project files
@@ -31,6 +31,15 @@ hosted relay (email via Resend); real Claude called
 after the app was quit.
 
 ## Next steps
+
+Releases are tags on commits (2026-11-04, Toni): parallel sessions bumped the version file to the
+same number, and a rebase drops the second, identical bump without a conflict, so two different
+builds could both be 0.8.112. Now `make -C macos install` and `make -C linux release` tag the
+commit (which must be origin/main) with the highest `v` / `server-v` tag + 1 and push the tag;
+GitHub refuses a taken name and the next number is tried; a commit already tagged keeps its number.
+No version lives in files any more. Tested in `scripts/tests/release_tag_test.sh` (two sessions
+racing for one number). The installed 0.8.112 was tagged by hand as the starting point, so the
+first install with tags is 0.8.113.
 
 Reading cloud-only files fixed in Mac 0.8.112 (2026-11-04, bug report: Claude couldn't read a
 green card photo in OneDrive): `files_read` asked macOS to download such files with the iCloud

@@ -28,7 +28,8 @@ dmg: project
 	./scripts/package.sh
 
 # Builds the disk image, installs it into /Applications, and starts it (every increment, CLAUDE.md).
-install: dmg
+# The version is the commit's release tag, given by install.sh (scripts/release-tag.sh).
+install: project
 	./scripts/install.sh
 
 clean:

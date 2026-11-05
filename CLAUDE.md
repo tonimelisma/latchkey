@@ -124,19 +124,23 @@ IMPORTANT: every session or task that changes files works in its own git worktre
 IMPORTANT: every working increment, however small, is published and installed. In order:
 
 1. Tests and lint pass for what changed (`make test` / `make lint` in `relay/` and `macos/`).
-2. Bump the app's patch version (`MARKETING_VERSION` in `macos/project.yml`) when anything in the
-   Mac app changed.
+2. Never write a version number by hand: a release is a tag on a commit on main (`v<x.y.z>` for the
+   Mac app, `server-v<x.y.z>` for Linux), given at install or release time by
+   `scripts/release-tag.sh` (the highest tag + 1; GitHub refuses a taken one, so sessions never
+   share a number; Toni, 2026-11-04). A commit already tagged keeps its number.
 3. Update specs, `docs/STATUS.md`, `docs/decisions.md`, and `README.md` in the same commit.
 4. Commit (files by name) and fast-forward `main` (above).
-5. If `relay/` changed: `deploy/deploy.sh`. If `linux/` changed: bump `linux/VERSION`, then
+5. If `relay/` changed: `deploy/deploy.sh`. If `linux/` changed:
    `make -C linux release` (installed servers update themselves within a day).
 6. If `macos/` changed: `make -C macos install` builds the disk image, quits the running app
    cleanly, replaces `/Applications/Latchkey.app`, starts it, and checks it reports the new
    version (pairing and permissions carry over). Toni never installs by hand. Installs and
    deploys run one at a time (a lock; the next waits), and an install refuses a checkout that
-   lacks commits already on origin/main, so merge first, then install (2026-11-04).
+   isn't exactly origin/main, so merge and push first, then install (2026-11-04). The install
+   tags the commit, then builds the image for that number.
 7. If behavior changed: a live check through the hosted relay with a fresh Claude Code session
-   (`claude -p --allowedTools mcp__claude_ai_Latchkey`); this session's own connector keeps the
+   (`claude -p "<prompt>" --allowedTools=mcp__claude_ai_Latchkey`: with a space instead of `=`,
+   the option takes the prompt as a second tool name); this session's own connector keeps the
    tool list it started with.
 
 ## Nothing left behind (Toni, 2026-10-23 and 2026-10-24)
@@ -168,7 +172,7 @@ Enforced by hooks in `.claude/settings.json` (`scripts/hooks.sh`):
 - After every push and at every session start, `scripts/tidy.sh` runs automatically (Claude Code
   hook in `.claude/settings.json`): branches merged into main (local and GitHub; never main, the
   current branch, or a branch checked out in a worktree), finished worktrees (as soon as merged),
-  stale refs, every disk image except the one for the version in `macos/project.yml`, built apps
+  stale refs, every disk image except the newest release's (highest `v` tag), built apps
   under `macos/build/DerivedData/Build/Products` (in the main checkout and in removed worktrees),
   and all but the newest relay Docker image. Last, it fast-forwards the main checkout when it is
   on `main`, clean, and only behind. Run it by hand after a push made outside Claude Code.
@@ -227,7 +231,8 @@ Mac app (run in `macos/`; `project.yml` is the source, the `.xcodeproj` is gener
 - `make test`: unit and contract tests (Swift Testing); exit code is the result
 - `make lint` / `make fmt`: swift-format
 - `make build` / `make run`: build, or build and open the app
-- `make dmg`: the installable disk image, `build/Latchkey-<version>.dmg`
+- `make dmg`: the installable disk image, `build/Latchkey-<version>.dmg`, for a commit that
+  already has its release tag (`make install` gives one)
 - `make install`: the disk image, installed into /Applications and started (every increment)
 - Signing: copy `Config/Local.xcconfig.example` to `Config/Local.xcconfig` and set your team ID
 
@@ -236,8 +241,8 @@ Linux server program (run in `linux/`, its own Go module; spec 010):
 - `make test-linux`: every test on Debian with systemd in Docker (Docker must run)
 - `make check`: end to end: private relay, pretend Mac, the program installed by install.sh in a
   Debian container, a real MCP client (`-claude` in `relay/cmd/linuxcheck` adds Claude Code)
-- `make release`: build, sign (`SERVER_SIGNING_KEY` in `.env`), publish `server-v$(cat VERSION)`;
-  bump `linux/VERSION` when anything in `linux/` changed (every increment ships)
+- `make release`: build, sign (`SERVER_SIGNING_KEY` in `.env`), tag the commit (must be origin/main)
+  `server-v<next number>` and publish it there (every increment ships)
 
 Screen states (`macos/scripts/state-check/`): `state-check.sh run|wait|report <folder outside the
 repo>` tries every use case in `cases.json` through the hosted relay with real Claude Code, in

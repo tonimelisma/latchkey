@@ -21,14 +21,19 @@ cd "$(dirname "$0")/.."
 git fetch -q origin main
 if ! git merge-base --is-ancestor refs/remotes/origin/main HEAD; then
   echo "install: this checkout lacks commits already on origin/main (another session shipped);" >&2
-  echo "install: rebase onto origin/main, bump the version, rebuild, then install" >&2
+  echo "install: rebase onto origin/main, retest, push to main, then install" >&2
   exit 1
 fi
 # shellcheck source=macos/scripts/install-lib.sh
 . scripts/install-lib.sh
-VERSION=$(sed -n 's/^ *MARKETING_VERSION: *"\(.*\)"/\1/p' project.yml)
+# The version is this commit's release tag, v<x.y.z> on GitHub, given or reused here (Toni,
+# 2026-11-04: releases are tags on commits, so two sessions never ship the same number). The
+# image is built inside the lock, for this number.
+VERSION=$(../scripts/release-tag.sh v)
+VERSION=$VERSION ./scripts/package.sh >/dev/null
 DMG=build/Latchkey-$VERSION.dmg
-[ -f "$DMG" ] || { echo "install: $DMG not found; run make dmg" >&2; exit 1; }
+[ -f "$DMG" ] || { echo "install: $DMG not found after building it" >&2; exit 1; }
+echo "install: building and installing Latchkey $VERSION (tag v$VERSION)"
 DEST=/Applications/Latchkey.app
 OLD=/Applications/.Latchkey-replaced.app
 NEW=/Applications/.Latchkey-new.app

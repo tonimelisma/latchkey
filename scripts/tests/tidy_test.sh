@@ -32,6 +32,7 @@ printf 'build/\n.claude/worktrees/\n' >"$main/.gitignore"
 g -C "$main" add scripts/tidy.sh macos/project.yml .gitignore
 g -C "$main" commit -q -m start
 g -C "$main" push -q origin main
+g -C "$main" tag v1.2.2 && g -C "$main" tag v1.2.3 # the newest release is 1.2.3
 tidy() { "$main/scripts/tidy.sh" >"$work/out" 2>&1; }
 products() { mkdir -p "$1/macos/build/DerivedData/Build/Products/Debug/Latchkey.app" && touch "$1/macos/build/DerivedData/Build/Products/Debug/Latchkey.app/Latchkey"; }
 
@@ -119,14 +120,14 @@ tidy
 yes "a checkout with its own commits is not moved" test -f "$main/ahead.txt"
 no "and gets no merge it didn't ask for" test -f "$main/second.txt"
 
-# --- a version that can't be read deletes no disk image ---
+# --- with no release tag no disk image is deleted ---
 g -C "$main" reset -q --soft HEAD~1
 g -C "$main" rm -q --cached ahead.txt
 rm "$main/ahead.txt"
 touch "$main/macos/build/Latchkey-0.0.1.dmg"
-printf 'settings: {}\n' >"$main/macos/project.yml"
+g -C "$main" tag -d v1.2.2 v1.2.3 >/dev/null
 tidy
-yes "without a readable version no disk image is deleted" test -f "$main/macos/build/Latchkey-0.0.1.dmg"
+yes "without a release tag no disk image is deleted" test -f "$main/macos/build/Latchkey-0.0.1.dmg"
 
 # --- a helper agent's worktree: locked by the session that started it, which is still running ---
 # Claude Code locks each helper's worktree with the pid of the session, and that process lives on
