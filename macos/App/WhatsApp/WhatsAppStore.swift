@@ -255,7 +255,8 @@ final class WhatsAppStore: @unchecked Sendable {
         guard
             let rows = try? SQLite.rows(
                 accounts,
-                "SELECT ZIDENTIFIER, ZPHONENUMBER FROM ZWAZACCOUNT WHERE ZCOUNTRYCODE IS NOT NULL AND ZCOUNTRYCODE != ''"),
+                "SELECT ZIDENTIFIER, ZPHONENUMBER FROM ZWAZACCOUNT WHERE ZCOUNTRYCODE IS NOT NULL AND ZCOUNTRYCODE != ''"
+            ),
             rows.count == 1
         else { return nil }
         var ids: [String] = []
@@ -295,7 +296,8 @@ final class WhatsAppStore: @unchecked Sendable {
             else { return nil }
             var stamp = "\(r[1].int ?? 0)/\(r[2].int ?? 0)"
             if let info = try? SQLite.rows(
-                db, "SELECT Z_OPT, hex(ZRECEIPTINFO) FROM ZWAMESSAGEINFO WHERE ZMESSAGE = ?", bind: [.int(r[0].int ?? 0)]
+                db, "SELECT Z_OPT, hex(ZRECEIPTINFO) FROM ZWAMESSAGEINFO WHERE ZMESSAGE = ?",
+                bind: [.int(r[0].int ?? 0)]
             ).first {
                 stamp += "/\(info[0].int ?? 0)/\(info[1].text ?? "")"
             }
@@ -433,10 +435,12 @@ final class WhatsAppStore: @unchecked Sendable {
         var lids: [String: String] = [:]
         if let accounts = try? SQLite.openReadOnly(accountsURL) {
             defer { SQLite.close(accounts) }
-            for r in (try? SQLite.rows(
-                accounts,
-                "SELECT ZIDENTIFIER, ZPHONENUMBER FROM ZWAZACCOUNT WHERE ZIDENTIFIER LIKE '%@lid' AND ZPHONENUMBER IS NOT NULL"
-            )) ?? [] {
+            for r
+                in (try? SQLite.rows(
+                    accounts,
+                    "SELECT ZIDENTIFIER, ZPHONENUMBER FROM ZWAZACCOUNT WHERE ZIDENTIFIER LIKE '%@lid' AND ZPHONENUMBER IS NOT NULL"
+                )) ?? []
+            {
                 guard let lid = r[0].text.map(Self.user), let number = r[1].text?.filter(\.isNumber), !number.isEmpty
                 else { continue }
                 numbers[lid] = number

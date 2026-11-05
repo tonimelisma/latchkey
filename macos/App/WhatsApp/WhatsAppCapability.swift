@@ -102,7 +102,8 @@ enum WhatsAppCapability {
                                     let more = try db.search(
                                         text: args["text"]?.stringValue, chat: dbChat,
                                         since: MessagesCapability.date(args["since"]?.stringValue),
-                                        until: messages.last?.date ?? MessagesCapability.date(args["until"]?.stringValue),
+                                        until: messages.last?.date
+                                            ?? MessagesCapability.date(args["until"]?.stringValue),
                                         limit: limit - messages.count, offset: 0
                                     ).filter { !seen.contains($0.key) }
                                     if !more.isEmpty {

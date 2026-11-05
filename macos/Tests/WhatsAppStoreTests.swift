@@ -193,7 +193,9 @@ import Testing
         #expect(s.stamp(chat: "15550001111@s.whatsapp.net", key: "B") != nil)
         var h: OpaquePointer?
         sqlite3_open(url.path, &h)
-        #expect(sqlite3_exec(h, "UPDATE ZWAMESSAGE SET Z_OPT = Z_OPT + 1 WHERE ZSTANZAID = 'A'", nil, nil, nil) == SQLITE_OK)
+        #expect(
+            sqlite3_exec(h, "UPDATE ZWAMESSAGE SET Z_OPT = Z_OPT + 1 WHERE ZSTANZAID = 'A'", nil, nil, nil) == SQLITE_OK
+        )
         sqlite3_close(h)
         #expect(s.stamp(chat: "15550001111@s.whatsapp.net", key: "A") != before)
         #expect(s.stamp(chat: "120363000@g.us", key: "A") == nil, "only in its own chat")
