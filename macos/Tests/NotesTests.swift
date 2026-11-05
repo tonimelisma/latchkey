@@ -1,4 +1,5 @@
 import Foundation
+import SQLite3
 import Testing
 
 @testable import Latchkey
@@ -62,6 +63,30 @@ import Testing
             try s.search("bread", folder: nil, limit: 10).map(\.id) == ["N-GROCERIES"], "body text, not just the title")
         #expect(try s.search("gone", folder: nil, limit: 10).isEmpty, "Recently Deleted is excluded")
         #expect(try s.search("flights", folder: "Notes", limit: 10).isEmpty, "folder filter")
+    }
+
+    /// A note whose folder was deleted under it still shows in Notes' "All" view, so it is found
+    /// too, with no folder (2026-11-04: twelve such notes were invisible to Claude).
+    @Test func findsANoteWhoseFolderWasDeleted() throws {
+        let url = try NotesFixture.make()
+        var db: OpaquePointer?
+        #expect(sqlite3_open(url.path, &db) == SQLITE_OK)
+        sqlite3_exec(
+            db,
+            """
+            INSERT INTO ZICCLOUDSYNCINGOBJECT (Z_PK,Z_ENT,ZIDENTIFIER,ZTITLE2,ZFOLDERTYPE,ZMARKEDFORDELETION)
+              VALUES (4,9,'F-GONE','Gone folder',0,1);
+            INSERT INTO ZICCLOUDSYNCINGOBJECT
+              (Z_PK,Z_ENT,ZIDENTIFIER,ZTITLE1,ZSNIPPET,ZFOLDER,ZNOTEDATA,ZMODIFICATIONDATE1,ZISPASSWORDPROTECTED)
+              VALUES (15,12,'N-STRANDED','Stranded note','Hi',4,NULL,0,0);
+            """, nil, nil, nil)
+        sqlite3_close(db)
+        let s = try NotesStore(url: url)
+        let hits = try s.search("stranded", folder: nil, limit: 10)
+        #expect(hits.map(\.id) == ["N-STRANDED"])
+        #expect(hits.first?.folder == "")
+        #expect(try s.read(id: "N-STRANDED").title == "Stranded note")
+        #expect(try s.folders().map(\.name) == ["Notes", "Trips"], "the deleted folder isn't listed")
     }
 
     @Test func emptyQueryListsRecentNotes() throws {

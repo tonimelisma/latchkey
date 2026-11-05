@@ -68,6 +68,8 @@ As an Owner, I set Notes and Messages each to Off, Read only, or Read & write in
 ### Notes
 - **FR-101** While Notes is Read only or Read & write, Claude shall be able to search notes by
   text, list folders, and read a note's title, folder, dates, text, and checklist items.
+  A note whose folder was deleted under it, which Notes still shows under All, is found too, with
+  no folder (2026-11-04: twelve such notes were invisible to Claude).
 - **FR-102** While Notes is Read & write, Claude shall be able to create a note (optionally in a
   folder), append to a note, replace a note's text, edit a passage of a note, and delete a note
   (edit added by Toni, 2026-10-22).

@@ -43,7 +43,7 @@ enum NotesCapability {
                             hits.isEmpty
                             ? "No notes found."
                             : hits.map { h in
-                                "- \(h.title) (id \(h.id); \(h.folder); changed \(h.modified.formatted(.iso8601)))"
+                                "- \(h.title) (id \(h.id); \(h.folder.isEmpty ? "no folder" : h.folder); changed \(h.modified.formatted(.iso8601)))"
                                     + (h.locked ? " [locked]" : "") + (h.snippet.isEmpty ? "" : "\n  \(h.snippet)")
                             }.joined(separator: "\n")
                         return .data(.object(["notes": .array(hits.map(json))]), text: text)
@@ -89,7 +89,7 @@ enum NotesCapability {
                             n.text, offset: try args.integer("offset", in: 0...Int.max) ?? 0)
                         let shortened = next != nil
                         var header =
-                            "\(n.title) (id \(n.id); folder \(n.folder); changed \(n.modified.formatted(.iso8601)))"
+                            "\(n.title) (id \(n.id); \(n.folder.isEmpty ? "no folder" : "folder \(n.folder)"); changed \(n.modified.formatted(.iso8601)))"
                         if n.locked { header += "\nThis note is locked with a password; its content can't be read." }
                         if let next {
                             header += "\nThe note has \(n.text.count) characters; read on with offset \(next)."

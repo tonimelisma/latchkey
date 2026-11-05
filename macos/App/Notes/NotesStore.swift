@@ -224,12 +224,17 @@ final class NotesStore: @unchecked Sendable {
         return try body()
     }
 
+    /// A note not deleted itself and not in Recently Deleted. A note whose folder was deleted under
+    /// it counts: Notes still shows it under All (2026-11-04, twelve such notes Claude couldn't see).
     private func liveNote(_ n: String) -> String {
-        var parts = [
-            "\(n).ZFOLDER IN (SELECT Z_PK FROM ZICCLOUDSYNCINGOBJECT WHERE Z_ENT = \(ent.folder) AND \(liveFolder("")))"
-        ]
+        var parts: [String] = []
+        if let t = col.folderType {
+            parts.append(
+                "COALESCE(\(n).ZFOLDER, 0) NOT IN (SELECT Z_PK FROM ZICCLOUDSYNCINGOBJECT WHERE Z_ENT = \(ent.folder) AND COALESCE(\(t), 0) = 1)"
+            )
+        }
         if let d = col.deleted { parts.append("COALESCE(\(n).\(d), 0) = 0") }
-        return parts.joined(separator: " AND ")
+        return parts.isEmpty ? "1" : parts.joined(separator: " AND ")
     }
 
     private func liveFolder(_ f: String) -> String {
@@ -268,11 +273,11 @@ final class NotesStore: @unchecked Sendable {
             bind.append(folder)
         }
         let sql = """
-            SELECT n.Z_PK, n.ZIDENTIFIER, n.\(col.noteTitle), f.\(col.folderTitle),
+            SELECT n.Z_PK, n.ZIDENTIFIER, n.\(col.noteTitle), CASE WHEN \(liveFolder("f")) THEN f.\(col.folderTitle) END,
               \(col.created.map { "n.\($0)" } ?? "NULL"), n.\(col.modified),
               \(col.snippet.map { "n.\($0)" } ?? "''"), \(col.locked.map { "n.\($0)" } ?? "0"), d.ZDATA
             FROM ZICCLOUDSYNCINGOBJECT n
-            JOIN ZICCLOUDSYNCINGOBJECT f ON f.Z_PK = n.ZFOLDER
+            LEFT JOIN ZICCLOUDSYNCINGOBJECT f ON f.Z_PK = n.ZFOLDER
             \(dataJoin)
             WHERE n.Z_ENT = \(ent.note) AND \(liveNote("n")) AND \(condition) \(folderFilter)
             ORDER BY n.\(col.modified) DESC, n.Z_PK
