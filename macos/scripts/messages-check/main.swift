@@ -10,8 +10,16 @@
 import AppKit
 import Foundation
 
-struct NoContacts: ContactsLookup {
-    func name(for handle: String) -> String? { nil }
+/// Names as Messages' window shows them for the owner's own address and number (the window is
+/// checked against them): MESSAGES_CHECK_NAME, e.g. the owner's name in Contacts.
+struct OwnName: ContactsLookup {
+    var own: Set<String>
+    var name = ProcessInfo.processInfo.environment["MESSAGES_CHECK_NAME"]
+    func name(for handle: String) -> String? {
+        own.contains { h in
+            h == handle || (h.filter(\.isNumber).count >= 7 && h.filter(\.isNumber) == handle.filter(\.isNumber))
+        } ? name : nil
+    }
     func people(matching name: String) -> [ContactPerson] { [] }
 }
 
@@ -23,7 +31,8 @@ let dbURL = URL(
     filePath: env["MESSAGES_CHECK_DB"] ?? URL.homeDirectory.appending(path: "Library/Messages/chat.db").path)
 let ui = LiveMessagesUI()
 
-func store() throws -> MessagesStore { try MessagesStore(url: dbURL, contacts: NoContacts()) }
+nonisolated(unsafe) var ownHandles: Set<String> = []
+func store() throws -> MessagesStore { try MessagesStore(url: dbURL, contacts: OwnName(own: ownHandles)) }
 
 func step(_ name: String) { print("· \(name)") }
 
@@ -152,6 +161,7 @@ guard args.count >= 3 else {
     print("usage: messages-check run <own address> <own number> | sweep <tag> <own address> <own number>")
     exit(2)
 }
+ownHandles = Set(args.dropFirst(2).suffix(2))
 switch args[1] {
 case "run" where args.count >= 4:
     let tag = env["MESSAGES_CHECK_TAG"] ?? "Latchkey check msgcheck"

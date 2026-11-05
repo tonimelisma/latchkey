@@ -92,7 +92,8 @@ others solved the same problems; check their current code before relying on deta
   as other people's messages), fast. Cons: only the plain text, no formatting or mentions.
   Chosen. The fixture's bodies are made by `NSArchiver`, so the test checks Apple's real format.
 - **Timestamps**: a value above 10^11 is nanoseconds since 2001, otherwise seconds.
-- **Left out**: reactions (`associated_message_type` ≠ 0) and system events (`item_type` ≠ 0).
+- **Left out**: system events (`item_type` ≠ 0). Reactions (`associated_message_type` ≠ 0) were
+  left out too until 2026-11-05; they now show on the message they're on (FR-170).
 - **Search speed** (FR-150): a first pass reads only the text straight from SQLite's memory and
   stops at the limit; full details are read for the matches. Matching is case- and
   accent-insensitive: a byte comparison when the query and the message are plain ASCII, and
@@ -113,7 +114,62 @@ others solved the same problems; check their current code before relying on deta
   conversation or handle; `error` ≠ 0 is a failure, `is_sent` = 1 is sent, nothing is "not yet
   confirmed" (not an error: Messages may still send it).
 - **Names**: Contacts names match by "contains", ignoring case and accents. One person with an
-  existing one-to-one conversation is sent to there; otherwise the choices are returned.
+  existing one-to-one conversation is sent to there; otherwise the choices are returned
+  (superseded 2026-11-05 for one person with several numbers: one is chosen, FR-171).
+
+## Messages' window (2026-11-05)
+
+Toni: "add everything missing, including reactions and deleting messages". Tried on Toni's Mac
+(macOS 27) in conversations with himself only (his address, his number, and a group of the two),
+every test item deleted afterwards. Options, least to most intrusive:
+
+- **AppleScript**: Messages' dictionary (`sdef`) has `send`, `login`, `logout`, and read-only
+  `chat`, `participant`, `account`; no `make`, `delete`, tapbacks, replies, edits, or naming.
+  Kept for what it does (sending to a person or a conversation), which also works locked.
+- **Shortcuts**: none of these actions exist there, and Toni rules Shortcuts out. Rejected.
+- **IMCore / private frameworks** (what some open projects use to send tapbacks): Constitution
+  IV forbids them, and they break with macOS updates. Rejected.
+- **Writing chat.db**: Messages and iCloud own it; nothing would be sent. Rejected.
+- **Accessibility in the background** (chosen): every message in Messages' window is an element
+  with identifier `Sticker` carrying Messages' own actions, named "Tapback Details…" (opens the
+  tapback picker), "Reply…", "Edit" and "Undo Send" (only while Messages allows them), "Copy",
+  "Delete…". The picker's buttons have identifiers `heart`, `thumbsUp`, `thumbsDown`, `ha`,
+  `exclamation`, `questionMark` (then recent emoji). Pressing them, and typing into
+  `messageBodyField` with Return sent to Messages' process, worked with another app in front;
+  Messages never came forward and the pointer didn't move (checked with the front app before
+  and after each step). Conversation rows in the list have "Delete…" too; deleting asks "Delete
+  from all your devices?" in a sheet. Deleted messages and conversations move to Recently
+  Deleted (`chat_recoverable_message_join`) for 30 days. Messages' action names are in the Mac's
+  language; English is matched (Toni's Mac), and on another language the answer says Messages
+  doesn't offer the action, without doing anything else.
+- **Showing a message**: `sms://open?message-guid=<id>`, opened without activating, shows the
+  conversation in the existing window in the background. `sms://open?addresses=a,b` opens a
+  new message to several people (a group).
+- **Brief activation**: not needed for any of these (unlike ticking in Notes).
+- **Locked Mac** (tried 2026-11-05, lid closed and locked): Messages' window can't be read at
+  all (its window element answers as the application), so these are refused at once; sending
+  with AppleScript still works. The lid closed while unlocked behaves as unlocked for
+  Accessibility (screen-state cases `messages.*` check it).
+- **Reading** (chat.db): tapbacks are rows with `associated_message_type` 2000–2007 (love, like,
+  dislike, laugh, emphasize, question, emoji with `associated_message_emoji`, sticker) and
+  3000–3007 taking one back, pointing at `p:<part>/<guid>` or `bp:<guid>`. In a conversation
+  with oneself Messages keeps only the copy of the owner's tapback that came back from the other
+  device (`is_from_me` 0), so a tapback is confirmed by its row whoever it is from. Inline
+  replies have `thread_originator_guid`. Edited messages have `date_edited` and, in
+  `message_summary_info` (a binary plist), `ec` → part → versions (`t`: typedstream text, first
+  is the original); unsent ones have `rp` there and no text.
+- **Choices made** (low-level, not asked): one tool `messages_change` for changes to existing
+  messages and conversations (like `notes_change`); groups and replies stay in `messages_send`
+  since they send. A message is found in the window by its conversation (the window's title must
+  name the conversation's people or group name, else nothing is done; security review
+  2026-11-05), its text or file name, and its side, and acted on only when exactly one shown
+  message matches and no later one on that side reads the same (the window shows no ids).
+  Edit and unsend limits (15 and 2 minutes, own iMessages) are checked before opening anything.
+- **Several numbers, no conversation** (FR-171): Messages has no public way to ask whether a
+  number is on iMessage (that lookup is private), so the order is: a number or address chat.db
+  already lists with service iMessage, a Contacts number labelled mobile or iPhone, the first
+  number, the first address. The answer names the one used and the others. Reverses the
+  2026-10-22 choice to return the choices (plan D3, D4) because Toni wants it to work.
 
 ## macOS permissions
 
