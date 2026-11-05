@@ -27,7 +27,7 @@ Operations:
 | `files_copy` (from, to) | Read & write | no | no | FR-202, FR-204 |
 | `files_trash` (path) | Read & write | no | yes | FR-202, FR-203 |
 
-Deadlines: search 30 s, reads 30 s (iCloud downloads), changes 10 s.
+Deadlines: search 30 s, reads 30 s (cloud downloads), changes 10 s.
 
 ## D2. Reading
 
@@ -40,8 +40,16 @@ continue (FR-207). Each answer starts by saying the content is the file's (FR-20
 Files over 100 MB aren't read: the size is that of the file a symbolic link points to (a link's
 own size is a few bytes), and the read itself stops past 100 MB; pipes and devices aren't read
 (security scan, 2026-10-24).
-iCloud placeholders are downloaded with `FileManager.startDownloadingUbiquitousItem` and waited
-for up to 20 s.
+Cloud-only files (a placeholder on the disk: iCloud Drive, OneDrive, Dropbox, Google Drive, any
+File Provider) are downloaded first through file coordination (`NSFileCoordinator`), falling back to
+`FileManager.startDownloadingUbiquitousItem`, for up to 20 s in all; a stuck coordination is
+cancelled. A file that still isn't here is read anyway (the read itself may fetch it); if that
+fails, the answer says it is kept in the cloud and gives macOS's error codes, and Latchkey's log
+records them without the file's name. Why (2026-11-04): macOS refused
+`startDownloadingUbiquitousItem` to the installed app for a OneDrive photo with "you don't have
+permission", while the same call worked from a plain program and coordination worked even with
+downloads switched off for the process; the old code stopped at that refusal, so every cloud-only
+OneDrive file failed. Every other unexpected Files error also carries macOS's codes.
 
 ## D3. Changing
 
@@ -89,7 +97,7 @@ other letter case, `..`, and links; reads and other apps' settings still work.
 | Article | Status |
 |---|---|
 | I. Outbound only | Pass: no change |
-| II. Fail fast | Pass: deadlines on every tool; iCloud waits capped at 20 s |
+| II. Fail fast | Pass: deadlines on every tool; cloud downloads capped at 20 s, a stuck one cancelled |
 | III. Disabled means nonexistent | Pass: tools per level |
 | IV. Good macOS citizen | Pass: Full Disk Access granted by the Owner; Trash, never erase |
 | V. Self-hostable | Pass: relay unchanged |

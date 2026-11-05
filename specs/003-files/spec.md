@@ -60,8 +60,8 @@ Documents, downloads, photos and projects live on the Mac. From a phone, Claude 
 
 - Files Spotlight doesn't index (hidden folders, excluded locations): search says so; listing
   still works.
-- iCloud files not downloaded yet: reading downloads them first, or says it can't within the
-  time limit.
+- Cloud files not downloaded yet (iCloud Drive, OneDrive, Dropbox, Google Drive): reading downloads
+  them first, or says it can't within the time limit.
 - Very large files and binary files; names with unusual characters; files that change while read.
 - Latchkey's own files reached by another spelling of the path (letter case, `..`, a link): still
   refused (FR-210).

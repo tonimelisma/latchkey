@@ -1,6 +1,6 @@
 # Status
 
-Last updated: 2026-11-04 (machine list shows Latchkey versions; WhatsApp built; Add to Claude button; plugin withdrawn; README rewritten as a short product page; relay web pages redone; purkki paired; spec 010 shipped)
+Last updated: 2026-11-04 (cloud-only files read again; machine list shows Latchkey versions; WhatsApp built; Add to Claude button; plugin withdrawn; README rewritten as a short product page; relay web pages redone; purkki paired; spec 010 shipped)
 
 Xcode signing ready (2026-10-20): Toni's Xcode account has a valid "Apple Development" certificate
 (certificate expires 2027-07-22). Keep the team ID out of committed project files
@@ -31,6 +31,16 @@ hosted relay (email via Resend); real Claude called
 after the app was quit.
 
 ## Next steps
+
+Reading cloud-only files fixed in Mac 0.8.112 (2026-11-04, bug report: Claude couldn't read a
+green card photo in OneDrive): `files_read` asked macOS to download such files with the iCloud
+call, which macOS refused to the installed app ("you don't have permission"), and gave up there.
+Now it downloads through file coordination first (any cloud folder: OneDrive, iCloud Drive,
+Dropbox, Google Drive), falls back to the old call, still tries the read, and puts macOS's error
+codes in the answer and in `latchkey_log` (no file names) when something fails; every other
+unexpected Files error carries the codes too (spec 003 plan D2). Why macOS refuses that one call
+to the app but not to a plain program is not known; the codes in the log will show it if
+coordination ever fails too.
 
 Claude's machine list shows each machine's Latchkey version beside its OS version (2026-11-04,
 relay only; spec 010 FR-1006): the versions each machine reports when it connects, already kept

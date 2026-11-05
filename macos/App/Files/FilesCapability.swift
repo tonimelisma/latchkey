@@ -113,9 +113,19 @@ enum FilesCapability {
                 handler: { args in
                     await run {
                         let url = try existing(args["path"]?.stringValue, home: home)
-                        try await downloadIfInICloud(url)
-                        switch try FileReader.read(url, offset: try args.integer("offset", in: 0...Int.max) ?? 0) {
+                        let offset = try args.integer("offset", in: 0...Int.max) ?? 0
+                        // A file that didn't download is still tried: the read itself may fetch it.
+                        let notHere = await CloudFile.download(url.resolvingSymlinksInPath())
+                        if let notHere {
+                            EventLog.shared.record(.app, "Files: a cloud file didn't download: \(notHere)", error: true)
+                        }
+                        let content: FileReader.Content
+                        do { content = try FileReader.read(url, offset: offset) } catch  where notHere != nil {
+                            throw Failure(message: cloudFailure(url, notHere, error))
+                        }
+                        switch content {
                         case .image(let image): return .image(image.data, mimeType: image.mimeType)
+                        case .notReadable where notHere != nil: throw Failure(message: cloudFailure(url, notHere, nil))
                         case .notReadable(let why): throw Failure(message: "\(url.path) can't be read: it's \(why).")
                         case .text(let text, let total, let next):
                             var out =
@@ -324,22 +334,11 @@ enum FilesCapability {
         return (from, to)
     }
 
-    private static func downloadIfInICloud(_ url: URL) async throws {
-        let v = try? url.resourceValues(forKeys: [.isUbiquitousItemKey, .ubiquitousItemDownloadingStatusKey])
-        guard v?.isUbiquitousItem == true, v?.ubiquitousItemDownloadingStatus != .current else { return }
-        try FileManager.default.startDownloadingUbiquitousItem(at: url)
-        for _ in 0..<80 {
-            try await Task.sleep(for: .milliseconds(250))
-            var fresh = url
-            fresh.removeAllCachedResourceValues()
-            if (try? fresh.resourceValues(forKeys: [.ubiquitousItemDownloadingStatusKey]))?
-                .ubiquitousItemDownloadingStatus
-                == .current
-            {
-                return
-            }
-        }
-        throw Failure(message: "\(url.path) is in iCloud and didn't download within 20 seconds. Try again in a moment.")
+    /// A cloud file that couldn't be downloaded (spec 003 edge cases); the codes are macOS's own.
+    private static func cloudFailure(_ url: URL, _ why: String?, _ error: Error?) -> String {
+        var text = "\(url.path) is kept in the cloud and couldn't be downloaded to the Mac (\(why ?? "unknown reason")"
+        if let error { text += "; reading: \(CloudFile.describe(error))" }
+        return text + "). Try again in a moment; if it keeps failing, Latchkey's log has the details."
     }
 
     private static func modified(_ url: URL) -> Date? {
@@ -366,7 +365,10 @@ enum FilesCapability {
             return .text("Spotlight didn't answer within 20 seconds. Try a narrower search or a folder.", isError: true)
         } catch {
             if refusedByPrivacy(error) { return .text(privacyRefusal, isError: true) }
-            return .text((error as NSError).localizedDescription, isError: true)
+            // The codes tell apart what the words don't (2026-11-04: "you don't have permission"
+            // hid a refused cloud download).
+            return .text(
+                "\((error as NSError).localizedDescription) (macOS error \(CloudFile.describe(error)))", isError: true)
         }
     }
 
