@@ -13,7 +13,7 @@ enum NotesCapability {
             readTools: readTools(store: { try source.store() }, scripts: OSAScriptRunner(app: Permissions.notesApp)),
             writeTools: writeTools(
                 store: { try source.store() }, scripts: OSAScriptRunner(app: Permissions.notesApp),
-                window: .unavailable))
+                window: .live))
     }
 
     static let noAccess = """

@@ -113,6 +113,11 @@ Serves FR-106, FR-155 to FR-159; research "Notes' window".
   Images show in the editor's text as U+FFFC. Headings, bullets, and numbered lines written into
   such a note are plain lines (`• ` for bullets): the format panel's buttons don't answer
   Accessibility presses in the background (tried 2026-11-04).
+- Checklists (changed 2026-11-06): each written line is set with Notes' Format → Checklist and
+  ticked with Format → Mark as Checked, in one moment with Notes in front (about a second; the
+  app that was in front gets it back). Before each command the editor gets the keyboard focus and
+  the caret; then every line's state is read back and any difference is answered, not hidden.
+  Checklist lines are written as plain paragraphs. Superseded:
 - Checklists: the toolbar's Checklist button (found by the name of the Format menu item with
   ⇧⌘L, so it works in any language) is pressed for each ☐/☑ line after the ☐/☑ is removed; its
   value says whether the line already is one. Pressing it works in the background.

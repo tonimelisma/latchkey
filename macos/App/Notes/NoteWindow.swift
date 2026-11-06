@@ -1,10 +1,12 @@
 import AppKit
 import ApplicationServices
 
-/// Notes' own window, driven through Accessibility in the background (spec 002 plan D3a,
-/// FR-155 to FR-159). Text goes in at a place in the note's editor, as typing would, so the
-/// checklists, links, and images around it stay; checklists are made with the toolbar's
-/// Checklist button; ticking needs Notes in front for a moment.
+/// Notes' own window, driven through Accessibility (spec 002 plan D3a, FR-155 to FR-159). Text
+/// goes in at a place in the note's editor, as typing would, in the background, so the
+/// checklists, links, and images around it stay. Checklists and ticks are made with Notes' Format
+/// menu, which works only while Notes is in front: Notes comes forward for a moment (the
+/// toolbar's Checklist button, pressed in the background, acted on a stale caret and mangled a
+/// note on 2026-11-05).
 struct NoteWindow: Sendable {
     /// Shows the note in Notes' main window without bringing Notes forward; answers the
     /// scripting ids of the notes shown before.
@@ -15,10 +17,12 @@ struct NoteWindow: Sendable {
     var open: @Sendable (_ noteID: String, _ ready: @escaping @Sendable (String) -> Bool) async -> String?
     /// Replaces a range (UTF-16) of the editor's text.
     var replace: @Sendable (_ noteID: String, _ range: NSRange, _ text: String) -> Bool
-    /// Puts the caret at a place; answers whether that paragraph is a checklist item.
-    var isChecklist: @Sendable (_ noteID: String, _ at: Int) -> Bool?
-    /// Makes the paragraph at the caret a checklist item, or no longer one.
-    var toggleChecklist: @Sendable (_ noteID: String) -> Bool
+    /// Whether each paragraph starting at these places is a checklist item, read in the
+    /// background (the Checklist button's state follows the caret); nil if it can't be read.
+    var checklistStates: @Sendable (_ noteID: String, _ at: [Int]) async -> [Bool]?
+    /// Makes each paragraph a checklist item or not, and ticks the ones asked, with Notes in
+    /// front for a moment and the app that was in front given it back.
+    var format: @Sendable (_ noteID: String, _ changes: [ParagraphFormat]) async -> Bool
     /// Ticks or unticks the items at these places (Notes comes forward for a moment).
     var markChecked: @Sendable (_ noteID: String, _ at: [Int]) async -> Bool
     /// Waits until `check` sees the change in Notes' database.
@@ -35,7 +39,7 @@ struct NoteWindow: Sendable {
     /// No window: the AppleScript route only (what the app uses while window editing is off).
     static let unavailable = NoteWindow(
         show: { _ in [] }, restore: { _ in }, open: { _, _ in nil }, replace: { _, _, _ in false },
-        isChecklist: { _, _ in nil }, toggleChecklist: { _ in false }, markChecked: { _, _ in false },
+        checklistStates: { _, _ in nil }, format: { _, _ in false }, markChecked: { _, _ in false },
         saved: { _ in false }, enabled: false)
 
     static let live = NoteWindow(
@@ -67,51 +71,51 @@ struct NoteWindow: Sendable {
             return AXUIElementSetAttributeValue(editor, kAXSelectedTextAttribute as CFString, text as CFString)
                 == .success
         },
-        isChecklist: { noteID, at in
-            guard let editor = Live.editor(noteID), Live.select(editor, NSRange(location: at, length: 0)),
-                let button = Live.checklistButton()
-            else { return nil }
-            var v: AnyObject?
-            guard AXUIElementCopyAttributeValue(button, kAXValueAttribute as CFString, &v) == .success else {
-                return nil
+        checklistStates: { noteID, places in
+            var states: [Bool] = []
+            for at in places {
+                guard let editor = Live.editor(noteID), Live.select(editor, NSRange(location: at, length: 0)) else {
+                    return nil
+                }
+                try? await Task.sleep(for: .milliseconds(150))
+                guard let on = Live.checklistOn() else { return nil }
+                states.append(on)
             }
-            if let n = v as? NSNumber { return n.boolValue }
-            if let s = v as? String { return s == "On" || s == "1" }
-            return nil
+            return states
         },
-        toggleChecklist: { _ in
-            guard let button = Live.checklistButton() else { return false }
-            return AXUIElementPerformAction(button, kAXPressAction as CFString) == .success
+        format: { noteID, changes in
+            await Live.inFront {
+                for change in changes {
+                    guard let editor = Live.editor(noteID),
+                        Live.caret(editor, at: change.at)
+                    else { return false }
+                    try? await Task.sleep(for: .milliseconds(200))
+                    if let want = change.checklist {
+                        guard let now = Live.checklistOn() else { return false }
+                        if now != want {
+                            guard await Live.pressMenu(char: "L", modifiers: 1) else { return false }
+                            try? await Task.sleep(for: .milliseconds(200))
+                        }
+                    }
+                    if change.tick {
+                        guard Live.caret(editor, at: change.at), await Live.pressMenu(char: "U", modifiers: 1)
+                        else { return false }
+                        try? await Task.sleep(for: .milliseconds(150))
+                    }
+                }
+                return true
+            }
         },
         markChecked: { noteID, places in
-            guard let notes = Live.notesApp() else { return false }
-            let previous = NSWorkspace.shared.frontmostApplication
-            notes.activate()
-            for _ in 0..<40 where NSWorkspace.shared.frontmostApplication != notes {
-                try? await Task.sleep(for: .milliseconds(50))
+            await Live.inFront {
+                for at in places {
+                    guard let editor = Live.editor(noteID), Live.caret(editor, at: at)
+                    else { return false }
+                    try? await Task.sleep(for: .milliseconds(200))
+                    guard await Live.pressMenu(char: "U", modifiers: 1) else { return false }
+                }
+                return true
             }
-            var done = true
-            for at in places {
-                guard let editor = Live.editor(noteID), Live.select(editor, NSRange(location: at, length: 0)),
-                    let item = Live.menuItem(char: "U", modifiers: 1)
-                else {
-                    done = false
-                    break
-                }
-                // The menu updates for the new caret a moment later.
-                var enabled = false
-                for _ in 0..<20 {
-                    enabled = AppWindowReader.string(item, kAXEnabledAttribute) == "1"
-                    if enabled { break }
-                    try? await Task.sleep(for: .milliseconds(25))
-                }
-                guard enabled, AXUIElementPerformAction(item, kAXPressAction as CFString) == .success else {
-                    done = false
-                    break
-                }
-            }
-            if let previous, previous != notes { previous.activate() }
-            return done
         },
         saved: { check in
             for _ in 0..<25 {
@@ -200,6 +204,14 @@ struct NoteWindow: Sendable {
             return nil
         }
 
+        /// Gives the editor the keyboard focus, then puts the caret at a place: a menu command acts
+        /// where the focused editor's caret is, and without the focus Notes used its own older
+        /// caret (the end of the note; seen 2026-11-05).
+        static func caret(_ editor: AXUIElement, at: Int) -> Bool {
+            _ = AXUIElementSetAttributeValue(editor, kAXFocusedAttribute as CFString, kCFBooleanTrue)
+            return select(editor, NSRange(location: at, length: 0))
+        }
+
         static func select(_ editor: AXUIElement, _ range: NSRange) -> Bool {
             var r = CFRange(location: range.location, length: range.length)
             guard let value = AXValueCreate(.cfRange, &r) else { return false }
@@ -218,6 +230,49 @@ struct NoteWindow: Sendable {
                 AppWindowReader.string($0, "AXMenuItemCmdChar") == char
                     && AppWindowReader.string($0, "AXMenuItemCmdModifiers") == String(modifiers)
             }
+        }
+
+        /// Runs `work` with Notes in front, then gives the front back to the app that had it.
+        static func inFront(_ work: () async -> Bool) async -> Bool {
+            guard let notes = notesApp() else { return false }
+            let previous = NSWorkspace.shared.frontmostApplication
+            notes.activate()
+            // Asked of Notes itself: NSWorkspace's frontmost app is updated by a run loop that
+            // isn't turning here, and read stale (seen 2026-11-05).
+            let app = AXUIElementCreateApplication(notes.processIdentifier)
+            var front = false
+            for _ in 0..<40 {
+                front = AppWindowReader.string(app, kAXFrontmostAttribute) == "1"
+                if front { break }
+                try? await Task.sleep(for: .milliseconds(50))
+            }
+            let done = front ? await work() : false
+            if let previous, previous != notes { previous.activate() }
+            return done
+        }
+
+        /// Presses a menu item by its shortcut once Notes has enabled it for the caret.
+        static func pressMenu(char: String, modifiers: Int) async -> Bool {
+            guard let item = menuItem(char: char, modifiers: modifiers) else { return false }
+            for _ in 0..<80 {  // up to 2 s: the menu follows the caret a moment later
+                if AppWindowReader.string(item, kAXEnabledAttribute) == "1" {
+                    return AXUIElementPerformAction(item, kAXPressAction as CFString) == .success
+                }
+                try? await Task.sleep(for: .milliseconds(25))
+            }
+            return false
+        }
+
+        /// Whether the paragraph at the caret is a checklist item: the toolbar button's state.
+        static func checklistOn() -> Bool? {
+            guard let button = checklistButton() else { return nil }
+            var v: AnyObject?
+            guard AXUIElementCopyAttributeValue(button, kAXValueAttribute as CFString, &v) == .success else {
+                return nil
+            }
+            if let n = v as? NSNumber { return n.boolValue }
+            if let s = v as? String { return s == "On" || s == "1" }
+            return nil
         }
 
         /// The toolbar's Checklist button: named like the Format menu's ⇧⌘L item.
@@ -239,6 +294,13 @@ struct NoteWindow: Sendable {
             return nil
         }
     }
+}
+
+/// One paragraph's wanted format: a checklist item or not (nil leaves it), and ticked.
+struct ParagraphFormat: Sendable, Equatable {
+    var at: Int
+    var checklist: Bool?
+    var tick = false
 }
 
 /// Where a change goes in the editor's text, in UTF-16 units as Accessibility counts

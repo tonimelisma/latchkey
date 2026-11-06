@@ -81,8 +81,9 @@ extension NotesCapability {
     /// FR-156: each paragraph in the region is a checklist item exactly when it starts with ☐ or
     /// ☑ (the mark is removed); ☑ items are ticked.
     static func makeChecklists(_ text: String, region: NSRange, noteID: String, window: NoteWindow) async throws {
+        // 1. The ☐/☑ marks come out, in the background.
         var removed = 0
-        var ticks: [Int] = []
+        var changes: [ParagraphFormat] = []
         for line in NoteWindowEdit.lines(in: text, region: region) {
             let at = line.at - removed
             if line.mark != nil {
@@ -91,18 +92,23 @@ extension NotesCapability {
                 }
                 removed += 2
             }
-            guard let isChecklist = window.isChecklist(noteID, at) else {
-                throw WindowFailure(message: "Latchkey couldn't find Notes' Checklist button.")
-            }
-            if isChecklist != (line.mark != nil) {
-                guard window.toggleChecklist(noteID) else {
-                    throw WindowFailure(message: "Notes' Checklist button didn't answer.")
-                }
-            }
-            if line.mark == .ticked { ticks.append(at) }
+            changes.append(ParagraphFormat(at: at, checklist: line.mark != nil, tick: line.mark == .ticked))
         }
-        if !ticks.isEmpty, await !window.markChecked(noteID, ticks) {
-            throw WindowFailure(message: "Notes didn't tick the checked items; they are there unticked.")
+        // 2. Each written paragraph becomes a checklist item or stays plain, and ticks are set,
+        // in one moment with Notes in front.
+        guard await window.format(noteID, changes) else {
+            throw WindowFailure(message: "Notes' Format menu didn't answer, so the checklist items may be plain lines.")
+        }
+        // 3. Read back: every paragraph must be what was asked.
+        guard let states = await window.checklistStates(noteID, changes.map(\.at)) else {
+            throw WindowFailure(message: "Latchkey couldn't read back the checklist items.")
+        }
+        let wrong = zip(changes, states).filter { $0.0.checklist != $0.1 }.count
+        if wrong > 0 {
+            throw WindowFailure(
+                message:
+                    "Notes shows \(wrong) of the written lines differently from what was asked (checklist item or plain line)."
+            )
         }
     }
 

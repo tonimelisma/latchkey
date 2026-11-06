@@ -188,6 +188,22 @@ every test item deleted afterwards. Options, least to most intrusive:
   https://developer.apple.com/forums/thread/107546?page=2, https://mjtsai.com/blog/?p=22551
 - Latchkey is not sandboxed (plan 001 D9), which these require.
 
+## Notes' window, what the live check showed (2026-11-05/06)
+
+The first build mangled a test note (wrong lines became checklist items, "eggs" became "ust").
+Recorded step by step on Toni's Mac with test notes:
+- The editor's text holds no list markers; offsets were right.
+- The toolbar's Checklist button, pressed in the background, acts on the caret Notes last had
+  itself (the end of the note), not the one Latchkey set; repeated presses did nothing. Writing
+  text first, waiting, or Notes in front didn't change that.
+- Format → Checklist with Notes in front works on the right line only once the editor has the
+  keyboard focus (AXFocused) before the caret is placed; without it the menu also acted at the end.
+- Mark as Checked becomes available a moment after a line is made a checklist item: wait up to
+  2 s and place the caret again.
+- NSWorkspace's frontmost app reads stale where no run loop turns; Notes' own AXFrontmost doesn't.
+- Result (macos/scripts/notes-check.sh, the real code): create, append, edit, tick, untick all give
+  the requested Markdown in Notes' database; the unit tests' stand-in now follows this behaviour.
+
 ## Notes' window (2026-11-04)
 
 Asked by Toni after Claude couldn't change a note with a checklist ("feels frustrating to find

@@ -43,6 +43,10 @@ logged out with "automated process detected"), and the account at stake is Toni'
 Facebook. Next: Toni opens facebook.com/messages in Safari; Claude reads the page (no clicks or
 typing), then writes spec 013 for Toni's review before any code.
 
+Notes checklist editing works again (2026-11-06): proven on the real Mac with the five checklist
+cases through `macos/scripts/notes-check.sh` (create, append, edit, tick, untick, delete); Notes
+comes forward for about a second per change. Still switched off: Messages' window actions.
+
 Switched off on 2026-11-05 until they work on Toni's Mac (live checks found them broken):
 Notes' window editing (checklist notes got mangled; such notes are refused again, checklist items
 stay ☐/☑, no ticking) and Messages' window actions (`messages_change`, new groups, inline replies;

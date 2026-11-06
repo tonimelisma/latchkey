@@ -35,7 +35,7 @@ final class FakeScripts: ScriptRunner, @unchecked Sendable {
         #expect(
             html
                 == "<div><h1>Trip</h1></div><div>Plain &amp; &lt;simple&gt;</div><ul><li>one</li><li>two</li></ul>"
-                + "<ol><li>first</li></ol><ul><li>☐ buy</li><li>☑ done</li></ul><div><br></div><div>End</div>")
+                + "<ol><li>first</li></ol><div>☐ buy</div><div>☑ done</div><div><br></div><div>End</div>")
     }
 
     @Test func nestsIndentedItems() {
@@ -117,7 +117,7 @@ final class FakeScripts: ScriptRunner, @unchecked Sendable {
         #expect(!result.isError, "\(result.content.jsonText)")
         #expect(result.content.jsonText.contains("N-IDEAS"))
         #expect(result.activity == "Claude created the note “Ideas”")
-        #expect(fake.lastArgs == ["<div><h1>Ideas</h1></div><ul><li>☐ soil</li></ul>", "Notes"])
+        #expect(fake.lastArgs == ["<div><h1>Ideas</h1></div><div>☐ soil</div>", "Notes"])
     }
 
     /// Spec 002 FR-154 (2026-11-01): a folder that doesn't exist is made, not refused.

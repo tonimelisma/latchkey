@@ -13,6 +13,13 @@ enum NoteHTML {
             let line = String(raw)
             let trimmed = line.drop { $0 == " " }
             let depth = (line.count - trimmed.count) / 2
+            // Checklist items are plain paragraphs: Notes' Format → Checklist turns one paragraph
+            // into an item, where a bulleted list item didn't change (checked live 2026-11-05).
+            if let box = checklistItem(String(trimmed)) {
+                closeLists(to: 0)
+                html += "<div>\(escape(box))</div>"
+                continue
+            }
             if let (tag, item) = listItem(String(trimmed)) {
                 closeLists(to: depth + 1)
                 if open.count == depth + 1, open[depth] != tag { closeLists(to: depth) }
@@ -50,9 +57,13 @@ enum NoteHTML {
         return nil
     }
 
+    private static func checklistItem(_ s: String) -> String? {
+        if s.hasPrefix("- [ ] ") { return "☐ " + s.dropFirst(6) }
+        if s.hasPrefix("- [x] ") || s.hasPrefix("- [X] ") { return "☑ " + s.dropFirst(6) }
+        return nil
+    }
+
     private static func listItem(_ s: String) -> (String, String)? {
-        if s.hasPrefix("- [ ] ") { return ("ul", "☐ " + s.dropFirst(6)) }
-        if s.hasPrefix("- [x] ") || s.hasPrefix("- [X] ") { return ("ul", "☑ " + s.dropFirst(6)) }
         if s.hasPrefix("- ") || s.hasPrefix("* ") { return ("ul", String(s.dropFirst(2))) }
         if let dot = s.firstIndex(of: "."), dot > s.startIndex, s[..<dot].allSatisfy(\.isNumber),
             s[s.index(after: dot)...].hasPrefix(" ")

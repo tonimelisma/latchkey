@@ -96,6 +96,9 @@ As an Owner, I set Notes and Messages each to Off, Read only, or Read & write in
   no way for other apps to make real checklists without Shortcuts (Toni chose AppleScript only,
   2026-10-22). Withdrawn 2026-11-04: replaced by FR-156; ☐ and ☑ remain only when Notes' window
   can't be used (FR-158).
+- **Notes switched on again 2026-11-06 (FR-155 to FR-159):** checklists and ticks now go through
+  Notes' Format menu with Notes in front for a moment (plan D3a), proven on Toni's Mac with the
+  five checklist cases. Messages (FR-172 to FR-178) stays off until fixed.
 - **Switched off 2026-11-05 (FR-155 to FR-159, FR-172 to FR-178):** the live checks found a
   checklist note mangled by FR-155/FR-156 and Messages' tapbacks not landing, edits failing, and
   the window jamming. Until each works on Toni's Mac, the app refuses these plainly: notes with

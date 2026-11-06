@@ -15,11 +15,11 @@ final class FakeNoteWindow: @unchecked Sendable {
     var locked = false
     private(set) var shown: [String] = []
     private(set) var restored: [[String]] = []
-    private(set) var toggles: [Int] = []
+    private(set) var formats: [ParagraphFormat] = []
     private(set) var marked: [Int] = []
     private(set) var replaced = 0
-    private var caret = 0
-    private var caretNote = ""
+    /// Paragraphs Notes leaves unchanged when formatted (to prove the read-back catches it).
+    var ignored: Set<Int> = []
 
     init(_ notes: [String: String] = [:]) {
         for (id, text) in notes { set(id, text) }
@@ -80,19 +80,29 @@ final class FakeNoteWindow: @unchecked Sendable {
                     return true
                 }
             },
-            isChecklist: { id, at in
+            checklistStates: { id, places in
                 self.lock.withLock {
-                    self.caret = at
-                    self.caretNote = id
-                    return self.styles[id]?[safe: self.paragraph(id, at: at)]?.0
+                    places.map { self.styles[id]?[safe: self.paragraph(id, at: $0)]?.0 ?? false }
                 }
             },
-            toggleChecklist: { id in
+            format: { id, changes in
+                // As seen in real Notes on 2026-11-05 through the Format menu: one paragraph at a
+                // time, at the place given. `ignored` stands for lines Notes didn't change, so the
+                // read-back must catch them.
                 self.lock.withLock {
-                    let p = self.paragraph(id, at: self.caret)
-                    self.toggles.append(self.caret)
-                    self.styles[id]?[p].0.toggle()
-                    self.styles[id]?[p].1 = false
+                    for c in changes {
+                        let p = self.paragraph(id, at: c.at)
+                        self.formats.append(c)
+                        if self.ignored.contains(p) { continue }
+                        if let want = c.checklist, self.styles[id]?[p].0 != want {
+                            self.styles[id]?[p].0 = want
+                            self.styles[id]?[p].1 = false
+                        }
+                        if c.tick {
+                            self.marked.append(c.at)
+                            self.styles[id]?[p].1.toggle()
+                        }
+                    }
                     return true
                 }
             },
@@ -239,6 +249,39 @@ extension Array {
         #expect(w.marked.count == 1)
     }
 
+    /// All checklist changes happen in one moment with Notes in front, one paragraph each, at the
+    /// written lines only (2026-11-05: the toolbar button changed the wrong line).
+    @Test func formatsExactlyTheWrittenLinesInOneGo() async throws {
+        let w = groceriesWindow()
+        let (_, tools) = try setup(w)
+        _ = await tools["notes_update"]!.handler(
+            .object([
+                "id": .string("N-GROCERIES"), "mode": .string("append"),
+                "text": .string("- [ ] Eggs\nThen:\n- [x] Butter"),
+            ]))
+        let text = w.text("N-GROCERIES") as NSString
+        #expect(
+            w.formats == [
+                ParagraphFormat(at: text.range(of: "Eggs").location, checklist: true),
+                ParagraphFormat(at: text.range(of: "Then:").location, checklist: false),
+                ParagraphFormat(at: text.range(of: "Butter").location, checklist: true, tick: true),
+            ])
+        let p = w.paragraphs("N-GROCERIES")
+        #expect(p[1].1 && p[1].2, "Milk is still a ticked checklist item")
+        #expect(p[2].1 && !p[2].2, "Bread is still an unticked checklist item")
+    }
+
+    /// When Notes doesn't change a line as asked, the answer says so instead of "changed".
+    @Test func aLineNotesDidntChangeIsReported() async throws {
+        let w = groceriesWindow()
+        w.ignored = [4]
+        let (_, tools) = try setup(w)
+        let result = await tools["notes_update"]!.handler(
+            .object(["id": .string("N-GROCERIES"), "mode": .string("append"), "text": .string("- [ ] Eggs")]))
+        #expect(result.isError)
+        #expect(result.content.jsonText.contains("differently from what was asked"), "\(result.content.jsonText)")
+    }
+
     @Test func editsAPassageInPlace() async throws {
         let w = groceriesWindow()
         let (_, tools) = try setup(w)
@@ -250,7 +293,7 @@ extension Array {
         #expect(!result.isError, "\(result.content.jsonText)")
         #expect(w.text("N-GROCERIES") == "Groceries\nMilk\nRye bread\nShop on Saturday\n")
         #expect(w.paragraphs("N-GROCERIES")[2].1, "still a checklist item")
-        #expect(w.toggles.isEmpty)
+        #expect(w.formats.isEmpty, "an edit changes no paragraph formats")
     }
 
     @Test func renamesANoteWithChecklists() async throws {
@@ -297,7 +340,7 @@ extension Array {
         let result = await tools["notes_create"]!.handler(
             .object(["title": .string("Ideas"), "text": .string("- [ ] soil\n- [x] seeds")]))
         #expect(!result.isError, "\(result.content.jsonText)")
-        #expect(fake.calls.first?.args.first == "<div><h1>Ideas</h1></div><ul><li>☐ soil</li><li>☑ seeds</li></ul>")
+        #expect(fake.calls.first?.args.first == "<div><h1>Ideas</h1></div><div>☐ soil</div><div>☑ seeds</div>")
         let p = w.paragraphs("N-IDEAS")
         #expect(p[1].0 == "soil" && p[1].1 && !p[1].2)
         #expect(p[2].0 == "seeds" && p[2].1 && p[2].2)
