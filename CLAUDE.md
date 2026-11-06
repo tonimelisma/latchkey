@@ -141,7 +141,10 @@ IMPORTANT: every working increment, however small, is published and installed. I
 7. If behavior changed: a live check through the hosted relay with a fresh Claude Code session
    (`claude -p "<prompt>" --allowedTools=mcp__claude_ai_Latchkey`: with a space instead of `=`,
    the option takes the prompt as a second tool name); this session's own connector keeps the
-   tool list it started with.
+   tool list it started with. Check only what changed: run `state-check.sh run <dir> <group…>`
+   with the groups whose code changed, never every group by habit (Toni, 2026-11-05: a full run
+   sends about six emails). A full run is for changes every tool shares (the connection, the
+   relay's tool handling) and for refreshing `docs/use-cases.md` in a new screen state.
 
 ## Nothing left behind (Toni, 2026-10-23 and 2026-10-24)
 
