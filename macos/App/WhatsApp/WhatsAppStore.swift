@@ -213,10 +213,13 @@ final class WhatsAppStore: @unchecked Sendable {
     /// Group events and other system rows have their own types; they aren't messages people wrote.
     /// Messages people wrote (no group events), each once: WhatsApp for Mac's database can hold
     /// the same message twice, two rows with one id in one chat (seen 2026-11-06), so only the
-    /// first row of an id is read.
+    /// first row of a copy is read. A copy is the same id from the same sender: all 7,695 copies in
+    /// the Owner's database were (2026-11-06; one differed in text, an edit, so text isn't compared),
+    /// and two senders' messages that happen to share an id are both kept.
     private static let written = """
         m.ZMESSAGETYPE NOT IN (6, 10) AND (m.ZSTANZAID IS NULL OR m.Z_PK = (SELECT MIN(d.Z_PK) FROM ZWAMESSAGE d \
-        WHERE d.ZCHATSESSION = m.ZCHATSESSION AND d.ZSTANZAID = m.ZSTANZAID))
+        WHERE d.ZCHATSESSION = m.ZCHATSESSION AND d.ZSTANZAID = m.ZSTANZAID AND d.ZMESSAGETYPE NOT IN (6, 10) \
+        AND d.ZISFROMME IS m.ZISFROMME AND d.ZFROMJID IS m.ZFROMJID AND d.ZGROUPMEMBER IS m.ZGROUPMEMBER))
         """
 
     private func message(_ r: [SQLite.Value]) -> WhatsAppMessage {
@@ -238,15 +241,17 @@ final class WhatsAppStore: @unchecked Sendable {
             key: r[14].text ?? "")
     }
 
-    /// One message of a chat by WhatsApp's own id (FR-1240).
+    /// One message of a chat by WhatsApp's own id (FR-1240), the same row the lists show. Nil when
+    /// two senders' messages share that id: which one was meant can't be told, so nothing is acted on.
     func message(chat: String, key: String) throws -> WhatsAppMessage? {
         try locked {
             refreshNames()
-            return try SQLite.rows(
+            let rows = try SQLite.rows(
                 // nosemgrep: scripts.semgrep.latchkey-sql-bound -- only fixed SQL constants are spliced in; every value is bound
-                db, "\(Self.messageSQL) WHERE s.ZCONTACTJID = ? AND m.ZSTANZAID = ? LIMIT 1",
-                bind: [.text(chat), .text(key)]
-            ).first.map(message)
+                db,
+                "\(Self.messageSQL) WHERE s.ZCONTACTJID = ? AND m.ZSTANZAID = ? AND \(Self.written) ORDER BY m.Z_PK LIMIT 2",
+                bind: [.text(chat), .text(key)])
+            return rows.count == 1 ? message(rows[0]) : nil
         }
     }
 
@@ -294,12 +299,14 @@ final class WhatsAppStore: @unchecked Sendable {
     func stamp(chat: String, key: String) -> String? {
         locked {
             guard
-                let r = try? SQLite.rows(
+                let rows = try? SQLite.rows(
+                    // nosemgrep: scripts.semgrep.latchkey-sql-bound -- only fixed SQL constants are spliced in; every value is bound
                     db,
-                    "SELECT m.Z_PK, m.Z_OPT, m.ZMESSAGETYPE FROM ZWAMESSAGE m JOIN ZWACHATSESSION s ON m.ZCHATSESSION = s.Z_PK WHERE s.ZCONTACTJID = ? AND m.ZSTANZAID = ? LIMIT 1",
-                    bind: [.text(chat), .text(key)]
-                ).first
+                    "SELECT m.Z_PK, m.Z_OPT, m.ZMESSAGETYPE FROM ZWAMESSAGE m JOIN ZWACHATSESSION s ON m.ZCHATSESSION = s.Z_PK WHERE s.ZCONTACTJID = ? AND m.ZSTANZAID = ? AND \(Self.written) ORDER BY m.Z_PK LIMIT 2",
+                    bind: [.text(chat), .text(key)]),
+                rows.count == 1
             else { return nil }
+            let r = rows[0]
             var stamp = "\(r[1].int ?? 0)/\(r[2].int ?? 0)"
             if let info = try? SQLite.rows(
                 db, "SELECT Z_OPT, hex(ZRECEIPTINFO) FROM ZWAMESSAGEINFO WHERE ZMESSAGE = ?",
@@ -321,7 +328,7 @@ final class WhatsAppStore: @unchecked Sendable {
                     """
                     SELECT instr(i.ZMETADATA, CAST(? AS BLOB)) FROM ZWAMESSAGE m
                     JOIN ZWACHATSESSION s ON m.ZCHATSESSION = s.Z_PK JOIN ZWAMEDIAITEM i ON m.ZMEDIAITEM = i.Z_PK
-                    WHERE s.ZCONTACTJID = ? AND m.ZSTANZAID = ? LIMIT 1
+                    WHERE s.ZCONTACTJID = ? AND m.ZSTANZAID = ? ORDER BY m.Z_PK LIMIT 1
                     """,
                     bind: [.text(quoted), .text(chat), .text(key)]
                 ).first
@@ -331,7 +338,7 @@ final class WhatsAppStore: @unchecked Sendable {
     }
 
     /// How many messages of the chat look like this one in WhatsApp for Mac's window: the same side,
-    /// words (or file name), and minute.
+    /// words (or file name), and minute. A stored copy counts once, as WhatsApp's window shows it.
     func lookalikes(_ m: WhatsAppMessage) throws -> Int {
         let minute = floor(m.date.timeIntervalSinceReferenceDate / 60) * 60
         let words = m.text.isEmpty ? (m.fileName ?? "") : m.text

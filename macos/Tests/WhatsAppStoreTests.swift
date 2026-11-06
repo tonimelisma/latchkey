@@ -230,7 +230,7 @@ import Testing
         #expect(
             sqlite3_exec(
                 h,
-                "INSERT INTO ZWAMESSAGE VALUES (9, 1, \(Self.t0 + 290), 0, 0, 'see you at six', NULL, NULL, NULL, 'A', 1)",
+                "INSERT INTO ZWAMESSAGE VALUES (9, 1, \(Self.t0 + 290), 0, 0, 'see you at six', '15550001111@s.whatsapp.net', NULL, NULL, 'A', 1)",
                 nil, nil, nil) == SQLITE_OK)
         sqlite3_close(h)
         let s = try WhatsAppStore(url: url)
@@ -239,6 +239,25 @@ import Testing
         let found = try s.search(
             text: "six", chat: nil, since: nil, until: nil, limit: 10, offset: 0)
         #expect(found.count == 1)
+    }
+
+    /// Only true copies are one message (security review 2026-11-06): two senders' messages that
+    /// share an id are both read, and acting on that id is refused rather than guessed.
+    @Test func twoSendersSharingAnIDAreBothReadAndNotActedOn() throws {
+        let url = try Self.make()
+        var h: OpaquePointer?
+        sqlite3_open(url.path, &h)
+        #expect(
+            sqlite3_exec(
+                h, "INSERT INTO ZWAMESSAGE VALUES (9, 1, \(Self.t0 + 295), 1, 0, 'mine', NULL, NULL, NULL, 'A', 1)",
+                nil, nil, nil) == SQLITE_OK)
+        sqlite3_close(h)
+        let s = try WhatsAppStore(url: url)
+        let m = try s.messages(chat: "15550001111@s.whatsapp.net", before: nil, limit: 10)
+        #expect(m.map(\.text) == ["ok", "mine", "see you at six"])
+        #expect(try s.message(chat: "15550001111@s.whatsapp.net", key: "A") == nil)
+        #expect(s.stamp(chat: "15550001111@s.whatsapp.net", key: "A") == nil)
+        #expect(try s.message(chat: "15550001111@s.whatsapp.net", key: "B")?.text == "ok")
     }
 
     /// Security review 2026-11-05: messages that look the same (same chat, sender side, words, minute)
