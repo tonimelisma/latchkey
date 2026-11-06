@@ -32,6 +32,17 @@ after the app was quit.
 
 ## Next steps
 
+Facebook Messenger (Toni, 2026-11-04; set aside 2026-11-05 "for another day"): not started, no
+spec yet. Toni's choices so far: read and send; through facebook.com/messages in Safari (check
+first that all chats show there, Meta recommends Chrome or Edge for encrypted chats); sending
+through Messenger's own functions in the page; the first live send to Jonna Melisma, one message,
+match confirmed with Toni first. Research so far: messenger.com closed in April 2026 and redirects
+to facebook.com/messages; the Messenger Mac app was switched off in December 2025; chats are
+end-to-end encrypted and the web restores history with a PIN; Meta flags automation (Beeper users
+logged out with "automated process detected"), and the account at stake is Toni's whole
+Facebook. Next: Toni opens facebook.com/messages in Safari; Claude reads the page (no clicks or
+typing), then writes spec 013 for Toni's review before any code.
+
 Notes with checklists, links, or images can be changed now (2026-11-04, Toni: "editing notes
 with checklists is not supported? … feels frustrating"): until now Latchkey refused every such
 note, which is most real notes. Such changes go through Notes' own window in the background
