@@ -91,10 +91,16 @@ struct NoteWindow: Sendable {
                 for change in changes {
                     guard let editor = Live.editor(noteID),
                         Live.caret(editor, at: change.at)
-                    else { return false }
+                    else {
+                        NotesLog.record("the note's editor or caret wasn't there with Notes in front", error: true)
+                        return false
+                    }
                     try? await Task.sleep(for: .milliseconds(200))
                     if let want = change.checklist {
-                        guard let now = Live.checklistOn() else { return false }
+                        guard let now = Live.checklistOn() else {
+                            NotesLog.record("the Checklist button wasn't found", error: true)
+                            return false
+                        }
                         if now != want {
                             guard await Live.pressMenu(char: "L", modifiers: 1) else { return false }
                             try? await Task.sleep(for: .milliseconds(200))
@@ -112,8 +118,10 @@ struct NoteWindow: Sendable {
         markChecked: { noteID, places in
             await Live.inFront {
                 for at in places {
-                    guard let editor = Live.editor(noteID), Live.caret(editor, at: at)
-                    else { return false }
+                    guard let editor = Live.editor(noteID), Live.caret(editor, at: at) else {
+                        NotesLog.record("the note's editor or caret wasn't there with Notes in front", error: true)
+                        return false
+                    }
                     try? await Task.sleep(for: .milliseconds(200))
                     guard await Live.pressMenu(char: "U", modifiers: 1) else { return false }
                 }
@@ -255,21 +263,30 @@ struct NoteWindow: Sendable {
         static func bringForward(_ target: NSRunningApplication) async -> Bool {
             let app = AXUIElementCreateApplication(target.processIdentifier)
             func isFront() async -> Bool {
-                for _ in 0..<15 {
+                // Up to 2 s: an app can take a moment to say it's in front.
+                for _ in 0..<40 {
                     if AppWindowReader.string(app, kAXFrontmostAttribute) == "1" { return true }
                     try? await Task.sleep(for: .milliseconds(50))
                 }
                 return false
             }
+            let name = target.bundleIdentifier ?? "an app"
             target.activate()
-            if await isFront() { return true }
+            if await isFront() {
+                NotesLog.record("brought \(name) forward with activate")
+                return true
+            }
             // `open -b`, as computer_act's open_app does: a program of its own asks LaunchServices,
             // which brought Notes forward when the installed app's activate and its
             // NSWorkspace.openApplication were both refused (2026-11-06).
             if let id = target.bundleIdentifier {
                 await openByID(id)
-                if await isFront() { return true }
+                if await isFront() {
+                    NotesLog.record("brought \(name) forward with open -b")
+                    return true
+                }
             }
+            NotesLog.record("couldn't bring \(name) forward", error: true)
             return false
         }
 
@@ -341,13 +358,20 @@ struct NoteWindow: Sendable {
 
         /// Presses a menu item by its shortcut once Notes has enabled it for the caret.
         static func pressMenu(char: String, modifiers: Int) async -> Bool {
-            guard let item = menuItem(char: char, modifiers: modifiers) else { return false }
+            let what = char == "L" ? "Checklist" : char == "U" ? "Mark as Checked" : "Delete Note"
+            guard let item = menuItem(char: char, modifiers: modifiers) else {
+                NotesLog.record("menu item \(what) not found", error: true)
+                return false
+            }
             for _ in 0..<80 {  // up to 2 s: the menu follows the caret a moment later
                 if AppWindowReader.string(item, kAXEnabledAttribute) == "1" {
-                    return AXUIElementPerformAction(item, kAXPressAction as CFString) == .success
+                    let pressed = AXUIElementPerformAction(item, kAXPressAction as CFString) == .success
+                    if !pressed { NotesLog.record("menu item \(what) didn't take the press", error: true) }
+                    return pressed
                 }
                 try? await Task.sleep(for: .milliseconds(25))
             }
+            NotesLog.record("menu item \(what) stayed unavailable for 2 s", error: true)
             return false
         }
 

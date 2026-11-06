@@ -58,5 +58,10 @@ struct OSAScriptRunner: ScriptRunner {
     }
 }
 
+/// Latchkey's log, printed here instead.
+enum NotesLog {
+    static func record(_ text: String, error: Bool = false) { print("log: \(error ? "ERROR " : "")\(text)") }
+}
+
 /// NotesWindowRoute.swift extends this; the check needs none of the rest.
 enum NotesCapability {}
