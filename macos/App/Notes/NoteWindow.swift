@@ -263,18 +263,48 @@ struct NoteWindow: Sendable {
             }
             target.activate()
             if await isFront() { return true }
-            if let url = target.bundleURL {
-                let config = NSWorkspace.OpenConfiguration()
-                config.activates = true
-                _ = try? await NSWorkspace.shared.openApplication(at: url, configuration: config)
-                if await isFront() { return true }
-            }
+            // `open -b`, as computer_act's open_app does: a program of its own asks LaunchServices,
+            // which brought Notes forward when the installed app's activate and its
+            // NSWorkspace.openApplication were both refused (2026-11-06).
             if let id = target.bundleIdentifier {
-                _ = try? await OSAScriptRunner().run(
-                    "on run argv\ntell application id (item 1 of argv) to activate\nend run", [id])
+                await openByID(id)
                 if await isFront() { return true }
             }
             return false
+        }
+
+        /// Runs `/usr/bin/open -b <id>` and waits up to 5 s for it, without blocking a thread.
+        static func openByID(_ id: String) async {
+            let p = Process()
+            p.executableURL = URL(filePath: "/usr/bin/open")
+            p.arguments = ["-b", id]
+            await withCheckedContinuation { (done: CheckedContinuation<Void, Never>) in
+                let once = OnceFlag()
+                p.terminationHandler = { _ in if once.claim() { done.resume() } }
+                do { try p.run() } catch {
+                    if once.claim() { done.resume() }
+                    return
+                }
+                DispatchQueue.global().asyncAfter(deadline: .now() + 5) {
+                    if once.claim() {
+                        p.terminate()
+                        done.resume()
+                    }
+                }
+            }
+        }
+
+        /// Lets exactly one of several callbacks go on.
+        final class OnceFlag: @unchecked Sendable {
+            private let lock = NSLock()
+            private var claimed = false
+            func claim() -> Bool {
+                lock.lock()
+                defer { lock.unlock() }
+                if claimed { return false }
+                claimed = true
+                return true
+            }
         }
 
         /// Deletes the note the window shows through Edit → Delete Note, with Notes in front for a
