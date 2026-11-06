@@ -51,7 +51,7 @@ import Testing
         let registry = CapabilityRegistry(
             capabilities: AppModel.makeCapabilities(), levels: CapabilityRegistry.defaultLevels)
         let frame = try AgentMessage.tools(ToolsUpdate(tools: registry.tools)).encode()
-        #expect(registry.tools.count <= 32, "the relay allows 256")
+        #expect(registry.tools.count <= 33, "the relay allows 256")
         #expect(frame.count < 64 * 1024, "the relay allows 512 KiB; this is \(frame.count) bytes")
     }
 }

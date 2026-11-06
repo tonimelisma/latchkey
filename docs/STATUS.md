@@ -44,14 +44,36 @@ only once Notes saved it (0.8.123): with the Mac locked Notes hadn't saved one t
 deletion ("Latchkey check 1104-2355 locked list"); check it's gone after the next unlock. Same day: `notes_find` finds notes whose folder
 was deleted under them (twelve old test notes were invisible to Claude); the screen-state check
 sweeps every "Latchkey check" item on exit, even when stopped, and fails when any is left; the
-end-of-turn hook was removed (Toni). Agreed with Toni, not done yet (helpers stopped mid-way on
-2026-11-04): Calendar invitations and attendees (unfinished work on branch
-`worktree-agent-ae40aa4c82831fac1`), Safari uploads/downloads/keys/scroll
-(`worktree-agent-aebd3fa474c7a7146`), Reminders flags/tags/subtasks
-(`worktree-agent-a1c198584ee941fbf`); Mail sending while locked, Messages
-groups/reactions/replies/edit/unsend/delete, and the WhatsApp fallback (groups, files, more
-states) left no code behind and start over. Left in Toni's apps by those helpers, to remove: a Messages test group, 7
-WhatsApp self-chat test messages, possibly a cancelled test calendar event.
+end-of-turn hook was removed (Toni).
+
+Six gaps closed together (2026-11-05, Toni: "add everything missing"), each built by a helper,
+merged and tested together (33 tools now):
+- Calendar: answer invitations, invite and remove people, change others' events (spec 007
+  FR-704 to FR-708, plan D7), through EventKit calls Apple doesn't document: an exception to
+  Constitution IV approved by Toni 2026-11-05, recorded in the constitution. Works in every
+  screen state; checked live unlocked (nothing sent to anyone).
+- Safari: key presses, hover, scroll, dropdowns, file upload, download, and a picture of the
+  page when the screen can't be captured (spec 005 FR-433 to FR-440). Checked in real Safari
+  unlocked for keys, hover, scroll, dropdowns; uploads, downloads, and the picture only in
+  WebKit so far (rerun `macos/scripts/safari-check.sh` unlocked).
+- Reminders: flags, tags, subtasks, sections read from Reminders' database; set through its
+  window (unlocked only); no change loses them (spec 007 FR-714 to FR-719). Removing a tag isn't
+  possible yet. Window steps not yet run live.
+- Mail: send, reply, forward, and draft without Mail's window, through a temporary signature
+  (spec 008 FR-841 to FR-845); the forward that added Toni to To is fixed. Checked unlocked;
+  locked still to run (Mail answered no scripting at all while locked on 2026-11-05).
+- Messages: new groups, tapbacks, inline replies, edit, unsend, delete a message or
+  conversation; reading shows tapbacks, replies, edits (spec 002 FR-170 to FR-178). Through
+  Messages' window, unlocked only; tapback, reply, and deleting a conversation checked live.
+- WhatsApp: replies, reactions, delete on both paths; WhatsApp for Mac's window is the fallback
+  again for text, files, replies (spec 012 FR-1245 to FR-1250). Checked live in the self chat;
+  groups and people without a known number not yet.
+
+Next: Notes while locked. Notes' window has no editor then; Notes' own app actions (append with
+Markdown, add or tick checklist items, tags, tables) may work without the window. A research
+helper is testing how Latchkey can call them (the private interface, or Shortcuts, which Toni
+ruled out 2026-10-22); Toni decides once it's known. iCloud.com in Latchkey's browser (Toni's
+first choice) is on hold until then.
 
 Releases are tags on commits (2026-11-04, Toni): parallel sessions bumped the version file to the
 same number, and a rebase drops the second, identical bump without a conflict, so two different
