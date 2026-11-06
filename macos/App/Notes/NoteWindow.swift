@@ -25,6 +25,9 @@ struct NoteWindow: Sendable {
     var format: @Sendable (_ noteID: String, _ changes: [ParagraphFormat]) async -> Bool
     /// Ticks or unticks the items at these places (Notes comes forward for a moment).
     var markChecked: @Sendable (_ noteID: String, _ at: [Int]) async -> Bool
+    /// Deletes the note the window shows through Notes' own Edit → Delete Note (Notes comes
+    /// forward for a moment); false when the window can't, so the scripted delete is used.
+    var deleteNote: @Sendable (_ noteID: String) async -> Bool = { _ in false }
     /// Waits until `check` sees the change in Notes' database.
     var saved: @Sendable (_ check: @escaping @Sendable () async -> Bool) async -> Bool
     /// Whether the Mac is locked: Notes' window then has no note editor (checked live
@@ -117,6 +120,7 @@ struct NoteWindow: Sendable {
                 return true
             }
         },
+        deleteNote: { await Live.deleteShown($0) },
         saved: { check in
             for _ in 0..<25 {
                 if await check() { return true }
@@ -236,9 +240,20 @@ struct NoteWindow: Sendable {
         static func inFront(_ work: () async -> Bool) async -> Bool {
             guard let notes = notesApp() else { return false }
             let previous = NSWorkspace.shared.frontmostApplication
-            // Asked of Notes itself: NSWorkspace's frontmost app is updated by a run loop that
-            // isn't turning here, and read stale (seen 2026-11-05).
-            let app = AXUIElementCreateApplication(notes.processIdentifier)
+            let done = await bringForward(notes) ? await work() : false
+            // The front goes back to the app that had it (2026-11-06: a plain activate from the
+            // installed app was refused and Notes stayed in front).
+            if let previous, previous != notes { _ = await bringForward(previous) }
+            return done
+        }
+
+        /// Brings an app to the front and answers whether it is there. macOS may refuse a plain
+        /// activate from a menu bar app in the background (the installed app's was, 2026-11-06);
+        /// opening the app through LaunchServices, then AppleScript's activate, are the fallbacks.
+        /// Whether it's in front is asked of the app itself: NSWorkspace's frontmost app is updated
+        /// by a run loop that isn't turning here, and read stale (seen 2026-11-05).
+        static func bringForward(_ target: NSRunningApplication) async -> Bool {
+            let app = AXUIElementCreateApplication(target.processIdentifier)
             func isFront() async -> Bool {
                 for _ in 0..<15 {
                     if AppWindowReader.string(app, kAXFrontmostAttribute) == "1" { return true }
@@ -246,25 +261,38 @@ struct NoteWindow: Sendable {
                 }
                 return false
             }
-            // macOS may refuse a plain activate from a menu bar app in the background (the
-            // installed app's was refused, 2026-11-06); opening the app through LaunchServices,
-            // then AppleScript's activate, are the fallbacks.
-            notes.activate()
-            var front = await isFront()
-            if !front, let url = notes.bundleURL {
+            target.activate()
+            if await isFront() { return true }
+            if let url = target.bundleURL {
                 let config = NSWorkspace.OpenConfiguration()
                 config.activates = true
                 _ = try? await NSWorkspace.shared.openApplication(at: url, configuration: config)
-                front = await isFront()
+                if await isFront() { return true }
             }
-            if !front {
-                _ = try? await OSAScriptRunner(app: Permissions.notesApp).run(
-                    "tell application id \"com.apple.Notes\" to activate", [])
-                front = await isFront()
+            if let id = target.bundleIdentifier {
+                _ = try? await OSAScriptRunner().run(
+                    "on run argv\ntell application id (item 1 of argv) to activate\nend run", [id])
+                if await isFront() { return true }
             }
-            let done = front ? await work() : false
-            if let previous, previous != notes { previous.activate() }
-            return done
+            return false
+        }
+
+        /// Deletes the note the window shows through Edit → Delete Note, with Notes in front for a
+        /// moment: Notes saves that at once, where a scripted delete sometimes stayed unsaved for
+        /// minutes (2026-11-06). Only when the editor shows exactly this note, so the note selected
+        /// in the list is it.
+        static func deleteShown(_ noteID: String) async -> Bool {
+            guard editor(noteID) != nil else { return false }
+            return await inFront {
+                guard let w = windows().first,
+                    let list = first(
+                        in: w, { AppWindowReader.string($0, kAXDescriptionAttribute) == "My Notes as List" }),
+                    editor(noteID) != nil
+                else { return false }
+                _ = AXUIElementSetAttributeValue(list, kAXFocusedAttribute as CFString, kCFBooleanTrue)
+                try? await Task.sleep(for: .milliseconds(200))
+                return await pressMenu(char: "\u{8}", modifiers: 8)
+            }
         }
 
         /// Presses a menu item by its shortcut once Notes has enabled it for the caret.

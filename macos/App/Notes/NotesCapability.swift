@@ -543,7 +543,17 @@ enum NotesCapability {
                             return .text("Give the note's id.", isError: true)
                         }
                         let note = try await s.read(id: id)
-                        _ = try await scripts.run(Script.delete, [note.scriptID])
+                        // Notes' own Edit → Delete Note first: Notes saves that at once, where a
+                        // scripted delete sometimes stayed unsaved for minutes (2026-11-06). The
+                        // scripted delete when the window can't (locked, Notes hidden).
+                        var deletedInWindow = false
+                        if window.enabled, !window.locked() {
+                            deletedInWindow =
+                                (try? await inWindow(scriptID: note.scriptID, noteID: note.id, window: window) { _ in
+                                    await window.deleteNote(note.id)
+                                }) ?? false
+                        }
+                        if !deletedInWindow { _ = try await scripts.run(Script.delete, [note.scriptID]) }
                         // Said deleted only once Notes' own database says so: with the Mac locked,
                         // Notes' scripting dropped a note its database still listed (2026-11-04).
                         var saved = false

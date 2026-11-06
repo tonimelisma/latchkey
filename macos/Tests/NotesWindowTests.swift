@@ -22,6 +22,7 @@ final class FakeNoteWindow: @unchecked Sendable {
     var ignored: Set<Int> = []
     /// Notes can't be brought forward: formatting does nothing and says so.
     var formatFails = false
+    private(set) var deleted: [String] = []
 
     init(_ notes: [String: String] = [:]) {
         for (id, text) in notes { set(id, text) }
@@ -116,6 +117,14 @@ final class FakeNoteWindow: @unchecked Sendable {
                         self.marked.append(at)
                         self.styles[id]?[p].1.toggle()
                     }
+                    return true
+                }
+            },
+            deleteNote: { id in
+                self.lock.withLock {
+                    guard self.available, self.texts[id] != nil else { return false }
+                    self.deleted.append(id)
+                    self.texts[id] = nil
                     return true
                 }
             },
@@ -268,6 +277,25 @@ extension Array {
         let p = w.paragraphs("N-GROCERIES")
         #expect(p[1].1 && p[1].2, "Milk is still a ticked checklist item")
         #expect(p[2].1 && !p[2].2, "Bread is still an unticked checklist item")
+    }
+
+    /// Deleting goes through Notes' own Delete Note, which Notes saves at once; the scripted
+    /// delete only when the window can't (2026-11-06: scripted deletes stayed unsaved for minutes).
+    @Test func deletesThroughNotesOwnCommand() async throws {
+        let w = groceriesWindow()
+        let (fake, tools) = try setup(w)
+        _ = await tools["notes_delete"]!.handler(.object(["id": .string("N-GROCERIES")]))
+        #expect(w.deleted == ["N-GROCERIES"])
+        #expect(!fake.calls.contains { $0.script == NotesCapability.Script.delete })
+    }
+
+    @Test func deletesByScriptWhenTheWindowCant() async throws {
+        let w = groceriesWindow()
+        w.available = false
+        let (fake, tools) = try setup(w)
+        _ = await tools["notes_delete"]!.handler(.object(["id": .string("N-GROCERIES")]))
+        #expect(w.deleted.isEmpty)
+        #expect(fake.calls.contains { $0.script == NotesCapability.Script.delete })
     }
 
     /// When Notes can't be brought forward, the ☐/☑ stay in the note, so the answer that says so
