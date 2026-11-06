@@ -47,12 +47,26 @@ struct NoteWindow: Sendable {
 
     static let live = NoteWindow(
         show: { scriptID in
+            // The app in front before anything happens: showing a note can itself bring Notes
+            // forward, and then the front was never given back (2026-11-06).
+            Live.ownerFront.withLock { $0 = Live.frontApp() }
             let out = try await OSAScriptRunner(app: Permissions.notesApp).run(Script.show, [scriptID])
             return out.split(separator: "\n").map(String.init).filter { !$0.isEmpty }
         },
         restore: { ids in
-            guard let first = ids.first else { return }
-            _ = try? await OSAScriptRunner(app: Permissions.notesApp).run(Script.restore, [first])
+            if let first = ids.first {
+                _ = try? await OSAScriptRunner(app: Permissions.notesApp).run(Script.restore, [first])
+            }
+            // Whatever brought Notes forward, the Owner's app gets the front back.
+            let owner = Live.ownerFront.withLock { held in
+                defer { held = nil }
+                return held
+            }
+            if let owner, let notes = Live.notesApp(), owner != notes,
+                Live.frontApp()?.processIdentifier == notes.processIdentifier
+            {
+                _ = await Live.bringForward(owner)
+            }
         },
         open: { noteID, ready in
             // At most 5 s however slowly Notes answers (each look took up to 2 s while locked).
@@ -256,9 +270,12 @@ struct NoteWindow: Sendable {
         }
 
         /// Runs `work` with Notes in front, then gives the front back to the app that had it.
+        /// The Owner's app in front when the change began (set by `show`, used by `restore`).
+        static let ownerFront = NSLockedBox<NSRunningApplication?>(nil)
+
         static func inFront(_ work: () async -> Bool) async -> Bool {
             guard let notes = notesApp() else { return false }
-            let previous = frontApp()
+            let previous = ownerFront.withLock { $0 } ?? frontApp()
             var done = false
             if await bringForward(notes) {
                 // Notes' window takes a moment to become the one keys and menus go to.
@@ -426,6 +443,18 @@ struct NoteWindow: Sendable {
             }
             return nil
         }
+    }
+}
+
+/// A value behind a lock (here: the Owner's app in front, kept between `show` and `restore`).
+final class NSLockedBox<T>: @unchecked Sendable {
+    private let lock = NSLock()
+    private var value: T
+    init(_ value: T) { self.value = value }
+    func withLock<R>(_ body: (inout T) -> R) -> R {
+        lock.lock()
+        defer { lock.unlock() }
+        return body(&value)
     }
 }
 
