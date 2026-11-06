@@ -36,3 +36,10 @@ From `plan.md`. `[P]` = parallel-safe.
 - **T813** [x] Mail held by its own alert (2026-11-02): when a Mail script times out, Latchkey
   reads Mail's alert, presses it when it has one button, and otherwise names it and its buttons
   for someone at the Mac (`mailsAlertIsReportedWhenMailDoesNotAnswer`). *FR-839, D11.*
+- **T814** [x] Writing while locked (2026-11-05), tests first (`MailSignatureWriteTests`): messages
+  without files written by Mail's scripting, the text in a temporary signature; files in the window
+  while it can be used, else a new message by scripting and a reply or forward refused naming the
+  queue; every recipient checked before Send; the signature removed on every path; an exact address
+  shown twice in the window isn't a stranger, a repeated name still is. Live: `mail-check.sh <to> script` unlocked; locked and lid
+  closed by the screen-state cases (`mail.send`, `mail.reply`, `mail.forward`, `mail.draft`,
+  `mail.send_file`, `mail.reply_file`). *FR-835, FR-841 to FR-845, D6a.*

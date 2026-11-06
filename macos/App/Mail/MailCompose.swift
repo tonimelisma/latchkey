@@ -2,7 +2,8 @@ import Foundation
 
 /// Writing email through Mail's own compose window, driven through Accessibility, so what is
 /// sent is ordinary mail (Toni, 2026-10-30; spec 008 plan D6). Text set through Mail's scripting
-/// arrives marked as quoted (research "Live check"); scripting is never used to compose.
+/// arrives marked as quoted (research "Live check"). Since 2026-11-05 the window is used only
+/// for files while it can be (plan D6a); everything else is written by `MailSignatureWriter`.
 
 /// How a compose window is opened.
 /// Where a message is, for Mail's scripting: its account, mailbox path, and id.
@@ -267,22 +268,42 @@ enum MailCompose {
         var extra: [String] = []
         // Exact addresses first, so a name shared by two contacts can't take another's place.
         var rest: [String] = []
+        var paired: [String] = []
         for t in tokens {
             if let i = left.firstIndex(where: { MailWrite.bare(t).caseInsensitiveCompare($0.address) == .orderedSame })
             {
                 left.remove(at: i)
+                paired.append(t)
             } else {
                 rest.append(t)
             }
         }
         for t in rest {
-            if let i = left.firstIndex(where: { $0.matches(t) }) { left.remove(at: i) } else { extra.append(t) }
+            if let i = left.firstIndex(where: { $0.matches(t) }) {
+                left.remove(at: i)
+                paired.append(t)
+            } else if !isRepeatedAddress(t, paired) {
+                // An exact address shown again, after it was paired with an asked address, is
+                // that recipient twice, not another one (Mail's window, forward of 2026-11-04).
+                // A repeated name is still extra: two people can share a name (security review
+                // 2026-11-05).
+                extra.append(t)
+            }
         }
         return (extra, left)
     }
 
+    /// Whether a token is an exact address already paired with an asked address.
+    static func isRepeatedAddress(_ t: String, _ paired: [String]) -> Bool {
+        let a = MailWrite.bare(t)
+        guard a.contains("@") else { return false }
+        return paired.contains { MailWrite.bare($0).caseInsensitiveCompare(a) == .orderedSame }
+    }
+
     /// Every field as asked, before anything is sent (plan D6).
-    static func check(_ r: Request, prefilled: ComposeFields, _ f: ComposeFields) throws {
+    /// `content: false` for a message made by scripting (plan D6a), whose text and files can't be
+    /// read back before sending.
+    static func check(_ r: Request, prefilled: ComposeFields, _ f: ComposeFields, content: Bool = true) throws {
         func fail(_ why: String) throws -> Never { throw ComposeFailure(message: why) }
         if let subject = r.subject, f.subject != subject {
             try fail("the subject in Mail's window is «\(f.subject)», not «\(subject)»")
@@ -329,6 +350,7 @@ enum MailCompose {
         if let sender = r.sender, !f.from.lowercased().contains(sender.lowercased()) {
             try fail("Mail's From is «\(f.from)», not \(sender)")
         }
+        guard content else { return }
         let wanted = collapse(r.text)
         if !wanted.isEmpty {
             let unquoted = collapse(f.body.filter { $0.quoteLevel == 0 }.map(\.text).joined(separator: "\n"))

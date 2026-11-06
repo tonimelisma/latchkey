@@ -170,7 +170,18 @@ enum MailWrite {
         return p
     }
 
-    /// A new message, reply, or forward written in Mail's own window (plan D6, Toni 2026-10-30),
+    /// Why a reply or forward with files can't go now (plan D6a): only Mail's window keeps its
+    /// quoted original when a file is added.
+    static func filesInResponse(_ nothing: String, _ why: String) -> String {
+        if why == AXMailWindows.needsAccessibility {
+            return
+                "\(nothing): a file added to a reply or forward goes in through Mail's own window, which needs Accessibility. The Mac's owner can turn on Latchkey in System Settings → Privacy & Security → Accessibility. Without the file it can go now."
+        }
+        return
+            "\(nothing): the Mac is locked, and while it is locked Mail can add a file to a reply or forward only by dropping the quoted original. It can go now without the file (a new message with the file works while locked), or mail_queue can queue it to go out the next time the Mac is unlocked; ask the Owner which."
+    }
+
+    /// A new message, reply, or forward written by Mail's scripting (plan D6a) or in Mail's own window (plan D6, Toni 2026-10-30),
     /// then sent and confirmed in Sent (plan D7), or saved as a draft.
     static func compose(_ args: JSONValue, _ s: MailStore, _ env: Env, draft: Bool) async throws -> ToolResult {
         let to = try addresses(args, "to")
@@ -203,6 +214,17 @@ enum MailWrite {
                     FileManager.default.isReadableFile(atPath: url.path)
                 else { return .text("\(nothing): there's no readable file at \(p).", isError: true) }
                 files.append(url)
+            }
+        }
+        // How it is written (plan D6a): by Mail's scripting, its text in a signature for a moment,
+        // unless files go with it while Mail's window can be used: attached by scripting, files
+        // come above the text, and a reply or forward loses its quoted original (tried 2026-11-05).
+        var byScript = env.byScript
+        if byScript, !files.isEmpty {
+            if let why = await env.windows.unavailable() {
+                if kind != nil { return .text(filesInResponse(nothing, why), isError: true) }
+            } else {
+                byScript = false
             }
         }
         // The sending account (FR-822).
@@ -246,7 +268,8 @@ enum MailWrite {
             }
             // Mail opens the original by its Message-ID, which anyone can copy into a message of
             // their own (security review 2026-10-30): with two, the wrong one could open.
-            let sharing = try s.messagesSharing(messageID: messageID)
+            // Mail's scripting finds the exact message by its place instead.
+            let sharing = byScript ? 1 : try s.messagesSharing(messageID: messageID)
             if sharing > 1 {
                 return .text(
                     "\(nothing): \(sharing) messages in Mail have that message's Message-ID \(messageID), so Latchkey can't be sure Mail would open the one chosen. Answer it in Mail instead.",
@@ -268,9 +291,12 @@ enum MailWrite {
             files: files, draft: draft)
         let start = Date().addingTimeInterval(-2)
         let shownSubject: String
+        let scripted = byScript
         do {
             shownSubject = try await env.composeQueue.run {
-                try await MailCompose.run(request, env.windows, attachWait: env.attachWait)
+                scripted
+                    ? try await MailSignatureWriter.run(request, env.scripts)
+                    : try await MailCompose.run(request, env.windows, attachWait: env.attachWait)
             }
         } catch let f as ComposeFailure where f.afterSend {
             return .text(
@@ -306,7 +332,8 @@ enum MailWrite {
             copy = try s.sentCopy(in: boxes, since: start, subject: finalSubject, recipient: bare(who))
             if copy == nil { try? await Task.sleep(for: env.poll) }
         }
-        let fileNote = files.isEmpty ? "" : ", \(files.count) attachment\(files.count == 1 ? "" : "s")"
+        var fileNote = files.isEmpty ? "" : ", \(files.count) attachment\(files.count == 1 ? "" : "s")"
+        if byScript, !files.isEmpty { fileNote += " (written without Mail's window, so the files are above the text)" }
         var r: ToolResult
         if let copy {
             var line = "Sent to \(([who] + (to + cc + bcc).dropFirst()).joined(separator: ", "))"

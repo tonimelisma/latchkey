@@ -26,6 +26,9 @@ enum MailCapability {
         var attachWait: Duration = MailCompose.attachWait
         /// Contacts' names for addresses: Mail shows a contact's name in place of the address.
         var contacts: any ContactsLookup = NoContacts()
+        /// Writes email by Mail's scripting, its text in a signature for a moment (plan D6a),
+        /// whenever that gives what Mail's window would; false always uses the window.
+        var byScript = true
     }
 
     struct NoContacts: ContactsLookup {
@@ -177,8 +180,8 @@ enum MailCapability {
                         Changes email in Apple Mail: mark_read, mark_unread, flag, unflag, junk, not_junk, \
                         move (to mailbox, in the same account), delete (moves it to its account's Trash), for id \
                         or several ids. draft saves a new message, a reply (reply_to), or a forward (forward) \
-                        in the account's Drafts without sending it (written in Mail's own window: works with the lid \
-                        closed, not while the Mac is locked).
+                        in the account's Drafts without sending it (works while the Mac is locked or the lid is \
+                        closed).
                         """, input: change, required: ["action"], readOnly: false, destructive: true,
                     deadlineMS: 60_000),
                 handler: { args in await run(env) { s in try await MailWrite.change(args, s, env) } }),
@@ -188,8 +191,9 @@ enum MailCapability {
                     description: """
                         Sends an email from Apple Mail: a new message (to, subject, text), a reply (reply_to, \
                         optionally reply_all; Mail quotes the original below the text), or a forward (forward \
-                        and to), with attachments from the Mac. Mail writes it in its own window: it works with \
-                        the lid closed, not while the Mac is locked. A reply or forward goes \
+                        and to), with attachments from the Mac. Works while the Mac is locked or the lid is \
+                        closed, except a reply or forward with attachments, which waits for an unlock \
+                        (mail_queue). A reply or forward goes \
                         from the account the original came to; a new message from from or Mail's default \
                         account. Answers once the message is in the account's Sent mailbox.
                         """, input: composeInput(), readOnly: false, openWorld: true, deadlineMS: 90_000),
@@ -198,7 +202,8 @@ enum MailCapability {
                 tool: .make(
                     "mail_queue", title: "Queue Email for When the Mac Is Unlocked",
                     description: """
-                        While the Mac is locked, mail_send can't write email. This queues a message instead, \
+                        While the Mac is locked, mail_send can't add attachments to a reply or forward. This \
+                        queues a message instead, \
                         to be sent the next time someone unlocks the Mac (ask the Owner whether waiting is \
                         fine). action: add (the same inputs as mail_send), list, cancel (id from list). The \
                         Owner is told when each queued message is sent.

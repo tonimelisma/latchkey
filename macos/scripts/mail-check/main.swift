@@ -24,9 +24,19 @@ func probe(_ w: AXComposeWindow) {
 }
 
 let args = CommandLine.arguments
-guard args.count >= 3, ["draft", "send", "probe"].contains(args[2]) else {
-    print("usage: mail-check <to> <draft|send|probe>")
+guard args.count >= 3, ["draft", "send", "probe", "script"].contains(args[2]) else {
+    print("usage: mail-check <to> <draft|send|probe|script>")
     exit(2)
+}
+if args[2] == "script" {
+    let finished = DispatchSemaphore(value: 0)
+    let result = ScriptedResult()
+    Task {
+        result.ok = await scriptedCheck(to: args[1])
+        finished.signal()
+    }
+    while finished.wait(timeout: .now()) == .timedOut { RunLoop.main.run(until: Date().addingTimeInterval(0.1)) }
+    exit(result.ok ? 0 : 1)
 }
 let to = args[1]
 let draft = args[2] == "draft"

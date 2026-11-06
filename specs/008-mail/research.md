@@ -200,3 +200,60 @@ screen check became a lock check (Toni, 2026-11-01).
   `dcb6746729d20cf00c42ad6453b4637a075f7d0b` (2026-02-11, "Fix for iOS"), as Sparkle is pinned by
   commit. Its swift-crypto and swift-certificates (Apache-2.0) resolve by Xcode's resolution
   of its `from:` ranges.
+
+## Writing while locked (2026-11-05, macOS 27.0.1, Mail 16.0)
+
+Toni mostly uses Claude from his phone with the Mac locked or the lid closed, when Mail's
+window can't be used (2026-11-01). Options, least to most intrusive, tried live where possible
+(unlocked; test mail only to the Owner's own address, every copy moved to Deleted Items after):
+
+| Option | Tried | Result | Pros | Cons |
+|---|---|---|---|---|
+| Scripting, text as `content` (`visible:false`) | 2026-10-29 | Text arrives quoted (`> ` in plain, `blockquote type=cite` in HTML) | No window | Quoted in every other mail app |
+| **Scripting, text as a temporary Mail signature** (`make new signature`, `set message signature of m`) | Yes | New message: plain part and HTML unquoted, no wrapper, one empty line first. Reply: text above Mail's quote, In-Reply-To/References set. Forward: text above "Begin forwarded message", original attachments carried. Draft: in Drafts, HTML right (plain part empty until sent). Deleting the signature before Send keeps the text | No window, no Accessibility, works whatever the screen does; Mail's own composer, threading, and Sent copy; recipients read back as addresses | Mail's signature list changes for about a second (syncs through iCloud); relies on "Place signature above quoted text" (Mail's default) for replies; leftovers if cut off (removed by the next write) |
+| Same, plus files attached by scripting | Yes | New message: files go above the text, an empty `blockquote` wrapper around them, an object character in the plain part; text itself unquoted. Reply: the quoted original is dropped (as 2026-11-03) | Files while locked for new messages | Layout worse than the window; unusable for replies and forwards |
+| Accessibility on the compose window while locked | 2026-11-01 | Mail opens no window Accessibility can use while locked | — | Doesn't work |
+| `mailto:` / `message://` and keystrokes | 2026-10-30 | Needs a window | — | Same as above |
+| SMTP or Exchange (EWS/Graph) directly | Not tried | — | Clean MIME | Needs each account's password or OAuth token, which Mail keeps to itself (Keychain items Latchkey may not read); bypasses Mail's Sent copy; another protocol per account kind. Rejected |
+| Writing a draft `.emlx` into Mail's store | Not tried | — | — | Mail's store is read-only for Latchkey (plan D2); Mail may overwrite or ignore it. Rejected |
+| Editing Mail's signature files on disk (`MailData/Signatures`, rich text, files) | Not tried | — | Formatting, files | Undocumented, Mail caches them, iCloud sync. Rejected |
+| Queue until unlock (`mail_queue`, D10) | Built | Works | Mail's window | Waits for the Owner |
+
+Chosen (plan D6a): the temporary signature for every message without files, in every screen
+state (also unlocked: nothing comes forward, no Accessibility needed); the window for files while
+it can be used; while it can't, scripting for a new message with files and a refusal naming the
+queue for a reply or forward with files. The earlier helper's idea (2026-11-04, "a scripted
+writer that puts the text in through a temporary Mail signature") is this option; it left no code.
+
+Low-level choices (decided here):
+- **Signature name**: `Latchkey message <UUID>`; (a) one fixed name (two writes could clash; the
+  queue allows one at a time anyway), (b) a fresh UUID each time, leftovers removed by prefix.
+  Chose (b).
+- **When the signature is deleted**: (a) after Send (lives several seconds, through Mail's send),
+  (b) right after Mail put the text in, before the checks (checked live: the sent text stays).
+  Chose (b).
+- **Checks before Send**: (a) none (the exact message object is used), (b) the window's recipient
+  and subject checks on what scripting reads back. Chose (b); scripting reads addresses, so names
+  Mail shows (the forward bug) don't matter. The text can't be read back (`content` of a hidden
+  message is empty), so it is checked live by `mail-check.sh script` instead.
+- **One script or several**: the message is made, filled, and read back in one script run (fewer
+  Apple events, the signature gone before Swift checks); send, save, or close in a second.
+- **Outgoing messages after Send**: Mail keeps sent `outgoing message` objects in memory until it
+  quits (`close` refuses them); harmless, nothing is stored.
+- **The forward bug** (docs/use-cases.md, 2026-11-04): Mail's window showed "Toni Melisma" once
+  more than asked; with the window, an address Mail was slow to turn into a token was typed a
+  second time (`addRecipients`' second way). Options: (a) skip any repeated token; (b) skip a
+  repeat only when it is an exact address already paired; (c) resolve names to addresses first
+  (Mail's tokens give none). Chose (b) after the security review (2026-11-05): with (a) a second
+  person sharing a name could slip through. Such forwards now go by scripting, which reads
+  addresses.
+
+**Locked: not yet confirmed.** `mail-check.sh <to> script` passed its four writes twice unlocked
+(each sent copy unquoted, a reply's and forward's text above the quote). During a third run the
+Mac locked by itself; from then Mail answered no Apple event at all (even reading `outgoing
+messages` timed out with -1712) while its main thread sat idle, as on 2026-11-03 ("a send that
+began just before the Mac locked froze Mail until the unlock"). Whether Mail answers scripting
+when a write *starts* on a locked Mac is what the screen-state cases (`mail.send`, `mail.reply`,
+`mail.forward`, `mail.draft`, `mail.send_file`, `mail.reply_file` in the locked states) settle.
+If Mail doesn't answer, every script ends at 25 s: before Send that is "Nothing was sent" (the
+queue can take it), at Send "Mail may not have sent it" (never resent).
