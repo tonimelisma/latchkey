@@ -34,9 +34,18 @@
         {"id": "messages.search", "case": "Search all messages", "steps": "messages_find with text \"ok\", limit 3."},
         {"id": "messages.read", "case": "Read a conversation", "steps": "messages_read the first conversation from messages.conversations, limit 5."},
         {"id": "messages.send", "case": "Send a text", "steps": "messages_send to \"{TO}\", text \"{TAG}: text (please ignore)\"."},
-        {"id": "messages.send_file", "case": "Send a file", "steps": "files_change write ~/Downloads/latchkey-check.txt with text \"{TAG}\" (overwrite true), then messages_send to \"{TO}\" with that path as the attachment and text \"{TAG}: file\", then files_change trash the file."}
+        {"id": "messages.send_file", "case": "Send a file", "steps": "files_change write ~/Downloads/latchkey-check.txt with text \"{TAG}\" (overwrite true), then messages_send to \"{TO}\" with that path as the attachment and text \"{TAG}: file\", then files_change trash the file."},
+        {"id": "messages.group", "case": "Start a named group with several people", "steps": "contacts_find query \"{TO}\" gives the owner's own card; messages_send with people [\"{TO}\", that card's mobile number], name \"{TAG} group\", text \"{TAG}: group (please ignore)\". works only when the answer says the group was started and named. Its conversation id is used below."},
+        {"id": "messages.read_group", "case": "Read the new group", "steps": "messages_read the group's conversation; the group's message shows with its message id."},
+        {"id": "messages.react", "case": "React with a tapback", "steps": "messages_change react, reaction like, on the group's message; then messages_read the group and check it shows Me liked."},
+        {"id": "messages.unreact", "case": "Take a tapback back", "steps": "messages_change unreact on the same message; messages_read shows no reaction from Me."},
+        {"id": "messages.reply", "case": "Reply to a specific message", "steps": "messages_send reply_to the group's message, text \"{TAG}: reply (please ignore)\"; messages_read shows it replying to that message."},
+        {"id": "messages.edit", "case": "Edit a message just sent", "steps": "messages_send to the group's conversation id, text \"{TAG}: to edit (please ignore)\"; messages_read it for its id; messages_change edit it, text \"{TAG}: edited (please ignore)\"; messages_read shows the new text marked edited."},
+        {"id": "messages.unsend", "case": "Unsend a message just sent", "steps": "messages_send to the group's conversation id, text \"{TAG}: to unsend (please ignore)\"; at once messages_read for its id and messages_change unsend it (within 2 minutes); messages_read shows it unsent."},
+        {"id": "messages.delete", "case": "Delete a message", "steps": "messages_change delete the edited message; messages_read no longer shows it."},
+        {"id": "messages.delete_conversation", "case": "Delete a whole conversation", "steps": "messages_change delete_conversation the group's conversation; messages_find no longer lists it."}
       ],
-      "missing": ["Delete or react to a message"]
+      "missing": []
     },
     {
       "id": "mail",
@@ -205,6 +214,7 @@
         {"id": "sweep.calendar", "case": "No test events left", "steps": "calendar_find query \"{TAG}\" from 7 days ago to 60 days ahead. Delete each one with span future, then look again. works only when none is left."},
         {"id": "sweep.reminders", "case": "No test reminders or lists left", "steps": "reminders_find with nothing, and with query \"{TAG}\". Delete each reminder with the tag (subtasks included) and each list whose name starts with \"{TAG}\", then look again. works only when none is left."},
         {"id": "sweep.mail", "case": "No test email outside the Trash", "steps": "mail_find subject \"{TAG}\". Mark every one read (mail_change mark_read, also those already in a Trash or Deleted Items), and delete (to Trash) each not already in a Trash or Deleted Items mailbox, then look again. works only when every one is read and in a Trash."},
+        {"id": "sweep.messages", "case": "No test messages left", "steps": "messages_find text \"{TAG}\", limit 100. Only in conversations whose people are all the owner (\"{TO}\" or the owner's own numbers, from contacts_find query \"{TO}\"): delete each group conversation with a message with the tag (messages_change delete_conversation), and each other message with the tag (messages_change delete). Never touch a conversation with anyone else. Then look again. works only when no message with the tag is left in the owner's own conversations."},
         {"id": "sweep.files", "case": "No test files left", "steps": "files_find path \"~/Downloads\". Trash every item there whose name starts with \"latchkey-check\" (the folder ~/Downloads/latchkey-check, latchkey-check.txt, latchkey-check-upload.txt, latchkey-check-download.txt and its numbered copies), and any \"dummy\" PDF (dummy.pdf, dummy 2.pdf, …) saved in the last day (files_change trash), then look again. works only when none is left."},
         {"id": "sweep.browser", "case": "Claude's own Safari page closed", "steps": "browser_read url \"about:blank\" (so Claude works in its own page), then browser_act close, then browser_read tabs true. works only when no tab is marked as Claude's own."}
       ],

@@ -57,6 +57,17 @@ deployed if it changed, a commit, and a push (Toni, 2026-10-22). `[P]` = paralle
   read a note, change a test note, read a conversation, send one test message with a tiny image
   to Toni's own address (Toni, 2026-10-22).
 
+## Messages: everything its window offers (2026-11-05, FR-170 to FR-178)
+
+- [x] Reading shows tapbacks, replies, edits, unsent messages, every message's id (MessagesTests)
+- [x] One person, several numbers: one chosen and named (MessagesSendTests)
+- [x] `messages_change` and `messages_send` people/reply_to, checked in chat.db (MessagesChangeTests)
+- [x] The window is checked against the conversation; a single match only (MessagesWindowMatchTests)
+- [x] Live in Toni's own conversation: like tapback, inline reply, conversation delete
+- [ ] Live: take back, edit, unsend, delete one message, new group (`scripts/messages-check.sh`,
+  Mac unlocked), then the screen-state cases `messages.*` and `sweep.messages`
+- [ ] Naming a group: find the details' name field
+
 ## Each increment ends with
 
 - Relay and Mac tests and lint pass; `make -C macos dmg`; `deploy/deploy.sh` if the relay

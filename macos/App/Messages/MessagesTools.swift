@@ -46,11 +46,13 @@ extension MessagesCapability {
         ]
     }
 
-    /// `messages_send` is already a single tool; it keeps its name and behavior.
+    /// `messages_send` (a person, a conversation, a new group, or an inline reply) and
+    /// `messages_change` (tapbacks, edits, unsending, deleting; spec 002 FR-172 to FR-178).
     static func writeTools(
         store: @escaping StoreSource, contacts: any ContactsLookup, scripts: any ScriptRunner, staging: URL,
-        confirmWait: Duration = .seconds(5)
+        ui: any MessagesUI, confirmWait: Duration = .seconds(5)
     ) -> [ToolEntry] {
-        writeOperations(store: store, contacts: contacts, scripts: scripts, staging: staging, confirmWait: confirmWait)
+        writeOperations(
+            store: store, contacts: contacts, scripts: scripts, staging: staging, ui: ui, confirmWait: confirmWait)
     }
 }

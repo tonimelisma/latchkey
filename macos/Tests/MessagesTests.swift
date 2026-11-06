@@ -32,7 +32,10 @@ import Testing
 
     @Test func listsConversationsNewestFirstWithNames() throws {
         let chats = try store().conversations(query: nil, limit: 10)
-        #expect(chats.map(\.id) == ["SMS;-;+358401234567", "iMessage;+;chat123", "iMessage;-;+15551234567"])
+        #expect(
+            chats.map(\.id) == [
+                "SMS;-;+358401234567", "iMessage;+;chat123", "iMessage;-;+15551234567", "iMessage;-;+15557770000",
+            ])
         let group = chats[1]
         #expect(group.isGroup)
         #expect(group.title == "Dinner club")
@@ -57,6 +60,26 @@ import Testing
         #expect(msgs[1].fromMe)
         #expect(msgs[0].sender?.name == "Sarah Lee")
         #expect(msgs[0].date == Date(timeIntervalSinceReferenceDate: MessagesFixture.t0))
+    }
+
+    /// FR-170: reactions (given, taken back, replaced), replies, edits, and unsent messages.
+    @Test func readsReactionsRepliesAndEdits() throws {
+        let msgs = try store().messages(in: "iMessage;-;+15557770000", before: nil, limit: 50)
+        #expect(msgs.map(\.id) == ["M-20", "M-21", "M-26", "M-27"], "reactions aren't messages of their own")
+        let lunch = msgs[0]
+        #expect(lunch.text == "Lunch at 1?")
+        #expect(lunch.edited)
+        #expect(lunch.originalText == "Lunch at noon?")
+        #expect(lunch.reactions.map(\.kind) == [.laugh], "the like was taken back, then a laugh given")
+        #expect(lunch.reactions.first?.fromMe == true)
+        let good = msgs[1]
+        #expect(good.reactions.count == 1, "one reaction per person: the 🎉 replaced the heart")
+        #expect(good.reactions.first?.kind == .emoji("🎉"))
+        #expect(good.reactions.first?.from?.handle == "+15557770000")
+        #expect(msgs[2].replyTo == "M-21")
+        #expect(msgs[2].replyToText == "Sounds good")
+        #expect(msgs[3].unsent)
+        #expect(!msgs[1].edited && !msgs[1].unsent && msgs[1].replyTo == nil)
     }
 
     @Test func pagesBackwards() throws {
@@ -141,6 +164,24 @@ import Testing
         let messages = try #require(result.structuredContent?["messages"])
         #expect(messages[2]?["author"] == .string("other"))
         #expect(messages[1]?["author"] == .string("me"))
+    }
+
+    /// FR-170: Claude sees who reacted how, what a reply answers, edits and unsent messages, and
+    /// every message's id (to react or reply to it).
+    @Test func readingShowsReactionsRepliesAndEdits() async throws {
+        let t = try tools()
+        let result = await t["messages_read"]!.handler(.object(["conversation": .string("iMessage;-;+15557770000")]))
+        let text = try #require(result.content[0]?["text"]?.stringValue)
+        let lines = text.split(separator: "\n").map(String.init)
+        let lunch = try #require(lines.first { $0.contains("Lunch at 1?") })
+        #expect(lunch.contains("(edited; first «Lunch at noon?»)"))
+        #expect(lunch.contains("reactions: Me laughed"))
+        #expect(lunch.contains("(message M-20)"))
+        let good = try #require(lines.first { $0.contains("Me: «Sounds good»") })
+        #expect(good.contains("+15557770000 reacted «🎉»"), "an emoji someone chose is their words")
+        let reply = try #require(lines.first { $0.contains("See you there") })
+        #expect(reply.contains("replying to message M-21 «Sounds good»"))
+        #expect(lines.contains { $0.contains("Me: (unsent)") })
     }
 
     @Test func quotedTextCannotFakeAnotherMessage() async throws {

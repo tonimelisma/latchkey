@@ -124,6 +124,38 @@ As an Owner, I set Notes and Messages each to Off, Read only, or Read & write in
   as written by others, so Claude can tell it apart from instructions.
 - **FR-115** Latchkey shall not add its own confirmations or limits to sending or changing; Claude's
   apps handle approvals (Toni, 2026-10-22).
+- **FR-170** When Claude reads or searches messages, each message shall show its id, the tapbacks on
+  it (each person's current one, by name, an emoji tapback quoted as their words), the message it
+  replies to (an inline reply), whether it was edited (with its first text when known), and
+  whether it was unsent; tapbacks are not listed as messages of their own (Toni, 2026-11-04: "add
+  everything missing").
+- **FR-171** When Claude sends to a person by name who has several numbers and addresses and no
+  conversation yet, Latchkey shall choose one instead of refusing: the one Messages already knows
+  on iMessage, else a number labelled mobile or iPhone, else the first number, else the first
+  address; the answer shall name the one used and the others (replaces the "return the choices"
+  rule of plan D3 and D4 for one person; several matching people still return the choices).
+- **FR-172** While Messages is Read & write, Claude shall be able to start a new group conversation
+  with two or more people (names, numbers, addresses) with a first message, optionally named, and
+  to name an existing group.
+- **FR-173** While Messages is Read & write, Claude shall be able to reply to a specific message
+  (an inline reply, shown in Messages under that message).
+- **FR-174** While Messages is Read & write, Claude shall be able to put a tapback on a message
+  (love, like, dislike, laugh, emphasize, question), replacing the owner's earlier one, and to take
+  the owner's tapback back. A tapback the message already has from the owner shall not be pressed
+  again (that would take it back).
+- **FR-175** While Messages is Read & write, Claude shall be able to edit an iMessage the owner sent
+  within the last 15 minutes and unsend one sent within the last 2 minutes (Messages' own limits);
+  outside them, or for someone else's message or an SMS, Claude is told why at once.
+- **FR-176** While Messages is Read & write, Claude shall be able to delete a message and a whole
+  conversation; Messages deletes them from the owner's devices and keeps them in Recently Deleted
+  for up to 30 days, and the answer says so.
+- **FR-177** The changes of FR-172 to FR-176 shall be made in Messages' own window in the
+  background, without bringing Messages forward or moving the pointer. While the window can't be
+  used (the Mac locked, which includes the lid closed while locked; Accessibility not allowed),
+  nothing shall be started and Claude shall be told why at once, with what still works (sending to
+  a person or an existing conversation).
+- **FR-178** Each such change shall be answered as done only once Messages' database shows it
+  (within 5 seconds), otherwise as asked for but not yet recorded; changes run one at a time.
 
 ### Capability levels
 - **FR-120** Notes and Messages shall each have three levels in the Mac app: Off, Read only, Read &
@@ -165,7 +197,9 @@ As an Owner, I set Notes and Messages each to Off, Read only, or Read & write in
 ## Edge cases
 - Locked notes; notes in iCloud and "On My Mac" accounts; shared notes.
 - Messages database written by Messages while being read; very large conversations.
-- A contact with several numbers; a number with no contact; group conversations without names.
+- A contact with several numbers (FR-171); a number with no contact; group conversations without names.
+- Several messages in a conversation that read the same: the window shows no ids, so the one
+  asked for is told apart by how many later ones on the same side read the same (plan D3b).
 - The Mac is asleep or offline mid-request (spec 001 behavior applies).
 - Sending to someone who isn't on iMessage (Messages falls back to SMS if the Mac can relay it, or
   fails; Claude is told which).

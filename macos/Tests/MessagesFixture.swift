@@ -22,7 +22,10 @@ enum MessagesFixture {
             ContactPerson(name: "Bob Stone", handles: ["bob@example.com", "+15559990000"]),
             ContactPerson(name: "Sam Ito", handles: ["+15550001111"]),
             ContactPerson(name: "Sam Ross", handles: ["+15550002222"]),
-            ContactPerson(name: "Ann Park", handles: ["+15550003333", "ann@example.com"]),
+            ContactPerson(name: "Ann Park", handles: ["ann@example.com", "+15550003333"]),
+            ContactPerson(
+                name: "Kim Moss", handles: ["+15550004444", "kim@example.com", "+15550005555"],
+                mobiles: ["+15550005555"]),
         ]
         func name(for handle: String) -> String? { names[handle] }
         func people(matching name: String) -> [ContactPerson] {
@@ -44,6 +47,69 @@ enum MessagesFixture {
               VALUES (\(id), 'M-SENT-\(id)', '\(text)', 0, \(date), 1, 0, \(error == 0 ? 1 : 0), \(error));
             INSERT INTO chat_message_join VALUES (\(chat), \(id), \(date));
             """, nil, nil, nil)
+    }
+
+    /// Chat 4, with a number not in Contacts, before everything else: an edited message, a reply,
+    /// an unsent message, and reactions given, taken back, and replaced (spec 002 FR-170).
+    static func addReactionsRepliesAndEdits(_ db: OpaquePointer?, at start: Double) {
+        let ns = { (s: Double) in Int64((start + s) * 1_000_000_000) }
+        let edited = try! PropertyListSerialization.data(
+            fromPropertyList: [
+                "ec": [
+                    "0": [
+                        ["d": start, "t": archived("Lunch at noon?")], ["d": start + 5, "t": archived("Lunch at 1?")],
+                    ]
+                ]
+            ], format: .binary, options: 0)
+        let unsent = try! PropertyListSerialization.data(
+            fromPropertyList: ["rp": [0], "ust": true], format: .binary, options: 0)
+        // (id, text, from me, reaction type, reacts to, emoji, replies to, edited, summary)
+        let rows: [(Int, String?, Bool, Int, String?, String?, String?, Bool, Data?)] = [
+            (20, "Lunch at 1?", false, 0, nil, nil, nil, true, edited),
+            (21, "Sounds good", true, 0, nil, nil, nil, false, nil),
+            (22, "Loved “Sounds good”", false, 2000, "p:0/M-21", nil, nil, false, nil),
+            (23, "Liked “Lunch at 1?”", true, 2001, "p:0/M-20", nil, nil, false, nil),
+            (24, "Removed a like from “Lunch at 1?”", true, 3001, "p:0/M-20", nil, nil, false, nil),
+            (25, "Laughed at “Lunch at 1?”", true, 2003, "p:0/M-20", nil, nil, false, nil),
+            (26, "See you there", false, 0, nil, nil, "M-21", false, nil),
+            (27, nil, true, 0, nil, nil, nil, true, unsent),
+            (28, "Reacted 🎉 to “Sounds good”", false, 2006, "bp:M-21", "🎉", nil, false, nil),
+        ]
+        var stmt: OpaquePointer?
+        sqlite3_prepare_v2(
+            db,
+            """
+            INSERT INTO message (ROWID, guid, text, handle_id, date, is_from_me, cache_has_attachments,
+              associated_message_type, associated_message_guid, associated_message_emoji, thread_originator_guid,
+              date_edited, message_summary_info, is_sent) VALUES (?,?,?,?,?,?,0,?,?,?,?,?,?,1)
+            """, -1, &stmt, nil)
+        defer { sqlite3_finalize(stmt) }
+        let transient = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
+        func text(_ i: Int32, _ s: String?) {
+            if let s { sqlite3_bind_text(stmt, i, s, -1, transient) } else { sqlite3_bind_null(stmt, i) }
+        }
+        for (n, r) in rows.enumerated() {
+            sqlite3_reset(stmt)
+            let date = ns(Double(n) * 10)
+            sqlite3_bind_int64(stmt, 1, Int64(r.0))
+            sqlite3_bind_text(stmt, 2, "M-\(r.0)", -1, transient)
+            text(3, r.1)
+            sqlite3_bind_int64(stmt, 4, r.2 ? 0 : 4)
+            sqlite3_bind_int64(stmt, 5, date)
+            sqlite3_bind_int64(stmt, 6, r.2 ? 1 : 0)
+            sqlite3_bind_int64(stmt, 7, Int64(r.3))
+            text(8, r.4)
+            text(9, r.5)
+            text(10, r.6)
+            sqlite3_bind_int64(stmt, 11, r.7 ? date + 1 : 0)
+            if let d = r.8 {
+                _ = d.withUnsafeBytes { sqlite3_bind_blob(stmt, 12, $0.baseAddress, Int32(d.count), transient) }
+            } else {
+                sqlite3_bind_null(stmt, 12)
+            }
+            sqlite3_step(stmt)
+            sqlite3_exec(db, "INSERT INTO chat_message_join VALUES (4, \(r.0), \(date))", nil, nil, nil)
+        }
     }
 
     static func make(extraMessages: Int = 0) throws -> URL {
@@ -68,17 +134,20 @@ enum MessagesFixture {
             CREATE TABLE message (ROWID INTEGER PRIMARY KEY, guid TEXT, text TEXT, attributedBody BLOB,
               handle_id INTEGER, date INTEGER, is_from_me INTEGER, cache_has_attachments INTEGER,
               associated_message_type INTEGER DEFAULT 0, item_type INTEGER DEFAULT 0, service TEXT,
-              is_sent INTEGER DEFAULT 0, error INTEGER DEFAULT 0);
+              is_sent INTEGER DEFAULT 0, error INTEGER DEFAULT 0, associated_message_guid TEXT,
+              associated_message_emoji TEXT, thread_originator_guid TEXT, date_edited INTEGER DEFAULT 0,
+              message_summary_info BLOB);
             CREATE TABLE chat_message_join (chat_id INTEGER, message_id INTEGER, message_date INTEGER);
             CREATE TABLE attachment (ROWID INTEGER PRIMARY KEY, guid TEXT, filename TEXT, mime_type TEXT,
               transfer_name TEXT, uti TEXT);
             CREATE TABLE message_attachment_join (message_id INTEGER, attachment_id INTEGER);
             INSERT INTO handle VALUES (1,'+15551234567','iMessage'),(2,'bob@example.com','iMessage'),
-              (3,'+358401234567','SMS');
+              (3,'+358401234567','SMS'),(4,'+15557770000','iMessage'),(5,'+15550003333','iMessage');
             INSERT INTO chat VALUES (1,'iMessage;-;+15551234567','+15551234567','','iMessage',45),
               (2,'iMessage;+;chat123','chat123','Dinner club','iMessage',43),
-              (3,'SMS;-;+358401234567','+358401234567','','SMS',45);
-            INSERT INTO chat_handle_join VALUES (1,1),(2,1),(2,2),(3,3);
+              (3,'SMS;-;+358401234567','+358401234567','','SMS',45),
+              (4,'iMessage;-;+15557770000','+15557770000','','iMessage',45);
+            INSERT INTO chat_handle_join VALUES (1,1),(2,1),(2,2),(3,3),(4,4);
             INSERT INTO attachment VALUES (1,'ATT-PHOTO','\(photo.path)','image/png','photo.png','public.png');
             INSERT INTO message_attachment_join VALUES (6,1);
             """)
@@ -142,8 +211,10 @@ enum MessagesFixture {
                 exec("INSERT INTO chat_message_join VALUES (2, \(id), \(date))")
             }
         }
+        exec("UPDATE message SET associated_message_guid = 'p:0/M-2' WHERE ROWID = 4")
         exec("COMMIT")
         sqlite3_finalize(stmt)
+        addReactionsRepliesAndEdits(db, at: t0 - 1000)
         return url
     }
 }
