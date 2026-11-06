@@ -258,6 +258,10 @@ import Testing
         #expect(try s.message(chat: "15550001111@s.whatsapp.net", key: "A") == nil)
         #expect(s.stamp(chat: "15550001111@s.whatsapp.net", key: "A") == nil)
         #expect(try s.message(chat: "15550001111@s.whatsapp.net", key: "B")?.text == "ok")
+        // A delete is confirmed by the count, never by "not found" (security review 2026-11-06).
+        #expect(try s.copies(chat: "15550001111@s.whatsapp.net", key: "A") == 2)
+        #expect(try s.copies(chat: "15550001111@s.whatsapp.net", key: "B") == 1)
+        #expect(try s.copies(chat: "15550001111@s.whatsapp.net", key: "Z") == 0)
     }
 
     /// Security review 2026-11-05: messages that look the same (same chat, sender side, words, minute)

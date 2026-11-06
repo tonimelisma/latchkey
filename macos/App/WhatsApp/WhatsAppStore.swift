@@ -255,6 +255,19 @@ final class WhatsAppStore: @unchecked Sendable {
         }
     }
 
+    /// How many messages of a chat have this id (stored copies counted once): 0 is the only proof a
+    /// message is gone, since a nil `message` may also mean two senders share the id.
+    func copies(chat: String, key: String) throws -> Int {
+        try locked {
+            try SQLite.rows(
+                // nosemgrep: scripts.semgrep.latchkey-sql-bound -- only fixed SQL constants are spliced in; every value is bound
+                db,
+                "SELECT COUNT(*) FROM ZWAMESSAGE m JOIN ZWACHATSESSION s ON m.ZCHATSESSION = s.Z_PK WHERE s.ZCONTACTJID = ? AND m.ZSTANZAID = ? AND \(Self.written)",
+                bind: [.text(chat), .text(key)]
+            ).first?[0].int.map(Int.init) ?? 0
+        }
+    }
+
     /// The Owner's own chat ("Message yourself"): the account WhatsApp marks as this device's own in
     /// its account list (the one row with a country code, LID.sqlite, 2026-11-05), matched on a chat's
     /// id only. Nil when that isn't known.

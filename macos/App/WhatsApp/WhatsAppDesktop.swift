@@ -157,9 +157,13 @@ struct WhatsAppDesktop: WhatsAppDesktopAPI {
         }
         guard case .done = pressed else { return pressed }
         // That very message (by its id) gone (for me), or marked deleted (for everyone).
+        // Counted, not looked up: a lookup that can't be read or can't tell two senders apart says
+        // nothing about a delete (security review 2026-11-06).
         let gone = await confirm { db in
-            let now = try? db.message(chat: target.chat.id, key: message.key)
-            return everyone ? (now == nil || now?.kind == "deleted") : now == nil
+            guard let n = try? db.copies(chat: target.chat.id, key: message.key) else { return false }
+            if n == 0 { return true }
+            guard everyone, n == 1 else { return false }
+            return (try? db.message(chat: target.chat.id, key: message.key))?.kind == "deleted"
         }
         return gone ? .done("confirmed in its database") : .unsure("its database doesn't show that message deleted")
     }
