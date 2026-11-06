@@ -32,6 +32,9 @@ accounts, and in Apple Maps.
    or delete a reminder, or start a new list, then it does.
 3. Given Read & write, when I ask Claude to delete a reminder list, then it deletes the list
    only after it has looked at how many reminders the list holds (Toni, 2026-10-28).
+4. Given Read & write and the Mac unlocked, when I ask Claude to flag a reminder, tag it, add
+   subtasks under it, or move it into a section, then it does; changing any reminder never loses
+   its subtasks, tags, flag, links, or images (Toni, 2026-11-05: "add everything missing").
 
 ### US3 (P1): My contacts
 1. Given Contacts is Read only or more, when I ask "what's Sarah's address?", then Claude finds
@@ -79,6 +82,26 @@ accounts, and in Apple Maps.
   nothing and say the actual number, so Claude can't delete a list it hasn't looked at (Toni,
   2026-10-28). Reading one list (FR-711) shall say how many reminders it holds, open and
   completed.
+- **FR-714** While Reminders is Read only or more, Claude shall see each reminder's flag, tags,
+  section, images, and attached links, and its subtasks under it (or, for a subtask, its
+  parent), and shall be able to search by tag; reading one list shall name its sections. When
+  Latchkey can't read them, the answer shall say they are unknown, never that there are none.
+- **FR-715** While Read & write, Claude shall be able to flag and unflag a reminder.
+- **FR-716** While Read & write, Claude shall be able to add tags to a reminder, when creating
+  it or later. When Claude asks to remove a tag and no way to do it exists, the tool shall
+  change nothing and say so.
+- **FR-717** While Read & write, Claude shall be able to create a subtask under a reminder,
+  make an existing reminder a subtask of another, and make a subtask a reminder of its own
+  again; subtasks are listed, completed, changed, and deleted like any reminder. A subtask
+  can't have subtasks (Reminders has one level); such a request shall be refused with that
+  reason.
+- **FR-718** While Read & write, Claude shall be able to move a reminder into one of its list's
+  sections, or out of its section.
+- **FR-719** No change Claude makes shall lose a reminder's subtasks, tags, flag, links, or
+  images. When a reminder with subtasks moves to another list, its subtasks shall move with it
+  and stay its subtasks. When a change of FR-715 to FR-718 can't be made in the Mac's current
+  state (locked), the tool shall change nothing, answer at once, and say which state it needs;
+  when one step of a change doesn't take, the answer shall say what was done and what wasn't.
 
 ### Contacts
 - **FR-721** While Contacts is Read only or Read & write, Claude shall be able to search

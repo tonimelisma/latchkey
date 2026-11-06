@@ -12,8 +12,8 @@ read-only.
 |---|---|---|---|---|
 | `calendar_find` (id?, query?, from?, to?, calendar?, free?, minutes?, hours?, limit?) | Read only | yes | no | FR-701, FR-702 |
 | `calendar_change` (action: create, update, delete; id, title, start, end, all_day, calendar, location, notes, url, alarms, repeat, repeat_every, repeat_until, repeat_count, span) | Read & write | no | yes | FR-703, FR-704 |
-| `reminders_find` (id?, query?, list?, completed?, from?, to?, limit?) | Read only | yes | no | FR-711 |
-| `reminders_change` (action: create, update, complete, uncomplete, delete, create_list, delete_list; id, title, notes, list, due, priority, url, alarms, repeat, repeat_every, repeat_until, repeat_count, reminder_count) | Read & write | no | yes | FR-712, FR-713 |
+| `reminders_find` (id?, query?, list?, completed?, from?, to?, limit?) | Read only | yes | no | FR-711, FR-714 |
+| `reminders_change` (action: create, update, complete, uncomplete, delete, create_list, delete_list; id, title, notes, list, due, priority, url, alarms, repeat, repeat_every, repeat_until, repeat_count, reminder_count, flagged, tags, parent, section) | Read & write | no | yes | FR-712, FR-713, FR-715 to FR-719 |
 | `contacts_find` (id?, query?, group?, photo?, limit?) | Read only | yes | no | FR-721 |
 | `contacts_change` (action: create, update, delete, create_group, rename_group, delete_group, add_to_group, remove_from_group; id, ids, group, name, given_name, family_name, middle_name, nickname, organization, job_title, department, phones, emails, addresses, birthday, urls) | Read & write | no | yes | FR-722, FR-723 |
 | `location_read` () | On | yes | no | FR-731 |
@@ -76,6 +76,40 @@ read-only.
   day's `hours`, per research.md.
 - Dates (FR-744): one parser and one formatter (`CalendarDates`), research.md "Dates in and
   out". Every answer starts with `Times are in <zone> (UTC±hh:mm).`
+
+## D7. Reminders' flags, tags, subtasks, and sections (FR-714 to FR-719)
+
+Evidence and options in research.md "Flags, tags, subtasks, and sections". EventKit has none of
+them; nothing writes Reminders' database.
+
+- Reading (FR-714): `RemindersStore` (App/Reminders) opens each `Data-*.sqlite` in Reminders'
+  group container read-only per call and returns a `RemindersSnapshot` by reminder id (the
+  database's `ZCKIDENTIFIER` is EventKit's `calendarItemIdentifier`): flag, tags, parent,
+  subtasks, section, image count, attached links; sections per list. `reminders_find` marks
+  flagged reminders ⚑, adds `#tags` and the subtask count, puts subtasks indented under their
+  reminder, matches `query` against tags, names a list's sections, and reads one reminder with
+  its section, flag, tags, parent, subtasks, images, and links. No snapshot (no Full Disk
+  Access): "unknown".
+- Writing (FR-715 to FR-718): `RemindersWindow` (App/Reminders) drives Reminders' main window
+  through Accessibility. The reminder is selected by opening `x-apple-reminderkit://REMCDReminder/<id>`
+  without activating Reminders; then, on the selected row: its own actions `Indent`, `Outdent`,
+  `Move Up`, `Move Down` (subtasks), the title field (tags: "#name" typed after the title, then
+  the title set back through EventKit), and, with Reminders in front for a moment, Edit → Flag
+  and File → Move to Section → name / None. `RemindersExtras.apply` runs parent, section,
+  tags, flag in that order and checks each in the database (`saved`, up to 5 s).
+- Subtasks: `ReminderRowPlan.next` moves the row until the parent (or its last subtask) is right
+  above it, then indents; one level only; a reminder in another list moves to the parent's
+  list first (through EventKit), and `create` with `parent` creates it in the parent's list.
+- Moving lists (FR-719): a reminder that is a subtask, or has subtasks, moves through
+  `EventsBackend.moveReminders` (one EventKit commit, parent and subtasks together), and the
+  subtasks are put back under it in the window; a subtask is first taken out of its parent.
+- Not losing anything (FR-719): every other change stays a plain EventKit save of the fields
+  Claude gave, which keeps flags, tags, subtasks, attachment links, and images (checked live).
+  Deleting a reminder says what happened to its subtasks.
+- States (FR-719): `preflight` refuses window changes before any change while the Mac is locked
+  (Reminders' window has no rows then) and when the database can't be read (nothing could be
+  checked). The lid closed while unlocked is tried by the screen-state check
+  (`reminders.subtask`, `reminders.keeps_extras`, `reminders.unflag_outdent`).
 
 ## D3. Contacts (FR-721, FR-722, FR-745)
 
@@ -159,9 +193,9 @@ read-only.
 | I. No inbound connections | Pass: same outbound connection |
 | II. Fail fast | Pass: every tool has a deadline; no prompt at call time |
 | III. Disabled means nonexistent | Pass: levels filter the tools (registry) |
-| IV. Good macOS citizen | Pass: public frameworks and standard prompts only |
+| IV. Good macOS citizen | Pass: public frameworks and standard prompts only; Reminders' flags, tags, subtasks, and sections through the Accessibility permission Latchkey already has (no private framework, no writing another app's data) |
 | V. Self-hostable | Pass: no new service; MapKit is part of macOS |
-| VI. Store the minimum | Pass: nothing stored on disk; ids are derived; what Latchkey created in Contacts is kept in memory for the run only (FR-724) |
+| VI. Store the minimum | Pass: nothing stored on disk; ids are derived; what Latchkey created in Contacts is kept in memory for the run only (FR-724); Reminders' database is read per call, nothing kept |
 | VII. Test-first | Pass: tests above written first |
 | VIII. Simplicity | Pass: Apple frameworks, no dependencies |
 | IX. Open source | Pass |

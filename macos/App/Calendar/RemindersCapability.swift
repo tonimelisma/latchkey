@@ -6,8 +6,8 @@ enum RemindersCapability {
         Capability(
             id: CapabilityRegistry.reminders, title: "Reminders",
             summary: "See, add, complete, change, and delete reminders and lists",
-            readTools: readTools(backend: EventKitBackend.shared, zone: { .current }),
-            writeTools: writeTools(backend: EventKitBackend.shared, zone: { .current }))
+            readTools: readTools(backend: EventKitBackend.shared, zone: { .current }, extras: .live),
+            writeTools: writeTools(backend: EventKitBackend.shared, zone: { .current }, extras: .live))
     }
 
     static let noAccess = """
@@ -17,16 +17,19 @@ enum RemindersCapability {
 
     static let maxReminders = 200
 
-    static func readTools(backend: any EventsBackend, zone: @escaping CalendarCapability.Zone) -> [ToolEntry] {
+    static func readTools(
+        backend: any EventsBackend, zone: @escaping CalendarCapability.Zone, extras: RemindersExtras = .none
+    ) -> [ToolEntry] {
         [
             ToolEntry(
                 tool: .make(
                     "reminders_find", title: "Find Reminders",
                     description: """
                         Lists and searches reminders in the Mac's Reminders, with each one's id. With id: that \
-                        reminder in full. With nothing: the lists with how many are open, then the open reminders \
-                        (dated ones by due date first). query matches title and notes; list limits to one list and \
-                        says how many reminders it holds, open and completed. \
+                        reminder in full, with its subtasks. With nothing: the lists with how many are open, then the \
+                        open reminders (dated ones by due date first); subtasks stand indented under their reminder; \
+                        ⚑ marks flagged ones, #name their tags. query matches title, notes, and tags; list limits to \
+                        one list, names its sections, and says how many reminders it holds, open and completed. \
                         Open reminders: to keeps those due by then. completed: true lists completed ones instead, \
                         from from (default 30 days ago) to to (default now). Dates: \(CalendarDates.accepted).
                         """,
@@ -39,25 +42,33 @@ enum RemindersCapability {
                         "to": .stringParam("Open: due by; completed: completed by"),
                         "limit": .integerParam("At most this many (default 50, up to 200)"),
                     ], readOnly: true, deadlineMS: 15_000),
-                handler: { args in await CalendarCapability.run(.reminders) { try await find(args, backend, zone()) } })
+                handler: { args in
+                    await CalendarCapability.run(.reminders) { try await find(args, backend, zone(), extras) }
+                })
         ]
     }
 
     static let changeActions = ["create", "update", "complete", "uncomplete", "delete", "create_list", "delete_list"]
 
-    static func writeTools(backend: any EventsBackend, zone: @escaping CalendarCapability.Zone) -> [ToolEntry] {
+    static func writeTools(
+        backend: any EventsBackend, zone: @escaping CalendarCapability.Zone, extras: RemindersExtras = .none
+    ) -> [ToolEntry] {
         [
             ToolEntry(
                 tool: .make(
                     "reminders_change", title: "Change Reminders",
                     description: """
                         Creates, changes, completes, or deletes a reminder, or creates or deletes a list. action: \
-                        create (title; notes, list, due, priority, url, repeat optional), update (id and only the \
-                        fields to change), complete or uncomplete (id), delete (id; it can't be undone), \
+                        create (title; notes, list, due, priority, url, repeat, flagged, tags, parent, section \
+                        optional), update (id and only the fields to change), complete or uncomplete (id), delete \
+                        (id; its subtasks go with it; it can't be undone), \
                         create_list (title), delete_list (list and reminder_count: how many reminders it holds, \
                         open and completed, as reminders_find with list says; the list and all its reminders are \
                         deleted and can't be brought back). due is a day (\(CalendarDates.accepted)); with a time, the Mac alerts then. An \
-                        empty text clears a field. Flags, tags, and subtasks aren't available to apps.
+                        empty text clears a field. parent makes it a subtask of that reminder (parent "" makes \
+                        it a reminder of its own again); tags are all its tags after the change. flagged, tags, \
+                        parent, and section are changed in the Reminders app's window: they need the Mac unlocked, \
+                        and Reminders may come forward for a moment for flags and sections.
                         """,
                     input: [
                         "action": .enumParam(changeActions, "What to do"),
@@ -74,19 +85,35 @@ enum RemindersCapability {
                         "repeat_count": .integerParam("Or: how many times in all"),
                         "reminder_count": .integerParam(
                             "For delete_list: how many reminders the list holds, open and completed"),
+                        "flagged": .boolParam("Flag it (true) or take the flag off (false)"),
+                        "tags": .object([
+                            "type": .string("array"), "items": .object(["type": .string("string")]),
+                            "description": .string("All its tags after the change, without # (e.g. [\"errands\"])"),
+                        ]),
+                        "parent": .stringParam("Make it a subtask of this reminder (its id); \"\" takes it out"),
+                        "section": .stringParam("A section of its list, by name; \"\" takes it out of its section"),
                     ], required: ["action"], readOnly: false, destructive: true, deadlineMS: 15_000),
-                handler: { args in await CalendarCapability.run(.reminders) { try await change(args, backend, zone()) }
+                handler: { args in
+                    await CalendarCapability.run(.reminders) { try await change(args, backend, zone(), extras) }
                 })
         ]
     }
 
     // MARK: find
 
-    static func find(_ args: JSONValue, _ backend: any EventsBackend, _ zone: TimeZone) async throws -> ToolResult {
+    static func find(
+        _ args: JSONValue, _ backend: any EventsBackend, _ zone: TimeZone, _ extras: RemindersExtras = .none
+    ) async throws -> ToolResult {
         guard backend.allowed(.reminders) else { throw EventsFailure.noAccess(.reminders) }
         var lines = [CalendarDates.zoneLine(zone)]
+        let snap = extras.source.snapshot()
         if let id = args["id"]?.stringValue, !id.isEmpty {
-            return .text(lines[0] + "\n\n" + describe(try backend.reminder(id: id), zone: zone))
+            let r = try backend.reminder(id: id)
+            let subtasks = (snap?.extra(id).subtaskIDs ?? []).compactMap { try? backend.reminder(id: $0) }
+            let parent = snap?.extra(id).parentID.map { try? backend.reminder(id: $0) } ?? nil
+            return .text(
+                lines[0] + "\n\n"
+                    + describe(r, zone: zone, extra: snap?.extra(id), parent: parent, subtasks: subtasks))
         }
         var lists: [String]?
         if let name = args["list"]?.stringValue, !name.isEmpty {
@@ -94,6 +121,9 @@ enum RemindersCapability {
             lists = [list.id]
             let (open, done) = try await count(list.id, backend)
             lines.append("\(list.title) holds \(reminders(open + done)) (\(open) open, \(done) completed).")
+            if let sections = snap?.sections[list.id], !sections.isEmpty {
+                lines.append("Sections: " + sections.joined(separator: ", ") + ".")
+            }
         }
         let completed = args["completed"]?.boolValue == true
         let cal = CalendarDates.calendar(zone)
@@ -124,7 +154,7 @@ enum RemindersCapability {
         }
         if !query.isEmpty {
             found = found.filter { r in
-                [r.title, r.notes ?? ""].contains {
+                ([r.title, r.notes ?? ""] + (snap?.extra(r.id).tags.map { "#" + $0 } ?? [])).contains {
                     $0.range(of: query, options: [.caseInsensitive, .diacriticInsensitive]) != nil
                 }
             }
@@ -141,7 +171,10 @@ enum RemindersCapability {
         let limit = min(try args.integer("limit", in: 1...Int.max) ?? 50, maxReminders)
         lines.append(completed ? "Completed reminders:" : "Open reminders:")
         if found.isEmpty { lines.append("None.") }
-        lines += found.prefix(limit).map { "- " + line($0, zone: zone) }
+        lines += nested(Array(found.prefix(limit)), snap).map { r, depth in
+            String(repeating: "  ", count: depth) + "- " + line(r, zone: zone, extra: snap?.extra(r.id))
+        }
+        if snap == nil { lines.append("(Flags, tags, and subtasks unknown: Latchkey needs Full Disk Access.)") }
         if found.count > limit {
             lines.append("… and \(found.count - limit) more; raise limit (up to \(maxReminders)).")
         }
@@ -161,8 +194,25 @@ enum RemindersCapability {
         r.due.map { CalendarDates.format($0, day: !r.dueHasTime, zone: zone) }
     }
 
-    static func line(_ r: ReminderInfo, zone: TimeZone) -> String {
+    /// Subtasks right after their reminder, one level in, when both are shown.
+    static func nested(_ found: [ReminderInfo], _ snap: RemindersSnapshot?) -> [(ReminderInfo, Int)] {
+        guard let snap else { return found.map { ($0, 0) } }
+        let shown = Set(found.map(\.id))
+        var out: [(ReminderInfo, Int)] = []
+        for r in found {
+            if let p = snap.extra(r.id).parentID, shown.contains(p) { continue }
+            out.append((r, 0))
+            let subtasks = snap.extra(r.id).subtaskIDs
+            out += found.filter { subtasks.contains($0.id) }.map { ($0, 1) }
+        }
+        return out
+    }
+
+    static func line(_ r: ReminderInfo, zone: TimeZone, extra: ReminderExtra? = nil) -> String {
         var s = "\(r.completed ? "☑" : "☐") \(r.title) [\(r.list)]"
+        if extra?.flagged == true { s += " ⚑" }
+        if let tags = extra?.tags, !tags.isEmpty { s += " " + RemindersExtras.tagText(tags) }
+        if let n = extra?.subtaskIDs.count, n > 0 { s += " (\(n) subtask\(n == 1 ? "" : "s"))" }
         if let d = due(r, zone: zone) {
             let late = !r.completed && (r.due ?? .distantFuture) < Date()
             s += " due \(d)\(late ? " (overdue)" : "")"
@@ -173,21 +223,40 @@ enum RemindersCapability {
         return s + " (id \(r.id))"
     }
 
-    static func describe(_ r: ReminderInfo, zone: TimeZone) -> String {
+    static func describe(
+        _ r: ReminderInfo, zone: TimeZone, extra: ReminderExtra? = nil, parent: ReminderInfo? = nil,
+        subtasks: [ReminderInfo] = []
+    ) -> String {
         var lines = ["Title: \(r.title)", "List: \(r.list)", "Status: \(r.completed ? "completed" : "open")"]
+        if let e = extra {
+            if let s = e.section { lines.append("Section: \(s)") }
+            lines.append("Flagged: \(e.flagged ? "yes" : "no")")
+            if !e.tags.isEmpty { lines.append("Tags: " + RemindersExtras.tagText(e.tags)) }
+            if let p = parent { lines.append("Subtask of: \(p.title) (id \(p.id))") }
+            if e.images > 0 { lines.append("Images: \(e.images)") }
+            if !e.links.isEmpty { lines.append("Attached links: " + e.links.joined(separator: ", ")) }
+        } else {
+            lines.append("Flag, tags, subtasks: unknown (Latchkey needs Full Disk Access to read them)")
+        }
         if let at = r.completedAt, r.completed { lines.append("Completed: \(CalendarDates.format(at, zone: zone))") }
         if let d = due(r, zone: zone) { lines.append("Due: \(d)") }
         if let p = r.priorityName { lines.append("Priority: \(p)") }
         if let rep = r.repeats { lines.append("Repeats: \(rep.describe(zone: zone))") }
         if let u = r.url { lines.append("Link: \(u)") }
         if let n = r.notes { lines.append("Notes:\n\(n)") }
+        if !subtasks.isEmpty {
+            lines.append("Subtasks:")
+            lines += subtasks.map { "- " + line($0, zone: zone) }
+        }
         lines.append("id: \(r.id)")
         return lines.joined(separator: "\n")
     }
 
     // MARK: change
 
-    static func change(_ args: JSONValue, _ backend: any EventsBackend, _ zone: TimeZone) async throws -> ToolResult {
+    static func change(
+        _ args: JSONValue, _ backend: any EventsBackend, _ zone: TimeZone, _ extras: RemindersExtras = .none
+    ) async throws -> ToolResult {
         guard backend.allowed(.reminders) else { throw EventsFailure.noAccess(.reminders) }
         let action = args["action"]?.stringValue
         func id() throws -> String {
@@ -208,20 +277,64 @@ enum RemindersCapability {
             }
             var d = try draft(args, zone: zone) ?? ReminderDraft()
             d.title = title
+            let x = try extrasChange(args)
+            // A subtask goes straight to its parent's list.
+            if case .set(let p) = x.parent, d.list == nil { d.list = try backend.reminder(id: p).listID }
+            let snap = x.isEmpty ? nil : try extras.preflight(x)
             let r = try backend.createReminder(d)
-            var added = done(
-                "Added “\(r.title)” to \(r.list)\(due(r, zone: zone).map { ", due \($0)" } ?? ""). id \(r.id)",
-                "Claude added the reminder “\(r.title)” to \(r.list)")
+            let text = "Added “\(r.title)” to \(r.list)\(due(r, zone: zone).map { ", due \($0)" } ?? ""). id \(r.id)"
+            let activity = "Claude added the reminder “\(r.title)” to \(r.list)"
+            var extra: [String] = []
+            if let snap {
+                do {
+                    extra = try await extras.apply(x, to: r, backend: backend, snapshot: snap)
+                } catch let e as ArgumentError {
+                    var partial = ToolResult.text(text + "\nBut: " + e.message, isError: true)
+                    partial.activity = activity
+                    partial.made = "the reminder “\(r.title)” in \(r.list)"
+                    return partial
+                }
+            }
+            var added = done(text + (extra.isEmpty ? "" : "\n" + extra.joined(separator: "; ") + "."), activity)
             added.made = "the reminder “\(r.title)” in \(r.list)"
             return added
         case "update":
             let reminderID = try id()
-            guard var d = try draft(args, zone: zone) else {
-                throw ArgumentError(message: "Give at least one field to change.")
+            var d = try draft(args, zone: zone)
+            let x = try extrasChange(args)
+            guard d != nil || !x.isEmpty else { throw ArgumentError(message: "Give at least one field to change.") }
+            if let t = args["title"]?.stringValue, !t.isEmpty { d?.title = t }
+            var r = try backend.reminder(id: reminderID)
+            let snap = extras.source.snapshot()
+            if !x.isEmpty { _ = try extras.preflight(x) }
+            // Another list: a subtask or a reminder with subtasks moves with the window's help.
+            if let list = d?.list, let snap, extras.moveNeedsWindow(reminderID, snap),
+                try backend.resolveCalendar(list, .reminders).id != r.listID
+            {
+                if case .set = x.parent {
+                    d?.list = nil  // the parent decides the list
+                } else {
+                    if extras.window.locked() {
+                        throw ArgumentError(
+                            message: "“\(r.title)” "
+                                + (snap.extra(reminderID).parentID != nil ? "is a subtask" : "has subtasks")
+                                + ", so moving it to another list needs the Reminders app's window, which a locked "
+                                + "Mac doesn't show. Nothing was changed; it works once the Mac is unlocked.")
+                    }
+                    r = try await extras.moveFamily(r, to: list, backend: backend, snapshot: snap)
+                    d?.list = nil
+                }
             }
-            if let t = args["title"]?.stringValue, !t.isEmpty { d.title = t }
-            let r = try backend.updateReminder(id: reminderID, d)
-            return done("Changed “\(r.title)”: \(line(r, zone: zone))", "Claude changed the reminder “\(r.title)”")
+            if let draft = d, draft != ReminderDraft() { r = try backend.updateReminder(id: reminderID, draft) }
+            var extra: [String] = []
+            if !x.isEmpty, let now = extras.source.snapshot() {
+                extra = try await extras.apply(x, to: r, backend: backend, snapshot: now)
+                r = try backend.reminder(id: reminderID)
+            }
+            return done(
+                "Changed “\(r.title)”: \(line(r, zone: zone, extra: extras.source.snapshot()?.extra(reminderID)))"
+                    + (extra.isEmpty ? "" : "\n" + extra.joined(separator: "; ") + "."),
+                "Claude changed the reminder “\(r.title)”")
         case "complete", "uncomplete":
             var d = ReminderDraft()
             d.completed = action == "complete"
@@ -231,8 +344,17 @@ enum RemindersCapability {
                 : done("Marked “\(r.title)” as not completed.", "Claude marked “\(r.title)” as not completed")
         case "delete":
             let old = try backend.reminder(id: try id())
+            let subtasks = extras.source.snapshot()?.extra(old.id).subtaskIDs ?? []
             try backend.deleteReminder(id: old.id)
-            return done("Deleted “\(old.title)” from \(old.list).", "Claude deleted the reminder “\(old.title)”")
+            var text = "Deleted “\(old.title)” from \(old.list)."
+            if !subtasks.isEmpty {
+                let left = subtasks.filter { (try? backend.reminder(id: $0)) != nil }
+                text +=
+                    left.isEmpty
+                    ? " Its \(subtasks.count == 1 ? "subtask" : "\(subtasks.count) subtasks") went with it."
+                    : " \(left.count) of its subtasks remain as reminders of their own."
+            }
+            return done(text, "Claude deleted the reminder “\(old.title)”")
         case "create_list":
             guard let title = args["title"]?.stringValue, !title.isEmpty else {
                 throw ArgumentError(message: "Give the new list's title.")
@@ -266,6 +388,31 @@ enum RemindersCapability {
         default:
             return .unknown("action", action, allowed: changeActions)
         }
+    }
+
+    /// The flag, tags, parent, and section the arguments set.
+    static func extrasChange(_ args: JSONValue) throws -> ReminderExtrasChange {
+        var x = ReminderExtrasChange()
+        if let f = args["flagged"] {
+            guard case .bool(let b) = f else { throw ArgumentError(message: "flagged must be true or false.") }
+            x.flagged = b
+        }
+        let badTags = ArgumentError(message: "tags must be a list of names, like [\"errands\"].")
+        switch args["tags"] {
+        case nil, .null?: break
+        case .array(let items)?:
+            x.tags = try items.map { v in
+                guard let t = v.stringValue.map(RemindersExtras.tagName), !t.isEmpty else { throw badTags }
+                return t
+            }
+        case .string(let s)?:
+            x.tags = s.split(whereSeparator: { $0 == "," || $0 == " " }).map { RemindersExtras.tagName(String($0)) }
+                .filter { !$0.isEmpty }
+        default: throw badTags
+        }
+        if let p = args["parent"]?.stringValue { x.parent = p.isEmpty ? .clear : .set(p) }
+        if let sec = args["section"]?.stringValue { x.section = sec.isEmpty ? .clear : .set(sec) }
+        return x
     }
 
     /// The fields the arguments set; nil when they set none.

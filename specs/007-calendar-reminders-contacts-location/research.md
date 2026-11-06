@@ -16,7 +16,7 @@ None of them keeps a lasting log of tool calls except AirMCP (a keyed, chained l
 | Area | Options | Chosen |
 |---|---|---|
 | Calendar | EventKit; AppleScript to Calendar (slow, opens the app, odd with repeats); Calendar's cache database (undocumented) | EventKit |
-| Reminders | EventKit; AppleScript to Reminders (slow); Reminders' database (undocumented, has flags and tags) | EventKit |
+| Reminders | EventKit; AppleScript to Reminders (slow); Reminders' database (undocumented, has flags and tags) | EventKit; since 2026-11-05 also the database (read-only) and Reminders' window for flags, tags, subtasks, and sections (below) |
 | Contacts | Contacts framework; AppleScript to Contacts | Contacts framework (already used for Messages) |
 | Location | Core Location (Wi-Fi based on a Mac) | Core Location |
 | Places, directions, geocoding | MapKit (`MKLocalSearch`, `MKDirections`, `MKGeocodingRequest`, `MKReverseGeocodingRequest`); `CLGeocoder` (deprecated in macOS 26) | MapKit |
@@ -184,3 +184,76 @@ no creation date and no link between the two ids, so Latchkey has to recognise i
   and deleted, 2026-10-29).
   Apple documents that an event's identifier may change when it moves to another calendar; the
   update answers with the event as saved, so Claude gets the new id. Not changed.
+
+## Flags, tags, subtasks, and sections (2026-11-05, spec FR-714 to FR-719; choices by Claude)
+
+Toni asked to "add everything missing". Reminders' flags, tags (hashtags), subtasks, and sections
+were not offered at all, and nobody had checked whether an update loses them. Tried on Toni's
+Mac (macOS 27.0.1) with throwaway lists named "Latchkey check 1105 rem", removed afterwards.
+
+What each route can do:
+
+| Route | Reads | Writes | Locked Mac |
+|---|---|---|---|
+| EventKit (`EKReminder`) | none of the four | none (no properties for them; Apple's EKReminder documentation lists title, dates, priority, completion only) | works |
+| Reminders' AppleScript (`sdef /System/Applications/Reminders.app`, macOS 27) | `flagged`; `container` can be a reminder | `flagged` on top-level reminders only; `make new reminder at <reminder>` and `move <reminder> to <reminder>` fail ("AppleEvent handler failed"), and the failed make left the reminder in the default list; a subtask can't be addressed at all (`reminder id` of a subtask: -1728), so it can't be flagged | works; needs a new Automation permission for Latchkey |
+| Reminders' database, read-only (`~/Library/Group Containers/group.com.apple.reminders/Container_v1/Stores/Data-*.sqlite`, Core Data) | all: `ZREMCDREMINDER.ZFLAGGED`, `ZPARENTREMINDER`; tags are `ZREMCDOBJECT` rows of entity `REMCDHashtag` (owner `ZREMINDER3`, name `ZNAME1`, label `ZREMCDHASHTAGLABEL`); images and URL attachments are `REMCDImageAttachment` / `REMCDURLAttachment` rows; sections are `ZREMCDBASESECTION` with the list's `ZMEMBERSHIPSOFREMINDERSINSECTIONSASDATA` JSON (`memberID`, `groupID`) | never (rule: no writing another app's database; iCloud sync owns it) | works (Full Disk Access, which Latchkey has) |
+| Reminders' window through Accessibility, in the background | (what's shown) | each reminder row has its own actions `Indent`, `Outdent`, `Move Up`, `Move Down`: `Indent` made a reminder a subtask with Mail in front, Reminders stayed behind; typing "#name" into a row's title field (set `AXSelectedText`, then `AXConfirm`) made a real tag, also in the background. Menus (Edit → Flag, File → Move to Section) are disabled while Reminders isn't in front, like Notes' | no window rows at all: the window list holds no reminders outline (and a recursive look at it hung for minutes until a 2 s messaging timeout was set) |
+| Reminders' private framework (ReminderKit) | all | all | — rejected: private framework (Constitution IV), and its store needs Apple's own entitlements |
+
+Checked live, every result read back from the database:
+
+- **Ids.** EventKit's `calendarItemIdentifier`, the database's `ZCKIDENTIFIER`, and the
+  AppleScript id (`x-apple-reminder://<id>`) are the same UUID, so the database is joined to
+  EventKit's reminders by id.
+- **EventKit keeps them.** Changing a parent's title (dropping the "#tag" text from it), notes,
+  and due date, and a subtask's title and notes, kept the flag, the tag, and the subtask link.
+  EventKit's `url` is `ZICSURL` on the reminder, not an attachment row, so URL attachments and
+  images made in the Reminders app are never touched by an EventKit save.
+- **EventKit and a reminder with subtasks moving lists.** Moving the parent alone is refused
+  (ReminderKit error -3002, "Subtask has different list from its parent reminder"; nothing
+  changes). Moving parent and subtask in one commit succeeds but drops the link: both arrive as
+  separate reminders. So Latchkey moves them together and puts each subtask back under the
+  parent in the window (unlocked only); on a locked Mac it refuses before changing anything.
+- **Tags.** A title set through EventKit or AppleScript with "#name" makes no tag. Typed into
+  the window's title field it does, and the "#name" text stays in the title; Latchkey then sets
+  the title back through EventKit and the tag stays.
+- **Not found: removing a tag** (see "Still open" below).
+
+Choices:
+
+- **Reading.** Options: (a) EventKit only, saying flags and tags are unknown; (b) the database,
+  read-only, per call; (c) the window. Chosen (b): complete, fast, works locked and with the lid
+  closed, and doesn't touch Reminders. Column names that differ between macOS versions are
+  looked up in each file; a missing column only leaves that detail out. Without Full Disk Access
+  the answers say flags, tags, and subtasks are unknown (never "none").
+- **Writing.** Options, least to most intrusive: (a) AppleScript; (b) the window's row actions
+  and title field in the background; (c) menus with Reminders brought forward for a moment.
+  AppleScript was rejected: it can't make subtasks, can't reach subtasks to flag them, and would
+  add an Automation prompt to setup. Chosen (b) for subtasks and tags, (c) for flags and sections,
+  where no background action exists (the same brief activation Notes' ticking uses, Toni's
+  2026-11-04 approval of that pattern). The reminder is selected by opening Reminders' own link
+  `x-apple-reminderkit://REMCDReminder/<id>` without activating Reminders.
+- **Putting a reminder under a parent.** `Indent` puts a row under the nearest reminder above
+  it, so the row first moves (`Move Up` / `Move Down`, one step at a time, at most twice the
+  rows) until the parent, or the parent's last subtask, is right above it
+  (`ReminderRowPlan`). Rows are matched by title; the result is always checked in the
+  database, and a wrong parent is reported, not hidden.
+- **Every window change is checked in the database** (up to 5 s) and the answer says plainly
+  what was done before a step that didn't take.
+- **Locked Mac.** Window changes are refused at once, before any change, with the reason
+  ("works once the Mac is unlocked"); reading and EventKit changes keep working.
+- **Tags in arguments.** `tags` is the whole set after the change (Claude reads them first), as
+  a JSON list or a comma-separated string, "#" optional, spaces become "-" (Reminders' tags
+  have no spaces).
+
+Still open (2026-11-05): the Mac stayed locked for the rest of the session, so these were built
+from the unlocked observations above and tested against an in-memory window, not yet run live:
+selecting a reminder through Reminders' link without bringing it forward, the Move Up / Move Down
+steps, Edit → Flag and File → Move to Section with the brief activation, and putting subtasks
+back after a list move. `macos/scripts/reminders-check.sh` runs all of them against the real
+Reminders (run the built program through Latchkey's shell tool, which has Reminders access,
+Accessibility, and Full Disk Access) and also looks for a way to remove a tag (Edit → Tags, or the
+title field); until one is found, removing a tag is refused with that reason (FR-716). Run on
+the locked Mac it passed: the window showed no reminders, and its list was deleted and checked
+gone through EventKit and the database.

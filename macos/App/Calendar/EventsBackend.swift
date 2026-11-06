@@ -150,6 +150,9 @@ protocol EventsBackend: Sendable {
     func createReminder(_ draft: ReminderDraft) throws -> ReminderInfo
     func updateReminder(id: String, _ draft: ReminderDraft) throws -> ReminderInfo
     func deleteReminder(id: String) throws
+    /// Moves reminders to a list (name or id) in one save: a reminder with subtasks moves only
+    /// together with them.
+    func moveReminders(_ ids: [String], list: String) throws -> [ReminderInfo]
     func createList(title: String) throws -> CalendarInfo
     /// Deletes a reminder list and every reminder in it.
     func deleteList(id: String) throws
