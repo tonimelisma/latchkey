@@ -155,8 +155,8 @@ removed). The old device's stored data is deleted
 at the first start. Checked live through the hosted relay on 2026-11-04 (0.8.116, 0.8.117): a
 send through the Safari tab (read within seconds), reading by number (WhatsApp for Mac now files
 most person chats by privacy id; the address book maps them), and a send through WhatsApp for Mac
-with the tab closed (since removed). Not yet checked: a send with the Mac locked, opening the tab
-itself (Safari stopped answering scripts while locked on 2026-11-01).
+with the tab closed; and on 2026-11-05 (0.8.119) sends with the Mac locked and no tab open:
+Latchkey opened the tab and the message went out (twice, 14:15 and 21:59 local).
 
 Calls cut off by the app stopping (bug report follow-up 2026-11-03; spec 001 FR-666 to FR-668,
 plan D27): built on a branch, not yet installed. A quit records every call still running as cut
