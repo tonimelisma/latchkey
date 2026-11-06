@@ -305,6 +305,25 @@ final class WhatsAppStore: @unchecked Sendable {
         }
     }
 
+    /// Whether a message of the chat is a reply quoting the message `quoted` (both by their ids):
+    /// WhatsApp keeps the quoted message's id in the reply's media item metadata (2026-11-05).
+    func quotes(chat: String, key: String, quoted: String) -> Bool {
+        locked {
+            guard !quoted.isEmpty,
+                let r = try? SQLite.rows(
+                    db,
+                    """
+                    SELECT instr(i.ZMETADATA, CAST(? AS BLOB)) FROM ZWAMESSAGE m
+                    JOIN ZWACHATSESSION s ON m.ZCHATSESSION = s.Z_PK JOIN ZWAMEDIAITEM i ON m.ZMEDIAITEM = i.Z_PK
+                    WHERE s.ZCONTACTJID = ? AND m.ZSTANZAID = ? LIMIT 1
+                    """,
+                    bind: [.text(quoted), .text(chat), .text(key)]
+                ).first
+            else { return false }
+            return (r[0].int ?? 0) > 0
+        }
+    }
+
     /// How many messages of the chat look like this one in WhatsApp for Mac's window: the same side,
     /// words (or file name), and minute.
     func lookalikes(_ m: WhatsAppMessage) throws -> Int {

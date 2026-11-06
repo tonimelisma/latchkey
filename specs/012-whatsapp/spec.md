@@ -128,6 +128,11 @@ As an Owner, I ask Claude to send a WhatsApp message, and it goes out right away
 - **FR-1247** When the Safari tab can't be used, the system shall react, unreact, and delete
   through WhatsApp for Mac's window, and count it done only when WhatsApp for Mac's database shows
   that very message (by its id) changed.
+- **FR-1250** When WhatsApp for Mac must come to the front (its message menu, typing, files), the
+  system shall not do it while the Owner used the keyboard or pointer in the last 3 seconds; shall
+  stop without sending when the Owner does, another app comes to the front, the chat changes, or
+  the message box doesn't hold exactly the text; shall put back the Owner's clipboard; and shall
+  bring back the app that was in front.
 - **FR-1249** While the Mac is locked and the Safari tab can't be used, the system shall answer at
   once that WhatsApp for Mac's window can't be used while the Mac is locked, and do nothing.
 

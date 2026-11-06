@@ -201,6 +201,26 @@ import Testing
         #expect(s.stamp(chat: "120363000@g.us", key: "A") == nil, "only in its own chat")
     }
 
+    /// Security review 2026-11-05: a reply sent through WhatsApp for Mac is confirmed to quote the
+    /// intended message by its id, which WhatsApp keeps in the reply's media item metadata (seen
+    /// 2026-11-05: the quoted stanza id at byte 3 of `ZWAMEDIAITEM.ZMETADATA`).
+    @Test func aReplyIsKnownByTheMessageItQuotes() throws {
+        let url = try Self.make()
+        var h: OpaquePointer?
+        sqlite3_open(url.path, &h)
+        let sql = """
+            ALTER TABLE ZWAMEDIAITEM ADD COLUMN ZMETADATA BLOB;
+            INSERT INTO ZWAMEDIAITEM VALUES (2, NULL, NULL, X'0A1441');
+            INSERT INTO ZWAMESSAGE VALUES (9, 1, \(Self.t0 + 400), 1, 0, 'yes', NULL, NULL, 2, 'R', 1);
+            """
+        #expect(sqlite3_exec(h, sql, nil, nil, nil) == SQLITE_OK)
+        sqlite3_close(h)
+        let s = try WhatsAppStore(url: url)
+        #expect(s.quotes(chat: "15550001111@s.whatsapp.net", key: "R", quoted: "A"))
+        #expect(!s.quotes(chat: "15550001111@s.whatsapp.net", key: "R", quoted: "B"))
+        #expect(!s.quotes(chat: "15550001111@s.whatsapp.net", key: "B", quoted: "A"))
+    }
+
     /// Security review 2026-11-05: messages that look the same (same chat, sender side, words, minute)
     /// are counted, so WhatsApp for Mac's window is never acted on when its bubble could be another.
     @Test func lookalikesAreCounted() throws {

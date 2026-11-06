@@ -211,11 +211,44 @@ Mac's database.
   message box. Setting the message box's `AXValue` shows the text but WhatsApp doesn't take it:
   the microphone stays, Send (menu) does nothing.
 
-- Not yet tried live (the Mac stayed locked from 13:40 to past 15:30 that day): putting text in
-  with `AXSelectedText` in the background, and WhatsApp briefly in front with Paste for text and
-  files (plan D3b options 1 and 4), React's emoji choice, Reply, and "Delete for everyone" in
-  WhatsApp for Mac's dialog. The code follows what was seen; the screen-state cases
-  `whatsapp.*` check it with the Safari tab unusable.
+- Unlocked again (18:10 to 18:40), in the Owner's own chat, every message deleted afterwards and
+  checked gone in the database and in WhatsApp Web's search:
+  - `AXSelectedText` in the background: accepted, but the box stays empty. Not usable.
+  - `whatsapp://send?phone=<number>&text=<text>`, opened without activating: WhatsApp stays
+    behind, fills the box its own way, and shows Send; pressing Send (`AXPress`) sent it. The whole
+    send of text to a person, or to the Owner's own chat, happens in the background.
+  - Opening a message's menu (`AXShowMenu`) brings WhatsApp to the front by itself. So React,
+    Reply, and Delete take the front for a moment, whatever else is done.
+  - With WhatsApp in front, keys sent to its process alone still don't arrive; keystrokes through
+    the session's event stream do, and so does Command-V there with a file on the clipboard (it
+    opens WhatsApp's preview with a caption field and Send). Edit → Paste from the menu bar stayed
+    disabled even in front. Typing into the caption field didn't arrive; the text goes as its own
+    message after the file.
+  - From a command-line program, `activate()`, Launch Services, and `AXFrontmost` were all granted
+    only after the program ended (cooperative activation); `NSWorkspace.frontmostApplication` also
+    lagged there, while the app's own `AXFrontmost` attribute told the truth at once. Latchkey (an
+    app) brings Notes forward with `activate()`; WhatsApp gets `activate()`, `AXFrontmost`, and,
+    failing those, its latest message's menu (opened and closed), which reliably brings it forward.
+  - Bringing the Owner's app back right after pressing a reaction made WhatsApp drop it; a press
+    during the reaction tray's opening animation was dropped too. Latchkey waits for what it
+    pressed to go away and a moment more.
+  - React: the tray shows twelve reactions (`AXIdentifier` ReactionsTray_ReactionButton), the
+    Owner's own marked `AXSelected`; pressing it again takes it off. A reaction made in WhatsApp
+    for Mac did not show in its database (`ZWAMESSAGEINFO` unchanged), unlike one made through
+    WhatsApp Web; the chat list's line "You reacted 👍 to "<words>"" did, and is the confirmation.
+  - Reply: the message box shows "Quoted message, Your message, <words>"; the reply's bubble is
+    labelled "Replying to You.\n<its line>.\nQuoted message.\n<quoted words>"; the database keeps
+    the quoted message's id in the reply's `ZWAMEDIAITEM.ZMETADATA`, which confirms the quote.
+  - Delete: in the Owner's own chat WhatsApp offers only "Delete for me" (as WhatsApp Web's own
+    check said); a selected text bubble's value is "Selected", a document's isn't.
+  - Chat → Close Chat (menu bar) works in the background and leaves no chat open; Escape sent to
+    WhatsApp closes the open chat (and only reached it while in front). The Archived button and
+    the sidebar's Chats switch lists in the background.
+  - A document sent from WhatsApp for Mac is stored with its name without the extension as text and
+    no title; its bubble shows the full file name.
+- Not tried live: a group or a person without a known number (pressing their row would mark the
+  chat read in Toni's real chats; the steps are the ones checked in the Owner's own chat), the lid
+  closed while unlocked.
 
 ### WhatsApp for Mac with the Mac locked
 

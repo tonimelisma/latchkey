@@ -98,8 +98,9 @@ missing, and a fallback that works only unlocked still beats none when Safari ca
   says so at once. Nothing is tried.
 - Everything through Accessibility, as the computer tools do (`AXPress`, `AXShowMenu`,
   `AXScrollToVisible`, `AXScrollUp/DownByPage`), with WhatsApp found by its bundle id (its name
-  starts with an invisible mark). WhatsApp stays behind for opening chats, reacting, deleting,
-  and replies' Reply step.
+  starts with an invisible mark). WhatsApp stays behind for opening chats and for text to a person
+  or the Owner's own chat; a message's menu (React, Reply, Delete), typing, and files bring it to
+  the front for a few seconds (FR-1250).
 - Opening the chat with certainty (FR-1246, security review 2026-11-05): a person with a known
   number, and the Owner's own chat with the Owner's number, through WhatsApp's own link
   `whatsapp://send?phone=<digits>` opened without activating; the header must then name that
@@ -114,17 +115,26 @@ missing, and a fallback that works only unlocked still beats none when Safari ca
 - Delete: the message menu's Delete, which selects it; the selection bar's Delete; then "Delete
   for me" or "Delete for everyone" in WhatsApp's own dialog. React: the message menu's React,
   then the emoji. Reply: the message menu's Reply before the text.
-- Text and files. Options weighed, least intrusive first:
-  1. Background only: keys and text sent to WhatsApp's process alone don't arrive; setting the
-     box's `AXValue` shows text WhatsApp doesn't take (2026-11-05). `AXSelectedText` (the text
-     view's own insertion, which Notes takes) is tried first for text.
-  2. `whatsapp://send?phone=…&text=…`: fills the box the app's own way, but only for people with
-     a number, and Send still needs a press; no groups, no files.
-  3. Paste or drag files: drag needs the real pointer (rejected); Paste is disabled while
-     WhatsApp isn't the active app.
-  4. WhatsApp briefly in front (as Notes' tick, spec 002 D3a): Paste works for text and for files
-     (each opens WhatsApp's preview, sent with Return), the Owner's clipboard is put back, and the
-     app they were in comes back. Chosen when 1 doesn't take the text, and for files.
+- Text and files. Options weighed, least intrusive first (all tried live 2026-11-05):
+  1. Background only: keys sent to WhatsApp's process alone, the box's `AXValue`, and
+     `AXSelectedText` don't put text in (rejected).
+  2. `whatsapp://send?phone=…&text=…` opened without activating, then Send pressed: all in the
+     background (chosen for text to a person with a number and to the Owner's own chat).
+  3. Drag files: needs the real pointer (rejected). Edit → Paste: disabled even in front (rejected).
+  4. WhatsApp briefly in front (as Notes' tick, spec 002 D3a): text typed through the session's
+     event stream, files by Command-V there (each opens WhatsApp's preview, sent with its Send; the
+     text follows as its own message), the Owner's clipboard put back, their app brought back.
+     Chosen for groups, people without a known number, files, and replies (Reply's menu brings
+     WhatsApp forward anyway).
+- WhatsApp in front only safely (security review 2026-11-05): not when the keyboard or pointer was
+  used in the last 3 seconds; before every keystroke, paste, and press, WhatsApp must still be in
+  front, the chat still this one, and no input newer than Latchkey's own; before Send the box must
+  hold exactly the text. Otherwise nothing is sent and the box is emptied.
+- Opening: Chat → Close Chat first, so the header can only name the chat this call opens; the
+  Owner's own chat only when no chat in the lists (Archived too) is named You; a row only when it
+  is the only one with that name in the lists and in the database.
+- React: WhatsApp's tray of twelve (the picker for other emoji isn't used; the answer lists the
+  twelve); unreact presses the Owner's selected one.
 - Confirmation in WhatsApp for Mac's database (FR-1247), by the message's id: a deletion when the
   row is gone (for me) or type 14 (for everyone); a reaction when that message's stamp (its row
   version and its receipts, where reactions are kept) changed; a send when a new message of the
