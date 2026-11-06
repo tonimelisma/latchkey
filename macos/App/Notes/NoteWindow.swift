@@ -236,15 +236,31 @@ struct NoteWindow: Sendable {
         static func inFront(_ work: () async -> Bool) async -> Bool {
             guard let notes = notesApp() else { return false }
             let previous = NSWorkspace.shared.frontmostApplication
-            notes.activate()
             // Asked of Notes itself: NSWorkspace's frontmost app is updated by a run loop that
             // isn't turning here, and read stale (seen 2026-11-05).
             let app = AXUIElementCreateApplication(notes.processIdentifier)
-            var front = false
-            for _ in 0..<40 {
-                front = AppWindowReader.string(app, kAXFrontmostAttribute) == "1"
-                if front { break }
-                try? await Task.sleep(for: .milliseconds(50))
+            func isFront() async -> Bool {
+                for _ in 0..<15 {
+                    if AppWindowReader.string(app, kAXFrontmostAttribute) == "1" { return true }
+                    try? await Task.sleep(for: .milliseconds(50))
+                }
+                return false
+            }
+            // macOS may refuse a plain activate from a menu bar app in the background (the
+            // installed app's was refused, 2026-11-06); opening the app through LaunchServices,
+            // then AppleScript's activate, are the fallbacks.
+            notes.activate()
+            var front = await isFront()
+            if !front, let url = notes.bundleURL {
+                let config = NSWorkspace.OpenConfiguration()
+                config.activates = true
+                _ = try? await NSWorkspace.shared.openApplication(at: url, configuration: config)
+                front = await isFront()
+            }
+            if !front {
+                _ = try? await OSAScriptRunner(app: Permissions.notesApp).run(
+                    "tell application id \"com.apple.Notes\" to activate", [])
+                front = await isFront()
             }
             let done = front ? await work() : false
             if let previous, previous != notes { previous.activate() }

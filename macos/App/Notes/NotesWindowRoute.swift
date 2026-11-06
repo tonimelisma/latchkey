@@ -81,25 +81,18 @@ extension NotesCapability {
     /// FR-156: each paragraph in the region is a checklist item exactly when it starts with ☐ or
     /// ☑ (the mark is removed); ☑ items are ticked.
     static func makeChecklists(_ text: String, region: NSRange, noteID: String, window: NoteWindow) async throws {
-        // 1. The ☐/☑ marks come out, in the background.
-        var removed = 0
-        var changes: [ParagraphFormat] = []
-        for line in NoteWindowEdit.lines(in: text, region: region) {
-            let at = line.at - removed
-            if line.mark != nil {
-                guard window.replace(noteID, NSRange(location: at, length: 2), "") else {
-                    throw WindowFailure(message: "Notes' window didn't take a checklist item.")
-                }
-                removed += 2
-            }
-            changes.append(ParagraphFormat(at: at, checklist: line.mark != nil, tick: line.mark == .ticked))
+        // 1. Each written paragraph becomes a checklist item or stays plain, and ticks are set, in
+        // one moment with Notes in front. The ☐/☑ marks are still in the text, so if this fails
+        // they are what the note shows, as the answer says (2026-11-06: removing them first left
+        // plain lines behind an answer that said ☐/☑).
+        let lines = NoteWindowEdit.lines(in: text, region: region)
+        let changes = lines.map {
+            ParagraphFormat(at: $0.at, checklist: $0.mark != nil, tick: $0.mark == .ticked)
         }
-        // 2. Each written paragraph becomes a checklist item or stays plain, and ticks are set,
-        // in one moment with Notes in front.
         guard await window.format(noteID, changes) else {
-            throw WindowFailure(message: "Notes' Format menu didn't answer, so the checklist items may be plain lines.")
+            throw WindowFailure(message: "Notes didn't come forward to make them real ones.")
         }
-        // 3. Read back: every paragraph must be what was asked.
+        // 2. Read back: every paragraph must be what was asked.
         guard let states = await window.checklistStates(noteID, changes.map(\.at)) else {
             throw WindowFailure(message: "Latchkey couldn't read back the checklist items.")
         }
@@ -109,6 +102,12 @@ extension NotesCapability {
                 message:
                     "Notes shows \(wrong) of the written lines differently from what was asked (checklist item or plain line)."
             )
+        }
+        // 3. The marks come out, last first so the earlier places stay right, in the background.
+        for line in lines.reversed() where line.mark != nil {
+            guard window.replace(noteID, NSRange(location: line.at, length: 2), "") else {
+                throw WindowFailure(message: "Notes' window didn't take the change; ☐ or ☑ may still show.")
+            }
         }
     }
 

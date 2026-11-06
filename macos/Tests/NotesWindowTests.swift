@@ -20,6 +20,8 @@ final class FakeNoteWindow: @unchecked Sendable {
     private(set) var replaced = 0
     /// Paragraphs Notes leaves unchanged when formatted (to prove the read-back catches it).
     var ignored: Set<Int> = []
+    /// Notes can't be brought forward: formatting does nothing and says so.
+    var formatFails = false
 
     init(_ notes: [String: String] = [:]) {
         for (id, text) in notes { set(id, text) }
@@ -90,6 +92,7 @@ final class FakeNoteWindow: @unchecked Sendable {
                 // time, at the place given. `ignored` stands for lines Notes didn't change, so the
                 // read-back must catch them.
                 self.lock.withLock {
+                    if self.formatFails { return false }
                     for c in changes {
                         let p = self.paragraph(id, at: c.at)
                         self.formats.append(c)
@@ -259,16 +262,24 @@ extension Array {
                 "id": .string("N-GROCERIES"), "mode": .string("append"),
                 "text": .string("- [ ] Eggs\nThen:\n- [x] Butter"),
             ]))
-        let text = w.text("N-GROCERIES") as NSString
-        #expect(
-            w.formats == [
-                ParagraphFormat(at: text.range(of: "Eggs").location, checklist: true),
-                ParagraphFormat(at: text.range(of: "Then:").location, checklist: false),
-                ParagraphFormat(at: text.range(of: "Butter").location, checklist: true, tick: true),
-            ])
+        #expect(w.formats.map(\.checklist) == [true, false, true])
+        #expect(w.formats.map(\.tick) == [false, false, true])
+        #expect(w.text("N-GROCERIES").hasSuffix("Eggs\nThen:\nButter\n"), "the marks are gone once all is right")
         let p = w.paragraphs("N-GROCERIES")
         #expect(p[1].1 && p[1].2, "Milk is still a ticked checklist item")
         #expect(p[2].1 && !p[2].2, "Bread is still an unticked checklist item")
+    }
+
+    /// When Notes can't be brought forward, the ☐/☑ stay in the note, so the answer that says so
+    /// is true (2026-11-06: the marks were removed first and plain lines were left).
+    @Test func aFailedFormatLeavesTheBoxes() async throws {
+        let w = groceriesWindow()
+        w.formatFails = true
+        let (_, tools) = try setup(w)
+        let result = await tools["notes_update"]!.handler(
+            .object(["id": .string("N-GROCERIES"), "mode": .string("append"), "text": .string("- [ ] Eggs")]))
+        #expect(result.isError)
+        #expect(w.text("N-GROCERIES").hasSuffix("☐ Eggs\n"), "\(w.text("N-GROCERIES"))")
     }
 
     /// When Notes doesn't change a line as asked, the answer says so instead of "changed".
