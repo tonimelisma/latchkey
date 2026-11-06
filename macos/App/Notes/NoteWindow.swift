@@ -122,8 +122,15 @@ struct NoteWindow: Sendable {
                         NotesLog.record("the note's editor or caret wasn't there with Notes in front", error: true)
                         return false
                     }
+                    try? await Task.sleep(for: .milliseconds(300))
+                    // Once more: the first focus can go to a window that wasn't key yet.
+                    _ = Live.caret(editor, at: at)
                     try? await Task.sleep(for: .milliseconds(200))
-                    guard await Live.pressMenu(char: "U", modifiers: 1) else { return false }
+                    guard await Live.pressMenu(char: "U", modifiers: 1) else {
+                        NotesLog.record(
+                            "the editor \(Live.isFocused(editor) ? "had" : "didn't have") the focus", error: true)
+                        return false
+                    }
                 }
                 return true
             }
@@ -219,6 +226,10 @@ struct NoteWindow: Sendable {
         /// Gives the editor the keyboard focus, then puts the caret at a place: a menu command acts
         /// where the focused editor's caret is, and without the focus Notes used its own older
         /// caret (the end of the note; seen 2026-11-05).
+        static func isFocused(_ editor: AXUIElement) -> Bool {
+            AppWindowReader.string(editor, kAXFocusedAttribute) == "1"
+        }
+
         static func caret(_ editor: AXUIElement, at: Int) -> Bool {
             _ = AXUIElementSetAttributeValue(editor, kAXFocusedAttribute as CFString, kCFBooleanTrue)
             return select(editor, NSRange(location: at, length: 0))
@@ -248,7 +259,12 @@ struct NoteWindow: Sendable {
         static func inFront(_ work: () async -> Bool) async -> Bool {
             guard let notes = notesApp() else { return false }
             let previous = frontApp()
-            let done = await bringForward(notes) ? await work() : false
+            var done = false
+            if await bringForward(notes) {
+                // Notes' window takes a moment to become the one keys and menus go to.
+                try? await Task.sleep(for: .milliseconds(300))
+                done = await work()
+            }
             // The front goes back to the app that had it (2026-11-06: a plain activate from the
             // installed app was refused and Notes stayed in front).
             if let previous, previous != notes { _ = await bringForward(previous) }
@@ -263,9 +279,14 @@ struct NoteWindow: Sendable {
         static func bringForward(_ target: NSRunningApplication) async -> Bool {
             let app = AXUIElementCreateApplication(target.processIdentifier)
             func isFront() async -> Bool {
-                // Up to 2 s: an app can take a moment to say it's in front.
+                // Up to 2 s. Both the app and the system must agree: Claude's app said it was in
+                // front while Notes still was (2026-11-06).
                 for _ in 0..<40 {
-                    if AppWindowReader.string(app, kAXFrontmostAttribute) == "1" { return true }
+                    if AppWindowReader.string(app, kAXFrontmostAttribute) == "1",
+                        frontApp()?.processIdentifier == target.processIdentifier
+                    {
+                        return true
+                    }
                     try? await Task.sleep(for: .milliseconds(50))
                 }
                 return false
