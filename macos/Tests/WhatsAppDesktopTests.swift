@@ -15,7 +15,7 @@ import Testing
 
     static func message(_ text: String, _ date: Date, fromMe: Bool = true, file: String? = nil) -> WhatsAppMessage {
         WhatsAppMessage(
-            id: "1", chatID: "c", chatName: nil, date: date, fromMe: fromMe, sender: "",
+            id: "1", chatID: "c", chatName: nil, date: date, fromMe: fromMe, sender: fromMe ? "You" : "Sarah",
             kind: file == nil ? "text" : "document", text: text, fileName: file, key: "K")
     }
 
@@ -35,6 +35,21 @@ import Testing
         let theirs = "Message from Sarah, on my way, November 4, at 21:22, Received from Sarah"
         #expect(WAWindow.matches(theirs, Self.message("on my way", m.date, fromMe: false), now: Self.now))
         #expect(!WAWindow.matches(theirs, m, now: Self.now))
+        // Anchored at the start, with the sender as the database names them.
+        let other = Self.message("on my way", m.date, fromMe: false)
+        #expect(!WAWindow.matches("Message from Sam, on my way, November 4, at 21:22, Received", other, now: Self.now))
+        #expect(!WAWindow.matches("Hi. " + theirs, other, now: Self.now))
+        #expect(
+            !WAWindow.matches(
+                "Message from Sam, x, Message from Sarah, on my way, November 4, at 21:22", other, now: Self.now),
+            "a field inside the words can't pass for the start")
+        #expect(!WAWindow.matches("Photo from Sarah, on my way, November 4, at 21:22, Received", other, now: Self.now))
+        #expect(
+            WAWindow.matches(
+                "Photo from Sarah, on my way, November 4, at 21:22, Received",
+                WhatsAppMessage(
+                    id: "1", chatID: "c", chatName: nil, date: m.date, fromMe: false, sender: "Sarah", kind: "image",
+                    text: "on my way", fileName: nil, key: "K"), now: Self.now))
     }
 
     @Test func todaysBubblesCarryTheTimeAlone() {

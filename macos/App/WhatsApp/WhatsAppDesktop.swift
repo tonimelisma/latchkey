@@ -553,50 +553,72 @@ struct WAWindow: @unchecked Sendable {
         return "\(day), \(year), at \(time)"
     }
 
-    /// Whether a bubble's label is this message's, field by field: "Your <kind>" for the Owner's own
-    /// or "<Kind> from <sender>" for others', then exactly its words (or file name), then exactly its
-    /// date and time, then the end or the next field.
-    static func matches(_ label: String, _ m: WhatsAppMessage, now: Date = Date()) -> Bool {
-        let words = shownWords(m)
-        guard !words.isEmpty else { return false }
-        let line = ownLine(label)
-        let tail = ", \(words), \(when(m.date, now: now))"
-        guard let range = line.range(of: tail) else { return false }
-        let after = line[range.upperBound...]
-        guard after.isEmpty || after.hasPrefix(",") else { return false }
-        let head = String(line[..<range.lowerBound])
-        if m.fromMe {
-            return head.range(of: #"^Your [a-z]+( [a-z]+)?$"#, options: .regularExpression) != nil
-        }
-        return !head.hasPrefix("Your ")
-            && head.range(of: #"^[A-Z][a-z]+( [a-z]+)? from \S"#, options: .regularExpression) != nil
+    /// What WhatsApp for Mac calls each kind of message at the start of a bubble's label.
+    static let kindWords: [String: String] = [
+        "text": "message", "image": "photo", "video": "video", "document": "document", "voice": "voice message",
+        "sticker": "sticker", "gif": "GIF", "location": "location", "contact": "contact",
+    ]
+
+    /// The label's expected start: "Your <kind>" for the Owner's own, "<Kind> from <sender>" for
+    /// others' (the sender as the database names them).
+    static func expectedHead(_ m: WhatsAppMessage) -> String {
+        let kind = kindWords[m.kind] ?? "message"
+        if m.fromMe { return "Your \(kind)" }
+        return "\(kind.prefix(1).uppercased())\(kind.dropFirst()) from \(clean(m.sender))"
     }
 
-    /// The message's bubble in this window's chat, scrolling up for older ones. Refused when the
-    /// message has no words or file name, or when more than one bubble matches.
+    /// Whether a bubble's label is this message's: exactly the expected head, its words (or file
+    /// name), and its date and time, from the label's start, then the end or the next field.
+    static func matches(_ label: String, _ m: WhatsAppMessage, now: Date = Date()) -> Bool {
+        let words = shownWords(m)
+        guard !words.isEmpty, m.fromMe || !clean(m.sender).isEmpty else { return false }
+        // Anchored from the start: exactly the expected head, words, and time, then the end or the
+        // next field (security review 2026-11-05).
+        let whole = "\(expectedHead(m)), \(words), \(when(m.date, now: now))"
+        let line = ownLine(label)
+        guard line.hasPrefix(whole) else { return false }
+        let after = line.dropFirst(whole.count)
+        return after.isEmpty || after.hasPrefix(",")
+    }
+
+    /// The message's bubble in this window's chat. The whole loaded history is looked through, from
+    /// the newest up, and the message is refused when it has no words or file name, or when more
+    /// than one bubble matches anywhere in it.
     func find(_ m: WhatsAppMessage) async -> Result<AXUIElement, Refusal> {
         guard !(m.text.isEmpty && (m.fileName ?? "").isEmpty) else {
             return .failure(
                 Refusal(message: "that message has no words or file name WhatsApp for Mac's window can be matched on"))
         }
-        for _ in 0..<30 {
+        var found: [AXUIElement] = []
+        var lastPage: [String] = []
+        for _ in 0..<60 {
             guard let pane = messagePane(), isTarget(pane) else {
                 return .failure(Refusal(message: "WhatsApp for Mac's window changed to another chat"))
             }
-            let hits = items(in: pane.element).filter { $0.role == "AXStaticText" && Self.matches($0.label, m) }
-            if hits.count > 1 {
+            let bubbles = items(in: pane.element).filter { $0.role == "AXStaticText" }
+            for hit in bubbles where Self.matches(hit.label, m) && !found.contains(where: { CFEqual($0, hit.element) })
+            {
+                found.append(hit.element)
+            }
+            if found.count > 1 {
                 return .failure(
                     Refusal(message: "more than one message in WhatsApp for Mac's window looks like that one"))
             }
-            if let hit = hits.first {
-                _ = perform(hit.element, "AXScrollToVisible")
-                try? await Task.sleep(for: .milliseconds(200))
-                return .success(hit.element)
-            }
+            let page = bubbles.map(\.label)
+            if page == lastPage { break }
+            lastPage = page
             guard perform(pane.element, "AXScrollUpByPage") else { break }
             try? await Task.sleep(for: .milliseconds(250))
         }
-        return .failure(Refusal(message: "WhatsApp for Mac's window doesn't show that message"))
+        guard let hit = found.first else {
+            return .failure(Refusal(message: "WhatsApp for Mac's window doesn't show that message"))
+        }
+        _ = perform(hit, "AXScrollToVisible")
+        try? await Task.sleep(for: .milliseconds(300))
+        guard let pane = messagePane(), isTarget(pane),
+            items(in: pane.element).contains(where: { CFEqual($0.element, hit) && Self.matches($0.label, m) })
+        else { return .failure(Refusal(message: "WhatsApp for Mac's window lost that message")) }
+        return .success(hit)
     }
 
     /// The message box shows that it replies to this message ("Quoted message, <its line>").
