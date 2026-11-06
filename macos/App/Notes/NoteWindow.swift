@@ -62,10 +62,19 @@ struct NoteWindow: Sendable {
                 defer { held = nil }
                 return held
             }
-            if let owner, let notes = Live.notesApp(), owner != notes,
-                Live.frontApp()?.processIdentifier == notes.processIdentifier
-            {
-                _ = await Live.bringForward(owner)
+            // Notes' `show` brings Notes forward a moment after the script returns (seen
+            // 2026-11-06), so watch for up to 1.5 s and give the front back each time it does,
+            // until the Owner's app has held it for 300 ms.
+            guard let owner, let notes = Live.notesApp(), owner != notes else { return }
+            var held = 0
+            for _ in 0..<30 where held < 6 {
+                if Live.frontApp()?.processIdentifier == notes.processIdentifier {
+                    held = 0
+                    _ = await Live.bringForward(owner)
+                } else {
+                    held += 1
+                }
+                try? await Task.sleep(for: .milliseconds(50))
             }
         },
         open: { noteID, ready in
