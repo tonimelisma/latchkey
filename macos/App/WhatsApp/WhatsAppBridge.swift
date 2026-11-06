@@ -5,7 +5,7 @@ import Foundation
 /// screen. `WhatsAppBridgeTests` runs it against a stand-in of those modules.
 enum WhatsAppBridge {
     /// `window.__latchkey.version`; a tab holding another version gets this one.
-    static let version = 2
+    static let version = 5
 
     static let source = #"""
         // Runs inside the Owner's WhatsApp Web tab (spec 012 plan D2). Defines window.__latchkey, whose
@@ -22,6 +22,14 @@ enum WhatsAppBridge {
             opaque: 'WAWebMediaOpaqueData',
             prep: 'WAWebPrepRawMedia',
             load: 'WAWebChatLoadMessages',
+          };
+          // Used only by the functions that need them (replies, reactions, deleting, your own chat), so
+          // a rename there doesn't stop sending and reading; the function then names what is missing.
+          const EXTRA = {
+            react: 'WAWebSendReactionMsgAction',
+            cmd: 'WAWebCmd',
+            capability: 'WAWebMsgActionCapability',
+            me: 'WAWebUserPrefsMeUser',
           };
           const wait = (ms) => new Promise((r) => setTimeout(r, ms));
           const clean = (s) => String(s || '').replace(/[‎‏‪-‮⁦-⁩]/g, '').trim();
@@ -41,6 +49,36 @@ enum WhatsAppBridge {
             return Object.values(MODULES).filter((name) => {
               try { return !window.require(name); } catch (e) { return true; }
             });
+          }
+
+          function extra(key) {
+            let m = null;
+            try { m = window.require(EXTRA[key]); } catch (e) { m = null; }
+            if (!m) throw new Error('WhatsApp Web changed in a way this version of Latchkey does not know (missing: ' + EXTRA[key] + '); Latchkey needs an update');
+            return m;
+          }
+
+          // The Owner's own chat ("Message yourself"), by WhatsApp Web's own idea of who is logged in.
+          function meChat(all) {
+            const me = extra('me');
+            const users = [];
+            for (const f of ['getMaybeMePnUser', 'getMaybeMeLidUser', 'getMaybeMeUser']) {
+              try { const u = typeof me[f] === 'function' ? me[f]() : null; if (u && u.user) users.push(u.user); } catch (e) { /* not in this version */ }
+            }
+            return all.find((c) => c.id.server !== 'g.us' && users.includes(c.id.user)) || null;
+          }
+
+          // A message of a chat by its key (the id WhatsApp gives it, as whatsapp_read shows it),
+          // loading older messages from WhatsApp as needed.
+          async function findMsg(chat, key) {
+            const k = String(key || '');
+            const hit = () => chat.msgs.getModelsArray().find((m) => m.id.id === k || mid(m) === k);
+            for (let i = 0; i < 30 && !hit(); i++) {
+              const n = chat.msgs.length;
+              try { await Promise.race([mod('load').loadEarlierMsgs({ chat }), wait(8000)]); } catch (e) { break; }
+              if (chat.msgs.length === n) break;
+            }
+            return hit() || null;
           }
 
           function chatsArray() { return mod('collections').Chat.getModelsArray(); }
@@ -82,11 +120,13 @@ enum WhatsAppBridge {
               text: clean(m.type === 'chat' ? m.body : (m.caption || '')),
               fileName: m.filename || '',
               ack: m.ack || 0,
+              key: m.id.id || '',
+              quoted: m.quotedStanzaID || '',
             };
           }
 
           window.__latchkey = {
-            version: 2,
+            version: 5,
 
             // The words on screen while no chats show (a loading or sync screen), for answers
             // that say why WhatsApp isn't connected. Never while chats show: no message text.
@@ -127,6 +167,10 @@ enum WhatsAppBridge {
               const to = clean(args.to);
               if (!to) return { none: true };
               const all = chatsArray();
+              if (/^(me|myself|you|message yourself)$/i.test(to)) {
+                const own = meChat(all);
+                return own ? { match: chatInfo(own) } : { none: true };
+              }
               // The desktop app's ids name people @s.whatsapp.net where WhatsApp Web says @c.us.
               const asWeb = to.replace(/@s\.whatsapp\.net$/, '@c.us');
               const byId = all.find((c) => c.id._serialized === asWeb);
@@ -207,11 +251,21 @@ enum WhatsAppBridge {
               const confirm = async (pred) => {
                 while (Date.now() < deadline && failed === null) {
                   const m = mine().find((x) => !known.has(mid(x)) && pred(x));
-                  if (m && m.ack >= 1) { known.add(mid(m)); return { id: mid(m), ack: m.ack }; }
+                  if (m && m.ack >= 1) { known.add(mid(m)); return { id: mid(m), key: m.id.id, ack: m.ack, quoted: m.quotedStanzaID || '' }; }
                   await wait(100);
                 }
                 return null;
               };
+              // A reply quotes the message: WhatsApp's own senders take the message itself as quotedMsg
+              // (checked 2026-11-05: they call quotedMsg.msgContextInfo themselves).
+              let quote = {};
+              let quoted = null;
+              if (args.replyTo) {
+                quoted = await findMsg(chat, args.replyTo);
+                if (!quoted) return { error: 'the message to reply to (' + args.replyTo + ') is not in this chat' };
+                quote = { quotedMsg: quoted };
+              }
+              const quotes = (ok) => !quoted || (ok && ok.quoted === quoted.id.id);
               const files = args.files || [];
               for (let i = 0; i < files.length; i++) {
                 const f = files[i];
@@ -222,21 +276,67 @@ enum WhatsAppBridge {
                 const prep = mod('prep').prepRawMedia(data, { asStickerUpload: false, asGif: false, isPtt: false, asDocument: !photo });
                 await prep.waitForPrep();
                 const caption = i === 0 && args.text ? args.text : undefined;
-                await prep.sendToChat({ chat, options: caption ? { caption } : {} });
+                const options = Object.assign(i === 0 ? Object.assign({}, quote) : {}, caption ? { caption } : {});
+                await prep.sendToChat({ chat, options });
                 const ok = await confirm((m) => (photo ? m.type === 'image' : m.type === 'document'));
-                results.push({ file: f.name, sent: !!ok, ack: ok ? ok.ack : 0 });
+                results.push({ file: f.name, sent: !!ok, ack: ok ? ok.ack : 0, key: ok ? ok.key : '', quoted: i === 0 && !!quoted ? quotes(ok) : undefined });
                 if (!ok) return { chat: chatInfo(chat), results, incomplete: true };
               }
               if (args.text && files.length === 0) {
                 // WhatsApp's own promise can take tens of seconds to settle after the message is out
                 // (seen 2026-11-03), so the message itself, in the chat with ack >= 1, is the answer.
-                mod('sendText').sendTextMsgToChat(chat, args.text).catch((e) => { failed = String((e && e.message) || e); });
+                mod('sendText').sendTextMsgToChat(chat, args.text, Object.assign({}, quote)).catch((e) => { failed = String((e && e.message) || e); });
                 const ok = await confirm((m) => m.type === 'chat' && m.body === args.text);
                 if (failed) return { chat: chatInfo(chat), results, error: failed };
-                results.push({ text: true, sent: !!ok, ack: ok ? ok.ack : 0 });
+                results.push({ text: true, sent: !!ok, ack: ok ? ok.ack : 0, key: ok ? ok.key : '', quoted: quoted ? quotes(ok) : undefined });
                 if (!ok) return { chat: chatInfo(chat), results, incomplete: true };
               }
               return { chat: chatInfo(chat), results };
+            },
+
+            // A reaction on a message (emoji), or none ('' takes the Owner's reaction away).
+            async react(args) {
+              const chat = chatsArray().find((c) => c.id._serialized === args.chat);
+              if (!chat) return { error: 'no such chat' };
+              const m = await findMsg(chat, args.message);
+              if (!m) return { error: 'no such message in this chat' };
+              const react = extra('react');
+              let failed = null;
+              let done = false;
+              Promise.resolve(react.sendReactionToMsg(m, args.emoji || '')).then(() => { done = true; }, (e) => { failed = String((e && e.message) || e); });
+              const deadline = Date.now() + (args.timeoutMs || 10000);
+              while (!done && failed === null && Date.now() < deadline) await wait(100);
+              if (failed !== null) return { error: failed };
+              return { done, message: msgInfo(m, chat) };
+            },
+
+            // Deletes a message: for the Owner only, or for everyone (only the Owner's own, and only
+            // while WhatsApp still allows it). Done when WhatsApp has taken it out or marked it deleted.
+            async remove(args) {
+              const chat = chatsArray().find((c) => c.id._serialized === args.chat);
+              if (!chat) return { error: 'no such chat' };
+              const m = await findMsg(chat, args.message);
+              if (!m) return { error: 'no such message in this chat' };
+              const cmd = extra('cmd').Cmd;
+              const info = msgInfo(m, chat);
+              if (args.everyone) {
+                if (!m.id.fromMe) return { refused: 'only your own messages can be deleted for everyone' };
+                const cap = extra('capability');
+                if (typeof cap.canSenderRevokeMsg === 'function' && !cap.canSenderRevokeMsg(m)) {
+                  return { refused: 'WhatsApp doesn\'t allow deleting this message for everyone (it is too old, or WhatsApp doesn\'t allow it in this chat, as in your own chat)' };
+                }
+                cmd.sendRevokeMsgs(chat, { list: [m], type: 'message' }, { clearMedia: true });
+              } else {
+                cmd.sendDeleteMsgs(chat, { list: [m], type: 'message' }, true);
+              }
+              const key = m.id.id;
+              const deadline = Date.now() + (args.timeoutMs || 10000);
+              const gone = () => {
+                const now = chat.msgs.getModelsArray().find((x) => x.id.id === key);
+                return args.everyone ? !now || now.type === 'revoked' : !now;
+              };
+              while (!gone() && Date.now() < deadline) await wait(100);
+              return { done: gone(), message: info };
             },
           };
         })();

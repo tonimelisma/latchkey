@@ -5,6 +5,10 @@ WhatsApp for Mac's database or the Owner's WhatsApp Web tab in Safari, sending o
 tab, opened by Latchkey when none is (Toni, 2026-11-04: the window fallback worked only unlocked). First built in 0.8.101 (2026-11-03) with Latchkey's own
 linked device; on 2026-11-04, after two days of linking that device and test devices by code,
 WhatsApp logged out every linked device of Toni's account (the phone stayed logged in).
+Extended 2026-11-05 (Toni: "add everything missing"): replies, reactions, and deleting on both
+paths; the Owner's own chat as "me"; older history from WhatsApp for Mac's database while reading
+through Safari; and WhatsApp for Mac's window again, as the fallback when the Safari tab can't be
+used (reverses FR-1215's "only through Safari").
 Scope: Claude reads, searches, and sends the Owner's WhatsApp messages from any Claude app,
 through the Mac, including while the Mac is locked where the Mac allows it.
 Out of scope: calls, status updates, communities and channels, changing WhatsApp settings.
@@ -74,9 +78,8 @@ As an Owner, I ask Claude to send a WhatsApp message, and it goes out right away
   and shall answer with the candidates so Claude can ask the Owner.
 - **FR-1214** Through the Safari tab, the system shall send to a person or a group, and shall send
   photos and files from the Mac as attachments, as well as text (Toni, 2026-11-02).
-- **FR-1215** When Claude asks to send, the system shall send only through WhatsApp Web in
-  Safari (FR-1208), without taking focus (Toni, 2026-11-04: WhatsApp for Mac's window, a
-  fallback that day, worked only with the Mac unlocked, and was removed).
+- **FR-1215** Withdrawn 2026-11-05 (sending only through WhatsApp Web in Safari; WhatsApp for
+  Mac's window is the fallback again, FR-1245).
 - **FR-1216** When a send may have gone (WhatsApp hasn't confirmed it), the system shall not send
   it again, and shall say to check before sending again.
 
@@ -89,6 +92,49 @@ As an Owner, I ask Claude to send a WhatsApp message, and it goes out right away
 - **FR-1222** While WhatsApp for Mac is running, the system shall read from its database;
   otherwise from the Owner's WhatsApp Web tab in Safari; otherwise from the database, saying how
   old its newest message is (Toni, 2026-11-04).
+
+- **FR-1248** While the system reads through the Safari tab and WhatsApp for Mac's database is
+  readable, when the tab holds fewer messages than asked for, the system shall add the older
+  messages from the database, saying which ones come from it and that it may be out of date.
+
+### Replies, reactions, and deleting (2026-11-05)
+
+- **FR-1240** The system shall show each message with WhatsApp's own id for it, the same through
+  the Safari tab and WhatsApp for Mac's database, so Claude can reply to, react to, or delete it.
+- **FR-1241** When Claude sends with a message's id to reply to, the system shall send the text or
+  files as a reply quoting that message, and say whether WhatsApp shows it as a reply; when that
+  message isn't in the chat, the system shall send nothing.
+- **FR-1242** When Claude asks to react to a message, the system shall put that emoji on it as the
+  Owner's reaction (replacing an earlier one), and, when asked to unreact, take the Owner's
+  reaction off.
+- **FR-1243** When Claude asks to delete a message, the system shall delete it for the Owner only,
+  or, when asked for everyone, for everyone in the chat: only the Owner's own messages and only
+  while WhatsApp allows it; otherwise it shall do nothing and say WhatsApp's reason.
+- **FR-1244** When Claude names the chat "me", the system shall use the Owner's own chat
+  ("Message yourself"), found by the Owner's own account, never by a chat's name; when that
+  account isn't known, it shall say no chat matches.
+
+### WhatsApp for Mac when the Safari tab can't be used (2026-11-05)
+
+- **FR-1245** When the Safari tab can't be used before anything went through it, and WhatsApp for
+  Mac runs and the Mac is unlocked, the system shall send through WhatsApp for Mac's window, to a
+  person (with or without a known number) or a group, text, files, or both, and as a reply,
+  confirmed in WhatsApp for Mac's database; and say in the answer why Safari wasn't used.
+- **FR-1246** The system shall act in WhatsApp for Mac's window only on a chat it opened with
+  certainty (a person by their number through WhatsApp's own link, the Owner's own chat by the
+  Owner's number, anything else only by a name no other chat has) and only on a message whose
+  side, words or file name, date, and time no other message of that chat shares; otherwise it
+  shall do nothing and say why.
+- **FR-1247** When the Safari tab can't be used, the system shall react, unreact, and delete
+  through WhatsApp for Mac's window, and count it done only when WhatsApp for Mac's database shows
+  that very message (by its id) changed.
+- **FR-1250** When WhatsApp for Mac must come to the front (its message menu, typing, files), the
+  system shall not do it while the Owner used the keyboard or pointer in the last 3 seconds; shall
+  stop without sending when the Owner does, another app comes to the front, the chat changes, or
+  the message box doesn't hold exactly the text; shall put back the Owner's clipboard; and shall
+  bring back the app that was in front.
+- **FR-1249** While the Mac is locked and the Safari tab can't be used, the system shall answer at
+  once that WhatsApp for Mac's window can't be used while the Mac is locked, and do nothing.
 
 ### Permissions and visibility
 
@@ -106,6 +152,9 @@ As an Owner, I ask Claude to send a WhatsApp message, and it goes out right away
   phone sends the message through the Safari tab, and the person receives it, within 60 s; or,
   where Safari doesn't answer while locked, Claude says so at once.
 - **SC-1202** Withdrawn 2026-11-04 (staying linked for 24 hours).
+- **SC-1204** With the Safari tab closed and Safari unable to open one, "WhatsApp the family
+  group <text>" goes out through WhatsApp for Mac with the Mac unlocked, and is answered at once
+  with why with the Mac locked.
 - **SC-1203** While the Owner types in another app, a send through the Safari tab causes no focus
   change, window, or pointer movement (checked with `focus.log` from the screen-state checks).
 

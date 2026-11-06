@@ -175,3 +175,120 @@ A signed test app kept the page open and took commands; it logged the page's sta
   business service (not from the Owner's number).
 - Safari while locked: on 2026-11-01 Safari stopped answering scripts with the Mac locked
   (spec 005); whether a WhatsApp send through the tab works locked is part of the live check.
+
+## 2026-11-05: replies, reactions, deleting, and WhatsApp for Mac again
+
+Toni asked to "add everything missing": the window fallback for groups, contacts without a
+known number, files, and more screen states; replies, reactions, and deleting on both paths;
+older history. Tests on Toni's Mac (macOS 27.0.1, WhatsApp for Mac 2.26.43.75), only in his own
+"Message yourself" chat, every test message deleted afterwards and checked gone in WhatsApp for
+Mac's database.
+
+### WhatsApp for Mac's window through Accessibility (unlocked)
+
+- The research of 2026-11-02 ("System Events saw zero elements") no longer holds: this version
+  shows its whole window to Accessibility, with WhatsApp behind other windows. Chats are
+  `AXButton`s named for the chat (", 3 unread messages" after a comma); the open chat is the
+  `AXGroup` "Messages in chat with <name>" (the Owner's own chat: "You"); each message is an
+  `AXStaticText` labelled with its side, words, date, and time: "Your message, <text>, November 4,
+  at 21:22, Sent to You, Red", "Your photo, <caption>, …", "Your document, check.txt, …". Every
+  label starts with an invisible direction mark (U+200E). The app's name is "‎WhatsApp" (with the
+  mark), so looking it up by the name "WhatsApp" fails; Latchkey uses its bundle id.
+- A message's `AXShowMenu` opens WhatsApp's own message menu in the background: Reply, React,
+  Star, Pin, Forward, Copy, Info, Delete, Select messages. A chat row's opens the chat menu
+  (Close Chat … Clear chat, Delete chat): never `AXShowMenu` on a row (one was opened by
+  mistake and closed with Escape, nothing chosen).
+- Delete, all in the background, WhatsApp never in front: Delete in the message menu puts the
+  chat in selection mode with that message selected ("1 Selected"); `AXPress` on other bubbles
+  selects them too (a bubble scrolled half out of view ignores the press until
+  `AXScrollToVisible`); the bar's Delete button asks "Delete 7 for me". This deleted the seven
+  test messages of 2026-11-04 (the first cleanup); the database showed them gone at once.
+- Pressing a chat row (`AXPress`) opens it in the background.
+- The menu bar is there too (Chat → Send, Send file…, Reply to Last Message, React to Last
+  Message; Edit → Paste), but Paste is disabled while WhatsApp isn't the active app.
+- Typing in the background does not work: key and text events sent to WhatsApp's process alone
+  (`CGEvent.postToPid`, as the computer tools do for other apps) never reach its search field or
+  message box. Setting the message box's `AXValue` shows the text but WhatsApp doesn't take it:
+  the microphone stays, Send (menu) does nothing.
+
+- Unlocked again (18:10 to 18:40), in the Owner's own chat, every message deleted afterwards and
+  checked gone in the database and in WhatsApp Web's search:
+  - `AXSelectedText` in the background: accepted, but the box stays empty. Not usable.
+  - `whatsapp://send?phone=<number>&text=<text>`, opened without activating: WhatsApp stays
+    behind, fills the box its own way, and shows Send; pressing Send (`AXPress`) sent it. The whole
+    send of text to a person, or to the Owner's own chat, happens in the background.
+  - Opening a message's menu (`AXShowMenu`) brings WhatsApp to the front by itself. So React,
+    Reply, and Delete take the front for a moment, whatever else is done.
+  - With WhatsApp in front, keys sent to its process alone still don't arrive; keystrokes through
+    the session's event stream do, and so does Command-V there with a file on the clipboard (it
+    opens WhatsApp's preview with a caption field and Send). Edit → Paste from the menu bar stayed
+    disabled even in front. Typing into the caption field didn't arrive; the text goes as its own
+    message after the file.
+  - From a command-line program, `activate()`, Launch Services, and `AXFrontmost` were all granted
+    only after the program ended (cooperative activation); `NSWorkspace.frontmostApplication` also
+    lagged there, while the app's own `AXFrontmost` attribute told the truth at once. Latchkey (an
+    app) brings Notes forward with `activate()`; WhatsApp gets `activate()`, `AXFrontmost`, and,
+    failing those, its latest message's menu (opened and closed), which reliably brings it forward.
+  - Bringing the Owner's app back right after pressing a reaction made WhatsApp drop it; a press
+    during the reaction tray's opening animation was dropped too. Latchkey waits for what it
+    pressed to go away and a moment more.
+  - React: the tray shows twelve reactions (`AXIdentifier` ReactionsTray_ReactionButton), the
+    Owner's own marked `AXSelected`; pressing it again takes it off. A reaction made in WhatsApp
+    for Mac did not show in its database (`ZWAMESSAGEINFO` unchanged), unlike one made through
+    WhatsApp Web; the chat list's line "You reacted 👍 to "<words>"" did, and is the confirmation.
+  - Reply: the message box shows "Quoted message, Your message, <words>"; the reply's bubble is
+    labelled "Replying to You.\n<its line>.\nQuoted message.\n<quoted words>"; the database keeps
+    the quoted message's id in the reply's `ZWAMEDIAITEM.ZMETADATA`, which confirms the quote.
+  - Delete: in the Owner's own chat WhatsApp offers only "Delete for me" (as WhatsApp Web's own
+    check said); a selected text bubble's value is "Selected", a document's isn't.
+  - Chat → Close Chat (menu bar) works in the background and leaves no chat open; Escape sent to
+    WhatsApp closes the open chat (and only reached it while in front). The Archived button and
+    the sidebar's Chats switch lists in the background.
+  - A document sent from WhatsApp for Mac is stored with its name without the extension as text and
+    no title; its bubble shows the full file name.
+- Not tried live: a group or a person without a known number (pressing their row would mark the
+  chat read in Toni's real chats; the steps are the ones checked in the Owner's own chat), the lid
+  closed while unlocked.
+
+### WhatsApp for Mac with the Mac locked
+
+- Locked, WhatsApp for Mac shows Accessibility nothing but its menu bar: its one "window" is
+  itself (a loop) with no chats or messages. Opening `whatsapp://send?phone=<own number>&text=…`
+  in the background, then Chat → Send from the menu bar, then Return sent to its process: nothing
+  was sent (database checked). So WhatsApp for Mac can't send, react, or delete while the Mac is
+  locked, by any route tried; the answer says so at once (FR-1249).
+- Its database stays current while locked (it showed a message sent through Safari within
+  seconds), so reading keeps working.
+
+### WhatsApp Web in Safari while locked (2026-11-05)
+
+- With the Mac locked (14:15), the installed Latchkey opened WhatsApp Web in a background Safari
+  tab and sent to the Owner's own chat; Safari answered `do JavaScript` throughout. This answers
+  the open question of 2026-11-04 for this lock (spec 005 saw Safari stop answering on
+  2026-11-01; it can still happen and is answered as before).
+- Checked live in that tab, locked, with the new bridge: `me` found the Owner's own chat through
+  `WAWebUserPrefsMeUser`; message keys (`id.id`) equal WhatsApp for Mac's `ZSTANZAID`, so one
+  message id works on both paths; a reply quoted the message, as text and as a file
+  (`sendTextMsgToChat(chat, text, {quotedMsg})` and the media send's `quotedMsg` option: WhatsApp
+  calls `quotedMsg.msgContextInfo` itself, so passing the result of `msgContextInfo` failed with
+  "T.msgContextInfo is not a function"); `WAWebSendReactionMsgAction.sendReactionToMsg(msg, "👍")`
+  reacted and `""` took it off (WhatsApp for Mac's database showed 👍 in that message's
+  `ZWAMESSAGEINFO.ZRECEIPTINFO`, then not); `WAWebCmd.Cmd.sendDeleteMsgs(chat, {list, type:
+  'message'}, true)` deleted for me (gone from the database within 2 s);
+  `WAWebMsgActionCapability.canSenderRevokeMsg` said no to deleting a one-minute-old message for
+  everyone in the Owner's own chat, so that is refused with WhatsApp's own reason. Module names
+  and argument shapes follow whatsapp-web.js (Apache-2.0), `src/structures/Message.js` and
+  `src/util/Injected/Utils.js` (read 2026-11-05).
+- `browser_act` scripts can't reach WhatsApp Web (its Content Security Policy refuses `eval`);
+  Latchkey's `do JavaScript` isn't `eval` and works.
+
+### Confirming a change in WhatsApp for Mac's database
+
+- A message's row (`ZWAMESSAGE.Z_OPT`) and its receipts row (`ZWAMESSAGEINFO`, where reactions
+  are kept) change when WhatsApp changes that message: a reaction raised `Z_OPT` from 3 to 4 and
+  added the emoji to `ZRECEIPTINFO`. Latchkey takes these as the message's stamp and confirms a
+  reaction by its change, a deletion by the row going (for me) or turning type 14 (for everyone),
+  and a send by a new message of the Owner's in that chat with that text.
+- The Owner's own account: WhatsApp's `LID.sqlite`, table `ZWAZACCOUNT`, has one row with a
+  country code (the Owner's: privacy id and number); other rows are accounts it knows by privacy
+  id and number, also used to find a number for a chat filed by privacy id.
