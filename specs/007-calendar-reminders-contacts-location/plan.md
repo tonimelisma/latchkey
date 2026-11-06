@@ -194,7 +194,7 @@ read-only.
 | I. No inbound connections | Pass: same outbound connection |
 | II. Fail fast | Pass: every tool has a deadline; no prompt at call time |
 | III. Disabled means nonexistent | Pass: levels filter the tools (registry) |
-| IV. Good macOS citizen | Pass, with one stated exception: invitations (D7) use EventKit methods Apple doesn't document, because no public API exists for them (Apple: "you can't add participants to an event nor change participant information"); they are the calls Calendar itself makes, inside the public EventKit framework, with no private framework loaded, each checked before use and read back after |
+| IV. Good macOS citizen | Pass, with one exception approved by Toni 2026-11-05 (recorded under principle IV in the constitution): invitations (D7) use EventKit methods Apple doesn't document, because no public API exists for them (Apple: "you can't add participants to an event nor change participant information"); they are the calls Calendar itself makes, inside the public EventKit framework, with no private framework loaded, each checked before use and read back after |
 | V. Self-hostable | Pass: no new service; MapKit is part of macOS |
 | VI. Store the minimum | Pass: nothing stored on disk; ids are derived; what Latchkey created in Contacts is kept in memory for the run only (FR-724) |
 | VII. Test-first | Pass: tests above written first |

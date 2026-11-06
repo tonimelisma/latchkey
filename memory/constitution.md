@@ -24,6 +24,17 @@ no private frameworks where a public API exists. If the user deletes the app, no
 On Linux: one systemd service, the distribution's own conventions, sudo set up only by the user
 (Latchkey never edits sudo's settings), and an uninstall command that leaves nothing behind.
 
+Exception (approved by Toni 2026-11-05): Calendar invitations use EventKit methods Apple doesn't
+document, because EventKit has no public way to answer invitations or invite people (spec 007
+FR-705 to FR-708, plan D7). Exactly these, the calls Calendar.app itself makes, inside the public
+EventKit framework: `EKEvent` `participationStatus`/`setParticipationStatus:`,
+`responseComment`/`setResponseComment:`, `addAttendee:`, `removeAttendee:`,
+`addOrganizerAndSelfAttendeeForNewInvitation`, the flags `allowsParticipationStatusModifications`,
+`allowsAttendeesModifications`, `currentUserMayActAsOrganizer`;
+`EKAttendee attendeeWithName:emailAddress:`; `EKSource ownerAddresses`; `EKCalendar`
+`selfIdentityEmail`, `ownerIdentityEmail`, `selfIdentityAddress`, `ownerIdentityAddress`. Each is
+checked before use, every change is read back, and a test fails when one disappears.
+
 ## V. Self-hostable by default
 The relay is one Go binary plus one SQLite file, shipped as a Docker image. The hosted instance runs
 exactly the same code. No feature may depend on a specific cloud vendor.
