@@ -293,7 +293,9 @@ enum CalendarCapability {
             }
             guard !old.ownEvent, old.attendees.contains(where: \.isOwner) else {
                 throw ArgumentError(
-                    message: "“\(old.title)” isn't an invitation to the Owner from someone else, so there's nothing to answer.")
+                    message:
+                        "“\(old.title)” isn't an invitation to the Owner from someone else, so there's nothing to answer."
+                )
             }
             guard old.canRespond else {
                 throw ArgumentError(

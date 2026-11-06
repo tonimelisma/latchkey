@@ -196,8 +196,8 @@ final class EventKitBackend: EventsBackend, @unchecked Sendable {
         case .clear: e.recurrenceRules = nil
         case .set(let r): e.recurrenceRules = [Self.rule(r)]
         }
-        try EventKitInvitations.uninvite(d.uninvite, from: e)
-        try EventKitInvitations.invite(d.invite, to: e)
+        try EventKitInvitations.uninvite(d.uninvite, from: e, own: EventKitInvitations.ownAddresses(of: e))
+        try EventKitInvitations.invite(d.invite, to: e, own: EventKitInvitations.ownAddresses(of: e))
     }
 
     static func rule(_ r: Repeat) -> EKRecurrenceRule {
@@ -269,7 +269,8 @@ final class EventKitBackend: EventsBackend, @unchecked Sendable {
             && (flag("allowsParticipationStatusModifications") ?? true)
         let sendsInvitations = [EKSourceType.calDAV, .exchange, .mobileMe].contains(e.calendar?.source?.sourceType)
         info.canInvite =
-            own ? sendsInvitations && (flag("allowsAttendeesModifications") ?? true)
+            own
+            ? sendsInvitations && (flag("allowsAttendeesModifications") ?? true)
             : (flag("allowsAttendeesModifications") ?? false)
         info.changesReachOthers = own || flag("currentUserMayActAsOrganizer") == true
         return info

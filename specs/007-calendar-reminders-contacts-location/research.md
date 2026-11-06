@@ -115,10 +115,59 @@ request, so notes are not read.
 - **Search sizes.** Events: up to 200 per answer (default 50), ranges up to 4 years (EventKit's
   limit for one query). Contacts: up to 100 (default 20). Places: up to 25 (default 10).
 
+## Invitations (2026-11-05, spec FR-705 to FR-708; choice by Claude, Toni asked for "everything missing")
+
+What was needed: accept, maybe, or decline an invitation; invite and uninvite people; change an
+event someone else organized. Apple's EventKit documents none of these ("you can't add
+participants to an event nor change participant information", `EKParticipant`). Options, least
+intrusive first:
+
+| Option | Works locked / lid closed | Pros | Cons | Result |
+|---|---|---|---|---|
+| EventKit's own undocumented methods (the ones Calendar.app calls): `EKEvent.participationStatus`/`responseComment`, `EKAttendee attendeeWithName:emailAddress:`, `addAttendee:`/`removeAttendee:`, `addOrganizerAndSelfAttendeeForNewInvitation`; flags `allowsParticipationStatusModifications`, `allowsAttendeesModifications`, `currentUserMayActAsOrganizer` | Yes (no window; same save as every Calendar change, which the screen-state check passes in all four states) | Nothing on screen; the account sends invitations and answers exactly as when the Owner uses Calendar; per-event permission flags come with it | Undocumented: Apple may rename them (looked up before use, a test fails first); Constitution IV exception (plan check) | **Chosen** |
+| Calendar.app's window through Accessibility (Computer control) | No (needs an unlocked screen; the invitation popover and Add Invitees field need Calendar in front for a moment) | Apple's own UI | Fragile, slow, visible, fails locked and with the lid closed (Computer control's limits) | **Fallback**: when a call is missing, the answer says Claude can do it in Calendar through Computer control |
+| Calendar's AppleScript | — | No undocumented calls | Its dictionary makes an attendee's `email` and `participation status` read-only (`sdef Calendar.app`), so no answers; adding attendees through it hasn't worked for years | Rejected |
+| CalDAV / Exchange (EWS, Graph) / Google Calendar API directly | Yes | Documented protocols | Needs each account's password or OAuth tokens, which macOS keeps from apps; Google's API needs a verified OAuth app; a second copy of every account | Rejected |
+| iTIP by Mail (an emailed `METHOD:REPLY` or `REQUEST`) | No (Mail sends only while unlocked) | Standard (RFC 5546) | The Owner's calendar copy keeps its old answer; Google and Exchange often ignore emailed replies from clients; invitations by email never reach the organizer's calendar as attendees | Rejected |
+
+Open-source MCP servers: iMCP's README offers viewing and creating events (repeats, alerts,
+availability) and names nothing about inviting or answering; the other servers above weren't
+checked again for this. A 2015 Stack Overflow answer shows the
+same undocumented `EKAttendee` class used to add attendees.
+
+Checked live 2026-11-05 on this Mac (macOS 26), with a test program built from Latchkey's own
+`EventKitBackend` and `EventKitInvitations` and run through the installed app's Shell tool, so
+with Latchkey's Calendar permission (a program run from Terminal gets write-only access):
+- All the calls exist. On unsaved events in each writable calendar (two Google, three Exchange):
+  inviting adds the person, the Owner as organizer, and the Owner as attendee; uninviting the
+  last person leaves no attendees. Nothing saved.
+- An attendee with the Owner's own address, saved without the organizer step, was dropped by the
+  save without an error: hence the organizer step and refusing the Owner's addresses (taken from
+  the account's `ownerAddresses` and the calendar's self and owner identities; a Google group
+  calendar's owner is the group address).
+- Answering, in memory only on three real invitations (never saved): the Owner's attendee entry
+  takes the new answer. Real invitations from others have
+  `allowsParticipationStatusModifications` 1 in the Owner's own calendars and 0 in calendars
+  shared by someone else (Jonna's), so those are refused with the reason.
+- Saved and deleted: a "Latchkey check" event in the Exchange calendar, with the Owner's own
+  address refused; the teardown confirmed nothing left, and `calendar_find` found nothing.
+- Not done live: a real invitation sent to someone, or a real answer sent to an organizer. The
+  test rules allow invitations only to the Owner's own address (`LATCHKEY_CHECK_TO`), the Exchange account itself,
+  and never from Gmail; an emailed test invitation from another account was not sent (the send
+  was refused in this session).
+
+Low-level choices (Claude): `answer` takes accept, maybe, decline (Calendar's words; "tentative"
+and "yes"/"no" also accepted); invite and uninvite are lists of addresses on create and update
+rather than separate actions, so one call can change an event and its invitees; the answer and
+attendees are read back after every save and a mismatch is an error.
+
 ## Sources
 
 - Apple: [EventKit](https://developer.apple.com/documentation/eventkit),
   [EKParticipant](https://developer.apple.com/documentation/eventkit/ekparticipant),
+  [RFC 5546 iTIP](https://www.rfc-editor.org/rfc/rfc5546),
+  [RFC 6638 CalDAV scheduling](https://www.rfc-editor.org/rfc/rfc6638),
+  [Stack Overflow: adding attendees with EventKit](https://stackoverflow.com/questions/28199558/how-to-add-attendees-to-a-calendar-event-in-ios),
   [Contacts](https://developer.apple.com/documentation/contacts),
   [Core Location](https://developer.apple.com/documentation/corelocation),
   [MKLocalSearch](https://developer.apple.com/documentation/mapkit/mklocalsearch),

@@ -135,7 +135,9 @@
         {"id": "calendar.read", "case": "Read an event in full", "steps": "calendar_find query \"{TAG}\" from {TOMORROW} to {TOMORROW}, then calendar_find with its id."},
         {"id": "calendar.move", "case": "Move an event", "steps": "calendar_change update that id, start \"{TOMORROW}T04:00\" (check it still lasts 15 minutes)."},
         {"id": "calendar.repeat", "case": "Make an event repeat", "steps": "calendar_change update that id, repeat daily, repeat_count 3."},
-        {"id": "calendar.delete", "case": "Delete an event", "steps": "calendar_change delete that id, span future; then check calendar_find query \"{TAG}\" over the next 5 days finds nothing (delete any left)."}
+        {"id": "calendar.delete", "case": "Delete an event", "steps": "calendar_change delete that id, span future; then check calendar_find query \"{TAG}\" over the next 5 days finds nothing (delete any left)."},
+        {"id": "calendar.invitation_read", "case": "See your answer to an invitation", "steps": "calendar_find from {TOMORROW}, 14 days on; pick an event organized by someone else (one with a person in its [calendar] other than the Owner's own, or an organizer shown when read) and read it with calendar_find id. works when the answer shows a \"Your answer:\" line. Never answer, change, or delete it: it is a real invitation."},
+        {"id": "calendar.invite_own", "case": "Inviting the calendar's own address is refused", "steps": "calendar_find with nothing; take a calendar that can be changed whose account is {TO}. calendar_change create, title \"{TAG} invite\", start \"{TOMORROW}T05:00\", calendar that calendar's id, invite [\"{TO}\"]. works when the answer refuses {TO} as the calendar's own address. Then calendar_find query \"{TAG} invite\" from {TOMORROW} to {TOMORROW}: delete any event found (span future) and look again; failed if one stays."}
       ],
       "missing": ["Invite people or answer invitations (macOS doesn't allow apps to)"]
     },

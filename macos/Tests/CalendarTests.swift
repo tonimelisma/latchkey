@@ -361,7 +361,8 @@ final class FakeEvents: EventsBackend, @unchecked Sendable {
             ]))
         #expect(both.isError)
         #expect(
-            text(await change.handler(.object(["action": .string("invite")]))).contains("create, update, delete, respond"))
+            text(await change.handler(.object(["action": .string("invite")]))).contains(
+                "create, update, delete, respond"))
     }
 
     @Test func updateMovesKeepingLengthAndDeleteRemoves() async throws {
@@ -491,6 +492,34 @@ final class FakeEvents: EventsBackend, @unchecked Sendable {
         let id = try addInvitation("Board meeting")
         let t = text(try await tool("calendar_find").handler(.object(["id": .string(id)])))
         #expect(t.contains("Your answer: not answered (calendar_change respond answers it)"), "\(t)")
+    }
+
+    /// The EventKit calls Calendar itself uses for invitations are still in this macOS: when
+    /// Apple removes one, this fails before a release ships without it (research.md
+    /// "Invitations").
+    @Test func eventKitStillHasTheInvitationCalls() {
+        #expect(EventKitInvitations.available)
+    }
+
+    /// Real EventKit objects, never saved: inviting adds the people, uninviting takes them off,
+    /// and the calendar's own address is refused (macOS drops it on save).
+    @Test func invitingChangesAnUnsavedEvent() throws {
+        let e = EKEvent(eventStore: EKEventStore())
+        try EventKitInvitations.invite(["ann@example.com", "bob@example.com"], to: e, own: [])
+        #expect(
+            Set((e.attendees ?? []).compactMap(EventKitInvitations.email)) == ["ann@example.com", "bob@example.com"])
+        try EventKitInvitations.invite(["ANN@example.com"], to: e, own: [])
+        #expect((e.attendees ?? []).count == 2, "someone already invited isn't added twice")
+        try EventKitInvitations.uninvite(["Ann@Example.com"], from: e)
+        #expect((e.attendees ?? []).compactMap(EventKitInvitations.email) == ["bob@example.com"])
+        #expect(throws: EventsFailure.self) {
+            try EventKitInvitations.invite(["Me@Example.com"], to: e, own: ["me@example.com"])
+        }
+    }
+
+    @Test func theOwnersAddressesComeFromTheAccount() {
+        let own = EventKitInvitations.addresses(["mailto:Toni@Example.com", "/calendar/dav/x/user/", "a@b.org"])
+        #expect(own == ["toni@example.com", "a@b.org"])
     }
 
     @Test func saysWhatToAllowWithoutAccess() async throws {
