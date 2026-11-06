@@ -23,6 +23,9 @@ extension NotesCapability {
     struct WindowFailure: Error {
         var message: String
 
+        /// Window editing is switched off (NoteWindow.enabled).
+        static let off = WindowFailure(message: "real checklists aren't available yet; that is being fixed.")
+
         static let locked = WindowFailure(
             message:
                 "The Mac is locked. Notes lets Latchkey change notes with checklists, links, or images only through its window, and macOS doesn't show a note there while the Mac is locked. Nothing was changed; it works again once someone unlocks the Mac. Plain notes can still be changed, and new notes made."

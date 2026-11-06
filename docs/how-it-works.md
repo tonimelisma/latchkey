@@ -44,7 +44,7 @@ Claude (web, Desktop, phone)  ──HTTPS──▶  Latchkey relay  ◀──out
   your Mac, and you can remove any one of them.
 - **You choose what Claude can do.** Each capability has a level in Latchkey's Settings window; a capability that's
   off doesn't exist as far as Claude knows. Most have Off, Read only, and Read & write; Shell and
-  Location & Maps are Off or On. Claude sees 33 tools from a Mac, plus the relay's `machines`:
+  Location & Maps are Off or On. Claude sees 32 tools from a Mac, plus the relay's `machines`:
 
   | Capability | Read only | Read & write adds |
   |---|---|---|

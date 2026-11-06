@@ -96,6 +96,11 @@ As an Owner, I set Notes and Messages each to Off, Read only, or Read & write in
   no way for other apps to make real checklists without Shortcuts (Toni chose AppleScript only,
   2026-10-22). Withdrawn 2026-11-04: replaced by FR-156; ☐ and ☑ remain only when Notes' window
   can't be used (FR-158).
+- **Switched off 2026-11-05 (FR-155 to FR-159, FR-172 to FR-178):** the live checks found a
+  checklist note mangled by FR-155/FR-156 and Messages' tapbacks not landing, edits failing, and
+  the window jamming. Until each works on Toni's Mac, the app refuses these plainly: notes with
+  checklists, links, or images as FR-106 first said, checklist items as ☐/☑ (FR-107), no ticking,
+  no `messages_change`, no new groups or inline replies. Reading (FR-170, FR-171) stays.
 - **FR-155** When Claude appends to, edits a passage of, renames, or replaces the text of a note
   that has checklists, links, mentions, tags, images, or tables, Latchkey shall make the change
   in Notes' own window, in place, leaving everything else in the note as it was, without

@@ -26,12 +26,17 @@ struct NoteWindow: Sendable {
     /// Whether the Mac is locked: Notes' window then has no note editor (checked live
     /// 2026-11-04), so nothing is tried.
     var locked: @Sendable () -> Bool = { false }
+    /// Whether changes go through Notes' window at all. Off in the app until checklist editing
+    /// works on real Notes (the live check of 2026-11-05 mangled a test note); then notes with
+    /// checklists, links, or images are refused as before (FR-106) and Claude's checklist items
+    /// stay ☐ and ☑.
+    var enabled = true
 
-    /// A window that never shows a note: the AppleScript route only.
+    /// No window: the AppleScript route only (what the app uses while window editing is off).
     static let unavailable = NoteWindow(
         show: { _ in [] }, restore: { _ in }, open: { _, _ in nil }, replace: { _, _, _ in false },
         isChecklist: { _, _ in nil }, toggleChecklist: { _ in false }, markChecked: { _, _ in false },
-        saved: { _ in false })
+        saved: { _ in false }, enabled: false)
 
     static let live = NoteWindow(
         show: { scriptID in

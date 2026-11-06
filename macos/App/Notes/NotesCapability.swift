@@ -12,7 +12,8 @@ enum NotesCapability {
             id: CapabilityRegistry.notes, title: "Notes", summary: "Read, search, create, edit, and delete notes",
             readTools: readTools(store: { try source.store() }, scripts: OSAScriptRunner(app: Permissions.notesApp)),
             writeTools: writeTools(
-                store: { try source.store() }, scripts: OSAScriptRunner(app: Permissions.notesApp), window: .live))
+                store: { try source.store() }, scripts: OSAScriptRunner(app: Permissions.notesApp),
+                window: .unavailable))
     }
 
     static let noAccess = """
@@ -242,7 +243,9 @@ enum NotesCapability {
                         var made = newFolder ? " The folder “\(folder)” was new and has been made." : ""
                         if hasChecklistItems(text) {
                             // FR-156: written as ☐/☑ lines, made real in Notes' window (FR-158: kept so without it).
-                            if let id {
+                            if !window.enabled {
+                                made += WindowFailure.off.boxes
+                            } else if let id {
                                 do {
                                     let last = lastShownLine(text)
                                     try await inWindow(
@@ -312,6 +315,7 @@ enum NotesCapability {
                                 isError: true)
                         }
                         if let why = refusal(note, replacing: mode == "replace") { return .text(why, isError: true) }
+                        if needsWindow(note), !window.enabled { return .text(windowOff(note), isError: true) }
                         var ending = ""
                         if needsWindow(note) {
                             // FR-155: in place, in Notes' window.
@@ -349,7 +353,9 @@ enum NotesCapability {
                                     Script.setBody,
                                     [note.scriptID, body.replacingOccurrences(of: needle, with: NoteHTML.escape(text))])
                             }
-                            if mode != "edit", hasChecklistItems(text) {
+                            if mode != "edit", hasChecklistItems(text), !window.enabled {
+                                ending = WindowFailure.off.boxes
+                            } else if mode != "edit", hasChecklistItems(text) {
                                 ending = await realChecklists(
                                     note, written: text, replace: mode == "replace", window, s)
                             }
@@ -412,6 +418,7 @@ enum NotesCapability {
                                 isError: true)
                         }
                         if let why = refusal(note, replacing: false) { return .text(why, isError: true) }
+                        if needsWindow(note), !window.enabled { return .text(windowOff(note), isError: true) }
                         if needsWindow(note) {
                             try await inWindow(scriptID: note.scriptID, noteID: note.id, window: window) { shown in
                                 try await apply(
@@ -455,6 +462,11 @@ enum NotesCapability {
                         else { return .text("Give the note's id and the item's text.", isError: true) }
                         let wanted: Bool
                         if case .bool(let b) = args["checked"] { wanted = b } else { wanted = true }
+                        if !window.enabled {
+                            return .text(
+                                "Latchkey can't tick or untick checklist items yet: that is being fixed. Ask the Mac's owner to do it in Notes.",
+                                isError: true)
+                        }
                         let note = try await s.read(id: id)
                         if let why = refusal(note, replacing: false) { return .text(why, isError: true) }
                         let found: (at: Int, ticked: Bool, text: String)
@@ -627,6 +639,19 @@ enum NotesCapability {
     /// Whether AppleScript's rewrite would lose part of the note, so Notes' window is used (FR-155).
     static func needsWindow(_ note: NotesStore.Note) -> Bool {
         note.hasChecklists || note.hasInlineItems || !note.attachments.isEmpty
+    }
+
+    /// FR-106, while window editing is off: why such a note isn't changed.
+    static func windowOff(_ note: NotesStore.Note) -> String {
+        var parts: [String] = []
+        if note.hasChecklists { parts.append("checklists") }
+        if note.hasInlineItems { parts.append("mentions, tags, or links") }
+        if !note.attachments.isEmpty { parts.append("images, tables, or other attachments") }
+        return """
+            Latchkey didn't change “\(note.title)”: it has \(parts.joined(separator: " and ")), and Notes only \
+            lets other apps rewrite a note's whole text, which would lose them. Create a new note instead, or \
+            ask the Mac's owner to change this one in Notes.
+            """
     }
 
     static func passage(_ problem: NoteWindowEdit.Problem, _ note: NotesStore.Note) -> String {

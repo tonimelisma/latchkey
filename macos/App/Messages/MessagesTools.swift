@@ -50,9 +50,10 @@ extension MessagesCapability {
     /// `messages_change` (tapbacks, edits, unsending, deleting; spec 002 FR-172 to FR-178).
     static func writeTools(
         store: @escaping StoreSource, contacts: any ContactsLookup, scripts: any ScriptRunner, staging: URL,
-        ui: any MessagesUI, confirmWait: Duration = .seconds(5)
+        ui: any MessagesUI, confirmWait: Duration = .seconds(5), windowActions: Bool = false
     ) -> [ToolEntry] {
         writeOperations(
-            store: store, contacts: contacts, scripts: scripts, staging: staging, ui: ui, confirmWait: confirmWait)
+            store: store, contacts: contacts, scripts: scripts, staging: staging, ui: ui, confirmWait: confirmWait,
+            windowActions: windowActions)
     }
 }

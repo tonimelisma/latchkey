@@ -43,6 +43,16 @@ logged out with "automated process detected"), and the account at stake is Toni'
 Facebook. Next: Toni opens facebook.com/messages in Safari; Claude reads the page (no clicks or
 typing), then writes spec 013 for Toni's review before any code.
 
+Switched off on 2026-11-05 until they work on Toni's Mac (live checks found them broken):
+Notes' window editing (checklist notes got mangled; such notes are refused again, checklist items
+stay ☐/☑, no ticking) and Messages' window actions (`messages_change`, new groups, inline replies;
+tapbacks didn't land, edits failed, the window jammed). The work list, in order: fix Notes
+checklist editing; fix the Messages actions; WhatsApp reading shows messages deleted for the
+Owner; prove Safari uploads/downloads/pictures, Reminders' window steps, Calendar through the app,
+WhatsApp groups, Mail while locked; Notes while locked through Shortcuts that Latchkey sets up
+itself. Each is done only once it works on the real Mac, every live test cleans up after itself,
+and nothing runs in the background (Toni, 2026-11-05).
+
 Notes with checklists, links, or images can be changed now (2026-11-04, Toni: "editing notes
 with checklists is not supported? … feels frustrating"): until now Latchkey refused every such
 note, which is most real notes. Such changes go through Notes' own window in the background

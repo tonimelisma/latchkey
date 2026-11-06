@@ -207,7 +207,7 @@ final class FakeScripts: ScriptRunner, @unchecked Sendable {
                 .object(["id": .string(id), "mode": .string("append"), "text": .string("eggs")]))
             #expect(result.isError, "\(id)")
             #expect(
-                result.content.jsonText.contains(id == "N-SECRET" ? "locked" : "Notes' window"),
+                result.content.jsonText.contains(id == "N-SECRET" ? "locked" : "Create a new note instead"),
                 "\(result.content.jsonText)")
         }
         #expect(fake.calls.isEmpty, "Notes was never asked to rewrite")
