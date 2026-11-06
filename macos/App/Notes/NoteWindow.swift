@@ -239,7 +239,7 @@ struct NoteWindow: Sendable {
         /// Runs `work` with Notes in front, then gives the front back to the app that had it.
         static func inFront(_ work: () async -> Bool) async -> Bool {
             guard let notes = notesApp() else { return false }
-            let previous = NSWorkspace.shared.frontmostApplication
+            let previous = frontApp()
             let done = await bringForward(notes) ? await work() : false
             // The front goes back to the app that had it (2026-11-06: a plain activate from the
             // installed app was refused and Notes stayed in front).
@@ -271,6 +271,20 @@ struct NoteWindow: Sendable {
                 if await isFront() { return true }
             }
             return false
+        }
+
+        /// The app in front, asked of Accessibility: NSWorkspace's answer was stale in the installed
+        /// app, so Notes was taken for the app in front and the front never went back (2026-11-06).
+        static func frontApp() -> NSRunningApplication? {
+            var v: AnyObject?
+            guard
+                AXUIElementCopyAttributeValue(
+                    AXUIElementCreateSystemWide(), kAXFocusedApplicationAttribute as CFString, &v) == .success,
+                let v, CFGetTypeID(v) == AXUIElementGetTypeID()
+            else { return NSWorkspace.shared.frontmostApplication }
+            var pid: pid_t = 0
+            AXUIElementGetPid(v as! AXUIElement, &pid)
+            return NSRunningApplication(processIdentifier: pid) ?? NSWorkspace.shared.frontmostApplication
         }
 
         /// Runs `/usr/bin/open -b <id>` and waits up to 5 s for it, without blocking a thread.
