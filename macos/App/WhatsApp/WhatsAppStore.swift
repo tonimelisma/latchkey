@@ -211,7 +211,13 @@ final class WhatsAppStore: @unchecked Sendable {
         LEFT JOIN ZWAMEDIAITEM i ON m.ZMEDIAITEM = i.Z_PK
         """
     /// Group events and other system rows have their own types; they aren't messages people wrote.
-    private static let written = "m.ZMESSAGETYPE NOT IN (6, 10)"
+    /// Messages people wrote (no group events), each once: WhatsApp for Mac's database can hold
+    /// the same message twice, two rows with one id in one chat (seen 2026-11-06), so only the
+    /// first row of an id is read.
+    private static let written = """
+        m.ZMESSAGETYPE NOT IN (6, 10) AND (m.ZSTANZAID IS NULL OR m.Z_PK = (SELECT MIN(d.Z_PK) FROM ZWAMESSAGE d \
+        WHERE d.ZCHATSESSION = m.ZCHATSESSION AND d.ZSTANZAID = m.ZSTANZAID))
+        """
 
     private func message(_ r: [SQLite.Value]) -> WhatsAppMessage {
         let fromMe = r[4].int == 1
