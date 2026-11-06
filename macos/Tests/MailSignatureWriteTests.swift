@@ -269,12 +269,19 @@ import Testing
     }
 
     /// Mail's window showed the one address asked for twice (docs/use-cases.md, forward, 2026-11-04):
-    /// a repeat of a token already paired with an asked address isn't a new recipient.
-    @Test func aRecipientShownTwiceIsNotAnExtra() {
+    /// an exact address repeated isn't a new recipient; a repeated name still is, since two
+    /// people can share a name (security review 2026-11-05).
+    @Test func anAddressShownTwiceIsNotAnExtra() {
         let bob = KnownAddress(address: "bob@example.com", names: ["Bob Stone"])
-        #expect(MailCompose.pair(["Bob Stone", "Bob Stone"], [bob]).extra.isEmpty)
         #expect(MailCompose.pair(["bob@example.com", "bob@example.com"], [bob]).extra.isEmpty)
+        #expect(MailCompose.pair(["bob@example.com", "Bob Stone <BOB@example.com>"], [bob]).extra.isEmpty)
+        #expect(MailCompose.pair(["Bob Stone", "bob@example.com"], [bob]).extra == ["Bob Stone"])
         #expect(MailCompose.pair(["Bob Stone", "Eve"], [bob]).extra == ["Eve"])
         #expect(MailCompose.pair(["Eve", "Eve"], [bob]).extra == ["Eve", "Eve"])
+    }
+
+    @Test func aNameShownTwiceIsStillAnExtra() {
+        let bob = KnownAddress(address: "bob@example.com", names: ["Bob Stone"])
+        #expect(MailCompose.pair(["Bob Stone", "Bob Stone"], [bob]).extra == ["Bob Stone"])
     }
 }

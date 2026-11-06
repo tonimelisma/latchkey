@@ -282,14 +282,22 @@ enum MailCompose {
             if let i = left.firstIndex(where: { $0.matches(t) }) {
                 left.remove(at: i)
                 paired.append(t)
-            } else if !paired.contains(t) {
-                // The same token again, after one like it stood for an asked address, is that
-                // recipient shown twice, not another one (Mail's window, forward of 2026-11-04:
-                // the address typed again when Mail was slow to make the first one a token).
+            } else if !isRepeatedAddress(t, paired) {
+                // An exact address shown again, after it was paired with an asked address, is
+                // that recipient twice, not another one (Mail's window, forward of 2026-11-04).
+                // A repeated name is still extra: two people can share a name (security review
+                // 2026-11-05).
                 extra.append(t)
             }
         }
         return (extra, left)
+    }
+
+    /// Whether a token is an exact address already paired with an asked address.
+    static func isRepeatedAddress(_ t: String, _ paired: [String]) -> Bool {
+        let a = MailWrite.bare(t)
+        guard a.contains("@") else { return false }
+        return paired.contains { MailWrite.bare($0).caseInsensitiveCompare(a) == .orderedSame }
     }
 
     /// Every field as asked, before anything is sent (plan D6).

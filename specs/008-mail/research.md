@@ -242,9 +242,11 @@ Low-level choices (decided here):
   quits (`close` refuses them); harmless, nothing is stored.
 - **The forward bug** (docs/use-cases.md, 2026-11-04): Mail's window showed "Toni Melisma" once
   more than asked; with the window, an address Mail was slow to turn into a token was typed a
-  second time (`addRecipients`' second way). A repeat of a token already paired with an asked
-  address is no longer counted as another recipient (`MailCompose.pair`); such forwards now go by
-  scripting, which reads addresses.
+  second time (`addRecipients`' second way). Options: (a) skip any repeated token; (b) skip a
+  repeat only when it is an exact address already paired; (c) resolve names to addresses first
+  (Mail's tokens give none). Chose (b) after the security review (2026-11-05): with (a) a second
+  person sharing a name could slip through. Such forwards now go by scripting, which reads
+  addresses.
 
 **Locked: not yet confirmed.** `mail-check.sh <to> script` passed its four writes twice unlocked
 (each sent copy unquoted, a reply's and forward's text above the quote). During a third run the

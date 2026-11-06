@@ -210,8 +210,10 @@ so it works locked, with the lid closed, and without Accessibility; Mail never c
   app; the window tests set it false).
 - Window route fix (docs/use-cases.md, forward of 2026-11-04, "To field has Toni Melisma, which
   wasn't asked for"): Mail was slow to turn the typed address into a token, so it was typed again
-  and showed twice; `MailCompose.pair` no longer counts a repeat of a token already paired with an
-  asked address as another recipient. Such forwards now go by scripting anyway.
+  and showed twice; `MailCompose.pair` no longer counts an exact address repeated after it was
+  paired with an asked address as another recipient. A repeated name still counts (two people can
+  share a name; security review 2026-11-05), so a name shown twice is still refused. Such forwards
+  now go by scripting anyway, which reads addresses.
 - Known limits: a reply's text goes above the quote only while Mail's "Place signature above
   quoted text" is on (Mail's default; no scripting property reads it); a new message's text
   starts after one empty line; with files written by scripting, a plain-text reader sees an
