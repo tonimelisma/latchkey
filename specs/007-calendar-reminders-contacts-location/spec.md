@@ -5,8 +5,8 @@ Scope: the Owner's calendars, reminders, and contacts on the Mac, where the Mac 
 places and directions. Only what macOS itself offers, with no developer account (Toni,
 2026-10-26). This reverses the 2026-10-22 roadmap decision for Calendar, Reminders, and Contacts.
 Out of scope: weather (Apple's weather service needs a paid developer account; Toni, 2026-10-26:
-leave it out), inviting people to events or answering invitations (macOS doesn't let apps do
-it), Mail, Shortcuts, Photos.
+leave it out), Mail, Shortcuts, Photos. Inviting people and answering invitations were out of
+scope until 2026-11-05 (Toni: "add everything missing"); FR-705 to FR-708 bring them in.
 
 ## Problem
 
@@ -65,9 +65,32 @@ accounts, and in Apple Maps.
   or all-day dates, calendar, location, notes, link, alarms, repetition), change any of these,
   and delete an event. For a repeating event, a change or deletion applies to the one occurrence
   or to it and all later ones, as Claude chooses.
-- **FR-704** When Claude asks to invite people, or to change an event in a calendar the Owner
-  can't change (subscribed calendars, holidays, others' invitations), the tool shall say that
-  macOS doesn't allow it, instead of acting.
+- **FR-704** (changed 2026-11-05) When Claude asks to change an event in a calendar the Owner
+  can't change (subscribed calendars, holidays, birthdays, others' calendars shared read-only),
+  the tool shall say that the calendar is read-only, instead of acting. (Until 2026-11-05 it also
+  refused invitations and others' events, saying macOS doesn't allow them; FR-705 to FR-708
+  replace that.)
+- **FR-705** While Read & write, when Claude asks to accept, tentatively accept ("maybe"), or
+  decline an invitation from someone else, optionally with a note to the organizer, for one
+  occurrence or it and all later ones, the system shall record the Owner's answer in the
+  calendar's account, which tells the organizer, read the answer back, and say what was answered.
+  When the account doesn't take answers for that event (a calendar shared by someone else, a
+  cancelled event), the system shall say so instead.
+- **FR-706** While Read & write, when Claude asks to invite people (by email address) to a new
+  or existing event, or to take invited people off it, the system shall add or remove them so
+  the calendar's account sends the invitations or cancellations, read the attendees back, and
+  name who was invited or uninvited. The system shall refuse, with the reason, an address that
+  is the calendar's own (the Owner), a calendar whose account doesn't send invitations (On My
+  Mac), an invitation whose organizer doesn't let guests invite others, and uninviting someone
+  who isn't invited.
+- **FR-707** While Read & write, when Claude asks to change or delete an event someone else
+  organized, the system shall do it in the Owner's calendar and say that only the Owner's copy
+  changed (the organizer and other guests keep theirs) unless the account lets the Owner act as
+  organizer; deleting such an event shall point to declining as the way to tell the organizer.
+- **FR-708** When reading an invitation (FR-701), the system shall show the Owner's current
+  answer and whether it can be answered on this Mac. These shall work while the Mac is locked
+  and with the lid closed; when this macOS lacks the calendar calls they need, the system shall
+  say so and that the Calendar app (through Computer control) can still do it.
 
 ### Reminders
 - **FR-711** While Reminders is Read only or Read & write, Claude shall be able to list the

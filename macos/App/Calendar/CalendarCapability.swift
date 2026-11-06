@@ -48,7 +48,8 @@ enum CalendarCapability {
         ]
     }
 
-    static let changeActions = ["create", "update", "delete"]
+    static let changeActions = ["create", "update", "delete", "respond"]
+    static let answers = ["accept", "maybe", "decline"]
 
     static func writeTools(backend: any EventsBackend, zone: @escaping Zone) -> [ToolEntry] {
         [
@@ -56,14 +57,17 @@ enum CalendarCapability {
                 tool: .make(
                     "calendar_change", title: "Change Calendar Events",
                     description: """
-                        Creates, changes, or deletes an event in the Mac's calendars. action: create (title, start, \
-                        and end, or all-day dates; calendar, location, notes, url, alarms, repeat are optional), \
-                        update (id and only the fields to change; moving start keeps the length), delete (id; it \
-                        can't be undone). For a repeating event, span: this (default) changes the one occurrence, \
-                        future that one and all later ones. Dates: \(CalendarDates.accepted); a date without a time \
-                        makes an all-day event. An empty text clears a field. macOS doesn't let apps invite people \
-                        or answer invitations, and events in read-only calendars or organized by others can't be \
-                        changed.
+                        Creates, changes, or deletes an event in the Mac's calendars, invites people, and answers \
+                        invitations. action: create (title, start, and end, or all-day dates; calendar, location, \
+                        notes, url, alarms, repeat, invite are optional), update (id and only the fields to change; \
+                        moving start keeps the length; invite and uninvite add or remove people by email), delete \
+                        (id; it can't be undone), respond (id and answer: accept, maybe, or decline an invitation; \
+                        comment is optional; the organizer is told). invite sends invitations from the calendar's \
+                        account (iCloud, Google, Exchange). An invitation from someone else can be changed too, but \
+                        only the Owner's copy changes unless the organizer lets guests change it. For a repeating \
+                        event, span: this (default) changes the one occurrence, future that one and all later ones. \
+                        Dates: \(CalendarDates.accepted); a date without a time makes an all-day event. An empty \
+                        text clears a field. Events in read-only calendars (holidays, subscriptions) can't be changed.
                         """,
                     input: [
                         "action": .enumParam(changeActions, "What to do"),
@@ -87,6 +91,16 @@ enum CalendarCapability {
                         "repeat_count": .integerParam("Or: how many times in all"),
                         "span": .enumParam(
                             ["this", "future"], "For a repeating event: this occurrence or this and later ones"),
+                        "invite": .object([
+                            "type": .string("array"), "items": .object(["type": .string("string")]),
+                            "description": .string("Email addresses to invite (create and update)"),
+                        ]),
+                        "uninvite": .object([
+                            "type": .string("array"), "items": .object(["type": .string("string")]),
+                            "description": .string("Email addresses to take off the event (update)"),
+                        ]),
+                        "answer": .enumParam(answers, "For respond: the Owner's answer to the invitation"),
+                        "comment": .stringParam("For respond: a note to the organizer"),
                     ], required: ["action"], readOnly: false, destructive: true, deadlineMS: 15_000),
                 handler: { args in await run(.events) { try change(args, backend, zone()) } })
         ]
@@ -188,8 +202,12 @@ enum CalendarCapability {
     static func describe(_ e: EventInfo, zone: TimeZone) -> String {
         var lines = [
             "Title: \(title(e))", "When: \(CalendarDates.span(e.start, e.end, allDay: e.allDay, zone: zone))",
-            "Calendar: \(e.calendar) (\(e.writable && e.ownEvent ? "can be changed" : e.writable ? "an invitation; only the organizer can change it" : "read-only"))",
+            "Calendar: \(e.calendar) (\(!e.writable ? "read-only" : e.changesReachOthers ? "can be changed" : "an invitation; changes reach only your copy"))",
         ]
+        if !e.ownEvent, let me = e.attendees.first(where: \.isOwner) {
+            lines.append(
+                "Your answer: \(me.status)\(e.canRespond && e.writable ? " (calendar_change respond answers it)" : "")")
+        }
         let q: (String) -> String = { e.ownEvent ? $0 : MessagesCapability.quote($0) }
         if let l = e.location { lines.append("Location: \(q(l))") }
         if let r = e.repeats { lines.append("Repeats: \(r.describe(zone: zone))") }
@@ -230,10 +248,11 @@ enum CalendarCapability {
                 throw ArgumentError(message: "Give the event's start (\(CalendarDates.accepted)).")
             }
             d.title = title
+            guard d.uninvite.isEmpty else { throw ArgumentError(message: "uninvite works only with update.") }
             let e = try backend.createEvent(d)
             var r = ToolResult.text(
                 "Added “\(e.title)” to \(e.calendar): \(CalendarDates.span(e.start, e.end, allDay: e.allDay, zone: zone))\(Self.repeating(e, zone: zone)). id \(e.id)\n"
-                    + CalendarDates.zoneLine(zone, at: e.start))
+                    + Self.invited(d) + CalendarDates.zoneLine(zone, at: e.start))
             r.activity = "Claude added “\(e.title)” to \(e.calendar)"
             r.made = "the event “\(e.title)” in \(e.calendar)"
             return r
@@ -243,21 +262,56 @@ enum CalendarCapability {
                 throw ArgumentError(message: "Give at least one field to change.")
             }
             if let t = args["title"]?.stringValue, !t.isEmpty { d.title = t }
+            try checkPeople(d, old)
             let e = try backend.updateEvent(id: old.id, d, future: future)
+            let copy =
+                old.changesReachOthers
+                ? ""
+                : "This changed your copy only: the organizer and other guests keep theirs, and the organizer's next update may replace it.\n"
             var r = ToolResult.text(
-                "Changed “\(e.title)”\(future && old.repeats != nil ? " and its later occurrences" : ""): "
+                "Changed \(title(e))\(future && old.repeats != nil ? " and its later occurrences" : ""): "
                     + "\(CalendarDates.span(e.start, e.end, allDay: e.allDay, zone: zone))\(Self.repeating(e, zone: zone, was: old)) [\(e.calendar)]. id \(e.id)\n"
-                    + CalendarDates.zoneLine(zone, at: e.start))
+                    + Self.invited(d) + copy + CalendarDates.zoneLine(zone, at: e.start))
             r.activity = "Claude changed “\(e.title)” in \(e.calendar)"
             return r
         case "delete":
             let old = try changeable(args, backend)
             try backend.deleteEvent(id: old.id, future: future)
             let which = old.repeats == nil ? "" : future ? " and its later occurrences" : " (this occurrence)"
+            let note =
+                old.ownEvent
+                ? "" : " It was an invitation: to tell the organizer you won't come, respond decline instead."
             var r = ToolResult.text(
-                "Deleted “\(old.title)”\(which), \(CalendarDates.span(old.start, old.end, allDay: old.allDay, zone: zone)), from \(old.calendar)."
+                "Deleted \(title(old))\(which), \(CalendarDates.span(old.start, old.end, allDay: old.allDay, zone: zone)), from \(old.calendar).\(note)"
             )
             r.activity = "Claude deleted “\(old.title)” from \(old.calendar)"
+            return r
+        case "respond":
+            let old = try changeable(args, backend)
+            guard let word = args["answer"]?.stringValue, let answer = InvitationAnswer(word: word) else {
+                throw ArgumentError(message: "Give answer: accept, maybe, or decline.")
+            }
+            guard !old.ownEvent, old.attendees.contains(where: \.isOwner) else {
+                throw ArgumentError(
+                    message:
+                        "“\(old.title)” isn't an invitation to the Owner from someone else, so there's nothing to answer."
+                )
+            }
+            guard old.canRespond else {
+                throw ArgumentError(
+                    message:
+                        "\(title(old)) can't be answered on this Mac (its account doesn't take answers for it, or it was cancelled)."
+                )
+            }
+            let comment = args["comment"]?.stringValue?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
+            let e = try backend.respond(id: old.id, answer, comment: comment, future: future)
+            let which = old.repeats == nil ? "" : future ? " and its later occurrences" : " (this occurrence)"
+            let said = ["accepted": "Accepted", "tentative": "Said maybe to", "declined": "Declined"][answer.rawValue]!
+            var r = ToolResult.text(
+                "\(said) \(title(e))\(which), \(CalendarDates.span(e.start, e.end, allDay: e.allDay, zone: zone)) [\(e.calendar)]; "
+                    + "the calendar's account tells \(e.organizer.map(MessagesCapability.quote) ?? "the organizer"). id \(e.id)\n"
+                    + CalendarDates.zoneLine(zone, at: e.start) + "\n\n" + MessagesCapability.marking)
+            r.activity = "Claude \(answer.verb) “\(e.title)” in \(e.calendar)"
             return r
         default:
             return .unknown("action", action, allowed: changeActions)
@@ -279,20 +333,60 @@ enum CalendarCapability {
         }
     }
 
-    /// The event the id names, if Claude may change it (FR-704).
+    /// The event the id names, if its calendar can be changed (FR-704). Invitations from others
+    /// can be changed and answered (FR-705, FR-707).
     private static func changeable(_ args: JSONValue, _ backend: any EventsBackend) throws -> EventInfo {
         guard let id = args["id"]?.stringValue, !id.isEmpty else {
             throw ArgumentError(message: "Give the event's id, from calendar_find.")
         }
         let e = try backend.event(id: id)
         guard e.writable else { throw EventsFailure.readOnlyCalendar(e.calendar) }
-        guard e.ownEvent else {
+        return e
+    }
+
+    /// Whether the people to invite and uninvite fit the event (FR-706).
+    private static func checkPeople(_ d: EventDraft, _ e: EventInfo) throws {
+        guard !d.invite.isEmpty || !d.uninvite.isEmpty else { return }
+        guard e.canInvite else {
             throw ArgumentError(
-                message:
-                    "“\(e.title)” is an invitation from \(e.organizer ?? "someone else"). macOS lets only the organizer change it, and doesn't let apps answer invitations."
+                message: e.ownEvent
+                    ? "People can't be invited to events in \(e.calendar): its account doesn't send invitations (an On My Mac calendar, for instance). Move the event to an iCloud, Google, or Exchange calendar first."
+                    : "\(title(e)) is an invitation from \(e.organizer.map(MessagesCapability.quote) ?? "someone else"), and the organizer doesn't let guests invite others."
             )
         }
-        return e
+        let emails = Set(e.attendees.compactMap { $0.email?.lowercased() })
+        for gone in d.uninvite where !emails.contains(gone.lowercased()) {
+            throw ArgumentError(
+                message: "\(gone) isn't invited to “\(e.title)”. Invited: \(emails.sorted().joined(separator: ", ")).")
+        }
+    }
+
+    /// "Invited a, b; their invitations go out from the calendar's account.\n"
+    static func invited(_ d: EventDraft) -> String {
+        var s = ""
+        if !d.invite.isEmpty {
+            s += "Invited \(d.invite.joined(separator: ", ")); the calendar's account sends the invitations.\n"
+        }
+        if !d.uninvite.isEmpty {
+            s += "Uninvited \(d.uninvite.joined(separator: ", ")); the calendar's account tells them.\n"
+        }
+        return s
+    }
+
+    /// Email addresses from `key`, trimmed; each must look like one.
+    static func emails(_ args: JSONValue, _ key: String) throws -> [String] {
+        guard let value = args[key] else { return [] }
+        guard case .array(let items) = value else {
+            throw ArgumentError(message: "\(key) must be a list of email addresses.")
+        }
+        return try items.map { v in
+            let s = v.stringValue?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            let parts = s.split(separator: "@", omittingEmptySubsequences: false)
+            guard parts.count == 2, !parts[0].isEmpty, parts[1].contains("."), !s.contains(" ") else {
+                throw ArgumentError(message: "\(key): “\(s)” isn't an email address.")
+            }
+            return s
+        }
     }
 
     /// The fields the arguments set; nil when they set none.
@@ -347,6 +441,9 @@ enum CalendarCapability {
             any = true
         }
         if let t = args["title"]?.stringValue, !t.isEmpty { any = true }
+        d.invite = try emails(args, "invite")
+        d.uninvite = try emails(args, "uninvite")
+        if !d.invite.isEmpty || !d.uninvite.isEmpty { any = true }
         return any ? d : nil
     }
 

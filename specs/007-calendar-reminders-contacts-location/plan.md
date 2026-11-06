@@ -11,7 +11,7 @@ read-only.
 | Tool | Level | readOnly | destructive | Serves |
 |---|---|---|---|---|
 | `calendar_find` (id?, query?, from?, to?, calendar?, free?, minutes?, hours?, limit?) | Read only | yes | no | FR-701, FR-702 |
-| `calendar_change` (action: create, update, delete; id, title, start, end, all_day, calendar, location, notes, url, alarms, repeat, repeat_every, repeat_until, repeat_count, span) | Read & write | no | yes | FR-703, FR-704 |
+| `calendar_change` (action: create, update, delete, respond; id, title, start, end, all_day, calendar, location, notes, url, alarms, repeat, repeat_every, repeat_until, repeat_count, span, invite, uninvite, answer, comment) | Read & write | no | yes | FR-703 to FR-707 |
 | `reminders_find` (id?, query?, list?, completed?, from?, to?, limit?) | Read only | yes | no | FR-711, FR-714 |
 | `reminders_change` (action: create, update, complete, uncomplete, delete, create_list, delete_list; id, title, notes, list, due, priority, url, alarms, repeat, repeat_every, repeat_until, repeat_count, reminder_count, flagged, tags, parent, section) | Read & write | no | yes | FR-712, FR-713, FR-715 to FR-719 |
 | `contacts_find` (id?, query?, group?, photo?, limit?) | Read only | yes | no | FR-721 |
@@ -62,9 +62,8 @@ read-only.
   ranges over 4 years are refused with a message. Ids per research.md ("Event ids").
 - Changes: `save(_:span:commit:)` and `remove(_:span:commit:)` with `.thisEvent` or
   `.futureEvents`. New events go to the named calendar or the default one; a calendar that
-  doesn't allow changes (`allowsContentModifications` false) or an event with attendees the
-  Owner doesn't organize is refused with the FR-704 message before saving. Any `invitees`-like
-  wish is answered by the tool description: invitations can't be sent.
+  doesn't allow changes (`allowsContentModifications` false) is refused with the FR-704 message
+  before saving. Invitations and others' events: D7 (until 2026-11-05 they were refused too).
 - Repeats: `EKRecurrenceRule(recurrenceWith:interval:end:)`, end by date or count.
 - Reminders: `predicateForIncompleteReminders` / `predicateForCompletedReminders`, fetched with
   the callback API wrapped in a continuation with the tool's deadline. Due dates: a date only
@@ -170,6 +169,42 @@ them; nothing writes Reminders' database.
 - Notes and titles of events organized by someone else, and attendee names, are wrapped as
   text written by others (spec 002 D6).
 
+## D7. Invitations: answers, invitees, others' events (FR-705 to FR-708; 2026-11-05)
+
+- Mechanism: the EventKit calls Calendar.app itself uses, on the same `EKEvent` objects and the
+  same `save(_:span:commit:)` (`EventKitInvitations`; options and choice in research.md
+  "Invitations"). The account (Google, Exchange, iCloud) sends the invitations, cancellations,
+  and answers, as when the Owner does it in Calendar. No window, no Apple Events: it works while
+  the Mac is locked and with the lid closed, like every other Calendar change.
+- `respond` (FR-705): sets the event's `participationStatus` (and `responseComment` for a note),
+  saves with the span asked for, then reads the answer back; a different answer after the save
+  is an error. Allowed only for an invitation from someone else that the account lets the Owner
+  answer (`allowsParticipationStatusModifications`, not cancelled); otherwise the reason.
+- `invite` / `uninvite` (FR-706), on create and update: `EKAttendee
+  attendeeWithName:emailAddress:` and `addAttendee:`; the first invitee also gets
+  `addOrganizerAndSelfAttendeeForNewInvitation`, as in Calendar, so the Owner is the organizer
+  (without it the account drops the attendees on save, seen live 2026-11-05). `removeAttendee:`
+  takes people off; when only the Owner is left, the Owner's own entries go too, so the event is
+  a plain event again. The Owner's addresses (the account's `ownerAddresses`, the calendar's
+  self and owner identities) are refused as invitees: macOS drops them silently. Allowed for the
+  Owner's own events in a CalDAV, Exchange, or iCloud calendar, and for others' invitations only
+  when the organizer lets guests invite (`allowsAttendeesModifications`). After the save the
+  attendees are read back; anyone missing or still there is named in an error.
+- Others' events (FR-707): changed and deleted like the Owner's; the answer says only the Owner's
+  copy changed unless `currentUserMayActAsOrganizer`. Deleting one points to `respond decline`.
+- Reading (FR-708): `Your answer: …` and whether `respond` can answer it.
+- Each call is looked up before use (`responds(to:)`); when one is missing on a future macOS,
+  the answer says so and points to the Calendar app through Computer control
+  (`eventKitStillHasTheInvitationCalls` fails first, before a release).
+- Tests: the tool routing and messages against the in-memory backend; the real EventKit calls on
+  unsaved events (invite, no duplicates, uninvite, the Owner's own address refused). Live, with
+  the installed app's Calendar permission (2026-11-05): an event saved and deleted in the
+  Exchange calendar with the Owner's own address refused, and, in memory only, invite and
+  uninvite in every writable Google and Exchange calendar and an answer on real invitations.
+  Sending real invitations and answers to other people isn't tested live: test invitations may
+  go only to the Owner's own address, which is never an invitee (screen-state cases
+  `calendar.invite_own`, `calendar.invitation_read`).
+
 ## Testing (Constitution VII)
 
 - Tests first, against in-memory backends: tool names, levels and annotations (23 tools; Read
@@ -193,7 +228,7 @@ them; nothing writes Reminders' database.
 | I. No inbound connections | Pass: same outbound connection |
 | II. Fail fast | Pass: every tool has a deadline; no prompt at call time |
 | III. Disabled means nonexistent | Pass: levels filter the tools (registry) |
-| IV. Good macOS citizen | Pass: public frameworks and standard prompts only; Reminders' flags, tags, subtasks, and sections through the Accessibility permission Latchkey already has (no private framework, no writing another app's data) |
+| IV. Good macOS citizen | Pass, with one exception approved by Toni 2026-11-05 (recorded under principle IV in the constitution): invitations (D7) use EventKit methods Apple doesn't document, because no public API exists for them (Apple: "you can't add participants to an event nor change participant information"); they are the calls Calendar itself makes, inside the public EventKit framework, with no private framework loaded, each checked before use and read back after; Reminders' flags, tags, subtasks, and sections through the Accessibility permission Latchkey already has (no private framework, no writing another app's data) |
 | V. Self-hostable | Pass: no new service; MapKit is part of macOS |
 | VI. Store the minimum | Pass: nothing stored on disk; ids are derived; what Latchkey created in Contacts is kept in memory for the run only (FR-724); Reminders' database is read per call, nothing kept |
 | VII. Test-first | Pass: tests above written first |

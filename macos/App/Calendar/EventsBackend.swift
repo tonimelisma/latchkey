@@ -72,6 +72,14 @@ struct EventInfo: Sendable, Equatable {
     /// Marked "free" in its availability.
     var markedFree = false
     var cancelled = false
+    /// An invitation the Owner can answer (accept, maybe, decline) on this Mac (FR-705).
+    var canRespond = false
+    /// People can be invited or uninvited: the Owner's own event in an account that sends
+    /// invitations, or an invitation whose organizer lets guests invite others (FR-706).
+    var canInvite = true
+    /// A change reaches the other attendees: the Owner organizes it, or the organizer lets guests
+    /// change it. Otherwise only the Owner's copy changes (FR-707).
+    var changesReachOthers = true
 
     var id: String { EventID.make(identifier, start: start) }
 
@@ -93,6 +101,35 @@ struct EventDraft: Sendable, Equatable {
     var url: Change<String> = .keep
     var alarms: Change<[Int]> = .keep
     var repeats: Change<Repeat> = .keep
+    /// Email addresses to invite (FR-706).
+    var invite: [String] = []
+    /// Email addresses to take off the event (FR-706).
+    var uninvite: [String] = []
+}
+
+/// The Owner's answer to an invitation (FR-705).
+enum InvitationAnswer: String, Sendable, CaseIterable {
+    case accepted, tentative, declined
+
+    /// The word Claude passes: accept, maybe, decline.
+    init?(word: String) {
+        switch word.lowercased() {
+        case "accept", "accepted", "yes": self = .accepted
+        case "maybe", "tentative": self = .tentative
+        case "decline", "declined", "no": self = .declined
+        default: return nil
+        }
+    }
+
+    /// As `Attendee.status` shows it.
+    var status: String { rawValue }
+    var verb: String {
+        switch self {
+        case .accepted: "accepted"
+        case .tentative: "said maybe to"
+        case .declined: "declined"
+        }
+    }
 }
 
 struct ReminderInfo: Sendable, Equatable {
@@ -145,6 +182,8 @@ protocol EventsBackend: Sendable {
     func createEvent(_ draft: EventDraft) throws -> EventInfo
     func updateEvent(id: String, _ draft: EventDraft, future: Bool) throws -> EventInfo
     func deleteEvent(id: String, future: Bool) throws
+    /// Answers an invitation for the Owner; the calendar's account tells the organizer.
+    func respond(id: String, _ answer: InvitationAnswer, comment: String?, future: Bool) throws -> EventInfo
     func reminders(completed: Bool, from: Date?, to: Date?, lists: [String]?) async throws -> [ReminderInfo]
     func reminder(id: String) throws -> ReminderInfo
     func createReminder(_ draft: ReminderDraft) throws -> ReminderInfo
