@@ -16,8 +16,11 @@ final class FakeScreen: ScreenStateSource, @unchecked Sendable {
     var list = [Displays.main, Displays.side]
     var locked = false
     var asleep = false
+    /// Connected displays, asleep ones included; nil: the same as the active list.
+    var connected: Int?
 
     func displays() -> [DisplayInfo] { list }
+    func connectedCount() -> Int { connected ?? list.count }
     func isLocked() -> Bool { locked }
     func isAsleep(_ id: CGDirectDisplayID) -> Bool { asleep }
 }
@@ -84,6 +87,17 @@ final class FakePoster: InputPoster, @unchecked Sendable {
         #expect(problem?.contains("asleep") == true)
         #expect(problem?.contains("locks itself as usual") == true)
         #expect(problem?.contains("shell") == true, "says what still works")
+    }
+
+    /// A sleeping display isn't in the active list but is still connected: that is "asleep", not
+    /// "the lid is closed" (live check 2026-11-07, lid open, Mac locked).
+    @Test func aSleepingDisplayOutOfTheActiveListIsAsleepNotLidClosed() async {
+        let s = FakeScreen()
+        s.list = []
+        s.connected = 1
+        let problem = await ScreenCheck.problem(s)
+        #expect(problem?.contains("asleep") == true, "\(problem ?? "")")
+        #expect(problem?.contains("lid is closed") == false)
     }
 }
 

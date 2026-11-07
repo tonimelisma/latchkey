@@ -48,6 +48,12 @@ protocol ScreenStateSource: Sendable {
     func displays() -> [DisplayInfo]
     func isLocked() -> Bool
     func isAsleep(_ id: CGDirectDisplayID) -> Bool
+    /// How many displays are connected, asleep ones included (a sleeping display isn't active).
+    func connectedCount() -> Int
+}
+
+extension ScreenStateSource {
+    func connectedCount() -> Int { displays().count }
 }
 
 struct SystemScreen: ScreenStateSource {
@@ -72,6 +78,12 @@ struct SystemScreen: ScreenStateSource {
     }
 
     func isAsleep(_ id: CGDirectDisplayID) -> Bool { CGDisplayIsAsleep(id) != 0 }
+
+    func connectedCount() -> Int {
+        var count: UInt32 = 0
+        CGGetOnlineDisplayList(0, nil, &count)
+        return Int(count)
+    }
 }
 
 /// Plain reasons the screen can't be used now (FR-504); nil when it can.
@@ -84,6 +96,12 @@ enum ScreenCheck {
     static func problem(_ s: any ScreenStateSource) async -> String? {
         let displays = s.displays()
         guard let main = displays.first else {
+            // A sleeping display drops out of the active list but stays connected (2026-11-07:
+            // a locked Mac with its lid open was said to have its lid closed).
+            if s.connectedCount() > 0 {
+                return
+                    "The Mac's display is asleep because no one has used the Mac for a while, so Claude can't see the screen; Latchkey doesn't wake it, so the Mac locks itself as usual. \(stillWorks)"
+            }
             return
                 "The Mac has no screen on right now (the lid is closed and no monitor is connected), so Claude can't see or use the screen. \(stillWorks)"
         }
