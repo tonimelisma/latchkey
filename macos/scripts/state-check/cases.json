@@ -171,7 +171,7 @@
     {
       "id": "whatsapp",
       "name": "WhatsApp",
-      "missing": ["Calls, status updates, communities, and channels (out of scope)", "WhatsApp for Mac's window while the Mac is locked (macOS shows it to no other app then); only Safari's WhatsApp Web tab can work"],
+      "missing": ["Calls, status updates, communities, and channels (out of scope)", "Sending, reacting, and deleting (withdrawn 2026-11-07: no route worked in every screen state without disturbing the user)"],
       "cases": [
         {"id": "whatsapp.chats", "case": "List recent chats", "steps": "whatsapp_find with nothing, limit 5."},
         {"id": "whatsapp.search", "case": "Search messages", "steps": "whatsapp_find with text \"the\", limit 3."},

@@ -26,7 +26,7 @@ struct WhatsAppMessage: Equatable, Sendable {
     var text: String
     var fileName: String?
     /// WhatsApp's own id for the message (its stanza id), the same in WhatsApp for Mac's database
-    /// and in WhatsApp Web: what Claude passes to reply to, react to, or delete it (FR-1240).
+    /// and in WhatsApp Web; shown to Claude with each message (FR-1240).
     var key: String = ""
 }
 

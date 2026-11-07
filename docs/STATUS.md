@@ -52,6 +52,22 @@ after the app was quit.
 
 ## Next steps
 
+1. Changing notes with checklists, links, or images, in every screen state: through iCloud.com in
+   Latchkey's own browser, in the background (it disturbs no one). Research first (how iCloud.com
+   Notes edits checklists, whether Safari's cookies keep it signed in), then a plan for Toni.
+2. Answering a calendar invitation, live: the code is in (spec 007 FR-705); the test invitation of
+   2026-11-07 hadn't reached the Exchange calendar before the event was deleted.
+3. Facebook Messenger stays set aside: it would send through a Safari tab, which, like WhatsApp
+   Web, works reliably only while the Mac is unlocked (Toni, 2026-11-07: "sending messages only
+   when the laptop is unlocked is crazy"; "if it's hit or miss then we don't put it in"). Only a
+   route that also works while locked would bring it back.
+
+For Toni (only he can): delete the ~96 old "Latchkey check" test messages in his two
+conversations with himself and the WhatsApp test message in his own chat; optionally switch off
+Latchkey's unused Mail permission (System Settings → Privacy & Security → Automation → Latchkey).
+
+## History (newest first; what was done and found, kept as the record)
+
 Facebook Messenger (Toni, 2026-11-04; set aside 2026-11-05 "for another day"): not started, no
 spec yet. Toni's choices so far: read and send; through facebook.com/messages in Safari (check
 first that all chats show there, Meta recommends Chrome or Edge for encrypted chats); sending

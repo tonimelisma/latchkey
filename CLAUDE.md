@@ -46,7 +46,11 @@ step is done or needs a decision from Toni.
 
 IMPORTANT: specs, `docs/STATUS.md`, `docs/decisions.md`, and `README.md` are updated in the same
 commit as the code or decision that changes them. Never let them drift (README added by Toni,
-2026-10-23).
+2026-10-23). The README always says, in plain words, what Latchkey does (each capability: what
+Claude can and can't do with it) and what works when (while locked, only while unlocked, the
+never-disturb rule and its exceptions); any change to a capability's tools or screen-state
+behavior updates those sections (Toni, 2026-11-07). `ReadmeTests` fails when a capability isn't
+named there.
 
 ## Working with Toni
 
