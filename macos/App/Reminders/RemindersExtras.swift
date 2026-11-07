@@ -200,6 +200,10 @@ struct RemindersExtras: Sendable {
                 if await check({ $0.extra(id).parentID == parent.id }) { return }
                 throw fail("Reminders put “\(r.title)” under another reminder titled “\(parent.title)”.")
             case .parentNotShown:
+                // Reminders on macOS 27 drops the selection after an indent, so the window then
+                // shows no selected row although the move took (live check 2026-11-07): what
+                // Reminders saved decides.
+                if await check({ $0.extra(id).parentID == parent.id }) { return }
                 throw fail("Reminders' window doesn't show “\(parent.title)” beside “\(r.title)”.")
             case .indent: guard window.act(.indent) else { throw fail("Reminders didn't indent “\(r.title)”.") }
             case .outdent: guard window.act(.outdent) else { throw fail("Reminders didn't outdent “\(r.title)”.") }

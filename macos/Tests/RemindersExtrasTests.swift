@@ -122,6 +122,8 @@ final class FakeRemindersApp: RemindersExtrasSource, @unchecked Sendable {
     var isLocked = false
     var readable = true
     var actions: [String] = []
+    /// Reminders on macOS 27 clears the selection after an indent (live check 2026-11-07).
+    var deselectAfterIndent = false
 
     func snapshot() -> RemindersSnapshot? {
         guard readable else { return nil }
@@ -155,6 +157,7 @@ final class FakeRemindersApp: RemindersExtrasSource, @unchecked Sendable {
                 case .indent:
                     guard i > 0 else { return false }
                     self.items[i].level = 1
+                    if self.deselectAfterIndent { self.selected = nil }
                 case .outdent: self.items[i].level = 0
                 case .moveUp:
                     guard i > 0 else { return false }
@@ -290,6 +293,13 @@ final class FakeRemindersApp: RemindersExtrasSource, @unchecked Sendable {
         let e = try #require(app.snapshot()).extra("R-TRIP")
         #expect(e.flagged && e.tags == ["travel"] && e.subtaskIDs == ["R-SOCKS"])
         #expect(app.actions.isEmpty)
+    }
+
+    @Test func aSubtaskIsDoneWhenRemindersDropsTheSelectionAfterIndenting() async throws {
+        app.deselectAfterIndent = true
+        let r = try await change(["action": .string("update"), "id": .string("R-CALL"), "parent": .string("R-TRIP")])
+        #expect(!r.isError, "\(text(r))")
+        #expect(app.snapshot()?.extra("R-CALL").parentID == "R-TRIP")
     }
 
     @Test func outdentsUnflagsAndMovesToASection() async throws {

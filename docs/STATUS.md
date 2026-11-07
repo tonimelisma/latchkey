@@ -91,11 +91,16 @@ merged and tested together (33 tools now):
   screen state; checked live unlocked (nothing sent to anyone).
 - Safari: key presses, hover, scroll, dropdowns, file upload, download, and a picture of the
   page when the screen can't be captured (spec 005 FR-433 to FR-440). Checked in real Safari
-  unlocked for keys, hover, scroll, dropdowns; uploads, downloads, and the picture only in
-  WebKit so far (rerun `macos/scripts/safari-check.sh` unlocked).
+  unlocked for keys, hover, scroll, dropdowns; on 2026-11-07 also uploads (file field and drop
+  place), downloads (a link, a file the page makes, a PDF), and the picture, through Latchkey's
+  own tools in real Safari on the check's local page (every file removed after). The picture
+  Latchkey draws when the screen can't be captured is still checked only in WebKit.
 - Reminders: flags, tags, subtasks, sections read from Reminders' database; set through its
   window (unlocked only); no change loses them (spec 007 FR-714 to FR-719). Removing a tag isn't
-  possible yet. Window steps not yet run live.
+  possible yet. Checked live 2026-11-07 in a test list (deleted after): flag and tag work; making
+  a subtask worked but was reported as failed, because Reminders on macOS 27 drops the selection
+  after the indent; fixed by letting Reminders' saved data decide. Sections can only be checked
+  in a list that already has one (Latchkey can't make sections).
 - Mail: send, reply, forward, and draft without Mail's window, through a temporary signature
   (spec 008 FR-841 to FR-845); the forward that added Toni to To is fixed. Checked unlocked;
   sending while locked works too (2026-11-07, 0.8.142: a test email to Toni sent with the Mac
