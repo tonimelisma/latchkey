@@ -136,12 +136,12 @@ enum MessagesCapability {
     /// folder, 2026-10-22).
     static let staging = URL.homeDirectory.appending(path: "Pictures/Latchkey")
 
-    /// `windowActions`: tapbacks, edits, unsending, deleting, new groups, and inline replies, made
-    /// in Messages' window (FR-172 to FR-178). Off in the app until they work on a real Mac: the
-    /// live checks of 2026-11-05 found tapbacks not landing, edits failing, and the window jamming.
+    /// Sending, and the actions made in Messages' window (FR-172 to FR-178): tapbacks, edits,
+    /// unsending, deleting, new groups, and inline replies (switched off 2026-11-05, back on
+    /// 2026-11-07 once each passed on the real Mac).
     static func writeOperations(
         store: @escaping StoreSource, contacts: any ContactsLookup, scripts: any ScriptRunner, staging: URL,
-        ui: any MessagesUI, confirmWait: Duration = .seconds(5), windowActions: Bool = true
+        ui: any MessagesUI, confirmWait: Duration = .seconds(5)
     ) -> [ToolEntry] {
         var input: [String: JSONValue] = [
             "to": .stringParam("Who or which conversation to send to"),
@@ -153,17 +153,15 @@ enum MessagesCapability {
         ]
         var description =
             "Sends a message from the Mac's Messages app: text, files, or both. to is a name from Contacts, a phone number, an email address, a group's name, or a conversation id from messages_find; for a person with several numbers and no conversation yet, the one Messages knows on iMessage, else a mobile number, is used and named in the answer. Attachments are paths of files on the Mac. If a name matches several people, nothing is sent and the choices are returned."
-        if windowActions {
-            input["people"] = .object([
-                "type": .string("array"), "items": .object(["type": .string("string")]),
-                "description": .string(
-                    "Instead of to: two or more people (names, numbers, addresses) for a new group"),
-            ])
-            input["name"] = .stringParam("With people: the new group's name")
-            input["reply_to"] = .stringParam("A message's id, from messages_read: reply to it inline")
-            description +=
-                " With people instead of to: starts a new group with them (optionally named), through Messages' window. With reply_to: an inline reply to that message, in its conversation, through Messages' window. Those two need the Mac unlocked."
-        }
+        input["people"] = .object([
+            "type": .string("array"), "items": .object(["type": .string("string")]),
+            "description": .string(
+                "Instead of to: two or more people (names, numbers, addresses) for a new group"),
+        ])
+        input["name"] = .stringParam("With people: the new group's name")
+        input["reply_to"] = .stringParam("A message's id, from messages_read: reply to it inline")
+        description +=
+            " With people instead of to: starts a new group with them (optionally named), through Messages' window. With reply_to: an inline reply to that message, in its conversation, through Messages' window. Those two need the Mac unlocked."
         var tools = [
             ToolEntry(
                 tool: .make(
@@ -172,11 +170,6 @@ enum MessagesCapability {
                 handler: { args in
                     await run(store) { s in
                         let text = args["text"]?.stringValue ?? ""
-                        if !windowActions, args.hasAny("people", "reply_to") {
-                            return .text(
-                                "Latchkey can't start new groups or reply inline yet: those are being fixed. Send to one person or an existing conversation with to.",
-                                isError: true)
-                        }
                         if let reply = args["reply_to"]?.stringValue, !reply.isEmpty {
                             return try await MessagesCapability.reply(
                                 to: reply, text: text, store: s, ui: ui, confirmWait: confirmWait)
@@ -247,7 +240,7 @@ enum MessagesCapability {
                     }
                 })
         ]
-        if windowActions { tools.append(changeTool(store: store, ui: ui, confirmWait: confirmWait)) }
+        tools.append(changeTool(store: store, ui: ui, confirmWait: confirmWait))
         return tools
     }
 

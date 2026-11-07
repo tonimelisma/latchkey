@@ -25,7 +25,7 @@ cleanup() {
 }
 trap cleanup EXIT
 swiftc -O -swift-version 6 -o "$out/messages-check" \
-    App/Messages/MessagesWindow.swift App/Messages/MessagesStore.swift App/Messages/AttributedBody.swift \
+    App/Foreground.swift App/Messages/MessagesWindow.swift App/Messages/MessagesStore.swift App/Messages/AttributedBody.swift \
     App/Messages/Contacts.swift App/SQLite.swift App/ImagePrep.swift App/Computer/Screen.swift \
     scripts/messages-check/main.swift
 if [[ $mode == sweep ]]; then

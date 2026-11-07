@@ -1,5 +1,6 @@
 import AppKit
 import ApplicationServices
+import os
 
 /// What Latchkey does in Messages' own window, through Accessibility, in the background (spec 002
 /// plan D3b, FR-172 to FR-178): tapbacks, inline replies, editing, unsending, deleting, and new
@@ -526,7 +527,8 @@ enum MessagesAX {
             }
         } catch {
             cancelEdit()
-            throw MessagesWindowProblem(message: "Messages didn't take the edit, so it was cancelled; the message wasn't changed.")
+            throw MessagesWindowProblem(
+                message: "Messages didn't take the edit, so it was cancelled; the message wasn't changed.")
         }
     }
 
@@ -633,24 +635,143 @@ enum MessagesAX {
             cancelEdit()
             throw MessagesWindowProblem(message: "Messages' group name editor wasn't as expected; nothing was changed.")
         }
-        _ = AXUIElementSetAttributeValue(field, kAXFocusedAttribute as CFString, kCFBooleanTrue)
-        guard AXUIElementSetAttributeValue(field, kAXValueAttribute as CFString, name as CFString) == .success else {
-            _ = press(cancel)
-            throw MessagesWindowProblem(message: "Messages didn't take the group's name; nothing was changed.")
-        }
-        try? await Task.sleep(for: .milliseconds(300))
-        guard press(done) else {
-            _ = press(cancel)
-            throw MessagesWindowProblem(message: "Messages didn't take the group's name; nothing was changed.")
-        }
-        do {
-            _ = try await wait("the name saved", seconds: 3) { () -> Bool? in
-                guard let w = window() else { return true }
-                return children(w).contains { MessagesAX.string($0, kAXRoleAttribute) == "AXSheet" } ? nil : true
+        // The name field takes focus and text only while Messages is in front; Done enables only on
+        // typed text (a value set through Accessibility leaves it off); and a sheet left changed asks
+        // "discard your changes?" on Cancel (live 2026-11-06). So Messages comes forward for a
+        // moment, only while the Owner isn't using the Mac (FR-179); the name is typed, Done is
+        // pressed only once it is on and the field holds the name, and on any failure the old text
+        // is typed back before Cancel, all while Messages is still in front.
+        guard let messages = app() else { throw MessagesWindowProblem(message: "Messages isn't running.") }
+        var saved = false
+        let outcome = await Foreground.run(
+            messages, log: { line, error in groupLog.log("\(line, privacy: .public) \(error)") }
+        ) {
+            ownerActed in
+            let old = string(field, kAXValueAttribute) ?? ""
+            // The field takes focus a moment after Messages comes forward; keys before that are
+            // lost (live 2026-11-07: "LK probe" became "probe"). So focus is asked for until it
+            // holds, and the name is typed again (over all of it) if the field doesn't hold it.
+            _ = try? await wait("the name field focused", seconds: 1.5) { () -> Bool? in
+                if string(field, kAXFocusedAttribute) == "1" { return true }
+                _ = AXUIElementSetAttributeValue(field, kAXFocusedAttribute as CFString, kCFBooleanTrue)
+                return nil
             }
-        } catch {
-            _ = press(cancel)
-            throw MessagesWindowProblem(message: "Messages didn't save the group's name; it was cancelled.")
+            var ready: Bool?
+            for _ in 0..<2 where ready == nil && !ownerActed() {
+                await replaceTyped(in: field, with: name)
+                ready = try? await wait("the name typed", seconds: 1.5) { () -> Bool? in
+                    string(field, kAXValueAttribute) == name && string(done, kAXEnabledAttribute) == "1" ? true : nil
+                }
+            }
+            guard ready != nil, !ownerActed(), press(done) else {
+                await replaceTyped(in: field, with: old)
+                try? await Task.sleep(for: .milliseconds(300))
+                _ = press(cancel)
+                await discardNameSheet()
+                return false
+            }
+            saved =
+                (try? await wait("the name saved", seconds: 3) { () -> Bool? in
+                    guard let w = window() else { return true }
+                    return children(w).contains { MessagesAX.string($0, kAXRoleAttribute) == "AXSheet" } ? nil : true
+                }) != nil
+            return saved
+        }
+        // No name sheet is left open behind the Owner's app: one left (Messages not brought
+        // forward, or the Owner acted) is closed with Messages in front again, unsaved. Its
+        // buttons answer only then (live 2026-11-06).
+        if !saved, nameSheet() != nil {
+            _ = await Foreground.run(
+                messages, log: { line, error in groupLog.log("\(line, privacy: .public) \(error)") }
+            ) { _ in
+                await discardNameSheet()
+                return nameSheet() == nil
+            }
+        }
+        if nameSheet() != nil {
+            throw MessagesWindowProblem(
+                message:
+                    "The group wasn't named, and Messages' name editor is still open in the group's window; nothing was saved."
+            )
+        }
+        switch outcome {
+        case .done: return
+        case .ownerBusy:
+            throw MessagesWindowProblem(
+                message:
+                    "The group wasn't named: someone was using the Mac, and naming needs Messages in front for a moment. Try again shortly."
+            )
+        case .ownerActed:
+            throw MessagesWindowProblem(
+                message:
+                    "The group wasn't named: someone typed or clicked while Messages was in front, so Latchkey stopped."
+            )
+        case .notForward:
+            throw MessagesWindowProblem(message: "The group wasn't named: Messages couldn't be brought forward for it.")
+        case .failed:
+            throw MessagesWindowProblem(message: "Messages didn't take the group's name; nothing was changed.")
+        }
+    }
+
+    static let groupLog = Logger(subsystem: "net.melisma.latchkey", category: "messages")
+
+    /// The window's sheet, if one is open (the name editor, or Messages' question over it).
+    static func nameSheet() -> AXUIElement? {
+        guard let w = window() else { return nil }
+        return children(w).first { MessagesAX.string($0, kAXRoleAttribute) == "AXSheet" }
+    }
+
+    /// Closes the name editor without saving, while Messages is in front: Cancel, and when
+    /// Messages asks "discard your changes?", Discard Changes (the alert's button by its title,
+    /// the one Messages shows in every language being unknown, else the alert's first button).
+    static func discardNameSheet() async {
+        for _ in 0..<3 {
+            guard let sheet = nameSheet() else { return }
+            if let alert = first(in: sheet, { MessagesAX.string($0, kAXDescriptionAttribute) == "alert" }) {
+                let buttons = children(alert).filter { MessagesAX.string($0, kAXRoleAttribute) == "AXButton" }
+                if let discard = discardButton(buttons.map { MessagesAX.string($0, kAXTitleAttribute) ?? "" }) {
+                    _ = press(buttons[discard])
+                }
+            } else if let (cancel, _) = sheetButtons(sheet) {
+                _ = press(cancel)
+            }
+            _ = try? await wait("the name editor closed", seconds: 1) { nameSheet() == nil ? true : nil }
+        }
+    }
+
+    /// Which of the discard question's buttons discards: "Discard Changes" by title, else the
+    /// first button (Messages puts Discard Changes before Cancel), never one titled Cancel.
+    static func discardButton(_ titles: [String]) -> Int? {
+        if let i = titles.firstIndex(where: { $0.localizedCaseInsensitiveContains("discard") }) { return i }
+        guard let first = titles.indices.first, titles[first] != "Cancel" else { return nil }
+        return first
+    }
+
+    /// Selects all of a focused field's text and types `text` over it as key presses sent to
+    /// Messages alone (never to the app in front); typing nothing deletes the selection.
+    static func replaceTyped(in field: AXUIElement, with text: String) async {
+        guard let pid = app()?.processIdentifier else { return }
+        let length = (string(field, kAXValueAttribute) ?? "").utf16.count
+        var range = CFRange(location: 0, length: length)
+        if let all = AXValueCreate(.cfRange, &range) {
+            _ = AXUIElementSetAttributeValue(field, kAXSelectedTextRangeAttribute as CFString, all)
+        }
+        let src = CGEventSource(stateID: .privateState)
+        if text.isEmpty, length > 0 {
+            for down in [true, false] {
+                CGEvent(keyboardEventSource: src, virtualKey: 51, keyDown: down)?.postToPid(pid)
+            }
+            return
+        }
+        // One key press per character, so an emoji's two halves arrive together.
+        for character in text {
+            var units = Array(String(character).utf16)
+            for down in [true, false] {
+                let e = CGEvent(keyboardEventSource: src, virtualKey: 0, keyDown: down)
+                e?.keyboardSetUnicodeString(stringLength: units.count, unicodeString: &units)
+                e?.postToPid(pid)
+            }
+            try? await Task.sleep(for: .milliseconds(15))
         }
     }
 

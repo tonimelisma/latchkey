@@ -299,6 +299,16 @@ final class FakeMessagesUI: MessagesUI, @unchecked Sendable {
         #expect(!MessagesAX.titleNames("Toni M & Toni M", named), "a named group shows its name")
     }
 
+    /// The name editor's "discard your changes?" is answered with Discard Changes, never Cancel
+    /// (Cancel there keeps the editor open with the changed name: live 2026-11-06).
+    @Test func discardQuestionIsAnsweredWithDiscard() {
+        #expect(MessagesAX.discardButton(["Discard Changes", "Cancel"]) == 0)
+        #expect(MessagesAX.discardButton(["Cancel", "Discard Changes"]) == 1)
+        #expect(MessagesAX.discardButton(["Hylkää muutokset", "Kumoa"]) == 0, "another language: the first button")
+        #expect(MessagesAX.discardButton(["Cancel", "Kumoa"]) == nil, "never Cancel")
+        #expect(MessagesAX.discardButton([]) == nil)
+    }
+
     @Test func rowMustNameTheConversation() {
         #expect(MessagesAX.rowNames("Toni M & Toni M, Latchkey check, Yesterday", Self.toni))
         #expect(MessagesAX.rowNames("+1 (555) 000-1111, Unread, hi, 12:00", Self.bob))

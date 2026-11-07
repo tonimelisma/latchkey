@@ -99,6 +99,11 @@ As an Owner, I set Notes and Messages each to Off, Read only, or Read & write in
 - **Notes switched on again 2026-11-06 (FR-155 to FR-159):** checklists and ticks now go through
   Notes' Format menu with Notes in front for a moment (plan D3a), proven on Toni's Mac with the
   five checklist cases. Messages (FR-172 to FR-178) stays off until fixed.
+- **Messages switched on again 2026-11-07 (FR-172 to FR-178):** a new group, a like given and
+  taken back, an inline reply, an edit, an unsend, deleting a message, naming the group, and
+  deleting the conversations all pass on Toni's Mac (macOS 27) in conversations with himself,
+  each checked in Messages' database and swept afterwards. Naming a group needs Messages in
+  front for about a second (its name field takes text only then), under FR-179.
 - **Switched off 2026-11-05 (FR-155 to FR-159, FR-172 to FR-178):** the live checks found a
   checklist note mangled by FR-155/FR-156 and Messages' tapbacks not landing, edits failing, and
   the window jamming. Until each works on Toni's Mac, the app refuses these plainly: notes with
@@ -119,10 +124,11 @@ As an Owner, I set Notes and Messages each to Off, Read only, or Read & write in
 - **FR-159** After a change in Notes' window, Latchkey shall show again the note the Mac's owner
   had open in Notes, and shall answer "changed" only once Notes' database shows the change.
 - **FR-179** While someone is typing or using the mouse on the Mac, Latchkey shall not bring Notes
-  forward: it waits up to 5 seconds for a 1.5-second pause, else nothing is changed and Claude is
-  told why. When someone types or clicks while Notes is in front, Latchkey shall stop, leave the
-  front with the app they chose, and tell Claude the note may hold what they typed (live check
-  2026-11-06: typing went into a test note while Notes was in front).
+  (or, for naming a group, Messages) forward: it waits up to 5 seconds for a 1.5-second pause,
+  else nothing is changed and Claude is told why. When someone types or clicks while the app is
+  in front, Latchkey shall stop, leave the front with the app they chose, and tell Claude (for
+  Notes, that the note may hold what they typed; for Messages, the group's name editor is closed
+  unsaved) (live check 2026-11-06: typing went into a test note while Notes was in front).
 
 ### Messages
 - **FR-110** While Messages is Read only or Read & write, Claude shall be able to list recent
@@ -149,7 +155,10 @@ As an Owner, I set Notes and Messages each to Off, Read only, or Read & write in
   rule of plan D3 and D4 for one person; several matching people still return the choices).
 - **FR-172** While Messages is Read & write, Claude shall be able to start a new group conversation
   with two or more people (names, numbers, addresses) with a first message, optionally named, and
-  to name an existing group.
+  to name an existing group. Messages' name editor takes text only while Messages is in front,
+  so for naming Messages comes forward for about a second (as FR-179 allows; the app that was
+  in front gets it back), and the editor is never left open: on any failure it is closed
+  without saving.
 - **FR-173** While Messages is Read & write, Claude shall be able to reply to a specific message
   (an inline reply, shown in Messages under that message).
 - **FR-174** While Messages is Read & write, Claude shall be able to put a tapback on a message
@@ -163,7 +172,8 @@ As an Owner, I set Notes and Messages each to Off, Read only, or Read & write in
   conversation; Messages deletes them from the owner's devices and keeps them in Recently Deleted
   for up to 30 days, and the answer says so.
 - **FR-177** The changes of FR-172 to FR-176 shall be made in Messages' own window in the
-  background, without bringing Messages forward or moving the pointer. While the window can't be
+  background, without bringing Messages forward or moving the pointer (naming a group excepted,
+  FR-172). While the window can't be
   used (the Mac locked, which includes the lid closed while locked; Accessibility not allowed),
   nothing shall be started and Claude shall be told why at once, with what still works (sending to
   a person or an existing conversation).

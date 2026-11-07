@@ -326,16 +326,7 @@ struct NoteWindow: Sendable {
         /// Whether the Owner typed or clicked while Notes was in front for the last change.
         static let ownerActed = NSLockedBox<Bool>(false)
 
-        /// Seconds since the Owner last typed, clicked, scrolled, or moved the mouse. Latchkey's
-        /// own steps (Accessibility, activating apps) aren't input events, so they don't count.
-        static func idleSeconds() -> Double {
-            let kinds: [CGEventType] = [
-                .keyDown, .flagsChanged, .leftMouseDown, .rightMouseDown, .otherMouseDown, .mouseMoved,
-                .leftMouseDragged, .scrollWheel,
-            ]
-            return kinds.map { CGEventSource.secondsSinceLastEventType(.combinedSessionState, eventType: $0) }.min()
-                ?? .infinity
-        }
+        static func idleSeconds() -> Double { Foreground.idleSeconds() }
 
         /// Whether the Owner used the Mac since Notes was brought forward for this change.
         static func ownerUsedTheMac() -> Bool {
@@ -362,105 +353,12 @@ struct NoteWindow: Sendable {
             return frontApp()?.processIdentifier == notes.processIdentifier
         }
 
-        /// Brings an app to the front and answers whether it is there. macOS may refuse a plain
-        /// activate from a menu bar app in the background (the installed app's was, 2026-11-06);
-        /// opening the app through LaunchServices, then AppleScript's activate, are the fallbacks.
-        /// Whether it's in front is asked of the app itself: NSWorkspace's frontmost app is updated
-        /// by a run loop that isn't turning here, and read stale (seen 2026-11-05).
+        // Shared with Messages' group naming (App/Foreground.swift).
         static func bringForward(_ target: NSRunningApplication) async -> Bool {
-            let app = AXUIElementCreateApplication(target.processIdentifier)
-            func isFront() async -> Bool {
-                // Up to 2 s. Both the app and the system must agree: Claude's app said it was in
-                // front while Notes still was (2026-11-06).
-                for _ in 0..<40 {
-                    if AppWindowReader.string(app, kAXFrontmostAttribute) == "1",
-                        frontApp()?.processIdentifier == target.processIdentifier
-                    {
-                        return true
-                    }
-                    try? await Task.sleep(for: .milliseconds(50))
-                }
-                return false
-            }
-            let name = target.bundleIdentifier ?? "an app"
-            target.activate()
-            if await isFront() {
-                NotesLog.record("brought \(name) forward with activate")
-                return true
-            }
-            // `open -b`, as computer_act's open_app does: a program of its own asks LaunchServices,
-            // which brought Notes forward when the installed app's activate and its
-            // NSWorkspace.openApplication were both refused (2026-11-06).
-            if let id = target.bundleIdentifier {
-                await openByID(id)
-                if await isFront() {
-                    NotesLog.record("brought \(name) forward with open -b")
-                    return true
-                }
-            }
-            NotesLog.record("couldn't bring \(name) forward", error: true)
-            return false
+            await Foreground.bringForward(target) { line, error in NotesLog.record(line, error: error) }
         }
-
-        /// The app in front: the owner of the topmost normal window on screen, which is what the
-        /// Owner sees. Accessibility's focused app failed (-25204) while Claude's app was in front,
-        /// and the fallback, NSWorkspace, reads stale in the installed app, so Notes taking the
-        /// front again went unseen and stayed (2026-11-06). Window owners need no permission.
-        static func frontApp() -> NSRunningApplication? {
-            if let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID)
-                as? [[String: Any]],
-                let top = list.first(where: {
-                    ($0[kCGWindowLayer as String] as? Int) == 0 && (($0[kCGWindowAlpha as String] as? Double) ?? 1) > 0
-                }),
-                let pid = top[kCGWindowOwnerPID as String] as? pid_t,
-                let app = NSRunningApplication(processIdentifier: pid)
-            {
-                return app
-            }
-            var v: AnyObject?
-            guard
-                AXUIElementCopyAttributeValue(
-                    AXUIElementCreateSystemWide(), kAXFocusedApplicationAttribute as CFString, &v) == .success,
-                let v, CFGetTypeID(v) == AXUIElementGetTypeID()
-            else { return NSWorkspace.shared.frontmostApplication }
-            var pid: pid_t = 0
-            AXUIElementGetPid(v as! AXUIElement, &pid)
-            return NSRunningApplication(processIdentifier: pid) ?? NSWorkspace.shared.frontmostApplication
-        }
-
-        /// Runs `/usr/bin/open -b <id>` and waits up to 5 s for it, without blocking a thread.
-        static func openByID(_ id: String) async {
-            let p = Process()
-            p.executableURL = URL(filePath: "/usr/bin/open")
-            p.arguments = ["-b", id]
-            await withCheckedContinuation { (done: CheckedContinuation<Void, Never>) in
-                let once = OnceFlag()
-                p.terminationHandler = { _ in if once.claim() { done.resume() } }
-                do { try p.run() } catch {
-                    if once.claim() { done.resume() }
-                    return
-                }
-                DispatchQueue.global().asyncAfter(deadline: .now() + 5) {
-                    if once.claim() {
-                        p.terminate()
-                        done.resume()
-                    }
-                }
-            }
-        }
-
-        /// Lets exactly one of several callbacks go on.
-        final class OnceFlag: @unchecked Sendable {
-            private let lock = NSLock()
-            private var claimed = false
-            func claim() -> Bool {
-                lock.lock()
-                defer { lock.unlock() }
-                if claimed { return false }
-                claimed = true
-                return true
-            }
-        }
+        static func frontApp() -> NSRunningApplication? { Foreground.frontApp() }
+        static func openByID(_ id: String) async { await Foreground.openByID(id) }
 
         /// Deletes the note the window shows through Edit → Delete Note, with Notes in front for a
         /// moment: Notes saves that at once, where a scripted delete sometimes stayed unsaved for

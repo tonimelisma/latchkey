@@ -3,9 +3,9 @@ import Testing
 
 @testable import Latchkey
 
-/// While Notes' window editing and Messages' window actions are switched off (live checks of
-/// 2026-11-05: a checklist note mangled, tapbacks not landing, edits failing), the app refuses
-/// plainly and touches nothing.
+/// Notes' refusals for notes it can't change safely, and Messages' window actions back on
+/// (switched off 2026-11-05 after live checks found them broken; on again 2026-11-07 once each
+/// passed on the real Mac).
 @Suite struct ContainmentTests {
     func notes() throws -> (FakeScripts, [String: ToolEntry]) {
         let store = try NotesStore(url: NotesFixture.make())
@@ -59,7 +59,7 @@ import Testing
         #expect(fake.calls.count == 1)
     }
 
-    @Test func messagesWindowActionsAreGone() async throws {
+    @Test func messagesWindowActionsAreOffered() async throws {
         let db = try MessagesFixture.make()
         let store = try MessagesStore(url: db, contacts: MessagesFixture.FakeContacts())
         let fake = FakeScripts()
@@ -67,16 +67,10 @@ import Testing
             store: { store }, contacts: MessagesFixture.FakeContacts(), scripts: fake,
             staging: FileManager.default.temporaryDirectory.appending(path: "staging-\(UUID().uuidString)"),
             ui: FakeMessagesUI())
-        #expect(tools.map(\.tool.name) == ["messages_send"], "no messages_change")
+        #expect(tools.map(\.tool.name) == ["messages_send", "messages_change"])
         let send = try #require(tools.first)
-        #expect(!send.tool.inputSchema.jsonText.contains("reply_to"))
-        for args: [String: JSONValue] in [
-            ["people": .array([.string("sarah"), .string("tom")]), "text": .string("hi")],
-            ["reply_to": .string("M1"), "text": .string("hi")],
-        ] {
-            let r = await send.handler(.object(args))
-            #expect(r.isError)
-            #expect(r.content.jsonText.contains("being fixed"))
+        for key in ["people", "name", "reply_to"] {
+            #expect(send.tool.inputSchema.jsonText.contains("\"\(key)\""), "\(key)")
         }
         #expect(fake.calls.isEmpty, "nothing reached Messages")
     }

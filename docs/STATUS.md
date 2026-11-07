@@ -1,6 +1,6 @@
 # Status
 
-Last updated: 2026-11-04 (Notes edits in Notes' window with real checklists; test sweep on exit; releases are tags on commits; cloud-only files read again; machine list shows Latchkey versions; WhatsApp built; Add to Claude button; plugin withdrawn; README rewritten as a short product page; relay web pages redone; purkki paired; spec 010 shipped)
+Last updated: 2026-11-07 (Messages' window actions on again, naming groups included; Notes edits in Notes' window with real checklists; test sweep on exit; releases are tags on commits; cloud-only files read again; machine list shows Latchkey versions; WhatsApp built; Add to Claude button; plugin withdrawn; README rewritten as a short product page; relay web pages redone; purkki paired; spec 010 shipped)
 
 Xcode signing ready (2026-10-20): Toni's Xcode account has a valid "Apple Development" certificate
 (certificate expires 2027-07-22). Keep the team ID out of committed project files
@@ -45,7 +45,18 @@ typing), then writes spec 013 for Toni's review before any code.
 
 Notes checklist editing works again (2026-11-06): proven on the real Mac with the five checklist
 cases through `macos/scripts/notes-check.sh` (create, append, edit, tick, untick, delete); Notes
-comes forward for about a second per change. Still switched off: Messages' window actions.
+comes forward for about a second per change.
+
+Messages' window actions work again (2026-11-07): a new group, a like given and taken back, an
+inline reply, an edit, an unsend, deleting a message, naming the group, and deleting whole
+conversations all pass on the real Mac (macOS 27) through `macos/scripts/messages-check.sh`, in
+conversations of Toni with himself, each checked in Messages' database and swept (a search finds
+none left). The causes: on macOS 27 a message's text is in its input label, the tapback picker
+drops a press made while it slides in, and the edit box is a different field. Naming a group
+needs Messages in front for about a second (its name box takes text only then), guarded like
+Notes (only after a pause in the Owner's input, stopped by it, the front given back; shared code
+in `macos/App/Foreground.swift`). Next on the work list: prove Safari, Reminders, Calendar,
+WhatsApp groups, and Mail while locked; then Notes while locked.
 
 Switched off on 2026-11-05 until they work on Toni's Mac (live checks found them broken):
 Notes' window editing (checklist notes got mangled; such notes are refused again, checklist items

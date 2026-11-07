@@ -7,6 +7,6 @@ cd "$(dirname "$0")/.."
 out=$(mktemp -d)
 trap 'rm -rf "$out"' EXIT
 swiftc -O -swift-version 6 -o "$out/notes-check" \
-    App/Notes/NoteWindow.swift App/Notes/NotesWindowRoute.swift App/Notes/NoteHTML.swift \
+    App/Foreground.swift App/Notes/NoteWindow.swift App/Notes/NotesWindowRoute.swift App/Notes/NoteHTML.swift \
     scripts/notes-check/stubs.swift scripts/notes-check/main.swift
 "$out/notes-check" "$@"

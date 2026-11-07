@@ -142,8 +142,8 @@ every test item deleted afterwards. Options, least to most intrusive:
   before and after each step). Not yet tried live, because the Mac locked (lid closed) before
   they could be: taking a tapback back, Edit, Undo Send, deleting one message, a new group from
   `sms://open?addresses=`, and the "Reply transcript" check; `macos/scripts/messages-check.sh`
-  runs them all, with a sweep. Naming a group: the conversation details' name field wasn't
-  found yet, so naming is answered plainly as not possible yet. Conversation rows in the list have "Delete…" too; deleting asks "Delete
+  runs them all, with a sweep. Naming a group: see the macOS 27 findings below (all of these
+  passed live on 2026-11-07). Conversation rows in the list have "Delete…" too; deleting asks "Delete
   from all your devices?" in a sheet. Deleted messages and conversations move to Recently
   Deleted (`chat_recoverable_message_join`) for 30 days. Messages' action names are in the Mac's
   language; English is matched (Toni's Mac), and on another language the answer says Messages
@@ -151,7 +151,36 @@ every test item deleted afterwards. Options, least to most intrusive:
 - **Showing a message**: `sms://open?message-guid=<id>`, opened without activating, shows the
   conversation in the existing window in the background. `sms://open?addresses=a,b` opens a
   new message to several people (a group).
-- **Brief activation**: not needed for any of these (unlike ticking in Notes).
+- **Brief activation**: not needed for any of these (unlike ticking in Notes), except naming a
+  group (below, 2026-11-07).
+- **macOS 27 findings (live, 2026-11-06 and 11-07)**, which explain the failures of 2026-11-05:
+  - A message (`Sticker`, an AXLink) has no children and no `CKBalloonTextView`; its exact text
+    is its `AXUserInputLabels` (one label). Its description is "Your iMessage, ‹text›, HH:MM" and
+    gains ", You liked this" after a like, so matching on the description missed messages.
+    Chosen: the input label, then the text view (older macOS), then the description.
+  - The tapback picker (`TapbackPickerCollectionView`) slides in; a press made before it settles
+    is dropped. Chosen: wait until the button's frame is the same on three looks 100 ms apart,
+    press once, and require the picker to close (else "didn't take the tapback").
+  - Editing shows "Cancel edit", the message as a group holding a focused AXTextField whose value
+    is the old text, and "Send edit". Chosen: that field (checked to hold the old text), its
+    value set, Return; if it doesn't close within 3 s, Escape cancels and the answer says so.
+  - Naming: the details (the title's "Conversation Details") put an Edit menu button rightmost in
+    the toolbar, with `edit_name_&_photo`; it opens a sheet with a text field ("Enter a Group
+    Name") and two unlabelled-by-id buttons, Cancel then Done. The field takes focus and text
+    only while Messages is in front (focus, the selected text, and keys sent to Messages were
+    all ignored with another app in front); a value set through Accessibility shows but leaves
+    Done disabled; typed keys enable it, but those sent right after Messages comes forward are
+    lost until the field has focus ("LK probe" became "probe"). Cancel on a changed sheet asks
+    "Are you sure you want to discard your changes?", whose buttons answer only while Messages
+    is in front; pressed in the background, the sheet stayed open over the group (once it needed
+    Toni's click). Options: bring Messages forward briefly (chosen, the same guarded way as
+    Notes, FR-179: after a pause in input, stopped by the Owner's input, the front given back;
+    the shared code is `App/Foreground.swift`); AppleScript (`chat`'s name is read-only);
+    leaving naming unsupported (Toni wants complete features). In front: focus until it holds,
+    type the name as key presses sent to Messages alone, type it again if the field doesn't hold
+    exactly the name, press Done only when it is on, and on any failure type the old text back,
+    Cancel, and answer the discard question with Discard Changes, all before giving the front
+    back.
 - **Locked Mac** (tried 2026-11-05, lid closed and locked): Messages' window can't be read at
   all (its window element answers as the application), so these are refused at once; sending
   with AppleScript still works. The lid closed while unlocked behaves as unlocked for
