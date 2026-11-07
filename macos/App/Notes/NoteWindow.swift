@@ -286,15 +286,28 @@ struct NoteWindow: Sendable {
             guard let notes = notesApp() else { return false }
             let previous = ownerFront.withLock { $0 } ?? frontApp()
             var done = false
-            if await bringForward(notes) {
-                // Notes' window takes a moment to become the one keys and menus go to.
-                try? await Task.sleep(for: .milliseconds(300))
+            if await bringForward(notes), await stayForward(notes) {
                 done = await work()
             }
             // The front goes back to the app that had it (2026-11-06: a plain activate from the
             // installed app was refused and Notes stayed in front).
             if let previous, previous != notes { _ = await bringForward(previous) }
             return done
+        }
+
+        /// Whether Notes is still in front 300 ms after coming forward, bringing it back through
+        /// LaunchServices when it isn't: an activate from a background app holds only a moment,
+        /// and Safari took the front back 200 to 400 ms later, so Notes' menu went unavailable and
+        /// an untick failed (2026-11-06). The wait is also Notes' window becoming the key window.
+        static func stayForward(_ notes: NSRunningApplication) async -> Bool {
+            for attempt in 0..<3 {
+                try? await Task.sleep(for: .milliseconds(300))
+                if frontApp()?.processIdentifier == notes.processIdentifier { return true }
+                NotesLog.record("Notes lost the front after coming forward (\(attempt + 1))")
+                await openByID(Permissions.notesApp)
+            }
+            try? await Task.sleep(for: .milliseconds(300))
+            return frontApp()?.processIdentifier == notes.processIdentifier
         }
 
         /// Brings an app to the front and answers whether it is there. macOS may refuse a plain
@@ -422,7 +435,12 @@ struct NoteWindow: Sendable {
                 NotesLog.record("menu item \(what) not found", error: true)
                 return false
             }
-            for _ in 0..<80 {  // up to 2 s: the menu follows the caret a moment later
+            for i in 0..<80 {  // up to 2 s: the menu follows the caret a moment later
+                // Notes' menus work only while Notes is in front; another app can take it back.
+                if i % 20 == 10, let notes = notesApp(), frontApp()?.processIdentifier != notes.processIdentifier {
+                    NotesLog.record("Notes lost the front before \(what); bringing it back")
+                    await openByID(Permissions.notesApp)
+                }
                 if AppWindowReader.string(item, kAXEnabledAttribute) == "1" {
                     let pressed = AXUIElementPerformAction(item, kAXPressAction as CFString) == .success
                     if !pressed { NotesLog.record("menu item \(what) didn't take the press", error: true) }

@@ -206,6 +206,12 @@ Recorded step by step on Toni's Mac with test notes:
   unseen, and it stayed in front after an append. The app in front is now the owner of the
   topmost on-screen window at layer 0 (CGWindowList, no permission needed for owners), which is
   what the Owner sees; Accessibility and NSWorkspace are fallbacks only.
+- An activate from a background app may hold only a moment: with the Owner in Safari, Safari took
+  the front back 200 to 400 ms after Notes came forward (not every time), Mark as Unchecked went
+  unavailable, and an untick failed (2026-11-06). Notes must still be in front 300 ms after coming
+  forward, else it is brought forward again with `open -b` (up to three times), and the menu press
+  does the same while it waits. The probe then showed the menu enabled throughout, and the untick
+  worked with both recoveries logged.
 - Result (macos/scripts/notes-check.sh, the real code): create, append, edit, tick, untick all give
   the requested Markdown in Notes' database; the unit tests' stand-in now follows this behaviour.
 

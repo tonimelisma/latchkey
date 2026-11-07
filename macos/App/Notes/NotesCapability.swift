@@ -492,7 +492,8 @@ enum NotesCapability {
                                 )
                             }
                             guard await window.markChecked(note.id, [item.at]) else {
-                                throw WindowFailure(message: "Notes didn't tick “\(found.text)”.")
+                                throw WindowFailure(
+                                    message: "Notes didn't \(wanted ? "tick" : "untick") “\(found.text)”.")
                             }
                         }
                         let ending = await savedNote(window) {
