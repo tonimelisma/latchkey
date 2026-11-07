@@ -11,7 +11,7 @@
 #
 # The results folder must be outside the repository (Claude Code run inside a worktree would run
 # the project's end-of-turn hooks). Results hold only works/refused/failed and a short reason.
-# LATCHKEY_CHECK_TO: the owner's own address; mail and iMessages are sent there, marked as checks.
+# LATCHKEY_CHECK_TO: the owner's own address, for the cases that need it (marked as checks).
 set -euo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"
 repo="$(git -C "$here" rev-parse --show-toplevel 2>/dev/null || echo /nonexistent)"

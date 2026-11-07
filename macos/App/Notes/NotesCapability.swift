@@ -13,7 +13,7 @@ enum NotesCapability {
             readTools: readTools(store: { try source.store() }, scripts: OSAScriptRunner(app: Permissions.notesApp)),
             writeTools: writeTools(
                 store: { try source.store() }, scripts: OSAScriptRunner(app: Permissions.notesApp),
-                window: .live))
+                window: .unavailable))
     }
 
     static let noAccess = """
@@ -443,71 +443,6 @@ enum NotesCapability {
                             [note.scriptID, body.replacingCharacters(in: at, with: NoteHTML.escape(title))])
                         var result = ToolResult.text("Renamed “\(note.title)” to “\(title)”.")
                         result.activity = "Claude renamed the note “\(note.title)” to “\(title)”"
-                        return result
-                    }
-                }),
-            ToolEntry(
-                tool: .make(
-                    "notes_check", title: "Tick a Checklist Item",
-                    description:
-                        "Ticks or unticks a checklist item in a note. Notes comes forward for about a second to do it.",
-                    input: [
-                        "id": .stringParam("The note's id, from notes_find"),
-                        "find": .stringParam("Text of the checklist item (part of it is enough when it's unique)"),
-                        "checked": .boolParam("true ticks (default), false unticks"),
-                    ], required: ["id", "find"], readOnly: false, deadlineMS: 60_000),
-                handler: { args in
-                    await run(store, scripts) { s in
-                        guard let id = args["id"]?.stringValue, let find = args["find"]?.stringValue, !find.isEmpty
-                        else { return .text("Give the note's id and the item's text.", isError: true) }
-                        let wanted: Bool
-                        if case .bool(let b) = args["checked"] { wanted = b } else { wanted = true }
-                        if !window.enabled {
-                            return .text(
-                                "Latchkey can't tick or untick checklist items yet: that is being fixed. Ask the Mac's owner to do it in Notes.",
-                                isError: true)
-                        }
-                        let note = try await s.read(id: id)
-                        if let why = refusal(note, replacing: false) { return .text(why, isError: true) }
-                        let found: (at: Int, ticked: Bool, text: String)
-                        switch NoteWindowEdit.item(find, markdown: note.text, text: nil) {
-                        case .success(let f): found = f
-                        case .failure(.notFound):
-                            return .text("“\(note.title)” has no checklist item with “\(find)”.", isError: true)
-                        case .failure(.several(let n)):
-                            return .text(
-                                "\(n) checklist items in “\(note.title)” have “\(find)”; give more of the item's text.",
-                                isError: true)
-                        }
-                        let word = wanted ? "ticked" : "unticked"
-                        if found.ticked == wanted {
-                            return .text("“\(found.text)” is already \(word) in “\(note.title)”.")
-                        }
-                        try await inWindow(scriptID: note.scriptID, noteID: note.id, window: window) { shown in
-                            guard case .success(let item) = NoteWindowEdit.item(find, markdown: note.text, text: shown)
-                            else {
-                                throw WindowFailure(
-                                    message:
-                                        "Notes' window doesn't show “\(found.text)” as Notes saved it; nothing was changed."
-                                )
-                            }
-                            guard await window.ownerQuiet() else { throw WindowFailure.busy }
-                            let pressed = await window.markChecked(note.id, [item.at])
-                            if window.ownerActed() { throw WindowFailure.interrupted(note.title) }
-                            guard pressed else {
-                                throw WindowFailure(
-                                    message: "Notes didn't \(wanted ? "tick" : "untick") “\(found.text)”.")
-                            }
-                        }
-                        let ending = await savedNote(window) {
-                            guard let now = try? await s.read(id: id),
-                                case .success(let item) = NoteWindowEdit.item(find, markdown: now.text, text: nil)
-                            else { return false }
-                            return item.ticked == wanted
-                        }
-                        var result = ToolResult.text(
-                            "\(wanted ? "Ticked" : "Unticked") “\(found.text)” in “\(note.title)”." + ending)
-                        result.activity = "Claude \(word) “\(found.text)” in the note “\(note.title)”"
                         return result
                     }
                 }),

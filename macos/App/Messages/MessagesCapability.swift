@@ -14,7 +14,7 @@ enum MessagesCapability {
             readTools: readTools(store: { try source.store() }),
             writeTools: writeTools(
                 store: { try source.store() }, contacts: contacts,
-                scripts: OSAScriptRunner(app: Permissions.messagesApp), staging: staging, ui: LiveMessagesUI()))
+                scripts: OSAScriptRunner(app: Permissions.messagesApp), staging: staging))
     }
 
     /// Names come from Contacts; without it they are missing (spec 001 FR-625).
@@ -141,9 +141,9 @@ enum MessagesCapability {
     /// 2026-11-07 once each passed on the real Mac).
     static func writeOperations(
         store: @escaping StoreSource, contacts: any ContactsLookup, scripts: any ScriptRunner, staging: URL,
-        ui: any MessagesUI, confirmWait: Duration = .seconds(5)
+        confirmWait: Duration = .seconds(5)
     ) -> [ToolEntry] {
-        var input: [String: JSONValue] = [
+        let input: [String: JSONValue] = [
             "to": .stringParam("Who or which conversation to send to"),
             "text": .stringParam("The message text"),
             "attachments": .object([
@@ -151,18 +151,9 @@ enum MessagesCapability {
                 "description": .string("Paths of files on the Mac to send"),
             ]),
         ]
-        var description =
+        let description =
             "Sends a message from the Mac's Messages app: text, files, or both. to is a name from Contacts, a phone number, an email address, a group's name, or a conversation id from messages_find; for a person with several numbers and no conversation yet, the one Messages knows on iMessage, else a mobile number, is used and named in the answer. Attachments are paths of files on the Mac. If a name matches several people, nothing is sent and the choices are returned."
-        input["people"] = .object([
-            "type": .string("array"), "items": .object(["type": .string("string")]),
-            "description": .string(
-                "Instead of to: two or more people (names, numbers, addresses) for a new group"),
-        ])
-        input["name"] = .stringParam("With people: the new group's name")
-        input["reply_to"] = .stringParam("A message's id, from messages_read: reply to it inline")
-        description +=
-            " With people instead of to: starts a new group with them (optionally named), through Messages' window. With reply_to: an inline reply to that message, in its conversation, through Messages' window. Those two need the Mac unlocked."
-        var tools = [
+        return [
             ToolEntry(
                 tool: .make(
                     "messages_send", title: "Send a Message", description: description, input: input,
@@ -170,15 +161,6 @@ enum MessagesCapability {
                 handler: { args in
                     await run(store) { s in
                         let text = args["text"]?.stringValue ?? ""
-                        if let reply = args["reply_to"]?.stringValue, !reply.isEmpty {
-                            return try await MessagesCapability.reply(
-                                to: reply, text: text, store: s, ui: ui, confirmWait: confirmWait)
-                        }
-                        if case .array(let list) = args["people"] {
-                            return try await startGroup(
-                                list.compactMap(\.stringValue), text: text, name: args["name"]?.stringValue, store: s,
-                                contacts: contacts, ui: ui, confirmWait: confirmWait)
-                        }
                         guard let to = args["to"]?.stringValue?.trimmingCharacters(in: .whitespaces), !to.isEmpty
                         else { return .text("Say who to send to.", isError: true) }
                         var paths: [String] = []
@@ -240,8 +222,6 @@ enum MessagesCapability {
                     }
                 })
         ]
-        tools.append(changeTool(store: store, ui: ui, confirmWait: confirmWait))
-        return tools
     }
 
     struct Target {

@@ -32,14 +32,6 @@ import Testing
         #expect(fake.calls.isEmpty, "Notes was never asked to change anything")
     }
 
-    @Test func tickingIsRefused() async throws {
-        let (fake, tools) = try notes()
-        let r = await tools["notes_check"]!.handler(.object(["id": .string("N-GROCERIES"), "find": .string("Bread")]))
-        #expect(r.isError)
-        #expect(r.content.jsonText.contains("can't tick or untick"))
-        #expect(fake.calls.isEmpty)
-    }
-
     @Test func checklistItemsInANewNoteStayBoxesAndSaySo() async throws {
         let (fake, tools) = try notes()
         fake.answer = { _, _ in "x-coredata://STORE-UUID/ICNote/p14" }
@@ -59,18 +51,18 @@ import Testing
         #expect(fake.calls.count == 1)
     }
 
-    @Test func messagesWindowActionsAreOffered() async throws {
+    /// Only plain sending: Messages' window actions were withdrawn (Toni, 2026-11-07).
+    @Test func messagesOffersOnlyPlainSending() async throws {
         let db = try MessagesFixture.make()
         let store = try MessagesStore(url: db, contacts: MessagesFixture.FakeContacts())
         let fake = FakeScripts()
         let tools = MessagesCapability.writeTools(
             store: { store }, contacts: MessagesFixture.FakeContacts(), scripts: fake,
-            staging: FileManager.default.temporaryDirectory.appending(path: "staging-\(UUID().uuidString)"),
-            ui: FakeMessagesUI())
-        #expect(tools.map(\.tool.name) == ["messages_send", "messages_change"])
+            staging: FileManager.default.temporaryDirectory.appending(path: "staging-\(UUID().uuidString)"))
+        #expect(tools.map(\.tool.name) == ["messages_send"])
         let send = try #require(tools.first)
         for key in ["people", "name", "reply_to"] {
-            #expect(send.tool.inputSchema.jsonText.contains("\"\(key)\""), "\(key)")
+            #expect(!send.tool.inputSchema.jsonText.contains("\"\(key)\""), "\(key)")
         }
         #expect(fake.calls.isEmpty, "nothing reached Messages")
     }

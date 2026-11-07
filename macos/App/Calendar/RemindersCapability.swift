@@ -59,16 +59,13 @@ enum RemindersCapability {
                     "reminders_change", title: "Change Reminders",
                     description: """
                         Creates, changes, completes, or deletes a reminder, or creates or deletes a list. action: \
-                        create (title; notes, list, due, priority, url, repeat, flagged, tags, parent, section \
-                        optional), update (id and only the fields to change), complete or uncomplete (id), delete \
+                        create (title; notes, list, due, priority, url, repeat optional), update (id and only the fields to change), complete or uncomplete (id), delete \
                         (id; its subtasks go with it; it can't be undone), \
                         create_list (title), delete_list (list and reminder_count: how many reminders it holds, \
                         open and completed, as reminders_find with list says; the list and all its reminders are \
                         deleted and can't be brought back). due is a day (\(CalendarDates.accepted)); with a time, the Mac alerts then. An \
-                        empty text clears a field. parent makes it a subtask of that reminder (parent "" makes \
-                        it a reminder of its own again); tags are all its tags after the change. flagged, tags, \
-                        parent, and section are changed in the Reminders app's window: they need the Mac unlocked, \
-                        and Reminders may come forward for a moment for flags and sections.
+                        empty text clears a field. Flags, tags, subtasks, and sections are shown but can't be \
+                        changed: that needs the Reminders app's window, which Latchkey doesn't use.
                         """,
                     input: [
                         "action": .enumParam(changeActions, "What to do"),
@@ -85,13 +82,6 @@ enum RemindersCapability {
                         "repeat_count": .integerParam("Or: how many times in all"),
                         "reminder_count": .integerParam(
                             "For delete_list: how many reminders the list holds, open and completed"),
-                        "flagged": .boolParam("Flag it (true) or take the flag off (false)"),
-                        "tags": .object([
-                            "type": .string("array"), "items": .object(["type": .string("string")]),
-                            "description": .string("All its tags after the change, without # (e.g. [\"errands\"])"),
-                        ]),
-                        "parent": .stringParam("Make it a subtask of this reminder (its id); \"\" takes it out"),
-                        "section": .stringParam("A section of its list, by name; \"\" takes it out of its section"),
                     ], required: ["action"], readOnly: false, destructive: true, deadlineMS: 15_000),
                 handler: { args in
                     await CalendarCapability.run(.reminders) { try await change(args, backend, zone(), extras) }
@@ -311,19 +301,12 @@ enum RemindersCapability {
             if let list = d?.list, let snap, extras.moveNeedsWindow(reminderID, snap),
                 try backend.resolveCalendar(list, .reminders).id != r.listID
             {
-                if case .set = x.parent {
-                    d?.list = nil  // the parent decides the list
-                } else {
-                    if extras.window.locked() {
-                        throw ArgumentError(
-                            message: "“\(r.title)” "
-                                + (snap.extra(reminderID).parentID != nil ? "is a subtask" : "has subtasks")
-                                + ", so moving it to another list needs the Reminders app's window, which a locked "
-                                + "Mac doesn't show. Nothing was changed; it works once the Mac is unlocked.")
-                    }
-                    r = try await extras.moveFamily(r, to: list, backend: backend, snapshot: snap)
-                    d?.list = nil
-                }
+                throw ArgumentError(
+                    message: "“\(r.title)” "
+                        + (snap.extra(reminderID).parentID != nil ? "is a subtask" : "has subtasks")
+                        + ", and moving it to another list would lose that: macOS drops the links, and only the "
+                        + "Reminders app's window could put them back, which Latchkey doesn't use. Nothing was changed."
+                )
             }
             if let draft = d, draft != ReminderDraft() { r = try backend.updateReminder(id: reminderID, draft) }
             var extra: [String] = []
@@ -390,8 +373,16 @@ enum RemindersCapability {
         }
     }
 
-    /// The flag, tags, parent, and section the arguments set.
+    /// The flag, tags, parent, and section the arguments set: none since 2026-11-07 (they were set in
+    /// the Reminders app's window, which drove an app the Owner may be using; Toni). Old arguments
+    /// are refused rather than ignored.
     static func extrasChange(_ args: JSONValue) throws -> ReminderExtrasChange {
+        for key in ["flagged", "tags", "parent", "section"] where args[key] != nil && args[key] != .null {
+            throw ArgumentError(
+                message:
+                    "Latchkey can't change a reminder's \(key == "flagged" ? "flag" : key) any more: that needs the Reminders app's window, which it doesn't use. Nothing was changed."
+            )
+        }
         var x = ReminderExtrasChange()
         if let f = args["flagged"] {
             guard case .bool(let b) = f else { throw ArgumentError(message: "flagged must be true or false.") }

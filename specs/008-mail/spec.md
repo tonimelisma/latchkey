@@ -1,5 +1,7 @@
 # Spec 008: Mail — WHAT and WHY
 
+**Withdrawn 2026-11-07 (Toni: "remove all mail related functionality. that's better done via APIs"):** the whole Mail capability (every requirement here). Latchkey has no Mail tools; this spec stays as the record.
+
 Status: Draft for Toni's review (2026-10-29). No tasks or code before the review.
 Scope: the Owner's mail in Apple Mail on the Mac, in every account Mail has: finding and reading
 messages, organising them, drafting, replying, forwarding, and sending. This supersedes the

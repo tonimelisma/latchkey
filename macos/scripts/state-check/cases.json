@@ -3,6 +3,7 @@
     {
       "id": "notes",
       "name": "Notes",
+      "missing": [],
       "cases": [
         {"id": "notes.folders", "case": "List folders and recent notes", "steps": "notes_find with nothing."},
         {"id": "notes.search", "case": "Search notes", "steps": "notes_find with query \"the\", limit 3."},
@@ -19,61 +20,23 @@
         {"id": "notes.delete", "case": "Delete a note", "steps": "notes_change delete the \"{TAG} default\" note."},
         {"id": "notes.delete_folder", "case": "Delete a folder", "steps": "notes_change delete_folder \"{TAG} folder\" and \"{TAG} new folder\" (their notes go to Recently Deleted)."},
         {"id": "notes.checklist_create", "case": "Create a note with a real checklist", "steps": "notes_change create, title \"{TAG} list\", text \"- [ ] eggs\\n- [x] milk\"; notes_read it and check eggs shows as - [ ] and milk as - [x]."},
-        {"id": "notes.checklist_append", "case": "Add to a note that has a checklist", "steps": "notes_change append on \"{TAG} list\", text \"- [ ] bread\\nPlain line\"; notes_read it and check bread shows as - [ ], Plain line is not a checklist item, and milk is still - [x]."},
-        {"id": "notes.checklist_edit", "case": "Change a passage in a note with a checklist", "steps": "notes_change edit on \"{TAG} list\", find \"eggs\", text \"brown eggs\"; notes_read it and check it shows - [ ] brown eggs."},
-        {"id": "notes.checklist_tick", "case": "Tick and untick a checklist item", "steps": "notes_change check on \"{TAG} list\", find \"bread\"; then notes_change uncheck, find \"milk\"; notes_read it and check bread is - [x] and milk is - [ ]."},
         {"id": "notes.checklist_delete", "case": "Delete the checklist note", "steps": "notes_change delete the \"{TAG} list\" note."}
-      ],
-      "missing": []
+      ]
     },
     {
       "id": "messages",
       "name": "Messages",
+      "missing": [],
       "cases": [
         {"id": "messages.conversations", "case": "List recent conversations", "steps": "messages_find with nothing, limit 5."},
         {"id": "messages.search", "case": "Search all messages", "steps": "messages_find with text \"ok\", limit 3."},
-        {"id": "messages.read", "case": "Read a conversation", "steps": "messages_read the first conversation from messages.conversations, limit 5."},
-        {"id": "messages.send", "case": "Send a text", "steps": "messages_send to \"{TO}\", text \"{TAG}: text (please ignore)\"."},
-        {"id": "messages.send_file", "case": "Send a file", "steps": "files_change write ~/Downloads/latchkey-check.txt with text \"{TAG}\" (overwrite true), then messages_send to \"{TO}\" with that path as the attachment and text \"{TAG}: file\", then files_change trash the file."},
-        {"id": "messages.group", "case": "Start a named group with several people", "steps": "contacts_find query \"{TO}\" gives the owner's own card; messages_send with people [\"{TO}\", that card's mobile number], name \"{TAG} group\", text \"{TAG}: group (please ignore)\". works only when the answer says the group was started and named. Its conversation id is used below."},
-        {"id": "messages.read_group", "case": "Read the new group", "steps": "messages_read the group's conversation; the group's message shows with its message id."},
-        {"id": "messages.react", "case": "React with a tapback", "steps": "messages_change react, reaction like, on the group's message; then messages_read the group and check it shows Me liked."},
-        {"id": "messages.unreact", "case": "Take a tapback back", "steps": "messages_change unreact on the same message; messages_read shows no reaction from Me."},
-        {"id": "messages.reply", "case": "Reply to a specific message", "steps": "messages_send reply_to the group's message, text \"{TAG}: reply (please ignore)\"; messages_read shows it replying to that message."},
-        {"id": "messages.edit", "case": "Edit a message just sent", "steps": "messages_send to the group's conversation id, text \"{TAG}: to edit (please ignore)\"; messages_read it for its id; messages_change edit it, text \"{TAG}: edited (please ignore)\"; messages_read shows the new text marked edited."},
-        {"id": "messages.unsend", "case": "Unsend a message just sent", "steps": "messages_send to the group's conversation id, text \"{TAG}: to unsend (please ignore)\"; at once messages_read for its id and messages_change unsend it (within 2 minutes); messages_read shows it unsent."},
-        {"id": "messages.delete", "case": "Delete a message", "steps": "messages_change delete the edited message; messages_read no longer shows it."},
-        {"id": "messages.delete_conversation", "case": "Delete a whole conversation", "steps": "messages_change delete_conversation the group's conversation; messages_find no longer lists it."}
-      ],
-      "missing": []
-    },
-    {
-      "id": "mail",
-      "name": "Mail",
-      "cases": [
-        {"id": "mail.accounts", "case": "List accounts and mailboxes", "steps": "mail_find with nothing."},
-        {"id": "mail.find", "case": "Find mail by sender, date, unread", "steps": "mail_find unread true, limit 3."},
-        {"id": "mail.text_search", "case": "Search mail text", "steps": "mail_find text \"invoice\", limit 3."},
-        {"id": "mail.read", "case": "Read a message (left unread)", "steps": "mail_read the first message mail.find found (mark_read false)."},
-        {"id": "mail.conversation", "case": "Read a whole conversation", "steps": "mail_read that message with conversation true."},
-        {"id": "mail.attachment", "case": "Read an attachment", "steps": "mail_find has_attachments true, limit 1; mail_read its attachment 1."},
-        {"id": "mail.send", "case": "Send a new email", "steps": "mail_send to [\"{TO}\"], subject \"{TAG}\", text \"Automated Latchkey check, please ignore.\"."},
-        {"id": "mail.reply", "case": "Reply to an email", "steps": "THE MESSAGE means the newest message whose subject contains \"Latchkey check\" (mail_find subject \"Latchkey check\", limit 1, any mailbox). If mail.send worked, wait until THE MESSAGE is the one it sent (shell_run \"sleep 20\" between tries, up to 4 tries). mail_send reply_to THE MESSAGE, text \"{TAG}: reply\"."},
-        {"id": "mail.forward", "case": "Forward an email", "steps": "mail_send forward THE MESSAGE to [\"{TO}\"], text \"{TAG}: forward\"."},
-        {"id": "mail.draft", "case": "Save a draft", "steps": "mail_change draft to [\"{TO}\"], subject \"{TAG} draft\", text \"Draft\"."},
-        {"id": "mail.send_file", "case": "Send a new email with a file", "steps": "mail_send to [\"{TO}\"], subject \"{TAG} file\", text \"Automated Latchkey check with a file, please ignore.\", attachments [\"/System/Library/CoreServices/SystemVersion.plist\"]. works when it says Sent (locked: it may say the files are above the text)."},
-        {"id": "mail.reply_file", "case": "Reply with a file (locked: refused, offers the queue)", "steps": "mail_send reply_to THE MESSAGE (search again), text \"{TAG}: reply with a file\", attachments [\"/System/Library/CoreServices/SystemVersion.plist\"]. While locked the right answer is refused, naming mail_queue; do not queue it."},
-        {"id": "mail.mark", "case": "Mark read and unread", "steps": "On THE MESSAGE (search again): mail_change mark_read, then mark_unread."},
-        {"id": "mail.flag", "case": "Flag and unflag", "steps": "On THE MESSAGE: mail_change flag, then unflag."},
-        {"id": "mail.junk", "case": "Mark as junk and not junk", "steps": "On THE MESSAGE: mail_change junk, then search for THE MESSAGE again and not_junk."},
-        {"id": "mail.move", "case": "Move to another mailbox", "steps": "On THE MESSAGE (search again): mail_change move to mailbox \"Archive\" (or another mailbox of its account if there is none)."},
-        {"id": "mail.delete", "case": "Delete (to Trash)", "steps": "mail_change delete every message from the last 7 days whose subject contains \"Latchkey check\" (search with limit 50), except THE MESSAGE, which later checks use."}
-      ],
-      "missing": ["Create, rename, or delete mailboxes", "Delete a draft"]
+        {"id": "messages.read", "case": "Read a conversation", "steps": "messages_read the first conversation from messages.conversations, limit 5."}
+      ]
     },
     {
       "id": "files",
       "name": "Files",
+      "missing": [],
       "cases": [
         {"id": "files.list", "case": "List a folder", "steps": "files_find path \"~/Downloads\"."},
         {"id": "files.search", "case": "Search with Spotlight", "steps": "files_find query \"invoice\", limit 3."},
@@ -88,12 +51,12 @@
         {"id": "files.read_pdf", "case": "Read a PDF", "steps": "files_find query \"kMDItemContentType == com.adobe.pdf\" or \"pdf\", limit 1; files_read the first .pdf found (check its text comes back, or for a PDF without text, a picture of its page)."},
         {"id": "files.read_image", "case": "See an image", "steps": "files_find query \"png\", limit 1; files_read the first .png found (only check an image comes back)."},
         {"id": "files.trash", "case": "Move to the Trash", "steps": "files_change trash ~/Downloads/latchkey-check."}
-      ],
-      "missing": []
+      ]
     },
     {
       "id": "shell",
       "name": "Shell",
+      "missing": ["Scripting other apps (osascript) or starting background services (by design)"],
       "cases": [
         {"id": "shell.run", "case": "Run a command", "steps": "shell_run \"echo hello && sw_vers -productVersion\"."},
         {"id": "shell.long", "case": "Run a long command and check on it", "steps": "shell_run \"sleep 40; echo done\" with wait 5 (it becomes a job), then shell_check that job with wait 30, again until it says done."},
@@ -104,12 +67,12 @@
         {"id": "shell.local_network", "case": "Reach a device on the home network", "steps": "shell_run \"r=$(route -n get default | awk '/gateway/{print $2}'); nc -z -G 3 $r 80 && echo reached $r || ping -c1 -t3 $r\"."},
         {"id": "shell.internet", "case": "Reach the internet", "steps": "shell_run \"curl -sS -o /dev/null -w '%{http_code}' https://example.com\"."},
         {"id": "shell.open", "case": "Open an app through macOS", "steps": "shell_run \"open -g -j -a Calculator && sleep 2 && pkill -x Calculator; echo ok\" with uses [\"open\"]."}
-      ],
-      "missing": ["Scripting other apps (osascript) or starting background services (by design)"]
+      ]
     },
     {
       "id": "browser",
       "name": "Browser (Safari)",
+      "missing": [],
       "cases": [
         {"id": "browser.open", "case": "Open a page", "steps": "browser_read url \"https://en.wikipedia.org/wiki/Apple_Inc.\"."},
         {"id": "browser.read", "case": "Read the page showing", "steps": "browser_read with nothing."},
@@ -129,23 +92,23 @@
         {"id": "browser.tabs", "case": "List tabs", "steps": "browser_read tabs true."},
         {"id": "browser.screenshot", "case": "Screenshot of the page", "steps": "browser_read screenshot true."},
         {"id": "browser.close", "case": "Close Claude's page", "steps": "browser_act close; then browser_read tabs true shows Claude has no page or a fresh one."}
-      ],
-      "missing": []
+      ]
     },
     {
       "id": "computer",
       "name": "Computer control",
+      "missing": [],
       "cases": [
         {"id": "computer.screenshot", "case": "See the screen", "steps": "computer_look show screenshot."},
         {"id": "computer.ui", "case": "Read the front window's buttons and text", "steps": "computer_look show ui."},
         {"id": "computer.apps", "case": "List running apps", "steps": "computer_look show apps."},
         {"id": "computer.key", "case": "Press a key", "steps": "computer_act key, keys \"f12\" (no effect in most apps). Do not click, move, type, or open apps."}
-      ],
-      "missing": []
+      ]
     },
     {
       "id": "calendar",
       "name": "Calendar",
+      "missing": ["Invite people or answer invitations (macOS doesn't allow apps to)"],
       "cases": [
         {"id": "calendar.overview", "case": "List calendars and the week ahead", "steps": "calendar_find with nothing."},
         {"id": "calendar.search", "case": "Search events", "steps": "calendar_find query \"meeting\", limit 3."},
@@ -157,30 +120,27 @@
         {"id": "calendar.delete", "case": "Delete an event", "steps": "calendar_change delete that id, span future; then check calendar_find query \"{TAG}\" over the next 5 days finds nothing (delete any left)."},
         {"id": "calendar.invitation_read", "case": "See your answer to an invitation", "steps": "calendar_find from {TOMORROW}, 14 days on; pick an event organized by someone else (one with a person in its [calendar] other than the Owner's own, or an organizer shown when read) and read it with calendar_find id. works when the answer shows a \"Your answer:\" line. Never answer, change, or delete it: it is a real invitation."},
         {"id": "calendar.invite_own", "case": "Inviting the calendar's own address is refused", "steps": "calendar_find with nothing; take a calendar that can be changed whose account is {TO}. calendar_change create, title \"{TAG} invite\", start \"{TOMORROW}T05:00\", calendar that calendar's id, invite [\"{TO}\"]. works when the answer refuses {TO} as the calendar's own address. Then calendar_find query \"{TAG} invite\" from {TOMORROW} to {TOMORROW}: delete any event found (span future) and look again; failed if one stays."}
-      ],
-      "missing": ["Invite people or answer invitations (macOS doesn't allow apps to)"]
+      ]
     },
     {
       "id": "reminders",
       "name": "Reminders",
+      "missing": ["Removing a tag (the Reminders app offers no way Latchkey can reach)"],
       "cases": [
         {"id": "reminders.overview", "case": "List lists and open reminders", "steps": "reminders_find with nothing, limit 5."},
         {"id": "reminders.create_list", "case": "Create a list", "steps": "reminders_change create_list, title \"{TAG}\"."},
         {"id": "reminders.create", "case": "Create a reminder with a due time", "steps": "reminders_change create, title \"{TAG} item\", list \"{TAG}\", due \"{TOMORROW}T09:00\"."},
         {"id": "reminders.update", "case": "Change a reminder", "steps": "reminders_find list \"{TAG}\" for its id, then reminders_change update, priority high, notes \"changed\"."},
-        {"id": "reminders.subtask", "case": "Add a flagged, tagged subtask", "steps": "reminders_change create, title \"{TAG} subtask\", parent the id of \"{TAG} item\", tags [\"latchkeycheck\"], flagged true. Then reminders_find id of \"{TAG} item\": works only when it lists \"{TAG} subtask\" under Subtasks, and reminders_find id of the subtask says Flagged: yes and Tags: #latchkeycheck."},
-        {"id": "reminders.keeps_extras", "case": "Change a reminder that has subtasks, a flag, and tags", "steps": "reminders_change update the subtask, notes \"still tagged\", due \"{TOMORROW}\"; then update \"{TAG} item\", title \"{TAG} item renamed\". Then reminders_find id of each: works only when the item still has its subtask and the subtask is still flagged, tagged #latchkeycheck, and a subtask of the item."},
-        {"id": "reminders.unflag_outdent", "case": "Unflag a subtask and make it a reminder of its own", "steps": "reminders_change update the subtask, flagged false, parent \"\". Then reminders_find id of it: works only when Flagged: no and it is no longer a subtask."},
         {"id": "reminders.complete", "case": "Complete and reopen", "steps": "reminders_change complete it, then uncomplete it."},
         {"id": "reminders.completed", "case": "List completed reminders", "steps": "reminders_find completed true, limit 3."},
         {"id": "reminders.delete", "case": "Delete a reminder", "steps": "reminders_change delete it."},
         {"id": "reminders.delete_list", "case": "Delete a list", "steps": "reminders_find list \"{TAG}\" for its count, then reminders_change delete_list, list \"{TAG}\", reminder_count that count."}
-      ],
-      "missing": ["Removing a tag (the Reminders app offers no way Latchkey can reach)"]
+      ]
     },
     {
       "id": "contacts",
       "name": "Contacts",
+      "missing": [],
       "cases": [
         {"id": "contacts.overview", "case": "List groups and count", "steps": "contacts_find with nothing."},
         {"id": "contacts.search", "case": "Search contacts", "steps": "contacts_find query \"a\", limit 3."},
@@ -193,12 +153,12 @@
         {"id": "contacts.rename_group", "case": "Rename a group", "steps": "contacts_change rename_group, group \"{TAG}\", name \"{TAG} renamed\"."},
         {"id": "contacts.delete_group", "case": "Delete a group", "steps": "contacts_change delete_group, group \"{TAG} renamed\"."},
         {"id": "contacts.delete", "case": "Delete a card", "steps": "contacts_change delete the card (search again by \"{TAG}\" if its id changed)."}
-      ],
-      "missing": []
+      ]
     },
     {
       "id": "location",
       "name": "Location & Maps",
+      "missing": [],
       "cases": [
         {"id": "location.read", "case": "Where the Mac is", "steps": "location_read."},
         {"id": "maps.places", "case": "Find places nearby", "steps": "maps_find query \"coffee\", limit 3."},
@@ -206,40 +166,30 @@
         {"id": "maps.transit", "case": "Transit time", "steps": "maps_find to \"San Francisco City Hall\", mode transit."},
         {"id": "maps.address", "case": "Look up an address", "steps": "maps_find address \"1 Infinite Loop, Cupertino\"."},
         {"id": "maps.reverse", "case": "Name a place from coordinates", "steps": "maps_find address \"37.3318,-122.0312\"."}
-      ],
-      "missing": []
+      ]
     },
     {
       "id": "whatsapp",
       "name": "WhatsApp",
+      "missing": ["Calls, status updates, communities, and channels (out of scope)", "WhatsApp for Mac's window while the Mac is locked (macOS shows it to no other app then); only Safari's WhatsApp Web tab can work"],
       "cases": [
         {"id": "whatsapp.chats", "case": "List recent chats", "steps": "whatsapp_find with nothing, limit 5."},
         {"id": "whatsapp.search", "case": "Search messages", "steps": "whatsapp_find with text \"the\", limit 3."},
-        {"id": "whatsapp.read", "case": "Read a chat, with message ids", "steps": "whatsapp_read chat \"me\", limit 5; check each message line shows its id (msg …)."},
-        {"id": "whatsapp.send", "case": "Send a text", "steps": "whatsapp_send to \"me\" (the Owner's own chat, WhatsApp's \"Message yourself\"; never any other chat), text \"{TAG}: text (please ignore)\"."},
-        {"id": "whatsapp.send_file", "case": "Send a file", "steps": "files_change write ~/Downloads/latchkey-check.txt with text \"{TAG}\" (overwrite true), then whatsapp_send to \"me\" with files [that path] and text \"{TAG}: file\", then files_change trash the file."},
-        {"id": "whatsapp.reply", "case": "Reply to a message, quoting it", "steps": "whatsapp_read chat \"me\", limit 10; take the msg id of \"{TAG}: text (please ignore)\"; whatsapp_send to \"me\", text \"{TAG}: reply\", reply_to that id; check the answer says it went as a reply."},
-        {"id": "whatsapp.react", "case": "React to a message and take it back", "steps": "whatsapp_change chat \"me\", message the id of \"{TAG}: text (please ignore)\", action react, emoji \"👍\"; then the same with action unreact."},
-        {"id": "whatsapp.delete_everyone", "case": "Delete a sent message for everyone", "steps": "whatsapp_send to \"me\", text \"{TAG}: everyone\"; whatsapp_read chat \"me\" for its msg id; whatsapp_change delete that id with everyone true; then whatsapp_change delete the same id (no everyone) so the \"deleted\" placeholder goes too."},
-        {"id": "whatsapp.delete", "case": "Delete messages for me", "steps": "whatsapp_read chat \"me\", limit 20; whatsapp_change delete (for me) every message whose text starts with \"{TAG}\" or whose file is latchkey-check.txt; then whatsapp_find text \"{TAG}\", chat \"me\" finds none."}
-      ],
-      "missing": ["Calls, status updates, communities, and channels (out of scope)", "WhatsApp for Mac's window while the Mac is locked (macOS shows it to no other app then); only Safari's WhatsApp Web tab can work"]
+        {"id": "whatsapp.read", "case": "Read a chat, with message ids", "steps": "whatsapp_read chat \"me\", limit 5; check each message line shows its id (msg …)."}
+      ]
     },
     {
       "id": "sweep",
       "name": "Nothing left behind",
+      "missing": [],
       "cases": [
         {"id": "sweep.notes", "case": "No test notes or folders left", "steps": "notes_find with query \"{TAG}\", and notes_find with nothing (the folder list). Delete every note whose title starts with \"{TAG}\" (notes_change delete) and every folder whose name starts with \"{TAG}\" (notes_change delete_folder), then look again. works only when nothing with the tag is left; otherwise failed, with what stayed."},
         {"id": "sweep.contacts", "case": "No test cards or groups left", "steps": "contacts_find with query \"{TAG}\", and with nothing (the groups). Delete each card and group with the tag, then look again. works only when none is left."},
         {"id": "sweep.calendar", "case": "No test events left", "steps": "calendar_find query \"{TAG}\" from 7 days ago to 60 days ahead. Delete each one with span future, then look again. works only when none is left."},
         {"id": "sweep.reminders", "case": "No test reminders or lists left", "steps": "reminders_find with nothing, and with query \"{TAG}\". Delete each reminder with the tag (subtasks included) and each list whose name starts with \"{TAG}\", then look again. works only when none is left."},
-        {"id": "sweep.mail", "case": "No test email outside the Trash", "steps": "mail_find subject \"{TAG}\". Mark every one read (mail_change mark_read, also those already in a Trash or Deleted Items), and delete (to Trash) each not already in a Trash or Deleted Items mailbox, then look again. works only when every one is read and in a Trash."},
-        {"id": "sweep.messages", "case": "No test messages left", "steps": "messages_find text \"{TAG}\", limit 100. Only in conversations whose people are all the owner (\"{TO}\" or the owner's own numbers, from contacts_find query \"{TO}\"): delete each group conversation with a message with the tag (messages_change delete_conversation), and each other message with the tag (messages_change delete). Never touch a conversation with anyone else. Then look again. works only when no message with the tag is left in the owner's own conversations."},
         {"id": "sweep.files", "case": "No test files left", "steps": "files_find path \"~/Downloads\". Trash every item there whose name starts with \"latchkey-check\" (the folder ~/Downloads/latchkey-check, latchkey-check.txt, latchkey-check-upload.txt, latchkey-check-download.txt and its numbered copies), and any \"dummy\" PDF (dummy.pdf, dummy 2.pdf, …) saved in the last day (files_change trash), then look again. works only when none is left."},
-        {"id": "sweep.browser", "case": "Claude's own Safari page closed", "steps": "browser_read url \"about:blank\" (so Claude works in its own page), then browser_act close, then browser_read tabs true. works only when no tab is marked as Claude's own."},
-        {"id": "sweep.whatsapp", "case": "No test WhatsApp messages left", "steps": "Only in the Owner's own chat (chat \"me\"; never touch any other chat): whatsapp_read chat \"me\", limit 50. whatsapp_change delete (for me) each message whose text starts with \"{TAG}\" or whose file is latchkey-check.txt, and each \"deleted\" placeholder an earlier case left, then read again and whatsapp_find text \"{TAG}\", chat \"me\". works only when none is left."}
-      ],
-      "missing": []
+        {"id": "sweep.browser", "case": "Claude's own Safari page closed", "steps": "browser_read url \"about:blank\" (so Claude works in its own page), then browser_act close, then browser_read tabs true. works only when no tab is marked as Claude's own."}
+      ]
     }
   ]
 }

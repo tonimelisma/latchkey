@@ -351,52 +351,11 @@ extension Array {
     }
 
     /// FR-157: ticking and unticking, with Notes' database telling what's ticked already.
-    @Test func ticksAndUnticksAnItem() async throws {
-        let w = groceriesWindow()
-        let (_, tools) = try setup(w)
-        let tick = await tools["notes_check"]!.handler(
-            .object(["id": .string("N-GROCERIES"), "find": .string("Bread"), "checked": .bool(true)]))
-        #expect(!tick.isError, "\(tick.content.jsonText)")
-        #expect(w.marked == [15])
-        #expect(tick.activity == "Claude ticked “Bread” in the note “Groceries”")
-        let already = await tools["notes_check"]!.handler(
-            .object(["id": .string("N-GROCERIES"), "find": .string("Milk"), "checked": .bool(true)]))
-        #expect(!already.isError)
-        #expect(already.content.jsonText.contains("already ticked"))
-        #expect(w.marked == [15], "nothing pressed")
-        let untick = await tools["notes_check"]!.handler(
-            .object(["id": .string("N-GROCERIES"), "find": .string("Milk"), "checked": .bool(false)]))
-        #expect(!untick.isError)
-        #expect(w.marked == [15, 10])
-        let plain = await tools["notes_check"]!.handler(
-            .object(["id": .string("N-GROCERIES"), "find": .string("Saturday"), "checked": .bool(true)]))
-        #expect(plain.isError)
-        #expect(plain.content.jsonText.contains("no checklist item"))
-    }
 
     /// Live check 2026-11-06: the Owner was typing when Notes came forward, and the typing went
     /// into the note. While the Owner uses the Mac, Notes isn't brought forward at all.
-    @Test func aBusyOwnerIsNeverInterrupted() async throws {
-        let w = groceriesWindow()
-        w.ownerBusy = true
-        let (_, tools) = try setup(w)
-        let tick = await tools["notes_check"]!.handler(
-            .object(["id": .string("N-GROCERIES"), "find": .string("Bread"), "checked": .bool(true)]))
-        #expect(tick.isError)
-        #expect(tick.content.jsonText.contains("using the Mac"))
-        #expect(w.marked.isEmpty, "Notes wasn't brought forward")
-    }
 
     /// When the Owner types or clicks while Notes is in front, the answer says the note may hold it.
-    @Test func typingDuringAChangeIsReported() async throws {
-        let w = groceriesWindow()
-        w.ownerActed = true
-        let (_, tools) = try setup(w)
-        let tick = await tools["notes_check"]!.handler(
-            .object(["id": .string("N-GROCERIES"), "find": .string("Bread"), "checked": .bool(true)]))
-        #expect(tick.isError)
-        #expect(tick.content.jsonText.contains("may have gone into"))
-    }
 
     /// FR-156 for new notes: written as ☐ lines, then made real in the window.
     @Test func aNewNoteGetsRealChecklists() async throws {
@@ -488,17 +447,15 @@ extension Array {
         #expect(result.content.jsonText.contains("hasn't saved"), "\(result.content.jsonText)")
     }
 
-    @Test func theChangeToolReachesCheck() async throws {
+    /// Ticking was withdrawn with Notes' window (Toni, 2026-11-07): the action doesn't exist.
+    @Test func theChangeToolHasNoCheck() async throws {
         let w = groceriesWindow()
         let store = try NotesStore(url: NotesFixture.make())
         let change = try #require(
             NotesCapability.writeTools(store: { store }, scripts: FakeScripts(), window: w.window).first)
         let result = await change.handler(
             .object(["action": .string("check"), "id": .string("N-GROCERIES"), "find": .string("Bread")]))
-        #expect(!result.isError, "\(result.content.jsonText)")
-        let untick = await change.handler(
-            .object(["action": .string("uncheck"), "id": .string("N-GROCERIES"), "find": .string("Milk")]))
-        #expect(!untick.isError)
-        #expect(w.marked.count == 2)
+        #expect(result.isError)
+        #expect(w.marked.isEmpty)
     }
 }

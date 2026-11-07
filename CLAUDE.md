@@ -191,6 +191,17 @@ Enforced by hooks in `.claude/settings.json` (`scripts/hooks.sh`):
 - Never commit the hosted relay's address, its server details, or the Apple team ID; they live in
   the gitignored `.env`, `macos/Config/Local.xcconfig`, and `CLAUDE.local.md` (Toni, 2026-10-23).
 
+## Never disturb the user (Toni, 2026-11-07; Constitution IV)
+
+IMPORTANT: while the Mac is unlocked, someone may be using any app. Latchkey never brings a
+window to the front, never drives an app's window they may be using (selection, view, text),
+and never moves the pointer or types into their apps. Background work that can't touch what they
+see is fine (scripting or databases without a window; a Safari tab of Claude's own behind
+theirs). A feature that would need the front or another app's window is not built, not even
+with a guard. Exceptions Toni chose: computer control, acting in the user's own Safari tabs, the
+shell's `open`. Unreliable routes (WhatsApp Web) are left out. Removed for this on 2026-11-07:
+Mail, WhatsApp sending, Notes' window editing, Messages' window actions, Reminders' window setters.
+
 ## Gotchas
 
 - `~/Development/Relay` is an unrelated project. This repo is `~/Development/latchkey`.

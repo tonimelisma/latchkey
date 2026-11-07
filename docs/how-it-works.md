@@ -44,21 +44,20 @@ Claude (web, Desktop, phone)  ──HTTPS──▶  Latchkey relay  ◀──out
   your Mac, and you can remove any one of them.
 - **You choose what Claude can do.** Each capability has a level in Latchkey's Settings window; a capability that's
   off doesn't exist as far as Claude knows. Most have Off, Read only, and Read & write; Shell and
-  Location & Maps are Off or On. Claude sees 33 tools from a Mac, plus the relay's `machines`:
+  Location & Maps are Off or On. Claude sees 25 tools from a Mac, plus the relay's `machines`. Latchkey never disturbs the person at the Mac: nothing comes to the front and no app they may be using is driven, except computer control (Constitution IV):
 
   | Capability | Read only | Read & write adds |
   |---|---|---|
-  | Notes | `notes_find`, `notes_read` | `notes_change` (create, append, replace, edit, rename, move between folders, create folders, delete notes or folders to Recently Deleted) |
-  | Messages | `messages_find`, `messages_read` (with tapbacks, replies, edits) | `messages_send` (text and files; new named groups and inline replies while unlocked), `messages_change` (tapbacks, edit, unsend, delete messages and conversations, name groups; in Messages' window while unlocked) |
-  | WhatsApp (WhatsApp for Mac's database while it runs, else the Owner's WhatsApp Web tab in Safari; Latchkey links nothing of its own) | `whatsapp_find`, `whatsapp_read` | `whatsapp_send` (through WhatsApp Web in Safari, opened in a background tab when it isn't open, else WhatsApp for Mac's window while the Mac is unlocked: people and groups, text, photos, files, replies), `whatsapp_change` (react, unreact, delete for me or everyone) |
+  | Notes | `notes_find`, `notes_read` | `notes_change` (create, append, replace, edit, rename, move between folders, create folders, delete notes or folders to Recently Deleted; notes with checklists, links, or images are read but not changed) |
+  | Messages | `messages_find`, `messages_read` (with tapbacks, replies, edits) | `messages_send` (text and files, to a person or an existing conversation; through Messages' scripting, no window) |
+  | WhatsApp (WhatsApp for Mac's database; current while that app runs) | `whatsapp_find`, `whatsapp_read` | (nothing: sending was withdrawn on 2026-11-07) |
   | Files | `files_find`, `files_read` (text, PDFs, documents, images) | `files_change` (write, edit, folders, move, copy, Trash) |
   | Shell | | `shell_run`, `shell_check` (long and interactive commands; writes fenced, leftovers removed) |
   | Browser (your Safari, your logins; while locked, Latchkey's own browser with your Safari logins) | `browser_read` | `browser_act` (click, type, script, close Claude's page) |
   | Computer control (while unlocked) | `computer_look` | `computer_act` (mouse, keyboard, apps) |
   | Calendar (every account on the Mac) | `calendar_find` (events, free time) | `calendar_change` (create, move, repeat, delete) |
-  | Reminders | `reminders_find` | `reminders_change` (create, complete, change, delete; new and deleted lists) |
+  | Reminders | `reminders_find` (with flags, tags, subtasks, sections) | `reminders_change` (create, complete, change, delete; new and deleted lists; flags, tags, subtasks, and sections aren't changed) |
   | Contacts | `contacts_find` (cards, photos) | `contacts_change` (create, change, delete; groups and their members) |
-  | Mail (every account in Apple Mail) | `mail_find`, `mail_read` | `mail_change` (read, flag, move, junk, delete to Trash, draft), `mail_send` (new, reply, forward, with files; through Mail's own window: works with the lid closed, not while the Mac is locked), `mail_queue` (while locked: sent at the next unlock) |
   | Location & Maps | `location_read`, `maps_find` (places, directions, travel times) | |
 
 - **You see what Claude did:** a notification for every change and every new Claude connection,
@@ -87,9 +86,9 @@ Claude (web, Desktop, phone)  ──HTTPS──▶  Latchkey relay  ◀──out
 
 | Setup: connect, then answer macOS's questions | |
 |---|---|
-| <img src="images/setup-connect.png" width="400" alt="The setup window's first step: enter your relay's address and click Connect. Three more steps follow: macOS's questions, System Settings, and Safari's setting."> | <img src="images/setup-questions.png" width="400" alt="The second setup step: a checklist of macOS's questions (Notifications, Contacts, Calendars, Reminders, Location, Local network, Notes, Messages, Mail, Safari) with an Ask Now button."> |
+| <img src="images/setup-connect.png" width="400" alt="The setup window's first step: enter your relay's address and click Connect. Three more steps follow: macOS's questions, System Settings, and Safari's setting."> | <img src="images/setup-questions.png" width="400" alt="The second setup step: a checklist of macOS's questions (Notifications, Contacts, Calendars, Reminders, Location, Local network, Notes, Messages, Safari) with an Ask Now button."> |
 | **Settings → What Claude Can Do:** a level for each capability | **Settings → Permissions:** every macOS approval and whether it's given |
-| <img src="images/settings-capabilities.png" width="400" alt="The What Claude Can Do tab: Notes, Messages, Mail, Files, Browser, Computer Control, Calendar, Reminders, and Contacts at Read & Write; Shell and Location & Maps On."> | <img src="images/settings-permissions.png" width="400" alt="The Permissions tab: Keep This Mac Awake, Full Disk Access, Notifications, control of Notes, Messages, Mail, and Safari, Contacts, Calendars, Reminders, Location, Local Network, Safari JavaScript, Screen Recording, Direct Screen Access, and Accessibility, each Allowed."> |
+| <img src="images/settings-capabilities.png" width="400" alt="The What Claude Can Do tab: Notes, Messages, Files, Browser, Computer Control, Calendar, Reminders, and Contacts at Read & Write; Shell and Location & Maps On."> | <img src="images/settings-permissions.png" width="400" alt="The Permissions tab: Keep This Mac Awake, Full Disk Access, Notifications, control of Notes, Messages, and Safari, Contacts, Calendars, Reminders, Location, Local Network, Safari JavaScript, Screen Recording, Direct Screen Access, and Accessibility, each Allowed."> |
 
 The pictures are drawn by the Mac app's own views with sample data (`macos/scripts/readme-shots.sh`
 redraws them).
@@ -108,7 +107,7 @@ redraws them).
 4. **macOS's permissions** (setup steps 2 to 4). Latchkey asks every macOS question any
    capability can use, whatever you turn on, so macOS never stops to ask while you're away:
    Notifications, Contacts, Calendars, Reminders, Location, Local Network, and control of Notes,
-   Messages, Mail, and Safari. Then it opens each System Settings page you need, one after
+   Messages, and Safari. Then it opens each System Settings page you need, one after
    another: keep-awake, Full Disk Access, Screen Recording, and Accessibility. Last, Safari's
    "Allow JavaScript from Apple Events". You choose later what Claude may actually do, in
    Latchkey's Settings window; the Permissions tab there shows each approval.

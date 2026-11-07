@@ -94,7 +94,7 @@ struct Capability: Identifiable, Sendable {
         case .readOnly: readTools
         case .readWrite:
             // A write tool replaces the read tool of its name: the same tool with more to it
-            // (mail_read's mark_read, spec 008 plan D1).
+            // (Notes and Messages read tools that a write tool extends).
             readTools.filter { r in !writeTools.contains { $0.tool.name == r.tool.name } } + writeTools
         }
     }
@@ -106,7 +106,6 @@ struct CapabilityRegistry: Sendable {
     static let notes = "notes"
     static let messages = "messages"
     static let whatsapp = "whatsapp"
-    static let mail = "mail"
     static let files = "files"
     static let shell = "shell"
     static let browser = "browser"
@@ -116,7 +115,7 @@ struct CapabilityRegistry: Sendable {
     static let contacts = "contacts"
     static let location = "location"
     static let all = [
-        notes, messages, whatsapp, mail, files, shell, browser, computer, calendar, reminders, contacts, location,
+        notes, messages, whatsapp, files, shell, browser, computer, calendar, reminders, contacts, location,
     ]
     /// Every capability starts fully on (spec 002 FR-121; specs 003–006, Toni 2026-10-22; spec 007
     /// FR-741, Toni 2026-10-26; spec 008 FR-830, Toni 2026-10-29). A capability new in an update

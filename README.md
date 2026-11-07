@@ -10,6 +10,27 @@ and nothing set up on your router. If your Mac is asleep, Claude tells you right
 
 <img src="docs/images/phone-chat.svg" width="300" alt="A phone chat: asked to find the lease PDF on the Mac, Claude answers from the MacBook at home that the lease ends on August 31, 2027, with notice due by July 2, 2027.">
 
+## What Latchkey does
+
+Latchkey is a small menu bar app for your Mac. It connects your Mac to Claude, so Claude, in any
+Claude app (phone, web, desktop), can work with what's on your Mac:
+
+- **Notes:** find and read your notes; create notes; change plain notes.
+- **Messages:** find and read conversations; send texts and files.
+- **WhatsApp:** find and read chats (from WhatsApp for Mac).
+- **Calendar and Reminders:** see, add, change, and delete events and reminders; answer and send
+  invitations.
+- **Contacts, location, and maps:** look people up, add or change contacts, find places and
+  directions.
+- **Files:** find, read (including PDFs and pictures), write, move, and trash files.
+- **Command line:** run commands, as you, never as administrator.
+- **Safari:** open pages and read, click, type, upload, and download, signed in as you.
+- **The screen:** take a picture of it, and control the computer when you ask.
+
+Your Mac never has to accept connections from the internet: Latchkey reaches out to a small
+service of yours online, the relay, and Claude talks to the relay. You decide which of these
+Claude may use, one by one.
+
 > **Latchkey is in testing; there's no download yet.** To hear when the first release is out,
 > click **Watch → Custom → Releases** at the top of this page (needs a free GitHub account).
 
@@ -44,13 +65,34 @@ space), like `https://relay.example.com/mcp`. Do this once; Claude on your phone
 
 - "What's on my calendar tomorrow? Text Sam that I'll be late."
 - "Find the lease PDF and tell me when it ends."
-- "Reply to Dana's email and attach last month's invoice."
+- "What did the family WhatsApp group decide about Saturday?"
 - "How much disk space is free? Is my backup still running?"
 - "Check my order status on that site I'm signed in to."
 - "Add milk to my shopping list and remind me at 6."
 
-Claude can use your Notes, Messages, WhatsApp, Mail, Calendar, Reminders, Contacts, files, Safari, the
-command line, location and maps, and the screen, but only what you turn on.
+Claude can use your Notes, Messages, WhatsApp (reading), Calendar, Reminders, Contacts, files,
+Safari, the command line, location and maps, and the screen, but only what you turn on. Email
+isn't included: your mail provider's own Claude connector does that better.
+
+## What works when
+
+Latchkey never gets in your way. While you're at the Mac, it doesn't bring windows to the front,
+doesn't take over an app you might be using, and doesn't move your pointer or type into your
+apps. It works in the background instead.
+
+- **Even while the Mac is locked** (lid open or closed): files and the command line; Notes
+  (find, read, create, and change plain notes); Messages (find, read, and send to a person or an
+  existing conversation); WhatsApp (find and read); Calendar (everything, including invitations);
+  Reminders (create, change, complete, delete); Contacts; location and maps; web pages Claude
+  opens itself, in a browser of Latchkey's own that uses your Safari sign-ins.
+- **Only while the Mac is unlocked:** Safari (Claude opens a tab of its own behind yours, in the
+  background, and can also read and act in your tabs when you ask); looking at the screen;
+  computer control.
+- **Computer control is the one exception to "never in your way":** it uses the real mouse and
+  keyboard, so you'll see it. It's there for when you ask Claude to use the computer.
+- **Not offered, because it would need an app's window while you might be using it:** changing
+  notes that have checklists, links, or pictures; Messages' reactions, inline replies, edits,
+  new groups; sending WhatsApp messages; setting flags, tags, subtasks, or sections in Reminders.
 
 ## You stay in charge
 
@@ -59,8 +101,10 @@ command line, location and maps, and the screen, but only what you turn on.
 - **You approve every Claude app** that connects, and can remove any of them later.
 - **You see everything Claude did**, with a notification for every change.
 - **You can pause Claude in one click** from the menu bar.
-- **Your content stays yours.** Your notes, messages, mail, and files pass through the relay to
+- **Your content stays yours.** Your notes, messages, and files pass through the relay to
   Claude and are never stored there.
+- **It never interrupts you.** What Claude does on your Mac happens in the background, except
+  computer control, which you'll see.
 - **Nothing is left behind.** What Claude starts is cleaned up when it's done.
 
 ## Also

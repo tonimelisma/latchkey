@@ -766,3 +766,15 @@ struct TextMatcher: Sendable {
         return false
     }
 }
+
+/// What the window must show before anything is pressed: the conversation's name, or its
+/// people's names and numbers (security review 2026-11-05: never act on whatever is shown).
+struct ConversationIdentity: Sendable, Equatable {
+    var id: String
+    /// The group's own name, if it has one.
+    var name: String?
+    var participants: [MessagesStore.Participant]
+}
+
+/// How to find one message in the window: Messages shows no ids there, so by its conversation,
+/// its text (or file name), and its side. Only a single match is acted on.

@@ -251,40 +251,22 @@ final class FakeRemindersApp: RemindersExtrasSource, @unchecked Sendable {
         app.readable = false
         let t = text(try await tool("reminders_find").handler(.object(["id": .string("R-TRIP")])))
         #expect(t.contains("unknown (Latchkey needs Full Disk Access"))
-        let r = try await change(["action": .string("update"), "id": .string("R-CALL"), "flagged": .bool(true)])
-        #expect(r.isError && text(r).contains("Full Disk Access"))
     }
 
-    @Test func createsASubtaskWithTagsAndAFlag() async throws {
-        let r = try await change([
-            "action": .string("create"), "title": .string("Charger"), "parent": .string("R-TRIP"),
-            "tags": .array([.string("travel"), .string("#tech")]), "flagged": .bool(true),
-        ])
-        #expect(!r.isError, "\(text(r))")
-        let id = try #require(fake.reminderList.last?.id)
-        let e = try #require(app.snapshot()).extra(id)
-        #expect(e.parentID == "R-TRIP")
-        #expect(e.flagged)
-        #expect(e.tags == ["travel", "tech"])
-        // The #tags typed into the title are taken out again; the tags stay.
-        #expect(fake.reminderList.last?.title == "Charger")
-        #expect(text(r).contains("is now a subtask of “Pack for trip”"), "\(text(r))")
-        // Moved up past "Call mom" to sit under the trip's subtasks, then indented.
-        #expect(app.actions.prefix(2) == ["Move Up", "Indent"], "\(app.actions)")
-    }
-
-    @Test func aLockedMacChangesNothing() async throws {
-        app.isLocked = true
-        let r = try await change([
-            "action": .string("update"), "id": .string("R-CALL"), "title": .string("Call dad"),
-            "flagged": .bool(true),
-        ])
-        #expect(r.isError && text(r).contains("locked"))
-        #expect(fake.reminderList[2].title == "Call mom")
-        #expect(app.actions.isEmpty)
-        // A change EventKit makes alone still works while locked.
-        let plain = try await change(["action": .string("update"), "id": .string("R-CALL"), "notes": .string("x")])
-        #expect(!plain.isError)
+    /// Flags, tags, subtasks, and sections are shown but not changed (Toni, 2026-11-07: setting
+    /// them drove the Reminders app's window, which the Owner may be using).
+    @Test func flagsTagsSubtasksAndSectionsAreRefused() async throws {
+        for (key, value) in [
+            ("flagged", JSONValue.bool(true)), ("tags", .array([.string("x")])), ("parent", .string("R-TRIP")),
+            ("section", .string("Dairy")),
+        ] {
+            let r = try await change(["action": .string("update"), "id": .string("R-CALL"), key: value])
+            #expect(r.isError && text(r).contains("Reminders app's window"), "\(key): \(text(r))")
+            let c = try await change(["action": .string("create"), "title": .string("New"), key: value])
+            #expect(c.isError, "\(key)")
+        }
+        #expect(app.actions.isEmpty, "the window was never touched")
+        #expect(fake.reminderList.count == 4, "nothing was created")
     }
 
     @Test func plainUpdatesKeepFlagsTagsAndSubtasks() async throws {
@@ -295,51 +277,19 @@ final class FakeRemindersApp: RemindersExtrasSource, @unchecked Sendable {
         #expect(app.actions.isEmpty)
     }
 
-    @Test func aSubtaskIsDoneWhenRemindersDropsTheSelectionAfterIndenting() async throws {
-        app.deselectAfterIndent = true
-        let r = try await change(["action": .string("update"), "id": .string("R-CALL"), "parent": .string("R-TRIP")])
-        #expect(!r.isError, "\(text(r))")
-        #expect(app.snapshot()?.extra("R-CALL").parentID == "R-TRIP")
-    }
-
-    @Test func outdentsUnflagsAndMovesToASection() async throws {
-        let out = try await change(["action": .string("update"), "id": .string("R-SOCKS"), "parent": .string("")])
-        #expect(!out.isError && app.snapshot()?.extra("R-SOCKS").parentID == nil, "\(text(out))")
-        let unflag = try await change([
-            "action": .string("update"), "id": .string("R-TRIP"), "flagged": .bool(false),
-        ])
-        #expect(!unflag.isError && app.snapshot()?.extra("R-TRIP").flagged == false)
-        let sec = try await change(["action": .string("update"), "id": .string("R-MILK"), "section": .string("dairy")])
-        #expect(!sec.isError && app.snapshot()?.extra("R-MILK").section == "Dairy", "\(text(sec))")
-        let none = try await change([
-            "action": .string("update"), "id": .string("R-MILK"), "section": .string("Bakery"),
-        ])
-        #expect(none.isError && text(none).contains("Dairy, Produce"))
-    }
-
-    @Test func refusesWhatRemindersCantDo() async throws {
-        let remove = try await change(["action": .string("update"), "id": .string("R-TRIP"), "tags": .array([])])
-        #expect(remove.isError && text(remove).contains("#travel"))
-        #expect(app.snapshot()?.extra("R-TRIP").tags == ["travel"])
-        let deep = try await change([
-            "action": .string("update"), "id": .string("R-CALL"), "parent": .string("R-SOCKS"),
-        ])
-        #expect(deep.isError && text(deep).contains("one level"))
-        let own = try await change(["action": .string("update"), "id": .string("R-TRIP"), "parent": .string("R-CALL")])
-        #expect(own.isError && text(own).contains("has subtasks of its own"))
-    }
-
-    @Test func movingAReminderWithSubtasksTakesThemAlong() async throws {
+    /// Moving a reminder with subtasks, or a subtask, to another list would lose the links (macOS
+    /// drops them): refused, nothing changed.
+    @Test func movingAReminderWithSubtasksIsRefused() async throws {
         let r = try await change(["action": .string("update"), "id": .string("R-TRIP"), "list": .string("Groceries")])
-        #expect(!r.isError, "\(text(r))")
-        #expect(
-            fake.reminderList.filter { $0.listID == "L-SHOP" }.map(\.id).sorted() == ["R-MILK", "R-SOCKS", "R-TRIP"])
-        #expect(app.snapshot()?.extra("R-SOCKS").parentID == "R-TRIP")
-        app.isLocked = true
-        let locked = try await change([
-            "action": .string("update"), "id": .string("R-TRIP"), "list": .string("Reminders"),
+        #expect(r.isError && text(r).contains("has subtasks"), "\(text(r))")
+        #expect(fake.reminderList.first { $0.id == "R-TRIP" }?.listID == "L-TODO")
+        let sub = try await change([
+            "action": .string("update"), "id": .string("R-SOCKS"), "list": .string("Groceries"),
         ])
-        #expect(locked.isError && text(locked).contains("has subtasks"))
-        #expect(fake.reminderList.first { $0.id == "R-TRIP" }?.listID == "L-SHOP")
+        #expect(sub.isError && text(sub).contains("is a subtask"))
+        let plain = try await change([
+            "action": .string("update"), "id": .string("R-CALL"), "list": .string("Groceries"),
+        ])
+        #expect(!plain.isError, "\(text(plain))")
     }
 }

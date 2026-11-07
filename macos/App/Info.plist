@@ -29,7 +29,7 @@
 	<key>NSHumanReadableCopyright</key>
 	<string>Apache-2.0</string>
 	<key>NSAppleEventsUsageDescription</key>
-	<string>Latchkey uses Notes, Messages, Mail, and Safari to change notes, send messages, organise and send email, and open web pages when you ask Claude to.</string>
+	<string>Latchkey uses Notes, Messages, and Safari to change notes, send messages, and open web pages when you ask Claude to.</string>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>Commands Claude runs on this Mac can reach printers, routers, and other devices on your network.</string>
 	<key>NSBonjourServices</key>

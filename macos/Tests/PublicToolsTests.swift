@@ -3,24 +3,23 @@ import Testing
 
 @testable import Latchkey
 
-/// The 33 tools Claude sees (15 consolidated 2026-10-23, 8 added by spec 007, 5 by spec 008, 4 by spec 012, messages_change by spec 002 FR-174) and how each reaches its operations.
+/// The 25 tools Claude sees (15 consolidated 2026-10-23, 8 added by spec 007, 2 by spec 012; Mail, WhatsApp sending, and Messages' window actions withdrawn 2026-11-07) and how each reaches its operations.
 @Suite struct PublicToolsTests {
     static let read = [
         "notes_find", "notes_read", "messages_find", "messages_read", "files_find", "files_read", "shell_check",
         "browser_read", "computer_look", "calendar_find", "reminders_find", "contacts_find", "location_read",
-        "maps_find", "mail_find", "mail_read", "whatsapp_find", "whatsapp_read",
+        "maps_find", "whatsapp_find", "whatsapp_read",
     ]
     static let write = [
-        "notes_change", "messages_send", "messages_change", "files_change", "shell_run", "browser_act", "computer_act",
-        "calendar_change", "reminders_change", "contacts_change", "mail_change", "mail_send", "mail_queue",
-        "whatsapp_send", "whatsapp_change",
+        "notes_change", "messages_send", "files_change", "shell_run", "browser_act", "computer_act",
+        "calendar_change", "reminders_change", "contacts_change",
     ]
 
-    @MainActor @Test func thirtyThreeToolsAtFullLevel() {
+    @MainActor @Test func twentyFiveToolsAtFullLevel() {
         let registry = CapabilityRegistry(
             capabilities: AppModel.makeCapabilities(), levels: CapabilityRegistry.defaultLevels)
         let names = registry.tools.map(\.name)
-        #expect(names.count == 33)
+        #expect(names.count == 25)
         #expect(Set(names) == Set(Self.read + Self.write))
         for t in registry.tools {
             #expect(t.annotations?.readOnlyHint == Self.read.contains(t.name), "\(t.name)")
@@ -54,7 +53,7 @@ import Testing
         #expect(fake.lastArgs.last == "<div>Plant tulips</div>")
         let bad = await change.handler(.object(["action": .string("archive")]))
         #expect(bad.isError)
-        #expect(bad.content.jsonText.contains("create, append, replace, edit, rename, check, uncheck, move, delete"))
+        #expect(bad.content.jsonText.contains("create, append, replace, edit, rename, move, delete"))
         let moved = await change.handler(
             .object(["action": .string("move"), "id": .string("N-IDEAS"), "folder": .string("Garden")]))
         #expect(!moved.isError, "\(moved.content.jsonText)")

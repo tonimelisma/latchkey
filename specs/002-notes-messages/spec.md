@@ -1,5 +1,7 @@
 # Spec 002: Notes and Messages — WHAT and WHY
 
+**Withdrawn 2026-11-07 (Toni: Latchkey never disturbs the user while the Mac is unlocked, Constitution IV):** FR-155 to FR-159 (changing notes in Notes' window, checklists and ticks) and FR-172 to FR-178 (Messages' window actions: new groups, tapbacks, inline replies, edit, unsend, delete, naming groups) and FR-179 (bringing an app forward). Notes with checklists, links, or images are refused again (FR-106); `messages_send` sends to a person or an existing conversation through Messages' scripting only.
+
 Status: Draft for Toni's review (2026-10-22)
 Scope: Claude reads, searches, creates, edits, and deletes the Owner's Apple Notes, and reads,
 searches, and sends the Owner's Messages (iMessage, SMS, RCS), from any Claude app, through the

@@ -35,6 +35,17 @@ EventKit framework: `EKEvent` `participationStatus`/`setParticipationStatus:`,
 `selfIdentityEmail`, `ownerIdentityEmail`, `selfIdentityAddress`, `ownerIdentityAddress`. Each is
 checked before use, every change is read back, and a test fails when one disappears.
 
+Never disturb the user (approved by Toni 2026-11-07): while the Mac is unlocked, the person at it
+may be using any app, so Latchkey never brings a window to the front, never drives an app's
+window the user may be using (changing its selection, view, or text), and never sends the
+pointer or keystrokes into the user's apps. Work that can't touch what the user sees is fine:
+data read or written through an app's scripting or database without its window, a Safari tab of
+Claude's own in the background while the user keeps browsing theirs. A feature that would need
+the front or another app's window is left out, not built with a guard. Exceptions, because the
+user asks for them knowingly: computer control (when Claude uses the computer, the user knows
+it), acting in the user's own Safari tabs, and the shell's `open`. Unreliable routes (WhatsApp Web
+in Safari) are left out too.
+
 ## V. Self-hostable by default
 The relay is one Go binary plus one SQLite file, shipped as a Docker image. The hosted instance runs
 exactly the same code. No feature may depend on a specific cloud vendor.

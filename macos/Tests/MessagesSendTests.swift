@@ -23,7 +23,7 @@ import Testing
         let staging = FileManager.default.temporaryDirectory.appending(path: "staging-\(UUID().uuidString)")
         let tools = MessagesCapability.writeOperations(
             store: { store }, contacts: MessagesFixture.FakeContacts(), scripts: fake, staging: staging,
-            ui: FakeMessagesUI(), confirmWait: .milliseconds(600))
+            confirmWait: .milliseconds(600))
         return Setup(db: db, fake: fake, staging: staging, send: try #require(tools.first))
     }
 

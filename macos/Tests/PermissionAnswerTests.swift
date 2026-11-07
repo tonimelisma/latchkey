@@ -34,7 +34,6 @@ struct PermissionAnswerTests {
     @Test func automationAnswersPointToLatchkeysPermissions() {
         for text in [
             NotesCapability.explain(ScriptError.notAllowed), MessagesCapability.explain(ScriptError.notAllowed),
-            MailCapability.notAllowed,
         ] {
             #expect(text.contains("Latchkey's Settings → Permissions"))
         }

@@ -1,12 +1,27 @@
 # Status
 
-Last updated: 2026-11-07 (Messages' window actions on again, naming groups included; Notes edits in Notes' window with real checklists; test sweep on exit; releases are tags on commits; cloud-only files read again; machine list shows Latchkey versions; WhatsApp built; Add to Claude button; plugin withdrawn; README rewritten as a short product page; relay web pages redone; purkki paired; spec 010 shipped)
+Last updated: 2026-11-07 (never disturb the user: Mail, WhatsApp sending, Notes' window editing, Messages' window actions, Reminders' window setters removed; test sweep on exit; releases are tags on commits; cloud-only files read again; machine list shows Latchkey versions; WhatsApp built; Add to Claude button; plugin withdrawn; README rewritten as a short product page; relay web pages redone; purkki paired; spec 010 shipped)
 
 Xcode signing ready (2026-10-20): Toni's Xcode account has a valid "Apple Development" certificate
 (certificate expires 2027-07-22). Keep the team ID out of committed project files
 (open source); put it in a gitignored `macos/Local.xcconfig` as `DEVELOPMENT_TEAM`.
 
 ## Current phase
+
+Never disturb the user (Toni, 2026-11-07; Constitution IV, CLAUDE.md): while the Mac is
+unlocked, Latchkey brings nothing to the front, drives no app the user may be using, and sends
+no pointer or keys into their apps; exceptions are computer control, acting in the user's own
+Safari tabs, and the shell's `open`. Removed for it, in one change (25 tools from a Mac now, was
+33): all of Mail (spec 008 withdrawn; Toni: better done through mail providers' APIs), WhatsApp
+sending and WhatsApp Web (spec 012: reading from WhatsApp for Mac's database only), Notes' window
+editing (spec 002 FR-155 to FR-159: notes with checklists, links, or images are refused again),
+Messages' window actions (FR-172 to FR-179: `messages_send` to a person or conversation only),
+and Reminders' flag, tag, subtask, and section setters (spec 007: read only; moving a reminder
+with subtasks to another list is refused). The README now says what works when. The screen-state
+cases for those were removed, and so were the Messages send cases, which could no longer clean up
+their test messages. Not done: the README and how-it-works pictures still show Mail (re-take
+them); the old "Latchkey check" test messages in Toni's self-conversations can no longer be
+deleted by Latchkey (Toni deletes them, or they stay).
 
 Spec 001 is built. Everything that doesn't need Toni is done and verified on this Mac
 (2026-10-20):
@@ -113,8 +128,8 @@ merged and tested together (33 tools now):
   again for text, files, replies (spec 012 FR-1245 to FR-1250). Checked live in the self chat;
   groups and people without a known number not yet.
 
-Next: Notes while locked, through iCloud.com in Latchkey's browser. Notes' window has no editor
-then. Shortcuts is dropped (Toni, 2026-11-07: "this approach is broken, remove it"): Latchkey
+Next: changing notes with checklists, links, or images, in any screen state, through iCloud.com
+in Latchkey's own browser (in the background, so it disturbs no one). Shortcuts is dropped (Toni, 2026-11-07: "this approach is broken, remove it"): Latchkey
 could add a signed shortcut by itself in the background, and its Notes action made the note, but
 running it put up "Allow … to output 1 note?" on the Owner's screen, and deleting a shortcut
 needs Shortcuts' window in front. Don't propose Shortcuts again.

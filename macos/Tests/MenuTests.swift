@@ -85,7 +85,7 @@ import Testing
             contacts: .notDetermined, safariJavaScript: nil, screenRecording: false, accessibility: false)
         let all = Approval.list(facts)
         let ids = [
-            "helper", "disk", "notifications", "notes", "messages", "mail", "contacts", "calendars", "reminders",
+            "helper", "disk", "notifications", "notes", "messages", "contacts", "calendars", "reminders",
             "location", "localNetwork", "safari", "safariJS", "screen", "screenAccess", "accessibility",
         ]
         #expect(all.map(\.id) == ids)
@@ -94,7 +94,7 @@ import Testing
             "everything is needed; Local Network is still being checked")
 
         facts = ApprovalFacts(
-            helper: true, fullDiskAccess: true, notes: .allowed, messages: .allowed, mail: .allowed, safari: .allowed,
+            helper: true, fullDiskAccess: true, notes: .allowed, messages: .allowed, safari: .allowed,
             contacts: .authorized, calendars: true, reminders: true, location: .allowed, safariJavaScript: true,
             screenRecording: true, accessibility: true, notifications: .allowed, localNetwork: true, screenAccess: true)
         #expect(Approval.list(facts).allSatisfy { $0.state == .allowed })

@@ -20,7 +20,8 @@ struct RemindersExtras: Sendable {
     var window: RemindersWindow
 
     static let none = RemindersExtras(source: NoRemindersExtras(), window: .unavailable)
-    static let live = RemindersExtras(source: RemindersStore(root: RemindersStore.defaultRoot), window: .live)
+    /// Reading only: the window setters were withdrawn on 2026-11-07 (Toni).
+    static let live = RemindersExtras(source: RemindersStore(root: RemindersStore.defaultRoot), window: .unavailable)
 
     static let noDisk = """
         Latchkey can't read flags, tags, subtasks, or sections: it needs Full Disk Access (the Mac's \

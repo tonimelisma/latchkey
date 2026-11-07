@@ -132,7 +132,7 @@ struct CapabilitiesPane: View {
                 Section("WhatsApp") {
                     // Spec 012 FR-1232.
                     Text(
-                        "Claude uses WhatsApp Web in Safari: log in once at web.whatsapp.com, and Latchkey opens it in a background tab when it isn't open. While WhatsApp for Mac runs, Claude reads its messages there. \(WhatsAppCapability.linkWarning)"
+                        "Claude reads and searches WhatsApp from WhatsApp for Mac on this Mac; it can't send. Messages are current while WhatsApp for Mac is running."
                     )
                     .font(.callout)
                     .foregroundStyle(.secondary)
@@ -206,7 +206,6 @@ struct PermissionsPane: View {
         case "screenAccess": Button("Allow…") { Task { await model.confirmScreenAccess() } }
         case "notes": control(Permissions.notesApp)
         case "messages": control(Permissions.messagesApp)
-        case "mail": control(Permissions.mailApp)
         case "safari": control(Permissions.safariApp)
         case "contacts":
             if model.contactsStatus == .notDetermined {
@@ -569,7 +568,6 @@ struct SetupView: View {
                 fix: model.localNetwork == false ? { Task { await model.allowLocalNetwork() } } : nil),
             control(Permissions.notesApp, "Notes"),
             control(Permissions.messagesApp, "Messages"),
-            control(Permissions.mailApp, "Mail"),
             control(Permissions.safariApp, "Safari"),
         ]
     }

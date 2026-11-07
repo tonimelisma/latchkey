@@ -55,7 +55,7 @@ final class FakeScripts: ScriptRunner, @unchecked Sendable {
         let (_, _, tools) = try setup()
         #expect(
             Set(tools.keys) == [
-                "notes_create", "notes_update", "notes_move", "notes_rename", "notes_check", "notes_create_folder",
+                "notes_create", "notes_update", "notes_move", "notes_rename", "notes_create_folder",
                 "notes_delete", "notes_delete_folder",
             ])
         #expect(tools["notes_move"]?.tool.annotations?.destructiveHint == false)

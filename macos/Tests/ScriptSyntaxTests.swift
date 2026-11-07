@@ -17,11 +17,7 @@ import Testing
         ("safari tab addresses", SafariBrowser.Script.tabAddresses),
         ("safari find window", SafariBrowser.Script.findWindow),
         ("safari any tab at", SafariBrowser.Script.anyTabAt),
-        ("whatsapp safari call", SafariWhatsApp.script),
-        ("whatsapp safari open", SafariWhatsApp.openScript),
         ("notes delete folder", NotesCapability.Script.deleteFolder),
-        ("notes show in window", NoteWindow.Script.show), ("notes show again", NoteWindow.Script.restore),
-        ("mail make message", AXMailWindows.makeScript), ("mail message action", AXMailWindows.messageScript),
         ("safari tab survey", SafariBrowser.Script.tabSurvey),
         ("safari tab javascript", SafariBrowser.Script.tabJavaScript),
         ("safari tab load", SafariBrowser.Script.tabLoad), ("safari tab new", SafariBrowser.Script.tabNew),
@@ -29,10 +25,6 @@ import Testing
         ("safari tab front", SafariBrowser.Script.tabFront), ("safari tab restore", SafariBrowser.Script.tabRestore),
         ("safari tab close", SafariBrowser.Script.tabClose),
         ("safari all tabs", SafariBrowser.Script.allTabs), ("safari tab pick", SafariBrowser.Script.tabPick),
-        ("mail accounts", MailScript.accounts), ("mail change", MailScript.change),
-        ("mail save attachment", MailScript.saveAttachment),
-        ("mail signature make", MailSignatureWriter.makeScript),
-        ("mail signature finish", MailSignatureWriter.finishScript),
     ]
 
     @Test(arguments: scripts.map(\.0))

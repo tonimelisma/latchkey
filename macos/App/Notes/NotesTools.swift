@@ -41,7 +41,7 @@ extension NotesCapability {
     }
 
     static let changeActions = [
-        "create", "append", "replace", "edit", "rename", "check", "uncheck", "move", "delete", "create_folder",
+        "create", "append", "replace", "edit", "rename", "move", "delete", "create_folder",
         "delete_folder",
     ]
 
@@ -57,14 +57,13 @@ extension NotesCapability {
                         Creates, changes, or deletes a note in Apple Notes. action: create (title, text, folder), \
                         append (id, text: added at the end), replace (id, text: everything below the title), \
                         edit (id, find: an exact passage in one paragraph, text: its replacement), \
-                        rename (id, title), check and uncheck (id, find: text of a checklist item; Notes comes \
-                        forward for about a second), move (id, folder: made if it doesn't exist, as for create), \
+                        rename (id, title), move (id, folder: made if it doesn't exist, as for create), \
                         delete (id: moves the note to Recently Deleted for 30 days), create_folder (folder), \
                         delete_folder (folder: \
                         deletes that folder, its notes to Recently Deleted; not the default folder). Text is Markdown-like: \
-                        # headings, - lists, 1. numbered lists, - [ ] and - [x] checklist items (real Notes \
-                        checklists). Notes with checklists, links, or images are changed in Notes' window, in place, \
-                        keeping them; headings and bullets written into those become plain lines.
+                        # headings, - lists, 1. numbered lists; - [ ] and - [x] become ☐ and ☑ lines. Notes with \
+                        checklists, links, or images can't be changed (rewriting them would lose those); create a \
+                        new note instead.
                         """,
                     input: [
                         "action": .enumParam(changeActions, "What to do"),
@@ -83,8 +82,6 @@ extension NotesCapability {
                     case "append", "replace", "edit":
                         return await ops.call("notes_update", args.with(["mode": args["action"]]))
                     case "rename": return await ops.call("notes_rename", args)
-                    case "check", "uncheck":
-                        return await ops.call("notes_check", args.with(["checked": .bool(action == "check")]))
                     case "move": return await ops.call("notes_move", args)
                     case "create_folder": return await ops.call("notes_create_folder", args)
                     case "delete": return await ops.call("notes_delete", args)

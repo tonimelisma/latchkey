@@ -1,5 +1,7 @@
 # Spec 007: Calendar, Reminders, Contacts, Location and Maps — WHAT and WHY
 
+**Withdrawn 2026-11-07 (Toni: Latchkey never disturbs the user while the Mac is unlocked, Constitution IV):** the window steps of FR-714 to FR-719: setting flags, tags, subtasks, and sections, and moving a reminder with subtasks (or a subtask) to another list, which needed the Reminders app's window. They are still read and shown; `reminders_change` refuses them and changes nothing.
+
 Status: Approved to build without a review stop (Toni, 2026-10-26); Toni reviews at the end.
 Scope: the Owner's calendars, reminders, and contacts on the Mac, where the Mac is, and finding
 places and directions. Only what macOS itself offers, with no developer account (Toni,

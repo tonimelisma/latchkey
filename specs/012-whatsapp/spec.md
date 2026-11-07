@@ -1,5 +1,7 @@
 # Spec 012: WhatsApp — WHAT and WHY
 
+**Withdrawn 2026-11-07 (Toni: unreliable, and driving an app the user may be using disturbs them, Constitution IV):** sending and changing messages (whatsapp_send, whatsapp_change; WhatsApp Web in Safari and WhatsApp for Mac's window: FR-1208, FR-1213 to FR-1220, FR-1245 to FR-1250 and every sending requirement) and reading through WhatsApp Web. WhatsApp is read and searched from WhatsApp for Mac's database only.
+
 Status: Rebuilt 2026-11-04 without a linked device of Latchkey's own (Toni): reading from
 WhatsApp for Mac's database or the Owner's WhatsApp Web tab in Safari, sending only through that
 tab, opened by Latchkey when none is (Toni, 2026-11-04: the window fallback worked only unlocked). First built in 0.8.101 (2026-11-03) with Latchkey's own
