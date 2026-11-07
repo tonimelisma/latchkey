@@ -68,6 +68,22 @@ Latchkey's unused Mail permission (System Settings → Privacy & Security → Au
 
 ## History (newest first; what was done and found, kept as the record)
 
+Hands-on check of every tool (2026-11-07, Toni: "manual testing, since it looks like the automated
+testing isn't picking up issues"), through the hosted relay on the installed app, unlocked and
+then locked, with the screen recorded before and after each round (front app, pointer, every
+window and its title): nothing on screen changed in any round. The code audit found nothing
+Claude can trigger that brings an app forward or sends input, outside computer control. Found and
+fixed: deleting a note or a Notes folder answered "not saved yet" and stayed in Notes' database
+(Notes saves a scripted move but not a scripted delete: a delete is now a move into the
+account's Recently Deleted, found by its folder type, and a folder's deletion is followed by a
+move that changes nothing, which makes Notes save); WhatsApp group senders showed as «+IAE=»
+(WhatsApp for Mac's member first-name field mostly holds encoded data: 3,328 of 3,374); removing
+a card from a contact group answered success but left it there once iCloud had taken the card
+over (the group's own record is removed now, and checked); with the display asleep and the lid
+open the screen tools said the lid was closed; closing the page while locked named Safari instead
+of Latchkey's own browser. Not tried: sending in Messages (its test message couldn't be deleted)
+and computer control (the exception, it uses the real pointer).
+
 Facebook Messenger (Toni, 2026-11-04; set aside 2026-11-05 "for another day"): not started, no
 spec yet. Toni's choices so far: read and send; through facebook.com/messages in Safari (check
 first that all chats show there, Meta recommends Chrome or Edge for encrypted chats); sending

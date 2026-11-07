@@ -231,7 +231,7 @@ final class WhatsAppStore: @unchecked Sendable {
             ? "You"
             : (r[10].text.flatMap { names[Self.user($0)] } ?? Self.clean(r[7].text) ?? Self.clean(r[9].text)
                 ?? Self.memberFirstName(r[8].text) ?? (isGroup ? nil : partner) ?? r[10].text.map(Self.user)
-                ?? "Someone")
+                    ?? "Someone")
         let kind = Self.kind(Int(r[5].int ?? -1))
         let path = r[13].text
         return WhatsAppMessage(

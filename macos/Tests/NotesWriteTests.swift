@@ -75,7 +75,8 @@ final class FakeScripts: ScriptRunner, @unchecked Sendable {
         #expect(!result.isError, "\(result.content.jsonText)")
         #expect(result.content.jsonText.contains("2 notes moved to Recently Deleted"))
         #expect(fake.calls.last?.script == NotesCapability.Script.deleteFolder)
-        #expect(fake.lastArgs == ["Latchkey Check"])
+        // With Recently Deleted's id, so its notes are moved there (which Notes saves at once).
+        #expect(fake.lastArgs == ["Latchkey Check", "x-coredata://STORE-UUID/ICFolder/p3"])
         #expect(result.activity == "Claude deleted the Notes folder “Latchkey Check”")
     }
 
