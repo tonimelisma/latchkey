@@ -112,6 +112,12 @@ protocol NotesReader: Sendable {
     func read(id: String) async throws -> NotesStore.Note
     func image(note: String, attachment: String) async throws -> NotesStore.Image
     func identifier(forScriptID scriptID: String) async throws -> String?
+    /// Recently Deleted's scripting ids, one per account; none when they can't be known.
+    func trashFolderScriptIDs() async throws -> [String]
+}
+
+extension NotesReader {
+    func trashFolderScriptIDs() async throws -> [String] { [] }
 }
 
 extension NotesStore: NotesReader {

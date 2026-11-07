@@ -232,7 +232,8 @@ final class FakeScripts: ScriptRunner, @unchecked Sendable {
             })
         let result = await tools["notes_delete"]!.handler(.object(["id": .string("N-GROCERIES")]))
         #expect(!result.isError, "\(result.content.jsonText)")
-        #expect(fake.lastArgs == ["x-coredata://STORE-UUID/ICNote/p10"])
+        // A move into the account's Recently Deleted (folder type 1), which Notes saves at once.
+        #expect(fake.lastArgs == ["x-coredata://STORE-UUID/ICNote/p10", "x-coredata://STORE-UUID/ICFolder/p3"])
         #expect(result.content.jsonText.contains("Recently Deleted"))
         #expect(result.activity == "Claude deleted the note “Groceries”")
     }

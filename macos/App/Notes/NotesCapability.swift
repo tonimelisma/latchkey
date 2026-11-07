@@ -413,7 +413,9 @@ enum NotesCapability {
                             return .text("Give the note's id.", isError: true)
                         }
                         let note = try await s.read(id: id)
-                        _ = try await scripts.run(Script.delete, [note.scriptID])
+                        // A move into Recently Deleted, which Notes saves at once (Script.delete).
+                        let trash = (try? await s.trashFolderScriptIDs()) ?? []
+                        _ = try await scripts.run(Script.delete, [note.scriptID, trash.joined(separator: "\n")])
                         // Said deleted only once Notes' own database says so: with the Mac locked,
                         // Notes' scripting dropped a note its database still listed (2026-11-04).
                         var saved = false
@@ -447,7 +449,9 @@ enum NotesCapability {
                         return .text("Give the folder's name.", isError: true)
                     }
                     do {
-                        let count = try await scripts.run(Script.deleteFolder, [folder])
+                        let trash = ((try? store())?.flatMap { try? $0.trashFolderScriptIDs() }) ?? []
+                        let count = try await scripts.run(
+                            Script.deleteFolder, [folder, trash.joined(separator: "\n")])
                         let notes = Int(count.trimmingCharacters(in: .whitespacesAndNewlines)) ?? 0
                         // Said deleted only once Notes' own database says so (2026-11-02: ten
                         // folders answered "deleted" stayed in Notes).
@@ -618,16 +622,40 @@ enum NotesCapability {
             end tell
             end run
             """
+        /// argv: the note's scripting id, Recently Deleted's ids (one per line). The note is moved
+        /// into its account's Recently Deleted, which is what Notes' own delete does and which Notes
+        /// saves at once; a scripted delete stayed unsaved for minutes (2026-11-07). A plain delete
+        /// when that folder isn't known.
         static let delete = """
             on run argv
             set theID to item 1 of argv
-            tell application "Notes" to delete note id theID
+            set trashIDs to paragraphs of (item 2 of argv)
+            tell application "Notes"
+            set c to container of note id theID
+            repeat while class of c is folder
+            set c to container of c
+            end repeat
+            set accID to id of c
+            repeat with tid in trashIDs
+            try
+            set tf to folder id (tid as text)
+            if (id of container of tf) is accID then
+            move note id theID to tf
+            return "moved"
+            end if
+            end try
+            end repeat
+            delete note id theID
+            return "deleted"
+            end tell
             end run
             """
         /// argv: folder name. Answers how many notes it held (spec 002 FR-152).
+        /// argv: folder name, Recently Deleted's ids (one per line).
         static let deleteFolder = """
             on run argv
             set folderName to item 1 of argv
+            set trashIDs to paragraphs of (item 2 of argv)
             tell application "Notes"
             set acc to default account
             if not (exists folder folderName of acc) then error "LATCHKEY_NO_FOLDER"
@@ -637,10 +665,27 @@ enum NotesCapability {
             set noteCount to count of notes of f
             -- Each note first, then the empty folder: a folder deleted with notes inside is gone
             -- from Notes' window but not saved, and comes back (2026-11-02, checked in its database).
+            -- Into Recently Deleted by a move, which Notes saves at once (see delete).
+            set tf to missing value
+            repeat with tid in trashIDs
+            try
+            set candidate to folder id (tid as text)
+            if (id of container of candidate) is (id of acc) then set tf to candidate
+            end try
+            end repeat
             repeat with n in (get notes of f)
+            if tf is missing value then
             delete n
+            else
+            move n to tf
+            end if
             end repeat
             delete f
+            -- Notes saves a folder's deletion only with its next save: a move that changes
+            -- nothing makes it save now (live check 2026-11-07).
+            if tf is not missing value then
+            if (count of notes of tf) > 0 then move (note 1 of tf) to tf
+            end if
             return noteCount as text
             end tell
             end run

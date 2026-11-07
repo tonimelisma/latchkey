@@ -187,6 +187,19 @@ final class NotesStore: @unchecked Sendable {
         }
     }
 
+    /// The scripting ids of every account's Recently Deleted folder (folder type 1), so a delete
+    /// can be a move there: Notes saves a scripted move at once but not a scripted delete (live
+    /// check 2026-11-07: a deleted note and folder stayed in the database for minutes).
+    func trashFolderScriptIDs() throws -> [String] {
+        guard let type = col.folderType else { return [] }
+        return try locked {
+            guard let uuid = try Self.rows(db, "SELECT Z_UUID FROM Z_METADATA").first?[0].text else { return [] }
+            return try Self.rows(db, "SELECT Z_PK FROM ZICCLOUDSYNCINGOBJECT WHERE \(type) = 1").compactMap {
+                $0[0].int.map { "x-coredata://\(uuid)/ICFolder/p\($0)" }
+            }
+        }
+    }
+
     private func scriptPrefix() throws -> String {
         guard let uuid = try Self.rows(db, "SELECT Z_UUID FROM Z_METADATA").first?[0].text else {
             throw Failure.unknownLayout("no store id")
