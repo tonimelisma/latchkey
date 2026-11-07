@@ -55,8 +55,8 @@ after the app was quit.
 1. Changing notes with checklists, links, or images: the iCloud.com route was probed on
    2026-11-07 and stopped (spec 002 research, "Notes with checklists through iCloud.com"): the
    approval and the drawing in a hidden view work, but iCloud.com's editor takes no input
-   Latchkey can give it without WebKit's private interfaces. Such notes stay read-only until
-   Toni picks another way. WhatsApp stays read-only from WhatsApp for Mac's database, even when
+   Latchkey can give it without WebKit's private interfaces. Such notes stay read-only (Toni,
+   2026-11-07, final: "Read only"). WhatsApp stays read-only from WhatsApp for Mac's database, even when
    out of date (Toni, 2026-11-07: "better than nothing").
 2. Answering a calendar invitation, live: the code is in (spec 007 FR-705); the test invitation of
    2026-11-07 hadn't reached the Exchange calendar before the event was deleted.

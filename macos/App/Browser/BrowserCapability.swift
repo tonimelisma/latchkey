@@ -1,5 +1,6 @@
 import CoreGraphics
 import Foundation
+import WebKit
 
 /// The Owner's Safari (spec 005).
 enum BrowserCapability {
@@ -465,7 +466,16 @@ enum BrowserCapability {
                 "Safari didn't answer within 25 seconds (it answered the quick check first, so the page was busy).",
                 isError: true)
         } catch {
-            return .text("Safari reported a problem: \(error.localizedDescription)", isError: true)
+            return .text(problem(error), isError: true)
         }
+    }
+
+    /// An error from Latchkey's own browser (WebKit, used while the Mac is locked) is named as
+    /// that, not as Safari's (2026-11-07: a page script's exception there said "Safari").
+    static func problem(_ error: Error) -> String {
+        let who =
+            (error as NSError).domain == WKError.errorDomain
+            ? "Latchkey's own browser (used while the Mac is locked)" : "Safari"
+        return "\(who) reported a problem: \(error.localizedDescription)"
     }
 }
