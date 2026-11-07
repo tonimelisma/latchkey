@@ -304,9 +304,11 @@ enum BrowserCapability {
                 handler: { _ in
                     await run {
                         let closed: Bool
+                        var page = "Claude's Safari page"
                         if let l = await route(browser, locked) {
                             closed = await l.isOpen
                             await l.discard()
+                            page = "Claude's page in Latchkey's own browser (used while the Mac is locked)"
                         } else if let address = try await browser.closeWorking() {
                             // FR-428: the owner's tab Claude worked in.
                             var r = ToolResult.text(
@@ -316,9 +318,8 @@ enum BrowserCapability {
                         } else {
                             closed = await browser.closePage()
                         }
-                        var r = ToolResult.text(
-                            closed ? "Closed Claude's Safari page." : "Claude has no Safari page open.")
-                        r.activity = "Closed Claude's Safari page"
+                        var r = ToolResult.text(closed ? "Closed \(page)." : "Claude has no page open.")
+                        r.activity = "Closed \(page)"
                         return r
                     }
                 }),
