@@ -45,10 +45,10 @@ extension NotesCapability {
         "delete_folder",
     ]
 
-    static func writeTools(store: @escaping StoreSource, scripts: any ScriptRunner, window: NoteWindow = .unavailable)
+    static func writeTools(store: @escaping StoreSource, scripts: any ScriptRunner)
         -> [ToolEntry]
     {
-        let ops = Operations(writeOperations(store: store, scripts: scripts, window: window))
+        let ops = Operations(writeOperations(store: store, scripts: scripts))
         return [
             ToolEntry(
                 tool: .make(

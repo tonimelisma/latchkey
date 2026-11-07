@@ -43,8 +43,8 @@ Claude (web, Desktop, phone)  ──HTTPS──▶  Latchkey relay  ◀──out
 - **You see who has access.** Latchkey's Settings window and your account page list the Claude apps that can use
   your Mac, and you can remove any one of them.
 - **You choose what Claude can do.** Each capability has a level in Latchkey's Settings window; a capability that's
-  off doesn't exist as far as Claude knows. Most have Off, Read only, and Read & write; Shell and
-  Location & Maps are Off or On. Claude sees 25 tools from a Mac, plus the relay's `machines`. Latchkey never disturbs the person at the Mac: nothing comes to the front and no app they may be using is driven, except computer control (Constitution IV):
+  off doesn't exist as far as Claude knows. Most have Off, Read only, and Read & write; Shell, WhatsApp,
+  and Location & Maps are Off or On. Claude sees 25 tools from a Mac, plus the relay's `machines`. Latchkey never disturbs the person at the Mac: nothing comes to the front and no app they may be using is driven, except computer control (Constitution IV):
 
   | Capability | Read only | Read & write adds |
   |---|---|---|

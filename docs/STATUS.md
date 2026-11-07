@@ -19,9 +19,14 @@ Messages' window actions (FR-172 to FR-179: `messages_send` to a person or conve
 and Reminders' flag, tag, subtask, and section setters (spec 007: read only; moving a reminder
 with subtasks to another list is refused). The README now says what works when. The screen-state
 cases for those were removed, and so were the Messages send cases, which could no longer clean up
-their test messages. Not done: the README and how-it-works pictures still show Mail (re-take
-them); the old "Latchkey check" test messages in Toni's self-conversations can no longer be
-deleted by Latchkey (Toni deletes them, or they stay).
+their test messages. Same day, the switched-off code went too: Notes' window editing
+(NoteWindow, the window route, their tests) and Reminders' window setters (RemindersWindow, the
+row planner); WhatsApp is Off or On in Settings (nothing to write); the README pictures were
+redrawn (`macos/scripts/readme-shots.sh`), and `docs/use-cases.md` and `docs/screen-states.md`
+say what was removed. WhatsApp sending through a background Safari tab was considered again and
+left out (Toni: hit or miss while locked is not good enough). For Toni: the old "Latchkey check"
+test messages in his self-conversations (Latchkey can't delete them any more), one WhatsApp test
+message in his own chat, and, optionally, Latchkey's unused Mail permission in System Settings.
 
 Spec 001 is built. Everything that doesn't need Toni is done and verified on this Mac
 (2026-10-20):

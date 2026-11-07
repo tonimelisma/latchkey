@@ -12,7 +12,8 @@ enum WhatsAppCapability {
         let opener = Opener()
         return Capability(
             id: CapabilityRegistry.whatsapp, title: "WhatsApp", summary: "Read and search WhatsApp messages",
-            readTools: readTools(store: { opener.store() }, desktopRunning: desktopRunning), writeTools: [])
+            readTools: readTools(store: { opener.store() }, desktopRunning: desktopRunning), writeTools: [],
+            levels: [.off, .readWrite], onTitle: "On")
     }
 
     static let marking = MessagesCapability.marking

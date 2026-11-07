@@ -12,8 +12,7 @@ enum NotesCapability {
             id: CapabilityRegistry.notes, title: "Notes", summary: "Read, search, create, edit, and delete notes",
             readTools: readTools(store: { try source.store() }, scripts: OSAScriptRunner(app: Permissions.notesApp)),
             writeTools: writeTools(
-                store: { try source.store() }, scripts: OSAScriptRunner(app: Permissions.notesApp),
-                window: .unavailable))
+                store: { try source.store() }, scripts: OSAScriptRunner(app: Permissions.notesApp)))
     }
 
     static let noAccess = """
@@ -146,8 +145,6 @@ enum NotesCapability {
             return .text(explain(failure), isError: true)
         } catch let a as ArgumentError {
             return .text(a.message, isError: true)
-        } catch let w as WindowFailure {
-            return .text(w.message, isError: true)
         } catch {
             // Full Disk Access turned off after the database was opened (FR-625).
             if !Permissions.hasFullDiskAccess { return .text(noAccess, isError: true) }
@@ -198,10 +195,10 @@ enum NotesCapability {
 
     // MARK: changing notes (plan D3)
 
-    /// Notes with checklists, links, or images, and checklists Claude writes, go through Notes'
-    /// window (plan D3a); `window` stands in for it in tests.
+    /// Through Notes' scripting only: notes with checklists, links, or images are refused (FR-106),
+    /// and checklists Claude writes stay ☐ and ☑ (Notes' window was withdrawn on 2026-11-07).
     static func writeOperations(
-        store: @escaping StoreSource, scripts: any ScriptRunner, window: NoteWindow = .unavailable
+        store: @escaping StoreSource, scripts: any ScriptRunner
     )
         -> [ToolEntry]
     {
@@ -241,37 +238,7 @@ enum NotesCapability {
                             try? await Task.sleep(for: .milliseconds(200))
                         }
                         var made = newFolder ? " The folder “\(folder)” was new and has been made." : ""
-                        if hasChecklistItems(text) {
-                            // FR-156: written as ☐/☑ lines, made real in Notes' window (FR-158: kept so without it).
-                            if !window.enabled {
-                                made += WindowFailure.off.boxes
-                            } else if let id {
-                                do {
-                                    let last = lastShownLine(text)
-                                    try await inWindow(
-                                        scriptID: scriptID, noteID: id, window: window, ready: { $0.contains(last) }
-                                    ) { shown in
-                                        let ns = shown as NSString
-                                        let newline = ns.range(of: "\n")
-                                        let start = newline.location == NSNotFound ? ns.length : newline.location + 1
-                                        try await makeChecklists(
-                                            shown, region: NSRange(location: start, length: ns.length - start),
-                                            noteID: id, window: window)
-                                    }
-                                    made += await savedNote(window) {
-                                        (try? await s.read(id: id))?.hasChecklists == true
-                                    }
-                                } catch let f as WindowFailure {
-                                    made += f.boxes
-                                }
-                            } else {
-                                made +=
-                                    WindowFailure(
-                                        message: "Notes hadn't saved the new note yet to make them real ones."
-                                    )
-                                    .boxes
-                            }
-                        }
+                        if hasChecklistItems(text) { made += checklistBoxes }
                         var result = ToolResult.data(
                             .object(["id": id.map(JSONValue.string) ?? .null, "title": .string(title)]),
                             text: (id.map { "Created “\(title)” (id \($0))." }
@@ -315,51 +282,26 @@ enum NotesCapability {
                                 isError: true)
                         }
                         if let why = refusal(note, replacing: mode == "replace") { return .text(why, isError: true) }
-                        if needsWindow(note), !window.enabled { return .text(windowOff(note), isError: true) }
+                        if needsWindow(note) { return .text(windowOff(note), isError: true) }
                         var ending = ""
-                        if needsWindow(note) {
-                            // FR-155: in place, in Notes' window.
-                            try await inWindow(scriptID: note.scriptID, noteID: note.id, window: window) { shown in
-                                let plan: NoteEditPlan
-                                switch mode {
-                                case "append": plan = NoteWindowEdit.append(to: shown, NoteWindowEdit.display(text))
-                                case "replace":
-                                    plan = NoteWindowEdit.replaceBody(of: shown, with: NoteWindowEdit.display(text))
-                                default:
-                                    switch NoteWindowEdit.edit(shown, find: find, with: text) {
-                                    case .success(let p): plan = p
-                                    case .failure(let problem): throw WindowFailure(message: passage(problem, note))
-                                    }
-                                }
-                                try await apply(
-                                    plan, to: shown, noteID: note.id, window: window, checklists: mode != "edit")
+                        switch mode {
+                        case "append":
+                            _ = try await scripts.run(Script.append, [note.scriptID, NoteHTML.from(text)])
+                        case "replace":
+                            _ = try await scripts.run(
+                                Script.setBody, [note.scriptID, NoteHTML.title(note.title) + NoteHTML.from(text)])
+                        default:
+                            let body = try await scripts.run(Script.getBody, [note.scriptID])
+                            let needle = NoteHTML.escape(find)
+                            let count = body.components(separatedBy: needle).count - 1
+                            guard count == 1 else {
+                                return .text(passage(count == 0 ? .notFound : .several(count), note), isError: true)
                             }
-                            ending = await savedNote(window) { await changed(s, note) }
-                        } else {
-                            switch mode {
-                            case "append":
-                                _ = try await scripts.run(Script.append, [note.scriptID, NoteHTML.from(text)])
-                            case "replace":
-                                _ = try await scripts.run(
-                                    Script.setBody, [note.scriptID, NoteHTML.title(note.title) + NoteHTML.from(text)])
-                            default:
-                                let body = try await scripts.run(Script.getBody, [note.scriptID])
-                                let needle = NoteHTML.escape(find)
-                                let count = body.components(separatedBy: needle).count - 1
-                                guard count == 1 else {
-                                    return .text(passage(count == 0 ? .notFound : .several(count), note), isError: true)
-                                }
-                                _ = try await scripts.run(
-                                    Script.setBody,
-                                    [note.scriptID, body.replacingOccurrences(of: needle, with: NoteHTML.escape(text))])
-                            }
-                            if mode != "edit", hasChecklistItems(text), !window.enabled {
-                                ending = WindowFailure.off.boxes
-                            } else if mode != "edit", hasChecklistItems(text) {
-                                ending = await realChecklists(
-                                    note, written: text, replace: mode == "replace", window, s)
-                            }
+                            _ = try await scripts.run(
+                                Script.setBody,
+                                [note.scriptID, body.replacingOccurrences(of: needle, with: NoteHTML.escape(text))])
                         }
+                        if mode != "edit", hasChecklistItems(text) { ending = checklistBoxes }
                         var result = ToolResult.text(
                             (mode == "append" ? "Added to “\(note.title)”." : "Changed “\(note.title)”.") + ending)
                         result.activity =
@@ -418,18 +360,7 @@ enum NotesCapability {
                                 isError: true)
                         }
                         if let why = refusal(note, replacing: false) { return .text(why, isError: true) }
-                        if needsWindow(note), !window.enabled { return .text(windowOff(note), isError: true) }
-                        if needsWindow(note) {
-                            try await inWindow(scriptID: note.scriptID, noteID: note.id, window: window) { shown in
-                                try await apply(
-                                    NoteWindowEdit.rename(shown, to: title), to: shown, noteID: note.id,
-                                    window: window, checklists: false)
-                            }
-                            let ending = await savedNote(window) { await changed(s, note) }
-                            var result = ToolResult.text("Renamed “\(note.title)” to “\(title)”." + ending)
-                            result.activity = "Claude renamed the note “\(note.title)” to “\(title)”"
-                            return result
-                        }
+                        if needsWindow(note) { return .text(windowOff(note), isError: true) }
                         let body = try await scripts.run(Script.getBody, [note.scriptID])
                         let old = NoteHTML.escape(note.title)
                         let firstLineEnd = body.range(of: "</div>")?.lowerBound ?? body.endIndex
@@ -482,18 +413,7 @@ enum NotesCapability {
                             return .text("Give the note's id.", isError: true)
                         }
                         let note = try await s.read(id: id)
-                        // Notes' own Edit → Delete Note first: Notes saves that at once, where a
-                        // scripted delete sometimes stayed unsaved for minutes (2026-11-06). The
-                        // scripted delete when the window can't (locked, Notes hidden).
-                        var deletedInWindow = false
-                        // Notes' window only while nobody is using the Mac; else the scripted delete.
-                        if window.enabled, !window.locked(), await window.ownerQuiet() {
-                            deletedInWindow =
-                                (try? await inWindow(scriptID: note.scriptID, noteID: note.id, window: window) { _ in
-                                    await window.deleteNote(note.id)
-                                }) ?? false
-                        }
-                        if !deletedInWindow { _ = try await scripts.run(Script.delete, [note.scriptID]) }
+                        _ = try await scripts.run(Script.delete, [note.scriptID])
                         // Said deleted only once Notes' own database says so: with the Mac locked,
                         // Notes' scripting dropped a note its database still listed (2026-11-04).
                         var saved = false
@@ -586,12 +506,12 @@ enum NotesCapability {
         return nil
     }
 
-    /// Whether AppleScript's rewrite would lose part of the note, so Notes' window is used (FR-155).
+    /// Whether AppleScript's rewrite would lose part of the note, so it isn't changed (FR-106).
     static func needsWindow(_ note: NotesStore.Note) -> Bool {
         note.hasChecklists || note.hasInlineItems || !note.attachments.isEmpty
     }
 
-    /// FR-106, while window editing is off: why such a note isn't changed.
+    /// FR-106: why such a note isn't changed.
     static func windowOff(_ note: NotesStore.Note) -> String {
         var parts: [String] = []
         if note.hasChecklists { parts.append("checklists") }
@@ -604,7 +524,26 @@ enum NotesCapability {
             """
     }
 
-    static func passage(_ problem: NoteWindowEdit.Problem, _ note: NotesStore.Note) -> String {
+    enum PassageProblem: Equatable {
+        case notFound
+        case several(Int)
+    }
+
+    /// Checklist items written into a note stay ☐ and ☑ characters: Notes makes real ones only in
+    /// its window, which Latchkey doesn't use (Toni, 2026-11-07; FR-158).
+    static let checklistBoxes =
+        " Its checklist items are ☐ and ☑ characters: Notes makes real checklists only in its own window, which Latchkey doesn't use."
+
+    /// Whether the text has checklist items (`- [ ]`, `- [x]`, or ☐ and ☑ lines).
+    static func hasChecklistItems(_ text: String) -> Bool {
+        text.split(separator: "\n").contains { line in
+            let t = line.trimmingCharacters(in: .whitespaces)
+            return ["- [ ] ", "- [x] ", "- [X] ", "☐ ", "☑ "].contains { t.hasPrefix($0) }
+                || ["- [ ]", "- [x]", "- [X]"].contains(t)
+        }
+    }
+
+    static func passage(_ problem: PassageProblem, _ note: NotesStore.Note) -> String {
         switch problem {
         case .notFound:
             "The passage wasn't found in “\(note.title)”, or it spans formatting. Read the note again and give a shorter passage."
@@ -616,36 +555,6 @@ enum NotesCapability {
     static func changed(_ s: any NotesReader, _ note: NotesStore.Note) async -> Bool {
         guard let now = try? await s.read(id: note.id) else { return false }
         return now.modified != note.modified || now.text != note.text
-    }
-
-    /// After AppleScript wrote ☐/☑ lines into a plain note, makes them real in Notes' window
-    /// (FR-156); without the window they stay (FR-158). Answers the result's ending.
-    static func realChecklists(
-        _ note: NotesStore.Note, written: String, replace: Bool, _ window: NoteWindow, _ s: any NotesReader
-    ) async -> String {
-        let last = lastShownLine(written)
-        let count = NoteWindowEdit.display(written).split(separator: "\n", omittingEmptySubsequences: false).count
-        do {
-            try await inWindow(
-                scriptID: note.scriptID, noteID: note.id, window: window, ready: { $0.contains(last) }
-            ) { shown in
-                let ns = shown as NSString
-                let region: NSRange
-                if replace {
-                    let newline = ns.range(of: "\n")
-                    let start = newline.location == NSNotFound ? ns.length : newline.location + 1
-                    region = NSRange(location: start, length: ns.length - start)
-                } else {
-                    region = NoteWindowEdit.lastLines(shown, count)
-                }
-                try await makeChecklists(shown, region: region, noteID: note.id, window: window)
-            }
-            return await savedNote(window) { (try? await s.read(id: note.id))?.hasChecklists == true }
-        } catch let f as WindowFailure {
-            return f.boxes
-        } catch {
-            return " Its checklist items are ☐ and ☑ characters for now: \(error.localizedDescription)"
-        }
     }
 
     /// AppleScript for Notes; the user's text arrives as arguments (argv).

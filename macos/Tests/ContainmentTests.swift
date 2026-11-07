@@ -10,7 +10,7 @@ import Testing
     func notes() throws -> (FakeScripts, [String: ToolEntry]) {
         let store = try NotesStore(url: NotesFixture.make())
         let fake = FakeScripts()
-        let tools = NotesCapability.writeOperations(store: { store }, scripts: fake, window: .unavailable)
+        let tools = NotesCapability.writeOperations(store: { store }, scripts: fake)
         return (fake, Dictionary(uniqueKeysWithValues: tools.map { ($0.tool.name, $0) }))
     }
 
@@ -40,7 +40,7 @@ import Testing
         #expect(!r.isError, "the note is made")
         #expect(fake.calls.count == 1, "one AppleScript create, no window")
         #expect(r.content.jsonText.contains("☐ and ☑ characters"))
-        #expect(r.content.jsonText.contains("aren't available yet"))
+        #expect(r.content.jsonText.contains("which Latchkey doesn't use"))
     }
 
     @Test func plainNotesStillChange() async throws {

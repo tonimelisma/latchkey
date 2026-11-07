@@ -267,38 +267,21 @@ enum RemindersCapability {
             }
             var d = try draft(args, zone: zone) ?? ReminderDraft()
             d.title = title
-            let x = try extrasChange(args)
-            // A subtask goes straight to its parent's list.
-            if case .set(let p) = x.parent, d.list == nil { d.list = try backend.reminder(id: p).listID }
-            let snap = x.isEmpty ? nil : try extras.preflight(x)
+            try refuseExtras(args)
             let r = try backend.createReminder(d)
             let text = "Added “\(r.title)” to \(r.list)\(due(r, zone: zone).map { ", due \($0)" } ?? ""). id \(r.id)"
             let activity = "Claude added the reminder “\(r.title)” to \(r.list)"
-            var extra: [String] = []
-            if let snap {
-                do {
-                    extra = try await extras.apply(x, to: r, backend: backend, snapshot: snap)
-                } catch let e as ArgumentError {
-                    var partial = ToolResult.text(text + "\nBut: " + e.message, isError: true)
-                    partial.activity = activity
-                    partial.made = "the reminder “\(r.title)” in \(r.list)"
-                    return partial
-                }
-            }
-            var added = done(text + (extra.isEmpty ? "" : "\n" + extra.joined(separator: "; ") + "."), activity)
+            var added = done(text, activity)
             added.made = "the reminder “\(r.title)” in \(r.list)"
             return added
         case "update":
             let reminderID = try id()
             var d = try draft(args, zone: zone)
-            let x = try extrasChange(args)
-            guard d != nil || !x.isEmpty else { throw ArgumentError(message: "Give at least one field to change.") }
+            try refuseExtras(args)
+            guard d != nil else { throw ArgumentError(message: "Give at least one field to change.") }
             if let t = args["title"]?.stringValue, !t.isEmpty { d?.title = t }
             var r = try backend.reminder(id: reminderID)
-            let snap = extras.source.snapshot()
-            if !x.isEmpty { _ = try extras.preflight(x) }
-            // Another list: a subtask or a reminder with subtasks moves with the window's help.
-            if let list = d?.list, let snap, extras.moveNeedsWindow(reminderID, snap),
+            if let list = d?.list, let snap = extras.source.snapshot(), extras.hasFamily(reminderID, snap),
                 try backend.resolveCalendar(list, .reminders).id != r.listID
             {
                 throw ArgumentError(
@@ -309,14 +292,8 @@ enum RemindersCapability {
                 )
             }
             if let draft = d, draft != ReminderDraft() { r = try backend.updateReminder(id: reminderID, draft) }
-            var extra: [String] = []
-            if !x.isEmpty, let now = extras.source.snapshot() {
-                extra = try await extras.apply(x, to: r, backend: backend, snapshot: now)
-                r = try backend.reminder(id: reminderID)
-            }
             return done(
-                "Changed “\(r.title)”: \(line(r, zone: zone, extra: extras.source.snapshot()?.extra(reminderID)))"
-                    + (extra.isEmpty ? "" : "\n" + extra.joined(separator: "; ") + "."),
+                "Changed “\(r.title)”: \(line(r, zone: zone, extra: extras.source.snapshot()?.extra(reminderID)))",
                 "Claude changed the reminder “\(r.title)”")
         case "complete", "uncomplete":
             var d = ReminderDraft()
@@ -373,37 +350,15 @@ enum RemindersCapability {
         }
     }
 
-    /// The flag, tags, parent, and section the arguments set: none since 2026-11-07 (they were set in
-    /// the Reminders app's window, which drove an app the Owner may be using; Toni). Old arguments
-    /// are refused rather than ignored.
-    static func extrasChange(_ args: JSONValue) throws -> ReminderExtrasChange {
+    /// Flags, tags, subtasks, and sections aren't set any more (2026-11-07: that needed the
+    /// Reminders app's window, which drove an app the Owner may be using; Toni). Refused, not ignored.
+    static func refuseExtras(_ args: JSONValue) throws {
         for key in ["flagged", "tags", "parent", "section"] where args[key] != nil && args[key] != .null {
             throw ArgumentError(
                 message:
                     "Latchkey can't change a reminder's \(key == "flagged" ? "flag" : key) any more: that needs the Reminders app's window, which it doesn't use. Nothing was changed."
             )
         }
-        var x = ReminderExtrasChange()
-        if let f = args["flagged"] {
-            guard case .bool(let b) = f else { throw ArgumentError(message: "flagged must be true or false.") }
-            x.flagged = b
-        }
-        let badTags = ArgumentError(message: "tags must be a list of names, like [\"errands\"].")
-        switch args["tags"] {
-        case nil, .null?: break
-        case .array(let items)?:
-            x.tags = try items.map { v in
-                guard let t = v.stringValue.map(RemindersExtras.tagName), !t.isEmpty else { throw badTags }
-                return t
-            }
-        case .string(let s)?:
-            x.tags = s.split(whereSeparator: { $0 == "," || $0 == " " }).map { RemindersExtras.tagName(String($0)) }
-                .filter { !$0.isEmpty }
-        default: throw badTags
-        }
-        if let p = args["parent"]?.stringValue { x.parent = p.isEmpty ? .clear : .set(p) }
-        if let sec = args["section"]?.stringValue { x.section = sec.isEmpty ? .clear : .set(sec) }
-        return x
     }
 
     /// The fields the arguments set; nil when they set none.

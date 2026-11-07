@@ -82,33 +82,8 @@ enum RemindersFixture {
     }
 }
 
-@Suite struct ReminderRowPlanTests {
-    func rows(_ spec: [(String, Int)], selected: String) -> [ReminderRow] {
-        spec.map { ReminderRow(title: $0.0, level: $0.1, selected: $0.0 == selected) }
-    }
-
-    @Test func movesNextToTheParentThenIndents() {
-        // New reminder at the bottom, the parent two reminders up.
-        var r = rows([("Trip", 0), ("Socks", 1), ("Milk", 0), ("Bread", 0), ("New", 0)], selected: "New")
-        #expect(ReminderRowPlan.next(r, parent: "Trip") == .moveUp)
-        r = rows([("Trip", 0), ("Socks", 1), ("New", 0), ("Milk", 0), ("Bread", 0)], selected: "New")
-        #expect(ReminderRowPlan.next(r, parent: "Trip") == .indent)
-        r = rows([("Trip", 0), ("Socks", 1), ("New", 1), ("Milk", 0)], selected: "New")
-        #expect(ReminderRowPlan.next(r, parent: "Trip") == .done)
-    }
-
-    @Test func movesDownOutdentsAndStopsWithoutTheParent() {
-        var r = rows([("New", 0), ("Milk", 0), ("Trip", 0)], selected: "New")
-        #expect(ReminderRowPlan.next(r, parent: "Trip") == .moveDown)
-        r = rows([("Milk", 0), ("New", 1), ("Trip", 0)], selected: "New")
-        #expect(ReminderRowPlan.next(r, parent: "Trip") == .outdent)
-        r = rows([("Milk", 0), ("New", 0)], selected: "New")
-        #expect(ReminderRowPlan.next(r, parent: "Trip") == .parentNotShown)
-    }
-}
-
-/// Reminders' window and database in memory: indenting, moving rows, typing #tags, and the
-/// menus change the same state the database answers from.
+/// Reminders' database in memory: flags, tags, subtasks, and the
+/// sections Latchkey reads.
 final class FakeRemindersApp: RemindersExtrasSource, @unchecked Sendable {
     struct Item {
         var id: String
@@ -118,12 +93,7 @@ final class FakeRemindersApp: RemindersExtrasSource, @unchecked Sendable {
 
     var items: [Item] = []
     var snap = RemindersSnapshot()
-    var selected: String?
-    var isLocked = false
     var readable = true
-    var actions: [String] = []
-    /// Reminders on macOS 27 clears the selection after an indent (live check 2026-11-07).
-    var deselectAfterIndent = false
 
     func snapshot() -> RemindersSnapshot? {
         guard readable else { return nil }
@@ -138,62 +108,7 @@ final class FakeRemindersApp: RemindersExtrasSource, @unchecked Sendable {
         return s
     }
 
-    var index: Int? { items.firstIndex { $0.id == selected } }
-
-    var window: RemindersWindow {
-        RemindersWindow(
-            show: { id in
-                self.selected = id
-                if !self.items.contains(where: { $0.id == id }) { self.items.append(Item(id: id, title: id)) }
-                return true
-            },
-            rows: {
-                self.items.map { ReminderRow(title: $0.title, level: $0.level, selected: $0.id == self.selected) }
-            },
-            act: { action in
-                guard let i = self.index else { return false }
-                self.actions.append(action.rawValue)
-                switch action {
-                case .indent:
-                    guard i > 0 else { return false }
-                    self.items[i].level = 1
-                    if self.deselectAfterIndent { self.selected = nil }
-                case .outdent: self.items[i].level = 0
-                case .moveUp:
-                    guard i > 0 else { return false }
-                    self.items.swapAt(i, i - 1)
-                case .moveDown:
-                    guard i + 1 < self.items.count else { return false }
-                    self.items.swapAt(i, i + 1)
-                }
-                return true
-            },
-            retitle: { text in
-                guard let i = self.index else { return false }
-                self.items[i].title = text
-                let tags = text.split(separator: " ").filter { $0.hasPrefix("#") }.map { String($0.dropFirst()) }
-                self.snap.reminders[self.items[i].id, default: ReminderExtra()].tags += tags
-                return true
-            },
-            title: { self.index.map { self.items[$0].title } },
-            menu: { path in
-                guard let id = self.selected else { return false }
-                self.actions.append(path.joined(separator: " → "))
-                if path == ["Edit", "Flag"] {
-                    self.snap.reminders[id, default: ReminderExtra()].flagged.toggle()
-                    return true
-                }
-                if path.count == 3, path[1] == "Move to Section" {
-                    self.snap.reminders[id, default: ReminderExtra()].section = path[2] == "None" ? nil : path[2]
-                    return true
-                }
-                return false
-            },
-            menuItems: { _ in [] }, locked: { self.isLocked },
-            saved: { check in check() })
-    }
-
-    var extras: RemindersExtras { RemindersExtras(source: self, window: window) }
+    var extras: RemindersExtras { RemindersExtras(source: self) }
 }
 
 @Suite struct RemindersExtrasToolTests {
@@ -265,7 +180,6 @@ final class FakeRemindersApp: RemindersExtrasSource, @unchecked Sendable {
             let c = try await change(["action": .string("create"), "title": .string("New"), key: value])
             #expect(c.isError, "\(key)")
         }
-        #expect(app.actions.isEmpty, "the window was never touched")
         #expect(fake.reminderList.count == 4, "nothing was created")
     }
 
@@ -274,7 +188,6 @@ final class FakeRemindersApp: RemindersExtrasSource, @unchecked Sendable {
         #expect(!r.isError)
         let e = try #require(app.snapshot()).extra("R-TRIP")
         #expect(e.flagged && e.tags == ["travel"] && e.subtaskIDs == ["R-SOCKS"])
-        #expect(app.actions.isEmpty)
     }
 
     /// Moving a reminder with subtasks, or a subtask, to another list would lose the links (macOS

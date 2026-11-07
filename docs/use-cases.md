@@ -10,6 +10,8 @@ in `macos/scripts/state-check/cases.json`. ✅ works, ⛔ refuses and says why, 
 
 Checked: unlocked: 2026-11-02 22:13:50 (app 0.8.95); locked: 2026-11-03 08:03:04 (app 0.8.100); lid_closed: 2026-11-03 21:08:35 (app 0.8.103); lid_closed_locked: 2026-11-02 13:27:34 (app 0.8.78).
 
+Rows for what was removed on 2026-11-07 (Mail, WhatsApp sending, Notes' window editing, Messages' window actions, Reminders' window setters; Toni: Latchkey never disturbs the user) were taken out by hand; the rest is from the runs above.
+
 | Use case | Unlocked | Locked | Lid closed | Lid closed, locked |
 |---|---|---|---|---|
 | **Notes** | | | | |
@@ -33,22 +35,6 @@ Checked: unlocked: 2026-11-02 22:13:50 (app 0.8.95); locked: 2026-11-03 08:03:04
 | Read a conversation | ✅ | ✅ | ✅ | ✅ |
 | Send a text | ✅ | ✅ | ✅ | ✅ |
 | Send a file | ✅ | ✅ | ✅ | ✅ |
-| **Mail** | | | | |
-| List accounts and mailboxes | ✅ | — | ✅ | ❌ The check run itself didn't finish or report |
-| Find mail by sender, date, unread | ✅ | — | ✅ | ❌ The check run itself didn't finish or report |
-| Search mail text | ✅ | — | ✅ | ❌ The check run itself didn't finish or report |
-| Read a message (left unread) | ✅ | — | ✅ | ❌ The check run itself didn't finish or report |
-| Read a whole conversation | ✅ | — | ✅ | ❌ The check run itself didn't finish or report |
-| Read an attachment | ✅ | — | ⛔ Attachment isn't on the Mac: Mail hasn't downloaded it. Opening the message in Mail downloads it. | ❌ The check run itself didn't finish or report |
-| Send a new email | ✅ | — | ✅ | ❌ The check run itself didn't finish or report |
-| Reply to an email | ✅ | — | ✅ | ❌ The check run itself didn't finish or report |
-| Forward an email | ❌ Nothing was sent: Mail's To field has Toni Melisma, which wasn't asked for. Failed twice, including once on its own. | — | ✅ | ❌ The check run itself didn't finish or report |
-| Save a draft | ✅ | — | ✅ | ❌ The check run itself didn't finish or report |
-| Mark read and unread | ✅ | — | ✅ | ❌ The check run itself didn't finish or report |
-| Flag and unflag | ✅ | — | ✅ | ❌ The check run itself didn't finish or report |
-| Mark as junk and not junk | ✅ | — | ✅ | ❌ The check run itself didn't finish or report |
-| Move to another mailbox | ✅ | — | ✅ | ❌ The check run itself didn't finish or report |
-| Delete (to Trash) | ✅ | — | ✅ | ❌ The check run itself didn't finish or report |
 | **Files** | | | | |
 | List a folder | ✅ | ✅ | ✅ | ✅ |
 | Search with Spotlight | ✅ | ✅ | ✅ | ✅ |
@@ -131,7 +117,6 @@ Checked: unlocked: 2026-11-02 22:13:50 (app 0.8.95); locked: 2026-11-03 08:03:04
 | No test cards or groups left | ✅ | ✅ | ✅ | — |
 | No test events left | ✅ | ✅ | ✅ | — |
 | No test reminders or lists left | ✅ | ✅ | ✅ | — |
-| No test email outside the Trash | ✅ | ✅ | ✅ | — |
 
 ## Not offered
 

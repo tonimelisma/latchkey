@@ -5,6 +5,14 @@ States that matter: **unlocked** (lid open, or the first minutes after closing i
 (after idle, lid open or closed). Latchkey never holds off the lock or unlocks the Mac (spec 001
 FR-661, Toni 2026-11-02: "we're not circumventing security").
 
+**Superseded in part on 2026-11-07** (Toni; Constitution IV): Latchkey never disturbs the user
+while the Mac is unlocked, so everything below that brought a window forward or drove another
+app's window is gone: all of Mail, WhatsApp sending (WhatsApp Web and WhatsApp for Mac's window),
+Notes' window editing, Messages' window actions, Reminders' window setters. What's left of the
+"gets in the way" group is computer control, which the user asks for knowingly, and the shell's
+`open`. The README's "What works when" is the current summary; the rest of this page is the
+record of what was tried.
+
 ## Tested with the lid closed and the Mac locked (app 0.8.78/0.8.79, 2026-11-02)
 
 | Group | Works | Notes |
