@@ -56,7 +56,7 @@ drops a press made while it slides in, and the edit box is a different field. Na
 needs Messages in front for about a second (its name box takes text only then), guarded like
 Notes (only after a pause in the Owner's input, stopped by it, the front given back; shared code
 in `macos/App/Foreground.swift`). Next on the work list: prove Safari, Reminders, Calendar,
-WhatsApp groups, and Mail while locked; then Notes while locked.
+and WhatsApp groups (Mail while locked is proven, 2026-11-07); then Notes while locked.
 
 Switched off on 2026-11-05 until they work on Toni's Mac (live checks found them broken):
 Notes' window editing (checklist notes got mangled; such notes are refused again, checklist items
@@ -98,10 +98,12 @@ merged and tested together (33 tools now):
   possible yet. Window steps not yet run live.
 - Mail: send, reply, forward, and draft without Mail's window, through a temporary signature
   (spec 008 FR-841 to FR-845); the forward that added Toni to To is fixed. Checked unlocked;
-  locked still to run (Mail answered no scripting at all while locked on 2026-11-05).
+  sending while locked works too (2026-11-07, 0.8.142: a test email to Toni sent with the Mac
+  locked reached Sent and the Inbox, then was deleted).
 - Messages: new groups, tapbacks, inline replies, edit, unsend, delete a message or
   conversation; reading shows tapbacks, replies, edits (spec 002 FR-170 to FR-178). Through
-  Messages' window, unlocked only; tapback, reply, and deleting a conversation checked live.
+  Messages' window, unlocked only; every one of them, and naming a group, checked live
+  (2026-11-07).
 - WhatsApp: replies, reactions, delete on both paths; WhatsApp for Mac's window is the fallback
   again for text, files, replies (spec 012 FR-1245 to FR-1250). Checked live in the self chat;
   groups and people without a known number not yet.
