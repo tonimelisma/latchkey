@@ -39,6 +39,20 @@ extension NotesCapability {
                     : message)
         }
 
+        /// The Owner is typing or using the mouse: Notes isn't brought forward.
+        static let busy = WindowFailure(
+            message:
+                "Someone is using the Mac right now (typing or the mouse), so Latchkey didn't bring Notes forward: their typing would have gone into the note. Nothing was changed; try again once the Mac has been left alone for a moment."
+        )
+
+        /// The Owner typed or clicked while Notes was in front.
+        static func interrupted(_ title: String) -> WindowFailure {
+            WindowFailure(
+                message:
+                    "Someone used the Mac while Notes was in front for this change, so it was stopped; what they typed may have gone into “\(title)”. Read the note to check it."
+            )
+        }
+
         static let unavailable = WindowFailure(
             message:
                 "Notes' window couldn't show the note: Notes may be hidden or minimized, the Mac may be locked or asleep, or Latchkey may not be allowed to use Accessibility (Latchkey's Settings → Permissions)."
@@ -89,7 +103,15 @@ extension NotesCapability {
         let changes = lines.map {
             ParagraphFormat(at: $0.at, checklist: $0.mark != nil, tick: $0.mark == .ticked)
         }
-        guard await window.format(noteID, changes) else {
+        guard await window.ownerQuiet() else { throw WindowFailure.busy }
+        let formatted = await window.format(noteID, changes)
+        if window.ownerActed() {
+            throw WindowFailure(
+                message:
+                    "someone used the Mac while Notes was in front, so making them real ones was stopped; what they typed may have gone into the note."
+            )
+        }
+        guard formatted else {
             throw WindowFailure(message: "Notes didn't come forward to make them real ones.")
         }
         // 2. Read back: every paragraph must be what was asked.

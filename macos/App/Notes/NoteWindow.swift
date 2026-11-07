@@ -33,6 +33,12 @@ struct NoteWindow: Sendable {
     /// Whether the Mac is locked: Notes' window then has no note editor (checked live
     /// 2026-11-04), so nothing is tried.
     var locked: @Sendable () -> Bool = { false }
+    /// Waits (up to 5 s) for the Owner to pause typing and the mouse, and answers whether they did:
+    /// Notes is brought forward only then, so the Owner's typing never lands in a note (live check
+    /// 2026-11-06: it did, and the note got "dia" and two empty items).
+    var ownerQuiet: @Sendable () async -> Bool = { true }
+    /// Whether the Owner typed or clicked while Notes was in front for the last change.
+    var ownerActed: @Sendable () -> Bool = { false }
     /// Whether changes go through Notes' window at all. Off in the app until checklist editing
     /// works on real Notes (the live check of 2026-11-05 mangled a test note); then notes with
     /// checklists, links, or images are refused as before (FR-106) and Claude's checklist items
@@ -166,7 +172,16 @@ struct NoteWindow: Sendable {
             }
             return false
         },
-        locked: { SystemScreen().isLocked() })
+        locked: { SystemScreen().isLocked() },
+        ownerQuiet: {
+            for _ in 0..<50 {
+                if Live.idleSeconds() >= 1.5 { return true }
+                try? await Task.sleep(for: .milliseconds(100))
+            }
+            NotesLog.record("the Owner kept using the Mac; Notes wasn't brought forward")
+            return false
+        },
+        ownerActed: { Live.ownerActed.withLock { $0 } })
 
     enum Script {
         /// argv: the note's scripting id. Answers the notes selected before, one per line.
@@ -285,24 +300,61 @@ struct NoteWindow: Sendable {
         static func inFront(_ work: () async -> Bool) async -> Bool {
             guard let notes = notesApp() else { return false }
             let previous = ownerFront.withLock { $0 } ?? frontApp()
+            ownerActed.withLock { $0 = false }
+            frontSince.withLock { $0 = .now }
+            defer { frontSince.withLock { $0 = nil } }
             var done = false
             if await bringForward(notes), await stayForward(notes) {
                 done = await work()
             }
+            let acted = ownerUsedTheMac()
+            if acted {
+                ownerActed.withLock { $0 = true }
+                NotesLog.record("the Owner used the Mac while Notes was in front", error: true)
+            }
             // The front goes back to the app that had it (2026-11-06: a plain activate from the
-            // installed app was refused and Notes stayed in front).
-            if let previous, previous != notes { _ = await bringForward(previous) }
-            return done
+            // installed app was refused and Notes stayed in front), but only while Notes still has
+            // it: an app the Owner went to meanwhile keeps it.
+            if let previous, previous != notes, frontApp()?.processIdentifier == notes.processIdentifier {
+                _ = await bringForward(previous)
+            }
+            return done && !acted
+        }
+
+        /// Since when Notes has been brought forward for a change (nil when it isn't).
+        static let frontSince = NSLockedBox<ContinuousClock.Instant?>(nil)
+        /// Whether the Owner typed or clicked while Notes was in front for the last change.
+        static let ownerActed = NSLockedBox<Bool>(false)
+
+        /// Seconds since the Owner last typed, clicked, scrolled, or moved the mouse. Latchkey's
+        /// own steps (Accessibility, activating apps) aren't input events, so they don't count.
+        static func idleSeconds() -> Double {
+            let kinds: [CGEventType] = [
+                .keyDown, .flagsChanged, .leftMouseDown, .rightMouseDown, .otherMouseDown, .mouseMoved,
+                .leftMouseDragged, .scrollWheel,
+            ]
+            return kinds.map { CGEventSource.secondsSinceLastEventType(.combinedSessionState, eventType: $0) }.min()
+                ?? .infinity
+        }
+
+        /// Whether the Owner used the Mac since Notes was brought forward for this change.
+        static func ownerUsedTheMac() -> Bool {
+            guard let since = frontSince.withLock({ $0 }) else { return false }
+            let d = ContinuousClock.now - since
+            let elapsed = Double(d.components.seconds) + Double(d.components.attoseconds) / 1e18
+            return idleSeconds() < elapsed
         }
 
         /// Whether Notes is still in front 300 ms after coming forward, bringing it back through
-        /// LaunchServices when it isn't: an activate from a background app holds only a moment,
-        /// and Safari took the front back 200 to 400 ms later, so Notes' menu went unavailable and
-        /// an untick failed (2026-11-06). The wait is also Notes' window becoming the key window.
+        /// LaunchServices when it isn't, unless the Owner took the front (2026-11-06: Safari came
+        /// back 200 to 400 ms later, Mark as Unchecked went unavailable, and an untick failed).
+        /// The wait is also Notes' window becoming the key window.
         static func stayForward(_ notes: NSRunningApplication) async -> Bool {
             for attempt in 0..<3 {
                 try? await Task.sleep(for: .milliseconds(300))
                 if frontApp()?.processIdentifier == notes.processIdentifier { return true }
+                // The Owner took it: never fight them for the front.
+                if ownerUsedTheMac() { return false }
                 NotesLog.record("Notes lost the front after coming forward (\(attempt + 1))")
                 await openByID(Permissions.notesApp)
             }
@@ -437,6 +489,7 @@ struct NoteWindow: Sendable {
             }
             for i in 0..<80 {  // up to 2 s: the menu follows the caret a moment later
                 // Notes' menus work only while Notes is in front; another app can take it back.
+                if ownerUsedTheMac() { return false }
                 if i % 20 == 10, let notes = notesApp(), frontApp()?.processIdentifier != notes.processIdentifier {
                     NotesLog.record("Notes lost the front before \(what); bringing it back")
                     await openByID(Permissions.notesApp)

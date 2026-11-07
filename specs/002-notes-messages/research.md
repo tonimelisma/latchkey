@@ -212,6 +212,16 @@ Recorded step by step on Toni's Mac with test notes:
   forward, else it is brought forward again with `open -b` (up to three times), and the menu press
   does the same while it waits. The probe then showed the menu enabled throughout, and the untick
   worked with both recoveries logged.
+- But the Owner was using the Mac: through the installed app the untick worked, yet the note got
+  "dia " and two empty checklist items, the Owner's typing caught while Notes was in front. So
+  Safari "taking the front back" was most likely the Owner, and bringing Notes forward again
+  fought them (FR-179). Latchkey now reads the seconds since the last key, click, scroll, or mouse
+  move (CGEventSource.secondsSinceLastEventType, public, no permission; Latchkey's own
+  Accessibility steps and activations aren't input events): it brings Notes forward only after a
+  1.5 s pause (waiting up to 5 s), never brings it back once the Owner has acted, and reports
+  input that came while Notes was in front. Options weighed: an event tap that holds the Owner's
+  keys meanwhile (needs Input Monitoring and takes their input: no), or carrying on and checking
+  the note after (the Owner's keys are still lost: no).
 - Result (macos/scripts/notes-check.sh, the real code): create, append, edit, tick, untick all give
   the requested Markdown in Notes' database; the unit tests' stand-in now follows this behaviour.
 

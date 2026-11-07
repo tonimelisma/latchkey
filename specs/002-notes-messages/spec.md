@@ -118,6 +118,11 @@ As an Owner, I set Notes and Messages each to Off, Read only, or Read & write in
   why, and text written to a new or plain note keeps its checklist items as ☐ and ☑.
 - **FR-159** After a change in Notes' window, Latchkey shall show again the note the Mac's owner
   had open in Notes, and shall answer "changed" only once Notes' database shows the change.
+- **FR-179** While someone is typing or using the mouse on the Mac, Latchkey shall not bring Notes
+  forward: it waits up to 5 seconds for a 1.5-second pause, else nothing is changed and Claude is
+  told why. When someone types or clicks while Notes is in front, Latchkey shall stop, leave the
+  front with the app they chose, and tell Claude the note may hold what they typed (live check
+  2026-11-06: typing went into a test note while Notes was in front).
 
 ### Messages
 - **FR-110** While Messages is Read only or Read & write, Claude shall be able to list recent

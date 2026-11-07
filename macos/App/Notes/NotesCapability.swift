@@ -491,7 +491,10 @@ enum NotesCapability {
                                         "Notes' window doesn't show “\(found.text)” as Notes saved it; nothing was changed."
                                 )
                             }
-                            guard await window.markChecked(note.id, [item.at]) else {
+                            guard await window.ownerQuiet() else { throw WindowFailure.busy }
+                            let pressed = await window.markChecked(note.id, [item.at])
+                            if window.ownerActed() { throw WindowFailure.interrupted(note.title) }
+                            guard pressed else {
                                 throw WindowFailure(
                                     message: "Notes didn't \(wanted ? "tick" : "untick") “\(found.text)”.")
                             }
@@ -548,7 +551,8 @@ enum NotesCapability {
                         // scripted delete sometimes stayed unsaved for minutes (2026-11-06). The
                         // scripted delete when the window can't (locked, Notes hidden).
                         var deletedInWindow = false
-                        if window.enabled, !window.locked() {
+                        // Notes' window only while nobody is using the Mac; else the scripted delete.
+                        if window.enabled, !window.locked(), await window.ownerQuiet() {
                             deletedInWindow =
                                 (try? await inWindow(scriptID: note.scriptID, noteID: note.id, window: window) { _ in
                                     await window.deleteNote(note.id)

@@ -23,6 +23,10 @@ final class FakeNoteWindow: @unchecked Sendable {
     /// Notes can't be brought forward: formatting does nothing and says so.
     var formatFails = false
     private(set) var deleted: [String] = []
+    /// The Owner keeps typing or using the mouse: Notes must not be brought forward.
+    var ownerBusy = false
+    /// The Owner typed or clicked while Notes was in front for the last change.
+    var ownerActed = false
 
     init(_ notes: [String: String] = [:]) {
         for (id, text) in notes { set(id, text) }
@@ -129,7 +133,9 @@ final class FakeNoteWindow: @unchecked Sendable {
                 }
             },
             saved: { _ in self.lock.withLock { self.saved } },
-            locked: { self.lock.withLock { self.locked } })
+            locked: { self.lock.withLock { self.locked } },
+            ownerQuiet: { self.lock.withLock { !self.ownerBusy } },
+            ownerActed: { self.lock.withLock { self.ownerActed } })
     }
 }
 
@@ -366,6 +372,30 @@ extension Array {
             .object(["id": .string("N-GROCERIES"), "find": .string("Saturday"), "checked": .bool(true)]))
         #expect(plain.isError)
         #expect(plain.content.jsonText.contains("no checklist item"))
+    }
+
+    /// Live check 2026-11-06: the Owner was typing when Notes came forward, and the typing went
+    /// into the note. While the Owner uses the Mac, Notes isn't brought forward at all.
+    @Test func aBusyOwnerIsNeverInterrupted() async throws {
+        let w = groceriesWindow()
+        w.ownerBusy = true
+        let (_, tools) = try setup(w)
+        let tick = await tools["notes_check"]!.handler(
+            .object(["id": .string("N-GROCERIES"), "find": .string("Bread"), "checked": .bool(true)]))
+        #expect(tick.isError)
+        #expect(tick.content.jsonText.contains("using the Mac"))
+        #expect(w.marked.isEmpty, "Notes wasn't brought forward")
+    }
+
+    /// When the Owner types or clicks while Notes is in front, the answer says the note may hold it.
+    @Test func typingDuringAChangeIsReported() async throws {
+        let w = groceriesWindow()
+        w.ownerActed = true
+        let (_, tools) = try setup(w)
+        let tick = await tools["notes_check"]!.handler(
+            .object(["id": .string("N-GROCERIES"), "find": .string("Bread"), "checked": .bool(true)]))
+        #expect(tick.isError)
+        #expect(tick.content.jsonText.contains("may have gone into"))
     }
 
     /// FR-156 for new notes: written as ☐ lines, then made real in the window.
