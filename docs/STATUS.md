@@ -109,10 +109,14 @@ merged and tested together (33 tools now):
   groups and people without a known number not yet.
 
 Next: Notes while locked. Notes' window has no editor then; Notes' own app actions (append with
-Markdown, add or tick checklist items, tags, tables) may work without the window. A research
-helper is testing how Latchkey can call them (the private interface, or Shortcuts, which Toni
-ruled out 2026-10-22); Toni decides once it's known. iCloud.com in Latchkey's browser (Toni's
-first choice) is on hold until then.
+Markdown, add or tick checklist items, tags, tables) may work without the window. Toni's choice
+(2026-11-05): through Shortcuts only if Latchkey sets the shortcuts up itself, otherwise
+iCloud.com in Latchkey's browser. Found 2026-11-07: macOS 27's Notes offers 51 app actions
+(Create Note, Append to Note with Markdown, Append Checklist Item, Set Checklist Items Checked,
+tags, tables, delete); `shortcuts sign` works with the Mac locked (about 2 s); there is no
+command to add a shortcut, so Latchkey would open the signed file and press Shortcuts' "Add
+Shortcut" itself (unlocked, once). `macos/scripts/notes-shortcut-probe.sh` (setup unlocked, run
+locked, sweep) proves both halves at the next unlock: setup, then `run` with the Mac locked.
 
 Releases are tags on commits (2026-11-04, Toni): parallel sessions bumped the version file to the
 same number, and a rebase drops the second, identical bump without a conflict, so two different
