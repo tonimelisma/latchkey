@@ -337,9 +337,21 @@ struct NoteWindow: Sendable {
             return false
         }
 
-        /// The app in front, asked of Accessibility: NSWorkspace's answer was stale in the installed
-        /// app, so Notes was taken for the app in front and the front never went back (2026-11-06).
+        /// The app in front: the owner of the topmost normal window on screen, which is what the
+        /// Owner sees. Accessibility's focused app failed (-25204) while Claude's app was in front,
+        /// and the fallback, NSWorkspace, reads stale in the installed app, so Notes taking the
+        /// front again went unseen and stayed (2026-11-06). Window owners need no permission.
         static func frontApp() -> NSRunningApplication? {
+            if let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID)
+                as? [[String: Any]],
+                let top = list.first(where: {
+                    ($0[kCGWindowLayer as String] as? Int) == 0 && (($0[kCGWindowAlpha as String] as? Double) ?? 1) > 0
+                }),
+                let pid = top[kCGWindowOwnerPID as String] as? pid_t,
+                let app = NSRunningApplication(processIdentifier: pid)
+            {
+                return app
+            }
             var v: AnyObject?
             guard
                 AXUIElementCopyAttributeValue(

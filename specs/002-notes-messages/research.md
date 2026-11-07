@@ -201,6 +201,11 @@ Recorded step by step on Toni's Mac with test notes:
 - Mark as Checked becomes available a moment after a line is made a checklist item: wait up to
   2 s and place the caret again.
 - NSWorkspace's frontmost app reads stale where no run loop turns; Notes' own AXFrontmost doesn't.
+- The system-wide AXFocusedApplication can fail (-25204) while Claude's app is in front
+  (2026-11-06): the front was then judged from stale NSWorkspace, Notes coming forward again went
+  unseen, and it stayed in front after an append. The app in front is now the owner of the
+  topmost on-screen window at layer 0 (CGWindowList, no permission needed for owners), which is
+  what the Owner sees; Accessibility and NSWorkspace are fallbacks only.
 - Result (macos/scripts/notes-check.sh, the real code): create, append, edit, tick, untick all give
   the requested Markdown in Notes' database; the unit tests' stand-in now follows this behaviour.
 
