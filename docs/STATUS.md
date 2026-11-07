@@ -52,9 +52,12 @@ after the app was quit.
 
 ## Next steps
 
-1. Changing notes with checklists, links, or images, in every screen state: through iCloud.com in
-   Latchkey's own browser, in the background (it disturbs no one). Research first (how iCloud.com
-   Notes edits checklists, whether Safari's cookies keep it signed in), then a plan for Toni.
+1. Changing notes with checklists, links, or images: the iCloud.com route was probed on
+   2026-11-07 and stopped (spec 002 research, "Notes with checklists through iCloud.com"): the
+   approval and the drawing in a hidden view work, but iCloud.com's editor takes no input
+   Latchkey can give it without WebKit's private interfaces. Such notes stay read-only until
+   Toni picks another way. WhatsApp stays read-only from WhatsApp for Mac's database, even when
+   out of date (Toni, 2026-11-07: "better than nothing").
 2. Answering a calendar invitation, live: the code is in (spec 007 FR-705); the test invitation of
    2026-11-07 hadn't reached the Exchange calendar before the event was deleted.
 3. Facebook Messenger stays set aside: it would send through a Safari tab, which, like WhatsApp

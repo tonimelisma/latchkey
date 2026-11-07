@@ -117,6 +117,29 @@ others solved the same problems; check their current code before relying on deta
   existing one-to-one conversation is sent to there; otherwise the choices are returned
   (superseded 2026-11-05 for one person with several numbers: one is chosen, FR-171).
 
+## Notes with checklists through iCloud.com (probe, 2026-11-07)
+
+Toni chose (2026-11-07) to change notes with checklists, links, or images through iCloud.com in
+Latchkey's own background browser, with his approval per web session. A probe found:
+
+- Toni's account has Advanced Data Protection: each new iCloud.com session sends an "allow access
+  to iCloud data on the web" request to his devices; once approved, Notes stays open in that
+  session until it is closed or signed out (support.apple.com/102630). Approved live.
+- A web view that is never on screen reports itself hidden, and iCloud.com then draws only the
+  folder list. Telling the page from its first line that it is visible (`visibilityState`,
+  `hidden`, a `requestAnimationFrame` stand-in, in a document-start user script) made it draw
+  the note list and the editing toolbar ("Make a checklist", "Create a note", "Delete this note").
+- The note editor is not editable markup: there is no `contenteditable` element or text field
+  for the body. iCloud.com ignores the page's own (untrusted) click and key events, and native
+  mouse events sent to the web view in an off-screen window didn't select anything either, with
+  the Mac locked.
+- So typing into a note would need WebKit's private interfaces (to make the view count as
+  visible and take input in the background) or the iCloud.com app's internal code, both fragile
+  and against Constitution IV; CloudKit's own web API can't be used under Advanced Data
+  Protection without Apple's key handling. Stopped there; such notes stay read-only.
+- Seen on iCloud.com but not on the Mac: a folder "Latchkey check persist C", an old test
+  leftover.
+
 ## Messages' window (2026-11-05)
 
 Toni: "add everything missing, including reactions and deleting messages". Tried on Toni's Mac
