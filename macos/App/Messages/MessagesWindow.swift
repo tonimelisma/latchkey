@@ -115,7 +115,17 @@ struct LiveMessagesUI: MessagesUI {
         case .tapback(let t):
             try perform(balloon, MessagesAX.Action.tapback)
             let button = try await MessagesAX.wait("the tapback choices") { MessagesAX.element(id: t.button) }
+            // The picker animates in; a press before it settles is taken as done and dropped
+            // (live check 2026-11-06). Pressed once only: a second press would take it back.
+            try await MessagesAX.settled(button)
             guard MessagesAX.press(button) else { throw problem("Messages didn't take the tapback.") }
+            do {
+                _ = try await MessagesAX.wait("the tapback taken", seconds: 3) {
+                    MessagesAX.element(id: MessagesAX.tapbackPicker) == nil ? true : nil
+                }
+            } catch {
+                throw problem("Messages didn't take the tapback; its choices stayed open.")
+            }
         case .reply(let text):
             try perform(balloon, MessagesAX.Action.reply)
             // Only into the replies view's field: never the conversation's own (that would send
@@ -125,7 +135,7 @@ struct LiveMessagesUI: MessagesUI {
             MessagesAX.closeReplies()
         case .edit(let text):
             try perform(balloon, MessagesAX.Action.edit, unavailable: Self.editLimit)
-            try await MessagesAX.typeIntoEditor(text)
+            try await MessagesAX.typeIntoEditor(text, replacing: target.text)
         case .unsend:
             try perform(balloon, MessagesAX.Action.unsend, unavailable: Self.unsendLimit)
         case .delete:
@@ -318,7 +328,11 @@ enum MessagesAX {
         var list: [AXUIElement] = []
         all(in: t, { MessagesAX.string($0, kAXIdentifierAttribute) == "Sticker" }, into: &list)
         return list.map { e in
-            let text = first(in: e) { MessagesAX.string($0, kAXIdentifierAttribute) == "CKBalloonTextView" }
+            // macOS 27 gives the message's own text as its input label (its description adds
+            // "Your iMessage, " and the time); earlier versions had a CKBalloonTextView inside.
+            let text =
+                inputLabel(e)
+                ?? first(in: e) { MessagesAX.string($0, kAXIdentifierAttribute) == "CKBalloonTextView" }
                 .flatMap { MessagesAX.string($0, kAXValueAttribute) }
             let description = MessagesAX.string(e, kAXDescriptionAttribute) ?? ""
             return Balloon(
@@ -327,6 +341,15 @@ enum MessagesAX {
                     text: text ?? description, description: description,
                     fromMe: (frame(e).map { $0.midX } ?? 0) > middle))
         }
+    }
+
+    /// The message's text as Messages labels it for input (`AXUserInputLabels`), when it has one.
+    static func inputLabel(_ e: AXUIElement) -> String? {
+        var v: AnyObject?
+        guard AXUIElementCopyAttributeValue(e, "AXUserInputLabels" as CFString, &v) == .success,
+            let labels = v as? [String], labels.count == 1, !labels[0].isEmpty
+        else { return nil }
+        return labels[0]
     }
 
     static func matches(_ target: BalloonTarget, _ b: Shown) -> Bool {
@@ -411,6 +434,22 @@ enum MessagesAX {
 
     static func press(_ e: AXUIElement) -> Bool { AXUIElementPerformAction(e, kAXPressAction as CFString) == .success }
 
+    static let tapbackPicker = "TapbackPickerCollectionView"
+
+    /// Waits until the element stops moving: the same frame on three looks 100 ms apart.
+    static func settled(_ e: AXUIElement) async throws {
+        var last = frame(e)
+        var same = 0
+        let deadline = ContinuousClock.now + .seconds(2)
+        while ContinuousClock.now < deadline {
+            try? await Task.sleep(for: .milliseconds(100))
+            let now = frame(e)
+            same = (now != nil && now == last) ? same + 1 : 0
+            if same >= 2 { return }
+            last = now
+        }
+    }
+
     /// A text or number attribute, as text.
     static func string(_ e: AXUIElement, _ attribute: String) -> String? {
         var v: AnyObject?
@@ -456,20 +495,48 @@ enum MessagesAX {
         }
     }
 
-    /// While a message is being edited, its text is an editable field: replaced, then Return.
-    static func typeIntoEditor(_ text: String) async throws {
+    /// While a message is being edited, its text is a focused field holding the old text (macOS 27:
+    /// a text field inside the message; earlier, its CKBalloonTextView): replaced, then Return. If
+    /// the editor doesn't close, the edit is cancelled and reported.
+    static func typeIntoEditor(_ text: String, replacing old: String) async throws {
+        let wanted = old.trimmingCharacters(in: .whitespacesAndNewlines)
         let editor = try await wait("the message being edited") { () -> AXUIElement? in
             guard let w = window() else { return nil }
             return first(in: w) {
-                MessagesAX.string($0, kAXIdentifierAttribute) == "CKBalloonTextView"
-                    && MessagesAX.string($0, kAXFocusedAttribute) == "1"
+                MessagesAX.string($0, kAXFocusedAttribute) == "1"
+                    && (MessagesAX.string($0, kAXIdentifierAttribute) == "CKBalloonTextView"
+                        || MessagesAX.string($0, kAXRoleAttribute) == "AXTextField")
+                    && MessagesAX.string($0, kAXIdentifierAttribute) != "messageBodyField"
+                    && (MessagesAX.string($0, kAXValueAttribute) ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+                        == wanted
             }
         }
         guard AXUIElementSetAttributeValue(editor, kAXValueAttribute as CFString, text as CFString) == .success else {
+            cancelEdit()
             throw MessagesWindowProblem(message: "Messages didn't take the new text; the message wasn't changed.")
         }
         try? await Task.sleep(for: .milliseconds(200))
         pressReturn()
+        do {
+            _ = try await wait("the edit sent", seconds: 3) { () -> Bool? in
+                var v: AnyObject?
+                // The field leaves the window once Messages has taken the edit.
+                return AXUIElementCopyAttributeValue(editor, kAXRoleAttribute as CFString, &v) != .success
+                    || MessagesAX.string(editor, kAXFocusedAttribute) != "1" ? true : nil
+            }
+        } catch {
+            cancelEdit()
+            throw MessagesWindowProblem(message: "Messages didn't take the edit, so it was cancelled; the message wasn't changed.")
+        }
+    }
+
+    /// Escape, sent to Messages alone: leaves editing without changing the message.
+    static func cancelEdit() {
+        guard let pid = app()?.processIdentifier else { return }
+        let src = CGEventSource(stateID: .privateState)
+        for down in [true, false] {
+            CGEvent(keyboardEventSource: src, virtualKey: 53, keyDown: down)?.postToPid(pid)
+        }
     }
 
     /// Presses the button of Messages' question ("Delete from all your devices?") that isn't Cancel.
@@ -529,12 +596,98 @@ enum MessagesAX {
         try? await Task.sleep(for: .milliseconds(500))
     }
 
+    /// The conversation's details (its title's "Conversation Details"), the toolbar's Edit menu,
+    /// "Edit Name & Photo" (found by identifier), the sheet's name field, Done (research
+    /// "Messages' window", live 2026-11-06). Whatever was opened is closed again, also on failure.
     static func setGroupName(_ name: String) async throws {
-        guard let title = element(id: "ConversationTitle"), performNamed(title, "Conversation Details") || press(title)
-        else { throw MessagesWindowProblem(message: "Messages didn't show the group's details.") }
-        // Not found yet on this macOS (research "Messages' window"): close what was opened and say so.
-        _ = AXUIElementPerformAction(title, kAXCancelAction as CFString)
-        throw MessagesWindowProblem(
-            message: "Latchkey can't name groups in Messages' window yet; the group keeps its people as its name.")
+        guard let title = element(id: "ConversationTitle") else {
+            throw MessagesWindowProblem(message: "Messages didn't show the group's details.")
+        }
+        let wasOpen = element(id: detailsHeader) != nil
+        if !wasOpen {
+            guard performNamed(title, "Conversation Details") || press(title) else {
+                throw MessagesWindowProblem(message: "Messages didn't show the group's details.")
+            }
+        }
+        defer {
+            if !wasOpen, element(id: detailsHeader) != nil, let t = element(id: "ConversationTitle") {
+                _ = performNamed(t, "Conversation Details") || press(t)
+            }
+        }
+        _ = try await wait("the group's details") { element(id: detailsHeader) }
+        let item = try await nameMenuItem()
+        guard press(item) else {
+            cancelEdit()
+            throw MessagesWindowProblem(message: "Messages didn't open the group's name.")
+        }
+        let sheet = try await wait("the group's name") { () -> AXUIElement? in
+            guard let w = window() else { return nil }
+            return children(w).first {
+                MessagesAX.string($0, kAXRoleAttribute) == "AXSheet"
+                    && first(in: $0) { MessagesAX.string($0, kAXRoleAttribute) == "AXTextField" } != nil
+            }
+        }
+        guard let field = first(in: sheet, { MessagesAX.string($0, kAXRoleAttribute) == "AXTextField" }),
+            let (cancel, done) = sheetButtons(sheet)
+        else {
+            cancelEdit()
+            throw MessagesWindowProblem(message: "Messages' group name editor wasn't as expected; nothing was changed.")
+        }
+        _ = AXUIElementSetAttributeValue(field, kAXFocusedAttribute as CFString, kCFBooleanTrue)
+        guard AXUIElementSetAttributeValue(field, kAXValueAttribute as CFString, name as CFString) == .success else {
+            _ = press(cancel)
+            throw MessagesWindowProblem(message: "Messages didn't take the group's name; nothing was changed.")
+        }
+        try? await Task.sleep(for: .milliseconds(300))
+        guard press(done) else {
+            _ = press(cancel)
+            throw MessagesWindowProblem(message: "Messages didn't take the group's name; nothing was changed.")
+        }
+        do {
+            _ = try await wait("the name saved", seconds: 3) { () -> Bool? in
+                guard let w = window() else { return true }
+                return children(w).contains { MessagesAX.string($0, kAXRoleAttribute) == "AXSheet" } ? nil : true
+            }
+        } catch {
+            _ = press(cancel)
+            throw MessagesWindowProblem(message: "Messages didn't save the group's name; it was cancelled.")
+        }
+    }
+
+    static let detailsHeader = "DetailsHeaderTitle"
+    static let nameItem = "edit_name_&_photo"
+
+    /// The details' Edit menu is the toolbar's rightmost menu button while the details show; it is
+    /// opened and must hold "Edit Name & Photo", or it is closed again and nothing else is done.
+    static func nameMenuItem() async throws -> AXUIElement {
+        guard let w = window(), let toolbar = first(in: w, { MessagesAX.string($0, kAXRoleAttribute) == "AXToolbar" })
+        else { throw MessagesWindowProblem(message: "Messages didn't show its toolbar.") }
+        let buttons = children(toolbar).filter { MessagesAX.string($0, kAXRoleAttribute) == "AXMenuButton" }
+        guard let edit = buttons.max(by: { (frame($0)?.minX ?? 0) < (frame($1)?.minX ?? 0) }), press(edit) else {
+            throw MessagesWindowProblem(message: "Messages didn't offer editing the group.")
+        }
+        do {
+            return try await wait("the group's Edit menu", seconds: 2) {
+                first(in: edit) { MessagesAX.string($0, kAXIdentifierAttribute) == nameItem }
+            }
+        } catch {
+            cancelEdit()
+            throw MessagesWindowProblem(message: "Messages didn't offer naming the group; nothing was changed.")
+        }
+    }
+
+    /// A sheet's two buttons side by side at its bottom (Cancel, Done): the pair of buttons that
+    /// are a container's only children, left one first.
+    static func sheetButtons(_ sheet: AXUIElement) -> (AXUIElement, AXUIElement)? {
+        var groups: [AXUIElement] = []
+        all(
+            in: sheet,
+            {
+                let c = MessagesAX.children($0)
+                return c.count == 2 && c.allSatisfy { MessagesAX.string($0, kAXRoleAttribute) == "AXButton" }
+            }, into: &groups)
+        guard groups.count == 1 else { return nil }
+        let pair = children(groups[0]).sorted { (frame($0)?.minX ?? 0) < (frame($1)?.minX ?? 0) }
+        return (pair[0], pair[1])
     }
 }

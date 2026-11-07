@@ -113,11 +113,6 @@ func run(own address: String, number: String, tag: String) async throws {
     try await ui.startGroup([address, number], text: "\(tag) group (please ignore)")
     let group = try await until("the new group") { try s.groupRecorded(with: [address, number], after: start) }
     let first = try await until("the first message") { try s.latestMessage(in: group) }
-    step("naming it")
-    guard let who = try s.identity(of: group) else { throw CheckFailure(message: "no group") }
-    try await ui.nameGroup(who, showing: first, name: "\(tag) group")
-    _ = try await until("the name") { try s.groupName(group) == "\(tag) group" ? true : nil }
-
     step("tapback like")
     start = try s.lastRow()
     try await ui.act(.tapback(.like), on: try target(s, first))
@@ -156,6 +151,11 @@ func run(own address: String, number: String, tag: String) async throws {
     }
     try await ui.act(.delete, on: try target(s, third))
     _ = try await until("the deletion") { try s.isDeleted(third) ? true : nil }
+
+    step("naming the group")
+    guard let who = try s.identity(of: group) else { throw CheckFailure(message: "no group") }
+    try await ui.nameGroup(who, showing: first, name: "\(tag) group")
+    _ = try await until("the name") { try s.groupName(group) == "\(tag) group" ? true : nil }
     print("all steps passed")
 }
 
