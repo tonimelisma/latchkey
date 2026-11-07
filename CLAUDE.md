@@ -166,6 +166,12 @@ Enforced by hooks in `.claude/settings.json` (`scripts/hooks.sh`):
   checkout off `main` or dirty. It runs when a session starts (Claude is told). It no longer runs
   when a turn ends: it sent Claude back again and again while Toni was stopping it (Toni removed
   that hook, 2026-11-04).
+- `scripts/keep-going.sh` runs when a turn ends (Toni, 2026-11-07: "add it, if you promise stop
+  works"): while `~/.claude/worklists/<session id>.md` has open `- [ ]` items, it sends Claude
+  back to the next one. Keep that list for every multi-item request: `- [x]` when done and
+  verified, `- [toni] …` for what only Toni can do. Stop always works: the Stop button skips
+  the hook, a latest message saying stop/pause/wait lets the turn end, any failure lets it end,
+  and Claude Code ends it after 8 send-backs in a row.
 - Commands that can lose work are refused: `git stash` in any spelling (only `list` and `show`
   are allowed), force-push (`-f`, `--force…`, or a `+refspec`), `git reset --hard`,
   `git clean -f`, `git branch -D`, `git checkout -- .`. A `git push` is also refused while

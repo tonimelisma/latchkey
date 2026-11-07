@@ -6,6 +6,8 @@
 #   hooks.sh session-start  Runs scripts/tidy.sh, then tells Claude about any loose ends.
 #   hooks.sh stop           Before Claude ends a turn: if loose ends remain, sends it back once
 #                           to resolve them. Not wired since 2026-11-04 (Toni removed the hook).
+#                           The Stop hook since 2026-11-07 is scripts/keep-going.sh (keeps
+#                           Claude on its work list; Toni: "add it, if you promise stop works").
 #   hooks.sh guard          Before a shell command: refuses git commands that can lose work
 #                           (stash except list/show, force-push in any spelling, hard reset,
 #                           ...), and any `git push` while scripts/private-values-check.sh
