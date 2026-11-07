@@ -617,7 +617,12 @@ func TestToolsAreStoredOnlyWhenTheyChange(t *testing.T) {
 	e := setup(t, nil)
 	e.agent.NoHeartbeat = true
 	c := e.dial()
-	require.Eventually(t, func() bool { return e.state().Online }, 5*time.Second, 10*time.Millisecond)
+	// The connect's own notice comes just after "online" is stored: count from after it.
+	require.Eventually(t, func() bool {
+		e.mu.Lock()
+		defer e.mu.Unlock()
+		return e.state().Online && len(e.toolsChanged) > 0
+	}, 5*time.Second, 10*time.Millisecond)
 	e.mu.Lock()
 	notified := len(e.toolsChanged)
 	e.mu.Unlock()

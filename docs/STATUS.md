@@ -256,8 +256,10 @@ for `open`, copies the address for the person, names the real menu items, and ch
 checkmark, and the app and page number the steps and say what each Add and passkey is.
 Google's free trial: Google stops what was made during a trial at day 90 unless the account
 was upgraded (Google's docs); the guide tells the Owner so, without making them upgrade (Toni).
-Flaky: relay `hub` TestToolsAreStoredOnlyWhenTheyChange fails under `-count=5` and in one full
-run, passes alone (code unchanged since spec 010).
+Fixed 2026-11-07: relay `hub` TestToolsAreStoredOnlyWhenTheyChange was flaky because it counted
+"tools changed" notices as soon as the Mac showed online, a moment before the connect's own
+notice; it now counts from after that notice (proven by delaying the notice: the old test then
+fails every time, the new one passes).
 
 The Latchkey plugin (spec 011) was built and shipped on 2026-11-01, then withdrawn the same day
 (Toni): it didn't help anyone get started and made no difference once Latchkey was connected.
@@ -398,8 +400,10 @@ for `open`, copies the address for the person, names the real menu items, and ch
 checkmark, and the app and page number the steps and say what each Add and passkey is.
 Google's free trial: Google stops what was made during a trial at day 90 unless the account
 was upgraded (Google's docs); the guide tells the Owner so, without making them upgrade (Toni).
-Flaky: relay `hub` TestToolsAreStoredOnlyWhenTheyChange fails under `-count=5` and in one full
-run, passes alone (code unchanged since spec 010).
+Fixed 2026-11-07: relay `hub` TestToolsAreStoredOnlyWhenTheyChange was flaky because it counted
+"tools changed" notices as soon as the Mac showed online, a moment before the connect's own
+notice; it now counts from after that notice (proven by delaying the notice: the old test then
+fails every time, the new one passes).
 
 The Latchkey plugin (spec 011) was built and shipped on 2026-11-01, then withdrawn the same day
 (Toni): it didn't help anyone get started and made no difference once Latchkey was connected.
