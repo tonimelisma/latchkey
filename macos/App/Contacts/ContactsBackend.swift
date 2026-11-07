@@ -279,12 +279,32 @@ final class CNContactsBackend: ContactsBackend, @unchecked Sendable {
         try execute(save)
     }
 
+    /// Removes the card from the group: the group holds one of the card's linked records (iCloud's
+    /// copy once iCloud took the card over), not the unified card Claude sees, and removing the
+    /// unified one answered success but left it there (live check 2026-11-07). So each record of
+    /// the card that the group holds is removed, and the group is read back.
     func removeMember(contactID: String, groupID: String) throws {
         try check()
+        let group = try cnGroup(groupID)
+        let keys = [CNContactIdentifierKey as CNKeyDescriptor]
+        let request = CNContactFetchRequest(keysToFetch: keys)
+        request.predicate = CNContact.predicateForContactsInGroup(withIdentifier: groupID)
+        request.unifyResults = false
+        var records: [CNContact] = []
+        let store = self.store
+        do {
+            try store.enumerateContacts(with: request) { record, _ in
+                let unified = try? store.unifiedContact(withIdentifier: record.identifier, keysToFetch: keys)
+                if record.identifier == contactID || unified?.identifier == contactID { records.append(record) }
+            }
+        } catch { throw ContactsFailure.failed(error.localizedDescription) }
+        guard !records.isEmpty else { return }  // not in the group
         let save = CNSaveRequest()
-        save.removeMember(
-            try cn(contactID, keys: [CNContactIdentifierKey as CNKeyDescriptor]), from: try cnGroup(groupID))
+        for record in records { save.removeMember(record, from: group) }
         try execute(save)
+        if try memberIDs(groupID: groupID).contains(contactID) {
+            throw ContactsFailure.failed("Contacts kept the card in the group")
+        }
     }
 
     func memberIDs(groupID: String) throws -> [String] {
