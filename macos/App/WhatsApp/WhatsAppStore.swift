@@ -229,8 +229,9 @@ final class WhatsAppStore: @unchecked Sendable {
         let sender: String =
             fromMe
             ? "You"
-            : (r[10].text.flatMap { names[Self.user($0)] } ?? Self.clean(r[7].text) ?? Self.clean(r[8].text)
-                ?? Self.clean(r[9].text) ?? (isGroup ? nil : partner) ?? r[10].text.map(Self.user) ?? "Someone")
+            : (r[10].text.flatMap { names[Self.user($0)] } ?? Self.clean(r[7].text) ?? Self.clean(r[9].text)
+                ?? Self.memberFirstName(r[8].text) ?? (isGroup ? nil : partner) ?? r[10].text.map(Self.user)
+                ?? "Someone")
         let kind = Self.kind(Int(r[5].int ?? -1))
         let path = r[13].text
         return WhatsAppMessage(
@@ -526,6 +527,15 @@ final class WhatsAppStore: @unchecked Sendable {
     }
 
     /// WhatsApp marks names with invisible direction characters ("\u{200E}You").
+    /// A group member's ZFIRSTNAME, when it is a name: WhatsApp for Mac mostly keeps encoded data
+    /// there, "+" and base64 (3,328 of 3,374 members on 2026-11-07; a sender showed as «+IAE=»).
+    static func memberFirstName(_ s: String?) -> String? {
+        guard let t = clean(s) else { return nil }
+        let base64 = CharacterSet(charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=")
+        if t.hasPrefix("+"), t.unicodeScalars.allSatisfy({ base64.contains($0) }), t.count > 1 { return nil }
+        return t
+    }
+
     static func clean(_ s: String?) -> String? {
         guard let s else { return nil }
         let t = s.unicodeScalars.filter {

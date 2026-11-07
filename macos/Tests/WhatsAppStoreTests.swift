@@ -134,6 +134,16 @@ import Testing
         #expect(older.map(\.text) == ["dinner saturday?", "hearts"])
     }
 
+    /// WhatsApp for Mac keeps encoded data, not a name, in most group members' first-name field
+    /// (a sender showed as «+IAE=», 2026-11-07): such a value is never a sender's name.
+    @Test func encodedMemberFieldsAreNotNames() {
+        #expect(WhatsAppStore.memberFirstName("+IAE=") == nil)
+        #expect(WhatsAppStore.memberFirstName("+CgAQlOKVygYgAQ==") == nil)
+        #expect(WhatsAppStore.memberFirstName("Johanna") == "Johanna")
+        #expect(WhatsAppStore.memberFirstName("+1 415 555 0100") == "+1 415 555 0100")
+        #expect(WhatsAppStore.memberFirstName("  ") == nil)
+    }
+
     @Test func searchMatchesTextLiterallyWithinDates() throws {
         let s = try WhatsAppStore(url: try Self.make())
         #expect(
