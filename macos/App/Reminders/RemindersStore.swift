@@ -103,6 +103,7 @@ struct RemindersStore: RemindersExtrasSource {
                 // nosemgrep: scripts.semgrep.latchkey-sql-bound -- column names come from the database's own table list; the value is bound
                 let sql =
                     "SELECT \(owner), \(name) FROM ZREMCDOBJECT o WHERE o.Z_ENT = ? AND o.ZMARKEDFORDELETION = 0 ORDER BY o.Z_PK"
+                // nosemgrep: scripts.semgrep.latchkey-sql-bound -- column names come from the database's own table list; the value is bound
                 for r in (try? SQLite.rows(db, sql, bind: [.int(tag)])) ?? [] {
                     guard let id = r[0].int.flatMap({ idOf[$0] }), let n = r[1].text, !n.isEmpty else { continue }
                     if extras[id]?.tags.contains(n) == false { extras[id]?.tags.append(n) }
@@ -111,6 +112,7 @@ struct RemindersStore: RemindersExtrasSource {
             if let image = entity["REMCDImageAttachment"] {
                 // nosemgrep: scripts.semgrep.latchkey-sql-bound -- column names come from the database's own table list; the value is bound
                 let sql = "SELECT \(owner) FROM ZREMCDOBJECT o WHERE o.Z_ENT = ? AND o.ZMARKEDFORDELETION = 0"
+                // nosemgrep: scripts.semgrep.latchkey-sql-bound -- column names come from the database's own table list; the value is bound
                 for r in (try? SQLite.rows(db, sql, bind: [.int(image)])) ?? [] {
                     if let id = r[0].int.flatMap({ idOf[$0] }) { extras[id]?.images += 1 }
                 }
@@ -118,6 +120,7 @@ struct RemindersStore: RemindersExtrasSource {
             if let link = entity["REMCDURLAttachment"], columns.contains("ZURL") {
                 // nosemgrep: scripts.semgrep.latchkey-sql-bound -- column names come from the database's own table list; the value is bound
                 let sql = "SELECT \(owner), o.ZURL FROM ZREMCDOBJECT o WHERE o.Z_ENT = ? AND o.ZMARKEDFORDELETION = 0"
+                // nosemgrep: scripts.semgrep.latchkey-sql-bound -- column names come from the database's own table list; the value is bound
                 for r in (try? SQLite.rows(db, sql, bind: [.int(link)])) ?? [] {
                     if let id = r[0].int.flatMap({ idOf[$0] }), let u = r[1].text { extras[id]?.links.append(u) }
                 }

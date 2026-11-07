@@ -1167,6 +1167,7 @@ actor SafariBrowser {
             """
         /// argv: window id, script, the script that takes what the page's dialogs said. Answers
         /// the dialogs (JSON), then the script's result.
+        // nosemgrep: scripts.semgrep.latchkey-applescript-constant -- only fixed text (an argument number, a constant mark) is spliced in; every value is an argument
         static let javaScript = """
             on run argv
             set winID to (item 1 of argv) as integer
@@ -1344,6 +1345,7 @@ actor SafariBrowser {
         /// all of them), such as one carrying a file Claude attaches, travels that way. Read
         /// before `tell`, so the script itself reads the file, not Safari.
         static func readCode(_ item: Int) -> String {
+            // nosemgrep: scripts.semgrep.latchkey-applescript-constant -- only fixed text (an argument number, a constant mark) is spliced in; every value is an argument
             """
             set theCode to item \(item) of argv
             if theCode starts with "\(SafariBrowser.fileMark)" then set theCode to (read (POSIX file (text \(SafariBrowser.fileMark.count + 1) thru -1 of theCode)) as «class utf8»)

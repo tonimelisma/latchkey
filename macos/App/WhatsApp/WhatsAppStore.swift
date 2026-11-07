@@ -249,6 +249,7 @@ final class WhatsAppStore: @unchecked Sendable {
             let rows = try SQLite.rows(
                 // nosemgrep: scripts.semgrep.latchkey-sql-bound -- only fixed SQL constants are spliced in; every value is bound
                 db,
+                // nosemgrep: scripts.semgrep.latchkey-sql-bound -- only fixed SQL constants are spliced in; every value is bound
                 "\(Self.messageSQL) WHERE s.ZCONTACTJID = ? AND m.ZSTANZAID = ? AND \(Self.written) ORDER BY m.Z_PK LIMIT 2",
                 bind: [.text(chat), .text(key)])
             return rows.count == 1 ? message(rows[0]) : nil
@@ -262,6 +263,7 @@ final class WhatsAppStore: @unchecked Sendable {
             try SQLite.rows(
                 // nosemgrep: scripts.semgrep.latchkey-sql-bound -- only fixed SQL constants are spliced in; every value is bound
                 db,
+                // nosemgrep: scripts.semgrep.latchkey-sql-bound -- only fixed SQL constants are spliced in; every value is bound
                 "SELECT COUNT(*) FROM ZWAMESSAGE m JOIN ZWACHATSESSION s ON m.ZCHATSESSION = s.Z_PK WHERE s.ZCONTACTJID = ? AND m.ZSTANZAID = ? AND \(Self.written)",
                 bind: [.text(chat), .text(key)]
             ).first?[0].int.map(Int.init) ?? 0
@@ -315,6 +317,7 @@ final class WhatsAppStore: @unchecked Sendable {
                 let rows = try? SQLite.rows(
                     // nosemgrep: scripts.semgrep.latchkey-sql-bound -- only fixed SQL constants are spliced in; every value is bound
                     db,
+                    // nosemgrep: scripts.semgrep.latchkey-sql-bound -- only fixed SQL constants are spliced in; every value is bound
                     "SELECT m.Z_PK, m.Z_OPT, m.ZMESSAGETYPE FROM ZWAMESSAGE m JOIN ZWACHATSESSION s ON m.ZCHATSESSION = s.Z_PK WHERE s.ZCONTACTJID = ? AND m.ZSTANZAID = ? AND \(Self.written) ORDER BY m.Z_PK LIMIT 2",
                     bind: [.text(chat), .text(key)]),
                 rows.count == 1
