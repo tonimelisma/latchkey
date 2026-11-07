@@ -65,8 +65,8 @@ tapbacks didn't land, edits failed, the window jammed). The work list, in order:
 checklist editing; fix the Messages actions; WhatsApp reading shows messages deleted for the
 Owner (done 2026-11-05: deleted messages leave once WhatsApp for Mac catches up; the real fault
 was WhatsApp storing some messages twice, which Latchkey read twice, now read once); prove Safari uploads/downloads/pictures, Reminders' window steps, Calendar through the app,
-WhatsApp groups, Mail while locked; Notes while locked through Shortcuts that Latchkey sets up
-itself. Each is done only once it works on the real Mac, every live test cleans up after itself,
+WhatsApp groups, Mail while locked; Notes while locked (through iCloud.com; Shortcuts dropped
+2026-11-07). Each is done only once it works on the real Mac, every live test cleans up after itself,
 and nothing runs in the background (Toni, 2026-11-05).
 
 Notes with checklists, links, or images can be changed now (2026-11-04, Toni: "editing notes
@@ -108,15 +108,11 @@ merged and tested together (33 tools now):
   again for text, files, replies (spec 012 FR-1245 to FR-1250). Checked live in the self chat;
   groups and people without a known number not yet.
 
-Next: Notes while locked. Notes' window has no editor then; Notes' own app actions (append with
-Markdown, add or tick checklist items, tags, tables) may work without the window. Toni's choice
-(2026-11-05): through Shortcuts only if Latchkey sets the shortcuts up itself, otherwise
-iCloud.com in Latchkey's browser. Found 2026-11-07: macOS 27's Notes offers 51 app actions
-(Create Note, Append to Note with Markdown, Append Checklist Item, Set Checklist Items Checked,
-tags, tables, delete); `shortcuts sign` works with the Mac locked (about 2 s); there is no
-command to add a shortcut, so Latchkey would open the signed file and press Shortcuts' "Add
-Shortcut" itself (unlocked, once). `macos/scripts/notes-shortcut-probe.sh` (setup unlocked, run
-locked, sweep) proves both halves at the next unlock: setup, then `run` with the Mac locked.
+Next: Notes while locked, through iCloud.com in Latchkey's browser. Notes' window has no editor
+then. Shortcuts is dropped (Toni, 2026-11-07: "this approach is broken, remove it"): Latchkey
+could add a signed shortcut by itself in the background, and its Notes action made the note, but
+running it put up "Allow … to output 1 note?" on the Owner's screen, and deleting a shortcut
+needs Shortcuts' window in front. Don't propose Shortcuts again.
 
 Releases are tags on commits (2026-11-04, Toni): parallel sessions bumped the version file to the
 same number, and a rebase drops the second, identical bump without a conflict, so two different
