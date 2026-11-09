@@ -191,6 +191,7 @@ final class AppModel {
             Task { await WhatsAppOldDevice.removeOnce() }
         }
         leftoverTimer = Self.tidyEveryMinute()
+        updates.startDailyCheck(current: Self.version)  // FR-669
         if ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil {
             screenReminder = remindScreenWhileHere()
             permissionWatch = watchPermissions()

@@ -31,7 +31,7 @@ make build VERSION="$version"
 SERVER_SIGNING_KEY=$SERVER_SIGNING_KEY go run ./cmd/sign "$version" build/latchkey-linux-amd64 build/latchkey-linux-arm64
 (cd build && shasum -a 256 latchkey-linux-amd64 latchkey-linux-arm64 > SHA256SUMS) # the format sha256sum -c reads
 cp install.sh build/install.sh
-gh release create "$tag" --verify-tag --title "Latchkey for Linux servers $version" \
+gh release create "$tag" --verify-tag --latest=false --title "Latchkey for Linux servers $version" \
   --notes "Install on a server (as yourself, not root): \`curl -fsSL https://raw.githubusercontent.com/tonimelisma/latchkey/main/linux/install.sh | sh -s -- https://your-relay\`. Installed servers update themselves; each download's signature is checked against the key built into the program." \
   build/latchkey-linux-amd64 build/latchkey-linux-amd64.sig build/latchkey-linux-arm64 build/latchkey-linux-arm64.sig build/SHA256SUMS build/install.sh
 rm -rf build

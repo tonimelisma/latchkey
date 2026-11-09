@@ -549,7 +549,16 @@ Why: on 2026-10-25 commands left processes and files on the Mac that nobody list
   being checked), with a button that does what the setup step does. Changes made in System
   Settings show within a second while the window is open. (Amended 2026-10-31: every permission
   is needed whatever the levels, FR-623.)
-- **FR-072** The app shall update itself through signed updates.
+- **FR-072** The app shall update itself through signed updates. (Waits for a Developer ID; until
+  then FR-669 tells the Owner about a new version, 2026-11-09.)
+- **FR-669** While the app has no signed updates, it shall check once a day whether a newer
+  release of the Mac app is published and, when one is, offer to download it from the menu and
+  from Settings; installing stays the Owner's (Toni, 2026-11-09). The check sends no account,
+  cookie, or anything about the Mac but the app's version.
+- **FR-670** Every installed release shall also be published as the public download, a disk
+  image without the hosted relay's address or any other private value of the deployment, at a
+  link that always gives the newest one (Toni, 2026-11-09: published although its signature
+  names the signer and the team).
 - **FR-074** A development or test build of the app shall be a different app from the installed
   one in macOS's eyes: it shall not share the installed app's settings, stored pairing and keys,
   privacy permissions, or keep-awake helper, and shall not receive the installed app's links

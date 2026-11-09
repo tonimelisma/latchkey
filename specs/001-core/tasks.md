@@ -222,6 +222,9 @@ Claude account and to try it on his phone and Desktop; that is listed in one sho
 - **T083** ✅ in code, off until set up: Sparkle 2.10.0 in the app (updater runs only with a public key),
   `macos/scripts/release.sh` builds, notarizes, signs, and publishes. Needs Toni: Developer ID,
   update key, public repository. *Serves FR-072.*
+- **T086** ✅ Public download and new-version notice (Toni, 2026-11-09): `publish.sh` after
+  every install, one image without the relay's address, `Updates` daily check, menu and
+  Settings rows; `ReleaseCheckTests`. *Serves FR-669, FR-670.*
 - **T084** ✅ Installable app and clean uninstall (Toni, 2026-10-20; no keep-awake test runs):
   disk image (`make -C macos dmg`), move-to-Applications on first launch, setup window, uninstall
   on move to Trash. Tests cover the move rule, Trash detection with a real move, and data
@@ -256,6 +259,7 @@ Claude account and to try it on his phone and Desktop; that is listed in one sho
 | FR-060 to FR-063 | T020, T062, T065 |
 | FR-070, FR-071 | T063 |
 | FR-072 | T082, T083 |
+| FR-669, FR-670 | T086 |
 | FR-073 | T050, T056 |
 | FR-075 | T050 |
 | FR-080 | T080 |

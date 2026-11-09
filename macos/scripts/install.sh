@@ -154,4 +154,6 @@ keepawake_verdict "$awake" || failed=1
 helper_verdict "$VERSION" "$awake" "$helper" || failed=1
 window_verdict "$windows" "$setup" || failed=1
 case "$started" in *"not paired"*) ;; *) audit_verdict "$audit" || failed=1 ;; esac
-exit $failed
+[ $failed = 0 ] || exit 1
+# Every installed release is the public download too (spec 001 FR-670).
+./scripts/publish.sh "$VERSION"

@@ -1,12 +1,22 @@
 # Status
 
-Last updated: 2026-11-07 (never disturb the user: Mail, WhatsApp sending, Notes' window editing, Messages' window actions, Reminders' window setters removed; test sweep on exit; releases are tags on commits; cloud-only files read again; machine list shows Latchkey versions; WhatsApp built; Add to Claude button; plugin withdrawn; README rewritten as a short product page; relay web pages redone; purkki paired; spec 010 shipped)
+Last updated: 2026-11-09 (public download on GitHub with a new-version notice; never disturb the user: Mail, WhatsApp sending, Notes' window editing, Messages' window actions, Reminders' window setters removed; test sweep on exit; releases are tags on commits; cloud-only files read again; machine list shows Latchkey versions; WhatsApp built; Add to Claude button; plugin withdrawn; README rewritten as a short product page; relay web pages redone; purkki paired; spec 010 shipped)
 
 Xcode signing ready (2026-10-20): Toni's Xcode account has a valid "Apple Development" certificate
 (certificate expires 2027-07-22). Keep the team ID out of committed project files
 (open source); put it in a gitignored `macos/Local.xcconfig` as `DEVELOPMENT_TEAM`.
 
 ## Current phase
+
+Public download (Toni, 2026-11-09; spec 001 FR-669, FR-670): every `make -C macos install` now
+also publishes its disk image as GitHub release `mac-<x.y.z>` (asset `Latchkey.dmg`; the README
+links releases/latest/download/Latchkey.dmg). Signed for development, not notarized: a
+downloaded copy opens after Privacy & Security → Open Anyway, once per version. The image
+carries no relay address (one image for everyone; checked before publishing). The app looks at
+GitHub's releases once a day and shows "Download Latchkey x.y.z…" in its menu and in Settings
+when a newer one is out. Only the newest three Mac releases are kept, so the Linux program's
+release lookup keeps finding its own. Messenger was looked at again and left out (no Mac app
+since 2025-12-15; the web page only).
 
 Never disturb the user (Toni, 2026-11-07; Constitution IV, CLAUDE.md): while the Mac is
 unlocked, Latchkey brings nothing to the front, drives no app the user may be using, and sends
@@ -60,10 +70,12 @@ after the app was quit.
    out of date (Toni, 2026-11-07: "better than nothing").
 2. Answering a calendar invitation, live: the code is in (spec 007 FR-705); the test invitation of
    2026-11-07 hadn't reached the Exchange calendar before the event was deleted.
-3. Facebook Messenger stays set aside: it would send through a Safari tab, which, like WhatsApp
-   Web, works reliably only while the Mac is unlocked (Toni, 2026-11-07: "sending messages only
-   when the laptop is unlocked is crazy"; "if it's hit or miss then we don't put it in"). Only a
-   route that also works while locked would bring it back.
+3. Facebook Messenger is left out for good (Toni, 2026-11-09): Meta ended the Mac app on
+   2025-12-15 and has no API for personal accounts, so only the hit-or-miss web page is left.
+4. A downloaded copy on another Mac: the public download was checked on this Mac only (it opens
+   after Open Anyway); the first person on another Mac confirms Open Anyway and setup there.
+5. Notarized download and self-updating (Apple Developer Program, $99 a year): later, Toni's
+   call; Sparkle is already in the app, off until an update key exists.
 
 For Toni (only he can): delete the ~96 old "Latchkey check" test messages in his two
 conversations with himself and the WhatsApp test message in his own chat; optionally switch off
@@ -819,7 +831,7 @@ left to the tests against a real relay and real commands (Toni, 2026-10-29).
 | M2 | OAuth, passkeys, pairing (relay side) | Done |
 | M3 | Mac app: pairs, connects, keeps awake, answers `battery_status` | Done (0.1.2) |
 | M4 | End to end from Claude on phone, web, Desktop | Desktop done; phone check and time limit left |
-| M5 | Signing, notarization, Sparkle, Docker image | Container and hosting done; releases need Developer ID |
+| M5 | Signing, notarization, Sparkle, Docker image | Container and hosting done; public download since 2026-11-09 (development-signed, Open Anyway); notarization and Sparkle need a Developer ID |
 
 ## Risks
 
@@ -833,4 +845,4 @@ left to the tests against a real relay and real commands (Toni, 2026-10-29).
 |---|---|
 | Claude's hosted-client tool-call timeout (undocumented) | Measure in M4; keep our 60 s cap below it |
 | Terms, privacy policy, abuse handling for the hosted relay | Launch blocker, deferred |
-| The repository must be public for update downloads (GitHub Releases) | Toni, before the first release |
+| The repository must be public for update downloads (GitHub Releases) | Done: public since 2026-10-31; downloads since 2026-11-09 |

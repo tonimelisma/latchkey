@@ -1,8 +1,10 @@
 #!/bin/sh
 # Builds the installable disk image: build/Latchkey-<version>.dmg with the app and a link to
 # Applications. Release configuration, signed with the team in Config/Local.xcconfig.
-# Until a Developer ID exists the app is signed for development and not notarized: it installs
-# and runs on Macs registered to the team (this Mac), not on others (see scripts/release.sh).
+# Until a Developer ID exists the app is signed for development and not notarized: another Mac
+# opens it after Privacy & Security → Open Anyway (scripts/publish.sh puts it on GitHub).
+# One image for everyone: it carries no relay address (LATCHKEY_DEFAULT_RELAY_HOST is emptied
+# here), so setup asks for the relay; the installed app is already paired.
 set -eu
 cd "$(dirname "$0")/.."
 ../scripts/link-local-files.sh
@@ -26,10 +28,14 @@ xcodegen generate --quiet
 # the app.
 rm -rf build/DerivedData/Build/Products/Release
 xcodebuild -project Latchkey.xcodeproj -scheme Latchkey -configuration Release \
-  -destination 'platform=macOS' -derivedDataPath build/DerivedData MARKETING_VERSION="$VERSION" build -quiet
+  -destination 'platform=macOS' -derivedDataPath build/DerivedData MARKETING_VERSION="$VERSION" LATCHKEY_DEFAULT_RELAY_HOST= build -quiet
 APP=build/DerivedData/Build/Products/Release/Latchkey.app
 
 codesign --verify --deep --strict "$APP"
+[ -z "$(/usr/libexec/PlistBuddy -c 'Print :LatchkeyDefaultRelayHost' "$APP/Contents/Info.plist" 2>/dev/null)" ] || {
+  echo "package: the app carries a default relay address" >&2
+  exit 1
+}
 test -x "$APP/Contents/MacOS/LatchkeyHelper"
 plutil -lint -s "$APP/Contents/Library/LaunchDaemons/net.melisma.latchkey.helper.plist"
 codesign -d -r- "$APP/Contents/MacOS/LatchkeyHelper" 2>&1 | grep -q 'identifier "net.melisma.latchkey.helper"'

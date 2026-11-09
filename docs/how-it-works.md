@@ -80,7 +80,9 @@ Claude (web, Desktop, phone)  ──HTTPS──▶  Latchkey relay  ◀──out
   your account; the full log, with arguments and results, and the app's own events, stays on
   your Mac, encrypted and checked for changes, until you uninstall the app. After each
   connection the Mac checks its log against the relay's list, call by call. Text written
-  by others (messages, web pages, files) is marked as content, not instructions.
+  by others (messages, web pages, files) is marked as content, not instructions. Besides the
+  relay, the app reaches one other place: once a day it asks GitHub for the list of Latchkey
+  releases, with no account or cookies, to tell you in its menu when a newer version is out.
 
 ## What it looks like
 

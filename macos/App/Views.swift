@@ -43,6 +43,8 @@ struct MenuContent: View {
         .keyboardShortcut(",")
         if model.updates.available {
             Button("Check for Updates…") { model.updates.checkForUpdates() }
+        } else if let notice = model.updates.notice {  // FR-669
+            Button("Download Latchkey \(notice.version)…") { model.updates.openDownload() }
         }
         Divider()
         Button("Quit Latchkey") { NSApp.terminate(nil) }
@@ -284,6 +286,10 @@ struct GeneralPane: View {
             if model.updates.available {
                 LabeledContent("Updates") {
                     Button("Check for Updates…") { model.updates.checkForUpdates() }
+                }
+            } else if let notice = model.updates.notice {  // FR-669
+                LabeledContent("Latchkey \(notice.version) is available") {
+                    Button("Download…") { model.updates.openDownload() }
                 }
             }
         }

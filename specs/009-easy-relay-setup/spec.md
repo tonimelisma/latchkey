@@ -121,8 +121,9 @@ terminal, and the hosted relay is Toni's alone.
 
 ## Known gaps
 
-- The Mac app is signed only for Toni's Macs until Apple's Developer Program (later): anyone else
-  must open it once through System Settings → Privacy & Security → Open Anyway. The document
+- The Mac app is signed for development, not notarized, until Apple's Developer Program (later):
+  anyone else downloads it from GitHub's releases (since 2026-11-09, spec 001 FR-670) and opens
+  it once per version through System Settings → Privacy & Security → Open Anyway. The document
   says so; it is the one step before Claude Code can help.
 - The repository is public since 2026-10-31 (Toni: "everything public now"), so the document
   is reachable; the relay images (FR-911) are published once built.

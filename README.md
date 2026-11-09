@@ -31,12 +31,17 @@ Your Mac never has to accept connections from the internet: Latchkey reaches out
 service of yours online, the relay, and Claude talks to the relay. You decide which of these
 Claude may use, one by one.
 
-> **Latchkey is in testing; there's no download yet.** To hear when the first release is out,
-> click **Watch → Custom → Releases** at the top of this page (needs a free GitHub account).
+> **Latchkey is in testing.** [Download Latchkey](https://github.com/tonimelisma/latchkey/releases/latest/download/Latchkey.dmg)
+> for a Mac with Apple silicon and macOS 26 or later. It isn't notarized by Apple yet, so macOS
+> asks once per version: see step 1.
 
 ## Get started
 
-1. **Install Latchkey on your Mac** (once it's released) and open it.
+1. **Install Latchkey on your Mac.** [Download it](https://github.com/tonimelisma/latchkey/releases/latest/download/Latchkey.dmg),
+   open the download, and drag Latchkey to Applications. The first time you open it, macOS says
+   it can't check the app: click **Done**, open **System Settings → Privacy & Security**, scroll
+   down, click **Open Anyway** next to Latchkey, and confirm. After that it opens like any app.
+   Latchkey's menu tells you when a newer version is out (download it the same way).
 2. **Let Claude set it up with you** (about 20 minutes; needs Claude Pro or Max, for the Code
    tab). In Latchkey's first setup step, click
    **Copy Request**. Open the Claude app on your Mac, click the **Code** tab, paste, and press
