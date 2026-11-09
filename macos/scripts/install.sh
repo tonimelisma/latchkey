@@ -155,5 +155,7 @@ helper_verdict "$VERSION" "$awake" "$helper" || failed=1
 window_verdict "$windows" "$setup" || failed=1
 case "$started" in *"not paired"*) ;; *) audit_verdict "$audit" || failed=1 ;; esac
 [ $failed = 0 ] || exit 1
-# Every installed release is the public download too (spec 001 FR-670).
+# Every installed release is the public download too (spec 001 FR-670). The image is closed
+# first: publish.sh opens it to check it, and a second open of an open image fails.
+hdiutil detach -quiet "$MNT" 2>/dev/null || true
 ./scripts/publish.sh "$VERSION"

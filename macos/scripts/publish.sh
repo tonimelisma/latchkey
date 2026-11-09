@@ -59,7 +59,10 @@ if [ -n "$xc_file" ]; then
 fi
 
 mkdir -p "$mnt"
-hdiutil attach -quiet -nobrowse -readonly -mountpoint "$mnt" "$DMG"
+hdiutil attach -quiet -nobrowse -readonly -mountpoint "$mnt" "$DMG" || {
+  echo "publish: couldn't open $DMG to check it (is it open elsewhere?)" >&2
+  exit 1
+}
 found=0
 printf '%s' "$values" | while IFS='=' read -r name value; do
   [ -n "$name" ] || continue
