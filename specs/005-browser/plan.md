@@ -197,7 +197,10 @@ in and Safari's file held Amazon's sign-in cookies with 345 days left. `takeSafa
 reads Safari's file again before each page Claude opens (`open`), and when Claude asks
 (`browser_read sign_in_again`, which then loads the page again): it asks the store for what it
 holds (one call) and sets only Safari's cookies that are missing or differ in value, so a
-second copy costs a file read and a handful of writes, not 3,000. Safari's value wins for a
+second copy costs a file read and a handful of writes, not 3,000 (a store just made is filled
+without asking: WebKit doesn't answer what a store holds before it is in use, seen live
+2026-11-14, locked, when the first page never came; and when it gives no answer in 2 s, every
+cookie is set again). Safari's value wins for a
 cookie both hold; a cookie only this browser holds stays (a site's own step-by-step state).
 It isn't done on click, type, or back: those are steps inside one visit, where swapping a
 cookie under the page could break a form's own token; the page Claude gets there can be

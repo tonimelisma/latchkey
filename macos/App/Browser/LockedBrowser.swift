@@ -56,16 +56,45 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate {
         return await Self.copy(cookies(), into: web.configuration.websiteDataStore.httpCookieStore)
     }
 
-    private static func copy(_ cookies: [SafariCookies.Cookie], into store: WKHTTPCookieStore) async -> Int {
+    /// `fresh`: a store just made holds nothing, and WebKit doesn't answer what a store holds
+    /// before it is in use (seen live 2026-11-14, locked: the first page never came), so
+    /// everything is set. Later, what it holds is asked for; with no answer in 2 s, everything
+    /// is set again, which changes nothing a page can see.
+    private static func copy(_ cookies: [SafariCookies.Cookie], into store: WKHTTPCookieStore, fresh: Bool = false)
+        async -> Int
+    {
         func key(_ c: HTTPCookie) -> String { "\(c.domain)\t\(c.path)\t\(c.name)" }
         var held: [String: String] = [:]
-        for c in await store.allCookies() { held[key(c)] = c.value }
+        if !fresh, let now = await holding(store) {
+            for c in now { held[key(c)] = c.value }
+        }
         var set = 0
         for cookie in cookies.compactMap(SafariCookies.httpCookie) where held[key(cookie)] != cookie.value {
             await store.setCookie(cookie)
             set += 1
         }
         return set
+    }
+
+    /// What the store holds, or nil when WebKit doesn't say within 2 s.
+    private static func holding(_ store: WKHTTPCookieStore) async -> [HTTPCookie]? {
+        final class Once { var done = false }
+        let once = Once()
+        return await withCheckedContinuation { (c: CheckedContinuation<[HTTPCookie]?, Never>) in
+            store.getAllCookies { cookies in
+                MainActor.assumeIsolated {
+                    guard !once.done else { return }
+                    once.done = true
+                    c.resume(returning: cookies)
+                }
+            }
+            Task { @MainActor in
+                try? await Task.sleep(for: .seconds(2))
+                guard !once.done else { return }
+                once.done = true
+                c.resume(returning: nil)
+            }
+        }
     }
 
     /// FR-442: Safari's cookies again, then the page Claude is on loaded again.
@@ -88,7 +117,7 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate {
         // Sites see Safari, as they do in the Owner's Safari: some refuse an app's own web view
         // (Google's sign-in, for one).
         w.customUserAgent = Self.safariUserAgent
-        _ = await Self.copy(cookies(), into: config.websiteDataStore.httpCookieStore)
+        _ = await Self.copy(cookies(), into: config.websiteDataStore.httpCookieStore, fresh: true)
         web = w
         return w
     }
