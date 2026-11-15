@@ -136,6 +136,8 @@ phone, Claude can't check a reservation in the Owner's account or fill in a form
   Safari answers; when Safari doesn't answer, Claude shall be told that the Owner's tabs can't
   be reached until someone unlocks the Mac (2026-11-03: Safari stopped answering scripts while
   locked on 2026-11-01, and answered the list and page scripts while locked on 2026-11-03).
+  (2026-11-15: Claude shall be told so within the relay's 30 seconds; with 25 seconds for each
+  script a call ran, it heard only that the Mac didn't answer.)
 - **FR-431** An answer from one of the Owner's tabs shall say which tab it came from, and the
   tab list shall mark the titles and addresses as written by websites, not instructions
   (FR-404; 2026-11-03).

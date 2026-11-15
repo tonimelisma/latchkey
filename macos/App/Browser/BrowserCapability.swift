@@ -5,7 +5,8 @@ import WebKit
 /// The Owner's Safari (spec 005).
 enum BrowserCapability {
     static let browser = SafariBrowser(
-        scripts: OSAScriptRunner(app: Permissions.safariApp))
+        scripts: OSAScriptRunner(app: Permissions.safariApp),
+        lockedScripts: OSAScriptRunner(app: Permissions.safariApp, timeout: .seconds(12)))
 
     @MainActor static func make() -> Capability {
         Capability(

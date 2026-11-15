@@ -296,6 +296,33 @@ import Testing
     }
 }
 
+/// FR-430 (2026-11-15): while the Mac is locked, a Safari that never answers is told within the
+/// relay's 30 s, through the shorter runner, and the tab list says the tabs need the Mac unlocked.
+@MainActor @Suite struct LockedSafariTests {
+    @Test func aStalledSafariIsToldInTimeWhileLocked() async {
+        let b = SafariBrowser(scripts: StalledSafari(), lockedScripts: SilentSafari(), isLocked: { true })
+        let own = OwnPages(cookies: { [] }, isLocked: { true })
+        defer { own.closeAll() }
+        let read = Dictionary(
+            uniqueKeysWithValues: BrowserCapability.readTools(browser: b, own: own).map { ($0.tool.name, $0) })[
+                "browser_read"]!
+        let started = ContinuousClock.now
+        let list = await read.handler(.object(["tabs": .bool(true)]))
+        #expect(list.content.jsonText.contains("unlocks the Mac"), "\(list.content.jsonText)")
+        let tab = await read.handler(.object(["tab": .string("10.2")]))
+        #expect(tab.isError && tab.content.jsonText.contains("unlock"), "\(tab.content.jsonText)")
+        #expect(ContinuousClock.now - started < .seconds(5), "the stalled runner was never used")
+    }
+}
+
+/// A Safari that never answers (a script waits until the call is cancelled).
+struct StalledSafari: ScriptRunner {
+    func run(_ script: String, _ args: [String]) async throws -> String {
+        try await Task.sleep(for: .seconds(3600))
+        return ""
+    }
+}
+
 /// A Safari that answers no script, as seen while the Mac is locked on 2026-11-01.
 struct SilentSafari: ScriptRunner {
     func run(_ script: String, _ args: [String]) async throws -> String { throw ScriptError.timedOut }

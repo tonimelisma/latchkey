@@ -261,7 +261,9 @@ Serves FR-424 to FR-431, and FR-403, FR-416, FR-419 as amended. Toni, answering 
   Safari stopped answering while locked on 2026-11-01 but answered the list three times and a
   page script three times while locked on 2026-11-03 (research.md), so Latchkey tries: a list
   Safari doesn't answer says the Owner's tabs need the Mac unlocked, and any other call that
-  times out while locked says Safari answers again once someone unlocks the Mac. Opening a page
+  times out while locked says Safari answers again once someone unlocks the Mac. While locked,
+  each Safari script has 12 s instead of 25 s (2026-11-15), so a call of two or three scripts
+  is told within the relay's 30 s. Opening a page
   uses Latchkey's own browser (FR-420) and makes Claude work in its own page again.
 - **Answers** (FR-431): every answer from an Owner's tab starts by naming it ("In the owner's
   Safari tab 4213.2, not Claude's own").

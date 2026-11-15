@@ -160,9 +160,21 @@ actor SafariBrowser {
     /// How long after Claude's navigation started the tab may be unmarked.
     private var allowance: TimeInterval { Double(settleLimit.components.seconds) + 1 }
 
-    init(scripts: any ScriptRunner, settleLimit: Duration = .seconds(15)) {
+    /// While the Mac is locked, scripts go to `lockedScripts` (a shorter limit), so a Safari that
+    /// stopped answering is told within the relay's 30 s (FR-430; 2026-11-15: with 25 s for each
+    /// of a call's scripts, a locked Mac's call passed the relay's limit, and Claude heard only that
+    /// the Mac didn't answer).
+    private let lockedScripts: (any ScriptRunner)?
+    private let isLocked: @Sendable () -> Bool
+
+    init(
+        scripts: any ScriptRunner, settleLimit: Duration = .seconds(15), lockedScripts: (any ScriptRunner)? = nil,
+        isLocked: @escaping @Sendable () -> Bool = { SystemScreen().isLocked() }
+    ) {
         self.scripts = scripts
         self.settleLimit = settleLimit
+        self.lockedScripts = lockedScripts
+        self.isLocked = isLocked
     }
 
     /// For tests: as if Claude last used the tab, and last navigated it, `seconds` earlier.
@@ -801,7 +813,9 @@ actor SafariBrowser {
 
     private func call(_ script: String, _ args: [String]) async throws -> String {
         lastUse = Date()
-        do { return try await scripts.run(script, args) } catch ScriptError.failed(let message) {
+        let locked = isLocked()
+        let runner = locked ? (lockedScripts ?? scripts) : scripts
+        do { return try await runner.run(script, args) } catch ScriptError.failed(let message) {
             if message.contains("LATCHKEY_NO_WINDOW") {
                 // The window of the tab Claude works in is gone.
                 let had = picked != nil
@@ -812,7 +826,7 @@ actor SafariBrowser {
             if message.contains("LATCHKEY_DIALOG_WAITING") { throw Failure.dialogWaiting }
             if message.contains("Allow JavaScript from Apple Events") { throw Failure.javaScriptOff }
             throw Failure.failed("Safari reported a problem: \(message)")
-        } catch ScriptError.timedOut where SystemScreen().isLocked() {
+        } catch ScriptError.timedOut where locked {
             // Seen live 2026-11-01: with the Mac locked, Safari stops answering scripts after a page.
             throw Failure.failed(
                 "Safari stopped answering while the Mac is locked. It answers again once someone unlocks the Mac."

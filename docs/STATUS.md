@@ -24,7 +24,9 @@ Then (Toni's report, 2026-11-15): pages of Claude's timed out because each new o
 cookies when they go there (spec 005 FR-441 as amended). And a busy Bank of America tab was
 told as "waiting on a dialog" (an idle Safari took 12 s to answer its first script, measured):
 a tab now has 10 s, and Claude is told it may be busy or paused,
-to try again, and how computer control can answer a real dialog (FR-432 as amended).
+to try again, and how computer control can answer a real dialog (FR-432 as amended). While
+the Mac is locked, each Safari script now has 12 s, so Claude is told within the relay's 30 s
+that the tabs need the Mac unlocked (FR-430 as amended).
 
 Pages that never freeze, one set per chat (Toni, 2026-11-15; spec 005 FR-444 to FR-451, plan
 D11): on Target a "Remove item?" dialog froze Claude's background Safari tab (Latchkey can't read
