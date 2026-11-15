@@ -90,8 +90,8 @@ struct SystemScreen: ScreenStateSource {
 enum ScreenLock {
     static func line(locked: Bool) -> String {
         locked
-            ? "The Mac was locked: pages Claude opens load in Latchkey's own browser until it is unlocked"
-            : "The Mac was unlocked: Claude's pages open in Safari again"
+            ? "The Mac was locked: the owner's Safari tabs may not answer until it is unlocked"
+            : "The Mac was unlocked: the owner's Safari tabs answer again"
     }
 }
 
