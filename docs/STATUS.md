@@ -22,7 +22,8 @@ once, and saved with download (spec 005 FR-452).
 Then (Toni's report, 2026-11-15): pages of Claude's timed out because each new one copied all
 3,500 Safari cookies (measured: over 100 s); now the pages share one store and take a site's
 cookies when they go there (spec 005 FR-441 as amended). And a busy Bank of America tab was
-told as "waiting on a dialog": a tab now has 6 s, and Claude is told it may be busy or paused,
+told as "waiting on a dialog" (an idle Safari took 12 s to answer its first script, measured):
+a tab now has 10 s, and Claude is told it may be busy or paused,
 to try again, and how computer control can answer a real dialog (FR-432 as amended).
 
 Pages that never freeze, one set per chat (Toni, 2026-11-15; spec 005 FR-444 to FR-451, plan

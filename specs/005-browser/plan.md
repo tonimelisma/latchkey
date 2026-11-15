@@ -291,8 +291,9 @@ answer); the time limit was 25 s (ScriptRunner).
   restore its own functions; then its dialog waits, and the next check below says so.
 - A page that already waits (its dialog came before the answers were in, e.g. at load): every
   check of a page (the mark check in the survey and the guard, picking, putting a tab back) has
-  a 2 s limit (6 s for the survey, the guard, and picking since 2026-11-15: a busy or paused
-  background tab took longer and was told as a dialog; Claude is told it may be either); on -1712 the survey marks the tab waiting, and a script refuses at once
+  a 2 s limit (since 2026-11-15, 10 s for the survey and picking and 6 s for the guard right
+  after: a busy or paused background tab took longer and was told as a dialog, and an idle
+  Safari took 12 s to answer its first script, then 0.5 s; Claude is told it may be either); on -1712 the survey marks the tab waiting, and a script refuses at once
   (`dialogWaiting`). The tab is still Claude's only when it is where it was, shows its last
   address, and the window's tabs (their number, order, and addresses, as one SHA-256
   fingerprint) are exactly as when Claude's mark was last seen there; it can then be loaded

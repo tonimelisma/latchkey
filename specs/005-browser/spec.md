@@ -145,7 +145,7 @@ phone, Claude can't check a reservation in the Owner's account or fill in a form
   given Claude's text or none, and the next answer shall say what each said. When a page
   already waits on a dialog it showed before Latchkey's answers were in it, Claude shall be told
   so within about 2 seconds (Claude's own page can then be loaded over or closed; the Owner's
-  tab is left as it is), instead of waiting for Safari's time limit (2026-11-15: within 6 seconds,
+  tab is left as it is), instead of waiting for Safari's time limit (2026-11-15: within 10 seconds,
   and Claude is told the tab may also be busy or paused by Safari and to try again, since a
   busy Bank of America tab was reported as waiting on a dialog it didn't have; and how computer
   control can answer a real one) (Toni, 2026-11-03: "25

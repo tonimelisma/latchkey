@@ -498,7 +498,7 @@ enum BrowserCapability {
             "There's no \(ref) on the page now (it may have changed). Read it again with browser_read."
         case .noOption(let text): "That list has no option \"\(text)\"."
         case .dialogWaiting:
-            "The owner's Safari tab didn't answer within 6 seconds, so nothing was done to it. Most often Safari is busy with the page or has paused the tab in the background, and it answers again in a moment: try again shortly. If it keeps not answering, the page may be waiting on a dialog of its own (an alert, a confirm, or a prompt), which Latchkey can't see or answer in a background tab: it shows when the tab is in front, and with computer control, while nobody is using the Mac, Claude can bring Safari forward and answer it."
+            "The owner's Safari tab didn't answer within 10 seconds, so nothing was done to it. Most often Safari is busy with the page or has paused the tab in the background, and it answers again in a moment: try again shortly. If it keeps not answering, the page may be waiting on a dialog of its own (an alert, a confirm, or a prompt), which Latchkey can't see or answer in a background tab: it shows when the tab is in front, and with computer control, while nobody is using the Mac, Claude can bring Safari forward and answer it."
         case .dialogHeld(let page, let kind, let message):
             heldDialog(page: page, kind: kind, message: message)
         case .failed(let message): message

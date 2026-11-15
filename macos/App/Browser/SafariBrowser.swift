@@ -24,9 +24,10 @@ struct TabSurvey: Equatable {
         var sameAddress: Bool
         var marked: Bool
         var loading = false
-        /// The page didn't answer within 6 s: it waits on a dialog it showed, or Safari has paused
+        /// The page didn't answer within 10 s: it waits on a dialog it showed, or Safari has paused
         /// or is busy with the tab (spec 005 FR-432; 2 s until 2026-11-15, when a busy tab was
-        /// reported as waiting on a dialog it didn't have).
+        /// reported as waiting on a dialog it didn't have; an idle Safari took 12 s to answer its
+        /// first script that day, then 0.5 s).
         var waiting = false
         /// The tab's address, only for the window's fingerprint.
         var address = ""
@@ -94,8 +95,8 @@ actor SafariBrowser {
         case moved
         /// The Owner's tab Claude was working in isn't surely there any more (FR-429).
         case tabGone
-        /// The Owner's tab didn't answer within 6 s: it may wait on a dialog of its own, or be paused
-        /// or busy (FR-432).
+        /// The Owner's tab didn't answer in time (10 s when found, 6 s right after): it may wait on a
+        /// dialog of its own, or be paused or busy (FR-432).
         case dialogWaiting
         /// A page of Claude's in Latchkey's own browser holds a confirm or prompt for Claude to
         /// answer (FR-448): the page's name, the dialog's kind, and its text (the website's).
@@ -856,7 +857,7 @@ actor SafariBrowser {
             set isWaiting to false
             if i is idx or sameURL then
             try
-            with timeout of 6 seconds
+            with timeout of 10 seconds
             set isMarked to ((do JavaScript checkJS in t) is "yes")
             end timeout
             on error number errNum
@@ -1102,7 +1103,7 @@ actor SafariBrowser {
             set t to tab idx of w
             set isMarked to "no"
             try
-            with timeout of 6 seconds
+            with timeout of 10 seconds
             if (do JavaScript (item 3 of argv) in t) is "yes" then set isMarked to "yes"
             end timeout
             end try
