@@ -300,16 +300,6 @@ final class WhatsAppStore: @unchecked Sendable {
         return nil
     }
 
-    /// How many visible chats have exactly this name: WhatsApp for Mac's window is opened by name only
-    /// when it is the only one (security review 2026-11-05).
-    func chatsNamed(_ name: String) throws -> Int {
-        try locked {
-            // nosemgrep: scripts.semgrep.latchkey-sql-bound -- only fixed SQL constants are spliced in; every value is bound
-            try SQLite.rows(db, "SELECT \(Self.chatColumns) \(Self.chatFrom) WHERE \(Self.visible)").map(chat)
-                .filter { $0.name == name }.count
-        }
-    }
-
     /// A version stamp of one message (its row and its receipts, where reactions are kept): it
     /// changes when WhatsApp changes that message. Nil when the message isn't in that chat.
     func stamp(chat: String, key: String) -> String? {
@@ -333,37 +323,6 @@ final class WhatsAppStore: @unchecked Sendable {
             }
             return stamp
         }
-    }
-
-    /// Whether a message of the chat is a reply quoting the message `quoted` (both by their ids):
-    /// WhatsApp keeps the quoted message's id in the reply's media item metadata (2026-11-05).
-    func quotes(chat: String, key: String, quoted: String) -> Bool {
-        locked {
-            guard !quoted.isEmpty,
-                let r = try? SQLite.rows(
-                    db,
-                    """
-                    SELECT instr(i.ZMETADATA, CAST(? AS BLOB)) FROM ZWAMESSAGE m
-                    JOIN ZWACHATSESSION s ON m.ZCHATSESSION = s.Z_PK JOIN ZWAMEDIAITEM i ON m.ZMEDIAITEM = i.Z_PK
-                    WHERE s.ZCONTACTJID = ? AND m.ZSTANZAID = ? ORDER BY m.Z_PK LIMIT 1
-                    """,
-                    bind: [.text(quoted), .text(chat), .text(key)]
-                ).first
-            else { return false }
-            return (r[0].int ?? 0) > 0
-        }
-    }
-
-    /// How many messages of the chat look like this one in WhatsApp for Mac's window: the same side,
-    /// words (or file name), and minute. A stored copy counts once, as WhatsApp's window shows it.
-    func lookalikes(_ m: WhatsAppMessage) throws -> Int {
-        let minute = floor(m.date.timeIntervalSinceReferenceDate / 60) * 60
-        let words = m.text.isEmpty ? (m.fileName ?? "") : m.text
-        return try messages(chat: m.chatID, before: Date(timeIntervalSinceReferenceDate: minute + 60), limit: 400)
-            .filter {
-                $0.fromMe == m.fromMe && $0.date.timeIntervalSinceReferenceDate >= minute
-                    && ($0.text.isEmpty ? ($0.fileName ?? "") : $0.text) == words
-            }.count
     }
 
     /// Words that mean the Owner's own chat ("Message yourself"), which WhatsApp names You (FR-1244).

@@ -47,7 +47,8 @@ enum AppLocation {
         let config = NSWorkspace.OpenConfiguration()
         config.createsNewApplicationInstance = true
         NSWorkspace.shared.openApplication(at: dest, configuration: config) { @Sendable _, _ in
-            Task { @MainActor in NSApp.terminate(nil) }
+            // Not terminate() from inside a main-queue block (macos.md: it hangs the app).
+            Task { @MainActor in NSApp.perform(#selector(NSApplication.terminate(_:)), with: nil, afterDelay: 0) }
         }
         return true
     }

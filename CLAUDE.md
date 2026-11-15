@@ -200,8 +200,7 @@ Enforced by hooks in `.claude/settings.json` (`scripts/hooks.sh`):
 IMPORTANT: while the Mac is unlocked, someone may be using any app. Latchkey never brings a
 window to the front, never drives an app's window they may be using (selection, view, text),
 and never moves the pointer or types into their apps. Background work that can't touch what they
-see is fine (scripting or databases without a window; a Safari tab of Claude's own behind
-theirs). A feature that would need the front or another app's window is not built, not even
+see is fine (scripting or databases without a window; Latchkey's own off-screen browser). A feature that would need the front or another app's window is not built, not even
 with a guard. Exceptions Toni chose: computer control, acting in the user's own Safari tabs, the
 shell's `open`. Unreliable routes (WhatsApp Web) are left out. Removed for this on 2026-11-07:
 Mail, WhatsApp sending, Notes' window editing, Messages' window actions, Reminders' window setters.
@@ -276,8 +275,7 @@ the screen state the Mac is in (unlocked, locked, lid closed; Toni dropped displ
 used the clipboard (`<state>/focus.log`; `LATCHKEY_CHECK_PARALLEL=1` runs one group at a time so
 each line belongs to one group). Needs `LATCHKEY_CHECK_TO` (Toni's own address, from `CLAUDE.local.md`).
 Claude Code here runs on Toni's Claude subscription; the dollar cost it prints is only what the
-same use would cost paid per use. `macos/scripts/mail-check.sh <to> <draft|send|probe>` runs the
-app's Mail compose code against the real Mail in the current screen state.
+same use would cost paid per use.
 
 <!-- Maintainers: keep this file under ~100 lines. Status and decisions live in docs/, topic
 knowledge in .claude/rules/, multi-step procedures in docs/. Test each line: would removing it

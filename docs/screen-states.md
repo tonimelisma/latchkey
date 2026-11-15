@@ -73,13 +73,14 @@ windows, pointer, clipboard), one group at a time, plus direct live checks. Unlo
      text typed with keys sent to Mail alone; nothing came forward in live checks.
    - Computer control of a named app (0.8.93): a picture of its window, its buttons and fields,
      press, type, and keys sent to it alone.
-   - Browser in Safari, tab mode; page pictures switch Claude's tab only while its window can't
-     be seen, else come from Latchkey's own browser (0.8.90).
+   - The owner's Safari tabs, in the background; a picture switches a tab only while its window
+     can't be seen, else Latchkey draws it (0.8.90). Claude's own pages are in Latchkey's own
+     browser, locked or not, since 0.8.153.
    - Computer looking (screenshot, front window's UI, apps): reads only.
 3. **Works while locked**
    - Files, shell, Notes, Messages, calendar, reminders, contacts, location and maps; Mail
      find and read; Mail organise (while Mail answers its scripting).
-   - Browser through Latchkey's own browser (Safari's cookies copied).
+   - Claude's own pages, in Latchkey's own browser (Safari's cookies copied).
    - Mail sending, queued until the next unlock (`mail_queue`).
 
 ## Moving group 1 to group 2: experiments (2026-11-02, unlocked)

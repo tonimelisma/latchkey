@@ -8,6 +8,17 @@ Xcode signing ready (2026-10-20): Toni's Xcode account has a valid "Apple Develo
 
 ## Current phase
 
+Dead code removed (Toni, 2026-11-15: "remove all dead code"): Safari's tab and window of Claude's
+own (its memory file, the Settings value, idle closing, the scripts only it used), a Mail script
+named in CLAUDE.md that no longer existed, the Messages helpers of the window actions removed on
+2026-11-07, WhatsApp sending's helpers, the client list's old menu view, and other unused
+helpers; two test stand-ins moved from the app into the tests. The navigation and security
+tests of Claude's old tab now run on one of the Owner's tabs, where the same rules apply. Found
+on the way: the offer to move the app into Applications on first launch (spec 001 FR-078) was
+written but never called; it now runs. And the full browser live check (24 of 25) found that a
+PDF's address timed out in Latchkey's own browser: a page that is a file is now answered at
+once, and saved with download (spec 005 FR-452).
+
 Pages that never freeze, one set per chat (Toni, 2026-11-15; spec 005 FR-444 to FR-451, plan
 D11): on Target a "Remove item?" dialog froze Claude's background Safari tab (Latchkey can't read
 or answer a background tab's dialog without bringing it forward), and two other chats loaded
@@ -84,10 +95,6 @@ after the app was quit.
 
 ## Next steps
 
-0. Remove Safari's own-tab code (spec 005 plan D2, D6: Claude's tab or window in Safari, the
-   "Claude Opens Pages In" setting's stored value, `BrowserPlace`) once a release has closed any
-   tab an earlier version left open (it closes after 30 minutes unused); the Owner's-tab code
-   (D8) shares its survey and checks, so it moves to its own type first.
 1. Changing notes with checklists, links, or images: the iCloud.com route was probed on
    2026-11-07 and stopped (spec 002 research, "Notes with checklists through iCloud.com"): the
    approval and the drawing in a hidden view work, but iCloud.com's editor takes no input

@@ -9,14 +9,6 @@ protocol SigningKey: Sendable {
     func sign(_ data: Data) throws -> String
 }
 
-struct SoftwareSigningKey: SigningKey {
-    let key = P256.Signing.PrivateKey()
-    var publicKeyDER: Data { key.publicKey.derRepresentation }
-    func sign(_ data: Data) throws -> String {
-        try key.signature(for: data).derRepresentation.base64URLEncodedString()
-    }
-}
-
 struct SecureEnclaveSigningKey: SigningKey {
     let key: SecureEnclave.P256.Signing.PrivateKey
 

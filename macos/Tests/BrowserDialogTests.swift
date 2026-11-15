@@ -85,7 +85,7 @@ import WebKit
             "1\tfalse\tfalse\tfalse\tfalse\thttps://mail.example.com/\n2\ttrue\tfalse\tfalse\ttrue\thttps://shop.example.com/\n"
         let s = TabSurvey("2\n" + rows)
         #expect(s.rows[1].waiting && !s.rows[0].waiting)
-        var t = ClaudeTab(index: 2, count: 2, address: "https://shop.example.com/", token: "ab")
+        var t = PickedTab(index: 2, count: 2, address: "https://shop.example.com/", token: "ab")
         #expect(TabSurvey.pick(s, remembered: t, navigating: false) == nil, "never seen marked in this window")
         t.fingerprint = s.fingerprint
         #expect(TabSurvey.pick(s, remembered: t, navigating: false) == 2, "the window's tabs as when last marked")
@@ -94,28 +94,26 @@ import WebKit
         #expect(TabSurvey.pick(changed, remembered: t, navigating: false) == nil)
     }
 
-    func tabBrowser(_ fake: FakeSafariTabs) -> SafariBrowser {
-        SafariBrowser(scripts: fake, settleLimit: .seconds(3), memory: nil, place: { .tab }, note: { _ in })
+    func picked(_ fake: FakeSafariTabs) async throws -> SafariBrowser {
+        let b = SafariBrowser(scripts: fake, settleLimit: .seconds(3))
+        try await b.pick("10.2")
+        return b
     }
 
-    @Test func claudesWaitingTabIsToldAtOnceAndCanBeLoadedOver() async throws {
+    /// The owner's tab waiting on its own dialog is told at once and left as it is (FR-432).
+    @Test func aWaitingTabIsToldAtOnceAndLeftAlone() async throws {
         let fake = FakeSafariTabs()
-        let b = tabBrowser(fake)
-        _ = try await b.open("https://shop.example.com/", newTab: false)
+        let b = try await picked(fake)
         _ = try await b.read(offset: 0)  // the mark seen with the window as it is
-        fake.windows[0].tabs[2].waiting = true
-        await #expect(throws: SafariBrowser.Failure.dialogWaiting(owners: false)) { _ = try await b.read(offset: 0) }
-        #expect(BrowserCapability.explain(.dialogWaiting(owners: false)).contains("Opening a page"))
-        // Loading over it works: the tab is known by its address while its page waits.
-        _ = try await b.open("https://shop.example.com/other", newTab: false)
-        #expect(fake.windows[0].tabs[2].url == "https://shop.example.com/other")
-        #expect(fake.ownerTabs.map(\.url) == ["https://mail.example.com/", "https://news.example.com/"])
+        fake.windows[0].tabs[1].waiting = true
+        await #expect(throws: SafariBrowser.Failure.dialogWaiting) { _ = try await b.read(offset: 0) }
+        #expect(BrowserCapability.explain(.dialogWaiting).contains("Nothing was done"))
+        #expect(fake.windows[0].tabs[1].url == "https://news.example.com/")
     }
 
     @Test func whatTheDialogsSaidComesWithTheAnswer() async throws {
         let fake = FakeSafariTabs()
-        let b = tabBrowser(fake)
-        _ = try await b.open("https://shop.example.com/", newTab: false)
+        let b = try await picked(fake)
         fake.dialogsSaid = #"[["confirm","Delete the order?","ok"]]"#
         _ = try await b.run("1", answer: DialogAnswer(confirm: true))
         #expect(await b.takeDialogs() == ["The page asked to confirm: «Delete the order?»; Latchkey answered OK."])
@@ -124,7 +122,7 @@ import WebKit
             return fake.calls[i].args
         }
         #expect(last()[5].contains("ok = true"), "Claude's OK went into the page with its script")
-        #expect(last()[8].contains("restore = false"), "Claude's own tab keeps the answers in place")
+        #expect(last()[8].contains("restore = true"), "the owner's page gets its own dialogs back")
         // The answer is the action's alone: the next script, a read, says Cancel.
         _ = try await b.read(offset: 0)
         #expect(last()[5].contains("ok = false"))
@@ -134,13 +132,5 @@ import WebKit
         #expect(try BrowserCapability.answer(.object(["confirm": .bool(true)])) == DialogAnswer(confirm: true))
         #expect(try BrowserCapability.answer(.object(["prompt_text": .string("Toni")])) == DialogAnswer(text: "Toni"))
         #expect(throws: ArgumentError.self) { try BrowserCapability.answer(.object(["confirm": .string("yes")])) }
-    }
-
-    @Test func claudesOwnWindowTellsAWaitingPage() async throws {
-        let fake = FakeSafari()
-        let b = SafariBrowser(scripts: fake, place: { .window })
-        _ = try await b.open("https://shop.example.com/", newTab: false)
-        fake.dialogWaiting = true
-        await #expect(throws: SafariBrowser.Failure.dialogWaiting(owners: false)) { _ = try await b.read(offset: 0) }
     }
 }

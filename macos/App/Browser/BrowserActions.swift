@@ -63,7 +63,7 @@ extension BrowserCapability {
         return r
     }
 
-    static func actionOperations(browser: SafariBrowser, own: OwnPages? = nil) -> [ToolEntry] {
+    static func actionOperations(browser: SafariBrowser, own: OwnPages) -> [ToolEntry] {
         [
             ToolEntry(
                 tool: .make(

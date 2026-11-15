@@ -238,6 +238,10 @@ phone, Claude can't check a reservation in the Owner's account or fill in a form
   Claude's OK no longer counted. Amends FR-432 for Claude's own pages.)
 - **FR-451** The list of tabs (FR-424) shall also list Claude's open pages: each one's name,
   title, and address.
+- **FR-452** When a page Claude opens or goes to in Latchkey's own browser is a file that browser
+  doesn't show (a PDF, an archive), Latchkey shall not wait for it to load: the answer shall say
+  that the page is a file and how to save it, and saving the page (FR-438) shall save that file,
+  fetched with the Owner's Safari cookies (live check 2026-11-15: a PDF's address timed out).
 
 ## Success criteria
 

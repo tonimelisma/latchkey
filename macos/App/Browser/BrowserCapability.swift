@@ -5,8 +5,7 @@ import WebKit
 /// The Owner's Safari (spec 005).
 enum BrowserCapability {
     static let browser = SafariBrowser(
-        scripts: OSAScriptRunner(app: Permissions.safariApp), memory: .app, place: { BrowserPlace.current },
-        note: { EventLog.shared.record(.leftovers, $0, systemLog: false) })
+        scripts: OSAScriptRunner(app: Permissions.safariApp))
 
     @MainActor static func make() -> Capability {
         Capability(
@@ -31,7 +30,7 @@ enum BrowserCapability {
 
     static let marking = PageScripts.marking
 
-    static func readOperations(browser: SafariBrowser, own: OwnPages? = nil) -> [ToolEntry] {
+    static func readOperations(browser: SafariBrowser, own: OwnPages) -> [ToolEntry] {
         [
             ToolEntry(
                 tool: .make(
@@ -48,21 +47,16 @@ enum BrowserCapability {
                             throw Failure.failed("Give an address.")
                         }
                         let offset = try args.integer("offset", in: 0...Int.max) ?? 0
-                        if let own {
-                            // FR-444, FR-445: in the page the call names, else in a new page.
-                            let named = Asked.page
-                            let l = try await MainActor.run { try named.map { try own.page($0) } ?? own.make() }
-                            let opened: PageScripts.Page
-                            do { opened = try await l.open(url) } catch {
-                                if named == nil { _ = await own.close(l.name) }
-                                throw error
-                            }
-                            return await told(page(offset > 0 ? try await l.read(offset: offset) : opened), l)
+                        // FR-444, FR-445: in the page the call names, else in a new page.
+                        let named = Asked.page
+                        let l = try await MainActor.run { try named.map { try own.page($0) } ?? own.make() }
+                        let opened: PageScripts.Page
+                        do { opened = try await l.open(url) } catch {
+                            if named == nil { _ = await own.close(l.name) }
+                            throw error
                         }
-                        let opened = try await browser.open(url, newTab: args["new_tab"] == .bool(true))
                         // With an offset too, the page Claude opened is read on from there.
-                        return await told(
-                            page(offset > 0 ? try await browser.read(offset: offset) : opened), nil, browser)
+                        return await told(page(offset > 0 ? try await l.read(offset: offset) : opened), l)
                     }
                 }),
             ToolEntry(
@@ -92,7 +86,7 @@ enum BrowserCapability {
                 handler: { args in
                     await run {
                         let select = try tabReference(args)
-                        if let own, select == nil {
+                        if select == nil {
                             // FR-451: Safari's tabs, then Claude's own pages. FR-430: while the
                             // Mac is locked Safari may not answer.
                             let pages = await own.listing()
@@ -107,12 +101,10 @@ enum BrowserCapability {
                             // FR-447: a tab already picked by that name keeps its pick and its
                             // check (FR-429); another is picked.
                             if await browser.working() != select { try await browser.pick(select) }
-                            let now = await browser.working()
-                            return .text(
-                                now.map { "Claude now works in the owner's Safari tab \($0), in the background." }
-                                    ?? "Claude now works in its own Safari page.")
                         }
-                        return .text(listing(try await browser.listTabs()))
+                        return .text(
+                            "Claude works in the owner's Safari tab \(await browser.working() ?? ""), in the background."
+                        )
                     }
                 }),
             ToolEntry(
@@ -235,7 +227,7 @@ enum BrowserCapability {
         return try await own.screenshot()
     }
 
-    static func writeOperations(browser: SafariBrowser, own: OwnPages? = nil) -> [ToolEntry] {
+    static func writeOperations(browser: SafariBrowser, own: OwnPages) -> [ToolEntry] {
         [
             ToolEntry(
                 tool: .make(
@@ -349,27 +341,22 @@ enum BrowserCapability {
                 tool: .make(
                     "browser_close", title: "Close the Page",
                     description:
-                        "Closes the tab Claude works in: the owner's tab it picked, or else Claude's own tab or window (the next page opens a new one).",
+                        "Closes Claude's page, or the owner's tab the call names.",
                     readOnly: false, destructive: true, openWorld: true, deadlineMS: 30_000),
                 handler: { _ in
                     await run {
-                        let closed: Bool
-                        var page = "Claude's Safari page"
-                        if let own, let l = try await route(browser, own) {
+                        if let l = try await route(browser, own) {
                             let name = await l.name
-                            closed = await own.close(name)
-                            page = "Claude's page \"\(name)\" in Latchkey's own browser"
-                        } else if let address = try await browser.closeWorking() {
-                            // FR-428: the owner's tab Claude worked in.
-                            var r = ToolResult.text(
-                                "Closed the owner's Safari tab showing \(address). Claude works in its own page again.")
-                            r.activity = "Closed the Safari tab showing \(host(address))"
+                            await own.close(name)
+                            let page = "Claude's page \"\(name)\" in Latchkey's own browser"
+                            var r = ToolResult.text("Closed \(page).")
+                            r.activity = "Closed \(page)"
                             return r
-                        } else {
-                            closed = await browser.closePage()
                         }
-                        var r = ToolResult.text(closed ? "Closed \(page)." : "Claude has no page open.")
-                        r.activity = "Closed \(page)"
+                        // FR-428: the owner's tab the call names.
+                        guard let address = try await browser.closeWorking() else { throw Failure.noWindow }
+                        var r = ToolResult.text("Closed the owner's Safari tab showing \(address).")
+                        r.activity = "Closed the Safari tab showing \(host(address))"
                         return r
                     }
                 }),
@@ -384,9 +371,9 @@ enum BrowserCapability {
 
     /// Where a reading or acting call goes (FR-444, FR-445, FR-447): the owner's Safari tab when
     /// the call names one (nil: Safari), else Claude's page in Latchkey's own browser, the one the
-    /// call names or the only one open. Without own pages (tests), Safari.
-    static func route(_ browser: SafariBrowser, _ own: OwnPages?) async throws -> LockedBrowser? {
-        guard let own, !Asked.tab else { return nil }
+    /// call names or the only one open.
+    static func route(_ browser: SafariBrowser, _ own: OwnPages) async throws -> LockedBrowser? {
+        guard !Asked.tab else { return nil }
         let named = Asked.page
         return try await MainActor.run { try own.page(named) }
     }
@@ -420,7 +407,6 @@ enum BrowserCapability {
             out += head
             for t in w.tabs {
                 var line = "\(t.front ? "*" : "-") \(t.reference) \(cut(t.title, 150)) — \(cut(t.address, 400))"
-                if t.claudes { line += " (Claude's own tab)" }
                 if t.working { line += " (Claude works in this tab)" }
                 if out.count + line.count > ResultLimit.characters - 200 {
                     left += 1
@@ -460,8 +446,13 @@ enum BrowserCapability {
         } else {
             return r
         }
-        // FR-443: an answer from Latchkey's own browser says so, first.
-        let from = l == nil ? "" : ownBrowser(await l!.name) + "\n"
+        // FR-443: an answer from Latchkey's own browser says so, first; FR-452: and when the page
+        // is a file, what to do with it.
+        var from = ""
+        if let l {
+            from = ownBrowser(await l.name) + "\n"
+            if let file = await l.fileNoteIfAny { from += file + "\n" }
+        }
         guard !dialogs.isEmpty || l != nil, case .array(let parts) = r.content,
             case .object(var first)? = parts.first, let text = first["text"]?.stringValue
         else { return r }
@@ -496,9 +487,9 @@ enum BrowserCapability {
     static func explain(_ f: Failure) -> String {
         switch f {
         case .noWindow:
-            "Claude's Safari page isn't open (it may have been closed). Open a page with browser_read and a url."
+            "That page isn't open (it may have been closed). Open one with browser_read and a url, or name one of the owner's tabs with tab."
         case .moved:
-            "Safari's tabs changed while Latchkey was using Claude's page. Try again."
+            "Safari's tabs changed while Latchkey was using the owner's tab. Try again."
         case .tabGone:
             "The owner's Safari tab Claude was working in isn't where it was (it was closed, or the tabs in its window changed), so nothing was done to any tab. List the tabs with browser_read and tabs, and pick it again."
         case .javaScriptOff:
@@ -506,10 +497,8 @@ enum BrowserCapability {
         case .elementMissing(let ref):
             "There's no \(ref) on the page now (it may have changed). Read it again with browser_read."
         case .noOption(let text): "That list has no option \"\(text)\"."
-        case .dialogWaiting(let owners):
-            owners
-                ? "The page in the owner's tab Claude works in is waiting on a dialog it showed before Latchkey could answer it (an alert, a confirm, or a prompt), so it can't be read or used. The dialog shows when the tab is in front in Safari and stays until someone answers it there. Nothing was done to the tab."
-                : "The page in Claude's Safari page is waiting on a dialog it showed before Latchkey could answer it (an alert, a confirm, or a prompt), so it can't be read or used. Opening a page (browser_read with url) replaces it, or browser_act close closes it."
+        case .dialogWaiting:
+            "The page in the owner's tab Claude works in is waiting on a dialog it showed before Latchkey could answer it (an alert, a confirm, or a prompt), so it can't be read or used. The dialog shows when the tab is in front in Safari and stays until someone answers it there. Nothing was done to the tab."
         case .dialogHeld(let page, let kind, let message):
             heldDialog(page: page, kind: kind, message: message)
         case .failed(let message): message

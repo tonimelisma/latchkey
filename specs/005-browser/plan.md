@@ -34,6 +34,11 @@ spec 006, since it needs the screen.
 
 ## D2. Safari through Apple Events
 
+(Since 2026-11-15, D11: Claude's own pages are Latchkey's own browser's. The window and tab of
+Claude's own in Safari described in D2 and D6, their memory file, the Settings choice, and the
+idle closing are removed with their code; the scripts, the survey, the mark and its check, and
+the navigation rules below now serve the Owner's tabs, D8, as `SafariBrowser`.)
+
 AppleScript through the shared `osascript` runner (spec 002): opening makes a new window the
 first time (its id is remembered) and later loads pages or adds tabs in that window only
 (FR-403). `do JavaScript` runs in that window's current tab. Claude's text, URLs, and scripts
@@ -411,6 +416,13 @@ dialogs Claude answers").
   Cancel after 5 minutes (a timer per dialog), and before another address loads or the page
   closes; Claude is told at its next call on that page. Options weighed: answering confirms in
   advance only (before), holding alerts too (one possible answer: dismissing loses nothing).
+- **Files** (FR-452): the navigation delegate's response check stops a main-frame load whose
+  type WebKit can't show, or that is a PDF (an off-screen view never finished loading one, live
+  check 2026-11-15), and keeps its address and type: the answer at once says it is a file and to
+  save it with `download`; no script runs in that page; saving the page fetches the address
+  itself (D10, with Safari's cookies). Options weighed: letting WebKit show PDFs (needs a window,
+  which would disturb the Owner), a longer wait (still a timeout), fetching every PDF at once
+  (a download Claude didn't ask for).
 - **Answers given in advance** (FR-450): `DialogAnswer.confirm` is now optional (absent: not
   given). In Latchkey's own browser an answer given stays good for 5 s after the action returns,
   for that page only; in the Owner's Safari tabs it ends with the action, as D9 says.

@@ -696,7 +696,6 @@ final class AppModel {
     var needsCalendar: Bool { calendarStatus != .fullAccess }
     var needsReminders: Bool { remindersStatus != .fullAccess }
     /// Certainly needed: "not known yet" doesn't count (FR-621).
-    var needsLocation: Bool { locationAccess != .allowed && locationAccess != .unknown }
 
     // MARK: Notifications and Local Network (FR-623)
 
@@ -1132,7 +1131,7 @@ final class AppModel {
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(60))
                 await ShellCapability.jobs.tidy()
-                _ = await BrowserCapability.browser.closeIfIdle()  // an earlier version's tab; notes it
+                _ = await BrowserCapability.browser.forgetIfIdle()  // spec 005 FR-425
                 _ = await MainActor.run { BrowserCapability.ownPages.closeIdle() }  // spec 005 FR-446
             }
         }

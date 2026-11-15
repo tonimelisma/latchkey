@@ -32,6 +32,11 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate {
         let reply: @MainActor (Bool, String?) -> Void
     }
     private(set) var held: Held?
+    /// Set when the page is a file this browser doesn't show (a PDF, an archive): its address and
+    /// type. An off-screen view can't show a PDF, and its load never finished (live check
+    /// 2026-11-15: a PDF's address timed out), so the load is stopped at once and the file is
+    /// saved with browser_act download instead (FR-452).
+    private(set) var file: (address: String, type: String)?
     /// Scripts of Latchkey's waiting on the page: answered with the held dialog when one comes,
     /// since the page can't finish them until it is answered.
     private var waiters: [UUID: (Result<String, Error>) -> Void] = [:]
@@ -48,8 +53,6 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate {
     private var failure: String?
 
     static let loadLimit: Duration = .seconds(20)
-
-    var isOpen: Bool { web != nil }
 
     /// The view's size, and whether the page's own scripts run: not in a copy drawn for a
     /// picture (FR-439), whose page is the markup of a page that already ran them.
@@ -313,6 +316,24 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate {
 
     // MARK: navigation
 
+    nonisolated func webView(
+        _ webView: WKWebView, decidePolicyFor navigationResponse: WKNavigationResponse,
+        decisionHandler: @escaping @MainActor @Sendable (WKNavigationResponsePolicy) -> Void
+    ) {
+        MainActor.assumeIsolated {
+            let type = navigationResponse.response.mimeType ?? ""
+            if navigationResponse.isForMainFrame, let url = navigationResponse.response.url,
+                !navigationResponse.canShowMIMEType || type == "application/pdf"
+            {
+                file = (url.absoluteString, type)
+                decisionHandler(.cancel)
+                done(true)
+                return
+            }
+            decisionHandler(.allow)
+        }
+    }
+
     nonisolated func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
         MainActor.assumeIsolated { done(true) }
     }
@@ -324,7 +345,9 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate {
     /// "Cancelled" (-999) is a page replaced by the next one, or back served from memory (seen live
     /// 2026-11-02: back said -999 and showed the page): not a failure.
     private func failed(_ error: any Error) {
-        if (error as NSError).code == NSURLErrorCancelled {
+        // A file's load was stopped on purpose (FR-452), and a cancelled one (-999) is a page
+        // replaced by the next one, or back served from memory: not failures.
+        if file != nil || (error as NSError).code == NSURLErrorCancelled {
             done(true)
             return
         }
@@ -348,6 +371,7 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate {
         let w = await view()
         cancelHeld(why: "before the page was replaced")  // FR-449
         failure = nil
+        file = nil
         finished?.resume(returning: false)
         let before = w.url
         let ok = await withCheckedContinuation { (c: CheckedContinuation<Bool, Never>) in
@@ -391,6 +415,7 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate {
         -> String
     {
         if let h = held { throw SafariBrowser.Failure.dialogHeld(page: name, kind: h.kind, message: h.message) }
+        if let file { throw SafariBrowser.Failure.failed(Self.fileNote(name, file)) }
         let w = await view()
         let id = UUID()
         return try await withCheckedThrowingContinuation { (c: CheckedContinuation<String, Error>) in
@@ -432,6 +457,10 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate {
     }
 
     private func page(offset: Int) async throws -> PageScripts.Page {
+        if let file {  // FR-452: nothing to read; the answer says what it is (`fileNote`)
+            let name = URL(string: file.address)?.lastPathComponent ?? ""
+            return PageScripts.Page(title: name, url: file.address, total: 0, text: "", elements: [])
+        }
         do { return try PageScripts.decode(try await script(PageScripts.read(offset: offset))) } catch is DecodingError
         {
             throw SafariBrowser.Failure.failed("The page didn't answer as expected.")
@@ -582,11 +611,18 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate {
         try await act(PageScripts.attach(ref, files: files), ref: ref, mayNavigate: true, answer: answer)
     }
 
-    /// A file fetched in the page, as in Safari (FR-438).
+    /// A file fetched in the page, as in Safari (FR-438). A page that is itself a file (FR-452) has
+    /// no page to fetch it: Latchkey fetches its address itself, with Safari's cookies.
     func fetchFile(ref: String?, url: String?, maxBytes: Int, wait: Duration = .seconds(20)) async throws
         -> (address: String, suggested: String, fetched: PageScripts.Fetched)
     {
         guard web != nil else { throw SafariBrowser.Failure.noWindow }
+        if let file, ref == nil, url == nil {
+            return (
+                file.address, URL(string: file.address)?.lastPathComponent ?? "",
+                PageScripts.Fetched(state: "failed", error: "a file, not a page")
+            )
+        }
         let start = try PageScripts.DownloadStart.decode(
             try SafariBrowser.detail(
                 try await script(PageScripts.startDownload(ref: ref, url: url, limit: maxBytes)), ref: ref ?? ""))
@@ -600,7 +636,15 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate {
     }
 
     /// The address of the page, for saving it when the page can't fetch it itself.
-    var address: String? { web?.url?.absoluteString }
+    var address: String? { file?.address ?? web?.url?.absoluteString }
+
+    /// What Claude is told of a page that is a file (FR-452).
+    static func fileNote(_ page: String, _ file: (address: String, type: String)) -> String {
+        "Page \"\(page)\" is a file (\(file.type.isEmpty ? "not a web page" : file.type)), which Latchkey's own browser doesn't show: save it to the Mac's Downloads folder with browser_act action download and page \"\(page)\" (no ref or url), then read it with files_read."
+    }
+
+    /// The note for this page when it is a file (FR-452).
+    var fileNoteIfAny: String? { file.map { Self.fileNote(name, $0) } }
 
     /// A picture drawn from a copy of a page (FR-439): the copy is loaded, without its scripts,
     /// in a view of Latchkey's own as big as the page's window, signed in with Safari's cookies

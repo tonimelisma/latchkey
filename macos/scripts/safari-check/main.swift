@@ -2,7 +2,7 @@
 // "Real Safari check"): checks the stand-in Safari of the unit tests can't make. Run by
 // scripts/safari-check.sh, from a program that may control Safari (a terminal), not from the
 // test host, which would need its own Automation approval. Works only in a Safari window it
-// opens for the purpose, in front so Claude's tab opens there, and closes it afterwards; the
+// opens for the purpose (its tabs play the Owner's), and closes it afterwards; the
 // Owner's tabs are only listed (titles and addresses, not printed), and read only with
 // LATCHKEY_READ_OWNER_TAB=1 (counts and the host printed); nothing of the Owner's is clicked,
 // typed into, or closed. Needs the network and Safari's
@@ -16,13 +16,6 @@ var failures: [String] = []
 @MainActor func check(_ ok: Bool, _ what: String) {
     print(ok ? "  ok: \(what)" : "  FAILED: \(what)")
     if !ok { failures.append(what) }
-}
-
-final class Notes: @unchecked Sendable {
-    private let lock = NSLock()
-    private var made: [String] = []
-    var all: [String] { lock.withLock { made } }
-    func add(_ s: String) { lock.withLock { made.append(s) } }
 }
 
 @MainActor func openWindow() async throws -> String {
@@ -57,8 +50,10 @@ final class Notes: @unchecked Sendable {
     return n.flatMap { Int($0) } ?? 0
 }
 
-/// Runs `body` with a browser whose tab is in a window of the check's own; closes the window.
-@MainActor func withTab(_ name: String, _ body: (SafariBrowser, Notes) async throws -> Void) async {
+/// Runs `body` with a browser and a window of the check's own, whose second tab plays one of the
+/// Owner's background tabs (spec 005 FR-424 to FR-431; Claude's own pages are Latchkey's own
+/// browser's since 2026-11-15, FR-444); closes the window.
+@MainActor func withTab(_ name: String, _ body: (SafariBrowser) async throws -> Void) async {
     // LATCHKEY_CHECK_ONLY=text runs only the checks whose name contains it.
     if let only = ProcessInfo.processInfo.environment["LATCHKEY_CHECK_ONLY"], !name.contains(only) { return }
     print(name)
@@ -73,11 +68,10 @@ final class Notes: @unchecked Sendable {
         await closeLate(before)
         return
     }
-    let notes = Notes()
-    let b = SafariBrowser(scripts: runner, place: { .tab }, note: { notes.add($0) })
+    let b = SafariBrowser(scripts: runner)
     currentWindow = window
-    do { try await body(b, notes) } catch { check(false, "\(name): \(error)") }
-    _ = try? await runner.run(SafariBrowser.Script.close, [window])
+    do { try await body(b) } catch { check(false, "\(name): \(error)") }
+    _ = try? await runner.run(closeWindow, [window])
     var gone = false
     for _ in 0..<50 where !gone {
         gone = !(await windowIDs()).contains(window)
@@ -85,6 +79,14 @@ final class Notes: @unchecked Sendable {
     }
     check(gone, "\(name): the check's window is closed")
 }
+
+let closeWindow = """
+    on run argv
+    tell application "Safari"
+    if (exists window id ((item 1 of argv) as integer)) then close window id ((item 1 of argv) as integer)
+    end tell
+    end run
+    """
 
 /// The ids of Safari's windows.
 @MainActor func windowIDs() async -> Set<String> {
@@ -123,15 +125,32 @@ final class Notes: @unchecked Sendable {
 
 var currentWindow = ""
 
-/// Opens Claude's first page; it must be a tab in the check's own window, or the check stops
-/// (closing Claude's tab wherever it went: it never works in the Owner's).
-@MainActor func open(_ b: SafariBrowser, _ url: String) async throws -> PageScripts.Page {
-    let page = try await b.open(url, newTab: false)
-    guard await tabCount(currentWindow) == 2 else {
-        _ = await b.closeIfIdle(after: 0)
-        throw SafariBrowser.Failure.failed("Claude's tab didn't open in the check's own window")
+/// Opens `url` in a new background tab of the check's own window (as one of the Owner's tabs is,
+/// behind the tab in front), picks it, and reads it once it has loaded; `read: false` for a page
+/// Safari lets no script into (a PDF).
+@MainActor func open(_ b: SafariBrowser, _ url: String, read: Bool = true) async throws -> PageScripts.Page {
+    _ = try await runner.run(
+        """
+        on run argv
+        tell application "Safari" to make new tab at end of tabs of window id ((item 1 of argv) as integer) with properties {URL:(item 2 of argv)}
+        end run
+        """, [currentWindow, url])
+    let reference = "\(currentWindow).\(await tabCount(currentWindow))"
+    guard read else {
+        try await Task.sleep(for: .seconds(3))
+        try await b.pick(reference)
+        return PageScripts.Page(title: "", url: url, total: 0, text: "", elements: [])
     }
-    return page
+    for _ in 0..<30 {
+        try await Task.sleep(for: .milliseconds(500))
+        if let page = try? await { () async throws -> PageScripts.Page in
+            try await b.pick(reference)
+            return try await b.read(offset: 0)
+        }(), page.url != "about:blank", !page.text.isEmpty {
+            return page
+        }
+    }
+    throw SafariBrowser.Failure.failed("\(url) didn't load in the check's background tab")
 }
 
 let article = "https://en.wikipedia.org/wiki/Mac_mini"
@@ -143,7 +162,7 @@ let article = "https://en.wikipedia.org/wiki/Mac_mini"
     return r
 }
 
-await withTab("A same-site click keeps Claude's tab") { b, notes in
+await withTab("A same-site click keeps the tab") { b in
     let first = try await open(b, article)
     check(first.url.contains("wikipedia.org/wiki/Mac"), "opened \(first.url)")
     let next = try await b.click(try ref(first) { $0.hasSuffix("/wiki/Mac_Studio") })
@@ -151,39 +170,39 @@ await withTab("A same-site click keeps Claude's tab") { b, notes in
     let again = try await b.read(offset: 0)
     check(again.url.hasSuffix("/wiki/Mac_Studio"), "the new page reads (\(again.url))")
     let tabs = try await b.listTabs().windows.flatMap(\.tabs)
-    check(tabs.first { $0.claudes }?.address.hasSuffix("/wiki/Mac_Studio") == true, "tabs lists it as Claude's")
+    check(tabs.first { $0.working }?.address.hasSuffix("/wiki/Mac_Studio") == true, "tabs lists it as the one Claude works in")
     let back = try await b.back()
     check(back.url.contains("/wiki/Mac_") && !back.url.hasSuffix("/wiki/Mac_Studio"), "back (\(back.url))")
     let redirect = try await b.click(try ref(back) { $0.hasSuffix("/wiki/Mac_Pro") || $0.hasSuffix("/wiki/IMac") })
     check(redirect.url.contains("/wiki/"), "a second click (\(redirect.url))")
     _ = try await b.read(offset: 0)
-    check(notes.all.isEmpty, "nothing lost: \(notes.all)")
+    check(await b.working() != nil, "still the same tab")
 }
 
 // A script of Claude's never opens the allowance (security review, fourth round, 2026-10-29).
-await withTab("A script that sends the page elsewhere loses Claude's tab, as designed") { b, notes in
+await withTab("A script that sends the page elsewhere loses the tab, as designed") { b in
     _ = try await open(b, article)
     _ = try await b.run("location.href = 'https://en.wikipedia.org/wiki/Mac_Studio'; 'ok'")
     var lost = false
     for _ in 0..<20 where !lost {
-        do { _ = try await b.read(offset: 0) } catch SafariBrowser.Failure.noWindow { lost = true }
+        do { _ = try await b.read(offset: 0) } catch SafariBrowser.Failure.tabGone { lost = true }
         if !lost { try await Task.sleep(for: .milliseconds(500)) }
     }
     check(lost, "Latchkey no longer uses the tab")
-    check(notes.all.contains { $0.contains("lost track") }, "noted as lost")
+    check(await b.working() == nil, "and forgot it")
 }
 
-await withTab("A cross-site click keeps Claude's tab (since 2026-11-01)") { b, notes in
+await withTab("A cross-site click keeps the tab (since 2026-11-01)") { b in
     let first = try await open(b, "https://en.wikipedia.org/wiki/Example.com")
     let r = try ref(first) { $0.hasPrefix("https://example.com") || $0.hasPrefix("http://example.com") }
     let page = try await b.click(r)
     check(page.url.contains("example.com") && !page.url.contains("wikipedia"), "the new page reads: \(page.url)")
     let again = try await b.read(offset: 0)
     check(again.url.contains("example.com") && !again.url.contains("wikipedia"), "and reads again")
-    check(!notes.all.contains { $0.contains("lost track") }, "not lost")
+    check(await b.working() != nil, "not lost")
 }
 
-await withTab("A long page comes in parts") { b, _ in
+await withTab("A long page comes in parts") { b in
     let first = try await open(b, article)
     let a0 = PageScripts.answer(first)
     check(a0.count <= ResultLimit.characters, "the first part is \(a0.count) characters")
@@ -210,9 +229,9 @@ await withTab("A long page comes in parts") { b, _ in
     return n.flatMap { Int($0) } ?? 0
 }
 
-// 2026-11-03 (spec 005 FR-424 to FR-431): the check's own window's first tab plays one of the
-// Owner's tabs: Claude lists it, works in it in the background, and closes it.
-await withTab("Another tab is listed, read, clicked, and closed in the background") { b, notes in
+// 2026-11-03 (spec 005 FR-424 to FR-431): the check's own window's first tab, the one in front,
+// plays another of the Owner's tabs: Claude lists it, works in it in the background, and closes it.
+await withTab("Another tab is listed, read, clicked, and closed in the background") { b in
     _ = try await open(b, "https://en.wikipedia.org/wiki/Example.com")
     _ = try await runner.run(
         """
@@ -226,7 +245,7 @@ await withTab("Another tab is listed, read, clicked, and closed in the backgroun
     check(
         mine?.tabs.count == 2,
         "the check's window is listed with both tabs (\(mine?.tabs.map { "\($0.index) \($0.address)" } ?? []))")
-    check(mine?.tabs.first?.front == true && mine?.tabs.last?.claudes == true, "front tab and Claude's tab named")
+    check(mine?.tabs.first?.front == true && mine?.tabs.last?.working == true, "the front tab and the tab Claude works in named")
     try await b.pick("\(currentWindow).1")
     let read = try await b.read(offset: 0)
     check(read.url.lowercased().contains("/wiki/mac_mini"), "the other tab reads (\(read.url))")
@@ -238,14 +257,13 @@ await withTab("Another tab is listed, read, clicked, and closed in the backgroun
     check(await b.working() == "\(currentWindow).1", "still working in it")
     let closed = try await b.closeWorking()
     check(closed?.lowercased().contains("/wiki/mac_mini") == true, "closed it (\(closed ?? "nothing"))")
-    check(await tabCount(currentWindow) == 1, "only Claude's tab is left")
-    check(try await b.read(offset: 0).url.contains("Example.com"), "Claude works in its own tab again")
-    check(notes.all.isEmpty, "nothing noted: \(notes.all)")
+    check(await tabCount(currentWindow) == 1, "one tab is left")
+    check(await b.working() == nil, "Claude works in no tab of Safari's now")
 }
 
 // 2026-11-05 (spec 005 FR-433 to FR-439): keys, hover, scrolling, lists, files in and out, and
 // the copy a picture is drawn from, on the check's own local page (served from 127.0.0.1 by
-// safari-check.sh; nothing is sent anywhere), in Claude's background tab: the check window's
+// safari-check.sh; nothing is sent anywhere), in a background tab: the check window's
 // front tab stays in front and Safari doesn't come forward. Every file saved to Downloads is
 // removed in the teardown, which runs also when a check throws, and the check fails if any
 // is left.
@@ -266,7 +284,7 @@ final class Saved: @unchecked Sendable {
 if let pages = ProcessInfo.processInfo.environment["LATCHKEY_PAGES"] {
     let saved = Saved()
     let downloadsBefore = Set((try? FileManager.default.contentsOfDirectory(atPath: BrowserDownloads.downloads.path)) ?? [])
-    await withTab("Keys, hover, scrolling, lists, files, and the picture copy, in a background tab") { b, notes in
+    await withTab("Keys, hover, scrolling, lists, files, and the picture copy, in a background tab") { b in
         let frontApp = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
         var page = try await open(b, pages + "/actions.html")
         check(page.title == "Latchkey check actions", "opened the local page (\(page.url))")
@@ -348,8 +366,8 @@ if let pages = ProcessInfo.processInfo.environment["LATCHKEY_PAGES"] {
         let copy = try await b.pictureCopy()
         check(copy.html.contains("value=\"picture me\"") && copy.html.contains("<base"), "the copy for a picture holds the page as it is")
         await stillBehind("files out")
-        // The PDF, opened in Claude's tab, saved as the page itself.
-        _ = try? await b.open(pages + "/files/latchkey-check.pdf", newTab: false)
+        // A PDF in a background tab, saved as the page itself.
+        _ = try await open(b, pages + "/files/latchkey-check.pdf", read: false)
         do {
             (file, text) = try await save(nil)
             check(file.lastPathComponent == "latchkey-check.pdf" && text.hasPrefix("%PDF"), "saved the PDF the tab shows")
@@ -357,7 +375,6 @@ if let pages = ProcessInfo.processInfo.environment["LATCHKEY_PAGES"] {
             check(false, "saving the PDF the tab shows: \(error)")
         }
         check(NSWorkspace.shared.frontmostApplication?.bundleIdentifier == frontApp, "the app in front stayed in front (\(frontApp ?? "?"))")
-        check(notes.all.isEmpty, "nothing lost: \(notes.all)")
     }
     // Teardown: every saved file goes, then nothing new may be left in Downloads.
     for f in saved.all { try? FileManager.default.removeItem(at: f) }
@@ -369,7 +386,7 @@ if let pages = ProcessInfo.processInfo.environment["LATCHKEY_PAGES"] {
 // reads one of them; prints only counts and the host, nothing of the page.
 if ProcessInfo.processInfo.environment["LATCHKEY_READ_OWNER_TAB"] == "1" {
     print("The Owner's tabs are listed and one is read (reading only)")
-    let b = SafariBrowser(scripts: runner, place: { .tab })
+    let b = SafariBrowser(scripts: runner)
     do {
         let list = try await b.listTabs()
         let tabs = list.windows.flatMap(\.tabs)

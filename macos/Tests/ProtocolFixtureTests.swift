@@ -55,7 +55,11 @@ func jsonObject(_ data: Data) throws -> NSObject {
         for file in try Fixtures.files("valid") {
             seen.insert(try AgentMessage.decode(Data(contentsOf: file)).type)
         }
-        #expect(seen == Set(AgentMessage.allTypes))
+        #expect(
+            seen == [
+                "challenge", "hello", "welcome", "state", "tools", "progress", "result", "goodbye", "call", "cancel",
+                "notice", "clients", "revoke_client", "audit_request", "audit",
+            ])
     }
 
     @Test(arguments: try Fixtures.files("tolerated"))

@@ -165,8 +165,6 @@ final class ContactsMemory: @unchecked Sendable {
         }
     }
 
-    func isCardRecord(_ id: String) -> Bool { with { s in s.cards.contains { !$0.deleted && $0.ids.contains(id) } } }
-
     /// Marks the card deleted, then deletes iCloud's copies of it (FR-726). Answers the names deleted.
     func deletedCard(_ key: UUID, in backend: any ContactsBackend) async throws -> [String] {
         with { s in

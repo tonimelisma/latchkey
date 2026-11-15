@@ -36,6 +36,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         if ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil { return }  // unit tests
+        // FR-078: opened from the disk image or Downloads, the app first offers to move itself into
+        // Applications (replacing an older copy there, which it quits); the copy there starts
+        // instead, and this one quits, also when the Owner chooses Quit.
+        if AppLocation.needsMove(Bundle.main.bundleURL) {
+            if !AppLocation.offerMove() {
+                NSApp.perform(#selector(NSApplication.terminate(_:)), with: nil, afterDelay: 0)
+            }
+            return
+        }
         // Alone, as nearly always: start at once, before any link the app was opened with arrives.
         guard SingleCopy.others().isEmpty else {
             Task {

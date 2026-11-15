@@ -109,15 +109,11 @@ import Testing
     @Test func nothingIsShownBeforeAListArrives() {
         let access = ClientAccess()
         #expect(access.entries == nil)
-        #expect(!access.isKnown)
-        #expect(access.menuEntries.isEmpty)
-        #expect(!access.hasMore)
     }
 
     @Test func anEmptyListIsKnownAndEmpty() {
         var access = ClientAccess()
         _ = access.received([], now: Self.t0)
-        #expect(access.isKnown)
         #expect(access.entries == [])
     }
 
@@ -126,16 +122,6 @@ import Testing
         _ = access.received([Self.entry("a"), Self.entry("b")], now: Self.t0)
         _ = access.received([Self.entry("c")], now: Self.t0)
         #expect(access.entries?.map(\.id) == ["c"])
-    }
-
-    @Test func theMenuShowsTheNewestFewAndOffersTheRest() {
-        var access = ClientAccess()
-        _ = access.received((0..<5).map { Self.entry("e\($0)") }, now: Self.t0)
-        #expect(access.menuEntries.count == 5)
-        #expect(!access.hasMore)
-        _ = access.received((0..<7).map { Self.entry("e\($0)") }, now: Self.t0)
-        #expect(access.menuEntries.map(\.id) == ["e0", "e1", "e2", "e3", "e4"])
-        #expect(access.hasMore)
     }
 
     /// FR-191: one click sends exactly one revoke_client; a second click while it is in flight
@@ -214,7 +200,7 @@ import Testing
         _ = access.received([a, Self.entry("b")], now: Self.t0)
         _ = access.beginRemoval("a", now: Self.t0)
         #expect(access.disconnected() == [.failed(a, .disconnected)])
-        #expect(!access.isKnown)
+        #expect(access.entries == nil)
         #expect(access.entries == nil)
         #expect(!access.isRemoving("a"))
         #expect(

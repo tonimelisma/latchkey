@@ -42,8 +42,6 @@ enum RemovalOutcome: Equatable, Sendable {
 struct ClientAccess: Equatable, Sendable {
     /// How long a removal waits for the relay's new list before it counts as failed.
     static let removalTimeout: TimeInterval = 5
-    /// The menu shows this many, newest first; the window shows all.
-    static let menuLimit = 5
 
     private struct Pending: Equatable, Sendable {
         var entry: ClientEntry
@@ -62,9 +60,6 @@ struct ClientAccess: Equatable, Sendable {
     private var pending: [String: Pending] = [:]
     private var failed: Failed?
 
-    var isKnown: Bool { entries != nil }
-    var menuEntries: [ClientEntry] { Array((entries ?? []).prefix(Self.menuLimit)) }
-    var hasMore: Bool { (entries?.count ?? 0) > Self.menuLimit }
     func isRemoving(_ id: String) -> Bool { pending[id] != nil }
 
     /// The last removal that didn't happen, in words, until it is tried again or the entry goes.

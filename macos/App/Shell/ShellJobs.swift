@@ -151,7 +151,6 @@ actor ShellJobs {
         }
 
         /// Sends `signal` to every process of the job.
-        func signalAll(_ signal: Int32) { members().forEach { kill($0, signal) } }
 
         /// True while any process of the job is left.
         var hasProcesses: Bool { !members().isEmpty }

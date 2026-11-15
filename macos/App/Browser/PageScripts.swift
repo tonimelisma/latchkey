@@ -286,8 +286,6 @@ enum PageScripts {
         })()
         """
 
-    static let titleAndAddress = "document.title + '\\t' + location.href"
-
     /// Put before every script in Claude's tab (spec 005 plan D6): marks the page as Claude's,
     /// so Latchkey finds the tab again after the Owner's tabs moved, and notes where the page is
     /// going when it starts loading another, so Latchkey knows Claude's tab while the new page,

@@ -75,8 +75,6 @@ final class PairingFlow: NSObject, ASWebAuthenticationPresentationContextProvidi
         p.resume(with: result)
     }
 
-    var isPairing: Bool { pending != nil }
-
     /// The sign-in window's completion handler. macOS calls it on a background thread, so it is
     /// built outside the main actor and marked @Sendable: a closure written inside this
     /// main-actor class would inherit main-actor isolation, and Swift 6 traps when it is called

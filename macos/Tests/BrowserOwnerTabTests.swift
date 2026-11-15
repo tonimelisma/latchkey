@@ -5,10 +5,10 @@ import Testing
 
 /// Spec 005 FR-424 to FR-431 (Toni, 2026-11-03: "Claude needs to be able to access my tabs and
 /// windows just like its own"): the browser tools reach every Safari tab and window, in the
-/// background, while Claude's own tab stays where it opens pages.
+/// background; Claude's own pages are Latchkey's own browser's (FR-444).
 @Suite struct BrowserOwnerTabTests {
-    func browser(_ fake: FakeSafariTabs, notes: Notes = Notes()) -> SafariBrowser {
-        SafariBrowser(scripts: fake, settleLimit: .seconds(3), place: { .tab }, note: { notes.add($0) })
+    func browser(_ fake: FakeSafariTabs) -> SafariBrowser {
+        SafariBrowser(scripts: fake, settleLimit: .seconds(3))
     }
 
     /// Two windows: the Owner's front one (id 10) with two tabs, and another (id 20) with one.
@@ -21,40 +21,27 @@ import Testing
         return fake
     }
 
-    /// FR-424: every tab of every window, with which is in front and which is Claude's; listing
-    /// runs no script in any page.
+    /// FR-424: every tab of every window, with which is in front; listing runs no script in any
+    /// page.
     @Test func listsEveryTabOfEveryWindow() async throws {
         let fake = twoWindows()
         let b = browser(fake)
-        _ = try await b.open("https://shop.example.com", newTab: false)
         let list = try await b.listTabs()
         #expect(list.windows.map(\.id) == ["10", "20"])
         #expect(list.windows.first?.frontWindow == true && list.windows.last?.frontWindow == false)
         let tabs = list.windows.flatMap(\.tabs)
-        #expect(tabs.map(\.reference) == ["10.1", "10.2", "10.3", "20.1"])
+        #expect(tabs.map(\.reference) == ["10.1", "10.2", "20.1"])
         #expect(tabs.first { $0.reference == "10.1" }?.front == true)
         #expect(tabs.first { $0.reference == "10.2" }?.front == false)
-        #expect(tabs.first { $0.reference == "10.3" }?.claudes == true)
-        #expect(tabs.filter(\.claudes).count == 1)
         #expect(tabs.first { $0.reference == "20.1" }?.address == "https://bank.example.com/")
         #expect(fake.ownerTabs.allSatisfy { $0.scriptsRun == 0 && $0.picks == 0 }, "the list runs no page script")
         #expect(fake.userWindow.current == 1)
-    }
-
-    /// FR-424: the list works before Claude has any page of its own (the bug report: "Claude's
-    /// Safari page isn't open").
-    @Test func listsWithoutAPageOfClaudes() async throws {
-        let fake = twoWindows()
-        let list = try await browser(fake).listTabs()
-        #expect(list.windows.flatMap(\.tabs).count == 3)
-        #expect(!list.windows.flatMap(\.tabs).contains { $0.claudes })
     }
 
     /// FR-425, FR-427: a picked tab of the Owner's reads as Claude's own does, in the background.
     @Test func readsAnOwnersTabInTheBackground() async throws {
         let fake = twoWindows()
         let b = browser(fake)
-        _ = try await b.open("https://shop.example.com", newTab: false)
         try await b.pick("20.1")
         #expect(await b.working() == "20.1")
         let page = try await b.read(offset: 0)
@@ -79,10 +66,10 @@ import Testing
         #expect(await b.working() == "10.2")
         #expect(fake.userWindow.current == 1, "the Owner's front tab stays in front")
         #expect(fake.windows[0].tabs[0].scriptsRun == 0, "the other tab untouched")
-        #expect(fake.claudeTabs.isEmpty, "no tab of Claude's was made")
     }
 
-    /// The same click rule as in Claude's own tab: a link to another site keeps the tab.
+    /// 2026-11-01: a link to another site keeps the tab: the address comes from Latchkey's own
+    /// click script, not a note the page wrote.
     @Test func aClickToAnotherSiteKeepsTheOwnersTab() async throws {
         let fake = FakeSafariTabs()
         let b = browser(fake)
@@ -93,17 +80,16 @@ import Testing
         #expect(await b.working() == "10.2")
     }
 
-    /// FR-429 with the same rule as Claude's tab: a script that sends the page elsewhere loses it.
+    /// FR-429; security review 2026-10-29 (fourth round): a script of Claude's never opens the
+    /// allowance, so a script that sends the page elsewhere loses the tab, even on the same site.
     @Test func aScriptThatGoesElsewhereLosesTheOwnersTab() async throws {
         let fake = FakeSafariTabs()
-        let notes = Notes()
-        let b = browser(fake, notes: notes)
+        let b = browser(fake)
         try await b.pick("10.2")
         fake.scriptGoesTo = "https://news.example.com/next"
         _ = try await b.run("location.href = '/next'")
         await #expect(throws: SafariBrowser.Failure.tabGone) { _ = try await b.read(offset: 0) }
         #expect(await b.working() == nil)
-        #expect(notes.all.isEmpty, "the Owner's tab is not Left Behind")
     }
 
     /// FR-429: the Owner closes a tab before the picked one: found again by its mark.
@@ -121,31 +107,24 @@ import Testing
     /// FR-429: a tab that slid into the picked tab's place is left alone, and Claude is told.
     @Test func aTabInThePickedTabsPlaceIsLeftAlone() async throws {
         let fake = FakeSafariTabs()
-        let notes = Notes()
-        let b = browser(fake, notes: notes)
+        let b = browser(fake)
         try await b.pick("10.2")
         fake.slideIn = "https://other.example.com/"
         await #expect(throws: SafariBrowser.Failure.tabGone) { _ = try await b.click("e1") }
         #expect(fake.windows[0].tabs[1].scriptsRun == 0, "the tab in its place ran nothing")
         #expect(await b.working() == nil)
-        #expect(notes.all.isEmpty)
         let r = BrowserCapability.explain(.tabGone)
         #expect(r.contains("tabs"), "tells Claude to list the tabs again")
     }
 
-    /// FR-428: Claude closes the Owner's tab it works in; Claude's own tab stays and is used next.
+    /// FR-428: Claude closes the Owner's tab it works in; the other tab stays.
     @Test func closesTheOwnersTabItWorksIn() async throws {
         let fake = FakeSafariTabs()
-        let notes = Notes()
-        let b = browser(fake, notes: notes)
-        _ = try await b.open("https://shop.example.com", newTab: false)
+        let b = browser(fake)
         try await b.pick("10.2")
         #expect(try await b.closeWorking() == "https://news.example.com/")
         #expect(fake.ownerTabs.map(\.url) == ["https://mail.example.com/"])
-        #expect(fake.claudeTabs.count == 1, "Claude's own tab stays")
         #expect(await b.working() == nil)
-        #expect(try await b.read(offset: 0).text == "claude", "back in Claude's own tab")
-        #expect(notes.all.isEmpty)
         #expect(try await b.closeWorking() == nil, "no Owner's tab picked now")
     }
 
@@ -166,27 +145,14 @@ import Testing
         #expect(fake.ownerTabs.count == 2, "the tab in its place stays open")
     }
 
-    /// FR-426: opening a page goes to Claude's own tab and ends work in the Owner's.
-    @Test func openingAPageGoesBackToClaudesOwnTab() async throws {
-        let fake = FakeSafariTabs()
-        let b = browser(fake)
-        try await b.pick("10.1")
-        _ = try await b.read(offset: 0)
-        let page = try await b.open("https://shop.example.com", newTab: false)
-        #expect(page.text == "claude")
-        #expect(await b.working() == nil)
-        #expect(fake.ownerTabs.map(\.url) == ["https://mail.example.com/", "https://news.example.com/"])
-    }
-
-    /// Picking Claude's own tab, or a bare number, works as the list says.
+    /// A reference, or a bare number (that tab of the front window), works as the list says.
     @Test func picksByReferenceOrNumber() async throws {
         let fake = FakeSafariTabs()
         let b = browser(fake)
-        _ = try await b.open("https://shop.example.com", newTab: false)
-        try await b.pick("10.3")
-        #expect(await b.working() == nil, "Claude's own tab")
+        try await b.pick("10.1")
+        #expect(await b.working() == "10.1")
         try await b.pick("2")
-        #expect(await b.working() == "10.2", "a bare number: that tab of the window with Claude's page")
+        #expect(await b.working() == "10.2", "a bare number: that tab of the front window")
         await #expect(throws: SafariBrowser.Failure.self) { try await b.pick("10.9") }
         await #expect(throws: SafariBrowser.Failure.self) { try await b.pick("55.1") }
         await #expect(throws: SafariBrowser.Failure.self) { try await b.pick("tab two") }
@@ -196,17 +162,16 @@ import Testing
     /// FR-425: 30 minutes unused forgets the pick; the Owner's tab is never closed for it.
     @Test func idleForgetsThePickWithoutClosing() async throws {
         let fake = FakeSafariTabs()
-        let notes = Notes()
-        let b = browser(fake, notes: notes)
+        let b = browser(fake)
         try await b.pick("10.2")
-        _ = await b.closeIfIdle(after: 1800, now: Date().addingTimeInterval(1900))
+        #expect(await !b.forgetIfIdle(after: 1800))
+        #expect(await b.forgetIfIdle(after: 1800, now: Date().addingTimeInterval(1900)))
         #expect(await b.working() == nil)
         #expect(fake.ownerTabs.count == 2)
-        #expect(notes.all.isEmpty)
     }
 
-    /// FR-427 with FR-423: a picture of an Owner's tab behind another switches only as Claude's does,
-    /// and the tab in front comes back.
+    /// FR-427 with FR-423: whether a picture needs the tab brought forward is asked without
+    /// changing anything, and the tab in front comes back after the shot.
     @Test func picturesOfAnOwnersTab() async throws {
         let fake = FakeSafariTabs()
         let b = browser(fake)
@@ -222,10 +187,10 @@ import Testing
     }
 }
 
-/// The tools' side of FR-424, FR-425, FR-430, FR-431.
-@Suite struct BrowserOwnerTabToolTests {
-    func tools(_ fake: FakeSafariTabs, own: OwnPages? = nil) -> [String: ToolEntry] {
-        let b = SafariBrowser(scripts: fake, settleLimit: .seconds(3), place: { .tab })
+/// The tools' side of FR-424, FR-425, FR-430, FR-431, FR-447.
+@MainActor @Suite struct BrowserOwnerTabToolTests {
+    func tools(_ fake: FakeSafariTabs, own: OwnPages = OwnPages(cookies: { [] })) -> [String: ToolEntry] {
+        let b = SafariBrowser(scripts: fake, settleLimit: .seconds(3))
         let all =
             BrowserCapability.readTools(browser: b, own: own)
             + BrowserCapability.writeTools(browser: b, own: own)
@@ -248,7 +213,9 @@ import Testing
         let r = await t["browser_read"]!.handler(.object(["tab": .string("10.2")]))
         #expect(!r.isError, "\(r.content.jsonText)")
         #expect(r.content.jsonText.contains("tab 10.2"), "FR-431")
-        let act = await t["browser_act"]!.handler(.object(["action": .string("click"), "ref": .string("e1")]))
+        // FR-447: each call names the tab it works in.
+        let act = await t["browser_act"]!.handler(
+            .object(["action": .string("click"), "ref": .string("e1"), "tab": .string("10.2")]))
         #expect(!act.isError, "\(act.content.jsonText)")
         #expect(act.content.jsonText.contains("tab 10.2"))
         #expect(fake.userWindow.current == 1)
@@ -273,7 +240,7 @@ import Testing
 
     /// FR-430, FR-444: Claude's pages are Latchkey's own browser's, but the Owner's tabs are
     /// Safari's: listed and used through Safari while it answers (seen live, locked, 2026-11-03).
-    @MainActor @Test func theOwnersTabsAreStillSafaris() async {
+    @Test func theOwnersTabsAreStillSafaris() async {
         let fake = FakeSafariTabs()
         let own = OwnPages(cookies: { [] }, isLocked: { true })
         defer { own.closeAll() }
@@ -286,12 +253,13 @@ import Testing
         #expect(fake.windows[0].tabs[1].scriptsRun > 0, "read through Safari")
     }
 
-    /// FR-442: Claude asks for Safari's cookies again. In Safari itself there is nothing to take;
-    /// in Latchkey's own browser it needs a page.
-    @MainActor @Test func signingInAgainIsForLatchkeysOwnBrowser() async {
+    /// FR-442: Claude asks for Safari's cookies again. In the owner's Safari tab there is nothing
+    /// to take; in Latchkey's own browser it needs a page.
+    @Test func signingInAgainIsForLatchkeysOwnBrowser() async {
         let fake = FakeSafariTabs()
-        let unlocked = await tools(fake)["browser_read"]!.handler(.object(["sign_in_again": .bool(true)]))
-        #expect(!unlocked.isError && unlocked.content.jsonText.contains("Safari itself"))
+        let safari = await tools(fake)["browser_read"]!.handler(
+            .object(["sign_in_again": .bool(true), "tab": .string("10.2")]))
+        #expect(!safari.isError && safari.content.jsonText.contains("Safari itself"), "\(safari.content.jsonText)")
         let own = OwnPages(cookies: { [] })
         defer { own.closeAll() }
         let locked = await tools(fake, own: own)["browser_read"]!.handler(
@@ -300,7 +268,7 @@ import Testing
     }
 
     /// FR-443: an answer from Latchkey's own browser begins by saying so; Safari's doesn't.
-    @MainActor @Test func answersFromLatchkeysOwnBrowserSaySo() async throws {
+    @Test func answersFromLatchkeysOwnBrowserSaySo() async throws {
         let fake = FakeSafariTabs()
         let own = OwnPages(cookies: { [] })
         defer { own.closeAll() }
@@ -317,10 +285,10 @@ import Testing
     }
 
     /// FR-430: when Safari doesn't answer while locked, the list says the tabs need unlocking.
-    @MainActor @Test func whileLockedASilentSafariIsSaidPlainly() async {
+    @Test func whileLockedASilentSafariIsSaidPlainly() async {
         let own = OwnPages(cookies: { [] }, isLocked: { true })
         defer { own.closeAll() }
-        let b = SafariBrowser(scripts: SilentSafari(), place: { .tab })
+        let b = SafariBrowser(scripts: SilentSafari())
         let t = Dictionary(
             uniqueKeysWithValues: BrowserCapability.readTools(browser: b, own: own).map { ($0.tool.name, $0) })
         let list = await t["browser_read"]!.handler(.object(["tabs": .bool(true)]))

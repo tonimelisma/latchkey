@@ -212,25 +212,6 @@ import Testing
     }
 
     /// Security review 2026-11-05: a reply sent through WhatsApp for Mac is confirmed to quote the
-    /// intended message by its id, which WhatsApp keeps in the reply's media item metadata (seen
-    /// 2026-11-05: the quoted stanza id at byte 3 of `ZWAMEDIAITEM.ZMETADATA`).
-    @Test func aReplyIsKnownByTheMessageItQuotes() throws {
-        let url = try Self.make()
-        var h: OpaquePointer?
-        sqlite3_open(url.path, &h)
-        let sql = """
-            ALTER TABLE ZWAMEDIAITEM ADD COLUMN ZMETADATA BLOB;
-            INSERT INTO ZWAMEDIAITEM VALUES (2, NULL, NULL, X'0A1441');
-            INSERT INTO ZWAMESSAGE VALUES (9, 1, \(Self.t0 + 400), 1, 0, 'yes', NULL, NULL, 2, 'R', 1);
-            """
-        #expect(sqlite3_exec(h, sql, nil, nil, nil) == SQLITE_OK)
-        sqlite3_close(h)
-        let s = try WhatsAppStore(url: url)
-        #expect(s.quotes(chat: "15550001111@s.whatsapp.net", key: "R", quoted: "A"))
-        #expect(!s.quotes(chat: "15550001111@s.whatsapp.net", key: "R", quoted: "B"))
-        #expect(!s.quotes(chat: "15550001111@s.whatsapp.net", key: "B", quoted: "A"))
-    }
-
     /// WhatsApp for Mac's database can hold the same message twice (two rows, one id, one chat;
     /// seen 2026-11-06 in the Owner's own chat), and every older message was then read twice.
     @Test func aMessageStoredTwiceIsReadOnce() throws {
@@ -272,24 +253,6 @@ import Testing
         #expect(try s.copies(chat: "15550001111@s.whatsapp.net", key: "A") == 2)
         #expect(try s.copies(chat: "15550001111@s.whatsapp.net", key: "B") == 1)
         #expect(try s.copies(chat: "15550001111@s.whatsapp.net", key: "Z") == 0)
-    }
-
-    /// Security review 2026-11-05: messages that look the same (same chat, sender side, words, minute)
-    /// are counted, so WhatsApp for Mac's window is never acted on when its bubble could be another.
-    @Test func lookalikesAreCounted() throws {
-        let url = try Self.make()
-        var h: OpaquePointer?
-        sqlite3_open(url.path, &h)
-        let t = Self.t0 + 295
-        #expect(
-            sqlite3_exec(
-                h, "INSERT INTO ZWAMESSAGE VALUES (8, 1, \(t), 0, 0, 'see you at six', NULL, NULL, NULL, 'H', 0)", nil,
-                nil, nil) == SQLITE_OK)
-        sqlite3_close(h)
-        let s = try WhatsAppStore(url: url)
-        let a = try #require(try s.message(chat: "15550001111@s.whatsapp.net", key: "A"))
-        let b = try #require(try s.message(chat: "15550001111@s.whatsapp.net", key: "B"))
-        #expect(try s.lookalikes(a) == 2 && s.lookalikes(b) == 1)
     }
 
     @Test func anotherLayoutIsSaidPlainly() throws {

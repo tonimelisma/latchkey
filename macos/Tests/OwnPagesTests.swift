@@ -1,4 +1,5 @@
 import Foundation
+import Network
 import Testing
 
 @testable import Latchkey
@@ -122,6 +123,29 @@ import Testing
         #expect(b.takeDialogs().contains { $0.contains("Remove item?") && $0.contains("Cancel") })
     }
 
+    /// FR-452 (live check 2026-11-15: a PDF's address timed out): a page that is a file isn't
+    /// waited for; Claude is told to save it, and no script runs in the empty view. Served from
+    /// this Mac (127.0.0.1), as a web server would.
+    @Test func aFileIsntWaitedFor() async throws {
+        let server = try await OneFileServer.start(type: "application/pdf", body: Data("%PDF-1.4\n%%EOF\n".utf8))
+        defer { server.stop() }
+        let b = browser()
+        defer { b.discard() }
+        let address = "http://127.0.0.1:\(server.port)/report.pdf"
+        let started = ContinuousClock.now
+        let page = try await b.open(address)
+        #expect(ContinuousClock.now - started < .seconds(5), "not left to the load limit")
+        #expect(page.url == address && page.text.isEmpty)
+        #expect(b.fileNoteIfAny?.contains("browser_act action download") == true)
+        #expect(b.address == address, "what download saves")
+        await #expect(throws: SafariBrowser.Failure.self) { _ = try await b.run("1") }
+        let fetched = try await b.fetchFile(ref: nil, url: nil, maxBytes: 1000)
+        #expect(fetched.address == address && fetched.fetched.state == "failed", "Latchkey fetches it itself")
+        // The next page is a page again.
+        _ = try await b.open(html: "<title>Back</title><p>Hi</p>", base: base)
+        #expect(b.fileNoteIfAny == nil)
+    }
+
     @Test func answeringWithNoDialogSaysSo() async throws {
         let b = browser()
         defer { b.discard() }
@@ -192,7 +216,7 @@ import Testing
 /// a call works in one of the Owner's tabs only when it names it.
 @MainActor @Suite struct OwnPagesToolTests {
     func tools(_ fake: FakeSafariTabs, _ pages: OwnPages) -> [String: ToolEntry] {
-        let b = SafariBrowser(scripts: fake, settleLimit: .seconds(3), place: { .tab })
+        let b = SafariBrowser(scripts: fake, settleLimit: .seconds(3))
         let all =
             BrowserCapability.readTools(browser: b, own: pages) + BrowserCapability.writeTools(browser: b, own: pages)
         return Dictionary(uniqueKeysWithValues: all.map { ($0.tool.name, $0) })
@@ -269,4 +293,53 @@ import Testing
             .object(["action": .string("script"), "page": .string(page), "code": .string("document.title")]))
         #expect(title.content.jsonText.contains("asked:true"), "\(title.content.jsonText)")
     }
+}
+
+/// Serves one file over HTTP on 127.0.0.1, for a test of how Latchkey's own browser takes a file.
+final class OneFileServer: @unchecked Sendable {
+    private let listener: NWListener
+    let port: UInt16
+
+    private init(listener: NWListener, port: UInt16) {
+        self.listener = listener
+        self.port = port
+    }
+
+    static func start(type: String, body: Data) async throws -> OneFileServer {
+        let params = NWParameters.tcp
+        params.requiredLocalEndpoint = NWEndpoint.hostPort(host: "127.0.0.1", port: .any)
+        let listener = try NWListener(using: params)
+        listener.newConnectionHandler = { @Sendable connection in
+            connection.start(queue: .global())
+            connection.receive(minimumIncompleteLength: 1, maximumLength: 65536) { @Sendable _, _, _, _ in
+                let head =
+                    "HTTP/1.1 200 OK\r\nContent-Type: \(type)\r\nContent-Length: \(body.count)\r\nConnection: close\r\n\r\n"
+                connection.send(
+                    content: Data(head.utf8) + body,
+                    completion: .contentProcessed { @Sendable _ in connection.cancel() })
+            }
+        }
+        let ready = AsyncStream<UInt16?> { continuation in
+            listener.stateUpdateHandler = { @Sendable state in
+                switch state {
+                case .ready:
+                    continuation.yield(listener.port?.rawValue)
+                    continuation.finish()
+                case .failed, .cancelled:
+                    continuation.yield(nil)
+                    continuation.finish()
+                default: break
+                }
+            }
+        }
+        listener.start(queue: .global())
+        for await port in ready {
+            guard let port else { break }
+            return OneFileServer(listener: listener, port: port)
+        }
+        listener.cancel()
+        throw SafariBrowser.Failure.failed("the test's server didn't start")
+    }
+
+    func stop() { listener.cancel() }
 }

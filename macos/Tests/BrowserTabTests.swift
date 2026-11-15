@@ -3,9 +3,9 @@ import Testing
 
 @testable import Latchkey
 
-/// Plays Safari with windows and tabs, for Claude's page in a tab of the Owner's window (spec 005
-/// FR-412 to FR-418). Answers the tab scripts the way Safari would, and records which tabs ran
-/// which script, so a test can tell that the Owner's tabs were never read or changed (FR-403).
+/// Plays Safari with windows and tabs, for the Owner's tabs Claude works in (spec 005 FR-424 to
+/// FR-431). Answers the tab scripts the way Safari would, and records which tabs ran which script,
+/// so a test can tell which tabs were read or changed.
 final class FakeSafariTabs: ScriptRunner, @unchecked Sendable {
     struct FakeTab {
         var url: String
@@ -38,11 +38,11 @@ final class FakeSafariTabs: ScriptRunner, @unchecked Sendable {
     private(set) var loads = 0
     /// The current tab while the screenshot ran.
     var currentDuringShot: Int?
-    /// Set to an address: right before the next script that acts on Claude's tab (after
-    /// Latchkey found it), the Owner closes Claude's tab and opens one at that address in its
+    /// Set to an address: right before the next script that acts on the picked tab (after
+    /// Latchkey found it), the Owner closes the picked tab and opens one at that address in its
     /// place, so the tab count stays the same.
     var slideIn: String?
-    /// Set to an address: the next click in Claude's tab is on a link to that page. As in real
+    /// Set to an address: the next click in the picked tab is on a link to that page. As in real
     /// Safari (2026-10-29), the link's `navigate` event comes only after the click script
     /// returned, and the new page has replaced the old one before Latchkey's next script, so
     /// no note of it is ever read: only the click script's own answer names the address.
@@ -51,18 +51,20 @@ final class FakeSafariTabs: ScriptRunner, @unchecked Sendable {
     var dialogsSaid = "[]"
     /// Plays a page whose click handler changes the link's address as it is clicked.
     var clickChangesLink = false
-    /// Set to an address: the next click in Claude's tab is on a button that sends the page
+    /// Set to an address: the next click in the picked tab is on a button that sends the page
     /// there; the `navigate` event comes after the click script, while the acting script waits
     /// for it, then the new page replaces the old one.
     var buttonGoesTo: String?
-    /// Set to an address: the next script in Claude's tab sets `location.href` to it; the
+    /// Set to an address: the next script in the picked tab sets `location.href` to it; the
     /// `navigate` event fires during the script, and the page is replaced right after.
     var scriptGoesTo: String?
     /// Set to an address: going back goes there, its `navigate` event too late, as for a link.
     var backGoesTo: String?
-    /// Set to an address: every script in Claude's tab reports that its page is going there,
+    /// Set to an address: every script in the picked tab reports that its page is going there,
     /// in the script's own run and whenever asked afterwards (a page forging its note).
     var pageGoal: String?
+    /// False: Safari's "Allow JavaScript from Apple Events" is off (FR-406).
+    var javaScriptAllowed = true
 
     init(userTabs: [String] = ["https://mail.example.com/", "https://news.example.com/"]) {
         windows =
@@ -76,7 +78,6 @@ final class FakeSafariTabs: ScriptRunner, @unchecked Sendable {
 
     var userWindow: FakeWindow { windows[0] }
     var ownerTabs: [FakeTab] { windows.flatMap(\.tabs).filter { $0.owner == "owner" } }
-    var claudeTabs: [FakeTab] { windows.flatMap(\.tabs).filter { $0.owner == "claude" } }
     var scripts: [String] { lock.withLock { calls.map(\.script) } }
 
     private func window(_ id: String) throws -> Int {
@@ -125,16 +126,6 @@ final class FakeSafariTabs: ScriptRunner, @unchecked Sendable {
         try lock.withLock {
             calls.append((script, args))
             switch script {
-            case SafariBrowser.Script.tabNew:
-                loads += 1
-                let tab = FakeTab(url: args[0], title: "Claude's", owner: "claude")
-                if windows.isEmpty {
-                    windows.append(FakeWindow(id: 90, tabs: [tab], current: 1))
-                    return "90\t1\t1"
-                }
-                windows[0].tabs.append(tab)
-                let n = windows[0].tabs.count
-                return "\(windows[0].id)\t\(n)\t\(n)"
             case SafariBrowser.Script.allTabs:
                 // Every browser window front to back: its id and front tab, then its tabs.
                 var out = ""
@@ -187,11 +178,16 @@ final class FakeSafariTabs: ScriptRunner, @unchecked Sendable {
                 var answer: String
                 var goesTo: String?
                 var late = false  // the navigate event comes after the script returned
+                if !javaScriptAllowed {
+                    throw ScriptError.failed(
+                        "Safari got an error: You must enable the “Allow JavaScript from Apple Events” option in Safari’s Develop menu to use “do JavaScript”. (8)"
+                    )
+                }
                 if js.contains("timeOrigin") {
                     answer = "\(loads)|complete|\(tab.url)"
                 } else if js.contains("latchkeyRead") {
                     answer =
-                        #"{"title":"Claude's page","url":"\#(tab.url)","total":5,"text":"\#(tab.owner)","elements":[]}"#
+                        #"{"title":"The owner's page","url":"\#(tab.url)","total":5,"text":"\#(tab.owner)","elements":[]}"#
                 } else if js.contains("document.title") {
                     answer = "\(tab.title)\t\(tab.url)"
                 } else {
@@ -239,14 +235,6 @@ final class FakeSafariTabs: ScriptRunner, @unchecked Sendable {
                     ? String(data: try! JSONEncoder().encode([answer, encoded(inRun)]), encoding: .utf8)! : answer
                 defer { dialogsSaid = "[]" }
                 return windows[w].tabs[i].url + "\n" + encoded(later) + "\n" + dialogsSaid + "\n" + run
-            case SafariBrowser.Script.tabLoad:
-                let (w, i) = try guarded(args)
-                windows[w].tabs[i].waiting = false  // a new page replaces the one waiting
-                loads += 1
-                windows[w].tabs[i].url = args[5]
-                windows[w].tabs[i].mark = nil
-                windows[w].tabs[i].scriptsRun += 1
-                return ""
             case SafariBrowser.Script.tabFront:
                 let (w, i) = try guarded(args)
                 let shown = windows[w].tabs[windows[w].current - 1].title
@@ -269,29 +257,7 @@ final class FakeSafariTabs: ScriptRunner, @unchecked Sendable {
                 if windows[w].current > windows[w].tabs.count { windows[w].current = windows[w].tabs.count }
                 if windows[w].tabs.isEmpty { windows.remove(at: w) }
                 return ""
-            case SafariBrowser.Script.close:
-                windows.removeAll { String($0.id) == args[0] }
-                return ""
             default:
-                if script.contains("make new document") {
-                    loads += 1
-                    windows.append(
-                        FakeWindow(
-                            id: 77, tabs: [FakeTab(url: args[0], title: "Claude's", owner: "claude-window")],
-                            current: 1))
-                    return "77"
-                }
-                if script.contains("do JavaScript") {
-                    let own = script == SafariBrowser.Script.javaScript
-                    let js = own ? args[1] : (args.last ?? "")
-                    let prefix = own ? "[]\n" : ""
-                    if js.contains("timeOrigin") { return prefix + "\(loads)|complete|https://w.example.com/" }
-                    if js.contains("latchkeyRead") {
-                        return prefix
-                            + #"{"title":"W","url":"https://w.example.com/","total":1,"text":"w","elements":[]}"#
-                    }
-                    return prefix + "ok"
-                }
                 return ""
             }
         }
@@ -311,156 +277,84 @@ final class FakeSafariTabs: ScriptRunner, @unchecked Sendable {
     }
 }
 
-/// What Latchkey noted for the Activity window's Left Behind list.
-final class Notes: @unchecked Sendable {
-    private let lock = NSLock()
-    private var made: [String] = []
-    var all: [String] { lock.withLock { made } }
-    func add(_ s: String) { lock.withLock { made.append(s) } }
-}
-
-@Suite struct BrowserTabTests {
-    func browser(_ fake: FakeSafariTabs, notes: Notes = Notes(), memory: WindowMemory? = nil) -> SafariBrowser {
-        SafariBrowser(
-            scripts: fake, settleLimit: .seconds(3), memory: memory, place: { .tab }, note: { notes.add($0) })
+/// The navigation rules of plan D6 and D8 in one of the Owner's tabs Claude works in: where a
+/// page may go after Claude's own click, typing, or back and still be the same tab, and which
+/// tab is never taken for it (security reviews 2026-10-29 to 2026-11-03). Tab 10.2 shows
+/// https://news.example.com/.
+@Suite struct OwnerTabNavigationTests {
+    func picked(_ fake: FakeSafariTabs) async throws -> SafariBrowser {
+        let b = SafariBrowser(scripts: fake, settleLimit: .seconds(3))
+        try await b.pick("10.2")
+        _ = try await b.read(offset: 0)  // marked, as any use marks it
+        return b
     }
 
-    /// FR-412, FR-413: a new tab at the end of the Owner's front window, behind the tab the Owner
-    /// is using; Claude reads its own tab only.
-    @Test func opensABackgroundTabInTheOwnersWindow() async throws {
-        let fake = FakeSafariTabs()
-        let b = browser(fake)
-        let page = try await b.open("https://shop.example.com", newTab: false)
-        #expect(page.text == "claude", "read Claude's tab")
-        #expect(fake.userWindow.tabs.count == 3)
-        #expect(fake.userWindow.tabs.last?.url == "https://shop.example.com")
-        #expect(fake.userWindow.current == 1, "the Owner's tab stays in front")
-        #expect(!fake.scripts.contains(SafariBrowser.Script.open), "no window of its own")
-        #expect(fake.windows.count == 1)
-        #expect(fake.ownerTabs.allSatisfy { $0.scriptsRun == 0 && $0.checks == 0 }, "FR-403")
-        _ = try await b.open("https://shop.example.com/cart", newTab: true)
-        #expect(fake.userWindow.tabs.count == 3, "one tab of its own, also when asked for a new one (FR-416)")
-        #expect(fake.claudeTabs.first?.url == "https://shop.example.com/cart")
-    }
-
-    /// FR-414: Safari without a window gets a new one, and Claude's page is its tab.
-    @Test func opensAWindowWhenSafariHasNone() async throws {
-        let fake = FakeSafariTabs(userTabs: [])
-        let b = browser(fake)
-        _ = try await b.open("https://shop.example.com", newTab: false)
-        #expect(fake.windows.count == 1)
-        #expect(fake.windows[0].tabs.map(\.owner) == ["claude"])
-    }
-
-    /// The Owner closes a tab to the left of Claude's: Claude's tab moved, and is still found by
-    /// its mark; the Owner's tabs stay untouched.
-    @Test func findsItsTabAfterTheOwnerClosesOneBeforeIt() async throws {
-        let fake = FakeSafariTabs()
-        let b = browser(fake)
-        _ = try await b.open("https://shop.example.com", newTab: false)
-        fake.ownerCloses(tab: 1)
-        let page = try await b.read(offset: 0)
-        #expect(page.text == "claude")
-        #expect(fake.ownerTabs.allSatisfy { $0.scriptsRun == 0 }, "FR-403")
-    }
-
-    /// FR-403: the Owner closes Claude's tab and opens one in its place, even at the same
-    /// address: Claude never reads it, and the lost tab is noted.
-    @Test func neverTakesTheOwnersTabInItsPlace() async throws {
-        for address in ["https://other.example.com/", "https://shop.example.com"] {
-            let fake = FakeSafariTabs()
-            let notes = Notes()
-            let b = browser(fake, notes: notes)
-            _ = try await b.open("https://shop.example.com", newTab: false)
-            fake.ownerCloses(tab: 3)
-            fake.ownerOpens(address)
-            // Claude's last use was more than a moment ago.
-            await b.age(by: 60)
-            await #expect(throws: SafariBrowser.Failure.noWindow) { try await b.read(offset: 0) }
-            #expect(fake.ownerTabs.allSatisfy { $0.scriptsRun == 0 }, "read the Owner's tab at \(address)")
-            #expect(notes.all.contains { $0.contains("lost track of Claude's Safari tab") })
-        }
-    }
-
-    /// Security review 2026-10-29: Latchkey's own scripts keep Claude's last use fresh, so
-    /// "Claude acted a moment ago" can't rest on it. Once Claude's page has loaded, a tab in
-    /// its place without the mark is the Owner's, also at the address Claude loaded.
+    /// Security review 2026-10-29: Latchkey's own scripts keep the last use fresh, so "Claude
+    /// acted a moment ago" can't rest on it: a tab in the picked one's place without the mark is
+    /// another, also at the same address.
     @Test func surveysDontKeepTheLoadingAllowanceOpen() async throws {
         let fake = FakeSafariTabs()
-        let b = browser(fake)
-        _ = try await b.open("https://shop.example.com", newTab: false)
-        // Reads (every one an Apple Event) before and after the allowance has run out; the clock
-        // is moved, not waited out, so the test doesn't depend on the settle limit.
+        let b = try await picked(fake)
         for _ in 0..<3 { _ = try await b.read(offset: 0) }
         await b.age(by: 60)
         for _ in 0..<3 { _ = try await b.read(offset: 0) }
-        fake.ownerCloses(tab: 3)
-        fake.ownerOpens("https://shop.example.com")
-        await #expect(throws: SafariBrowser.Failure.noWindow) { try await b.read(offset: 0) }
-        #expect(fake.ownerTabs.allSatisfy { $0.scriptsRun == 0 && $0.mark == nil }, "the Owner's tab was used")
+        fake.ownerCloses(tab: 2)
+        fake.ownerOpens("https://news.example.com/")
+        await #expect(throws: SafariBrowser.Failure.tabGone) { try await b.read(offset: 0) }
+        #expect(fake.windows[0].tabs[1].scriptsRun == 0 && fake.windows[0].tabs[1].mark == nil, "the new tab was used")
     }
 
-    /// While Claude's page loads, an Owner's tab in its place is still not Claude's: its address
-    /// isn't the one Claude loaded.
+    /// While a page Claude's click loaded is loading, a tab in its place is still not the picked
+    /// one: its address isn't the one the click went to.
     @Test func aTabInItsPlaceWhileLoadingIsNotTaken() async throws {
         let fake = FakeSafariTabs()
-        let b = browser(fake)
-        _ = try await b.open("https://shop.example.com", newTab: false)
-        _ = try await b.open("https://shop.example.com/cart", newTab: false)
-        fake.ownerCloses(tab: 3)
+        let b = try await picked(fake)
+        fake.clickGoesTo = "https://news.example.com/cart"
+        _ = try await b.click("e1")
+        fake.ownerCloses(tab: 2)
         fake.ownerOpens("https://owner.example.com/")
-        await #expect(throws: SafariBrowser.Failure.noWindow) { try await b.read(offset: 0) }
-        #expect(fake.ownerTabs.allSatisfy { $0.scriptsRun == 0 && $0.mark == nil })
+        await #expect(throws: SafariBrowser.Failure.tabGone) { try await b.read(offset: 0) }
+        #expect(fake.windows[0].tabs[1].scriptsRun == 0 && fake.windows[0].tabs[1].mark == nil)
     }
 
-    /// A click that goes to another page keeps Claude's tab: the page said where it was going.
+    /// A click that goes to another page keeps the tab: the page said where it was going.
     /// Security review 2026-10-29: a page that keeps saying it is going somewhere opens the
     /// loading allowance at most once per action of Claude's.
     @Test func aPageReportsWhereItGoesOncePerAction() async throws {
         let fake = FakeSafariTabs()
-        let b = browser(fake)
-        _ = try await b.open("https://shop.example.com", newTab: false)
-        await b.age(by: 60)  // Claude's own load is long over
-        fake.pageGoal = "https://shop.example.com/cart"
+        let b = try await picked(fake)
+        fake.pageGoal = "https://news.example.com/cart"
         let before = Date()
         _ = try await b.click("e1")  // several scripts in one action, each reporting the goal
         let first = try #require(await b.navigationState())
-        #expect(first.addresses.contains("https://shop.example.com/cart"))
+        #expect(first.addresses.contains("https://news.example.com/cart"))
         #expect(first.since < before.addingTimeInterval(0.4), "set by the first report only")
-        // Security review 2026-10-29: later actions (or interleaved ones) can't move it forward
-        // while the allowance a note opened is still open.
+        // Later actions (or interleaved ones) can't move it forward while the allowance a note
+        // opened is still open.
         _ = try await b.read(offset: 0)
         let second = try #require(await b.navigationState())
         #expect(second.since == first.since, "a note can't keep the allowance open")
-        fake.pageGoal = nil
     }
 
     /// Security review 2026-10-29: a page can only name an address on its own site.
     @Test func aNoteOfAnotherSiteIsIgnored() async throws {
         let fake = FakeSafariTabs()
-        let b = browser(fake)
-        _ = try await b.open("https://shop.example.com", newTab: false)
-        await b.age(by: 60)
+        let b = try await picked(fake)
         fake.pageGoal = "https://owner.example.com/"
         _ = try await b.click("e1")
         let state = await b.navigationState()
         #expect(
             state.map { !$0.addresses.contains("https://owner.example.com/") } ?? true, "\(String(describing: state))")
-        fake.pageGoal = nil
     }
 
     /// Security review 2026-10-29: a read can't open the allowance, however often the page
     /// reports; only Claude's own click, typing, or back can.
     @Test func aReadNeverOpensTheAllowance() async throws {
         let fake = FakeSafariTabs()
-        let b = browser(fake)
-        _ = try await b.open("https://shop.example.com", newTab: false)
-        await b.age(by: 60)
-        let old = await b.navigationState()?.since
-        fake.pageGoal = "https://shop.example.com/cart"
+        let b = try await picked(fake)
+        fake.pageGoal = "https://news.example.com/cart"
         _ = try await b.read(offset: 0)
-        #expect(await b.navigationState()?.since == old, "a read opened the allowance")
-        fake.pageGoal = nil
+        #expect(await b.navigationState() == nil, "a read opened the allowance")
     }
 
     /// A noted address is used only when it is one web address on one line.
@@ -476,258 +370,99 @@ final class Notes: @unchecked Sendable {
     }
 
     /// Live check 2026-10-29: in real Safari a link's `navigate` event comes after the click
-    /// script, and the new page has replaced the old one before Latchkey asks for the note, so
-    /// a same-site click lost Claude's tab. The click script's own answer names the link.
+    /// script, and the new page has replaced the old one before Latchkey asks for the note. The
+    /// click script's own answer names the link.
     @Test func aLinkClickToAnotherPageKeepsTheTab() async throws {
         let fake = FakeSafariTabs()
-        let notes = Notes()
-        let b = browser(fake, notes: notes)
-        _ = try await b.open("https://shop.example.com", newTab: false)
-        await b.age(by: 60)  // Claude's own load is long over
-        fake.clickGoesTo = "https://shop.example.com/checkout"
+        let b = try await picked(fake)
+        fake.clickGoesTo = "https://news.example.com/checkout"
         let page = try await b.click("e1")
-        #expect(page.url == "https://shop.example.com/checkout")
-        #expect(fake.claudeTabs.first?.mark != nil, "marked again on the new page")
-        let again = try await b.read(offset: 0)
-        #expect(again.url == "https://shop.example.com/checkout")
-        #expect(notes.all.isEmpty, "\(notes.all)")
-        #expect(fake.ownerTabs.allSatisfy { $0.scriptsRun == 0 && $0.mark == nil })
+        #expect(page.url == "https://news.example.com/checkout")
+        #expect(fake.windows[0].tabs[1].mark != nil, "marked again on the new page")
+        #expect(try await b.read(offset: 0).url == "https://news.example.com/checkout")
+        #expect(fake.windows[0].tabs[0].scriptsRun == 0 && fake.windows[0].tabs[0].mark == nil)
     }
 
     /// A button that sends the page elsewhere: its note comes after the click script, while
     /// the acting script waits for it.
     @Test func aButtonThatGoesToAnotherPageKeepsTheTab() async throws {
         let fake = FakeSafariTabs()
-        let b = browser(fake)
-        _ = try await b.open("https://shop.example.com", newTab: false)
-        await b.age(by: 60)
-        fake.buttonGoesTo = "https://shop.example.com/done"
-        let page = try await b.click("e1")
-        #expect(page.url == "https://shop.example.com/done")
+        let b = try await picked(fake)
+        fake.buttonGoesTo = "https://news.example.com/done"
+        #expect(try await b.click("e1").url == "https://news.example.com/done")
     }
 
     /// Back to the previous page: the entry's address comes from the back script itself.
     @Test func goingBackKeepsTheTab() async throws {
         let fake = FakeSafariTabs()
-        let b = browser(fake)
-        _ = try await b.open("https://shop.example.com", newTab: false)
-        await b.age(by: 60)
-        fake.backGoesTo = "https://shop.example.com/before"
-        let page = try await b.back()
-        #expect(page.url == "https://shop.example.com/before")
-    }
-
-    /// 2026-11-01: a link to another site keeps the tab (until then it lost it, from the security
-    /// review of 2026-10-29): the address comes from Latchkey's own click script, not a note the
-    /// page wrote, and nothing of the Owner's is touched.
-    @Test func aLinkClickToAnotherSiteKeepsTheTab() async throws {
-        let fake = FakeSafariTabs()
-        let notes = Notes()
-        let b = browser(fake, notes: notes)
-        _ = try await b.open("https://shop.example.com", newTab: false)
-        await b.age(by: 60)
-        fake.clickGoesTo = "https://pay.example.net/"
-        let page = try await b.click("e1")
-        #expect(page.url == "https://pay.example.net/")
-        #expect(fake.claudeTabs.count == 1)
-        #expect(!notes.all.contains { $0.contains("lost track") }, "\(notes.all)")
-        #expect(fake.ownerTabs.allSatisfy { $0.scriptsRun == 0 && $0.mark == nil })
-    }
-
-    /// 2026-11-01: Claude can close its own page; the Owner's tabs stay.
-    @Test func claudeClosesItsOwnTab() async throws {
-        let fake = FakeSafariTabs()
-        let b = browser(fake)
-        _ = try await b.open("https://shop.example.com", newTab: false)
-        let owners = fake.ownerTabs.count
-        #expect(await b.closePage())
-        #expect(fake.claudeTabs.isEmpty)
-        #expect(fake.ownerTabs.count == owners && fake.ownerTabs.allSatisfy { $0.scriptsRun == 0 })
-        #expect(await b.closePage() == false, "nothing left to close")
+        let b = try await picked(fake)
+        fake.backGoesTo = "https://news.example.com/before"
+        #expect(try await b.back().url == "https://news.example.com/before")
     }
 
     /// Security review 2026-11-01: a page whose click handler changes the link's address can't
-    /// name another site; the tab is lost, as before.
+    /// name another site; the tab is lost.
     @Test func aLinkChangedByThePageInTheClickLosesTheTab() async throws {
         let fake = FakeSafariTabs()
-        let notes = Notes()
-        let b = browser(fake, notes: notes)
-        _ = try await b.open("https://shop.example.com", newTab: false)
-        await b.age(by: 60)
+        let b = try await picked(fake)
         fake.clickGoesTo = "https://pay.example.net/"
         fake.clickChangesLink = true
-        await #expect(throws: SafariBrowser.Failure.noWindow) { _ = try await b.click("e1") }
-        #expect(notes.all.contains { $0.contains("lost track") })
-        #expect(fake.ownerTabs.allSatisfy { $0.scriptsRun == 0 && $0.mark == nil })
-    }
-
-    /// Security review 2026-10-29 (fourth round): a script of Claude's never opens the
-    /// allowance, so a script that sends the page to another page loses the tab, even on the
-    /// same site, although its note is now read in the script's own run.
-    @Test func aScriptThatGoesToAnotherPageLosesTheTab() async throws {
-        let fake = FakeSafariTabs()
-        let notes = Notes()
-        let b = browser(fake, notes: notes)
-        _ = try await b.open("https://shop.example.com", newTab: false)
-        await b.age(by: 60)
-        fake.scriptGoesTo = "https://shop.example.com/next"
-        _ = try await b.run("location.href = '/next'")
-        await #expect(throws: SafariBrowser.Failure.noWindow) { _ = try await b.read(offset: 0) }
-        #expect(notes.all.contains { $0.contains("lost track") })
+        await #expect(throws: SafariBrowser.Failure.tabGone) { _ = try await b.click("e1") }
+        #expect(await b.working() == nil)
+        #expect(fake.windows[0].tabs[0].scriptsRun == 0 && fake.windows[0].tabs[0].mark == nil, "the other tab")
     }
 
     /// The note a script's own run takes counts during Claude's click: a button whose handler
     /// sets `location.href` fires the `navigate` event inside the click script.
     @Test func aNoteInTheClickScriptsOwnRunCounts() async throws {
         let fake = FakeSafariTabs()
-        let b = browser(fake)
-        _ = try await b.open("https://shop.example.com", newTab: false)
-        await b.age(by: 60)
-        fake.pageGoal = "https://shop.example.com/cart"
+        let b = try await picked(fake)
+        fake.pageGoal = "https://news.example.com/cart"
         _ = try await b.click("e1")
-        #expect(await b.navigationState()?.addresses.contains("https://shop.example.com/cart") == true)
-        fake.pageGoal = nil
+        #expect(await b.navigationState()?.addresses.contains("https://news.example.com/cart") == true)
     }
 
-    /// Security review 2026-10-29: an Owner's tab that slides into Claude's place between
-    /// finding Claude's tab and acting on it (same tab count) is never run, loaded, closed, or
-    /// brought forward.
-    @Test(arguments: ["read", "open", "screenshot", "close"])
+    /// Security review 2026-10-29: a tab that slides into the picked one's place between finding
+    /// it and acting on it (same tab count) is never run, closed, or brought forward.
+    @Test(arguments: ["read", "screenshot", "close"])
     func aTabSlidingInBeforeTheActionIsLeftAlone(_ action: String) async throws {
-        let fake = FakeSafariTabs()
-        let b = browser(fake)
-        _ = try await b.open("https://shop.example.com", newTab: false)
-        await b.age(by: 60)
-        for address in ["https://owner.example.com/", "https://shop.example.com"] {
+        for address in ["https://owner.example.com/", "https://news.example.com/"] {
+            let fake = FakeSafariTabs()
+            let b = try await picked(fake)
             fake.slideIn = address
             switch action {
             case "read": _ = try? await b.read(offset: 0)
-            case "open": _ = try? await b.open("https://shop.example.com/next", newTab: false)
             case "screenshot": _ = try? await b.showing { $0 }
-            default: _ = await b.closeIfIdle(after: 0)
+            default: _ = try? await b.closeWorking()
             }
-            let owners = fake.windows.flatMap(\.tabs).filter { $0.owner == "owner" }
-            #expect(owners.count >= 3, "\(action): an Owner's tab was closed")
-            #expect(owners.allSatisfy { $0.scriptsRun == 0 && $0.mark == nil }, "\(action): an Owner's tab was used")
-            #expect(
-                !owners.contains { $0.url == "https://shop.example.com/next" }, "\(action): loaded into the Owner's tab"
-            )
-            #expect(fake.userWindow.current == 1, "\(action): an Owner's tab was brought forward")
-            // Start again from a fresh tab of Claude's for the second address.
-            _ = try? await b.open("https://shop.example.com", newTab: false)
-            await b.age(by: 60)
+            let slid = fake.windows[0].tabs[1]
+            #expect(fake.windows[0].tabs.count == 2, "\(action): a tab was closed")
+            #expect(slid.scriptsRun == 0 && slid.mark == nil, "\(action): the tab in its place was used")
+            #expect(fake.userWindow.current == 1, "\(action): a tab was brought forward")
         }
     }
 
-    /// FR-415: a screenshot brings Claude's tab forward, then the Owner's tab back.
-    @Test func screenshotShowsClaudesTabThenTheOwnersAgain() async throws {
+    /// FR-415, FR-427: a picture brings the tab forward for the shot, then the Owner's front tab
+    /// back, also when the shot failed.
+    @Test func aPictureShowsTheTabThenTheFrontTabAgain() async throws {
         let fake = FakeSafariTabs()
-        let b = browser(fake)
-        _ = try await b.open("https://shop.example.com", newTab: false)
+        let b = try await picked(fake)
         let title = try await b.showing { title in
             fake.currentDuringShot = fake.userWindow.current
             return title
         }
-        #expect(title == "Claude's")
-        #expect(fake.currentDuringShot == 3, "Claude's tab was in front for the shot")
-        #expect(fake.userWindow.current == 1, "and the Owner's tab is back")
+        #expect(title == "Owner's")
+        #expect(fake.currentDuringShot == 2, "the tab was in front for the shot")
+        #expect(fake.userWindow.current == 1, "and the Owner's front tab is back")
         await #expect(throws: (any Error).self) {
             try await b.showing { _ -> String in throw SafariBrowser.Failure.failed("no screen") }
         }
         #expect(fake.userWindow.current == 1, "back also when the shot failed")
     }
 
-    /// FR-423: whether a picture needs Claude's tab brought forward, asked without changing anything.
-    @Test func picturesAskBeforeSwitchingTabs() async throws {
-        let fake = FakeSafariTabs()
-        let b = browser(fake)
-        _ = try await b.open("https://shop.example.com", newTab: false)
-        let plan = try await b.pictureSwitch()
-        #expect(plan.needed, "the Owner's tab is in front")
-        #expect(plan.address == "https://shop.example.com")
-        #expect(fake.userWindow.current == 1, "nothing switched by asking")
-    }
-
-    /// FR-411 in a tab: 30 minutes unused closes Claude's tab only, noted as Left Behind.
-    @Test func idleClosesOnlyClaudesTab() async throws {
-        let fake = FakeSafariTabs()
-        let notes = Notes()
-        let b = browser(fake, notes: notes)
-        _ = try await b.open("https://shop.example.com", newTab: false)
-        #expect(await !b.closeIfIdle(after: 1800))
-        #expect(await b.closeIfIdle(after: 1800, now: Date().addingTimeInterval(1900)))
-        #expect(fake.claudeTabs.isEmpty)
-        #expect(fake.ownerTabs.count == 2)
-        #expect(notes.all.last == "Closed Claude's Safari tab after 30 minutes unused")
-        #expect(await !b.closeIfIdle(after: 0), "nothing left to close")
-    }
-
-    /// A tab Latchkey can't find any more isn't closed (it might be the Owner's now); the
-    /// Left Behind list says so.
-    @Test func idleCloseOfALostTabSaysSo() async throws {
-        let fake = FakeSafariTabs()
-        let notes = Notes()
-        let b = browser(fake, notes: notes)
-        _ = try await b.open("https://shop.example.com", newTab: false)
-        fake.ownerCloses(tab: 3)
-        fake.ownerOpens("https://owner.example.com/")
-        #expect(await b.closeIfIdle(after: 1800, now: Date().addingTimeInterval(1900)))
-        #expect(fake.ownerTabs.count == 3, "the Owner's new tab stays")
-        #expect(notes.all.contains { $0.contains("lost track") })
-    }
-
-    /// A restarted Latchkey still closes Claude's tab, in the same run of Safari.
-    @Test func aRestartRemembersClaudesTab() async throws {
-        let folder = FileManager.default.temporaryDirectory.appending(path: "tab-memory-\(UUID().uuidString)")
-        defer { try? FileManager.default.removeItem(at: folder) }
-        let file = folder.appending(path: "safari-window.json")
-        let fake = FakeSafariTabs()
-        _ = try await browser(fake, memory: WindowMemory(file: file) { "100 1" }).open(
-            "https://shop.example.com", newTab: false)
-        #expect(WindowMemory(file: file) { nil }.load()?.tab?.index == 3)
-        let notes = Notes()
-        let restarted = browser(fake, notes: notes, memory: WindowMemory(file: file) { "100 1" })
-        #expect(await restarted.closeIfIdle(after: 1800, now: Date().addingTimeInterval(1900)))
-        #expect(fake.claudeTabs.isEmpty)
-        #expect(fake.ownerTabs.count == 2)
-        #expect(!FileManager.default.fileExists(atPath: file.path))
-    }
-
-    /// FR-416 as amended 2026-11-03: Claude's pages load in its one tab, and the list shows every
-    /// tab with Claude's marked (FR-424).
-    @Test func listsEveryTabWithClaudesMarked() async throws {
-        let fake = FakeSafariTabs()
-        let b = browser(fake)
-        _ = try await b.open("https://shop.example.com", newTab: false)
-        _ = try await b.open("https://shop.example.com/b", newTab: true)
-        #expect(fake.claudeTabs.count == 1, "a new tab is still Claude's one tab")
-        let tabs = try await b.listTabs().windows.flatMap(\.tabs)
-        #expect(tabs.count == 3)
-        #expect(tabs.filter(\.claudes).map(\.address) == ["https://shop.example.com/b"])
-        #expect(fake.ownerTabs.allSatisfy { $0.scriptsRun == 0 })
-    }
-
-    /// FR-417: changing the setting takes effect at the next page Claude opens; the old window
-    /// closes, so nothing is left behind.
-    @Test func changingTheSettingMovesToATab() async throws {
-        let fake = FakeSafariTabs()
-        let place = PlaceBox(.window)
-        let b = SafariBrowser(scripts: fake, settleLimit: .seconds(3), place: { place.value })
-        _ = try await b.open("https://w.example.com", newTab: false)
-        #expect(fake.windows.contains { $0.id == 77 })
-        place.value = .tab
-        _ = try await b.open("https://shop.example.com", newTab: false)
-        #expect(!fake.windows.contains { $0.id == 77 }, "Claude's window closed")
-        #expect(fake.claudeTabs.count == 1)
-        place.value = .window
-        _ = try await b.open("https://w.example.com", newTab: false)
-        #expect(fake.claudeTabs.isEmpty, "Claude's tab closed")
-        #expect(fake.windows.contains { $0.id == 77 })
-    }
-
-    /// Which tab is Claude's, decided from what Safari reports (plan D6).
-    @Test func picksClaudesTab() {
-        let mine = ClaudeTab(index: 3, count: 3, address: "https://a/", token: "t")
+    /// Which tab is the picked one, decided from what Safari reports (plan D6, D8).
+    @Test func picksThePickedTab() {
+        let mine = PickedTab(index: 3, count: 3, address: "https://a/", token: "t")
         func survey(_ count: Int, _ rows: [(Bool, Bool)], loadingAt: Int? = 3) -> TabSurvey {
             TabSurvey(
                 count: count,
@@ -740,7 +475,7 @@ final class Notes: @unchecked Sendable {
             TabSurvey.pick(
                 survey(3, [(false, false), (false, false), (false, false)], loadingAt: nil), remembered: mine,
                 navigating: true)
-                == nil, "loading, but not the address Claude loaded")
+                == nil, "loading, but not the address Claude's action loaded")
         let three = [(false, false), (false, false)]
         #expect(TabSurvey.pick(survey(3, three + [(true, true)]), remembered: mine, navigating: false) == 3)
         #expect(
@@ -751,7 +486,7 @@ final class Notes: @unchecked Sendable {
             "Claude's own page is still loading")
         #expect(
             TabSurvey.pick(survey(3, three + [(true, false)]), remembered: mine, navigating: false) == nil,
-            "same address but not marked: may be the Owner's")
+            "same address but not marked: may be another tab")
         #expect(
             TabSurvey.pick(survey(4, three + [(false, false), (false, false)]), remembered: mine, navigating: true)
                 == nil)
@@ -761,20 +496,6 @@ final class Notes: @unchecked Sendable {
                 == nil)
         #expect(TabSurvey("3\n1\tfalse\tfalse\n2\tfalse\tfalse\n3\ttrue\ttrue\n").rows.last?.marked == true)
         #expect(TabSurvey("1\n1\tfalse\tfalse\ttrue\n").rows.first?.loading == true)
-    }
-
-    @Test func settingStartsAsATab() {
-        #expect(BrowserPlace.stored(in: UserDefaults(suiteName: "browser-place-\(UUID().uuidString)")!) == .tab)
-    }
-}
-
-final class PlaceBox: @unchecked Sendable {
-    private let lock = NSLock()
-    private var stored: BrowserPlace
-    init(_ p: BrowserPlace) { stored = p }
-    var value: BrowserPlace {
-        get { lock.withLock { stored } }
-        set { lock.withLock { stored = newValue } }
     }
 }
 

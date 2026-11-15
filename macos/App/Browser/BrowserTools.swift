@@ -25,7 +25,7 @@ extension BrowserCapability {
         }
     }
 
-    static func readTools(browser: SafariBrowser, own: OwnPages? = nil) -> [ToolEntry] {
+    static func readTools(browser: SafariBrowser, own: OwnPages) -> [ToolEntry] {
         let ops = Operations(readOperations(browser: browser, own: own))
         return [
             ToolEntry(
@@ -47,7 +47,8 @@ extension BrowserCapability {
                         page of Claude's comes back signed out after a click or typing, takes Safari's cookies \
                         again and loads the page again. A page's confirm or prompt that Claude didn't answer in \
                         advance waits for Claude: the answer says what it asks, and browser_act action dialog \
-                        answers it.
+                        answers it. A page that is a file (a PDF) isn't shown: save it with browser_act \
+                        download.
                         """,
                     input: [
                         "url": .stringParam("A page to open"),
@@ -92,7 +93,7 @@ extension BrowserCapability {
         "click", "type", "select", "key", "hover", "scroll", "upload", "download", "script", "dialog", "close",
     ]
 
-    static func writeTools(browser: SafariBrowser, own: OwnPages? = nil) -> [ToolEntry] {
+    static func writeTools(browser: SafariBrowser, own: OwnPages) -> [ToolEntry] {
         // browser_act's tab picks the tab first, through the tab list's own operation.
         let ops = Operations(
             writeOperations(browser: browser, own: own)

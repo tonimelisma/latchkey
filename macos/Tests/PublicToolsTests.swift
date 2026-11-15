@@ -103,15 +103,24 @@ import Testing
         #expect(list.content.jsonText.contains(id))
     }
 
-    @Test func browserReadOpensAndActClicks() async throws {
-        let fake = FakeSafari()
-        let b = SafariBrowser(scripts: fake)
-        let read = try #require(BrowserCapability.readTools(browser: b).first)
-        let act = try #require(BrowserCapability.writeTools(browser: b).first)
-        let opened = await read.handler(.object(["url": .string("shop.example.com")]))
-        #expect(opened.content.jsonText.contains("[e1] link: Orders"))
+    @MainActor @Test func browserReadOpensAndActClicks() async throws {
+        let b = SafariBrowser(scripts: FakeSafariTabs())
+        let pages = OwnPages(cookies: { [] })
+        defer { pages.closeAll() }
+        let read = try #require(BrowserCapability.readTools(browser: b, own: pages).first)
+        let act = try #require(BrowserCapability.writeTools(browser: b, own: pages).first)
+        let opened = await read.handler(.object(["url": .string("about:blank")]))
+        #expect(!opened.isError, "\(opened.content.jsonText)")
+        let built = await act.handler(
+            .object([
+                "action": .string("script"),
+                "code": .string("document.body.innerHTML = '<button onclick=\"document.title = 1\">Buy</button>'; 1"),
+            ]))
+        #expect(!built.isError, "\(built.content.jsonText)")
+        let page = await read.handler(.object([:]))
+        #expect(page.content.jsonText.contains("[e1] button: Buy"), "\(page.content.jsonText)")
         let clicked = await act.handler(.object(["action": .string("click"), "ref": .string("e1")]))
-        #expect(!clicked.isError)
+        #expect(!clicked.isError, "\(clicked.content.jsonText)")
     }
 
     @Test func computerActDragsFromXY() async throws {

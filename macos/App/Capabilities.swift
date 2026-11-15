@@ -142,9 +142,6 @@ struct CapabilityRegistry: Sendable {
 
     var tools: [Tool] { entries.map(\.tool) }
 
-    /// True when any capability is on (it then needs the macOS permissions).
-    var anyOn: Bool { capabilities.contains { level($0.id) != .off } }
-
     /// Why a running call of `tool` must stop: its capability is now off, or at a level without
     /// that tool. Nil while the tool is allowed (spec 001 FR-066).
     func stopReason(tool: String) -> String? {

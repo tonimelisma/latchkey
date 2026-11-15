@@ -281,11 +281,6 @@ enum AgentMessage: Sendable {
     case clients(ClientsUpdate), revokeClient(RevokeClient)
     case auditRequest(AuditRequest), audit(AuditPage)
 
-    static let allTypes = [
-        "challenge", "hello", "welcome", "state", "tools", "progress", "result", "goodbye", "call", "cancel", "notice",
-        "clients", "revoke_client", "audit_request", "audit",
-    ]
-
     var type: String {
         switch self {
         case .challenge: "challenge"
@@ -307,7 +302,6 @@ enum AgentMessage: Sendable {
     }
 
     private struct Envelope: Decodable { var type: String? }
-    private enum TypeKey: String, CodingKey { case type }
 
     static func decode(_ data: Data) throws -> AgentMessage {
         let dec = Self.decoder

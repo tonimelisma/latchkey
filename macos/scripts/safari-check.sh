@@ -1,6 +1,6 @@
 #!/bin/bash
 # Runs Latchkey's real SafariBrowser against the real Safari (scripts/safari-check/main.swift):
-# same-site and cross-site clicks keep Claude's tab, a script's navigation loses it, a long page
+# same-site and cross-site clicks keep the tab Claude works in, a script's navigation loses it, a long page
 # comes in parts, another tab is listed, read, clicked, and closed in the background, and keys,
 # hover, scrolling, lists, files in and out, and the picture copy work on a local test page
 # (scripts/safari-check/pages, served from 127.0.0.1 while the check runs). Run it from a

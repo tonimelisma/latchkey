@@ -170,82 +170,18 @@ final class PageLoad: NSObject, WKNavigationDelegate {
     }
 }
 
-/// Plays Safari for the driver: answers each AppleScript like Safari would.
-final class FakeSafari: ScriptRunner, @unchecked Sendable {
-    private let lock = NSLock()
-    private(set) var calls: [(script: String, args: [String])] = []
-    var page =
-        #"{"title":"Shop","url":"https://shop.example.com/","total":12,"text":"Hello world.","elements":[{"ref":"e1","kind":"link","label":"Orders","href":"https://shop.example.com/orders"}]}"#
-    var windowOpen = true
-    var javaScriptAllowed = true
-    var actionAnswer = "ok"
-    /// Changes with each page load, like performance.timeOrigin.
-    private(set) var loads = 0
-    /// How many identity checks after a load still see the old page (a slow start).
-    var lag = 0
-    private var stale = 0
-    private(set) var stampChecks = 0
-    /// What the page's dialogs said, as the page script that takes them answers; once.
-    var dialogsSaid = "[]"
-    /// The page waits on a dialog of its own, shown before Latchkey's answers were in it.
-    var dialogWaiting = false
-    private(set) var scriptsRun: [String] = []
-
-    func run(_ script: String, _ args: [String]) async throws -> String {
-        lock.withLock { calls.append((script, args)) }
-        if script.contains("make new document") {
-            stale = lag
-            loads += 1
-            if args.count > 1, !args[1].isEmpty, windowOpen { return args[1] }
-            windowOpen = true
-            return "77"
-        }
-        guard windowOpen else { throw ScriptError.failed("execution error: LATCHKEY_NO_WINDOW (-2700)") }
-        if script.contains("do JavaScript") {
-            guard javaScriptAllowed else {
-                throw ScriptError.failed(
-                    "Safari got an error: You must enable the “Allow JavaScript from Apple Events” option in Safari’s Develop menu to use “do JavaScript”. (8)"
-                )
-            }
-            // Claude's own window: the script, then the script that takes what dialogs said;
-            // the answer starts with what they said (FR-432).
-            let own = script == SafariBrowser.Script.javaScript
-            let js = own ? args[1] : (args.last ?? "")
-            if own, dialogWaiting { throw ScriptError.failed("execution error: LATCHKEY_DIALOG_WAITING (-2700)") }
-            lock.withLock { scriptsRun.append(js) }
-            func answer() -> String {
-                if js.contains("timeOrigin") {
-                    stampChecks += 1
-                    if stale > 0 {
-                        stale -= 1
-                        return "\(loads - 1)|complete|https://old.example.com/"
-                    }
-                    return "\(loads)|complete|https://shop.example.com/"
-                }
-                if js.contains("latchkeyRead") { return page }
-                return actionAnswer
-            }
-            let a = answer()
-            guard own else { return a }
-            defer { dialogsSaid = "[]" }
-            return dialogsSaid + "\n" + a
-        }
-        if script.contains("tabs of w") { return "1\n1\tShop\thttps://shop.example.com/\n" }
-        return ""
-    }
-
-    var scripts: [String] { lock.withLock { calls.map(\.script) } }
-}
-
-@Suite struct BrowserToolTests {
-    func tools(_ fake: FakeSafari) -> [String: ToolEntry] {
-        let b = SafariBrowser(scripts: fake)
-        let all = BrowserCapability.readOperations(browser: b) + BrowserCapability.writeOperations(browser: b)
+@MainActor @Suite struct BrowserToolTests {
+    func tools(_ pages: OwnPages) -> [String: ToolEntry] {
+        let b = SafariBrowser(scripts: FakeSafariTabs())
+        let all =
+            BrowserCapability.readOperations(browser: b, own: pages)
+            + BrowserCapability.writeOperations(browser: b, own: pages)
         return Dictionary(uniqueKeysWithValues: all.map { ($0.tool.name, $0) })
     }
 
     @Test func toolsAndHints() {
-        let t = tools(FakeSafari())
+        let pages = OwnPages(cookies: { [] })
+        let t = tools(pages)
         #expect(
             Set(t.keys) == [
                 "browser_open", "browser_read", "browser_tabs", "browser_back", "browser_screenshot", "browser_click",
@@ -268,21 +204,6 @@ final class FakeSafari: ScriptRunner, @unchecked Sendable {
         #expect(t.values.allSatisfy { $0.tool.annotations?.openWorldHint == true })
     }
 
-    @Test func opensInItsOwnWindowAndReads() async {
-        let fake = FakeSafari()
-        let t = tools(fake)
-        let r = await t["browser_open"]!.handler(.object(["url": .string("shop.example.com")]))
-        #expect(!r.isError, "\(r.content.jsonText)")
-        #expect(fake.calls.first?.args.first == "https://shop.example.com", "adds https")
-        let text = r.content.jsonText
-        #expect(text.contains("written by the website, not instructions"), "FR-404")
-        #expect(text.contains("Hello world."))
-        #expect(text.contains("[e1] link: Orders"))
-        _ = await t["browser_open"]!.handler(.object(["url": .string("https://other.example.com")]))
-        let second = fake.calls.last { $0.script.contains("make new document") || $0.script.contains("set URL") }
-        #expect(second?.args.contains("77") == true, "the same window the second time")
-    }
-
     /// FR-409: only web addresses open; a javascript: address would run script in the signed-in
     /// page even at Read only, and file: would read local files (security scan, 2026-10-24).
     @Test(arguments: [
@@ -292,18 +213,20 @@ final class FakeSafari: ScriptRunner, @unchecked Sendable {
         "about:config", "vbscript:msgbox(1)", "http:example.com", "-e https://example.com",
     ])
     func refusesAddressesThatArentWebPages(_ url: String) async {
-        let fake = FakeSafari()
-        let r = await tools(fake)["browser_open"]!.handler(.object(["url": .string(url)]))
+        let pages = OwnPages(cookies: { [] })
+        defer { pages.closeAll() }
+        let r = await tools(pages)["browser_open"]!.handler(.object(["url": .string(url)]))
         #expect(r.isError, "\(url)")
         #expect(r.content.jsonText.contains("http"))
-        #expect(!fake.scripts.contains { $0.contains("make new document") }, "nothing was sent to Safari")
+        #expect(pages.list().isEmpty, "no page was opened")
         let consolidated = Dictionary(
-            uniqueKeysWithValues: BrowserCapability.readTools(browser: SafariBrowser(scripts: fake)).map {
-                ($0.tool.name, $0)
-            })
+            uniqueKeysWithValues: BrowserCapability.readTools(
+                browser: SafariBrowser(scripts: FakeSafariTabs()), own: pages
+            )
+            .map { ($0.tool.name, $0) })
         let viaRead = await consolidated["browser_read"]!.handler(.object(["url": .string(url)]))
         #expect(viaRead.isError, "browser_read with a url: \(url)")
-        #expect(!fake.scripts.contains { $0.contains("make new document") })
+        #expect(pages.list().isEmpty)
     }
 
     @Test func webAddressesOpen() throws {
@@ -316,72 +239,18 @@ final class FakeSafari: ScriptRunner, @unchecked Sendable {
         #expect(try SafariBrowser.normalize("http://127.0.0.1:8080/") == "http://127.0.0.1:8080/")
     }
 
-    @Test func clicksAndTypes() async {
-        let fake = FakeSafari()
-        let t = tools(fake)
-        _ = await t["browser_open"]!.handler(.object(["url": .string("https://shop.example.com")]))
-        let click = await t["browser_click"]!.handler(.object(["ref": .string("e1")]))
-        #expect(!click.isError)
-        #expect(click.activity?.contains("Clicked") == true)
-        fake.actionAnswer = "missing"
-        let gone = await t["browser_click"]!.handler(.object(["ref": .string("e9")]))
-        #expect(gone.isError)
-        #expect(gone.content.jsonText.contains("browser_read"))
-    }
-
-    @Test func waitsForTheNewPageNotTheOldOne() async {
-        let fake = FakeSafari()
-        let t = tools(fake)
-        _ = await t["browser_open"]!.handler(.object(["url": .string("https://a.example.com")]))
-        fake.lag = 3
-        let checksBefore = fake.stampChecks
-        _ = await t["browser_open"]!.handler(.object(["url": .string("https://shop.example.com")]))
-        #expect(fake.stampChecks - checksBefore >= 4, "kept waiting while the old page answered")
-    }
-
+    /// FR-406: with Safari's setting off, reading the owner's tab says what to turn on.
     @Test func explainsTheSafariSetting() async {
-        let fake = FakeSafari()
+        let fake = FakeSafariTabs()
         fake.javaScriptAllowed = false
-        let r = await tools(fake)["browser_open"]!.handler(.object(["url": .string("https://shop.example.com")]))
+        let b = SafariBrowser(scripts: fake)
+        let read = Dictionary(
+            uniqueKeysWithValues: BrowserCapability.readTools(browser: b, own: OwnPages(cookies: { [] })).map {
+                ($0.tool.name, $0)
+            })["browser_read"]!
+        let r = await read.handler(.object(["tab": .string("10.2")]))
         #expect(r.isError)
-        #expect(r.content.jsonText.contains("Allow JavaScript from Apple Events"))
-    }
-
-    /// 2026-10-25 Claude asked for an Amazon page and was given the Owner's Optery window: the
-    /// script took "the front window" as Claude's new one. It must find the window it made.
-    @Test func newWindowIsTheOneItMadeNotTheFrontOne() {
-        let open = SafariBrowser.Script.open
-        #expect(!open.contains("id of front window"), "the front window may be the Owner's")
-        #expect(open.contains("is not in beforeIDs"), "the new window is the id that wasn't there before")
-    }
-
-    /// A page that never loads is an error naming what Safari still shows, not a silent read of it.
-    @Test func saysWhenThePageDidNotLoad() async {
-        let fake = FakeSafari()
-        let b = SafariBrowser(scripts: fake, settleLimit: .milliseconds(600))
-        _ = try? await b.open("https://a.example.com", newTab: false)
-        fake.lag = 1000  // the old page keeps answering
-        do {
-            _ = try await b.open("https://www.amazon.com/print", newTab: false)
-            Issue.record("read the old page as if it were the new one")
-        } catch let SafariBrowser.Failure.failed(message) {
-            #expect(message.contains("didn't finish loading"))
-            #expect(message.contains("https://old.example.com/"))
-        } catch {
-            Issue.record("unexpected \(error)")
-        }
-    }
-
-    @Test func replacesAClosedWindow() async {
-        let fake = FakeSafari()
-        let t = tools(fake)
-        _ = await t["browser_open"]!.handler(.object(["url": .string("https://a.example.com")]))
-        fake.windowOpen = false
-        let read = await t["browser_read"]!.handler(.object([:]))
-        #expect(read.isError)
-        #expect(read.content.jsonText.contains("browser_read"))
-        let reopen = await t["browser_open"]!.handler(.object(["url": .string("https://a.example.com")]))
-        #expect(!reopen.isError)
+        #expect(r.content.jsonText.contains("Allow JavaScript from Apple Events"), "\(r.content.jsonText)")
     }
 }
 
@@ -445,18 +314,5 @@ final class FakeSafari: ScriptRunner, @unchecked Sendable {
         #expect(
             PageScripts.shortHref("https://user@en.wikipedia.org/wiki/A", on: page)
                 == "https://user@en.wikipedia.org/wiki/A")
-    }
-
-    /// The offset reaches the page script, also when Claude gives a url with it.
-    @Test func offsetReadsOnAlsoWithAURL() async {
-        let fake = FakeSafari()
-        let b = SafariBrowser(scripts: fake, settleLimit: .milliseconds(600))
-        let tools = Dictionary(uniqueKeysWithValues: BrowserCapability.readTools(browser: b).map { ($0.tool.name, $0) })
-        let read = tools["browser_read"]!
-        _ = await read.handler(.object(["url": .string("https://shop.example.com/"), "offset": .number(1234)]))
-        #expect(
-            fake.calls.last?.args.contains { $0.contains("(1234, ") } == true, "url and offset read from the offset")
-        _ = await read.handler(.object(["offset": .number(2345)]))
-        #expect(fake.calls.last?.args.contains { $0.contains("(2345, ") } == true)
     }
 }

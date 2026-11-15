@@ -203,26 +203,6 @@ struct KeychainTraceKey: TraceKeyStore, TraceKeyItem {
     }
 }
 
-final class MemoryTraceKey: TraceKeyStore, @unchecked Sendable {
-    private let lock = NSLock()
-    private var key: SymmetricKey?
-
-    func loadOrCreate() throws -> SymmetricKey {
-        lock.lock()
-        defer { lock.unlock() }
-        if let key { return key }
-        let k = SymmetricKey(size: .bits256)
-        key = k
-        return k
-    }
-
-    func delete() {
-        lock.lock()
-        key = nil
-        lock.unlock()
-    }
-}
-
 // MARK: the record of the newest entry (FR-613)
 
 /// The Keychain item that holds the newest entry's number and checksum.

@@ -353,63 +353,73 @@ enum ActionPage {
     }
 }
 
-/// Answers the download scripts like Safari: the start, then the file once.
+/// Answers the download scripts like Safari, in the owner's tab 10.2: the start, then the file once.
 final class DownloadSafari: ScriptRunner, @unchecked Sendable {
-    let fake = FakeSafari()
+    let fake = FakeSafariTabs()
     var fetched =
         #"{"state":"done","status":200,"type":"text/plain","disposition":"attachment; filename=\"r.txt\"","final":"https://shop.example.com/r","size":2,"b64":"aGk="}"#
 
     func run(_ script: String, _ args: [String]) async throws -> String {
-        if script == SafariBrowser.Script.javaScript, args.count > 1 {
-            if args[1].contains("__latchkeyDownload', { value") {
-                return "[]\nok\t{\"address\":\"https://shop.example.com/r\",\"suggested\":\"\"}"
-            }
-            if args[1].contains("var j = window.__latchkeyDownload") { return "[]\n" + fetched }
+        let answered = try await fake.run(script, args)  // the tab's checks and mark, as in Safari
+        guard script == SafariBrowser.Script.tabJavaScript, args.count > 5 else { return answered }
+        let answer: String
+        if args[5].contains("__latchkeyDownload', { value") {
+            answer = "ok\t{\"address\":\"https://shop.example.com/r\",\"suggested\":\"\"}"
+        } else if args[5].contains("var j = window.__latchkeyDownload") {
+            answer = fetched
+        } else {
+            return answered
         }
-        return try await fake.run(script, args)
+        let run = String(data: try JSONEncoder().encode([answer, "\"\""]), encoding: .utf8)!
+        return "https://news.example.com/\n\"\"\n[]\n" + run
     }
 }
 
-@Suite struct BrowserActionToolTests {
+@MainActor @Suite struct BrowserActionToolTests {
     func tools(_ runner: any ScriptRunner) -> [String: ToolEntry] {
         let b = SafariBrowser(scripts: runner)
-        let all = BrowserCapability.readTools(browser: b) + BrowserCapability.writeTools(browser: b)
+        let pages = OwnPages(cookies: { [] })
+        let all =
+            BrowserCapability.readTools(browser: b, own: pages) + BrowserCapability.writeTools(browser: b, own: pages)
         return Dictionary(uniqueKeysWithValues: all.map { ($0.tool.name, $0) })
     }
 
     @Test func browserActTakesTheNewActions() async throws {
-        let t = tools(FakeSafari())
+        let t = tools(FakeSafariTabs())
         let act = try #require(t["browser_act"])
         let schema = act.tool.inputSchema.jsonText
-        for a in ["select", "key", "hover", "scroll", "upload", "download"] { #expect(schema.contains(a), "\(a)") }
-        _ = await t["browser_read"]!.handler(.object(["url": .string("https://shop.example.com")]))
+        for a in ["select", "key", "hover", "scroll", "upload", "download", "dialog"] {
+            #expect(schema.contains(a), "\(a)")
+        }
+        let tab: JSONValue = .string("10.2")
         let calls: [[String: JSONValue]] = [
-            ["action": .string("key"), "keys": .string("Tab Enter")],
-            ["action": .string("hover"), "ref": .string("e1")],
-            ["action": .string("scroll"), "direction": .string("down")],
-            ["action": .string("select"), "ref": .string("e1"), "options": .array([.string("Large")])],
+            ["action": .string("key"), "keys": .string("Tab Enter"), "tab": tab],
+            ["action": .string("hover"), "ref": .string("e1"), "tab": tab],
+            ["action": .string("scroll"), "direction": .string("down"), "tab": tab],
+            ["action": .string("select"), "ref": .string("e1"), "options": .array([.string("Large")]), "tab": tab],
         ]
         for args in calls {
             let r = await act.handler(.object(args))
             #expect(!r.isError, "\(args): \(r.content.jsonText)")
             #expect(r.activity != nil, "FR-408: \(args)")
         }
-        let badKey = await act.handler(.object(["action": .string("key"), "keys": .string("hyper+q")]))
+        let badKey = await act.handler(.object(["action": .string("key"), "keys": .string("hyper+q"), "tab": tab]))
         #expect(badKey.isError && badKey.content.jsonText.contains("doesn't know the key"))
         let noFile = await act.handler(
             .object([
-                "action": .string("upload"), "ref": .string("e1"),
+                "action": .string("upload"), "ref": .string("e1"), "tab": tab,
                 "paths": .array([.string("/nonexistent/latchkey-test-file")]),
             ]))
         #expect(noFile.isError && noFile.content.jsonText.contains("no file"))
-        let badDir = await act.handler(.object(["action": .string("scroll"), "direction": .string("sideways")]))
+        let badDir = await act.handler(
+            .object(["action": .string("scroll"), "direction": .string("sideways"), "tab": tab]))
         #expect(badDir.isError)
     }
 
     @Test func aDownloadIsSavedWithItsNameAndTheAnswerNamesThePath() async throws {
         let runner = DownloadSafari()
         let b = SafariBrowser(scripts: runner)
-        _ = try await b.open("https://shop.example.com", newTab: false)
+        try await b.pick("10.2")
         let folder = FileManager.default.temporaryDirectory.appending(path: "latchkey-dl-" + UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: folder) }
         let saved = try await BrowserCapability.download(ref: "e1", url: nil, browser: b, locked: nil, folder: folder)

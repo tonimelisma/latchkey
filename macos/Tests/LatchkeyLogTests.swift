@@ -164,7 +164,6 @@ import Testing
             always: [LatchkeyLog.entry(source: source, fallback: LatchkeyLog.memory(EventLog()))])
         #expect(registry.tools.map(\.name) == ["latchkey_log"])
         #expect(registry.tools.first?.annotations?.readOnlyHint == true)
-        #expect(!registry.anyOn)
         let r = await registry.call(tool: "latchkey_log", arguments: .object([:]))
         #expect(Self.text(r).contains("Connected"))
         try AgentMessage.validate(tools: registry.tools)

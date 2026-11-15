@@ -722,5 +722,4 @@ extension FileHandle {
 
 extension JSONValue {
     var stringValue: String? { if case .string(let s) = self { s } else { nil } }
-    var numberValue: Double? { if case .number(let n) = self { n } else { nil } }
 }
