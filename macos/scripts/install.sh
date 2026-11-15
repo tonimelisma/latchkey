@@ -92,7 +92,17 @@ fi
 rm -rf "$OLD"
 
 START=$(date "+%Y-%m-%d %H:%M:%S")
-open "$DEST"
+# macOS can refuse the first launch of a just-replaced app (error -600, 2026-11-15: the new app
+# was in place and nothing ran); the Mac must never be left without Latchkey, so try again.
+i=0
+until open "$DEST"; do
+  i=$((i + 1))
+  if [ $i -ge 5 ]; then
+    echo "install: the new app is in place but macOS wouldn't start it; start it by hand" >&2
+    exit 1
+  fi
+  sleep 2
+done
 i=0
 started=""
 while [ $i -lt 30 ]; do
