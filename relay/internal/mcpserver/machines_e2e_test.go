@@ -83,12 +83,18 @@ func TestTwoMachinesBehindOneConnector(t *testing.T) {
 
 	cs := e.client(stateful, nil)
 	assert.NotEmpty(t, cs.InitializeResult().Instructions, "the instructions name the machines tool")
-	list, err := cs.ListTools(ctx(t), nil)
-	require.NoError(t, err)
+	// The server's tools may arrive a moment after its connection (seen under load, 2026-11-15).
 	byName := map[string]*mcp.Tool{}
-	for _, tool := range list.Tools {
-		byName[tool.Name] = tool
-	}
+	require.Eventually(t, func() bool {
+		list, err := cs.ListTools(ctx(t), nil)
+		require.NoError(t, err)
+		clear(byName)
+		for _, tool := range list.Tools {
+			byName[tool.Name] = tool
+		}
+		run := byName["shell_run"]
+		return run != nil && strings.Contains(run.Description, "Linux")
+	}, 5*time.Second, 20*time.Millisecond)
 	require.Len(t, byName, 3, "machines, battery_status, and shell_run once")
 	assert.Equal(t, "On a Mac: Runs a command on the Mac (zsh).\n\nOn a Linux server: Runs a command on the server (bash).", byName["shell_run"].Description)
 	schema, _ := json.Marshal(byName["shell_run"].InputSchema)

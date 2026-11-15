@@ -239,7 +239,7 @@ for local connectors and expected for remote ones); documented incident response
   and a tidy-modules check; it gates every deploy, CI on every push and daily, and the image
   release. CI also builds, lints, and runs all tests. Dependabot proposes weekly updates for Go
   modules, base images, and actions. Base images pinned by digest, actions by commit SHA, Go
-  toolchain pinned (1.27.3); the published image carries an SBOM and build provenance. The
+  toolchain pinned (1.27.4); the published image carries an SBOM and build provenance. The
   first scan found 16 reachable vulnerabilities (Go 1.27.1, go-jose 3.0.3, OpenTelemetry
   exporters 1.21.0), all fixed; the history has no leaked secrets.
 - **Done (2026-10-24):** static analysis and more dependency checks in `make security` (Toni):

@@ -2,7 +2,7 @@ module github.com/tonimelisma/latchkey/relay
 
 go 1.26.10
 
-toolchain go1.27.3
+toolchain go1.27.4
 
 require (
 	github.com/chromedp/cdproto v0.159.3
