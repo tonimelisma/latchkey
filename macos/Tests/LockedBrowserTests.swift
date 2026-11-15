@@ -60,4 +60,71 @@ import Testing
         let agent = try await b.run("navigator.userAgent")
         #expect(agent.contains("Safari/605.1.15") && agent.contains("Version/"))
     }
+
+    /// "Safari's cookies" as a test sets them: what `SafariCookies.current` reads from Safari's file.
+    final class Jar: @unchecked Sendable {
+        private let lock = NSLock()
+        private var held: [SafariCookies.Cookie] = []
+        var cookies: [SafariCookies.Cookie] {
+            get { lock.withLock { held } }
+            set { lock.withLock { held = newValue } }
+        }
+        func set(_ pairs: [String: String]) {
+            cookies = pairs.map {
+                SafariCookies.Cookie(
+                    domain: "test.example", name: $0.key, path: "/", value: $0.value, secure: false, httpOnly: false,
+                    expires: Date().addingTimeInterval(3600))
+            }
+        }
+    }
+
+    /// The page's own view of its cookies, once it holds `wanted` (WebKit hands a changed store
+    /// to the page a moment later).
+    private func pageCookies(_ b: LockedBrowser, until wanted: (String) -> Bool) async throws -> String {
+        var seen = ""
+        let deadline = ContinuousClock.now + .seconds(5)
+        repeat {
+            seen = try await b.run("document.cookie")
+            if wanted(seen) { break }
+            try await Task.sleep(for: .milliseconds(50))
+        } while ContinuousClock.now < deadline
+        return seen
+    }
+
+    /// FR-441: each page Claude opens starts with Safari's cookies as they are then, not as they
+    /// were when the browser started.
+    @Test func safarisCookiesAreTakenAgainWithEachPageClaudeOpens() async throws {
+        let jar = Jar()
+        jar.set(["sid": "one"])
+        let b = LockedBrowser(cookies: { jar.cookies })
+        defer { b.discard() }
+        _ = try await b.open(html: "<p>Hi</p>", base: base)
+        #expect(try await pageCookies(b) { $0.contains("sid=one") }.contains("sid=one"))
+        jar.set(["sid": "two"])
+        _ = try await b.open(html: "<p>Again</p>", base: base)
+        let seen = try await pageCookies(b) { $0.contains("sid=two") }
+        #expect(seen.contains("sid=two") && !seen.contains("sid=one"), "\(seen)")
+    }
+
+    /// FR-441, FR-442: a sign-in the site took away in this browser comes back from Safari, and
+    /// what the site set only here stays.
+    @Test func aLostSignInComesBackAndThePagesOwnCookiesStay() async throws {
+        let jar = Jar()
+        jar.set(["sid": "one"])
+        let b = LockedBrowser(cookies: { jar.cookies })
+        defer { b.discard() }
+        _ = try await b.open(html: "<p>Hi</p>", base: base)
+        _ = try await b.run("document.cookie = 'sid=; Max-Age=0; path=/'; document.cookie = 'own=kept; path=/'; 1")
+        let lost = try await pageCookies(b) { !$0.contains("sid=") }
+        #expect(!lost.contains("sid=") && lost.contains("own=kept"), "\(lost)")
+        #expect(await b.takeSafarisCookies() == 1, "only the one that differs is set")
+        let back = try await pageCookies(b) { $0.contains("sid=one") }
+        #expect(back.contains("sid=one") && back.contains("own=kept"), "\(back)")
+        #expect(await b.takeSafarisCookies() == 0, "nothing differs now")
+    }
+
+    @Test func signingInAgainNeedsAPage() async throws {
+        let b = LockedBrowser(cookies: { [] })
+        await #expect(throws: SafariBrowser.Failure.self) { _ = try await b.signInAgain() }
+    }
 }

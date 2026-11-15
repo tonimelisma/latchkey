@@ -22,6 +22,9 @@ enum SafariCookies {
             path: "Library/Containers/com.apple.Safari/Data/Library/Cookies/Cookies.binarycookies")
     }
 
+    /// Safari's cookies as its file holds them now; none when the file can't be read.
+    static let current: @Sendable () -> [Cookie] = { parse((try? Data(contentsOf: file)) ?? Data()) }
+
     /// The cookies in `data` that haven't expired at `now`.
     static func parse(_ data: Data, now: Date = Date()) -> [Cookie] {
         let b = [UInt8](data)

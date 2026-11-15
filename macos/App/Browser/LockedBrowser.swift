@@ -4,9 +4,9 @@ import WebKit
 /// The browser used while the Mac is locked (spec 005 FR-420 to FR-422, Toni 2026-11-02). Safari
 /// stops answering scripts while the Mac is locked (seen live 2026-11-01), but a WebKit view of
 /// Latchkey's own keeps working, off-screen (checked live, locked: it loaded, ran scripts,
-/// navigated, went back, and took a picture). It starts with Safari's cookies, read from Safari's
-/// file at that moment into a store that lives only in memory, so the Owner's signed-in sites
-/// work; it is discarded, cookies and all, as soon as the Mac is unlocked, when Safari takes
+/// navigated, went back, and took a picture). It holds Safari's cookies, read from Safari's
+/// file into a store that lives only in memory, and taken again with every page Claude opens
+/// (FR-441), so the Owner's signed-in sites work; it is discarded, cookies and all, as soon as the Mac is unlocked, when Safari takes
 /// over again. It runs the same page scripts as Safari (`PageScripts`), so Claude's answers look
 /// the same; it has one page and no tabs.
 @MainActor
@@ -35,13 +35,48 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate {
     /// picture (FR-439), whose page is the markup of a page that already ran them.
     private let size: CGSize
     private let pageScripts: Bool
+    /// Safari's cookies as they are now (tests give their own).
+    private let cookies: @Sendable () -> [SafariCookies.Cookie]
 
-    init(size: CGSize = CGSize(width: 1280, height: 900), pageScripts: Bool = true) {
+    init(
+        size: CGSize = CGSize(width: 1280, height: 900), pageScripts: Bool = true,
+        cookies: @escaping @Sendable () -> [SafariCookies.Cookie] = SafariCookies.current
+    ) {
         self.size = size
         self.pageScripts = pageScripts
+        self.cookies = cookies
     }
 
-    /// The view, made on first use with Safari's cookies as they are now.
+    /// Takes Safari's cookies again, as they are now (FR-441): each one this browser lacks or
+    /// holds with another value is set, so Safari's copy wins, also for a cookie the site took
+    /// away here; what only this browser holds stays. Answers how many it set.
+    @discardableResult
+    func takeSafarisCookies() async -> Int {
+        guard let web else { return 0 }
+        return await Self.copy(cookies(), into: web.configuration.websiteDataStore.httpCookieStore)
+    }
+
+    private static func copy(_ cookies: [SafariCookies.Cookie], into store: WKHTTPCookieStore) async -> Int {
+        func key(_ c: HTTPCookie) -> String { "\(c.domain)\t\(c.path)\t\(c.name)" }
+        var held: [String: String] = [:]
+        for c in await store.allCookies() { held[key(c)] = c.value }
+        var set = 0
+        for cookie in cookies.compactMap(SafariCookies.httpCookie) where held[key(cookie)] != cookie.value {
+            await store.setCookie(cookie)
+            set += 1
+        }
+        return set
+    }
+
+    /// FR-442: Safari's cookies again, then the page Claude is on loaded again.
+    func signInAgain() async throws -> PageScripts.Page {
+        guard web != nil else { throw SafariBrowser.Failure.noWindow }
+        await takeSafarisCookies()
+        try await navigate { _ = $0.reload() }
+        return try await page(offset: 0)
+    }
+
+    /// The view, made on first use with Safari's cookies as they are then.
     private func view() async -> WKWebView {
         if let web { return web }
         let config = WKWebViewConfiguration()
@@ -53,11 +88,7 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate {
         // Sites see Safari, as they do in the Owner's Safari: some refuse an app's own web view
         // (Google's sign-in, for one).
         w.customUserAgent = Self.safariUserAgent
-        let store = config.websiteDataStore.httpCookieStore
-        let data = (try? Data(contentsOf: SafariCookies.file)) ?? Data()
-        for cookie in SafariCookies.parse(data).compactMap(SafariCookies.httpCookie) {
-            await store.setCookie(cookie)
-        }
+        _ = await Self.copy(cookies(), into: config.websiteDataStore.httpCookieStore)
         web = w
         return w
     }
@@ -249,12 +280,14 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate {
     func open(_ url: String) async throws -> PageScripts.Page {
         let address = try SafariBrowser.normalize(url)
         guard let u = URL(string: address) else { throw SafariBrowser.Failure.failed("That address isn't valid.") }
+        await takeSafarisCookies()  // FR-441
         try await navigate { $0.load(URLRequest(url: u)) }
         return try await page(offset: 0)
     }
 
     /// A page from text, at `base` (tests: the real WebKit view, no network).
     func open(html: String, base: URL) async throws -> PageScripts.Page {
+        await takeSafarisCookies()
         try await navigate { $0.loadHTMLString(html, baseURL: base) }
         return try await page(offset: 0)
     }

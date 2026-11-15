@@ -25,3 +25,7 @@
   for the tools), then keys, hover, scrolling, lists, attaching files, saving files, and
   pictures drawn without the screen (2026-11-05). Checked against real Safari with
   `macos/scripts/safari-check.sh` on a local test page. *FR-433 to FR-440, D10.*
+- **T410** Tests first (WebKit view with a stand-in for Safari's cookies: a changed cookie
+  arrives with the next page, one the page took away comes back, the page's own stay; the
+  tools' answers), then Safari's cookies taken again with every page Claude opens in Latchkey's
+  own browser and when Claude asks (2026-11-14). *FR-441, FR-442, D7.*

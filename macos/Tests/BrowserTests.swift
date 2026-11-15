@@ -249,10 +249,14 @@ final class FakeSafari: ScriptRunner, @unchecked Sendable {
         #expect(
             Set(t.keys) == [
                 "browser_open", "browser_read", "browser_tabs", "browser_back", "browser_screenshot", "browser_click",
-                "browser_type", "browser_script", "browser_close", "browser_key", "browser_hover", "browser_scroll",
+                "browser_sign_in_again", "browser_type", "browser_script", "browser_close", "browser_key",
+                "browser_hover", "browser_scroll",
                 "browser_select", "browser_upload", "browser_download",
             ])
-        for n in ["browser_open", "browser_read", "browser_tabs", "browser_back", "browser_screenshot"] {
+        for n in [
+            "browser_open", "browser_read", "browser_tabs", "browser_back", "browser_screenshot",
+            "browser_sign_in_again",
+        ] {
             #expect(t[n]?.tool.annotations?.readOnlyHint == true)
         }
         for n in [

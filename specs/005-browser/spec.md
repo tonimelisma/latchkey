@@ -175,6 +175,17 @@ phone, Claude can't check a reservation in the Owner's account or fill in a form
   FR-430): in Claude's background tab or the Owner's tab Claude works in, without bringing a tab
   or Safari forward, and in Latchkey's own browser while the Mac is locked; each shall appear in
   the menu's activity (FR-408).
+- **FR-441** When Claude opens a page in Latchkey's own browser (FR-420), Latchkey shall first
+  take the Owner's Safari cookies again, as they are then: a cookie Safari holds replaces this
+  browser's copy of it (same site, name, and path), also one the site took away here, and a
+  cookie only this browser holds stays (Toni, 2026-11-14: "copying cookies from real browser
+  would always work"; a site had signed Claude out in this browser while Safari stayed signed
+  in). Amends FR-420's "as they are when it starts"; FR-421 holds for every copy.
+- **FR-442** While Claude's page is in Latchkey's own browser, Claude shall be able to ask for
+  the Owner's Safari cookies to be taken again and its page loaded again, for a page that came
+  back signed out after a click or typing (Toni, 2026-11-14: "allow agent to initiate
+  real->latchkey browser cookie copy manually"). While Claude's page is in Safari, the answer
+  shall say that Safari is already signed in as the Owner, and nothing shall change.
 
 ## Success criteria
 

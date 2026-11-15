@@ -89,7 +89,8 @@ apps. It works in the background instead.
   (find, read, create, and change plain notes); Messages (find, read, and send to a person or an
   existing conversation); WhatsApp (find and read); Calendar (everything, including invitations);
   Reminders (create, change, complete, delete); Contacts; location and maps; web pages Claude
-  opens itself, in a browser of Latchkey's own that uses your Safari sign-ins.
+  opens itself, in a browser of Latchkey's own that uses your Safari sign-ins (taken from Safari
+  again with each page Claude opens, so a site that signed it out there is signed in again).
 - **Only while the Mac is unlocked:** Safari (Claude opens a tab of its own behind yours, in the
   background, and can also read and act in your tabs when you ask); looking at the screen;
   computer control.

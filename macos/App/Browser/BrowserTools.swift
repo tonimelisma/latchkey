@@ -21,9 +21,11 @@ extension BrowserCapability {
                         in parts; pass offset to read on. screenshot: shows the page as an image (captured from the \
                         screen when it can be, else drawn by Latchkey from the page as it is). While the Mac is \
                         locked, Safari doesn't answer, so Latchkey uses a browser of its own instead, signed in \
-                        with the owner's Safari cookies, for the pages Claude opens: one page, its own history \
-                        (the owner's tabs are still tried through Safari); it is closed when the Mac is unlocked, \
-                        and Safari is used again.
+                        with the owner's Safari cookies (taken again with each url Claude opens), for the pages \
+                        Claude opens: one page, its own history (the owner's tabs are still tried through Safari); \
+                        it is closed when the Mac is unlocked, and Safari is used again. sign_in_again: when a \
+                        page in that browser comes back signed out after a click or typing, takes Safari's \
+                        cookies again and loads the page again.
                         """,
                     input: [
                         "url": .stringParam("A page to open"),
@@ -32,12 +34,15 @@ extension BrowserCapability {
                         "tab": .stringParam("Work in this tab: its reference from the tab list, like 4213.2"),
                         "tabs": .boolParam("List every tab of every Safari window"),
                         "screenshot": .boolParam("Show the page as an image"),
+                        "sign_in_again": .boolParam(
+                            "While the Mac is locked: take Safari's cookies again and load the page again"),
                         "offset": .integerParam("Read the page from this character"),
                     ], readOnly: true, openWorld: true, deadlineMS: 30_000),
                 handler: { args in
                     if args.hasAny("url") { return await ops.call("browser_open", args) }
                     if args["back"] == .bool(true) { return await ops.call("browser_back", args) }
                     if args["screenshot"] == .bool(true) { return await ops.call("browser_screenshot", args) }
+                    if args["sign_in_again"] == .bool(true) { return await ops.call("browser_sign_in_again", args) }
                     if let tab = args["tab"], tab.isPresent {
                         let switched = await ops.call("browser_tabs", .object(["select": tab]))
                         if switched.isError { return switched }

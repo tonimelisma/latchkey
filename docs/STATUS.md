@@ -1,12 +1,20 @@
 # Status
 
-Last updated: 2026-11-09 (public download on GitHub with a new-version notice; never disturb the user: Mail, WhatsApp sending, Notes' window editing, Messages' window actions, Reminders' window setters removed; test sweep on exit; releases are tags on commits; cloud-only files read again; machine list shows Latchkey versions; WhatsApp built; Add to Claude button; plugin withdrawn; README rewritten as a short product page; relay web pages redone; purkki paired; spec 010 shipped)
+Last updated: 2026-11-14 (the locked browser takes Safari's cookies again with every page; public download on GitHub with a new-version notice; never disturb the user: Mail, WhatsApp sending, Notes' window editing, Messages' window actions, Reminders' window setters removed; test sweep on exit; releases are tags on commits; cloud-only files read again; machine list shows Latchkey versions; WhatsApp built; Add to Claude button; plugin withdrawn; README rewritten as a short product page; relay web pages redone; purkki paired; spec 010 shipped)
 
 Xcode signing ready (2026-10-20): Toni's Xcode account has a valid "Apple Development" certificate
 (certificate expires 2027-07-22). Keep the team ID out of committed project files
 (open source); put it in a gitignored `macos/Local.xcconfig` as `DEVELOPMENT_TEAM`.
 
 ## Current phase
+
+Sign-ins while locked (Toni, 2026-11-14; spec 005 FR-441, FR-442, plan D7): Latchkey's own
+browser copied Safari's cookies once, when it started; on 2026-11-14 Amazon answered Claude
+signed out there while Safari was still signed in. It now takes Safari's cookies again before
+every page Claude opens (Safari's copy wins; cookies only that browser holds stay), and Claude
+can ask for it with `browser_read sign_in_again`, which also loads the page again. Not built,
+proposed to Toni and undecided: each answer from that browser saying it isn't Safari, the
+Mac's state line saying locked or unlocked, and lock and unlock in Latchkey's log.
 
 Public download (Toni, 2026-11-09; spec 001 FR-669, FR-670): every `make -C macos install` now
 also publishes its disk image as GitHub release `mac-<x.y.z>` (asset `Latchkey.dmg`; the README

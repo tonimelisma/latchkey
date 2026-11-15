@@ -191,6 +191,21 @@ cancelled by the next one or back from memory (-999) isn't a failure; a page tha
 loading (pushState) counts as loaded once its address changed. Risks: Safari's cookie file format isn't documented (a change shows as no sign-ins, not as a
 failure); a site that ties a session to Safari itself may ask to sign in.
 
+Since 2026-11-14 (FR-441, FR-442; Toni): the copy is no longer made once. Seen 2026-11-14: Amazon
+answered Claude signed out, with an empty cart, in this browser, while Safari was still signed
+in and Safari's file held Amazon's sign-in cookies with 345 days left. `takeSafarisCookies`
+reads Safari's file again before each page Claude opens (`open`), and when Claude asks
+(`browser_read sign_in_again`, which then loads the page again): it asks the store for what it
+holds (one call) and sets only Safari's cookies that are missing or differ in value, so a
+second copy costs a file read and a handful of writes, not 3,000. Safari's value wins for a
+cookie both hold; a cookie only this browser holds stays (a site's own step-by-step state).
+It isn't done on click, type, or back: those are steps inside one visit, where swapping a
+cookie under the page could break a form's own token; the page Claude gets there can be
+loaded again with `sign_in_again`. Nothing goes back to Safari: its file can't be written
+safely while Safari runs. Known limits: Safari writes its file a little after a change, so the
+copy can be moments behind; a site that refuses this browser itself stays signed out however
+fresh the copy.
+
 ## D8. The Owner's tabs and windows (Toni, 2026-11-03)
 
 Serves FR-424 to FR-431, and FR-403, FR-416, FR-419 as amended. Toni, answering a bug report

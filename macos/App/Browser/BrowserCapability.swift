@@ -131,6 +131,25 @@ enum BrowserCapability {
                 }),
             ToolEntry(
                 tool: .make(
+                    "browser_sign_in_again", title: "Sign In Again from Safari",
+                    description:
+                        "In Latchkey's own browser (used while the Mac is locked): takes the owner's Safari cookies again and loads Claude's page again.",
+                    readOnly: true, openWorld: true, deadlineMS: 30_000),
+                handler: { _ in
+                    await run {
+                        // FR-442. Only Latchkey's own browser holds a copy; Safari is the original.
+                        guard let l = await route(browser, locked) else {
+                            return .text(
+                                "Claude's page is in Safari itself, which is already signed in as the owner: there is nothing to take again. If a site asks to sign in there, the owner is signed out of it in Safari."
+                            )
+                        }
+                        var r = await told(page(try await l.signInAgain()), l)
+                        r.activity = "Took Safari's sign-ins again in Latchkey's own browser"
+                        return r
+                    }
+                }),
+            ToolEntry(
+                tool: .make(
                     "browser_screenshot", title: "Screenshot of the Page",
                     description:
                         "Shows the page Claude works in as an image: captured from the screen when it can be, else drawn by Latchkey from the page as it is (locked, display off, lid closed).",

@@ -288,6 +288,19 @@ import Testing
         #expect(fake.windows[0].tabs[1].scriptsRun > 0, "read through Safari")
     }
 
+    /// FR-442: Claude asks for Safari's cookies again. In Safari itself there is nothing to take;
+    /// in Latchkey's own browser it needs a page.
+    @MainActor @Test func signingInAgainIsForLatchkeysOwnBrowser() async {
+        let fake = FakeSafariTabs()
+        let unlocked = await tools(fake)["browser_read"]!.handler(.object(["sign_in_again": .bool(true)]))
+        #expect(!unlocked.isError && unlocked.content.jsonText.contains("Safari itself"))
+        let own = LockedBrowser(cookies: { [] })
+        defer { own.discard() }
+        let locked = await tools(fake, locked: { own })["browser_read"]!.handler(
+            .object(["sign_in_again": .bool(true)]))
+        #expect(locked.isError, "no page open yet: \(locked.content.jsonText)")
+    }
+
     /// FR-430: when Safari doesn't answer while locked, the list says the tabs need unlocking.
     @MainActor @Test func whileLockedASilentSafariIsSaidPlainly() async {
         let own = LockedBrowser()
