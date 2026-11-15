@@ -24,7 +24,9 @@ Claude app (phone, web, desktop), can work with what's on your Mac:
   directions.
 - **Files:** find, read (including PDFs and pictures), write, move, and trash files.
 - **Command line:** run commands, as you, never as administrator.
-- **Safari:** open pages and read, click, type, upload, and download, signed in as you.
+- **Safari and the web:** open pages and read, click, type, upload, and download, signed in with
+  your Safari sign-ins, in a browser of Latchkey's own; and read and act in your own Safari tabs
+  when you ask. When a page asks "Are you sure?", Claude answers it.
 - **The screen:** take a picture of it, and control the computer when you ask.
 
 Your Mac never has to accept connections from the internet: Latchkey reaches out to a small
@@ -89,13 +91,16 @@ apps. It works in the background instead.
   (find, read, create, and change plain notes); Messages (find, read, and send to a person or an
   existing conversation); WhatsApp (find and read); Calendar (everything, including invitations);
   Reminders (create, change, complete, delete); Contacts; location and maps; web pages Claude
-  opens itself, in a browser of Latchkey's own that uses your Safari sign-ins (taken from Safari
-  again with each page Claude opens, so a site that signed it out there is signed in again).
-  Each answer from that browser tells Claude it isn't Safari, and every answer from the Mac
-  says whether it is locked or unlocked.
-- **Only while the Mac is unlocked:** Safari (Claude opens a tab of its own behind yours, in the
-  background, and can also read and act in your tabs when you ask); looking at the screen;
-  computer control.
+  opens itself. Those always open in a hidden browser of Latchkey's own, locked or not, never in
+  your Safari windows. It uses your Safari sign-ins, taken from Safari again with each page
+  Claude opens, so a site that signed it out there is signed in again. Each page has a short
+  name, so two chats never load over each other's pages. When a page asks to confirm something
+  ("Remove item?"), Claude is shown the question and answers it; if it doesn't within 5
+  minutes, the page gets Cancel. Each answer from that browser tells Claude it isn't Safari,
+  and every answer from the Mac says whether it is locked or unlocked.
+- **Only while the Mac is unlocked:** your own Safari tabs (Claude reads and acts in them in the
+  background when you ask; Safari mostly stops answering while the Mac is locked); looking at
+  the screen; computer control.
 - **Computer control is the one exception to "never in your way":** it uses the real mouse and
   keyboard, so you'll see it. It's there for when you ask Claude to use the computer.
 - **Not offered, because it would need an app's window while you might be using it:** changing

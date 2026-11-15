@@ -379,9 +379,8 @@ final class AppModel {
                 forName: .init("com.apple.screenIsUnlocked"), object: nil, queue: .main
             ) { [weak self] _ in
                 MainActor.assumeIsolated {
-                    // The browser used while locked goes at once, with its copy of Safari's cookies
-                    // (spec 005 FR-422; security review 2026-11-02).
-                    BrowserCapability.lockedBrowser.discard()
+                    // Claude's pages stay: they are Latchkey's own browser's, locked or not
+                    // (spec 005 FR-444 amends FR-422).
                     self?.screenChanged(locked: false)
                 }
             })
@@ -500,7 +499,7 @@ final class AppModel {
 
     func setLevel(_ id: String, _ level: AccessLevel) {
         capabilities.setLevel(id, level)
-        if id == CapabilityRegistry.browser { BrowserCapability.lockedBrowser.discard() }
+        if id == CapabilityRegistry.browser { BrowserCapability.ownPages.closeAll() }
         defaults.set(capabilities.levels.mapValues(\.rawValue), forKey: Keys.levels)
         let registry = capabilities
         Task { [connection] in
@@ -516,7 +515,7 @@ final class AppModel {
 
     func setPaused(_ on: Bool) {
         paused = on
-        if on { BrowserCapability.lockedBrowser.discard() }
+        if on { BrowserCapability.ownPages.closeAll() }
         Pause.set(on, defaults)
         event(.pause, "\(on ? "Paused" : "Resumed") Claude's access")
         guard on else { return }
@@ -1133,7 +1132,8 @@ final class AppModel {
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(60))
                 await ShellCapability.jobs.tidy()
-                _ = await BrowserCapability.browser.closeIfIdle()  // notes what it closed
+                _ = await BrowserCapability.browser.closeIfIdle()  // an earlier version's tab; notes it
+                _ = await MainActor.run { BrowserCapability.ownPages.closeIdle() }  // spec 005 FR-446
             }
         }
     }

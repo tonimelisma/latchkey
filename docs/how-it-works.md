@@ -37,8 +37,8 @@ Claude (web, Desktop, phone)  ──HTTPS──▶  Latchkey relay  ◀──out
 - **Claude's work leaves nothing behind.** A shell command writes only to its own scratch folder, the folder it
   runs in, Downloads, package caches, and what Claude declares; opening apps, scripting other apps, and
   changing settings work only when Claude declares them; what it leaves running is stopped when it
-  finishes unless Claude asks to keep it for a while, however it slipped away; its scratch folder goes to the Trash. Claude's Safari
-  tab (a background tab in your window, or a window of its own if you choose) closes after 30 minutes unused. The Activity window's Left Behind view lists what was kept, removed,
+  finishes unless Claude asks to keep it for a while, however it slipped away; its scratch folder goes to the Trash. Each of
+  Claude's web pages (in Latchkey's own hidden browser) closes after 30 minutes unused. The Activity window's Left Behind view lists what was kept, removed,
   and made, and you're notified only of what nobody meant to leave.
 - **You see who has access.** Latchkey's Settings window and your account page list the Claude apps that can use
   your Mac, and you can remove any one of them.
@@ -53,7 +53,7 @@ Claude (web, Desktop, phone)  ──HTTPS──▶  Latchkey relay  ◀──out
   | WhatsApp (WhatsApp for Mac's database; current while that app runs) | `whatsapp_find`, `whatsapp_read` | (nothing: sending was withdrawn on 2026-11-07) |
   | Files | `files_find`, `files_read` (text, PDFs, documents, images) | `files_change` (write, edit, folders, move, copy, Trash) |
   | Shell | | `shell_run`, `shell_check` (long and interactive commands; writes fenced, leftovers removed) |
-  | Browser (your Safari, your logins; while locked, Latchkey's own browser with your Safari logins) | `browser_read` | `browser_act` (click, type, script, close Claude's page) |
+  | Browser (Claude's pages in Latchkey's own browser with your Safari logins; your Safari tabs when you ask) | `browser_read` | `browser_act` (click, type, script, answer a page's dialog, close a page) |
   | Computer control (while unlocked) | `computer_look` | `computer_act` (mouse, keyboard, apps) |
   | Calendar (every account on the Mac) | `calendar_find` (events, free time) | `calendar_change` (create, move, repeat, delete) |
   | Reminders | `reminders_find` (with flags, tags, subtasks, sections) | `reminders_change` (create, complete, change, delete; new and deleted lists; flags, tags, subtasks, and sections aren't changed) |

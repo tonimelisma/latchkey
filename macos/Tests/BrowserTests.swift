@@ -251,7 +251,7 @@ final class FakeSafari: ScriptRunner, @unchecked Sendable {
                 "browser_open", "browser_read", "browser_tabs", "browser_back", "browser_screenshot", "browser_click",
                 "browser_sign_in_again", "browser_type", "browser_script", "browser_close", "browser_key",
                 "browser_hover", "browser_scroll",
-                "browser_select", "browser_upload", "browser_download",
+                "browser_select", "browser_upload", "browser_download", "browser_dialog",
             ])
         for n in [
             "browser_open", "browser_read", "browser_tabs", "browser_back", "browser_screenshot",
@@ -261,7 +261,7 @@ final class FakeSafari: ScriptRunner, @unchecked Sendable {
         }
         for n in [
             "browser_click", "browser_type", "browser_script", "browser_close", "browser_key", "browser_hover",
-            "browser_scroll", "browser_select", "browser_upload", "browser_download",
+            "browser_scroll", "browser_select", "browser_upload", "browser_download", "browser_dialog",
         ] {
             #expect(t[n]?.tool.annotations?.destructiveHint == true)
         }

@@ -107,6 +107,9 @@ actor SafariBrowser {
         /// The page waits on a dialog it showed before Latchkey's answers were in it (FR-432);
         /// `owners`: one of the Owner's tabs, not Claude's own.
         case dialogWaiting(owners: Bool)
+        /// A page of Claude's in Latchkey's own browser holds a confirm or prompt for Claude to
+        /// answer (FR-448): the page's name, the dialog's kind, and its text (the website's).
+        case dialogHeld(page: String, kind: String, message: String)
         case failed(String)
     }
 

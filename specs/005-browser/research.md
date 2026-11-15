@@ -345,3 +345,31 @@ first.
   Safari lets no script into (PDFs, Safari's own pages). (c) Waking the display or unlocking:
   never (FR-661). The copy is also used when the Owner can see the window (FR-423), where
   bringing Claude's tab forward would show in front of him.
+
+
+## Pages by name and dialogs Claude answers (2026-11-15)
+
+Seen on Target, 2026-11-15: Claude's "Remove item?" stalled in its background Safari tab, and two
+other chats loaded a menu and a complaint form over the cart in Claude's one tab.
+
+- **Why a Safari tab can't ask Claude** (D9's findings): a page waiting on its dialog answers no
+  script, and Accessibility shows no sheet for a background tab's dialog, so Latchkey can neither
+  read nor answer it without bringing the tab forward. Latchkey's own answers in the page must
+  return at once (alert, confirm, and prompt are synchronous), so they can't wait for Claude.
+  WebKit's `WKUIDelegate` gets every dialog with a reply to give later: only Latchkey's own
+  browser can hold one for Claude.
+- **Telling chats apart**: Claude's apps don't say which chat a call comes from. Developers report
+  that claude.ai sends every chat of an account over one MCP session
+  (https://github.com/anthropics/claude-ai-mcp/issues/539,
+  https://github.com/anthropics/claude-code/issues/79241), and ask for a conversation identifier
+  (https://github.com/anthropics/claude-code/issues/41836); the stateless protocol of 2026-07-28
+  drops sessions altogether. Only Claude Code has one session per conversation. So pages are told
+  apart by a name Claude carries in its own context.
+- **Names** (decided by Claude, low-level): counting p1, p2 (after a restart p1 would be a new
+  page another chat may still name), a long random id (costs Claude tokens in every call), or four
+  random characters from an alphabet without look-alikes (about 24 million names; chosen).
+- **Limit** (decided by Claude): 10 pages at once, the eleventh refused (closing the one unused
+  longest would lose another chat's page, the thing being fixed). Each page is its own view and
+  cookie store (tens of MB each).
+- **Alerts** (decided by Claude): dismissed at once and told, as before, rather than held: an alert
+  has one answer, so holding it would only stop the page.

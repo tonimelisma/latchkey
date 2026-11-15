@@ -71,10 +71,10 @@
     },
     {
       "id": "browser",
-      "name": "Browser (Safari)",
+      "name": "Browser",
       "missing": [],
       "cases": [
-        {"id": "browser.open", "case": "Open a page", "steps": "browser_read url \"https://en.wikipedia.org/wiki/Apple_Inc.\"."},
+        {"id": "browser.open", "case": "Open a page", "steps": "browser_read url \"https://en.wikipedia.org/wiki/Apple_Inc.\". Note the page name the answer gives (like p4k2): every later browser call in this group passes page with the name of the page it is about (each url without page opens a new page)."},
         {"id": "browser.read", "case": "Read the page showing", "steps": "browser_read with nothing."},
         {"id": "browser.click", "case": "Click a link on the same site", "steps": "browser_act click a link to another Wikipedia article (its ref from browser.read)."},
         {"id": "browser.back", "case": "Go back", "steps": "browser_read back true; check it's the Apple Inc. article again."},
@@ -89,9 +89,10 @@
         {"id": "browser.upload", "case": "Attach a file from the Mac to the page", "steps": "files_change write ~/Downloads/latchkey-check-upload.txt, text \"{TAG} upload\"; browser_act upload, ref the Latchkey file field, paths [\"~/Downloads/latchkey-check-upload.txt\"]; then browser_act script, code \"lkfile.files[0].name + ' ' + lkfile.files[0].size\", and check it names latchkey-check-upload.txt. Nothing is sent."},
         {"id": "browser.download", "case": "Save a linked file to Downloads", "steps": "browser_act download, ref the Latchkey download link; check the answer names the saved path in ~/Downloads; files_read that path and check it says Latchkey check download; then files_change trash that file and ~/Downloads/latchkey-check-upload.txt."},
         {"id": "browser.download_pdf", "case": "Save the PDF a tab shows", "steps": "browser_read url \"https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf\"; browser_act download with no ref and no url (the page itself); check the answer names a .pdf path in ~/Downloads; files_find that path to check it is there, then files_change trash it."},
+        {"id": "browser.dialog", "case": "Answer a page's confirm dialog", "steps": "browser_read url \"https://example.com\"; browser_act script, code \"setTimeout(function () { document.title = 'asked:' + confirm('Latchkey check: remove item?') }, 300); 'ok'\"; then browser_read that page and check the answer says the page waits on a dialog asking to confirm Latchkey check: remove item?; browser_act dialog, confirm true; then browser_act script, code \"document.title\", and check it is asked:true."},
         {"id": "browser.tabs", "case": "List tabs", "steps": "browser_read tabs true."},
         {"id": "browser.screenshot", "case": "Screenshot of the page", "steps": "browser_read screenshot true."},
-        {"id": "browser.close", "case": "Close Claude's page", "steps": "browser_act close; then browser_read tabs true shows Claude has no page or a fresh one."}
+        {"id": "browser.close", "case": "Close Claude's pages", "steps": "browser_act close for each page this group opened (pass page); then browser_read tabs true and check none of those pages is listed."}
       ]
     },
     {

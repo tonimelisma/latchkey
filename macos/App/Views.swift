@@ -111,8 +111,6 @@ struct SettingsView: View {
 
 struct CapabilitiesPane: View {
     let model: AppModel
-    /// Where Claude's Safari pages open (spec 005 FR-412); takes effect at the next page.
-    @AppStorage(BrowserPlace.key) private var browserPlace: BrowserPlace = .tab
 
     var body: some View {
         Form {
@@ -140,13 +138,14 @@ struct CapabilitiesPane: View {
                     .foregroundStyle(.secondary)
                 }
             }
-            Section("Browser") {
-                Picker(selection: $browserPlace) {
-                    Text("A Tab in Your Safari Window").tag(BrowserPlace.tab)
-                    Text("A Window of Its Own").tag(BrowserPlace.window)
-                } label: {
-                    Text("Claude Opens Pages In")
-                    Text("A tab opens behind the one you’re using, so you can keep working.")
+            if model.capabilities.level(CapabilityRegistry.browser) != .off {
+                Section("Browser") {
+                    // Spec 005 FR-444.
+                    Text(
+                        "Claude opens pages in a browser of Latchkey’s own, signed in with your Safari sign-ins, so nothing changes in your Safari windows. When you ask, it can also use your Safari tabs, in the background."
+                    )
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
                 }
             }
         }

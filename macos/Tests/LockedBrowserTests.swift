@@ -14,8 +14,11 @@ import Testing
         defer { b.discard() }
         _ = try await b.open(html: "<p>Hi</p>", base: base)
         #expect(try await b.run("alert('Saved'); 'a'") == "a")
-        #expect(try await b.run("confirm('Delete everything?') ? 'yes' : 'no'") == "no", "never a yes")
-        #expect(try await b.run("String(prompt('Your name?'))") == "null")
+        // Answered as Claude said in advance; with nothing said, a dialog waits (HeldDialogTests).
+        #expect(
+            try await b.run("confirm('Delete everything?') ? 'yes' : 'no'", answer: DialogAnswer(confirm: false))
+                == "no")
+        #expect(try await b.run("String(prompt('Your name?'))", answer: DialogAnswer(confirm: false)) == "null")
         let told = b.takeDialogs()
         #expect(told.count == 3)
         #expect(told[0].contains("«Saved»") && told[1].contains("answered Cancel") && told[2].contains("gave none"))

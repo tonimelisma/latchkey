@@ -69,7 +69,7 @@ enum PageScripts {
         // nosemgrep: latchkey-page-script-literal -- splices in only a Bool and literal(text).
         """
         (function () {
-          var k = '__latchkeyDialogs', ok = \(a.confirm ? "true" : "false"), text = \(a.text.map(literal) ?? "null");
+          var k = '__latchkeyDialogs', ok = \(a.confirm == true ? "true" : "false"), text = \(a.text.map(literal) ?? "null");
           function arm(w) {
             try {
               var d = w[k];
@@ -114,15 +114,19 @@ enum PageScripts {
         """
     }
 
+    /// A dialog's text as Claude is told it: at most 200 characters, one line, without the «»
+    /// Latchkey frames it with.
+    static func dialogText(_ s: String) -> String {
+        String(
+            s.replacingOccurrences(of: "«", with: "\"").replacingOccurrences(of: "»", with: "\"")
+                .components(separatedBy: .newlines).joined(separator: " ").prefix(200))
+    }
+
     /// One line for Claude, the same in Safari and in Latchkey's own browser: at most 200
     /// characters of the page's text, on one line, without the «» that frame it (security review
     /// 2026-11-02: a page could pose as Latchkey's own words).
     static func dialogNote(kind: String, message: String, answer: String?) -> String {
-        func clean(_ s: String) -> String {
-            String(
-                s.replacingOccurrences(of: "«", with: "\"").replacingOccurrences(of: "»", with: "\"")
-                    .components(separatedBy: .newlines).joined(separator: " ").prefix(200))
-        }
+        let clean = dialogText
         switch kind {
         // nosemgrep: scripts.semgrep.latchkey-page-script-literal -- a note for Claude, never run in a page; the page's text is framed and cleaned
         case "alert": return "The page showed an alert: «\(clean(message))» (dismissed)."
@@ -356,6 +360,11 @@ enum PageScripts {
 /// How the page's own dialogs are answered during one of Claude's actions (spec 005 FR-432):
 /// a confirm gets OK only when Claude's action says so, a prompt Claude's text or none.
 struct DialogAnswer: Sendable, Equatable {
-    var confirm = false
+    /// OK (true) or Cancel (false) for a confirm; nil when Claude gave none. In Safari none is
+    /// Cancel; in Latchkey's own browser none means the dialog waits for Claude (FR-448).
+    var confirm: Bool?
+    /// The text for a prompt; nil when Claude gave none.
     var text: String?
+    /// Whether Claude answered anything in advance.
+    var given: Bool { confirm != nil || text != nil }
 }

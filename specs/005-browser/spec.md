@@ -36,6 +36,12 @@ phone, Claude can't check a reservation in the Owner's account or fill in a form
    go back, or close it, then Claude does so just as in its own tab, in the background: the tab I
    have in front stays in front.
 
+### US5 (P1): Pages that never freeze, one per chat (Toni, 2026-11-15)
+1. Given a page shows "Remove item?" after Claude's click, when Claude asks Latchkey, then
+   Claude is told what the dialog says and answers it OK or Cancel; nothing waits on the Owner.
+2. Given two chats use the browser at once, when each opens pages, then neither loads over the
+   other's page.
+
 ## Requirements
 
 - **FR-401** While Browser is Read only or Read & write, Claude shall be able to open a web
@@ -190,6 +196,48 @@ phone, Claude can't check a reservation in the Owner's account or fill in a form
   picture) shall begin by saying that it is from Latchkey's own browser and not Safari, that
   the Mac is locked, and that the Owner's open Safari tabs aren't in it (Toni, 2026-11-15: an
   agent there took it for Safari until it closed the page).
+  (2026-11-15: "the Mac is locked" is withdrawn from that first line: Claude's pages are in that
+  browser whether the Mac is locked or not, FR-444; the line names the page, FR-445.)
+- **FR-444** Claude's own pages shall open in Latchkey's own browser (FR-420, FR-421, FR-441,
+  FR-442), whether the Mac is locked or not, and never in Safari; Safari shall be used only for
+  the Owner's tabs (FR-424 to FR-431). (Toni, 2026-11-15, "Own browser, Claude answers": a page's
+  "Remove item?" dialog froze Claude's background Safari tab on Target, and a dialog in a
+  background tab can't be read or answered without bringing the tab forward. Amends FR-412 to
+  FR-419 and FR-426, whose tab and window of Claude's own in Safari are withdrawn, with the
+  Settings choice of FR-412; FR-420's "while the Mac is locked"; and FR-422: that browser is no
+  longer closed when the Mac is unlocked.)
+- **FR-445** When Claude opens a page without naming one, Latchkey shall open a new page of
+  Claude's own and give its short name (like p4k2) in the answer. A call that names a page shall
+  read, act in, open an address in, or close that page; a call that names none shall use the one
+  page open, and when several are open it shall do nothing and answer with the list of pages
+  (each page's name, title, and address, marked as written by websites). (Toni, 2026-11-15,
+  "Page names": Claude's apps send every chat's calls over one connection, so Latchkey can't tell
+  chats apart; on 2026-11-15 two other chats' pages loaded over the Target cart in Claude's one
+  tab.)
+- **FR-446** A page of Claude's unused for 30 minutes shall be closed with its cookies (as
+  FR-411). At most 10 pages shall be open at once: an eleventh is refused with the list of pages
+  and how to close one, so no chat's page is closed for another's.
+- **FR-447** Claude shall work in one of the Owner's tabs only in a call that names that tab; a
+  call that names no tab shall work in Claude's own page. (2026-11-15, follows from FR-445: one
+  chat's tab no longer becomes another chat's. Amends FR-425's "Claude shall keep working in
+  that tab until it opens a page, picks another tab, or leaves it unused for 30 minutes".)
+- **FR-448** When a page of Claude's shows a confirm or a prompt that Claude's action didn't
+  answer in advance (FR-450), Latchkey shall hold it, and the page shall wait, until Claude
+  answers it: OK or Cancel, or the text for a prompt. The answer to the call that was running
+  then (or else to Claude's next call on that page) shall say what the dialog says and how to
+  answer it. An alert shall be dismissed and told, as before (FR-432). (Toni, 2026-11-15: "why
+  can't the browser show the pop-up to claude and let it answer?")
+- **FR-449** A held dialog Claude hasn't answered within 5 minutes shall get Cancel (a prompt:
+  no text), and Claude shall be told so at its next call on that page. Opening another address
+  in that page or closing it shall first answer it Cancel and say so. (Toni, 2026-11-15:
+  "Cancel after 5 minutes".)
+- **FR-450** An answer Claude gives with its action in advance (OK to a confirm, text for a
+  prompt) shall also answer the page's dialogs that come up to 5 seconds after that action
+  ended, in Claude's own pages only; in the Owner's tabs FR-432 stands (only during the action).
+  (Toni, 2026-11-15, "Up to 5 seconds": Target's dialog came after the click had returned, when
+  Claude's OK no longer counted. Amends FR-432 for Claude's own pages.)
+- **FR-451** The list of tabs (FR-424) shall also list Claude's open pages: each one's name,
+  title, and address.
 
 ## Success criteria
 
@@ -200,9 +248,19 @@ phone, Claude can't check a reservation in the Owner's account or fill in a form
 - **SC-404** On the Mac, in a background tab, Claude presses keys, hovers, scrolls, chooses
   from lists, attaches a file, and saves a file into Downloads, and the tab the Owner has in
   front stays in front (2026-11-05).
+- **SC-405** A page of Claude's that asks to confirm after a click is answered by Claude, not
+  frozen; two chats' pages stay apart (unit tests with the real WebKit view; live check
+  2026-11-15).
 
 ## Edge cases
 
+- A page shows dialog after dialog: each is held in turn; Claude answers them one by one
+  (FR-448). A page that loops on dialogs is closed by Claude (FR-449: closing answers Cancel).
+- A chat names a page another chat opened (it can see the names in the list, FR-451): it is the
+  Owner's own Claude either way, so it works; the names are random so chats don't hit them by
+  accident.
+- Latchkey restarts: Claude's pages are gone (they are kept only in memory, FR-421); a call
+  naming one is told it isn't open.
 - The Owner closes Claude's window or tab: the next request opens a new one (FR-418).
 - The Owner closes or moves the tab Claude is working in, or opens or closes another tab in its
   window: Claude is told to list the tabs again (FR-429).

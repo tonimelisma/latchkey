@@ -7,7 +7,7 @@ import Foundation
 extension BrowserCapability {
     static let directions = ["down", "up", "left", "right", "top", "bottom"]
 
-    /// Latchkey's own browser while the Mac is locked, else Safari.
+    /// Claude's own page in Latchkey's own browser, else the owner's Safari tab the call names.
     static func either<T>(
         _ l: LockedBrowser?, _ own: (LockedBrowser) async throws -> T, _ safari: () async throws -> T
     ) async throws -> T {
@@ -63,7 +63,7 @@ extension BrowserCapability {
         return r
     }
 
-    static func actionOperations(browser: SafariBrowser, locked: @escaping LockedRoute = noLocked) -> [ToolEntry] {
+    static func actionOperations(browser: SafariBrowser, own: OwnPages? = nil) -> [ToolEntry] {
         [
             ToolEntry(
                 tool: .make(
@@ -79,7 +79,7 @@ extension BrowserCapability {
                         let keys = try keyList(args)
                         let ref = args["ref"]?.stringValue.flatMap { $0.isEmpty ? nil : $0 }
                         let a = try answer(args)
-                        let l = await route(browser, locked)
+                        let l = try await route(browser, own)
                         let done = try await either(
                             l, { try await $0.press(keys, ref: ref, answer: a) },
                             { try await browser.press(keys, ref: ref, answer: a) })
@@ -101,7 +101,7 @@ extension BrowserCapability {
                         guard let ref = args["ref"]?.stringValue, !ref.isEmpty else {
                             throw Failure.failed("Give the element's reference.")
                         }
-                        let l = await route(browser, locked)
+                        let l = try await route(browser, own)
                         let done = try await either(l, { try await $0.hover(ref) }, { try await browser.hover(ref) })
                         let shown = Int(done.detail) ?? 0
                         return await acted(
@@ -127,7 +127,7 @@ extension BrowserCapability {
                         }
                         let amount = try args.integer("amount", in: 1...1_000_000)
                         let ref = args["ref"]?.stringValue.flatMap { $0.isEmpty ? nil : $0 }
-                        let l = await route(browser, locked)
+                        let l = try await route(browser, own)
                         let done =
                             try await either(
                                 l, { try await $0.scroll(ref, direction: direction, amount: amount) },
@@ -153,7 +153,7 @@ extension BrowserCapability {
                             let options = try texts(args, "options") ?? texts(args, "text")
                         else { throw Failure.failed("Give the list's reference and the options to choose.") }
                         let a = try answer(args)
-                        let l = await route(browser, locked)
+                        let l = try await route(browser, own)
                         let done = try await either(
                             l, { try await $0.choose(ref, options: options, answer: a) },
                             { try await browser.choose(ref, options: options, answer: a) })
@@ -179,7 +179,7 @@ extension BrowserCapability {
                         else { throw Failure.failed("Give the field's reference and the files' paths.") }
                         let files = try BrowserDownloads.attachments(paths)
                         let a = try answer(args)
-                        let l = await route(browser, locked)
+                        let l = try await route(browser, own)
                         let done = try await either(
                             l, { try await $0.attach(ref, files: files, answer: a) },
                             { try await browser.attach(ref, files: files, answer: a) })
@@ -205,7 +205,7 @@ extension BrowserCapability {
                         if let u = url, !u.lowercased().hasPrefix("blob:"), !u.lowercased().hasPrefix("data:") {
                             url = try SafariBrowser.normalize(u)
                         }
-                        let l = await route(browser, locked)
+                        let l = try await route(browser, own)
                         let saved = try await download(ref: ref, url: url, browser: browser, locked: l)
                         var r = ToolResult.text(saved.said)
                         r.activity = "Saved \(saved.file.lastPathComponent) to Downloads"

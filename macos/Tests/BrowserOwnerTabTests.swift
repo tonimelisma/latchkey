@@ -224,13 +224,11 @@ import Testing
 
 /// The tools' side of FR-424, FR-425, FR-430, FR-431.
 @Suite struct BrowserOwnerTabToolTests {
-    func tools(_ fake: FakeSafariTabs, locked: @escaping BrowserCapability.LockedRoute = BrowserCapability.noLocked)
-        -> [String: ToolEntry]
-    {
+    func tools(_ fake: FakeSafariTabs, own: OwnPages? = nil) -> [String: ToolEntry] {
         let b = SafariBrowser(scripts: fake, settleLimit: .seconds(3), place: { .tab })
         let all =
-            BrowserCapability.readTools(browser: b, locked: locked)
-            + BrowserCapability.writeTools(browser: b, locked: locked)
+            BrowserCapability.readTools(browser: b, own: own)
+            + BrowserCapability.writeTools(browser: b, own: own)
         return Dictionary(uniqueKeysWithValues: all.map { ($0.tool.name, $0) })
     }
 
@@ -273,15 +271,15 @@ import Testing
         #expect(r.content.jsonText.contains("tab 10.2"))
     }
 
-    /// FR-430: while locked, Claude's pages open in Latchkey's own browser, but the Owner's tabs
-    /// are Safari's: listed and used through Safari while it answers (seen live 2026-11-03).
-    @MainActor @Test func whileLockedTheOwnersTabsAreStillSafaris() async {
+    /// FR-430, FR-444: Claude's pages are Latchkey's own browser's, but the Owner's tabs are
+    /// Safari's: listed and used through Safari while it answers (seen live, locked, 2026-11-03).
+    @MainActor @Test func theOwnersTabsAreStillSafaris() async {
         let fake = FakeSafariTabs()
-        let own = LockedBrowser()
-        defer { own.discard() }
-        let t = tools(fake, locked: { own })
+        let own = OwnPages(cookies: { [] }, isLocked: { true })
+        defer { own.closeAll() }
+        let t = tools(fake, own: own)
         let list = await t["browser_read"]!.handler(.object(["tabs": .bool(true)]))
-        #expect(list.content.jsonText.contains("10.2") && list.content.jsonText.contains("locked"))
+        #expect(list.content.jsonText.contains("10.2") && list.content.jsonText.contains("no page of its own"))
         let read = await t["browser_read"]!.handler(.object(["tab": .string("10.2")]))
         #expect(!read.isError, "\(read.content.jsonText)")
         #expect(read.content.jsonText.contains("tab 10.2"))
@@ -294,9 +292,9 @@ import Testing
         let fake = FakeSafariTabs()
         let unlocked = await tools(fake)["browser_read"]!.handler(.object(["sign_in_again": .bool(true)]))
         #expect(!unlocked.isError && unlocked.content.jsonText.contains("Safari itself"))
-        let own = LockedBrowser(cookies: { [] })
-        defer { own.discard() }
-        let locked = await tools(fake, locked: { own })["browser_read"]!.handler(
+        let own = OwnPages(cookies: { [] })
+        defer { own.closeAll() }
+        let locked = await tools(fake, own: own)["browser_read"]!.handler(
             .object(["sign_in_again": .bool(true)]))
         #expect(locked.isError, "no page open yet: \(locked.content.jsonText)")
     }
@@ -304,10 +302,10 @@ import Testing
     /// FR-443: an answer from Latchkey's own browser begins by saying so; Safari's doesn't.
     @MainActor @Test func answersFromLatchkeysOwnBrowserSaySo() async throws {
         let fake = FakeSafariTabs()
-        let own = LockedBrowser(cookies: { [] })
-        defer { own.discard() }
+        let own = OwnPages(cookies: { [] })
+        defer { own.closeAll() }
         _ = try await own.open(html: "<p>hello there</p>", base: URL(string: "https://example.test/")!)
-        let t = tools(fake, locked: { own })
+        let t = tools(fake, own: own)
         let read = await t["browser_read"]!.handler(.object([:]))
         #expect(!read.isError, "\(read.content.jsonText)")
         #expect(read.content.jsonText.contains("From Latchkey's own browser, not Safari"))
@@ -320,11 +318,11 @@ import Testing
 
     /// FR-430: when Safari doesn't answer while locked, the list says the tabs need unlocking.
     @MainActor @Test func whileLockedASilentSafariIsSaidPlainly() async {
-        let own = LockedBrowser()
-        defer { own.discard() }
+        let own = OwnPages(cookies: { [] }, isLocked: { true })
+        defer { own.closeAll() }
         let b = SafariBrowser(scripts: SilentSafari(), place: { .tab })
         let t = Dictionary(
-            uniqueKeysWithValues: BrowserCapability.readTools(browser: b, locked: { own }).map { ($0.tool.name, $0) })
+            uniqueKeysWithValues: BrowserCapability.readTools(browser: b, own: own).map { ($0.tool.name, $0) })
         let list = await t["browser_read"]!.handler(.object(["tabs": .bool(true)]))
         #expect(list.content.jsonText.contains("unlocks the Mac"))
     }

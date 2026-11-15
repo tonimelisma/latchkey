@@ -1,24 +1,44 @@
 import AppKit
 import WebKit
 
-/// The browser used while the Mac is locked (spec 005 FR-420 to FR-422, Toni 2026-11-02). Safari
-/// stops answering scripts while the Mac is locked (seen live 2026-11-01), but a WebKit view of
-/// Latchkey's own keeps working, off-screen (checked live, locked: it loaded, ran scripts,
-/// navigated, went back, and took a picture). It holds Safari's cookies, read from Safari's
-/// file into a store that lives only in memory, and taken again with every page Claude opens
-/// (FR-441), so the Owner's signed-in sites work; it is discarded, cookies and all, as soon as the Mac is unlocked, when Safari takes
-/// over again. It runs the same page scripts as Safari (`PageScripts`), so Claude's answers look
-/// the same; it has one page and no tabs.
+/// One page of Claude's in Latchkey's own browser (spec 005 FR-420, FR-444, Toni 2026-11-02 and
+/// 2026-11-15): an off-screen WebKit view, first made for while the Mac is locked (Safari stops
+/// answering scripts then, seen live 2026-11-01), and since 2026-11-15 used for every page Claude
+/// opens, locked or not, so a page's dialog can wait for Claude's answer instead of freezing a
+/// background Safari tab (FR-448). It holds Safari's cookies, read from Safari's file into a
+/// store that lives only in memory, and taken again with every page Claude opens (FR-441), so
+/// the Owner's signed-in sites work; it is discarded, cookies and all, when Claude closes it or
+/// leaves it unused (`OwnPages`). It runs the same page scripts as Safari (`PageScripts`), so
+/// Claude's answers look the same; it has one page and no tabs.
 @MainActor
 final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate {
     private var web: WKWebView?
-    /// What the page's own dialogs said since the last answer (alert, confirm, prompt), told
-    /// to Claude with the next page; a confirm is answered Cancel and a prompt with nothing, so a
-    /// page never gets a yes from Latchkey on its own (2026-11-02).
+    /// The page's name, as Claude passes it (FR-445); set by `OwnPages`.
+    var name = ""
+    /// What the page's own dialogs said since the last answer, told to Claude with the next
+    /// page: alerts (dismissed), dialogs answered by what Claude gave in advance, and held ones
+    /// that got Cancel (FR-449). Latchkey never says OK on its own (2026-11-02).
     private(set) var dialogs: [String] = []
-    /// Claude's answers for the action that runs (FR-432), set with `acting`; Cancel and no
-    /// text otherwise.
+    /// What Claude answered in advance with its action (FR-432, FR-450): good during the action
+    /// and until `presetUntil`.
     private var dialogAnswer = DialogAnswer()
+    private var presetUntil: ContinuousClock.Instant?
+    /// A confirm or prompt waiting for Claude's answer (FR-448).
+    struct Held {
+        let id = UUID()
+        let kind: String
+        let message: String
+        let defaultText: String
+        let reply: @MainActor (Bool, String?) -> Void
+    }
+    private(set) var held: Held?
+    /// Scripts of Latchkey's waiting on the page: answered with the held dialog when one comes,
+    /// since the page can't finish them until it is answered.
+    private var waiters: [UUID: (Result<String, Error>) -> Void] = [:]
+    /// How long a held dialog waits for Claude (FR-449), and how long an answer Claude gave in
+    /// advance lasts after its action (FR-450); tests shorten them.
+    private let holdLimit: Duration
+    private let presetWindow: Duration
     private var droppedDialogs = 0
     /// True while Claude's own click, typing, or script runs: only then may the page open a new
     /// window (security review 2026-11-02: a page's own pop-up can't take Claude's page away).
@@ -40,11 +60,14 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate {
 
     init(
         size: CGSize = CGSize(width: 1280, height: 900), pageScripts: Bool = true,
-        cookies: @escaping @Sendable () -> [SafariCookies.Cookie] = SafariCookies.current
+        cookies: @escaping @Sendable () -> [SafariCookies.Cookie] = SafariCookies.current,
+        holdLimit: Duration = .seconds(300), presetWindow: Duration = .seconds(5)
     ) {
         self.size = size
         self.pageScripts = pageScripts
         self.cookies = cookies
+        self.holdLimit = holdLimit
+        self.presetWindow = presetWindow
     }
 
     /// Takes Safari's cookies again, as they are now (FR-441): each one this browser lacks or
@@ -168,9 +191,13 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate {
         initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping @MainActor @Sendable (Bool) -> Void
     ) {
         MainActor.assumeIsolated {
-            let ok = acting && dialogAnswer.confirm
-            note("confirm", message, ok ? "ok" : "cancel")
-            completionHandler(ok)
+            // FR-450: what Claude answered in advance; else the dialog waits for Claude (FR-448).
+            if let ok = preset.confirm {
+                note("confirm", message, ok ? "ok" : "cancel")
+                completionHandler(ok)
+                return
+            }
+            hold("confirm", message, "") { ok, _ in completionHandler(ok) }
         }
     }
 
@@ -179,10 +206,71 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate {
         initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping @MainActor @Sendable (String?) -> Void
     ) {
         MainActor.assumeIsolated {
-            let text = acting ? dialogAnswer.text : nil
-            note("prompt", prompt, text ?? "")
-            completionHandler(text)
+            let given = preset
+            if given.text != nil || given.confirm == false {
+                let text = given.confirm == false ? nil : given.text
+                note("prompt", prompt, text ?? "")
+                completionHandler(text)
+                return
+            }
+            hold("prompt", prompt, defaultText ?? "") { ok, text in completionHandler(ok ? text : nil) }
         }
+    }
+
+    /// What Claude answered in advance, while it counts: during its action and for a moment after
+    /// (FR-450); none otherwise.
+    private var preset: DialogAnswer {
+        if acting { return dialogAnswer }
+        if let until = presetUntil, ContinuousClock.now < until { return dialogAnswer }
+        return DialogAnswer()
+    }
+
+    /// Keeps a dialog for Claude (FR-448): the scripts waiting on the page are told at once, and
+    /// the dialog gets Cancel when Claude hasn't answered within the limit (FR-449).
+    private func hold(
+        _ kind: String, _ message: String, _ defaultText: String, reply: @escaping @MainActor (Bool, String?) -> Void
+    ) {
+        if let old = held {  // a page shows one at a time; should another come, the old one is let go
+            held = nil
+            old.reply(false, nil)
+        }
+        let h = Held(kind: kind, message: message, defaultText: defaultText, reply: reply)
+        held = h
+        let told = SafariBrowser.Failure.dialogHeld(page: name, kind: kind, message: message)
+        let waiting = waiters
+        waiters = [:]
+        for w in waiting.values { w(.failure(told)) }
+        let limit = holdLimit
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(for: limit)
+            guard let self, self.held?.id == h.id else { return }
+            self.cancelHeld(why: "after 5 minutes without Claude's answer")
+        }
+    }
+
+    /// Gives a held dialog Cancel (a prompt: no text) and notes it for Claude (FR-449).
+    private func cancelHeld(why: String) {
+        guard let h = held else { return }
+        held = nil
+        note(h.kind, h.message, h.kind == "confirm" ? "cancel" : "")
+        if let last = dialogs.indices.last, dialogs[last].hasSuffix(".") {
+            dialogs[last] = String(dialogs[last].dropLast()) + ", \(why)."
+        }
+        h.reply(false, nil)
+    }
+
+    /// Claude's answer to the held dialog (FR-448): OK or Cancel, and for a prompt its text (or
+    /// the page's own suggestion). Then the page as it is once it settled.
+    func answerDialog(ok: Bool, text: String?) async throws -> PageScripts.Page {
+        guard let h = held else {
+            throw SafariBrowser.Failure.failed(
+                "No dialog is waiting in page \"\(name)\". Read the page with browser_read to see it as it is.")
+        }
+        let before = web?.url?.absoluteString
+        held = nil
+        h.reply(ok, h.kind == "prompt" ? (text ?? h.defaultText) : nil)
+        await settle(from: before, atMost: .seconds(2))
+        return try await page(offset: 0)
     }
 
     /// A link that opens a new window or tab (target=_blank, window.open) opens here instead:
@@ -204,8 +292,16 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate {
         return nil
     }
 
-    /// Drops the page and its cookies (the Mac was unlocked, or Claude closed it).
+    /// Drops the page and its cookies (Claude closed it, or left it unused). A held dialog gets
+    /// Cancel first, so the page's script isn't left waiting.
     func discard() {
+        if let h = held {
+            held = nil
+            h.reply(false, nil)
+        }
+        let waiting = waiters
+        waiters = [:]
+        for w in waiting.values { w(.failure(SafariBrowser.Failure.noWindow)) }
         web?.stopLoading()
         web?.navigationDelegate = nil
         web?.uiDelegate = nil
@@ -250,6 +346,7 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate {
     /// Runs `start`, then waits for the page it loads to finish, at most `loadLimit`.
     private func navigate(_ start: (WKWebView) -> Void) async throws {
         let w = await view()
+        cancelHeld(why: "before the page was replaced")  // FR-449
         failure = nil
         finished?.resume(returning: false)
         let before = w.url
@@ -276,25 +373,62 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate {
         }
     }
 
-    /// After a click or a form: waits up to 5 s for the address to change and the page to finish.
-    private func settle(from address: String?) async {
-        for _ in 0..<50 {
+    /// After a click or a form: waits up to 5 s for the address to change and the page to
+    /// finish, or for a dialog the page holds for Claude (FR-448).
+    private func settle(from address: String?, atMost: Duration = .seconds(5)) async {
+        let deadline = ContinuousClock.now + atMost
+        while ContinuousClock.now < deadline {
             try? await Task.sleep(for: .milliseconds(100))
-            guard let w = web else { return }
+            guard let w = web, held == nil else { return }
             if w.url?.absoluteString != address, !w.isLoading { return }
         }
     }
 
-    private func script(_ code: String) async throws -> String {
+    /// Runs a script in the page, as text (`text` turns its value into text). A page holding a
+    /// dialog runs no script until the dialog is answered: one that would start is refused, and
+    /// one running when a dialog comes is answered with the dialog (its late result is dropped).
+    private func evaluate(_ code: String, text: @escaping @MainActor @Sendable (Any?) -> String) async throws
+        -> String
+    {
+        if let h = held { throw SafariBrowser.Failure.dialogHeld(page: name, kind: h.kind, message: h.message) }
         let w = await view()
+        let id = UUID()
+        return try await withCheckedThrowingContinuation { (c: CheckedContinuation<String, Error>) in
+            waiters[id] = { c.resume(with: $0) }
+            // The reply is taken as WebKit delivers it, in order with the page's dialogs: a dialog
+            // the page shows right after the script finished doesn't take the script's result.
+            w.evaluateJavaScript(code) { [weak self] value, error in
+                guard let self, let waiter = self.waiters.removeValue(forKey: id) else { return }
+                waiter(error.map { .failure($0) } ?? .success(text(value)))
+            }
+        }
+    }
+
+    private func script(_ code: String) async throws -> String {
         do {
-            let value = try await w.evaluateJavaScript(code)
-            if let s = value as? String { return s }
-            if let n = value as? NSNumber { return n.stringValue }
-            return value.map { "\($0)" } ?? ""
+            return try await evaluate(code) { value in
+                if let s = value as? String { return s }
+                if let n = value as? NSNumber { return n.stringValue }
+                return value.map { "\($0)" } ?? ""
+            }
+        } catch let f as SafariBrowser.Failure {
+            throw f
         } catch {
             throw SafariBrowser.Failure.failed("The page's script failed: \(error.localizedDescription)")
         }
+    }
+
+    /// Claude's action starts: its answers in advance count until it ends (FR-432).
+    private func begin(_ answer: DialogAnswer) {
+        acting = true
+        dialogAnswer = answer
+        presetUntil = nil
+    }
+
+    /// Claude's action ended: its answers in advance count for a moment more (FR-450).
+    private func end() {
+        acting = false
+        presetUntil = dialogAnswer.given ? ContinuousClock.now + presetWindow : nil
     }
 
     private func page(offset: Int) async throws -> PageScripts.Page {
@@ -327,12 +461,8 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate {
     }
 
     func click(_ ref: String, answer: DialogAnswer = DialogAnswer()) async throws -> PageScripts.Page {
-        acting = true
-        dialogAnswer = answer
-        defer {
-            acting = false
-            dialogAnswer = DialogAnswer()
-        }
+        begin(answer)
+        defer { end() }
         guard let w = web else { throw SafariBrowser.Failure.noWindow }
         let before = w.url?.absoluteString
         let answer = try await script(PageScripts.click(ref))
@@ -354,12 +484,8 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate {
     func type(_ ref: String, text: String, submit: Bool, answer: DialogAnswer = DialogAnswer()) async throws
         -> PageScripts.Page
     {
-        acting = true
-        dialogAnswer = answer
-        defer {
-            acting = false
-            dialogAnswer = DialogAnswer()
-        }
+        begin(answer)
+        defer { end() }
         guard let w = web else { throw SafariBrowser.Failure.noWindow }
         let before = w.url?.absoluteString
         try check(
@@ -385,25 +511,24 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate {
     }
 
     func run(_ code: String, answer: DialogAnswer = DialogAnswer()) async throws -> String {
-        acting = true
-        dialogAnswer = answer
-        defer {
-            acting = false
-            dialogAnswer = DialogAnswer()
-        }
+        begin(answer)
+        defer { end() }
         guard let w = web else { throw SafariBrowser.Failure.noWindow }
         let before = w.url?.absoluteString
         do {
             // Given to WebKit as it is: a page's Content Security Policy forbids the eval that
             // Safari's wrapper uses (seen live on GitHub), but not a script the app itself runs.
-            let value = try await w.evaluateJavaScript(code)
-            if let s = value as? String { return s }
-            if let v = value, JSONSerialization.isValidJSONObject(v),
-                let data = try? JSONSerialization.data(withJSONObject: v)
-            {
-                return String(decoding: data, as: UTF8.self)
+            return try await evaluate(code) { value in
+                if let s = value as? String { return s }
+                if let v = value, JSONSerialization.isValidJSONObject(v),
+                    let data = try? JSONSerialization.data(withJSONObject: v)
+                {
+                    return String(decoding: data, as: UTF8.self)
+                }
+                return value.map { "\($0)" } ?? "undefined"
             }
-            return value.map { "\($0)" } ?? "undefined"
+        } catch let f as SafariBrowser.Failure {
+            throw f
         } catch {
             // A script that sends the page elsewhere ends with the page it ran in (seen live).
             await settle(from: before)
@@ -418,12 +543,8 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate {
     private func act(_ code: String, ref: String, mayNavigate: Bool, answer: DialogAnswer) async throws
         -> (detail: String, page: PageScripts.Page)
     {
-        acting = true
-        dialogAnswer = answer
-        defer {
-            acting = false
-            dialogAnswer = DialogAnswer()
-        }
+        begin(answer)
+        defer { end() }
         guard let w = web else { throw SafariBrowser.Failure.noWindow }
         let before = w.url?.absoluteString
         let detail = try SafariBrowser.detail(try await script(code), ref: ref)

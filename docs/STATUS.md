@@ -1,12 +1,24 @@
 # Status
 
-Last updated: 2026-11-14 (the locked browser takes Safari's cookies again with every page; public download on GitHub with a new-version notice; never disturb the user: Mail, WhatsApp sending, Notes' window editing, Messages' window actions, Reminders' window setters removed; test sweep on exit; releases are tags on commits; cloud-only files read again; machine list shows Latchkey versions; WhatsApp built; Add to Claude button; plugin withdrawn; README rewritten as a short product page; relay web pages redone; purkki paired; spec 010 shipped)
+Last updated: 2026-11-15 (Claude's pages always in Latchkey's own browser, by name, with dialogs Claude answers; the locked browser takes Safari's cookies again with every page; public download on GitHub with a new-version notice; never disturb the user: Mail, WhatsApp sending, Notes' window editing, Messages' window actions, Reminders' window setters removed; test sweep on exit; releases are tags on commits; cloud-only files read again; machine list shows Latchkey versions; WhatsApp built; Add to Claude button; plugin withdrawn; README rewritten as a short product page; relay web pages redone; purkki paired; spec 010 shipped)
 
 Xcode signing ready (2026-10-20): Toni's Xcode account has a valid "Apple Development" certificate
 (certificate expires 2027-07-22). Keep the team ID out of committed project files
 (open source); put it in a gitignored `macos/Local.xcconfig` as `DEVELOPMENT_TEAM`.
 
 ## Current phase
+
+Pages that never freeze, one set per chat (Toni, 2026-11-15; spec 005 FR-444 to FR-451, plan
+D11): on Target a "Remove item?" dialog froze Claude's background Safari tab (Latchkey can't read
+or answer a background tab's dialog without bringing it forward), and two other chats loaded
+their pages over the cart in Claude's one tab. Now Claude's own pages always open in Latchkey's
+own browser, locked or not (Safari only for the Owner's tabs, and only in a call that names
+one). Each url opened without a page name is a new page with a short name (like p4k2) that
+Claude passes on later calls, since Claude's apps send every chat over one connection (at most
+10, each closed after 30 minutes unused). A confirm or prompt Claude didn't answer in advance
+waits and is shown to Claude, which answers it with `browser_act` action `dialog`; Cancel after
+5 minutes. An OK given with an action also answers a dialog up to 5 s later. The Settings choice
+of a Safari tab or window is gone.
 
 Sign-ins while locked (Toni, 2026-11-14; spec 005 FR-441, FR-442, plan D7): Latchkey's own
 browser copied Safari's cookies once, when it started; on 2026-11-14 Amazon answered Claude
@@ -72,6 +84,10 @@ after the app was quit.
 
 ## Next steps
 
+0. Remove Safari's own-tab code (spec 005 plan D2, D6: Claude's tab or window in Safari, the
+   "Claude Opens Pages In" setting's stored value, `BrowserPlace`) once a release has closed any
+   tab an earlier version left open (it closes after 30 minutes unused); the Owner's-tab code
+   (D8) shares its survey and checks, so it moves to its own type first.
 1. Changing notes with checklists, links, or images: the iCloud.com route was probed on
    2026-11-07 and stopped (spec 002 research, "Notes with checklists through iCloud.com"): the
    approval and the drawing in a hidden view work, but iCloud.com's editor takes no input
