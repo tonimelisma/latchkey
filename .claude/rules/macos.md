@@ -156,4 +156,8 @@ paths:
   session running the app's binary) runs under that program's permissions: never take a
   second copy's "missing" permissions at face value. Only one copy runs (FR-207).
 
+- Safari keeps a closed window for a while as an invisible window with no tabs, under its old id
+  (seen 2026-11-15: still listed 10 s after `close`). A check that a window closed looks only at
+  visible windows with tabs.
+
 Add new gotchas here as they are discovered.

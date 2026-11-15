@@ -88,9 +88,21 @@ let closeWindow = """
     end run
     """
 
-/// The ids of Safari's windows.
+/// The ids of Safari's windows that can be seen. A closed window stays a while as an invisible
+/// window with no tabs (seen 2026-11-15: still there 10 s after closing), which isn't open.
 @MainActor func windowIDs() async -> Set<String> {
-    let out = (try? await runner.run("tell application \"Safari\" to return id of every window", [])) ?? ""
+    let out =
+        (try? await runner.run(
+            """
+            tell application "Safari"
+            set out to {}
+            repeat with w in windows
+            if visible of w and (count of tabs of w) > 0 then set end of out to ((id of w) as text)
+            end repeat
+            set AppleScript's text item delimiters to ","
+            return out as text
+            end tell
+            """, [])) ?? ""
     return Set(out.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty })
 }
 
@@ -333,7 +345,7 @@ if let pages = ProcessInfo.processInfo.environment["LATCHKEY_PAGES"] {
         done = try await b.attach(try element(page, "field:file", "Attach"), files: [small])
         try await Task.sleep(for: .milliseconds(300))
         var log = try await b.run("document.getElementById('filelog').textContent")
-        check(log.contains("latchkey-check-upload.txt=21:uploaded by the check"), "a file field got the file (\(log))")
+        check(log.contains("latchkey-check-upload.txt=21:uploaded by the chec"), "a file field got the file (the page logs 20 characters) (\(log))")
         let big = PageScripts.Attachment(name: "latchkey-check-big.bin", type: "application/octet-stream", data: Data(repeating: 65, count: 3_000_000))
         done = try await b.attach(try element(page, "field:file", "Attach"), files: [big])
         try await Task.sleep(for: .milliseconds(500))
