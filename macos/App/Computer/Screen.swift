@@ -86,6 +86,15 @@ struct SystemScreen: ScreenStateSource {
     }
 }
 
+/// What Latchkey's log says when the Mac is locked or unlocked (FR-672).
+enum ScreenLock {
+    static func line(locked: Bool) -> String {
+        locked
+            ? "The Mac was locked: pages Claude opens load in Latchkey's own browser until it is unlocked"
+            : "The Mac was unlocked: Claude's pages open in Safari again"
+    }
+}
+
 /// Plain reasons the screen can't be used now (FR-504); nil when it can.
 /// A sleeping display is never woken (Toni, 2026-11-02: Latchkey doesn't get around the Mac's
 /// idle lock, lid open or closed; waking it reset the idle time, so Claude's looks could keep an

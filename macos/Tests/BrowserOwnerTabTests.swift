@@ -301,6 +301,23 @@ import Testing
         #expect(locked.isError, "no page open yet: \(locked.content.jsonText)")
     }
 
+    /// FR-443: an answer from Latchkey's own browser begins by saying so; Safari's doesn't.
+    @MainActor @Test func answersFromLatchkeysOwnBrowserSaySo() async throws {
+        let fake = FakeSafariTabs()
+        let own = LockedBrowser(cookies: { [] })
+        defer { own.discard() }
+        _ = try await own.open(html: "<p>hello there</p>", base: URL(string: "https://example.test/")!)
+        let t = tools(fake, locked: { own })
+        let read = await t["browser_read"]!.handler(.object([:]))
+        #expect(!read.isError, "\(read.content.jsonText)")
+        #expect(read.content.jsonText.contains("From Latchkey's own browser, not Safari"))
+        #expect(read.content.jsonText.contains("hello there"))
+        let picture = await t["browser_read"]!.handler(.object(["screenshot": .bool(true)]))
+        #expect(picture.content.jsonText.contains("From Latchkey's own browser, not Safari"))
+        let safari = await tools(fake)["browser_read"]!.handler(.object(["tab": .number(2)]))
+        #expect(!safari.content.jsonText.contains("Latchkey's own browser"))
+    }
+
     /// FR-430: when Safari doesn't answer while locked, the list says the tabs need unlocking.
     @MainActor @Test func whileLockedASilentSafariIsSaidPlainly() async {
         let own = LockedBrowser()

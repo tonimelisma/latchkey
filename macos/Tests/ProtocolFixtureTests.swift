@@ -89,6 +89,21 @@ func jsonObject(_ data: Data) throws -> NSObject {
         #expect(encodedState["time_zone"] is NSNull)
         #expect(encodedState["lid_closed"] is NSNull)
         #expect(encodedState["time_remaining_min"] is NSNull)
+        #expect(encodedState["screen_locked"] == nil, "left out when not known")
+    }
+
+    /// FR-671: the Mac says whether it is locked.
+    @Test func theScreensLockIsSent() throws {
+        var state = AgentState.sample
+        state.screenLocked = true
+        let object = try jsonObject(AgentMessage.state(StateUpdate(state: state)).encode()) as! [String: Any]
+        #expect((object["state"] as! [String: Any])["screen_locked"] as? Bool == true)
+    }
+
+    /// FR-672: what the log says for a lock and an unlock.
+    @Test func lockAndUnlockReadDifferently() {
+        #expect(ScreenLock.line(locked: true).hasPrefix("The Mac was locked"))
+        #expect(ScreenLock.line(locked: false).hasPrefix("The Mac was unlocked"))
     }
 }
 

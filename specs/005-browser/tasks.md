@@ -29,3 +29,5 @@
   arrives with the next page, one the page took away comes back, the page's own stay; the
   tools' answers), then Safari's cookies taken again with every page Claude opens in Latchkey's
   own browser and when Claude asks (2026-11-14). *FR-441, FR-442, D7.*
+- **T411** Test first (the tools' answers through Latchkey's own browser begin with the line;
+  Safari's don't), then the line on every answer from that browser (2026-11-15). *FR-443, D7.*

@@ -148,6 +148,13 @@ func statusLine(name, kind string, s *agentproto.State) string {
 		line += ", " + p
 	}
 	line += " · " + keepAwakePhrase(s.KeepAwake)
+	if s.ScreenLocked != nil { // FR-671
+		if *s.ScreenLocked {
+			line += " · locked"
+		} else {
+			line += " · unlocked"
+		}
+	}
 	if s.PowerSource == agentproto.PowerBattery && !s.Charging && s.BatteryPercent <= lowBatteryWarning {
 		line += " · battery low: the Mac goes to sleep at 15%"
 	}

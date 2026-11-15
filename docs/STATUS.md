@@ -12,9 +12,11 @@ Sign-ins while locked (Toni, 2026-11-14; spec 005 FR-441, FR-442, plan D7): Latc
 browser copied Safari's cookies once, when it started; on 2026-11-14 Amazon answered Claude
 signed out there while Safari was still signed in. It now takes Safari's cookies again before
 every page Claude opens (Safari's copy wins; cookies only that browser holds stay), and Claude
-can ask for it with `browser_read sign_in_again`, which also loads the page again. Not built,
-proposed to Toni and undecided: each answer from that browser saying it isn't Safari, the
-Mac's state line saying locked or unlocked, and lock and unlock in Latchkey's log.
+can ask for it with `browser_read sign_in_again`, which also loads the page again. Since
+2026-11-15 (Toni: "do the undecided bits"; spec 005 FR-443, spec 001 FR-671, FR-672): every
+answer from that browser begins by saying it is Latchkey's own browser, not Safari; the Mac's
+state line ends "locked" or "unlocked" (the Mac tells the relay at once on a change; new
+optional `screen_locked` in its state); and each lock and unlock is an event in Latchkey's log.
 
 Public download (Toni, 2026-11-09; spec 001 FR-669, FR-670): every `make -C macos install` now
 also publishes its disk image as GitHub release `mac-<x.y.z>` (asset `Latchkey.dmg`; the README

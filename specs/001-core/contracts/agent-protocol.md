@@ -342,6 +342,10 @@ to Unicode letter case (" 2", " 3", … appended), and `welcome` carries the nam
 {"type": "welcome", "heartbeat_interval_s": 15, "server_time": "...", "name": "homeserver 2"}
 ```
 
+A Mac's state adds `screen_locked` (true or false, optional: left out when not known; FR-671).
+The Mac reads it as it is for every state it sends, the heartbeat's too, and sends a state at
+once when macOS says the screen was locked or unlocked.
+
 A Linux server's state adds `uptime_s` (seconds, optional) and sends the Mac-only fields with
 fixed values the relay ignores for it: `battery_percent` 0, `power_source` "unknown", `charging`
 and `low_power_mode` false, `time_remaining_min` and `lid_closed` null, `thermal_state` "nominal",

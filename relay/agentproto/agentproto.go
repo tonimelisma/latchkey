@@ -118,8 +118,10 @@ type State struct {
 	TimeZone         *string `json:"time_zone"`
 	KeepAwake        string  `json:"keep_awake"`
 	// UptimeS is how long a Linux server has been up, in seconds (spec 010); a Mac leaves it out.
-	UptimeS    *int64    `json:"uptime_s,omitempty"`
-	ObservedAt time.Time `json:"observed_at"`
+	UptimeS *int64 `json:"uptime_s,omitempty"`
+	// ScreenLocked is whether a Mac's screen is locked (FR-671); left out when not known.
+	ScreenLocked *bool     `json:"screen_locked,omitempty"`
+	ObservedAt   time.Time `json:"observed_at"`
 }
 
 // Values of State.PowerSource.

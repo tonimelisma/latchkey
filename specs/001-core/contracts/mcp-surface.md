@@ -249,7 +249,7 @@ block, built by the relay from the state it holds: the answering machine's line 
 account has other machines, a second line naming them (Toni, 2026-10-31):
 
 ```
-Toni's MacBook Pro (Mac): online · 64% battery, on battery power · keep-awake on
+Toni's MacBook Pro (Mac): online · 64% battery, on battery power · keep-awake on · locked
 Other machines: homeserver (Linux, online)
 ```
 
@@ -267,6 +267,7 @@ other non-text block the line break is always added. The machine's own blocks ar
 - Mac power: "on battery power", "plugged in", "charging", or "on UPS power".
 - Mac keep-awake: "keep-awake on", "keep-awake off", "keep-awake off (battery low)", "keep-awake
   off (too hot)", "keep-awake off (not approved in System Settings)".
+- Mac screen, after keep-awake, when the Mac reports it (FR-671): "locked" or "unlocked".
 - Mac warnings appended: "battery low: the Mac goes to sleep at 15%" (on battery at 25% or less),
   "the Mac is too hot and may go to sleep" (thermal serious or critical).
 - Linux uptime: "up 12 days" (two days or more), "up 5 hours" (two hours or more), "up 20 minutes".

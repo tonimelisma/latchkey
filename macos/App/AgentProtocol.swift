@@ -39,13 +39,15 @@ struct AgentState: Codable, Equatable, Sendable {
     var keepAwake: KeepAwake
     /// A Linux server's uptime (spec 010); a Mac never sends it, but the shared fixtures carry it.
     var uptimeS: Int64? = nil
+    /// Whether the Mac's screen is locked (spec 001 FR-671); left out when not known.
+    var screenLocked: Bool? = nil
     var observedAt: Date
 
     enum CodingKeys: String, CodingKey {
         case batteryPercent = "battery_percent", powerSource = "power_source", charging
         case timeRemainingMin = "time_remaining_min", thermalState = "thermal_state"
         case lowPowerMode = "low_power_mode", lidClosed = "lid_closed", timeZone = "time_zone"
-        case keepAwake = "keep_awake", uptimeS = "uptime_s", observedAt = "observed_at"
+        case keepAwake = "keep_awake", uptimeS = "uptime_s", screenLocked = "screen_locked", observedAt = "observed_at"
     }
 
     func encode(to encoder: Encoder) throws {
@@ -60,6 +62,7 @@ struct AgentState: Codable, Equatable, Sendable {
         try c.encode(timeZone, forKey: .timeZone)
         try c.encode(keepAwake, forKey: .keepAwake)
         try c.encodeIfPresent(uptimeS, forKey: .uptimeS)  // left out when nil
+        try c.encodeIfPresent(screenLocked, forKey: .screenLocked)
         try c.encode(observedAt, forKey: .observedAt)
     }
 }

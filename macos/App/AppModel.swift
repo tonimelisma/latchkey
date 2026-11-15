@@ -382,7 +382,14 @@ final class AppModel {
                     // The browser used while locked goes at once, with its copy of Safari's cookies
                     // (spec 005 FR-422; security review 2026-11-02).
                     BrowserCapability.lockedBrowser.discard()
+                    self?.screenChanged(locked: false)
                 }
+            })
+        observers.append(
+            DistributedNotificationCenter.default().addObserver(
+                forName: .init("com.apple.screenIsLocked"), object: nil, queue: .main
+            ) { [weak self] _ in
+                MainActor.assumeIsolated { self?.screenChanged(locked: true) }
             })
         let ws = NSWorkspace.shared.notificationCenter
         observers.append(
@@ -468,6 +475,13 @@ final class AppModel {
         await connection?.sendState()
     }
 
+    /// The Mac was locked or unlocked: kept in Latchkey's log, and the relay hears at once, so
+    /// Claude's next answer says which (FR-671, FR-672).
+    private func screenChanged(locked: Bool) {
+        event(.power, ScreenLock.line(locked: locked))
+        Task { await connection?.sendState() }
+    }
+
     /// The keep-awake line last logged (FR-620).
     private let keepAwakeChanges = Changes<String>()
     /// Retries after keep-awake failed to take effect, since the last success.
@@ -475,7 +489,12 @@ final class AppModel {
 
     func approveHelper() { keepAwakeController.helper.openApprovalSettings() }
 
-    var agentState: AgentState { power.agentState(keepAwake: keepAwake) }
+    /// Read as it is each time (the heartbeat too), so the relay's line is never long behind.
+    var agentState: AgentState {
+        var s = power.agentState(keepAwake: keepAwake)
+        s.screenLocked = SystemScreen().isLocked()  // FR-671
+        return s
+    }
 
     // MARK: capabilities
 

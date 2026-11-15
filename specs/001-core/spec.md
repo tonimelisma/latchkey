@@ -559,6 +559,12 @@ Why: on 2026-10-25 commands left processes and files on the Mac that nobody list
   image without the hosted relay's address or any other private value of the deployment, at a
   link that always gives the newest one (Toni, 2026-11-09: published although its signature
   names the signer and the team).
+- **FR-671** The line of the Mac's state (FR-065) shall say whether the Mac is locked or
+  unlocked, and the relay shall hear of a lock or unlock at once, so the next answer says which
+  (Toni, 2026-11-15: an agent could only guess the Mac was locked, from a page that came back
+  signed out).
+- **FR-672** The Mac's activity log shall hold an event each time the Mac is locked or unlocked
+  (FR-633), so Claude can read from Latchkey's log when it happened (Toni, 2026-11-15).
 - **FR-074** A development or test build of the app shall be a different app from the installed
   one in macOS's eyes: it shall not share the installed app's settings, stored pairing and keys,
   privacy permissions, or keep-awake helper, and shall not receive the installed app's links

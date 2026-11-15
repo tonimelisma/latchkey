@@ -177,6 +177,14 @@ func TestStatusLine(t *testing.T) {
 
 	assert.Equal(t, n+" (Mac): online", statusLine(n, store.KindMac, nil))
 
+	// FR-671: locked or unlocked, when the Mac says which.
+	s = lastState(64, "battery")
+	locked := true
+	s.ScreenLocked = &locked
+	assert.Equal(t, n+" (Mac): online · 64% battery, on battery power · keep-awake on · locked", statusLine(n, store.KindMac, s))
+	locked = false
+	assert.Equal(t, n+" (Mac): online · 64% battery, on battery power · keep-awake on · unlocked", statusLine(n, store.KindMac, s))
+
 	// A Linux server: its uptime, never battery or keep-awake (spec 010 plan D5).
 	up := int64(12*24*3600 + 3600)
 	assert.Equal(t, "homeserver (Linux): online · up 12 days", statusLine("homeserver", store.KindLinux, &agentproto.State{UptimeS: &up}))

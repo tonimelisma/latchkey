@@ -91,6 +91,8 @@ apps. It works in the background instead.
   Reminders (create, change, complete, delete); Contacts; location and maps; web pages Claude
   opens itself, in a browser of Latchkey's own that uses your Safari sign-ins (taken from Safari
   again with each page Claude opens, so a site that signed it out there is signed in again).
+  Each answer from that browser tells Claude it isn't Safari, and every answer from the Mac
+  says whether it is locked or unlocked.
 - **Only while the Mac is unlocked:** Safari (Claude opens a tab of its own behind yours, in the
   background, and can also read and act in your tabs when you ask); looking at the screen;
   computer control.

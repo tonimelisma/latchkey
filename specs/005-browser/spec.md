@@ -186,6 +186,10 @@ phone, Claude can't check a reservation in the Owner's account or fill in a form
   back signed out after a click or typing (Toni, 2026-11-14: "allow agent to initiate
   real->latchkey browser cookie copy manually"). While Claude's page is in Safari, the answer
   shall say that Safari is already signed in as the Owner, and nothing shall change.
+- **FR-443** Every answer that comes from Latchkey's own browser (a page, a script's result, a
+  picture) shall begin by saying that it is from Latchkey's own browser and not Safari, that
+  the Mac is locked, and that the Owner's open Safari tabs aren't in it (Toni, 2026-11-15: an
+  agent there took it for Safari until it closed the page).
 
 ## Success criteria
 
