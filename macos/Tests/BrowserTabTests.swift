@@ -283,7 +283,9 @@ final class FakeSafariTabs: ScriptRunner, @unchecked Sendable {
 /// https://news.example.com/.
 @Suite struct OwnerTabNavigationTests {
     func picked(_ fake: FakeSafariTabs) async throws -> SafariBrowser {
-        let b = SafariBrowser(scripts: fake, settleLimit: .seconds(3))
+        // 10 s: the allowance (the limit plus 1 s) must outlast a slow moment while every suite
+        // runs side by side (3 s ran out at 4.05 s, 2026-11-15).
+        let b = SafariBrowser(scripts: fake, settleLimit: .seconds(10))
         try await b.pick("10.2")
         _ = try await b.read(offset: 0)  // marked, as any use marks it
         return b

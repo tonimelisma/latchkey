@@ -145,7 +145,10 @@ phone, Claude can't check a reservation in the Owner's account or fill in a form
   given Claude's text or none, and the next answer shall say what each said. When a page
   already waits on a dialog it showed before Latchkey's answers were in it, Claude shall be told
   so within about 2 seconds (Claude's own page can then be loaded over or closed; the Owner's
-  tab is left as it is), instead of waiting for Safari's time limit (Toni, 2026-11-03: "25
+  tab is left as it is), instead of waiting for Safari's time limit (2026-11-15: within 6 seconds,
+  and Claude is told the tab may also be busy or paused by Safari and to try again, since a
+  busy Bank of America tab was reported as waiting on a dialog it didn't have; and how computer
+  control can answer a real one) (Toni, 2026-11-03: "25
   seconds to stall on Claude is too much"; "Answer them, Claude can say OK").
 
 - **FR-433** While Browser is Read & write, Claude shall be able to press keys in the page it
@@ -186,7 +189,10 @@ phone, Claude can't check a reservation in the Owner's account or fill in a form
   browser's copy of it (same site, name, and path), also one the site took away here, and a
   cookie only this browser holds stays (Toni, 2026-11-14: "copying cookies from real browser
   would always work"; a site had signed Claude out in this browser while Safari stayed signed
-  in). Amends FR-420's "as they are when it starts"; FR-421 holds for every copy.
+  in). Amends FR-420's "as they are when it starts"; FR-421 holds for every copy. (2026-11-15:
+  the cookies taken are those of the site the page goes to, when it goes there, and Claude's
+  pages share them, as a browser's tabs do: copying all of Safari's 3,500 into every new page
+  took over 100 seconds, so pages timed out.)
 - **FR-442** While Claude's page is in Latchkey's own browser, Claude shall be able to ask for
   the Owner's Safari cookies to be taken again and its page loaded again, for a page that came
   back signed out after a click or typing (Toni, 2026-11-14: "allow agent to initiate

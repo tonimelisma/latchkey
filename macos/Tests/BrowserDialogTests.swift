@@ -107,7 +107,8 @@ import WebKit
         _ = try await b.read(offset: 0)  // the mark seen with the window as it is
         fake.windows[0].tabs[1].waiting = true
         await #expect(throws: SafariBrowser.Failure.dialogWaiting) { _ = try await b.read(offset: 0) }
-        #expect(BrowserCapability.explain(.dialogWaiting).contains("Nothing was done"))
+        let said = BrowserCapability.explain(.dialogWaiting)
+        #expect(said.contains("nothing was done") && said.contains("try again") && said.contains("computer control"))
         #expect(fake.windows[0].tabs[1].url == "https://news.example.com/")
     }
 

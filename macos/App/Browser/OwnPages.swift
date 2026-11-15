@@ -1,4 +1,5 @@
 import Foundation
+import WebKit
 
 /// Claude's pages in Latchkey's own browser, by name (spec 005 FR-444 to FR-446, FR-451; Toni,
 /// 2026-11-15: "Page names"). Claude's apps send every chat's calls over one connection, so
@@ -28,6 +29,9 @@ final class OwnPages {
     }
 
     private var pages: [String: Entry] = [:]
+    /// The cookie store all of Claude's pages share, as a browser's tabs do: memory only (FR-421),
+    /// made with the first page and dropped when every page closes at once (pause, a level change).
+    private var store: WKWebsiteDataStore?
     private var order: [String] = []
     private let cookies: @Sendable () -> [SafariCookies.Cookie]
     private let limit: Int
@@ -60,7 +64,8 @@ final class OwnPages {
                 "\(limit) pages of Claude's are open, the most at once, so no new one was opened. Close one with browser_act (action close, page), or open the address in one of them with browser_read (url and page).\n\n"
                     + listing())
         }
-        let b = LockedBrowser(cookies: cookies)
+        if store == nil { store = .nonPersistent() }
+        let b = LockedBrowser(cookies: cookies, store: store)
         b.name = newName()
         pages[b.name] = Entry(browser: b, used: Date())
         order.append(b.name)
@@ -120,6 +125,7 @@ final class OwnPages {
 
     func closeAll() {
         for name in order { close(name) }
+        store = nil
     }
 
     /// Each open page: its name, title, and address, oldest first.

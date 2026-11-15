@@ -126,6 +126,46 @@ import Testing
         #expect(await b.takeSafarisCookies() == 0, "nothing differs now")
     }
 
+    /// 2026-11-15: a page takes only its own site's Safari cookies (copying all 3,500 took over
+    /// 100 seconds, so every new page timed out), and a page opens fast however many Safari holds.
+    @Test func aPageTakesOnlyItsSitesCookiesAndOpensFast() async throws {
+        var all = (0..<3500).map {
+            SafariCookies.Cookie(
+                domain: "site\($0 % 1400).example", name: "c\($0)", path: "/", value: "v", secure: false,
+                httpOnly: false, expires: Date().addingTimeInterval(3600))
+        }
+        all.append(
+            SafariCookies.Cookie(
+                domain: ".test.example", name: "sid", path: "/", value: "mine", secure: false, httpOnly: false,
+                expires: Date().addingTimeInterval(3600)))
+        let jar = Jar()
+        jar.cookies = all
+        let b = LockedBrowser(cookies: { jar.cookies })
+        defer { b.discard() }
+        let started = ContinuousClock.now
+        _ = try await b.open(html: "<p>Hi</p>", base: base)
+        // Seconds, not the minutes a full copy took (it waits only for the page, also while the
+        // suites run side by side).
+        #expect(ContinuousClock.now - started < .seconds(20), "\(ContinuousClock.now - started)")
+        let seen = try await pageCookies(b) { $0.contains("sid=mine") }
+        #expect(seen == "sid=mine", "\(seen)")
+        #expect(LockedBrowser.covers(".example.com", "www.example.com"))
+        #expect(LockedBrowser.covers("example.com", "example.com"))
+        #expect(!LockedBrowser.covers("ample.com", "example.com"))
+        #expect(!LockedBrowser.covers("a.example.com", "example.com"))
+    }
+
+    /// Claude's pages share one cookie store, as a browser's tabs do: a sign-in one page made is
+    /// the other's too.
+    @Test func claudesPagesShareTheirCookies() async throws {
+        let pages = OwnPages(cookies: { [] })
+        defer { pages.closeAll() }
+        let a = try await pages.open(html: "<p>A</p>", base: base)
+        _ = try await pages.page(a).run("document.cookie = 'made=here; path=/'; 1")
+        let b = try await pages.open(html: "<p>B</p>", base: base)
+        #expect(try await pageCookies(try pages.page(b)) { $0.contains("made=here") }.contains("made=here"))
+    }
+
     @Test func signingInAgainNeedsAPage() async throws {
         let b = LockedBrowser(cookies: { [] })
         await #expect(throws: SafariBrowser.Failure.self) { _ = try await b.signInAgain() }

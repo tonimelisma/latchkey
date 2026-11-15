@@ -291,7 +291,8 @@ answer); the time limit was 25 s (ScriptRunner).
   restore its own functions; then its dialog waits, and the next check below says so.
 - A page that already waits (its dialog came before the answers were in, e.g. at load): every
   check of a page (the mark check in the survey and the guard, picking, putting a tab back) has
-  a 2 s limit; on -1712 the survey marks the tab waiting, and a script refuses at once
+  a 2 s limit (6 s for the survey, the guard, and picking since 2026-11-15: a busy or paused
+  background tab took longer and was told as a dialog; Claude is told it may be either); on -1712 the survey marks the tab waiting, and a script refuses at once
   (`dialogWaiting`). The tab is still Claude's only when it is where it was, shows its last
   address, and the window's tabs (their number, order, and addresses, as one SHA-256
   fingerprint) are exactly as when Claude's mark was last seen there; it can then be loaded
@@ -420,9 +421,20 @@ dialogs Claude answers").
   type WebKit can't show, or that is a PDF (an off-screen view never finished loading one, live
   check 2026-11-15), and keeps its address and type: the answer at once says it is a file and to
   save it with `download`; no script runs in that page; saving the page fetches the address
-  itself (D10, with Safari's cookies). Options weighed: letting WebKit show PDFs (needs a window,
+  itself (D10, with Safari's cookies). WebKit's own stop of such a load (error 102) counts as a
+  file too, and WebKit's word of a load counts only for the load Latchkey waits for (a late
+  error of an earlier one had ended or failed the next). Options weighed: letting WebKit show PDFs (needs a window,
   which would disturb the Owner), a longer wait (still a timeout), fetching every PDF at once
   (a download Claude didn't ask for).
+- **Cookies per site** (FR-441, 2026-11-15): all of Claude's pages share one memory-only cookie
+  store (`OwnPages`; dropped when every page closes at once), and a page takes Safari's cookies
+  for a site (the cookies whose domain covers the host) when it goes there: before Claude's url
+  loads (Safari's copy wins), and in the navigation-action check for any other site it goes to
+  (a click, a redirect, a frame: only cookies the store lacks, so nothing changes under a form).
+  The cookies are set all at once. Measured 2026-11-15: 3,500 cookies into a new store took 145 s
+  one after another, 106 s all at once; since every new page copied them all, pages, pictures,
+  and a PDF timed out in the live checks. Options weighed: one full copy per app run (still 100 s
+  for the first page), copying in the background (pages signed out until it ends).
 - **Answers given in advance** (FR-450): `DialogAnswer.confirm` is now optional (absent: not
   given). In Latchkey's own browser an answer given stays good for 5 s after the action returns,
   for that page only; in the Owner's Safari tabs it ends with the action, as D9 says.

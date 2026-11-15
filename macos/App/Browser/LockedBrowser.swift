@@ -60,46 +60,81 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate {
     private let pageScripts: Bool
     /// Safari's cookies as they are now (tests give their own).
     private let cookies: @Sendable () -> [SafariCookies.Cookie]
+    /// The cookie store, shared by all of Claude's pages (`OwnPages`), in memory only (FR-421);
+    /// nil: one of this page's own.
+    private let store: WKWebsiteDataStore?
+    /// The sites whose Safari cookies this page has taken (by host), so a page going back and forth
+    /// doesn't take them again.
+    private var taken: Set<String> = []
 
     init(
         size: CGSize = CGSize(width: 1280, height: 900), pageScripts: Bool = true,
         cookies: @escaping @Sendable () -> [SafariCookies.Cookie] = SafariCookies.current,
-        holdLimit: Duration = .seconds(300), presetWindow: Duration = .seconds(5)
+        store: WKWebsiteDataStore? = nil, holdLimit: Duration = .seconds(300), presetWindow: Duration = .seconds(5)
     ) {
         self.size = size
         self.pageScripts = pageScripts
         self.cookies = cookies
+        self.store = store
         self.holdLimit = holdLimit
         self.presetWindow = presetWindow
     }
 
-    /// Takes Safari's cookies again, as they are now (FR-441): each one this browser lacks or
-    /// holds with another value is set, so Safari's copy wins, also for a cookie the site took
-    /// away here; what only this browser holds stays. Answers how many it set.
+    /// Takes Safari's cookies for a site again, as they are now (FR-441): Safari's cookies whose
+    /// domain covers `host` (the page's own when nil). With `overwrite`, each one this browser
+    /// lacks or holds with another value is set, so Safari's copy wins, also for a cookie the site
+    /// took away here; without, only those it lacks. What only this browser holds stays. Answers
+    /// how many it set. Only one site's (2026-11-15): copying all of Safari's 3,500 cookies took
+    /// over 100 seconds, so every new page timed out.
     @discardableResult
-    func takeSafarisCookies() async -> Int {
-        guard let web else { return 0 }
-        return await Self.copy(cookies(), into: web.configuration.websiteDataStore.httpCookieStore)
+    func takeSafarisCookies(for host: String? = nil, overwrite: Bool = true) async -> Int {
+        guard let web, let site = (host ?? web.url?.host())?.lowercased(), !site.isEmpty else { return 0 }
+        taken.insert(site)
+        let wanted = cookies().filter { Self.covers($0.domain, site) }
+        return await Self.copy(wanted, into: web.configuration.websiteDataStore.httpCookieStore, overwrite: overwrite)
     }
 
-    /// `fresh`: a store just made holds nothing, and WebKit doesn't answer what a store holds
-    /// before it is in use (seen live 2026-11-14, locked: the first page never came), so
-    /// everything is set. Later, what it holds is asked for; with no answer in 2 s, everything
-    /// is set again, which changes nothing a page can see.
-    private static func copy(_ cookies: [SafariCookies.Cookie], into store: WKHTTPCookieStore, fresh: Bool = false)
+    /// Whether a cookie for `domain` goes to `host`, as browsers decide: the same host, or a host
+    /// under it ("example.com" and ".example.com" cover "www.example.com").
+    static func covers(_ domain: String, _ host: String) -> Bool {
+        var d = domain.lowercased()
+        if d.hasPrefix(".") { d.removeFirst() }
+        return !d.isEmpty && (host == d || host.hasSuffix("." + d))
+    }
+
+    /// The cookie stores something was written to (`copy`).
+    private static var written: Set<ObjectIdentifier> = []
+
+    /// What the store holds is asked for first; with no answer in 2 s (WebKit doesn't answer for
+    /// a store not yet in use, seen live 2026-11-14), every one is set, which changes nothing a
+    /// page can see. The cookies are set all at once, not one after another.
+    private static func copy(_ cookies: [SafariCookies.Cookie], into store: WKHTTPCookieStore, overwrite: Bool)
         async -> Int
     {
+        guard !cookies.isEmpty else { return 0 }
         func key(_ c: HTTPCookie) -> String { "\(c.domain)\t\(c.path)\t\(c.name)" }
         var held: [String: String] = [:]
-        if !fresh, let now = await holding(store) {
+        // A store nothing was written to holds nothing: not asked (WebKit wouldn't answer).
+        if written.contains(ObjectIdentifier(store)), let now = await holding(store) {
             for c in now { held[key(c)] = c.value }
         }
-        var set = 0
-        for cookie in cookies.compactMap(SafariCookies.httpCookie) where held[key(cookie)] != cookie.value {
-            await store.setCookie(cookie)
-            set += 1
+        written.insert(ObjectIdentifier(store))
+        let todo = cookies.compactMap(SafariCookies.httpCookie).filter {
+            let here = held[key($0)]
+            return overwrite ? here != $0.value : here == nil
         }
-        return set
+        guard !todo.isEmpty else { return 0 }
+        final class Left { var count: Int; init(_ n: Int) { count = n } }
+        let left = Left(todo.count)
+        await withCheckedContinuation { (done: CheckedContinuation<Void, Never>) in
+            for cookie in todo {
+                store.setCookie(cookie) {
+                    left.count -= 1
+                    if left.count == 0 { done.resume() }
+                }
+            }
+        }
+        return todo.count
     }
 
     /// What the store holds, or nil when WebKit doesn't say within 2 s.
@@ -127,15 +162,15 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate {
     func signInAgain() async throws -> PageScripts.Page {
         guard web != nil else { throw SafariBrowser.Failure.noWindow }
         await takeSafarisCookies()
-        try await navigate { _ = $0.reload() }
+        try await navigate { $0.reload() }
         return try await page(offset: 0)
     }
 
-    /// The view, made on first use with Safari's cookies as they are then.
+    /// The view, made on first use; Safari's cookies come per site, as pages go there.
     private func view() async -> WKWebView {
         if let web { return web }
         let config = WKWebViewConfiguration()
-        config.websiteDataStore = .nonPersistent()  // memory only: nothing written to disk
+        config.websiteDataStore = store ?? .nonPersistent()  // memory only: nothing written to disk
         config.defaultWebpagePreferences.allowsContentJavaScript = pageScripts
         let w = WKWebView(frame: NSRect(origin: .zero, size: size), configuration: config)
         w.navigationDelegate = self
@@ -143,7 +178,6 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate {
         // Sites see Safari, as they do in the Owner's Safari: some refuse an app's own web view
         // (Google's sign-in, for one).
         w.customUserAgent = Self.safariUserAgent
-        _ = await Self.copy(cookies(), into: config.websiteDataStore.httpCookieStore, fresh: true)
         web = w
         return w
     }
@@ -316,6 +350,29 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate {
 
     // MARK: navigation
 
+    /// A page going to a site whose Safari cookies it hasn't taken (a click, a redirect, a frame)
+    /// takes those it lacks first, never replacing what the site set here during the visit
+    /// (FR-441: swapping a cookie under a form could break its own token).
+    nonisolated func webView(
+        _ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction,
+        decisionHandler: @escaping @MainActor @Sendable (WKNavigationActionPolicy) -> Void
+    ) {
+        MainActor.assumeIsolated {
+            let url = navigationAction.request.url
+            guard let host = url?.host()?.lowercased(), !host.isEmpty, !taken.contains(host),
+                ["http", "https"].contains(url?.scheme?.lowercased() ?? "")
+            else {
+                decisionHandler(.allow)
+                return
+            }
+            taken.insert(host)
+            Task { @MainActor [weak self] in
+                await self?.takeSafarisCookies(for: host, overwrite: false)
+                decisionHandler(.allow)
+            }
+        }
+    }
+
     nonisolated func webView(
         _ webView: WKWebView, decidePolicyFor navigationResponse: WKNavigationResponse,
         decisionHandler: @escaping @MainActor @Sendable (WKNavigationResponsePolicy) -> Void
@@ -335,11 +392,18 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate {
     }
 
     nonisolated func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
-        MainActor.assumeIsolated { done(true) }
+        MainActor.assumeIsolated { if isCurrent(navigation) { done(true) } }
     }
 
     nonisolated func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: any Error) {
-        MainActor.assumeIsolated { failed(error) }
+        MainActor.assumeIsolated { if isCurrent(navigation) { failed(error) } }
+    }
+
+    /// Whether WebKit's news is of the load Latchkey waits for: a late word of an earlier load (a
+    /// file whose load was stopped, seen with the suites side by side) must not end or fail the
+    /// next one. A load WebKit gave no navigation for counts as the current one.
+    private func isCurrent(_ navigation: WKNavigation?) -> Bool {
+        current == nil || navigation == nil || navigation === current
     }
 
     /// "Cancelled" (-999) is a page replaced by the next one, or back served from memory (seen live
@@ -347,7 +411,14 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate {
     private func failed(_ error: any Error) {
         // A file's load was stopped on purpose (FR-452), and a cancelled one (-999) is a page
         // replaced by the next one, or back served from memory: not failures.
-        if file != nil || (error as NSError).code == NSURLErrorCancelled {
+        let e = error as NSError
+        // WebKit stops a load it won't show itself too (102, "Frame load interrupted"), at times
+        // before the response check above has run (seen with the suites side by side): a file.
+        if file == nil, e.code == 102, ["WebKitErrorDomain", WKError.errorDomain].contains(e.domain) {
+            let address = (e.userInfo[NSURLErrorFailingURLErrorKey] as? URL)?.absoluteString ?? web?.url?.absoluteString
+            if let address { file = (address, "") }
+        }
+        if file != nil || e.code == NSURLErrorCancelled {
             done(true)
             return
         }
@@ -358,7 +429,7 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate {
     nonisolated func webView(
         _ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: any Error
     ) {
-        MainActor.assumeIsolated { failed(error) }
+        MainActor.assumeIsolated { if isCurrent(navigation) { failed(error) } }
     }
 
     private func done(_ ok: Bool) {
@@ -366,8 +437,11 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate {
         finished = nil
     }
 
+    /// The load `navigate` waits for, as WebKit named it.
+    private var current: WKNavigation?
+
     /// Runs `start`, then waits for the page it loads to finish, at most `loadLimit`.
-    private func navigate(_ start: (WKWebView) -> Void) async throws {
+    private func navigate(_ start: (WKWebView) -> WKNavigation?) async throws {
         let w = await view()
         cancelHeld(why: "before the page was replaced")  // FR-449
         failure = nil
@@ -376,7 +450,8 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate {
         let before = w.url
         let ok = await withCheckedContinuation { (c: CheckedContinuation<Bool, Never>) in
             finished = c
-            start(w)
+            current = nil
+            current = start(w)
             // A page that changes without loading (history.pushState, back within one page) never
             // says it finished: done once its address changed and nothing loads (2026-11-02).
             Task { @MainActor [weak self] in
@@ -472,14 +547,16 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate {
     func open(_ url: String) async throws -> PageScripts.Page {
         let address = try SafariBrowser.normalize(url)
         guard let u = URL(string: address) else { throw SafariBrowser.Failure.failed("That address isn't valid.") }
-        await takeSafarisCookies()  // FR-441
+        _ = await view()
+        await takeSafarisCookies(for: u.host())  // FR-441: Safari's copy wins
         try await navigate { $0.load(URLRequest(url: u)) }
         return try await page(offset: 0)
     }
 
     /// A page from text, at `base` (tests: the real WebKit view, no network).
     func open(html: String, base: URL) async throws -> PageScripts.Page {
-        await takeSafarisCookies()
+        _ = await view()
+        await takeSafarisCookies(for: base.host())
         try await navigate { $0.loadHTMLString(html, baseURL: base) }
         return try await page(offset: 0)
     }
@@ -528,7 +605,7 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate {
         guard let w = web else { throw SafariBrowser.Failure.noWindow }
         let before = w.url
         if w.canGoBack {
-            try await navigate { _ = $0.goBack() }
+            try await navigate { $0.goBack() }
         } else {
             // WebKit's own list may not have an entry the page made (history.pushState): the
             // page's history goes back then.
