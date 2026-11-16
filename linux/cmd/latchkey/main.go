@@ -2,7 +2,7 @@
 //
 //	latchkey install --relay https://relay.example [--name homeserver]
 //	latchkey status | shell on|off | files off|read|write | pause | resume | rename NAME
-//	latchkey activity [--check] | update | uninstall | version
+//	latchkey activity [--check] | activity export [--from DAY] [--to DAY] | update | uninstall | version
 //	latchkey run        (what the systemd service runs)
 package main
 
@@ -15,6 +15,7 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -41,6 +42,9 @@ const usage = `Latchkey for Linux servers: Claude's access to this server, throu
   latchkey pause | resume                      answer every call "paused", or stop doing so
   latchkey rename NAME                         the name Claude sees for this server
   latchkey activity [--check]                  the last 50 things Claude did here, or the last audit check
+  latchkey activity export [--from DAY] [--to DAY]
+                                               everything Claude did here, in full, one JSON line each
+                                               (DAY is YYYY-MM-DD in UTC, both days included)
   latchkey update                              install the newest release now
   latchkey uninstall                           remove this server from your account and delete Latchkey
   latchkey version
@@ -261,19 +265,34 @@ func status(p config.Paths) error {
 	if out, err := exec.CommandContext(context.Background(), "systemctl", "is-active", "latchkey").Output(); err == nil || len(out) > 0 {
 		fmt.Println("Service: " + strings.TrimSpace(string(out)))
 	}
-	if entries, err := activity.Read(p.Activity, time.Time{}); err == nil {
-		for i := len(entries) - 1; i >= 0; i-- {
-			if e := entries[i]; e.Kind == "event" && strings.HasPrefix(e.Text, "Connected to ") {
-				fmt.Printf("Last connected: %s, %s\n", e.At.Local().Format("2006-01-02 15:04"), strings.TrimPrefix(e.Text, "Connected to "))
-				break
-			}
-		}
+	connected := func(e *activity.Entry) bool { return e.Kind == "event" && strings.HasPrefix(e.Text, "Connected to ") }
+	if last, _, err := logFiles(p).Newest(1, connected); err == nil && len(last) == 1 {
+		fmt.Printf("Last connected: %s, %s\n", last[0].At.Local().Format("2006-01-02 15:04"), strings.TrimPrefix(last[0].Text, "Connected to "))
 	}
 	return nil
 }
 
+// logFiles is where the activity log is: the daily files and the single file of earlier versions.
+func logFiles(p config.Paths) activity.Files {
+	return activity.Files{Dir: p.Activity, Old: p.ActivityV0}
+}
+
 func showActivity(p config.Paths, args []string) error {
-	entries, err := activity.Read(p.Activity, time.Time{})
+	files := logFiles(p)
+	if len(args) > 0 && args[0] == "export" {
+		return exportActivity(p, files, args[1:])
+	}
+	check := len(args) > 0 && args[0] == "--check"
+	keep := func(e *activity.Entry) bool {
+		e.Result = nil // not printed
+		return true
+	}
+	n := 50
+	if check {
+		keep = func(e *activity.Entry) bool { return strings.HasPrefix(e.Text, "Audit check") }
+		n = 1
+	}
+	entries, skipped, err := files.Newest(n, keep)
 	if errors.Is(err, os.ErrNotExist) {
 		fmt.Println("Nothing yet.")
 		return nil
@@ -281,19 +300,67 @@ func showActivity(p config.Paths, args []string) error {
 	if err != nil {
 		return err
 	}
-	if len(args) > 0 && args[0] == "--check" {
-		for i := len(entries) - 1; i >= 0; i-- {
-			if strings.HasPrefix(entries[i].Text, "Audit check") {
-				fmt.Printf("%s  %s\n(The service compares its log with the relay's audit every time it connects.)\n",
-					entries[i].At.Local().Format("2006-01-02 15:04:05"), entries[i].Text)
-				return nil
-			}
-		}
+	switch {
+	case check && len(entries) == 1:
+		fmt.Printf("%s  %s\n(The service compares its log with the relay's audit every time it connects.)\n",
+			entries[0].At.Local().Format("2006-01-02 15:04:05"), entries[0].Text)
+	case check:
 		fmt.Println("No audit check yet; the service runs one each time it connects.")
+	default:
+		activity.Print(os.Stdout, entries, n)
+	}
+	if skipped > 0 {
+		fmt.Printf("(%s of the log couldn't be read and left out.)\n", lines(skipped))
+	}
+	return nil
+}
+
+// lines is "1 line" or "3 lines".
+func lines(n int) string {
+	if n == 1 {
+		return "1 line"
+	}
+	return fmt.Sprintf("%d lines", n)
+}
+
+// exportActivity writes the whole log, or the days asked for, in the export line every side
+// writes (FR-1059; spec 001 contracts/trace-files.md "The export line").
+func exportActivity(p config.Paths, files activity.Files, args []string) error {
+	fs := flag.NewFlagSet("activity export", flag.ContinueOnError)
+	from := fs.String("from", "", "the first day, YYYY-MM-DD in UTC (default: the first there is)")
+	to := fs.String("to", "", "the last day, YYYY-MM-DD in UTC (default: today)")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if fs.NArg() > 0 {
+		return errors.New("say latchkey activity export [--from YYYY-MM-DD] [--to YYYY-MM-DD]")
+	}
+	_, skipped, err := files.Export(os.Stdout, machineName(p, files), *from, *to)
+	if errors.Is(err, os.ErrNotExist) {
+		fmt.Fprintln(os.Stderr, "Nothing yet.")
 		return nil
 	}
-	activity.Print(os.Stdout, entries, 50)
-	return nil
+	if skipped > 0 {
+		fmt.Fprintf(os.Stderr, "latchkey: %s of the log couldn't be read and left out.\n", lines(skipped))
+	}
+	return err
+}
+
+// machineName is this server's name as the relay last gave it (the name Claude sees and the
+// relay's trace uses), else the name in its settings.
+func machineName(p config.Paths, files activity.Files) string {
+	const prefix = "Connected as "
+	connected := func(e *activity.Entry) bool { return e.Kind == "event" && strings.HasPrefix(e.Public, prefix) }
+	if last, _, err := files.Newest(1, connected); err == nil && len(last) == 1 {
+		if name, err := strconv.Unquote(strings.TrimPrefix(last[0].Public, prefix)); err == nil && name != "" {
+			return name
+		}
+	}
+	s, err := config.Load(p)
+	if err != nil {
+		s = config.Defaults()
+	}
+	return s.MachineName()
 }
 
 func updateNow(p config.Paths) error {
@@ -339,7 +406,7 @@ func uninstall(p config.Paths) error {
 // run is the service: connected until systemd stops it, updating itself daily.
 func run(p config.Paths) error {
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo}))
-	log, err := activity.Open(p.Activity)
+	log, err := activity.Open(logFiles(p))
 	if err != nil {
 		return err
 	}

@@ -91,11 +91,14 @@ type Paths struct {
 	Service  string // /etc/systemd/system/latchkey.service
 	Settings string // Config/settings.json
 	Key      string // Data/device.key
-	Activity string // Data/activity.jsonl
-	Update   string // Data/update.json
-	Jobs     string // Cache/jobs: each command's scratch folder
-	Bin      string // Cache/bin: the sudo wrapper, first on every command's PATH
-	Command  string // ~/.local/bin/latchkey: a link to the program, for the Owner's shell
+	Activity string // Data/activity: the activity log, one file a day (UTC)
+	// ActivityV0 is Data/activity.jsonl, the single log file of versions before 2026-11-15:
+	// only read, never written (FR-1058).
+	ActivityV0 string
+	Update     string // Data/update.json
+	Jobs       string // Cache/jobs: each command's scratch folder
+	Bin        string // Cache/bin: the sudo wrapper, first on every command's PATH
+	Command    string // ~/.local/bin/latchkey: a link to the program, for the Owner's shell
 }
 
 // ServiceFile is the systemd unit's path.
@@ -128,7 +131,8 @@ func PathsFor(home, xdgConfig, xdgData, xdgCache string) Paths {
 	}
 	p.Settings = filepath.Join(p.Config, "settings.json")
 	p.Key = filepath.Join(p.Data, "device.key")
-	p.Activity = filepath.Join(p.Data, "activity.jsonl")
+	p.Activity = filepath.Join(p.Data, "activity")
+	p.ActivityV0 = filepath.Join(p.Data, "activity.jsonl")
 	p.Update = filepath.Join(p.Data, "update.json")
 	p.Jobs = filepath.Join(p.Cache, "jobs")
 	p.Bin = filepath.Join(p.Cache, "bin")

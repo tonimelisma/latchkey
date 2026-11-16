@@ -58,7 +58,9 @@ endpoints' per-address limit.
 | `~/.local/bin/latchkey` | link to the program | link |
 | `~/.config/latchkey/settings.json` | settings (below) | 600 |
 | `~/.local/share/latchkey/device.key` | P-256 key, PKCS#8 DER; refused if others can read it | 600 |
-| `~/.local/share/latchkey/activity.jsonl` | activity log, one JSON object per line | 600 |
+| `~/.local/share/latchkey/activity/` | activity log, one file a day (spec 001 `contracts/trace-files.md`, "Linux server") | 700 |
+| `~/.local/share/latchkey/activity/YYYY-MM-DD.jsonl` | the day's entries (UTC), one JSON object per line, version 1, in full; only appended to | 600 |
+| `~/.local/share/latchkey/activity.jsonl` | activity log of versions before 2026-11-15 (version 0, cut short); left as it is, read, never written | 600 |
 | `~/.local/share/latchkey/update.json` | last update: version, previous, confirmed, starts, skip list | 600 |
 | `~/.cache/latchkey/jobs/<id>/` | each command's scratch folder (`TMPDIR`, `LATCHKEY_SCRATCH`) | 700 |
 | `~/.cache/latchkey/bin/sudo` | `exec <real sudo> -n "$@"`, first on every command's `PATH` | 755 |
@@ -108,7 +110,11 @@ service stops everything in its group.
 
 `latchkey status`, `shell on|off`, `files off|read|write`, `pause`, `resume`, `rename NAME`,
 `activity` (last 50 entries), `activity --check` (the last audit comparison; the service runs one
-after each connection), `update` (install the newest release now, then `sudo systemctl restart
+after each connection), `activity export [--from YYYY-MM-DD] [--to YYYY-MM-DD]` (the whole log,
+or those days in UTC with both included, the old file's lines too, to standard output in the
+export line of spec 001 `contracts/trace-files.md`, oldest first; `machine` is the name the
+relay last welcomed the server with, else the settings' name; the number of lines that couldn't
+be read goes to standard error), `update` (install the newest release now, then `sudo systemctl restart
 latchkey`), `uninstall`, `version`, `run` (the service). Exit status 0 on success, 1 on failure,
 2 for usage.
 
@@ -132,7 +138,8 @@ refused while paused like every call. Read-only, deadline 10 s. Arguments and an
 Mac's (spec 001 contracts/mcp-surface.md "`latchkey_log`"), "server" in place of "Mac":
 `lines` 1–1000 (default 200), `category` one of `app`, `connection`, `pairing`, `settings`,
 `pause`, `update`, `audit`. Lines are the activity log's events that carry public words (never
-calls, never events from before the mark, made from server 0.1.1 on); without the log, this run's lines from memory
+calls, never events from before the mark, made from server 0.1.1 on), from the daily files and
+the old single file; without the log, this run's lines from memory
 (at most 1000), and the header says so.
 
 ```

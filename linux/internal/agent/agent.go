@@ -304,7 +304,7 @@ func (a *Agent) toolsFor(s config.Settings) map[string]tools.Tool {
 		list = append(list, a.Shell.Tools()...)
 	}
 	list = append(list, a.Files.Tools(s.Files)...)
-	list = append(list, latchkeylog.Tool(a.Log, a.Paths.Activity, a.Version)) // always (FR-1052)
+	list = append(list, latchkeylog.Tool(a.Log, a.Log.Files(), a.Version)) // always (FR-1052)
 	for _, t := range list {
 		out[t.Def.Name] = t
 	}
@@ -393,15 +393,22 @@ func (a *Agent) call(ctx context.Context, c *conn, m *agentproto.Call) {
 	if footer := a.Shell.Footer(); footer != "" { // every answer names running and kept commands (FR-322's rule)
 		res.Content = append(res.Content, tools.Content{"type": "text", "text": "\n" + footer})
 	}
-	if err := c.send(ctx, res.Encode(m.ID)); err != nil {
+	sent := res.Encode(m.ID)
+	if err := c.send(ctx, sent); err != nil {
 		a.Logger.Warn("result not sent", "call", m.ID, "err", err)
 		a.Log.Private("connection", true, fmt.Sprintf("The answer to call %s couldn't be sent: %v", m.ID, err),
 			"An answer couldn't be sent to the relay: "+describe(err))
 	}
-	_ = a.Log.Add(activity.Entry{
-		Kind: "call", CallID: m.ID, Tool: m.Tool, Client: m.Client, Arguments: string(m.Arguments),
-		Result: resultText(res), IsError: res.IsError, DurationMS: time.Since(start).Milliseconds(),
-	})
+	_ = a.Log.Add(callEntry(m, sent, time.Since(start))) // a call never fails for its log
+}
+
+// callEntry is a call's line in the activity log (FR-1057): the arguments as they came and the
+// content exactly as sent to the relay, images included, nothing cut.
+func callEntry(m *agentproto.Call, sent *agentproto.Result, took time.Duration) activity.Entry {
+	return activity.Entry{
+		Kind: "call", CallID: m.ID, Tool: m.Tool, Client: m.Client, Arguments: m.Arguments,
+		Result: sent.Content, IsError: sent.IsError, DurationMS: took.Milliseconds(),
+	}
 }
 
 // run runs a tool, turning a panic into an error answer (security review, 2026-10-31).
@@ -416,20 +423,6 @@ func run(ctx context.Context, t tools.Tool, raw json.RawMessage) (res tools.Resu
 		return tools.Failf("%v", err)
 	}
 	return t.Run(ctx, args)
-}
-
-func resultText(r tools.Result) string {
-	var b strings.Builder
-	for _, c := range r.Content {
-		switch c["type"] {
-		case "text":
-			s, _ := c["text"].(string)
-			b.WriteString(s)
-		case "image":
-			b.WriteString("[image]")
-		}
-	}
-	return b.String()
 }
 
 func (a *Agent) cancelAll() {
