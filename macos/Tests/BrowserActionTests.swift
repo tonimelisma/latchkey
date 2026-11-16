@@ -123,6 +123,32 @@ enum ActionPage {
         #expect(try await p.run("getComputedStyle(document.getElementById('submenu')).display") == "block")
     }
 
+    /// A click presses as a mouse does, down and up at the element's centre, then clicks once:
+    /// Gmail's "Create filter" acts on the press, not on click alone (2026-11-16).
+    @Test func clickPressesDownAndUpThenClicksOnce() async throws {
+        let p = TestPage()
+        try await p.load(
+            """
+            <html><body><div id="b" role="button" style="margin:40px;width:100px;height:30px">Create filter</div>
+            <p id="log"></p><script>
+            var b = document.getElementById('b'), log = [];
+            ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click'].forEach(function (k) {
+              b.addEventListener(k, function (ev) {
+                var r = b.getBoundingClientRect();
+                var inside = ev.clientX > r.left && ev.clientX < r.right && ev.clientY > r.top && ev.clientY < r.bottom;
+                log.push(k + (k === 'click' || inside ? '' : '@outside'));
+                document.getElementById('log').textContent = log.join(',');
+              });
+            });
+            </script></body></html>
+            """)
+        let r = try PageScripts.decode(try await p.run(PageScripts.read(offset: 0)))
+        _ = try await p.run(PageScripts.click(try ref(r, "button", "Create filter")))
+        #expect(
+            try await p.run("document.getElementById('log').textContent")
+                == "pointerdown,mousedown,pointerup,mouseup,click")
+    }
+
     @Test func scrollsThePageAndAPartOfIt() async throws {
         let (p, r) = try await page()
         let down = try JSONDecoder().decode(

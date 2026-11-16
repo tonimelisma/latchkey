@@ -288,6 +288,13 @@ like the existing actions. Owner-level choices were his (do all of it; working f
 outranks older limits); the options and low-level choices below are Claude's, least intrusive
 first.
 
+- **Clicks.** (a) `element.click()` alone (until 2026-11-16): a click event only, so pages
+  that act on the press never responded (Gmail's "Create filter" ignored three tries, 2026-11-16).
+  (b) Pointer and mouse over, down, and up at the element's centre, then `element.click()`
+  (chosen, 2026-11-16): script events make no click of their own, so the page still gets
+  one click; Gmail's filter was created this way while the Mac was locked. `isTrusted` stays
+  false, so a page that checks it still needs computer control. (c) Native mouse events:
+  move the Owner's pointer and need the screen; rejected for the same reasons as keys.
 - **Keys.** (a) Keyboard events dispatched in the page by a script, with what the browser
   would do by default done by the script where the page didn't take the key (chosen): runs in
   a background tab, in the Owner's tabs, and in Latchkey's own browser while locked; a page

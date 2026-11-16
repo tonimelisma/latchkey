@@ -228,6 +228,22 @@ enum PageScripts {
           var before = a0 instanceof HTMLAnchorElement ? hrefOf.call(a0) : null;
           if (e.scrollIntoView) e.scrollIntoView({ block: 'center' });
           if (e.focus) e.focus();
+          // The press a real mouse makes comes first, at the element's centre: Google's pages
+          // (Gmail's "Create filter", 2026-11-16) act on pointer and mouse down and up, not on
+          // click alone. These script events don't make a click of their own, so e.click()
+          // stays the one click.
+          if (e.getBoundingClientRect && e.dispatchEvent) {
+            var r = e.getBoundingClientRect();
+            var at = { bubbles: true, cancelable: true, composed: true, view: window, button: 0,
+                       clientX: r.left + r.width / 2, clientY: r.top + r.height / 2 };
+            ['pointerover', 'mouseover', 'pointerdown', 'mousedown', 'pointerup', 'mouseup'].forEach(function (k) {
+              var down = k === 'pointerdown' || k === 'mousedown';
+              at.buttons = down ? 1 : 0;
+              e.dispatchEvent(k.indexOf('pointer') === 0 && window.PointerEvent
+                ? new PointerEvent(k, Object.assign({ pointerId: 1, pointerType: 'mouse', isPrimary: true }, at))
+                : new MouseEvent(k, at));
+            });
+          }
           e.click();
           var a = e.closest ? e.closest('a[href]') : null;
           var t = a ? (a.getAttribute('target') || '').toLowerCase() : '';
