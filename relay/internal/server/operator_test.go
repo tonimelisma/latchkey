@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"net/http"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -14,6 +15,7 @@ import (
 	"github.com/tonimelisma/latchkey/relay/internal/operator"
 	"github.com/tonimelisma/latchkey/relay/internal/store"
 	"github.com/tonimelisma/latchkey/relay/internal/testagent"
+	"github.com/tonimelisma/latchkey/relay/internal/trace"
 )
 
 // command runs an operator command the way `docker exec … /relay <args>` does: another
@@ -23,8 +25,12 @@ func (h *harness) command(args ...string) string {
 	db, err := store.Open(context.Background(), h.dbPath)
 	require.NoError(h.t, err)
 	defer func() { _ = db.Close() }()
+	opts, err := TraceOptions(db, filepath.Dir(h.dbPath))
+	require.NoError(h.t, err)
+	traces, err := trace.New(opts)
+	require.NoError(h.t, err)
 	var out bytes.Buffer
-	require.NoError(h.t, operator.Run(context.Background(), operator.Env{Store: db, Out: &out, Actor: "test", Now: time.Now}, args))
+	require.NoError(h.t, operator.Run(context.Background(), operator.Env{Store: db, Traces: traces, Out: &out, Actor: "test", Now: time.Now}, args))
 	return out.String()
 }
 

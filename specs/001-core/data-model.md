@@ -20,7 +20,7 @@ milliseconds. Device public keys are stored as PKIX DER.
 | **oauth_requests** | signature, kind (`code`, `pkce`, `access`, `refresh`), request_id, client_id, user_id, requested_at, scopes, granted_scopes, form, session_json, expires_at, used_at, rotated_at, revoked_at | Codes and tokens, keyed by token signature (never raw tokens); written by fosite until 2026-10-27, by the zitadel/oidc storage adapter since, in the same shape. `form` keeps a code's authorize parameters, re-checked at the exchange (redirect URI, PKCE challenge); `session_json` holds subject and expiry times in the shape fosite read (kept so a rollback still reads new rows). `pkce` rows are no longer written (the challenge is in the code's `form`); old ones expire with their code. Codes live 1 min, access tokens 1 h, refresh tokens 90 days |
 | **oauth_grants** | request_id, id, user_id, client_id, client_name, client_host, redirect, approved_at, last_used_at | One row per approval on the Allow page (FR-190): the grant's internal request ID (shared by its rows in **oauth_requests**), its public `id` (16 random bytes, what the Mac app and the account page name it by), and what the consent page showed. `last_used_at` is written at most once a minute (FR-192). Deleted with the grant, and by the daily purge once no code or token of the grant is left |
 | **client_authorizations** | id, user_id, client_name, at, notified_at | Each time a Claude client was given access, so the Owner's Mac is told once; kept 30 days |
-| **audit_log** | id, user_id, device_id, at, tool, surface, outcome, duration_ms, call_id | No arguments, no results (FR-022, FR-023). Kept until the account is deleted; nothing is deleted by age (FR-024, FR-630; was 30 days until 2026-10-27). `call_id` is the call's id, unique for all time (FR-632; `''` for entries from before migration 12). Index on (device_id, at) for the Mac's comparison (FR-634). A `revoke_client` from the Mac app is recorded with tool `revoke_client` and surface `Latchkey app`, without the grant's ID and with `call_id` `''` |
+| **audit_log** | id, user_id, device_id, at, tool, surface, outcome, duration_ms, call_id | No arguments, no results (FR-022, FR-023); since 2026-11-15 those are in the trace files, never in the database (below). Kept until the account is deleted; nothing is deleted by age (FR-024, FR-630; was 30 days until 2026-10-27). `call_id` is the call's id, unique for all time (FR-632; `''` for entries from before migration 12). Index on (device_id, at) for the Mac's comparison (FR-634). A `revoke_client` from the Mac app is recorded with tool `revoke_client` and surface `Latchkey app`, without the grant's ID and with `call_id` `''` |
 | **events** | id, at, kind, user_id, device_id, detail, hour, count, last_at | The relay's event record (FR-631, plan D18): Mac connections and their end, keep-awake changes, sign-in attempts and outcomes, Claude apps approved, refused, and removed, pairings and unpairings, and refused or failed requests. `detail` is fixed words the relay chooses (outcome, reason, close code, the app's name), never content, codes, tokens, keys, or IP addresses. Refusals and sign-in attempts anyone can cause are counted: one row per hour, kind, account, and detail (`hour` set, `count`, first `at` and `last_at`); `user_id` is NULL without an account, and an unfinished sign-up counts as none. Kept until the account is deleted (cascade); rows without an account are kept too, and grow by at most one per kind and reason an hour |
 | **blocked_emails** | email, blocked_at, reason | Addresses the operator blocked (FR-197), normalized as at sign-up; kept until unblocked |
 | **operator_log** | id, at, actor, action, email, user_id, device_id, detail | Every operator command that changed something (FR-195): who ran it (the server's user name), what, when, the address it was about, and the reason given. `user_id` and `device_id` let the running relay close that account's connections (FR-198). Not tied to the account, so it survives the account's deletion; purged after one year (FR-199) |
@@ -28,8 +28,31 @@ milliseconds. Device public keys are stored as PKIX DER.
 ## Outside the database
 
 - The key file (`KEY_FILE`, default `DATA_DIR/relay.key`): 32 random bytes, readable by the
-  relay's user only, made on the first start. It encrypts the values in **relay_keys** and
-  nothing else. The hosted relay keeps it outside the data volume (plan D10).
+  relay's user only, made on the first start. It encrypts the values in **relay_keys**, and a
+  key derived from it seals the trace files (below). The hosted relay keeps it outside the data
+  volume (plan D10). A new key file (after `relay reset-keys`) can't read the earlier trace
+  lines: readers skip and count them, and nothing deletes them.
+
+- **The trace files** (since 2026-11-15; FR-680, FR-681, FR-683 to FR-688;
+  `contracts/trace-files.md`): each account's full trace in `DATA_DIR/traces/<account id>/`, one
+  file a day, `YYYY-MM-DD.trace` (the UTC day a call began), folders 0700, files 0600. One line
+  per tool call the relay answered for the account (its own `machines` tool and calls that never
+  reached a machine included): the arguments exactly as Claude sent them (`machine` included),
+  the whole content Claude got (the status line, images included), whether it failed, the
+  outcome, the duration, the call id, the Claude app, and the machine; and one line per event of
+  the account (**events**; counted ones as often as they are logged, the first of each hour).
+  Each line is `{"v":1,"sealed":"<base64>"}`: AES-256-GCM under HKDF-SHA256 of the key file's
+  bytes (info `latchkey relay traces v1`), with `<account id>/<day>` as authenticated data, so a
+  line can't be moved to another account or day. Only ever appended to, each line synchronized
+  to disk before it counts; a line cut short by a crash is ended before the next one is written,
+  and readers skip and count lines they can't read. Kept until the account is deleted: Delete
+  account (the Owner's, or the operator's `account delete`) and the daily purge of unfinished
+  sign-ups remove the account's folder; nothing is deleted by age. While the disk holding
+  `traces/` has less than 2 GiB free, nothing is written (the operator events `traces_paused`
+  and `traces_resumed`, without an account, mark when) and nothing is deleted to make room. Read
+  back only by the operator's `relay trace export <email>` and the account's Download full
+  activity (`GET /account/trace`). The hosted relay's nightly disk copies hold them like the
+  database.
 
 - With built-in TLS (`ACME_EMAIL` set): TLS certificates and the ACME account key, in
   `DATA_DIR/certs`. Nothing about users.
@@ -40,7 +63,7 @@ milliseconds. Device public keys are stored as PKIX DER.
 
 ## Not stored
 
-- Tool arguments or results.
+- Tool arguments or results in the database (they are in the trace files only, FR-023).
 - Passkey private keys or device private keys (they never leave the user's devices).
 - IP addresses beyond the HTTP access log, which is deleted after 30 days.
 

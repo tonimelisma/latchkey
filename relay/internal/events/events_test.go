@@ -60,3 +60,36 @@ func TestRecordStoresAndLogs(t *testing.T) {
 	none.Record(ctx, store.Event{Kind: events.MacConnected})
 	none.Count(ctx, store.Event{Kind: events.RequestRefused})
 }
+
+// FR-683: the account's events also go to its trace; counted ones as often as they are logged
+// (the first of each hour), so nobody can grow a trace without bound.
+func TestEventsGoToTheTrace(t *testing.T) {
+	ctx := context.Background()
+	st, err := store.Open(ctx, filepath.Join(t.TempDir(), "relay.db"))
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = st.Close() })
+	u, err := st.CreateUser(ctx, "a@example.com", time.Now())
+	require.NoError(t, err)
+	r := events.New(st, slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil)), nil)
+	var traced []store.Event
+	r.TraceTo(func(e store.Event) { traced = append(traced, e) })
+	r.Record(ctx, store.Event{Kind: events.MacConnected, UserID: u.ID, Detail: "app 0.9.0"})
+	for range 5 {
+		r.Count(ctx, store.Event{Kind: events.RequestRefused, UserID: u.ID, Detail: "POST /token: rate limit"})
+	}
+	r.Log(store.Event{Kind: events.AccountDeleted, UserID: u.ID})
+	require.Len(t, traced, 2)
+	assert.Equal(t, events.MacConnected, traced[0].Kind)
+	assert.False(t, traced[0].At.IsZero(), "with its time")
+	assert.Equal(t, events.RequestRefused, traced[1].Kind)
+
+	var none *events.Recorder
+	none.TraceTo(func(store.Event) {})
+}
+
+func TestTraceEventKinds(t *testing.T) {
+	assert.Contains(t, events.Kinds, events.TracesPaused)
+	assert.Contains(t, events.Kinds, events.TracesResumed)
+	assert.Equal(t, "traces_paused", events.TracesPaused)
+	assert.Equal(t, "traces_resumed", events.TracesResumed)
+}

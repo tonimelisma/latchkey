@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net/url"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -15,6 +16,7 @@ import (
 	"github.com/tonimelisma/latchkey/relay/internal/account"
 	"github.com/tonimelisma/latchkey/relay/internal/server"
 	"github.com/tonimelisma/latchkey/relay/internal/store"
+	"github.com/tonimelisma/latchkey/relay/internal/trace"
 )
 
 // The operator's commands are subcommands of the relay binary itself (the image has no shell):
@@ -61,6 +63,27 @@ func TestOperatorCommand(t *testing.T) {
 	code, _, errOut = run("help")
 	assert.Equal(t, 2, code)
 	assert.Contains(t, errOut, "block list")
+	assert.Contains(t, errOut, "trace export <email>")
+
+	// FR-685: the trace the running relay wrote, exported beside it with the same key file.
+	opts, err := server.TraceOptions(st, dir)
+	require.NoError(t, err)
+	ts, err := trace.New(opts)
+	require.NoError(t, err)
+	ts.Append(u.ID, time.Now(), trace.Event("mac_connected", "app 1.0", "Mac"))
+	code, out, errOut = run("trace", "export", "owner@example.com")
+	assert.Equal(t, 0, code, errOut)
+	assert.Contains(t, out, `"tool":"mac_connected"`)
+	assert.Contains(t, out, `"account":"owner@example.com"`)
+	assert.Equal(t, 1, strings.Count(out, "\n"))
+	code, _, errOut = run("trace", "export")
+	assert.Equal(t, 2, code)
+	assert.Contains(t, errOut, "trace export <email>")
+
+	// The operator's delete removes the account's traces (FR-687).
+	code, _, errOut = run("account", "delete", "owner@example.com")
+	assert.Equal(t, 0, code, errOut)
+	assert.NoDirExists(t, filepath.Join(dir, "traces", u.ID))
 
 	code, _, errOut = operatorCommandWithEnv(t, []string{"account", "list"}, map[string]string{})
 	assert.Equal(t, 1, code)

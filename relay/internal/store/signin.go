@@ -47,14 +47,24 @@ func (s *Store) DeleteUser(ctx context.Context, userID string) error {
 	return requireOneRow(res)
 }
 
-// PurgeUnverifiedUsers deletes sign-ups never verified and created before the cutoff.
-func (s *Store) PurgeUnverifiedUsers(ctx context.Context, before time.Time) (int64, error) {
-	res, err := s.db.ExecContext(ctx,
-		`DELETE FROM users WHERE email_verified_at IS NULL AND created_at < ?`, before.UnixMilli())
+// PurgeUnverifiedUsers deletes sign-ups never verified and created before the cutoff, and
+// returns their IDs (so what is kept outside the database about them can go too).
+func (s *Store) PurgeUnverifiedUsers(ctx context.Context, before time.Time) ([]string, error) {
+	rows, err := s.db.QueryContext(ctx,
+		`DELETE FROM users WHERE email_verified_at IS NULL AND created_at < ? RETURNING id`, before.UnixMilli())
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
-	return res.RowsAffected()
+	defer func() { _ = rows.Close() }()
+	var ids []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	return ids, rows.Err()
 }
 
 // Passkey is a stored WebAuthn credential.

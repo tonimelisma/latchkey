@@ -30,13 +30,17 @@ const (
 	RequestRefused  = "request_refused" // counted; detail: route, status, reason
 	RequestFailed   = "request_failed"  // counted; detail: route, status, reason
 	AccountDeleted  = "account_deleted" // logged only: its record goes with the account
+	// The relay stopped writing traces because its disk is low, and started again (FR-684).
+	// Operator events, without an account; detail: the free space found.
+	TracesPaused  = "traces_paused"
+	TracesResumed = "traces_resumed"
 )
 
 // Kinds lists every kind.
 var Kinds = []string{
 	MacConnected, MacDisconnected, MacRefused, KeepAwake, SignInPasskey, SignInCode, Recovery,
 	ClaudeApproved, ClaudeRefused, ClaudeRemoved, MacPaired, MacUnpaired, RequestRefused,
-	RequestFailed, AccountDeleted,
+	RequestFailed, AccountDeleted, TracesPaused, TracesResumed,
 }
 
 var titles = map[string]string{
@@ -55,6 +59,8 @@ var titles = map[string]string{
 	RequestRefused:  "request refused",
 	RequestFailed:   "request failed",
 	AccountDeleted:  "account deleted",
+	TracesPaused:    "traces paused: the disk is low",
+	TracesResumed:   "traces resumed",
 }
 
 // Title is the words of a kind's log line.
@@ -70,6 +76,7 @@ type Recorder struct {
 	store *store.Store
 	log   *slog.Logger
 	now   func() time.Time
+	trace func(store.Event)
 }
 
 // New makes a recorder; now nil means time.Now.
@@ -83,6 +90,21 @@ func New(st *store.Store, log *slog.Logger, now func() time.Time) *Recorder {
 	return &Recorder{store: st, log: log, now: now}
 }
 
+// TraceTo sets where each recorded event also goes: the account's trace (FR-683). Counted
+// events go there as often as they are logged, the first of each hour. Set it before the
+// recorder is used.
+func (r *Recorder) TraceTo(f func(store.Event)) {
+	if r != nil {
+		r.trace = f
+	}
+}
+
+func (r *Recorder) traced(e store.Event) {
+	if r.trace != nil {
+		r.trace(e)
+	}
+}
+
 // Record stores the event and logs it. The time is now unless e.At is set. The write survives
 // the caller's cancellation: a request that ends doesn't take its event with it.
 func (r *Recorder) Record(ctx context.Context, e store.Event) {
@@ -93,6 +115,7 @@ func (r *Recorder) Record(ctx context.Context, e store.Event) {
 		e.At = r.now().UTC()
 	}
 	r.line(e, false)
+	r.traced(e)
 	if r.store == nil {
 		return
 	}
@@ -112,6 +135,7 @@ func (r *Recorder) Count(ctx context.Context, e store.Event) {
 	}
 	if r.store == nil {
 		r.line(e, true)
+		r.traced(e)
 		return
 	}
 	first, err := r.store.CountEvent(context.WithoutCancel(ctx), e)
@@ -121,6 +145,7 @@ func (r *Recorder) Count(ctx context.Context, e store.Event) {
 	}
 	if first {
 		r.line(e, true)
+		r.traced(e)
 	}
 }
 

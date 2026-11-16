@@ -98,15 +98,18 @@ func TestPrivacyPolicyNamesEveryStoredTable(t *testing.T) {
 	assert.GreaterOrEqual(t, n, 12)
 }
 
-// The policy says what is never stored, how long things are kept, and the rest the directory
-// policy asks for: collection, use, retention, contact.
+// The policy says what the relay keeps of tool calls, how long things are kept, and the rest the
+// directory policy asks for: collection, use, retention, contact.
 func TestPrivacyPolicyCoversWhatItMust(t *testing.T) {
 	policy := legalPage(t, "/privacy")
 	for _, want := range []string{
-		"never stored", // tool results pass through
-		"in transit",   // and can technically be seen there
-		"Anthropic",    // Claude is someone else's service
-		"30 days",      // notes of approvals, access log
+		"keeps the full content of every tool call",                                            // FR-688 (until 2026-11-15: "never stored")
+		"screenshots and other images included",                                                // FR-688
+		"stored encrypted, kept until you delete your account, and you can download all of it", // FR-688
+		"Download full activity",                                                               // FR-685
+		"in transit",                                                                           // and can technically be seen there
+		"Anthropic",                                                                            // Claude is someone else's service
+		"30 days",                                                                              // notes of approvals, access log
 		"until you delete your account. Nothing in them is deleted because of its age", // FR-630
 		"15 minutes",                // emailed codes
 		"Delete account",            // deletion
@@ -121,6 +124,10 @@ func TestPrivacyPolicyCoversWhatItMust(t *testing.T) {
 		"We may change this policy", // changes
 	} {
 		assert.Contains(t, policy, want)
+	}
+	// FR-688: no promise left that content isn't kept.
+	for _, gone := range []string{"never stored", "holds no arguments and no results.", "does not store it or write it to any log"} {
+		assert.NotContains(t, policy, gone)
 	}
 }
 

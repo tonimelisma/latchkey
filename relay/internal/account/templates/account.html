@@ -107,6 +107,7 @@
   {{if .Data.Recent}}{{template "entries" .Data.Recent}}{{else}}<p class="empty">Nothing yet. Claude's tool calls and changes to your account appear here.</p>{{end}}
   </div>
   <p class="hint"><a href="/account/activity">See all activity ›</a></p>
+  {{if .Data.Traces}}<p class="hint"><a href="/account/trace" download>Download full activity</a>: every tool call in full, with what Claude sent and got back (screenshots included), and every change to your account, as a file of JSON lines.</p>{{end}}
 </section>
 
 <section aria-labelledby="acct">

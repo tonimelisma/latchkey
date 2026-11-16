@@ -4,7 +4,9 @@ import (
 	"context"
 	"crypto/aes"
 	"crypto/cipher"
+	"crypto/hkdf"
 	"crypto/rand"
+	"crypto/sha256"
 	"crypto/subtle"
 	"database/sql"
 	"errors"
@@ -58,6 +60,17 @@ func OpenWithKeyFile(ctx context.Context, path, keyFile string) (*Store, error) 
 		return nil, err
 	}
 	return s, nil
+}
+
+// DeriveKey returns a 32-byte key for one other use of the key file, named by info:
+// HKDF-SHA256 over the key file's bytes (no salt). The key file's own bytes never leave the
+// store, and a key derived for one use says nothing about the key file or another use. The
+// relay's trace files are sealed with one (FR-683, contracts/trace-files.md).
+func (s *Store) DeriveKey(info string) ([]byte, error) {
+	if len(s.fileKey) != keyFileSize {
+		return nil, errors.New("store: opened without a key file")
+	}
+	return hkdf.Key(sha256.New, s.fileKey, nil, info, keyFileSize)
 }
 
 // KeyFileCreated returns the key file's path and whether this start created it.
@@ -118,6 +131,7 @@ func (s *Store) unlockKeys(ctx context.Context, keyFile string) error {
 		return err
 	}
 	s.aead, s.keyFile, s.keyFileCreated = aead, keyFile, created
+	s.fileKey = key
 
 	// Every sealed key must open before anything else is done with the key file.
 	for _, k := range keys {

@@ -33,6 +33,7 @@ import (
 	"github.com/tonimelisma/latchkey/relay/internal/limit"
 	"github.com/tonimelisma/latchkey/relay/internal/oauth"
 	"github.com/tonimelisma/latchkey/relay/internal/store"
+	"github.com/tonimelisma/latchkey/relay/internal/trace"
 )
 
 const (
@@ -95,6 +96,9 @@ type Config struct {
 	// Events records sign-in attempts and their outcomes, pairings, and unpairings (FR-631).
 	// Nil records nothing.
 	Events *events.Recorder
+	// Traces is the accounts' trace files (FR-683): the account downloads its own, and Delete
+	// account removes them. Nil: the relay keeps none.
+	Traces *trace.Store
 }
 
 // Service serves the account pages and implements oauth.Authenticator.
@@ -209,6 +213,7 @@ func (s *Service) Register(mux *http.ServeMux) {
 	mux.HandleFunc("POST /passkey/login/finish", s.loginFinish)
 	mux.HandleFunc("GET /account", s.accountPage)
 	mux.HandleFunc("GET /account/activity", s.activityPage)
+	mux.HandleFunc("GET /account/trace", s.traceDownload)
 	mux.HandleFunc("POST /account/revoke-mac", s.revokeMac)
 	mux.HandleFunc("POST /account/machines/remove", s.removeMachine)
 	mux.HandleFunc("POST /pair/device", s.devicePair)

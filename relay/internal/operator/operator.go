@@ -1,5 +1,5 @@
 // Package operator is the commands for the person running a relay (plan D14, FR-195): list
-// accounts, suspend and delete them, block addresses. They are subcommands of the relay binary
+// accounts, suspend and delete them, block addresses, export an account's trace (FR-685). They are subcommands of the relay binary
 // (the image has no shell) and work on the same database as the running relay, which follows
 // them (server.operatorWatch).
 package operator
@@ -15,6 +15,7 @@ import (
 
 	"github.com/tonimelisma/latchkey/relay/internal/account"
 	"github.com/tonimelisma/latchkey/relay/internal/store"
+	"github.com/tonimelisma/latchkey/relay/internal/trace"
 )
 
 // Usage lists the commands.
@@ -31,6 +32,10 @@ const Usage = `Commands for the person running this relay:
                                           its account if it has one
   relay unblock <email>                   remove a block (a suspended account stays suspended)
   relay block list                        the blocked addresses
+  relay trace export <email> [--from YYYY-MM-DD] [--to YYYY-MM-DD]
+                                          the account's full trace, oldest first, one JSON
+                                          line per tool call or event (days in UTC, both
+                                          included), to standard output
 
 With no command, relay starts the server.
 `
@@ -40,10 +45,12 @@ var ErrUsage = errors.New("not a command")
 
 // Env is what a command works with.
 type Env struct {
-	Store *store.Store
-	Out   io.Writer        // one plain line per command that changed or found something
-	Actor string           // who runs it, for the operator log
-	Now   func() time.Time // default time.Now
+	Store  *store.Store
+	Traces *trace.Store     // the accounts' trace files (FR-683); nil: none
+	Out    io.Writer        // one plain line per command that changed or found something; an export's lines
+	Err    io.Writer        // what an export couldn't read; default io.Discard
+	Actor  string           // who runs it, for the operator log
+	Now    func() time.Time // default time.Now
 }
 
 // Run executes one command. An error means nothing was done (or the command wasn't one,
@@ -51,6 +58,9 @@ type Env struct {
 func Run(ctx context.Context, env Env, args []string) error {
 	if env.Now == nil {
 		env.Now = time.Now
+	}
+	if env.Err == nil {
+		env.Err = io.Discard
 	}
 	if len(args) == 0 {
 		return ErrUsage
@@ -84,8 +94,69 @@ func Run(ctx context.Context, env Env, args []string) error {
 		return env.withEmail(rest, true, func(email, reason string) error { return env.block(ctx, email, reason) })
 	case "unblock":
 		return env.withEmail(rest, false, func(email, _ string) error { return env.unblock(ctx, email) })
+	case "trace":
+		if len(rest) == 0 || rest[0] != "export" {
+			return ErrUsage
+		}
+		return env.traceExport(ctx, rest[1:])
 	}
 	return ErrUsage
+}
+
+// traceExport is `trace export <email> [--from YYYY-MM-DD] [--to YYYY-MM-DD]` (FR-685).
+func (e Env) traceExport(ctx context.Context, args []string) error {
+	var email, from, to string
+	for i := 0; i < len(args); i++ {
+		a := args[i]
+		name, value, inline := strings.Cut(a, "=")
+		switch name {
+		case "--from", "--to":
+			if !inline {
+				if i+1 == len(args) {
+					return ErrUsage
+				}
+				i++
+				value = args[i]
+			}
+			if err := trace.CheckDay(value); err != nil || value == "" {
+				return fmt.Errorf("%s: %q is not a day; write it as YYYY-MM-DD", name, value)
+			}
+			if name == "--from" {
+				from = value
+			} else {
+				to = value
+			}
+		default:
+			if strings.HasPrefix(a, "-") || email != "" {
+				return ErrUsage
+			}
+			email = a
+		}
+	}
+	if email == "" {
+		return ErrUsage
+	}
+	return e.withEmail([]string{email}, false, func(email, _ string) error {
+		u, err := e.Store.UserByEmail(ctx, email)
+		if err != nil {
+			return noAccount(email, err)
+		}
+		if e.Traces == nil {
+			return errors.New("this relay keeps no traces")
+		}
+		skipped, err := e.Traces.Export(u.ID, u.Email, from, to, e.Out)
+		if err != nil {
+			return err
+		}
+		switch skipped {
+		case 0:
+		case 1:
+			_, _ = fmt.Fprintln(e.Err, "1 line couldn't be read and was left out.")
+		default:
+			_, _ = fmt.Fprintf(e.Err, "%d lines couldn't be read and were left out.\n", skipped)
+		}
+		return nil
+	})
 }
 
 // withEmail reads "<email> [reason words…]", normalizing the address as sign-up does.
@@ -147,8 +218,12 @@ func (e Env) unsuspend(ctx context.Context, email string) error {
 }
 
 func (e Env) delete(ctx context.Context, email string) error {
-	if _, err := e.Store.DeleteUserByOperator(ctx, email, e.Actor, e.Now()); err != nil {
+	u, err := e.Store.DeleteUserByOperator(ctx, email, e.Actor, e.Now())
+	if err != nil {
 		return noAccount(email, err)
+	}
+	if err := e.Traces.Delete(u.ID); err != nil { // FR-687
+		return fmt.Errorf("deleted %s, but its traces couldn't be removed (%w); remove the folder traces/%s in the relay's data folder", email, err, u.ID)
 	}
 	return e.say("Deleted %s and everything this relay stored about it; its Mac is disconnected.", email)
 }

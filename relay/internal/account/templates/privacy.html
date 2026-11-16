@@ -8,9 +8,9 @@
 <h2>The short version</h2>
 <ul>
 <li>The relay stores what it needs to sign you in, to find your Mac, and to show you what happened. All of it is listed below.</li>
-<li>What Claude's tools read and do on your Mac (your notes, messages, files, screen contents, commands, and their results) passes through the relay and is never stored on it.</li>
+<li>The relay keeps the full content of every tool call Claude makes through it: what Claude asked your machines (your notes, messages, files, screen contents, commands) and everything they answered, screenshots and other images included. It is stored encrypted, kept until you delete your account, and you can download all of it from your account page.</li>
 <li>We do not sell your data. There is no advertising, no tracking, and no analytics.</li>
-<li>Delete account, on your account page, removes what the relay stores about you at once.</li>
+<li>Delete account, on your account page, removes what the relay stores about you at once, the full activity included.</li>
 </ul>
 
 <h2>What the relay stores</h2>
@@ -42,8 +42,9 @@
 
 <p><strong>About what happened</strong></p>
 <ul>
-<li>An activity log: for each tool call, an identifier of the call, which tool ran, when, which Claude app made the call (the name it gave), how long it took, and the outcome (worked, failed, timed out, or your Mac was offline). It holds no arguments and no results. Removing an app's access from your Mac is logged the same way. Your Mac can ask for its part of this log, to check it against its own.</li>
+<li>An activity log: for each tool call, an identifier of the call, which tool ran, when, which Claude app made the call (the name it gave), how long it took, and the outcome (worked, failed, timed out, or your Mac was offline). It holds no arguments and no results; those are in the full activity below. Removing an app's access from your Mac is logged the same way. Your Mac can ask for its part of this log, to check it against its own.</li>
 <li>A record of events on your account, with the time and, where it applies, your Mac: each time your Mac connects and disconnects (and why), each change of keep-awake, each sign-in attempt and how it went (passkey, emailed code, or recovery), each Claude app you approved, refused, or that lost its access, each time a Mac was connected to or disconnected from your account, and each request the relay refused or failed, with the reason. Refused requests are counted per hour rather than one by one. The record never holds what Claude did on your Mac, codes, tokens, keys, or network addresses. Requests refused without any account are counted per hour in the same way, without anything that identifies who sent them.</li>
+<li>Your full activity: for each tool call Claude made through the relay, including calls that never reached a machine and Claude's questions to the relay about your machines, what Claude sent (the tool and everything it asked for), the whole answer Claude got back (text, screenshots and other images, and the status of your machines that the relay adds), whether it failed, how long it took, the call's identifier, which Claude app made it, and which machine it went to; and the events on your account listed above. It is kept in files of one day each, encrypted with the relay's own key. Nothing in it is deleted because of its age. You can download all of it from your account page (Download full activity).</li>
 </ul>
 
 <p><strong>For running the relay</strong></p>
@@ -58,21 +59,21 @@
 
 <h2>What the relay does not store</h2>
 <ul>
-<li>What tools return and what Claude asks of them. Your notes, messages, files, screenshots, commands, and their results pass through the relay in transit and are never stored on it.</li>
-<li>Your Mac keeps its own detailed activity log, including that content, on your Mac only. It is encrypted there and is not sent to the relay.</li>
+<li>Your machines' own activity logs. Each Mac and Linux server keeps its own detailed log, including the content of tool calls, on that machine. It is not sent to the relay.</li>
 <li>Passwords (there are none), the private part of your passkeys, and your Mac's private key.</li>
 <li>Your conversations with Claude. Those are between you and Anthropic.</li>
 </ul>
 
 <h2>What can be seen in transit</h2>
-<p>Everything between Claude, the relay, and your Mac travels over encrypted connections (HTTPS). The relay is where those connections meet, and tool traffic is not encrypted beyond that. So the server this relay runs on can technically see tool traffic while it passes through, in transit, although the relay does not store it or write it to any log. If that matters for what you let Claude do, you can run your own relay: the software is open source.</p>
+<p>Everything between Claude, the relay, and your Mac travels over encrypted connections (HTTPS). The relay is where those connections meet, and tool traffic is not encrypted beyond that. So the server this relay runs on can technically see tool traffic while it passes through, and the relay keeps it in your full activity, encrypted with the relay's own key; whoever runs the server holds that key. If that matters for what you let Claude do, you can run your own relay: the software is open source.</p>
 <p>Claude is operated by Anthropic, under Anthropic's own terms and <a href="https://www.anthropic.com/legal/privacy" rel="noopener noreferrer">privacy policy</a>. What you say to Claude, and what your Mac's tools return to Claude, is handled by Anthropic, not by us. With each answer from your Mac, the relay also tells Claude your Mac's status, such as its battery level and whether it is online.</p>
 
 <h2>What we use it for</h2>
 <ul>
 <li>To sign you in and keep your account safe.</li>
 <li>To connect Claude to your Mac, and to tell Claude when your Mac is offline and why.</li>
-<li>To show you your Mac's status, the apps that have access, and the activity log.</li>
+<li>To show you your Mac's status, the apps that have access, and the activity log, and to let you download your full activity.</li>
+<li>To find and fix what goes wrong and to improve how Latchkey works with Claude, by reviewing what happened in tool calls.</li>
 <li>To email you sign-in and recovery codes and notices about your account's security.</li>
 <li>To protect this relay from abuse and to keep it running.</li>
 </ul>
@@ -85,7 +86,7 @@
 <h2>How long it is kept</h2>
 <ul>
 <li>Your account, passkeys, Mac details, and approvals: until you remove them or delete your account.</li>
-<li>The activity log and the record of events: until you delete your account. Nothing in them is deleted because of its age.</li>
+<li>The activity log, the record of events, and your full activity: until you delete your account. Nothing in them is deleted because of its age. If the server's disk runs low, the relay stops adding to the full activity until there is room again, and deletes none of it.</li>
 <li>Browser sign-ins: 30 days, or until you sign out.</li>
 <li>Emailed codes: 15 minutes. The code that connects your Mac: 5 minutes. A sign-up that was never finished: one day.</li>
 <li>Access tokens: one hour. The tokens that renew them: 90 days from their last renewal. Both are removed at once when you remove an app's access.</li>
@@ -101,7 +102,7 @@
 <p>This relay is not for anyone under 18, and we don't knowingly collect data from children.</p>
 
 <h2>Your choices and rights</h2>
-<p>Your account page shows your Mac, the apps that have access, and the activity log. There you can remove an app's access, disconnect your Mac, and delete everything with Delete account.</p>
+<p>Your account page shows your Mac, the apps that have access, and the activity log, and lets you download your full activity. There you can remove an app's access, disconnect your Mac, and delete everything with Delete account.</p>
 <p>You can also ask us for a copy of what the relay stores about you, to correct it, or to delete it. Write to <a href="mailto:{{.Data.Contact}}">{{.Data.Contact}}</a>. Depending on where you live, the law gives you such rights: residents of California, of the European Union and the European Economic Area, and of the United Kingdom, among others, can ask for access to their data, for its correction, and for its deletion. We will not treat you differently for asking, and we will answer as soon as we reasonably can and within the time the law sets.</p>
 <p>If European or UK data protection law applies to you: we handle your data because it is needed to provide the service you asked for and to keep it secure, and you can also complain to your data protection authority.</p>
 
