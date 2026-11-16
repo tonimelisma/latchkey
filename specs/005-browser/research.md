@@ -413,3 +413,17 @@ results there. Tried in a separate program: a window ordered in off every screen
 `WKPreferences.inactiveSchedulingPolicy = .none`, leave the page hidden; only WebKit's
 undocumented `_setWindowOcclusionDetectionEnabled:` made it visible. Toni, 2026-11-15: "public
 only", so that is not used.
+
+Found later the same evening (2026-11-15 19:23 to 19:35, Latchkey's log, category `browser`),
+the cause: at 19:23:57 Claude's page copied Target's `refreshToken` from Safari's file; at
+19:23:58 Target replaced it there and issued `accessToken`, `idToken`, and `egsSessionId`: the
+copy redeemed Safari's refresh token, and Target rotates refresh tokens. At 19:24:24 and 19:30:28
+Latchkey put Safari's old one back over the new one ("Safari's copy wins", FR-441). From 19:30:28
+Safari's file held no Target sign-in, and at 19:35:33 Target began a new `login-session` in
+Claude's page: both were signed out, as refresh-token reuse detection does. No copy can avoid
+this, and nothing public writes cookies into Safari, so while unlocked signed-in sites open in
+Safari itself (FR-455) and nothing is copied (FR-456); while locked, Toni accepts the sign-outs
+(FR-457). Choices (decided by Claude, low-level): "signed in" is a sign-in cookie (HttpOnly or
+named for a token) lasting over a day in Safari's file: reading a site as signed in when it
+isn't only opens a Safari tab, which is safe; the other way Claude can move the page with
+sign_in_again (FR-459).

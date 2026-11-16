@@ -258,6 +258,27 @@ phone, Claude can't check a reservation in the Owner's account or fill in a form
 - **FR-454** When a site replaces, removes, or adds a sign-in cookie in Claude's pages, Latchkey
   shall record in Latchkey's log, once per site for changes made together, which ones, by name,
   and whether each replaced or removed one was still Safari's copy; never a value.
+- **FR-455** While the Mac is unlocked, when Claude opens a page of a site the Owner is signed in
+  to in Safari (Safari holds a sign-in cookie for it lasting more than a day), the page shall
+  open in a new background tab of Claude's at the end of the Owner's front Safari window, with
+  the tab in front unchanged, and later calls that name the page shall work in that tab; any
+  other site opens in Latchkey's own browser (Toni, 2026-11-15: "when computer is unlocked, if
+  it's a site that would require my sign-in, use my real browser. otherwise use your own").
+  When Safari has no window, the page shall open in Latchkey's own browser and Claude shall be
+  told why (a new window would show on the Owner's screen, Constitution IV). Amends FR-444.
+- **FR-456** While the Mac is unlocked, Latchkey's own browser shall take none of Safari's
+  cookies (a copy that renews a rotating sign-in signs Safari out: Latchkey's log, 2026-11-15
+  19:23:58, Target). Amends FR-441 and FR-442 for that time.
+- **FR-457** While the Mac is locked, Claude's pages shall open in Latchkey's own browser with
+  Safari's cookies as FR-441 says, though a site may sign the Owner out in Safari (Toni,
+  2026-11-15: "signing me out is a side effect, it's still nice to get web access even when my
+  laptop is locked"); answers from that browser shall say so.
+- **FR-458** When the Mac is unlocked, the copies of Safari's cookies Latchkey's own browser
+  took while it was locked shall be dropped before Claude's next browser call, and Latchkey's
+  log shall say so. Its pages stay open.
+- **FR-459** While the Mac is unlocked, when Claude asks to sign in again in a page of
+  Latchkey's own browser (FR-442), the page shall move into a Safari tab of Claude's at the same
+  address, under the same name.
 
 ## Success criteria
 

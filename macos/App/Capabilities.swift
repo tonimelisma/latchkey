@@ -21,6 +21,16 @@ struct ToolResult: Sendable, Equatable {
         content = .array(items)
     }
 
+    /// Puts a line of text before the answer's first text part.
+    mutating func prependText(_ s: String) {
+        guard case .array(var items) = content, case .object(var first)? = items.first,
+            let text = first["text"]?.stringValue
+        else { return }
+        first["text"] = .string(s + text)
+        items[0] = .object(first)
+        content = .array(items)
+    }
+
     /// The answer's text parts joined, for the Owner's notifications.
     var plainText: String {
         guard case .array(let items) = content else { return "" }

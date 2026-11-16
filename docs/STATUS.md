@@ -1,6 +1,6 @@
 # Status
 
-Last updated: 2026-11-15 (sign-in cookies in Latchkey's log, for Safari's Target sign-outs; full traces everywhere, in daily files, for evals; Claude's pages always in Latchkey's own browser, by name, with dialogs Claude answers; the locked browser takes Safari's cookies again with every page; public download on GitHub with a new-version notice; never disturb the user: Mail, WhatsApp sending, Notes' window editing, Messages' window actions, Reminders' window setters removed; test sweep on exit; releases are tags on commits; cloud-only files read again; machine list shows Latchkey versions; WhatsApp built; Add to Claude button; plugin withdrawn; README rewritten as a short product page; relay web pages redone; purkki paired; spec 010 shipped)
+Last updated: 2026-11-15 (signed-in sites in Safari tabs of Claude's while unlocked; sign-in cookies in Latchkey's log, for Safari's Target sign-outs; full traces everywhere, in daily files, for evals; Claude's pages always in Latchkey's own browser, by name, with dialogs Claude answers; the locked browser takes Safari's cookies again with every page; public download on GitHub with a new-version notice; never disturb the user: Mail, WhatsApp sending, Notes' window editing, Messages' window actions, Reminders' window setters removed; test sweep on exit; releases are tags on commits; cloud-only files read again; machine list shows Latchkey versions; WhatsApp built; Add to Claude button; plugin withdrawn; README rewritten as a short product page; relay web pages redone; purkki paired; spec 010 shipped)
 
 Xcode signing ready (2026-10-20): Toni's Xcode account has a valid "Apple Development" certificate
 (certificate expires 2027-07-22). Keep the team ID out of committed project files
@@ -8,17 +8,15 @@ Xcode signing ready (2026-10-20): Toni's Xcode account has a valid "Apple Develo
 
 ## Current phase
 
-Safari signed out of Target (Toni, 2026-11-15, twice that evening), after Claude's pages had
-used Target in Latchkey's own browser. Measured (spec 005 research, "Sign-outs from Safari"):
-Safari's cookie file lags Safari, so the copy Claude's page got held a Target sign-in Safari had
-already renewed 4 minutes before; the stale copy was still accepted. What ends Safari's sign-in
-isn't proven yet, so Latchkey's log now records each copy (site, count, sign-in cookie names,
-age of Safari's cookie file) and each sign-in cookie a site changes in Claude's pages, by name
-only (`latchkey_log` category `browser`; FR-453, FR-454). Also found: Claude's pages there count
-as hidden to WebKit (no drawing), so Target's search shows no results; the only fix found uses an
-undocumented WebKit setting, and Toni chose public APIs only. Open, for Toni: whether Claude's
-pages go back to Safari tabs of their own while the Mac is unlocked (as until 0.8.158), which
-avoids both.
+Safari signed out of Target (Toni, 2026-11-15, three times that evening), found and fixed:
+Target rotates its refresh token, and Claude's page in Latchkey's own browser redeemed Safari's
+copy (Latchkey's log, 19:23:58), which ended Safari's sign-in. Now (Toni's rule; spec 005 FR-455
+to FR-459): while the Mac is unlocked, a site the owner is signed in to opens in a background
+Safari tab of Claude's with his real sign-in, other sites in Latchkey's own browser with no
+copied cookies; while locked, Latchkey's own browser copies Safari's cookies as before, and a
+sign-out is an accepted side effect; the copies are dropped at unlock. Also found: pages of
+Latchkey's own browser count as hidden to WebKit, so Target's search showed no results there;
+signed-in shopping now runs in Safari, where it works (public APIs only, Toni).
 
 Full traces everywhere, for evals (Toni, 2026-11-15: "I want to be able to do evals on everything
 that happened anywhere"; spec 001 FR-680 to FR-689, spec 010 FR-1057 to FR-1059,
@@ -132,9 +130,9 @@ after the app was quit.
 
 ## Next steps
 
-1. Target sign-outs: at the next one, read `latchkey_log` (category `browser`) for what Claude's
-   pages did with Target's sign-in cookies just before, and fix the cause; Toni's answer on
-   Safari tabs while unlocked (Current phase) decides where Claude's pages go.
+1. While locked, Target's search stays empty in Latchkey's own browser (its pages count as
+   hidden to WebKit, and only an undocumented setting changes that, which Toni declined); Claude
+   can still open products and the cart there.
 2. Changing notes with checklists, links, or images: the iCloud.com route was probed on
    2026-11-07 and stopped (spec 002 research, "Notes with checklists through iCloud.com"): the
    approval and the drawing in a hidden view work, but iCloud.com's editor takes no input

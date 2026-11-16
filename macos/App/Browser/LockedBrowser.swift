@@ -66,6 +66,9 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate {
     /// Logs each copy of Safari's cookies (FR-453); Claude's pages share one (`OwnPages`).
     private let watch: CookieWatch?
     private let fileAge: @Sendable () -> TimeInterval?
+    /// Whether Safari's cookies may be copied now: while the Mac is locked only, for Claude's
+    /// pages (FR-456: a copy that renews a rotating sign-in signs Safari out). Tests: always.
+    private let mayCopy: @MainActor () -> Bool
     /// The sites whose Safari cookies this page has taken (by host), so a page going back and forth
     /// doesn't take them again.
     private var taken: Set<String> = []
@@ -74,9 +77,11 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate {
         size: CGSize = CGSize(width: 1280, height: 900), pageScripts: Bool = true,
         cookies: @escaping @Sendable () -> [SafariCookies.Cookie] = SafariCookies.current,
         store: WKWebsiteDataStore? = nil, watch: CookieWatch? = nil,
-        fileAge: @escaping @Sendable () -> TimeInterval? = { nil }, holdLimit: Duration = .seconds(300),
+        fileAge: @escaping @Sendable () -> TimeInterval? = { nil },
+        mayCopy: @escaping @MainActor () -> Bool = { true }, holdLimit: Duration = .seconds(300),
         presetWindow: Duration = .seconds(5)
     ) {
+        self.mayCopy = mayCopy
         self.watch = watch
         self.fileAge = fileAge
         self.size = size
@@ -96,6 +101,7 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate {
     @discardableResult
     func takeSafarisCookies(for host: String? = nil, overwrite: Bool = true) async -> Int {
         guard let web, let site = (host ?? web.url?.host())?.lowercased(), !site.isEmpty else { return 0 }
+        guard mayCopy() else { return 0 }
         taken.insert(site)
         let wanted = cookies().filter { Self.covers($0.domain, site) }
         let set = await Self.copy(
@@ -167,6 +173,13 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate {
             }
         }
     }
+
+    /// Whether this page has Safari's sign-ins now (they are copied only while that is allowed).
+    var signedInFromSafari: Bool { mayCopy() }
+
+    /// The sites taken are forgotten, so their cookies are taken again when next allowed
+    /// (FR-458: the copies were dropped).
+    func forgetTaken() { taken = [] }
 
     /// FR-442: Safari's cookies again, then the page Claude is on loaded again.
     func signInAgain() async throws -> PageScripts.Page {
@@ -369,7 +382,7 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate {
     ) {
         MainActor.assumeIsolated {
             let url = navigationAction.request.url
-            guard let host = url?.host()?.lowercased(), !host.isEmpty, !taken.contains(host),
+            guard mayCopy(), let host = url?.host()?.lowercased(), !host.isEmpty, !taken.contains(host),
                 ["http", "https"].contains(url?.scheme?.lowercased() ?? "")
             else {
                 decisionHandler(.allow)
@@ -739,7 +752,8 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate {
     static func draw(_ copy: PageScripts.PictureCopy) async throws -> PreparedImage {
         let width = min(max(copy.width, 320), 2560)
         let height = min(max(copy.height, 240), 1600)
-        let b = LockedBrowser(size: CGSize(width: width, height: height), pageScripts: false)
+        let b = LockedBrowser(
+            size: CGSize(width: width, height: height), pageScripts: false, mayCopy: { SystemScreen().isLocked() })
         defer { b.discard() }
         guard let base = URL(string: copy.url), ["http", "https"].contains(base.scheme?.lowercased() ?? "") else {
             throw SafariBrowser.Failure.failed("Latchkey can't draw this page (\(copy.url.prefix(60))).")

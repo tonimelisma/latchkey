@@ -481,6 +481,55 @@ actor SafariBrowser {
         pickedUnmarked = f[1] == "yes" ? nil : String(f[2])
     }
 
+    /// Opens `url` in a new tab of Claude's at the end of the Owner's front Safari window, behind
+    /// the tab in front (FR-455), and works in it; nothing comes forward. False when Safari has
+    /// no window (a new window would show on the Owner's screen, so none is made).
+    func openTab(_ url: String) async throws -> PageScripts.Page? {
+        beginAction()
+        let address = try Self.normalize(url)
+        let out = try await call(Script.tabNew, [address]).trimmingCharacters(in: .whitespacesAndNewlines)
+        if out == "none" { return nil }
+        let f = out.split(separator: "\t").map { $0.trimmingCharacters(in: .whitespaces) }
+        guard f.count == 3, let index = Int(f[1]), let count = Int(f[2]) else {
+            throw Failure.failed("Safari reported a problem: it didn't say where the new tab is.")
+        }
+        forget()
+        picked = (f[0], PickedTab(index: index, count: count, address: address, token: Self.newToken()))
+        navigated(to: address)
+        guard try await settle(after: nil, expectNavigation: true) else {
+            throw Failure.failed(
+                "Safari didn't finish loading \(address) within \(settleLimit.components.seconds) seconds. Read the page as it is with browser_read and page."
+            )
+        }
+        return try await readPage(offset: 0)
+    }
+
+    /// Loads `url` in the tab Claude works in (a tab of Claude's own, FR-455).
+    func load(_ url: String) async throws -> PageScripts.Page {
+        beginAction()
+        let address = try Self.normalize(url)
+        let before = try? await stamp()
+        let found = try await locate()
+        _ = try await call(Script.tabLoad, replacingArguments(found) + [address])
+        picked?.tab.address = address
+        navigated(to: address)
+        guard try await settle(after: before, expectNavigation: true) else {
+            throw Failure.failed(
+                "Safari didn't finish loading \(address) within \(settleLimit.components.seconds) seconds. Read the page as it is with browser_read and page."
+            )
+        }
+        return try await readPage(offset: 0)
+    }
+
+    /// A driver of its own for a Safari tab of Claude's (FR-455): the same scripts and limits, its
+    /// own tab, so pages of different chats never share one.
+    nonisolated func sibling() -> SafariBrowser {
+        SafariBrowser(scripts: scripts, settleLimit: settleLimit, lockedScripts: lockedScripts, isLocked: isLocked)
+    }
+
+    /// The address of the page Claude works in, as last seen.
+    func workingAddress() -> String? { picked?.tab.address }
+
     /// Closes the Owner's tab Claude works in (FR-428), through the same check as any action
     /// (FR-429). Its address, or nil when no tab is picked.
     func closeWorking() async throws -> String? {
@@ -1045,6 +1094,40 @@ actor SafariBrowser {
             if isMarked then set current tab of w to tab previousIndex of w
             end if
             return ""
+            end tell
+            end run
+            """
+        /// argv: the guard's five, url. Loads the address in Claude's tab only.
+        static let tabLoad =
+            "on run argv\n" + tabGuard + "\n"
+                + """
+                set URL of t to (item 6 of argv)
+                return ""
+                end tell
+                end run
+                """
+        /// argv: url. A new tab at the end of the Owner's front Safari window, behind the tab the
+        /// Owner has in front, for a page of Claude's (FR-455). Answers "window id<TAB>tab
+        /// index<TAB>tab count", or "none" when Safari has no window: a new one would show on
+        /// the Owner's screen (Constitution IV), so none is made.
+        static let tabNew = """
+            on run argv
+            set theURL to item 1 of argv
+            set sep to character id 9
+            tell application "Safari"
+            repeat with w in windows
+            set isBrowser to false
+            try
+            get current tab of w
+            set isBrowser to true
+            end try
+            if isBrowser then
+            make new tab at end of tabs of w with properties {URL:theURL}
+            set n to count of tabs of w
+            return ((id of w) as text) & sep & (n as text) & sep & (n as text)
+            end if
+            end repeat
+            return "none"
             end tell
             end run
             """

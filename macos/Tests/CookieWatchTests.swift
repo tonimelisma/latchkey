@@ -84,7 +84,7 @@ import Testing
                 httpOnly: false, expires: Date().addingTimeInterval(3600))
         ]
         let told = Told()
-        let pages = OwnPages(cookies: { jar.cookies }, fileAge: { 30 }, record: { told.add($0) })
+        let pages = OwnPages(cookies: { jar.cookies }, isLocked: { true }, fileAge: { 30 }, record: { told.add($0) })
         defer { pages.closeAll() }
         let name = try await pages.open(html: "<p>Hi</p>", base: URL(string: "https://test.example/")!)
         #expect(

@@ -5,7 +5,8 @@ extension BrowserCapability {
     /// Runs one call with what it asked for (FR-445, FR-447): the page it names, and whether it
     /// names one of the owner's tabs, which it picks first.
     static func asked(
-        _ args: JSONValue, _ ops: Operations, browser: SafariBrowser, _ body: @escaping @Sendable () async -> ToolResult
+        _ args: JSONValue, _ ops: Operations, browser: SafariBrowser, own: OwnPages,
+        _ body: @escaping @Sendable () async -> ToolResult
     ) async -> ToolResult {
         let page: String?
         switch args["page"] {
@@ -14,13 +15,22 @@ extension BrowserCapability {
         default: return .text("page is the name of one of Claude's pages, like \"p4k2\".", isError: true)
         }
         let tab = args["tab"].flatMap { $0.isPresent ? $0 : nil }
+        // FR-458: copies taken while the Mac was locked go once it is unlocked.
+        await own.forgetCopiesIfUnlocked()
+        // FR-455: a page of Claude's that is a Safari tab of Claude's is worked in through its own
+        // driver (not when the call names one of the owner's tabs).
+        let safari = tab == nil ? await own.safariCalled(page) : nil
         return await Asked.$page.withValue(page) {
             await Asked.$tab.withValue(tab != nil) {
-                if let tab {
-                    let picked = await ops.call("browser_tabs", .object(["select": tab]))
-                    if picked.isError { return picked }
+                await Asked.$safari.withValue(safari?.browser) {
+                    await Asked.$safariName.withValue(safari?.name) {
+                        if let tab {
+                            let picked = await ops.call("browser_tabs", .object(["select": tab]))
+                            if picked.isError { return picked }
+                        }
+                        return await body()
+                    }
                 }
-                return await body()
             }
         }
     }
@@ -32,11 +42,14 @@ extension BrowserCapability {
                 tool: .make(
                     "browser_read", title: "Read the Web",
                     description: """
-                        Opens and reads web pages on the Mac. Claude's own pages are in Latchkey's own browser \
-                        (not Safari, so nothing changes in the owner's Safari window), signed in with a copy of \
-                        the owner's Safari sign-ins, taken again with each url opened. With url: opens that page \
-                        in a new page of Claude's own and answers with its name, like p4k2; with url and page, \
-                        opens it in that page. Pass page on every later call (other chats may have pages open \
+                        Opens and reads web pages on the Mac. Claude's own pages: while the Mac is unlocked, a \
+                        site the owner is signed in to in Safari opens in a background Safari tab of Claude's \
+                        (the owner's real sign-in; the owner's front tab stays in front), and any other site in \
+                        Latchkey's own browser without the owner's sign-ins; while the Mac is locked, every page \
+                        is in Latchkey's own browser with a copy of Safari's sign-ins (a site may then sign the \
+                        owner out in Safari). Each answer says which. With url: opens that page in a new page of \
+                        Claude's own and answers with its name, like p4k2; with url and page, opens it in that \
+                        page. Pass page on every later call (other chats may have pages open \
                         too; with several open, a call without page is refused with the list). tabs: lists every \
                         tab of every Safari window of the owner's, each with a reference like 4213.2 (window, \
                         then tab), and Claude's own pages. With tab: reads that tab of the owner's, in the \
@@ -44,8 +57,9 @@ extension BrowserCapability {
                         nothing else: reads the page. Answers with the page's text and the links, buttons, and \
                         fields on it, each with a reference like e12 for browser_act. Long pages come in parts; \
                         pass offset to read on. screenshot: shows the page as an image. sign_in_again: when a \
-                        page of Claude's comes back signed out after a click or typing, takes Safari's cookies \
-                        again and loads the page again. A page's confirm or prompt that Claude didn't answer in \
+                        page of Claude's in Latchkey's own browser is signed out but needs the owner's sign-in: \
+                        while the Mac is unlocked, moves it into a Safari tab of Claude's at the same address; \
+                        while locked, takes Safari's cookies again and loads the page again. A page's confirm or prompt that Claude didn't answer in \
                         advance waits for Claude: the answer says what it asks, and browser_act action dialog \
                         answers it. A page that is a file (a PDF) isn't shown: save it with browser_act \
                         download.
@@ -59,7 +73,8 @@ extension BrowserCapability {
                         "tabs": .boolParam("List every tab of every Safari window, and Claude's own pages"),
                         "screenshot": .boolParam("Show the page as an image"),
                         "sign_in_again": .boolParam(
-                            "Take Safari's cookies again and load Claude's page again (it came back signed out)"),
+                            "Claude's page is signed out but needs the owner's sign-in: move it into Safari (unlocked) or take Safari's cookies again (locked)"
+                        ),
                         "offset": .integerParam("Read the page from this character"),
                     ], readOnly: true, openWorld: true, deadlineMS: 30_000),
                 handler: { args in
@@ -72,12 +87,14 @@ extension BrowserCapability {
                         } else {
                             rest = args
                         }
-                        return await asked(rest, ops, browser: browser) { await ops.call("browser_open", rest) }
+                        return await asked(rest, ops, browser: browser, own: own) {
+                            await ops.call("browser_open", rest)
+                        }
                     }
                     if args["tabs"] == .bool(true), args["tab"]?.isPresent != true {
                         return await ops.call("browser_tabs", .object([:]))
                     }
-                    return await asked(args, ops, browser: browser) {
+                    return await asked(args, ops, browser: browser, own: own) {
                         if args["back"] == .bool(true) { return await ops.call("browser_back", args) }
                         if args["screenshot"] == .bool(true) { return await ops.call("browser_screenshot", args) }
                         if args["sign_in_again"] == .bool(true) {
@@ -147,7 +164,7 @@ extension BrowserCapability {
                 handler: { args in
                     let action = args["action"]?.stringValue
                     guard actions.contains(action ?? "") else { return .unknown("action", action, allowed: actions) }
-                    return await asked(args, ops, browser: browser) {
+                    return await asked(args, ops, browser: browser, own: own) {
                         switch action {
                         case "click": return await ops.call("browser_click", args)
                         case "type": return await ops.call("browser_type", args)

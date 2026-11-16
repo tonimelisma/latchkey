@@ -56,7 +56,7 @@ extension BrowserCapability {
     static func acted(
         _ said: String, _ p: PageScripts.Page, _ l: LockedBrowser?, _ browser: SafariBrowser, activity: String
     ) async -> ToolResult {
-        let working = l == nil ? await browser.working() : nil
+        let working = l == nil ? await here(browser).working() : nil
         var r = await told(
             .text(said + "\n\n" + (working.map { named($0) + "\n" } ?? "") + PageScripts.answer(p)), l, browser)
         r.activity = activity
@@ -82,7 +82,7 @@ extension BrowserCapability {
                         let l = try await route(browser, own)
                         let done = try await either(
                             l, { try await $0.press(keys, ref: ref, answer: a) },
-                            { try await browser.press(keys, ref: ref, answer: a) })
+                            { try await here(browser).press(keys, ref: ref, answer: a) })
                         let did = (try? JSONDecoder().decode([String].self, from: Data(done.detail.utf8))) ?? []
                         return await acted(
                             "Pressed (keys a script sends; a site that only takes a real keyboard won't notice them):\n"
@@ -102,7 +102,8 @@ extension BrowserCapability {
                             throw Failure.failed("Give the element's reference.")
                         }
                         let l = try await route(browser, own)
-                        let done = try await either(l, { try await $0.hover(ref) }, { try await browser.hover(ref) })
+                        let done = try await either(
+                            l, { try await $0.hover(ref) }, { try await here(browser).hover(ref) })
                         let shown = Int(done.detail) ?? 0
                         return await acted(
                             shown > 0
@@ -131,7 +132,7 @@ extension BrowserCapability {
                         let done =
                             try await either(
                                 l, { try await $0.scroll(ref, direction: direction, amount: amount) },
-                                { try await browser.scroll(ref, direction: direction, amount: amount) })
+                                { try await here(browser).scroll(ref, direction: direction, amount: amount) })
                         let at = try? JSONDecoder().decode(
                             PageScripts.ScrollPosition.self, from: Data(done.detail.utf8))
                         return await acted(
@@ -156,7 +157,7 @@ extension BrowserCapability {
                         let l = try await route(browser, own)
                         let done = try await either(
                             l, { try await $0.choose(ref, options: options, answer: a) },
-                            { try await browser.choose(ref, options: options, answer: a) })
+                            { try await here(browser).choose(ref, options: options, answer: a) })
                         let chosen = (try? JSONDecoder().decode([String].self, from: Data(done.detail.utf8))) ?? options
                         return await acted(
                             "Chose (website text): " + chosen.map { "\"\($0)\"" }.joined(separator: ", "), done.page, l,
@@ -182,7 +183,7 @@ extension BrowserCapability {
                         let l = try await route(browser, own)
                         let done = try await either(
                             l, { try await $0.attach(ref, files: files, answer: a) },
-                            { try await browser.attach(ref, files: files, answer: a) })
+                            { try await here(browser).attach(ref, files: files, answer: a) })
                         let how = done.detail.contains("dropped") ? "Dropped" : "Attached"
                         let list = files.map { "\($0.name) (\(BrowserDownloads.size($0.data.count)))" }
                         return await acted(
@@ -227,7 +228,7 @@ extension BrowserCapability {
         let got =
             try await either(
                 l, { try await $0.fetchFile(ref: ref, url: url, maxBytes: BrowserDownloads.pageLimit) },
-                { try await browser.fetchFile(ref: ref, url: url, maxBytes: BrowserDownloads.pageLimit) })
+                { try await here(browser).fetchFile(ref: ref, url: url, maxBytes: BrowserDownloads.pageLimit) })
         let f = got.fetched
         func said(_ file: URL, _ size: Int, _ type: String?, how: String) -> String {
             "Saved \(BrowserDownloads.size(size))\(type.map { ", \($0)" } ?? "") to \(file.path) (\(how)). Read it with files_read and that path; it is marked as downloaded from the web, as Safari marks downloads."

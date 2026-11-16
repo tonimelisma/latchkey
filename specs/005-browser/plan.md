@@ -460,6 +460,25 @@ activity log, shown in the Activity window ("Browser Sign-Ins"), and returned by
 "Sign-outs from Safari"). Site names and cookie names go to macOS's log in public; values never
 leave the store.
 
+## D13. Signed-in sites in Safari while unlocked (FR-455 to FR-459, 2026-11-15)
+
+`OwnPages` holds each page as `.own(LockedBrowser)` or `.safari(SafariBrowser)`. A Safari page
+has a `SafariBrowser` of its own (`sibling()`: the same script runners and limits), so pages of
+different chats never share a picked tab, and the owner's tabs keep theirs. `openTab` makes a
+tab at the end of the front browser window (`make new tab at end of tabs`, which leaves the
+current tab as it is), picks it with a new mark, and waits for the page like any navigation of
+Claude's (the tab is taken unmarked while it shows the address it is loading); `load` loads an
+address in it (`Script.tabLoad`, guarded like every action). `browser_open` decides: a page the
+call names that is a Safari page loads there; otherwise, while unlocked and `signedIn(host)`
+(a sign-in cookie of `CookieWatch.isSignIn` lasting over a day in Safari's file), a Safari page;
+else Latchkey's own browser. `BrowserTools.asked` resolves the page name: for a Safari page it
+sets `Asked.safari` and `Asked.safariName`, `route` then answers nil, and every handler's Safari
+calls go through `here(browser)`, the page's driver. `LockedBrowser` takes Safari's cookies only
+when `mayCopy()` (from `OwnPages`: locked), which also marks the store as holding copies; the
+next call after unlock removes the store's cookies (`removeData`) and the pages' taken sites.
+A picture drawn in Latchkey's own browser (FR-439) copies only while locked too. Not chosen: a
+setting, or Claude choosing the browser per page (Toni's rule decides from the sign-in itself).
+
 ## Testing
 
 A stand-in script runner answers like Safari: open, read (page JSON), click, type, missing

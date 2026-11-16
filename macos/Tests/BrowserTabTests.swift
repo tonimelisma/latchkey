@@ -126,6 +126,21 @@ final class FakeSafariTabs: ScriptRunner, @unchecked Sendable {
         try lock.withLock {
             calls.append((script, args))
             switch script {
+            case SafariBrowser.Script.tabNew:
+                // Claude's own tab, at the end of the front window, behind the Owner's (FR-455).
+                guard !windows.isEmpty else { return "none" }
+                loads += 1
+                windows[0].tabs.append(FakeTab(url: args[0], title: "Claude's", owner: "claude"))
+                let n = windows[0].tabs.count
+                return "\(windows[0].id)\t\(n)\t\(n)"
+            case SafariBrowser.Script.tabLoad:
+                let (w, i) = try guarded(args)
+                windows[w].tabs[i].waiting = false  // a new page replaces the one waiting
+                loads += 1
+                windows[w].tabs[i].url = args[5]
+                windows[w].tabs[i].mark = nil
+                windows[w].tabs[i].scriptsRun += 1
+                return ""
             case SafariBrowser.Script.allTabs:
                 // Every browser window front to back: its id and front tab, then its tabs.
                 var out = ""
