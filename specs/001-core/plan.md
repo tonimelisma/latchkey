@@ -1226,6 +1226,34 @@ Options and the choice: research.md "Calls cut off by the app stopping".
   `latchkey_log` among what a Mac offers, also with every capability off. Linux (spec 010): not
   offered; its program logs to the journal, a separate job.
 
+### D28. Full traces in daily files (FR-680 to FR-689; spec 010 FR-1057 to FR-1059)
+
+Toni, 2026-11-15: full traces everywhere, for evals over everything that happened anywhere, kept
+where no migration can wipe them. Formats: `contracts/trace-files.md`; options weighed:
+research.md "Trace files".
+
+- One shape on every side: files named by the UTC day, only ever appended to, every line carrying
+  its format version; a reader skips and counts what it can't read and never changes a file.
+  Every side exports the same line (FR-686), and `call_id` joins a relay line to its machine line.
+- Mac (FR-682): `TraceFiles` (App/Trace.swift) holds two files a day, `.entries` with each
+  entry's fields in the clear (what the tamper check, the comparison with the relay, and paging
+  read) and `.content` with the sealed content back to back. `ActivityReader` reads the files a
+  day at a time, newest day first; sealing, the chain (FR-612), and the Keychain record (FR-613)
+  are unchanged. The first start copies the database's rows byte for byte (read with SQLite from
+  a copy of its files, never through SwiftData, which may change a store just by opening it) into
+  `activity.copying/`, reads them back, and renames the folder; `activity.store` stays on disk as
+  it was. The copy is recorded as an app event. SwiftData is no longer used by the app.
+- Relay (FR-683 to FR-685, FR-687, FR-688): a trace writer called from the MCP server's tool
+  handlers (every outcome, the `machines` tool too) and from the event recorder; each line sealed
+  with AES-256-GCM under a key derived from the key file (HKDF, its own info string), bound to the
+  account and day. Below 2 GiB free it writes nothing and records `traces_paused` and
+  `traces_resumed`. Delete account removes the account's folder. `relay trace export` and
+  `GET /account/trace` write the export line. No agent protocol change: the relay already sees
+  every argument and result it forwards.
+- Linux (FR-1057 to FR-1059): `activity/YYYY-MM-DD.jsonl`, plain, 0600, arguments and the whole
+  content array in full; the old `activity.jsonl` read as version 0 and never written again;
+  `latchkey activity export`.
+
 ## Constitution check
 
 | Article | Status |
@@ -1235,7 +1263,7 @@ Options and the choice: research.md "Calls cut off by the app stopping".
 | III. Disabled means nonexistent | Pass (FR-061); Pause leaves levels as they are and answers calls like an offline Mac (D15); `latchkey_log` is no capability, reads only Latchkey's own public lines, and is refused while paused (D26) |
 | IV. Good macOS citizen | Pass with one documented exception: no App Sandbox (D9) |
 | V. Self-hostable | Pass (D10) |
-| VI. Store the minimum | Pass (D11, D12, D14, data-model.md): a grant's label and times, and the operator's own actions for a year |
+| VI. Store the minimum | Pass as amended by Toni on 2026-11-15 (D11, D12, D14, D28, data-model.md): a grant's label and times, the operator's own actions for a year, and each account's full trace, encrypted, in its own files until the account is deleted, never in the database |
 | VII. Test-first | Planned (testing strategy) |
 | VIII. Simplicity | Pass: relay, Mac app, specs |
 | IX. Open source | Pass: Apache-2.0; all dependencies MIT, BSD, or Apache |

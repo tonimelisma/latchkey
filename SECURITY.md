@@ -52,8 +52,10 @@ The design and its reasons are in `docs/best-practices.md` and `specs/`. In shor
   doesn't exist for Claude, and the Mac rejects calls to it.
 - Sign-in uses passkeys; Claude gets OAuth tokens issued for this relay only; the Mac proves
   itself with a key kept in the Secure Enclave.
-- The relay never stores what tools return; its log keeps which tool ran and when, for 30 days.
-  The full activity log stays on the Mac.
+- Full traces of every call (arguments and results) are kept on the Mac (encrypted with a key in
+  the Keychain), on each Linux server (readable only by the Owner's account), and on the relay
+  (encrypted with the relay's key file, deleted with the account), in daily files that are only
+  ever appended to. The relay's database itself holds no arguments or results.
 - Every change Claude makes shows a notification on the Mac, and so does every new Claude
   connection.
 

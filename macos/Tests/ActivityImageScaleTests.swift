@@ -62,7 +62,7 @@ import Testing
         _ = try time("calls for the audit check") { try trace.reader.calls() }
 
         let url = dir.appending(path: "export.jsonl")
-        let exported = try time("export") { try trace.reader.export(ActivityQuery(), to: url) }
+        let exported = try time("export") { try trace.reader.export(ActivityQuery(), to: url, machine: "Mac") }
         #expect(exported == 320)
         let lines = try String(contentsOf: url, encoding: .utf8).split(separator: "\n")
         let images = lines.filter { $0.contains(#""type":"image""#) }

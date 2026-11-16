@@ -75,11 +75,18 @@ Claude (web, Desktop, phone)  ──HTTPS──▶  Latchkey relay  ◀──out
   before the Mac sleeps.
 - **Keep-awake:** while connected, the app keeps the Mac awake, lid closed included, and lets it
   sleep when the battery reaches 15% or it gets too hot.
-- **Privacy:** the relay never stores what tools return. It keeps a list of which tools ran, when,
-  and for which Claude app, plus connections, sign-ins, and refused requests, until you delete
-  your account; the full log, with arguments and results, and the app's own events, stays on
-  your Mac, encrypted and checked for changes, until you uninstall the app. After each
-  connection the Mac checks its log against the relay's list, call by call. Text written
+- **What is kept:** a full trace of every call (what Claude asked, everything it got back,
+  screenshots included, how long it took, which Claude app) is kept on the Mac, on each Linux
+  server, and on the relay, in files of one day each that are only ever added to: no age limit,
+  and no update or migration rewrites them. On the Mac it is encrypted with a key in your
+  Keychain and checked for changes, until you uninstall the app; on a Linux server it is a plain
+  file only your account can read; on the relay it is encrypted with the relay's own key, and
+  deleted with your account. The relay stops writing traces while its disk has less than 2 GB
+  free, and never deletes old ones to make room. Every side exports the same line format (the
+  Activity window's Export…, `latchkey activity export` on a server, Download full activity on
+  the relay's account page), so traces join up by call. The relay's database also keeps a list
+  of which tools ran, plus connections, sign-ins, and refused requests, until you delete your
+  account; after each connection the Mac checks its log against that list, call by call. Text written
   by others (messages, web pages, files) is marked as content, not instructions. Besides the
   relay, the app reaches one other place: once a day it asks GitHub for the list of Latchkey
   releases, with no account or cookies, to tell you in its menu when a newer version is out.
@@ -143,7 +150,8 @@ code, and click Connect. The service starts (sudo asks for your password once if
 comes back after every reboot, and updates itself, checking each update's signature. On the
 server, `latchkey shell on|off` and `latchkey files off|read|write` choose what Claude can do
 there (Shell on and Files read & write to start), `latchkey pause` stops everything, `latchkey
-activity` shows what Claude did, and `latchkey uninstall` removes it all. Commands run in bash
+activity` shows what Claude did (`latchkey activity export` writes the full trace), and
+`latchkey uninstall` removes it all. Commands run in bash
 as you; sudo works for what you allowed without a password and otherwise answers at once (it
 never waits for one); whatever a command leaves running is stopped when it finishes, sudo's too.
 Deleting a file on a server deletes it for good. As on a Mac, Claude can always read

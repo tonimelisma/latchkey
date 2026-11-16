@@ -45,14 +45,42 @@ enum LogBeforeTheCheck {
         return entries
     }
 
-    /// Changes the stored rows directly, as another program could.
-    static func tamper(_ dir: URL, _ change: (ModelContext, [SealedActivity]) throws -> Void) throws {
-        let container = try ModelContainer(
-            for: SealedActivity.self, configurations: ModelConfiguration(url: dir.appending(path: TraceStore.fileName)))
-        let context = ModelContext(container)
-        let rows = try context.fetch(FetchDescriptor<SealedActivity>(sortBy: [SortDescriptor(\.seq)]))
-        try change(context, rows)
-        try context.save()
+    /// An entry as the daily files hold it, for changing them as another program could.
+    struct StoredEntry {
+        var id: UUID
+        var at: Date
+        var seq: Int
+        var keyID: String
+        var kind: String
+        var callID: String
+        var device: String
+        var mac: Data?
+        var sealed: Data
+    }
+
+    /// Changes the stored entries directly, as another program could: reads every day's files
+    /// (entries in the order of their numbers), lets `change` edit them, and writes the files anew.
+    static func tamper(_ dir: URL, _ change: (inout [StoredEntry]) throws -> Void) throws {
+        let files = TraceFiles(folder: dir.appending(path: TraceStore.folderName))
+        var rows: [StoredEntry] = []
+        for day in files.days() {
+            let content = files.content(day)
+            for r in files.rows(day).rows {
+                rows.append(
+                    StoredEntry(
+                        id: r.id, at: r.at, seq: r.seq, keyID: r.keyID, kind: r.kind, callID: r.callID,
+                        device: r.device, mac: r.mac, sealed: TraceFiles.sealed(r, in: content) ?? Data()))
+            }
+        }
+        rows.sort { $0.seq < $1.seq }
+        try change(&rows)
+        try FileManager.default.removeItem(at: files.folder)
+        try files.append(
+            rows.map {
+                TraceFiles.Item(
+                    id: $0.id, at: $0.at, seq: $0.seq, keyID: $0.keyID, kind: $0.kind, callID: $0.callID,
+                    device: $0.device, mac: $0.mac, sealed: $0.sealed)
+            })
     }
 
     @MainActor static func check(_ dir: URL, _ keys: MemoryTraceKey, _ latest: MemoryLatestEntry) throws -> LogCheck {
@@ -89,7 +117,7 @@ enum LogBeforeTheCheck {
         let latest = MemoryLatestEntry()
         do {
             let trace = try TraceStore(directory: dir, keys: keys, latest: latest)
-            let page = try trace.page(limit: 100)
+            let page = try trace.reader.page(ActivityQuery(kind: .action), limit: 100)
             #expect(page.entries.map(\.result) == ["output 3", "output 2", "output 1"], "readable after the upgrade")
             #expect(page.entries.allSatisfy { $0.beforeCheck }, "marked as from before the check")
             #expect(page.unreadable == 1, "the entry under a lost key is counted, not shown")
@@ -98,13 +126,13 @@ enum LogBeforeTheCheck {
             #expect(check.broken.isEmpty)
             #expect(!check.missingNewer)
             #expect(check.beforeCheck == 3)
-            #expect(latest.writes.isEmpty, "nothing to record yet")
+            #expect(latest.writes == ["add"], "the move's event is the first entry recorded")
 
             try trace.record(Self.entry(4, at: now))
-            #expect(latest.writes == ["add"])
+            #expect(latest.writes == ["add", "update"])
         }
         let trace = try TraceStore(directory: dir, keys: keys, latest: latest)
-        let page = try trace.page(limit: 100)
+        let page = try trace.reader.page(ActivityQuery(kind: .action), limit: 100)
         #expect(page.entries.map(\.result) == ["output 4", "output 3", "output 2", "output 1"])
         #expect(page.entries.map(\.beforeCheck) == [false, true, true, true])
         #expect(page.unreadable == 1)
@@ -132,7 +160,7 @@ enum LogBeforeTheCheck {
         let keys = MemoryTraceKey()
         let latest = MemoryLatestEntry()
         let entries = try Self.log(5, in: dir, keys: keys, latest: latest)
-        try Self.tamper(dir) { context, rows in context.delete(rows[2]) }
+        try Self.tamper(dir) { rows in rows.remove(at: 2) }
         let check = try Self.check(dir, keys, latest)
         #expect(check.broken.map(\.seq) == [4], "the entry after the removed one doesn't follow")
         #expect(abs(check.broken[0].at.timeIntervalSince(entries[3].at)) < 0.001)
@@ -145,11 +173,11 @@ enum LogBeforeTheCheck {
         let keys = MemoryTraceKey()
         let latest = MemoryLatestEntry()
         _ = try Self.log(5, in: dir, keys: keys, latest: latest)
-        try Self.tamper(dir) { _, rows in rows[1].at = rows[1].at.addingTimeInterval(-86_400) }
+        try Self.tamper(dir) { rows in rows[1].at = rows[1].at.addingTimeInterval(-86_400) }
         #expect(try Self.check(dir, keys, latest).broken.map(\.seq) == [2], "a changed time")
 
         // Content swapped in from another entry no longer opens: it is counted as changed.
-        try Self.tamper(dir) { _, rows in rows[3].sealed = rows[4].sealed }
+        try Self.tamper(dir) { rows in rows[3].sealed = rows[4].sealed }
         let trace = try TraceStore(directory: dir, keys: keys, latest: latest)
         let page = try trace.page(limit: 10)
         #expect(page.entries.map(\.seq) == [5, 3, 1, 2], "newest first by the stored time, changed one included")
@@ -163,7 +191,7 @@ enum LogBeforeTheCheck {
         let keys = MemoryTraceKey()
         let latest = MemoryLatestEntry()
         _ = try Self.log(5, in: dir, keys: keys, latest: latest)
-        try Self.tamper(dir) { _, rows in (rows[1].seq, rows[2].seq) = (rows[2].seq, rows[1].seq) }
+        try Self.tamper(dir) { rows in (rows[1].seq, rows[2].seq) = (rows[2].seq, rows[1].seq) }
         #expect(!(try Self.check(dir, keys, latest).broken.isEmpty))
     }
 
@@ -174,7 +202,7 @@ enum LogBeforeTheCheck {
         let keys = MemoryTraceKey()
         let latest = MemoryLatestEntry()
         _ = try Self.log(5, in: dir, keys: keys, latest: latest)
-        try Self.tamper(dir) { _, rows in rows[1].seq = 0 }
+        try Self.tamper(dir) { rows in rows[1].seq = 0 }
         #expect(try Self.check(dir, keys, latest).broken.map(\.seq) == [3])
         let trace = try TraceStore(directory: dir, keys: keys, latest: latest)
         #expect(try trace.page(limit: 10).changed.count == 1, "its content no longer opens either")
@@ -188,10 +216,7 @@ enum LogBeforeTheCheck {
         let keys = MemoryTraceKey()
         let latest = MemoryLatestEntry()
         let entries = try Self.log(5, in: dir, keys: keys, latest: latest)
-        try Self.tamper(dir) { context, rows in
-            context.delete(rows[4])
-            context.delete(rows[3])
-        }
+        try Self.tamper(dir) { rows in rows.removeLast(2) }
         let check = try Self.check(dir, keys, latest)
         #expect(check.broken.isEmpty, "what is left still chains")
         #expect(check.missingNewer)
@@ -235,7 +260,7 @@ enum LogBeforeTheCheck {
         let keys = MemoryTraceKey()
         let latest = MemoryLatestEntry()
         _ = try Self.log(4, in: dir, keys: keys, latest: latest)
-        try Self.tamper(dir) { context, rows in context.delete(rows[3]) }
+        try Self.tamper(dir) { rows in rows.remove(at: 3) }
         latest.set(.unreadable("Keychain error -25308"))
 
         let trace = try TraceStore(directory: dir, keys: keys, latest: latest)
@@ -392,7 +417,7 @@ enum LogBeforeTheCheck {
         defer { try? FileManager.default.removeItem(at: dir) }
         let trace = try TraceStore(directory: dir, keys: MemoryTraceKey(), latest: MemoryLatestEntry())
         let before = trace.diskBytes
-        #expect(before > 0)
+        #expect(before == 0, "a new log has no files yet")
         try trace.record((1...200).map { Self.entry($0, at: Date(), result: String(repeating: "x", count: 4000)) })
         #expect(trace.diskBytes > before + 200 * 1000, "\(before) → \(trace.diskBytes)")
         #expect(try TraceStore(inMemory: true, keys: MemoryTraceKey()).diskBytes == 0)
@@ -441,27 +466,28 @@ enum LogBeforeTheCheck {
     // MARK: Export… (FR-615)
 
     @Test func anExportedLineIsReadable() throws {
-        let format = ActivityExport(timeZone: TimeZone(secondsFromGMT: -7 * 3600)!)
+        let format = ActivityExport(timeZone: TimeZone(secondsFromGMT: -7 * 3600)!, machine: "Toni’s Mac")
         let a = Activity(
             at: Date(timeIntervalSince1970: 1_793_000_000.25), tool: "files_read",
             arguments: "{\"path\":\"/Users/toni/a.txt\"}", result: "[{\"type\":\"text\",\"text\":\"hi\"}]",
             isError: true, durationMS: 42)
         #expect(
             format.line(a)
-                == #"{"time":"2026-10-26T00:33:20.250-07:00","kind":"action","tool":"files_read","arguments":{"path":"/Users/toni/a.txt"},"result":[{"text":"hi","type":"text"}],"isError":true,"durationMS":42,"call_id":null,"client":null}"#
+                == #"{"v":1,"source":"mac","machine":"Toni’s Mac","time":"2026-10-26T00:33:20.250-07:00","kind":"action","tool":"files_read","arguments":{"path":"/Users/toni/a.txt"},"result":[{"text":"hi","type":"text"}],"isError":true,"durationMS":42,"call_id":null,"client":null}"#
                 || format.line(a)
-                    == #"{"time":"2026-10-26T00:33:20.250-07:00","kind":"action","tool":"files_read","arguments":{"path":"/Users/toni/a.txt"},"result":[{"type":"text","text":"hi"}],"isError":true,"durationMS":42,"call_id":null,"client":null}"#,
+                    == #"{"v":1,"source":"mac","machine":"Toni’s Mac","time":"2026-10-26T00:33:20.250-07:00","kind":"action","tool":"files_read","arguments":{"path":"/Users/toni/a.txt"},"result":[{"type":"text","text":"hi"}],"isError":true,"durationMS":42,"call_id":null,"client":null}"#,
             "\(format.line(a))")
         let plain = Activity(
             at: Date(timeIntervalSince1970: 0), tool: "remove_access", arguments: "Claude (claude.ai)",
             result: "Removed.", isError: false, durationMS: 0)
-        let line = ActivityExport(timeZone: TimeZone(secondsFromGMT: 0)!).line(plain)
+        let line = ActivityExport(timeZone: TimeZone(secondsFromGMT: 0)!, machine: "Mac").line(plain)
         #expect(line.contains(#""time":"1970-01-01T00:00:00.000Z""#))
         #expect(line.contains(#""arguments":"Claude (claude.ai)""#), "text that isn't JSON stays a string")
         let object = try #require(try JSONSerialization.jsonObject(with: Data(line.utf8)) as? [String: Any])
         #expect(
             Set(object.keys) == [
-                "time", "kind", "tool", "arguments", "result", "isError", "durationMS", "call_id", "client",
+                "v", "source", "machine", "time", "kind", "tool", "arguments", "result", "isError", "durationMS",
+                "call_id", "client",
             ])
     }
 
@@ -475,7 +501,7 @@ enum LogBeforeTheCheck {
         )
         let url = dir.appending(path: "export.jsonl")
         try "old content that must go".write(to: url, atomically: true, encoding: .utf8)
-        #expect(try trace.reader.export(ActivityQuery(tool: "a_b"), to: url) == 1250)
+        #expect(try trace.reader.export(ActivityQuery(tool: "a_b"), to: url, machine: "Mac") == 1250)
         let lines = try String(contentsOf: url, encoding: .utf8).split(separator: "\n")
         #expect(lines.count == 1250)
         let durations = try lines.map {

@@ -30,10 +30,7 @@ enum LogBeforeEvents {
     /// Seals and chains `entries` exactly as those versions did (the checksum over the previous
     /// one, seq, id, time, and key ID), and returns the newest entry's record.
     @MainActor static func write(_ entries: [Activity], key: SymmetricKey, to dir: URL) throws -> Data {
-        let reader = ActivityReader(
-            container: try ModelContainer(
-                for: Latchkey.SealedActivity.self, configurations: .init(isStoredInMemoryOnly: true)),
-            key: key)
+        let reader = ActivityReader(files: TraceFiles(folder: dir.appending(path: "unused")), key: key)
         let container = try ModelContainer(
             for: SealedActivity.self, configurations: ModelConfiguration(url: dir.appending(path: TraceStore.fileName)))
         var previous = ActivityReader.chainStart
@@ -86,7 +83,7 @@ enum LogBeforeEvents {
         do {
             let trace = try TraceStore(directory: dir, keys: keys, latest: latest)
             #expect(trace.latestState == .ok)
-            let page = try trace.page(limit: 100)
+            let page = try trace.reader.page(ActivityQuery(kind: .action), limit: 100)
             #expect(page.entries.map(\.result) == ["output 5", "output 4", "output 3", "output 2", "output 1"])
             #expect(
                 page.entries.allSatisfy {
@@ -95,15 +92,15 @@ enum LogBeforeEvents {
             #expect(try trace.reader.check(expected: trace.expected) == LogCheck(), "the old chain still holds")
             try trace.record(Self.call(6, at: now))
             try trace.record(Activity.event(.connection, "Connected to the relay", at: now.addingTimeInterval(1)))
-            #expect(latest.writes == ["update", "update"])
+            #expect(latest.writes == ["update", "update", "update"], "the move's event, the call, the event")
         }
         let trace = try TraceStore(directory: dir, keys: keys, latest: latest)
         #expect(try trace.reader.check(expected: trace.expected) == LogCheck(), "and continues across the new kinds")
         let page = try trace.page(limit: 100)
-        #expect(page.entries.count == 7)
+        #expect(page.entries.count == 8, "five old entries, the move's event, a call, an event")
         #expect(page.entries[0].kind == .event)
-        #expect(page.entries[1].callID == "call_6")
-        #expect(page.entries[1].device == Self.device)
+        let call = try #require(page.entries.first { $0.callID == "call_6" })
+        #expect(call.device == Self.device)
     }
 
     // MARK: the stored shape
@@ -120,9 +117,9 @@ enum LogBeforeEvents {
             let trace = try TraceStore(directory: dir, keys: keys, latest: latest)
             try trace.record((1...4).map { Self.call($0, at: now.addingTimeInterval(Double($0))) })
         }
-        try ActivityLogTests.tamper(dir) { _, rows in rows[1].callID = "call_99" }
+        try ActivityLogTests.tamper(dir) { rows in rows[1].callID = "call_99" }
         #expect(try ActivityLogTests.check(dir, keys, latest).broken.map(\.seq) == [2])
-        try ActivityLogTests.tamper(dir) { _, rows in
+        try ActivityLogTests.tamper(dir) { rows in
             rows[1].callID = "call_2"
             rows[2].kind = ActivityKind.event.rawValue
         }
@@ -147,7 +144,7 @@ enum LogBeforeEvents {
 
     /// FR-633, FR-615: Export… carries both kinds, with the kind and the call id.
     @Test func anExportedLineNamesItsKindAndCallID() throws {
-        let format = ActivityExport(timeZone: TimeZone(secondsFromGMT: 0)!)
+        let format = ActivityExport(timeZone: TimeZone(secondsFromGMT: 0)!, machine: "Mac")
         let action = try #require(
             JSONSerialization.jsonObject(with: Data(format.line(Self.call(1, at: Date())).utf8)) as? [String: Any])
         #expect(action["kind"] as? String == "action")
@@ -547,7 +544,7 @@ enum LogBeforeEvents {
         let entries = try trace.reader.page(ActivityQuery(), limit: 10, oldestFirst: true).entries
         #expect(entries.map(\.client) == ["Claude Code", nil])
         #expect(try trace.reader.page(ActivityQuery(text: "claude code"), limit: 10).entries.count == 1, "searchable")
-        let format = ActivityExport(timeZone: TimeZone(secondsFromGMT: 0)!)
+        let format = ActivityExport(timeZone: TimeZone(secondsFromGMT: 0)!, machine: "Mac")
         let line = try #require(
             JSONSerialization.jsonObject(with: Data(format.line(entries[0]).utf8)) as? [String: Any])
         #expect(line["client"] as? String == "Claude Code")

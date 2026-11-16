@@ -285,6 +285,13 @@ account"). Fixtures updated; patch version bumped.
   (once per reason), an answer not sent, pause and resume (`pause`), the name changing
   (`settings`), a failed update check (`update`). The journal keeps its `slog` lines.
 
+### D16 Full traces in daily files (FR-1057 to FR-1059; Toni, 2026-11-15)
+
+The activity log moves from one file with cut arguments and results to `activity/YYYY-MM-DD.jsonl`
+in full (spec 001 plan D28, `contracts/trace-files.md`). The old `activity.jsonl` is read as
+version 0 by everything that reads the log and never written again. `latchkey activity export`
+writes the export line every side shares, so a server's trace joins the relay's by call id.
+
 ## Milestones (dependency order)
 
 1. Protocol package public; contracts and fixtures (D3).

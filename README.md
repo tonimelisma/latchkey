@@ -114,8 +114,11 @@ apps. It works in the background instead.
 - **You approve every Claude app** that connects, and can remove any of them later.
 - **You see everything Claude did**, with a notification for every change.
 - **You can pause Claude in one click** from the menu bar.
-- **Your content stays yours.** Your notes, messages, and files pass through the relay to
-  Claude and are never stored there.
+- **A full record of everything, kept for good.** Your Mac, each Linux server, and the relay
+  each keep every call Claude made, with what it asked and everything it got back (screenshots
+  included), in files of one day each that nothing ever rewrites or deletes. Your Mac's are
+  encrypted, the relay's are encrypted and go when you delete your account, and you can
+  export them all in one shape, to run evals over everything that happened.
 - **It never interrupts you.** What Claude does on your Mac happens in the background, except
   computer control, which you'll see.
 - **Nothing is left behind.** What Claude starts is cleaned up when it's done.

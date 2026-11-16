@@ -5,6 +5,25 @@ import Testing
 
 @testable import Latchkey
 
+/// The plaintext log of the versions before FR-026a, as they stored it.
+@Model final class TraceEntry {
+    var at: Date
+    var tool: String
+    var arguments: String
+    var result: String
+    var isError: Bool
+    var durationMS: Int
+
+    init(at: Date, tool: String, arguments: String, result: String, isError: Bool, durationMS: Int) {
+        self.at = at
+        self.tool = tool
+        self.arguments = arguments
+        self.result = result
+        self.isError = isError
+        self.durationMS = durationMS
+    }
+}
+
 @Suite struct TraceTests {
     /// A folder of its own and a key that never touches the real Keychain.
     static func scratch() throws -> URL {
@@ -14,10 +33,10 @@ import Testing
     }
 
     /// Every byte the store left on disk, including SQLite's side files.
+    /// Every file under `dir`, the daily files' folder included.
     static func bytesOnDisk(_ dir: URL) throws -> [Data] {
-        try FileManager.default.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil).map {
-            try Data(contentsOf: $0)
-        }
+        let all = FileManager.default.enumerator(at: dir, includingPropertiesForKeys: nil)?.allObjects as? [URL] ?? []
+        return try all.filter { !$0.hasDirectoryPath }.map { try Data(contentsOf: $0) }
     }
 
     /// FR-026 (Toni, 2026-10-26): nothing is deleted by age, however old.

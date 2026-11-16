@@ -884,3 +884,44 @@ Telling the historical call apart (FR-668), options:
    no entry is written. Quits by this app and later never excuse anything, so a call this fix
    failed to record would still be reported missing. Only events in those windows are read (a
    few rows), not the whole log.
+
+## Trace files (FR-680 to FR-689, spec 010 FR-1057 to FR-1059, 2026-11-15)
+
+Toni asked for full traces everywhere, for evals, safe from migrations, perhaps as a log file
+per day. His choices (2026-11-15): every relay keeps full traces (not an operator switch or an
+opt-in); the relay's are encrypted and a Linux server's plain; images kept in full; on the Mac
+the files become the record; an account's traces go with Delete account; below 2 GiB free the
+relay stops writing traces rather than deleting old ones ("a few screenshots might delete days of
+traces"; a ring buffer was his first thought and withdrawn); the operator and the account can
+both export.
+
+Choices made here (low-level, contracts/trace-files.md):
+
+- **Day of a file: UTC, by when the entry began.** Local days shift with travel and daylight
+  saving, and an entry filed by when it was written would land after entries that began later,
+  so pages by time would need every file. Cost: a call across midnight is written into the
+  previous day's file after entries of the next; the start reads the newest two days to find
+  where the chain continues (calls end within the relay's deadlines, far less than a day).
+- **Mac: two files a day, not one.** One file with the content inline would make the comparison
+  with the relay, the tamper check, and each start read every byte of every screenshot (Toni's
+  log on 2026-11-15: 190 MB in 22,487 entries, the largest 3.9 MB). With the fields in the clear
+  in a small file, those read about 200 bytes an entry. A third way, an index rebuilt from the
+  files (SQLite as a cache), was left out as one more thing to keep in step (Constitution VIII).
+- **Mac: the exact time kept as the Double's bits.** The chain's checksum covers the bit pattern
+  of the time; a decimal number in JSON could round on the way back, and a copied log would then
+  fail its own check. An ISO time beside it is for people only.
+- **Mac: reading the old database from a copy.** A read-only SQLite connection to a database in
+  WAL mode still writes its shared-memory file; the test that the database stays byte for byte
+  as it was caught it. The copy takes a few seconds once, on the first start.
+- **Mac: the copy as a folder renamed at the end.** A rename is atomic, so a start either finds
+  the whole copy or none; a half copy (`activity.copying/`) is thrown away and made again. The
+  copy is checked by count, newest number, and the set of ids before the rename.
+- **Line cut short.** A writer that finds a file not ending in a line break starts its line on a
+  new one, so a crash mid-line costs that line only, never the next.
+- **Relay: sealed lines, key from the key file.** Encrypting each line under a key derived from
+  `KEY_FILE` (HKDF, info `latchkey relay traces v1`) means a copy of the data disk or a backup
+  without the key file shows nothing, at no new secret to keep; the account and day as
+  authenticated data stop lines being moved between accounts or days.
+- **Linux: plain.** A key on the same account would protect nothing from the commands Claude runs
+  there (Toni's choice).
+

@@ -131,7 +131,9 @@ import Testing
         }
         #expect(month.entries.count == 200)
         let url = dir.appending(path: "export.jsonl")
-        let exported = try await once("export whole log") { try reader.export(ActivityQuery(), to: url) }
+        let exported = try await once("export whole log") {
+            try reader.export(ActivityQuery(), to: url, machine: "Mac")
+        }
         #expect(exported == Self.count + mainSteps)
         let disk = trace.diskBytes
 

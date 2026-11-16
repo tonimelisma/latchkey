@@ -2,7 +2,6 @@ import CryptoKit
 import Foundation
 import OSLog
 import Security
-import SwiftData
 
 /// What an entry is: something Claude had the Mac do, or the app's own event (FR-633).
 enum ActivityKind: String, Codable, Sendable, CaseIterable {
@@ -54,69 +53,6 @@ struct Activity: Identifiable, Sendable, Codable {
         Activity(
             at: at, tool: category.rawValue, arguments: "", result: text, isError: error, durationMS: 0, kind: .event,
             inSystemLog: systemLog)
-    }
-}
-
-/// What is stored: the time and the chain's fields in the clear, everything else AES-GCM
-/// encrypted (FR-026a). The fields added on 2026-10-26 all have defaults, so SwiftData upgrades
-/// a log from before them in place (FR-612).
-@Model
-final class SealedActivity {
-    #Index<SealedActivity>([\.at, \.seq], [\.seq], [\.keyID])
-
-    var id: UUID
-    var at: Date
-    var sealed: Data
-    /// Its number in the chain, counting up across keys; 0 = recorded before the check (FR-612).
-    var seq: Int = 0
-    /// HMAC-SHA256 over the previous entry's `mac`, `seq`, `id`, `at`, and `keyID` (FR-612).
-    var mac: Data?
-    /// Which log key sealed it (8 bytes derived from the key, as hex), so entries that can't be
-    /// read are counted without decrypting the log (FR-203). "" = not yet looked at; "-" = sealed
-    /// with a key that was already gone when the check came.
-    var keyID: String = ""
-    /// `ActivityKind`'s raw value (FR-633). Added 2026-10-27 with defaults, so a log from before
-    /// upgrades in place: its entries are actions without a call id.
-    var kind: String = ActivityKind.action.rawValue
-    /// The relay's call id (FR-632), or "".
-    var callID: String = ""
-    /// The device ID the call came through, or "".
-    var device: String = ""
-
-    init(
-        id: UUID, at: Date, sealed: Data, seq: Int = 0, mac: Data? = nil, keyID: String = "",
-        kind: String = ActivityKind.action.rawValue, callID: String = "", device: String = ""
-    ) {
-        self.id = id
-        self.at = at
-        self.sealed = sealed
-        self.seq = seq
-        self.mac = mac
-        self.keyID = keyID
-        self.kind = kind
-        self.callID = callID
-        self.device = device
-    }
-}
-
-/// The activity log before FR-026a, in plaintext: read once, encrypted into the new log, and
-/// its file deleted (research.md "Encrypting the activity log").
-@Model
-final class TraceEntry {
-    var at: Date
-    var tool: String
-    var arguments: String
-    var result: String
-    var isError: Bool
-    var durationMS: Int
-
-    init(at: Date, tool: String, arguments: String, result: String, isError: Bool, durationMS: Int) {
-        self.at = at
-        self.tool = tool
-        self.arguments = arguments
-        self.result = result
-        self.isError = isError
-        self.durationMS = durationMS
     }
 }
 
@@ -400,19 +336,237 @@ struct LogCheck: Sendable, Equatable {
     var brokenSeqs: Set<Int> { Set(broken.map(\.seq)) }
 }
 
+// MARK: the daily files (FR-680 to FR-682, contracts/trace-files.md)
+
+/// One entry's fields in the clear: a line of a day's `.entries` file, and where its sealed
+/// content is in the day's `.content` file.
+struct TraceRow: Sendable, Equatable {
+    var id: UUID
+    var at: Date
+    var seq: Int
+    var keyID: String
+    var kind: String
+    var callID: String
+    var device: String
+    var mac: Data?
+    /// The day's name, `YYYY-MM-DD` (UTC).
+    var day: String
+    var off: Int
+    var len: Int
+}
+
+/// A line of a `.entries` file, version 1 (contracts/trace-files.md).
+private struct EntriesLineV1: Codable {
+    var v: Int
+    var seq: Int
+    var id: UUID
+    /// The bit pattern of `at.timeIntervalSinceReferenceDate`, 16 hex digits: the chain's
+    /// checksum is over that exact Double.
+    var at: String
+    /// The same time for people reading the file; never read back.
+    var time: String
+    var kind: String
+    var callID: String
+    var device: String
+    var key: String
+    var mac: String
+    var off: Int
+    var len: Int
+
+    enum CodingKeys: String, CodingKey {
+        case v, seq, id, at, time, kind, callID = "call_id", device, key, mac, off, len
+    }
+}
+
+/// A day's headers as read: the rows that could be read, and how many lines couldn't (a version
+/// this app doesn't know, or a line cut short).
+struct TraceDay: Sendable {
+    var rows: [TraceRow] = []
+    var skipped = 0
+}
+
+/// The folder of daily files. Files are only ever appended to (FR-681): nothing here renames,
+/// truncates, rewrites, or deletes one. Reading is safe from any thread; writing happens on one
+/// (the app's `TraceStore`).
+struct TraceFiles: Sendable {
+    let folder: URL
+
+    static let entriesSuffix = ".entries"
+    static let contentSuffix = ".content"
+
+    init(folder: URL) { self.folder = folder }
+
+    /// The UTC day an entry with this time is filed under.
+    static func day(_ date: Date) -> String {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "UTC")!
+        let c = calendar.dateComponents([.year, .month, .day], from: date)
+        return String(format: "%04d-%02d-%02d", c.year ?? 0, c.month ?? 0, c.day ?? 0)
+    }
+
+    /// ISO8601DateFormatter is safe to use from several threads.
+    nonisolated(unsafe) private static let isoFormatter: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        f.timeZone = TimeZone(identifier: "UTC")!
+        return f
+    }()
+
+    static func hex(_ date: Date) -> String {
+        String(format: "%016llx", date.timeIntervalSinceReferenceDate.bitPattern)
+    }
+
+    static func date(hex: String) -> Date? {
+        guard hex.count == 16, let bits = UInt64(hex, radix: 16) else { return nil }
+        return Date(timeIntervalSinceReferenceDate: Double(bitPattern: bits))
+    }
+
+    func entriesURL(_ day: String) -> URL { folder.appending(path: day + Self.entriesSuffix) }
+    func contentURL(_ day: String) -> URL { folder.appending(path: day + Self.contentSuffix) }
+
+    /// Every day with an entries file, oldest first.
+    func days() -> [String] {
+        let names = (try? FileManager.default.contentsOfDirectory(atPath: folder.path)) ?? []
+        return
+            names
+            .filter { $0.hasSuffix(Self.entriesSuffix) && $0.count == 10 + Self.entriesSuffix.count }
+            .map { String($0.dropLast(Self.entriesSuffix.count)) }
+            .filter { $0.range(of: #"^\d{4}-\d{2}-\d{2}$"#, options: .regularExpression) != nil }
+            .sorted()
+    }
+
+    /// A day's rows in file order. Lines that can't be read are counted, never changed.
+    func rows(_ day: String) -> TraceDay {
+        var out = TraceDay()
+        guard let data = try? Data(contentsOf: entriesURL(day), options: .mappedIfSafe) else { return out }
+        let decoder = JSONDecoder()
+        for line in data.split(separator: 0x0A, omittingEmptySubsequences: true) {
+            guard let l = try? decoder.decode(EntriesLineV1.self, from: Data(line)), l.v == 1,
+                let at = Self.date(hex: l.at), l.off >= 0, l.len >= 0
+            else {
+                out.skipped += 1
+                continue
+            }
+            out.rows.append(
+                TraceRow(
+                    id: l.id, at: at, seq: l.seq, keyID: l.key, kind: l.kind, callID: l.callID, device: l.device,
+                    mac: l.mac.isEmpty ? nil : Data(base64Encoded: l.mac), day: day, off: l.off, len: l.len))
+        }
+        return out
+    }
+
+    /// Every row of every day, and how many lines couldn't be read.
+    func allRows() -> TraceDay {
+        var out = TraceDay()
+        for day in days() {
+            let d = rows(day)
+            out.rows += d.rows
+            out.skipped += d.skipped
+        }
+        return out
+    }
+
+    /// A day's content file, mapped (read on demand, safe to slice from any thread).
+    func content(_ day: String) -> Data? { try? Data(contentsOf: contentURL(day), options: .alwaysMapped) }
+
+    /// The sealed content of a row from a day's mapped content.
+    static func sealed(_ row: TraceRow, in content: Data?) -> Data? {
+        guard let content, row.off + row.len <= content.count else { return nil }
+        return content.subdata(in: (content.startIndex + row.off)..<(content.startIndex + row.off + row.len))
+    }
+
+    /// An entry to write: its fields in the clear and its sealed content.
+    struct Item {
+        var id: UUID
+        var at: Date
+        var seq: Int
+        var keyID: String
+        var kind: String
+        var callID: String
+        var device: String
+        var mac: Data?
+        var sealed: Data
+    }
+
+    /// Appends the entries, each to the day of its time: the content first, then the entries
+    /// lines, then both files synchronized to disk. Content without a line pointing at it (a crash
+    /// in between) is never read.
+    func append(_ items: [Item]) throws {
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        var byDay: [(String, [Item])] = []
+        for item in items {
+            let day = Self.day(item.at)
+            if let i = byDay.firstIndex(where: { $0.0 == day }) {
+                byDay[i].1.append(item)
+            } else {
+                byDay.append((day, [item]))
+            }
+        }
+        let encoder = JSONEncoder()
+        for (day, dayItems) in byDay {
+            let content = try Self.openForAppend(contentURL(day))
+            defer { try? content.close() }
+            var offset = Int(try content.seekToEnd())
+            var blob = Data()
+            var lines = Data()
+            for item in dayItems {
+                let line = EntriesLineV1(
+                    v: 1, seq: item.seq, id: item.id, at: Self.hex(item.at),
+                    time: Self.isoFormatter.string(from: item.at),
+                    kind: item.kind, callID: item.callID, device: item.device, key: item.keyID,
+                    mac: item.mac?.base64EncodedString() ?? "", off: offset, len: item.sealed.count)
+                blob.append(item.sealed)
+                offset += item.sealed.count
+                lines.append(try encoder.encode(line))
+                lines.append(0x0A)
+            }
+            try content.write(contentsOf: blob)
+            try content.synchronize()
+            let entries = try Self.openForAppend(entriesURL(day))
+            defer { try? entries.close() }
+            let end = try entries.seekToEnd()
+            if end > 0 {
+                // A line cut short by a crash must not run into the next one.
+                try entries.seek(toOffset: end - 1)
+                if try entries.read(upToCount: 1) != Data([0x0A]) { lines.insert(0x0A, at: 0) }
+                _ = try entries.seekToEnd()
+            }
+            try entries.write(contentsOf: lines)
+            try entries.synchronize()
+        }
+    }
+
+    private static func openForAppend(_ url: URL) throws -> FileHandle {
+        if !FileManager.default.fileExists(atPath: url.path) {
+            guard FileManager.default.createFile(atPath: url.path, contents: nil) else {
+                throw CocoaError(.fileWriteUnknown)
+            }
+        }
+        return try FileHandle(forUpdating: url)
+    }
+
+    /// Bytes the files take on disk (FR-610, FR-689).
+    var diskBytes: Int64 {
+        let names = (try? FileManager.default.contentsOfDirectory(atPath: folder.path)) ?? []
+        return names.reduce(0) { sum, name in
+            let attributes = try? FileManager.default.attributesOfItem(atPath: folder.appending(path: name).path)
+            return sum + ((attributes?[.size] as? NSNumber)?.int64Value ?? 0)
+        }
+    }
+}
+
 /// The log's keys and the chain's rules; Sendable, so the window's searches and the check run off
-/// the main thread, each on its own `ModelContext`.
+/// the main thread.
 struct ActivityReader: Sendable {
-    let container: ModelContainer
+    let files: TraceFiles
     let key: SymmetricKey
     let chainKey: SymmetricKey
     let keyID: String
 
     static let unknownKey = "-"
-    private static let log = Logger(subsystem: AppIdentity.current.logSubsystem, category: "activity")
 
-    init(container: ModelContainer, key: SymmetricKey) {
-        self.container = container
+    init(files: TraceFiles, key: SymmetricKey) {
+        self.files = files
         self.key = key
         chainKey = HKDF<SHA256>.deriveKey(
             inputKeyMaterial: key, info: Data("latchkey activity chain".utf8), outputByteCount: 32)
@@ -465,35 +619,10 @@ struct ActivityReader: Sendable {
         return try AES.GCM.seal(plain, using: key, authenticating: Self.boundData(seq: seq, id: a.id)).combined!
     }
 
-    /// A stored row's values, copied out of its context so they can be opened on any thread.
-    struct Row: Sendable {
-        var id: UUID
-        var at: Date
-        var seq: Int
-        var keyID: String
-        var sealed: Data
-        var kind: String
-        var callID: String
-        var device: String
-
-        init(_ s: SealedActivity) {
-            id = s.id
-            at = s.at
-            seq = s.seq
-            keyID = s.keyID
-            sealed = s.sealed
-            kind = s.kind
-            callID = s.callID
-            device = s.device
-        }
-    }
-
-    func open(_ s: SealedActivity) -> Activity? { open(Row(s)) }
-
     /// Decrypts an entry; nil for one sealed with a key that is gone or changed since. Such an
     /// entry is never shown as a tool run, least of all a failed one (FR-203).
-    func open(_ s: Row) -> Activity? {
-        guard let box = try? AES.GCM.SealedBox(combined: s.sealed) else { return nil }
+    func open(_ s: TraceRow, sealed: Data?) -> Activity? {
+        guard let sealed, let box = try? AES.GCM.SealedBox(combined: sealed) else { return nil }
         let data =
             s.seq == 0
             ? try? AES.GCM.open(box, using: key)
@@ -507,10 +636,23 @@ struct ActivityReader: Sendable {
         return a
     }
 
+    /// Opens rows of one day.
+    func open(_ rows: [TraceRow]) -> [Activity?] {
+        var contents: [String: Data] = [:]
+        return rows.map { row in
+            if contents[row.day] == nil { contents[row.day] = files.content(row.day) ?? Data() }
+            return open(row, sealed: TraceFiles.sealed(row, in: contents[row.day]))
+        }
+    }
+
+    private static func before(_ a: TraceRow, _ c: ActivityCursor) -> Bool {
+        a.at < c.at || (a.at == c.at && a.seq < c.seq)
+    }
+
     /// The entries matching `query`, newest first (or oldest first), after `cursor`, at most
-    /// `limit`. Decrypts a batch at a time, each batch in a context of its own so memory stays flat.
-    /// `countUnreadable: false` leaves `unreadable` at 0: counting reads an index of the whole
-    /// log, and the menu doesn't show the count.
+    /// `limit`. Reads a day at a time, newest day first, so the first page reads only the newest
+    /// days. `countUnreadable: false` leaves `unreadable` at 0: counting reads every day's
+    /// entries file, and the menu doesn't show the count.
     func page(
         _ query: ActivityQuery, after cursor: ActivityCursor? = nil, limit: Int, oldestFirst: Bool = false,
         countUnreadable: Bool = true
@@ -518,38 +660,34 @@ struct ActivityReader: Sendable {
         var page = ActivityPage()
         let kid = keyID
         if cursor == nil && countUnreadable {
-            page.unreadable = try ModelContext(container).fetchCount(
-                FetchDescriptor<SealedActivity>(predicate: #Predicate { $0.keyID != kid }))
+            let all = files.allRows()
+            page.unreadable = all.rows.filter { $0.keyID != kid }.count + all.skipped
         }
-        var position =
-            cursor
-            ?? (oldestFirst ? ActivityCursor(at: .distantPast, seq: -1) : ActivityCursor(at: .distantFuture, seq: .max))
         let from = query.from ?? .distantPast
         let to = query.to ?? .distantFuture
-        let kind = query.kind?.rawValue ?? ""
-        // Unfiltered, a page needs about `limit` rows (the menu asks for 10); a search, many.
-        let batch = query.text.isEmpty && query.tool == nil ? min(max(limit, 50), 1000) : 1000
+        let fromDay = query.from.map(TraceFiles.day)
+        let toDay = query.to.map(TraceFiles.day)
+        let cursorDay = cursor.map { TraceFiles.day($0.at) }
+        var days = files.days()
+        if !oldestFirst { days.reverse() }
         let matcher = ActivityMatcher(query.text)
-        while true {
-            let pAt = position.at
-            let pSeq = position.seq
-            let order: SortOrder = oldestFirst ? .forward : .reverse
-            var d = FetchDescriptor<SealedActivity>(
-                // A plain range on the time, which the index serves; entries at the cursor's own
-                // time that were already shown are skipped below.
-                predicate: oldestFirst
-                    ? #Predicate { $0.at >= from && $0.at < to && $0.at >= pAt && (kind == "" || $0.kind == kind) }
-                    : #Predicate { $0.at >= from && $0.at < to && $0.at <= pAt && (kind == "" || $0.kind == kind) },
-                sortBy: [SortDescriptor(\.at, order: order), SortDescriptor(\.seq, order: order)])
-            d.fetchLimit = batch
-            let (count, done) = try autoreleasepool { () throws -> (Int, Bool) in
-                let fetched = try ModelContext(container).fetch(d)
-                let rows = fetched.filter { $0.at != pAt || (oldestFirst ? $0.seq > pSeq : $0.seq < pSeq) }.map(
-                    Row.init)
-                // A whole batch at one moment, all shown already, can't happen; never loop on it.
-                if rows.isEmpty && fetched.count == batch { return (0, false) }
-                for (row, outcome) in zip(rows, sift(rows, query, matcher)) {
-                    position = ActivityCursor(at: row.at, seq: row.seq)
+        for day in days {
+            if let fromDay, day < fromDay { continue }
+            if let toDay, day > toDay { continue }
+            if let cursorDay, oldestFirst ? day < cursorDay : day > cursorDay { continue }
+            var rows = files.rows(day).rows.filter { r in
+                r.at >= from && r.at < to && (query.kind == nil || r.kind == query.kind!.rawValue)
+                    && (cursor.map { c in oldestFirst ? Self.before(c.asRow, r.cursor) : Self.before(r, c) } ?? true)
+            }
+            rows.sort { oldestFirst ? Self.before($0, $1.cursor) : Self.before($1, $0.cursor) }
+            guard !rows.isEmpty else { continue }
+            let content = files.content(day)
+            var start = 0
+            let batch = query.text.isEmpty && query.tool == nil ? max(limit, 50) : 1000
+            while start < rows.count {
+                let chunk = Array(rows[start..<min(rows.count, start + batch)])
+                start += chunk.count
+                for (row, outcome) in zip(chunk, sift(chunk, content, query, matcher)) {
                     switch outcome {
                     case .unopenable:
                         if row.keyID == kid { page.changed.append(row.at) }
@@ -557,17 +695,15 @@ struct ActivityReader: Sendable {
                         break
                     case .entry(let a):
                         page.entries.append(a)
-                        if page.entries.count == limit { return (fetched.count, true) }
+                        if page.entries.count == limit {
+                            page.next = row.cursor
+                            return page
+                        }
                     }
                 }
-                return (fetched.count, false)
             }
-            if done {
-                page.next = position
-                return page
-            }
-            if count < batch { return page }
         }
+        return page
     }
 
     private enum Sifted: Sendable {
@@ -577,13 +713,15 @@ struct ActivityReader: Sendable {
     }
 
     /// Opens and matches a batch on every core; the order is kept.
-    private func sift(_ rows: [Row], _ query: ActivityQuery, _ matcher: ActivityMatcher) -> [Sifted] {
+    private func sift(_ rows: [TraceRow], _ content: Data?, _ query: ActivityQuery, _ matcher: ActivityMatcher)
+        -> [Sifted]
+    {
         let out = Slots(count: rows.count)
         defer { out.free() }
         let chunk = 32
         DispatchQueue.concurrentPerform(iterations: (rows.count + chunk - 1) / chunk) { c in
             for i in c * chunk..<min(rows.count, (c + 1) * chunk) {
-                guard let a = open(rows[i]) else {
+                guard let a = open(rows[i], sealed: TraceFiles.sealed(rows[i], in: content)) else {
                     out.put(i, .unopenable)
                     continue
                 }
@@ -614,15 +752,15 @@ struct ActivityReader: Sendable {
         try page(ActivityQuery(kind: .action), limit: limit, countUnreadable: false).entries
     }
 
-    /// Every entry `query` selects, oldest first, as JSON Lines into `url` (FR-615). Returns how
-    /// many were written.
+    /// Every entry `query` selects, oldest first, as JSON Lines into `url` (FR-615, FR-686).
+    /// Returns how many were written.
     @discardableResult
-    func export(_ query: ActivityQuery, to url: URL, timeZone: TimeZone = .current) throws -> Int {
+    func export(_ query: ActivityQuery, to url: URL, machine: String, timeZone: TimeZone = .current) throws -> Int {
         FileManager.default.createFile(atPath: url.path, contents: nil)
         let file = try FileHandle(forWritingTo: url)
         defer { try? file.close() }
         try file.truncate(atOffset: 0)
-        let format = ActivityExport(timeZone: timeZone)
+        let format = ActivityExport(timeZone: timeZone, machine: machine)
         var written = 0
         var cursor: ActivityCursor?
         repeat {
@@ -642,36 +780,28 @@ struct ActivityReader: Sendable {
     /// Every action with a call id, from the fields in the clear (no decrypting), and how many
     /// actions have none (from before call ids, FR-634).
     func calls() throws -> (calls: [MacCall], withoutIDs: Int) {
-        let action = ActivityKind.action.rawValue
-        var d = FetchDescriptor<SealedActivity>(predicate: #Predicate { $0.kind == action && $0.callID != "" })
-        d.propertiesToFetch = [\.callID, \.device, \.at]
-        let calls = try ModelContext(container).fetch(d).map {
+        let actions = files.allRows().rows.filter { $0.kind == ActivityKind.action.rawValue }
+        let calls = actions.filter { !$0.callID.isEmpty }.map {
             MacCall(callID: $0.callID, device: $0.device, at: $0.at)
         }
-        let without = try ModelContext(container).fetchCount(
-            FetchDescriptor<SealedActivity>(predicate: #Predicate { $0.kind == action && $0.callID == "" }))
-        return (calls, without)
+        return (calls, actions.count - calls.count)
     }
 
     /// The tool of each of these calls, decrypted, for naming the ones missing on the relay.
     func tools(of callIDs: Set<String>) throws -> [String: String] {
         guard !callIDs.isEmpty else { return [:] }
-        let ids = Array(callIDs)
-        let rows = try ModelContext(container).fetch(
-            FetchDescriptor<SealedActivity>(predicate: #Predicate { ids.contains($0.callID) }))
+        let rows = files.allRows().rows.filter { callIDs.contains($0.callID) }
         var out: [String: String] = [:]
-        for row in rows { if let a = open(row) { out[row.callID] = a.tool } }
+        for (row, a) in zip(rows, open(rows)) { if let a { out[row.callID] = a.tool } }
         return out
     }
 
     /// Which of these call ids the log has an action for (FR-667).
     func logged(_ callIDs: Set<String>) throws -> Set<String> {
         guard !callIDs.isEmpty else { return [] }
-        let ids = Array(callIDs)
-        let action = ActivityKind.action.rawValue
-        var d = FetchDescriptor<SealedActivity>(predicate: #Predicate { $0.kind == action && ids.contains($0.callID) })
-        d.propertiesToFetch = [\.callID]
-        return Set(try ModelContext(container).fetch(d).map(\.callID))
+        return Set(
+            files.allRows().rows.filter { $0.kind == ActivityKind.action.rawValue && callIDs.contains($0.callID) }.map(
+                \.callID))
     }
 
     /// The text of the quit event apps from before FR-666 recorded; this app's own quit line
@@ -680,17 +810,16 @@ struct ActivityReader: Sendable {
 
     /// When an app from before FR-666, which didn't record the calls running at its quit, began
     /// to quit within one of these windows (FR-668): its app event saying just "Quitting".
-    /// Reads only the events in the windows.
+    /// Reads only the days of the windows.
     func oldQuits(in windows: [ClosedRange<Date>]) throws -> [Date] {
-        let event = ActivityKind.event.rawValue
         var found: Set<Date> = []
+        let event = ActivityKind.event.rawValue
         for w in windows {
-            let (from, to) = (w.lowerBound, w.upperBound)
-            let rows = try ModelContext(container).fetch(
-                FetchDescriptor<SealedActivity>(
-                    predicate: #Predicate { $0.kind == event && $0.at >= from && $0.at <= to }))
-            for row in rows {
-                if let a = open(row), a.tool == EventCategory.app.rawValue, a.result == Self.oldQuitLine {
+            let days = files.days().filter { $0 >= TraceFiles.day(w.lowerBound) && $0 <= TraceFiles.day(w.upperBound) }
+            for day in days {
+                let rows = files.rows(day).rows.filter { $0.kind == event && w.contains($0.at) }
+                for a in open(rows).compactMap({ $0 })
+                where a.tool == EventCategory.app.rawValue && a.result == Self.oldQuitLine {
                     found.insert(a.at)
                 }
             }
@@ -698,114 +827,92 @@ struct ActivityReader: Sendable {
         return found.sorted()
     }
 
-    /// The newest checked entry under the current key: its number and checksum, where the chain
-    /// continues. Walks the numbers down from the newest, a few rows at a time.
-    ///
-    /// Not one query for "this key, highest number": SQLite answers that from the key's index
-    /// and sorts every entry of the key to find the top one, so each start read the whole log
-    /// (2026-10-29). The number's own index gives the rows newest first; another key's rows
-    /// are skipped here. Only a log whose newest entries are all under an earlier key (the key
-    /// was lost) is walked further, and only until the first entry under this one.
-    func newestChained(_ context: ModelContext) throws -> ChainTip? {
+    /// The newest entry's number of any key, and the newest checked entry under the current key:
+    /// where the chain continues. An entry is filed under the day it began, so one written just
+    /// after midnight can sit in the day before; the newest two days with entries are read, and
+    /// further back only while the newest days hold none under this key (the key was lost).
+    func tip() -> (lastSeq: Int, mine: ChainTip?) {
         let kid = keyID
-        var below = Int.max
-        let batch = 64
-        while true {
-            let b = below
-            var d = FetchDescriptor<SealedActivity>(
-                predicate: #Predicate { $0.seq > 0 && $0.seq < b }, sortBy: [SortDescriptor(\.seq, order: .reverse)])
-            d.fetchLimit = batch
-            d.propertiesToFetch = [\.seq, \.keyID, \.mac]
-            let rows = try context.fetch(d)
-            if let mine = rows.first(where: { $0.keyID == kid }) {
-                return ChainTip(seq: mine.seq, mac: mine.mac ?? Data())
+        var lastSeq = 0
+        var mine: TraceRow?
+        var read = 0
+        for day in files.days().reversed() {
+            let rows = files.rows(day).rows
+            guard !rows.isEmpty else { continue }
+            read += 1
+            if read <= 2 { lastSeq = max(lastSeq, rows.map(\.seq).max() ?? 0) }
+            if let m = rows.filter({ $0.keyID == kid && $0.seq > 0 }).max(by: { $0.seq < $1.seq }),
+                m.seq > (mine?.seq ?? 0)
+            {
+                mine = m
             }
-            guard rows.count == batch, let last = rows.last else { return nil }
-            below = last.seq
+            if read >= 2 && mine != nil { break }
         }
-    }
-
-    /// Entries under the current key recorded before the check began. Asked for by number
-    /// alone (there are no new ones), for the same reason as the check's batches.
-    private func beforeCheckCount() throws -> Int {
-        let kid = keyID
-        var d = FetchDescriptor<SealedActivity>(predicate: #Predicate { $0.seq == 0 })
-        d.propertiesToFetch = [\.keyID]
-        return try autoreleasepool { try ModelContext(container).fetch(d).filter { $0.keyID == kid }.count }
+        return (lastSeq, mine.map { ChainTip(seq: $0.seq, mac: $0.mac ?? Data()) })
     }
 
     /// Walks the chain of entries under the current key, oldest first, reading only the
     /// fields in the clear (FR-612); then looks for the newest entry Latchkey knows it wrote
     /// (FR-613). `expected` is nil when that isn't known.
-    ///
-    /// Each batch is asked for by number alone, so SQLite reads it in order from the number's
-    /// index; rows of other keys are skipped here. Asked for "this key and after this number",
-    /// SQLite used the key's index and sorted every remaining entry for each batch of 5,000:
-    /// that sorting grew with the square of the log (2026-10-29; the whole check took 5 s at 100,000).
     func check(expected: ChainTip?) throws -> LogCheck {
         var result = LogCheck()
         let kid = keyID
-        result.beforeCheck = try beforeCheckCount()
+        let all = files.allRows().rows
+        result.beforeCheck = all.filter { $0.seq == 0 && $0.keyID == kid }.count
         var previous = Self.chainStart
-        var after = 0
         var found = false
         var newest: (seq: Int, at: Date)?
-        let batch = 5000
-        while true {
-            let a = after
-            var d = FetchDescriptor<SealedActivity>(
-                predicate: #Predicate { $0.seq > a }, sortBy: [SortDescriptor(\.seq)])
-            d.fetchLimit = batch
-            d.propertiesToFetch = [\.seq, \.id, \.at, \.keyID, \.mac, \.kind, \.callID, \.device]
-            let count = try autoreleasepool { () throws -> Int in
-                let rows = try ModelContext(container).fetch(d)
-                for row in rows {
-                    after = row.seq
-                    guard row.keyID == kid else { continue }
-                    let stored = row.mac ?? Data()
-                    let place = ActivityCursor(at: row.at, seq: row.seq)
-                    let computed = mac(
-                        previous: previous, seq: row.seq, id: row.id, at: row.at, keyID: kid, kind: row.kind,
-                        callID: row.callID, device: row.device)
-                    if stored != computed {
-                        result.broken.append(place)
-                    }
-                    if let expected, row.seq == expected.seq {
-                        found = true
-                        if stored != expected.mac, result.broken.last != place { result.broken.append(place) }
-                    }
-                    previous = stored
-                    newest = (row.seq, row.at)
-                }
-                return rows.count
+        for row in all.filter({ $0.seq > 0 && $0.keyID == kid }).sorted(by: { $0.seq < $1.seq }) {
+            let stored = row.mac ?? Data()
+            let place = row.cursor
+            let computed = mac(
+                previous: previous, seq: row.seq, id: row.id, at: row.at, keyID: kid, kind: row.kind,
+                callID: row.callID, device: row.device)
+            if stored != computed {
+                result.broken.append(place)
             }
-            if count < batch { break }
+            if let expected, row.seq == expected.seq {
+                found = true
+                if stored != expected.mac, result.broken.last != place { result.broken.append(place) }
+            }
+            previous = stored
+            newest = (row.seq, row.at)
         }
         if let expected, !found, (newest?.seq ?? 0) < expected.seq {
             result.missingNewer = true
-            // The newest entry of any kind still there, for the warning.
-            var d = FetchDescriptor<SealedActivity>(sortBy: [SortDescriptor(\.at, order: .reverse)])
-            d.fetchLimit = 1
-            d.propertiesToFetch = [\.at]
-            result.lastPresent = try ModelContext(container).fetch(d).first?.at
+            result.lastPresent = all.map(\.at).max()
         }
         return result
     }
 }
 
-/// One exported entry per line (FR-615): fields in a fixed order; arguments and results that
-/// are JSON stay JSON, anything else is a string.
+extension TraceRow {
+    var cursor: ActivityCursor { ActivityCursor(at: at, seq: seq) }
+}
+
+extension ActivityCursor {
+    fileprivate var asRow: TraceRow {
+        TraceRow(id: UUID(), at: at, seq: seq, keyID: "", kind: "", callID: "", device: "", day: "", off: 0, len: 0)
+    }
+}
+
+/// One exported entry per line (FR-615, FR-686, contracts/trace-files.md "The export line"):
+/// fields in a fixed order; arguments and results that are JSON stay JSON, anything else is a
+/// string.
 struct ActivityExport {
     let formatter: ISO8601DateFormatter
+    let machine: String
 
-    init(timeZone: TimeZone) {
+    init(timeZone: TimeZone, machine: String) {
         formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         formatter.timeZone = timeZone
+        self.machine = machine
     }
 
     func line(_ a: Activity) -> String {
         let fields: [(String, String)] = [
+            ("v", "1"), ("source", Self.json("mac")), ("machine", Self.json(machine)),
             ("time", Self.json(formatter.string(from: a.at))), ("kind", Self.json(a.kind.rawValue)),
             ("tool", Self.json(a.tool)), ("arguments", Self.embedded(a.arguments)),
             // An event's text is text, even when it happens to parse as JSON.
@@ -858,16 +965,81 @@ enum ActivityLog {
     var problem: String? { if case .unavailable(let why) = self { why } else { nil } }
 }
 
+/// The earlier activity database (until 2026-11-15), read once, read-only, straight with SQLite:
+/// never opened through SwiftData, which may change a store's file just by opening it (FR-682).
+enum ActivityDatabase {
+    struct Row {
+        var id: UUID
+        var at: Date
+        var sealed: Data
+        var seq: Int
+        var keyID: String
+        var mac: Data?
+        var kind: String
+        var callID: String
+        var device: String
+    }
+
+    /// Every row in the order it was stored; none when there is no table (a store never written).
+    static func rows(_ url: URL) throws -> [Row] {
+        let db = try SQLite.openReadOnly(url)
+        defer { SQLite.close(db) }
+        let columns = Set(
+            try SQLite.rows(db, "PRAGMA table_info(ZSEALEDACTIVITY)").compactMap { $0.count > 1 ? $0[1].text : nil })
+        guard columns.contains("ZID"), columns.contains("ZAT"), columns.contains("ZSEALED") else { return [] }
+        func column(_ name: String) -> String { columns.contains(name) ? name : "NULL" }
+        let sql = """
+            SELECT ZID, ZAT, ZSEALED, \(column("ZSEQ")), \(column("ZKEYID")), \(column("ZMAC")), \
+            \(column("ZKIND")), \(column("ZCALLID")), \(column("ZDEVICE")) FROM ZSEALEDACTIVITY ORDER BY Z_PK
+            """
+        var out: [Row] = []
+        try SQLite.forEachRow(db, sql) { v in
+            guard let idData = v[0].blob, idData.count == 16, let at = v[1].double, let sealed = v[2].blob else {
+                throw SQLite.Failure(message: "a row of the activity database can’t be read")
+            }
+            let id = idData.withUnsafeBytes { UUID(uuid: $0.loadUnaligned(as: uuid_t.self)) }
+            out.append(
+                Row(
+                    id: id, at: Date(timeIntervalSinceReferenceDate: at), sealed: sealed, seq: Int(v[3].int ?? 0),
+                    keyID: v[4].text ?? "", mac: v[5].blob, kind: v[6].text ?? ActivityKind.action.rawValue,
+                    callID: v[7].text ?? "", device: v[8].text ?? ""))
+            return true
+        }
+        return out
+    }
+
+    /// The plaintext log from before FR-026a (`trace.store`), read the same way.
+    static func plaintextEntries(_ url: URL) throws -> [Activity] {
+        let db = try SQLite.openReadOnly(url)
+        defer { SQLite.close(db) }
+        let tables = try SQLite.rows(db, "SELECT name FROM sqlite_master WHERE type='table' AND name='ZTRACEENTRY'")
+        guard !tables.isEmpty else { return [] }
+        return try SQLite.rows(
+            db, "SELECT ZAT, ZTOOL, ZARGUMENTS, ZRESULT, ZISERROR, ZDURATIONMS FROM ZTRACEENTRY ORDER BY ZAT"
+        ).map { v in
+            Activity(
+                at: Date(timeIntervalSinceReferenceDate: v[0].double ?? 0), tool: v[1].text ?? "",
+                arguments: v[2].text ?? "", result: v[3].text ?? "", isError: (v[4].int ?? 0) != 0,
+                durationMS: Int(v[5].int ?? 0))
+        }
+    }
+}
+
 @MainActor
 final class TraceStore {
     static let defaultDirectory = AppIdentity.current.supportDirectory
+    /// The daily files' folder (FR-680).
+    nonisolated static let folderName = "activity"
+    /// Where the copy from the database is made before it becomes the folder (FR-682).
+    nonisolated static let copyingName = "activity.copying"
+    /// The database the log was kept in until 2026-11-15: read once, never changed (FR-682).
     nonisolated static let fileName = "activity.store"
     static let legacyFileName = "trace.store"
 
-    let container: ModelContainer
+    let files: TraceFiles
     let reader: ActivityReader
-    /// The store's file, for the space it uses (FR-610); nil in memory.
-    private let file: URL?
+    /// A folder of the store's own for a test log, removed with the store.
+    private let temporary: URL?
     private let latest: any LatestEntryItem
     /// What the start found about the record of the newest entry (FR-613).
     private(set) var latestState = LatestEntryState.ok
@@ -878,42 +1050,110 @@ final class TraceStore {
     private(set) var expected: ChainTip?
     private var nextSeq = 1
     private var previousMac = ActivityReader.chainStart
+    /// How many entries the start copied from the database; 0 when there was nothing to copy.
+    private(set) var copiedFromDatabase = 0
 
-    init(
+    convenience init(
         directory: URL = TraceStore.defaultDirectory, keys: any TraceKeyStore = KeychainTraceKey(),
         latest: any LatestEntryItem = KeychainLatestEntry()
     ) throws {
+        try self.init(directory: directory, keys: keys, latest: latest, temporary: nil)
+    }
+
+    /// A log of its own in a fresh temporary folder, removed with the store (for tests).
+    convenience init(inMemory: Bool, keys: any TraceKeyStore, latest: any LatestEntryItem = MemoryLatestEntry()) throws
+    {
+        let dir = FileManager.default.temporaryDirectory.appending(path: "latchkey-trace-\(UUID().uuidString)")
+        try self.init(directory: dir, keys: keys, latest: latest, temporary: dir)
+    }
+
+    private init(directory: URL, keys: any TraceKeyStore, latest: any LatestEntryItem, temporary: URL?) throws {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let key = try keys.loadOrCreate()
-        let url = directory.appending(path: Self.fileName)
-        container = try ModelContainer(for: SealedActivity.self, configurations: ModelConfiguration(url: url))
-        reader = ActivityReader(container: container, key: key)
-        file = url
+        let folder = directory.appending(path: Self.folderName)
+        files = TraceFiles(folder: folder)
+        reader = ActivityReader(files: files, key: key)
+        self.temporary = temporary
         self.latest = latest
+        copiedFromDatabase = try Self.copyDatabase(
+            directory.appending(path: Self.fileName), into: folder, reader: reader)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         try prepare()
         try migrateLegacy(in: directory)
+        if copiedFromDatabase > 0 {
+            try record(
+                .event(
+                    .app,
+                    "The activity log moved into daily files: \(copiedFromDatabase) entries copied unchanged; the earlier database is kept as it was",
+                    systemLog: false))
+        }
     }
 
-    init(inMemory: Bool, keys: any TraceKeyStore, latest: any LatestEntryItem = MemoryLatestEntry()) throws {
-        let key = try keys.loadOrCreate()
-        container = try ModelContainer(
-            for: SealedActivity.self, configurations: ModelConfiguration(isStoredInMemoryOnly: inMemory))
-        reader = ActivityReader(container: container, key: key)
-        file = nil
-        self.latest = latest
-        try prepare()
+    deinit {
+        if let temporary { try? FileManager.default.removeItem(at: temporary) }
     }
 
-    private var context: ModelContext { container.mainContext }
-
-    /// Upgrades entries from before the check, then finds where the chain continues.
-    private func prepare() throws {
-        try labelOldEntries()
+    /// Copies every row of the earlier database into the daily files unchanged, all or nothing
+    /// (FR-682, contracts/trace-files.md): into a folder of its own, read back, then renamed.
+    /// A start that finds the files never copies again; the database is only ever read.
+    /// Returns how many entries were copied.
+    nonisolated static func copyDatabase(_ database: URL, into folder: URL, reader: ActivityReader) throws -> Int {
+        let fm = FileManager.default
+        guard !fm.fileExists(atPath: folder.path) else { return 0 }
+        let copying = folder.deletingLastPathComponent().appending(path: copyingName)
+        if fm.fileExists(atPath: copying.path) { try fm.removeItem(at: copying) }  // an interrupted copy
+        guard fm.fileExists(atPath: database.path) else { return 0 }
+        // Read from a copy: even a read-only SQLite connection writes the database's
+        // shared-memory file, and the original is to stay exactly as it was.
+        let snapshot = fm.temporaryDirectory.appending(path: "latchkey-activity-\(UUID().uuidString)")
+        try fm.createDirectory(at: snapshot, withIntermediateDirectories: true)
+        defer { try? fm.removeItem(at: snapshot) }
+        for suffix in ["", "-wal", "-shm"] {
+            let file = database.deletingLastPathComponent().appending(path: database.lastPathComponent + suffix)
+            if fm.fileExists(atPath: file.path) {
+                try fm.copyItem(at: file, to: snapshot.appending(path: fileName + suffix))
+            }
+        }
+        let rows = try ActivityDatabase.rows(snapshot.appending(path: fileName))
+        guard !rows.isEmpty else { return 0 }
+        let staging = TraceFiles(folder: copying)
         let kid = reader.keyID
-        var newest = FetchDescriptor<SealedActivity>(sortBy: [SortDescriptor(\.seq, order: .reverse)])
-        newest.fetchLimit = 1
-        let lastSeq = try context.fetch(newest).first?.seq ?? 0
-        let lastMine = try reader.newestChained(context)
+        var start = 0
+        while start < rows.count {
+            let chunk = rows[start..<min(rows.count, start + 500)]
+            start += chunk.count
+            try autoreleasepool {
+                try staging.append(
+                    chunk.map { r in
+                        // An entry not yet labelled gets the ID of the key that opens it (FR-612).
+                        var keyID = r.keyID
+                        if keyID.isEmpty {
+                            let row = TraceRow(
+                                id: r.id, at: r.at, seq: r.seq, keyID: "", kind: r.kind, callID: r.callID,
+                                device: r.device, day: "", off: 0, len: r.sealed.count)
+                            keyID = reader.open(row, sealed: r.sealed) == nil ? ActivityReader.unknownKey : kid
+                        }
+                        return TraceFiles.Item(
+                            id: r.id, at: r.at, seq: r.seq, keyID: keyID, kind: r.kind, callID: r.callID,
+                            device: r.device, mac: r.mac, sealed: r.sealed)
+                    })
+            }
+        }
+        let back = staging.allRows()
+        guard back.skipped == 0, back.rows.count == rows.count,
+            back.rows.map(\.seq).max() == rows.map(\.seq).max(),
+            Set(back.rows.map(\.id)) == Set(rows.map(\.id))
+        else {
+            throw CocoaError(.fileWriteUnknown, userInfo: [NSDebugDescriptionErrorKey: "the copy didn’t read back"])
+        }
+        try fm.moveItem(at: copying, to: folder)
+        return rows.count
+    }
+
+    /// Finds where the chain continues.
+    private func prepare() throws {
+        let kid = reader.keyID
+        let (lastSeq, lastMine) = reader.tip()
 
         // FR-613: only "no record" may lead to writing one; one that can't be read or isn't
         // understood is left alone for this launch, and raises no alarm.
@@ -939,46 +1179,26 @@ final class TraceStore {
         previousMac = tip?.mac ?? ActivityReader.chainStart
     }
 
-    /// FR-612 upgrade: entries from before the check get the ID of the key that opens them, in
-    /// one save; if it fails, nothing changes and the next start tries again.
-    private func labelOldEntries() throws {
-        let rows = try context.fetch(FetchDescriptor<SealedActivity>(predicate: #Predicate { $0.keyID == "" }))
-        guard !rows.isEmpty else { return }
-        for row in rows {
-            row.keyID = reader.open(row) == nil ? ActivityReader.unknownKey : reader.keyID
-        }
-        do {
-            try context.save()
-        } catch {
-            context.rollback()
-            AppModel.log.error("Couldn't label the older activity entries: \(error.localizedDescription)")
-        }
-    }
-
     func record(_ a: Activity) throws { try record([a]) }
 
-    /// Seals and chains each entry, saves them together, then moves the record of the newest
-    /// entry on (FR-612, FR-613). The record is written only after the entries are saved, so it
-    /// never names an entry that isn't there.
+    /// Seals and chains each entry, appends them to their days' files, then moves the record of
+    /// the newest entry on (FR-612, FR-613). The record is written only after the entries are on
+    /// disk, so it never names an entry that isn't there.
     func record(_ entries: [Activity]) throws {
         guard !entries.isEmpty else { return }
         var seq = nextSeq
         var previous = previousMac
+        var items: [TraceFiles.Item] = []
         for a in entries {
             let mac = reader.mac(previous: previous, a, seq: seq)
-            context.insert(
-                SealedActivity(
-                    id: a.id, at: a.at, sealed: try reader.seal(a, seq: seq), seq: seq, mac: mac, keyID: reader.keyID,
-                    kind: a.kind.rawValue, callID: a.callID ?? "", device: a.device ?? ""))
+            items.append(
+                TraceFiles.Item(
+                    id: a.id, at: a.at, seq: seq, keyID: reader.keyID, kind: a.kind.rawValue, callID: a.callID ?? "",
+                    device: a.device ?? "", mac: mac, sealed: try reader.seal(a, seq: seq)))
             previous = mac
             seq += 1
         }
-        do {
-            try context.save()
-        } catch {
-            context.rollback()
-            throw error
-        }
+        try files.append(items)
         let tip = ChainTip(seq: seq - 1, mac: previous)
         nextSeq = seq
         previousMac = previous
@@ -1009,14 +1229,8 @@ final class TraceStore {
     /// The newest readable entries, and how many stored entries can't be read (FR-203).
     func page(limit: Int) throws -> ActivityPage { try reader.page(ActivityQuery(), limit: limit) }
 
-    /// Bytes the log's files take on disk, SQLite's side files included (FR-610).
-    var diskBytes: Int64 {
-        guard let file else { return 0 }
-        return ["", "-wal", "-shm"].reduce(0) { sum, suffix in
-            let attributes = try? FileManager.default.attributesOfItem(atPath: file.path + suffix)
-            return sum + ((attributes?[.size] as? NSNumber)?.int64Value ?? 0)
-        }
-    }
+    /// Bytes the daily files take on disk (FR-610, FR-689); the earlier database isn't counted.
+    var diskBytes: Int64 { files.diskBytes }
 
     /// Encrypts the plaintext log from before FR-026a into this one, then deletes its files.
     /// The files go even if they can't be read: plaintext must not stay on disk.
@@ -1024,14 +1238,7 @@ final class TraceStore {
         let legacy = directory.appending(path: Self.legacyFileName)
         guard FileManager.default.fileExists(atPath: legacy.path) else { return }
         do {
-            let old = try ModelContainer(for: TraceEntry.self, configurations: ModelConfiguration(url: legacy))
-            let entries = try ModelContext(old).fetch(FetchDescriptor<TraceEntry>(sortBy: [SortDescriptor(\.at)]))
-            try record(
-                entries.map {
-                    Activity(
-                        at: $0.at, tool: $0.tool, arguments: $0.arguments, result: $0.result, isError: $0.isError,
-                        durationMS: $0.durationMS)
-                })
+            try record(try ActivityDatabase.plaintextEntries(legacy))
         } catch {
             AppModel.log.error("Couldn't move the old activity log; deleting it: \(error.localizedDescription)")
         }

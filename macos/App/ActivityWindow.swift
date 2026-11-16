@@ -256,9 +256,10 @@ struct ActivityView: View {
         panel.canCreateDirectories = true
         guard panel.runModal() == .OK, let url = panel.url else { return }
         let q = query
+        let machine = model.nameForClaude
         exporting = true
         Task {
-            let outcome = await Task.detached { Result { try reader.export(q, to: url) } }.value
+            let outcome = await Task.detached { Result { try reader.export(q, to: url, machine: machine) } }.value
             exporting = false
             if case .failure(let error) = outcome {
                 let alert = NSAlert()
