@@ -199,6 +199,14 @@ enum PageScripts {
             }
             else if (tag === 'select' && e.selectedIndex >= 0) item.value = e.options[e.selectedIndex].text;
             if (fileField && (st.display === 'none' || st.visibility === 'hidden' || r.width < 2 || r.height < 2)) item.label = (item.label ? item.label + ' ' : '') + '(hidden file field)';
+            // Under another element at its centre, as the page shows it: a mouse can't reach it
+            // (Gmail draws its filter form twice, one copy over the other, 2026-11-16).
+            // Checkboxes and radio buttons are often drawn over on purpose, so they aren't marked.
+            var cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+            if (!fileField && type !== 'checkbox' && type !== 'radio' && cx >= 0 && cy >= 0 && cx < innerWidth && cy < innerHeight) {
+              var over = document.elementFromPoint(cx, cy);
+              if (over && over !== e && !e.contains(over) && !over.contains(e) && !(e.labels && Array.prototype.some.call(e.labels, function (l) { return l.contains(over); }))) item.label = (item.label ? item.label + ' ' : '') + '(under another element)';
+            }
             out.push(item);
           }
           // Parts of the page that scroll on their own (FR-435), at most 20.
@@ -238,6 +246,17 @@ enum PageScripts {
           var a0 = e.closest ? e.closest('a[href]') : null;
           var before = a0 instanceof HTMLAnchorElement ? hrefOf.call(a0) : null;
           if (e.scrollIntoView) e.scrollIntoView({ block: 'center' });
+          // A copy with the same text drawn over this one is what a mouse would press there
+          // (Gmail's filter form, drawn twice, 2026-11-16): the press and click go to it.
+          if (e.getBoundingClientRect && document.elementFromPoint) {
+            var c = e.getBoundingClientRect(), words = (e.innerText || '').replace(/\\s+/g, ' ').trim();
+            var over = document.elementFromPoint(c.left + c.width / 2, c.top + c.height / 2);
+            if (words && over && over !== e && !e.contains(over) && !over.contains(e)) {
+              for (var up = over; up && up !== document.body; up = up.parentElement) {
+                if ((up.innerText || '').replace(/\\s+/g, ' ').trim() === words) { e = up; break; }
+              }
+            }
+          }
           if (e.focus) e.focus();
           // The press a real mouse makes comes first, at the element's centre: Google's pages
           // (Gmail's "Create filter", 2026-11-16) act on pointer and mouse down and up, not on

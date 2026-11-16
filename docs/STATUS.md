@@ -12,7 +12,9 @@ Clicks in pages (2026-11-16): Gmail's "Create filter" ignored Latchkey's clicks 
 was locked, because a click was `element.click()` alone and Gmail acts on the press. A click now
 sends pointer and mouse down and up at the element's centre first (spec 005 research, Clicks). A click
 that changes nothing on the page now says so, and browser_act's wording names what to try
-before computer control, which doesn't work while locked.
+before computer control, which doesn't work while locked. Gmail draws its filter form twice,
+one copy over the other: an element under another is now marked, and a click on it reaches the
+copy with the same text on top.
 
 Safari signed out of Target (Toni, 2026-11-15, three times that evening), found and fixed:
 Target rotates its refresh token, and Claude's page in Latchkey's own browser redeemed Safari's

@@ -149,6 +149,26 @@ enum ActionPage {
                 == "pointerdown,mousedown,pointerup,mouseup,click")
     }
 
+    /// Gmail draws its filter form twice, one copy exactly over the other, and only the copy on
+    /// top answers (2026-11-16): the one underneath is marked, and a click on it reaches the top.
+    @Test func aCopyDrawnOverAnotherTakesTheClick() async throws {
+        let p = TestPage()
+        try await p.load(
+            """
+            <html><body>
+            <div role="button" id="under" style="position:absolute;left:40px;top:40px;width:120px;height:30px">Create filter</div>
+            <div style="position:absolute;left:0;top:0;width:300px;height:200px;background:#fff">
+              <div role="button" id="top" style="position:absolute;left:40px;top:40px;width:120px;height:30px"
+                onpointerdown="document.title = 'pressed'">Create filter</div></div>
+            </body></html>
+            """)
+        let r = try PageScripts.decode(try await p.run(PageScripts.read(offset: 0)))
+        let under = try #require(r.elements.first { $0.label.contains("under another element") })
+        #expect(r.elements.filter { $0.label == "Create filter" }.count == 1)
+        _ = try await p.run(PageScripts.click(under.ref))
+        #expect(try await p.run("document.title") == "pressed")
+    }
+
     /// A click the page ignores is told apart from one that changed it (2026-11-16).
     @Test func aClickThatChangesNothingIsToldApart() async throws {
         let p = TestPage()

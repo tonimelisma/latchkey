@@ -295,6 +295,13 @@ first.
   one click; Gmail's filter was created this way while the Mac was locked. `isTrusted` stays
   false, so a page that checks it still needs computer control. (c) Native mouse events:
   move the Owner's pointer and need the screen; rejected for the same reasons as keys.
+- **An element under another one.** Gmail draws its filter form twice, one copy exactly over
+  the other; only the top copy answers, and the live check of 2026-11-16 clicked the one beneath.
+  (a) Leave such elements out of the list: hides real controls behind small overlaps. (b) Mark
+  them "(under another element)" and send a click on one to a copy with the same text that is
+  on top at its centre, as a mouse would (chosen); anything else under it is clicked as before,
+  so styled checkboxes drawn over their input still work. (c) Always click what is on top:
+  could press an unrelated banner.
 - **A click the page ignored.** Every click reads the page before and after; when the address,
   title, text, and controls are all the same, the answer says so first and names what to try
   next (2026-11-16: an agent took three ignored clicks for a page that can't be clicked while
