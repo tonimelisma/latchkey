@@ -3,14 +3,16 @@ package agent
 import (
 	"context"
 	"crypto/x509"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net"
 	"os"
-	"path/filepath"
+	"strings"
 	"syscall"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -19,6 +21,8 @@ import (
 	"github.com/tonimelisma/latchkey/linux/internal/config"
 	"github.com/tonimelisma/latchkey/linux/internal/files"
 	"github.com/tonimelisma/latchkey/linux/internal/shell"
+	"github.com/tonimelisma/latchkey/linux/internal/tools"
+	"github.com/tonimelisma/latchkey/relay/agentproto"
 )
 
 // The public words name the kind of failure, never the relay's address, its IP, or a file
@@ -76,7 +80,7 @@ func TestNotConnectingNamesTheStep(t *testing.T) {
 func TestTheLogToolIsAlwaysOffered(t *testing.T) {
 	home := t.TempDir()
 	p := config.PathsFor(home, "", "", "")
-	log, err := activity.Open(filepath.Join(home, "activity.jsonl"))
+	log, err := activity.Open(activity.Files{Dir: p.Activity, Old: p.ActivityV0})
 	require.NoError(t, err)
 	a := &Agent{Paths: p, Version: "0.1.1", Log: log, Shell: shell.New(p), Files: files.New(p)}
 	off := a.toolsFor(config.Settings{Shell: config.Off, Files: config.FilesOff})
@@ -84,4 +88,27 @@ func TestTheLogToolIsAlwaysOffered(t *testing.T) {
 	on := a.toolsFor(config.Settings{Shell: config.On, Files: config.FilesWrite})
 	assert.Contains(t, sortedKeys(on), "latchkey_log")
 	assert.Contains(t, sortedKeys(on), "shell_run")
+}
+
+// A call's line keeps the arguments as they came and the content exactly as sent to the relay,
+// images and all (FR-1057): nothing cut, nothing summarized.
+func TestACallIsLoggedWhole(t *testing.T) {
+	big := strings.Repeat("z", 1<<20)
+	res := tools.Result{Content: []tools.Content{
+		{"type": "text", "text": big},
+		{"type": "image", "data": "iVBORw0KGgo=", "mimeType": "image/png"},
+	}, IsError: true}
+	sent := res.Encode("call_1")
+	m := &agentproto.Call{ID: "call_1", Tool: "files_read", Client: "Claude", Arguments: json.RawMessage(`{"path":"/tmp/a.png"}`)}
+	e := callEntry(m, sent, 1500*time.Millisecond)
+	assert.Equal(t, "call", e.Kind)
+	assert.Equal(t, "call_1", e.CallID)
+	assert.Equal(t, "files_read", e.Tool)
+	assert.Equal(t, "Claude", e.Client)
+	assert.JSONEq(t, `{"path":"/tmp/a.png"}`, string(e.Arguments))
+	assert.Equal(t, string(sent.Content), string(e.Result), "the content array as sent")
+	assert.Contains(t, string(e.Result), `"type":"image"`)
+	assert.Greater(t, len(e.Result), 1<<20)
+	assert.True(t, e.IsError)
+	assert.Equal(t, int64(1500), e.DurationMS)
 }

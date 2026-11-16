@@ -13,7 +13,7 @@ import (
 // auditCheck compares the server's activity log with the relay's audit after each connection
 // (FR-1050; agent-protocol.md, "Audit comparison") and records the outcome in the log.
 func (a *Agent) auditCheck(ctx context.Context, c *conn, answers <-chan *agentproto.Audit) {
-	entries, err := activity.Read(a.Paths.Activity, time.Time{})
+	entries, _, err := a.Log.Files().Calls(time.Time{}, time.Time{})
 	if err != nil {
 		return
 	}

@@ -2,6 +2,7 @@ package latchkeylog_test
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -27,17 +28,18 @@ func text(t *testing.T, r tools.Result) string {
 	return s
 }
 
-func setup(t *testing.T) (*activity.Log, string) {
+func setup(t *testing.T) (*activity.Log, activity.Files) {
 	t.Helper()
-	path := filepath.Join(t.TempDir(), "activity.jsonl")
-	log, err := activity.Open(path)
+	dir := t.TempDir()
+	files := activity.Files{Dir: filepath.Join(dir, "activity"), Old: filepath.Join(dir, "activity.jsonl")}
+	log, err := activity.Open(files)
 	require.NoError(t, err)
-	return log, path
+	return log, files
 }
 
 func TestDefinition(t *testing.T) {
-	log, path := setup(t)
-	d := latchkeylog.New(log, path, "0.1.1", zone).Def
+	log, files := setup(t)
+	d := latchkeylog.New(log, files, "0.1.1", zone).Def
 	assert.Equal(t, "latchkey_log", d.Name)
 	assert.True(t, d.Annotations.ReadOnlyHint)
 	assert.InDelta(t, 10000, d.Meta[agentproto.DeadlineMetaKey], 0, "deadline 10 s")
@@ -52,15 +54,15 @@ func TestDefinition(t *testing.T) {
 }
 
 func TestAnswer(t *testing.T) {
-	log, path := setup(t)
+	log, files := setup(t)
 	at := time.Date(2026, 11, 3, 22, 2, 9, 0, time.UTC)
 	add := func(e activity.Entry) { require.NoError(t, log.Add(e)) }
 	add(activity.Entry{At: at, Kind: "event", Category: "app", Text: "Latchkey 0.1.1 started", Public: "Latchkey 0.1.1 started"})
-	add(activity.Entry{At: at.Add(time.Second), Kind: "call", Tool: "shell_run", Arguments: `{"command":"cat /etc/shadow"}`, Result: "secret"})
+	add(activity.Entry{At: at.Add(time.Second), Kind: "call", Tool: "shell_run", Arguments: json.RawMessage(`{"command":"cat /etc/shadow"}`), Result: json.RawMessage(`[{"type":"text","text":"secret"}]`)})
 	add(activity.Entry{At: at.Add(2 * time.Second), Kind: "event", Category: "connection", IsError: true, Text: "Disconnected: dial tcp 10.0.0.1:443", Public: "Disconnected: the relay refused the connection;\ntrying again in 2s"})
 	add(activity.Entry{At: at.Add(4 * time.Second), Kind: "event", Category: "connection", Text: `Connected to https://relay.example as "box"`, Public: `Connected as "box"`})
 	add(activity.Entry{At: at.Add(5 * time.Second), Kind: "event", Category: "audit", Text: "Audit check: call_1 missing"})
-	tool := latchkeylog.New(log, path, "0.1.1", zone)
+	tool := latchkeylog.New(log, files, "0.1.1", zone)
 
 	r := tool.Run(context.Background(), tools.Args{})
 	assert.False(t, r.IsError)
@@ -80,15 +82,29 @@ func TestAnswer(t *testing.T) {
 	assert.Equal(t, "Latchkey's log on this server has no pause lines yet.", text(t, r))
 }
 
+// The single file of earlier versions is still read, before the daily files (FR-1058).
+func TestReadsTheOldFileToo(t *testing.T) {
+	log, files := setup(t)
+	require.NoError(t, os.WriteFile(files.Old, []byte(
+		`{"at":"2026-11-04T08:00:00Z","kind":"event","category":"app","text":"Latchkey 0.1.4 started","public":"Latchkey 0.1.4 started"}`+"\n"+
+			`{"at":"2026-11-04T08:00:01Z","kind":"call","tool":"shell_run","arguments":"{\"command\":\"ls\"}","result":"x"}`+"\n"+
+			`{"at":"2026-11-04T08:00:0`+"\n"), 0o600))
+	require.NoError(t, log.Add(activity.Entry{At: time.Date(2026, 11, 15, 8, 0, 0, 0, time.UTC), Kind: "event", Category: "app", Text: "Latchkey 0.1.5 started", Public: "Latchkey 0.1.5 started"}))
+	r := latchkeylog.New(log, files, "0.1.5", zone).Run(context.Background(), tools.Args{})
+	assert.Equal(t, `Latchkey's own log on this server (Latchkey 0.1.5): the newest 2 lines, newest last; times in Test/Zone (UTC-08:00).
+2026-11-04 00:00:00 app: Latchkey 0.1.4 started
+2026-11-15 00:00:00 app: Latchkey 0.1.5 started`, text(t, r))
+}
+
 func TestEmpty(t *testing.T) {
-	log, path := setup(t)
-	r := latchkeylog.New(log, path, "0.1.1", zone).Run(context.Background(), tools.Args{})
+	log, files := setup(t)
+	r := latchkeylog.New(log, files, "0.1.1", zone).Run(context.Background(), tools.Args{})
 	assert.Equal(t, "Latchkey's log on this server has no lines yet.", text(t, r))
 }
 
 func TestBadArguments(t *testing.T) {
-	log, path := setup(t)
-	tool := latchkeylog.New(log, path, "0.1.1", zone)
+	log, files := setup(t)
+	tool := latchkeylog.New(log, files, "0.1.1", zone)
 	for _, v := range []any{float64(0), float64(1001), 2.5, "ten"} {
 		r := tool.Run(context.Background(), tools.Args{"lines": v})
 		assert.True(t, r.IsError)
@@ -103,26 +119,27 @@ func TestBadArguments(t *testing.T) {
 }
 
 func TestFromMemoryWhenTheLogCantBeRead(t *testing.T) {
-	log, path := setup(t)
+	log, files := setup(t)
 	log.Event("app", "Latchkey %s started", "0.1.1")
-	require.NoError(t, os.Remove(path))
-	require.NoError(t, os.Mkdir(path, 0o700)) // the log is now a folder: unreadable as a file
-	r := latchkeylog.New(log, path, "0.1.1", zone).Run(context.Background(), tools.Args{})
+	today := filepath.Join(files.Dir, time.Now().UTC().Format("2006-01-02")+".jsonl")
+	require.NoError(t, os.Remove(today))
+	require.NoError(t, os.Mkdir(today, 0o700)) // today's file is now a folder: unreadable as a file
+	r := latchkeylog.New(log, files, "0.1.1", zone).Run(context.Background(), tools.Args{})
 	got := text(t, r)
 	assert.False(t, r.IsError)
 	assert.Contains(t, got, "Latchkey's activity log isn't available just now (it is a folder), ")
 	assert.Contains(t, got, "so these are only the lines since Latchkey started.")
 	assert.Contains(t, got, "app: Latchkey 0.1.1 started")
-	assert.NotContains(t, got, path, "the reason names no file (FR-1053)")
+	assert.NotContains(t, got, files.Dir, "the reason names no file (FR-1053)")
 }
 
 func TestLongAnswersLeaveOutTheOldest(t *testing.T) {
-	log, path := setup(t)
+	log, files := setup(t)
 	for i := range 1000 {
 		log.Event("app", "line %04d %s", i, strings.Repeat("x", 100))
 	}
 	log.Event("app", "long %s", strings.Repeat("y\n", 3000))
-	r := latchkeylog.New(log, path, "0.1.1", zone).Run(context.Background(), tools.Args{"lines": float64(1000)})
+	r := latchkeylog.New(log, files, "0.1.1", zone).Run(context.Background(), tools.Args{"lines": float64(1000)})
 	got := text(t, r)
 	assert.LessOrEqual(t, len([]rune(got)), 40000)
 	lines := strings.Split(got, "\n")

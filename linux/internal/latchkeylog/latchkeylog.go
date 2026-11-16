@@ -33,12 +33,13 @@ const (
 var Categories = []string{"app", "connection", "pairing", "settings", "pause", "update", "audit"}
 
 // Tool is the tool for the service: times in the server's own zone.
-func Tool(log *activity.Log, path, version string) tools.Tool {
-	return New(log, path, version, time.Local)
+func Tool(log *activity.Log, files activity.Files, version string) tools.Tool {
+	return New(log, files, version, time.Local)
 }
 
-// New is the tool reading the activity log at path, with log's memory when that can't be read.
-func New(log *activity.Log, path, version string, zone *time.Location) tools.Tool {
+// New is the tool reading the activity log's files (the daily files and the old single file),
+// with log's memory when they can't be read.
+func New(log *activity.Log, files activity.Files, version string, zone *time.Location) tools.Tool {
 	return tools.Tool{
 		Def: tools.Make(tools.Spec{
 			Name: Name, Title: "Latchkey's Log",
@@ -54,12 +55,12 @@ func New(log *activity.Log, path, version string, zone *time.Location) tools.Too
 			ReadOnly: true, DeadlineMS: 10000,
 		}),
 		Run: func(_ context.Context, args tools.Args) tools.Result {
-			return answer(args, log, path, version, zone)
+			return answer(args, log, files, version, zone)
 		},
 	}
 }
 
-func answer(args tools.Args, log *activity.Log, path, version string, zone *time.Location) tools.Result {
+func answer(args tools.Args, log *activity.Log, files activity.Files, version string, zone *time.Location) tools.Result {
 	count, err := args.Int("lines", defaultLines, 1, maxLines)
 	if err != nil {
 		return tools.Failf("lines must be a whole number from 1 to %d.", maxLines)
@@ -76,7 +77,7 @@ func answer(args tools.Args, log *activity.Log, path, version string, zone *time
 		category = s
 	}
 	var note string
-	found, err := activity.Public(path, category, count)
+	found, err := files.Public(category, count)
 	if err != nil {
 		note = fmt.Sprintf("Latchkey's activity log isn't available just now (%s), so these are only the lines since Latchkey started.", why(err))
 		found = log.Recent(category, count)
