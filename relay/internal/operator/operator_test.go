@@ -3,7 +3,10 @@ package operator_test
 import (
 	"bytes"
 	"context"
+	"encoding/json"
+	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -13,13 +16,16 @@ import (
 
 	"github.com/tonimelisma/latchkey/relay/internal/operator"
 	"github.com/tonimelisma/latchkey/relay/internal/store"
+	"github.com/tonimelisma/latchkey/relay/internal/trace"
 )
 
 var t0 = time.Date(2026, 10, 25, 12, 0, 0, 0, time.UTC)
 
 type env struct {
-	t     *testing.T
-	store *store.Store
+	t      *testing.T
+	store  *store.Store
+	traces *trace.Store
+	errOut bytes.Buffer
 }
 
 func setup(t *testing.T) *env {
@@ -27,7 +33,13 @@ func setup(t *testing.T) *env {
 	st, err := store.Open(context.Background(), filepath.Join(t.TempDir(), "relay.db"))
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = st.Close() })
-	return &env{t: t, store: st}
+	key, err := st.DeriveKey(trace.KeyInfo)
+	require.NoError(t, err)
+	ts, err := trace.New(trace.Options{
+		Dir: filepath.Join(t.TempDir(), "traces"), Key: key, FreeSpace: func(string) (uint64, error) { return 100 << 30, nil },
+	})
+	require.NoError(t, err)
+	return &env{t: t, store: st, traces: ts}
 }
 
 // run is one command, as `relay <args>` would run it; it returns what was printed.
@@ -35,7 +47,7 @@ func (e *env) run(args ...string) (string, error) {
 	e.t.Helper()
 	var out bytes.Buffer
 	err := operator.Run(context.Background(), operator.Env{
-		Store: e.store, Out: &out, Actor: "alex", Now: func() time.Time { return t0 },
+		Store: e.store, Traces: e.traces, Out: &out, Err: &e.errOut, Actor: "alex", Now: func() time.Time { return t0 },
 	}, args)
 	return out.String(), err
 }
@@ -109,6 +121,80 @@ func TestAccountDelete(t *testing.T) {
 	require.ErrorIs(t, err, store.ErrNotFound)
 	assert.Equal(t, store.OpDelete, e.lastLog().Action)
 	assert.Equal(t, "alex", e.lastLog().Actor)
+}
+
+// FR-687: the operator's delete removes the account's traces too, and only that account's.
+func TestAccountDeleteRemovesTraces(t *testing.T) {
+	e := setup(t)
+	u := e.user("owner@example.com")
+	other := e.user("zed@example.com")
+	e.traces.Append(u.ID, t0, trace.Event("mac_connected", "app 1.0", ""))
+	e.traces.Append(other.ID, t0, trace.Event("mac_connected", "app 1.0", ""))
+	e.ok("account", "delete", "owner@example.com")
+	n := 0
+	_, err := e.traces.Each(u.ID, "", "", func(trace.Line) error { n++; return nil })
+	require.NoError(t, err)
+	assert.Zero(t, n, "the account's traces are gone")
+	_, err = e.traces.Each(other.ID, "", "", func(trace.Line) error { n++; return nil })
+	require.NoError(t, err)
+	assert.Equal(t, 1, n, "another account's stay")
+}
+
+// FR-685, FR-686: the operator exports an account's trace to standard output, oldest first, one
+// export line each with the account's current address, from and to a day (both included).
+func TestTraceExport(t *testing.T) {
+	e := setup(t)
+	u := e.user("owner@example.com")
+	day := func(d int) time.Time { return time.Date(2026, 11, d, 12, 0, 0, 0, time.UTC) }
+	for _, d := range []int{16, 14, 15} {
+		e.traces.Append(u.ID, day(d), trace.Line{
+			Kind: trace.KindAction, Tool: "shell_run", Arguments: trace.JSONOrString([]byte(`{"command":"date"}`)),
+			Result: json.RawMessage(`[{"type":"text","text":"ok"}]`), Outcome: "ok", CallID: "call_" + strconv.Itoa(d), Machine: "Mac",
+		})
+	}
+	tools := func(out string) []string {
+		var ids []string
+		for _, l := range strings.Split(strings.TrimSuffix(out, "\n"), "\n") {
+			if l == "" {
+				continue
+			}
+			var m map[string]any
+			require.NoError(t, json.Unmarshal([]byte(l), &m), l)
+			assert.Equal(t, "owner@example.com", m["account"])
+			assert.Equal(t, "relay", m["source"])
+			ids = append(ids, m["call_id"].(string))
+		}
+		return ids
+	}
+	out, err := e.run("trace", "export", "Owner@Example.com")
+	require.NoError(t, err)
+	assert.Equal(t, []string{"call_14", "call_15", "call_16"}, tools(out))
+	assert.JSONEq(t, `{"v":1,"source":"relay","machine":"Mac","time":"2026-11-14T12:00:00.000Z","kind":"action",
+		"tool":"shell_run","arguments":{"command":"date"},"result":[{"type":"text","text":"ok"}],"isError":false,
+		"durationMS":0,"call_id":"call_14","client":null,"outcome":"ok","account":"owner@example.com"}`, strings.Split(out, "\n")[0])
+	out, err = e.run("trace", "export", "owner@example.com", "--from", "2026-11-15")
+	require.NoError(t, err)
+	assert.Equal(t, []string{"call_15", "call_16"}, tools(out))
+	out, err = e.run("trace", "export", "owner@example.com", "--to", "2026-11-15", "--from", "2026-11-15")
+	require.NoError(t, err)
+	assert.Equal(t, []string{"call_15"}, tools(out))
+	out, err = e.run("trace", "export", "owner@example.com", "--from=2026-11-16")
+	require.NoError(t, err)
+	assert.Equal(t, []string{"call_16"}, tools(out))
+	assert.Empty(t, e.errOut.String())
+
+	// Lines that can't be read are left out and counted on standard error.
+	require.NoError(t, os.WriteFile(filepath.Join(e.traces.Dir(), u.ID, "2026-11-17.trace"), []byte("cut sh"), 0o600))
+	out, err = e.run("trace", "export", "owner@example.com")
+	require.NoError(t, err)
+	assert.Len(t, tools(out), 3)
+	assert.Contains(t, e.errOut.String(), "1 line couldn't be read and was left out")
+
+	// An account with no trace exports nothing, and that is no error.
+	e.user("zed@example.com")
+	out, err = e.run("trace", "export", "zed@example.com")
+	require.NoError(t, err)
+	assert.Empty(t, out)
 }
 
 func TestBlockUnblockAndList(t *testing.T) {
@@ -219,6 +305,14 @@ func TestFailures(t *testing.T) {
 		"unblock alone":            {"unblock"},
 		"unknown command":          {"acount", "list"},
 		"list with extra words":    {"account", "list", "all"},
+		"trace alone":              {"trace"},
+		"trace export no address":  {"trace", "export"},
+		"trace export no account":  {"trace", "export", "nobody@example.com"},
+		"trace export bad day":     {"trace", "export", "owner@example.com", "--from", "15.11.2026"},
+		"trace export no day":      {"trace", "export", "owner@example.com", "--to"},
+		"trace export odd flag":    {"trace", "export", "owner@example.com", "--since", "2026-11-15"},
+		"trace export two emails":  {"trace", "export", "owner@example.com", "zed@example.com"},
+		"trace unknown":            {"trace", "import", "owner@example.com"},
 		"nothing":                  {},
 	}
 	for name, args := range cases {
@@ -234,4 +328,5 @@ func TestFailures(t *testing.T) {
 	_, err = e.run("acount", "list")
 	require.ErrorIs(t, err, operator.ErrUsage)
 	assert.Contains(t, operator.Usage, "account suspend <email> [reason]")
+	assert.Contains(t, operator.Usage, "trace export <email> [--from YYYY-MM-DD] [--to YYYY-MM-DD]")
 }

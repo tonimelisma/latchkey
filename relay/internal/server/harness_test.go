@@ -16,6 +16,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -26,6 +27,7 @@ import (
 	"github.com/tonimelisma/latchkey/relay/internal/oauth"
 	"github.com/tonimelisma/latchkey/relay/internal/store"
 	"github.com/tonimelisma/latchkey/relay/internal/testagent"
+	"github.com/tonimelisma/latchkey/relay/internal/trace"
 )
 
 // harness is the fully assembled relay on localhost, driven without a browser: Owners are
@@ -38,6 +40,8 @@ type harness struct {
 	db     *store.Store
 	relay  *Relay
 	mail   *account.MemoryMailer
+	traces *trace.Store
+	free   atomic.Uint64 // the free disk space the traces see
 }
 
 func newHarness(t *testing.T, tweak func(*Options)) *harness {
@@ -50,11 +54,18 @@ func newHarness(t *testing.T, tweak func(*Options)) *harness {
 	srv := httptest.NewUnstartedServer(nil)
 	_, port, _ := net.SplitHostPort(srv.Listener.Addr().String())
 	h := &harness{t: t, base: "http://localhost:" + port, dbPath: path, db: db, mail: &account.MemoryMailer{}}
+	h.free.Store(100 << 30)
+	topts, err := TraceOptions(db, filepath.Dir(path))
+	require.NoError(t, err)
+	topts.Logger, topts.CheckEvery = slog.New(slog.DiscardHandler), time.Nanosecond
+	topts.FreeSpace = func(string) (uint64, error) { return h.free.Load(), nil }
+	h.traces, err = trace.New(topts)
+	require.NoError(t, err)
 	public, _ := url.Parse(h.base)
 	// Any client host: the tests register throwaway clients, which the default list refuses (FR-180).
 	o := Options{
 		PublicURL: public, Store: db, Mailer: h.mail, Logger: slog.New(slog.DiscardHandler),
-		AllowedClients: oauth.AnyClientHost(),
+		AllowedClients: oauth.AnyClientHost(), Traces: h.traces,
 	}
 	o.Hub.HeartbeatInterval, o.Hub.OfflineAfter = time.Second, 5*time.Second
 	if tweak != nil {

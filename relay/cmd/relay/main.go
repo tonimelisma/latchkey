@@ -22,6 +22,7 @@ import (
 	"github.com/tonimelisma/latchkey/relay/internal/account"
 	"github.com/tonimelisma/latchkey/relay/internal/server"
 	"github.com/tonimelisma/latchkey/relay/internal/store"
+	"github.com/tonimelisma/latchkey/relay/internal/trace"
 )
 
 // version is set at build time with -ldflags "-X main.version=...".
@@ -66,10 +67,21 @@ func run(ctx context.Context) error {
 		logger.Info("copied the database before updating its layout; to go back to the previous version, stop the relay and put this copy in place of relay.db", "copy", backup)
 	}
 
+	// Every relay keeps each account's full trace beside its database (FR-683).
+	topts, err := server.TraceOptions(db, cfg.DataDir)
+	if err != nil {
+		return err
+	}
+	topts.Logger = logger
+	traces, err := trace.New(topts)
+	if err != nil {
+		return err
+	}
+
 	r, err := server.New(ctx, server.Options{
 		PublicURL: cfg.PublicURL, Store: db, AllowedEmails: cfg.AllowedEmails, Logger: logger, Version: version,
 		TrustedProxies: cfg.TrustedProxies, AllowedClients: cfg.AllowedClientHosts, Operator: cfg.Operator,
-		Mailer: mailer(cfg), SetupCode: cfg.SetupCode,
+		Mailer: mailer(cfg), SetupCode: cfg.SetupCode, Traces: traces,
 	})
 	if err != nil {
 		return err

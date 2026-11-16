@@ -54,9 +54,9 @@ func TestPurgeUnverifiedUsers(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, s.VerifyEmail(ctx, verified.ID, t0))
 
-	n, err := s.PurgeUnverifiedUsers(ctx, t0.Add(time.Hour))
+	ids, err := s.PurgeUnverifiedUsers(ctx, t0.Add(time.Hour))
 	require.NoError(t, err)
-	assert.Equal(t, int64(1), n)
+	assert.Equal(t, []string{stale.ID}, ids, "the purged accounts are named, so their traces go too (FR-687)")
 	_, err = s.User(ctx, stale.ID)
 	require.ErrorIs(t, err, store.ErrNotFound)
 	_, err = s.User(ctx, fresh.ID)

@@ -5,6 +5,8 @@ import (
 	"context"
 	"crypto/aes"
 	"crypto/cipher"
+	"crypto/hkdf"
+	"crypto/sha256"
 	"database/sql"
 	"os"
 	"path/filepath"
@@ -320,4 +322,25 @@ func TestResetKeys(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, got, 1, "the Mac stays paired")
 	assert.Equal(t, d.ID, got[0].ID, "the Mac stays paired")
+}
+
+// FR-683: the trace key is HKDF-SHA256 over the key file's bytes, one key per use, never the
+// key file's bytes themselves.
+func TestDeriveKeyFromTheKeyFile(t *testing.T) {
+	dir := t.TempDir()
+	keyFile := filepath.Join(dir, "relay.key")
+	require.NoError(t, os.WriteFile(keyFile, secret, 0o600))
+	st, err := store.OpenWithKeyFile(context.Background(), filepath.Join(dir, "relay.db"), keyFile)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = st.Close() })
+
+	k, err := st.DeriveKey("latchkey relay traces v1")
+	require.NoError(t, err)
+	want, err := hkdf.Key(sha256.New, secret, nil, "latchkey relay traces v1", 32)
+	require.NoError(t, err)
+	assert.Equal(t, want, k)
+	assert.NotEqual(t, secret, k)
+	other, err := st.DeriveKey("something else")
+	require.NoError(t, err)
+	assert.NotEqual(t, k, other)
 }

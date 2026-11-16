@@ -4,9 +4,12 @@ package server
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"net/url"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -18,6 +21,7 @@ import (
 	"github.com/tonimelisma/latchkey/relay/internal/mcpserver"
 	"github.com/tonimelisma/latchkey/relay/internal/oauth"
 	"github.com/tonimelisma/latchkey/relay/internal/store"
+	"github.com/tonimelisma/latchkey/relay/internal/trace"
 )
 
 // Relay is the assembled server.
@@ -37,6 +41,8 @@ type Relay struct {
 	PurgeClients func(context.Context) error
 	// Events is the relay's event record (FR-631).
 	Events *events.Recorder
+	// Traces is the accounts' trace files (FR-683), or nil.
+	Traces *trace.Store
 	// grantExpired records an approval the purge removed and tells the rest of the relay.
 	grantExpired func(context.Context, store.Grant)
 }
@@ -59,6 +65,57 @@ type Options struct {
 	// AllowedClients is the hosts whose clients may ask for access (FR-180). The zero value is
 	// the default: Claude's apps only.
 	AllowedClients oauth.AllowedHosts
+	// Traces keeps each account's full trace (FR-683): every relay has one (TraceOptions); nil
+	// keeps none, for tests that don't look at traces.
+	Traces *trace.Store
+}
+
+// TraceDirName is the trace folder's name in the relay's data folder.
+const TraceDirName = "traces"
+
+// TraceOptions is how a relay with its database in dataDir keeps its traces: in
+// dataDir/traces, sealed with a key derived from the key file (FR-683), and only for accounts
+// that exist. The server and the operator's commands open them the same way.
+func TraceOptions(st *store.Store, dataDir string) (trace.Options, error) {
+	key, err := st.DeriveKey(trace.KeyInfo)
+	if err != nil {
+		return trace.Options{}, err
+	}
+	return trace.Options{
+		Dir: filepath.Join(dataDir, TraceDirName), Key: key,
+		AccountExists: func(id string) bool {
+			_, err := st.User(context.Background(), id)
+			return !errors.Is(err, store.ErrNotFound) // a failing database read keeps the line
+		},
+	}, nil
+}
+
+// traceEvents sends the account's events to its trace, and reports the low-disk pause as
+// operator events (FR-683, FR-684).
+func traceEvents(st *store.Store, rec *events.Recorder, ts *trace.Store) {
+	if ts == nil {
+		return
+	}
+	rec.TraceTo(func(e store.Event) {
+		if e.UserID == "" {
+			return // an operator event: no account's trace
+		}
+		machine := ""
+		if e.DeviceID != "" {
+			if d, err := st.Device(context.Background(), e.DeviceID); err == nil {
+				machine = d.Name
+			}
+		}
+		ts.Append(e.UserID, e.At, trace.Event(e.Kind, e.Detail, machine))
+	})
+	ts.OnPauseChange(func(paused bool, free uint64) {
+		gib := float64(free) / (1 << 30)
+		e := store.Event{Kind: events.TracesResumed, Detail: fmt.Sprintf("%.1f GiB free; traces are written again", gib)}
+		if paused {
+			e = store.Event{Kind: events.TracesPaused, Detail: fmt.Sprintf("%.1f GiB free, less than 2 GiB; no traces are written until there is more, and none are deleted", gib)}
+		}
+		rec.Record(context.Background(), e)
+	})
 }
 
 // New builds the relay: hub, MCP server, OAuth, and account pages on one mux.
@@ -68,6 +125,7 @@ func New(ctx context.Context, o Options) (*Relay, error) {
 		acc *account.Service
 	)
 	rec := events.New(o.Store, o.Logger, nil)
+	traceEvents(o.Store, rec, o.Traces)
 	hc := o.Hub
 	hc.Logger = o.Logger
 	hc.Events = rec
@@ -87,7 +145,7 @@ func New(ctx context.Context, o Options) (*Relay, error) {
 		return removed
 	}
 	h := hub.New(o.Store, hc)
-	ms = mcpserver.New(o.Store, h, mcpserver.Options{Logger: o.Logger, Version: o.Version})
+	ms = mcpserver.New(o.Store, h, mcpserver.Options{Logger: o.Logger, Version: o.Version, Traces: o.Traces})
 
 	auth := &authBridge{}
 	oc := oauth.Config{
@@ -109,7 +167,7 @@ func New(ctx context.Context, o Options) (*Relay, error) {
 	}
 	acc, err = account.New(ctx, account.Config{
 		PublicURL: o.PublicURL, Store: o.Store, Macs: h, Mailer: o.Mailer, SetupCode: o.SetupCode, OAuth: oa,
-		AllowedEmails: o.AllowedEmails, Logger: o.Logger, Operator: o.Operator, Events: rec,
+		AllowedEmails: o.AllowedEmails, Logger: o.Logger, Operator: o.Operator, Events: rec, Traces: o.Traces,
 		DevicesChanged: func(userID string) { ms.ToolsChanged(userID) },
 		AccessRemoved:  func(userID string) { ms.Forget(userID) },
 	})
@@ -125,7 +183,7 @@ func New(ctx context.Context, o Options) (*Relay, error) {
 	oa.Register(mux)
 	acc.Register(mux)
 	r := &Relay{
-		Handler: guard(o.PublicURL, o.TrustedProxies, rec, mux), Hub: h, Store: o.Store, Events: rec,
+		Handler: guard(o.PublicURL, o.TrustedProxies, rec, mux), Hub: h, Store: o.Store, Events: rec, Traces: o.Traces,
 		grantExpired: oa.GrantExpired,
 	}
 	r.PurgeClients = func(ctx context.Context) error {
@@ -206,8 +264,14 @@ func (r *Relay) Daily(ctx context.Context, now time.Time, logger *slog.Logger) {
 	for _, g := range ended {
 		r.grantExpired(ctx, g)
 	}
-	if _, err := db.PurgeUnverifiedUsers(ctx, now.Add(-24*time.Hour)); err != nil {
+	gone, err := db.PurgeUnverifiedUsers(ctx, now.Add(-24*time.Hour))
+	if err != nil {
 		logger.Error("purge unverified sign-ups", "err", err)
+	}
+	for _, id := range gone { // their traces go with them (FR-687)
+		if err := r.Traces.Delete(id); err != nil {
+			logger.Error("remove the traces of an unfinished sign-up", "user", id, "err", err)
+		}
 	}
 	for _, job := range []func(context.Context) error{r.PurgeClients, r.Housekeeping} {
 		if err := job(ctx); err != nil {

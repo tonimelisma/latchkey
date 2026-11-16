@@ -38,6 +38,7 @@ type Store struct {
 	db *sql.DB
 	// The relay's own keys are sealed with aead, made from the key file (sealed.go).
 	aead           cipher.AEAD
+	fileKey        []byte // the key file's bytes, for DeriveKey only
 	keyFile        string
 	keyFileCreated bool
 	// backup is the copy made before this open's migrations, if any (spec 009 plan D4).

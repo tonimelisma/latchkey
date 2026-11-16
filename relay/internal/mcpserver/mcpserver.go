@@ -24,6 +24,7 @@ import (
 	"github.com/tonimelisma/latchkey/relay/agentproto"
 	"github.com/tonimelisma/latchkey/relay/internal/hub"
 	"github.com/tonimelisma/latchkey/relay/internal/store"
+	"github.com/tonimelisma/latchkey/relay/internal/trace"
 )
 
 // Options configures the server.
@@ -34,6 +35,8 @@ type Options struct {
 	// SessionTimeout closes a 2025-11-25 session that received no request for this long.
 	// Default DefaultSessionTimeout.
 	SessionTimeout time.Duration
+	// Traces receives each call's full trace (FR-683); nil traces nothing.
+	Traces *trace.Store
 }
 
 // DefaultSessionTimeout is how long an unused session lives (FR-090).
@@ -385,12 +388,15 @@ func errorResult(text string) *mcp.CallToolResult {
 
 // listMachines answers the relay's machines tool (spec 010 FR-1006).
 func (s *Server) listMachines(userID string) mcp.ToolHandler {
-	return func(ctx context.Context, _ *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	return func(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		start := s.opts.Now()
 		ms := s.machines(ctx, userID)
-		if len(ms) == 0 {
-			return errorResult(neverPairedText), nil
+		result, outcome := errorResult(neverPairedText), store.OutcomeError
+		if len(ms) > 0 {
+			result, outcome = machinesResult(ms, s.opts.Now()), store.OutcomeOK
 		}
-		return machinesResult(ms, s.opts.Now()), nil
+		s.trace(userID, start, agentproto.NewCallID(), surface(req), agentproto.RelayToolMachines, "", req, result, outcome)
+		return result, nil
 	}
 }
 
@@ -405,13 +411,17 @@ func (s *Server) forward(userID, toolName string) mcp.ToolHandler {
 		ms := s.machines(ctx, userID)
 		if len(ms) == 0 {
 			s.audit(ctx, userID, "", callID, client, toolName, store.OutcomeOffline, start)
-			return errorResult(neverPairedText), nil
+			result := errorResult(neverPairedText)
+			s.trace(userID, start, callID, client, toolName, "", req, result, store.OutcomeOffline)
+			return result, nil
 		}
 		named, args := takeMachine(req.Params.Arguments)
 		m, refusal := choose(ms, toolName, named, start)
 		if refusal != "" {
 			s.audit(ctx, userID, "", callID, client, toolName, store.OutcomeError, start)
-			return errorResult(refusal), nil
+			result := errorResult(refusal)
+			s.trace(userID, start, callID, client, toolName, "", req, result, store.OutcomeError)
+			return result, nil
 		}
 		d := m.Device
 		deadline := agentproto.ToolDeadline(m.tool(toolName))
@@ -459,6 +469,7 @@ func (s *Server) forward(userID, toolName string) mcp.ToolHandler {
 			appendStatusLine(result, line)
 		}
 		s.audit(ctx, userID, d.ID, callID, client, toolName, outcome, start)
+		s.trace(userID, start, callID, client, toolName, d.Name, req, result, outcome)
 		return result, nil
 	}
 }
@@ -535,4 +546,27 @@ func (s *Server) audit(ctx context.Context, userID, deviceID, callID, surface, t
 	if err != nil {
 		s.opts.Logger.Error("audit", "user", userID, "call", callID, "err", err)
 	}
+}
+
+// trace writes the call to the account's trace (FR-683): the arguments exactly as Claude sent
+// them (the machine argument included), and the content Claude gets, as it gets it. Writing
+// never fails the call; machine is "" when the call reached none.
+func (s *Server) trace(userID string, start time.Time, callID, client, tool, machine string, req *mcp.CallToolRequest, result *mcp.CallToolResult, outcome string) {
+	if s.opts.Traces == nil {
+		return
+	}
+	var args json.RawMessage
+	if req != nil && req.Params != nil {
+		args = req.Params.Arguments
+	}
+	content, err := trace.Marshal(result.Content)
+	if err != nil {
+		s.opts.Logger.Error("trace: the result couldn't be written as JSON", "user", userID, "call", callID, "err", err)
+		content = trace.String("(the result couldn't be written as JSON)")
+	}
+	s.opts.Traces.Append(userID, start, trace.Line{
+		Machine: machine, Kind: trace.KindAction, Tool: tool, Arguments: trace.JSONOrString(args),
+		Result: content, IsError: result.IsError, DurationMS: s.opts.Now().Sub(start).Milliseconds(),
+		CallID: callID, Client: client, Outcome: outcome,
+	})
 }

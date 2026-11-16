@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"os/user"
 	"path/filepath"
@@ -13,7 +14,9 @@ import (
 	"time"
 
 	"github.com/tonimelisma/latchkey/relay/internal/operator"
+	"github.com/tonimelisma/latchkey/relay/internal/server"
 	"github.com/tonimelisma/latchkey/relay/internal/store"
+	"github.com/tonimelisma/latchkey/relay/internal/trace"
 )
 
 // operatorCommand runs one of the operator's commands (FR-195) against the relay's database,
@@ -34,7 +37,12 @@ func operatorCommand(args []string, getenv func(string) string, stdout, stderr i
 		return 1
 	}
 	defer func() { _ = db.Close() }()
-	err = operator.Run(ctx, operator.Env{Store: db, Out: stdout, Actor: operatorActor(getenv)}, args)
+	traces, err := openTraces(db, getenv("DATA_DIR"))
+	if err != nil {
+		_, _ = fmt.Fprintln(stderr, "relay:", err)
+		return 1
+	}
+	err = operator.Run(ctx, operator.Env{Store: db, Traces: traces, Out: stdout, Err: stderr, Actor: operatorActor(getenv)}, args)
 	switch {
 	case errors.Is(err, operator.ErrUsage):
 		_, _ = fmt.Fprint(stderr, operator.Usage)
@@ -47,7 +55,18 @@ func operatorCommand(args []string, getenv func(string) string, stdout, stderr i
 }
 
 func isCommand(args []string) bool {
-	return len(args) > 0 && (args[0] == "account" || args[0] == "block" || args[0] == "unblock")
+	return len(args) > 0 && (args[0] == "account" || args[0] == "block" || args[0] == "unblock" || args[0] == "trace")
+}
+
+// openTraces opens the accounts' trace files the way the running relay does (FR-683), for the
+// commands that export or delete them.
+func openTraces(db *store.Store, dataDir string) (*trace.Store, error) {
+	opts, err := server.TraceOptions(db, dataDir)
+	if err != nil {
+		return nil, err
+	}
+	opts.Logger = slog.New(slog.NewTextHandler(os.Stderr, nil))
+	return trace.New(opts)
 }
 
 // openStore opens the relay's database for a command run beside the server: the one place that

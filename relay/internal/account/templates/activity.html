@@ -1,7 +1,7 @@
 {{template "head" .}}
 <p class="back"><a href="/account">‹ Your account</a></p>
 <h1>Activity</h1>
-<p class="lead">Every tool call Claude made through this relay, and every change to your account, newest first. Arguments and results are never stored here; each machine keeps its own full log.</p>
+<p class="lead">Every tool call Claude made through this relay, and every change to your account, newest first.{{if .Data.Traces}} The relay also keeps what each call sent and got back, in full: <a href="/account/trace" download>Download full activity</a>.{{end}} Each machine keeps its own full log too.</p>
 <div class="panel">
 {{if .Data.Entries}}{{template "entries" .Data.Entries}}{{else}}<p class="empty">{{if .Data.Newest}}Nothing yet.{{else}}No older activity.{{end}}</p>{{end}}
 </div>

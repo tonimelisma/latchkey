@@ -54,6 +54,7 @@ type accountView struct {
 	AddNext     addClaudeView // the next step at the top, while !HasClaude (FR-660)
 	AddHere     addClaudeView // in the Claude section, always (FR-655, FR-659)
 	InstallLine string        // a Linux server's install command for this relay (FR-654)
+	Traces      bool          // the relay keeps full traces: the page offers the download (FR-685)
 }
 
 // installScript is where a Linux server's install command downloads the installer.
@@ -72,6 +73,7 @@ func (s *Service) accountPage(w http.ResponseWriter, r *http.Request) {
 		InstallLine: "curl -fsSL " + installScript + " | sh -s -- " + origin,
 		AddNext:     addClaudeView{AddLink: addToClaudeLink(connector), Connector: connector, Suffix: "-next"},
 		AddHere:     addClaudeView{AddLink: addToClaudeLink(connector), Connector: connector},
+		Traces:      s.cfg.Traces != nil,
 	}
 	newID := ""
 	if r.URL.Query().Get("done") == "linked" {
@@ -251,6 +253,11 @@ func (s *Service) deleteAccount(w http.ResponseWriter, r *http.Request) {
 	if err := s.cfg.Store.DeleteUser(ctx, sess.UserID); err != nil {
 		s.errorPage(w, http.StatusInternalServerError, "Something went wrong", "Try again.")
 		return
+	}
+	// The account's traces go with it (FR-687). A call that ends after this writes nothing: the
+	// trace store makes no folder for an account that is gone.
+	if err := s.cfg.Traces.Delete(sess.UserID); err != nil {
+		s.cfg.Logger.Error("the deleted account's traces couldn't be removed; remove its folder in traces/ by hand", "user", sess.UserID, "err", err)
 	}
 	// The account's record went with it (FR-630); the relay's output keeps the line.
 	s.cfg.Events.Log(store.Event{Kind: events.AccountDeleted, UserID: sess.UserID, Detail: "by its Owner, with everything the relay held about it"})

@@ -1,7 +1,8 @@
 #!/bin/sh
 # Turns on a nightly copy (snapshot) of the hosted relay's server disk in Google Cloud, kept for
-# 14 days (Toni, 2026-10-25). The disk holds the relay's one database: accounts, passkeys, and
-# pairings. Reads the VM, project and zone from the repository's .env, like deploy/deploy.sh.
+# 14 days (Toni, 2026-10-25). The disk holds the relay's database (accounts, passkeys, and
+# pairings) and, since 2026-11-15, each account's trace files. Reads the VM, project and zone
+# from the repository's .env, like deploy/deploy.sh.
 # Safe to rerun: it creates the schedule and attaches it only when missing.
 # To restore: create a disk from a snapshot in the Google Cloud console and start the VM from it.
 set -eu

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/tonimelisma/latchkey/relay/internal/events"
+	"github.com/tonimelisma/latchkey/relay/internal/trace"
 )
 
 const (
@@ -107,6 +108,7 @@ type activityView struct {
 	Entries []entry
 	Older   string // the next page's address, "" on the last
 	Newest  bool   // the first page
+	Traces  bool   // the relay keeps full traces: the page offers the download (FR-685)
 }
 
 // activityPage is GET /account/activity: every tool call and account event, newest first, a page
@@ -125,11 +127,38 @@ func (s *Service) activityPage(w http.ResponseWriter, r *http.Request) {
 		s.errorPage(w, http.StatusInternalServerError, "Activity isn't available right now", "Try again in a moment.")
 		return
 	}
-	v := activityView{Entries: list, Newest: before.IsZero()}
+	v := activityView{Entries: list, Newest: before.IsZero(), Traces: s.cfg.Traces != nil}
 	if more {
 		v.Older = "/account/activity?before=" + strconv.FormatInt(list[len(list)-1].At.UnixMilli(), 10)
 	}
 	s.render(w, http.StatusOK, "activity.html", page{Title: "Activity", Email: u.Email, CSRF: s.csrfFor(tok), Data: v, Wide: true})
+}
+
+// traceDownload is GET /account/trace: the signed-in account's whole trace, every tool call in
+// full and every event, oldest first, one export line each (FR-685, FR-686).
+func (s *Service) traceDownload(w http.ResponseWriter, r *http.Request) {
+	u, _, ok := s.requireUser(w, r)
+	if !ok {
+		return
+	}
+	if s.cfg.Traces == nil {
+		s.errorPage(w, http.StatusNotFound, "Full activity isn't kept", "This relay doesn't keep the full content of tool calls.")
+		return
+	}
+	name := "latchkey-trace-" + s.now().UTC().Format(trace.DayFormat) + ".jsonl"
+	h := w.Header()
+	h.Set("Content-Type", "application/x-ndjson; charset=utf-8")
+	h.Set("Content-Disposition", `attachment; filename="`+name+`"`)
+	h.Set("Cache-Control", "no-store")
+	h.Set("X-Content-Type-Options", "nosniff")
+	h.Set("Referrer-Policy", "no-referrer")
+	skipped, err := s.cfg.Traces.Export(u.ID, u.Email, "", "", w)
+	if err != nil { // the answer has begun: the download ends short, and the log says why
+		s.cfg.Logger.Error("trace download", "user", u.ID, "err", err)
+	}
+	if skipped > 0 {
+		s.cfg.Logger.Warn("trace download left out lines that couldn't be read", "user", u.ID, "lines", skipped)
+	}
 }
 
 // ownerDetail is an event's detail without the words its title already says: "signed in" adds
