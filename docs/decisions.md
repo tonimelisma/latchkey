@@ -14,7 +14,7 @@ Add a row when a decision is made; never delete one, mark it "superseded by" ins
 | 2026-10-19 | Relay remembers online/last seen, battery, power, thermal, keep-awake; no request queueing | FR-020, FR-025 |
 | 2026-10-19 | Relay audit log: metadata only, 30 days | FR-022, FR-024 |
 | 2026-10-19 | Mac keeps full local trace with arguments and results, 90 days | FR-026 |
-| 2026-10-19 | Encrypted in transit is enough; relay never stores tool results | FR-023, Constitution VI |
+| 2026-10-19 | Encrypted in transit is enough; relay never stores tool results (replaced 2026-11-15: the relay keeps full traces in its trace files, never in its database) | FR-023, Constitution VI |
 | 2026-10-19 | Claude auth: OAuth 2.1 with fosite plus our own CIMD and DCR client lookup | plan D4, FR-040 |
 | 2026-10-19 | Owner login: passkeys only; recovery by single-use email link over SMTP | plan D5, FR-041, FR-042 |
 | 2026-10-19 | Pairing via browser sign-in; Secure Enclave device key | plan D6, FR-050 |

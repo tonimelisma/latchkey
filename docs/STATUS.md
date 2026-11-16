@@ -1,12 +1,28 @@
 # Status
 
-Last updated: 2026-11-15 (Claude's pages always in Latchkey's own browser, by name, with dialogs Claude answers; the locked browser takes Safari's cookies again with every page; public download on GitHub with a new-version notice; never disturb the user: Mail, WhatsApp sending, Notes' window editing, Messages' window actions, Reminders' window setters removed; test sweep on exit; releases are tags on commits; cloud-only files read again; machine list shows Latchkey versions; WhatsApp built; Add to Claude button; plugin withdrawn; README rewritten as a short product page; relay web pages redone; purkki paired; spec 010 shipped)
+Last updated: 2026-11-15 (full traces everywhere, in daily files, for evals; Claude's pages always in Latchkey's own browser, by name, with dialogs Claude answers; the locked browser takes Safari's cookies again with every page; public download on GitHub with a new-version notice; never disturb the user: Mail, WhatsApp sending, Notes' window editing, Messages' window actions, Reminders' window setters removed; test sweep on exit; releases are tags on commits; cloud-only files read again; machine list shows Latchkey versions; WhatsApp built; Add to Claude button; plugin withdrawn; README rewritten as a short product page; relay web pages redone; purkki paired; spec 010 shipped)
 
 Xcode signing ready (2026-10-20): Toni's Xcode account has a valid "Apple Development" certificate
 (certificate expires 2027-07-22). Keep the team ID out of committed project files
 (open source); put it in a gitignored `macos/Local.xcconfig` as `DEVELOPMENT_TEAM`.
 
 ## Current phase
+
+Full traces everywhere, for evals (Toni, 2026-11-15: "I want to be able to do evals on everything
+that happened anywhere"; spec 001 FR-680 to FR-689, spec 010 FR-1057 to FR-1059,
+`specs/001-core/contracts/trace-files.md`, constitution VI amended). The Mac, each Linux server,
+and every relay now keep every call's arguments and whole result (screenshots included) and their
+events in files of one day each, only ever appended to: no age limit, and no update or migration
+rewrites them. The Mac's log moved out of its database into the files (encrypted as before, the
+tamper chain unchanged); the first start copies the database in unchanged and leaves it on disk
+as it was (measured on a copy of Toni's log: 22,569 entries, 190 MB, 2.2 s). A Linux server's
+files are plain, readable only by the Owner, nothing cut any more; the old `activity.jsonl` is
+still read. The relay's are encrypted with a key from its key file, in a folder per account,
+removed with the account; below 2 GiB free it stops writing them and never deletes old ones.
+One export line everywhere, joined by call id: Export… in the Activity window, `latchkey
+activity export` on a server, `relay trace export <email>` for the operator, and Download full
+activity on the account page. Found on the way: the Linux end-to-end check had been failing on
+main since the machine list began naming Latchkey's version; fixed.
 
 Dead code removed (Toni, 2026-11-15: "remove all dead code"): Safari's tab and window of Claude's
 own (its memory file, the Settings value, idle closing, the scripts only it used), a Mail script

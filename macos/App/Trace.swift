@@ -471,7 +471,9 @@ struct TraceFiles: Sendable {
 
     /// The sealed content of a row from a day's mapped content.
     static func sealed(_ row: TraceRow, in content: Data?) -> Data? {
-        guard let content, row.off + row.len <= content.count else { return nil }
+        // Checked without adding: a changed line could hold numbers that overflow.
+        guard let content, row.off >= 0, row.len >= 0, row.off <= content.count, row.len <= content.count - row.off
+        else { return nil }
         return content.subdata(in: (content.startIndex + row.off)..<(content.startIndex + row.off + row.len))
     }
 

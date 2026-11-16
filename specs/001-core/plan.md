@@ -1243,8 +1243,14 @@ research.md "Trace files".
   a copy of its files, never through SwiftData, which may change a store just by opening it) into
   `activity.copying/`, reads them back, and renames the folder; `activity.store` stays on disk as
   it was. The copy is recorded as an app event. SwiftData is no longer used by the app.
-- Relay (FR-683 to FR-685, FR-687, FR-688): a trace writer called from the MCP server's tool
-  handlers (every outcome, the `machines` tool too) and from the event recorder; each line sealed
+- Relay (FR-683 to FR-685, FR-687, FR-688): package `internal/trace`, written by `mcpserver`
+  for every call (every outcome of `forward`, and the `machines` tool) and by
+  `events.Recorder.TraceTo` for an account's events (counted events only as often as they are
+  logged, so no one can grow a trace without limit); opened through `server.TraceOptions` by the
+  server and the operator commands alike, so both use one key (`Store.DeriveKey`, HKDF over the
+  key file's bytes, which never leave the store); removed in Delete account, the operator's
+  `account delete`, and the daily purge of unfinished sign-ups; a folder is made only for an
+  account that still exists, so a call ending after a deletion doesn't bring it back; each line sealed
   with AES-256-GCM under a key derived from the key file (HKDF, its own info string), bound to the
   account and day. Below 2 GiB free it writes nothing and records `traces_paused` and
   `traces_resumed`. Delete account removes the account's folder. `relay trace export` and

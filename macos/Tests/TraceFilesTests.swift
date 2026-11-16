@@ -242,6 +242,45 @@ enum LogBeforeFiles {
         #expect(try trace.page(limit: 10).entries.map(\.seq) == [3, 1, 2], "newest first by time")
     }
 
+    /// FR-681: the code that keeps the daily files only appends; no other part of the app names
+    /// their folder (uninstalling removes the whole data folder, FR-077).
+    @Test func noCodeRewritesOrDeletesTraceFiles() throws {
+        let app = URL(fileURLWithPath: #filePath).deletingLastPathComponent().appendingPathComponent("../App")
+            .standardizedFileURL
+        let trace = try String(contentsOf: app.appendingPathComponent("Trace.swift"), encoding: .utf8)
+        let start = try #require(trace.range(of: "struct TraceFiles: Sendable {"))
+        let end = try #require(trace.range(of: "struct ActivityReader: Sendable {"))
+        let body = trace[start.upperBound..<end.lowerBound]
+        for call in [
+            "removeItem", "truncate", "moveItem", "replaceItem", "write(to:", "atomically",
+            "createFile(atPath: url.path, contents: Data",
+        ] {
+            #expect(!body.contains(call), "TraceFiles must only append: \(call)")
+        }
+        let files = try FileManager.default.subpathsOfDirectory(atPath: app.path).filter {
+            $0.hasSuffix(".swift") && $0 != "Trace.swift"
+        }
+        for file in files {
+            let text = try String(contentsOf: app.appendingPathComponent(file), encoding: .utf8)
+            #expect(!text.contains("folderName") && !text.contains("TraceFiles("), "\(file) touches the trace files")
+        }
+    }
+
+    /// A changed line whose place in the content file overflows when added up is an entry that
+    /// can't be opened, not a crash (security review, 2026-11-15).
+    @Test func aPlaceThatOverflowsIsNotOpened() {
+        let row = TraceRow(
+            id: UUID(), at: Date(), seq: 1, keyID: "", kind: "action", callID: "", device: "", day: "2026-11-15",
+            off: Int.max, len: Int.max)
+        #expect(TraceFiles.sealed(row, in: Data([1, 2, 3])) == nil)
+        var tail = row
+        tail.off = 2
+        tail.len = 5
+        #expect(TraceFiles.sealed(tail, in: Data([1, 2, 3])) == nil)
+        tail.len = 1
+        #expect(TraceFiles.sealed(tail, in: Data([1, 2, 3])) == Data([3]))
+    }
+
     /// FR-680: a result as large as a screenshot is kept whole.
     @MainActor @Test func keepsLargeResultsWhole() throws {
         let trace = try TraceStore(inMemory: true, keys: MemoryTraceKey())

@@ -924,4 +924,15 @@ Choices made here (low-level, contracts/trace-files.md):
   authenticated data stop lines being moved between accounts or days.
 - **Linux: plain.** A key on the same account would protect nothing from the commands Claude runs
   there (Toni's choice).
+- **Relay: the trace key derived, not the key file itself, and not a second file.** Deriving keeps
+  the two uses of one secret apart; a second key file would be one more thing to back up and to
+  lose. After `relay reset-keys` (a new key file) earlier trace lines can't be read: they are
+  skipped and counted, never deleted.
+- **Relay: the machine on a failed call.** Kept when the call was sent to a machine (offline,
+  timeout, disconnected; `outcome` says it didn't arrive), `null` when the relay refused it or had
+  no machine.
+- **Relay: export order.** Two passes over each day (the times, then the lines in order), so a day
+  full of screenshots is never held in memory. Measured cost of writing: about 15 ms for a 4 MB
+  result, `fsync` included.
+
 
