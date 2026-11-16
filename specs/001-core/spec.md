@@ -140,12 +140,14 @@ Format: EARS ("When <trigger>, the <system> shall <response>"). IDs are stable; 
   image, several parts, an error), without a blank line added where the text already ends with
   a line break, and without any change to the result itself.
 - **FR-022** The relay shall record an audit entry for every tool call: time, tool name, Claude
-  surface if known, outcome (ok, error, timeout, offline), and duration. It shall not record tool
-  arguments.
+  surface if known, outcome (ok, error, timeout, offline), and duration. The audit itself holds
+  no tool arguments; since 2026-11-15 the arguments and results are in the relay's trace files
+  (FR-683).
 - **FR-022a** The relay shall store a Claude surface's name only after removing control and
   formatting characters from it and cutting it to 64 characters, since the client chooses it
   (2026-10-25, security review).
-- **FR-023** The relay shall not store tool results.
+- **FR-023** *Amended 2026-11-15 (Toni):* the relay shall store tool arguments and results only
+  in its trace files (FR-683), never in its database. Was: the relay shall not store tool results.
 - **FR-024** *Amended 2026-10-27 (Toni):* the relay shall keep audit entries until the account
   is deleted; nothing is deleted by age (FR-630). Was: deleted after 30 days.
 - **FR-025** The relay shall not queue tool calls for later delivery.
@@ -153,7 +155,7 @@ Format: EARS ("When <trigger>, the <system> shall <response>"). IDs are stable; 
   arguments, results, and errors, viewable in the app, stored only on the Mac.
   The app shall keep every entry, images in results included, until the app is uninstalled;
   nothing is deleted by age (Toni, 2026-10-26; until then entries older than 90 days were
-  deleted).
+  deleted). Since 2026-11-15 the trace is kept in daily files (FR-680, FR-682).
 - **FR-026a** The Mac app shall store the trace encrypted, with a key only the app can read, so
   other programs on the Mac can't read it (Toni, 2026-10-24, security scan).
 - **FR-201** The Mac app shall make a new key for the trace only when no key exists at all. If a
@@ -198,6 +200,8 @@ Format: EARS ("When <trigger>, the <system> shall <response>"). IDs are stable; 
   UTC offset, tool, arguments, result, whether it failed, duration in milliseconds; since
   2026-10-27 also whether it is an action or an event, the call id, and the Claude app, FR-633,
   FR-637), to a place the Owner chooses in the standard save dialog. Entries that can't be read are left out.
+  Since 2026-11-15 each line is the export line every side writes (FR-686), which adds the format
+  version, the source, and the machine's name in front.
 - **FR-616** When the Owner opens the Activity window, the window shall appear at once and fill
   in as the log is read: no work over the whole log (the tamper check, counting unreadable
   entries, searching) shall run on the app's main thread or hold up the window, the menu, or
@@ -349,6 +353,48 @@ days; nothing checked that the two sides agree.
 - **FR-637** The relay shall send with each call the name of the Claude app that made it (as it
   records it in its audit), and the Mac's activity log shall store and show it for that call
   (Toni, 2026-10-27: the audit found no way to tell on the Mac which app did what).
+
+### Full traces in daily files (Toni, 2026-11-15)
+
+Why: Toni wants to run evals over everything that happened anywhere ("for telemetry, can we please
+extend so full traces are available everywhere? and can we also ensure they're never wiped e.g.
+by migrations? maybe a log file would be safest, separate ones for every day"). Until now the
+relay kept no arguments or results, a Linux server cut them to 4,000 and 2,000 characters, and
+the Mac's trace lived in one database a migration could rewrite. Formats: `contracts/trace-files.md`.
+
+- **FR-680** The Mac app, each Linux server, and the relay shall each keep a full trace of every
+  tool call they handle (the arguments as they came, the whole result as Claude got it, images
+  included, whether it failed, the duration, the call id, the Claude app, and the machine) and of
+  their events, in files of one day each (UTC), named by the day.
+- **FR-681** A trace file shall only ever be appended to. No version, upgrade, or migration shall
+  rewrite, truncate, rename, or delete one; there is no age limit. The only removals are
+  uninstalling (Mac, Linux server) and Delete account on the relay (FR-687). A new format shall
+  add lines of a new version and keep reading every version written before; a line that can't
+  be read shall be skipped and counted, never cause a change to the file.
+- **FR-682** On the Mac the daily files shall be the activity log (FR-026, FR-610 to FR-616,
+  FR-633, FR-634): the Activity window, the menu, the export, the tamper check, and the
+  comparison with the relay read them. The first start of this version shall copy every entry of
+  the earlier database into the files unchanged (still encrypted, the chain still checking), all
+  or nothing, and leave the database's files on disk untouched.
+- **FR-683** The relay shall keep each account's full trace (FR-680), its own `machines` tool and
+  calls that never reached a machine included, together with the account's events (FR-631), in a
+  folder of the account's own, encrypted with a key derived from its key file (FR-186). This holds
+  on every relay, hosted or self-hosted (Toni, 2026-11-15).
+- **FR-684** While the disk holding the relay's traces has less than 2 GiB free, the relay shall
+  write no new trace lines and keep working otherwise; it shall record an event when it stops
+  and when it starts again with 2 GiB or more free. It shall never delete traces to make room
+  (Toni, 2026-11-15: "a few screenshots might delete days of traces").
+- **FR-685** The relay's operator shall be able to export an account's trace with a command
+  (`relay trace export <email>`, optionally from and to a day), and a signed-in account shall be
+  able to download its own whole trace from its account page.
+- **FR-686** Every export (the Mac's Export…, a Linux server's `latchkey activity export`, the
+  relay's two) shall write the same line format, so traces from every side can be put together
+  and a call's relay line joined to its machine line by the call id.
+- **FR-687** Delete account, by the Owner or by the operator, shall remove the account's traces
+  from the relay.
+- **FR-688** The relay's privacy page shall say that the relay keeps the full content of tool
+  calls, encrypted, until the account is deleted, and that the account can download it.
+- **FR-689** The Activity window's disk use (FR-610) shall count the daily files.
 
 ### No call missing because the app stopped (bug report follow-up, 2026-11-03)
 Why: every install after 2026-11-03 failed its audit check on one `mail_find` that was running

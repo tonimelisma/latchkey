@@ -153,8 +153,21 @@ and pairing a second Mac replaces the first (spec 001 FR-053).
 - **FR-1050** Every command and file change on a server shall be recorded in an activity log on
   the server, readable by the Owner with a command, and in the relay's audit trail; there are no
   notifications (Toni, 2026-10-31). The server's log shall be compared with the relay's as the
-  Mac's is (spec 001 FR-630 to FR-637).
+  Mac's is (spec 001 FR-630 to FR-637). Since 2026-11-15 the log is in daily files with
+  arguments and results in full (FR-1057).
 - **FR-1051** The activity log shall be readable only by the Owner's account.
+
+### Linux server: full traces in daily files (Toni, 2026-11-15; spec 001 FR-680 to FR-686)
+
+- **FR-1057** The server's activity log shall be kept in files of one day each (UTC), only ever
+  appended to, with every call's arguments and result in full (images included; until 2026-11-15
+  they were cut to 4,000 and 2,000 characters), readable only by the Owner's account and not
+  encrypted (Toni, 2026-11-15: a key on the same account would protect nothing from commands
+  Claude runs there). Formats: spec 001 `contracts/trace-files.md`.
+- **FR-1058** The single log file of earlier versions shall be left as it is, never written again,
+  and still read by `latchkey activity`, the comparison with the relay, and `latchkey_log`.
+- **FR-1059** `latchkey activity export`, optionally from and to a day, shall write the server's
+  whole trace in the export line every side writes (spec 001 FR-686).
 
 ### Linux server: Latchkey's log for Claude (Toni, 2026-11-03: "fix everything, properly")
 

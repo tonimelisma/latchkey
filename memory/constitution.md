@@ -51,8 +51,11 @@ The relay is one Go binary plus one SQLite file, shipped as a Docker image. The 
 exactly the same code. No feature may depend on a specific cloud vendor.
 
 ## VI. Store the minimum
-The relay stores what it needs to authenticate, route, and report status. It does not store tool
-results. Anything it does store is listed in `data-model.md`. Secrets are hashed or encrypted at rest.
+The relay stores what it needs to authenticate, route, and report status, and (amended by Toni
+2026-11-15, for evals over everything that happened) the full trace of each account's tool calls,
+encrypted, in that account's trace files until the account is deleted (spec 001 FR-683). Tool
+arguments and results never go into its database. Anything it does store is listed in
+`data-model.md`. Secrets are hashed or encrypted at rest.
 
 ## VII. Test-first on the contracts
 The agent protocol, the MCP surface, and the OAuth flows are specified as contracts. Contract tests
