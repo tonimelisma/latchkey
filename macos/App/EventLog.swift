@@ -26,6 +26,10 @@ enum EventCategory: String, CaseIterable, Sendable {
     case activity
     /// The comparison with the relay's audit (FR-634).
     case audit
+    /// What Claude's pages in Latchkey's own browser did with sign-ins: each copy of Safari's
+    /// cookies and each sign-in cookie a site changed, by name, never a value (spec 005 FR-453,
+    /// FR-454).
+    case browser
     /// What Claude's work left on the Mac (FR-640 to FR-643). Names files, so recorded with
     /// `systemLog: false` only.
     case leftovers
@@ -43,6 +47,7 @@ enum EventCategory: String, CaseIterable, Sendable {
         case .activity: Diagnostics.activity
         case .audit: Diagnostics.audit
         case .leftovers: Diagnostics.activity
+        case .browser: Diagnostics.browser
         }
     }
 }

@@ -41,9 +41,10 @@ enum LatchkeyLog {
                 description: """
                     Latchkey's own recent log on this Mac, for finding out why something in Latchkey isn't \
                     working: its connection to the relay, keep-awake, sleep and wake, macOS permissions, setup, \
-                    pause, pairing, and errors it showed. Newest last, one line each: time, category, ERROR \
-                    when it was one, text. It holds no tool calls, messages, file names, or the relay's \
-                    address. Optional: lines (default \(defaultLines), up to \(maxLines)) and category (one \
+                    pause, pairing, errors it showed, and (browser) which sign-in cookies Claude's pages took \
+                    from Safari and which ones a site changed, by name. Newest last, one line each: time, \
+                    category, ERROR when it was one, text. It holds no tool calls, messages, file names, cookie \
+                    values, or the relay's address. Optional: lines (default \(defaultLines), up to \(maxLines)) and category (one \
                     kind only).
                     """,
                 input: [

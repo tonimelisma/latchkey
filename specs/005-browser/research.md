@@ -373,3 +373,43 @@ other chats loaded a menu and a complaint form over the cart in Claude's one tab
   cookie store (tens of MB each).
 - **Alerts** (decided by Claude): dismissed at once and told, as before, rather than held: an alert
   has one answer, so holding it would only stop the page.
+
+
+## Sign-outs from Safari (2026-11-15)
+
+Toni, 2026-11-15: Safari was signed out of Target, twice, after Claude's pages had opened Target
+in Latchkey's own browser (where all of Claude's pages are since 0.8.158 that day). Measured the
+same evening, through Latchkey's tools, token times and status codes only:
+
+- Safari's live Target sign-in: an `idToken` (a JWT in a cookie scripts can read) issued
+  02:55:19 UTC, valid 4 hours; Target's profile service (`api.target.com/guest_profile_details`)
+  answered Safari 200.
+- The copy Claude's new page got from Safari's cookie file: an `idToken` issued **02:50:59**,
+  valid 24 hours, the sign-in Safari had already renewed at 02:55. **Safari's cookie file lags
+  what Safari holds in memory**, so a copy can carry tokens Safari has already replaced.
+- The stale copy was still accepted (profile 200). While loading, the page called only
+  `gsp.target.com/gsp/oauth_validations/v3/token_validations`; no renewal was seen.
+- Not yet seen: whether a copy's renewal with an already-used refresh token is what ends Safari's
+  sign-in (refresh-token rotation with reuse detection would do that), or Target's bot protection
+  (PerimeterX `_px*` cookies, tied to the browser) ending a sign-in used from two browsers.
+  Nothing recorded what Claude's pages did with cookies, hence FR-453 and FR-454.
+
+Choices for the log (decided by Claude, low-level):
+- **Which cookies are sign-in cookies**: (a) every cookie (Target alone changes analytics and
+  bot-protection cookies every few seconds: the log would fill); (b) names matching a list of
+  words (session, sid, auth, login: matches analytics cookies like `kampyleUserSession`); (c)
+  HttpOnly, which only a server can set and page scripts' cookies can't be, plus any name
+  containing "token", for sites whose ID token scripts read. Chosen: (c).
+- **Where**: macOS's log alone (gone within hours, FR-633's reason for the activity log); the
+  activity log as a `browser` event, public in macOS's log so `latchkey_log` returns it (chosen:
+  site and cookie names, like page addresses, are no secret; values never leave the store).
+- **When to look**: after each change notification (one look per cookie set: dozens a page), or
+  0.3 s after the first of a burst (chosen).
+
+Same evening, also found: Claude's pages in Latchkey's own browser are in no window, so WebKit
+treats them as hidden (`document.visibilityState` "hidden", no `requestAnimationFrame`, no
+IntersectionObserver, timers slowed to once a second). Target's search never asked for its
+results there. Tried in a separate program: a window ordered in off every screen, and
+`WKPreferences.inactiveSchedulingPolicy = .none`, leave the page hidden; only WebKit's
+undocumented `_setWindowOcclusionDetectionEnabled:` made it visible. Toni, 2026-11-15: "public
+only", so that is not used.

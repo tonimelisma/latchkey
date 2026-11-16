@@ -447,6 +447,19 @@ dialogs Claude answers").
   refusing with the list, the limit of 10, idle closing, and routing a call that names a tab to
   Safari (the stand-in).
 
+## D12. Sign-in cookies in Latchkey's log (FR-453, FR-454, 2026-11-15)
+
+`CookieWatch` (App/Browser/CookieWatch.swift) is made with the cookie store Claude's pages share
+(`OwnPages`) and dropped with it. `LockedBrowser.takeSafarisCookies` hands it the cookies each
+copy set and the age of Safari's cookie file (`SafariCookies.fileAge`, its modification date);
+it writes one line. As a `WKHTTPCookieStoreObserver` it looks at the store 0.3 s after a change
+(changes made together are one look), compares the sign-in cookies with those last seen, and
+writes one line per site. Lines go to the new event category `browser`, so they are kept in the
+activity log, shown in the Activity window ("Browser Sign-Ins"), and returned by `latchkey_log`
+(category `browser`). A sign-in cookie is one that is HttpOnly or named for a token (research,
+"Sign-outs from Safari"). Site names and cookie names go to macOS's log in public; values never
+leave the store.
+
 ## Testing
 
 A stand-in script runner answers like Safari: open, read (page JSON), click, type, missing

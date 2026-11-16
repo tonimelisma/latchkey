@@ -250,6 +250,14 @@ phone, Claude can't check a reservation in the Owner's account or fill in a form
   doesn't show (a PDF, an archive), Latchkey shall not wait for it to load: the answer shall say
   that the page is a file and how to save it, and saving the page (FR-438) shall save that file,
   fetched with the Owner's Safari cookies (live check 2026-11-15: a PDF's address timed out).
+- **FR-453** When Latchkey copies Safari's cookies for a site into Claude's pages (FR-441), it
+  shall record in Latchkey's log the site, how many cookies it set, the names of the sign-in
+  cookies among them, and how long before Safari had last written its cookie file; never a value
+  (FR-421) (Toni, 2026-11-15: Target signed Safari out after Claude's page used a copy, and
+  nothing recorded what that page did; "do we need further instrumentation").
+- **FR-454** When a site replaces, removes, or adds a sign-in cookie in Claude's pages, Latchkey
+  shall record in Latchkey's log, once per site for changes made together, which ones, by name,
+  and whether each replaced or removed one was still Safari's copy; never a value.
 
 ## Success criteria
 

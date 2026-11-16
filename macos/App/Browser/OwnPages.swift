@@ -32,6 +32,10 @@ final class OwnPages {
     /// The cookie store all of Claude's pages share, as a browser's tabs do: memory only (FR-421),
     /// made with the first page and dropped when every page closes at once (pause, a level change).
     private var store: WKWebsiteDataStore?
+    /// Logs what the pages do with sign-ins (FR-453, FR-454); made and dropped with `store`.
+    private var watch: CookieWatch?
+    private let fileAge: @Sendable () -> TimeInterval?
+    private let record: @Sendable (String) -> Void
     private var order: [String] = []
     private let cookies: @Sendable () -> [SafariCookies.Cookie]
     private let limit: Int
@@ -40,9 +44,13 @@ final class OwnPages {
 
     init(
         cookies: @escaping @Sendable () -> [SafariCookies.Cookie] = SafariCookies.current, limit: Int = 10,
-        isLocked: @escaping @MainActor () -> Bool = { SystemScreen().isLocked() }
+        isLocked: @escaping @MainActor () -> Bool = { SystemScreen().isLocked() },
+        fileAge: @escaping @Sendable () -> TimeInterval? = SafariCookies.fileAge,
+        record: @escaping @Sendable (String) -> Void = { EventLog.shared.record(.browser, $0) }
     ) {
         self.cookies = cookies
+        self.fileAge = fileAge
+        self.record = record
         self.limit = limit
         self.isLocked = isLocked
     }
@@ -64,8 +72,12 @@ final class OwnPages {
                 "\(limit) pages of Claude's are open, the most at once, so no new one was opened. Close one with browser_act (action close, page), or open the address in one of them with browser_read (url and page).\n\n"
                     + listing())
         }
-        if store == nil { store = .nonPersistent() }
-        let b = LockedBrowser(cookies: cookies, store: store)
+        if store == nil {
+            let s = WKWebsiteDataStore.nonPersistent()
+            store = s
+            watch = CookieWatch(store: s.httpCookieStore, record: record)
+        }
+        let b = LockedBrowser(cookies: cookies, store: store, watch: watch, fileAge: fileAge)
         b.name = newName()
         pages[b.name] = Entry(browser: b, used: Date())
         order.append(b.name)
@@ -125,6 +137,8 @@ final class OwnPages {
 
     func closeAll() {
         for name in order { close(name) }
+        watch?.stop()
+        watch = nil
         store = nil
     }
 

@@ -1,12 +1,24 @@
 # Status
 
-Last updated: 2026-11-15 (full traces everywhere, in daily files, for evals; Claude's pages always in Latchkey's own browser, by name, with dialogs Claude answers; the locked browser takes Safari's cookies again with every page; public download on GitHub with a new-version notice; never disturb the user: Mail, WhatsApp sending, Notes' window editing, Messages' window actions, Reminders' window setters removed; test sweep on exit; releases are tags on commits; cloud-only files read again; machine list shows Latchkey versions; WhatsApp built; Add to Claude button; plugin withdrawn; README rewritten as a short product page; relay web pages redone; purkki paired; spec 010 shipped)
+Last updated: 2026-11-15 (sign-in cookies in Latchkey's log, for Safari's Target sign-outs; full traces everywhere, in daily files, for evals; Claude's pages always in Latchkey's own browser, by name, with dialogs Claude answers; the locked browser takes Safari's cookies again with every page; public download on GitHub with a new-version notice; never disturb the user: Mail, WhatsApp sending, Notes' window editing, Messages' window actions, Reminders' window setters removed; test sweep on exit; releases are tags on commits; cloud-only files read again; machine list shows Latchkey versions; WhatsApp built; Add to Claude button; plugin withdrawn; README rewritten as a short product page; relay web pages redone; purkki paired; spec 010 shipped)
 
 Xcode signing ready (2026-10-20): Toni's Xcode account has a valid "Apple Development" certificate
 (certificate expires 2027-07-22). Keep the team ID out of committed project files
 (open source); put it in a gitignored `macos/Local.xcconfig` as `DEVELOPMENT_TEAM`.
 
 ## Current phase
+
+Safari signed out of Target (Toni, 2026-11-15, twice that evening), after Claude's pages had
+used Target in Latchkey's own browser. Measured (spec 005 research, "Sign-outs from Safari"):
+Safari's cookie file lags Safari, so the copy Claude's page got held a Target sign-in Safari had
+already renewed 4 minutes before; the stale copy was still accepted. What ends Safari's sign-in
+isn't proven yet, so Latchkey's log now records each copy (site, count, sign-in cookie names,
+age of Safari's cookie file) and each sign-in cookie a site changes in Claude's pages, by name
+only (`latchkey_log` category `browser`; FR-453, FR-454). Also found: Claude's pages there count
+as hidden to WebKit (no drawing), so Target's search shows no results; the only fix found uses an
+undocumented WebKit setting, and Toni chose public APIs only. Open, for Toni: whether Claude's
+pages go back to Safari tabs of their own while the Mac is unlocked (as until 0.8.158), which
+avoids both.
 
 Full traces everywhere, for evals (Toni, 2026-11-15: "I want to be able to do evals on everything
 that happened anywhere"; spec 001 FR-680 to FR-689, spec 010 FR-1057 to FR-1059,
@@ -120,19 +132,22 @@ after the app was quit.
 
 ## Next steps
 
-1. Changing notes with checklists, links, or images: the iCloud.com route was probed on
+1. Target sign-outs: at the next one, read `latchkey_log` (category `browser`) for what Claude's
+   pages did with Target's sign-in cookies just before, and fix the cause; Toni's answer on
+   Safari tabs while unlocked (Current phase) decides where Claude's pages go.
+2. Changing notes with checklists, links, or images: the iCloud.com route was probed on
    2026-11-07 and stopped (spec 002 research, "Notes with checklists through iCloud.com"): the
    approval and the drawing in a hidden view work, but iCloud.com's editor takes no input
    Latchkey can give it without WebKit's private interfaces. Such notes stay read-only (Toni,
    2026-11-07, final: "Read only"). WhatsApp stays read-only from WhatsApp for Mac's database, even when
    out of date (Toni, 2026-11-07: "better than nothing").
-2. Answering a calendar invitation, live: the code is in (spec 007 FR-705); the test invitation of
+3. Answering a calendar invitation, live: the code is in (spec 007 FR-705); the test invitation of
    2026-11-07 hadn't reached the Exchange calendar before the event was deleted.
-3. Facebook Messenger is left out for good (Toni, 2026-11-09): Meta ended the Mac app on
+4. Facebook Messenger is left out for good (Toni, 2026-11-09): Meta ended the Mac app on
    2025-12-15 and has no API for personal accounts, so only the hit-or-miss web page is left.
-4. A downloaded copy on another Mac: the public download was checked on this Mac only (it opens
+5. A downloaded copy on another Mac: the public download was checked on this Mac only (it opens
    after Open Anyway); the first person on another Mac confirms Open Anyway and setup there.
-5. Notarized download and self-updating (Apple Developer Program, $99 a year): later, Toni's
+6. Notarized download and self-updating (Apple Developer Program, $99 a year): later, Toni's
    call; Sparkle is already in the app, off until an update key exists.
 
 For Toni (only he can): delete the ~96 old "Latchkey check" test messages in his two

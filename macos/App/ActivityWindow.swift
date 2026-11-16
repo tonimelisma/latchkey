@@ -327,6 +327,7 @@ extension ActivityFormat {
         case .activity: "Activity Log"
         case .audit: "Relay Check"
         case .leftovers: "Left Behind"
+        case .browser: "Browser Sign-Ins"
         case nil: category
         }
     }

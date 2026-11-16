@@ -12,6 +12,7 @@ enum Diagnostics {
     static let helper = Logger(subsystem: subsystem, category: "helper")
     static let connection = Logger(subsystem: subsystem, category: "connection")
     static let power = Logger(subsystem: subsystem, category: "power")
+    static let browser = Logger(subsystem: subsystem, category: "browser")
     static let permissions = Logger(subsystem: subsystem, category: "permissions")
     /// Start, quit, pairing, pause (the same category as `AppModel.log`).
     static let lifecycle = Logger(subsystem: subsystem, category: "lifecycle")

@@ -63,6 +63,9 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate {
     /// The cookie store, shared by all of Claude's pages (`OwnPages`), in memory only (FR-421);
     /// nil: one of this page's own.
     private let store: WKWebsiteDataStore?
+    /// Logs each copy of Safari's cookies (FR-453); Claude's pages share one (`OwnPages`).
+    private let watch: CookieWatch?
+    private let fileAge: @Sendable () -> TimeInterval?
     /// The sites whose Safari cookies this page has taken (by host), so a page going back and forth
     /// doesn't take them again.
     private var taken: Set<String> = []
@@ -70,8 +73,12 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate {
     init(
         size: CGSize = CGSize(width: 1280, height: 900), pageScripts: Bool = true,
         cookies: @escaping @Sendable () -> [SafariCookies.Cookie] = SafariCookies.current,
-        store: WKWebsiteDataStore? = nil, holdLimit: Duration = .seconds(300), presetWindow: Duration = .seconds(5)
+        store: WKWebsiteDataStore? = nil, watch: CookieWatch? = nil,
+        fileAge: @escaping @Sendable () -> TimeInterval? = { nil }, holdLimit: Duration = .seconds(300),
+        presetWindow: Duration = .seconds(5)
     ) {
+        self.watch = watch
+        self.fileAge = fileAge
         self.size = size
         self.pageScripts = pageScripts
         self.cookies = cookies
@@ -91,7 +98,10 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate {
         guard let web, let site = (host ?? web.url?.host())?.lowercased(), !site.isEmpty else { return 0 }
         taken.insert(site)
         let wanted = cookies().filter { Self.covers($0.domain, site) }
-        return await Self.copy(wanted, into: web.configuration.websiteDataStore.httpCookieStore, overwrite: overwrite)
+        let set = await Self.copy(
+            wanted, into: web.configuration.websiteDataStore.httpCookieStore, overwrite: overwrite)
+        watch?.copied(site: site, set: set, fileAge: fileAge())
+        return set.count
     }
 
     /// Whether a cookie for `domain` goes to `host`, as browsers decide: the same host, or a host
@@ -109,9 +119,9 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate {
     /// a store not yet in use, seen live 2026-11-14), every one is set, which changes nothing a
     /// page can see. The cookies are set all at once, not one after another.
     private static func copy(_ cookies: [SafariCookies.Cookie], into store: WKHTTPCookieStore, overwrite: Bool)
-        async -> Int
+        async -> [HTTPCookie]
     {
-        guard !cookies.isEmpty else { return 0 }
+        guard !cookies.isEmpty else { return [] }
         func key(_ c: HTTPCookie) -> String { "\(c.domain)\t\(c.path)\t\(c.name)" }
         var held: [String: String] = [:]
         // A store nothing was written to holds nothing: not asked (WebKit wouldn't answer).
@@ -123,7 +133,7 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate {
             let here = held[key($0)]
             return overwrite ? here != $0.value : here == nil
         }
-        guard !todo.isEmpty else { return 0 }
+        guard !todo.isEmpty else { return [] }
         final class Left { var count: Int; init(_ n: Int) { count = n } }
         let left = Left(todo.count)
         await withCheckedContinuation { (done: CheckedContinuation<Void, Never>) in
@@ -134,11 +144,11 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate {
                 }
             }
         }
-        return todo.count
+        return todo
     }
 
     /// What the store holds, or nil when WebKit doesn't say within 2 s.
-    private static func holding(_ store: WKHTTPCookieStore) async -> [HTTPCookie]? {
+    static func holding(_ store: WKHTTPCookieStore) async -> [HTTPCookie]? {
         final class Once { var done = false }
         let once = Once()
         return await withCheckedContinuation { (c: CheckedContinuation<[HTTPCookie]?, Never>) in

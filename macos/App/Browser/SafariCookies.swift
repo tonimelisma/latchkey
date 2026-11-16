@@ -25,6 +25,14 @@ enum SafariCookies {
     /// Safari's cookies as its file holds them now; none when the file can't be read.
     static let current: @Sendable () -> [Cookie] = { parse((try? Data(contentsOf: file)) ?? Data()) }
 
+    /// How long ago Safari last wrote its cookie file, in seconds; nil when it can't be read.
+    /// Safari keeps its newest cookies in memory and writes the file later, so a copy is only as
+    /// new as this (seen 2026-11-15: the file held a Target sign-in Safari had renewed 4 min before).
+    static let fileAge: @Sendable () -> TimeInterval? = {
+        (try? file.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate)
+            .map { Date().timeIntervalSince($0) }
+    }
+
     /// The cookies in `data` that haven't expired at `now`.
     static func parse(_ data: Data, now: Date = Date()) -> [Cookie] {
         let b = [UInt8](data)
