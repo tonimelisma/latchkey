@@ -309,12 +309,17 @@ enum BrowserCapability {
                         let p: PageScripts.Page
                         let l = try await route(browser, own)
                         let a = try answer(args)
+                        let before: PageScripts.Page?
                         if let l {
+                            before = try? await l.read(offset: 0)
                             p = try await l.click(ref, answer: a)
                         } else {
+                            before = try? await here(browser).read(offset: 0)
                             p = try await here(browser).click(ref, answer: a)
                         }
-                        var r = await told(page(p, l == nil ? await here(browser).working() : nil), l, browser)
+                        let note = before.map { PageScripts.unchanged($0, p) } == true ? PageScripts.unchangedNote : ""
+                        var r = await told(
+                            page(p, l == nil ? await here(browser).working() : nil, note: note), l, browser)
                         r.activity = "Clicked \(ref) on \(host(p.url))"
                         return r
                     }
@@ -556,8 +561,8 @@ enum BrowserCapability {
 
     /// The page as Claude's answer, within Claude's result size (FR-405).
     /// `working`: the owner's tab the page came from (FR-431), named first.
-    static func page(_ p: PageScripts.Page, _ working: String? = nil) -> ToolResult {
-        .text((working.map { named($0) + "\n" } ?? "") + PageScripts.answer(p))
+    static func page(_ p: PageScripts.Page, _ working: String? = nil, note: String = "") -> ToolResult {
+        .text((working.map { named($0) + "\n" } ?? "") + note + PageScripts.answer(p))
     }
 
     /// Which tab an answer came from, when it is one of the owner's (FR-431).

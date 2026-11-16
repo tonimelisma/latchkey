@@ -48,6 +48,17 @@ enum PageScripts {
 
     static let pageSize = ResultLimit.characters
 
+    /// Whether a click left the page as it was: the same address, title, text, and controls with
+    /// their values. Claude is told, so a click the page ignored isn't taken for one that worked
+    /// (Gmail's "Create filter", 2026-11-16: three tries, each answered with the same page).
+    static func unchanged(_ before: Page, _ after: Page) -> Bool {
+        before.url == after.url && before.title == after.title && before.total == after.total
+            && before.text == after.text && before.elements == after.elements
+    }
+
+    static let unchangedNote =
+        "Nothing on the page changed after the click: the page may not have taken it. Try key Enter or Space in it, or a script that sends the events the page listens for, before giving up.\n"
+
     static func decode(_ json: String) throws -> Page {
         try JSONDecoder().decode(Page.self, from: Data(json.utf8))
     }

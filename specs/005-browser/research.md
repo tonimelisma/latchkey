@@ -295,6 +295,10 @@ first.
   one click; Gmail's filter was created this way while the Mac was locked. `isTrusted` stays
   false, so a page that checks it still needs computer control. (c) Native mouse events:
   move the Owner's pointer and need the screen; rejected for the same reasons as keys.
+- **A click the page ignored.** Every click reads the page before and after; when the address,
+  title, text, and controls are all the same, the answer says so first and names what to try
+  next (2026-11-16: an agent took three ignored clicks for a page that can't be clicked while
+  locked, as the tool's own wording sent a page that ignores script input to computer control).
 - **Keys.** (a) Keyboard events dispatched in the page by a script, with what the browser
   would do by default done by the script where the page didn't take the key (chosen): runs in
   a background tab, in the Owner's tabs, and in Latchkey's own browser while locked; a page

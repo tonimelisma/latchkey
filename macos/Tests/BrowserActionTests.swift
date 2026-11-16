@@ -149,6 +149,26 @@ enum ActionPage {
                 == "pointerdown,mousedown,pointerup,mouseup,click")
     }
 
+    /// A click the page ignores is told apart from one that changed it (2026-11-16).
+    @Test func aClickThatChangesNothingIsToldApart() async throws {
+        let p = TestPage()
+        try await p.load(
+            """
+            <html><body><button id="dead">Dead</button>
+            <button id="live" onclick="document.getElementById('out').textContent = 'done'">Live</button>
+            <label><input type="checkbox" id="c">Delete it</label><p id="out"></p></body></html>
+            """)
+        func read() async throws -> PageScripts.Page {
+            try PageScripts.decode(try await p.run(PageScripts.read(offset: 0)))
+        }
+        for (label, changes) in [("Dead", false), ("Live", true), ("Delete it", true)] {
+            let before = try await read()
+            let ref = try #require(before.elements.first { $0.label.contains(label) }?.ref)
+            _ = try await p.run(PageScripts.click(ref))
+            #expect(PageScripts.unchanged(before, try await read()) == !changes, "\(label)")
+        }
+    }
+
     @Test func scrollsThePageAndAPartOfIt() async throws {
         let (p, r) = try await page()
         let down = try JSONDecoder().decode(

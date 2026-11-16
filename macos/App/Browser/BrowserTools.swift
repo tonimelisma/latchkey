@@ -132,9 +132,12 @@ extension BrowserCapability {
                         itself, e.g. a PDF: saved to the Mac's Downloads folder, and the answer names the path \
                         for files_read), script (code: JavaScript run in the page; its result is returned), \
                         dialog (answers the dialog Claude's page waits on: confirm true for OK or false for \
-                        Cancel, prompt_text for a prompt), close (closes the page or the owner's tab). Keys and \
-                        hover are a script's, not a real keyboard's or mouse's: most pages take them; one that \
-                        doesn't needs computer control. The page's own dialogs: an alert is dismissed and told; \
+                        Cancel, prompt_text for a prompt), close (closes the page or the owner's tab). Clicks, keys, \
+                        and hover are a script's, not a real mouse's or keyboard's: a click presses down and up \
+                        at the element's centre, then clicks. Most pages take them. When the answer says the \
+                        page didn't change, try key Enter or Space in the element, or a script that sends the \
+                        events the page listens for; computer control is the last way, and only while the Mac \
+                        is unlocked. The page's own dialogs: an alert is dismissed and told; \
                         confirm and prompt_text answer a dialog the action brings up in advance (in Claude's \
                         page also one that comes up to 5 seconds later); otherwise, in Claude's page a confirm \
                         or prompt waits for Claude's answer (action dialog; Cancel after 5 minutes), and in the \
