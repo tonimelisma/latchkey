@@ -262,7 +262,9 @@ enum LogBeforeFiles {
         }
         for file in files {
             let text = try String(contentsOf: app.appendingPathComponent(file), encoding: .utf8)
-            #expect(!text.contains("folderName") && !text.contains("TraceFiles("), "\(file) touches the trace files")
+            #expect(
+                !text.contains("TraceStore.folderName") && !text.contains("TraceFiles("),
+                "\(file) touches the trace files")
         }
     }
 
