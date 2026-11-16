@@ -128,7 +128,7 @@ compatible.
 
 The Mac's `latchkey_log` reads its activity log's events marked public (spec 001 plan D26). The
 server writes two things today: `slog` lines to standard error, which systemd puts in the
-journal, and events in its own activity log (`activity.jsonl`, D11).
+journal, and events in its own activity log (daily files in `activity/`, plus the old `activity.jsonl`; D11, D16).
 
 | Option | For | Against |
 |---|---|---|
@@ -158,7 +158,7 @@ patterns (addresses, IPs, URLs, absolute paths); patterns miss host names outsid
 relative paths, user names, and tokens, so no public word now comes from an error's message.
 
 The journal keeps its `slog` lines for the Owner (`journalctl -u latchkey`). Note: with Files on,
-Claude can read `activity.jsonl` itself (Latchkey's own files can be read, FR-1043), calls
+Claude can read the activity log itself (Latchkey's own files can be read, FR-1043), calls
 included; `latchkey_log` doesn't widen that, and doesn't depend on it.
 
 ## End to end: how Claude uses several machines
@@ -215,3 +215,11 @@ call fell just before the start. The check now asks from 10 minutes earlier
 (`activity.AuditSince`) and keeps those earlier entries only when the log has them
 (`activity.FromLogStart`), so a call from before the log began is still nobody's gap. The Mac
 reads the whole audit from 0 and never had this.
+
+## Old lines in the trace export (FR-1059, 2026-11-15)
+
+Version 0 lines (`activity.jsonl`) cut arguments at 4,000 characters and kept only the result's
+text. In the export, arguments that still parse as JSON stay JSON and cut ones are strings;
+results are always strings, since version 0 never held the content array. Alternatives: everything
+as strings (simpler, but most old arguments couldn't be filtered by field); parse results too
+(would report text that happens to be JSON as content).

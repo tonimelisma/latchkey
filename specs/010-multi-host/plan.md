@@ -138,7 +138,7 @@ reader (picked in research.md). Nothing else.
   (its own control-group subtree, D9), `Restart=always`, `WantedBy=multi-user.target`: starts at
   boot, nobody logged in (FR-1021). Files: program `~/.local/lib/latchkey/latchkey` (owned by the
   Owner, so it can update itself), settings `~/.config/latchkey/settings.json`, data
-  `~/.local/share/latchkey/` (device key `device.key` P-256 PKCS#8 0600, `activity.jsonl` 0600,
+  `~/.local/share/latchkey/` (device key `device.key` P-256 PKCS#8 0600, `activity/` 0700 with daily files 0600 (D16; `activity.jsonl` of earlier versions kept and read),
   update state). Key in a file, not the TPM: no extra dependency and the service runs as the
   Owner; recorded in research.md.
 - **Commands**: `install --relay URL` (pairing, service, start), `status`, `shell on|off`,
@@ -201,8 +201,13 @@ files (program, settings, data, service file) refused for change, after resolvin
 
 ### D11 Activity on Linux (FR-1050, FR-1051)
 
-`activity.jsonl` (0600): one line per call (time, call id, tool, arguments, result summary
-truncated to 2,000 characters, error, duration) and per leftover action. `latchkey activity`
+Since 2026-11-15 (D16): `activity/YYYY-MM-DD.jsonl` (folder 0700, files 0600), one version-1
+JSON line per call (the arguments as they came and the content array as sent to the relay, in
+full) and per event, filed by the UTC day of its time, appended and synchronized per entry, with a
+line break first when a crash left a line cut short. `activity.jsonl` of earlier versions (results
+cut to 2,000 characters) is left as it is and read as version 0. `latchkey activity export
+[--from] [--to]` writes the shared export line; its `machine` is the name the relay last welcomed
+the server with, else the settings' name. `latchkey activity`
 prints the last 50; `--check` prints the last audit comparison (agent-protocol "Audit
 comparison"), which the service runs after each connection and logs. (A comparison of its own
 would need a second connection, which would replace the service's.) No notifications.

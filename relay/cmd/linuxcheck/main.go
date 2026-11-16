@@ -452,7 +452,9 @@ func (c *check) checkTools() error {
 	if err != nil {
 		return err
 	}
-	if !strings.Contains(text, "- homeserver · Linux server (Debian GNU/Linux 12") || !strings.Contains(text, "- Pretend MacBook · Mac") {
+	// The line names the Latchkey version, then the system (spec 010 FR-1006).
+	if !strings.Contains(text, "- homeserver · Linux server (Latchkey ") || !strings.Contains(text, "Debian GNU/Linux 12") ||
+		!strings.Contains(text, "- Pretend MacBook · Mac") {
 		return fmt.Errorf("machines: %q", text)
 	}
 	step("machines answered:\n%s", indent(text))
@@ -566,6 +568,13 @@ func (c *check) checkSettings() error {
 	time.Sleep(1500 * time.Millisecond)
 	if out, err := c.asToni("latchkey activity | tail -n 5; latchkey status"); err != nil || !strings.Contains(out, "files_find") || !strings.Contains(out, "Service: active") {
 		return fmt.Errorf("activity and status on the server: %w\n%s", err, out)
+	}
+	// The full trace in the export line every side shares (spec 001 FR-686, spec 010 FR-1059).
+	day := time.Now().UTC().Format("2006-01-02")
+	if out, err := c.asToni("latchkey activity export --from " + day); err != nil ||
+		!strings.Contains(out, `"source":"linux"`) || !strings.Contains(out, `"tool":"files_find"`) ||
+		!strings.Contains(out, `"call_id":"`) {
+		return fmt.Errorf("the server's trace export: %w\n%s", err, out)
 	}
 	return nil
 }
