@@ -49,6 +49,8 @@ final class ContactsMemory: @unchecked Sendable {
         var preexisting: Set<String>
         /// Fingerprints of the cards Latchkey put in the group.
         var members: Set<String> = []
+        /// The records of cards Latchkey made and put in the group, with when (FR-728).
+        var memberCards: [UUID: Date] = [:]
         let created: Date
         var deleted = false
     }
@@ -260,10 +262,47 @@ final class ContactsMemory: @unchecked Sendable {
     }
 
     func added(_ cards: [ContactCard], to key: UUID) {
+        let made = cards.compactMap { cardRecord(for: $0) }
+        let at = now()
         with { s in
             guard let i = s.groups.firstIndex(where: { $0.key == key }) else { return }
             s.groups[i].members.formUnion(cards.map(Self.fingerprint))
+            for k in made { s.groups[i].memberCards[k] = at }
         }
+    }
+
+    /// Claude took the cards out of the group: never put back (FR-728).
+    func removed(_ cards: [ContactCard], from key: UUID) {
+        let made = cards.compactMap { cardRecord(for: $0) }
+        with { s in
+            guard let i = s.groups.firstIndex(where: { $0.key == key }) else { return }
+            for k in made { s.groups[i].memberCards[k] = nil }
+        }
+    }
+
+    /// Cards Latchkey made and put in `g` within `copyWindow` that the group no longer holds, as
+    /// they are now (FR-728): iCloud takes a new card and group over about a minute after they
+    /// were made, each with a new id, and dropped the membership (seen 2026-11-16).
+    func droppedMembers(of g: ContactGroup, memberIDs: [String], in backend: any ContactsBackend) throws
+        -> [ContactCard]
+    {
+        guard let key = groupRecord(for: g) else { return [] }
+        let at = now()
+        let wanted: [[String]] = with { s in
+            guard let rec = s.groups.first(where: { $0.key == key && !$0.deleted }) else { return [] }
+            return rec.memberCards.compactMap { cardKey, added in
+                guard at.timeIntervalSince(added) < Self.copyWindow else { return nil }
+                return s.cards.first { $0.key == cardKey && !$0.deleted }?.ids
+            }
+        }
+        var out: [ContactCard] = []
+        for ids in wanted where !ids.contains(where: memberIDs.contains) {
+            guard let last = ids.last else { continue }
+            var card = try? backend.card(id: last)
+            if card == nil { card = try refindCard(last, in: backend) }
+            if let card, !memberIDs.contains(card.id) { out.append(card) }
+        }
+        return out
     }
 
     struct GroupSweep: Equatable {

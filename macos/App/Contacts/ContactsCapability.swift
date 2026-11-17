@@ -138,6 +138,7 @@ enum ContactsCapability {
         }
         if let g = args["group"]?.stringValue, !g.isEmpty {
             let group = try group(g, backend, memory).group
+            if try !restoreMembers(group, backend, memory).isEmpty { cards = try backend.all() }
             cards = cards.filter { $0.groups.contains(group.name) }
         }
         let query = args["query"]?.stringValue ?? ""
@@ -148,6 +149,17 @@ enum ContactsCapability {
         var lines = cards.isEmpty ? ["No contacts found."] : cards.prefix(limit).map { "- " + line($0) }
         if cards.count > limit { lines.append("… and \(cards.count - limit) more; narrow the search or raise limit.") }
         return .text(lines.joined(separator: "\n"))
+    }
+
+    /// Puts back the cards Latchkey added to a group it made that iCloud dropped when it took the
+    /// group over (FR-728); answers the cards put back.
+    @discardableResult
+    static func restoreMembers(_ g: ContactGroup, _ backend: any ContactsBackend, _ memory: ContactsMemory) throws
+        -> [ContactCard]
+    {
+        let dropped = try memory.droppedMembers(of: g, memberIDs: try backend.memberIDs(groupID: g.id), in: backend)
+        for c in dropped { try backend.addMember(contactID: c.id, groupID: g.id) }
+        return dropped
     }
 
     static func line(_ c: ContactCard) -> String {
@@ -385,7 +397,10 @@ enum ContactsCapability {
                     }
                 }
             }
-            if adding, let key = memory.groupRecord(for: g) { memory.added(cards, to: key) }
+            if let key = memory.groupRecord(for: g) {
+                if adding { memory.added(cards, to: key) } else { memory.removed(cards, from: key) }
+            }
+            if adding { try Self.restoreMembers(g, backend, memory) }
             let names =
                 cards.dropLast().map(\.name).joined(separator: ", ") + (cards.count > 1 ? " and " : "")
                 + cards.last!.name

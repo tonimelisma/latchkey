@@ -381,6 +381,40 @@ func resultText(_ r: ToolResult) -> String {
         #expect(fake.cards.contains { $0.id == "ICLOUD-1" })
     }
 
+    /// Live check 2026-11-16: about a minute after a new card and group were made, iCloud took
+    /// both over with new ids and dropped the membership added meanwhile; it is put back (FR-728),
+    /// and never for a card Claude took out.
+    @Test func aMembershipICloudDroppedIsPutBack() async throws {
+        let card = try await createTestPerson()
+        let group = try await createGroup("Book club")
+        let added = try await change(["action": .string("add_to_group"), "group": .string(group), "id": .string(card)])
+        #expect(!added.isError, "\(resultText(added))")
+        // iCloud takes both over and drops the membership.
+        fake.changeID(card, to: "ICLOUD-P:ABPerson")
+        fake.changeID(group, to: "ICLOUD-G:ABGroup")
+        if let i = fake.cards.firstIndex(where: { $0.id == "ICLOUD-P:ABPerson" }) { fake.cards[i].groups = [] }
+        let found = try await call("contacts_find", ["group": .string("Book club")])
+        #expect(resultText(found).contains("Test Person"), "\(resultText(found))")
+        #expect(fake.cards.first { $0.id == "ICLOUD-P:ABPerson" }?.groups == ["Book club"])
+
+        // Taken out by Claude: stays out.
+        let removed = try await change([
+            "action": .string("remove_from_group"), "group": .string("Book club"), "id": .string("ICLOUD-P:ABPerson"),
+        ])
+        #expect(!removed.isError, "\(resultText(removed))")
+        let after = try await call("contacts_find", ["group": .string("Book club")])
+        #expect(resultText(after).contains("No contacts found"), "\(resultText(after))")
+
+        // Past the window, nothing is put back.
+        _ = try await change([
+            "action": .string("add_to_group"), "group": .string("Book club"), "id": .string("ICLOUD-P:ABPerson"),
+        ])
+        clock.mutate { $0 = $0.addingTimeInterval(ContactsMemory.copyWindow + 1) }
+        if let i = fake.cards.firstIndex(where: { $0.id == "ICLOUD-P:ABPerson" }) { fake.cards[i].groups = [] }
+        let late = try await call("contacts_find", ["group": .string("Book club")])
+        #expect(resultText(late).contains("No contacts found"), "\(resultText(late))")
+    }
+
     @Test func aNewGroupWhoseIdChangedIsFoundAgain() async throws {
         let id = try await createGroup("Book club")
         fake.changeID(id, to: "ICLOUD-G:ABGroup")

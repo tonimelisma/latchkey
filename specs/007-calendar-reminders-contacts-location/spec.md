@@ -156,6 +156,10 @@ accounts, and in Apple Maps.
   2026-10-29: deleting a new group left iCloud's copy behind).
 - **FR-727** When such a copy appears only after the delete has answered, the next change Claude
   makes in Contacts within that 10 minutes shall delete it the same way and say so.
+- **FR-728** When a card Latchkey made was put in a group Latchkey made, and within 10 minutes
+  of that the group no longer holds the card (iCloud took both over with new ids and dropped
+  the membership; live check 2026-11-16), reading that group or adding to it shall put the card
+  back first. A card Claude took out of the group is never put back.
 
 ### Location and Maps
 - **FR-731** While Location & Maps is On, Claude shall be able to get the Mac's current
