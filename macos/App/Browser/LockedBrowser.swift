@@ -511,9 +511,9 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate {
     /// Runs a script in the page, as text (`text` turns its value into text). A page holding a
     /// dialog runs no script until the dialog is answered: one that would start is refused, and
     /// one running when a dialog comes is answered with the dialog (its late result is dropped).
-    private func evaluate(_ code: String, text: @escaping @MainActor @Sendable (Any?) -> String) async throws
-        -> String
-    {
+    private func evaluate(
+        _ code: String, async: Bool = false, text: @escaping @MainActor @Sendable (Any?) -> String
+    ) async throws -> String {
         if let h = held { throw SafariBrowser.Failure.dialogHeld(page: name, kind: h.kind, message: h.message) }
         if let file { throw SafariBrowser.Failure.failed(Self.fileNote(name, file)) }
         let w = await view()
@@ -522,9 +522,20 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate {
             waiters[id] = { c.resume(with: $0) }
             // The reply is taken as WebKit delivers it, in order with the page's dialogs: a dialog
             // the page shows right after the script finished doesn't take the script's result.
-            w.evaluateJavaScript(code) { [weak self] value, error in
-                guard let self, let waiter = self.waiters.removeValue(forKey: id) else { return }
-                waiter(error.map { .failure($0) } ?? .success(text(value)))
+            if async {
+                // An async function body: WebKit awaits its promise (scripts with await).
+                w.callAsyncJavaScript(code, arguments: [:], in: nil, in: .page) { [weak self] result in
+                    guard let self, let waiter = self.waiters.removeValue(forKey: id) else { return }
+                    switch result {
+                    case .success(let value): waiter(.success(text(value)))
+                    case .failure(let error): waiter(.failure(error))
+                    }
+                }
+            } else {
+                w.evaluateJavaScript(code) { [weak self] value, error in
+                    guard let self, let waiter = self.waiters.removeValue(forKey: id) else { return }
+                    waiter(error.map { .failure($0) } ?? .success(text(value)))
+                }
             }
         }
     }
@@ -539,7 +550,7 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate {
         } catch let f as SafariBrowser.Failure {
             throw f
         } catch {
-            throw SafariBrowser.Failure.failed("The page's script failed: \(error.localizedDescription)")
+            throw SafariBrowser.Failure.failed("The page's script failed: \(PageScripts.failure(error))")
         }
     }
 
@@ -648,9 +659,7 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate {
         guard let w = web else { throw SafariBrowser.Failure.noWindow }
         let before = w.url?.absoluteString
         do {
-            // Given to WebKit as it is: a page's Content Security Policy forbids the eval that
-            // Safari's wrapper uses (seen live on GitHub), but not a script the app itself runs.
-            return try await evaluate(code) { value in
+            let shown: @MainActor @Sendable (Any?) -> String = { value in
                 if let s = value as? String { return s }
                 if let v = value, JSONSerialization.isValidJSONObject(v),
                     let data = try? JSONSerialization.data(withJSONObject: v)
@@ -659,13 +668,30 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate {
                 }
                 return value.map { "\($0)" } ?? "undefined"
             }
+            guard PageScripts.usesAwait(code) else {
+                // Given to WebKit as it is: a page's Content Security Policy forbids the eval that
+                // Safari's wrapper uses (seen live on GitHub), but not a script the app itself runs.
+                return try await evaluate(code, text: shown)
+            }
+            var last: Error?
+            for body in PageScripts.asyncBodies(code) {
+                do {
+                    return try await evaluate(PageScripts.asyncFunction(body), async: true, text: shown)
+                } catch let f as SafariBrowser.Failure {
+                    throw f
+                } catch {
+                    last = error
+                    guard PageScripts.failure(error).contains("SyntaxError") else { break }
+                }
+            }
+            throw last ?? SafariBrowser.Failure.failed("The script didn't run.")
         } catch let f as SafariBrowser.Failure {
             throw f
         } catch {
             // A script that sends the page elsewhere ends with the page it ran in (seen live).
             await settle(from: before)
             if let now = w.url?.absoluteString, now != before { return "The page went to \(now)." }
-            throw error
+            throw SafariBrowser.Failure.failed("Error: \(PageScripts.failure(error))")
         }
     }
 

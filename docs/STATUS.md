@@ -15,8 +15,9 @@ files in `~/Library/Application Support/Latchkey/Feedback`; no notification. To 
 read that folder, fix each issue, and add a regression case for it (CLAUDE.md).
 
 Regression cases from every issue found so far (2026-11-16: commits, Toni's reports, and Claude
-Code transcripts): 62 cases in the regressions groups. Five past issues can't be checked through
-the tools and stay covered elsewhere: the setup window at start and the pairing after a restart
+Code transcripts): 61 cases in the regressions groups. Six past issues can't be checked through
+the tools and stay covered elsewhere: a note with a checklist refused unchanged (Latchkey can't
+make a checklist note to test with); the setup window at start and the pairing after a restart
 (install.sh checks both), sending to an existing Messages conversation (only a real send shows
 it), and computer control's choose on a native pop-up and background typing into a web combobox
 (each needs a test app or page of its own, not built yet).
@@ -28,6 +29,16 @@ that changes nothing on the page now says so, and browser_act's wording names wh
 before computer control, which doesn't work while locked. Gmail draws its filter form twice,
 one copy over the other: an element under another is now marked, and a click on it reaches the
 copy with the same text on top.
+First live run of the regressions groups (2026-11-16, unlocked): 46 of 62 worked, 4 apply only
+while locked. Fixed from it: page scripts with await, the page's own error words, and scripts
+where the page forbids eval (Safari tabs); a link whose handler cancels the click is no longer
+followed; the shell points to latchkey_log when macOS refuses its system log; five cases that
+checked wrongly were rewritten (a Python crash showed a Problem Report window on Toni's screen;
+`pgrep -f` matched the checking agent itself). Still open from it: Contacts' remove from group
+after iCloud took the card, and four computer control answers (typing into Calculator lost a
+key, press doesn't tell the change, the ui list repeats empty cells, and the answer for targeting
+Latchkey itself).
+
 Pages are read once they stop changing (a second with nothing added or removed, at most three),
 so the first read of Gmail shows the mailbox, not "Loading...". Every issue found now becomes a
 case in the "regressions" group of the screen-state checks (Toni, 2026-11-16; CLAUDE.md).

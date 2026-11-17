@@ -312,6 +312,21 @@ first.
   doesn't show a page's requests without private interfaces. A click that loads no new page now
   stops waiting for one after a second instead of five. Controls are compared by what they
   show, not their references.
+- **Claude's scripts: await, errors, and pages that forbid eval (2026-11-16).** In Safari a
+  script ran through the page's `eval`, which pages with a strict policy refuse (GitHub, Google
+  Cloud console) and which can't `await`; in Latchkey's own browser errors came back as WebKit's
+  "A JavaScript exception occurred". (a) Always splice Claude's code into the page script: no
+  eval, but the last statement's value is lost and a syntax error breaks the whole script.
+  (b) eval first, and spliced code in an async function when the code awaits or the page refused
+  eval (chosen): Safari starts it in one script and collects its result in the next ones, as
+  `do JavaScript` can't wait; Latchkey's own browser uses WebKit's `callAsyncJavaScript`. The
+  code is tried as one expression, then with its last statement returned, then as written.
+  Errors carry the page's own message. (c) Ask Claude to wrap its code: every agent would have to
+  learn it.
+- **A link whose handler cancels the click.** Latchkey's own browser goes to a clicked link's
+  address itself when WebKit doesn't (seen live); it did so also when the page's handler had
+  cancelled the click (`return false`), so a dead link changed the page. The click script now
+  notes whether the click was cancelled, and a cancelled one is not followed.
 - **A click the page ignored.** Every click reads the page before and after; when the address,
   title, text, and controls are all the same, the answer says so first and names what to try
   next (2026-11-16: an agent took three ignored clicks for a page that can't be clicked while

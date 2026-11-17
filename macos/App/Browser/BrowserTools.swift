@@ -130,7 +130,7 @@ extension BrowserCapability {
                         amount in pixels; ref to scroll inside an element), upload (ref: a file field or drop \
                         place, paths: files on the Mac), download (ref: a link, or url, or neither for the page \
                         itself, e.g. a PDF: saved to the Mac's Downloads folder, and the answer names the path \
-                        for files_read), script (code: JavaScript run in the page; its result is returned), \
+                        for files_read), script (code: JavaScript run in the page; its result is returned, or the error the page gave; await works, and it runs also where the page forbids eval), \
                         dialog (answers the dialog Claude's page waits on: confirm true for OK or false for \
                         Cancel, prompt_text for a prompt), close (closes the page or the owner's tab). Clicks, keys, \
                         and hover are a script's, not a real mouse's or keyboard's: a click presses down and up \

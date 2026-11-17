@@ -191,6 +191,13 @@ enum Fence {
     static let settingsHint =
         "[Changing settings (defaults write) is refused unless declared: run it again with writes [\"~/Library/Preferences/<domain>.plist\"] and why.]"
 
+    /// Added when the output shows macOS refusing its system log inside the fence ("log: Cannot
+    /// run while sandboxed", 2026-11-16): Latchkey's own log is a tool of its own.
+    static let systemLogHint =
+        "[macOS's system log can't be read from Latchkey's shell. Latchkey's own log (its connection, keep-awake, permissions, browser sign-ins, errors) is the latchkey_log tool.]"
+
+    static func looksLikeSystemLog(_ text: String) -> Bool { text.contains("Cannot run while sandboxed") }
+
     /// What an output shows was refused (FR-320, FR-328, FR-329).
     static func refusals(in text: String) -> (write: Bool, handoff: Bool, settings: Bool) {
         let lines = text.split(separator: "\n").map { $0.lowercased() }

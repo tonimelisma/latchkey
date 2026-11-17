@@ -613,7 +613,9 @@ final class FakeSafariTabs: ScriptRunner, @unchecked Sendable {
         _ = try await page.run(PageScripts.read(offset: 0))
         let refs = try PageScripts.decode(try await page.run(PageScripts.read(offset: 0))).elements.map(\.ref)
         try #require(refs.count == 3, "the page's three elements, before any is clicked")
-        #expect(try await page.run(PageScripts.click(refs[0])) == "ok\n\"https://shop.example.com/tracked\"")
+        // Its handler cancels the click (return false): no address to go to (2026-11-16, a
+        // cancelled link was followed); a link that isn't cancelled is in aCancelledLinkIsNotFollowed.
+        #expect(try await page.run(PageScripts.click(refs[0])) == "ok")
         #expect(try await page.run(PageScripts.click(refs[1])) == "ok", "a new tab isn't Claude's tab")
         #expect(try await page.run(PageScripts.click(refs[2])) == "ok")
         #expect(try await page.run(PageScripts.back) == "ok", "no entry to go back to")

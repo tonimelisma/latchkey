@@ -187,6 +187,7 @@ enum ShellCapability {
         if LocalNetwork.looksRefused(s.output), LocalNetwork.refused { text += "\n" + LocalNetwork.hint }
         if s.refusedHandoff { text += "\n" + Fence.handoffHint }
         if s.refusedSettings { text += "\n" + Fence.settingsHint }
+        if Fence.looksLikeSystemLog(s.output) { text += "\n" + Fence.systemLogHint }
         if let warning = s.fenceWarning { text += "\n" + warning }
         for note in s.stopped { text += "\n" + note }
         if s.finished {

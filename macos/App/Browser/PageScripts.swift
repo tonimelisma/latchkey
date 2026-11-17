@@ -318,10 +318,16 @@ enum PageScripts {
                 : new MouseEvent(k, at));
             });
           }
+          // Whether the page cancelled the click (a link whose handler returns false): its
+          // address is then not one to go to (2026-11-16: Latchkey went there anyway).
+          var cancelled = false;
+          var seen = function (ev) { if (ev.target === e || (e.contains && e.contains(ev.target))) cancelled = ev.defaultPrevented; };
+          window.addEventListener('click', seen, false);
           e.click();
+          window.removeEventListener('click', seen, false);
           var a = e.closest ? e.closest('a[href]') : null;
           var t = a ? (a.getAttribute('target') || '').toLowerCase() : '';
-          if (a && !a.hasAttribute('download') && (t === '' || t === '_self' || t === '_top' || t === '_parent')) {
+          if (a && !cancelled && !a.hasAttribute('download') && (t === '' || t === '_self' || t === '_top' || t === '_parent')) {
             var after = a instanceof HTMLAnchorElement ? hrefOf.call(a) : String(a.href);
             return 'ok\\n' + enc(after) + (a === a0 && after === before ? '\\n' + enc('same') : '');
           }
@@ -430,6 +436,135 @@ enum PageScripts {
     /// Whether a page carries Claude's mark: "yes" or "no", nothing else of the page.
     static func tabCheck(_ token: String) -> String {
         "window.__latchkeyTab === \(literal(token)) ? 'yes' : 'no'"
+    }
+
+    /// Whether Claude's script waits on something (`await`): it then runs as the body of an
+    /// async function, whose result is awaited (2026-11-16: scripts with await failed with only
+    /// "A JavaScript exception occurred").
+    static func usesAwait(_ code: String) -> Bool {
+        code.range(of: #"\bawait\b"#, options: .regularExpression) != nil
+    }
+
+    /// The function bodies to try for Claude's script: as one expression whose value is
+    /// returned, then as written (statements ending in `return`). A body that isn't valid
+    /// JavaScript fails to start, and the next is tried.
+    static func asyncBodies(_ code: String) -> [String] {
+        if code.range(of: #"\breturn\b"#, options: .regularExpression) != nil { return [code] }
+        var one = code.trimmingCharacters(in: .whitespacesAndNewlines)
+        while one.hasSuffix(";") { one.removeLast() }
+        var bodies = ["return (\n" + one + "\n);"]
+        // Statements: the last one's value is returned, as eval gives it.
+        if let cut = lastStatement(one) {
+            let head = String(one[..<cut]), tail = String(one[cut...]).trimmingCharacters(in: .whitespacesAndNewlines)
+            if !tail.isEmpty { bodies.append(head + "\nreturn (\n" + tail + "\n);") }
+        }
+        bodies.append(code)
+        return bodies
+    }
+
+    /// Where the last top-level statement starts: after the last `;` or line break outside
+    /// strings, template literals, comments, and brackets; nil when there is one statement.
+    static func lastStatement(_ code: String) -> String.Index? {
+        var depth = 0
+        var quote: Character?
+        var escaped = false
+        var lineComment = false, blockComment = false
+        var last: String.Index?
+        var i = code.startIndex
+        while i < code.endIndex {
+            let c = code[i]
+            let next = code.index(after: i)
+            let n: Character? = next < code.endIndex ? code[next] : nil
+            if lineComment {
+                if c == "\n" { lineComment = false; if depth == 0 { last = next } }
+            } else if blockComment {
+                if c == "*", n == "/" { blockComment = false; i = code.index(after: next); continue }
+            } else if let q = quote {
+                if escaped { escaped = false } else if c == "\\" { escaped = true } else if c == q { quote = nil }
+            } else if c == "/", n == "/" {
+                lineComment = true
+            } else if c == "/", n == "*" {
+                blockComment = true
+            } else if c == "'" || c == "\"" || c == "`" {
+                quote = c
+            } else if "([{".contains(c) {
+                depth += 1
+            } else if ")]}".contains(c) {
+                depth = max(0, depth - 1)
+            } else if depth == 0, c == ";" || c == "\n" {
+                last = next
+            }
+            i = next
+        }
+        guard let last, last < code.endIndex else { return nil }
+        return last
+    }
+
+    /// An async function around `body`, its value as text as `custom` gives it.
+    static func asyncFunction(_ body: String) -> String {
+        // Claude's own code, spliced in as code on purpose: it runs in the page either way, and
+        // only spliced code can await or run where the page's policy forbids eval.
+        // nosemgrep: latchkey-page-script-literal
+        """
+        const __latchkeyValue = await (async function () {
+        \(body)
+        })();
+        return typeof __latchkeyValue === 'string' ? __latchkeyValue
+          : (__latchkeyValue === undefined ? 'undefined' : JSON.stringify(__latchkeyValue));
+        """
+    }
+
+    /// Safari: starts Claude's script as an async function and answers "started" (nothing when
+    /// it isn't valid JavaScript); `asyncResult` collects what it gave. Safari's `do JavaScript`
+    /// can't wait for a promise, so the result waits in the page under `id`.
+    static func startAsync(id: String, body: String) -> String {
+        // nosemgrep: latchkey-page-script-literal
+        """
+        (function () {
+          var runs = window.__latchkeyRuns || (window.__latchkeyRuns = {});
+          var id = \(literal(id));
+          runs[id] = { state: 'running' };
+          (async function () {
+        \(asyncFunction(body))
+          })().then(function (v) { runs[id] = { state: 'done', value: v }; },
+                    function (e) { runs[id] = { state: 'error', value: String(e) }; });
+          return 'started';
+        })()
+        """
+    }
+
+    /// Safari: "running", "gone" (the page changed since), or the JSON {state, value} of a
+    /// finished script (then forgotten in the page).
+    static func asyncResult(id: String) -> String {
+        """
+        (function () {
+          var runs = window.__latchkeyRuns, id = \(literal(id));
+          var r = runs && runs[id];
+          if (!r) return 'gone';
+          if (r.state === 'running') return 'running';
+          delete runs[id];
+          return JSON.stringify(r);
+        })()
+        """
+    }
+
+    /// Whether the page's policy refused the eval `custom` uses (GitHub, Google Cloud console:
+    /// "unsafe-eval", Trusted Types; 2026-11-01): the script then runs as spliced code.
+    static func evalRefused(_ answer: String) -> Bool {
+        answer.hasPrefix("Error: EvalError") || answer.contains("unsafe-eval") || answer.contains("Trusted Type")
+    }
+
+    /// The page's own words for a script that failed in WebKit, instead of "A JavaScript
+    /// exception occurred".
+    static func failure(_ error: Error) -> String {
+        let e = error as NSError
+        guard let message = e.userInfo["WKJavaScriptExceptionMessage"] as? String else {
+            return e.localizedDescription
+        }
+        if let line = e.userInfo["WKJavaScriptExceptionLineNumber"] as? Int, line > 0 {
+            return "\(message) (line \(line))"
+        }
+        return message
     }
 
     /// Claude's own script; its result as text.

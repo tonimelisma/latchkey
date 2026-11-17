@@ -140,6 +140,8 @@ actor SafariBrowser {
     private var lastUse = Date()
     /// How long a page may take to load (plan D3).
     private let settleLimit: Duration
+    /// How long a script with await may run in Safari before its result is given up (the call has 30 s).
+    private let asyncLimit: Duration = .seconds(20)
     /// Claude's own navigation in the tab: when it started and where to (where the page said it
     /// was going after Claude's click, typing, or back). Not `lastUse`, which every Apple Event
     /// refreshes (security review, 2026-10-29).
@@ -312,7 +314,38 @@ actor SafariBrowser {
 
     func run(_ code: String, answer: DialogAnswer = DialogAnswer()) async throws -> String {
         beginAction()
-        return try await javaScript(PageScripts.custom(code), answer: answer)
+        if !PageScripts.usesAwait(code) {
+            let out = try await javaScript(PageScripts.custom(code), answer: answer)
+            if !PageScripts.evalRefused(out) { return out }
+        }
+        return try await runAsync(code, answer: answer)
+    }
+
+    /// Claude's script as spliced code in an async function: for await, and for pages whose
+    /// policy forbids eval (2026-11-16). Started in one script, its result collected by the next
+    /// ones, as Safari's `do JavaScript` doesn't wait for a promise.
+    private func runAsync(_ code: String, answer: DialogAnswer) async throws -> String {
+        let id = Self.newToken()
+        for body in PageScripts.asyncBodies(code) {
+            let started = try await javaScript(PageScripts.startAsync(id: id, body: body), answer: answer)
+            guard started == "started" else { continue }
+            let deadline = ContinuousClock.now + asyncLimit
+            while ContinuousClock.now < deadline {
+                try await Task.sleep(for: .milliseconds(100))
+                let r = try await javaScript(PageScripts.asyncResult(id: id))
+                switch r {
+                case "running": continue
+                case "gone": return "The page changed before the script finished."
+                default:
+                    struct Run: Decodable { var state: String, value: String? }
+                    guard let run = try? JSONDecoder().decode(Run.self, from: Data(r.utf8)) else { return r }
+                    return run.state == "error" ? "Error: " + (run.value ?? "") : (run.value ?? "undefined")
+                }
+            }
+            return "The script was still running after \(asyncLimit.components.seconds) seconds; its result is lost."
+        }
+        return
+            "Error: SyntaxError: the script isn't valid JavaScript. With await, give one expression, or statements that end with return."
     }
 
     /// Runs one of the action scripts of 2026-11-04 (`PageActions.swift`) in the page Claude

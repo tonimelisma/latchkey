@@ -169,6 +169,35 @@ enum ActionPage {
         #expect(try await p.run("document.title") == "pressed")
     }
 
+    /// Safari's route for scripts (2026-11-16): where the page's policy forbids eval (GitHub,
+    /// Google Cloud console), custom() says so and the script runs as spliced code started by
+    /// startAsync and collected by asyncResult; await works the same way.
+    @Test func scriptsRunWhereThePageForbidsEval() async throws {
+        let p = TestPage()
+        try await p.load(
+            """
+            <html><head><meta http-equiv="Content-Security-Policy" content="script-src 'self'"></head>
+            <body><p id='p'>strict</p></body></html>
+            """)
+        #expect(PageScripts.evalRefused(try await p.run(PageScripts.custom("document.title"))))
+        func async(_ code: String) async throws -> String {
+            let id = UUID().uuidString
+            for body in PageScripts.asyncBodies(code) {
+                guard (try? await p.run(PageScripts.startAsync(id: id, body: body))) == "started" else { continue }
+                for _ in 0..<50 {
+                    let r = try await p.run(PageScripts.asyncResult(id: id))
+                    if r != "running" { return r }
+                    try await Task.sleep(for: .milliseconds(20))
+                }
+            }
+            return "never started"
+        }
+        #expect(try await async("document.getElementById('p').textContent") == #"{"state":"done","value":"strict"}"#)
+        #expect(try await async("await Promise.resolve(2) * 21") == #"{"state":"done","value":"42"}"#)
+        #expect(try await async("const a = 1; return a + 1") == #"{"state":"done","value":"2"}"#)
+        #expect(try await async("throw new Error('nope')").contains("nope"))
+    }
+
     /// A click the page ignores is told apart from one that changed it (2026-11-16).
     @Test func aClickThatChangesNothingIsToldApart() async throws {
         let p = TestPage()
@@ -313,6 +342,38 @@ enum ActionPage {
         let go = try #require(r.elements.first { $0.label == "Go" }?.ref)
         let after = try await b.click(go)
         #expect(after.text.contains("Next step"))
+    }
+
+    /// A link whose handler cancels the click is not followed (2026-11-16: Latchkey went to its
+    /// address itself, so the page changed and "nothing changed" was never said).
+    @Test func aCancelledLinkIsNotFollowed() async throws {
+        let b = LockedBrowser()
+        defer { b.discard() }
+        let r = try await b.open(
+            html: "<html><body><a href='#gone' onclick='return false'>Inert</a> <a href='#here'>Live</a></body></html>",
+            base: base)
+        let inert = try #require(r.elements.first { $0.label == "Inert" }?.ref)
+        let live = try #require(r.elements.first { $0.label == "Live" }?.ref)
+        #expect(try await b.click(inert).url == base.absoluteString)
+        #expect(try await b.click(live).url.hasSuffix("#here"))
+    }
+
+    /// Scripts with await, and errors in the page's own words (2026-11-16: both came back as
+    /// "A JavaScript exception occurred").
+    @Test func scriptsAwaitAndSayWhatFailed() async throws {
+        let b = LockedBrowser()
+        defer { b.discard() }
+        _ = try await b.open(html: "<html><body><p id='p'>hi</p></body></html>", base: base)
+        #expect(try await b.run("await new Promise(r => setTimeout(r, 50)); 'waited'") == "waited")
+        #expect(try await b.run("await Promise.resolve(41) + 1") == "42")
+        #expect(try await b.run("const t = await Promise.resolve('x'); return t + 'y'") == "xy")
+        #expect(try await b.run("document.getElementById('p').textContent") == "hi")
+        await #expect {
+            try await b.run("throw new Error('lk-check-boom')")
+        } throws: { "\($0)".contains("lk-check-boom") }
+        await #expect {
+            try await b.run("await Promise.reject(new Error('lk-async-boom'))")
+        } throws: { "\($0)".contains("lk-async-boom") }
     }
 
     @Test func everyActionWorksInLatchkeysOwnBrowser() async throws {

@@ -361,7 +361,11 @@ enum BrowserCapability {
                     "browser_script", title: "Run Script in the Page",
                     description:
                         "Runs JavaScript in the page Claude works in (its own, or the owner's tab it picked) and returns its result as text.",
-                    input: ["code": .stringParam("A JavaScript expression or statements; the last value is returned")],
+                    input: [
+                        "code": .stringParam(
+                            "A JavaScript expression or statements; the last value is returned; await works"
+                        )
+                    ],
                     required: ["code"], readOnly: false, destructive: true, openWorld: true, deadlineMS: 30_000),
                 handler: { args in
                     await run {
