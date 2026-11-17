@@ -995,6 +995,7 @@ enum ActivityDatabase {
             \(column("ZKIND")), \(column("ZCALLID")), \(column("ZDEVICE")) FROM ZSEALEDACTIVITY ORDER BY Z_PK
             """
         var out: [Row] = []
+        // nosemgrep: latchkey-sql-bound -- `sql` splices only fixed column names or NULL, chosen above.
         try SQLite.forEachRow(db, sql) { v in
             guard let idData = v[0].blob, idData.count == 16, let at = v[1].double, let sealed = v[2].blob else {
                 throw SQLite.Failure(message: "a row of the activity database can’t be read")
