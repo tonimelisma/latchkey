@@ -134,6 +134,15 @@ import Testing
         #expect(older.map(\.text) == ["dinner saturday?", "hearts"])
     }
 
+    /// A sender without a name never shows as a bare id that reads as a phone number
+    /// (regression run 2026-11-17).
+    @Test func aSenderWithoutANameIsSaidSo() {
+        #expect(WhatsAppStore.unnamed("14155550100@s.whatsapp.net", number: nil) == "+14155550100")
+        #expect(WhatsAppStore.unnamed("265424885301446@lid", number: "14155550100") == "+14155550100")
+        let unknown = WhatsAppStore.unnamed("265424885301446@lid", number: nil)
+        #expect(unknown.contains("without a saved name") && unknown.contains("265424885301446"))
+    }
+
     /// WhatsApp for Mac keeps encoded data, not a name, in most group members' first-name field
     /// (a sender showed as «+IAE=», 2026-11-07): such a value is never a sender's name.
     @Test func encodedMemberFieldsAreNotNames() {

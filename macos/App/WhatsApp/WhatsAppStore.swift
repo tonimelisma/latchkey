@@ -230,8 +230,8 @@ final class WhatsAppStore: @unchecked Sendable {
             fromMe
             ? "You"
             : (r[10].text.flatMap { names[Self.user($0)] } ?? Self.clean(r[7].text) ?? Self.clean(r[9].text)
-                ?? Self.memberFirstName(r[8].text) ?? (isGroup ? nil : partner) ?? r[10].text.map(Self.user)
-                    ?? "Someone")
+                ?? Self.memberFirstName(r[8].text) ?? (isGroup ? nil : partner)
+                    ?? r[10].text.map { Self.unnamed($0, number: numberOfLID[Self.user($0)]) } ?? "Someone")
         let kind = Self.kind(Int(r[5].int ?? -1))
         let path = r[13].text
         return WhatsAppMessage(
@@ -486,6 +486,15 @@ final class WhatsAppStore: @unchecked Sendable {
     }
 
     /// WhatsApp marks names with invisible direction characters ("\u{200E}You").
+    /// A sender WhatsApp knows no name for: a phone number as "+number", else a member without a
+    /// name, with the privacy id that tells such members apart. Was the bare id, which reads as a
+    /// phone number (a group sender showed as 265424885301446, regression run 2026-11-17).
+    static func unnamed(_ jid: String, number: String?) -> String {
+        if jid.hasSuffix("@s.whatsapp.net") { return "+" + user(jid) }
+        if let number, !number.isEmpty { return "+" + number }
+        return "a member without a saved name (WhatsApp privacy id \(user(jid)))"
+    }
+
     /// A group member's ZFIRSTNAME, when it is a name: WhatsApp for Mac mostly keeps encoded data
     /// there, "+" and base64 (3,328 of 3,374 members on 2026-11-07; a sender showed as «+IAE=»).
     static func memberFirstName(_ s: String?) -> String? {
