@@ -371,7 +371,18 @@ enum ContactsCapability {
                 if adding {
                     try backend.addMember(contactID: c.id, groupID: g.id)
                 } else {
-                    try backend.removeMember(contactID: c.id, groupID: g.id)
+                    // Contacts' read-back can still list the card right after the removal, and a
+                    // second try a moment later succeeds (regression run 2026-11-16).
+                    var attempt = 0
+                    while true {
+                        do {
+                            try backend.removeMember(contactID: c.id, groupID: g.id)
+                            break
+                        } catch ContactsFailure.failed(let why) where why.contains("kept the card") && attempt < 2 {
+                            attempt += 1
+                            try await Task.sleep(for: .seconds(1))
+                        }
+                    }
                 }
             }
             if adding, let key = memory.groupRecord(for: g) { memory.added(cards, to: key) }

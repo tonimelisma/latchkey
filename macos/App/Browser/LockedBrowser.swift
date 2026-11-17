@@ -587,7 +587,14 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate {
         _ = await view()
         await takeSafarisCookies(for: u.host())  // FR-441: Safari's copy wins
         try await navigate { $0.load(URLRequest(url: u)) }
-        return try await page(offset: 0)
+        var p = try await page(offset: 0)
+        // A slow site still loading after the limit answered with an empty page and no word of
+        // why (bugzilla.samba.org, regression run 2026-11-16).
+        if file == nil, p.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, web?.isLoading == true {
+            p.text =
+                "(The page is still loading after \(Self.loadLimit.components.seconds) seconds: read it again in a moment with browser_read and this page's name.)"
+        }
+        return p
     }
 
     /// A page from text, at `base` (tests: the real WebKit view, no network).

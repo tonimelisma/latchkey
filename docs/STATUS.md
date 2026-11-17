@@ -34,10 +34,12 @@ while locked. Fixed from it: page scripts with await, the page's own error words
 where the page forbids eval (Safari tabs); a link whose handler cancels the click is no longer
 followed; the shell points to latchkey_log when macOS refuses its system log; five cases that
 checked wrongly were rewritten (a Python crash showed a Problem Report window on Toni's screen;
-`pgrep -f` matched the checking agent itself). Still open from it: Contacts' remove from group
-after iCloud took the card, and four computer control answers (typing into Calculator lost a
-key, press doesn't tell the change, the ui list repeats empty cells, and the answer for targeting
-Latchkey itself).
+`pgrep -f` matched the checking agent itself). Then fixed too: computer control types one
+character per key (Calculator got "1" for "12"), a press tells text that changed (a display),
+and targeting Latchkey is refused as such; Contacts' remove from group tries again when its
+read-back still lists the card; a slow site still loading after 20 s says so instead of an
+empty page. The second run (locked): 50 worked, the rest only apply while unlocked. Still to
+run while unlocked: the computer control group and the Safari-tab cases.
 
 Pages are read once they stop changing (a second with nothing added or removed, at most three),
 so the first read of Gmail shows the mailbox, not "Loading...". Every issue found now becomes a
