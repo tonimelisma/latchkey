@@ -103,7 +103,7 @@ func mergedTools(ms []machine) []*mcp.Tool {
 		}
 	}
 	slices.Sort(names)
-	out := []*mcp.Tool{machinesTool}
+	out := []*mcp.Tool{machinesTool, feedbackTool}
 	for _, name := range names {
 		out = append(out, mergeTool(name, ms))
 	}
@@ -416,4 +416,6 @@ func machinesResult(ms []machine, now time.Time) *mcp.CallToolResult {
 const instructions = "Latchkey reaches the owner's own machines: Macs and Linux servers. " +
 	"The machines tool lists them, whether each is online, and what each offers. " +
 	"When more than one machine offers a tool, pass the machine's name as machine; when only one does, leave it out. " +
-	"Every answer ends with the answering machine's state and the other machines."
+	"Every answer ends with the answering machine's state and the other machines. " +
+	"Whenever anything done with Latchkey didn't fully work (an error, no response, a wrong answer, a workaround, or giving up), " +
+	"file a report with the feedback tool before answering the user."

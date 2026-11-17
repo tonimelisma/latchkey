@@ -50,8 +50,8 @@ func TestMergedToolsOneKind(t *testing.T) {
 	for _, tool := range tools {
 		names = append(names, tool.Name)
 	}
-	assert.Equal(t, []string{"machines", "notes_find", "shell_run"}, names, "the machines tool, then each name once")
-	shell := tools[2]
+	assert.Equal(t, []string{"machines", "feedback", "notes_find", "shell_run"}, names, "the machines and feedback tools, then each name once")
+	shell := tools[3]
 	assert.Equal(t, "Runs a command on the Mac (zsh).", shell.Description, "one kind: its description as is")
 	assert.Equal(t, map[string]any{"type": "string", "description": machineArgDescription}, props(t, shell)["machine"])
 	assert.Equal(t, []any{"command"}, schemaOf(t, shell)["required"], "machine is never required")
@@ -94,8 +94,8 @@ func TestMergedToolsPerKindNotes(t *testing.T) {
 		{Device: mac("New Mac"), LastSeen: now, Tools: []*mcp.Tool{macShell, macFiles}},
 	}
 	tools := mergedTools(ms)
-	require.Len(t, tools, 3)
-	files, shell := tools[1], tools[2]
+	require.Len(t, tools, 4)
+	files, shell := tools[2], tools[3]
 
 	assert.Equal(t, "On a Mac: Runs a command in zsh, never as administrator.\n\n"+
 		"On a Linux server: Runs a command in bash; sudo works where allowed without a password.", shell.Description,

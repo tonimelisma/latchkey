@@ -58,7 +58,7 @@ func jsonObject(_ data: Data) throws -> NSObject {
         #expect(
             seen == [
                 "challenge", "hello", "welcome", "state", "tools", "progress", "result", "goodbye", "call", "cancel",
-                "notice", "clients", "revoke_client", "audit_request", "audit",
+                "notice", "clients", "revoke_client", "audit_request", "audit", "feedback", "feedback_saved",
             ])
     }
 

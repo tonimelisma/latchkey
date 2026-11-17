@@ -122,7 +122,7 @@ struct Hello: Codable, Sendable {
 
     /// `clients`: send the list of Claude apps with access, and keep it current (FR-190, FR-192).
     /// `audit`: answer `audit_request` with this Mac's audit (FR-634).
-    static let supportedFeatures = ["clients", "audit"]
+    static let supportedFeatures = ["clients", "audit", "feedback"]
 
     /// The hello this app sends: always with the features it supports, its kind, and its name.
     static func make(
@@ -275,11 +275,48 @@ struct AuditPage: Codable, Equatable, Sendable {
     }
 }
 
+/// One report Claude filed with the relay's feedback tool (spec 001 FR-690, FR-693).
+struct FeedbackReport: Codable, Equatable, Sendable {
+    var id: String
+    var at: Date
+    var client: String
+    var machine: String
+    var summary: String
+    var details: String
+
+    static let maxSummary = 500
+    static let maxDetails = 20_000
+    static let maxName = 200
+    static let maxReports = 50
+
+    /// "fb_" and 26 characters of the call id alphabet.
+    static func isValid(id: String) -> Bool {
+        id.utf8.count == 29 && id.hasPrefix("fb_")
+            && id.dropFirst(3).allSatisfy { "0123456789ABCDEFGHJKMNPQRSTVWXYZ".contains($0) }
+    }
+
+    var isValid: Bool {
+        Self.isValid(id: id) && !summary.isEmpty && summary.count <= Self.maxSummary && details.count <= Self.maxDetails
+            && client.count <= Self.maxName && machine.count <= Self.maxName
+    }
+}
+
+/// Relay → app: reports to save, oldest first.
+struct FeedbackMessage: Codable, Equatable, Sendable {
+    var reports: [FeedbackReport]
+}
+
+/// App → relay: the reports it saved.
+struct FeedbackSaved: Codable, Equatable, Sendable {
+    var ids: [String]
+}
+
 enum AgentMessage: Sendable {
     case challenge(Challenge), hello(Hello), welcome(Welcome), state(StateUpdate), tools(ToolsUpdate)
     case progress(Progress), result(CallResult), goodbye(Goodbye), call(Call), cancel(Cancel), notice(Notice)
     case clients(ClientsUpdate), revokeClient(RevokeClient)
     case auditRequest(AuditRequest), audit(AuditPage)
+    case feedback(FeedbackMessage), feedbackSaved(FeedbackSaved)
 
     var type: String {
         switch self {
@@ -298,6 +335,8 @@ enum AgentMessage: Sendable {
         case .revokeClient: "revoke_client"
         case .auditRequest: "audit_request"
         case .audit: "audit"
+        case .feedback: "feedback"
+        case .feedbackSaved: "feedback_saved"
         }
     }
 
@@ -340,6 +379,18 @@ enum AgentMessage: Sendable {
                 return .revokeClient(r)
             case "audit_request": return .auditRequest(try dec.decode(AuditRequest.self, from: data))
             case "audit": return .audit(try dec.decode(AuditPage.self, from: data))
+            case "feedback":
+                let f = try dec.decode(FeedbackMessage.self, from: data)
+                guard f.reports.count <= FeedbackReport.maxReports, f.reports.allSatisfy(\.isValid) else {
+                    throw ProtocolError.violation("invalid feedback")
+                }
+                return .feedback(f)
+            case "feedback_saved":
+                let f = try dec.decode(FeedbackSaved.self, from: data)
+                guard f.ids.count <= FeedbackReport.maxReports, f.ids.allSatisfy(FeedbackReport.isValid(id:)) else {
+                    throw ProtocolError.violation("invalid feedback id")
+                }
+                return .feedbackSaved(f)
             default: throw ProtocolError.violation("unknown message type \(type)")
             }
         } catch let e as ProtocolError {
@@ -368,6 +419,8 @@ enum AgentMessage: Sendable {
         case .revokeClient(let m): body = try enc.encode(m)
         case .auditRequest(let m): body = try enc.encode(m)
         case .audit(let m): body = try enc.encode(m)
+        case .feedback(let m): body = try enc.encode(m)
+        case .feedbackSaved(let m): body = try enc.encode(m)
         }
         guard var object = try JSONSerialization.jsonObject(with: body) as? [String: Any] else {
             throw ProtocolError.violation("message did not encode as an object")

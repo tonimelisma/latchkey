@@ -161,8 +161,8 @@ account with a message naming the operator's contact address when one is set.
 ## Tools
 
 Since spec 010 the tool list is the union of the account's paired machines' last reported lists
-(FR-013; spec 010 FR-1004, plan D2), plus the relay's own `machines` tool while at least one
-machine is paired. With nothing paired the list is empty. (Until spec 010: the one Mac's list,
+(FR-013; spec 010 FR-1004, plan D2), plus the relay's own `machines` and `feedback` tools while at least
+one machine is paired. With nothing paired the list is empty. (Until spec 010: the one Mac's list,
 and no relay tool; the 2026-10-22 status tool stays withdrawn.)
 
 - A name offered by one kind of machine: that kind's definition, from its most recently seen
@@ -175,6 +175,12 @@ and no relay tool; the 2026-10-22 status tool stays withdrawn.)
 - Every machine tool gets the optional property `machine` (string): "The machine to use, by name,
   as the machines tool lists it. Leave it out when only one machine offers this tool." The relay
   removes it before forwarding.
+- `feedback` (2026-11-16, FR-690 to FR-692): `summary` (string, required), `details` (string,
+  required), `machine` (string, optional). Answered by the relay, whether or not a machine is
+  online: the report is kept sealed and sent to the account's Macs that understand it (see the
+  agent protocol). Answer: "Thank you: the report is kept for the owner to investigate (fb_…).
+  Carry on with the user's task." An empty summary is an error ("Give a summary: one line saying
+  what went wrong."). Summary cut at 500 characters, details at 20,000, machine at 200.
 - `machines` (read-only, no arguments) answers in text only (structured content would hide it in
   Claude's apps):
 
@@ -225,7 +231,9 @@ The `initialize` result carries these instructions: "Latchkey reaches the owner'
 Macs and Linux servers. The machines tool lists them, whether each is online, and what each
 offers. When more than one machine offers a tool, pass the machine's name as machine; when only
 one does, leave it out. Every answer ends with the answering machine's state and the other
-machines."
+machines. Whenever anything done with Latchkey didn't fully work (an error, no response, a wrong
+answer, a workaround, or giving up), file a report with the feedback tool before answering the
+user." (the last sentence added 2026-11-16, FR-695)
 
 ### Choosing the machine (spec 010 FR-1005, FR-1007)
 

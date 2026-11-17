@@ -98,7 +98,7 @@ const RedirectThisComputer = "this computer"
 var AllTypes = []Type{
 	TypeChallenge, TypeHello, TypeWelcome, TypeState, TypeTools, TypeProgress,
 	TypeResult, TypeGoodbye, TypeCall, TypeCancel, TypeNotice, TypeClients, TypeRevokeClient,
-	TypeAuditRequest, TypeAudit,
+	TypeAuditRequest, TypeAudit, TypeFeedback, TypeFeedbackSaved,
 }
 
 // Message is any protocol message.
@@ -329,6 +329,10 @@ func newMessage(t Type) Message {
 		return &AuditRequest{}
 	case TypeAudit:
 		return &Audit{}
+	case TypeFeedback:
+		return &Feedback{}
+	case TypeFeedbackSaved:
+		return &FeedbackSaved{}
 	}
 	return nil
 }
@@ -393,6 +397,10 @@ func Decode(data []byte) (Message, error) {
 		return msg, validateAuditRequest(m)
 	case *Audit:
 		return msg, validateAudit(m)
+	case *Feedback:
+		return msg, validateFeedback(m)
+	case *FeedbackSaved:
+		return msg, validateFeedbackSaved(m)
 	}
 	return msg, nil
 }
@@ -463,7 +471,7 @@ func ValidateTools(tools []*mcp.Tool) error {
 		switch {
 		case t == nil || !toolName.MatchString(t.Name):
 			return fmt.Errorf("%w: invalid tool name", ErrProtocolViolation)
-		case t.Name == RelayToolLaptopStatus || t.Name == RelayToolMachines:
+		case t.Name == RelayToolLaptopStatus || t.Name == RelayToolMachines || t.Name == RelayToolFeedback:
 			return fmt.Errorf("%w: tool name %q is reserved by the relay", ErrProtocolViolation, t.Name)
 		case seen[t.Name]:
 			return fmt.Errorf("%w: duplicate tool %q", ErrProtocolViolation, t.Name)

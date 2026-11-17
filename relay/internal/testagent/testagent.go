@@ -128,6 +128,8 @@ type Conn struct {
 	Notices chan *agentproto.Notice  // every notice received
 	Clients chan *agentproto.Clients // every list of apps with access received
 	Audits  chan *agentproto.Audit   // every audit page received
+	// Feedback is every feedback message received (only with FeatureFeedback announced).
+	Feedback chan *agentproto.Feedback
 
 	mu      sync.Mutex
 	running map[string]context.CancelFunc
@@ -153,7 +155,7 @@ func (a *Agent) Dial(ctx context.Context) (*Conn, error) {
 		agent: a, ws: ws,
 		Calls: make(chan *agentproto.Call, 100), Cancels: make(chan *agentproto.Cancel, 100),
 		Notices: make(chan *agentproto.Notice, 100), Clients: make(chan *agentproto.Clients, 100),
-		Audits:  make(chan *agentproto.Audit, 100),
+		Audits: make(chan *agentproto.Audit, 100), Feedback: make(chan *agentproto.Feedback, 100),
 		running: map[string]context.CancelFunc{}, frozen: make(chan struct{}), done: make(chan struct{}),
 	}
 	msg, err := c.read(ctx)
@@ -265,6 +267,14 @@ func (c *Conn) readLoop() {
 				return
 			}
 			c.Audits <- m
+		case *agentproto.Feedback:
+			if !slices.Contains(c.agent.Features, agentproto.FeatureFeedback) {
+				// An app without the feature treats the message as unknown.
+				_ = c.ws.Close(agentproto.CloseProtocolViolation, "unknown message type")
+				c.err = errors.New("received feedback without announcing the feature")
+				return
+			}
+			c.Feedback <- m
 		}
 	}
 }

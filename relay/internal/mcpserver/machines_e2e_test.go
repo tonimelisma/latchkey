@@ -95,7 +95,7 @@ func TestTwoMachinesBehindOneConnector(t *testing.T) {
 		run := byName["shell_run"]
 		return run != nil && strings.Contains(run.Description, "Linux")
 	}, 5*time.Second, 20*time.Millisecond)
-	require.Len(t, byName, 3, "machines, battery_status, and shell_run once")
+	require.Len(t, byName, 4, "machines, feedback, battery_status, and shell_run once")
 	assert.Equal(t, "On a Mac: Runs a command on the Mac (zsh).\n\nOn a Linux server: Runs a command on the server (bash).", byName["shell_run"].Description)
 	schema, _ := json.Marshal(byName["shell_run"].InputSchema)
 	assert.Contains(t, string(schema), `"machine"`)

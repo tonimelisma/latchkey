@@ -1055,6 +1055,7 @@ final class AppModel {
             status: { [weak self] s in await self?.connectionChanged(s) },
             notice: { [weak self] n in await self?.show(n) },
             clients: { [weak self] list in await self?.clientsChanged(list) },
+            feedback: { reports in FeedbackFolder.standard.save(reports) },
             connected: { [weak self] in await self?.checkAudit() },
             name: { [weak self] in await MainActor.run { self?.nameForClaude } },
             welcomed: { [weak self] name in await MainActor.run { self?.shownName = name } })

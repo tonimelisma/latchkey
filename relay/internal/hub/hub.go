@@ -374,6 +374,7 @@ func (h *Hub) start(ctx context.Context, c *conn, hello *agentproto.Hello) bool 
 	c.setTools(hello.Tools)
 	c.clientsFeature = hello.Has(agentproto.FeatureClients) && c.device.Kind == store.KindMac // only a Mac lists and removes apps (spec 010)
 	c.auditFeature = hello.Has(agentproto.FeatureAudit)
+	c.feedbackFeature = hello.Has(agentproto.FeatureFeedback) && c.device.Kind == store.KindMac // only a Mac saves reports (FR-692)
 	c.keepAwake = hello.State.KeepAwake
 
 	err = write(ctx, c.ws, welcome)
@@ -421,6 +422,7 @@ func (h *Hub) start(ctx context.Context, c *conn, hello *agentproto.Hello) bool 
 	c.connectedEvent(ctx, hello, previous.StateJSON)
 	h.cfg.OnToolsChanged(c.device.UserID)
 	c.sendClients(ctx, true) // right after welcome, to an agent that announced the feature
+	c.sendFeedback(ctx)      // reports filed while it was away (FR-692)
 	if h.cfg.NoticesOnConnect != nil {
 		for _, n := range h.cfg.NoticesOnConnect(ctx, c.device, previous.ConnectedAt) {
 			if err := c.send(ctx, n); err != nil {
@@ -494,6 +496,11 @@ type conn struct {
 	done   chan struct{}
 
 	auditFeature bool // the agent announced audit_request and audit (FR-634)
+
+	// Claude's feedback reports (FR-692): whether the agent announced the feature; feedbackMu
+	// keeps two sends from crossing.
+	feedbackFeature bool
+	feedbackMu      sync.Mutex
 
 	frames *rate.Limiter // frames the Mac may send (FR-091)
 
@@ -728,6 +735,12 @@ func (c *conn) handle(ctx context.Context, msg agentproto.Message) bool {
 			return false
 		}
 		c.answerAudit(ctx, m)
+	case *agentproto.FeedbackSaved:
+		if !c.feedbackFeature {
+			c.closeWith(ErrDisconnected, agentproto.CloseProtocolViolation, "feedback_saved without the feedback feature")
+			return false
+		}
+		c.feedbackSaved(ctx, m)
 	default:
 		c.closeWith(ErrDisconnected, agentproto.CloseProtocolViolation,
 			fmt.Sprintf("%s is not an agent message", msg.MessageType()))

@@ -803,6 +803,34 @@ field misdrawn after pairing a server (2026-11-01); these requirements give the 
   repeating it); once one exists, it shall not. With no machine yet, connecting one comes first. Why: Toni wanted the step to nag until Claude
   has connected (2026-11-01).
 
+### Feedback from Claude (Toni, 2026-11-16)
+
+Why: an agent gave up on a Gmail filter while the Mac was locked and nobody heard why until Toni
+pasted its report into another session. Toni: "whenever an agent tries to use latchkey and is in
+any way unsuccessful, they should file a feedback that goes somewhere where [Claude] can
+investigate". Every issue found this way also becomes a regression case (CLAUDE.md).
+
+- **FR-690** While any machine is paired, the relay shall offer Claude a tool of its own,
+  `feedback`, which takes a short summary and the details of what was tried (tools, arguments,
+  answers) and, optionally, the machine it was about. Its description shall ask Claude to file
+  one whenever anything done with Latchkey didn't fully work: a tool error, a page that didn't
+  respond, an answer that was wrong or unclear, a workaround that was needed, or giving up.
+- **FR-691** The relay shall answer `feedback` itself, whether or not any machine is online, and
+  keep each report (its time, the Claude app's name, the machine named, the summary, and the
+  details) with its text sealed under the relay's key file (FR-186), until the account is
+  deleted.
+- **FR-692** When a report is filed and a Mac of the account that understands feedback is
+  connected, the relay shall send it to that Mac at once; otherwise it shall send every report
+  that Mac hasn't saved yet right after the Mac's next welcome. A report is sent until a Mac says
+  it saved it, then never again. Only Macs get reports (not Linux servers).
+- **FR-693** The Mac app shall save each report it receives as a plain text file of its own in
+  the folder `Feedback` inside its data folder, named by its time and id, and tell the relay
+  which reports it saved. A report already saved is not written again.
+- **FR-694** No one shall be notified of a report (Toni, 2026-11-16: "No notification"); reports
+  are read when someone investigates.
+- **FR-695** The relay's server instructions to Claude shall say that `feedback` exists and when
+  to use it.
+
 ## Success criteria
 
 Measurable, technology-free. Each one has a test.

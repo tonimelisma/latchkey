@@ -365,8 +365,11 @@ func (s *Server) syncTools(ctx context.Context, userID string, u *userServer) {
 			continue
 		}
 		handler := s.forward(userID, t.Name)
-		if name == agentproto.RelayToolMachines {
+		switch name {
+		case agentproto.RelayToolMachines:
 			handler = s.listMachines(userID)
+		case agentproto.RelayToolFeedback:
+			handler = s.fileFeedback(userID)
 		}
 		if err := addToolSafely(u.server, t, handler); err != nil {
 			s.opts.Logger.Error("machine tool left out", "user", userID, "tool", name, "err", err)

@@ -106,7 +106,8 @@ it.
 `features` (optional, added 2026-10-25, FR-190) is an array of strings naming the later
 additions to this protocol that the app understands. The app sends `["clients"]` when it
 understands the `clients` and `revoke_client` messages below, and `"audit"` (2026-10-27) when it
-understands `audit_request` and `audit`. Unknown strings are ignored, and
+understands `audit_request` and `audit`, and `"feedback"` (2026-11-16) when it understands
+`feedback` and `feedback_saved`. Unknown strings are ignored, and
 a missing `features` means none. The relay sends `clients` messages ONLY to an agent that listed
 `"clients"`: the app up to 0.8.9 treats an unknown message type as a protocol violation.
 
@@ -162,6 +163,7 @@ Sent in `hello`, in every `state` message, and in `goodbye`.
 | `goodbye` | Before an intentional disconnect | `reason`, `state` |
 | `revoke_client` | The Owner removed one app's access in the Mac app (FR-191) | `id` (from the `clients` list) |
 | `audit_request` | The app compares its log with the relay's audit (FR-634); only with the `audit` feature | `id`, `since`, `limit` |
+| `feedback_saved` | The app saved reports from a `feedback` message (FR-693); only with the `feedback` feature | `ids` |
 
 `goodbye.reason`: `low_battery`, `too_hot`, `user_quit`, `system_sleep`, `system_shutdown`,
 `user_disconnected`.
@@ -178,6 +180,7 @@ Sent in `hello`, in every `state` message, and in `goodbye`.
 | `notice` | Something the Owner must be told on the Mac | `kind`, `at`, `client` (optional) |
 | `clients` | Right after `welcome`, and whenever the list changes; only to an agent that announced the `clients` feature (FR-190) | `clients` (full list, replaces the previous one) |
 | `audit` | The answer to an `audit_request` (FR-634) | `id`, `entries`, `next_since` |
+| `feedback` | Right after `welcome` and whenever Claude files a report, while reports wait; only to a Mac that announced the `feedback` feature (FR-692) | `reports` |
 
 `notice.kind`: `account_recovered` (a recovery link was used, FR-042); `client_authorized` (a
 Claude client was given access; `client` is its name with the host the relay checked, as on the
@@ -298,6 +301,27 @@ shows an app from before spec 001 FR-666 beginning to quit (its app event "Quitt
 before the call's `at` to 5 s after `at + duration_ms`) was cut off by that quit: it is named
 apart and doesn't count as missing (FR-668, 2026-11-03). Calls cut off by later quits or crashes
 are in the Mac's log (FR-666, FR-667) and are matched like any other.
+
+## Claude's feedback reports (`feedback`, `feedback_saved`; added 2026-11-16, FR-690 to FR-695)
+
+relay → Mac:
+
+```json
+{"type": "feedback", "reports": [
+  {"id": "fb_7Q2MXK4RZB3N8P5TVWYC6DHJ9F", "at": "2026-11-16T21:30:00Z", "client": "Claude Code",
+   "machine": "Toni's MacBook", "summary": "Create filter ignored three clicks", "details": "…"}
+]}
+```
+
+Mac → relay, once the files are written: `{"type": "feedback_saved", "ids": ["fb_…"]}`.
+
+The relay sends every report of the account no Mac has saved yet (at most 50 a message, oldest
+first) right after `welcome` and whenever Claude files one; a report may come more than once
+until it is saved, and the Mac writes each id once. Only Macs that announced `"feedback"` get
+them (a Linux server never does). Ids are `fb_` and 26 characters of the call id alphabet.
+Limits (both sides; fixtures `valid/feedback*.json`, `invalid/feedback-*.json`): summary 1 to
+500 characters, details up to 20,000, client and machine up to 200, `at` required, at most 50
+reports or ids. A `feedback_saved` from an agent without the feature closes with 4005.
 
 ## Tools
 

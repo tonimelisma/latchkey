@@ -30,6 +30,8 @@ struct ConnectionHooks: Sendable {
     var notice: @Sendable (Notice) async -> Void
     /// The Claude apps with access, each time the relay sends the list (FR-192).
     var clients: @Sendable ([ClientEntry]) async -> Void = { _ in }
+    /// Saves Claude's feedback reports and answers with the ids saved (FR-693); none by default.
+    var feedback: @Sendable ([FeedbackReport]) async -> [String] = { _ in [] }
     /// Each time a connection is established (after `welcome`); not awaited by the connection.
     var connected: @Sendable () async -> Void = {}
     /// The name to ask for in hello (spec 010 FR-1002); nil keeps the relay's.
@@ -332,6 +334,9 @@ actor RelayConnection {
             case .notice(let n): await hooks.notice(n)
             case .clients(let c): await hooks.clients(c.clients)
             case .audit(let page): answerAudit(page.id, page)
+            case .feedback(let f):
+                let saved = await hooks.feedback(f.reports)
+                if !saved.isEmpty { try await send(.feedbackSaved(FeedbackSaved(ids: saved)), on: t) }
             default: throw ProtocolError.violation("unexpected message")
             }
         }
