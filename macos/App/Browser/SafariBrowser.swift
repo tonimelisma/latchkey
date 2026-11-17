@@ -284,10 +284,14 @@ actor SafariBrowser {
     }
 
     /// `answer`: how the page's dialogs are answered during this click only (FR-432).
+    /// The tab Claude works in is one Latchkey opened for Claude (FR-455), not the owner's.
+    private var claudesTab = false
+
     func click(_ ref: String, answer: DialogAnswer = DialogAnswer()) async throws -> PageScripts.Page {
         beginAction(mayNavigate: true)
         let before = try? await stamp()
-        try check(try await javaScript(PageScripts.click(ref), acting: true, answer: answer), ref: ref)
+        try check(
+            try await javaScript(PageScripts.click(ref, sameTab: claudesTab), acting: true, answer: answer), ref: ref)
         _ = try await settle(after: before, expectNavigation: false)
         return try await readPage(offset: 0)
     }
@@ -452,7 +456,9 @@ actor SafariBrowser {
     func listTabs() async throws -> SafariTabList {
         beginAction()
         var list = SafariTabList(try await call(Script.allTabs, []))
-        if picked != nil { _ = try? await locate() }
+        // While locked each script may wait 12 s: finding the tab again would put the list past the
+        // relay's 30 s (feedback report 2026-11-17); the tab it was at is marked then.
+        if picked != nil, !isLocked() { _ = try? await locate() }
         let working = picked.map { ($0.window, $0.tab.index) }
         for w in list.windows.indices {
             for t in list.windows[w].tabs.indices {
@@ -469,6 +475,7 @@ actor SafariBrowser {
     /// Forgets the picked tab (nothing is done to it).
     func forget() {
         picked = nil
+        claudesTab = false
         pickedUnmarked = nil
         navigation = nil
         noteOpened = nil
@@ -513,6 +520,7 @@ actor SafariBrowser {
         }
         forget()
         picked = (id, PickedTab(index: number, count: count, address: String(f[2]), token: token))
+        claudesTab = false
         pickedUnmarked = f[1] == "yes" ? nil : String(f[2])
     }
 
@@ -530,6 +538,7 @@ actor SafariBrowser {
         }
         forget()
         picked = (f[0], PickedTab(index: index, count: count, address: address, token: Self.newToken()))
+        claudesTab = true  // a tab Latchkey opened for Claude
         navigated(to: address)
         guard try await settle(after: nil, expectNavigation: true) else {
             throw Failure.failed(

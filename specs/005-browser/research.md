@@ -327,6 +327,15 @@ first.
   address itself when WebKit doesn't (seen live); it did so also when the page's handler had
   cancelled the click (`return false`), so a dead link changed the page. The click script now
   notes whether the click was cancelled, and a cancelled one is not followed.
+- **A link that opens a new tab, in a tab of Claude's own (2026-11-17).** Costco's Orders &
+  Returns opened in a new tab, which Latchkey counts as the owner's, so Claude's page was lost
+  (feedback report). (a) Follow the new tab as Claude's: Safari doesn't say which tab a click
+  opened. (b) In a tab Latchkey opened for Claude, a link with a new-tab target opens in the same
+  tab: the click script sets the target to `_self` for the click and puts it back (chosen). In
+  the owner's tabs, links do as the page says.
+- **Listing tabs while locked.** Each script may wait 12 s while locked, and finding Claude's tab
+  again after the list made it pass the relay's 30 s once (feedback report 2026-11-17); while
+  locked the list marks the tab where it last was.
 - **A click the page ignored.** Every click reads the page before and after; when the address,
   title, text, and controls are all the same, the answer says so first and names what to try
   next (2026-11-16: an agent took three ignored clicks for a page that can't be clicked while

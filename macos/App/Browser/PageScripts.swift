@@ -282,9 +282,16 @@ enum PageScripts {
     /// so the link's own address is how Latchkey knows where Claude's click went. Read after the
     /// click, as the page's own click handlers may change it; a third line, "same" (JSON), says the
     /// address didn't change in the click, which another site's address needs (2026-11-01).
-    static func click(_ ref: String) -> String {
+    /// `sameTab`: a link that would open a new tab opens in this one, for a tab of Claude's own:
+    /// the new tab was the owner's to Latchkey and Claude lost its page (Costco's Orders &
+    /// Returns, feedback report 2026-11-17).
+    static func click(_ ref: String, sameTab: Bool = false) -> String {
         """
         (function () { \(find(ref))
+          var newTab = \(sameTab ? "true" : "false") && e.closest ? e.closest('a[target]') : null;
+          var targetWas = newTab ? newTab.getAttribute('target') : null;
+          if (newTab && ['', '_self', '_top', '_parent'].indexOf(targetWas.toLowerCase()) < 0) newTab.setAttribute('target', '_self');
+          else newTab = null;
           var hrefOf = Object.getOwnPropertyDescriptor(HTMLAnchorElement.prototype, 'href').get;
           var enc = JSON.stringify;
           var a0 = e.closest ? e.closest('a[href]') : null;
@@ -325,6 +332,7 @@ enum PageScripts {
           window.addEventListener('click', seen, false);
           e.click();
           window.removeEventListener('click', seen, false);
+          if (newTab) newTab.setAttribute('target', targetWas);
           var a = e.closest ? e.closest('a[href]') : null;
           var t = a ? (a.getAttribute('target') || '').toLowerCase() : '';
           if (a && !cancelled && !a.hasAttribute('download') && (t === '' || t === '_self' || t === '_top' || t === '_parent')) {

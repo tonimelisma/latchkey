@@ -198,6 +198,20 @@ enum ActionPage {
         #expect(try await async("throw new Error('nope')").contains("nope"))
     }
 
+    /// In a tab of Claude's own, a link that would open a new tab opens in this one (Costco,
+    /// feedback report 2026-11-17); in the owner's tabs it is left alone.
+    @Test func aNewTabLinkStaysInClaudesTab() async throws {
+        let p = TestPage()
+        try await p.load("<html><body><a id='n' href='#moved' target='_blank'>Orders</a></body></html>")
+        let r = try PageScripts.decode(try await p.run(PageScripts.read(offset: 0)))
+        let ref = try #require(r.elements.first { $0.label == "Orders" }?.ref)
+        _ = try await p.run(PageScripts.click(ref, sameTab: false))
+        #expect(try await p.run("location.hash") == "", "the owner's tab: a new tab, as the page wants")
+        _ = try await p.run(PageScripts.click(ref, sameTab: true))
+        #expect(try await p.run("location.hash") == "#moved")
+        #expect(try await p.run("document.getElementById('n').getAttribute('target')") == "_blank", "put back")
+    }
+
     /// A click the page ignores is told apart from one that changed it (2026-11-16).
     @Test func aClickThatChangesNothingIsToldApart() async throws {
         let p = TestPage()

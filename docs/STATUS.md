@@ -46,6 +46,13 @@ added before that is lost (seen 2026-11-16 with a test card: the group showed 0 
 removal case fails for the same reason. Two failures came from runs overlapping (a stale page
 of an earlier case; a Costco tab that moved) and passed in the run before.
 
+Claude's feedback reports, first day (2026-11-17): the checking agents filed ten on their own.
+Seven were issues fixed the same night; three were new and are fixed too: WhatsApp mentions
+showed bare privacy ids, a new-tab link in a tab of Claude's lost the page (Costco), and the tab
+list while locked could pass 30 s. Also fixed from the runs: a WhatsApp group sender without a
+name is said so, and Contacts puts back a membership iCloud dropped when it took a new card and
+group over (spec 007 FR-728).
+
 Pages are read once they stop changing (a second with nothing added or removed, at most three),
 so the first read of Gmail shows the mailbox, not "Loading...". Every issue found now becomes a
 case in the "regressions" group of the screen-state checks (Toni, 2026-11-16; CLAUDE.md).
