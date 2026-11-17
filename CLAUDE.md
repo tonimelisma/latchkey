@@ -197,11 +197,16 @@ Enforced by hooks in `.claude/settings.json` (`scripts/hooks.sh`):
 
 ## Every issue becomes a regression case (Toni, 2026-11-16)
 
+Claude's own reports of what didn't work arrive as files in
+`~/Library/Application Support/Latchkey/Feedback` (spec 001 FR-690 to FR-695); read new ones at
+the start of a session about Latchkey's behavior, and treat each as an issue found.
+
 IMPORTANT: every issue found in Latchkey (by Toni, an agent's feedback report, a live check, or
-a test) gets a case in the "regressions" group of `macos/scripts/state-check/cases.json`, in
-the same commit as its fix: the id names it, `case` says what went wrong and when, `steps` say
+a test) gets a case in a regressions group of `macos/scripts/state-check/cases.json`
+("regressions", or "regressions-browser", "-shell", "-computer", "-other" by area), in the same
+commit as its fix: the id names it, `case` says what went wrong and when, `steps` say
 how a fresh agent checks it and what counts as working. Cases never write anything they don't
-remove. Run `state-check.sh run <dir> regressions` after every fix that touches a case's area.
+remove. Run `state-check.sh run <dir> <its group>` after every fix that touches a case's area.
 
 ## Never disturb the user (Toni, 2026-11-07; Constitution IV)
 

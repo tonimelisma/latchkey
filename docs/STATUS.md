@@ -1,12 +1,25 @@
 # Status
 
-Last updated: 2026-11-16 (pages are read once they stop changing; every issue becomes a regression case; clicks press down and up before clicking, so Gmail's buttons answer; signed-in sites in Safari tabs of Claude's while unlocked; sign-in cookies in Latchkey's log, for Safari's Target sign-outs; full traces everywhere, in daily files, for evals; Claude's pages always in Latchkey's own browser, by name, with dialogs Claude answers; the locked browser takes Safari's cookies again with every page; public download on GitHub with a new-version notice; never disturb the user: Mail, WhatsApp sending, Notes' window editing, Messages' window actions, Reminders' window setters removed; test sweep on exit; releases are tags on commits; cloud-only files read again; machine list shows Latchkey versions; WhatsApp built; Add to Claude button; plugin withdrawn; README rewritten as a short product page; relay web pages redone; purkki paired; spec 010 shipped)
+Last updated: 2026-11-16 (Claude's feedback tool, reports copied to the Mac's Feedback folder; pages are read once they stop changing; every issue becomes a regression case; clicks press down and up before clicking, so Gmail's buttons answer; signed-in sites in Safari tabs of Claude's while unlocked; sign-in cookies in Latchkey's log, for Safari's Target sign-outs; full traces everywhere, in daily files, for evals; Claude's pages always in Latchkey's own browser, by name, with dialogs Claude answers; the locked browser takes Safari's cookies again with every page; public download on GitHub with a new-version notice; never disturb the user: Mail, WhatsApp sending, Notes' window editing, Messages' window actions, Reminders' window setters removed; test sweep on exit; releases are tags on commits; cloud-only files read again; machine list shows Latchkey versions; WhatsApp built; Add to Claude button; plugin withdrawn; README rewritten as a short product page; relay web pages redone; purkki paired; spec 010 shipped)
 
 Xcode signing ready (2026-10-20): Toni's Xcode account has a valid "Apple Development" certificate
 (certificate expires 2027-07-22). Keep the team ID out of committed project files
 (open source); put it in a gitignored `macos/Local.xcconfig` as `DEVELOPMENT_TEAM`.
 
 ## Current phase
+
+Claude's feedback reports (Toni, 2026-11-16; spec 001 FR-690 to FR-695): the relay offers its own
+`feedback` tool, and its instructions ask Claude to file a report whenever anything done with
+Latchkey didn't fully work. Reports are kept sealed on the relay and copied to the Mac as text
+files in `~/Library/Application Support/Latchkey/Feedback`; no notification. To investigate,
+read that folder, fix each issue, and add a regression case for it (CLAUDE.md).
+
+Regression cases from every issue found so far (2026-11-16: commits, Toni's reports, and Claude
+Code transcripts): 62 cases in the regressions groups. Five past issues can't be checked through
+the tools and stay covered elsewhere: the setup window at start and the pairing after a restart
+(install.sh checks both), sending to an existing Messages conversation (only a real send shows
+it), and computer control's choose on a native pop-up and background typing into a web combobox
+(each needs a test app or page of its own, not built yet).
 
 Clicks in pages (2026-11-16): Gmail's "Create filter" ignored Latchkey's clicks while the Mac
 was locked, because a click was `element.click()` alone and Gmail acts on the press. A click now
