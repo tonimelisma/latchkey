@@ -180,6 +180,15 @@
       ]
     },
     {
+      "id": "regressions",
+      "name": "Regressions",
+      "missing": [],
+      "cases": [
+        {"id": "regressions.gmail_create_filter_click", "case": "Gmail's filter form answers one plain click (2026-11-16: the form is drawn twice, one copy over the other, and clicks went to the copy beneath)", "steps": "browser_read url \"https://mail.google.com/mail/u/0/#create-filter/from=example-latchkey-check.invalid\" (note the page name). When the filter search form shows, browser_act click its \"Create filter\" once, with click, not a script. works only if the answer lists \"Delete it\". Click nothing else and never create a filter. Then browser_act close the page."},
+        {"id": "regressions.gmail_first_read_drawn", "case": "The first read of Gmail shows the mailbox, not its loading screen (2026-11-16: the first read said \"Loading...\")", "steps": "browser_read url \"https://mail.google.com/mail/u/0/#inbox\" (note the page name). works only if that first answer shows the mailbox (Compose, Inbox, and messages or an empty inbox), not only \"Loading...\". Then browser_act close the page."}
+      ]
+    },
+    {
       "id": "sweep",
       "name": "Nothing left behind",
       "missing": [],

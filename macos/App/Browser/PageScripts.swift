@@ -53,7 +53,16 @@ enum PageScripts {
     /// (Gmail's "Create filter", 2026-11-16: three tries, each answered with the same page).
     static func unchanged(_ before: Page, _ after: Page) -> Bool {
         before.url == after.url && before.title == after.title && before.total == after.total
-            && before.text == after.text && before.elements == after.elements
+            && before.text == after.text && shown(before) == shown(after)
+    }
+
+    /// The controls as they show, without their references: a reference given anew to the
+    /// same control isn't a change on the page.
+    private static func shown(_ p: Page) -> [String] {
+        p.elements.map {
+            [$0.kind, $0.label, $0.href ?? "", $0.value ?? "", $0.checked.map(String.init) ?? ""].joined(
+                separator: "\u{1F}")
+        }
     }
 
     static let unchangedNote =
@@ -66,6 +75,41 @@ enum PageScripts {
     static func literal(_ s: String) -> String {
         let data = (try? JSONEncoder().encode([s])) ?? Data("[\"\"]".utf8)
         return String(decoding: data, as: UTF8.self).dropFirst().dropLast().description
+    }
+
+    /// How much the page has changed so far: "readyState|changes|text length". The first run
+    /// starts counting nodes added, removed, or rewritten (not style or attribute changes, so an
+    /// animation doesn't count as loading). For `quiet`.
+    static let changes = """
+        (function () { var w = window;
+          if (!w.__latchkeyChanges) { w.__latchkeyChanges = 1;
+            try { new MutationObserver(function (l) { w.__latchkeyChanges += l.length; }).observe(document, { subtree: true, childList: true, characterData: true }); } catch (x) {} }
+          return document.readyState + '|' + w.__latchkeyChanges + '|' + ((document.body && document.body.innerText) || '').length; })()
+        """
+
+    /// Waits until the page has stopped changing: loaded, and nothing added or removed for a
+    /// second, at most `atMost`. A page's "finished loading" comes before an app like Gmail has
+    /// drawn anything: the first read after opening Gmail said "Loading..." (2026-11-16), and a
+    /// click's before-and-after compared a page still filling in. `run` runs a page script.
+    static func quiet(
+        isolation: isolated (any Actor)? = #isolation, atMost: Duration = .seconds(3),
+        _ run: () async throws -> String
+    ) async {
+        let deadline = ContinuousClock.now + atMost
+        var last: String?
+        var same = 0
+        while ContinuousClock.now < deadline {
+            // A page that can't say (the script refused, or no answer of this shape): no waiting.
+            guard let now = try? await run(), now.split(separator: "|").count == 3 else { return }
+            if now.hasPrefix("complete|"), now == last {
+                same += 1
+                if same >= 4 { return }
+            } else {
+                same = 0
+            }
+            last = now
+            try? await Task.sleep(for: .milliseconds(250))
+        }
     }
 
     static let stamp = "String(performance.timeOrigin) + '|' + document.readyState + '|' + location.href"

@@ -1,6 +1,6 @@
 # Status
 
-Last updated: 2026-11-16 (clicks press down and up before clicking, so Gmail's buttons answer; signed-in sites in Safari tabs of Claude's while unlocked; sign-in cookies in Latchkey's log, for Safari's Target sign-outs; full traces everywhere, in daily files, for evals; Claude's pages always in Latchkey's own browser, by name, with dialogs Claude answers; the locked browser takes Safari's cookies again with every page; public download on GitHub with a new-version notice; never disturb the user: Mail, WhatsApp sending, Notes' window editing, Messages' window actions, Reminders' window setters removed; test sweep on exit; releases are tags on commits; cloud-only files read again; machine list shows Latchkey versions; WhatsApp built; Add to Claude button; plugin withdrawn; README rewritten as a short product page; relay web pages redone; purkki paired; spec 010 shipped)
+Last updated: 2026-11-16 (pages are read once they stop changing; every issue becomes a regression case; clicks press down and up before clicking, so Gmail's buttons answer; signed-in sites in Safari tabs of Claude's while unlocked; sign-in cookies in Latchkey's log, for Safari's Target sign-outs; full traces everywhere, in daily files, for evals; Claude's pages always in Latchkey's own browser, by name, with dialogs Claude answers; the locked browser takes Safari's cookies again with every page; public download on GitHub with a new-version notice; never disturb the user: Mail, WhatsApp sending, Notes' window editing, Messages' window actions, Reminders' window setters removed; test sweep on exit; releases are tags on commits; cloud-only files read again; machine list shows Latchkey versions; WhatsApp built; Add to Claude button; plugin withdrawn; README rewritten as a short product page; relay web pages redone; purkki paired; spec 010 shipped)
 
 Xcode signing ready (2026-10-20): Toni's Xcode account has a valid "Apple Development" certificate
 (certificate expires 2027-07-22). Keep the team ID out of committed project files
@@ -15,6 +15,9 @@ that changes nothing on the page now says so, and browser_act's wording names wh
 before computer control, which doesn't work while locked. Gmail draws its filter form twice,
 one copy over the other: an element under another is now marked, and a click on it reaches the
 copy with the same text on top.
+Pages are read once they stop changing (a second with nothing added or removed, at most three),
+so the first read of Gmail shows the mailbox, not "Loading...". Every issue found now becomes a
+case in the "regressions" group of the screen-state checks (Toni, 2026-11-16; CLAUDE.md).
 
 Safari signed out of Target (Toni, 2026-11-15, three times that evening), found and fixed:
 Target rotates its refresh token, and Claude's page in Latchkey's own browser redeemed Safari's

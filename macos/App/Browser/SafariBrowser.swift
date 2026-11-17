@@ -272,6 +272,8 @@ actor SafariBrowser {
     }
 
     private func readPage(offset: Int) async throws -> PageScripts.Page {
+        // Safari answers no script while locked: waiting would only add a timeout (FR-430).
+        if offset == 0, !isLocked() { await PageScripts.quiet { try await javaScript(PageScripts.changes) } }
         do {
             return try PageScripts.decode(try await javaScript(PageScripts.read(offset: offset)))
         } catch is DecodingError {

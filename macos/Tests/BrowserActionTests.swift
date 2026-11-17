@@ -297,6 +297,24 @@ enum ActionPage {
 @MainActor @Suite struct LockedBrowserActionTests {
     let base = URL(string: "https://test.example/")!
 
+    /// An app that draws its page after "finished loading" (Gmail said "Loading..." on the first
+    /// read, 2026-11-16) is read once it has drawn it, and a click that changes the page later
+    /// is read with the change.
+    @Test func aPageIsReadOnceItStopsChanging() async throws {
+        let b = LockedBrowser()
+        defer { b.discard() }
+        let r = try await b.open(
+            html: """
+                <html><body><p>Loading...</p><script>
+                setTimeout(function () { document.body.innerHTML = '<p>Inbox drawn</p><button onclick="setTimeout(function () { document.body.insertAdjacentHTML(\\'beforeend\\', \\'<p>Next step</p>\\'); }, 600)">Go</button>'; }, 700);
+                </script></body></html>
+                """, base: base)
+        #expect(r.text.contains("Inbox drawn"))
+        let go = try #require(r.elements.first { $0.label == "Go" }?.ref)
+        let after = try await b.click(go)
+        #expect(after.text.contains("Next step"))
+    }
+
     @Test func everyActionWorksInLatchkeysOwnBrowser() async throws {
         let b = LockedBrowser()
         defer { b.discard() }

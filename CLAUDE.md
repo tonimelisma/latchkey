@@ -195,6 +195,14 @@ Enforced by hooks in `.claude/settings.json` (`scripts/hooks.sh`):
 - Never commit the hosted relay's address, its server details, or the Apple team ID; they live in
   the gitignored `.env`, `macos/Config/Local.xcconfig`, and `CLAUDE.local.md` (Toni, 2026-10-23).
 
+## Every issue becomes a regression case (Toni, 2026-11-16)
+
+IMPORTANT: every issue found in Latchkey (by Toni, an agent's feedback report, a live check, or
+a test) gets a case in the "regressions" group of `macos/scripts/state-check/cases.json`, in
+the same commit as its fix: the id names it, `case` says what went wrong and when, `steps` say
+how a fresh agent checks it and what counts as working. Cases never write anything they don't
+remove. Run `state-check.sh run <dir> regressions` after every fix that touches a case's area.
+
 ## Never disturb the user (Toni, 2026-11-07; Constitution IV)
 
 IMPORTANT: while the Mac is unlocked, someone may be using any app. Latchkey never brings a

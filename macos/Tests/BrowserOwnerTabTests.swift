@@ -300,7 +300,8 @@ import Testing
 /// relay's 30 s, through the shorter runner, and the tab list says the tabs need the Mac unlocked.
 @MainActor @Suite struct LockedSafariTests {
     @Test func aStalledSafariIsToldInTimeWhileLocked() async {
-        let b = SafariBrowser(scripts: StalledSafari(), lockedScripts: SilentSafari(), isLocked: { true })
+        let stalled = StalledSafari()
+        let b = SafariBrowser(scripts: stalled, lockedScripts: SilentSafari(), isLocked: { true })
         let own = OwnPages(cookies: { [] }, isLocked: { true })
         defer { own.closeAll() }
         let read = Dictionary(
@@ -311,13 +312,26 @@ import Testing
         #expect(list.content.jsonText.contains("unlocks the Mac"), "\(list.content.jsonText)")
         let tab = await read.handler(.object(["tab": .string("10.2")]))
         #expect(tab.isError && tab.content.jsonText.contains("unlock"), "\(tab.content.jsonText)")
-        #expect(ContinuousClock.now - started < .seconds(5), "the stalled runner was never used")
+        // What matters is that the stalled runner is never asked; the time only has to fit the
+        // relay's 30 s, as tests running side by side can keep this one waiting for seconds.
+        #expect(stalled.calls.count == 0, "the stalled runner was used")
+        #expect(ContinuousClock.now - started < .seconds(25))
     }
 }
 
 /// A Safari that never answers (a script waits until the call is cancelled).
 struct StalledSafari: ScriptRunner {
+    /// How many scripts it was asked to run.
+    final class Count: @unchecked Sendable {
+        private let lock = NSLock()
+        private var n = 0
+        var count: Int { lock.withLock { n } }
+        func add() { lock.withLock { n += 1 } }
+    }
+    let calls = Count()
+
     func run(_ script: String, _ args: [String]) async throws -> String {
+        calls.add()
         try await Task.sleep(for: .seconds(3600))
         return ""
     }

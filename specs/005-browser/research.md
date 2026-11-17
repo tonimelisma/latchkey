@@ -302,6 +302,16 @@ first.
   on top at its centre, as a mouse would (chosen); anything else under it is clicked as before,
   so styled checkboxes drawn over their input still work. (c) Always click what is on top:
   could press an unrelated banner.
+- **Reading a page that is still drawing itself.** A page's "finished loading" comes before an
+  app like Gmail has drawn anything (the first read said "Loading...", 2026-11-16), and the
+  before-and-after of a click compared a page still filling in. (a) A fixed wait: slow for
+  every page, still too short for some. (b) Wait until nothing is added, removed, or rewritten
+  in the page for one second, at most three (chosen): costs about a second per read; style and
+  attribute changes don't count, so animations don't hold it up; skipped in the owner's Safari
+  while locked, where Safari answers no script. (c) Wait for the network to go quiet: WebKit
+  doesn't show a page's requests without private interfaces. A click that loads no new page now
+  stops waiting for one after a second instead of five. Controls are compared by what they
+  show, not their references.
 - **A click the page ignored.** Every click reads the page before and after; when the address,
   title, text, and controls are all the same, the answer says so first and names what to try
   next (2026-11-16: an agent took three ignored clicks for a page that can't be clicked while

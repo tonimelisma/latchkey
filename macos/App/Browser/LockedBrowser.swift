@@ -503,6 +503,8 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate {
             try? await Task.sleep(for: .milliseconds(100))
             guard let w = web, held == nil else { return }
             if w.url?.absoluteString != address, !w.isLoading { return }
+            // No new page after a second: the action changed this one; `quiet` waits for it.
+            if !w.isLoading, ContinuousClock.now > deadline - atMost + .seconds(1) { return }
         }
     }
 
@@ -559,6 +561,7 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate {
             let name = URL(string: file.address)?.lastPathComponent ?? ""
             return PageScripts.Page(title: name, url: file.address, total: 0, text: "", elements: [])
         }
+        if offset == 0 { await PageScripts.quiet { try await script(PageScripts.changes) } }
         do { return try PageScripts.decode(try await script(PageScripts.read(offset: offset))) } catch is DecodingError
         {
             throw SafariBrowser.Failure.failed("The page didn't answer as expected.")
