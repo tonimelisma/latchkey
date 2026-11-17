@@ -39,7 +39,12 @@ character per key (Calculator got "1" for "12"), a press tells text that changed
 and targeting Latchkey is refused as such; Contacts' remove from group tries again when its
 read-back still lists the card; a slow site still loading after 20 s says so instead of an
 empty page. The second run (locked): 50 worked, the rest only apply while unlocked. Still to
-run while unlocked: the computer control group and the Safari-tab cases.
+run while unlocked: the computer control group and the Safari-tab cases. Third run (locked,
+0.8.167): 52 worked. Open: Contacts groups and iCloud. A card and a group made through
+Latchkey are taken over by iCloud about a minute later, each with a new id, and the membership
+added before that is lost (seen 2026-11-16 with a test card: the group showed 0 members); the
+removal case fails for the same reason. Two failures came from runs overlapping (a stale page
+of an earlier case; a Costco tab that moved) and passed in the run before.
 
 Pages are read once they stop changing (a second with nothing added or removed, at most three),
 so the first read of Gmail shows the mailbox, not "Loading...". Every issue found now becomes a
