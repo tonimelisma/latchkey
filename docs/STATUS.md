@@ -47,11 +47,14 @@ removal case fails for the same reason. Two failures came from runs overlapping 
 of an earlier case; a Costco tab that moved) and passed in the run before.
 
 Claude's feedback reports, first day (2026-11-17): the checking agents filed ten on their own.
-Seven were issues fixed the same night; three were new and are fixed too: WhatsApp mentions
-showed bare privacy ids, a new-tab link in a tab of Claude's lost the page (Costco), and the tab
-list while locked could pass 30 s. Also fixed from the runs: a WhatsApp group sender without a
-name is said so, and Contacts puts back a membership iCloud dropped when it took a new card and
-group over (spec 007 FR-728).
+Seven were issues fixed the same night; three were new. Fixed: WhatsApp mentions showed bare
+privacy ids, and a new-tab link in a tab of Claude's lost the page (Costco; works live). Still
+open: listing tabs while locked passed the relay's 30 s on the first call (a retry answers at
+once). Not fixed by 0.8.171, which no longer finds Claude's tab again while locked: the live run
+after it failed the same way. Ruled out so far: the locked script runner's 12 s limit (it stops
+osascript) and listing Claude's own pages (no waiting). Case regressions.browser_locked_tabs_answer_in_time.
+Also fixed from the runs: a WhatsApp group sender without a name is said so, and Contacts puts
+back a membership iCloud dropped when it took a new card and group over (spec 007 FR-728).
 
 Pages are read once they stop changing (a second with nothing added or removed, at most three),
 so the first read of Gmail shows the mailbox, not "Loading...". Every issue found now becomes a
