@@ -236,7 +236,8 @@ final class WhatsAppStore: @unchecked Sendable {
         let path = r[13].text
         return WhatsAppMessage(
             id: "\(r[0].int ?? 0)", chatID: r[1].text ?? "", chatName: partner, date: Self.date(r[3]) ?? .distantPast,
-            fromMe: fromMe, sender: sender, kind: kind, text: Self.clean(r[6].text) ?? "",
+            fromMe: fromMe, sender: sender, kind: kind,
+            text: Self.mentions(in: Self.clean(r[6].text) ?? "", names: names, numbers: numberOfLID),
             fileName: kind == "document"
                 ? (Self.clean(r[11].text) ?? path.map { ($0 as NSString).lastPathComponent }) : nil,
             key: r[14].text ?? "")
@@ -486,6 +487,27 @@ final class WhatsAppStore: @unchecked Sendable {
     }
 
     /// WhatsApp marks names with invisible direction characters ("\u{200E}You").
+    /// Mentions in a message's text ("@247179730018527") with the person's name, or "+number",
+    /// or said to be a member without a saved name: WhatsApp keeps a mention as the person's
+    /// privacy id or number, which read as a phone number (feedback report 2026-11-17).
+    static func mentions(in text: String, names: [String: String], numbers: [String: String]) -> String {
+        guard text.contains("@"), let pattern = try? NSRegularExpression(pattern: #"@(\d{6,20})\b"#) else {
+            return text
+        }
+        var out = text
+        for match in pattern.matches(in: text, range: NSRange(text.startIndex..., in: text)).reversed() {
+            guard let whole = Range(match.range, in: out), let digits = Range(match.range(at: 1), in: out) else {
+                continue
+            }
+            let id = String(out[digits])
+            let shown =
+                names[id].map { "@" + $0 } ?? numbers[id].map { "@+" + $0 }
+                ?? (id.count >= 14 ? "@(a member without a saved name)" : nil)
+            if let shown { out.replaceSubrange(whole, with: shown) }
+        }
+        return out
+    }
+
     /// A sender WhatsApp knows no name for: a phone number as "+number", else a member without a
     /// name, with the privacy id that tells such members apart. Was the bare id, which reads as a
     /// phone number (a group sender showed as 265424885301446, regression run 2026-11-17).

@@ -134,6 +134,21 @@ import Testing
         #expect(older.map(\.text) == ["dinner saturday?", "hearts"])
     }
 
+    /// Mentions show the person, never a bare privacy id (feedback report 2026-11-17).
+    @Test func mentionsShowThePerson() {
+        let names = ["247179730018527": "Jen"]
+        let numbers = ["265424885301446": "14155550100"]
+        #expect(
+            WhatsAppStore.mentions(in: "From @247179730018527's people.", names: names, numbers: numbers)
+                == "From @Jen's people.")
+        #expect(WhatsAppStore.mentions(in: "hi @265424885301446", names: names, numbers: numbers) == "hi @+14155550100")
+        #expect(
+            WhatsAppStore.mentions(in: "and @999999999999999", names: names, numbers: numbers)
+                == "and @(a member without a saved name)")
+        #expect(
+            WhatsAppStore.mentions(in: "mail me@example.com", names: names, numbers: numbers) == "mail me@example.com")
+    }
+
     /// A sender without a name never shows as a bare id that reads as a phone number
     /// (regression run 2026-11-17).
     @Test func aSenderWithoutANameIsSaidSo() {
