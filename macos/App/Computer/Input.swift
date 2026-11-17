@@ -48,16 +48,16 @@ struct QuartzPoster: InputPoster {
             ev?.flags = flags
             ev?.post(tap: .cghidEventTap)
         case .text(let s):
-            // Unicode text in chunks, so any language and emoji arrive as typed.
-            let units = Array(s.utf16)
-            for start in stride(from: 0, to: units.count, by: 16) {
-                let chunk = Array(units[start..<min(start + 16, units.count)])
+            // Unicode text one character per key, so any language and emoji arrive as typed,
+            // and apps that read one key per event (Calculator) get every one (2026-11-16).
+            for (i, character) in s.enumerated() {
+                let units = Array(String(character).utf16)
                 for down in [true, false] {
                     let ev = CGEvent(keyboardEventSource: src, virtualKey: 0, keyDown: down)
-                    ev?.keyboardSetUnicodeString(stringLength: chunk.count, unicodeString: chunk)
+                    ev?.keyboardSetUnicodeString(stringLength: units.count, unicodeString: units)
                     ev?.post(tap: .cghidEventTap)
                 }
-                usleep(8000)
+                usleep(i % 16 == 15 ? 8000 : 2000)
             }
         }
         usleep(15000)  // give apps a moment between events

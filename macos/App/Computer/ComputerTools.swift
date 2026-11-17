@@ -114,6 +114,14 @@ extension ComputerCapability {
     // MARK: one app in the background (FR-510)
 
     private static func target(_ env: ComputerEnvironment, _ name: String) throws -> AppTarget {
+        // Latchkey is left out of what computer control reaches (its windows set what Claude may
+        // do); saying it isn't running was wrong (regression case 2026-11-16).
+        if AppControl.namesLatchkey(name) {
+            throw Failure(
+                message:
+                    "Computer control never acts on Latchkey itself: its windows set what Claude may do, so only the owner uses them."
+            )
+        }
         guard let t = env.appControl.find(name) else {
             throw Failure(
                 message:
@@ -196,11 +204,22 @@ extension ComputerCapability {
     private static func values(_ env: ComputerEnvironment, _ listing: AppListing?) -> [String: String] {
         guard let listing else { return [:] }
         var out: [String: String] = [:]
-        for e in listing.items where watched.contains(e.role) {
+        // Text too, as a display shows what a press did (Calculator, regression run 2026-11-16);
+        // at most `textWatched` of it, so a long window stays quick.
+        var texts = 0
+        for e in listing.items {
+            if e.role == "AXStaticText" {
+                guard texts < textWatched else { continue }
+                texts += 1
+            } else if !watched.contains(e.role) {
+                continue
+            }
             if let v = env.appControl.value(e) { out[e.ref] = v }
         }
         return out
     }
+
+    private static let textWatched = 300
 
     private static let watched: Set<String> = [
         "AXCheckBox", "AXRadioButton", "AXTextField", "AXTextArea", "AXComboBox", "AXPopUpButton", "AXSearchField",
@@ -216,12 +235,22 @@ extension ComputerCapability {
             e.ref != except && before[e.ref] != nil && after[e.ref] != nil && before[e.ref] != after[e.ref]
         }
         guard !changed.isEmpty else { return nil }
-        let shown = changed.prefix(10).map { e in
-            "\(e.ref) \(e.role) \"\(e.label)\": \"\(before[e.ref]!.prefix(60))\" → \"\(after[e.ref]!.prefix(60))\""
+        func list(_ items: [AppElement]) -> String {
+            let shown = items.prefix(10).map { e in
+                "\(e.ref) \(e.role) \"\(e.label)\": \"\(before[e.ref]!.prefix(60))\" → \"\(after[e.ref]!.prefix(60))\""
+            }
+            return shown.joined(separator: "; ") + (items.count > 10 ? "; and \(items.count - 10) more" : "")
         }
-        let more = changed.count > 10 ? "; and \(changed.count - 10) more" : ""
-        return "Also changed in the window: " + shown.joined(separator: "; ") + more
-            + ". If you didn't mean that, look at the window and undo it."
+        let texts = changed.filter { $0.role == "AXStaticText" }
+        let controls = changed.filter { $0.role != "AXStaticText" }
+        var parts: [String] = []
+        if !texts.isEmpty { parts.append("Text now showing: " + list(texts) + ".") }
+        if !controls.isEmpty {
+            parts.append(
+                "Also changed in the window: " + list(controls)
+                    + ". If you didn't mean that, look at the window and undo it.")
+        }
+        return parts.joined(separator: " ")
     }
 
     /// What has the keyboard focus: the app's answer, else the last look's element whose flag is set.

@@ -113,6 +113,11 @@ struct AppControl: Sendable {
         return app.bundleURL?.lastPathComponent.lowercased().hasPrefix("latchkey") == true
     }
 
+    /// Whether an app name Claude gave means Latchkey ("Latchkey", "Latchkey Dev", "Latchkey.app").
+    static func namesLatchkey(_ name: String) -> Bool {
+        name.trimmingCharacters(in: .whitespaces).lowercased().hasPrefix("latchkey")
+    }
+
     /// The last listing of each app's window, so a reference stays the element Claude saw.
     static let refs = Locked<[pid_t: AppListing]>([:])
 }
@@ -129,16 +134,16 @@ struct PidPoster: InputPoster {
             event?.flags = flags
             event?.postToPid(pid)
         case .text(let s):
-            var units = Array(s.utf16)[...]
-            while !units.isEmpty {
-                let chunk = Array(units.prefix(16))
-                units = units.dropFirst(chunk.count)
+            // One character per key, as a keyboard types: an app that reads one key per event
+            // (Calculator) took only the first of a 16-character chunk (regression run 2026-11-16).
+            for (i, character) in s.enumerated() {
+                let units = Array(String(character).utf16)
                 for down in [true, false] {
                     let event = CGEvent(keyboardEventSource: src, virtualKey: 0, keyDown: down)
-                    event?.keyboardSetUnicodeString(stringLength: chunk.count, unicodeString: chunk)
+                    event?.keyboardSetUnicodeString(stringLength: units.count, unicodeString: units)
                     event?.postToPid(pid)
                 }
-                usleep(15_000)
+                usleep(i % 16 == 15 ? 15_000 : 2_000)
             }
         default:
             break
