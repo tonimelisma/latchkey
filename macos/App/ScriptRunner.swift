@@ -24,11 +24,35 @@ struct OSAScriptRunner: ScriptRunner {
     var timeout: Duration = .seconds(25)
 
     func run(_ script: String, _ args: [String]) async throws -> String {
-        if let app, await Permissions.automationOpening(app) == .notAsked { throw ScriptError.notAllowed }
+        let clock = ContinuousClock()
+        let start = clock.now
+        var left = timeout
+        if let app {
+            // The permission check asks macOS, which may wait on the app itself: while the Mac is
+            // locked a napping Safari held it past the relay's 30 s before the script's own limit
+            // began (2026-11-17). So it shares the script's limit.
+            // An unknown answer (nil) still runs the script, as before; only no answer stops it.
+            guard
+                let answer = await Deadline.first(
+                    within: timeout,
+                    { () async -> Permissions.Automation?? in .some(await Permissions.automationOpening(app)) })
+            else {
+                EventLog.shared.record(
+                    .permissions,
+                    "The Automation check for \(app) didn't answer within \(timeout); the script didn't run",
+                    error: true)
+                throw ScriptError.timedOut
+            }
+            if answer == .notAsked { throw ScriptError.notAllowed }
+            let spent = clock.now - start
+            if spent > .seconds(3) {
+                EventLog.shared.record(.permissions, "The Automation check for \(app) took \(spent)")
+            }
+            left = max(timeout - spent, .seconds(2))
+        }
         let lines = script.split(separator: "\n", omittingEmptySubsequences: false).flatMap { ["-e", String($0)] }
         let r: ProcessResult
-        do { r = try await ProcessCommands.launch("/usr/bin/osascript", lines + ["--"] + args, timeout: timeout) } catch
-        {
+        do { r = try await ProcessCommands.launch("/usr/bin/osascript", lines + ["--"] + args, timeout: left) } catch {
             throw ScriptError.failed(error.localizedDescription)
         }
         if r.timedOut { throw ScriptError.timedOut }
@@ -38,6 +62,40 @@ struct OSAScriptRunner: ScriptRunner {
                 ? ScriptError.notAllowed : message.contains("-1712") ? .timedOut : .failed(message)
         }
         return r.outputText
+    }
+}
+
+/// The answer of work that may never come back (a blocking Apple call behind a continuation),
+/// or nil once `limit` passes. After that the work is cancelled and its late answer dropped.
+enum Deadline {
+    static func first<T: Sendable>(within limit: Duration, _ work: @escaping @Sendable () async -> T?) async -> T? {
+        let once = Once<T>()
+        return await withCheckedContinuation { (done: CheckedContinuation<T?, Never>) in
+            once.set(done)
+            let worker = Task { once.finish(await work()) }
+            Task {
+                try? await Task.sleep(for: limit)
+                once.finish(nil)
+                worker.cancel()
+            }
+        }
+    }
+
+    /// Resumes the continuation once: with the first answer, or nil at the limit.
+    private final class Once<T: Sendable>: @unchecked Sendable {
+        private let lock = NSLock()
+        private var done: CheckedContinuation<T?, Never>?
+
+        func set(_ c: CheckedContinuation<T?, Never>) { lock.withLock { done = c } }
+
+        func finish(_ value: T?) {
+            let c = lock.withLock {
+                let c = done
+                done = nil
+                return c
+            }
+            c?.resume(returning: value)
+        }
     }
 }
 

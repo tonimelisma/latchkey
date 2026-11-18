@@ -134,6 +134,8 @@ paths:
   `Task.detached` is no way out: it runs on the same pool. A blocking Apple call (e.g.
   `AEDeterminePermissionToAutomateTarget`) goes to a GCD queue behind a continuation, like
   `Permissions.automation` (setup views in tests held all 8 threads that way, 2026-11-03).
+  Behind a continuation it still has no limit: the check before each Safari script held a locked
+  tab list past the relay's 30 s (2026-11-17). Bound such calls with `Deadline.first`.
 - Tests run side by side (`parallelizable` in project.yml, 2026-10-29): a test needs its own
   folders and stand-ins (no shared static state), and a wait for something the system does
   (a process gone, a file event, output arriving) looks repeatedly up to a few seconds instead

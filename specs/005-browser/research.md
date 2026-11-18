@@ -479,3 +479,7 @@ Safari itself (FR-455) and nothing is copied (FR-456); while locked, Toni accept
 named for a token) lasting over a day in Safari's file: reading a site as signed in when it
 isn't only opens a Safari tab, which is safe; the other way Claude can move the page with
 sign_in_again (FR-459).
+
+## The locked tab list past 30 s (2026-11-17)
+
+The first tab list while locked sometimes passed the relay's 30 s; a retry answered at once. The script runner's 12 s limit only began after the Automation permission check, which had none: `AEDeterminePermissionToAutomateTarget` may wait on the target app, and when it gave no clear answer Latchkey opened Safari and asked up to 20 more times. Options: (a) cache the permission for a while (hides a permission the owner turns off); (b) skip the check while locked (a script could then raise the Automation question behind the lock, which stalls Safari scripting: see the gotcha of 2026-10-29); (c) give the check and the script one shared limit. Chosen: (c), with a log line when the check is slow or doesn't answer.

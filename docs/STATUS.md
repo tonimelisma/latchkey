@@ -48,11 +48,14 @@ of an earlier case; a Costco tab that moved) and passed in the run before.
 
 Claude's feedback reports, first day (2026-11-17): the checking agents filed ten on their own.
 Seven were issues fixed the same night; three were new. Fixed: WhatsApp mentions showed bare
-privacy ids, and a new-tab link in a tab of Claude's lost the page (Costco; works live). Still
-open: listing tabs while locked passed the relay's 30 s on the first call (a retry answers at
-once). Not fixed by 0.8.171, which no longer finds Claude's tab again while locked: the live run
-after it failed the same way. Ruled out so far: the locked script runner's 12 s limit (it stops
-osascript) and listing Claude's own pages (no waiting). Case regressions.browser_locked_tabs_answer_in_time.
+privacy ids, and a new-tab link in a tab of Claude's lost the page (Costco; works live). Listing
+tabs while locked passed the relay's 30 s on the first call (a retry answered at once); 0.8.171's
+change (not finding Claude's tab again while locked) didn't fix it. Cause: before every Safari
+script, the Automation permission check (`AEDeterminePermissionToAutomateTarget`, then up to 20
+more after opening Safari) ran with no limit, and macOS may wait on a napping Safari for it. Now
+the check and the script share the script's limit (12 s while locked), and a check slower than
+3 s or one that doesn't answer is logged under permissions, so a slow call names its step. Case
+regressions.browser_locked_tabs_answer_in_time.
 Also fixed from the runs: a WhatsApp group sender without a name is said so, and Contacts puts
 back a membership iCloud dropped when it took a new card and group over (spec 007 FR-728).
 
