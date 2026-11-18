@@ -55,7 +55,9 @@ script, the Automation permission check (`AEDeterminePermissionToAutomateTarget`
 more after opening Safari) ran with no limit, and macOS may wait on a napping Safari for it. Now
 the check and the script share the script's limit (12 s while locked), and a check slower than
 3 s or one that doesn't answer is logged under permissions, so a slow call names its step. Case
-regressions.browser_locked_tabs_answer_in_time.
+regressions.browser_locked_tabs_answer_in_time works live in 0.8.172 (lid closed and locked,
+2026-11-17 18:24: browser regressions 25 worked, 3 unlocked-only skipped), and the log showed the
+check taking 3 s there, which confirms where the time went.
 Also fixed from the runs: a WhatsApp group sender without a name is said so, and Contacts puts
 back a membership iCloud dropped when it took a new card and group over (spec 007 FR-728).
 
