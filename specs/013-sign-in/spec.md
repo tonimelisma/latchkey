@@ -16,7 +16,7 @@ While the Mac is locked, Claude's pages open in Latchkey's own browser with copi
 cookies (spec 005 FR-457). When a site's sign-in has expired in Safari, or the site signs
 Latchkey's copy out, Claude reaches a sign-in page and can go no further: the Owner is away, and
 nothing on the Mac can sign in for them. Apple's Passwords app has no interface another app can
-read, so the only way in is a copy the Owner hands over himself.
+read, so the only way in is a copy the Owner hands over themselves.
 
 ## User stories
 
