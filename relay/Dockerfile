@@ -1,7 +1,7 @@
 # The Latchkey relay: one static binary on a distroless base, data in /data (plan D10, FR-080).
 # The build stage runs natively and cross-compiles for the target (no emulation).
 # Base images are pinned by digest so a build is repeatable; Dependabot proposes updates.
-FROM --platform=$BUILDPLATFORM golang:1.27.4@sha256:5e8afd493a7124a8586e134d9b532731161d4b9becf9dee5a5956b107426f93d AS build
+FROM --platform=$BUILDPLATFORM golang:1.27.4@sha256:205c7636d74e0ffbe3d007162df7d74f859f5a8c8322dfb9f907977686c126cf AS build
 ARG TARGETOS TARGETARCH
 WORKDIR /src
 COPY go.mod go.sum ./
