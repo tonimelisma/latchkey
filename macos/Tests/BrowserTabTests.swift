@@ -484,20 +484,29 @@ final class FakeSafariTabs: ScriptRunner, @unchecked Sendable {
         func row(_ i: Int, _ address: String) -> TabSurvey.Row {
             TabSurvey.Row(index: i, sameAddress: false, marked: false, address: address)
         }
-        let before = TabSurvey(count: 3, rows: [row(1, "https://o/1"), row(2, "https://o/2"), row(3, "https://citi/")])
-        var mine = PickedTab(index: 3, count: 3, address: "https://online.citi/dash", token: "t")
+        let before = TabSurvey(
+            count: 3, rows: [row(1, "https://o/1"), row(2, "https://o/2"), row(3, "https://www.citi.com/")])
+        var mine = PickedTab(index: 3, count: 3, address: "https://online.citi.com/US/ag/dashboard", token: "t")
         mine.others = before.fingerprint(without: 3)
         let after = TabSurvey(
-            count: 3, rows: [row(1, "https://o/1"), row(2, "https://o/2"), row(3, "https://online.citi/login")])
+            count: 3, rows: [row(1, "https://o/1"), row(2, "https://o/2"), row(3, "https://online.citi.com/US/login")])
         #expect(TabSurvey.pick(after, remembered: mine, navigating: false, claudes: true) == 3)
         #expect(TabSurvey.pick(after, remembered: mine, navigating: false, claudes: false) == nil, "an owner's tab")
         let ownerMoved = TabSurvey(
-            count: 3, rows: [row(1, "https://o/1"), row(2, "https://o/other"), row(3, "https://online.citi/login")])
+            count: 3,
+            rows: [row(1, "https://o/1"), row(2, "https://o/other"), row(3, "https://online.citi.com/US/login")])
         #expect(TabSurvey.pick(ownerMoved, remembered: mine, navigating: false, claudes: true) == nil)
         let opened = TabSurvey(
             count: 4,
-            rows: [row(1, "https://o/1"), row(2, "https://o/2"), row(3, "https://online.citi/login"), row(4, "x")])
+            rows: [
+                row(1, "https://o/1"), row(2, "https://o/2"), row(3, "https://online.citi.com/US/login"), row(4, "x"),
+            ])
         #expect(TabSurvey.pick(opened, remembered: mine, navigating: false, claudes: true) == nil)
+        // Security review 2026-11-21: the owner closed Claude's tab and opened one of theirs in
+        // its place, on another site: never taken for Claude's.
+        let ownersInItsPlace = TabSurvey(
+            count: 3, rows: [row(1, "https://o/1"), row(2, "https://o/2"), row(3, "https://mail.example.com/inbox")])
+        #expect(TabSurvey.pick(ownersInItsPlace, remembered: mine, navigating: false, claudes: true) == nil)
     }
 
     /// Which tab is the picked one, decided from what Safari reports (plan D6, D8).

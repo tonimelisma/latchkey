@@ -46,6 +46,15 @@ struct TabSurvey: Equatable {
     var count: Int
     var rows: [Row]
 
+    /// Whether two https addresses are on the same registered site ("online.citi.com/login" and
+    /// "online.citi.com/US/ag/dashboard"; "www.citi.com" too).
+    static func sameSite(_ a: String, _ b: String) -> Bool {
+        guard let x = URL(string: a), let y = URL(string: b), x.scheme == "https", y.scheme == "https",
+            let hx = x.host()?.lowercased(), let hy = y.host()?.lowercased(), !hx.isEmpty
+        else { return false }
+        return PublicSuffix.registrable(hx) == PublicSuffix.registrable(hy)
+    }
+
     /// The fingerprint of every tab but the one at `index`.
     func fingerprint(without index: Int) -> String {
         let all = rows.filter { $0.index != index }.map(\.address).joined(separator: "\n")
@@ -82,8 +91,12 @@ struct TabSurvey: Equatable {
             if navigating && r.loading && s.count == t.count { return r.index }
             // A tab of Claude's own whose page went elsewhere (a redirect after the load's limit
             // took its mark; Citi, 2026-11-21): still the tab at its place while the window has as
-            // many tabs and every other one is exactly as when it was last surely Claude's.
-            if claudes && s.count == t.count, let seen = t.others, seen == s.fingerprint(without: t.index) {
+            // many tabs, every other one is exactly as when it was last surely Claude's, and it is
+            // still on the site Claude last loaded (a tab of the owner's opened in its place, after
+            // it was closed, is on another site; security review 2026-11-21).
+            if claudes && s.count == t.count, let seen = t.others, seen == s.fingerprint(without: t.index),
+                Self.sameSite(r.address, t.address)
+            {
                 return r.index
             }
             // A page waiting on its own dialog answers no script, so it can't show the mark: it
