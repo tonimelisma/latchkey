@@ -99,3 +99,84 @@ for Keychain reads (count without data, "couldn't read" is not "isn't there") ap
   30-second step ([RFC 6238](https://www.rfc-editor.org/rfc/rfc6238)).
 - `websites-that-append-2fa-to-password.json` in apple/password-manager-resources names sites
   where the code goes after the password in the same field.
+
+## Receiving Apple's export (2026-11-20)
+
+- **What the app ships.** An AutoFill credential provider extension
+  (`ASCredentialProviderViewController`, extension point
+  `com.apple.authentication-services-credential-provider-ui`), with the entitlement
+  `com.apple.developer.authentication-services.autofill-credential-provider` on the app and the
+  extension ([Apple](https://developer.apple.com/documentation/authenticationservices/ascredentialproviderviewcontroller.md)).
+  The extension's `ASCredentialProviderExtensionCapabilities` set `SupportsCredentialExchange`
+  and `SupportedCredentialExchangeVersions = ["1.0"]`; the app lists
+  `ASCredentialExchangeActivityType` in `NSUserActivityTypes`
+  ([ASCredentialImportManager](https://developer.apple.com/documentation/authenticationservices/ascredentialimportmanager.md)).
+  Extensions are sandboxed; the app needn't be (not stated by Apple outright:
+  [forum](https://developer.apple.com/forums/thread/718589)).
+- **The import runs in the app.** macOS opens the app with a user activity holding a one-time
+  token; `importCredentials(token:)` returns the data. No file is written
+  ([importCredentials](https://developer.apple.com/documentation/authenticationservices/ascredentialimportmanager/importcredentials(token:).md)).
+- **Needs the paid Apple Developer Program.** "AutoFill credential provider" is available to
+  paid members and Developer ID, not to free (Personal Team) accounts
+  ([Apple, supported capabilities](https://developer.apple.com/help/account/reference/supported-capabilities-macos)).
+  Latchkey is signed today with Toni's free Apple Development certificate (STATUS: the $99
+  program is "later, Toni's call").
+- **What comes.** Per item: title, site addresses (`scope.urls`), dates; credentials of kind
+  password (user name, password), passkey (credential id, RP ID, user name and display name,
+  user handle, private key in PKCS#8), TOTP, notes, cards
+  ([ASImportableCredential](https://developer.apple.com/documentation/authenticationservices/asimportablecredential.md),
+  [Passkey](https://developer.apple.com/documentation/authenticationservices/asimportablecredential/passkey.md)).
+  Apple's Passwords sends logins, passkeys, and verification codes; the Apple Account's own
+  passkey isn't exportable ([Bitwarden](https://bitwarden.com/en-gb/help/import-from-safari.md),
+  [Six Colors](https://sixcolors.com/post/2025/09/export-keys-securely-from-passwords-to-third-party-managers/)).
+  Selected items can be sent, on Mac and iPhone.
+- **A snapshot, never a sync.** Nothing pushes later changes in Passwords to the importer; the
+  provider's "report" callbacks are signals from sites, and save requests exist on iOS only
+  ([WWDC25 279](https://developer.apple.com/videos/play/wwdc2025/279/)). Keeping the copies
+  current means exporting again.
+- **No AutoFill offers elsewhere.** Registering identities in `ASCredentialIdentityStore` is
+  optional; without it macOS shows no suggestions from Latchkey (whether an enabled provider
+  still shows a generic entry is to be tested).
+- **Early trouble.** Apps missing from the export list were reported and fixed by Apple in
+  26.4 ([forum](https://developer.apple.com/forums/thread/819382)); whether Latchkey must be
+  switched on under AutoFill & Passwords first is to be tested.
+- **The fallback without the program: the CSV file.** Passwords' File → Export All Passwords to
+  File writes passwords, user names, sites, notes, and verification codes (an `OTPAuth` column),
+  never passkeys, unencrypted ([Apple](https://support.apple.com/guide/passwords/mchl35b12625/mac)).
+
+## Passkeys elsewhere (2026-11-20)
+
+- WebKit's own passkeys need the `com.apple.developer.web-browser.public-key-credential`
+  entitlement, for apps that can be the default browser, by request and review
+  ([Apple](https://developer.apple.com/documentation/bundleresources/entitlements/com.apple.developer.web-browser.public-key-credential.md),
+  [WebKit bug 237380](https://bugs.webkit.org/show_bug.cgi?id=237380)); and off screen the page
+  is never focused (tested above). So Latchkey answers passkeys itself in its own browser.
+- The hook's messages must take the page's origin from `WKScriptMessage.frameInfo.securityOrigin`,
+  never from the page's script ([Apple](https://developer.apple.com/documentation/webkit/wkscriptmessage/frameinfo.md)).
+- What the hook must imitate: `PublicKeyCredential` objects (`instanceof`), the availability
+  checks, `getClientCapabilities()`, `getClientExtensionResults()`, `toJSON()`, conditional
+  requests that wait until aborted. Sites wanting attestation or the PRF extension won't work.
+- **Claude's Safari tabs.** Latchkey can't add a script to a Safari page before the page's own
+  scripts run, and Safari's own passkeys ask for Touch ID on the screen. A hook added after the
+  page loads catches a passkey request started by a button Claude clicks, not one the page starts
+  as it opens (to be tested). Passwords and codes fill there like any field.
+- **No live access exists.** `SecRequestSharedWebCredential` and `ASAuthorizationPasswordProvider`
+  reach only an app's own associated domains, with a sheet on screen
+  ([Apple](https://developer.apple.com/documentation/authenticationservices/asauthorizationpasswordprovider.md)).
+
+## Keychain while locked (2026-11-20)
+
+The data protection keychain forgets `WhenUnlocked` secrets some time after the lock (Apple DTS,
+[forum](https://developer.apple.com/forums/thread/729835)); `AfterFirstUnlockThisDeviceOnly`
+stays readable, as Latchkey's own items already are. The login keychain Latchkey uses today is
+"on the road to deprecation" ([TN3137](https://developer.apple.com/documentation/technotes/tn3137-on-mac-keychains.md));
+the plan picks one.
+
+## Only a real test settles
+
+1. Latchkey appearing in Passwords' export list (Developer ID, sandboxed stub extension,
+   menu-bar app); whether it must be enabled in AutoFill & Passwords first.
+2. A menu-bar app receiving the import's user activity.
+3. The export's exact content, and Apple's passkey keys loading into CryptoKit as they come.
+4. The hook accepted by real sites (BE/BS, frames, conditional requests).
+5. Keychain reads hours into a lock, lid closed.
