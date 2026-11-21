@@ -117,7 +117,10 @@ final class OwnSessions {
         guard on(), case .some(let held) = signIns.load() else { return [] }
         let back = fellBack(held.imported)
         if let s = sitesFor, s.imported == held.imported, s.fellBack == back { return s.sites }
-        let sites = Array(Set(held.logins.map(\.site)).subtracting(back)).sorted()
+        // A site that fell back takes every held site registered under its name with it (FR-1352),
+        // also for a fallback recorded before that rule.
+        let groups = Set(back.map { PublicSuffix.registrable($0) })
+        let sites = Set(held.logins.map(\.site)).filter { !groups.contains(PublicSuffix.registrable($0)) }.sorted()
         sitesFor = (held.imported, back, sites)
         return sites
     }

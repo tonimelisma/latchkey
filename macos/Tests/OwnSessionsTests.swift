@@ -122,6 +122,15 @@ import WebKit
         #expect(!s.isOwn("na.account.a.test") && !s.reaches(".a.test") && s.isOwn("accounts.g.test"))
     }
 
+    @Test func aFallbackKeptBeforeTheWholeSiteRuleCoversItToo() throws {
+        let n = SavedSignIn(title: "N", site: "na.account.a.test", user: "ann", password: "pw", otp: nil)
+        let vault = MemoryVault()
+        let old = OwnSessions.Contents(cookies: [], fellBack: ["a.test"], fellBackFor: Self.imported)
+        vault.items[OwnSessions.account] = try JSONEncoder().encode(old)
+        let (s, _, _) = try Self.sessions([Self.a, n], vault: vault)
+        #expect(!s.isOwn("na.account.a.test") && !s.reaches(".a.test"))
+    }
+
     @Test func registeredNames() {
         #expect(PublicSuffix.registrable("na.account.amazon.com") == "amazon.com")
         #expect(PublicSuffix.registrable("amazon.com") == "amazon.com")
