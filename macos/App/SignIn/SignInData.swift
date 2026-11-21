@@ -99,15 +99,61 @@ enum SiteMatch {
         guard let u = URL(string: withScheme), ["http", "https"].contains(u.scheme?.lowercased() ?? ""),
             var host = u.host()?.lowercased(), host.contains(".")
         else { return nil }
-        if host.hasPrefix("www.") { host.removeFirst(4) }
+        if host.hasPrefix("www."), !PublicSuffix.isSuffix(String(host.dropFirst(4))) { host.removeFirst(4) }
         return host
     }
 
+    /// The page's host is the site, or a subdomain of it when the site isn't itself a public
+    /// suffix: a sign-in saved for a shared host (herokuapp.com, github.io) never fills on its
+    /// customers' sites (security review, 2026-11-21).
     static func fills(site: String, on page: String) -> Bool {
         guard !site.isEmpty, let u = URL(string: page), u.scheme?.lowercased() == "https",
             let host = u.host()?.lowercased()
         else { return false }
-        return host == site || host.hasSuffix("." + site)
+        return host == site || (host.hasSuffix("." + site) && !PublicSuffix.isSuffix(site))
+    }
+}
+
+/// The Public Suffix List (publicsuffix.org, MPL 2.0, bundled as `public_suffix_list.dat`,
+/// ICANN and private sections): names under which anyone may register their own (com, co.uk,
+/// github.io, herokuapp.com).
+enum PublicSuffix {
+    private struct Rules {
+        var exact: Set<String> = []
+        var wildcard: Set<String> = []
+        var exception: Set<String> = []
+    }
+
+    private static let rules: Rules = {
+        var r = Rules()
+        guard let url = Bundle.main.url(forResource: "public_suffix_list", withExtension: "dat"),
+            let text = try? String(contentsOf: url, encoding: .utf8)
+        else { return r }
+        for raw in text.split(whereSeparator: \.isNewline) {
+            let line = raw.trimmingCharacters(in: .whitespaces).lowercased()
+            if line.isEmpty || line.hasPrefix("//") { continue }
+            if line.hasPrefix("!") {
+                r.exception.insert(String(line.dropFirst()))
+            } else if line.hasPrefix("*.") {
+                r.wildcard.insert(String(line.dropFirst(2)))
+            } else {
+                r.exact.insert(line)
+            }
+        }
+        return r
+    }()
+
+    /// Whether the list loaded. Without it every name counts as a suffix: no subdomain fills,
+    /// the safe side.
+    static var loaded: Bool { !rules.exact.isEmpty }
+
+    static func isSuffix(_ name: String) -> Bool {
+        let n = name.lowercased()
+        guard n.contains("."), loaded else { return true }
+        if rules.exception.contains(n) { return false }
+        if rules.exact.contains(n) { return true }
+        if let dot = n.firstIndex(of: "."), rules.wildcard.contains(String(n[n.index(after: dot)...])) { return true }
+        return false
     }
 }
 

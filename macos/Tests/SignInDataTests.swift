@@ -90,6 +90,19 @@ import Testing
         #expect(!SiteMatch.fills(site: "", on: "https://amazon.com/"))
     }
 
+    @Test func sharedHostsFillOnlyThemselves() {
+        #expect(PublicSuffix.loaded)
+        #expect(PublicSuffix.isSuffix("herokuapp.com") && PublicSuffix.isSuffix("github.io"))
+        #expect(PublicSuffix.isSuffix("co.uk") && PublicSuffix.isSuffix("com"))
+        #expect(!PublicSuffix.isSuffix("amazon.com") && !PublicSuffix.isSuffix("bbc.co.uk"))
+        #expect(!SiteMatch.fills(site: "herokuapp.com", on: "https://evil.herokuapp.com/"))
+        #expect(SiteMatch.fills(site: "herokuapp.com", on: "https://herokuapp.com/"))
+        #expect(SiteMatch.fills(site: "the-internet.herokuapp.com", on: "https://the-internet.herokuapp.com/login"))
+        #expect(!SiteMatch.fills(site: "the-internet.herokuapp.com", on: "https://other.herokuapp.com/login"))
+        #expect(SiteMatch.site(of: "https://www.github.io/") == "www.github.io")
+        #expect(SiteMatch.fills(site: "bbc.co.uk", on: "https://account.bbc.co.uk/signin"))
+    }
+
     @Test func aSavedAddressBecomesItsSite() {
         #expect(SiteMatch.site(of: "https://www.Example.com/login?x=1") == "example.com")
         #expect(SiteMatch.site(of: "https://accounts.google.com/") == "accounts.google.com")
