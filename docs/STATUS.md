@@ -28,6 +28,8 @@ cloud settings and the SSH permission check counted as a cloud change (each woul
 the sentinel trusted process names and a host-wide "dpkg is running" flag, and the hub's Close
 returned before a closed connection's last trace line (the long-flaky "traces: directory not
 empty" tests). Live check after: a fresh Claude Code session saw both machines and used a tool.
+All alerts reached the alert address (11 on the first day, from the runs themselves); one was a
+false alarm, hackernews's own health check (wget) seen as a foreign program, fixed the same day.
 
 Security emails (Toni, 2026-11-21; spec 001 FR-696 to FR-699, plan D5): the relay emails the
 Owner whenever a machine is paired, an app is allowed on the consent page (not on a refresh), or

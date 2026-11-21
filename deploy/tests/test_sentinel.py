@@ -131,6 +131,13 @@ class Containers(unittest.TestCase):
         self.assertEqual(sentinel.unexpected_programs("hackernews-app-1", ["node", "MainThread"]), [])
         self.assertEqual(sentinel.unexpected_programs("hackernews-app-1", ["node", "xmrig"]), ["xmrig"])
 
+    def test_a_containers_own_health_check_and_backup_are_normal(self):
+        # Found live 2026-11-21: hackernews's health check runs wget every 30 s, and the minute's
+        # process check caught it ("wget is running inside hackernews-app-1"); the nightly backup
+        # runs sqlite3 the same way.
+        self.assertEqual(sentinel.unexpected_programs("hackernews-app-1", ["node", "wget", "sqlite3"]), [])
+        self.assertEqual(sentinel.unexpected_programs("hackernews-app-1", ["node", "wget", "sh"]), ["sh"])
+
 
 class Audit(unittest.TestCase):
     def test_parse_a_watch_event(self):

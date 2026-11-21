@@ -80,7 +80,8 @@ CONTAINERS = {
         },
     },
     "hackernews-app-1": {
-        "programs": {"node", "MainThread"},
+        # The app, its health check (wget, every 30 s) and the nightly backup (sqlite3).
+        "programs": {"node", "MainThread", "wget", "sqlite3"},
         "mounts": {"volume:hackernews_sqlite-data"},
     },
     # latchkey-update-apps checks a new Caddy version against the Caddyfile in this one first.
