@@ -248,7 +248,7 @@ import Testing
     @Test func theEmailClaudeFoundIsArchivedInMailToo() async throws {
         let mail = TextedCodesTests.Texts()
         let key = MailCodes.Place(id: 9, account: "ACCT", mailbox: "Inbox").key
-        mail.all = [.init(id: key, text: "Your verification code is 320518", date: Date())]
+        mail.all = [.init(id: key, text: "From: noreply@a.test\nYour verification code is 320518", date: Date())]
         let deleted = TextedCodesTests.Deleted()
         let started = TextedCodesTests.Deleted()
         let (r, _, own) = try await run(
@@ -270,7 +270,9 @@ import Testing
         let mail = TextedCodesTests.Texts()
         let key = MailCodes.Place(id: 42, account: "ACCT", mailbox: "Inbox").key
         mail.all = [
-            .init(id: key, text: "Your verification code\nUse 320518 to sign in.", date: Date().addingTimeInterval(60))
+            .init(
+                id: key, text: "From: noreply@a.test\nYour verification code\nUse 320518 to sign in.",
+                date: Date().addingTimeInterval(60))
         ]
         let deleted = TextedCodesTests.Deleted()
         let started = TextedCodesTests.Deleted()
@@ -294,6 +296,17 @@ import Testing
 
 /// Apple Mail's side (FR-1365, FR-1366).
 @Suite struct MailCodesTests {
+    /// Security review 2026-11-21: an email code is used only from an email naming the site.
+    @Test(arguments: [
+        ("online.citi.com", "From: alerts@citibank.com\nYour one-time passcode", true),
+        ("www.amazon.com", "From: account-update@amazon.com\nVerify", true),
+        ("www.amazon.com", "From: deals@shop.example\nYour code 123456", false),
+        ("a.test", "From: x@a.test", true), ("a.test", "From: x@b.test", false),
+    ])
+    func anEmailMustNameTheSite(_ site: String, _ text: String, _ names: Bool) {
+        #expect(MailCodes.names(site, in: text) == names)
+    }
+
     @Test func aPlaceComesFromMailsAddressAndBack() throws {
         let p = try #require(MailCodes.Place(id: 7, url: "ews://0FFA47A7-021E/Deleted%20Items"))
         #expect(p.account == "0FFA47A7-021E" && p.mailbox == "Deleted Items")

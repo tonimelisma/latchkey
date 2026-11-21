@@ -53,6 +53,17 @@ enum MailCodes {
         }
     }
 
+    /// Whether an email (its sender line and text) names the site: the site's registered name
+    /// without its suffix ("citi" for online.citi.com, also in citibank.com), or, for a name under
+    /// 3 letters, the whole registered name. An email code from anyone else is never used, nor its
+    /// email archived (security review 2026-11-21).
+    static func names(_ site: String, in text: String) -> Bool {
+        let registered = PublicSuffix.registrable(site)
+        let brand = String(registered.split(separator: ".").first ?? "")
+        let t = text.lowercased()
+        return brand.count >= 3 ? t.contains(brand) : t.contains(registered)
+    }
+
     /// Mailboxes a code never comes from: what the Owner sent or drafted, and what's deleted.
     static func skipped(_ mailbox: String) -> Bool {
         let m = mailbox.lowercased()
@@ -68,9 +79,11 @@ enum MailCodes {
             let rows = try? SQLite.rows(
                 db,
                 """
-                SELECT m.ROWID, m.date_received, COALESCE(s.subject, ''), COALESCE(su.summary, ''), mb.url
+                SELECT m.ROWID, m.date_received, COALESCE(s.subject, ''), COALESCE(su.summary, ''), mb.url,
+                  COALESCE(a.address, '')
                 FROM messages m LEFT JOIN subjects s ON s.ROWID = m.subject
                   LEFT JOIN summaries su ON su.ROWID = m.summary JOIN mailboxes mb ON mb.ROWID = m.mailbox
+                  LEFT JOIN addresses a ON a.ROWID = m.sender
                 WHERE m.date_received >= ? AND m.deleted = 0 ORDER BY m.date_received DESC LIMIT 20
                 """, bind: [.int(Int64(since.timeIntervalSince1970))])
         else { return nil }
@@ -82,7 +95,8 @@ enum MailCodes {
             // email's own text, from its file, once Mail has it.
             let body = file(of: place, in: root).flatMap { try? Data(contentsOf: $0) }.map(Self.text(ofEmlx:)) ?? ""
             return TextedCodes.Text(
-                id: place.key, text: [r[2].text ?? "", r[3].text ?? "", body].joined(separator: "\n"),
+                id: place.key,
+                text: ["From: " + (r[5].text ?? ""), r[2].text ?? "", r[3].text ?? "", body].joined(separator: "\n"),
                 date: Date(timeIntervalSince1970: Double(r[1].int ?? 0)))
         }
     }

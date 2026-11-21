@@ -228,7 +228,8 @@ we can't find it via Apple Mail either"; then "yes, script Mail for archiving an
 - **FR-1365** Only when Claude says it has no tool for the Owner's email shall Latchkey read
   Apple Mail on this Mac for the code: an email received after the site's request, not in a sent,
   draft, or deleted mailbox, read from Mail's own files (its text, never through its window),
-  under FR-1360's rules for a code; Apple Mail is started in the background, hidden, when it
+  under FR-1360's rules for a code and only from an email naming the site (its sender or text
+  holds the site's registered name, like "citi"; security review 2026-11-21); Apple Mail is started in the background, hidden, when it
   isn't running.
 - **FR-1366** After a sign-in that worked with an emailed code, that email shall be marked read
   and moved to its account's archive mailbox through Mail's scripting, never its window: the one

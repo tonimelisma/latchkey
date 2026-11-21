@@ -201,7 +201,7 @@ enum LoginsCapability {
             // Without Apple Mail, a shorter wait for a text: Claude is then asked about email.
             let perCall = await MainActor.run { readMail ? codes.perCall : codes.firstWait }
             let until = min(callStart + perCall, ContinuousClock.now + .seconds(left))
-            if let got = await codes.wait(since: since, until: until, mail: readMail) {
+            if let got = await codes.wait(since: since, until: until, mail: readMail, site: login.site) {
                 usedText.id = got.message
                 return (got.code, false)
             }
@@ -216,7 +216,7 @@ enum LoginsCapability {
         // FR-1366: a code Claude found in the owner's email: that email is archived through Apple
         // Mail too, when Mail has it (Toni, 2026-11-21: "script Mail for archiving anyway").
         var archivedInMail = false
-        if !givenCode.isEmpty, outcome == .signedIn, let place = await codes.mailHolding(givenCode) {
+        if !givenCode.isEmpty, outcome == .signedIn, let place = await codes.mailHolding(givenCode, site: login.site) {
             await codes.used(place, site: host)
             archivedInMail = true
         }

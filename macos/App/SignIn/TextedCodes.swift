@@ -75,9 +75,9 @@ final class TextedCodes {
     /// A code text (and with `mail`, a code email in Apple Mail) that arrived since `since` and
     /// wasn't used, waiting for one until `until`; the code and the text's id. Nil when none came,
     /// or neither texts nor (with `mail`) Mail can be used.
-    func wait(since: Date, until: ContinuousClock.Instant, poll: Duration = .seconds(1), mail: Bool = false)
-        async -> (code: String, message: String)?
-    {
+    func wait(
+        since: Date, until: ContinuousClock.Instant, poll: Duration = .seconds(1), mail: Bool = false, site: String = ""
+    ) async -> (code: String, message: String)? {
         let texts = on(), recent = recent, recentMail = recentMail
         guard texts || mail else { return nil }
         if mail { await startMail() }
@@ -91,6 +91,9 @@ final class TextedCodes {
             }.value
             guard let texts = found else { return nil }
             for t in texts.sorted(by: { $0.date > $1.date }) where !used.contains(t.id) {
+                // An email must name the site (security review 2026-11-21); a text may come from
+                // anyone (Toni: "Any new code text").
+                if MailCodes.Place(key: t.id) != nil, !MailCodes.names(site, in: t.text) { continue }
                 if let code = Self.code(in: t.text) {
                     used.insert(t.id)
                     return (code, t.id)
@@ -106,11 +109,13 @@ final class TextedCodes {
     /// The email in Apple Mail from the last 10 minutes holding exactly `code` (one Claude read with
     /// its own email tool), for archiving it (FR-1366); nil when Mail doesn't have it. Mail is
     /// only read here, never started.
-    func mailHolding(_ code: String, now: Date = Date()) async -> String? {
+    func mailHolding(_ code: String, site: String, now: Date = Date()) async -> String? {
         let recentMail = recentMail
         let from = now.addingTimeInterval(-600)
         let mails = await Task.detached { recentMail(from) }.value ?? []
-        return mails.sorted { $0.date > $1.date }.first { Self.code(in: $0.text) == code }?.id
+        return mails.sorted { $0.date > $1.date }.first {
+            Self.code(in: $0.text) == code && MailCodes.names(site, in: $0.text)
+        }?.id
     }
 
     // MARK: deleting the text after use (FR-1362)
