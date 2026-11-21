@@ -284,6 +284,17 @@ class Dpkg(unittest.TestCase):
         self.assertEqual(sentinel.dpkg_findings(out), (["/usr/bin/sudo"], ["/etc/ssh/sshd_config"]))
 
 
+class Stop(unittest.TestCase):
+    def test_a_shutdown_or_a_planned_restart_is_expected(self):
+        self.assertEqual(sentinel.stop_reason("stopping", False, None), "the server is shutting down")
+        self.assertEqual(sentinel.stop_reason("", True, None), "the server is shutting down")
+        self.assertEqual(sentinel.stop_reason("running", False, 3.0), "restarted by setup.sh")
+
+    def test_any_other_stop_is_not(self):
+        self.assertIsNone(sentinel.stop_reason("running", False, None))
+        self.assertIsNone(sentinel.stop_reason("degraded", False, 600.0))  # an old announcement doesn't count
+
+
 class RepeatLimit(unittest.TestCase):
     def test_the_same_finding_is_sent_once_an_hour(self):
         s = sentinel.Shipper.__new__(sentinel.Shipper)

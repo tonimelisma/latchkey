@@ -56,8 +56,10 @@ if [ -z "$(find "$stamp" -mtime -7 2>/dev/null)" ]; then
   if [ -n "$old" ] && docker pull -q "$CADDY" >/dev/null 2>&1; then
     new=$(docker image inspect --format '{{.Id}}' "$CADDY")
     if [ "$new" != "$old" ]; then
-      if docker run --rm --name caddy-check --network none --read-only -v /opt/reverse-proxy/Caddyfile:/etc/caddy/Caddyfile:ro \
-        "$CADDY" caddy validate --config /etc/caddy/Caddyfile >/dev/null 2>&1; then
+      # Scratch /data and /config: validating opens the access log and Caddy's storage there.
+      if out=$(docker run --rm --name caddy-check --network none --read-only --tmpfs /data --tmpfs /config \
+        -v /opt/reverse-proxy/Caddyfile:/etc/caddy/Caddyfile:ro \
+        "$CADDY" caddy validate --config /etc/caddy/Caddyfile 2>&1); then
         docker tag "$old" caddy:previous
         (cd /opt/reverse-proxy && docker compose up -d >/dev/null)
         sleep 10
@@ -69,7 +71,7 @@ if [ -z "$(find "$stamp" -mtime -7 2>/dev/null)" ]; then
           (cd /opt/reverse-proxy && docker compose up -d >/dev/null)
         fi
       else
-        log "caddy: $new refuses the Caddyfile; staying on $old"
+        log "caddy: $new refuses the Caddyfile; staying on $old: $(printf '%s' "$out" | tail -1 | cut -c1-300)"
         docker tag "$old" "$CADDY"
       fi
     fi

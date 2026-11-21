@@ -133,7 +133,8 @@ if docker network inspect reverse_proxy >/dev/null 2>&1 &&
   [ "$(docker network inspect reverse_proxy --format '{{len .Containers}}')" = 0 ]; then
   docker network rm reverse_proxy >/dev/null && say "removed the old shared network"
 fi
-put update-apps.sh /usr/local/sbin/latchkey-update-apps 755 || true
+# A changed updater checks Caddy again at once instead of waiting for its week.
+if put update-apps.sh /usr/local/sbin/latchkey-update-apps 755; then rm -f /var/lib/latchkey-update-apps/caddy.checked; fi
 put latchkey-update-apps.service /etc/systemd/system/latchkey-update-apps.service 644 || true
 put latchkey-update-apps.timer /etc/systemd/system/latchkey-update-apps.timer 644 || true
 
@@ -161,6 +162,9 @@ systemctl enable --now auditd >/dev/null 2>&1
 systemctl enable --now latchkey-update-apps.timer >/dev/null 2>&1
 systemctl enable latchkey-sentinel >/dev/null 2>&1
 if [ -n "$sentinel_changed" ] || ! systemctl is-active -q latchkey-sentinel; then
+  # A restart planned here says so, and the sentinel reports its stop quietly (any other stop
+  # outside a shutdown is a WARNING).
+  touch /run/latchkey-sentinel.planned
   systemctl restart latchkey-sentinel && say "sentinel (re)started"
 fi
 

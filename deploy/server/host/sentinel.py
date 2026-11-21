@@ -628,6 +628,24 @@ def metadata(path):
         return r.read().decode()
 
 
+def stop_reason(state, nologin, planned_age):
+    """Why the sentinel is being stopped, when that's expected: the server shutting down (systemd
+    says so, or has created /run/nologin, which it does while stopping), or a restart setup.sh
+    announced in the last two minutes. None otherwise: a stop worth a WARNING."""
+    if state == "stopping" or nologin:
+        return "the server is shutting down"
+    if planned_age is not None and 0 <= planned_age < 120:
+        return "restarted by setup.sh"
+    return None
+
+
+def file_age(path):
+    try:
+        return time.time() - os.stat(path).st_mtime
+    except OSError:
+        return None
+
+
 class Printer:
     """For --check: findings printed, nothing sent."""
 
@@ -653,8 +671,9 @@ def main():
 
     def stop(_sig, _frame):
         state = run(["systemctl", "is-system-running"]).strip()
-        sev = NOTICE if state == "stopping" else WARNING
-        out.emit(sev, "sentinel_stop", f"sentinel stopping (system {state or 'unknown'})")
+        why = stop_reason(state, os.path.exists("/run/nologin"), file_age("/run/latchkey-sentinel.planned"))
+        sev = NOTICE if why else WARNING
+        out.emit(sev, "sentinel_stop", f"sentinel stopping ({why or 'not by a shutdown or setup.sh'}; system {state or 'unknown'})")
         out.flush()
         sys.exit(0)
 

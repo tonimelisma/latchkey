@@ -62,15 +62,23 @@ gcv projects get-iam-policy "$PROJECT" --format=json >"$tmp/iam.json"
 python3 -I deploy/iam.py is-owner "$OWNER" <"$tmp/iam.json" ||
   { echo "FAIL: $OWNER, signed in to gcloud, isn't an owner of the project" >&2; exit 1; }
 
+# Each cloud change below is made only when something differs: every write is an admin action,
+# and each one emails the owner ("Latchkey: cloud project changed"), so a rerun stays quiet.
 echo "• Google Cloud services for IAP, OS Login and alerts"
-gc services enable iap.googleapis.com oslogin.googleapis.com monitoring.googleapis.com logging.googleapis.com >/dev/null
+enabled=$(gcv services list --enabled --format='value(config.name)')
+for api in iap.googleapis.com oslogin.googleapis.com monitoring.googleapis.com logging.googleapis.com; do
+  printf '%s\n' "$enabled" | grep -qx "$api" || gc services enable "$api" >/dev/null
+done
 
 echo "• SSH through Google's IAP tunnel, with OS Login"
 if ! gcv compute firewall-rules describe allow-ssh-iap >/dev/null; then
   gc compute firewall-rules create allow-ssh-iap --network default --direction INGRESS --priority 1000 \
     --source-ranges 35.235.240.0/20 --allow tcp:22 --description "SSH only through Google's IAP tunnel (deploy/harden.sh)" >/dev/null
 fi
-gc compute instances add-metadata "$VM" --zone "$ZONE" --metadata enable-oslogin=TRUE,block-project-ssh-keys=TRUE >/dev/null
+gcv compute instances describe "$VM" --zone "$ZONE" --format=json >"$tmp/vm.json"
+if ! python3 -I deploy/iam.py metadata-ok <"$tmp/vm.json"; then
+  gc compute instances add-metadata "$VM" --zone "$ZONE" --metadata enable-oslogin=TRUE,block-project-ssh-keys=TRUE >/dev/null
+fi
 if gcv compute project-info describe --format='value(commonInstanceMetadata.items[].key)' | tr ';' '\n' | grep -qx ssh-keys; then
   gc compute project-info remove-metadata --keys ssh-keys >/dev/null
   echo "  - SSH keys in the project's metadata removed"
@@ -100,10 +108,13 @@ if ! gcv iam service-accounts describe "$SA" >/dev/null; then
   sleep 10
 fi
 for role in roles/logging.logWriter roles/monitoring.metricWriter; do
-  gc projects add-iam-policy-binding "$PROJECT" --member "serviceAccount:$SA" --role "$role" --condition=None >/dev/null
+  python3 -I deploy/iam.py has-role "serviceAccount:$SA" "$role" <"$tmp/iam.json" ||
+    gc projects add-iam-policy-binding "$PROJECT" --member "serviceAccount:$SA" --role "$role" --condition=None >/dev/null
 done
 for bucket in $(printf '%s' "${APP_BUCKETS-}" | tr ',' ' '); do
-  gc storage buckets add-iam-policy-binding "gs://$bucket" --member "serviceAccount:$SA" --role roles/storage.objectUser >/dev/null
+  gcv storage buckets get-iam-policy "gs://$bucket" --format=json >"$tmp/bucket.json" || : >"$tmp/bucket.json"
+  python3 -I deploy/iam.py has-role "serviceAccount:$SA" roles/storage.objectUser <"$tmp/bucket.json" 2>/dev/null ||
+    gc storage buckets add-iam-policy-binding "gs://$bucket" --member "serviceAccount:$SA" --role roles/storage.objectUser >/dev/null
 done
 DEFAULT_SA=$(gcv projects describe "$PROJECT" --format='value(projectNumber)')-compute@developer.gserviceaccount.com
 if python3 -I deploy/iam.py has-role "serviceAccount:$DEFAULT_SA" roles/editor <"$tmp/iam.json"; then
@@ -137,7 +148,9 @@ if ! python3 -I deploy/iam.py vm-ok "$SA" "$SCOPES" <"$tmp/vm.json"; then
   gc compute instances start "$VM" --zone "$ZONE" >/dev/null
   REBOOT=started
 fi
-gc compute instances update "$VM" --zone "$ZONE" --deletion-protection >/dev/null
+if [ "$(gcv compute instances describe "$VM" --zone "$ZONE" --format='value(deletionProtection)')" != True ]; then
+  gc compute instances update "$VM" --zone "$ZONE" --deletion-protection >/dev/null
+fi
 if [ "$REBOOT" = 1 ]; then
   echo "  - restarting the server for its updates"
   ssh_vm 'sudo systemctl reboot' >/dev/null 2>&1 || true

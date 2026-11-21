@@ -50,6 +50,13 @@ class Iam(unittest.TestCase):
         with self.assertRaises(SystemExit):
             iam.sentinel_config({})
 
+    def test_metadata(self):
+        vm = {"metadata": {"items": [{"key": "enable-oslogin", "value": "TRUE"}, {"key": "block-project-ssh-keys", "value": "true"}]}}
+        self.assertTrue(iam.metadata_ok(vm))
+        vm["metadata"]["items"][0]["value"] = "FALSE"
+        self.assertFalse(iam.metadata_ok(vm))
+        self.assertFalse(iam.metadata_ok({}))
+
     def test_vm(self):
         sa, scopes = "relay-vm@p.iam.gserviceaccount.com", "a,b"
         vm = {"serviceAccounts": [{"email": sa, "scopes": ["b", "a"]}],

@@ -7,6 +7,7 @@ answer; tested by deploy/tests/test_iam.py.
                                  fails (prints nothing) when it already is
   sentinel-config                the OS Login profile to the sentinel's settings
                                  (deploy/server/host/sentinel.py): the owner's accounts
+  metadata-ok                    the VM's metadata turns on OS Login and blocks project SSH keys
   vm-ok SA SCOPES                the VM runs as SA with exactly SCOPES (comma-separated), with
                                  Secure Boot, vTPM and integrity monitoring on
 """
@@ -63,9 +64,17 @@ def vm_ok(vm, sa, scopes):
     return bool(shield.get("enableSecureBoot") and shield.get("enableVtpm") and shield.get("enableIntegrityMonitoring"))
 
 
+def metadata_ok(vm):
+    items = {i.get("key"): i.get("value") for i in (vm.get("metadata") or {}).get("items", [])}
+    return items.get("enable-oslogin", "").upper() == "TRUE" and items.get("block-project-ssh-keys", "").upper() == "TRUE"
+
+
 def main(argv):
-    data = json.load(sys.stdin)
+    raw = sys.stdin.read()
+    data = json.loads(raw) if raw.strip() else {}
     cmd = argv[1] if len(argv) > 1 else ""
+    if cmd == "metadata-ok":
+        return 0 if metadata_ok(data) else 1
     if cmd == "is-owner":
         return 0 if is_owner(data, argv[2]) else 1
     if cmd == "has-role":
