@@ -3,23 +3,23 @@ import Testing
 
 @testable import Latchkey
 
-/// The 25 tools Claude sees (15 consolidated 2026-10-23, 8 added by spec 007, 2 by spec 012; Mail, WhatsApp sending, and Messages' window actions withdrawn 2026-11-07) and how each reaches its operations.
+/// The 27 tools Claude sees (15 consolidated 2026-10-23, 8 added by spec 007, 2 by spec 012, 2 by spec 013; Mail, WhatsApp sending, and Messages' window actions withdrawn 2026-11-07) and how each reaches its operations.
 @Suite struct PublicToolsTests {
     static let read = [
         "notes_find", "notes_read", "messages_find", "messages_read", "files_find", "files_read", "shell_check",
         "browser_read", "computer_look", "calendar_find", "reminders_find", "contacts_find", "location_read",
-        "maps_find", "whatsapp_find", "whatsapp_read",
+        "maps_find", "whatsapp_find", "whatsapp_read", "logins_find",
     ]
     static let write = [
         "notes_change", "messages_send", "files_change", "shell_run", "browser_act", "computer_act",
-        "calendar_change", "reminders_change", "contacts_change",
+        "calendar_change", "reminders_change", "contacts_change", "logins_sign_in",
     ]
 
-    @MainActor @Test func twentyFiveToolsAtFullLevel() {
+    @MainActor @Test func twentySevenToolsAtFullLevel() {
         let registry = CapabilityRegistry(
             capabilities: AppModel.makeCapabilities(), levels: CapabilityRegistry.defaultLevels)
         let names = registry.tools.map(\.name)
-        #expect(names.count == 25)
+        #expect(names.count == 27)
         #expect(Set(names) == Set(Self.read + Self.write))
         for t in registry.tools {
             #expect(t.annotations?.readOnlyHint == Self.read.contains(t.name), "\(t.name)")

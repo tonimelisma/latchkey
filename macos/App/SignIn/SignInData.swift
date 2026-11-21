@@ -97,8 +97,10 @@ enum SiteMatch {
         guard !trimmed.isEmpty else { return nil }
         let withScheme = trimmed.contains("://") ? trimmed : "https://" + trimmed
         guard let u = URL(string: withScheme), ["http", "https"].contains(u.scheme?.lowercased() ?? ""),
-            var host = u.host()?.lowercased(), host.contains(".")
+            var host = u.host()?.lowercased()
         else { return nil }
+        if host.hasSuffix(".") { host.removeLast() }
+        guard host.contains("."), !host.hasPrefix("."), !host.contains("..") else { return nil }
         if host.hasPrefix("www."), !PublicSuffix.isSuffix(String(host.dropFirst(4))) { host.removeFirst(4) }
         return host
     }
@@ -108,8 +110,9 @@ enum SiteMatch {
     /// customers' sites (security review, 2026-11-21).
     static func fills(site: String, on page: String) -> Bool {
         guard !site.isEmpty, let u = URL(string: page), u.scheme?.lowercased() == "https",
-            let host = u.host()?.lowercased()
+            var host = u.host()?.lowercased()
         else { return false }
+        if host.hasSuffix(".") { host.removeLast() }  // "example.com." is example.com
         return host == site || (host.hasSuffix("." + site) && !PublicSuffix.isSuffix(site))
     }
 }
@@ -147,9 +150,14 @@ enum PublicSuffix {
     /// the safe side.
     static var loaded: Bool { !rules.exact.isEmpty }
 
+    /// A name with a trailing or doubled dot, or an international one (the list writes those in
+    /// Unicode, hosts come as punycode), counts as a suffix: no subdomain fills, the safe side
+    /// (security review, 2026-11-21).
     static func isSuffix(_ name: String) -> Bool {
         let n = name.lowercased()
-        guard n.contains("."), loaded else { return true }
+        guard n.contains("."), loaded, !n.hasPrefix("."), !n.hasSuffix("."), !n.contains(".."),
+            n.unicodeScalars.allSatisfy(\.isASCII), !n.split(separator: ".").contains(where: { $0.hasPrefix("xn--") })
+        else { return true }
         if rules.exception.contains(n) { return false }
         if rules.exact.contains(n) { return true }
         if let dot = n.firstIndex(of: "."), rules.wildcard.contains(String(n[n.index(after: dot)...])) { return true }

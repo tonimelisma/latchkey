@@ -85,7 +85,7 @@ final class AppModel {
             NotesCapability.make(), MessagesCapability.make(), WhatsAppCapability.make(),
             FilesCapability.make(),
             ShellCapability.make(),
-            BrowserCapability.make(), ComputerCapability.make(), CalendarCapability.make(),
+            BrowserCapability.make(), LoginsCapability.make(), ComputerCapability.make(), CalendarCapability.make(),
             RemindersCapability.make(), ContactsCapability.make(), LocationCapability.make(),
         ]
     }

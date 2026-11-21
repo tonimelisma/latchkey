@@ -101,6 +101,14 @@ import Testing
         #expect(!SiteMatch.fills(site: "the-internet.herokuapp.com", on: "https://other.herokuapp.com/login"))
         #expect(SiteMatch.site(of: "https://www.github.io/") == "www.github.io")
         #expect(SiteMatch.fills(site: "bbc.co.uk", on: "https://account.bbc.co.uk/signin"))
+        // A trailing dot is the same host; it never gets past the suffix check.
+        #expect(!SiteMatch.fills(site: "herokuapp.com", on: "https://evil.herokuapp.com./"))
+        #expect(SiteMatch.fills(site: "amazon.com", on: "https://www.amazon.com./"))
+        #expect(SiteMatch.site(of: "https://herokuapp.com./") == "herokuapp.com")
+        // International names fill on their own host only.
+        #expect(PublicSuffix.isSuffix("xn--bcher-kva.de") && PublicSuffix.isSuffix("bücher.de"))
+        #expect(SiteMatch.fills(site: "xn--bcher-kva.de", on: "https://xn--bcher-kva.de/"))
+        #expect(!SiteMatch.fills(site: "xn--bcher-kva.de", on: "https://login.xn--bcher-kva.de/"))
     }
 
     @Test func aSavedAddressBecomesItsSite() {

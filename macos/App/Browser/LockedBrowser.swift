@@ -717,6 +717,11 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate {
         return (detail, try await page(offset: 0))
     }
 
+    /// A sign-in script (spec 013, `SignInScripts.swift`): what it answered, and the page after it.
+    func signInScript(_ code: String, navigates: Bool) async throws -> (detail: String, page: PageScripts.Page) {
+        try await act(code, ref: "", mayNavigate: navigates, answer: DialogAnswer())
+    }
+
     func press(_ keys: [PageScripts.Key], ref: String?, answer: DialogAnswer = DialogAnswer()) async throws
         -> (detail: String, page: PageScripts.Page)
     {

@@ -124,8 +124,10 @@ struct CapabilityRegistry: Sendable {
     static let reminders = "reminders"
     static let contacts = "contacts"
     static let location = "location"
+    /// Spec 013: sign-in with the Owner's passwords, On by default (Toni, 2026-11-20).
+    static let logins = "logins"
     static let all = [
-        notes, messages, whatsapp, files, shell, browser, computer, calendar, reminders, contacts, location,
+        notes, messages, whatsapp, files, shell, browser, logins, computer, calendar, reminders, contacts, location,
     ]
     /// Every capability starts fully on (spec 002 FR-121; specs 003–006, Toni 2026-10-22; spec 007
     /// FR-741, Toni 2026-10-26; spec 008 FR-830, Toni 2026-10-29). A capability new in an update
