@@ -20,8 +20,9 @@ Owner whenever a machine is paired, an app is allowed on the consent page (not o
 the account is recovered, with the time in UTC, the request's IP address, and links to the
 account page and recovery. Sent in the background after the change, never holding it up; at
 most 10 per account at once, then one every 6 minutes. Other accounts can't silence them: each
-account's first 3 in 6 hours skip the relay-wide limit, whose refusals are logged at Error
-(FR-699a, from the security review). Built and tested in the relay; deploy pending.
+account's first 3 in 6 hours have a relay-wide allowance and 4 sending slots of their own,
+and every refusal not of the account's own doing is logged at Error (FR-699a, from the
+security reviews). Built and tested in the relay; deploy pending.
 
 Sign-in (spec 013, built 2026-11-21): Latchkey signs in on Claude's pages with the owner's
 passwords and verification codes from Passwords' CSV export, filled by Latchkey, never seen by

@@ -392,20 +392,29 @@ Serves FR-041, FR-042, FR-043, FR-696 to FR-699a.
 - No account can silence another's security email (FR-699a; security review, 2026-11-21: with
   open sign-up, an attacker's own accounts could empty the one relay-wide bucket by pairing
   their own machines, then take over a victim's account unreported). Each account also has a
-  reserve, 3 at once and one back every 2 hours (3 in any 6 hours): an email the reserve covers
-  needs only the account's own bucket; past the reserve it needs the relay-wide bucket too. The
-  decision is made under one lock, looking at the account's bucket first (`Keyed.HasAt`, which
-  takes nothing), then the reserve, then the relay-wide bucket, and spends the account's token
-  only when the email will go, so a refusal costs the account nothing. A relay-wide refusal is
-  logged at Error as "security email not sent: relay-wide limit reached" for the operator's
-  alarm. An email that finds all 16 slots busy waits for one within its 30 s ("security email
-  not sent: no sending slot in time", Error, if none frees) instead of being dropped, so a
-  burst from other accounts can't crowd it out; the waiting tasks are bounded by the limits
-  above and by the 30 s. Reserved emails don't draw on the relay-wide bucket: the most a relay
-  sends is that bucket plus 3 per account in 6 hours, each to an account's own confirmed
-  address. Options weighed: a bigger relay-wide bucket (only raises what an attacker must
-  spend); a relay-wide bucket per IP address (the attacker's accounts can use many addresses);
-  no relay-wide limit for security emails at all (nothing would bound the provider's quota).
+  reserve, 3 at once and one back every 2 hours (3 in any 6 hours). A reserve-covered email is
+  paid from a second relay-wide bucket, 300 at once and one every 10 s, that ordinary emails
+  never touch, so a flood of them can't drain it, and all accounts' reserves together stay
+  bounded (review: a reserve with no relay-wide ceiling let many accounts' reserves add up
+  without limit, bad for the sending domain's reputation). Past it, a reserve-covered email
+  falls back to the ordinary bucket, so the victim gets two chances; past both it isn't sent.
+  Draining the reserved bucket takes 100 confirmed accounts' reserves at once, and each new
+  account needs an emailed sign-up code from the codes' own allowance. The decision is made
+  under one lock: the account's bucket first (`Keyed.HasAt`, which takes nothing), then the
+  waiting cap, then the relay-wide buckets; the account's token and reserve are spent only when
+  the email will go, so a refusal costs the account nothing. Sending: 16 slots, 4 of them only
+  for reserve-covered emails (which may also take the other 12), so other accounts' ordinary
+  emails can't hold every slot. An email waits up to 30 s for a slot, and its own 30 s to send
+  start once it holds one (two deadlines, so a long wait doesn't eat the send). At most 256 of
+  each kind wait (accepted, not yet holding a slot; at most 540 tasks in all); one more is
+  dropped. Every refusal that isn't the account's own doing is logged at Error with a fixed
+  message for the operator's alarm: "security email not sent: relay-wide limit reached",
+  "... relay-wide limit for reserved emails reached", "... too many waiting to be sent", "...
+  no sending slot in time". Options weighed: a bigger single relay-wide bucket (only raises
+  what an attacker must spend); a relay-wide bucket per IP address (the attacker's accounts can
+  use many addresses); charging reserved emails to the ordinary bucket and letting them go a
+  bounded amount over (the overdraft is drained by the same flood); no relay-wide limit for
+  security emails at all (nothing would bound the provider's quota).
 - Email: SMTP via `github.com/wneessen/go-mail`; configured by environment variables (FR-080).
   The hosted relay sends through Resend's SMTP from `no-reply@` its own host name. Mail is always
   encrypted: TLS from the start on port 465, required STARTTLS on other ports (a server that

@@ -115,7 +115,6 @@ type Service struct {
 	// flight, sending bounds them.
 	background sync.WaitGroup
 	sending    chan struct{}
-	alerting   chan struct{} // security emails in flight (FR-699)
 
 	mu         sync.Mutex
 	swept      time.Time // last sweep of ceremonies and tickets
@@ -125,12 +124,18 @@ type Service struct {
 	perAddress *limit.Keyed // codes per address: guessing and inbox flooding
 	allSends   *limit.Keyed // emails from the relay: the sending service's quota
 	setupTries *limit.Keyed // setup codes tried, relay-wide
-	// Security emails (FR-699): per account, each account's reserve, and from the whole relay;
-	// decided under alertMu.
-	alertMu          sync.Mutex
-	alertsPerAccount *limit.Keyed
-	alertReserves    *limit.Keyed
-	alertSends       *limit.Keyed
+	// Security emails (FR-699, FR-699a): per account, each account's reserve, from the whole
+	// relay, and from the whole relay for reserve-covered ones; and how many of each kind are
+	// waiting or sending (alertPending, indexed by reserve-covered). Decided under alertMu.
+	alertMu           sync.Mutex
+	alertsPerAccount  *limit.Keyed
+	alertReserves     *limit.Keyed
+	alertSends        *limit.Keyed
+	alertReserveSends *limit.Keyed
+	alertPending      [2]int
+	// Sending slots: the ordinary ones, and those only reserve-covered emails may take.
+	alertSlots         chan struct{}
+	alertReservedSlots chan struct{}
 }
 
 // New creates the service.
@@ -194,12 +199,13 @@ func New(ctx context.Context, cfg Config) (*Service, error) {
 	}
 	return &Service{
 		cfg: cfg, webauthn: wa, pages: pages, csrfKey: key, secure: secure, cookie: cookie,
-		sending: make(chan struct{}, maxBackgroundSends), alerting: make(chan struct{}, maxAlertSends),
+		sending:    make(chan struct{}, maxBackgroundSends),
+		alertSlots: make(chan struct{}, alertSlots-alertReservedSlots), alertReservedSlots: make(chan struct{}, alertReservedSlots),
 		ceremonies: map[string]*ceremony{}, tickets: map[string]*ticket{}, lastEmail: map[string]time.Time{},
 		perAddress: limit.NewKeyed(emailBurst, emailRefill), allSends: limit.NewKeyed(sendBurst, sendRefill),
 		setupTries:       limit.NewKeyed(SetupCodeTries, setupCodeRefill),
 		alertsPerAccount: limit.NewKeyed(alertBurst, alertRefill), alertReserves: limit.NewKeyed(alertReserve, alertReserveRefill),
-		alertSends: limit.NewKeyed(alertSendBurst, alertSendRefill),
+		alertSends: limit.NewKeyed(alertSendBurst, alertSendRefill), alertReserveSends: limit.NewKeyed(alertReserveSendBurst, alertReserveSendRefill),
 	}, nil
 }
 

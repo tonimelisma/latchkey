@@ -8,7 +8,7 @@ import (
 	"github.com/tonimelisma/latchkey/relay/internal/store"
 )
 
-// Security emails (FR-696 to FR-699, plan D5).
+// Security emails (FR-696 to FR-699a, plan D5).
 //
 // Each account gets alertBurst at once, then one more every alertRefill: enough for setting up
 // several machines and Claude apps in one sitting, and few enough that a flood can't bury the
@@ -16,30 +16,44 @@ import (
 // alertSendRefill, kept apart from the sign-in codes' allowance so a flood of sign-up codes
 // can't silence them.
 //
-// Other accounts must not be able to silence an Owner's email either, by using up the relay-wide
-// allowance with alerts of their own (security review, 2026-11-21). So each account also holds a
-// reserve of alertReserve, one back every alertReserveRefill (3 in any 6 hours): an email the
-// reserve covers needs only the account's own allowance; only one beyond it needs the relay-wide
-// one too. A takeover's pairing or approval is reported even while the relay-wide limit is
-// reached; only a flood on the account itself runs past the reserve.
+// Other accounts must not be able to silence an Owner's email either (security review,
+// 2026-11-21). So each account also holds a reserve of alertReserve, one back every
+// alertReserveRefill (3 in any 6 hours). A reserve-covered email is paid from a relay-wide
+// allowance of its own, alertReserveSendBurst at once, then one every alertReserveSendRefill,
+// which ordinary emails never touch, so a flood of them can't drain it; all accounts' reserves
+// together stay bounded by it. Past it, a reserve-covered email falls back to the ordinary
+// allowance; past both, it isn't sent.
 //
-// At most maxAlertSends are sent at once; one that finds them all busy waits for a free one
-// within its backgroundSendTimeout rather than being dropped, so a burst from other accounts
-// can't crowd it out.
+// alertSlots are sent at once, alertReservedSlots of them kept for reserve-covered emails, so
+// other accounts' ordinary emails can't hold every slot. One that finds its slots busy waits up
+// to alertSlotWait for one, then gets alertSendTimeout to send; at most maxAlertWaiting of each
+// kind wait, and one more is dropped.
 const (
-	alertBurst         = 10
-	alertRefill        = 6 * time.Minute
-	alertReserve       = 3
-	alertReserveRefill = 2 * time.Hour
-	alertSendBurst     = 100
-	alertSendRefill    = 30 * time.Second
-	maxAlertSends      = 16
+	alertBurst             = 10
+	alertRefill            = 6 * time.Minute
+	alertReserve           = 3
+	alertReserveRefill     = 2 * time.Hour
+	alertSendBurst         = 100
+	alertSendRefill        = 30 * time.Second
+	alertReserveSendBurst  = 300
+	alertReserveSendRefill = 10 * time.Second
+	alertSlots             = 16
+	alertReservedSlots     = 4
+)
+
+// Variables so tests can change them.
+var (
+	alertSlotWait    = 30 * time.Second
+	alertSendTimeout = backgroundSendTimeout
+	maxAlertWaiting  = 256
 )
 
 // Stable log messages, for an operator's alarm.
 const (
-	logAlertRelayLimit = "security email not sent: relay-wide limit reached"
-	logAlertNoSlot     = "security email not sent: no sending slot in time"
+	logAlertRelayLimit   = "security email not sent: relay-wide limit reached"
+	logAlertReserveLimit = "security email not sent: relay-wide limit for reserved emails reached"
+	logAlertTooMany      = "security email not sent: too many waiting to be sent"
+	logAlertNoSlot       = "security email not sent: no sending slot in time"
 )
 
 // alert emails the account's Owner about a change to its security, in the background, after the
@@ -49,19 +63,21 @@ func (s *Service) alert(ctx context.Context, userID string, a alertEmail) {
 	if s.cfg.Mailer == nil {
 		return // no email server: nothing is emailed (spec 009)
 	}
-	if !s.allowAlert(userID, a.what) {
+	reserved, ok := s.allowAlert(userID, a.what)
+	if !ok {
 		return
 	}
-	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), backgroundSendTimeout)
+	base := context.WithoutCancel(ctx)
 	s.background.Go(func() {
-		defer cancel()
-		select {
-		case s.alerting <- struct{}{}:
-		case <-ctx.Done():
+		defer s.alertDone(reserved)
+		slot := s.alertSlot(base, reserved)
+		if slot == nil {
 			s.cfg.Logger.Error(logAlertNoSlot, "change", a.what, "user", userID)
 			return
 		}
-		defer func() { <-s.alerting }()
+		defer func() { <-slot }()
+		ctx, cancel := context.WithTimeout(base, alertSendTimeout) // from now: the slot is held
+		defer cancel()
 		u, err := s.cfg.Store.User(ctx, userID)
 		if err == nil {
 			err = s.cfg.Mailer.Send(ctx, u.Email, a.subject, a.body)
@@ -72,24 +88,75 @@ func (s *Service) alert(ctx context.Context, userID string, a alertEmail) {
 	})
 }
 
-// allowAlert decides whether the account's email may go out, and only then spends what it
-// needs: a refusal costs the account none of its allowance or reserve.
-func (s *Service) allowAlert(userID, what string) bool {
+// alertSlot takes a sending slot, waiting up to alertSlotWait, and returns the channel to give
+// it back to, or nil when none came free. A reserve-covered email may take any slot.
+func (s *Service) alertSlot(ctx context.Context, reserved bool) chan struct{} {
+	ctx, cancel := context.WithTimeout(ctx, alertSlotWait)
+	defer cancel()
+	reservedSlots := s.alertReservedSlots
+	if !reserved {
+		reservedSlots = nil // a nil channel is never ready
+	}
+	select {
+	case reservedSlots <- struct{}{}:
+		return s.alertReservedSlots
+	case s.alertSlots <- struct{}{}:
+		return s.alertSlots
+	case <-ctx.Done():
+		return nil
+	}
+}
+
+// alertDone counts an email that was accepted as no longer waiting or sending.
+func (s *Service) alertDone(reserved bool) {
+	s.alertMu.Lock()
+	s.alertPending[kindIndex(reserved)]--
+	s.alertMu.Unlock()
+}
+
+func kindIndex(reserved bool) int {
+	if reserved {
+		return 1
+	}
+	return 0
+}
+
+// allowAlert decides whether the account's email may go out, and whether its reserve covers it.
+// It spends what the email needs only once every check passed: a refusal costs the account none
+// of its allowance or reserve.
+func (s *Service) allowAlert(userID, what string) (reserved, ok bool) {
 	s.alertMu.Lock()
 	defer s.alertMu.Unlock()
 	now := s.now()
 	if !s.alertsPerAccount.HasAt(userID, now) {
 		s.cfg.Logger.Warn("security email not sent: too many for the account", "change", what, "user", userID)
-		return false
+		return false, false
 	}
-	if !s.alertReserves.AllowAt(userID, now) && !s.alertSends.AllowAt("", now) {
-		// Not the account's doing alone: the whole relay is sending too many. An operator
-		// should know at once.
+	reserved = s.alertReserves.HasAt(userID, now)
+	slots := alertSlots - alertReservedSlots
+	if reserved {
+		slots = alertSlots
+	}
+	if s.alertPending[kindIndex(reserved)] >= slots+maxAlertWaiting {
+		s.cfg.Logger.Error(logAlertTooMany, "change", what, "user", userID, "reserved", reserved)
+		return false, false
+	}
+	// The refusals below are not the account's doing alone: the whole relay is sending too many,
+	// which an operator should know at once.
+	switch {
+	case reserved:
+		if !s.alertReserveSends.AllowAt("", now) && !s.alertSends.AllowAt("", now) {
+			s.cfg.Logger.Error(logAlertReserveLimit, "change", what, "user", userID)
+			return false, false
+		}
+		s.alertReserves.AllowAt(userID, now)
+	case !s.alertSends.AllowAt("", now):
 		s.cfg.Logger.Error(logAlertRelayLimit, "change", what, "user", userID)
-		return false
+		return false, false
 	}
 	s.alertsPerAccount.AllowAt(userID, now)
-	return true
+	s.alertPending[kindIndex(reserved)]++
+	return reserved, true
 }
 
 // DrainMail waits until every email being sent in the background has been sent or has failed, or

@@ -304,6 +304,126 @@ func TestOtherAccountsCantSilenceAnOwnersSecurityEmail(t *testing.T) {
 	assert.Len(t, e.newMail(before), 7, "the account's own allowance of 10 is all there: 3 used, 7 left")
 }
 
+// accounts makes n confirmed accounts and returns their IDs.
+func (e *env) accounts(prefix string, n int) []string {
+	e.t.Helper()
+	ctx := context.Background()
+	ids := make([]string, n)
+	for i := range n {
+		u, err := e.store.CreateUser(ctx, prefix+strconv.Itoa(i)+"@example.com", e.clock.now())
+		require.NoError(e.t, err)
+		require.NoError(e.t, e.store.VerifyEmail(ctx, u.ID, e.clock.now()))
+		ids[i] = u.ID
+	}
+	return ids
+}
+
+// spendReserves sends each account's 3 reserve-covered emails, so its next ones aren't.
+func (e *env) spendReserves(ids []string) {
+	e.t.Helper()
+	for _, id := range ids {
+		for range 3 {
+			e.svc.ClientAuthorized(context.Background(), id, "Claude (claude.ai)", "claude.ai")
+		}
+	}
+	e.svc.WaitForMail()
+}
+
+// Reserve-covered emails have a relay-wide ceiling of their own, 300 at once, so many accounts'
+// reserves together stay bounded; past it they fall back to the ordinary relay-wide allowance,
+// and past that nothing goes (FR-699a).
+func TestReservedEmailsHaveARelayWideCeiling(t *testing.T) {
+	out := &logBuffer{}
+	e := setupWith(t, func(c *account.Config) { c.Logger = slog.New(slog.NewTextHandler(out, nil)) })
+	ids := e.accounts("user", 140)
+	before := len(e.mail.Sent())
+	e.spendReserves(ids) // 420 reserve-covered emails
+	assert.Len(t, e.mail.Sent()[before:], 400, "300 reserved, then the ordinary 100")
+	assert.Contains(t, out.String(), "level=ERROR msg=\"security email not sent: relay-wide limit for reserved emails reached\"")
+}
+
+// 4 of the 16 sending slots are kept for reserve-covered emails: other accounts' ordinary ones
+// can't hold them all while the mail server is slow (FR-699a).
+func TestSlotsAreKeptForReserveCoveredEmails(t *testing.T) {
+	out := &logBuffer{}
+	e := setupWith(t, func(c *account.Config) { c.Logger = slog.New(slog.NewTextHandler(out, nil)) })
+	account.SetAlertTimes(t, 300*time.Millisecond, 5*time.Second)
+	e.browser().signUp()
+	attackers := e.accounts("attacker", 3)
+	e.spendReserves(attackers)
+
+	release := e.mailer.hold()
+	defer release()
+	before := len(e.mail.Sent())
+	ctx := context.Background()
+	for _, id := range attackers {
+		for range 7 { // 21 ordinary emails for 12 ordinary slots
+			e.svc.ClientAuthorized(ctx, id, "Claude (claude.ai)", "claude.ai")
+		}
+	}
+	e.svc.ClientAuthorized(ctx, e.ownerID(), "Intruder (evil.example)", "evil.example")
+	time.Sleep(600 * time.Millisecond) // past the wait: whatever had no slot gave up
+	release()
+	e.svc.WaitForMail()
+	assert.Contains(t, out.String(), "security email not sent: no sending slot in time", "the ordinary ones beyond 12 waited in vain")
+	var toOwner []account.Message
+	for _, m := range e.mail.Sent()[before:] {
+		if m.To == owner {
+			toOwner = append(toOwner, m)
+		}
+	}
+	require.Len(t, toOwner, 1, "the Owner's email had a slot of its own")
+	assert.Contains(t, toOwner[0].Body, "Intruder (evil.example)")
+	assert.Len(t, e.mail.Sent()[before:], 13, "12 ordinary ones and the Owner's")
+}
+
+// Waiting for a slot and sending have deadlines of their own: an email that waited still gets its
+// whole send time once it holds a slot (FR-699a).
+func TestTheSendDeadlineStartsOnceASlotIsHeld(t *testing.T) {
+	e := setup(t)
+	account.SetAlertTimes(t, 2*time.Second, time.Second)
+	attackers := e.accounts("user", 2)
+	e.spendReserves(attackers)
+
+	release := e.mailer.hold()
+	defer release()
+	before := len(e.mail.Sent())
+	ctx := context.Background()
+	for i := range 13 { // 12 take the ordinary slots; one waits
+		e.svc.ClientAuthorized(ctx, attackers[i%2], "Claude (claude.ai)", "claude.ai")
+	}
+	// The 12 sends give up after 1 s; the waiting one takes a slot then, with a second of its
+	// own, and the mail server answers half way through it.
+	time.Sleep(1500 * time.Millisecond)
+	release()
+	e.svc.WaitForMail()
+	assert.Len(t, e.mail.Sent()[before:], 1, "the one that waited was sent")
+}
+
+// At most so many emails of each kind wait for a slot; one more is dropped and logged at Error
+// (FR-699a).
+func TestWaitingEmailsAreCapped(t *testing.T) {
+	out := &logBuffer{}
+	e := setupWith(t, func(c *account.Config) { c.Logger = slog.New(slog.NewTextHandler(out, nil)) })
+	account.SetAlertWaiters(t, 2)
+	attackers := e.accounts("user", 3)
+	e.spendReserves(attackers)
+
+	release := e.mailer.hold()
+	defer release()
+	before := len(e.mail.Sent())
+	ctx := context.Background()
+	for _, id := range attackers {
+		for range 5 { // 15: 12 slots, 2 waiting, 1 too many
+			e.svc.ClientAuthorized(ctx, id, "Claude (claude.ai)", "claude.ai")
+		}
+	}
+	assert.Contains(t, out.String(), "level=ERROR msg=\"security email not sent: too many waiting to be sent\"")
+	release()
+	e.svc.WaitForMail()
+	assert.Len(t, e.mail.Sent()[before:], 14)
+}
+
 // While the mail server is slow, every sending slot can be busy with other accounts' emails; the
 // Owner's waits for a free one instead of being dropped (FR-699).
 func TestBusySendingSlotsDontDropAnEmail(t *testing.T) {
