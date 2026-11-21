@@ -296,10 +296,9 @@ after the app was quit.
 For Toni (only he can): delete the ~96 old "Latchkey check" test messages in his two
 conversations with himself and the WhatsApp test message in his own chat; optionally switch off
 Latchkey's unused Mail permission (System Settings → Privacy & Security → Automation → Latchkey).
-The relay's server (2026-11-21): check that the test alert from "Google Cloud Alerting" reached
-the alert address (`ALERT_EMAIL` in `.env`; its spam folder too); make sure the Google account that owns the project has
-2-step verification with a passkey or security key, since it is now the only way into the
-server (docs/threat-model.md, "Accepted").
+The relay's server (2026-11-21): make sure the Google account that owns the project has 2-step
+verification with a passkey or security key, since it is now the only way into the server
+(docs/threat-model.md, "Accepted"). The alerts reach the alert address (checked).
 
 ## History (newest first; what was done and found, kept as the record)
 
