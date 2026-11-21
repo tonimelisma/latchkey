@@ -30,6 +30,10 @@ returned before a closed connection's last trace line (the long-flaky "traces: d
 empty" tests). Live check after: a fresh Claude Code session saw both machines and used a tool.
 All alerts reached the alert address (11 on the first day, from the runs themselves); one was a
 false alarm, hackernews's own health check (wget) seen as a foreign program, fixed the same day.
+hackernews's nightly backup was in the locked account's crontab, which lost docker: it now runs
+from /etc/cron.d as root, and a run as cron does it wrote today's copy to its bucket through
+`relay-vm`. Its deploys were checked end to end: back on the previous image, the timer found
+CI's newest (9be196f), switched to it and logged it healthy.
 
 Security emails (Toni, 2026-11-21; spec 001 FR-696 to FR-699, plan D5): the relay emails the
 Owner whenever a machine is paired, an app is allowed on the consent page (not on a refresh), or
