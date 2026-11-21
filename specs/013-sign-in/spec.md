@@ -212,6 +212,34 @@ once when unlocked" and "Any new code text".
 - **FR-1363** Latchkey's log records each code text used and deleted (when, the site, never the
   code or the text).
 
+### Codes emailed to the Owner (Toni, 2026-11-21)
+
+Toni, 2026-11-21: "Email and SMS both"; asked, "Mark read, archive"; and "always prefer direct
+MCP instead of Apple Mail tricks. only if the agent says they're not able to access emails,
+start Apple Mail. Ask the agent specifically if they can access emails. If they can't find it,
+we can't find it via Apple Mail either"; then "yes, script Mail for archiving anyway".
+
+- **FR-1364** When a site asks for a code and no text with one has arrived within the call's
+  first 20 seconds, the answer shall ask Claude whether it can read the Owner's email with a tool
+  of its own. When it can, Claude finds the code and passes it to the next call, which fills it
+  in; when Claude's tool can't find it, Latchkey shall not look in Apple Mail (the same mailbox).
+  A code Claude passes is the code alone (4 to 10 letters or digits). A text that arrives still
+  counts (FR-1360).
+- **FR-1365** Only when Claude says it has no tool for the Owner's email shall Latchkey read
+  Apple Mail on this Mac for the code: an email received after the site's request, not in a sent,
+  draft, or deleted mailbox, read from Mail's own files (its text, never through its window),
+  under FR-1360's rules for a code; Apple Mail is started in the background, hidden, when it
+  isn't running.
+- **FR-1366** After a sign-in that worked with an emailed code, that email shall be marked read
+  and moved to its account's archive mailbox through Mail's scripting, never its window: the one
+  Latchkey read, and the one holding the exact code Claude passed when Mail has it (received in
+  the last 10 minutes); Mail is never started for this. Only while the Mac is unlocked (Mail
+  froze when scripted behind the lock, 2026-11-02), else at the next unlock. When Mail doesn't
+  have the email, Claude is asked to archive it with its own tool. Without permission to script
+  Mail, the email stays and Latchkey's log says why (no question is shown to the Owner).
+- **FR-1367** Latchkey's log records each code email used and archived (when, the site, never the
+  code or the text).
+
 ### Passkeys (later, not built now)
 
 - **FR-1330** When Latchkey is signed through the paid Apple Developer Program, Latchkey shall take

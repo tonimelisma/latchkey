@@ -164,17 +164,26 @@ import Testing
         </script>
         """
 
-    func run(_ texts: TextedCodesTests.Texts, deleted: TextedCodesTests.Deleted) async throws -> (
-        ToolResult, TextedCodes, OwnPages
-    ) {
+    func run(
+        _ texts: TextedCodesTests.Texts, deleted: TextedCodesTests.Deleted, args: [String: JSONValue] = [:],
+        mail: TextedCodesTests.Texts = .init(), started: TextedCodesTests.Deleted = .init()
+    ) async throws -> (ToolResult, TextedCodes, OwnPages) {
         let s = SignInStore(vault: MemoryVault())
         try s.replace(with: [SignInPageTests.ann], at: Date(timeIntervalSince1970: 1_800_000_000))
         let own = OwnPages(cookies: { [] }, isLocked: { false }, record: { _ in })
         let c = TextedCodesTests().codes(texts, deleted: deleted)
         c.perCall = .seconds(2)
+        c.firstWait = .seconds(2)
+        c.recentMail = { since in
+            mail.asked.append(since)
+            return mail.all.filter { $0.date >= since }
+        }
+        c.startMail = { started.ids.append("mail") }
         let name = try await own.open(html: Self.codePage, base: SignInToolsTests.base)
+        var call = args
+        call["page"] = .string(name)
         let r = await LoginsCapability.signIn(store: s, own: own, move: { _ in nil }, codes: c).handler(
-            .object(["page": .string(name)]))
+            .object(call))
         return (r, c, own)
     }
 
@@ -211,11 +220,147 @@ import Testing
         let deleted = TextedCodesTests.Deleted()
         let (r, c, own) = try await run(texts, deleted: deleted)
         defer { own.closeAll() }
-        #expect(r.plainText.contains("hasn't reached Messages on this Mac yet"), "\(r.plainText)")
+        #expect(r.plainText.contains("none has reached Messages on this Mac yet"), "\(r.plainText)")
+        #expect(r.plainText.contains("Can you read the owner's email with a tool of your own"))
         #expect(!r.isError)
         let later = Date().addingTimeInterval(5)
         #expect(c.requested("a.test", now: later) < later, "the next call waits for the same text")
         #expect(deleted.ids.isEmpty)
         #expect(TextedCodes(defaults: nil).perCall < .seconds(60), "a real call fits in the relay's 60 s")
+    }
+
+    // MARK: codes sent by email (FR-1364 to FR-1366)
+
+    /// Toni, 2026-11-21: Claude's own email tool first; the code it found is filled in.
+    @Test func aCodeClaudeReadInEmailIsFilledIn() async throws {
+        let deleted = TextedCodesTests.Deleted()
+        let started = TextedCodesTests.Deleted()
+        let (r, _, own) = try await run(
+            .init(), deleted: deleted, args: ["code": .string("320518")], started: started)
+        defer { own.closeAll() }
+        #expect(r.plainText.contains("Signed in to a.test as ann."), "\(r.plainText)")
+        #expect(r.plainText.contains("archive it with your email tool"))
+        #expect(deleted.ids.isEmpty && started.ids.isEmpty, "Apple Mail is never touched")
+    }
+
+    /// Toni, 2026-11-21: "script Mail for archiving anyway": the email with the code Claude found is
+    /// archived through Apple Mail when Mail has it, without starting Mail.
+    @Test func theEmailClaudeFoundIsArchivedInMailToo() async throws {
+        let mail = TextedCodesTests.Texts()
+        let key = MailCodes.Place(id: 9, account: "ACCT", mailbox: "Inbox").key
+        mail.all = [.init(id: key, text: "Your verification code is 320518", date: Date())]
+        let deleted = TextedCodesTests.Deleted()
+        let started = TextedCodesTests.Deleted()
+        let (r, _, own) = try await run(
+            .init(), deleted: deleted, args: ["code": .string("320518")], mail: mail, started: started)
+        defer { own.closeAll() }
+        #expect(r.plainText.contains("archives it in Apple Mail"), "\(r.plainText)")
+        #expect(deleted.ids == [key] && started.ids.isEmpty)
+    }
+
+    @Test func aCodeMustBeACode() async throws {
+        let (r, _, own) = try await run(.init(), deleted: .init(), args: ["code": .string("320518; drop")])
+        defer { own.closeAll() }
+        #expect(r.isError && r.plainText.contains("4 to 10 letters or digits"))
+    }
+
+    /// Only when Claude says it has no email tool: Apple Mail is started and read, and the email
+    /// marked read and archived after the sign-in worked.
+    @Test func withoutAnEmailToolAppleMailIsRead() async throws {
+        let mail = TextedCodesTests.Texts()
+        let key = MailCodes.Place(id: 42, account: "ACCT", mailbox: "Inbox").key
+        mail.all = [
+            .init(id: key, text: "Your verification code\nUse 320518 to sign in.", date: Date().addingTimeInterval(60))
+        ]
+        let deleted = TextedCodesTests.Deleted()
+        let started = TextedCodesTests.Deleted()
+        let (r, _, own) = try await run(
+            .init(), deleted: deleted, args: ["no_email_access": .bool(true)], mail: mail, started: started)
+        defer { own.closeAll() }
+        #expect(r.plainText.contains("Signed in to a.test as ann."), "\(r.plainText)")
+        #expect(started.ids == ["mail"] && deleted.ids == [key])
+    }
+
+    @Test func withoutNoEmailAccessAppleMailIsNeverRead() async throws {
+        let mail = TextedCodesTests.Texts()
+        mail.all = [.init(id: "mail:1\tA\tInbox", text: "code 320518", date: Date().addingTimeInterval(60))]
+        let started = TextedCodesTests.Deleted()
+        let (r, _, own) = try await run(.init(), deleted: .init(), mail: mail, started: started)
+        defer { own.closeAll() }
+        #expect(!r.plainText.contains("Signed in"), "\(r.plainText)")
+        #expect(mail.asked.isEmpty && started.ids.isEmpty)
+    }
+}
+
+/// Apple Mail's side (FR-1365, FR-1366).
+@Suite struct MailCodesTests {
+    @Test func aPlaceComesFromMailsAddressAndBack() throws {
+        let p = try #require(MailCodes.Place(id: 7, url: "ews://0FFA47A7-021E/Deleted%20Items"))
+        #expect(p.account == "0FFA47A7-021E" && p.mailbox == "Deleted Items")
+        #expect(MailCodes.Place(key: p.key) == p)
+        #expect(MailCodes.Place(key: "sms-guid") == nil && MailCodes.Place(key: "mail:x\ty\tz") == nil)
+        #expect(MailCodes.Place(id: 1, url: "imap://ACCT/INBOX")?.mailbox == "INBOX")
+    }
+
+    @Test(arguments: [
+        ("Sent Items", true), ("Drafts", true), ("Deleted Items", true), ("INBOX", false), ("Junk", false),
+    ])
+    func whatTheOwnerSentNeverCounts(_ mailbox: String, _ skipped: Bool) {
+        #expect(MailCodes.skipped(mailbox) == skipped)
+    }
+
+    /// Mail's preview text comes hours late (2026-11-21), so the code is read from the email's file.
+    @Test func theCodeIsReadFromTheEmailItself() {
+        let plain = "123\nSubject: x\nContent-Type: text/plain\n\nYour verification code is 482913.\n"
+        #expect(TextedCodes.code(in: MailCodes.text(ofEmlx: Data(plain.utf8))) == "482913")
+        let html = Data(
+            "<html><head><style>.c{color:#000000}</style></head><body><p>Your code</p><strong>551204</strong></body></html>"
+                .utf8
+        ).base64EncodedString()
+        let multipart = """
+            900
+            Subject: Sign in
+            Content-Type: multipart/alternative; boundary="b1"
+
+            --b1
+            Content-Type: text/html; charset=utf-8
+            Content-Transfer-Encoding: base64
+
+            \(html)
+            --b1--
+            """
+        #expect(TextedCodes.code(in: MailCodes.text(ofEmlx: Data(multipart.utf8))) == "551204")
+        let qp =
+            "1\nContent-Type: text/plain\nContent-Transfer-Encoding: quoted-printable\n\nYour one-time pass=\ncode: 7731=3D\n"
+        #expect(MailCodes.text(ofEmlx: Data(qp.utf8)).contains("Your one-time passcode: 7731="))
+    }
+
+    @Test func theEmailsFileIsWhereMailKeepsIt() throws {
+        let root = FileManager.default.temporaryDirectory.appending(path: "mail-\(UUID().uuidString)")
+        let dir = root.appending(path: "ACCT/Archive.mbox/STORE-1/Data/6/0/1/Messages")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        try Data("1\n\nx".utf8).write(to: dir.appending(path: "106222.emlx"))
+        let found = MailCodes.file(of: .init(id: 106222, account: "ACCT", mailbox: "Archive"), in: root)
+        #expect(found?.lastPathComponent == "106222.emlx")
+        #expect(MailCodes.file(of: .init(id: 106223, account: "ACCT", mailbox: "Archive"), in: root) == nil)
+    }
+
+    final class Calls: ScriptRunner, @unchecked Sendable {
+        var args: [[String]] = []
+        var answer = "ok"
+        func run(_ script: String, _ args: [String]) async throws -> String {
+            self.args.append(args)
+            return answer
+        }
+    }
+
+    @Test func archivingNamesTheEmailByItsPlace() async throws {
+        let calls = Calls()
+        try await MailCodes.archive(.init(id: 42, account: "ACCT", mailbox: "Inbox"), runner: calls)
+        #expect(calls.args == [["ACCT", "Inbox", "42"]])
+        calls.answer = "not found"
+        await #expect(throws: CodeTextWindow.Problem.self) {
+            try await MailCodes.archive(.init(id: 42, account: "ACCT", mailbox: "Inbox"), runner: calls)
+        }
     }
 }

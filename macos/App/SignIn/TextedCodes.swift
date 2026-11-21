@@ -21,15 +21,22 @@ final class TextedCodes {
     typealias Recent = @Sendable (Date) -> [Text]?
 
     /// How long a site's request for a code is waited on, over one or more calls (FR-1361).
-    nonisolated static let window: TimeInterval = 120
+    var window: TimeInterval = 120
 
     /// Whether texts may be used: Messages isn't Off in Latchkey's settings. Set by the app; Off
     /// until then and in tests.
     var on: () -> Bool = { false }
     var recent: Recent = TextedCodes.fromMessages
+    /// Emails from Apple Mail's index (FR-1364), read only when Claude has no email tool.
+    var recentMail: Recent = { MailCodes.recent($0) }
+    /// Starts Apple Mail hidden when it isn't running (FR-1365).
+    var startMail: () async -> Void = { await MailCodes.start() }
     /// How long one sign-in call waits for the text: within the relay's 60 s for a call, with
     /// time left for filling the code in.
     var perCall: Duration = .seconds(45)
+    /// How long a call that hasn't been told about email waits for a text before asking Claude
+    /// whether it can read the owner's email (FR-1364).
+    var firstWait: Duration = .seconds(20)
     private var used: Set<String> = []
     /// When each site first asked for a code, for the 2 minutes of FR-1361.
     private var requested: [String: Date] = [:]
@@ -60,22 +67,29 @@ final class TextedCodes {
 
     /// When `site` first asked for a code; noted now when it hadn't.
     func requested(_ site: String, now: Date = Date()) -> Date {
-        if let at = requested[site], now.timeIntervalSince(at) < Self.window { return at }
+        if let at = requested[site], now.timeIntervalSince(at) < window { return at }
         requested[site] = now
         return now
     }
 
-    /// A code text that arrived since `since` and wasn't used, waiting for one until `until`; the
-    /// code and the text's id. Nil when none came or texts can't be used.
-    func wait(since: Date, until: ContinuousClock.Instant, poll: Duration = .seconds(1)) async -> (
-        code: String, message: String
-    )? {
-        guard on() else { return nil }
-        let recent = recent
+    /// A code text (and with `mail`, a code email in Apple Mail) that arrived since `since` and
+    /// wasn't used, waiting for one until `until`; the code and the text's id. Nil when none came,
+    /// or neither texts nor (with `mail`) Mail can be used.
+    func wait(since: Date, until: ContinuousClock.Instant, poll: Duration = .seconds(1), mail: Bool = false)
+        async -> (code: String, message: String)?
+    {
+        let texts = on(), recent = recent, recentMail = recentMail
+        guard texts || mail else { return nil }
+        if mail { await startMail() }
         while true {
-            // Messages dates a text when it arrives; a few seconds' slack for clocks and saving.
-            let texts = await Task.detached { recent(since.addingTimeInterval(-5)) }.value
-            guard let texts else { return nil }
+            // Messages and Mail date what arrives; a few seconds' slack for clocks and saving.
+            let from = since.addingTimeInterval(-5)
+            let found = await Task.detached { () -> [Text]? in
+                let a = texts ? recent(from) : nil
+                let b = mail ? recentMail(from) : nil
+                return a == nil && b == nil ? nil : (a ?? []) + (b ?? [])
+            }.value
+            guard let texts = found else { return nil }
             for t in texts.sorted(by: { $0.date > $1.date }) where !used.contains(t.id) {
                 if let code = Self.code(in: t.text) {
                     used.insert(t.id)
@@ -89,6 +103,16 @@ final class TextedCodes {
 
     func forget(_ site: String) { requested[site] = nil }
 
+    /// The email in Apple Mail from the last 10 minutes holding exactly `code` (one Claude read with
+    /// its own email tool), for archiving it (FR-1366); nil when Mail doesn't have it. Mail is
+    /// only read here, never started.
+    func mailHolding(_ code: String, now: Date = Date()) async -> String? {
+        let recentMail = recentMail
+        let from = now.addingTimeInterval(-600)
+        let mails = await Task.detached { recentMail(from) }.value ?? []
+        return mails.sorted { $0.date > $1.date }.first { Self.code(in: $0.text) == code }?.id
+    }
+
     // MARK: deleting the text after use (FR-1362)
 
     /// The texts used and not yet deleted, kept across restarts.
@@ -100,8 +124,15 @@ final class TextedCodes {
     }
 
     private var memoryPending: [String] = []
-    /// Deletes a text in Messages' window; throws why it couldn't. Tests give their own.
-    var deleter: (String) async throws -> Void = { try await CodeTextWindow.delete($0) }
+    /// Deletes a text in Messages' window, or marks an email read and archives it in Mail; throws
+    /// why it couldn't. Tests give their own.
+    var deleter: (String) async throws -> Void = { key in
+        if let place = MailCodes.Place(key: key) {
+            try await MailCodes.archive(place)
+        } else {
+            try await CodeTextWindow.delete(key)
+        }
+    }
     var isLocked: () -> Bool = { SystemScreen().isLocked() }
     /// Deleting is a change in Messages: only while Messages is Read & write in Latchkey's settings
     /// (security review 2026-11-21). Set by the app; true in tests.
@@ -110,30 +141,39 @@ final class TextedCodes {
 
     /// A code text was used: deleted now while unlocked, else at the next unlock.
     func used(_ message: String, site: String) async {
-        EventLog.shared.record(.app, "Sign-in on \(site): used a code texted to the owner")
+        let how = MailCodes.Place(key: message) == nil ? "texted" : "emailed (Apple Mail)"
+        EventLog.shared.record(.app, "Sign-in on \(site): used a code \(how) to the owner")
         if !pending.contains(message) { pending.append(message) }
         await deletePending()
     }
 
-    /// Deletes every text waiting to be, while the Mac is unlocked.
+    /// Deletes every text, and archives every email, waiting to be, while the Mac is unlocked.
     func deletePending() async {
         guard !deleting, !pending.isEmpty else { return }
-        guard mayDelete() else {
+        if !mayDelete(), pending.contains(where: { MailCodes.Place(key: $0) == nil }) {
             EventLog.shared.record(
                 .app, "Used sign-in code texts stay in Messages: Messages isn't Read & write in Latchkey's settings")
-            pending = []
-            return
+            pending.removeAll { MailCodes.Place(key: $0) == nil }
         }
-        guard !isLocked() else { return }
+        guard !isLocked(), !pending.isEmpty else { return }
         deleting = true
         defer { deleting = false }
         for message in pending {
+            let email = MailCodes.Place(key: message) != nil
             do {
                 try await deleter(message)
-                EventLog.shared.record(.app, "Deleted a sign-in code text in Messages after use")
+                EventLog.shared.record(
+                    .app,
+                    email
+                        ? "Marked a sign-in code email read and archived it in Mail after use"
+                        : "Deleted a sign-in code text in Messages after use")
             } catch {
-                let why = (error as? CodeTextWindow.Problem)?.message ?? "\(error)"
-                EventLog.shared.record(.app, "A used sign-in code text stays in Messages: \(why)", error: true)
+                let why =
+                    (error as? CodeTextWindow.Problem)?.message
+                    ?? (error as? ScriptError).map { MessagesCapability.explain($0) } ?? "\(error)"
+                EventLog.shared.record(
+                    .app, "A used sign-in code \(email ? "email stays in Mail" : "text stays in Messages"): \(why)",
+                    error: true)
             }
             pending.removeAll { $0 == message }
         }

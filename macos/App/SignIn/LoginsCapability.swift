@@ -88,16 +88,23 @@ enum LoginsCapability {
                         Signs in on one of Claude's own pages (opened with browser_read; name it with page, like p4k2) \
                         with the owner's saved password for that page's site: Latchkey fills in the user name and \
                         password itself, sends them, and fills in the site's verification code too: from Passwords \
-                        when it has one, else a code the site texts to the owner, taken from Messages (if the text \
-                        is slow, the answer asks to call again on the same page). Claude never sees the password or \
-                        the code. Works in Latchkey's own browser and in Claude's Safari tabs, never in the owner's \
-                        own tabs. user: which user name, when Latchkey holds several for the site (logins_find lists \
-                        them). It can't answer passkeys, codes sent by email, or captchas: the answer says what the \
-                        page asks for. A refused sign-in may be tried once more.
+                        when it has one, else a code the site texts to the owner, taken from Messages. For a code \
+                        sent by email the answer asks whether you can read the owner's email with a tool of your \
+                        own: then pass the code you find as code; only if you can't, pass no_email_access and \
+                        Latchkey reads Apple Mail. Claude never sees the password. Works in Latchkey's own browser \
+                        and in Claude's Safari tabs, never in the owner's own tabs. user: which user name, when \
+                        Latchkey holds several for the site (logins_find lists them). It can't answer passkeys or \
+                        captchas: the answer says what the page asks for. A refused sign-in may be tried once more.
                         """,
                     input: [
                         "page": .stringParam("Claude's page, by the name browser_read gave, like p4k2"),
                         "user": .stringParam("The user name to sign in as, when there are several"),
+                        "code": .stringParam(
+                            "A verification code you read in the owner's email with your own email tool, for the page's code step"
+                        ),
+                        "no_email_access": .boolParam(
+                            "True only when you have no tool to read the owner's email: Latchkey then reads Apple Mail on the Mac"
+                        ),
                     ], readOnly: false, destructive: false, openWorld: true, deadlineMS: 60_000),
                 handler: { args in
                     await BrowserCapability.run {
@@ -124,6 +131,13 @@ enum LoginsCapability {
     {
         let name = args["page"]?.stringValue.flatMap { $0.trimmingCharacters(in: .whitespaces).isEmpty ? nil : $0 }
         let wantedUser = args["user"]?.stringValue?.trimmingCharacters(in: .whitespaces) ?? ""
+        // FR-1364: a code Claude read in the owner's email with its own tool; FR-1365: Claude has
+        // no email tool, so Apple Mail is read.
+        let givenCode = args["code"]?.stringValue?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if !givenCode.isEmpty, givenCode.range(of: #"^[A-Za-z0-9-]{4,10}$"#, options: .regularExpression) == nil {
+            return .text("code must be the verification code alone: 4 to 10 letters or digits.", isError: true)
+        }
+        let readMail = args["no_email_access"] == .bool(true)
         let target: Target = try await MainActor.run {
             if let s = own.safariCalled(name) { return .safari(s.name, s.browser) }
             return .own(try own.page(name))
@@ -180,23 +194,32 @@ enum LoginsCapability {
         final class UsedText: @unchecked Sendable { var id: String? }
         let usedText = UsedText()
         let texted: SignInFlow.Texted = {
+            if !givenCode.isEmpty { return (givenCode, false) }
             let since = await codes.requested(login.site, now: started)
-            let left = max(0, TextedCodes.window - Date().timeIntervalSince(since))
-            let perCall = await MainActor.run { codes.perCall }
+            let window = await MainActor.run { codes.window }
+            let left = max(0, window - Date().timeIntervalSince(since))
+            // Without Apple Mail, a shorter wait for a text: Claude is then asked about email.
+            let perCall = await MainActor.run { readMail ? codes.perCall : codes.firstWait }
             let until = min(callStart + perCall, ContinuousClock.now + .seconds(left))
-            if let got = await codes.wait(since: since, until: until) {
+            if let got = await codes.wait(since: since, until: until, mail: readMail) {
                 usedText.id = got.message
                 return (got.code, false)
             }
-            let pending = await MainActor.run { codes.on() } && Date().timeIntervalSince(since) < TextedCodes.window
-            return (nil, pending)
+            return (nil, Date().timeIntervalSince(since) < window)
         }
         let (outcome, page) = try await SignInFlow.signIn(
             login, exact: PublicSuffix.isSuffix(login.site), store: store, run: run, texted: texted)
-        if outcome != .waitingForText { await codes.forget(login.site) }
+        if outcome != .waitingForCode { await codes.forget(login.site) }
         // FR-1362: the text is deleted in Messages once used (now while unlocked, else at unlock).
         // Only once the site took the code: a text whose code didn't work may not have been one.
         if let used = usedText.id, outcome == .signedIn { await codes.used(used, site: host) }
+        // FR-1366: a code Claude found in the owner's email: that email is archived through Apple
+        // Mail too, when Mail has it (Toni, 2026-11-21: "script Mail for archiving anyway").
+        var archivedInMail = false
+        if !givenCode.isEmpty, outcome == .signedIn, let place = await codes.mailHolding(givenCode) {
+            await codes.used(place, site: host)
+            archivedInMail = true
+        }
         let who = login.user.isEmpty ? "" : " as \(login.user)"
         var said: String
         var activity: String?
@@ -204,12 +227,27 @@ enum LoginsCapability {
         case .signedIn:
             said = "Signed in to \(host)\(who)."
             activity = "Signed in to \(host)\(who)"
+            // FR-1366: the owner wants code emails read and archived after use.
+            if archivedInMail {
+                said += " Latchkey marks the email with that code read and archives it in Apple Mail."
+            } else if !givenCode.isEmpty {
+                said += " Now mark the email with that code read and archive it with your email tool."
+            }
         case .needsCode:
             said =
-                "\(host) now asks for a verification code Latchkey doesn't hold (no code text reached Messages on this Mac within 2 minutes; it may have been sent by email, or Messages is off in Latchkey's settings)."
-        case .waitingForText:
+                "\(host) now asks for a verification code Latchkey doesn't have: none reached Messages\(readMail ? " or Apple Mail" : "") on this Mac within 2 minutes."
+        case .waitingForCode where readMail:
             said =
-                "\(host) texted a verification code to the owner's phone, and it hasn't reached Messages on this Mac yet. Call logins_sign_in again on this page in a few seconds: Latchkey takes the code from Messages and fills it in itself."
+                "\(host) sent a verification code, and it hasn't reached Messages or Apple Mail on this Mac yet. Call logins_sign_in again on this page with no_email_access true in a few seconds."
+        case .waitingForCode:
+            // FR-1364: Claude's own email tool first (Toni, 2026-11-21: "always prefer direct MCP
+            // instead of Apple Mail tricks"); Apple Mail only when Claude has none.
+            said = """
+                \(host) asks for a verification code it sent to the owner, by text or email, and none has reached Messages on this Mac yet. Can you read the owner's email with a tool of your own (a Gmail, Outlook, or other email connector)?
+                - If you can: find the newest email from \(host) with the code, call logins_sign_in again on this page with code set to it, and once signed in, mark that email read and archive it with your tool. If your tool can't find it, stop there: Apple Mail on the Mac reads the same mailbox, so don't ask Latchkey to look.
+                - Only if you have no tool for the owner's email: call logins_sign_in again on this page with no_email_access true, and Latchkey reads Apple Mail on the Mac (starting it in the background if needed).
+                - If it was a text, call logins_sign_in again on this page in a few seconds: Latchkey takes it from Messages.
+                """
         case .check:
             said = "\(host) shows a check Latchkey can't answer (a captcha, or a new-device check)."
         case .refused(let words):

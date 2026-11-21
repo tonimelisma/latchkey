@@ -120,6 +120,14 @@ import Testing
         <input name="username" autocomplete="username"><input type="password" name="p"><button>Log in</button></form>
         """
 
+    /// A sign-in whose 2 minutes of waiting for a code are over (FR-1361): its fallback follows.
+    static func noWait() -> TextedCodes {
+        let c = TextedCodes(defaults: nil)
+        c.window = 0
+        c.firstWait = .zero
+        return c
+    }
+
     func fallback(locked: Bool, wide: Bool = false) throws -> (OwnPages, OwnSessions, SignInStore) {
         // wide: a second sign-in saved for another name under a.test, and Safari's sign-in in a
         // cookie for all of a.test (Amazon's shape, live check 2026-11-21).
@@ -143,9 +151,9 @@ import Testing
         defer { own.closeAll() }
         let name = try await own.open(html: Self.needsCode, base: Self.base)
         #expect(try await own.page(name).run("document.cookie") == "", "no copy before: Latchkey signs in itself")
-        let r = await LoginsCapability.signIn(store: s, own: own, move: { _ in nil }).handler(
+        let r = await LoginsCapability.signIn(store: s, own: own, move: { _ in nil }, codes: Self.noWait()).handler(
             .object(["page": .string(name)]))
-        #expect(r.plainText.contains("verification code Latchkey doesn't hold"), "\(r.plainText)")
+        #expect(r.plainText.contains("verification code Latchkey doesn't have"), "\(r.plainText)")
         #expect(r.plainText.contains("the owner's Safari sign-in is used there instead"))
         // A test page has no server to load it again from: said so, the copy taken all the same.
         #expect(r.plainText.contains("took a copy of Safari's cookies"))
@@ -162,7 +170,7 @@ import Testing
         defer { own.closeAll() }
         let name = try await own.open(html: Self.needsCode, base: Self.base)
         _ = try await own.page(name).run("document.cookie = 'attempt=1; path=/; secure'; 'ok'")
-        let r = await LoginsCapability.signIn(store: s, own: own, move: { _ in nil }).handler(
+        let r = await LoginsCapability.signIn(store: s, own: own, move: { _ in nil }, codes: Self.noWait()).handler(
             .object(["page": .string(name)]))
         #expect(r.plainText.contains("the owner's Safari sign-in is used there instead"), "\(r.plainText)")
         #expect(sessions.fellBack("a.test") && sessions.fellBack("na.account.a.test"))
@@ -180,7 +188,7 @@ import Testing
             move: { _ in
                 moved.called = true
                 return nil
-            }
+            }, codes: Self.noWait()
         ).handler(.object(["page": .string(name)]))
         #expect(moved.called, "\(r.plainText)")
         #expect(r.plainText.contains("couldn't move into Safari"))
@@ -193,7 +201,7 @@ import Testing
         let (own, sessions, s) = try fallback(locked: true)
         defer { own.closeAll() }
         let name = try await own.open(html: SignInPageTests.onePage(), base: Self.base)
-        let r = await LoginsCapability.signIn(store: s, own: own, move: { _ in nil }).handler(
+        let r = await LoginsCapability.signIn(store: s, own: own, move: { _ in nil }, codes: Self.noWait()).handler(
             .object(["page": .string(name)]))
         #expect(r.plainText.contains("Signed in to a.test as ann."), "\(r.plainText)")
         #expect(!r.plainText.contains("Safari sign-in is used"))

@@ -24,8 +24,8 @@ enum SignInFlow {
         case signedIn
         /// The page asks for a code Latchkey doesn't hold.
         case needsCode
-        /// The site texted a code that hasn't arrived in Messages yet (FR-1361): call again.
-        case waitingForText
+        /// The site sent a code that hasn't reached Latchkey yet (FR-1361, FR-1364): call again.
+        case waitingForCode
         /// A captcha or another check Latchkey can't answer.
         case check
         /// The site refused: the page's words, if any.
@@ -96,7 +96,7 @@ enum SignInFlow {
                 // FR-1360: a code the site texted to the Owner, when Latchkey may use texts.
                 guard let texted else { return .needsCode }
                 let t = await texted()
-                guard let c = t.code else { return t.pending ? .waitingForText : .needsCode }
+                guard let c = t.code else { return t.pending ? .waitingForCode : .needsCode }
                 code = c
             } else if page.code, !page.password, let totp {
                 // A code about to run out waits for the next one; a code sent once is never sent

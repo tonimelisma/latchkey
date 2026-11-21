@@ -19,6 +19,7 @@ import Testing
         ("safari tab front", SafariBrowser.Script.tabFront), ("safari tab restore", SafariBrowser.Script.tabRestore),
         ("safari tab close", SafariBrowser.Script.tabClose),
         ("safari all tabs", SafariBrowser.Script.allTabs), ("safari tab pick", SafariBrowser.Script.tabPick),
+        ("mail archive code email", MailCodes.Script.archive),
     ]
 
     @Test(arguments: scripts.map(\.0))

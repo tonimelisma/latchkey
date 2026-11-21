@@ -29,3 +29,7 @@ Each test is written and seen failing before its code.
   "call again" answer, deleting at once or at unlock: `TextedCodesTests`, `TextedCodeSignInTests`
   (FR-1360 to FR-1363); the delete in Messages' window is checked live by
   `logins.texted_code_deleted` after the next code used while unlocked
+- [x] T18 Emailed codes: `code` and `no_email_access` on logins_sign_in, Claude asked first,
+  `MailCodes` (Mail's index and email files, started hidden only without an email tool, archived
+  through Mail's scripting while unlocked, also for a code Claude found): `TextedCodeSignInTests`,
+  `MailCodesTests`, `ScriptSyntaxTests` (FR-1364 to FR-1367); live with the next code emailed

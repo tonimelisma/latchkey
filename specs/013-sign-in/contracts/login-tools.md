@@ -24,10 +24,18 @@ Both exist only while the Owner's Sign-in setting is On (FR-1340). Answers are t
 - Answer: the outcome in plain words, then the page as browser_read shows it:
   - "Signed in to <site> as <user>."
   - "<site> now asks for a verification code Latchkey doesn't hold (sent by text or email?)."
-  - A code the site texts (FR-1360, FR-1361) is filled without a word of it; while it hasn't
-    come: "<site> texted a verification code to the owner's phone, and it hasn't reached Messages
-    on this Mac yet. Call logins_sign_in again on this page in a few seconds: …" (not an error;
-    no fallback until 2 minutes have passed).
+  - A code the site texts (FR-1360, FR-1361) is filled without a word of it. Inputs `code` (a
+    code Claude read in the owner's email with its own tool, 4 to 10 letters or digits) and
+    `no_email_access` (true: Claude has no email tool; Latchkey reads Apple Mail), FR-1364,
+    FR-1365. When no code came within 20 s (45 s with `no_email_access`), not an error, no
+    fallback until 2 minutes have passed: "<site> asks for a verification code it sent to the
+    owner, by text or email, and none has reached Messages on this Mac yet. Can you read the
+    owner's email with a tool of your own …?" with the three ways on (pass `code` and archive
+    the email; only without an email tool, `no_email_access`; for a text, call again). With
+    `no_email_access`: "… hasn't reached Messages or Apple Mail on this Mac yet. Call … again
+    with no_email_access true …". After a sign-in with `code`: "Latchkey marks the email with
+    that code read and archives it in Apple Mail." or, when Mail doesn't have it, "Now mark the
+    email with that code read and archive it with your email tool." (FR-1366).
   - "<site> shows a check Latchkey can't answer (a captcha or a new-device check)." Only a
     challenge the page shows counts: hidden reCAPTCHA frames from ad scripts and the invisible
     reCAPTCHA badge don't (live check 2026-11-21, homerecording.com, a sign-in that had worked).

@@ -42,8 +42,12 @@ Claude app (phone, web, desktop), can work with what's on your Mac:
   your next export. When a site texts you a code, Latchkey takes it from Messages and fills it
   in itself (Claude never sees it), then deletes that text in Messages: at once while the Mac is
   unlocked (Messages' window may show that conversation for a moment, the one exception to
-  "never in your way" here), or when you next unlock it. Not yet: passkeys, and codes sent by
-  email.
+  "never in your way" here), or when you next unlock it. When a site emails you a code, Claude
+  is asked first whether it can read your email with a tool of its own (a Gmail or Outlook
+  connector) and passes the code it finds; only if it has none does Latchkey read Apple Mail on
+  your Mac (starting it hidden if needed). Either way, once signed in, the code email is marked
+  read and archived through Mail's scripting when Mail has it (else Claude archives it with its
+  tool). Not yet: passkeys.
 - **The screen:** take a picture of it, and control the computer when you ask.
 
 Your Mac never has to accept connections from the internet: Latchkey reaches out to a small

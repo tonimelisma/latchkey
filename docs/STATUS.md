@@ -87,7 +87,12 @@ signed in with Safari's sign-in. That check texted Toni two Amazon codes Latchke
 FR-1363): Latchkey takes a code a site texts from Messages, fills it, and deletes the text in
 Messages' window, at once while unlocked, else at the next unlock. Not yet tried live: the
 delete in Messages' window (the Mac was locked); the case `logins.texted_code_deleted` checks
-the log after the next code used.
+the log after the next code used. Emailed codes (0.8.186; Toni: "Email and SMS both", Claude's
+own email tool first; spec 013 FR-1364 to FR-1367): after 20 s with no text, Claude is asked
+whether it can read the owner's email and passes the code; only without an email tool does
+Latchkey read Apple Mail's files (Mail's previews come hours late, so the email files are
+decoded), starting Mail hidden. The code email is then marked read and archived through Mail's
+scripting while unlocked. Not yet tried live: reading a real code email and the archive script.
 Live check (0.8.175, Mac locked, 2026-11-21 00:54): groups logins, browser, files, shell: 51 of 51
 worked. A fresh Claude signed in to the-internet.herokuapp.com as tomsmith with the fixture's test
 sign-in (`logins-fixture.sh`); none of its 10 tool results held the password except the test
