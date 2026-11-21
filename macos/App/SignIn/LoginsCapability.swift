@@ -260,6 +260,9 @@ enum LoginsCapability {
                     : " One more try is allowed.")
         case .noForm:
             said = "There's no sign-in form on this page to fill. Open the site's sign-in page, then call again."
+        case .couldntFill:
+            said =
+                "Latchkey couldn't fill \(host)'s sign-in form (the page changed what was typed into a field), so nothing was sent and nothing counts against the saved sign-in."
         case .wrongSite:
             said = "The page went to another site before Latchkey filled anything, so nothing was filled."
         }
@@ -270,7 +273,7 @@ enum LoginsCapability {
             browser = "Latchkey's own browser"
             let failed: Bool =
                 switch outcome {
-                case .needsCode, .check, .refused: true
+                case .needsCode, .check, .refused, .couldntFill: true
                 default: false
                 }
             // Spec 013 FR-1352: where Latchkey's own sign-in can't finish, the owner's Safari
@@ -320,7 +323,7 @@ enum LoginsCapability {
             .browser, "Sign-in on \(host)\(who) in \(browser): \(said.prefix(160))", error: outcome != .signedIn,
             systemLog: false)
         result.activity = activity
-        result.isError = outcome == .noForm || outcome == .wrongSite
+        result.isError = outcome == .noForm || outcome == .wrongSite || outcome == .couldntFill
         return result
     }
 

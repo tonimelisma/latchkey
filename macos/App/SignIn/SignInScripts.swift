@@ -47,11 +47,21 @@ extension PageScripts {
             if (s.visibility === 'hidden' || s.display === 'none' || Number(s.opacity) === 0) return false;
             return e.offsetWidth > 0 && e.offsetHeight > 0;
           });
+          // The site's own words about the sign-in: a shown error element first, then a shown
+          // alert; never a link (Citi's "Skip to Content" link is marked as a live region).
           function problem() {
-            var all = document.querySelectorAll('[role="alert"], [aria-live="assertive"], .error, .alert, .flash, [class*="error"], [id*="error"]');
-            for (var i = 0; i < all.length; i++) {
-              var t = (all[i].innerText || '').replace(/\\s+/g, ' ').trim();
-              if (t && seen(all[i]) || t && all[i].offsetHeight) return t.slice(0, 300);
+            var groups = ['.error, [class*="error"], [id*="error"]', '[role="alert"], [aria-live="assertive"], .alert, .flash'];
+            for (var g = 0; g < groups.length; g++) {
+              var all = document.querySelectorAll(groups[g]);
+              for (var i = 0; i < all.length; i++) {
+                var el = all[i];
+                if (el.tagName === 'A' || (el.closest && el.closest('a'))) continue;
+                var t = (el.innerText || '').replace(/\\s+/g, ' ').trim();
+                if (!t || /^skip to\\b/i.test(t) || !(el.offsetWidth || el.offsetHeight)) continue;
+                var s = getComputedStyle(el);
+                if (s.visibility === 'hidden' || s.display === 'none') continue;
+                return t.slice(0, 300);
+              }
             }
             return '';
           }
@@ -87,12 +97,36 @@ extension PageScripts {
             filled = [];
             try { Object.defineProperty(window, '__latchkeyFilled', { value: filled, enumerable: false }); } catch (x) {}
           }
+          // Typed one character at a time, as a keyboard does (key events with codes, beforeinput,
+          // the text put in at the caret, input): input masks take nothing else (Citi's user ID
+          // kept only "uu" of "dummyuser", 2026-11-21). A page script may handle a key itself
+          // (preventDefault); then its own handling stands. True when the field holds the value.
+          var setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
           function put(e, v) {
             if (e.focus) e.focus();
-            Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(e, v);
-            e.dispatchEvent(new Event('input', { bubbles: true }));
-            e.dispatchEvent(new Event('change', { bubbles: true }));
             filled.push(e);
+            setter.call(e, '');
+            e.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'deleteContentBackward' }));
+            for (var i = 0; i < v.length; i++) {
+              var ch = v.charAt(i), up = ch.toUpperCase();
+              var code = /[a-z]/i.test(ch) ? 'Key' + up : (/[0-9]/.test(ch) ? 'Digit' + ch : '');
+              var kc = /[a-z0-9]/i.test(ch) ? up.charCodeAt(0) : 0;
+              var go = e.dispatchEvent(new KeyboardEvent('keydown', { key: ch, code: code, keyCode: kc, which: kc, bubbles: true, cancelable: true }));
+              go = e.dispatchEvent(new KeyboardEvent('keypress', { key: ch, code: code, keyCode: ch.charCodeAt(0), charCode: ch.charCodeAt(0), which: ch.charCodeAt(0), bubbles: true, cancelable: true })) && go;
+              go = e.dispatchEvent(new InputEvent('beforeinput', { data: ch, inputType: 'insertText', bubbles: true, cancelable: true })) && go;
+              if (go) {
+                var was = e.value, s = e.selectionStart, t = e.selectionEnd;
+                if (s === null || s === undefined) { s = was.length; t = was.length; }
+                setter.call(e, was.slice(0, s) + ch + was.slice(t));
+                try { e.setSelectionRange(s + 1, s + 1); } catch (x) {}
+                e.dispatchEvent(new InputEvent('input', { data: ch, inputType: 'insertText', bubbles: true }));
+              }
+              e.dispatchEvent(new KeyboardEvent('keyup', { key: ch, code: code, keyCode: kc, which: kc, bubbles: true }));
+            }
+            e.dispatchEvent(new Event('change', { bubbles: true }));
+            if (e.blur) e.blur();
+            var squash = function (s) { return String(s).replace(/[\\s-]/g, ''); };
+            return squash(e.value) === squash(v);
           }
           function send(e) {
             var form = e.form || (e.closest && e.closest('form'));
@@ -108,19 +142,29 @@ extension PageScripts {
               e.dispatchEvent(new KeyboardEvent(k, { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true }));
             });
           }
+          // Nothing is sent when a field doesn't hold what was typed: the site would refuse an
+          // empty or changed form, and that is no refusal of the password (Citi, 2026-11-21).
+          var unfilled = 'ok\\t' + JSON.stringify({ step: 'unfilled' });
           if (passwords.length && pass) {
-            if (userField && user && userField.value !== user) put(userField, user);
-            put(passwords[0], pass);
+            if (userField && user && userField.value !== user && !put(userField, user)) return unfilled;
+            if (!put(passwords[0], pass)) return unfilled;
             send(passwords[0]);
             return 'ok\\t' + JSON.stringify({ step: 'password' });
           }
           if ((codeField || boxes.length) && code) {
-            if (boxes.length) { boxes.forEach(function (b, i) { put(b, code.charAt(i)); }); send(boxes[boxes.length - 1]); }
-            else { put(codeField, code); send(codeField); }
+            if (boxes.length) {
+              var all = true;
+              boxes.forEach(function (b, i) { all = put(b, code.charAt(i)) && all; });
+              if (!all) return unfilled;
+              send(boxes[boxes.length - 1]);
+            } else {
+              if (!put(codeField, code)) return unfilled;
+              send(codeField);
+            }
             return 'ok\\t' + JSON.stringify({ step: 'code' });
           }
           if (userField && user && !passwords.length && !userSent) {
-            put(userField, user);
+            if (!put(userField, user)) return unfilled;
             send(userField);
             return 'ok\\t' + JSON.stringify({ step: 'user' });
           }

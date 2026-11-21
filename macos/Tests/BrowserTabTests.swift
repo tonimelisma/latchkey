@@ -477,6 +477,29 @@ final class FakeSafariTabs: ScriptRunner, @unchecked Sendable {
         #expect(fake.userWindow.current == 1, "back also when the shot failed")
     }
 
+    /// Citi, 2026-11-21: a tab of Claude's own whose page redirected after the load's limit (no
+    /// mark, not the address loaded) is still Claude's while every other tab is as it was; an
+    /// owner's tab never is, and a change to any other tab loses it.
+    @Test func claudesOwnTabSurvivesARedirect() {
+        func row(_ i: Int, _ address: String) -> TabSurvey.Row {
+            TabSurvey.Row(index: i, sameAddress: false, marked: false, address: address)
+        }
+        let before = TabSurvey(count: 3, rows: [row(1, "https://o/1"), row(2, "https://o/2"), row(3, "https://citi/")])
+        var mine = PickedTab(index: 3, count: 3, address: "https://online.citi/dash", token: "t")
+        mine.others = before.fingerprint(without: 3)
+        let after = TabSurvey(
+            count: 3, rows: [row(1, "https://o/1"), row(2, "https://o/2"), row(3, "https://online.citi/login")])
+        #expect(TabSurvey.pick(after, remembered: mine, navigating: false, claudes: true) == 3)
+        #expect(TabSurvey.pick(after, remembered: mine, navigating: false, claudes: false) == nil, "an owner's tab")
+        let ownerMoved = TabSurvey(
+            count: 3, rows: [row(1, "https://o/1"), row(2, "https://o/other"), row(3, "https://online.citi/login")])
+        #expect(TabSurvey.pick(ownerMoved, remembered: mine, navigating: false, claudes: true) == nil)
+        let opened = TabSurvey(
+            count: 4,
+            rows: [row(1, "https://o/1"), row(2, "https://o/2"), row(3, "https://online.citi/login"), row(4, "x")])
+        #expect(TabSurvey.pick(opened, remembered: mine, navigating: false, claudes: true) == nil)
+    }
+
     /// Which tab is the picked one, decided from what Safari reports (plan D6, D8).
     @Test func picksThePickedTab() {
         let mine = PickedTab(index: 3, count: 3, address: "https://a/", token: "t")

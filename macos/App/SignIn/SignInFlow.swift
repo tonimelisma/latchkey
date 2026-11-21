@@ -32,6 +32,8 @@ enum SignInFlow {
         case refused(String)
         /// Nothing on the page to fill.
         case noForm
+        /// A field didn't hold what Latchkey typed, so nothing was sent (Citi, 2026-11-21).
+        case couldntFill
         /// The page is on another site (or moved there) before Latchkey filled anything.
         case wrongSite
     }
@@ -129,6 +131,7 @@ enum SignInFlow {
             case "code": sentCode = true
             case "user": sentUser = true
             case "wrongsite": return filledAny ? .signedIn : .wrongSite
+            case "unfilled": return .couldntFill
             default: break steps  // nothing more to fill: what the page shows decides
             }
             filledAny = true

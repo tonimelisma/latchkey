@@ -12,6 +12,9 @@ struct PickedTab: Equatable, Sendable {
     var token: String
     /// The window's tabs when the mark was last seen (`TabSurvey.fingerprint`, FR-432).
     var fingerprint: String? = nil
+    /// The window's other tabs when this one was last surely the picked one, for a tab of
+    /// Claude's own whose page went elsewhere without its mark (`TabSurvey.pick`).
+    var others: String? = nil
 }
 
 /// What Safari reports about a window's tabs before Latchkey uses the picked one: for each tab
@@ -43,6 +46,12 @@ struct TabSurvey: Equatable {
     var count: Int
     var rows: [Row]
 
+    /// The fingerprint of every tab but the one at `index`.
+    func fingerprint(without index: Int) -> String {
+        let all = rows.filter { $0.index != index }.map(\.address).joined(separator: "\n")
+        return SHA256.hash(data: Data("\(count)\n\(index)\n\(all)".utf8)).map { String(format: "%02x", $0) }.joined()
+    }
+
     init(count: Int, rows: [Row]) {
         self.count = count
         self.rows = rows
@@ -67,10 +76,16 @@ struct TabSurvey: Equatable {
     /// action loaded is loading (`navigating`; the new page has no mark yet), the tab at that
     /// position when the window has as many tabs as before and the tab shows that address; or,
     /// when tabs moved, a tab with the mark at the tab's last address.
-    static func pick(_ s: TabSurvey, remembered t: PickedTab, navigating: Bool) -> Int? {
+    static func pick(_ s: TabSurvey, remembered t: PickedTab, navigating: Bool, claudes: Bool = false) -> Int? {
         if let r = s.rows.first(where: { $0.index == t.index }) {
             if r.marked { return r.index }
             if navigating && r.loading && s.count == t.count { return r.index }
+            // A tab of Claude's own whose page went elsewhere (a redirect after the load's limit
+            // took its mark; Citi, 2026-11-21): still the tab at its place while the window has as
+            // many tabs and every other one is exactly as when it was last surely Claude's.
+            if claudes && s.count == t.count, let seen = t.others, seen == s.fingerprint(without: t.index) {
+                return r.index
+            }
             // A page waiting on its own dialog answers no script, so it can't show the mark: it
             // is the picked tab only while the window's tabs are exactly as when its mark was last
             // seen (FR-432; security review 2026-11-03: an address alone could be another tab's).
@@ -741,12 +756,14 @@ actor SafariBrowser {
             try await call(
                 Script.tabSurvey,
                 [window, String(t.index), t.address, PageScripts.tabCheck(t.token), loading.joined(separator: "\n")]))
-        guard let index = TabSurvey.pick(survey, remembered: t, navigating: !loading.isEmpty) else {
+        guard let index = TabSurvey.pick(survey, remembered: t, navigating: !loading.isEmpty, claudes: claudesTab)
+        else {
             losePick()
             throw Failure.tabGone
         }
         t.index = index
         t.count = survey.count
+        t.others = survey.fingerprint(without: index)
         let row = survey.rows.first { $0.index == index }
         if row?.marked == true { t.fingerprint = survey.fingerprint }
         picked?.tab = t

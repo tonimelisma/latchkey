@@ -93,6 +93,17 @@ whether it can read the owner's email and passes the code; only without an email
 Latchkey read Apple Mail's files (Mail's previews come hours late, so the email files are
 decoded), starting Mail hidden. The code email is then marked read and archived through Mail's
 scripting while unlocked. Not yet tried live: reading a real code email and the archive script.
+Citi (Toni, 2026-11-21, 0.8.185): signing in failed and the page got lost. Found on Citi's own
+login page: its user ID field has an input mask that keeps only what comes with real key
+presses ("dummyuser" became "uu" when set in one go), so the form went with a bad user ID;
+Latchkey quoted the page's "Skip to Content" link (a live region) as Citi's error; two such
+tries counted as refusals and blocked the saved password though it was never checked; and a
+Safari tab of Claude's whose page redirected after the load's 15 s limit lost its mark, so
+later calls said "That page isn't open" and each new page left another Citi tab. 0.8.187: fields
+are typed key by key (key events with codes, beforeinput, the caret), a field that doesn't hold
+what was typed sends nothing and counts nothing ("couldn't fill"), the site's error is read
+from error elements first and never from a link, and a tab of Claude's own stays found while
+every other tab in its window is as it was.
 Live check (0.8.175, Mac locked, 2026-11-21 00:54): groups logins, browser, files, shell: 51 of 51
 worked. A fresh Claude signed in to the-internet.herokuapp.com as tomsmith with the fixture's test
 sign-in (`logins-fixture.sh`); none of its 10 tool results held the password except the test

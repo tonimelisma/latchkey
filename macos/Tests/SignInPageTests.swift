@@ -179,4 +179,60 @@ import Testing
         _ = try await b.open(html: page, base: Self.base)
         #expect(try await signIn(b).outcome == .signedIn)
     }
+
+    /// Citi, 2026-11-21: an input mask keeps only what comes with a real key press (a key code),
+    /// and puts its own model back on every input; a value set in one go came out as "uu".
+    static let masked = """
+        <form id="f"><input id="Signon_username" type="text"><input id="p" type="password"><button>Sign on</button></form><p id="m"></p>
+        <script>
+        var model = '', u = document.getElementById('Signon_username');
+        u.addEventListener('keydown', function (ev) { if (ev.keyCode > 0 && ev.key.length === 1) model += ev.key; });
+        u.addEventListener('input', function () { u.value = model; });
+        document.getElementById('f').addEventListener('submit', function (ev) {
+          ev.preventDefault();
+          var ok = u.value === 'ann' && document.getElementById('p').value === \(PageScripts.literal(ann.password));
+          if (ok) { document.body.innerHTML = '<h1>Welcome ann</h1>'; }
+          else { var m = document.getElementById('m'); m.className = 'cds-error'; m.textContent = 'Enter a valid user ID'; }
+        });
+        </script>
+        """
+
+    @Test func anInputMaskTakesWhatIsTypedKeyByKey() async throws {
+        let b = browser()
+        defer { b.discard() }
+        _ = try await b.open(html: Self.masked, base: Self.base)
+        let (outcome, page) = try await signIn(b)
+        #expect(outcome == .signedIn, "\(page.text)")
+    }
+
+    /// A field that won't hold what is typed: nothing is sent, and it is no refusal.
+    @Test func aFieldThatWontHoldTheValueSendsNothing() async throws {
+        let b = browser()
+        defer { b.discard() }
+        let html = """
+            <form id="f"><input id="u" autocomplete="username"><input id="p" type="password"><button>Sign in</button></form>
+            <script>
+            document.getElementById('u').addEventListener('input', function (ev) { ev.target.value = ''; });
+            window.sent = 0;
+            document.getElementById('f').addEventListener('submit', function (ev) { ev.preventDefault(); window.sent++; });
+            </script>
+            """
+        _ = try await b.open(html: html, base: Self.base)
+        let store = SignInStore(vault: MemoryVault())
+        #expect(try await signIn(b, store: store).outcome == .couldntFill)
+        #expect(try await b.run("String(window.sent)") == "0")
+        #expect(!store.blocked(Self.ann) && store.refused(Self.ann) == 1, "nothing counted before")
+    }
+
+    /// Citi, 2026-11-21: its "Skip to Content" link is a live region; the site's error is what's said.
+    @Test func theSitesErrorIsSaidNotASkipLink() async throws {
+        let b = browser()
+        defer { b.discard() }
+        let page =
+            "<a href=\"#main\" aria-live=\"assertive\">Skip to Content</a><span class=\"cds-error\" style=\"display:none\">Enter a valid password</span>"
+            + Self.onePage(expect: "something else")
+        _ = try await b.open(html: page, base: Self.base)
+        let (outcome, _) = try await signIn(b)
+        #expect(outcome == .refused("Wrong password"))
+    }
 }
