@@ -74,6 +74,10 @@ type Hub struct {
 	mu     sync.Mutex
 	conns  map[string]*conn // device ID → live connection
 	closed bool
+	// running counts the agent connections being served, from accept until their last event is
+	// recorded, so Close returns only after nothing of theirs can still be written. Added to
+	// only under mu while not closed.
+	running sync.WaitGroup
 
 	// persistLocks order the store writes of one device's connections without holding mu (which
 	// every Online and Call takes) across a database write. A fixed set shared by all devices.
@@ -193,10 +197,22 @@ func (h *Hub) Close() {
 		c.closeWith(ErrDisconnected, agentproto.CloseNormal, "relay shutting down")
 		<-c.done
 	}
+	// Connections that ended just before (a revoked Mac) or are still in their handshake (bounded
+	// by its own deadline) finish recording what happened before Close returns.
+	h.running.Wait()
 }
 
 // ServeHTTP accepts an agent WebSocket.
 func (h *Hub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	h.mu.Lock()
+	if h.closed {
+		h.mu.Unlock()
+		http.Error(w, "relay shutting down", http.StatusServiceUnavailable)
+		return
+	}
+	h.running.Add(1)
+	h.mu.Unlock()
+	defer h.running.Done()
 	ws, err := websocket.Accept(w, r, &websocket.AcceptOptions{Subprotocols: []string{agentproto.Subprotocol}})
 	if err != nil {
 		return // Accept already wrote the HTTP error

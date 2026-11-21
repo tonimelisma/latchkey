@@ -4,10 +4,12 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"log/slog"
 	"net/http/httptest"
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -17,6 +19,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/tonimelisma/latchkey/relay/agentproto"
+	"github.com/tonimelisma/latchkey/relay/internal/events"
 	"github.com/tonimelisma/latchkey/relay/internal/hub"
 	"github.com/tonimelisma/latchkey/relay/internal/store"
 	"github.com/tonimelisma/latchkey/relay/internal/testagent"
@@ -510,6 +513,29 @@ func TestPanicDuringStartLeavesNothingBehind(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		t.Fatal("hub.Close waited forever on a connection that panicked")
 	}
+}
+
+// Close returns only after every connection has recorded how it ended, also one that ended just
+// before: a trace line written after Close would land in a folder already removed (the deleted
+// account's, or a test's TempDir).
+func TestCloseWaitsForTheLastEventOfEveryConnection(t *testing.T) {
+	evStore, err := store.Open(context.Background(), filepath.Join(t.TempDir(), "events.db"))
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = evStore.Close() })
+	rec := events.New(evStore, slog.New(slog.DiscardHandler), nil)
+	var traced atomic.Bool
+	rec.TraceTo(func(ev store.Event) {
+		if ev.Kind == events.MacDisconnected {
+			time.Sleep(300 * time.Millisecond)
+			traced.Store(true)
+		}
+	})
+	e := setup(t, func(c *hub.Config) { c.Events = rec })
+	c := e.dial()
+	e.waitOnline(true)
+	require.NoError(t, c.Close())
+	e.hub.Close()
+	assert.True(t, traced.Load(), "Close returned before the connection's end was recorded")
 }
 
 func TestShutdownMarksDevicesOffline(t *testing.T) {
