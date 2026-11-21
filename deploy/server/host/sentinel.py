@@ -136,29 +136,37 @@ def unexpected_listeners(ss_output):
     return sorted(found)
 
 
-def classify_exec(container, command, healthcheck):
+# Each known container's health check, as this repository defines it (relay/Dockerfile,
+# deploy/server/host/hackernews-compose.yml; deploy/tests/test_sentinel.py keeps them equal).
+# Fixed here, never read from the container: whoever controls a container could declare any
+# command its health check.
+HEALTH_CHECKS = {
+    "latchkey-relay": "/relay healthcheck",
+    "hackernews-app-1": "wget --spider -q http://localhost:3000/api/v1/stories?timespan=Day&limit=1",
+}
+
+
+def classify_exec(container, command):
     """Severity of a command run inside a container (docker events exec_create), or None for its
-    own health check. healthcheck is the container's Healthcheck.Test list."""
-    if healthcheck and healthcheck[0] in ("CMD", "CMD-SHELL"):
-        own = " ".join(healthcheck[1:])
-        if command.strip() == own.strip():
-            return None
+    own health check (HEALTH_CHECKS)."""
+    command = command.strip()
+    if container in HEALTH_CHECKS and command == HEALTH_CHECKS[container]:
+        return None
     for rx in EXPECTED_EXEC.get(container, []):
-        if re.fullmatch(rx, command.strip()):
+        if re.fullmatch(rx, command):
             return NOTICE
     return WARNING
 
 
-def unexpected_programs(container, procs, healthcheck=None):
+def unexpected_programs(container, procs):
     """Processes in a container other than its own program, as (comm, args) pairs: its health
     check and the commands the deploy and backup run there count only by their exact command
-    line (a process can take any name). Returns the sorted comm names."""
+    line (a process can take any name). In a container that isn't a known one, every process is
+    reported. Returns the sorted comm names."""
     known = CONTAINERS.get(container)
     found = set()
     for comm, args in procs:
-        if known is not None and comm in known["programs"]:
-            continue
-        if classify_exec(container, args, healthcheck or []) in (None, NOTICE):
+        if known is not None and (comm in known["programs"] or classify_exec(container, args) in (None, NOTICE)):
             continue
         found.add(comm)
     return sorted(found)
@@ -540,8 +548,6 @@ def inspect(cid):
 
 
 def watch_docker(out):
-    health = {}
-
     def handle(line):
         d = json.loads(line)
         kind, action = d.get("Type"), d.get("Action", "")
@@ -550,9 +556,7 @@ def watch_docker(out):
         cid = (d.get("Actor") or {}).get("ID", "")
         if kind == "container" and action.startswith("exec_create"):
             command = action.split(": ", 1)[1] if ": " in action else ""
-            if cid not in health:
-                health[cid] = ((inspect(cid).get("Config") or {}).get("Healthcheck") or {}).get("Test") or []
-            sev = classify_exec(name, command, health[cid])
+            sev = classify_exec(name, command)
             if sev:
                 out.emit(sev, "docker_exec", f"command run inside {name}: {command[:300]}", container=name, command=command[:1000])
         elif kind == "container" and action == "start":
@@ -581,8 +585,7 @@ def check_periodic(out):
     for name in names:
         top = run(["docker", "top", name, "-eo", "pid,comm,args"], timeout=20).splitlines()[1:]
         procs = [(p[1], p[2] if len(p) > 2 else "") for p in (line.split(None, 2) for line in top) if len(p) >= 2]
-        health = ((inspect(name).get("Config") or {}).get("Healthcheck") or {}).get("Test") or []
-        for prog in unexpected_programs(name, procs, health):
+        for prog in unexpected_programs(name, procs):
             out.emit(WARNING, "container_process", f"{prog} is running inside {name}", repeat_key=("proc", name, prog), container=name, program=prog)
     for pid in os.listdir("/proc"):
         if not pid.isdigit():

