@@ -1,0 +1,122 @@
+# Plan 013: Signing in by itself — HOW
+
+Spec: `spec.md`. Research: `research.md`. Approved to build by Toni, 2026-11-20 ("do the whole
+thing"). Everything is in the Mac app; the relay and the Linux program don't change (tools are
+defined on the Mac and pass through the relay as they are).
+
+## D1. Where the copies live (FR-1310, FR-1305)
+
+One generic-password item in the login keychain, account `sign-ins`, under the app's own Keychain
+service (`AppIdentity`), through the existing `Keychain` helper: accessible after first unlock,
+this device only (readable while locked, as the pairing is; `research.md`), trusting only this
+app. Its data is JSON: the import's date and the list of `SavedSignIn` (title, site, user name,
+password, `otpauth` address). Tests use a memory vault (the `PairingVault` protocol;
+`KeychainVault` writes nothing under XCTest). Removing (menu, uninstall watcher in
+`Installation.swift`) deletes the item. Options weighed: one item per sign-in (hundreds of
+Keychain items, slower list, partial imports possible) vs one item (all or nothing for free,
+FR-1303); one item chosen.
+
+## D2. Taking a file in (FR-1300, FR-1301, FR-1303)
+
+A folder of Latchkey's own, `~/Library/Application Support/<app>/Sign-in Import` (0700, left out
+of Time Machine with `isExcludedFromBackup`, never in iCloud Drive), watched while the app runs
+(a file-system event source plus a check every 2 s). A `.csv` that appears there is read once it
+stops growing, parsed (`PasswordsCSV`), stored (replacing everything, only when the whole file
+parsed), overwritten with zeros, and deleted; the Owner gets a notification with the count. A
+file that isn't Passwords' export is deleted too, and the notification says why. The folder is
+where the one-touch export (D3) saves, and where the hand steps tell the Owner to save. Options
+weighed: watching Downloads (needs that folder's permission, and the file could sync) vs a
+private folder; the private folder chosen.
+
+## D3. The one-touch export (FR-1301, FR-1306)
+
+`PasswordsExport` drives Passwords through Accessibility (the permission setup already asks for):
+open Passwords (`NSWorkspace`, it comes to the front because the Owner clicked); wait up to 2
+minutes for File → Export All Passwords to File… to be enabled (it is while Passwords is unlocked:
+the Owner's Touch ID); press it; press the confirmation's Export button; in the save panel, set
+the name to the import folder's full path and press Save; then D2 takes the file. Each step looks
+for its element by role and title for up to 10 s; anything unexpected stops the export, leaves
+Passwords as it is, and says which step. Passwords is quit afterwards only if Latchkey started it.
+Only while unlocked, only from a click (menu, Settings, setup, the reminder). Without Accessibility
+the hand steps show instead.
+
+## D4. The weekly reminder (FR-1304)
+
+At start and every hour: when the reminder is on, the last import (or the first start of this
+version, when there was none) is 7 days old or more, and no reminder went out in the last 7 days,
+post one notification (category `signins.export`). A click starts D3. The setting and the dates
+are in user defaults; never a window (Constitution IV).
+
+## D5. The tools (FR-1320, FR-1326, FR-1340; contract `contracts/login-tools.md`)
+
+A capability `logins` ("Sign-in"), levels Off and On (On by default), with a read tool
+`logins_find` and a write tool `logins_sign_in` (Toni, 2026-11-21: "Two: logins_find +
+logins_sign_in", after the MCP research: a read-only tool is approved without asking in Claude's
+apps). Off: neither exists (Constitution III).
+
+## D6. Filling a page (FR-1321, FR-1322, FR-1311)
+
+`logins_sign_in` takes `page` (Claude's page, as the browser tools name it) and an optional
+`user`. It works only in Claude's own pages: Latchkey's own browser, or a Safari tab of Claude's
+(spec 005 FR-455); never the Owner's tabs. Steps, at most four per call:
+
+1. Read the page's address; pick the sign-ins whose site fills there (`SiteMatch`). None: say so
+   (FR-1325). Several user names and none given: list them.
+2. Run the step script (`PageScripts.signInStep`) in the page's main frame only. It checks the
+   page is https on that site itself (so a page that moved meanwhile gets nothing), finds the
+   visible fields (password, verification code, or a user name alone, as on a two-page sign-in),
+   fills them with the field's own value setter and input events, and sends the form (its submit
+   button, else Enter).
+3. Wait for the page to settle (the browsers' own action wait), look again (`signInState`), and
+   go on: a code field and a code held fills the code; a password field again after the password
+   was sent is a failure; nothing to fill is done.
+4. Last, clear every password field and any code field Latchkey filled that is still on the page
+   (`clearSignIn`), so no script of Claude's can read them; page reads already hide such fields
+   (spec 005 FR-410).
+
+Secrets reach the page only inside the script: in Latchkey's own browser through WebKit
+directly; in Safari always through the 0600 script file in a 0700 folder, removed right after,
+never as an `osascript` argument (which other programs can see). Options weighed: typing with
+keystrokes (needs the front window, Constitution IV) vs the value setter; the value setter
+chosen, as the browser tools' own `type` does.
+
+## D7. Outcome and retries (FR-1323, FR-1324, FR-1327)
+
+The answer names the outcome in words (signed in; asks for a code Latchkey doesn't hold; a
+captcha or new-device check; the site refused, with the page's words), then the page as the
+browser tools show it. A refusal counts against that sign-in (site and user name, in memory); the
+second refusal blocks it until the next import. A code is never sent twice in one time step.
+Every sign-in goes into the activity log (site, user name, browser, outcome).
+
+## D8. Where the Owner sees it (FR-1301, FR-1302, FR-1305)
+
+Settings → What Claude Can Do lists Sign-in with the other capabilities and, while it is on, a
+section with how many sign-ins Latchkey holds and from when, Export from Passwords…, Remove All,
+and the reminder switch. The menu has Export Passwords to Latchkey…. Setup gets a sixth step,
+"Hand over your sign-ins (optional)", which never counts as missing (FR-1302).
+
+## D9. Tests and checks
+
+- Unit: `SignInDataTests` (CSV, codes with RFC 6238's vectors, site matching), `SignInStoreTests`
+  (replace all or nothing, failures, memory vault), `SignInPageTests` (the real WebKit view with
+  fixture pages at an https address: one-page and two-page forms, a code step, a frame from
+  another site, a page of another site, a refused password, fields cleared, no secret in any
+  answer), `SignInToolsTests` (the tools: Off means gone, list, no sign-in, several users,
+  second failure blocks), `PublicToolsTests` (27 tools), `ReadmeTests`.
+- Export: `macos/scripts/passwords-export-check.sh` drives the real export once on Toni's Mac
+  (his Touch ID), and checks the file was taken in and deleted. Toni's step.
+- Live (screen-state cases, group `logins`): with a test sign-in for the public test site
+  the-internet.herokuapp.com dropped into the import folder (only while Latchkey holds no
+  sign-ins of the Owner's, so nothing of his is replaced; removed in teardown), a fresh Claude
+  lists the site, signs in, and the traces are searched for the password.
+
+## Constitution check
+
+- I (no inbound): unchanged. II (fail fast): every step has a limit (10 s per element, 2 minutes
+  for Touch ID, the tools' 30 s). III (off is gone): the capability's tools vanish at Off. IV
+  (good citizen, never disturb): Passwords comes forward only because the Owner clicked; the
+  reminder is a notification; filling uses no keystrokes or pointer; uninstalling removes the
+  copies. V (self-hostable): nothing on the relay. VI (store the minimum): the copies stay on the
+  Mac; traces never hold a secret (tool arguments and answers don't). VII (test-first): tests
+  above, written first. VIII (simplicity): one item, one folder, no new program or package. IX:
+  no new dependencies.
