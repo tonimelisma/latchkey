@@ -187,6 +187,11 @@ after the app was quit.
 
 ## Next steps
 
+0. Spec 013, signing in by itself (`specs/013-sign-in/`): spec and research written 2026-11-20,
+   waiting for Toni's review before the plan. Passwords and verification codes from Passwords'
+   CSV export, filled by Latchkey in its own browser and Claude's Safari tabs; passkeys later,
+   with the paid Apple Developer Program. A test on Toni's Mac showed Latchkey can answer a
+   site's passkey request itself in its own browser.
 1. While locked, Target's search stays empty in Latchkey's own browser (its pages count as
    hidden to WebKit, and only an undocumented setting changes that, which Toni declined); Claude
    can still open products and the cart there.

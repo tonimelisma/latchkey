@@ -1,77 +1,149 @@
 # Spec 013: Signing in by itself — WHAT and WHY
 
-Status: Draft for Toni's review (started 2026-11-20). No plan, tasks, or code until Toni approves.
-Scope: Latchkey's own browser signs in to sites by itself with copies of the Owner's existing
-passwords and passkeys, which the Owner hands over once from Apple's Passwords app. Latchkey,
-never Claude, fills in the secret; Claude never sees it.
-Out of scope: registering new passkeys of Latchkey's own on the Owner's accounts (Toni,
-2026-11-20: "that'll mess up everything"); a live link to Apple's Passwords (none exists:
-`research.md`); other password managers; creating accounts or changing passwords.
+Status: Draft for Toni's review (2026-11-20). No plan, tasks, or code until Toni approves.
+Scope: Latchkey signs in to sites by itself with copies of the Owner's existing passwords and
+verification codes, which the Owner hands over from Apple's Passwords app. Latchkey, never
+Claude, fills in the secret; Claude never sees it.
+Out of scope: registering passkeys of Latchkey's own on the Owner's accounts (Toni, 2026-11-20:
+"that'll mess up everything"); a live link to Apple's Passwords (none exists: `research.md`);
+other password managers; creating accounts or changing passwords.
+Later: passkeys. Apple hands passkeys only to apps signed through the paid Apple Developer
+Program, through its export to another app; Latchkey uses Passwords' file export for now (Toni,
+2026-11-20: "CSV file for now"), which never contains passkeys. FR-1330 to FR-1339 are kept for
+that step and are not built now.
 
-Research: `research.md`.
+Research, with a test run on Toni's Mac: `research.md`.
 
 ## Problem
 
 While the Mac is locked, Claude's pages open in Latchkey's own browser with copies of Safari's
 cookies (spec 005 FR-457). When a site's sign-in has expired in Safari, or the site signs
 Latchkey's copy out, Claude reaches a sign-in page and can go no further: the Owner is away, and
-nothing on the Mac can sign in for them. Apple's Passwords app has no interface another app can
-read, so the only way in is a copy the Owner hands over themselves.
+nothing on the Mac can sign in for them. Apple's Passwords app can't be scripted and has no
+interface another app can read (`research.md`), so the only way in is a copy the Owner hands over.
 
 ## User stories
 
-### US1 (P1): Hand over my sign-ins once
-1. Given I open Passwords and choose to export to another app, when I pick Latchkey and approve
-   with Touch ID, then Latchkey keeps a copy of what I exported and says how many sign-ins it
-   now holds.
-2. Given I later add or change a password, when I export that item again, then Latchkey's copy
-   is replaced by the new one.
+### US1 (P1): Hand over my sign-ins
+1. Given I'm setting up Latchkey, when I reach the sign-ins step, then Latchkey tells me how to
+   export my passwords from Passwords to a file, and when I do, it takes them in, deletes the
+   file at once, and says how many sign-ins it now holds.
+2. Given a week has passed since my last export, then Latchkey shows a notification (never a
+   window in front) inviting me to export again; clicking it takes me to the same steps.
+3. Given I export again, then Latchkey's copies are replaced by the new file's: changed passwords
+   change, and sign-ins I deleted in Passwords are gone from Latchkey too.
 
 ### US2 (P1): Claude gets past a sign-in page while I'm away
-1. Given the Mac is locked and Claude reaches a site's sign-in page in Latchkey's own browser,
-   and Latchkey holds a sign-in for that site, when Claude asks Latchkey to sign in, then
-   Latchkey fills in and sends the sign-in itself and Claude continues on the signed-in page.
-2. Given the site asks for a passkey Latchkey holds, then Latchkey answers it itself.
+1. Given Claude reaches a site's sign-in page and Latchkey holds a sign-in for that site, when
+   Claude asks Latchkey to sign in, then Latchkey fills in and sends the sign-in itself and
+   Claude goes on from the signed-in page.
+2. Given the site then asks for a verification code that Latchkey holds, then Latchkey fills in
+   the current code too.
 3. Given Latchkey holds no sign-in for the site, then Claude is told so at once, in plain words.
+4. This works in Latchkey's own browser (Mac locked, or a site I'm not signed in to) and in
+   Claude's own Safari tabs (Mac unlocked).
 
-### US3 (P1): Claude never holds my secrets
-1. Claude never sees a password, a passkey, or a code: not in a page it reads, not in an answer,
-   not in Latchkey's log or traces.
+### US3 (P1): Claude knows what it can sign in to, and never holds a secret
+1. Given Claude asks, then it gets the list of sites Latchkey can sign in to, with the user name
+   for each, and never a password or code.
+2. Claude never sees a password or a code: not in a page it reads, not in an answer, not in
+   Latchkey's log or traces.
 
-### US4 (P1): Off means gone
-1. Given signing in is Off, then no sign-in tool or mention exists for Claude (Constitution III).
-2. Given I remove Latchkey's copies, then they are gone from the Mac, and deleting the app
-   leaves none behind (Constitution IV).
+### US4 (P1): I decide
+1. Sign-in is a setting of its own in Latchkey, on by default; given I turn it Off, then no
+   sign-in action, list, or mention exists for Claude (Constitution III).
+2. Given I choose to remove Latchkey's copies, then they are gone from the Mac at once, and
+   uninstalling Latchkey removes them too (Constitution IV).
 
 ## Requirements
 
-Numbers FR-1300 onward. Draft; the choices marked below are Toni's.
+### Taking the sign-ins in
 
-- **FR-1300** Latchkey shall accept sign-ins only through Apple's export to another app, which
-  the Owner starts and approves on the Mac themselves.
-- **FR-1301** Latchkey shall keep its copies only on the Mac, encrypted by the Mac's Keychain,
-  never sent to the relay, never logged, traced, or shown to Claude.
-- **FR-1302** Latchkey shall fill a sign-in only into a page whose address belongs to the site the
-  sign-in was saved for. [NEEDS CLARIFICATION: exact site matching rule]
-- **FR-1303** When Latchkey holds no sign-in for the page's site, the answer shall say so at once.
-- **FR-1304** [NEEDS CLARIFICATION: what comes over: passwords, passkeys, verification codes]
-- **FR-1305** [NEEDS CLARIFICATION: where Latchkey signs in: its own browser only, or also
-  Claude's Safari tabs]
-- **FR-1306** [NEEDS CLARIFICATION: Claude asks to sign in, or Latchkey signs in whenever it
-  meets a sign-in page]
-- **FR-1307** [NEEDS CLARIFICATION: whether Claude may list which sites Latchkey can sign in to]
-- **FR-1308** [NEEDS CLARIFICATION: its own capability in Latchkey's menu, or part of Browser]
+- **FR-1300** Latchkey shall take sign-ins only from a file the Owner exported from Apple's
+  Passwords app (File → Export All Passwords to File), never from any other source or program.
+- **FR-1301** During setup, and from Latchkey's menu at any time, Latchkey shall show the Owner
+  the steps to export and shall watch for the exported file; when it appears, Latchkey shall
+  read it, delete it at once, and say how many sign-ins (and how many with verification codes)
+  it now holds. A file that can't be read is deleted too, and the Owner is told why it failed.
+- **FR-1302** The setup step for sign-ins may be skipped; a skipped step shall not count as
+  missing setup (it doesn't open the setup window again, spec 001 FR-205).
+- **FR-1303** Each import shall replace every copy Latchkey held with the new file's contents, all
+  or nothing: when the new file can't be read in full, the old copies stay.
+- **FR-1304** When 7 days have passed since the last import (or since setup, when there was none),
+  Latchkey shall post one notification inviting the Owner to export again, and again every 7
+  days until they do or turn the reminder off. The notification shall never bring a window to the
+  front (Constitution IV); clicking it opens the steps of FR-1301 (Toni, 2026-11-20: "can't that be
+  automated without front window": it can't, Passwords needs the Owner's Touch ID for every export
+  and can't be scripted, so a notification is the least intrusive reminder).
+- **FR-1305** The Owner shall be able to remove every copy from Latchkey's menu, at once; when the
+  Owner uninstalls Latchkey, the copies shall be removed with it.
+
+### Keeping them
+
+- **FR-1310** Latchkey shall keep its copies only on this Mac, in its Keychain, readable while the
+  Mac is locked, never synced to iCloud, never sent to the relay, and never written to a log,
+  trace, or answer.
+- **FR-1311** A password or code Latchkey filled in shall be hidden from Claude when it reads the
+  page, as every password and code field is (spec 005 FR-410).
+
+### Signing in
+
+- **FR-1320** While Sign-in is On, Claude shall be able to ask Latchkey to sign in on a page of its
+  own (in Latchkey's own browser or in one of Claude's Safari tabs), optionally naming which user
+  name when Latchkey holds more than one for the site (Toni, 2026-11-20: "When Claude asks").
+  Latchkey shall never fill a sign-in Claude didn't ask for, and never in the Owner's own Safari
+  tabs.
+- **FR-1321** Latchkey shall fill a sign-in only into a page at an `https` address whose host is the
+  site the sign-in was saved for or one of its subdomains (a sign-in saved for `amazon.com` fills on
+  `www.amazon.com`), into the page itself and never into a frame from another site (Toni,
+  2026-11-20: "Its site and subdomains").
+- **FR-1322** When the page asks for a user name and password (on one page or one after the other),
+  Latchkey shall fill them in and send the form; when the page asks for a verification code and the
+  sign-in has one, Latchkey shall fill in the current code and send it.
+- **FR-1323** The answer shall say what happened in plain words: signed in, which step the page now
+  asks for (a code Latchkey doesn't hold, a new-device check, a captcha), or what the page said
+  when it refused; it shall never contain the secret.
+- **FR-1324** When a sign-in fails, Latchkey shall allow Claude one more try of it; after the second
+  failure, Latchkey shall refuse that sign-in until the next import, saying why (Toni, 2026-11-20:
+  "Try once more"). A code refused once is never sent again; the retry waits for the next code.
+- **FR-1325** When Latchkey holds no sign-in for the page's site, the answer shall say so at once.
+- **FR-1326** While Sign-in is On, Claude shall be able to list the sites Latchkey can sign in to,
+  with the user name for each and whether it has a verification code, never a password or code.
+- **FR-1327** Every sign-in Latchkey makes shall go into Latchkey's activity log: the site, the user
+  name, the browser, and the outcome, never the secret.
+
+### Passkeys (later, not built now)
+
+- **FR-1330** When Latchkey is signed through the paid Apple Developer Program, Latchkey shall take
+  passwords, passkeys, and verification codes through Apple's export to another app, approved by
+  the Owner with Touch ID, with no file in between.
+- **FR-1331** Latchkey shall then answer a site's passkey request in its own browser with the
+  Owner's exported passkey, when Claude asked to sign in, under the rules of FR-1321 to FR-1327.
+
+### The setting
+
+- **FR-1340** Sign-in shall be a capability of its own in Latchkey's settings, On or Off, On by
+  default (Toni, 2026-11-20). While it is Off, no sign-in action or list exists for Claude and no
+  answer mentions it (Constitution III); the copies stay until the Owner removes them.
 
 ## Success criteria
 
 - With the Mac locked and the lid closed, Claude signs in to a site whose Safari sign-in has
   expired, with no help from the Owner, and finishes the task.
-- No secret appears in anything Claude, the relay, the log, or the traces receive (a test
-  searches them for every imported secret).
+- No secret appears in anything Claude, the relay, the log, or the traces receive (a test searches
+  them for every imported secret).
+- The exported file is gone within seconds of appearing.
 
 ## Edge cases
 
-- A site that sends a code by text or email after the password (two-step sign-in).
-- A site that asks for a new-device confirmation, or locks the account after failed tries.
-- A sign-in form inside a frame from another site.
-- A lookalike address of a real site.
+- A site that sends a code by text or email after the password: Latchkey says so; Claude may read
+  the text with Messages, if that is on.
+- A site that asks for a new-device check, or a captcha: Latchkey stops and says so.
+- A site where the code goes after the password in the same field (Apple's list,
+  `research.md`): Latchkey fills the password and code together.
+- A sign-in form inside a frame from another site: not filled (FR-1321).
+- A lookalike address (`amaz0n.com`): no match, nothing filled.
+- Several sign-ins for one site: Claude names the user name; without one, Latchkey asks Claude to
+  choose from the list.
+- The exported file left in a synced folder (iCloud Drive, Time Machine): Latchkey deletes it at
+  once, and the steps suggest a folder that isn't synced.
