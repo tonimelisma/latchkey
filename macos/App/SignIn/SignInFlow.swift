@@ -18,6 +18,8 @@ enum SignInFlow {
         var user: Bool
         var captcha: Bool
         var problem: String
+        /// A step asking how to send the code, with a text or email button (Citi, 2026-11-21).
+        var deliver: Bool
     }
 
     enum Outcome: Equatable {
@@ -89,9 +91,16 @@ enum SignInFlow {
         var sentPassword = false
         var sentCode = false
         var sentUser = false
+        var sentDelivery = false
         var filledAny = false
-        steps: for _ in 0..<4 {
-            if page.password && sentPassword || page.code && sentCode { return .refused(page.problem) }
+        steps: for _ in 0..<5 {
+            // After the password, a step asking how to send the code is pressed, not a refusal
+            // (Citi keeps its password field on that page, 2026-11-21).
+            let choosing = sentPassword && page.deliver && !page.code && !sentDelivery
+            // Back at a sign-in form after asking for the code: the site ended the sign-in
+            // (Citi did, 2026-11-21); no refusal of the password, which it had taken.
+            if sentDelivery && page.password && !page.code && !sentCode { return .check }
+            if !choosing, page.password && sentPassword || page.code && sentCode { return .refused(page.problem) }
             if page.captcha && !page.password && !page.code { return .check }
             var code = ""
             if page.code, !page.password, totp == nil {
@@ -121,7 +130,8 @@ enum SignInFlow {
             filled()
             r = try await run(
                 PageScripts.signInStep(
-                    host: host, user: login.user, password: login.password, code: code, userSent: sentUser), true)
+                    host: host, user: login.user, password: login.password, code: code, userSent: sentUser,
+                    passwordSent: choosing), true)
             struct Step: Decodable { var step: String }
             let step =
                 r.detail == "wrongsite"
@@ -130,6 +140,7 @@ enum SignInFlow {
             case "password": sentPassword = true
             case "code": sentCode = true
             case "user": sentUser = true
+            case "delivery": sentDelivery = true
             case "wrongsite": return filledAny ? .signedIn : .wrongSite
             case "unfilled": return .couldntFill
             default: break steps  // nothing more to fill: what the page shows decides
@@ -138,6 +149,7 @@ enum SignInFlow {
             r = try await run(PageScripts.signInState, false)
             page = try state(r.detail)
         }
+        if sentDelivery && page.password && !page.code && !sentCode { return .check }
         if page.password && sentPassword || page.code && sentCode { return .refused(page.problem) }
         // The user name went, and the site showed no password field after it.
         if sentUser && !sentPassword && !page.password && !page.code && page.user { return .refused(page.problem) }

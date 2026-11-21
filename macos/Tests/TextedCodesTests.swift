@@ -166,7 +166,8 @@ import Testing
 
     func run(
         _ texts: TextedCodesTests.Texts, deleted: TextedCodesTests.Deleted, args: [String: JSONValue] = [:],
-        mail: TextedCodesTests.Texts = .init(), started: TextedCodesTests.Deleted = .init()
+        mail: TextedCodesTests.Texts = .init(), started: TextedCodesTests.Deleted = .init(),
+        page html: String = TextedCodeSignInTests.codePage
     ) async throws -> (ToolResult, TextedCodes, OwnPages) {
         let s = SignInStore(vault: MemoryVault())
         try s.replace(with: [SignInPageTests.ann], at: Date(timeIntervalSince1970: 1_800_000_000))
@@ -179,7 +180,7 @@ import Testing
             return mail.all.filter { $0.date >= since }
         }
         c.startMail = { started.ids.append("mail") }
-        let name = try await own.open(html: Self.codePage, base: SignInToolsTests.base)
+        let name = try await own.open(html: html, base: SignInToolsTests.base)
         var call = args
         call["page"] = .string(name)
         let r = await LoginsCapability.signIn(store: s, own: own, move: { _ in nil }, codes: c).handler(
@@ -291,6 +292,43 @@ import Testing
         defer { own.closeAll() }
         #expect(!r.plainText.contains("Signed in"), "\(r.plainText)")
         #expect(mail.asked.isEmpty && started.ids.isEmpty)
+    }
+
+    /// Citi, 2026-11-21: after the password, "We'll send a code to +1 ••• 0790" with Text me / Call
+    /// me (its password field still showing): Text me is pressed, then the texted code is filled.
+    static func citiLike(textMeEndsIt: Bool = false) -> String {
+        let afterText =
+            textMeEndsIt
+            ? "app.innerHTML = '<input id=\"u\" autocomplete=\"username\"><input id=\"pw\" type=\"password\"><button>Sign on</button>';"
+            : "app.innerHTML = '<label>Enter the code <input id=\"otp\" autocomplete=\"one-time-code\"></label><button id=\"v\">Verify</button>'; document.getElementById('v').onclick = function () { if (document.getElementById('otp').value === '320518') app.innerHTML = '<h1>Welcome ann</h1>'; };"
+        return """
+            <title>Sign on</title><div id="app">
+            <input id="u" autocomplete="username"><input id="pw" type="password"><button id="go">Sign on</button></div>
+            <script>
+            var app = document.getElementById('app');
+            document.getElementById('go').onclick = function () {
+              app.innerHTML = '<p>Let us make sure it is you. We will send a code to +1 *** 0790.</p><input type="password" style="width:1px"><button id="t">Text me</button><button>Call me</button>';
+              document.getElementById('t').onclick = function () { \(afterText) };
+            };
+            </script>
+            """
+    }
+
+    @Test func aStepAskingHowToSendTheCodeIsAnswered() async throws {
+        let texts = TextedCodesTests.Texts()
+        texts.all = [
+            .init(id: "otp-9", text: "Citi: your one-time code is 320518", date: Date().addingTimeInterval(60))
+        ]
+        let (r, _, own) = try await run(texts, deleted: .init(), page: Self.citiLike())
+        defer { own.closeAll() }
+        #expect(r.plainText.contains("Signed in to a.test as ann."), "\(r.plainText)")
+    }
+
+    @Test func aSiteThatEndsTheSignInAtThatStepIsNoRefusal() async throws {
+        let (r, _, own) = try await run(.init(), deleted: .init(), page: Self.citiLike(textMeEndsIt: true))
+        defer { own.closeAll() }
+        #expect(r.plainText.contains("shows a check Latchkey can't answer"), "\(r.plainText)")
+        #expect(!r.plainText.contains("refused"))
     }
 }
 

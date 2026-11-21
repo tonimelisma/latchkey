@@ -58,6 +58,9 @@ extension PageScripts {
                 if (el.tagName === 'A' || (el.closest && el.closest('a'))) continue;
                 var t = (el.innerText || '').replace(/\\s+/g, ' ').trim();
                 if (!t || /^skip to\\b/i.test(t) || !(el.offsetWidth || el.offsetHeight)) continue;
+                // A notice about something else (Citi's holiday scam warning, 2026-11-21) is long:
+                // the site's words about a sign-in are a sentence or two.
+                if (t.length > 160 || /^alert section/i.test(t)) continue;
                 var s = getComputedStyle(el);
                 if (s.visibility === 'hidden' || s.display === 'none') continue;
                 return t.slice(0, 300);
@@ -65,6 +68,14 @@ extension PageScripts {
             }
             return '';
           }
+          // A step asking how to send the code ("We'll send a code to +1 ••• 0790": Text me / Call
+          // me; Citi, 2026-11-21): the buttons that send it, by text message first, then email.
+          var delivery = Array.prototype.filter.call(document.querySelectorAll('button, [role="button"], input[type="submit"], input[type="button"], a'), seen)
+            .map(function (b) { return { el: b, t: (b.innerText || b.value || '').replace(/\\s+/g, ' ').trim() }; })
+            .filter(function (x) { return x.t.length < 40; });
+          var bySms = delivery.filter(function (x) { return /^(text( me)?|send (me )?(a )?(text|sms)( message)?|sms|text message)\\b/i.test(x.t); })[0];
+          var byMail = delivery.filter(function (x) { return /^(email( me)?|send (me )?(an )?email|e-mail( me)?)\\b/i.test(x.t); })[0];
+          var deliver = bySms || byMail;
         """
 
     /// What the page asks for now: `{ password, code, user, captcha, problem }`. Where the page is
@@ -74,7 +85,8 @@ extension PageScripts {
         (function () {
         \(signInHelpers)
           return 'ok\\t' + JSON.stringify({ password: passwords.length > 0,
-            code: !!codeField || boxes.length > 0, user: !!userField, captcha: captcha, problem: problem() });
+            code: !!codeField || boxes.length > 0, user: !!userField, captcha: captcha, problem: problem(),
+            deliver: !!deliver && !codeField && !boxes.length });
         })()
         """
 
@@ -85,11 +97,12 @@ extension PageScripts {
     /// only, which no page script can change (security review, 2026-11-21). Answers `{ step }`:
     /// password, code, user, none, or wrongsite.
     static func signInStep(
-        host: String, user: String, password: String, code: String, userSent: Bool = false
+        host: String, user: String, password: String, code: String, userSent: Bool = false,
+        passwordSent: Bool = false
     ) -> String {
         // nosemgrep: latchkey-page-script-literal -- besides literal(), only the constant signInHelpers.
         """
-        (function (host, user, pass, code, userSent) {
+        (function (host, user, pass, code, userSent, passwordSent) {
           if (location.protocol !== 'https:' || location.hostname !== host) return 'ok\\twrongsite';
         \(signInHelpers)
           var filled = window.__latchkeyFilled;
@@ -134,7 +147,7 @@ extension PageScripts {
             var b = buttons.filter(function (b) { return (b.getAttribute('type') || 'submit').toLowerCase() === 'submit'; })[0];
             if (!b) {
               var near = Array.prototype.filter.call(document.querySelectorAll('button, [role="button"], input[type="submit"]'), seen);
-              b = near.filter(function (b) { return /^\\s*(sign ?in|log ?in|next|continue|submit|verify|confirm)\\b/i.test(b.innerText || b.value || ''); })[0];
+              b = near.filter(function (b) { return /^\\s*(sign ?in|sign ?on|log ?in|log ?on|next|continue|submit|verify|confirm)\\b/i.test(b.innerText || b.value || ''); })[0];
             }
             if (b) { b.click(); return; }
             if (form) { if (form.requestSubmit) form.requestSubmit(); else form.submit(); return; }
@@ -145,6 +158,12 @@ extension PageScripts {
           // Nothing is sent when a field doesn't hold what was typed: the site would refuse an
           // empty or changed form, and that is no refusal of the password (Citi, 2026-11-21).
           var unfilled = 'ok\\t' + JSON.stringify({ step: 'unfilled' });
+          // After the password, a step asking how to send the code: its text-message button (or
+          // email), never before (a sign-in page may offer "email me a link" beside the password).
+          if (passwordSent && deliver && !codeField && !boxes.length) {
+            deliver.el.click();
+            return 'ok\\t' + JSON.stringify({ step: 'delivery' });
+          }
           if (passwords.length && pass) {
             if (userField && user && userField.value !== user && !put(userField, user)) return unfilled;
             if (!put(passwords[0], pass)) return unfilled;
@@ -169,7 +188,7 @@ extension PageScripts {
             return 'ok\\t' + JSON.stringify({ step: 'user' });
           }
           return 'ok\\t' + JSON.stringify({ step: 'none' });
-        })(\(literal(host)), \(literal(user)), \(literal(password)), \(literal(code)), \(literal(userSent ? "1" : "")) === '1')
+        })(\(literal(host)), \(literal(user)), \(literal(password)), \(literal(code)), \(literal(userSent ? "1" : "")) === '1', \(literal(passwordSent ? "1" : "")) === '1')
         """
     }
 

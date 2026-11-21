@@ -103,7 +103,13 @@ later calls said "That page isn't open" and each new page left another Citi tab.
 are typed key by key (key events with codes, beforeinput, the caret), a field that doesn't hold
 what was typed sends nothing and counts nothing ("couldn't fill"), the site's error is read
 from error elements first and never from a link, and a tab of Claude's own stays found while
-every other tab in its window is as it was.
+every other tab in its window is as it was. Rerun with 0.8.187: the password went through;
+then Citi asked how to send the code (Text me / Call me), which Latchkey read as a refusal
+with Citi's scam banner as the reason; pressing Text me by script sent the page back to Citi's
+signed-out home (Citi's bot protection, not worked around). 0.8.188: after the password, a
+"how to send the code" step is answered with its text option (FR-1368), a site that then ends
+the sign-in is a check, not a refusal, long notices and banners are never the site's words,
+and "Sign on" buttons count. Citi itself needs Toni to sign in once in Safari.
 Live check (0.8.175, Mac locked, 2026-11-21 00:54): groups logins, browser, files, shell: 51 of 51
 worked. A fresh Claude signed in to the-internet.herokuapp.com as tomsmith with the fixture's test
 sign-in (`logins-fixture.sh`); none of its 10 tool results held the password except the test

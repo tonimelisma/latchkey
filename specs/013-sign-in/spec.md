@@ -195,6 +195,11 @@ once when unlocked" and "Any new code text".
   friend's "meet at 1830"), whoever sent it, and fill it in itself as FR-1322 does; Claude never sees it. Each
   text is used once. While Messages is Off in Latchkey's settings, or Latchkey can't read
   Messages, no text is used.
+- **FR-1368** When, after the password, the site asks how to send the code (Citi, 2026-11-21: "We'll
+  send a code to +1 ••• 0790", Text me / Call me), Latchkey shall press the text-message option
+  (else email), never such a button before the password went; and when the site then returns
+  to its sign-in form, the answer shall say the site ended the sign-in (a check), never that it
+  refused the password, and it counts as no refusal.
 - **FR-1361** One sign-in call waits for that text for as long as the call's time allows; when the
   text hasn't come by then, the answer says the site texted a code that hasn't arrived and to call
   again on the same page, and the next call takes it. A text is waited for up to 2 minutes from
