@@ -22,7 +22,7 @@ final class OwnSessions {
         var sameSite: String?
         var kept: Date
 
-        var key: String { "\(OwnSessions.bare(domain))\t\(path)\t\(name)" }
+        var key: String { OwnSessions.key(domain, path, name) }
 
         init(_ c: HTTPCookie, kept: Date) {
             name = c.name
@@ -71,6 +71,13 @@ final class OwnSessions {
         self.vault = vault
         self.now = now
     }
+
+    /// The same cookie whatever form its domain takes.
+    nonisolated static func key(_ domain: String, _ path: String, _ name: String) -> String {
+        "\(bare(domain))\t\(path)\t\(name)"
+    }
+
+    nonisolated static func key(of c: HTTPCookie) -> String { key(c.domain, c.path, c.name) }
 
     nonisolated static func bare(_ domain: String) -> String {
         var d = domain.lowercased()
@@ -161,8 +168,10 @@ final class OwnSessions {
     }
 
     /// FR-1353: keeps the cookies of `all` (what the store holds now) that reach an own site, in
-    /// place of those kept before; writes only on a change.
-    func keep(_ all: [HTTPCookie]) {
+    /// place of those kept before; writes only on a change. `copied`: the keys of cookies a copy
+    /// of Safari's put in the store, never kept.
+    func keep(_ all: [HTTPCookie], copied: Set<String> = []) {
+        let all = copied.isEmpty ? all : all.filter { !copied.contains(Self.key(of: $0)) }
         guard !sites().isEmpty, var c = contents() else { return }
         let before = Dictionary(c.cookies.map { ($0.key, $0) }, uniquingKeysWith: { a, _ in a })
         let at = now()

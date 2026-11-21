@@ -223,6 +223,31 @@ import WebKit
         #expect(try await cookies(own, a) == "own_a=mine", "Latchkey's own sign-in stayed")
     }
 
+    /// Security review 2026-11-21: a copy of Safari's taken while a site wasn't Latchkey's own
+    /// (before an export named it, or after a fallback) is never kept once it becomes own.
+    @Test func aCopyTakenBeforeTheSiteBecameOwnIsNeverKept() async throws {
+        let store = SignInStore(vault: MemoryVault())
+        try store.replace(with: [OwnSessionsTests.a], at: OwnSessionsTests.imported)
+        let s = OwnSessions(signIns: store, vault: MemoryVault())
+        s.on = { true }
+        let own = pages(locked: true, sessions: s)
+        defer { own.closeAll() }
+        let b = try await own.open(html: "<p>b</p>", base: URL(string: "https://b.test/")!)
+        #expect(try await cookies(own, b).contains("safari_b"), "b.test isn't Latchkey's own yet: a copy")
+        // The next export holds a password for b.test too.
+        try store.replace(
+            with: [OwnSessionsTests.a, SavedSignIn(title: "B", site: "b.test", user: "bo", password: "pw", otp: nil)],
+            at: OwnSessionsTests.imported.addingTimeInterval(60))
+        #expect(s.isOwn("b.test"))
+        _ = try await own.page(b).run("document.cookie = 'own_b=mine; max-age=86400; path=/; secure'; 'ok'")
+        var kept: [String] = []
+        for _ in 0..<40 where kept.isEmpty {
+            try await Task.sleep(for: .milliseconds(100))
+            kept = s.kept().map(\.name)
+        }
+        #expect(kept == ["own_b"], "the site's own cookie is kept, Safari's copy never")
+    }
+
     @Test func theAnswerSaysLatchkeySignsInItself() async throws {
         let (s, _, _) = try OwnSessionsTests.sessions(clock: .live())
         let own = pages(locked: false, sessions: s)

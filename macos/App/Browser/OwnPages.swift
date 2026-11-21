@@ -97,7 +97,10 @@ final class OwnPages {
             let sessions = sessions
             // FR-1353: what the sites set for Latchkey's own sign-ins is kept as it changes, and
             // what was kept goes into the new store before its first page.
-            watch = CookieWatch(store: s.httpCookieStore, record: record, changed: { sessions?.keep($0) })
+            let cookieStore = s.httpCookieStore
+            watch = CookieWatch(
+                store: cookieStore, record: record,
+                changed: { sessions?.keep($0, copied: LockedBrowser.copied(in: cookieStore)) })
         }
         // FR-456: Safari's cookies only while the Mac is locked (a copy that renews a rotating
         // sign-in signs Safari out; Toni accepts that while locked).
@@ -191,8 +194,11 @@ final class OwnPages {
         guard copiedWhileLocked, !isLocked(), let store else { return }
         copiedWhileLocked = false
         // Spec 013 FR-1354: Latchkey's own sign-ins stay; only the copies go.
-        if let sessions, let all = await LockedBrowser.holding(store.httpCookieStore) { sessions.keep(all) }
+        if let sessions, let all = await LockedBrowser.holding(store.httpCookieStore) {
+            sessions.keep(all, copied: LockedBrowser.copied(in: store.httpCookieStore))
+        }
         await store.removeData(ofTypes: [WKWebsiteDataTypeCookies], modifiedSince: .distantPast)
+        LockedBrowser.forgetCopied(in: store.httpCookieStore)
         if let sessions { await LockedBrowser.set(sessions.kept(), into: store.httpCookieStore) }
         for e in pages.values { e.browser?.forgetTaken() }
         record(
@@ -263,6 +269,7 @@ final class OwnPages {
         for name in order { close(name) }
         watch?.stop()
         watch = nil
+        if let store { LockedBrowser.forgetCopied(in: store.httpCookieStore) }
         store = nil
         restoring = nil
     }
