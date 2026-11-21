@@ -53,7 +53,8 @@ final class SignInWatcher {
 
     private func tick() {
         for outcome in SignInImport.check(taken: { self.lastTaken = $0 }) {
-            EventLog.shared.record(.app, "Sign-in import: \(outcome)", error: { if case .imported = outcome { false } else { true } }())
+            EventLog.shared.record(
+                .app, "Sign-in import: \(outcome)", error: { if case .imported = outcome { false } else { true } }())
             post(title: "Latchkey", body: outcome.told, category: nil)
             imported(outcome)
         }

@@ -1,12 +1,21 @@
 # Status
 
-Last updated: 2026-11-16 (Claude's feedback tool, reports copied to the Mac's Feedback folder; pages are read once they stop changing; every issue becomes a regression case; clicks press down and up before clicking, so Gmail's buttons answer; signed-in sites in Safari tabs of Claude's while unlocked; sign-in cookies in Latchkey's log, for Safari's Target sign-outs; full traces everywhere, in daily files, for evals; Claude's pages always in Latchkey's own browser, by name, with dialogs Claude answers; the locked browser takes Safari's cookies again with every page; public download on GitHub with a new-version notice; never disturb the user: Mail, WhatsApp sending, Notes' window editing, Messages' window actions, Reminders' window setters removed; test sweep on exit; releases are tags on commits; cloud-only files read again; machine list shows Latchkey versions; WhatsApp built; Add to Claude button; plugin withdrawn; README rewritten as a short product page; relay web pages redone; purkki paired; spec 010 shipped)
+Last updated: 2026-11-21 (Sign-in built, spec 013; Claude's feedback tool, reports copied to the Mac's Feedback folder; pages are read once they stop changing; every issue becomes a regression case; clicks press down and up before clicking, so Gmail's buttons answer; signed-in sites in Safari tabs of Claude's while unlocked; sign-in cookies in Latchkey's log, for Safari's Target sign-outs; full traces everywhere, in daily files, for evals; Claude's pages always in Latchkey's own browser, by name, with dialogs Claude answers; the locked browser takes Safari's cookies again with every page; public download on GitHub with a new-version notice; never disturb the user: Mail, WhatsApp sending, Notes' window editing, Messages' window actions, Reminders' window setters removed; test sweep on exit; releases are tags on commits; cloud-only files read again; machine list shows Latchkey versions; WhatsApp built; Add to Claude button; plugin withdrawn; README rewritten as a short product page; relay web pages redone; purkki paired; spec 010 shipped)
 
 Xcode signing ready (2026-10-20): Toni's Xcode account has a valid "Apple Development" certificate
 (certificate expires 2027-07-22). Keep the team ID out of committed project files
 (open source); put it in a gitignored `macos/Local.xcconfig` as `DEVELOPMENT_TEAM`.
 
 ## Current phase
+
+Sign-in (spec 013, built 2026-11-21): Latchkey signs in on Claude's pages with the owner's
+passwords and verification codes from Passwords' CSV export, filled by Latchkey, never seen by
+Claude. Two tools, `logins_find` and `logins_sign_in`; a Sign-in setting, On by default; the
+one-touch export from the menu, Settings, setup (an optional sixth step), and a weekly
+notification; copies in one Keychain item, removed with Remove All or an uninstall. Security
+reviews of the build added: the Public Suffix List (no subdomain fills under shared hosts), the
+page's site from the browser's own address with fills in a script world of Latchkey's own, the
+save panel cancelled on anything unexpected. Passkeys need the paid Apple Developer Program.
 
 Claude's feedback reports (Toni, 2026-11-16; spec 001 FR-690 to FR-695): the relay offers its own
 `feedback` tool, and its instructions ask Claude to file a report whenever anything done with
@@ -187,11 +196,12 @@ after the app was quit.
 
 ## Next steps
 
-0. Spec 013, signing in by itself (`specs/013-sign-in/`): spec and research written 2026-11-20,
-   waiting for Toni's review before the plan. Passwords and verification codes from Passwords'
-   CSV export, filled by Latchkey in its own browser and Claude's Safari tabs; passkeys later,
-   with the paid Apple Developer Program. A test on Toni's Mac showed Latchkey can answer a
-   site's passkey request itself in its own browser.
+0. Sign-in's first real export (spec 013 T11, Toni's step): Latchkey's menu → Export Passwords
+   to Latchkey…, one Touch ID. The export works Passwords' menus and save panel through
+   Accessibility; its English titles and the save panel's Go to Folder are untested until then.
+   Afterwards: check the log shows the file taken in and deleted, and run the `logins` group
+   (its test sign-in step skips once the owner's copies are in). Passkeys wait for the paid
+   Apple Developer Program (spec 013 FR-1330).
 1. While locked, Target's search stays empty in Latchkey's own browser (its pages count as
    hidden to WebKit, and only an undocumented setting changes that, which Toni declined); Claude
    can still open products and the cart there.

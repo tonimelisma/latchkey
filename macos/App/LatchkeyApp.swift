@@ -71,7 +71,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     nonisolated func userNotificationCenter(
         _ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse
     ) async {
-        guard response.notification.request.content.categoryIdentifier == PermissionLoss.category else { return }
+        let category = response.notification.request.content.categoryIdentifier
+        // Spec 013 FR-1304: the weekly reminder's click starts the one-touch export.
+        if category == SignInReminder.category {
+            await MainActor.run { model.exportPasswords() }
+            return
+        }
+        guard category == PermissionLoss.category else { return }
         await MainActor.run { model.showSetup() }
     }
 

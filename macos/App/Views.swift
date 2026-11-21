@@ -33,6 +33,10 @@ struct MenuContent: View {
                 NSApp.activate()
             }
         }
+        if model.capabilities.level(CapabilityRegistry.logins) != .off {  // spec 013 FR-1301
+            Button("Export Passwords to Latchkey…") { model.exportPasswords() }
+                .disabled(model.exporting)
+        }
         Button("Settings…") {
             // A menu-bar-only app opens no Settings window until it is a regular, active app;
             // WindowPresence returns it to the menu bar when the window closes.
@@ -138,6 +142,9 @@ struct CapabilitiesPane: View {
                     .foregroundStyle(.secondary)
                 }
             }
+            if model.capabilities.level(CapabilityRegistry.logins) != .off {
+                SignInSection(model: model)
+            }
             if model.capabilities.level(CapabilityRegistry.browser) != .off {
                 Section("Browser") {
                     // Spec 005 FR-444.
@@ -150,6 +157,40 @@ struct CapabilitiesPane: View {
             }
         }
         .formStyle(.grouped)
+    }
+}
+
+/// Spec 013 FR-1301, FR-1304, FR-1305: the sign-ins Latchkey holds, and handing them over.
+struct SignInSection: View {
+    @Bindable var model: AppModel
+
+    var body: some View {
+        Section("Sign-in") {
+            Text(
+                "Claude can ask Latchkey to sign in to a site on its own pages. Latchkey fills in your password and verification code itself; Claude never sees them. Latchkey keeps a copy of your passwords from Passwords, only on this Mac."
+            )
+            .font(.callout)
+            .foregroundStyle(.secondary)
+            LabeledContent("Sign-ins") {
+                if let when = model.signInImported {
+                    Text("\(model.signInCount), from \(when.formatted(date: .abbreviated, time: .shortened))")
+                } else {
+                    Text("None yet")
+                }
+            }
+            HStack {
+                Button("Export from Passwords…") { model.exportPasswords() }
+                    .disabled(model.exporting)
+                if model.exporting { ProgressView().controlSize(.small) }
+                Spacer()
+                Button("Remove All", role: .destructive) { model.removeSignIns() }
+                    .disabled(model.signInCount == 0)
+            }
+            if let status = model.signInStatus {
+                Text(status).font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            }
+            Toggle("Remind me weekly to export again", isOn: $model.signInReminder)
+        }
     }
 }
 
@@ -434,8 +475,10 @@ struct SetupView: View {
         VStack(alignment: .leading, spacing: 16) {
             VStack(alignment: .leading, spacing: 4) {
                 Text("Set Up Latchkey").font(.title.bold())
-                Text("Five steps, then Claude can reach this Mac from anywhere, even while you’re away.")
-                    .foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                Text(
+                    "Five steps, then Claude can reach this Mac from anywhere, even while you’re away. A sixth, handing over your sign-ins, is optional."
+                )
+                .foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             }
             step("connect", "Connect to your account") {
                 Text(
@@ -510,6 +553,21 @@ struct SetupView: View {
             step("claude", "Add Latchkey to Claude") {
                 AddToClaudeSteps(model: model, relayShown: relayShown)
             }
+            step("signins", "Hand over your sign-ins (optional)") {
+                Text(
+                    "So Claude can sign in to sites while you’re away, Latchkey keeps a copy of your passwords from Passwords, only on this Mac, and fills them in itself; Claude never sees them. Click Export: Passwords opens, and you only approve with Touch ID."
+                )
+                .foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                HStack {
+                    Button("Export") { model.exportPasswords() }
+                        .keyboardShortcut(.defaultAction)
+                        .disabled(model.exporting)
+                    if model.exporting { ProgressView().controlSize(.small) }
+                }
+                if let status = model.signInStatus {
+                    Text(status).font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                }
+            }
             Divider()
             HStack {
                 Text(
@@ -532,7 +590,8 @@ struct SetupView: View {
         }
     }
 
-    private static let steps = ["connect", "questions", "switches", "safari", "claude"]
+    /// "signins" is optional (spec 013 FR-1302): it never counts as missing setup.
+    private static let steps = ["connect", "questions", "switches", "safari", "claude", "signins"]
 
     /// One line of a step's checklist: done, or what to do about it.
     private struct Row: Identifiable {
@@ -614,6 +673,7 @@ struct SetupView: View {
         case "switches": model.switchesOn
         case "safari": model.safariJavaScript == true
         case "claude": AddToClaude.step(entries: model.access.entries) == .done
+        case "signins": model.signInCount > 0
         default: false
         }
     }

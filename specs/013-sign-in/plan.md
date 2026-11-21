@@ -103,8 +103,8 @@ and the reminder switch. The menu has Export Passwords to Latchkey…. Setup get
   another site, a page of another site, a refused password, fields cleared, no secret in any
   answer), `SignInToolsTests` (the tools: Off means gone, list, no sign-in, several users,
   second failure blocks), `PublicToolsTests` (27 tools), `ReadmeTests`.
-- Export: `macos/scripts/passwords-export-check.sh` drives the real export once on Toni's Mac
-  (his Touch ID), and checks the file was taken in and deleted. Toni's step.
+- Export: the first real export is Toni's click on Export Passwords to Latchkey… in the menu
+  (his Touch ID); Claude then checks the log shows the file taken in and deleted.
 - Live (screen-state cases, group `logins`): with a test sign-in for the public test site
   the-internet.herokuapp.com dropped into the import folder (only while Latchkey holds no
   sign-ins of the Owner's, so nothing of his is replaced; removed in teardown), a fresh Claude

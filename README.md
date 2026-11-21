@@ -27,6 +27,14 @@ Claude app (phone, web, desktop), can work with what's on your Mac:
 - **Safari and the web:** open pages and read, click, type, upload, and download: sites you are
   signed in to in a background Safari tab of Claude's (your real sign-in), other sites in a
   hidden browser of Latchkey's own; and read and act in your own Safari tabs when you ask.
+- **Signing in:** when a page of Claude's asks to sign in, Latchkey signs in for it with your
+  saved password from Apple's Passwords, and the site's verification code when Passwords has
+  it. Latchkey fills them in itself: Claude never sees a password or a code, only the list of
+  sites and user names. Latchkey keeps its copy only on your Mac; you hand it over with one
+  Touch ID (Latchkey's menu → Export Passwords to Latchkey…), and a weekly notification
+  reminds you to do it again. It fills only on the site a password was saved for, never on
+  another site's page, and never in your own Safari tabs. Not yet: passkeys, and codes sent by
+  text or email (Claude can read a text with Messages).
 - **The screen:** take a picture of it, and control the computer when you ask.
 
 Your Mac never has to accept connections from the internet: Latchkey reaches out to a small
@@ -95,7 +103,8 @@ apps. It works in the background instead.
   copy of your Safari sign-ins. **That copy can sign you out in Safari:** a site like Target
   renews its sign-in when the copy uses it, and the one Safari holds stops working, so you may
   have to sign in again there after unlocking. Once you unlock, that browser drops its copy.
-  Each page has a short name, so two chats never load over each other's pages. When a page in
+  Signing in with your saved passwords works there too. Each page has a short name, so two
+  chats never load over each other's pages. When a page in
   that browser asks to confirm something ("Remove item?"), Claude is shown the question and
   answers it; if it doesn't within 5 minutes, the page gets Cancel. Every answer says which
   browser it came from, and every answer from the Mac says whether it is locked or unlocked.
@@ -104,9 +113,12 @@ apps. It works in the background instead.
   nothing is copied and nothing signs you out (your front tab stays in front; other sites open
   in Latchkey's hidden browser, with none of your sign-ins); your own Safari tabs (Claude reads
   and acts in them in the background when you ask; Safari mostly stops answering while the Mac
-  is locked); looking at the screen; computer control.
+  is locked); looking at the screen; computer control; handing your sign-ins over from
+  Passwords (you click Export, and approve with Touch ID).
 - **Computer control is the one exception to "never in your way":** it uses the real mouse and
-  keyboard, so you'll see it. It's there for when you ask Claude to use the computer.
+  keyboard, so you'll see it. It's there for when you ask Claude to use the computer. Exporting
+  your sign-ins also brings Passwords forward for a few seconds, only because you clicked
+  Export.
 - **Not offered, because it would need an app's window while you might be using it:** changing
   notes that have checklists, links, or pictures; Messages' reactions, inline replies, edits,
   new groups; sending WhatsApp messages; setting flags, tags, subtasks, or sections in Reminders.

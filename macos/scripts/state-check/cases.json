@@ -96,6 +96,18 @@
       ]
     },
     {
+      "id": "logins",
+      "name": "Sign-in",
+      "missing": [],
+      "cases": [
+        {"id": "logins.list", "case": "List the sites Latchkey can sign in to", "steps": "logins_find with nothing. Works only if the answer is a list of sites and user names, or says Latchkey holds no sign-ins yet; never a password."},
+        {"id": "logins.test_import", "case": "Take in a test sign-in, only while Latchkey holds none of the owner's", "steps": "Only if logins.list said Latchkey holds no sign-ins yet (otherwise skip this, logins.sign_in, and logins.teardown: a check never replaces the owner's copies): with shell_run, printf 'Title,URL,Username,Password,Notes,OTPAuth\\nLatchkey check {TAG},https://the-internet.herokuapp.com/login,tomsmith,SuperSecretPassword!,,\\n' > \"$HOME/Library/Application Support/Latchkey/Sign-in Import/check-{TAG}.csv\"; wait 5 seconds; logins_find site \"the-internet.herokuapp.com\". Works only if it lists the site with user tomsmith and the file is gone from the folder."},
+        {"id": "logins.sign_in", "case": "Sign in on a page with a saved password", "steps": "Only after logins.test_import: browser_read url \"https://the-internet.herokuapp.com/login\" (note the page name); logins_sign_in with that page. Works only if the answer says Signed in to the-internet.herokuapp.com as tomsmith, the page shows 'You logged into a secure area', and the answer never contains SuperSecretPassword. Close the page."},
+        {"id": "logins.other_site", "case": "A page of a site with no saved sign-in gets nothing", "steps": "browser_read url \"https://example.com/\"; logins_sign_in with that page. Works only if the answer is an error saying Latchkey holds no saved sign-in for example.com (or none at all). Close the page."},
+        {"id": "logins.teardown", "case": "Remove the test sign-in", "steps": "Only if logins.test_import ran: with shell_run, printf 'Title,URL,Username,Password,Notes,OTPAuth\\n' > \"$HOME/Library/Application Support/Latchkey/Sign-in Import/empty-{TAG}.csv\"; wait 5 seconds; logins_find with nothing. Works only if it says Latchkey holds no sign-ins yet and no .csv file is left in that folder."}
+      ]
+    },
+    {
       "id": "computer",
       "name": "Computer control",
       "missing": [],
@@ -214,7 +226,8 @@
         {"id": "regressions.browser_back_no_cancel_error", "case": "Go back answered 'page didn't load, NSURLErrorDomain -999' though the page did go back (lid closed and locked run, app 0.8.78, docs/use-cases.md ❌; also seen 2026-11-02). (source: docs/use-cases.md (Go back row); transcripts b1e10493 2026-11-02)", "steps": "browser_read url \"https://example.com\"; browser_act click its More information link; browser_read back true on that page. Works only if the answer shows Example Domain and no -999 error. Run locked too. Close the page."},
         {"id": "regressions.browser_locked_close_names_own_browser", "case": "Closing the page while locked said Safari instead of Latchkey's own browser (hands-on check 2026-11-07). (source: commit 87b54d3 (2026-11-07))", "steps": "Locked only. browser_read url \"https://example.com\"; browser_act close with that page. Works only if the answer names Latchkey's own browser, not Safari."},
         {"id": "regressions.browser_refuses_other_schemes", "case": "Security review (2026-10-24): javascript:, file:, data: addresses reached Safari before the http/https rule. (source: commit f672303 (2026-10-24); docs/STATUS.md live check 2026-10-24)", "steps": "browser_read url \"file:///etc/hosts\", then browser_read url \"javascript:document.title\". Works only if both are refused with the http/https message and no page opens (browser_read tabs true shows none new)."},
-        {"id": "regressions.browser_password_value_hidden", "case": "Security review (2026-10-24): reading a page could return what password, one-time-code, or card fields hold. (source: commit df1e803 (2026-10-24))", "steps": "browser_read url \"https://example.com\"; browser_act script, code \"document.body.insertAdjacentHTML('beforeend', '<input type=password id=lkpw value=lk-secret-check>'); 'ok'\"; browser_read that page. Works only if lk-secret-check appears nowhere in the answer. Close the page."}
+        {"id": "regressions.browser_password_value_hidden", "case": "Security review (2026-10-24): reading a page could return what password, one-time-code, or card fields hold. (source: commit df1e803 (2026-10-24))", "steps": "browser_read url \"https://example.com\"; browser_act script, code \"document.body.insertAdjacentHTML('beforeend', '<input type=password id=lkpw value=lk-secret-check>'); 'ok'\"; browser_read that page. Works only if lk-secret-check appears nowhere in the answer. Close the page."},
+        {"id": "regressions.logins_other_site_gets_nothing", "case": "Security review (2026-11-21): a sign-in saved for one site could fill on another (subdomains of shared hosts like herokuapp.com; a page script passing for another site's address). (source: spec 013 research)", "steps": "browser_read url \"https://example.com/\"; logins_sign_in with that page. Works only if the answer is an error saying Latchkey holds no saved sign-in for example.com (or none at all), and nothing was filled. Close the page."}
       ]
     },
     {

@@ -194,3 +194,46 @@ the plan picks one.
   step (Toni chose "One touch, when you click").
 - To test in the plan: the menu path and dialogs of Passwords on macOS 27 through Accessibility,
   and choosing the save folder in its save panel.
+
+## Building it (2026-11-21)
+
+- **Tool shape.** MCP research: Anthropic's connector rules reject a tool that both reads and
+  writes, and Claude's apps approve read-only tools without asking
+  ([review criteria](https://claude.com/docs/connectors/building/review-criteria),
+  [define tools](https://platform.claude.com/docs/en/agents-and-tools/tool-use/define-tools));
+  names follow Latchkey's own `noun_verb`. So `logins_find` (read-only, `openWorld` false) and
+  `logins_sign_in` (write, not destructive, open world). Secrets never pass through the model,
+  as the MCP spec asks for sensitive data
+  ([elicitation](https://modelcontextprotocol.io/specification/2025-11-25/client/elicitation));
+  Playwright MCP's `--secrets` and browser-use's placeholders do the same with less: values
+  still reach the page from the model's side, and Playwright calls it "a convenience, not a
+  security boundary" ([Playwright MCP](https://playwright.dev/mcp/configuration/options),
+  [browser-use](https://docs.browser-use.com/customize/agent/sensitive-data)). Toni chose two
+  tools.
+- **Shared hosts.** A sign-in saved for a shared host (`herokuapp.com`, `github.io`) would also
+  fill on every customer's subdomain. Latchkey bundles the Public Suffix List
+  (`macos/App/SignIn/Resources/public_suffix_list.dat`, MPL 2.0, from
+  [publicsuffix.org](https://publicsuffix.org/list/public_suffix_list.dat), ICANN and private
+  sections) and fills such a site on its own host only. International names (the list writes
+  them in Unicode, hosts arrive as punycode), and names with a trailing or doubled dot, count as
+  suffixes too: the safe side. Options weighed: an exact-host rule (Toni chose subdomains), a
+  hand list of shared hosts (incomplete), the list (chosen; refresh it with the release).
+- **Where the page is.** A page's scripts can rewrite JavaScript's own functions (`JSON`,
+  `String.prototype`), so an address a script reports could be another site's. Latchkey reads
+  the address from WebKit (`WKWebView.url`) or Safari (AppleScript's URL of the tab), decides
+  the site in Swift, and the fill script checks again with `location` (which no script can
+  replace) and `===` only. In Latchkey's own browser the sign-in scripts run in a content world
+  of their own (`WKContentWorld.world(name:)`), which the page's scripts can't reach; the DOM and
+  its events are shared, so the site's own handlers see the typing as usual. Safari's
+  `do JavaScript` has no such world. Tested: `SignInPageTests.aPageThatRewritesBuiltInsGetsNothing`,
+  `SignInToolsTests.aPageCantClaimAnotherSitesAddress`.
+- **Clearing.** Filled fields are cleared after every sign-in, and also when a step fails.
+- **Safari's script arguments.** Short scripts went to `osascript` as arguments, which other
+  programs of the user can see; sign-in scripts always go through the 0600 file instead.
+- **The export's save panel.** Accessibility gives a new reference to the same element on every
+  look, so elements are compared with `CFEqual`. The panel is cancelled when anything is
+  unexpected before Save, and a file saved elsewhere after all is found by its unique name and
+  wiped (security review, 2026-11-21).
+- **A browser's own checks.** A user name that isn't an email, in a field of type email, stops
+  the form in the browser itself (seen in the tests); real sites with email fields have email
+  user names.

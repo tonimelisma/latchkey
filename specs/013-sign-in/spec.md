@@ -1,6 +1,8 @@
 # Spec 013: Signing in by itself — WHAT and WHY
 
-Status: Draft for Toni's review (2026-11-20). No plan, tasks, or code until Toni approves.
+Status: Approved and built (Toni, 2026-11-20: "do the whole thing"); plan `plan.md`, tasks
+`tasks.md`, tools `contracts/login-tools.md`. Two tools, `logins_find` and `logins_sign_in`
+(Toni, 2026-11-21, after the MCP research in `research.md`).
 Scope: Latchkey signs in to sites by itself with copies of the Owner's existing passwords and
 verification codes, which the Owner hands over from Apple's Passwords app. Latchkey, never
 Claude, fills in the secret; Claude never sees it.
@@ -109,7 +111,12 @@ interface another app can read (`research.md`), so the only way in is a copy the
 - **FR-1321** Latchkey shall fill a sign-in only into a page at an `https` address whose host is the
   site the sign-in was saved for or one of its subdomains (a sign-in saved for `amazon.com` fills on
   `www.amazon.com`), into the page itself and never into a frame from another site (Toni,
-  2026-11-20: "Its site and subdomains").
+  2026-11-20: "Its site and subdomains"). A site that is itself a public suffix (a shared host
+  such as `herokuapp.com`, by the Public Suffix List), or an international or malformed name,
+  fills on its own host only.
+- **FR-1328** Which site a page is on shall be decided from the browser's own record of its
+  address, never from anything the page's scripts report, and the page shall be checked again
+  just before each fill (security review, 2026-11-21).
 - **FR-1322** When the page asks for a user name and password (on one page or one after the other),
   Latchkey shall fill them in and send the form; when the page asks for a verification code and the
   sign-in has one, Latchkey shall fill in the current code and send it.

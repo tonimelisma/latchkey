@@ -51,7 +51,8 @@ import Testing
         let f = try Self.folder()
         let other = f.appending(path: "notes.txt")
         try Data("x".utf8).write(to: other)
-        try FileManager.default.setAttributes([.modificationDate: Date(timeIntervalSinceNow: -60)], ofItemAtPath: other.path)
+        try FileManager.default.setAttributes(
+            [.modificationDate: Date(timeIntervalSinceNow: -60)], ofItemAtPath: other.path)
         #expect(SignInImport.check(folder: f, store: SignInStore(vault: MemoryVault())).isEmpty)
         #expect(FileManager.default.fileExists(atPath: other.path))
     }

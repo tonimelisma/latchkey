@@ -35,6 +35,7 @@ enum LoginsCapability {
                 case .none: return .text(noneYet)
                 case .unreadable: return .text(unreadable, isError: true)
                 case .some(let c):
+                    guard !c.logins.isEmpty else { return .text(noneYet) }
                     logins = c.logins
                     imported = c.imported
                 }
@@ -47,12 +48,16 @@ enum LoginsCapability {
                 .sorted { ($0.site, $0.user) < ($1.site, $1.user) }
                 let when = imported.formatted(date: .abbreviated, time: .shortened)
                 guard !shown.isEmpty else {
-                    return .text("No saved sign-in for \(wanted). Latchkey holds \(logins.count) from Passwords (taken in \(when)).")
+                    return .text(
+                        "No saved sign-in for \(wanted). Latchkey holds \(logins.count) from Passwords (taken in \(when))."
+                    )
                 }
-                var out = "Saved sign-ins (from the owner's Passwords, taken in \(when)); sign in with logins_sign_in:\n"
+                var out =
+                    "Saved sign-ins (from the owner's Passwords, taken in \(when)); sign in with logins_sign_in:\n"
                 var left = 0
                 for l in shown {
-                    let line = "- \(l.site) — \(l.user.isEmpty ? "(no user name)" : l.user)"
+                    let line =
+                        "- \(l.site) — \(l.user.isEmpty ? "(no user name)" : l.user)"
                         + (l.otp != nil ? " (has a verification code)" : "") + "\n"
                     if out.count + line.count > ResultLimit.characters - 100 {
                         left += 1

@@ -10,19 +10,31 @@ import Testing
 
     @Test func dueAWeekAfterTheLastImport() {
         let imported = Self.start
-        #expect(!SignInReminder.due(now: imported + 6 * Self.day, imported: imported, since: imported, reminded: nil, on: true))
-        #expect(SignInReminder.due(now: imported + 7 * Self.day, imported: imported, since: imported, reminded: nil, on: true))
+        #expect(
+            !SignInReminder.due(
+                now: imported + 6 * Self.day, imported: imported, since: imported, reminded: nil, on: true))
+        #expect(
+            SignInReminder.due(
+                now: imported + 7 * Self.day, imported: imported, since: imported, reminded: nil, on: true))
     }
 
     @Test func withoutAnImportCountsFromFirstSeen() {
-        #expect(!SignInReminder.due(now: Self.start + 3 * Self.day, imported: nil, since: Self.start, reminded: nil, on: true))
-        #expect(SignInReminder.due(now: Self.start + 8 * Self.day, imported: nil, since: Self.start, reminded: nil, on: true))
+        #expect(
+            !SignInReminder.due(
+                now: Self.start + 3 * Self.day, imported: nil, since: Self.start, reminded: nil, on: true))
+        #expect(
+            SignInReminder.due(
+                now: Self.start + 8 * Self.day, imported: nil, since: Self.start, reminded: nil, on: true))
     }
 
     @Test func onceAWeekAndNeverWhenOff() {
         let now = Self.start + 20 * Self.day
-        #expect(!SignInReminder.due(now: now, imported: Self.start, since: Self.start, reminded: now - 2 * Self.day, on: true))
-        #expect(SignInReminder.due(now: now, imported: Self.start, since: Self.start, reminded: now - 7 * Self.day, on: true))
+        #expect(
+            !SignInReminder.due(
+                now: now, imported: Self.start, since: Self.start, reminded: now - 2 * Self.day, on: true))
+        #expect(
+            SignInReminder.due(
+                now: now, imported: Self.start, since: Self.start, reminded: now - 7 * Self.day, on: true))
         #expect(!SignInReminder.due(now: now, imported: Self.start, since: Self.start, reminded: nil, on: false))
     }
 }

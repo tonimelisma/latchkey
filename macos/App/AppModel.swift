@@ -193,6 +193,15 @@ final class AppModel {
         leftoverTimer = Self.tidyEveryMinute()
         updates.startDailyCheck(current: Self.version)  // FR-669
         if ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil {
+            // Spec 013: the import folder and the weekly reminder.
+            let watcher = SignInWatcher.shared
+            watcher.signInOn = { [weak self] in self?.capabilities.level(CapabilityRegistry.logins) != .off }
+            watcher.imported = { [weak self] outcome in
+                self?.refreshSignIns()
+                self?.signInStatus = outcome.told
+            }
+            watcher.start()
+            refreshSignIns()
             screenReminder = remindScreenWhileHere()
             permissionWatch = watchPermissions()
             permanentWatch = PermanentWatch(home: .homeDirectory) { url in
@@ -357,6 +366,7 @@ final class AppModel {
         connection = nil
         await keepAwakeController.restore()
         await BackgroundItems.unregisterAll()
+        SignInStore.shared.removeAll()  // spec 013 FR-1305
         event(.app, "Uninstalling: removing the local files, the activity log included")
         EventLog.shared.discard()  // nothing more can be kept once the log is gone
         LocalData().remove()
@@ -509,6 +519,68 @@ final class AppModel {
                 registry, calls: { reason in await connection?.stopCalls(reason) }, shell: ShellCapability.jobs)
         }
         if needsSetup { showSetup() }
+    }
+
+    // MARK: sign-ins (spec 013)
+
+    /// How many sign-ins Latchkey holds and since when; nil when it can't tell.
+    private(set) var signInCount = 0
+    private(set) var signInImported: Date?
+    /// The last export's or import's outcome, for Settings.
+    var signInStatus: String?
+    private(set) var exporting = false
+
+    /// Read through `reminderChanges`, so a change shows in Settings at once.
+    private var reminderChanges = 0
+    var signInReminder: Bool {
+        get {
+            _ = reminderChanges
+            return SignInWatcher.shared.reminderOn
+        }
+        set {
+            SignInWatcher.shared.reminderOn = newValue
+            reminderChanges += 1
+        }
+    }
+
+    func refreshSignIns() {
+        switch SignInStore.shared.load() {
+        case .some(let c):
+            signInCount = c.logins.count
+            signInImported = c.imported
+        default:
+            signInCount = 0
+            signInImported = nil
+        }
+    }
+
+    /// FR-1301: the one-touch export, after the Owner's click.
+    func exportPasswords() {
+        guard !exporting else { return }
+        exporting = true
+        signInStatus = "Approve with Touch ID in Passwords…"
+        event(.app, "The Owner started the Passwords export")
+        Task {
+            let outcome = await PasswordsExport.run()
+            exporting = false
+            switch outcome {
+            case .saved:
+                signInStatus = signInStatus == "Approve with Touch ID in Passwords…" ? "Exported." : signInStatus
+            case .byHand:
+                signInStatus =
+                    "Latchkey needs Accessibility to export for you. Or export by hand: in Passwords choose File → Export All Passwords to File, and save it in the folder that opens."
+                NSWorkspace.shared.open(SignInImport.folder)
+            case .stopped(let why): signInStatus = "The export stopped: \(why)."
+            }
+        }
+    }
+
+    /// FR-1305.
+    func removeSignIns() {
+        SignInStore.shared.removeAll()
+        refreshSignIns()
+        signInStatus = "Latchkey's copies of your sign-ins are removed."
+        event(.app, "The Owner removed every sign-in")
     }
 
     // MARK: pause (FR-602 to FR-604)

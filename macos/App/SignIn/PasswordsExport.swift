@@ -45,9 +45,11 @@ enum PasswordsExport {
     private static func steps(_ ax: AXUIElement, pid: pid_t, folder: URL, approve: Duration) async -> Outcome {
         // 1. The menu item is enabled once Passwords is unlocked (the Owner's Touch ID).
         guard
-            let item = await waitFor(approve, {
-                menuItem(ax, menu: "File", prefix: "Export All Passwords").flatMap { enabled($0) ? $0 : nil }
-            })
+            let item = await waitFor(
+                approve,
+                {
+                    menuItem(ax, menu: "File", prefix: "Export All Passwords").flatMap { enabled($0) ? $0 : nil }
+                })
         else { return .stopped("Passwords wasn't unlocked within \(approve.components.seconds / 60) minutes") }
         AXUIElementPerformAction(item, kAXPressAction as CFString)
         // 2. The confirmation: Export Passwords.
@@ -61,20 +63,32 @@ enum PasswordsExport {
         }
         let file = "Passwords-\(UUID().uuidString.prefix(8)).csv"
         AXUIElementSetAttributeValue(name, kAXValueAttribute as CFString, file as CFString)
-        // Go to Latchkey's folder: Command-Shift-G, the folder's path, Return.
-        let before = Set(fields(ax).map { ObjectIdentifier($0 as AnyObject) })
+        // Go to Latchkey's folder: Command-Shift-G opens a field of its own (a new element, told
+        // apart with CFEqual: Accessibility hands out a new reference on every look), the
+        // folder's path, Return. Anything unexpected cancels the panel: nothing is saved.
+        let before = fields(ax)
         key(pid, 5, flags: [.maskCommand, .maskShift])  // G
         guard
-            let goTo = await waitFor(.seconds(5), {
-                fields(ax).first { !before.contains(ObjectIdentifier($0 as AnyObject)) }
-            })
-        else { return .stopped("the save panel's Go to Folder didn't open") }
+            let goTo = await waitFor(
+                .seconds(5),
+                {
+                    fields(ax).first { f in !CFEqual(f, name) && !before.contains { CFEqual($0, f) } }
+                })
+        else { return cancel(ax, "the save panel's Go to Folder didn't open") }
         AXUIElementSetAttributeValue(goTo, kAXValueAttribute as CFString, folder.path as CFString)
         try? await Task.sleep(for: .milliseconds(400))
-        key(pid, 36)  // Return
-        try? await Task.sleep(for: .milliseconds(600))
+        key(pid, 36)  // Return: goes to the folder
+        // The Go to field closes and the name is still Latchkey's, or nothing is saved.
+        guard
+            await waitFor(
+                .seconds(5),
+                { () -> Bool? in
+                    fields(ax).contains { CFEqual($0, goTo) } ? nil : true
+                }) == true,
+            let named = saveName(ax), (value(named, kAXValueAttribute) as? String) == file
+        else { return cancel(ax, "the save panel didn't go to Latchkey's folder") }
         guard let save = await waitFor(.seconds(5), { button(ax, prefix: "Save") }) else {
-            return .stopped("the save panel's Save button wasn't found")
+            return cancel(ax, "the save panel's Save button wasn't found")
         }
         AXUIElementPerformAction(save, kAXPressAction as CFString)
         let target = folder.appending(path: file)
@@ -82,7 +96,40 @@ enum PasswordsExport {
             // Taken in (and deleted) by the import already, or still there to take.
             FileManager.default.fileExists(atPath: target.path) || SignInWatcher.shared.lastTaken == file ? true : nil
         }
-        return landed == true ? .saved : .stopped("the file didn't arrive in Latchkey's folder")
+        if landed == true { return .saved }
+        // Saved somewhere else after all: find the file by its name and wipe it.
+        let wiped = wipeStray(file)
+        return .stopped(
+            "the file didn't arrive in Latchkey's folder"
+                + (wiped ? " (it was saved elsewhere and is now deleted)" : ""))
+    }
+
+    /// Presses the panel's Cancel, so nothing is saved; the reason.
+    private static func cancel(_ ax: AXUIElement, _ why: String) -> Outcome {
+        if let c = button(ax, prefix: "Cancel") { AXUIElementPerformAction(c, kAXPressAction as CFString) }
+        return .stopped(why)
+    }
+
+    /// Looks for an export by its unique name where a save panel may have put it (the home
+    /// folder, Desktop, Documents, Downloads, iCloud Drive, two levels down) and wipes it.
+    static func wipeStray(_ name: String, home: URL = .homeDirectory) -> Bool {
+        let places = ["", "Desktop", "Documents", "Downloads", "Library/Mobile Documents/com~apple~CloudDocs"]
+        var found = false
+        for place in places {
+            let root = place.isEmpty ? home : home.appending(path: place)
+            guard
+                let walk = FileManager.default.enumerator(
+                    at: root, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles, .skipsPackageDescendants])
+            else { continue }
+            while let url = walk.nextObject() as? URL {
+                if walk.level > 2 { walk.skipDescendants() }
+                if url.lastPathComponent == name {
+                    SignInImport.wipe(url)
+                    found = true
+                }
+            }
+        }
+        return found
     }
 
     // MARK: Accessibility
@@ -143,7 +190,9 @@ enum PasswordsExport {
     private static func saveName(_ ax: AXUIElement) -> AXUIElement? {
         let all = everything(ax)
         guard all.contains(where: { role($0) == kAXButtonRole && title($0) == "Save" }) else { return nil }
-        return all.first { role($0) == kAXTextFieldRole && (value($0, kAXIdentifierAttribute) as? String) == "saveAsNameTextField" }
+        return all.first {
+            role($0) == kAXTextFieldRole && (value($0, kAXIdentifierAttribute) as? String) == "saveAsNameTextField"
+        }
             ?? all.first { role($0) == kAXTextFieldRole }
     }
 

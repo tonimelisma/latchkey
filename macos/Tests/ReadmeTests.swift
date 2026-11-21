@@ -27,7 +27,7 @@ import Testing
         let words = [
             "Notes": "Notes", "Messages": "Messages", "WhatsApp": "WhatsApp", "Files": "Files", "Shell": "Command line",
             "Browser": "Safari", "Computer Control": "screen", "Calendar": "Calendar", "Reminders": "Reminders",
-            "Contacts": "Contacts", "Location & Maps": "maps",
+            "Contacts": "Contacts", "Location & Maps": "maps", "Sign-in": "Signing in",
         ]
         for c in AppModel.makeCapabilities() {
             let word = words[c.title]
