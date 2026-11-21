@@ -198,6 +198,12 @@ Claude only connects over HTTPS. Pick one:
   also sends `Strict-Transport-Security`.
 - **Container.** The `docker run` flags above make the filesystem read-only except `/data` and a
   small `/tmp`, and drop all Linux capabilities; the image runs as a non-root user.
+- **The server is part of it.** Whoever is root on the relay's server holds its key file and
+  database. Give the relay a server or network of its own, open only 80 and 443 to the
+  internet, keep SSH behind a VPN or your cloud's tunnel, and turn on automatic security
+  updates. The hosted relay's setup is in `deploy/harden.sh` and docs/threat-model.md, "The
+  relay's server" (Google Cloud; the sentinel in `deploy/server/host/` works on any Ubuntu
+  server that can write to Cloud Logging).
 
 ## Terms and privacy policy
 

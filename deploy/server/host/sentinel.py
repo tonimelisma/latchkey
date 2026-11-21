@@ -97,12 +97,27 @@ EXPECTED_EXEC = {
     "hackernews-app-1": [r"sqlite3 /data/hackernews\.db \.backup '/tmp/hackernews-backup\.db'"],
 }
 
-# Programs that keep the system running and may write watched files outside anyone's session.
+# Programs that keep the system running and may write watched files outside anyone's session,
+# by the path the kernel resolved (a process can name itself anything; it can't fake its exe).
 SYSTEM_WRITERS = {
-    "google_guest_ag", "google_guest_agent", "google_oslogin_", "systemd", "systemd-tmpfile",
-    "systemd-sysuser", "dockerd", "containerd", "sshd", "logrotate", "chronyd", "cron",
+    "/usr/bin/google_guest_agent", "/usr/bin/google_guest_compat_manager", "/usr/lib/systemd/systemd",
+    "/usr/bin/systemd-tmpfiles", "/usr/bin/systemd-sysusers", "/usr/bin/dockerd", "/usr/bin/containerd",
+    "/usr/sbin/sshd", "/usr/sbin/logrotate", "/usr/sbin/chronyd", "/usr/sbin/cron",
 }
-PACKAGE_TOOLS = {"dpkg", "apt", "apt-get", "unattended-upgr", "unattended-upgrade", "apt-check"}
+# The package tools; while one runs, writes it causes (its maintainer scripts are shells) are an update.
+PACKAGE_EXES = {"/usr/bin/dpkg", "/usr/bin/apt", "/usr/bin/apt-get"}
+# Places where no write is ever explained away by an update or a system program: only the
+# owner's own session is quiet there (a package almost never touches them; a false alarm on one
+# is cheap, a missed intrusion isn't).
+NEVER_QUIET = {"lk_relay", "lk_caddy", "lk_apps", "lk_sudoers", "lk_ssh_keys", "lk_preload", "lk_audit",
+               "lk_docker", "lk_sshd"}
+# Each known container's image, by name (a container may take a known name; not a known image).
+IMAGES = {
+    "latchkey-relay": r"latchkey-relay:[0-9a-f]{7,40}",
+    "caddy": r"caddy:2-alpine",
+    "caddy-check": r"caddy:2-alpine",
+    "hackernews-app-1": r"ghcr\.io/tonimelisma/hackernews:(latest|[0-9a-f]{7,40})",
+}
 
 
 def unexpected_listeners(ss_output):
@@ -145,9 +160,14 @@ def container_problems(name, inspect):
     privileged, the host's namespaces, extra capabilities, or mounts that aren't its own."""
     problems = []
     known = CONTAINERS.get(name)
-    if known is None:
-        problems.append(f"unknown container {name} (image {inspect.get('Config', {}).get('Image', '?')})")
+    image = (inspect.get("Config") or {}).get("Image", "?")
     host = inspect.get("HostConfig", {})
+    if known is None:
+        problems.append(f"unknown container {name} (image {image})")
+    elif not re.fullmatch(IMAGES[name], image):
+        problems.append(f"image {image} isn't {name}'s")
+    if name == "caddy-check" and (host.get("NetworkMode") != "none" or not host.get("ReadonlyRootfs")):
+        problems.append("caddy-check with a network or a writable filesystem")
     if host.get("Privileged"):
         problems.append("privileged")
     for mode in ("PidMode", "NetworkMode", "IpcMode", "UTSMode", "UsernsMode"):
@@ -192,24 +212,38 @@ def parse_audit_line(line):
 
 
 def classify_audit(event, owner_uids, packages_running):
-    """Severity of one grouped audit event (dict with key, auid, exe, comm). Owner's sessions and
-    package updates are quiet; system daemons too; anything else is a WARNING."""
+    """Severity of one grouped audit event (dict with key, auid, exe). The owner's sessions are
+    quiet; outside NEVER_QUIET, package updates and system programs (by exe) too; anything else
+    is a WARNING."""
     key = event.get("key", "")
     auid = event.get("auid", AUID_UNSET)
-    comm = event.get("comm", "")
+    exe = event.get("exe", "")
     if auid in owner_uids:
         return INFO if key == "lk_root_exec" else NOTICE
     if auid not in (AUID_UNSET, "unset", "-1"):
         return WARNING  # a session of someone else: a local account or an unknown OS Login user
     if key == "lk_root_exec":
         return INFO
-    if packages_running or comm in PACKAGE_TOOLS:
-        return NOTICE
     if key == "lk_modules":
-        return NOTICE  # Docker loads netfilter modules; out-of-tree ones are checked separately
-    if comm in SYSTEM_WRITERS:
+        return NOTICE  # Docker loads netfilter modules; check_periodic judges every loaded module
+    if key in NEVER_QUIET:
+        return WARNING
+    if packages_running or exe in PACKAGE_EXES or exe in SYSTEM_WRITERS:
         return NOTICE
     return WARNING
+
+
+def module_problem(path, taint):
+    """Why a loaded module is suspect, or None: its file isn't the running kernel's own (or can't
+    be found), or the kernel marks it out-of-tree (O), unsigned (E) or forced (F)."""
+    if not path:
+        return "its file can't be found"
+    if not re.match(r"/(usr/)?lib/modules/[^/]+/kernel/", path):
+        return f"from outside the kernel's own ({path})"
+    bad = set(taint) & set("OEF")
+    if bad:
+        return "the kernel marks it " + ",".join(sorted(bad))
+    return None
 
 
 SSH_ACCEPTED = re.compile(r"Accepted (\S+) for (\S+) from (\S+) port \d+")
@@ -356,13 +390,13 @@ def run(cmd, timeout=120):
 
 
 def packages_running():
+    """A real package tool is running (by its exe, which a process can't fake)."""
     for pid in os.listdir("/proc"):
         if not pid.isdigit():
             continue
         try:
-            with open(f"/proc/{pid}/comm") as f:
-                if f.read().strip() in PACKAGE_TOOLS:
-                    return True
+            if os.readlink(f"/proc/{pid}/exe") in PACKAGE_EXES:
+                return True
         except OSError:
             continue
     return False
@@ -526,9 +560,15 @@ def check_periodic(out):
     except OSError:
         mods = []
     for mod in mods:
-        path = run(["modinfo", "-n", mod], timeout=10).strip()
-        if path and not path.startswith(f"/lib/modules/{release}/kernel/") and not path.startswith(f"/usr/lib/modules/{release}/kernel/"):
-            out.emit(WARNING, "kernel_module", f"kernel module {mod} from outside the kernel's own ({path})", repeat_key=("mod", mod), module=mod, path=path)
+        path = run(["modinfo", "-k", release, "-n", mod], timeout=10).strip()
+        try:
+            with open(f"/sys/module/{mod}/taint") as f:
+                taint = f.read().strip()
+        except OSError:
+            taint = ""
+        problem = module_problem(path, taint)
+        if problem:
+            out.emit(WARNING, "kernel_module", f"kernel module {mod}: {problem}", repeat_key=("mod", mod), module=mod, path=path, taint=taint)
 
 
 def check_daily(out):

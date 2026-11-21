@@ -75,7 +75,7 @@ class Exec(unittest.TestCase):
 class Containers(unittest.TestCase):
     def relay(self, **host):
         return {
-            "Config": {"Image": "latchkey-relay:abc"},
+            "Config": {"Image": "latchkey-relay:c4bc474"},
             "HostConfig": {"Privileged": False, "NetworkMode": "latchkey-front", "PidMode": "", **host},
             "Mounts": [
                 {"Type": "volume", "Name": "latchkey_latchkey-data", "Destination": "/data"},
@@ -87,7 +87,7 @@ class Containers(unittest.TestCase):
         self.assertEqual(sentinel.container_problems("latchkey-relay", self.relay()), [])
 
     def test_caddy_may_bind_web_ports(self):
-        info = {"HostConfig": {"CapAdd": ["NET_BIND_SERVICE"]}, "Mounts": [
+        info = {"Config": {"Image": "caddy:2-alpine"}, "HostConfig": {"CapAdd": ["NET_BIND_SERVICE"]}, "Mounts": [
             {"Type": "bind", "Source": "/opt/reverse-proxy/Caddyfile", "Destination": "/etc/caddy/Caddyfile"},
             {"Type": "volume", "Name": "hackernews_caddy-data", "Destination": "/data"}]}
         self.assertEqual(sentinel.container_problems("caddy", info), [])
@@ -106,8 +106,20 @@ class Containers(unittest.TestCase):
         self.assertEqual(sentinel.container_problems("latchkey-relay", info), ["mount / at /host"])
 
     def test_the_relays_keys_in_another_container_are_reported(self):
-        info = {"HostConfig": {}, "Mounts": [{"Type": "bind", "Source": "/opt/latchkey/keys/relay", "Destination": "/k"}]}
+        info = {"Config": {"Image": "ghcr.io/tonimelisma/hackernews:latest"}, "HostConfig": {}, "Mounts": [{"Type": "bind", "Source": "/opt/latchkey/keys/relay", "Destination": "/k"}]}
         self.assertEqual(sentinel.container_problems("hackernews-app-1", info), ["mount /opt/latchkey/keys/relay at /k"])
+
+    def test_a_known_name_with_another_image_is_reported(self):
+        info = self.relay()
+        info["Config"]["Image"] = "alpine:latest"
+        self.assertEqual(sentinel.container_problems("latchkey-relay", info), ["image alpine:latest isn't latchkey-relay's"])
+
+    def test_the_caddy_check_must_stay_isolated(self):
+        mounts = [{"Type": "bind", "Source": "/opt/reverse-proxy/Caddyfile", "Destination": "/etc/caddy/Caddyfile"}]
+        ok = {"Config": {"Image": "caddy:2-alpine"}, "HostConfig": {"NetworkMode": "none", "ReadonlyRootfs": True}, "Mounts": mounts}
+        self.assertEqual(sentinel.container_problems("caddy-check", ok), [])
+        bad = {"Config": {"Image": "caddy:2-alpine"}, "HostConfig": {"NetworkMode": "bridge", "ReadonlyRootfs": True}, "Mounts": mounts}
+        self.assertEqual(sentinel.container_problems("caddy-check", bad), ["caddy-check with a network or a writable filesystem"])
 
     def test_an_unknown_container_is_reported(self):
         out = sentinel.container_problems("miner", {"Config": {"Image": "x/y"}, "HostConfig": {}, "Mounts": []})
@@ -148,21 +160,51 @@ class Audit(unittest.TestCase):
             self.assertEqual(sentinel.classify_audit(ev, OWNER_UIDS, False), sentinel.WARNING)
 
     def test_a_package_update_is_quiet(self):
-        ev = {"key": "lk_systemd", "auid": "4294967295", "comm": "sh"}
+        ev = {"key": "lk_systemd", "auid": "4294967295", "exe": "/usr/bin/dash"}
         self.assertEqual(sentinel.classify_audit(ev, OWNER_UIDS, True), sentinel.NOTICE)
-        ev = {"key": "lk_apt", "auid": "4294967295", "comm": "dpkg"}
+        ev = {"key": "lk_apt", "auid": "4294967295", "exe": "/usr/bin/dpkg"}
         self.assertEqual(sentinel.classify_audit(ev, OWNER_UIDS, False), sentinel.NOTICE)
 
     def test_a_write_from_no_session_is_a_warning(self):
         # A container escape or a hijacked service: no login uid, not a package update.
-        ev = {"key": "lk_relay", "auid": "4294967295", "comm": "python3"}
+        ev = {"key": "lk_systemd", "auid": "4294967295", "exe": "/usr/bin/python3.12"}
         self.assertEqual(sentinel.classify_audit(ev, OWNER_UIDS, False), sentinel.WARNING)
-        ev = {"key": "lk_ssh_keys", "auid": "unset", "comm": "node"}
+        ev = {"key": "lk_ssh_keys", "auid": "unset", "exe": "/usr/local/bin/node"}
         self.assertEqual(sentinel.classify_audit(ev, OWNER_UIDS, False), sentinel.WARNING)
 
+    def test_a_fake_process_name_explains_nothing(self):
+        # comm is whatever a process calls itself; only the kernel's exe path counts.
+        ev = {"key": "lk_cron", "auid": "4294967295", "comm": "dpkg", "exe": "/tmp/x"}
+        self.assertEqual(sentinel.classify_audit(ev, OWNER_UIDS, False), sentinel.WARNING)
+        ev = {"key": "lk_cron", "auid": "4294967295", "comm": "systemd", "exe": "/dev/shm/s"}
+        self.assertEqual(sentinel.classify_audit(ev, OWNER_UIDS, False), sentinel.WARNING)
+
+    def test_the_most_sensitive_places_are_never_explained_away(self):
+        # Even during a package update or by a system program: only the owner's session is quiet.
+        for key in sorted(sentinel.NEVER_QUIET):
+            ev = {"key": key, "auid": "4294967295", "exe": "/usr/bin/dpkg"}
+            self.assertEqual(sentinel.classify_audit(ev, OWNER_UIDS, True), sentinel.WARNING, key)
+            ev = {"key": key, "auid": "34248051", "exe": "/usr/bin/dash"}
+            self.assertEqual(sentinel.classify_audit(ev, OWNER_UIDS, False), sentinel.NOTICE, key)
+
     def test_googles_agent_managing_accounts_is_quiet(self):
-        ev = {"key": "lk_accounts", "auid": "4294967295", "comm": "google_guest_ag"}
+        ev = {"key": "lk_accounts", "auid": "4294967295", "exe": "/usr/bin/google_guest_agent"}
         self.assertEqual(sentinel.classify_audit(ev, OWNER_UIDS, False), sentinel.NOTICE)
+
+
+class Modules(unittest.TestCase):
+    def test_the_kernels_own_module_is_fine(self):
+        self.assertIsNone(sentinel.module_problem("/lib/modules/6.17.0-1010-gcp/kernel/net/bridge/bridge.ko.zst", ""))
+
+    def test_a_module_whose_file_cant_be_found_is_suspect(self):
+        self.assertEqual(sentinel.module_problem("", ""), "its file can't be found")
+
+    def test_a_module_from_elsewhere_is_suspect(self):
+        self.assertIn("outside", sentinel.module_problem("/tmp/rootkit.ko", ""))
+        self.assertIn("outside", sentinel.module_problem("/lib/modules/6.17.0-1010-gcp/updates/dkms/x.ko", ""))
+
+    def test_an_out_of_tree_or_unsigned_module_is_suspect(self):
+        self.assertEqual(sentinel.module_problem("/lib/modules/6.17.0-1010-gcp/kernel/x.ko", "OE"), "the kernel marks it E,O")
 
 
 class Journal(unittest.TestCase):
