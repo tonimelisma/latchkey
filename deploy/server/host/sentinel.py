@@ -80,8 +80,9 @@ CONTAINERS = {
         },
     },
     "hackernews-app-1": {
-        # The app, its health check (wget, every 30 s) and the nightly backup (sqlite3).
-        "programs": {"node", "MainThread", "wget", "sqlite3"},
+        # Its health check (wget, every 30 s) and the nightly backup (sqlite3) are expected only
+        # by their exact command lines (unexpected_programs), never by name.
+        "programs": {"node", "MainThread"},
         "mounts": {"volume:hackernews_sqlite-data"},
     },
     # latchkey-update-apps checks a new Caddy version against the Caddyfile in this one first.
@@ -95,7 +96,7 @@ CONTAINERS = {
 # containers, besides each container's own health check.
 EXPECTED_EXEC = {
     "caddy": [r"caddy (validate|reload) --config /etc/caddy/Caddyfile"],
-    "hackernews-app-1": [r"sqlite3 /data/hackernews\.db \.backup '/tmp/hackernews-backup\.db'"],
+    "hackernews-app-1": [r"sqlite3 /data/hackernews\.db \.backup '?/tmp/hackernews-backup\.db'?"],
 }
 
 # Programs that keep the system running and may write watched files outside anyone's session,
@@ -148,12 +149,19 @@ def classify_exec(container, command, healthcheck):
     return WARNING
 
 
-def unexpected_programs(container, programs):
-    """Programs (ps comm names) in a known container other than its own."""
+def unexpected_programs(container, procs, healthcheck=None):
+    """Processes in a container other than its own program, as (comm, args) pairs: its health
+    check and the commands the deploy and backup run there count only by their exact command
+    line (a process can take any name). Returns the sorted comm names."""
     known = CONTAINERS.get(container)
-    if known is None:
-        return sorted(set(programs))
-    return sorted(set(p for p in programs if p not in known["programs"]))
+    found = set()
+    for comm, args in procs:
+        if known is not None and comm in known["programs"]:
+            continue
+        if classify_exec(container, args, healthcheck or []) in (None, NOTICE):
+            continue
+        found.add(comm)
+    return sorted(found)
 
 
 def container_problems(name, inspect):
@@ -571,9 +579,10 @@ def check_periodic(out):
         out.emit(WARNING, "listener", f"something new is listening: {item}", repeat_key=("listen", item), socket=item)
     names = run(["docker", "ps", "--format", "{{.Names}}"]).split()
     for name in names:
-        top = run(["docker", "top", name, "-eo", "pid,comm"], timeout=20).splitlines()[1:]
-        progs = [line.split(None, 1)[1].strip() for line in top if len(line.split(None, 1)) == 2]
-        for prog in unexpected_programs(name, progs):
+        top = run(["docker", "top", name, "-eo", "pid,comm,args"], timeout=20).splitlines()[1:]
+        procs = [(p[1], p[2] if len(p) > 2 else "") for p in (line.split(None, 2) for line in top) if len(p) >= 2]
+        health = ((inspect(name).get("Config") or {}).get("Healthcheck") or {}).get("Test") or []
+        for prog in unexpected_programs(name, procs, health):
             out.emit(WARNING, "container_process", f"{prog} is running inside {name}", repeat_key=("proc", name, prog), container=name, program=prog)
     for pid in os.listdir("/proc"):
         if not pid.isdigit():
