@@ -14,6 +14,20 @@ with OS Login, gives the VM its own least-privilege account, Secure Boot and aut
 with a nightly reboot when needed, removes unneeded packages and services, puts hackernews (which
 shares the server) in a container without root on its own network, and its deploys become pulls
 by the server; the sentinel and cloud alerts email Toni on anything that shouldn't happen.
+Done live 2026-11-21 (three runs, the last one quiet): only 80 and 443 open (22 to IAP only),
+Secure Boot on, kernel 7.0 with all 65 pending updates, the VM on `relay-vm` (the default account
+lost Editor), 44 locked audit rules, the sentinel's heartbeats in Cloud Logging, five alerts
+and an uptime check, one test alert sent; the relay shares `latchkey-front` with Caddy only;
+hackernews runs as uid 1000 without capabilities, its GitHub deploy job and SSH secrets removed
+(hackernews 9be196f, which also made its image run as non-root); Caddy moved to the newest 2.x
+by the weekly check. The relay emails the owner on a paired machine, an allowed app and a
+recovery (spec 001 FR-696 to FR-699a), deployed as 50e1d08. Fixed on the way, each found by the
+live runs or the automated security review: the SSH settings' undo ran out during the updates
+(now applied last and checked), the Caddy check lacked a scratch /data, reruns wrote unchanged
+cloud settings and the SSH permission check counted as a cloud change (each would email Toni),
+the sentinel trusted process names and a host-wide "dpkg is running" flag, and the hub's Close
+returned before a closed connection's last trace line (the long-flaky "traces: directory not
+empty" tests). Live check after: a fresh Claude Code session saw both machines and used a tool.
 
 Security emails (Toni, 2026-11-21; spec 001 FR-696 to FR-699, plan D5): the relay emails the
 Owner whenever a machine is paired, an app is allowed on the consent page (not on a refresh), or
@@ -272,6 +286,10 @@ after the app was quit.
 For Toni (only he can): delete the ~96 old "Latchkey check" test messages in his two
 conversations with himself and the WhatsApp test message in his own chat; optionally switch off
 Latchkey's unused Mail permission (System Settings → Privacy & Security → Automation → Latchkey).
+The relay's server (2026-11-21): check that the test alert from "Google Cloud Alerting" reached
+the alert address (`ALERT_EMAIL` in `.env`; its spam folder too); make sure the Google account that owns the project has
+2-step verification with a passkey or security key, since it is now the only way into the
+server (docs/threat-model.md, "Accepted").
 
 ## History (newest first; what was done and found, kept as the record)
 
