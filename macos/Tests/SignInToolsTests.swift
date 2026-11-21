@@ -113,4 +113,70 @@ import Testing
             .object(["page": .string(name)]))
         #expect(r.isError && r.plainText.contains("only on https"))
     }
+
+    /// Spec 013 FR-1352: where Latchkey's own sign-in can't finish, the owner's Safari sign-in.
+    static let needsCode = """
+        <form onsubmit="event.preventDefault(); document.body.innerHTML = '<label>Enter the code we texted you <input name=code autocomplete=one-time-code></label>';">
+        <input name="username" autocomplete="username"><input type="password" name="p"><button>Log in</button></form>
+        """
+
+    func fallback(locked: Bool) throws -> (OwnPages, OwnSessions, SignInStore) {
+        let s = try store([SignInPageTests.ann])
+        let sessions = OwnSessions(signIns: s, vault: MemoryVault())
+        sessions.on = { true }
+        let safari = [
+            SafariCookies.Cookie(
+                domain: "a.test", name: "safari_a", path: "/", value: "1", secure: true, httpOnly: false,
+                expires: Date().addingTimeInterval(86400))
+        ]
+        let own = OwnPages(cookies: { safari }, isLocked: { locked }, record: { _ in }, sessions: sessions)
+        return (own, sessions, s)
+    }
+
+    @Test func lockedItTakesSafarisSignInWhereItsOwnCantFinish() async throws {
+        let (own, sessions, s) = try fallback(locked: true)
+        defer { own.closeAll() }
+        let name = try await own.open(html: Self.needsCode, base: Self.base)
+        #expect(try await own.page(name).run("document.cookie") == "", "no copy before: Latchkey signs in itself")
+        let r = await LoginsCapability.signIn(store: s, own: own, move: { _ in nil }).handler(
+            .object(["page": .string(name)]))
+        #expect(r.plainText.contains("verification code Latchkey doesn't hold"), "\(r.plainText)")
+        #expect(r.plainText.contains("the owner's Safari sign-in is used there instead"))
+        // A test page has no server to load it again from: said so, the copy taken all the same.
+        #expect(r.plainText.contains("took a copy of Safari's cookies"))
+        #expect(r.plainText.contains("loading it again didn't work"))
+        #expect(sessions.fellBack("a.test") && !sessions.isOwn("a.test"))
+        #expect(try await own.page(name).run("document.cookie") == "safari_a=1")
+    }
+
+    @Test func unlockedThePageMovesToSafari() async throws {
+        let (own, sessions, s) = try fallback(locked: false)
+        defer { own.closeAll() }
+        let name = try await own.open(html: Self.needsCode, base: Self.base)
+        let moved = Box()
+        let r = await LoginsCapability.signIn(
+            store: s, own: own,
+            move: { _ in
+                moved.called = true
+                return nil
+            }
+        ).handler(.object(["page": .string(name)]))
+        #expect(moved.called, "\(r.plainText)")
+        #expect(r.plainText.contains("couldn't move into Safari"))
+        #expect(sessions.fellBack("a.test"))
+    }
+
+    final class Box: @unchecked Sendable { var called = false }
+
+    @Test func aSignInThatWorksStaysLatchkeysOwn() async throws {
+        let (own, sessions, s) = try fallback(locked: true)
+        defer { own.closeAll() }
+        let name = try await own.open(html: SignInPageTests.onePage(), base: Self.base)
+        let r = await LoginsCapability.signIn(store: s, own: own, move: { _ in nil }).handler(
+            .object(["page": .string(name)]))
+        #expect(r.plainText.contains("Signed in to a.test as ann."), "\(r.plainText)")
+        #expect(!r.plainText.contains("Safari sign-in is used"))
+        #expect(sessions.isOwn("a.test"))
+        #expect(r.plainText.contains("with Latchkey's own sign-in for a.test"))
+    }
 }

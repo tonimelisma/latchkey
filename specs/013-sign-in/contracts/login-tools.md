@@ -29,5 +29,18 @@ Both exist only while the Owner's Sign-in setting is On (FR-1340). Answers are t
     reCAPTCHA badge don't (live check 2026-11-21, homerecording.com, a sign-in that had worked).
   - "<site> refused the sign-in: «page's words». One more try is allowed." / "…Latchkey won't
     try it again until the owner exports from Passwords again."
+  - In Latchkey's own browser, after a code it doesn't hold, a check, or a refusal on a site it
+    signs in to itself (FR-1352), the line goes on: "Latchkey's own sign-in couldn't finish on
+    <site>, so the owner's Safari sign-in is used there instead, until the owner exports from
+    Passwords again:" then, locked, "this page took a copy of Safari's cookies for it … and
+    loaded again." (or "…but loading it again didn't work: read it again with browser_read."),
+    unlocked, "the page moved into a Safari tab of Claude's, signed in as the owner if Safari
+    is." (or "…couldn't move into Safari (Safari has no window open), so it stays here.").
+  - The first line of every answer from Latchkey's own browser on such a site (FR-1355): "…
+    Claude's page "<name>", with Latchkey's own sign-in for <site>, not a copy of Safari's, so the
+    owner's Safari stays signed in (if the page asks to sign in, logins_sign_in signs in)."
+    `browser_read sign_in_again` there: "Latchkey signs in to <site> itself … call
+    logins_sign_in with page "<name>"; if that can't finish, it uses the owner's Safari sign-in
+    instead."
   - Errors (isError): no sign-in for the page's site (with the sites it does hold, at most 20);
     several user names (listed: call again with user); not https; the Owner's tab; no page.

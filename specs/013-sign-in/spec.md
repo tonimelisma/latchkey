@@ -142,6 +142,42 @@ interface another app can read (`research.md`), so the only way in is a copy the
 - **FR-1327** Every sign-in Latchkey makes shall go into Latchkey's activity log: the site, the user
   name, the browser, and the outcome, never the secret.
 
+### Latchkey's own sign-ins, so Safari stays signed in (Toni, 2026-11-21)
+
+Toni, 2026-11-21: "can it not sync cookies to its own browser for the websites it has login for,
+so it doesn't log my real browser out?" Then, asked: "Own sign-in, cookies as fallback", "Keep,
+protected", "Latchkey's own browser" (also while unlocked). A copy of Safari's cookies that a site
+renews signs Safari out (spec 005 FR-456, Target); a session of Latchkey's own doesn't touch
+Safari's.
+
+- **FR-1350** While Sign-in is On, Claude's pages in Latchkey's own browser shall take none of the
+  Owner's Safari cookies for a site Latchkey holds a saved sign-in for (by FR-1321's matching),
+  locked or unlocked: neither the site's own nor a cookie of a wider domain that would reach it.
+  Claude signs in there with Latchkey's own sign-in (FR-1320). Amends spec 005 FR-441, FR-442,
+  FR-457 for those sites.
+- **FR-1351** While the Mac is unlocked, a page of such a site shall open in Latchkey's own
+  browser, not in a Safari tab of Claude's. Amends spec 005 FR-455 and FR-459 for those sites.
+- **FR-1352** When Latchkey's own sign-in can't finish on such a site (the site asks for a code
+  Latchkey doesn't hold, shows a check it can't answer, or refuses the password), Latchkey shall
+  use the Owner's Safari sign-in for that site as spec 005 does: while the Mac is locked, take
+  Safari's cookies for the site and load the page again; while unlocked, move the page into a
+  Safari tab of Claude's. The answer says that Latchkey's own sign-in couldn't finish, why, and
+  that the Owner's Safari sign-in is used instead (which may sign Safari out on some sites, as
+  before). The site stays on Safari's sign-in until the Owner's next export or Remove All.
+- **FR-1353** The cookies a site sets in Latchkey's own browser for a site of FR-1350 (its own
+  sign-in) shall be kept on this Mac across Latchkey's restarts and updates, in Latchkey's
+  Keychain as the sign-ins are (FR-1310), never readable by Claude's command line or Files tools,
+  never synced or sent anywhere. Copies of Safari's cookies are never kept (spec 005 FR-421). A
+  kept cookie goes when it expires; one with no expiry after 14 days.
+- **FR-1354** Unlocking the Mac (spec 005 FR-458) shall drop only the copies of Safari's cookies,
+  never Latchkey's own sign-ins. Remove All and uninstalling (FR-1305) shall remove the kept
+  sign-ins too. While Sign-in is Off, they are neither used nor kept up to date, and Claude's
+  pages behave as spec 005 says.
+- **FR-1355** Every answer from Latchkey's own browser for a page of such a site shall say that
+  Latchkey signs in to that site itself, with logins_sign_in when the page asks to sign in, not
+  that the page is "without the owner's sign-ins" (live check 2026-11-21: that read as a
+  contradiction next to "Signed in").
+
 ### Passkeys (later, not built now)
 
 - **FR-1330** When Latchkey is signed through the paid Apple Developer Program, Latchkey shall take

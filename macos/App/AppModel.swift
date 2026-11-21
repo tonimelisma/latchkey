@@ -196,6 +196,8 @@ final class AppModel {
             // Spec 013: the import folder and the weekly reminder.
             let watcher = SignInWatcher.shared
             watcher.signInOn = { [weak self] in self?.capabilities.level(CapabilityRegistry.logins) != .off }
+            // FR-1350 to FR-1354: Latchkey's own sign-ins, only while Sign-in is On.
+            OwnSessions.shared.on = { [weak self] in self?.capabilities.level(CapabilityRegistry.logins) != .off }
             watcher.imported = { [weak self] outcome in
                 self?.refreshSignIns()
                 self?.signInStatus = outcome.told
@@ -367,6 +369,7 @@ final class AppModel {
         await keepAwakeController.restore()
         await BackgroundItems.unregisterAll()
         SignInStore.shared.removeAll()  // spec 013 FR-1305
+        OwnSessions.shared.removeAll()  // FR-1354
         event(.app, "Uninstalling: removing the local files, the activity log included")
         EventLog.shared.discard()  // nothing more can be kept once the log is gone
         LocalData().remove()
@@ -584,6 +587,8 @@ final class AppModel {
     /// FR-1305.
     func removeSignIns() {
         SignInStore.shared.removeAll()
+        OwnSessions.shared.removeAll()  // FR-1354: Latchkey's own sign-ins go too
+        BrowserCapability.ownPages.closeAll()
         refreshSignIns()
         signInStatus = "Latchkey's copies of your sign-ins are removed."
         event(.app, "The Owner removed every sign-in")

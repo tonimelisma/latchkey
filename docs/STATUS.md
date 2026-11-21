@@ -38,6 +38,12 @@ Toni's export with 0.8.177 (2026-11-21 10:41): done in 10 s, 1,026 sign-ins (Pas
 the hosted relay: homerecording.com signed in, no password in any answer, but the tool said "a
 check" (a hidden reCAPTCHA frame from Google's ad script); 0.8.178 counts only a challenge the
 page shows, and logins_find starts with totals and says how many have codes (a feedback report).
+Latchkey's own sign-ins (0.8.179; Toni: "can it not sync cookies … so it doesn't log my real
+browser out?"; spec 013 FR-1350 to FR-1355): for the 871 sites Latchkey has a password for, its
+own browser copies none of Safari's cookies, locked or unlocked, and stays its own browser
+while unlocked; Claude signs in with logins_sign_in, and the session is kept in a Keychain item
+of Latchkey's across restarts. Where that can't finish (no code, a check, a refusal), the site
+uses Safari's sign-in as before until the next export.
 Live check (0.8.175, Mac locked, 2026-11-21 00:54): groups logins, browser, files, shell: 51 of 51
 worked. A fresh Claude signed in to the-internet.herokuapp.com as tomsmith with the fixture's test
 sign-in (`logins-fixture.sh`); none of its 10 tool results held the password except the test

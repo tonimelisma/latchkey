@@ -280,6 +280,12 @@ phone, Claude can't check a reservation in the Owner's account or fill in a form
   Latchkey's own browser (FR-442), the page shall move into a Safari tab of Claude's at the same
   address, under the same name.
 
+Amended by spec 013 FR-1350 to FR-1355 (Toni, 2026-11-21): for a site Latchkey holds a saved
+password for, while Sign-in is On, FR-441, FR-442 and FR-457 copy none of Safari's cookies (nor a
+wider domain's that would reach it), FR-455 and FR-459 keep the page in Latchkey's own browser,
+and FR-458 keeps Latchkey's own sign-ins; Latchkey signs in there itself, and uses Safari's
+sign-in as these rules say only where its own can't finish.
+
 ## Success criteria
 
 - **SC-401** From the phone, Claude reads a page of a site the Owner is signed in to on the Mac.

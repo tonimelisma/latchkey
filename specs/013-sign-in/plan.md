@@ -117,6 +117,36 @@ section with how many sign-ins Latchkey holds and from when, Export from Passwor
 and the reminder switch. The menu has Export Passwords to Latchkey…. Setup gets a sixth step,
 "Hand over your sign-ins (optional)", which never counts as missing (FR-1302).
 
+## D10. Latchkey's own sign-ins (FR-1350 to FR-1355)
+
+`OwnSessions` (App/SignIn) knows the own sites: those a held sign-in fills on (`SiteMatch.fills`),
+minus the sites that fell back to Safari (FR-1352), while Sign-in is On. It answers two questions
+for the browser: is this host an own site, and does a cookie of this domain reach one (the
+domain is an own site, under one, or a wider domain of one, as `LockedBrowser.covers` decides).
+- FR-1350: `LockedBrowser` asks before every copy of Safari's cookies: no copy for an own host,
+  and from a copy for any other host the cookies that would reach an own site are left out.
+- FR-1351: `OwnPages.inSafari` is false for an own host; `browser_sign_in_again` on an own site's
+  page answers that Latchkey signs in there itself (logins_sign_in), unless it fell back.
+- FR-1352: when `logins_sign_in` in Latchkey's own browser ends with a code it doesn't hold, a
+  check, or a refusal, the site is marked fallen back (with the import date it applies to, so
+  the next export clears it), then: locked, Safari's cookies for the site and the page again;
+  unlocked, the page moves into a Safari tab of Claude's (FR-459's way). The answer says so.
+- FR-1353: the store's changes (`CookieWatch` already observes it) are looked at 1 s after they
+  settle; the cookies that reach an own site are written to a Keychain item of their own
+  (account "sign-in sessions": JSON of name, value, domain, path, expiry, secure, HttpOnly,
+  SameSite, and when it was kept), when they changed. A new store (`OwnPages.make`) gets them
+  back before its first page. Expired ones, and ones with no expiry kept over 14 days, are
+  dropped when read. Options weighed: a persistent `WKWebsiteDataStore` (WebKit's own files under
+  ~/Library/WebKit, readable by Claude's command line unless fenced, and it would also keep the
+  copies of Safari's cookies, which FR-421 forbids) vs Latchkey's own Keychain item with only
+  its own sign-ins (encrypted, readable only by Latchkey, as the sign-ins are); the Keychain item
+  chosen.
+- FR-1354: `forgetCopiesIfUnlocked` keeps the own sign-ins: it saves them, drops every cookie,
+  and sets them back. Remove All and uninstall delete the item. While Sign-in is Off,
+  `OwnSessions` has no own sites, so nothing changes from spec 005.
+- FR-1355: `BrowserCapability.ownBrowser` names the case: "with Latchkey's own sign-in for
+  <site> (if the page asks to sign in, logins_sign_in signs in)".
+
 ## D9. Tests and checks
 
 - Unit: `SignInDataTests` (CSV, codes with RFC 6238's vectors, site matching), `SignInStoreTests`

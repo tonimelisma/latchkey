@@ -111,9 +111,17 @@ final class CookieWatch: NSObject, WKHTTPCookieStoreObserver {
     private let record: @Sendable (String) -> Void
     private var looking = false
 
-    init(store: WKHTTPCookieStore, record: @escaping @Sendable (String) -> Void) {
+    /// Told what the store holds after each change (spec 013 FR-1353: Latchkey keeps its own
+    /// sign-ins).
+    private let changed: @MainActor ([HTTPCookie]) -> Void
+
+    init(
+        store: WKHTTPCookieStore, record: @escaping @Sendable (String) -> Void,
+        changed: @escaping @MainActor ([HTTPCookie]) -> Void = { _ in }
+    ) {
         self.store = store
         self.record = record
+        self.changed = changed
         super.init()
         store.add(self)  // held weakly by the store
     }
@@ -138,6 +146,7 @@ final class CookieWatch: NSObject, WKHTTPCookieStoreObserver {
             looking = false
             guard let all = await LockedBrowser.holding(store) else { return }
             for line in seen.changes(now: all) { record(line) }
+            changed(all)
         }
     }
 

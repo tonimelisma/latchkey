@@ -17,7 +17,7 @@ enum BrowserCapability {
 
     /// Claude's pages, in Latchkey's own browser, locked or not (spec 005 FR-444, FR-445). Tests
     /// that pass none get Safari for Claude's page too (the stand-in), so they never reach the web.
-    @MainActor static let ownPages = OwnPages()
+    @MainActor static let ownPages = OwnPages(sessions: .shared)
 
     /// What the call being answered asked for (FR-445, FR-447), set by browser_read and
     /// browser_act for that one call only, so calls of different chats running at once can't
@@ -184,20 +184,21 @@ enum BrowserCapability {
                                 "That page is in Safari itself, which is already signed in as the owner: there is nothing to take again. If a site asks to sign in there, the owner is signed out of it in Safari."
                             )
                         }
+                        // Spec 013 FR-1350: a site Latchkey signs in to itself takes no copy.
+                        if let site = await l.ownSite {
+                            let name = await l.name
+                            return .text(
+                                "Latchkey signs in to \(site) itself, with its own sign-in, so that the owner's Safari stays signed in: there is no copy of Safari's to take. If the page asks to sign in, call logins_sign_in with page \"\(name)\"; if that can't finish, it uses the owner's Safari sign-in instead."
+                            )
+                        }
                         // FR-459: while the Mac is unlocked no copy is taken; the page moves into
                         // a Safari tab of Claude's at the same address, under the same name.
                         if await !l.signedInFromSafari {
-                            let name = await l.name
-                            let address = await l.tabs().tabs.first?.2 ?? ""
-                            let s = browser.sibling()
-                            guard ["http", "https"].contains(URL(string: address)?.scheme?.lowercased() ?? ""),
-                                let p = try await s.openTab(address)
-                            else {
+                            guard let (name, p, s) = try await moveToSafari(l, browser, own) else {
                                 return .text(
                                     "The page couldn't move into Safari (Safari has no window open, or the page has no web address), so it stays in Latchkey's own browser, without the owner's sign-ins: while the Mac is unlocked, Latchkey's own browser takes none of them, so that Safari's own stay signed in."
                                 )
                             }
-                            _ = try await MainActor.run { try own.adopt(s, address: p.url, name: name) }
                             var r = await safariAnswer(p, name, s)
                             r.activity = "Moved Claude's page into a Safari tab of Claude's, signed in as the owner"
                             return r
@@ -219,7 +220,9 @@ enum BrowserCapability {
                         if let l = try await route(browser, own) {
                             let image = try await l.screenshot()
                             var r = ToolResult.image(image.data, mimeType: image.mimeType)
-                            r.appendText(ownBrowser(await l.name, signedIn: await l.signedInFromSafari))  // FR-443
+                            // FR-443
+                            r.appendText(
+                                ownBrowser(await l.name, signedIn: await l.signedInFromSafari, own: await l.ownSite))
                             return r
                         }
                         // FR-439: when the screen can't be captured (locked, display asleep, lid
@@ -285,6 +288,21 @@ enum BrowserCapability {
         r.appendText(said)
         if let tab = await here(browser).working() { r.appendText(named(tab)) }
         return r
+    }
+
+    /// FR-459 (and spec 013 FR-1352): Claude's page moves into a Safari tab of Claude's at the same
+    /// address, under the same name; nil when it can't (no Safari window, no web address).
+    static func moveToSafari(_ l: LockedBrowser, _ browser: SafariBrowser, _ own: OwnPages) async throws -> (
+        name: String, page: PageScripts.Page, safari: SafariBrowser
+    )? {
+        let name = await l.name
+        let address = await l.tabs().tabs.first?.2 ?? ""
+        let s = browser.sibling()
+        guard ["http", "https"].contains(URL(string: address)?.scheme?.lowercased() ?? ""),
+            let p = try await s.openTab(address)
+        else { return nil }
+        _ = try await MainActor.run { try own.adopt(s, address: p.url, name: name) }
+        return (name, p, s)
     }
 
     /// A picture of `address` from a browser of Latchkey's own, made for this one picture.
@@ -535,7 +553,7 @@ enum BrowserCapability {
         // is a file, what to do with it.
         var from = ""
         if let l {
-            from = ownBrowser(await l.name, signedIn: await l.signedInFromSafari) + "\n"
+            from = ownBrowser(await l.name, signedIn: await l.signedInFromSafari, own: await l.ownSite) + "\n"
             if let file = await l.fileNoteIfAny { from += file + "\n" }
         }
         guard !dialogs.isEmpty || l != nil, case .array(let parts) = r.content,
@@ -554,11 +572,16 @@ enum BrowserCapability {
 
     /// FR-443: the first line of every answer from Latchkey's own browser (Toni, 2026-11-15: an
     /// agent there couldn't tell it wasn't in Safari), naming the page (FR-445).
-    static func ownBrowser(_ name: String, signedIn: Bool = true) -> String {
+    /// `own`: the site of the page when Latchkey signs in to it itself (spec 013 FR-1355).
+    static func ownBrowser(_ name: String, signedIn: Bool = true, own: String? = nil) -> String {
         let how =
-            signedIn
-            ? "signed in with a copy of Safari's sign-ins (the Mac is locked; a site may sign the owner out in Safari when this copy renews its sign-in)"
-            : "without the owner's sign-ins (while the Mac is unlocked, sites the owner is signed in to open in a Safari tab of Claude's instead; if this page needs the owner's sign-in, browser_read sign_in_again moves it there)"
+            if let own {
+                "with Latchkey's own sign-in for \(own), not a copy of Safari's, so the owner's Safari stays signed in (if the page asks to sign in, logins_sign_in signs in)"
+            } else if signedIn {
+                "signed in with a copy of Safari's sign-ins (the Mac is locked; a site may sign the owner out in Safari when this copy renews its sign-in)"
+            } else {
+                "without the owner's sign-ins (while the Mac is unlocked, sites the owner is signed in to open in a Safari tab of Claude's instead; if this page needs the owner's sign-in, browser_read sign_in_again moves it there)"
+            }
         return
             "From Latchkey's own browser, not Safari: Claude's page \"\(name)\", \(how). Pass page \"\(name)\" to keep working in it (other chats may have pages too). The owner's open Safari tabs aren't in it: name one with tab to work there."
     }

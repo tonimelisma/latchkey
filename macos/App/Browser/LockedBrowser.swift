@@ -69,6 +69,11 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate {
     /// Whether Safari's cookies may be copied now: while the Mac is locked only, for Claude's
     /// pages (FR-456: a copy that renews a rotating sign-in signs Safari out). Tests: always.
     private let mayCopy: @MainActor () -> Bool
+    /// Latchkey's own sign-ins (spec 013 FR-1350): no copy of Safari's cookies for a site
+    /// Latchkey signs in to itself, nor of a cookie that would reach one. Nil: none (tests).
+    private let sessions: OwnSessions?
+    /// Waited for before the first page: Latchkey's kept sign-ins going into the store (FR-1353).
+    private let ready: @MainActor () async -> Void
     /// The sites whose Safari cookies this page has taken (by host), so a page going back and forth
     /// doesn't take them again.
     private var taken: Set<String> = []
@@ -78,10 +83,13 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate {
         cookies: @escaping @Sendable () -> [SafariCookies.Cookie] = SafariCookies.current,
         store: WKWebsiteDataStore? = nil, watch: CookieWatch? = nil,
         fileAge: @escaping @Sendable () -> TimeInterval? = { nil },
-        mayCopy: @escaping @MainActor () -> Bool = { true }, holdLimit: Duration = .seconds(300),
+        mayCopy: @escaping @MainActor () -> Bool = { true }, sessions: OwnSessions? = nil,
+        ready: @escaping @MainActor () async -> Void = {}, holdLimit: Duration = .seconds(300),
         presetWindow: Duration = .seconds(5)
     ) {
         self.mayCopy = mayCopy
+        self.sessions = sessions
+        self.ready = ready
         self.watch = watch
         self.fileAge = fileAge
         self.size = size
@@ -101,9 +109,9 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate {
     @discardableResult
     func takeSafarisCookies(for host: String? = nil, overwrite: Bool = true) async -> Int {
         guard let web, let site = (host ?? web.url?.host())?.lowercased(), !site.isEmpty else { return 0 }
-        guard mayCopy() else { return 0 }
+        guard mayCopy(), sessions?.isOwn(site) != true else { return 0 }  // FR-1350
         taken.insert(site)
-        let wanted = cookies().filter { Self.covers($0.domain, site) }
+        let wanted = cookies().filter { Self.covers($0.domain, site) && sessions?.reaches($0.domain) != true }
         let set = await Self.copy(
             wanted, into: web.configuration.websiteDataStore.httpCookieStore, overwrite: overwrite)
         watch?.copied(site: site, set: set, fileAge: fileAge())
@@ -176,6 +184,16 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate {
 
     /// Whether this page has Safari's sign-ins now (they are copied only while that is allowed).
     var signedInFromSafari: Bool { mayCopy() }
+
+    /// The site of the page Latchkey signs in to itself, if it is one (FR-1355).
+    var ownSite: String? { web?.url?.host().flatMap { sessions?.ownSite($0) } }
+
+    /// Sets Latchkey's kept sign-ins into a store (`OwnPages`, FR-1353), noting it was written to.
+    static func set(_ cookies: [HTTPCookie], into store: WKHTTPCookieStore) async {
+        guard !cookies.isEmpty else { return }
+        written.insert(ObjectIdentifier(store))
+        for c in cookies { await store.setCookie(c) }
+    }
 
     /// The sites taken are forgotten, so their cookies are taken again when next allowed
     /// (FR-458: the copies were dropped).
@@ -383,7 +401,7 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate {
         MainActor.assumeIsolated {
             let url = navigationAction.request.url
             guard mayCopy(), let host = url?.host()?.lowercased(), !host.isEmpty, !taken.contains(host),
-                ["http", "https"].contains(url?.scheme?.lowercased() ?? "")
+                ["http", "https"].contains(url?.scheme?.lowercased() ?? ""), sessions?.isOwn(host) != true
             else {
                 decisionHandler(.allow)
                 return
@@ -599,6 +617,7 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate {
         let address = try SafariBrowser.normalize(url)
         guard let u = URL(string: address) else { throw SafariBrowser.Failure.failed("That address isn't valid.") }
         _ = await view()
+        await ready()  // FR-1353: Latchkey's kept sign-ins are in the store first
         await takeSafarisCookies(for: u.host())  // FR-441: Safari's copy wins
         try await navigate { $0.load(URLRequest(url: u)) }
         var p = try await page(offset: 0)
@@ -614,6 +633,7 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate {
     /// A page from text, at `base` (tests: the real WebKit view, no network).
     func open(html: String, base: URL) async throws -> PageScripts.Page {
         _ = await view()
+        await ready()
         await takeSafarisCookies(for: base.host())
         try await navigate { $0.loadHTMLString(html, baseURL: base) }
         return try await page(offset: 0)

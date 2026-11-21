@@ -54,13 +54,19 @@ final class OwnPages {
     let isLocked: @MainActor () -> Bool
     /// Safari's cookies were copied into `store` while the Mac was locked (FR-458).
     private var copiedWhileLocked = false
+    /// Latchkey's own sign-ins (spec 013 FR-1350 to FR-1354); nil: none (tests that don't ask).
+    let sessions: OwnSessions?
+    /// The kept sign-ins going into a new store, waited for before its first page (FR-1353).
+    private var restoring: Task<Void, Never>?
 
     init(
         cookies: @escaping @Sendable () -> [SafariCookies.Cookie] = SafariCookies.current, limit: Int = 10,
         isLocked: @escaping @MainActor () -> Bool = { SystemScreen().isLocked() },
         fileAge: @escaping @Sendable () -> TimeInterval? = SafariCookies.fileAge,
-        record: @escaping @Sendable (String) -> Void = { EventLog.shared.record(.browser, $0) }
+        record: @escaping @Sendable (String) -> Void = { EventLog.shared.record(.browser, $0) },
+        sessions: OwnSessions? = nil
     ) {
+        self.sessions = sessions
         self.cookies = cookies
         self.fileAge = fileAge
         self.record = record
@@ -88,7 +94,10 @@ final class OwnPages {
         if store == nil {
             let s = WKWebsiteDataStore.nonPersistent()
             store = s
-            watch = CookieWatch(store: s.httpCookieStore, record: record)
+            let sessions = sessions
+            // FR-1353: what the sites set for Latchkey's own sign-ins is kept as it changes, and
+            // what was kept goes into the new store before its first page.
+            watch = CookieWatch(store: s.httpCookieStore, record: record, changed: { sessions?.keep($0) })
         }
         // FR-456: Safari's cookies only while the Mac is locked (a copy that renews a rotating
         // sign-in signs Safari out; Toni accepts that while locked).
@@ -98,11 +107,22 @@ final class OwnPages {
                 guard let self, self.isLocked() else { return false }
                 self.copiedWhileLocked = true
                 return true
-            })
+            }, sessions: sessions, ready: { [weak self] in await self?.restore() })
         b.name = newName()
         pages[b.name] = Entry(kind: .own(b), used: Date())
         order.append(b.name)
         return b
+    }
+
+    /// FR-1353: Latchkey's kept sign-ins go into the store once, before its first page loads, after
+    /// a view uses it (WebKit loses cookies set into a store no view uses yet).
+    private func restore() async {
+        if let restoring { return await restoring.value }
+        guard let sessions, let store else { return }
+        let kept = sessions.kept()
+        let t = Task { await LockedBrowser.set(kept, into: store.httpCookieStore) }
+        restoring = t
+        await t.value
     }
 
     /// A page of Claude's in a Safari tab it opened (FR-455), under `name` (a new one when nil,
@@ -160,6 +180,8 @@ final class OwnPages {
     /// unlocked, for a site the Owner is signed in to.
     func inSafari(_ url: String) -> Bool {
         guard !isLocked(), let host = URL(string: url)?.host(), !host.isEmpty else { return false }
+        // Spec 013 FR-1351: a site Latchkey signs in to itself stays in its own browser.
+        if sessions?.isOwn(host) == true { return false }
         return signedIn(host)
     }
 
@@ -168,7 +190,10 @@ final class OwnPages {
     func forgetCopiesIfUnlocked() async {
         guard copiedWhileLocked, !isLocked(), let store else { return }
         copiedWhileLocked = false
+        // Spec 013 FR-1354: Latchkey's own sign-ins stay; only the copies go.
+        if let sessions, let all = await LockedBrowser.holding(store.httpCookieStore) { sessions.keep(all) }
         await store.removeData(ofTypes: [WKWebsiteDataTypeCookies], modifiedSince: .distantPast)
+        if let sessions { await LockedBrowser.set(sessions.kept(), into: store.httpCookieStore) }
         for e in pages.values { e.browser?.forgetTaken() }
         record(
             "The Mac was unlocked: Latchkey's own browser dropped the copies of Safari's cookies it took while locked")
@@ -239,6 +264,7 @@ final class OwnPages {
         watch?.stop()
         watch = nil
         store = nil
+        restoring = nil
     }
 
     /// Each open page: its name, title, and address, oldest first.
