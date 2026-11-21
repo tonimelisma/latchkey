@@ -6,7 +6,8 @@
 # What and why: docs/threat-model.md, "The relay's server".
 set -eu
 cd "$(dirname "$0")"
-export DEBIAN_FRONTEND=noninteractive LC_ALL=C
+# needrestart stays quiet: harden.sh restarts the whole server when an update needs it.
+export DEBIAN_FRONTEND=noninteractive LC_ALL=C NEEDRESTART_SUSPEND=1
 reboot_needed=''
 say() { printf '  - %s\n' "$*"; }
 

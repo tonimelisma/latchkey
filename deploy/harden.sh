@@ -82,7 +82,7 @@ python3 -I deploy/iam.py sentinel-config <"$tmp/profile.json" >"$tmp/sentinel.js
 echo "• the server"
 cp -R deploy/server/host "$tmp/host"
 cp "$tmp/sentinel.json" "$tmp/host/sentinel.json"
-COPYFILE_DISABLE=1 tar -czf "$tmp/host.tgz" -C "$tmp/host" .
+COPYFILE_DISABLE=1 tar --no-xattrs -czf "$tmp/host.tgz" -C "$tmp/host" .
 # shellcheck disable=SC2016 # for the VM's shell
 ssh_vm 'sudo sh -euc '"'"'d=$(mktemp -d /root/latchkey-harden.XXXXXX); trap "rm -rf $d" EXIT; tar -xzf - -C $d --no-same-owner; sh $d/setup.sh'"'" \
   <"$tmp/host.tgz" | tee "$tmp/setup.out"
