@@ -34,11 +34,35 @@ def sentinel_filter(project):
     return f'logName="projects/{project}/logs/latchkey-sentinel" AND severity>=WARNING'
 
 
+# Logged as admin activity but changing nothing: the check that the caller may act as the VM's
+# service account, which OS Login makes on every SSH (and so every deploy). Granting that right is
+# an IAM change (SetIamPolicy), which still alerts.
+NOT_CHANGES = ("iam.serviceAccounts.actAs",)
+
+
 def cloud_change_filter(project):
+    left_out = " AND ".join(f'NOT protoPayload.methodName="{m}"' for m in NOT_CHANGES)
     return (
         f'logName="projects/{project}/logs/cloudaudit.googleapis.com%2Factivity" AND '
-        f'NOT protoPayload.authenticationInfo.principalEmail=~"{GOOGLE_AGENTS}"'
+        f'NOT protoPayload.authenticationInfo.principalEmail=~"{GOOGLE_AGENTS}" AND {left_out}'
     )
+
+
+def differs(want, have):
+    """Whether any field we set differs from what the API holds (it adds fields of its own)."""
+    if isinstance(want, dict):
+        if not isinstance(have, dict):
+            return True
+        return any(differs(v, have.get(k)) for k, v in want.items())
+    if isinstance(want, list):
+        if not isinstance(have, list) or len(want) != len(have):
+            return True
+        return any(differs(w, h) for w, h in zip(want, have))
+    if isinstance(want, bool) or have is None:
+        return want != have
+    if isinstance(want, (int, float)) and isinstance(have, (int, float)):
+        return float(want) != float(have)  # the API answers 1 as 1.0
+    return str(want) != str(have)
 
 
 def iap_filter(project, owner):
@@ -192,21 +216,28 @@ def main():
     created = []
 
     channels = api.list_all(f"{mon}/notificationChannels", "notificationChannels")
-    channel = next((c["name"] for c in channels if c.get("displayName") == CHANNEL_NAME), None)
+    # Every write is an admin action, which the "cloud project changed" alert reports: each thing
+    # is written only when it differs, so a rerun sends nothing.
+    have_channel = next((c for c in channels if c.get("displayName") == CHANNEL_NAME), None)
     want_channel = {"type": "email", "displayName": CHANNEL_NAME, "labels": {"email_address": email}, "enabled": True}
-    if channel is None:
+    if have_channel is None:
         channel = api.call("POST", f"{mon}/notificationChannels", want_channel)["name"]
         print("• alert email channel created")
     else:
-        api.call("PATCH", f"https://monitoring.googleapis.com/v3/{channel}?updateMask=labels,enabled", want_channel)
+        channel = have_channel["name"]
+        if differs(want_channel, have_channel):
+            api.call("PATCH", f"https://monitoring.googleapis.com/v3/{channel}?updateMask=labels,enabled", want_channel)
+            print("• alert email channel updated")
 
     metric_url = f"https://logging.googleapis.com/v2/projects/{project}/metrics"
     want_metric = {"name": HEARTBEAT_METRIC, "description": "Latchkey sentinel heartbeats", "filter": heartbeat_filter(project)}
-    if api.call("GET", f"{metric_url}/{HEARTBEAT_METRIC}") is None:
+    have_metric = api.call("GET", f"{metric_url}/{HEARTBEAT_METRIC}")
+    if have_metric is None:
         api.call("POST", metric_url, want_metric)
         print("• heartbeat metric created")
-    else:
+    elif differs(want_metric, have_metric):
         api.call("PUT", f"{metric_url}/{HEARTBEAT_METRIC}", want_metric)
+        print("• heartbeat metric updated")
 
     checks = api.list_all(f"{mon}/uptimeCheckConfigs", "uptimeCheckConfigs")
     check = next((c for c in checks if c.get("displayName") == UPTIME_NAME), None)
@@ -215,16 +246,17 @@ def main():
         print("• uptime check created")
     uptime_id = check["name"].rsplit("/", 1)[-1]
 
-    existing = {p["displayName"]: p["name"] for p in api.list_all(f"{mon}/alertPolicies", "alertPolicies")}
+    existing = {p["displayName"]: p for p in api.list_all(f"{mon}/alertPolicies", "alertPolicies")}
     for policy in policies(project, host, owner, channel, uptime_id):
-        name = existing.get(policy["displayName"])
-        if name is None:
+        have = existing.get(policy["displayName"])
+        if have is None:
             api.call("POST", f"{mon}/alertPolicies", policy)
             created.append(policy["displayName"])
             print(f"• alert created: {policy['displayName']}")
-        else:
+        elif differs(policy, have):
             mask = "displayName,documentation,conditions,combiner,enabled,alertStrategy,notificationChannels"
-            api.call("PATCH", f"https://monitoring.googleapis.com/v3/{name}?updateMask={mask}", policy)
+            api.call("PATCH", f"https://monitoring.googleapis.com/v3/{have['name']}?updateMask={mask}", policy)
+            print(f"• alert updated: {policy['displayName']}")
     if created:
         print("CREATED " + ",".join(created))
 

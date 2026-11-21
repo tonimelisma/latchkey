@@ -94,6 +94,19 @@ class Alerts(unittest.TestCase):
         self.assertFalse(rx.search("1-compute@developer.gserviceaccount.com"))
         self.assertFalse(rx.search("attacker@gmail.com"))
 
+    def test_the_ssh_permission_check_isnt_a_change(self):
+        self.assertIn('NOT protoPayload.methodName="iam.serviceAccounts.actAs"', alerts.cloud_change_filter("proj"))
+
+    def test_differs_ignores_fields_the_api_adds(self):
+        want = {"displayName": "x", "conditions": [{"conditionMatchedLog": {"filter": "f"}}], "enabled": True}
+        have = {"name": "projects/p/alertPolicies/1", "displayName": "x", "creationRecord": {},
+                "conditions": [{"name": "c", "conditionMatchedLog": {"filter": "f"}}], "enabled": True}
+        self.assertFalse(alerts.differs(want, have))
+        have["conditions"][0]["conditionMatchedLog"]["filter"] = "g"
+        self.assertTrue(alerts.differs(want, have))
+        self.assertTrue(alerts.differs({"enabled": True}, {}))
+        self.assertFalse(alerts.differs({"thresholdValue": 1}, {"thresholdValue": 1.0}))
+
     def test_iap_by_others(self):
         self.assertIn('principalEmail!="owner@example.com"', alerts.iap_filter("proj", "owner@example.com"))
 
