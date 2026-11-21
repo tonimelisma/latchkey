@@ -107,6 +107,13 @@ class Alerts(unittest.TestCase):
         self.assertTrue(alerts.differs({"enabled": True}, {}))
         self.assertFalse(alerts.differs({"thresholdValue": 1}, {"thresholdValue": 1.0}))
 
+    def test_a_field_someone_added_counts_as_a_difference(self):
+        want = {"displayName": "x", "conditions": [{"conditionMatchedLog": {"filter": "f"}}]}
+        have = {"displayName": "x", "conditions": [{"conditionMatchedLog": {"filter": "f"}}], "severity": "INFO"}
+        self.assertTrue(alerts.differs(want, have))
+        have = {"displayName": "x", "conditions": [{"conditionMatchedLog": {"filter": "f", "extra": 1}}]}
+        self.assertTrue(alerts.differs(want, have))
+
     def test_iap_by_others(self):
         self.assertIn('principalEmail!="owner@example.com"', alerts.iap_filter("proj", "owner@example.com"))
 

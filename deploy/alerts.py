@@ -48,10 +48,19 @@ def cloud_change_filter(project):
     )
 
 
+# What the API adds that nobody sets (seen on 2026-11-21). Any other field it holds but we don't
+# set counts as a difference, so the rerun puts back a policy someone loosened by adding to it.
+OUTPUT_ONLY = {"name", "creationRecord", "mutationRecord", "mutationRecords", "createTime", "updateTime",
+               "metricDescriptor", "resourceName", "verificationStatus"}
+
+
 def differs(want, have):
-    """Whether any field we set differs from what the API holds (it adds fields of its own)."""
+    """Whether what the API holds differs from what we want: a field we set has another value,
+    or it holds a field we don't set (output-only ones aside)."""
     if isinstance(want, dict):
         if not isinstance(have, dict):
+            return True
+        if set(have) - set(want) - OUTPUT_ONLY:
             return True
         return any(differs(v, have.get(k)) for k, v in want.items())
     if isinstance(want, list):
