@@ -8,8 +8,21 @@ struct OwnFiles: Sendable {
     /// Folders where settings files live, and the starts of the names of Latchkey's.
     var settingsFolders: [URL]
     var settingsPrefixes: [String]
+    /// Folders Claude may not even read (spec 013): where the Passwords export lands.
+    var secretFolders: [URL] = [
+        AppIdentity.current.supportDirectory.appending(path: "Sign-in Import", directoryHint: .isDirectory),
+        AppIdentity.release.supportDirectory.appending(path: "Sign-in Import", directoryHint: .isDirectory),
+    ]
 
     static let refusal = "Latchkey doesn't change its own files. Nothing was changed."
+    static let secretRefusal =
+        "That folder is where Latchkey takes in the owner's passwords; Claude can't read it. Nothing was read."
+
+    /// True when `url` is in a folder Claude may not read, or is one.
+    func secret(_ url: URL) -> Bool {
+        let path = Self.parts(url)
+        return secretFolders.contains { path.starts(with: Self.parts($0)) }
+    }
 
     /// This build's files and the installed app's: a Debug build is a different app to macOS
     /// (`AppIdentity`), and still never changes the installed app's settings or data.

@@ -164,6 +164,11 @@ enum Fence {
         ]
         rules.append(services(settingsService))
         if let mark { rules.append("(deny file-read* (literal \(quote(OwnFiles.real(mark).path))))") }
+        // Spec 013: the Passwords export waits there for a moment before Latchkey wipes it.
+        rules.append(
+            "(deny file-read* "
+                + own.secretFolders.map { "(subpath \(quote(OwnFiles.real($0).path)))" }.joined(
+                    separator: " ") + ")")
         rules.append(
             "(allow process-exec " + unfenced.map { "(literal \(quote($0)))" }.joined(separator: " ")
                 + " (with no-sandbox))")

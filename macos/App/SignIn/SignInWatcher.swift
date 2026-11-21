@@ -45,7 +45,7 @@ final class SignInWatcher {
         guard timer == nil else { return }
         try? SignInImport.prepare()
         if defaults.object(forKey: Keys.firstSeen) == nil { defaults.set(Date(), forKey: Keys.firstSeen) }
-        timer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { _ in
+        timer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { _ in
             Task { @MainActor in SignInWatcher.shared.tick() }
         }
         tick()

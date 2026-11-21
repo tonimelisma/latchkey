@@ -237,3 +237,9 @@ the plan picks one.
 - **A browser's own checks.** A user name that isn't an email, in a field of type email, stops
   the form in the browser itself (seen in the tests); real sites with email fields have email
   user names.
+- **The moment the export exists.** For half a second, until Latchkey wipes it, the exported file
+  sits in the import folder. Claude's command line runs in Latchkey's sandbox, which now denies
+  reading that folder (`Fence.profile`), and Files refuses it (`OwnFiles.secret`); writing there
+  was already refused (Latchkey's own files). So the live check's test sign-in is placed by
+  `macos/scripts/state-check/logins-fixture.sh`, run by the operator, never by Claude; it refuses
+  while Latchkey holds sign-ins it didn't leave (security review, 2026-11-21).

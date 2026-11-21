@@ -304,6 +304,8 @@ enum FilesCapability {
     private static func existing(_ path: String?, home: URL) throws -> URL {
         guard let path, !path.isEmpty else { throw Failure(message: "Give a path.") }
         let url = resolve(path, home: home)
+        // Spec 013: the Passwords export's folder is never read, listed, or copied.
+        if OwnFiles.standard.secret(url) { throw Failure(message: OwnFiles.secretRefusal) }
         guard FileManager.default.fileExists(atPath: url.path) else {
             throw Failure(message: "There's nothing at \(url.path). Check the path with files_find.")
         }

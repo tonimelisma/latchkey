@@ -65,6 +65,19 @@ import Testing
         #expect(try f.resourceValues(forKeys: [.isExcludedFromBackupKey]).isExcludedFromBackup == true)
     }
 
+    /// Security review (2026-11-21): Claude's command line and file tools can't read the folder
+    /// while an export waits there.
+    @Test func claudesToolsCantReadTheFolder() throws {
+        let own = OwnFiles.standard
+        let release = AppIdentity.release.supportDirectory.appending(path: "Sign-in Import/Passwords-x.csv")
+        #expect(own.secret(release) && own.secret(SignInImport.folder))
+        #expect(!own.secret(AppIdentity.release.supportDirectory.appending(path: "Feedback/a.txt")))
+        let home = FileManager.default.temporaryDirectory
+        let profile = Fence.profile(scratch: home, folder: home, declared: [], home: home, own: own)
+        #expect(profile.contains("(deny file-read* (subpath"))
+        #expect(profile.contains("Sign-in Import"))
+    }
+
     @Test func whatTheOwnerIsTold() {
         #expect(SignInImport.Outcome.imported(count: 3, codes: 1).told.contains("3 sign-ins"))
         #expect(SignInImport.Outcome.imported(count: 1, codes: 0).told.contains("1 sign-in "))
