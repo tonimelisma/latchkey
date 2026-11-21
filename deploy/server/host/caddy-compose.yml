@@ -1,0 +1,48 @@
+# Caddy, the HTTPS front door of the relay's server, shared by the Latchkey relay and hackernews.
+# deploy/harden.sh installs this as /opt/reverse-proxy/docker-compose.yml. Caddy sits on two
+# networks, one per app, so the apps can't reach each other; it keeps no capability but binding
+# the web ports, and can't write outside its data volumes. latchkey-update-apps moves it to the
+# newest Caddy 2 each week, after Caddy accepts the configuration with the new version.
+services:
+  caddy:
+    image: caddy:2-alpine
+    container_name: caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    networks:
+      - latchkey-front
+      - hackernews-front
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m
+    cap_drop: [ALL]
+    cap_add: [NET_BIND_SERVICE]
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 128m
+    pids_limit: 200
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  caddy-data:
+    external: true
+    name: hackernews_caddy-data
+  caddy-config:
+    external: true
+    name: hackernews_caddy-config
+
+networks:
+  latchkey-front:
+    external: true
+  hackernews-front:
+    external: true

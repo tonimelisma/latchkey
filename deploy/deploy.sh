@@ -1,6 +1,7 @@
 #!/bin/sh
 # Deploys the relay to a Google Cloud VM that already runs Caddy as its reverse proxy (in
-# /opt/reverse-proxy, container "caddy", on the docker network "reverse_proxy").
+# /opt/reverse-proxy, container "caddy"), set up by deploy/harden.sh: Caddy and the relay share
+# the docker network "latchkey-front", and no other container is on it.
 # Everything about the deployment comes from the repository's .env (gitignored):
 #   DEPLOY_HOST       the relay's public host name, e.g. relay.example.com
 #   DEPLOY_DNS_ZONE   the Cloudflare zone it lives in, e.g. example.com
@@ -63,7 +64,8 @@ check_operator "${OPERATOR_NAME-}" "${OPERATOR_CONTACT-}" "${OPERATOR_LAW-}" "${
 HOST=$DEPLOY_HOST
 ZONE_NAME=$DEPLOY_DNS_ZONE
 VM=$DEPLOY_VM PROJECT=$DEPLOY_PROJECT ZONE=$DEPLOY_ZONE
-ssh_vm() { gcloud compute ssh "$VM" --project "$PROJECT" --zone "$ZONE" --quiet --command "$1"; }
+# SSH reaches the VM only through Google's IAP tunnel (deploy/harden.sh).
+ssh_vm() { vm_ssh "$VM" "$PROJECT" "$ZONE" "$1"; }
 
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
@@ -95,12 +97,12 @@ ssh_vm "set -e; sudo install -d -m 755 $REMOTE_DIR
 sudo sh -ec 'umask 022; cd $REMOTE_DIR; if [ -f docker-compose.yml ]; then cp -p docker-compose.yml docker-compose.yml.prev; fi
 cat > docker-compose.yml.new && mv docker-compose.yml.new docker-compose.yml'" \
   <deploy/server/docker-compose.yml
-# Caddy reaches the relay over the docker network "reverse_proxy"; the relay believes the client
+# Caddy reaches the relay over the docker network "latchkey-front"; the relay believes the client
 # address Caddy forwards only from that network's own address ranges (FR-082, research.md).
-PROXY_NETS=$(ssh_vm "sudo docker network inspect reverse_proxy --format '{{range .IPAM.Config}}{{.Subnet}},{{end}}'" | tr -d ' \r\n')
+PROXY_NETS=$(ssh_vm "sudo docker network inspect latchkey-front --format '{{range .IPAM.Config}}{{.Subnet}},{{end}}'" | tr -d ' \r\n')
 PROXY_NETS=${PROXY_NETS%,}
 case $PROXY_NETS in
-  '' | *[!0-9a-fA-F.:/,]*) echo "FAIL: could not read the reverse_proxy network's address ranges"; exit 1 ;;
+  '' | *[!0-9a-fA-F.:/,]*) echo "FAIL: could not read the latchkey-front network's address ranges"; exit 1 ;;
 esac
 # printf is a shell builtin, so the secret is in no process's arguments; a here-document would
 # go through a temp file in some shells. A failure on the VM fails the deploy (the pipeline's

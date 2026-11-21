@@ -232,6 +232,11 @@ so the rightmost entry is the real client. How the deploy learns Caddy's address
   internet clients over IPv6 arrive from the bridge gateway's private address and could spoof
   their address (scan finding).
 
+Update 2026-11-21 (the server's hardening, docs/threat-model.md "The relay's server"): the relay
+and Caddy now share a network of their own, `latchkey-front`, made by `deploy/harden.sh`, and
+`deploy.sh` reads that network's subnets instead. The cost above is gone: no other container is
+on it (hackernews has its own network with Caddy), so only Caddy can claim a client address.
+
 Sources: https://caddyserver.com/docs/caddyfile/directives/reverse_proxy#defaults,
 https://docs.docker.com/reference/cli/docker/network/inspect/
 

@@ -8,6 +8,13 @@ Xcode signing ready (2026-10-20): Toni's Xcode account has a valid "Apple Develo
 
 ## Current phase
 
+The relay's server, locked down and watched (Toni, 2026-11-21: "a high risk target"; docs/threat-model.md
+"The relay's server", plan D29): `deploy/harden.sh` closes SSH to all but Google's IAP tunnel
+with OS Login, gives the VM its own least-privilege account, Secure Boot and automatic updates
+with a nightly reboot when needed, removes unneeded packages and services, puts hackernews (which
+shares the server) in a container without root on its own network, and its deploys become pulls
+by the server; the sentinel and cloud alerts email Toni on anything that shouldn't happen.
+
 Sign-in (spec 013, built 2026-11-21): Latchkey signs in on Claude's pages with the owner's
 passwords and verification codes from Passwords' CSV export, filled by Latchkey, never seen by
 Claude. Two tools, `logins_find` and `logins_sign_in`; a Sign-in setting, On by default; the

@@ -185,3 +185,77 @@ Ordered by how directly an outside attacker reaches the crown jewel:
    escaping in AppleScript and page scripts, SQLite queries).
 6. The helper and its XPC check; `macos/App/Installation.swift`; the URL scheme handler.
 7. Scripts and deployment: `deploy/`, `macos/scripts/`, `scripts/`, the container settings.
+
+## The relay's server (hosted relay, 2026-11-21)
+
+The hosted relay runs on one small Google Cloud VM (Ubuntu 24.04 LTS) shared with one other app
+of Toni's (hackernews) behind Caddy, the HTTPS front door. Whoever is root there holds the
+relay's key file and database, so the server is part of the crown jewel. `deploy/harden.sh`
+(cloud side, then `deploy/server/host/setup.sh` on the server) sets everything below and can be
+rerun at any time; Toni chose each part (decisions.md, 2026-11-21).
+
+What reaches the server:
+- From the internet, only 80 and 443 (Caddy). SSH (22) is open only to Google's IAP tunnel
+  (35.235.240.0/20): a connection needs Toni's Google account and IAM, and the sign-in is OS
+  Login (no SSH keys in metadata or in home folders; the old local accounts are locked). sshd
+  takes keys only, no root, no forwarding, current ciphers. Remote desktop, the duplicate SSH
+  rule and the "all internal traffic" rule are gone.
+- hackernews no longer deploys over SSH from GitHub: the server pulls its public image every
+  5 minutes (`latchkey-update-apps`), so nothing from outside can sign in to deploy. Its compose
+  file is in this repository, so a push to hackernews changes the app, never its limits: no
+  root inside, no capabilities, no new privileges, its own network with Caddy only.
+- The relay shares the network `latchkey-front` with Caddy alone, and believes forwarded client
+  addresses only from that network (FR-082): hackernews can't reach the relay at all.
+- Caddy keeps only the capability to bind the web ports, runs read-only, and moves to the
+  newest Caddy 2 weekly after the new version accepts the Caddyfile.
+
+The server itself:
+- Its own service account, `relay-vm`, may only write logs and metrics (and use hackernews's
+  backup bucket); Google's default account, which had Editor on the whole project, has no role.
+  So a root intruder can't change the project, read other buckets, or delete the logs that
+  report them.
+- Secure Boot, vTPM, integrity monitoring, deletion protection; the address is reserved.
+- Automatic security updates, Docker's packages too, with a reboot at 12:00 UTC when one needs
+  it; Docker keeps containers running while it restarts (live-restore) and grants no new
+  privileges to any container.
+- Removed: crash reports (a dump can hold secrets), LXD's installer, PackageKit, telnet and
+  ftp, Docker's unused extras, the boot splash, RAID tools, and the snooping and tunnelling tools
+  (tcpdump, strace, netcat, screen, tmux, byobu). Switched off: Google's OS Config agent (a
+  root command channel from the console), Ubuntu Pro's timers and news, SFTP, cloud-init after
+  first boot. Kernel settings close what Ubuntu leaves open (kexec, ptrace, BPF JIT, redirects);
+  rare network protocols and file systems can't be loaded.
+
+Intrusion detection: everything is reported off the server, to Cloud Logging, where the server's
+account can write but not delete; Cloud Monitoring emails Toni (`deploy/alerts.py`):
+- the sentinel (`deploy/server/host/sentinel.py`) reports a WARNING for: a change to a watched
+  file (the relay's folder, Caddy's, sshd, sudoers, accounts, cron, systemd units, Docker's
+  settings, the loader, PAM, apt sources) made outside Toni's own SSH session and outside a
+  package update; any session or sudo by anyone else; a command run inside a container other
+  than its health check and the deploy's and backup's own; an unknown container, or a known one
+  started privileged, on the host's namespaces, with extra capabilities or other mounts; a new
+  listening port; a program in a container other than its own; a program running from /tmp,
+  /dev/shm or memory; a kernel module from outside the kernel; daily, an installed program that
+  differs from its package (`dpkg --verify`), a new set-user-ID program, /etc/ld.so.preload.
+  Audit rules are locked (`-e 2`): changing them takes a reboot. Every root command in a
+  session is recorded (INFO) as the server's history.
+- alerts also fire when the sentinel's heartbeat stops for 30 minutes (killed, or the server
+  down), when anyone but Toni goes through the IAP tunnel, on any change to the cloud project
+  by anyone but Google's own agents, and when the relay doesn't answer for 10 minutes.
+- the relay emails the account owner when a Mac pairs, a Claude app gets access, or the account
+  is recovered (spec 001), so a stolen account shows up at once even with the server intact.
+
+Accepted: Toni's Google account is the root of trust (project owner, IAP, OS Login); it must
+have 2-step verification with a passkey or security key. hackernews shares the kernel, so a
+kernel escape from its container would reach the relay; it runs without root or capabilities
+to make that hard. An intruder who is already root can stop the sentinel, which the missing
+heartbeat reports, but not erase what it already sent.
+
+### If the server is broken into
+
+1. Look at what was reported: Cloud Logging, log `latchkey-sentinel` (WARNING and above), and
+   the project's audit log. Don't sign in to the server first if the intruder may be there.
+2. Cut it off: stop the VM (`gcloud compute instances stop`), keep the disk for evidence (snapshot it).
+3. Treat the relay's keys as stolen: on a fresh server, deploy, then `relay reset-keys --confirm`
+   (everyone signs in again, every Mac pairs again), and rotate `RESEND_API_KEY` and the Cloudflare
+   token in `.env`. Restore the database from a snapshot older than the first warning.
+4. Then `deploy/harden.sh` on the new server, and see what the warning says got in.

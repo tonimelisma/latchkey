@@ -1,0 +1,11 @@
+# Latchkey: keeps hackernews and Caddy current (update-apps.sh), installed by deploy/harden.sh.
+[Unit]
+Description=Update hackernews and Caddy from their public images
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/latchkey-update-apps
+Nice=10
+IOSchedulingClass=idle

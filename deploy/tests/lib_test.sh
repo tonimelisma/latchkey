@@ -470,5 +470,39 @@ grep -q '^    env_file: relay.env$' "$root/deploy/server/docker-compose.yml" && 
 grep -q 'check_operator ' "$root/deploy/deploy.sh" && grep -q 'operator_env_lines ' "$root/deploy/deploy.sh" &&
   ok "deploy.sh checks and writes the operator settings" || bad "deploy.sh checks and writes the operator settings"
 
+# --- The hardened server (deploy/harden.sh) ---
+expect 0 "no app buckets is fine" check_buckets ""
+expect 0 "app buckets accepted" check_buckets "a-backup,b.c_d"
+expect 1 "bucket with a space refused" check_buckets "a b"
+expect 1 "bucket with a quote refused" check_buckets "a';x"
+expect 1 "empty bucket in the list refused" check_buckets "a,,b"
+printf 'WARNING: \n\nTo increase the performance of the tunnel, consider installing NumPy. For instructions,\nplease see https://cloud.google.com/iap/docs/using-tcp-forwarding#increasing_the_tcp_upload_bandwidth\nERROR: real problem\n' |
+  gcloud_noise >"$work/noise"
+[ "$(cat "$work/noise")" = "ERROR: real problem" ] && ok "gcloud's advice is left out, errors stay" || bad "gcloud's advice is left out, errors stay"
+# Every SSH command of the deploy goes through the IAP tunnel; SSH isn't reachable otherwise.
+grep -q -- '--tunnel-through-iap' "$root/deploy/lib.sh" && grep -q 'ssh_vm() { vm_ssh ' "$root/deploy/deploy.sh" &&
+  ! grep -q 'gcloud compute ssh' "$root/deploy/deploy.sh" && ok "deploy.sh reaches the VM through IAP" || bad "deploy.sh reaches the VM through IAP"
+# The relay shares its network with Caddy only, and trusts forwarded addresses only from it.
+grep -q '^      - latchkey-front$' "$root/deploy/server/docker-compose.yml" && ! grep -q reverse_proxy "$root/deploy/server/docker-compose.yml" &&
+  ok "the relay is on its own network" || bad "the relay is on its own network"
+grep -q 'docker network inspect latchkey-front' "$root/deploy/deploy.sh" && ok "trusted proxies come from the relay's network" || bad "trusted proxies come from the relay's network"
+# The other apps' containers can't reach the relay's network, and keep no privileges.
+for f in hackernews-compose.yml caddy-compose.yml; do
+  c=$root/deploy/server/host/$f
+  grep -q 'cap_drop: \[ALL\]' "$c" && grep -q 'no-new-privileges:true' "$c" && ok "$f drops privileges" || bad "$f drops privileges"
+done
+! grep -q latchkey-front "$root/deploy/server/host/hackernews-compose.yml" && ok "hackernews is not on the relay's network" || bad "hackernews is not on the relay's network"
+grep -q '^    user: "1000:1000"$' "$root/deploy/server/host/hackernews-compose.yml" && ok "hackernews doesn't run as root" || bad "hackernews doesn't run as root"
+# SSH settings: no root, no forwarding, keys only.
+for setting in 'PermitRootLogin no' 'PasswordAuthentication no' 'DisableForwarding yes' 'AuthenticationMethods publickey'; do
+  grep -qx "$setting" "$root/deploy/server/host/sshd.conf" && ok "sshd: $setting" || bad "sshd: $setting"
+done
+# The audit rules end locked, and watch the relay's keys.
+[ "$(tail -1 "$root/deploy/server/host/audit.rules")" = "-e 2" ] && ok "audit rules are locked" || bad "audit rules are locked"
+grep -q '^-w /opt/latchkey -p wa -k lk_relay$' "$root/deploy/server/host/audit.rules" && ok "audit watches the relay's folder" || bad "audit watches the relay's folder"
+# Every audit key the rules use starts with lk_, which is what the sentinel reads.
+if grep -o -- '-k [^ ]*' "$root/deploy/server/host/audit.rules" | grep -v -- '-k lk_' | grep -q .; then bad "audit keys start with lk_"; else ok "audit keys start with lk_"; fi
+python3 -c 'import json,sys; json.load(open(sys.argv[1]))' "$root/deploy/server/host/docker-daemon.json" && ok "Docker settings are JSON" || bad "Docker settings are JSON"
+
 [ "$fails" = 0 ] && echo "all passed" || echo "$fails failed"
 [ "$fails" = 0 ]

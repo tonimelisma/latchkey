@@ -1,0 +1,45 @@
+# hackernews (github.com/tonimelisma/hackernews), which shares the relay's server. deploy/harden.sh
+# installs this as /opt/hackernews/docker-compose.yml. It lives here, not in hackernews's
+# repository, because what a container may touch on the server is the server's security, not the
+# app's: a change pushed to hackernews can change the app, never these limits. The app runs as
+# its own user without capabilities, on a network only Caddy shares, and latchkey-update-apps
+# pulls its public image every few minutes (Toni, 2026-11-21: no more SSH deploys from GitHub).
+name: hackernews
+services:
+  app:
+    image: ghcr.io/tonimelisma/hackernews:latest
+    pull_policy: missing
+    restart: unless-stopped
+    user: "1000:1000"
+    environment:
+      - NODE_ENV=production
+      - SECRET=${SECRET}
+      - SQLITE_PATH=/data/hackernews.db
+      - PORT=3000
+    volumes:
+      - sqlite-data:/data
+    networks:
+      hackernews-front:
+        aliases:
+          - hackernews-app
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 384m
+    pids_limit: 200
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3000/api/v1/stories?timespan=Day&limit=1"]
+      interval: 30s
+      timeout: 15s
+      retries: 3
+      start_period: 60s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+volumes:
+  sqlite-data:
+networks:
+  hackernews-front:
+    external: true

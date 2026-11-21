@@ -116,6 +116,35 @@ operator_env_lines() {
   [ -z "$5" ] || printf "BACKUP_DAYS='%s'\n" "$5"
 }
 
+# check_buckets VALUE: APP_BUCKETS (deploy/harden.sh), Cloud Storage bucket names separated by
+# commas; empty is fine.
+check_buckets() {
+  case $1 in
+    *[!a-z0-9._,-]* | ,* | *, | *,,*)
+      echo "FAIL: APP_BUCKETS in .env must be bucket names separated by commas" >&2
+      return 1
+      ;;
+  esac
+}
+
+# gcloud_noise: copies gcloud's stderr (on stdin) without its advice that isn't about the
+# command (installing NumPy for the tunnel, the Python version) and the empty lines around it.
+gcloud_noise() {
+  grep -v -e NumPy -e increasing_the_tcp -e FutureWarning -e 'warnings.warn' -e '^WARNING: *$' -e '^ *$' || true
+}
+
+# vm_ssh VM PROJECT ZONE COMMAND: runs COMMAND on the VM. SSH reaches it only through Google's
+# IAP tunnel, signing in with OS Login (deploy/harden.sh). Standard input and output pass
+# through; the exit status is the command's.
+vm_ssh() {
+  _err=$(mktemp)
+  _rc=0
+  gcloud compute ssh "$1" --project "$2" --zone "$3" --tunnel-through-iap --quiet --command "$4" 2>"$_err" || _rc=$?
+  gcloud_noise <"$_err" >&2
+  rm -f "$_err"
+  return "$_rc"
+}
+
 # check_ip VALUE: the VM's public IPv4 address as Google Cloud reports it.
 check_ip() {
   case $1 in

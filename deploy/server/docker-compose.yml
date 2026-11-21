@@ -14,7 +14,7 @@ services:
       - latchkey-data:/data
       - /opt/latchkey/keys/relay:/keys
     networks:
-      - reverse_proxy
+      - latchkey-front
     mem_limit: 160m
     pids_limit: 200
     read_only: true # only the data volume, the key folder, and a small /tmp for SQLite are writable
@@ -29,7 +29,7 @@ services:
     security_opt:
       - no-new-privileges:true
 networks:
-  reverse_proxy:
+  latchkey-front: # shared with Caddy only (deploy/harden.sh)
     external: true
 volumes:
   latchkey-data:
