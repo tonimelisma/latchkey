@@ -512,7 +512,8 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate {
     /// dialog runs no script until the dialog is answered: one that would start is refused, and
     /// one running when a dialog comes is answered with the dialog (its late result is dropped).
     private func evaluate(
-        _ code: String, async: Bool = false, text: @escaping @MainActor @Sendable (Any?) -> String
+        _ code: String, async: Bool = false, world: WKContentWorld = .page,
+        text: @escaping @MainActor @Sendable (Any?) -> String
     ) async throws -> String {
         if let h = held { throw SafariBrowser.Failure.dialogHeld(page: name, kind: h.kind, message: h.message) }
         if let file { throw SafariBrowser.Failure.failed(Self.fileNote(name, file)) }
@@ -531,18 +532,31 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate {
                     case .failure(let error): waiter(.failure(error))
                     }
                 }
-            } else {
+            } else if world == .page {
                 w.evaluateJavaScript(code) { [weak self] value, error in
                     guard let self, let waiter = self.waiters.removeValue(forKey: id) else { return }
                     waiter(error.map { .failure($0) } ?? .success(text(value)))
+                }
+            } else {
+                // A world of Latchkey's own: the page's scripts can't change what this one uses
+                // (spec 013: a sign-in's checks and filling, security review 2026-11-21).
+                w.evaluateJavaScript(code, in: nil, in: world) { [weak self] result in
+                    guard let self, let waiter = self.waiters.removeValue(forKey: id) else { return }
+                    switch result {
+                    case .success(let value): waiter(.success(text(value)))
+                    case .failure(let error): waiter(.failure(error))
+                    }
                 }
             }
         }
     }
 
-    private func script(_ code: String) async throws -> String {
+    /// Spec 013: the world sign-in scripts run in, apart from the page's own.
+    static let signInWorld = WKContentWorld.world(name: "latchkey-sign-in")
+
+    private func script(_ code: String, world: WKContentWorld = .page) async throws -> String {
         do {
-            return try await evaluate(code) { value in
+            return try await evaluate(code, world: world) { value in
                 if let s = value as? String { return s }
                 if let n = value as? NSNumber { return n.stringValue }
                 return value.map { "\($0)" } ?? ""
@@ -705,21 +719,28 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate {
     /// One of the action scripts of 2026-11-04 (`PageActions.swift`), as in Safari: what it did,
     /// and the page after it. `mayNavigate`: Claude's own action, which may open a page (as a
     /// click), so the answer waits for it.
-    private func act(_ code: String, ref: String, mayNavigate: Bool, answer: DialogAnswer) async throws
+    private func act(
+        _ code: String, ref: String, mayNavigate: Bool, answer: DialogAnswer, world: WKContentWorld = .page
+    ) async throws
         -> (detail: String, page: PageScripts.Page)
     {
         begin(answer)
         defer { end() }
         guard let w = web else { throw SafariBrowser.Failure.noWindow }
         let before = w.url?.absoluteString
-        let detail = try SafariBrowser.detail(try await script(code), ref: ref)
+        let detail = try SafariBrowser.detail(try await script(code, world: world), ref: ref)
         if mayNavigate { await settle(from: before) }
         return (detail, try await page(offset: 0))
     }
 
-    /// A sign-in script (spec 013, `SignInScripts.swift`): what it answered, and the page after it.
-    func signInScript(_ code: String, navigates: Bool) async throws -> (detail: String, page: PageScripts.Page) {
-        try await act(code, ref: "", mayNavigate: navigates, answer: DialogAnswer())
+    /// A sign-in script (spec 013, `SignInScripts.swift`), in Latchkey's own world: what it
+    /// answered, the page after it, and the page's address as WebKit has it (never as the page's
+    /// script says).
+    func signInScript(_ code: String, navigates: Bool) async throws
+        -> (detail: String, page: PageScripts.Page, address: String)
+    {
+        let r = try await act(code, ref: "", mayNavigate: navigates, answer: DialogAnswer(), world: Self.signInWorld)
+        return (r.detail, r.page, web?.url?.absoluteString ?? "")
     }
 
     func press(_ keys: [PageScripts.Key], ref: String?, answer: DialogAnswer = DialogAnswer()) async throws

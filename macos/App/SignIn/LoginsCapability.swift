@@ -112,7 +112,8 @@ enum LoginsCapability {
         case .unreadable: return .text(unreadable, isError: true)
         case .some(let c): logins = c.logins
         }
-        let address = try SignInFlow.state(try await run(PageScripts.signInState, false).detail).address
+        // The page's address as the browser has it: a page's script can't make itself another site.
+        let address = try await run(PageScripts.signInState, false).address
         let host = BrowserCapability.host(address)
         guard address.lowercased().hasPrefix("https:") else {
             return .text("Latchkey signs in only on https pages; this page is \(address.prefix(200)).", isError: true)

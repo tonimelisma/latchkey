@@ -49,29 +49,30 @@ extension PageScripts {
           }
         """
 
-    /// What the page asks for now: `{ password, code, user, captcha, problem, address }`.
+    /// What the page asks for now: `{ password, code, user, captcha, problem }`. Where the page is
+    /// comes from the browser, never from here.
     // nosemgrep: latchkey-page-script-literal -- splices in only the constant signInHelpers.
     static let signInState = """
         (function () {
         \(signInHelpers)
-          return 'ok\\t' + JSON.stringify({ address: location.href, password: passwords.length > 0,
+          return 'ok\\t' + JSON.stringify({ password: passwords.length > 0,
             code: !!codeField || boxes.length > 0, user: !!userField, captcha: captcha, problem: problem() });
         })()
         """
 
     /// Fills what the page asks for and sends it: the password (with the user name when there is
     /// a field for it), else the verification code, else the user name alone (a two-page
-    /// sign-in). Nothing when the page isn't https on `site` (or, `exact` "1", that host only).
-    /// Answers `{ step }`: password, code, user, none, or wrongsite.
+    /// sign-in). Latchkey has checked the page's address itself (`SiteMatch`); the script checks
+    /// again that the page is still https at `host`, with the browser's own `location` and `===`
+    /// only, which no page script can change (security review, 2026-11-21). Answers `{ step }`:
+    /// password, code, user, none, or wrongsite.
     static func signInStep(
-        site: String, exact: Bool, user: String, password: String, code: String, userSent: Bool = false
+        host: String, user: String, password: String, code: String, userSent: Bool = false
     ) -> String {
         // nosemgrep: latchkey-page-script-literal -- besides literal(), only the constant signInHelpers.
         """
-        (function (site, exact, user, pass, code, userSent) {
-          var h = location.hostname.toLowerCase();
-          var here = h === site || (!exact && h.slice(-site.length - 1) === '.' + site);
-          if (location.protocol !== 'https:' || !here) return 'ok\\t' + JSON.stringify({ step: 'wrongsite' });
+        (function (host, user, pass, code, userSent) {
+          if (location.protocol !== 'https:' || location.hostname !== host) return 'ok\\twrongsite';
         \(signInHelpers)
           var filled = window.__latchkeyFilled;
           if (!filled) {
@@ -116,8 +117,7 @@ extension PageScripts {
             return 'ok\\t' + JSON.stringify({ step: 'user' });
           }
           return 'ok\\t' + JSON.stringify({ step: 'none' });
-        })(\(literal(site)), \(literal(exact ? "1" : "")) === '1', \(literal(user)), \(literal(password)), \(literal(code)),
-           \(literal(userSent ? "1" : "")) === '1')
+        })(\(literal(host)), \(literal(user)), \(literal(password)), \(literal(code)), \(literal(userSent ? "1" : "")) === '1')
         """
     }
 

@@ -138,6 +138,22 @@ import Testing
         #expect(r.outcome == .wrongSite)
     }
 
+    /// A page that rewrites JavaScript's own functions can't pass for another site.
+    @Test func aPageThatRewritesBuiltInsGetsNothing() async throws {
+        let b = browser()
+        defer { b.discard() }
+        let poison = """
+            <script>
+            String.prototype.toLowerCase = function () { return 'a.test'; };
+            String.prototype.slice = function () { return '.a.test'; };
+            var real = JSON.stringify; JSON.stringify = function (v) { return real(Object.assign({}, v, { step: 'password' })); };
+            </script>
+            """
+        _ = try await b.open(html: poison + Self.onePage(), base: URL(string: "https://evil.example/login")!)
+        #expect(try await signIn(b).outcome == .wrongSite)
+        #expect(try await b.run("document.querySelector('[name=pw]').value") == "")
+    }
+
     @Test func aCaptchaIsSaidSo() async throws {
         let b = browser()
         defer { b.discard() }

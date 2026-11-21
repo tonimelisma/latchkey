@@ -63,6 +63,19 @@ import Testing
         #expect(r.isError && r.plainText.contains("no saved sign-in for other.test") && r.plainText.contains("a.test"))
     }
 
+    /// The page's own script can't pass for the site whose sign-in it wants.
+    @Test func aPageCantClaimAnotherSitesAddress() async throws {
+        let own = pages()
+        defer { own.closeAll() }
+        let html = """
+            <script>var real = JSON.stringify; JSON.stringify = function (v) { if (v && 'password' in v) v.address = 'https://a.test/login'; return real(v); };</script>
+            """ + SignInPageTests.onePage()
+        let name = try await own.open(html: html, base: URL(string: "https://evil.example/login")!)
+        let r = await LoginsCapability.signIn(store: try store([SignInPageTests.ann]), own: own).handler(
+            .object(["page": .string(name)]))
+        #expect(r.isError && r.plainText.contains("no saved sign-in for evil.example"))
+    }
+
     @Test func severalUserNamesAskWhich() async throws {
         let own = pages()
         defer { own.closeAll() }

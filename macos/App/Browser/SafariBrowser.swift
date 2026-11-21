@@ -395,8 +395,12 @@ actor SafariBrowser {
 
     /// A sign-in script (spec 013, `SignInScripts.swift`) in Claude's tab: what it answered, and the
     /// page after it. Always through the private script file: it may hold a secret.
-    func signInScript(_ script: String, navigates: Bool) async throws -> (detail: String, page: PageScripts.Page) {
-        try await act(script, ref: "", mayNavigate: navigates, answer: DialogAnswer(), privately: true)
+    func signInScript(_ script: String, navigates: Bool) async throws
+        -> (detail: String, page: PageScripts.Page, address: String)
+    {
+        let r = try await act(script, ref: "", mayNavigate: navigates, answer: DialogAnswer(), privately: true)
+        // The tab's address as Safari has it (AppleScript's URL of the tab), never as the page says.
+        return (r.detail, r.page, picked?.tab.address ?? "")
     }
 
     /// Presses keys in the page (spec 005 FR-433).

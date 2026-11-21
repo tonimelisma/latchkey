@@ -39,7 +39,9 @@ enum SignInImport {
     }
 
     /// Takes in every `.csv` in the folder that hasn't changed for a second; the outcome of each.
-    static func check(folder: URL = folder, store: SignInStore = .shared, now: Date = Date()) -> [Outcome] {
+    static func check(
+        folder: URL = folder, store: SignInStore = .shared, now: Date = Date(), taken: (String) -> Void = { _ in }
+    ) -> [Outcome] {
         let fm = FileManager.default
         guard
             let names = try? fm.contentsOfDirectory(
@@ -50,6 +52,7 @@ enum SignInImport {
             let changed = (try? url.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate
             guard let changed, now.timeIntervalSince(changed) >= 1 else { continue }
             out.append(take(url, store: store, now: now))
+            taken(url.lastPathComponent)
         }
         return out
     }
