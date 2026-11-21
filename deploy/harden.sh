@@ -88,6 +88,8 @@ ssh_vm 'sudo sh -euc '"'"'d=$(mktemp -d /root/latchkey-harden.XXXXXX); trap "rm 
   <"$tmp/host.tgz" | tee "$tmp/setup.out"
 # A new connection proves the SSH settings work; it cancels their 5-minute undo.
 ssh_vm 'sudo systemctl stop latchkey-sshd-undo.timer >/dev/null 2>&1; sudo systemctl reset-failed latchkey-sshd-undo >/dev/null 2>&1; true'
+ssh_vm 'sudo cmp -s /etc/ssh/sshd_config.d/01-latchkey.conf /dev/stdin' <deploy/server/host/sshd.conf ||
+  { echo "FAIL: the server's SSH settings aren't the hardened ones (were they undone?); run deploy/harden.sh again" >&2; exit 1; }
 REBOOT=''
 [ "$(tail -1 "$tmp/setup.out")" != REBOOT ] || REBOOT=1
 

@@ -80,26 +80,16 @@ if put docker-daemon.json /etc/docker/daemon.json 644; then
   systemctl restart docker
   say "restarted Docker with its new settings"
 fi
-# SSH: harden.sh checks a new connection works, then cancels the timer that would undo this.
-if [ -f sshd.conf ] && ! cmp -s sshd.conf /etc/ssh/sshd_config.d/01-latchkey.conf 2>/dev/null; then
-  install -m 644 sshd.conf /etc/ssh/sshd_config.d/01-latchkey.conf
-  if ! sshd -t; then
-    rm -f /etc/ssh/sshd_config.d/01-latchkey.conf
-    echo "FAIL: the SSH server refused the new settings; they were taken out again" >&2
-    exit 1
-  fi
-  systemctl stop latchkey-sshd-undo.timer >/dev/null 2>&1 || true
-  systemd-run --quiet --unit latchkey-sshd-undo --on-active=300 /bin/sh -c \
-    'rm -f /etc/ssh/sshd_config.d/01-latchkey.conf; systemctl try-reload-or-restart ssh'
-  systemctl try-reload-or-restart ssh
-  say "new SSH settings (undone in 5 minutes unless harden.sh confirms a new connection)"
-fi
 
 # --- Accounts: only OS Login accounts sign in; the old local ones can't ---
 for u in tonimelisma ubuntu; do
   id "$u" >/dev/null 2>&1 || continue
   for g in docker google-sudoers sudo adm; do
-    if id -nG "$u" | tr ' ' '\n' | grep -qx "$g"; then gpasswd -d "$u" "$g" >/dev/null && say "$u left group $g"; fi
+    # The local group file, not id: OS Login also answers for google-sudoers by its own lookup.
+    if grep -q "^$g:[^:]*:[^:]*:\(.*,\)\{0,1\}$u\(,.*\)\{0,1\}$" /etc/group; then
+      gpasswd -d "$u" "$g" >/dev/null || { echo "FAIL: couldn't take $u out of $g" >&2; exit 1; }
+      say "$u left group $g"
+    fi
   done
   home=$(getent passwd "$u" | cut -d: -f6)
   if [ -s "$home/.ssh/authorized_keys" ]; then : >"$home/.ssh/authorized_keys" && say "$u's SSH keys removed"; fi
@@ -175,5 +165,22 @@ if [ "$upgradable" -gt 0 ]; then
   say "installed $upgradable updates"
 fi
 apt-get -y -q autoremove --purge >/dev/null 2>&1 || true
+
+# SSH last, so its 5-minute undo can't run out during the updates: harden.sh opens a new
+# connection right after this, which proves the settings work and cancels the undo.
+if [ -f sshd.conf ] && ! cmp -s sshd.conf /etc/ssh/sshd_config.d/01-latchkey.conf 2>/dev/null; then
+  install -m 644 sshd.conf /etc/ssh/sshd_config.d/01-latchkey.conf
+  if ! sshd -t; then
+    rm -f /etc/ssh/sshd_config.d/01-latchkey.conf
+    echo "FAIL: the SSH server refused the new settings; they were taken out again" >&2
+    exit 1
+  fi
+  systemctl stop latchkey-sshd-undo.timer >/dev/null 2>&1 || true
+  systemctl reset-failed latchkey-sshd-undo >/dev/null 2>&1 || true
+  systemd-run --quiet --unit latchkey-sshd-undo --on-active=300 /bin/sh -c \
+    'rm -f /etc/ssh/sshd_config.d/01-latchkey.conf; systemctl try-reload-or-restart ssh'
+  systemctl try-reload-or-restart ssh
+  say "new SSH settings (undone in 5 minutes unless harden.sh confirms a new connection)"
+fi
 [ ! -f /var/run/reboot-required ] || reboot_needed=1
 if [ -n "$reboot_needed" ]; then echo REBOOT; fi

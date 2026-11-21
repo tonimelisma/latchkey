@@ -192,19 +192,59 @@ class Audit(unittest.TestCase):
         self.assertEqual(sentinel.classify_audit(ev, OWNER_UIDS, False), sentinel.NOTICE)
 
 
+    def test_a_write_by_dpkgs_own_child_is_quiet_only_outside_never_quiet(self):
+        ev = {"key": "lk_systemd", "auid": "4294967295", "exe": "/usr/bin/dash"}
+        self.assertEqual(sentinel.classify_audit(ev, OWNER_UIDS, True), sentinel.NOTICE)
+        self.assertEqual(sentinel.classify_audit(ev, OWNER_UIDS, False), sentinel.WARNING)
+
+    def test_a_module_loaded_from_memory_is_a_warning(self):
+        ev = {"key": "lk_modules", "auid": "4294967295", "arch": "c000003e", "syscall": "175"}
+        self.assertEqual(sentinel.classify_audit(ev, OWNER_UIDS, False), sentinel.WARNING)
+        ev = {"key": "lk_modules", "auid": "4294967295", "arch": "c000003e", "syscall": "313"}  # finit_module: from a file
+        self.assertEqual(sentinel.classify_audit(ev, OWNER_UIDS, False), sentinel.NOTICE)
+
+
+class StartedByDpkg(unittest.TestCase):
+    # pid -> (exe, parent)
+    TREE = {"300": ("/usr/bin/dash", "200"), "200": ("/usr/bin/dpkg", "100"), "100": ("/usr/bin/apt-get", "1"),
+            "400": ("/usr/bin/dash", "350"), "350": ("/usr/bin/python3.12", "1")}
+
+    def walk(self, pid):
+        def exe_of(p):
+            if p not in self.TREE:
+                raise OSError("gone")
+            return self.TREE[p][0]
+        return sentinel.started_by_dpkg(pid, exe_of, lambda p: self.TREE[p][1])
+
+    def test_a_maintainer_script_is_dpkgs(self):
+        self.assertTrue(self.walk("300"))
+        self.assertTrue(self.walk("200"))
+
+    def test_anything_else_is_not(self):
+        self.assertFalse(self.walk("400"))
+        self.assertFalse(self.walk("999"))  # gone: not explained
+        self.assertFalse(self.walk(""))
+
+
 class Modules(unittest.TestCase):
+    R = "6.17.0-1010-gcp"
+
     def test_the_kernels_own_module_is_fine(self):
-        self.assertIsNone(sentinel.module_problem("/lib/modules/6.17.0-1010-gcp/kernel/net/bridge/bridge.ko.zst", ""))
+        self.assertIsNone(sentinel.module_problem(f"/lib/modules/{self.R}/kernel/net/bridge/bridge.ko.zst", "", self.R, "A1", "A1"))
 
     def test_a_module_whose_file_cant_be_found_is_suspect(self):
-        self.assertEqual(sentinel.module_problem("", ""), "its file can't be found")
+        self.assertEqual(sentinel.module_problem("", "", self.R), "its file can't be found")
 
     def test_a_module_from_elsewhere_is_suspect(self):
-        self.assertIn("outside", sentinel.module_problem("/tmp/rootkit.ko", ""))
-        self.assertIn("outside", sentinel.module_problem("/lib/modules/6.17.0-1010-gcp/updates/dkms/x.ko", ""))
+        self.assertIn("outside", sentinel.module_problem("/tmp/rootkit.ko", "", self.R))
+        self.assertIn("outside", sentinel.module_problem(f"/lib/modules/{self.R}/updates/dkms/x.ko", "", self.R))
+        self.assertIn("outside", sentinel.module_problem("/lib/modules/6.1.0-evil/kernel/x.ko", "", self.R))
 
     def test_an_out_of_tree_or_unsigned_module_is_suspect(self):
-        self.assertEqual(sentinel.module_problem("/lib/modules/6.17.0-1010-gcp/kernel/x.ko", "OE"), "the kernel marks it E,O")
+        self.assertEqual(sentinel.module_problem(f"/lib/modules/{self.R}/kernel/x.ko", "OE", self.R), "the kernel marks it E,O")
+
+    def test_a_loaded_module_that_isnt_its_file_is_suspect(self):
+        self.assertIn("isn't its file", sentinel.module_problem(f"/lib/modules/{self.R}/kernel/x.ko", "", self.R, "A1", "B2"))
 
 
 class Journal(unittest.TestCase):

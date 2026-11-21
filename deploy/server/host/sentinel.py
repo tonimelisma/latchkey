@@ -101,7 +101,7 @@ EXPECTED_EXEC = {
 # by the path the kernel resolved (a process can name itself anything; it can't fake its exe).
 SYSTEM_WRITERS = {
     "/usr/bin/google_guest_agent", "/usr/bin/google_guest_compat_manager", "/usr/lib/systemd/systemd",
-    "/usr/bin/systemd-tmpfiles", "/usr/bin/systemd-sysusers", "/usr/bin/dockerd", "/usr/bin/containerd",
+    "/usr/bin/systemd-sysusers", "/usr/bin/dockerd", "/usr/bin/containerd",
     "/usr/sbin/sshd", "/usr/sbin/logrotate", "/usr/sbin/chronyd", "/usr/sbin/cron",
 }
 # The package tools; while one runs, writes it causes (its maintainer scripts are shells) are an update.
@@ -211,10 +211,16 @@ def parse_audit_line(line):
     return kind, serial, fields
 
 
-def classify_audit(event, owner_uids, packages_running):
-    """Severity of one grouped audit event (dict with key, auid, exe). The owner's sessions are
-    quiet; outside NEVER_QUIET, package updates and system programs (by exe) too; anything else
-    is a WARNING."""
+# init_module loads a module from memory, with no file to check (finit_module, which modprobe
+# uses, loads one from a file): x86-64 and 32-bit syscall numbers.
+INIT_MODULE_FROM_MEMORY = {("c000003e", "175"), ("40000003", "128")}
+
+
+def classify_audit(event, owner_uids, from_dpkg):
+    """Severity of one grouped audit event (dict with key, auid, exe, arch, syscall). from_dpkg:
+    the process that made it was started by dpkg (checked from its own parents when the event
+    came, never from whatever else is running). The owner's sessions are quiet; outside
+    NEVER_QUIET, dpkg's writes and system programs (by exe) too; anything else is a WARNING."""
     key = event.get("key", "")
     auid = event.get("auid", AUID_UNSET)
     exe = event.get("exe", "")
@@ -225,24 +231,51 @@ def classify_audit(event, owner_uids, packages_running):
     if key == "lk_root_exec":
         return INFO
     if key == "lk_modules":
+        if (event.get("arch"), event.get("syscall")) in INIT_MODULE_FROM_MEMORY:
+            return WARNING
         return NOTICE  # Docker loads netfilter modules; check_periodic judges every loaded module
     if key in NEVER_QUIET:
         return WARNING
-    if packages_running or exe in PACKAGE_EXES or exe in SYSTEM_WRITERS:
+    if from_dpkg or exe in PACKAGE_EXES or exe in SYSTEM_WRITERS:
         return NOTICE
     return WARNING
 
 
-def module_problem(path, taint):
-    """Why a loaded module is suspect, or None: its file isn't the running kernel's own (or can't
-    be found), or the kernel marks it out-of-tree (O), unsigned (E) or forced (F)."""
+def started_by_dpkg(ppid, exe_of=None, parent_of=None):
+    """The process ppid, or one of its parents, is dpkg (by exe). Walks /proc; a parent that's
+    gone counts as not dpkg, so an unexplained write stays a WARNING."""
+    exe_of = exe_of or (lambda p: os.readlink(f"/proc/{p}/exe"))
+    parent_of = parent_of or _parent
+    pid, seen = str(ppid or ""), 0
+    while pid.isdigit() and pid not in ("0", "1") and seen < 16:
+        try:
+            if exe_of(pid) in PACKAGE_EXES:
+                return True
+            pid = parent_of(pid)
+        except OSError:
+            return False
+        seen += 1
+    return False
+
+
+def _parent(pid):
+    with open(f"/proc/{pid}/stat") as f:
+        return f.read().rsplit(")", 1)[1].split()[1]
+
+
+def module_problem(path, taint, release, loaded_src="", file_src=""):
+    """Why a loaded module is suspect, or None: its file (resolved, links followed) isn't in the
+    running kernel's own module tree or can't be found; the kernel marks it out-of-tree (O),
+    unsigned (E) or forced (F); or what's loaded isn't what that file holds (srcversion)."""
     if not path:
         return "its file can't be found"
-    if not re.match(r"/(usr/)?lib/modules/[^/]+/kernel/", path):
+    if not re.match(r"/(usr/)?lib/modules/" + re.escape(release) + r"/kernel/", path):
         return f"from outside the kernel's own ({path})"
     bad = set(taint) & set("OEF")
     if bad:
         return "the kernel marks it " + ",".join(sorted(bad))
+    if loaded_src and file_src and loaded_src != file_src:
+        return f"what's loaded isn't its file ({path})"
     return None
 
 
@@ -382,6 +415,14 @@ class Shipper:
 # --- Watchers ---
 
 
+def read_text(path):
+    try:
+        with open(path) as f:
+            return f.read().strip()
+    except OSError:
+        return ""
+
+
 def run(cmd, timeout=120):
     try:
         return subprocess.run(cmd, capture_output=True, text=True, timeout=timeout).stdout
@@ -389,17 +430,6 @@ def run(cmd, timeout=120):
         return ""
 
 
-def packages_running():
-    """A real package tool is running (by its exe, which a process can't fake)."""
-    for pid in os.listdir("/proc"):
-        if not pid.isdigit():
-            continue
-        try:
-            if os.readlink(f"/proc/{pid}/exe") in PACKAGE_EXES:
-                return True
-        except OSError:
-            continue
-    return False
 
 
 def follow(cmd, handle, out, name):
@@ -450,7 +480,7 @@ def watch_audit(out, owner_uids):
             continue
         ev = groups.setdefault(serial, {})
         if kind == "SYSCALL":
-            for k in ("key", "auid", "uid", "exe", "comm", "success", "pid", "ppid", "tty"):
+            for k in ("key", "auid", "uid", "exe", "comm", "success", "pid", "ppid", "tty", "arch", "syscall"):
                 if k in fields:
                     ev[k] = fields[k]
         elif kind == "PATH":
@@ -469,7 +499,7 @@ def report_audit(out, ev, owner_uids):
     key = ev.get("key", "")
     if not key.startswith("lk_"):
         return
-    sev = classify_audit(ev, owner_uids, packages_running() if key != "lk_root_exec" else False)
+    sev = classify_audit(ev, owner_uids, key != "lk_root_exec" and started_by_dpkg(ev.get("ppid")))
     what = ev.get("command") or ev.get("exe", "?")
     paths = [p for p in ev.get("paths", []) if p not in ("(null)",)]
     msg = f"{key[3:]}: {ev.get('comm', '?')} (login uid {ev.get('auid', '?')})" + (f" on {', '.join(paths[:5])}" if paths else "")
@@ -561,12 +591,11 @@ def check_periodic(out):
         mods = []
     for mod in mods:
         path = run(["modinfo", "-k", release, "-n", mod], timeout=10).strip()
-        try:
-            with open(f"/sys/module/{mod}/taint") as f:
-                taint = f.read().strip()
-        except OSError:
-            taint = ""
-        problem = module_problem(path, taint)
+        path = os.path.realpath(path) if path.startswith("/") else ""
+        taint = read_text(f"/sys/module/{mod}/taint")
+        loaded_src = read_text(f"/sys/module/{mod}/srcversion")
+        file_src = run(["modinfo", "-F", "srcversion", path], timeout=10).strip() if path and loaded_src else ""
+        problem = module_problem(path, taint, release, loaded_src, file_src)
         if problem:
             out.emit(WARNING, "kernel_module", f"kernel module {mod}: {problem}", repeat_key=("mod", mod), module=mod, path=path, taint=taint)
 
