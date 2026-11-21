@@ -12,5 +12,5 @@ Each test is written and seen failing before its code.
 - [x] T7 The reminder: tests, `SignInReminder.swift` (FR-1304)
 - [x] T8 Settings, menu, setup step, uninstall (FR-1302, FR-1305)
 - [x] T9 README, STATUS, decisions; regression and live cases (group `logins`)
-- [ ] T10 Full tests and lint, install, live check
+- [x] T10 Full tests and lint, install, live check (0.8.175: 881 tests; live 51 of 51)
 - [ ] T11 Toni: Latchkey menu → Export Passwords to Latchkey…, one Touch ID (the first live export)

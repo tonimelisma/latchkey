@@ -15,7 +15,13 @@ one-touch export from the menu, Settings, setup (an optional sixth step), and a 
 notification; copies in one Keychain item, removed with Remove All or an uninstall. Security
 reviews of the build added: the Public Suffix List (no subdomain fills under shared hosts), the
 page's site from the browser's own address with fills in a script world of Latchkey's own, the
-save panel cancelled on anything unexpected. Passkeys need the paid Apple Developer Program.
+save panel cancelled on anything unexpected, and Claude's command line and Files can't read the
+import folder. Passkeys need the paid Apple Developer Program.
+Live check (0.8.175, Mac locked, 2026-11-21 00:54): groups logins, browser, files, shell: 51 of 51
+worked. A fresh Claude signed in to the-internet.herokuapp.com as tomsmith with the fixture's test
+sign-in (`logins-fixture.sh`); none of its 10 tool results held the password except the test
+site's own page text, which prints it; the fixture was removed and logins_find then said
+Latchkey holds none.
 
 Claude's feedback reports (Toni, 2026-11-16; spec 001 FR-690 to FR-695): the relay offers its own
 `feedback` tool, and its instructions ask Claude to file a report whenever anything done with
