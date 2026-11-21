@@ -22,7 +22,10 @@ panel's Go to Folder, telling it only in Settings: each look walked Passwords' w
 (1,045 passwords, 85 s a look), and keys sent to Passwords alone never reach the save panel (its
 own process). 0.8.176 looks only in dialogs (0.07 s), posts the two key presses as the keyboard
 does while Passwords is in front, shows each step in the menu and Settings, and sends a
-notification when it stops (the import already sends one when it's done).
+notification when it stops (the import already sends one when it's done). 0.8.177: after a stop,
+Latchkey checks the save panel closed and, for 10 minutes, wipes a file of the export's name
+saved anywhere a panel may put it (FR-1307; Toni asked whether a stale file is left in
+Downloads; none was).
 Live check (0.8.175, Mac locked, 2026-11-21 00:54): groups logins, browser, files, shell: 51 of 51
 worked. A fresh Claude signed in to the-internet.herokuapp.com as tomsmith with the fixture's test
 sign-in (`logins-fixture.sh`); none of its 10 tool results held the password except the test

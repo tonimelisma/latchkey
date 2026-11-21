@@ -77,6 +77,13 @@ interface another app can read (`research.md`), so the only way in is a copy the
   know it's complete?"). Passwords comes to the front for this, because the Owner clicked
   (Toni, 2026-11-20: "One touch, when you click"; Passwords can't be scripted and asks for the
   Owner's approval on every export, `research.md`, so no export without the Owner exists).
+- **FR-1307** No copy of the export shall be left anywhere else. When an export stops, Latchkey
+  shall cancel the save panel and check that it closed, and if it didn't, tell the Owner to close
+  it with Cancel. For 10 minutes after a stop, a file with that export's name that turns up where
+  a save panel may put it (the home folder, Desktop, Documents, Downloads, iCloud Drive, the
+  cloud folders of other providers) shall be overwritten and deleted, and the Owner told (Toni,
+  2026-11-21: "does it clean up after unsuccessful exports, too, or is a stale file with all my
+  passwords left in my Downloads folder?").
 - **FR-1306** Export shall work only while the Mac is unlocked, and only after the Owner clicked;
   Latchkey shall never start it by itself. When the Owner doesn't approve within 2 minutes, or
   Passwords' window isn't what Latchkey expects, Latchkey shall stop, leave Passwords open as it

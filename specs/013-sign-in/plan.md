@@ -52,6 +52,11 @@ Found on the first real run (2026-11-21), and how it works since:
   them, and only while Passwords is in front (brought back once if not); otherwise the export
   stops and cancels the panel. Tried on TextEdit's panel, the same one: it opens and saves where
   told.
+- No file left behind (FR-1307): every stop presses the panel's Cancel and checks the panel
+  closed (else the Owner is told to close it with Cancel); for 10 minutes after a stop, every
+  3 s, `PasswordsExport.sweep` wipes a file of the export's unique name in the home folder,
+  Desktop, Documents, Downloads and iCloud Drive (two levels down) and `Library/CloudStorage`
+  (three), and a notification says so.
 - A full path in the name field doesn't work: AppKit turns each `/` into `:` and saves in the
   panel's current folder (tried: a file in Downloads).
 Only while unlocked, only from a click (menu, Settings, setup, the reminder). Without Accessibility

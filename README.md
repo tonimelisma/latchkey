@@ -32,7 +32,8 @@ Claude app (phone, web, desktop), can work with what's on your Mac:
   it. Latchkey fills them in itself: Claude never sees a password or a code, only the list of
   sites and user names. Latchkey keeps its copy only on your Mac; you hand it over with one
   Touch ID (Latchkey's menu → Export Passwords to Latchkey…), and a weekly notification
-  reminds you to do it again. It fills only on the site a password was saved for, never on
+  reminds you to do it again. The exported file is deleted as soon as Latchkey has read it, and
+  an export that stops leaves no file behind. It fills only on the site a password was saved for, never on
   another site's page, and never in your own Safari tabs. Not yet: passkeys, and codes sent by
   text or email (Claude can read a text with Messages).
 - **The screen:** take a picture of it, and control the computer when you ask.
