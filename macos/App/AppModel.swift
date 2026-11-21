@@ -201,6 +201,9 @@ final class AppModel {
             // FR-1360: code texts only while Messages isn't Off; FR-1362: texts used while locked
             // (or before a restart) are deleted now if the Mac is unlocked.
             TextedCodes.shared.on = { [weak self] in self?.capabilities.level(CapabilityRegistry.messages) != .off }
+            TextedCodes.shared.mayDelete = { [weak self] in
+                self?.capabilities.level(CapabilityRegistry.messages) == .readWrite
+            }
             Task { await TextedCodes.shared.deletePending() }
             watcher.imported = { [weak self] outcome in
                 self?.refreshSignIns()

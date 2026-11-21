@@ -190,8 +190,9 @@ once when unlocked" and "Any new code text".
 
 - **FR-1360** When a site asks for a verification code during Latchkey's own sign-in and Latchkey
   holds no code generator for it, Latchkey shall take the code from the newest text in Messages
-  on this Mac that arrived after that sign-in began, isn't from the Owner, and holds a code (4 to
-  8 digits), whoever sent it, and fill it in itself as FR-1322 does; Claude never sees it. Each
+  on this Mac that arrived after that sign-in began, isn't from the Owner, and reads as a code
+  text (4 to 8 digits next to a word like "code" or "OTP"; security review 2026-11-21: never a
+  friend's "meet at 1830"), whoever sent it, and fill it in itself as FR-1322 does; Claude never sees it. Each
   text is used once. While Messages is Off in Latchkey's settings, or Latchkey can't read
   Messages, no text is used.
 - **FR-1361** One sign-in call waits for that text for as long as the call's time allows; when the
@@ -199,7 +200,9 @@ once when unlocked" and "Any new code text".
   again on the same page, and the next call takes it. A text is waited for up to 2 minutes from
   the site's request; after that, the sign-in counts as needing a code Latchkey doesn't hold
   (FR-1352's fallback follows).
-- **FR-1362** After Latchkey used a code text, it shall delete that text in Messages (from all the
+- **FR-1362** After Latchkey signed in with a code text (only then: a text whose code the site
+  refused may not have been one), and while Messages is Read & write in Latchkey's settings
+  (deleting is a change), it shall delete that text in Messages (from all the
   Owner's devices, kept in Recently Deleted as Messages does), through Messages' own window in
   the background, without bringing Messages forward: at once while the Mac is unlocked, else as
   soon as it is unlocked, also after a restart in between. Only that one message, never the

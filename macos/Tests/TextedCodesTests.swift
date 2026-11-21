@@ -46,7 +46,10 @@ import Testing
         #expect(TextedCodes.code(in: text) == code)
     }
 
-    @Test(arguments: ["See you at 7", "Your package is on its way", "Pin 123", "Ref 1234567890"])
+    @Test(arguments: [
+        "See you at 7", "Your package is on its way", "Pin 123", "Ref 1234567890", "Meet at 1830 by the door",
+        "Call me at 5551 when you land",
+    ])
     func noCodeWhereThereIsNone(_ text: String) {
         #expect(TextedCodes.code(in: text) == nil)
     }
@@ -125,6 +128,15 @@ import Testing
         #expect(c.pending.isEmpty)
     }
 
+    /// Security review 2026-11-21: deleting is a change in Messages, so only while it is Read & write.
+    @Test func whileMessagesIsReadOnlyTheTextStays() async {
+        let deleted = Deleted()
+        let c = codes(Texts(), deleted: deleted)
+        c.mayDelete = { false }
+        await c.used("msg-1", site: "a.test")
+        #expect(deleted.ids.isEmpty && c.pending.isEmpty)
+    }
+
     @Test(arguments: [
         ("98626", "98626", true), ("98626", "986260", false), ("+1 (555) 010-9999", "+15550109999", true),
         ("Amazon", "98626", false),
@@ -142,9 +154,11 @@ import Testing
         <script>
         var app = document.getElementById('app');
         document.getElementById('go').onclick = function () {
-          app.innerHTML = '<label>Enter the code we texted you <input id="otp" autocomplete="one-time-code"></label><button id="v">Verify</button>';
+          app.innerHTML = '<label>Enter the code we texted you <input id="otp" autocomplete="one-time-code"></label><button id="v">Verify</button><p id="m"></p>';
           document.getElementById('v').onclick = function () {
-            app.innerHTML = document.getElementById('otp').value === '320518' ? '<h1>Welcome ann</h1>' : '<p role="alert">Wrong code</p>';
+            // As sites do: a wrong code keeps the code field, with the error beside it.
+            if (document.getElementById('otp').value === '320518') { app.innerHTML = '<h1>Welcome ann</h1>'; return; }
+            var m = document.getElementById('m'); m.setAttribute('role', 'alert'); m.textContent = 'Wrong code';
           };
         };
         </script>
@@ -178,6 +192,18 @@ import Testing
         #expect(r.plainText.contains("Signed in to a.test as ann."), "\(r.plainText)")
         #expect(!r.plainText.contains("320518"), "Claude never sees the code")
         #expect(deleted.ids == ["otp-1"])
+    }
+
+    /// Security review 2026-11-21: a text whose code the site refused may not have been a code
+    /// text at all, so it stays.
+    @Test func aTextWhoseCodeIsRefusedStays() async throws {
+        let texts = TextedCodesTests.Texts()
+        texts.all = [.init(id: "other", text: "Your code is 999999", date: Date().addingTimeInterval(60))]
+        let deleted = TextedCodesTests.Deleted()
+        let (r, _, own) = try await run(texts, deleted: deleted)
+        defer { own.closeAll() }
+        #expect(r.plainText.contains("refused"), "\(r.plainText)")
+        #expect(deleted.ids.isEmpty)
     }
 
     @Test func aTextStillOnItsWayAsksForAnotherCall() async throws {

@@ -195,7 +195,8 @@ enum LoginsCapability {
             login, exact: PublicSuffix.isSuffix(login.site), store: store, run: run, texted: texted)
         if outcome != .waitingForText { await codes.forget(login.site) }
         // FR-1362: the text is deleted in Messages once used (now while unlocked, else at unlock).
-        if let used = usedText.id { await codes.used(used, site: host) }
+        // Only once the site took the code: a text whose code didn't work may not have been one.
+        if let used = usedText.id, outcome == .signedIn { await codes.used(used, site: host) }
         let who = login.user.isEmpty ? "" : " as \(login.user)"
         var said: String
         var activity: String?

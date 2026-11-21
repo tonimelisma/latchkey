@@ -38,8 +38,9 @@ final class TextedCodes {
 
     init(defaults: UserDefaults? = .standard) { self.defaults = defaults }
 
-    /// The code in a text: a run of 4 to 8 digits standing alone, the one next to a word like
-    /// "code" when there are several.
+    /// The code in a code text: a run of 4 to 8 digits standing alone, next to a word like "code"
+    /// or "OTP". A text without such a word is no code text, whatever numbers it holds (security
+    /// review 2026-11-21: "meet at 1830" must never be filled in, nor deleted).
     nonisolated static func code(in text: String) -> String? {
         let ns = text as NSString
         guard let re = try? NSRegularExpression(pattern: #"(?<![\p{L}\p{N}])\d{4,8}(?![\p{L}\p{N}])"#) else {
@@ -47,13 +48,14 @@ final class TextedCodes {
         }
         let hits = re.matches(in: text, range: NSRange(location: 0, length: ns.length))
         guard !hits.isEmpty else { return nil }
-        let word = #"(?i)(code|otp|passcode|pass code|verification|verify|pin|koodi|kod|código|codice|password)"#
+        let word =
+            #"(?i)(code|otp|one[- ]time|passcode|pass code|verification|verify|security|2fa|pin|koodi|kod|código|codice|password|tunnus|vahvistus)"#
         for h in hits {
             let from = max(0, h.range.location - 40)
             let around = ns.substring(with: NSRange(location: from, length: min(ns.length - from, h.range.length + 80)))
             if around.range(of: word, options: .regularExpression) != nil { return ns.substring(with: h.range) }
         }
-        return ns.substring(with: hits[0].range)
+        return nil
     }
 
     /// When `site` first asked for a code; noted now when it hadn't.
@@ -101,6 +103,9 @@ final class TextedCodes {
     /// Deletes a text in Messages' window; throws why it couldn't. Tests give their own.
     var deleter: (String) async throws -> Void = { try await CodeTextWindow.delete($0) }
     var isLocked: () -> Bool = { SystemScreen().isLocked() }
+    /// Deleting is a change in Messages: only while Messages is Read & write in Latchkey's settings
+    /// (security review 2026-11-21). Set by the app; true in tests.
+    var mayDelete: () -> Bool = { true }
     private var deleting = false
 
     /// A code text was used: deleted now while unlocked, else at the next unlock.
@@ -112,7 +117,14 @@ final class TextedCodes {
 
     /// Deletes every text waiting to be, while the Mac is unlocked.
     func deletePending() async {
-        guard !deleting, !isLocked(), !pending.isEmpty else { return }
+        guard !deleting, !pending.isEmpty else { return }
+        guard mayDelete() else {
+            EventLog.shared.record(
+                .app, "Used sign-in code texts stay in Messages: Messages isn't Read & write in Latchkey's settings")
+            pending = []
+            return
+        }
+        guard !isLocked() else { return }
         deleting = true
         defer { deleting = false }
         for message in pending {

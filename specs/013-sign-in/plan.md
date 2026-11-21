@@ -157,7 +157,10 @@ generator, it asks for a texted code. Messages' database (its own read-only conn
 `messages_find` reads) is looked at every second for texts not from the Owner that arrived
 since the site's request (the first time it asked, kept for 2 minutes across calls), newest
 first; the first unused one holding a code is taken. A code is a run of 4 to 8 digits standing
-alone, the one next to a word like "code" when there are several. Each text id is used once (in
+alone next to a word like "code", "OTP", "verification" (also Finnish and other languages'); a
+text with numbers but no such word is no code text (security review 2026-11-21). A text is
+queued for deleting only after the sign-in with its code succeeded, and deleted only while
+Messages is Read & write. Each text id is used once (in
 memory). One call waits up to 45 s (the relay allows 60 s); with no text by then the answer
 asks for another call, and after 2 minutes the sign-in counts as needing a code (D10's fallback).
 No text is used while Messages is Off.
