@@ -33,7 +33,7 @@ Both exist only while the Owner's Sign-in setting is On (FR-1340). Answers are t
     signs in to itself (FR-1352), the line goes on: "Latchkey's own sign-in couldn't finish on
     <site>, so the owner's Safari sign-in is used there instead, until the owner exports from
     Passwords again:" then, locked, "this page took a copy of Safari's cookies for it … and
-    loaded again." (or "…but loading it again didn't work: read it again with browser_read."),
+    opened <site> again." (or "…but loading it again didn't work: read it again with browser_read."),
     unlocked, "the page moved into a Safari tab of Claude's, signed in as the owner if Safari
     is." (or "…couldn't move into Safari (Safari has no window open), so it stays here.").
   - The first line of every answer from Latchkey's own browser on such a site (FR-1355): "…

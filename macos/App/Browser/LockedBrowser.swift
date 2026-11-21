@@ -206,6 +206,20 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate {
     /// Whether this page has Safari's sign-ins now (they are copied only while that is allowed).
     var signedInFromSafari: Bool { mayCopy() }
 
+    /// Drops the cookies this browser holds for `sites` (the same domain, under one, or a wider
+    /// one): a sign-in Latchkey started there and couldn't finish leaves nothing to mix with the
+    /// copy of Safari's that replaces it (spec 013 FR-1352).
+    func dropCookies(for sites: [String]) async {
+        guard let store = web?.configuration.websiteDataStore.httpCookieStore, let all = await Self.holding(store)
+        else { return }
+        for c in all {
+            let d = OwnSessions.bare(c.domain)
+            if sites.contains(where: { $0 == d || $0.hasSuffix("." + d) || d.hasSuffix("." + $0) }) {
+                await store.deleteCookie(c)
+            }
+        }
+    }
+
     /// The site of the page Latchkey signs in to itself, if it is one (FR-1355).
     var ownSite: String? { web?.url?.host().flatMap { sessions?.ownSite($0) } }
 

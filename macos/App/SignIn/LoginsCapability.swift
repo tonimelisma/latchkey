@@ -208,18 +208,22 @@ enum LoginsCapability {
             // Spec 013 FR-1352: where Latchkey's own sign-in can't finish, the owner's Safari
             // sign-in is used instead, as spec 005 does.
             if failed, let sessions = own.sessions, await MainActor.run(body: { sessions.isOwn(host) }) {
-                await MainActor.run { sessions.fallBack(login.site) }
+                let fallen = await MainActor.run { sessions.fallBack(login.site) }
                 EventLog.shared.record(
                     .browser,
-                    "Sign-in on \(host): Latchkey's own sign-in couldn't finish; Safari's sign-in is used there now")
+                    "Sign-in on \(host): Latchkey's own sign-in couldn't finish; Safari's sign-in is used now for \(fallen.joined(separator: ", "))"
+                )
                 let instead =
                     "Latchkey's own sign-in couldn't finish on \(host), so the owner's Safari sign-in is used there instead, until the owner exports from Passwords again"
                 if await MainActor.run(body: { own.isLocked() }) {
                     let copied =
                         " \(instead): this page took a copy of Safari's cookies for it (a site may sign the owner out in Safari when this copy renews its sign-in)"
                     do {
-                        let again = try await l.signInAgain()
-                        said += copied + " and loaded again."
+                        // What Latchkey's own try left goes first; then the page Claude asked to
+                        // sign in on opens again (a fresh load: reloading a code step resends it).
+                        await l.dropCookies(for: fallen)
+                        let again = try await l.open(address)
+                        said += copied + " and opened \(BrowserCapability.host(address)) again."
                         result = await BrowserCapability.told(.text(said + "\n\n" + PageScripts.answer(again)), l)
                     } catch {
                         said += copied + ", but loading it again didn't work: read it again with browser_read."

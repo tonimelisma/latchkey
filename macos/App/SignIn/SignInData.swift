@@ -163,6 +163,18 @@ enum PublicSuffix {
         if let dot = n.firstIndex(of: "."), rules.wildcard.contains(String(n[n.index(after: dot)...])) { return true }
         return false
     }
+
+    /// The name a site is registered under: the shortest ending of `host` that isn't a public
+    /// suffix itself ("na.account.amazon.com" → "amazon.com"); the host when none is shorter.
+    static func registrable(_ host: String) -> String {
+        let labels = host.lowercased().split(separator: ".", omittingEmptySubsequences: false)
+        guard labels.count > 1 else { return host.lowercased() }
+        // The longest ending that is a public suffix, and one label more.
+        for i in 0..<(labels.count - 1) where isSuffix(labels[(i + 1)...].joined(separator: ".")) {
+            return labels[i...].joined(separator: ".")
+        }
+        return host.lowercased()
+    }
 }
 
 /// A time-based verification code (RFC 6238) from an `otpauth://totp/` address.

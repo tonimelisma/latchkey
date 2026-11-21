@@ -144,17 +144,25 @@ final class OwnSessions {
         return sites().contains { $0 == d || $0.hasSuffix("." + d) || d.hasSuffix("." + $0) }
     }
 
-    /// FR-1352: the site's own sign-in couldn't finish; Safari's is used there until the next export.
-    func fallBack(_ site: String) {
-        guard case .some(let held) = signIns.load(), var c = contents() else { return }
+    /// FR-1352: the site's own sign-in couldn't finish; Safari's is used there until the next
+    /// export, for every held site registered under the same name (live check 2026-11-21: Amazon's
+    /// sign-in cookies are for all of amazon.com, and a second sign-in saved for
+    /// na.account.amazon.com kept them from the copy). The sites that fell back.
+    @discardableResult
+    func fallBack(_ site: String) -> [String] {
+        guard case .some(let held) = signIns.load(), var c = contents() else { return [] }
         if c.fellBackFor != held.imported {
             c.fellBack = []
             c.fellBackFor = held.imported
         }
-        guard !c.fellBack.contains(site) else { return }
-        c.fellBack.append(site)
-        c.cookies.removeAll { reachesOnly(site, $0.domain) }
+        let group = PublicSuffix.registrable(site)
+        let all = Set(held.logins.map(\.site).filter { PublicSuffix.registrable($0) == group } + [site])
+        let new = all.subtracting(c.fellBack).sorted()
+        guard !new.isEmpty else { return all.sorted() }
+        c.fellBack += new
+        c.cookies.removeAll { k in all.contains { reachesOnly($0, k.domain) } }
         save(c)
+        return all.sorted()
     }
 
     func fellBack(_ site: String) -> Bool {

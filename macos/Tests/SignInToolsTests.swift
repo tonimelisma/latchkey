@@ -120,14 +120,19 @@ import Testing
         <input name="username" autocomplete="username"><input type="password" name="p"><button>Log in</button></form>
         """
 
-    func fallback(locked: Bool) throws -> (OwnPages, OwnSessions, SignInStore) {
-        let s = try store([SignInPageTests.ann])
+    func fallback(locked: Bool, wide: Bool = false) throws -> (OwnPages, OwnSessions, SignInStore) {
+        // wide: a second sign-in saved for another name under a.test, and Safari's sign-in in a
+        // cookie for all of a.test (Amazon's shape, live check 2026-11-21).
+        let s = try store(
+            [SignInPageTests.ann]
+                + (wide
+                    ? [SavedSignIn(title: "N", site: "na.account.a.test", user: "ann", password: "pw", otp: nil)] : []))
         let sessions = OwnSessions(signIns: s, vault: MemoryVault())
         sessions.on = { true }
         let safari = [
             SafariCookies.Cookie(
-                domain: "a.test", name: "safari_a", path: "/", value: "1", secure: true, httpOnly: false,
-                expires: Date().addingTimeInterval(86400))
+                domain: wide ? ".a.test" : "a.test", name: "safari_a", path: "/", value: "1", secure: true,
+                httpOnly: false, expires: Date().addingTimeInterval(86400))
         ]
         let own = OwnPages(cookies: { safari }, isLocked: { locked }, record: { _ in }, sessions: sessions)
         return (own, sessions, s)
@@ -146,6 +151,22 @@ import Testing
         #expect(r.plainText.contains("took a copy of Safari's cookies"))
         #expect(r.plainText.contains("loading it again didn't work"))
         #expect(sessions.fellBack("a.test") && !sessions.isOwn("a.test"))
+        #expect(try await own.page(name).run("document.cookie") == "safari_a=1")
+    }
+
+    /// Live check 2026-11-21 (Amazon): the fallback covers every sign-in saved under the same
+    /// name, so Safari's cookie for all of the site is copied, and what Latchkey's own try left
+    /// goes first.
+    @Test func theFallbackCoversTheWholeSiteAndDropsTheTry() async throws {
+        let (own, sessions, s) = try fallback(locked: true, wide: true)
+        defer { own.closeAll() }
+        let name = try await own.open(html: Self.needsCode, base: Self.base)
+        _ = try await own.page(name).run("document.cookie = 'attempt=1; path=/; secure'; 'ok'")
+        let r = await LoginsCapability.signIn(store: s, own: own, move: { _ in nil }).handler(
+            .object(["page": .string(name)]))
+        #expect(r.plainText.contains("the owner's Safari sign-in is used there instead"), "\(r.plainText)")
+        #expect(sessions.fellBack("a.test") && sessions.fellBack("na.account.a.test"))
+        #expect(!sessions.reaches(".a.test"))
         #expect(try await own.page(name).run("document.cookie") == "safari_a=1")
     }
 

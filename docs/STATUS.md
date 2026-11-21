@@ -52,7 +52,14 @@ browser out?"; spec 013 FR-1350 to FR-1355): for the 871 sites Latchkey has a pa
 own browser copies none of Safari's cookies, locked or unlocked, and stays its own browser
 while unlocked; Claude signs in with logins_sign_in, and the session is kept in a Keychain item
 of Latchkey's across restarts. Where that can't finish (no code, a check, a refusal), the site
-uses Safari's sign-in as before until the next export.
+uses Safari's sign-in as before until the next export. Live check (0.8.181, Mac locked): groups
+logins, browser, regressions-browser: 49 worked, 4 skipped (unlocked only, or the test
+sign-in), 2 failed; homerecording.com was still signed in with the kept session after two
+restarts. The two failures: one case expected a sign-in form where the kept session needed
+none (the case was updated), and Amazon stayed signed out after the fallback, because a second
+sign-in saved for na.account.amazon.com still held back Safari's amazon.com cookies. 0.8.182
+falls back every sign-in under the same registered name, drops what Latchkey's own try left,
+and opens the page again instead of reloading a code step.
 Live check (0.8.175, Mac locked, 2026-11-21 00:54): groups logins, browser, files, shell: 51 of 51
 worked. A fresh Claude signed in to the-internet.herokuapp.com as tomsmith with the fixture's test
 sign-in (`logins-fixture.sh`); none of its 10 tool results held the password except the test

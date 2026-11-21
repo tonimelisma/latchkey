@@ -163,7 +163,11 @@ Safari's.
   Safari's cookies for the site and load the page again; while unlocked, move the page into a
   Safari tab of Claude's. The answer says that Latchkey's own sign-in couldn't finish, why, and
   that the Owner's Safari sign-in is used instead (which may sign Safari out on some sites, as
-  before). The site stays on Safari's sign-in until the Owner's next export or Remove All.
+  before). The site stays on Safari's sign-in until the Owner's next export or Remove All. A site
+  here is every saved sign-in registered under the same name (amazon.com and
+  na.account.amazon.com are one; live check 2026-11-21: Amazon's sign-in is in cookies for all of
+  amazon.com, which the second saved sign-in still held back), and what Latchkey's own try left
+  in its browser for it is dropped before the copy.
 - **FR-1353** The cookies a site sets in Latchkey's own browser for a site of FR-1350 (its own
   sign-in) shall be kept on this Mac across Latchkey's restarts and updates, in Latchkey's
   Keychain as the sign-ins are (FR-1310), never readable by Claude's command line or Files tools,

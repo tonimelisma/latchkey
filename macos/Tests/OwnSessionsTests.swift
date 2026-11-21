@@ -115,6 +115,20 @@ import WebKit
         #expect(s.isOwn("a.test") && !s.fellBack("a.test"), "the next export tries Latchkey's own again")
     }
 
+    @Test func aFallbackCoversEverySignInUnderTheSameName() throws {
+        let n = SavedSignIn(title: "N", site: "na.account.a.test", user: "ann", password: "pw", otp: nil)
+        let (s, _, _) = try Self.sessions([Self.a, n, Self.g])
+        #expect(s.fallBack("a.test") == ["a.test", "na.account.a.test"])
+        #expect(!s.isOwn("na.account.a.test") && !s.reaches(".a.test") && s.isOwn("accounts.g.test"))
+    }
+
+    @Test func registeredNames() {
+        #expect(PublicSuffix.registrable("na.account.amazon.com") == "amazon.com")
+        #expect(PublicSuffix.registrable("amazon.com") == "amazon.com")
+        #expect(PublicSuffix.registrable("www.bbc.co.uk") == "bbc.co.uk")
+        #expect(PublicSuffix.registrable("app.herokuapp.com") == "app.herokuapp.com")
+    }
+
     @Test func anUnreadableItemIsNeverWrittenOver() throws {
         let vault = MemoryVault()
         vault.items[OwnSessions.account] = Data("{}".utf8)

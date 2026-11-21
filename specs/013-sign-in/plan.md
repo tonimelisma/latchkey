@@ -129,7 +129,10 @@ domain is an own site, under one, or a wider domain of one, as `LockedBrowser.co
   page answers that Latchkey signs in there itself (logins_sign_in), unless it fell back.
 - FR-1352: when `logins_sign_in` in Latchkey's own browser ends with a code it doesn't hold, a
   check, or a refusal, the site is marked fallen back (with the import date it applies to, so
-  the next export clears it), then: locked, Safari's cookies for the site and the page again;
+  the next export clears it), and with it every held site of the same registered name
+  (`PublicSuffix.registrable`), then: locked, the cookies the browser holds for those sites go,
+  Safari's are copied, and the address the page had when the sign-in began opens again (a
+  fresh load: a reload resends a code step);
   unlocked, the page moves into a Safari tab of Claude's (FR-459's way). The answer says so.
 - FR-1353: the store's changes (`CookieWatch` already observes it) are looked at 1 s after they
   settle; the cookies that reach an own site are written to a Keychain item of their own
