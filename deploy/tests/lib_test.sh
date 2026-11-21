@@ -486,6 +486,11 @@ grep -q -- '--tunnel-through-iap' "$root/deploy/lib.sh" && grep -q 'ssh_vm() { v
 grep -q '^      - latchkey-front$' "$root/deploy/server/docker-compose.yml" && ! grep -q reverse_proxy "$root/deploy/server/docker-compose.yml" &&
   ok "the relay is on its own network" || bad "the relay is on its own network"
 grep -q 'docker network inspect latchkey-front' "$root/deploy/deploy.sh" && ok "trusted proxies come from the relay's network" || bad "trusted proxies come from the relay's network"
+# hackernews's backup runs as root (it needs docker); the locked old accounts keep no cron jobs.
+grep -q '^0 3 \* \* \* root /opt/hackernews/scripts/backup-sqlite.sh ' "$root/deploy/server/host/hackernews-backup.cron" &&
+  grep -q 'put hackernews-backup.cron /etc/cron.d/hackernews-backup' "$root/deploy/server/host/setup.sh" &&
+  grep -q 'crontab -u "$u" -r' "$root/deploy/server/host/setup.sh" &&
+  ok "the backup runs from root's cron, not a locked account's" || bad "the backup runs from root's cron, not a locked account's"
 # The other apps' containers can't reach the relay's network, and keep no privileges.
 for f in hackernews-compose.yml caddy-compose.yml; do
   c=$root/deploy/server/host/$f

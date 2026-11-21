@@ -105,6 +105,13 @@ for d in /opt/hackernews /opt/reverse-proxy; do
 done
 [ ! -f /opt/hackernews/.env ] || chmod 600 /opt/hackernews/.env
 if [ -d /opt/voice-decommission ]; then rm -rf /opt/voice-decommission && say "deleted the old voice backups"; fi
+# hackernews's nightly backup runs as root from /etc/cron.d; it was in the old account's crontab,
+# which can't run docker any more (found 2026-11-21, before the first night).
+put hackernews-backup.cron /etc/cron.d/hackernews-backup 644 || true
+for u in tonimelisma ubuntu; do
+  if crontab -u "$u" -l >/dev/null 2>&1; then crontab -u "$u" -r && say "removed $u's crontab (its backup job now runs as root)"; fi
+done
+[ ! -f /var/log/hackernews-backup.log ] || chown root:root /var/log/hackernews-backup.log
 
 # --- Docker: each app on its own network with Caddy, so neither can reach the other ---
 for net in latchkey-front hackernews-front; do
