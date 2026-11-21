@@ -6,8 +6,9 @@
 # What and why: docs/threat-model.md, "The relay's server".
 set -eu
 cd "$(dirname "$0")"
-# needrestart stays quiet: harden.sh restarts the whole server when an update needs it.
-export DEBIAN_FRONTEND=noninteractive LC_ALL=C NEEDRESTART_SUSPEND=1
+# needrestart restarts every service still using a replaced library by itself, without asking
+# (a kernel update is left to the restart harden.sh makes).
+export DEBIAN_FRONTEND=noninteractive LC_ALL=C NEEDRESTART_MODE=a
 reboot_needed=''
 say() { printf '  - %s\n' "$*"; }
 
@@ -126,6 +127,11 @@ if [ -n "$hn_changed" ] || ! docker inspect hackernews-app-1 --format '{{json .N
 fi
 if [ -n "$caddy_changed" ]; then
   (cd /opt/reverse-proxy && docker compose up -d --quiet-pull >/dev/null 2>&1) && say "Caddy restarted with its new settings"
+fi
+# The old network every container shared goes once nothing is on it (the deploy moves the relay).
+if docker network inspect reverse_proxy >/dev/null 2>&1 &&
+  [ "$(docker network inspect reverse_proxy --format '{{len .Containers}}')" = 0 ]; then
+  docker network rm reverse_proxy >/dev/null && say "removed the old shared network"
 fi
 put update-apps.sh /usr/local/sbin/latchkey-update-apps 755 || true
 put latchkey-update-apps.service /etc/systemd/system/latchkey-update-apps.service 644 || true
