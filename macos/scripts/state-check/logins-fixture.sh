@@ -15,7 +15,7 @@ header='Title,URL,Username,Password,Notes,OTPAuth'
 
 # The item's last change, from its attributes only (no secret is read, no prompt shows).
 changed() {
-  security find-generic-password -s net.melisma.latchkey -a sign-ins 2>/dev/null |
+  { security find-generic-password -s net.melisma.latchkey -a sign-ins 2>/dev/null || true; } |
     sed -n 's/.*"mdat"<timedate>=0x[0-9A-F]*  "\([0-9]*\)Z.*/\1/p'
 }
 
