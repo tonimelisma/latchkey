@@ -129,15 +129,24 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate {
     /// The cookie stores something was written to (`copy`).
     private static var written: Set<ObjectIdentifier> = []
 
-    /// Per store, every cookie (by domain, path, and name) a copy of Safari's put or found there:
-    /// never kept as Latchkey's own sign-in, also once its site becomes one Latchkey signs in to
-    /// itself (spec 013 FR-1353; security review 2026-11-21).
-    private static var copiedKeys: [ObjectIdentifier: Set<String>] = [:]
+    /// Per store, the domains a copy of Safari's cookies went to (each cookie's domain, bare): no
+    /// cookie of those sites is kept as Latchkey's own sign-in from that store, also once a site
+    /// becomes one Latchkey signs in to itself, and also under a name the site gave a copied
+    /// session later, until the store's cookies are wiped (spec 013 FR-1353; security reviews
+    /// 2026-11-21).
+    private static var copiedDomains: [ObjectIdentifier: Set<String>] = [:]
 
-    static func copied(in store: WKHTTPCookieStore) -> Set<String> { copiedKeys[ObjectIdentifier(store)] ?? [] }
+    static func copied(in store: WKHTTPCookieStore) -> Set<String> { copiedDomains[ObjectIdentifier(store)] ?? [] }
 
-    /// The store's copies are gone (dropped at unlock, or the store itself).
-    static func forgetCopied(in store: WKHTTPCookieStore) { copiedKeys[ObjectIdentifier(store)] = nil }
+    /// The store's copies of `these` domains are gone (wiped at unlock); nil: the store is gone.
+    static func forgetCopied(in store: WKHTTPCookieStore, these: Set<String>? = nil) {
+        let id = ObjectIdentifier(store)
+        guard let these else {
+            copiedDomains[id] = nil
+            return
+        }
+        copiedDomains[id]?.subtract(these)
+    }
 
     /// What the store holds is asked for first; with no answer in 2 s (WebKit doesn't answer for
     /// a store not yet in use, seen live 2026-11-14), every one is set, which changes nothing a
@@ -154,7 +163,7 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate {
         }
         written.insert(ObjectIdentifier(store))
         let offered = cookies.compactMap(SafariCookies.httpCookie)
-        copiedKeys[ObjectIdentifier(store), default: []].formUnion(offered.map { OwnSessions.key(of: $0) })
+        copiedDomains[ObjectIdentifier(store), default: []].formUnion(offered.map { OwnSessions.bare($0.domain) })
         let todo = offered.filter {
             let here = held[key($0)]
             return overwrite ? here != $0.value : here == nil

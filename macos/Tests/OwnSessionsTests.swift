@@ -239,13 +239,30 @@ import WebKit
             with: [OwnSessionsTests.a, SavedSignIn(title: "B", site: "b.test", user: "bo", password: "pw", otp: nil)],
             at: OwnSessionsTests.imported.addingTimeInterval(60))
         #expect(s.isOwn("b.test"))
+        // The store took a copy for b.test: nothing of b.test from it is kept, whatever its name
+        // (a site may renew a copied session under a new one).
         _ = try await own.page(b).run("document.cookie = 'own_b=mine; max-age=86400; path=/; secure'; 'ok'")
+        try await Task.sleep(for: .milliseconds(1500))
+        #expect(!s.kept().contains { $0.domain.contains("b.test") }, "\(s.kept().map(\.name))")
+        // A new store (no copy in it; unlocked, so none is taken) keeps what the site sets.
+        own.closeAll()
+        let fresh = pages(locked: false, sessions: s)
+        defer { fresh.closeAll() }
+        let again = try await fresh.open(html: "<p>b</p>", base: URL(string: "https://b.test/")!)
+        _ = try await fresh.page(again).run("document.cookie = 'own_b=fresh; max-age=86400; path=/; secure'; 'ok'")
         var kept: [String] = []
         for _ in 0..<40 where kept.isEmpty {
             try await Task.sleep(for: .milliseconds(100))
             kept = s.kept().map(\.name)
         }
-        #expect(kept == ["own_b"], "the site's own cookie is kept, Safari's copy never")
+        #expect(kept == ["own_b"])
+    }
+
+    @Test func aCopyForASiteNeverDropsWhatWasKeptThere() throws {
+        let (s, _, _) = try OwnSessionsTests.sessions(clock: .live())
+        s.keep([OwnSessionsTests.cookie("a.test", "own_a", "kept", expires: Date().addingTimeInterval(86400))])
+        s.keep([OwnSessionsTests.cookie("a.test", "own_a", "other")], copied: ["a.test"])
+        #expect(s.kept().map(\.value) == ["kept"])
     }
 
     @Test func theAnswerSaysLatchkeySignsInItself() async throws {

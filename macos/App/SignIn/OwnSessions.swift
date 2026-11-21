@@ -168,20 +168,27 @@ final class OwnSessions {
     }
 
     /// FR-1353: keeps the cookies of `all` (what the store holds now) that reach an own site, in
-    /// place of those kept before; writes only on a change. `copied`: the keys of cookies a copy
-    /// of Safari's put in the store, never kept.
+    /// place of those kept before; writes only on a change. `copied`: the domains a copy of
+    /// Safari's cookies went to in the store: no cookie related to one is kept (the same domain,
+    /// under it, or a wider one), whatever its name.
     func keep(_ all: [HTTPCookie], copied: Set<String> = []) {
-        let all = copied.isEmpty ? all : all.filter { !copied.contains(Self.key(of: $0)) }
+        func tainted(_ domain: String) -> Bool {
+            let d = Self.bare(domain)
+            return copied.contains { $0 == d || $0.hasSuffix("." + d) || d.hasSuffix("." + $0) }
+        }
         guard !sites().isEmpty, var c = contents() else { return }
         let before = Dictionary(c.cookies.map { ($0.key, $0) }, uniquingKeysWith: { a, _ in a })
         let at = now()
-        let fresh = all.filter { reaches($0.domain) }.compactMap { cookie -> Kept? in
+        var fresh = all.filter { reaches($0.domain) && !tainted($0.domain) }.compactMap { cookie -> Kept? in
             var k = Kept(cookie, kept: at)
             // An unchanged cookie keeps when it was first kept, for the 14 days of FR-1353.
             if let was = before[k.key], was.value == k.value { k.kept = was.kept }
             return expired(k.expires, kept: k.kept, at: at) ? nil : k
         }
-        .sorted { $0.key < $1.key }
+        // What was kept for a site this store took a copy for stays as it was kept: the store's
+        // cookies there can't be told apart from the copy's.
+        fresh += c.cookies.filter { tainted($0.domain) && !expired($0.expires, kept: $0.kept, at: at) }
+        fresh.sort { $0.key < $1.key }
         guard fresh != c.cookies.sorted(by: { $0.key < $1.key }) else { return }
         c.cookies = fresh
         save(c)

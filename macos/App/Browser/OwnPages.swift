@@ -197,8 +197,10 @@ final class OwnPages {
         if let sessions, let all = await LockedBrowser.holding(store.httpCookieStore) {
             sessions.keep(all, copied: LockedBrowser.copied(in: store.httpCookieStore))
         }
+        // Only the copies the wipe covers are forgotten: one made while it runs stays marked.
+        let wiped = LockedBrowser.copied(in: store.httpCookieStore)
         await store.removeData(ofTypes: [WKWebsiteDataTypeCookies], modifiedSince: .distantPast)
-        LockedBrowser.forgetCopied(in: store.httpCookieStore)
+        LockedBrowser.forgetCopied(in: store.httpCookieStore, these: wiped)
         if let sessions { await LockedBrowser.set(sessions.kept(), into: store.httpCookieStore) }
         for e in pages.values { e.browser?.forgetTaken() }
         record(
