@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -252,6 +253,73 @@ func (e *env) ownerID() string {
 	u, err := e.store.UserByEmail(context.Background(), owner)
 	require.NoError(e.t, err)
 	return u.ID
+}
+
+// Other accounts can't use up the relay-wide allowance and so silence an Owner's security
+// email: each account's first 3 in 6 hours go out whatever the relay-wide limit says, and a send
+// the relay-wide limit refuses costs the account none of its own allowance (FR-699; security
+// review, 2026-11-21).
+func TestOtherAccountsCantSilenceAnOwnersSecurityEmail(t *testing.T) {
+	out := &logBuffer{}
+	e := setupWith(t, func(c *account.Config) { c.Logger = slog.New(slog.NewTextHandler(out, nil)) })
+	b := e.browser()
+	b.signUp()
+	ctx := context.Background()
+
+	// An attacker's own accounts send security emails until the relay-wide allowance is gone.
+	for i := range 20 {
+		attacker, err := e.store.CreateUser(ctx, "attacker"+strconv.Itoa(i)+"@example.com", e.clock.now())
+		require.NoError(t, err)
+		require.NoError(t, e.store.VerifyEmail(ctx, attacker.ID, e.clock.now()))
+		for range 10 {
+			e.svc.ClientAuthorized(ctx, attacker.ID, "Claude (claude.ai)", "claude.ai")
+		}
+	}
+	e.svc.WaitForMail()
+	require.Contains(t, out.String(), "level=ERROR msg=\"security email not sent: relay-wide limit reached\"",
+		"the relay-wide limit was reached, and said so at Error level for the operator")
+
+	// The Owner's account is taken over: a Mac is paired. The email still goes out.
+	before := len(e.mail.Sent())
+	code := b.pairCode("Intruder")
+	status, m := e.browser().json("/pair/exchange", map[string]string{"code": code, "public_key": p256DER(t), "name": "Intruder"})
+	require.Equal(t, http.StatusOK, status, m)
+	sent := e.newMail(before)
+	require.Len(t, sent, 1, "the Owner hears of it")
+	assert.Contains(t, sent[0].Body, "“Intruder”")
+
+	// Two more go out from the reserve; after that, sends the relay-wide limit refuses don't
+	// use up the account's own allowance of 10.
+	id := e.ownerID()
+	before = len(e.mail.Sent())
+	for range 7 {
+		e.svc.ClientAuthorized(ctx, id, "Claude (claude.ai)", "claude.ai")
+	}
+	assert.Len(t, e.newMail(before), 2, "the reserve's other two")
+	e.clock.advance(4 * time.Minute) // the relay-wide allowance refills 8; the account's, none
+	before = len(e.mail.Sent())
+	for range 9 {
+		e.svc.ClientAuthorized(ctx, id, "Claude (claude.ai)", "claude.ai")
+	}
+	assert.Len(t, e.newMail(before), 7, "the account's own allowance of 10 is all there: 3 used, 7 left")
+}
+
+// While the mail server is slow, every sending slot can be busy with other accounts' emails; the
+// Owner's waits for a free one instead of being dropped (FR-699).
+func TestBusySendingSlotsDontDropAnEmail(t *testing.T) {
+	e := setup(t)
+	ctx := context.Background()
+	release := e.mailer.hold()
+	defer release()
+	for i := range 20 { // more than the 16 slots
+		u, err := e.store.CreateUser(ctx, "user"+strconv.Itoa(i)+"@example.com", e.clock.now())
+		require.NoError(t, err)
+		require.NoError(t, e.store.VerifyEmail(ctx, u.ID, e.clock.now()))
+		e.svc.ClientAuthorized(ctx, u.ID, "Claude (claude.ai)", "claude.ai")
+	}
+	release()
+	e.svc.WaitForMail()
+	assert.Len(t, e.mail.Sent(), 20, "every one sent")
 }
 
 // At most 10 security emails per account at once, then one every 6 minutes; another account

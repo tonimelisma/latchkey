@@ -537,6 +537,13 @@ So that a stolen account or a rogue connector shows up in the Owner's inbox at o
   from the whole relay at once, then one every 30 seconds, apart from the sign-in codes'
   allowance; one over a limit is not sent and is logged. Where the relay has no email server,
   none is sent.
+- **FR-699a** Other accounts shall not be able to keep an Owner's security email from being sent
+  (security review, 2026-11-21). Each account's first 3 security emails in any 6 hours shall
+  need only the account's own allowance, never the relay-wide one; a send the relay-wide limit
+  refuses shall use none of the account's allowance, and shall be logged at error level with a
+  fixed message ("security email not sent: relay-wide limit reached") an operator's alarm can
+  match. An email that finds every sending slot busy shall wait for one within its 30 seconds
+  rather than be dropped.
 
 ### Capabilities
 - **FR-060** The Mac app shall let the Owner enable and disable each capability.

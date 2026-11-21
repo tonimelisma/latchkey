@@ -40,6 +40,15 @@ func NewKeyed(burst int, every time.Duration) *Keyed {
 // Allow takes one token from key's bucket and reports whether one was there.
 func (k *Keyed) Allow(key string) bool { return k.AllowAt(key, k.now()) }
 
+// HasAt reports whether key's bucket holds a token at now, without taking it, so a caller can
+// check several limits and spend only when all of them allow.
+func (k *Keyed) HasAt(key string, now time.Time) bool {
+	k.mu.Lock()
+	defer k.mu.Unlock()
+	b, ok := k.buckets[key]
+	return !ok || b.lim.TokensAt(now) >= 1
+}
+
 // AllowAt is Allow at a given time, for callers with their own clock.
 func (k *Keyed) AllowAt(key string, now time.Time) bool {
 	k.mu.Lock()

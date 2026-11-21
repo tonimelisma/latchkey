@@ -125,8 +125,11 @@ type Service struct {
 	perAddress *limit.Keyed // codes per address: guessing and inbox flooding
 	allSends   *limit.Keyed // emails from the relay: the sending service's quota
 	setupTries *limit.Keyed // setup codes tried, relay-wide
-	// Security emails (FR-699): per account, and from the whole relay.
+	// Security emails (FR-699): per account, each account's reserve, and from the whole relay;
+	// decided under alertMu.
+	alertMu          sync.Mutex
 	alertsPerAccount *limit.Keyed
+	alertReserves    *limit.Keyed
 	alertSends       *limit.Keyed
 }
 
@@ -195,7 +198,8 @@ func New(ctx context.Context, cfg Config) (*Service, error) {
 		ceremonies: map[string]*ceremony{}, tickets: map[string]*ticket{}, lastEmail: map[string]time.Time{},
 		perAddress: limit.NewKeyed(emailBurst, emailRefill), allSends: limit.NewKeyed(sendBurst, sendRefill),
 		setupTries:       limit.NewKeyed(SetupCodeTries, setupCodeRefill),
-		alertsPerAccount: limit.NewKeyed(alertBurst, alertRefill), alertSends: limit.NewKeyed(alertSendBurst, alertSendRefill),
+		alertsPerAccount: limit.NewKeyed(alertBurst, alertRefill), alertReserves: limit.NewKeyed(alertReserve, alertReserveRefill),
+		alertSends: limit.NewKeyed(alertSendBurst, alertSendRefill),
 	}, nil
 }
 

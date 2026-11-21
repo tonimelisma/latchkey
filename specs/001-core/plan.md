@@ -315,7 +315,7 @@ Serves FR-040, FR-014, FR-180 to FR-185.
 - Resource indicator: an `resource` parameter, if sent, must equal the connector URL.
 
 ### D5. Owner authentication: passkeys only, email recovery
-Serves FR-041, FR-042, FR-043, FR-696 to FR-699.
+Serves FR-041, FR-042, FR-043, FR-696 to FR-699a.
 - `github.com/go-webauthn/webauthn` (BSD-3), discoverable credentials, user verification required.
 - One sign-in page (FR-043a), email first: a verified account with passkeys continues with its
   passkey; a new account gets a 6-digit code by email (15 minutes, 5 wrong attempts, stored hashed
@@ -389,6 +389,23 @@ Serves FR-041, FR-042, FR-043, FR-696 to FR-699.
   the codes' per-address limit (one a minute would swallow the recovery email sent right after
   its code); a queue in the database that survives a restart (a new table and its privacy text
   for a 30-second window; not worth it).
+- No account can silence another's security email (FR-699a; security review, 2026-11-21: with
+  open sign-up, an attacker's own accounts could empty the one relay-wide bucket by pairing
+  their own machines, then take over a victim's account unreported). Each account also has a
+  reserve, 3 at once and one back every 2 hours (3 in any 6 hours): an email the reserve covers
+  needs only the account's own bucket; past the reserve it needs the relay-wide bucket too. The
+  decision is made under one lock, looking at the account's bucket first (`Keyed.HasAt`, which
+  takes nothing), then the reserve, then the relay-wide bucket, and spends the account's token
+  only when the email will go, so a refusal costs the account nothing. A relay-wide refusal is
+  logged at Error as "security email not sent: relay-wide limit reached" for the operator's
+  alarm. An email that finds all 16 slots busy waits for one within its 30 s ("security email
+  not sent: no sending slot in time", Error, if none frees) instead of being dropped, so a
+  burst from other accounts can't crowd it out; the waiting tasks are bounded by the limits
+  above and by the 30 s. Reserved emails don't draw on the relay-wide bucket: the most a relay
+  sends is that bucket plus 3 per account in 6 hours, each to an account's own confirmed
+  address. Options weighed: a bigger relay-wide bucket (only raises what an attacker must
+  spend); a relay-wide bucket per IP address (the attacker's accounts can use many addresses);
+  no relay-wide limit for security emails at all (nothing would bound the provider's quota).
 - Email: SMTP via `github.com/wneessen/go-mail`; configured by environment variables (FR-080).
   The hosted relay sends through Resend's SMTP from `no-reply@` its own host name. Mail is always
   encrypted: TLS from the start on port 465, required STARTTLS on other ports (a server that

@@ -23,6 +23,22 @@ func TestKeyedAllowsBurstThenRefills(t *testing.T) {
 	assert.False(t, k.Allow("a"))
 }
 
+// HasAt looks without taking: a caller can check one limit, then another, and spend only when
+// both allow.
+func TestKeyedHasAtTakesNothing(t *testing.T) {
+	now := time.Unix(1_000_000, 0)
+	k := NewKeyed(2, time.Minute)
+	assert.True(t, k.HasAt("a", now), "a new key has its whole burst")
+	for range 5 {
+		k.HasAt("a", now)
+	}
+	assert.True(t, k.AllowAt("a", now))
+	assert.True(t, k.HasAt("a", now))
+	assert.True(t, k.AllowAt("a", now))
+	assert.False(t, k.HasAt("a", now), "burst used up")
+	assert.True(t, k.HasAt("a", now.Add(time.Minute)), "and back after one interval")
+}
+
 func TestKeyedForgetsIdleKeys(t *testing.T) {
 	now := time.Unix(1_000_000, 0)
 	k := NewKeyed(2, time.Second)
