@@ -4,6 +4,7 @@
 package limit
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"net/http"
@@ -115,24 +116,58 @@ func (p TrustedProxies) trusts(peer netip.Addr) bool {
 // network is not enough: with `docker run -p`, internet clients can arrive from the Docker bridge
 // gateway's private address.
 func (p TrustedProxies) ClientIP(r *http.Request) string {
+	a, raw := p.client(r)
+	if !a.IsValid() {
+		return raw
+	}
+	return bucketKey(a)
+}
+
+// ClientAddress is the same address in full, an IPv6 one not grouped: what a security email
+// names (FR-699).
+func (p TrustedProxies) ClientAddress(r *http.Request) string {
+	a, raw := p.client(r)
+	if !a.IsValid() {
+		return raw
+	}
+	return a.String()
+}
+
+// client is the request's client address (see ClientIP), or, when the peer's address can't be
+// read, an invalid address and the peer as it was given.
+func (p TrustedProxies) client(r *http.Request) (netip.Addr, string) {
 	host, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err != nil {
 		host = r.RemoteAddr
 	}
 	peer, err := netip.ParseAddr(host)
 	if err != nil {
-		return host
+		return netip.Addr{}, host
 	}
 	peer = peer.Unmap()
 	if p.trusts(peer) {
 		if xff := r.Header.Values("X-Forwarded-For"); len(xff) > 0 {
 			parts := strings.Split(xff[len(xff)-1], ",")
 			if a, err := netip.ParseAddr(strings.TrimSpace(parts[len(parts)-1])); err == nil {
-				return bucketKey(a.Unmap())
+				return a.Unmap(), ""
 			}
 		}
 	}
-	return bucketKey(peer)
+	return peer, ""
+}
+
+type addressKey struct{}
+
+// WithAddress carries the request's client address (ClientAddress) to the handlers, which have
+// no TrustedProxies of their own.
+func WithAddress(ctx context.Context, addr string) context.Context {
+	return context.WithValue(ctx, addressKey{}, addr)
+}
+
+// Address is the client address WithAddress put on ctx, or "" when there is none.
+func Address(ctx context.Context) string {
+	a, _ := ctx.Value(addressKey{}).(string)
+	return a
 }
 
 // bucketKey groups IPv6 clients by /64, the usual allocation to one customer, so rotating

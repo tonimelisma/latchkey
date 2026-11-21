@@ -256,6 +256,7 @@ func (s *Service) linkPost(w http.ResponseWriter, r *http.Request) {
 	}
 	s.cfg.Events.Record(ctx, store.Event{Kind: events.MacPaired, UserID: u.ID, DeviceID: d.ID, Detail: "a Linux server"})
 	s.cfg.DevicesChanged(u.ID)
+	s.machinePaired(ctx, d)
 	// FR-656: the account page names the new machine and marks it.
 	// nosemgrep: go.lang.security.injection.open-redirect.open-redirect -- fixed local path; the ID is the relay's own, escaped
 	http.Redirect(w, r, "/account?done=linked&machine="+url.QueryEscape(d.ID), http.StatusSeeOther)

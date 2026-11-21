@@ -69,6 +69,32 @@ func TestClientIP(t *testing.T) {
 	}
 }
 
+// ClientAddress is the same address, whole: a security email names it as it is, where the
+// limits group IPv6 clients by network (FR-699).
+func TestClientAddress(t *testing.T) {
+	cases := []struct{ remote, xff, want string }{
+		{"203.0.113.9:4000", "", "203.0.113.9"},
+		{"127.0.0.1:4000", "198.51.100.1", "198.51.100.1"},
+		{"[2001:db8:1:2:3:4:5:6]:4000", "", "2001:db8:1:2:3:4:5:6"},
+		{"127.0.0.1:4000", "2001:db8::7", "2001:db8::7"},
+		{"[::ffff:203.0.113.9]:4000", "", "203.0.113.9"},
+		{"203.0.113.9:4000", "198.51.100.1", "203.0.113.9"},
+	}
+	for _, c := range cases {
+		r := httptest.NewRequestWithContext(t.Context(), "GET", "/", nil)
+		r.RemoteAddr = c.remote
+		if c.xff != "" {
+			r.Header.Set("X-Forwarded-For", c.xff)
+		}
+		assert.Equal(t, c.want, TrustedProxies(nil).ClientAddress(r), "%s %s", c.remote, c.xff)
+	}
+}
+
+func TestAddressInContext(t *testing.T) {
+	assert.Empty(t, Address(t.Context()), "none set")
+	assert.Equal(t, "198.51.100.1", Address(WithAddress(t.Context(), "198.51.100.1")))
+}
+
 func TestParseTrustedProxies(t *testing.T) {
 	p, err := ParseTrustedProxies("")
 	require.NoError(t, err)

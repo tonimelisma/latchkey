@@ -25,6 +25,7 @@ import (
 
 	"github.com/tonimelisma/latchkey/relay/agentproto"
 	"github.com/tonimelisma/latchkey/relay/internal/account"
+	"github.com/tonimelisma/latchkey/relay/internal/limit"
 	"github.com/tonimelisma/latchkey/relay/internal/oauth"
 	"github.com/tonimelisma/latchkey/relay/internal/store"
 )
@@ -96,7 +97,11 @@ func setupWith(t *testing.T, tweak func(*account.Config)) *env {
 	e.mailer = &gatedMailer{MemoryMailer: e.mail}
 
 	mux := http.NewServeMux()
-	srv := httptest.NewServer(mux)
+	// The relay's guard puts the client's address on every request (FR-082); here the client is
+	// this machine.
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mux.ServeHTTP(w, r.WithContext(limit.WithAddress(r.Context(), limit.TrustedProxies(nil).ClientAddress(r))))
+	}))
 	t.Cleanup(srv.Close)
 	_, port, _ := net.SplitHostPort(strings.TrimPrefix(srv.URL, "http://"))
 	e.base = "http://localhost:" + port // WebAuthn needs a domain, not an IP
@@ -104,7 +109,12 @@ func setupWith(t *testing.T, tweak func(*account.Config)) *env {
 
 	var svc *account.Service
 	auth := &lateAuth{}
-	o, err := oauth.New(ctx, oauth.Config{Issuer: public, Store: st, Auth: auth, Now: e.clock.now, AllowedClients: oauth.AnyClientHost()})
+	o, err := oauth.New(ctx, oauth.Config{
+		Issuer: public, Store: st, Auth: auth, Now: e.clock.now, AllowedClients: oauth.AnyClientHost(),
+		OnAuthorized: func(ctx context.Context, userID, clientName, redirectHost string) {
+			svc.ClientAuthorized(ctx, userID, clientName, redirectHost)
+		},
+	})
 	require.NoError(t, err)
 	cfg := account.Config{
 		PublicURL: public, Store: st, Macs: e.macs, Mailer: e.mailer, OAuth: o,
@@ -116,6 +126,7 @@ func setupWith(t *testing.T, tweak func(*account.Config)) *env {
 	require.NoError(t, err)
 	auth.svc = svc
 	e.svc = svc
+	t.Cleanup(svc.WaitForMail) // before the store closes
 	o.Register(mux)
 	svc.Register(mux)
 	return e
@@ -779,6 +790,7 @@ func TestRecovery(t *testing.T) {
 	lost := e.browser() // the passkeys are gone; a new device
 	e.clock.advance(2 * time.Minute)
 	lost.codeFlow(store.PurposeRecover)
+	e.svc.WaitForMail() // the notice goes out after the answer (FR-699)
 	assert.Contains(t, e.mail.Sent()[len(e.mail.Sent())-2].Subject, "recovery code")
 	assert.Equal(t, http.StatusOK, lost.get("/account").status, "signed in with the new passkey")
 
@@ -835,7 +847,7 @@ func TestNewClientAccessIsAnnouncedOnce(t *testing.T) {
 
 	// Offline: kept for the next connection, told once.
 	e.clock.advance(time.Minute)
-	svc.ClientAuthorized(ctx, u.ID, "Claude")
+	svc.ClientAuthorized(ctx, u.ID, "Claude", "claude.ai")
 	assert.Empty(t, e.macs.notices)
 	notices := svc.NoticesOnConnect(ctx, d, time.Time{})
 	require.Len(t, notices, 1)
@@ -847,7 +859,7 @@ func TestNewClientAccessIsAnnouncedOnce(t *testing.T) {
 	e.macs.mu.Lock()
 	e.macs.online[d.ID] = true
 	e.macs.mu.Unlock()
-	svc.ClientAuthorized(ctx, u.ID, "Claude Code")
+	svc.ClientAuthorized(ctx, u.ID, "Claude Code", "localhost:33418")
 	require.Len(t, e.macs.notices, 1)
 	assert.Equal(t, "Claude Code", e.macs.notices[0].Client)
 	assert.Empty(t, svc.NoticesOnConnect(ctx, d, time.Time{}))
@@ -888,12 +900,16 @@ type gatedMailer struct {
 	*account.MemoryMailer
 	mu   sync.Mutex
 	gate chan struct{} // non-nil: Send waits until it is closed
+	err  error         // non-nil: Send fails with it, sending nothing
 }
 
 func (g *gatedMailer) Send(ctx context.Context, to, subject, body string) error {
 	g.mu.Lock()
-	gate := g.gate
+	gate, err := g.gate, g.err
 	g.mu.Unlock()
+	if err != nil {
+		return err
+	}
 	if gate != nil {
 		select {
 		case <-gate:
@@ -902,6 +918,13 @@ func (g *gatedMailer) Send(ctx context.Context, to, subject, body string) error 
 		}
 	}
 	return g.MemoryMailer.Send(ctx, to, subject, body)
+}
+
+// fail makes every send fail with err, until it is called with nil.
+func (g *gatedMailer) fail(err error) {
+	g.mu.Lock()
+	g.err = err
+	g.mu.Unlock()
 }
 
 func (g *gatedMailer) hold() (release func()) {

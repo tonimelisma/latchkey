@@ -514,6 +514,30 @@ Why: on 2026-10-25 commands left processes and files on the Mac that nobody list
   on the same Mac. The relay address the Owner types in is unaffected (security review,
   2026-10-25).
 
+### Security emails (Toni, 2026-11-21)
+
+So that a stolen account or a rogue connector shows up in the Owner's inbox at once.
+
+- **FR-696** When a machine (a Mac, or a Linux server, spec 010) is paired to an account,
+  including the same Mac pairing again, the relay shall email the account's Owner, naming the
+  kind of machine and its name.
+- **FR-697** When the Owner allows an app on the consent page (FR-049a), the relay shall email
+  the Owner, naming the app with its checked host and the host the approval is sent back to, as
+  the consent page showed them. Refusing an app, redeeming its code, and refreshing its access
+  shall send none.
+- **FR-698** When an account recovery completes, the relay shall email the Owner, saying what
+  the recovery removed.
+- **FR-699** Each of these security emails shall say what happened, when (in UTC), and the IP
+  address the request came from (as FR-082 determines it, when known), and what to do if it
+  wasn't the Owner, with links to the relay's account page (where a machine or an app is
+  removed) and to recovery; it shall hold no code, token, or key. The relay shall send it in the
+  background after the change is made, so the change never waits for the mail server or fails
+  because of it, giving up after 30 seconds; a failure shall be logged. The relay shall send at
+  most 10 security emails per account at once, then one more every 6 minutes, and at most 100
+  from the whole relay at once, then one every 30 seconds, apart from the sign-in codes'
+  allowance; one over a limit is not sent and is logged. Where the relay has no email server,
+  none is sent.
+
 ### Capabilities
 - **FR-060** The Mac app shall let the Owner enable and disable each capability.
 - **FR-061** The tool list Claude sees shall contain only tools of enabled capabilities, plus
@@ -862,6 +886,10 @@ Measurable, technology-free. Each one has a test.
 - Clock skew between Mac and relay: the relay's clock is authoritative for all timestamps.
 - Recovery email is intercepted: links are single-use, short-lived, and recovery is announced to
   the account email and in the Mac app.
+- Someone floods an account with approvals or pairings: the first 10 security emails reach the
+  Owner, so the flood itself shows; the rest are logged (FR-699).
+- The relay restarts while a security email is being sent: it waits for it, up to its shutdown
+  limit of 10 seconds.
 - The Owner revokes the Mac while a call is in flight: the call fails with "Mac disconnected".
 - The Owner turns a capability off or down while one of its calls is in flight: the call is
   stopped and answered with the reason (FR-066). A change it had already made stays made.

@@ -75,7 +75,7 @@ func newHarness(t *testing.T, tweak func(*Options)) *harness {
 	require.NoError(t, err)
 	srv.Config.Handler = h.relay.Handler
 	srv.Start()
-	t.Cleanup(func() { h.relay.Hub.Close(); srv.Close() })
+	t.Cleanup(func() { h.relay.Hub.Close(); srv.Close(); h.relay.DrainMail(context.Background()) })
 	return h
 }
 

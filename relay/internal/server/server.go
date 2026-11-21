@@ -43,6 +43,9 @@ type Relay struct {
 	Events *events.Recorder
 	// Traces is the accounts' trace files (FR-683), or nil.
 	Traces *trace.Store
+	// DrainMail waits, until ctx ends, for the emails being sent in the background (recovery
+	// codes, security emails): call it at shutdown, after the last request is answered.
+	DrainMail func(context.Context)
 	// grantExpired records an approval the purge removed and tells the rest of the relay.
 	grantExpired func(context.Context, store.Grant)
 }
@@ -150,7 +153,9 @@ func New(ctx context.Context, o Options) (*Relay, error) {
 	auth := &authBridge{}
 	oc := oauth.Config{
 		Issuer: o.PublicURL, Store: o.Store, Auth: auth, Logger: o.Logger, AllowedClients: o.AllowedClients, Events: rec,
-		OnAuthorized: func(ctx context.Context, userID, clientName string) { acc.ClientAuthorized(ctx, userID, clientName) },
+		OnAuthorized: func(ctx context.Context, userID, clientName, redirectHost string) {
+			acc.ClientAuthorized(ctx, userID, clientName, redirectHost)
+		},
 		// The Mac's list of apps with access follows every change (FR-192), and an app whose
 		// access ended loses its open sessions while the others keep theirs (FR-191).
 		OnGrantsChanged: func(ctx context.Context, userID string) { h.ClientsChanged(ctx, userID) },
@@ -184,7 +189,7 @@ func New(ctx context.Context, o Options) (*Relay, error) {
 	acc.Register(mux)
 	r := &Relay{
 		Handler: guard(o.PublicURL, o.TrustedProxies, rec, mux), Hub: h, Store: o.Store, Events: rec, Traces: o.Traces,
-		grantExpired: oa.GrantExpired,
+		grantExpired: oa.GrantExpired, DrainMail: acc.DrainMail,
 	}
 	r.PurgeClients = func(ctx context.Context) error {
 		_, err := oa.PurgeRefusedClients(ctx)

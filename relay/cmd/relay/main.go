@@ -140,6 +140,7 @@ func run(ctx context.Context) error {
 	if err := srv.Shutdown(shutdownCtx); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		return err
 	}
+	r.DrainMail(shutdownCtx) // a security email of the last moments still goes out
 	return nil
 }
 

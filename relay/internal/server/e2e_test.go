@@ -54,7 +54,7 @@ func startRelayWith(t *testing.T, tweak func(*Options)) (string, *store.Store) {
 	require.NoError(t, err)
 	srv.Config.Handler = r.Handler
 	srv.Start()
-	t.Cleanup(func() { r.Hub.Close(); srv.Close() })
+	t.Cleanup(func() { r.Hub.Close(); srv.Close(); r.DrainMail(context.Background()) })
 	return base, db
 }
 

@@ -12,6 +12,7 @@ import (
 
 	"github.com/tonimelisma/latchkey/relay/agentproto"
 	"github.com/tonimelisma/latchkey/relay/internal/events"
+	"github.com/tonimelisma/latchkey/relay/internal/limit"
 	"github.com/tonimelisma/latchkey/relay/internal/store"
 )
 
@@ -334,12 +335,8 @@ func (s *Service) completeRecovery(ctx context.Context, u store.User, keep []byt
 		return err
 	}
 	s.cfg.AccessRemoved(u.ID)
-	if s.cfg.Mailer != nil {
-		if err := s.cfg.Mailer.Send(ctx, u.Email, "Your Latchkey account was recovered",
-			emailRecovered(now, s.link("/recover", nil), s.link("/account", nil))); err != nil {
-			s.cfg.Logger.Error("recovery notice email", "err", err)
-		}
-	}
+	account, recover := s.alertLinks()
+	s.alert(ctx, u.ID, emailRecovered(now, limit.Address(ctx), account, recover)) // after the answer (FR-698)
 	for _, d := range s.onlineMacs(ctx, u.ID) {
 		n := &agentproto.Notice{Kind: agentproto.NoticeAccountRecovered, At: now.Truncate(time.Second)}
 		if err := s.cfg.Macs.SendNotice(ctx, d.ID, n); err != nil {

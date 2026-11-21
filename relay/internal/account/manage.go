@@ -396,6 +396,7 @@ func (s *Service) pairExchange(w http.ResponseWriter, r *http.Request) {
 	}
 	s.cfg.Events.Record(ctx, store.Event{Kind: events.MacPaired, UserID: userID, DeviceID: d.ID})
 	s.cfg.DevicesChanged(userID)
+	s.machinePaired(ctx, d)
 	writeJSON(w, http.StatusOK, map[string]string{"device_id": d.ID})
 }
 

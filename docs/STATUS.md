@@ -15,6 +15,13 @@ with a nightly reboot when needed, removes unneeded packages and services, puts 
 shares the server) in a container without root on its own network, and its deploys become pulls
 by the server; the sentinel and cloud alerts email Toni on anything that shouldn't happen.
 
+Security emails (Toni, 2026-11-21; spec 001 FR-696 to FR-699, plan D5): the relay emails the
+Owner whenever a machine is paired, an app is allowed on the consent page (not on a refresh), or
+the account is recovered, with the time in UTC, the request's IP address, and links to the
+account page and recovery. Sent in the background after the change, never holding it up; at
+most 10 per account at once, then one every 6 minutes. Built and tested in the relay; deploy
+pending.
+
 Sign-in (spec 013, built 2026-11-21): Latchkey signs in on Claude's pages with the owner's
 passwords and verification codes from Passwords' CSV export, filled by Latchkey, never seen by
 Claude. Two tools, `logins_find` and `logins_sign_in`; a Sign-in setting, On by default; the

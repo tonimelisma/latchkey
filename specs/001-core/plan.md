@@ -315,7 +315,7 @@ Serves FR-040, FR-014, FR-180 to FR-185.
 - Resource indicator: an `resource` parameter, if sent, must equal the connector URL.
 
 ### D5. Owner authentication: passkeys only, email recovery
-Serves FR-041, FR-042, FR-043.
+Serves FR-041, FR-042, FR-043, FR-696 to FR-699.
 - `github.com/go-webauthn/webauthn` (BSD-3), discoverable credentials, user verification required.
 - One sign-in page (FR-043a), email first: a verified account with passkeys continues with its
   passkey; a new account gets a 6-digit code by email (15 minutes, 5 wrong attempts, stored hashed
@@ -345,8 +345,8 @@ Serves FR-041, FR-042, FR-043.
 - Recovery: single-use code, 15 min expiry, stored hashed; completing it removes all old passkeys
   (FR-047), signs out every browser, and removes every Claude client's access (its codes and
   tokens), as "Remove Claude's access" does (FR-047a); the recovery page and
-  emails say Claude must connect again. Using it is announced by email and in the
-  Mac app. The Mac app learns of it through a `notice` message (contracts/agent-protocol.md), sent
+  emails say Claude must connect again. Using it is announced by email (a security email,
+  below) and in the Mac app. The Mac app learns of it through a `notice` message (contracts/agent-protocol.md), sent
   at once if the Mac is online, otherwise on its next connection (the relay compares the
   recovery's `used_at` with the device's last connection; nothing new is stored).
 - Sign-ins in progress (security review, 2026-10-25). A passkey exchange (5 minutes) and the
@@ -368,6 +368,27 @@ Serves FR-041, FR-042, FR-043.
   request waited on the mail server only when the account existed. A send that fails can't be
   reported to the page without revealing the account; the page already tells the Owner to ask
   again if no email arrives.
+- Security emails (FR-696 to FR-699; Toni, 2026-11-21), the same way: `account/alerts.go`
+  sends one after a Mac's `POST /pair/exchange`, a Linux server's confirmed `POST /link`, the
+  consent page's Allow (oauth's `OnAuthorized`, which now passes the redirect host the page
+  showed, and which a code exchange or refresh never calls), and a completed recovery. The
+  recovery email, which until now was sent before the passkey step answered, goes the same
+  way. Each is handed to a background task (at most 16 at once, 30 s each, its own slots apart
+  from the recovery codes'), which looks up the address and sends; a failure is logged with the
+  change and the account's ID, never the address or the IP. Limits, in memory: 10 per account
+  at once, then one every 6 minutes (several machines and Claude apps set up in one sitting
+  fit; a flood shows as ten emails), and 100 from the relay at once, then one every 30 s, apart
+  from the codes' relay-wide allowance so a flood of sign-up codes can't silence them. They
+  can only go to an account's own confirmed address, after a signed-in or code-confirmed
+  action, so they can't be aimed at a stranger. The IP: the guard puts `ClientAddress` (the
+  FR-082 address, an IPv6 one whole, not grouped by /64 as the limits do) on the request's
+  context (`limit.WithAddress`), so the account and OAuth handlers need no proxy settings of
+  their own; it appears only in the email, never in the database or the log. At shutdown the
+  relay waits for sends in progress, within its 10 s (`Relay.DrainMail`). Options weighed:
+  sending in the request (Constitution II: the change would wait on the mail server); sharing
+  the codes' per-address limit (one a minute would swallow the recovery email sent right after
+  its code); a queue in the database that survives a restart (a new table and its privacy text
+  for a 30-second window; not worth it).
 - Email: SMTP via `github.com/wneessen/go-mail`; configured by environment variables (FR-080).
   The hosted relay sends through Resend's SMTP from `no-reply@` its own host name. Mail is always
   encrypted: TLS from the start on port 465, required STARTTLS on other ports (a server that
@@ -1282,7 +1303,7 @@ Ops Agent (about 150 MB; the sentinel writes to the Logging API itself).
 | Article | Status |
 |---|---|
 | I. Outbound only | Pass (D1) |
-| II. Fail fast | Pass (D2, D3); hosted Claude timeout to be measured |
+| II. Fail fast | Pass (D2, D3; security emails are sent after the change, with a deadline, D5); hosted Claude timeout to be measured |
 | III. Disabled means nonexistent | Pass (FR-061); Pause leaves levels as they are and answers calls like an offline Mac (D15); `latchkey_log` is no capability, reads only Latchkey's own public lines, and is refused while paused (D26) |
 | IV. Good macOS citizen | Pass with one documented exception: no App Sandbox (D9) |
 | V. Self-hostable | Pass (D10) |

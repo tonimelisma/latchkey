@@ -115,6 +115,7 @@ type Service struct {
 	// flight, sending bounds them.
 	background sync.WaitGroup
 	sending    chan struct{}
+	alerting   chan struct{} // security emails in flight (FR-699)
 
 	mu         sync.Mutex
 	swept      time.Time // last sweep of ceremonies and tickets
@@ -124,6 +125,9 @@ type Service struct {
 	perAddress *limit.Keyed // codes per address: guessing and inbox flooding
 	allSends   *limit.Keyed // emails from the relay: the sending service's quota
 	setupTries *limit.Keyed // setup codes tried, relay-wide
+	// Security emails (FR-699): per account, and from the whole relay.
+	alertsPerAccount *limit.Keyed
+	alertSends       *limit.Keyed
 }
 
 // New creates the service.
@@ -187,10 +191,11 @@ func New(ctx context.Context, cfg Config) (*Service, error) {
 	}
 	return &Service{
 		cfg: cfg, webauthn: wa, pages: pages, csrfKey: key, secure: secure, cookie: cookie,
-		sending:    make(chan struct{}, maxBackgroundSends),
+		sending: make(chan struct{}, maxBackgroundSends), alerting: make(chan struct{}, maxAlertSends),
 		ceremonies: map[string]*ceremony{}, tickets: map[string]*ticket{}, lastEmail: map[string]time.Time{},
 		perAddress: limit.NewKeyed(emailBurst, emailRefill), allSends: limit.NewKeyed(sendBurst, sendRefill),
-		setupTries: limit.NewKeyed(SetupCodeTries, setupCodeRefill),
+		setupTries:       limit.NewKeyed(SetupCodeTries, setupCodeRefill),
+		alertsPerAccount: limit.NewKeyed(alertBurst, alertRefill), alertSends: limit.NewKeyed(alertSendBurst, alertSendRefill),
 	}, nil
 }
 
@@ -780,9 +785,12 @@ func (s *Service) onlineMacs(ctx context.Context, userID string) []store.Device 
 }
 
 // ClientAuthorized tells the Owner's Macs that a Claude client was given access: now if one is
-// online, otherwise on the next connection.
-func (s *Service) ClientAuthorized(ctx context.Context, userID, clientName string) {
+// online, otherwise on the next connection. It also emails the Owner (FR-697), naming the
+// client and the host the approval went back to as the consent page showed them.
+func (s *Service) ClientAuthorized(ctx context.Context, userID, clientName, redirectHost string) {
 	now := s.now()
+	account, recover := s.alertLinks()
+	s.alert(ctx, userID, emailAppAllowed(clientName, redirectHost, now, limit.Address(ctx), account, recover))
 	told := false
 	for _, d := range s.onlineMacs(ctx, userID) {
 		n := &agentproto.Notice{Kind: agentproto.NoticeClientAuthorized, At: now.Truncate(time.Second), Client: clientName}

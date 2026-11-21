@@ -156,7 +156,8 @@ func (s *Server) authorize(w http.ResponseWriter, r *http.Request) {
 		Kind: events.ClaudeApproved, UserID: userID, Detail: eventLabel(label(ar.client, ar.redirect)),
 	})
 	if s.cfg.OnAuthorized != nil {
-		s.cfg.OnAuthorized(ctx, userID, label(ar.client, ar.redirect))
+		c := consentFor(ar.client, ar.redirect)
+		s.cfg.OnAuthorized(ctx, userID, c.Label(), c.RedirectHost)
 	}
 	s.redirectBack(w, ar, url.Values{"code": {code}, "scope": {strings.Join(ar.granted, " ")}})
 }

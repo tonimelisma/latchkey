@@ -136,6 +136,9 @@ apps. It works in the background instead.
 - **You choose what Claude can do.** Each ability is Off, Read only, or Read & write. One that's
   off doesn't exist as far as Claude knows.
 - **You approve every Claude app** that connects, and can remove any of them later.
+- **You hear about every change to your account.** The relay emails you whenever a machine is
+  connected, a Claude app is allowed, or your account is recovered, with the time and the IP
+  address it came from, so if it wasn't you, you know at once and can remove it.
 - **You see everything Claude did**, with a notification for every change.
 - **You can pause Claude in one click** from the menu bar.
 - **A full record of everything, kept for good.** Your Mac, each Linux server, and the relay

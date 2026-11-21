@@ -91,6 +91,7 @@ type env struct {
 
 	authorizedMu  sync.Mutex
 	authorized    []string // client names, in order
+	sentBackTo    []string // each authorization's redirect host as the consent page showed it
 	grantsChanged []string // user IDs told that their list of apps changed (under authorizedMu)
 	grantsRemoved []string // grant IDs reported removed (under authorizedMu)
 
@@ -143,11 +144,12 @@ func setupAt(t *testing.T, path string, allowed oauth.AllowedHosts) *env {
 	e.oauth, err = oauth.New(ctx, oauth.Config{
 		Issuer: issuer, Store: st, Auth: e.auth, HTTPClient: e.cimd.Client(), Now: e.clock.now,
 		AllowedClients: allowed,
-		OnAuthorized: func(_ context.Context, userID, clientName string) {
+		OnAuthorized: func(_ context.Context, userID, clientName, redirectHost string) {
 			e.authorizedMu.Lock()
 			defer e.authorizedMu.Unlock()
 			if userID == e.userID {
 				e.authorized = append(e.authorized, clientName)
+				e.sentBackTo = append(e.sentBackTo, redirectHost)
 			}
 		},
 		OnGrantsChanged: func(_ context.Context, userID string) {
@@ -579,10 +581,14 @@ func TestEveryAuthorizationIsAnnounced(t *testing.T) {
 	e := setup(t)
 	id := e.register("https://claude.ai/api/mcp/auth_callback")
 	e.tokens(id)
-	e.tokens(id)
+	_, refresh := e.tokens(id)
+	// Refreshing an approved app's access is no new approval (FR-697).
+	resp, m := e.tokenRequest(url.Values{"grant_type": {"refresh_token"}, "refresh_token": {refresh}, "client_id": {id}})
+	require.Equal(t, http.StatusOK, resp.StatusCode, m)
 	e.authorizedMu.Lock()
 	defer e.authorizedMu.Unlock()
-	assert.Equal(t, []string{"Claude (claude.ai)", "Claude (claude.ai)"}, e.authorized, "each grant")
+	assert.Equal(t, []string{"Claude (claude.ai)", "Claude (claude.ai)"}, e.authorized, "each grant, and nothing for the refresh")
+	assert.Equal(t, []string{"claude.ai", "claude.ai"}, e.sentBackTo, "where the consent page said the approval goes")
 }
 
 func TestResourceIndicator(t *testing.T) {

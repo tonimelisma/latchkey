@@ -139,7 +139,8 @@ func guard(public *url.URL, proxies limit.TrustedProxies, rec *events.Recorder, 
 			}
 			r.Body = http.MaxBytesReader(w, r.Body, max)
 		}
-		next.ServeHTTP(w, r)
+		// The handlers name the client's address in security emails (FR-699).
+		next.ServeHTTP(w, r.WithContext(limit.WithAddress(r.Context(), proxies.ClientAddress(r))))
 	}))
 }
 

@@ -138,9 +138,10 @@ type Config struct {
 	// HTTPClient fetches client metadata documents. Default: refuses private addresses.
 	HTTPClient *http.Client
 	Now        func() time.Time
-	// OnAuthorized runs after each grant, with the client's name and checked host (as on the
-	// consent page), so the Owner can be told.
-	OnAuthorized func(ctx context.Context, userID, clientName string)
+	// OnAuthorized runs after each grant the Owner allowed on the consent page (never for a
+	// refresh), with the client's name and checked host and the host the approval goes back to,
+	// as the page showed them, so the Owner can be told (FR-697).
+	OnAuthorized func(ctx context.Context, userID, clientName, redirectHost string)
 	// Logger gets what clients are not told, such as why a metadata document was refused.
 	Logger *slog.Logger
 	// OnGrantsChanged runs when the Owner's list of apps with access changed: a first token was

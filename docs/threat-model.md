@@ -135,7 +135,9 @@ Boundaries, each a place where input must be treated as hostile:
 6. Sign-in and recovery codes: 6 digits, hashed, 15 minutes, 5 wrong attempts, rate-limited per
    address and per email; recovery removes old passkeys and is announced. A recovery request
    answers the same, at the same speed, for known and unknown addresses; completing a recovery
-   ends every other pending one.
+   ends every other pending one. Every machine paired, every app allowed, and every completed
+   recovery is emailed to the owner at once, with the time and the request's IP address
+   (FR-696 to FR-699), so a stolen session or a rogue connector shows.
 7. The relay never blocks on the Mac without a deadline, and no unauthenticated request can make
    it hold unbounded memory, goroutines, connections, or rows. Bounded: MCP sessions (30 minutes
    idle, 64 per owner), frames from a connected Mac (60 at once, then 5 a second) and its tool
