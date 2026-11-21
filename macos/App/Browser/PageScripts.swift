@@ -286,6 +286,7 @@ enum PageScripts {
     /// the new tab was the owner's to Latchkey and Claude lost its page (Costco's Orders &
     /// Returns, feedback report 2026-11-17).
     static func click(_ ref: String, sameTab: Bool = false) -> String {
+        // nosemgrep: latchkey-page-script-literal -- besides find(), only a Bool.
         """
         (function () { \(find(ref))
           var newTab = \(sameTab ? "true" : "false") && e.closest ? e.closest('a[target]') : null;
@@ -570,6 +571,7 @@ enum PageScripts {
             return e.localizedDescription
         }
         if let line = e.userInfo["WKJavaScriptExceptionLineNumber"] as? Int, line > 0 {
+            // nosemgrep: latchkey-page-script-literal -- an error message for Claude, never run in a page.
             return "\(message) (line \(line))"
         }
         return message
