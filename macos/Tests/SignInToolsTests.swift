@@ -37,6 +37,11 @@ import Testing
         #expect(!all.contains("pw-a") && !all.contains("gh-secret") && !all.contains("GEZDGNBV"))
         let one = await find.handler(.object(["site": .string("https://github.com/login")])).plainText
         #expect(one.contains("github.com") && !one.contains("a.test"))
+        // Totals, and codes said either way (feedback report, 2026-11-21).
+        #expect(all.contains("3 sign-ins for 3 sites; 1 with a verification code"), "\(all)")
+        let noCodes = await LoginsCapability.find(store: try store([SignInStoreTests.a])).handler(.object([:]))
+            .plainText
+        #expect(noCodes.contains("1 sign-in for 1 site; none has a verification code in Passwords."), "\(noCodes)")
         let empty = await LoginsCapability.find(store: SignInStore(vault: MemoryVault())).handler(.object([:]))
         #expect(empty.plainText.contains("no sign-ins yet"))
     }

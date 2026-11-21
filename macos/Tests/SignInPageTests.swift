@@ -160,4 +160,23 @@ import Testing
         _ = try await b.open(html: "<p>Are you human?</p><div class=\"g-recaptcha\">x</div>", base: Self.base)
         #expect(try await signIn(b).outcome == .check)
     }
+
+    /// Live check 2026-11-21 (homerecording.com): a forum's page after signing in carried Google
+    /// ads, whose script adds a hidden reCAPTCHA frame; Latchkey answered "a check it can't
+    /// answer" though Claude was signed in. Only a challenge the page shows counts.
+    @Test func captchaPartsThePageDoesntShowArentACheck() async throws {
+        let b = browser()
+        defer { b.discard() }
+        let after = """
+            <h1>Welcome ann</h1>\
+            <iframe src="about:blank#/recaptcha/api2/aframe" style="display:none"></iframe>\
+            <iframe src="about:blank#/recaptcha/api2/aframe" width="0" height="0" style="border:0"></iframe>\
+            <div class="grecaptcha-badge" style="width:256px;height:60px">\
+            <iframe src="about:blank#/recaptcha/api2/anchor?size=invisible" width="256" height="60"></iframe></div>
+            """
+        let page = Self.onePage().replacingOccurrences(of: "'<h1>Welcome ann</h1>'", with: PageScripts.literal(after))
+        #expect(page.contains("grecaptcha-badge"))
+        _ = try await b.open(html: page, base: Self.base)
+        #expect(try await signIn(b).outcome == .signedIn)
+    }
 }

@@ -52,8 +52,16 @@ enum LoginsCapability {
                         "No saved sign-in for \(wanted). Latchkey holds \(logins.count) from Passwords (taken in \(when))."
                     )
                 }
+                // Totals first, codes said either way (fb_BCMYNJQJP20GB7EQ92NTA2R9M0, 2026-11-21: with no
+                // marker at all, "none has a code" read like a missing marker).
+                let sites = Set(shown.map(\.site)).count
+                let codes = shown.filter { $0.otp != nil }.count
                 var out =
-                    "Saved sign-ins (from the owner's Passwords, taken in \(when)); sign in with logins_sign_in:\n"
+                    "Saved sign-ins (from the owner's Passwords, taken in \(when)); sign in with logins_sign_in.\n"
+                    + "\(shown.count) sign-in\(shown.count == 1 ? "" : "s") for \(sites) site\(sites == 1 ? "" : "s"); "
+                    + (codes == 0
+                        ? "none has a verification code in Passwords.\n"
+                        : "\(codes) with a verification code, marked below; the rest have none.\n")
                 var left = 0
                 for l in shown {
                     let line =

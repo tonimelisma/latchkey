@@ -26,6 +26,11 @@ notification when it stops (the import already sends one when it's done). 0.8.17
 Latchkey checks the save panel closed and, for 10 minutes, wipes a file of the export's name
 saved anywhere a panel may put it (FR-1307; Toni asked whether a stale file is left in
 Downloads; none was).
+Toni's export with 0.8.177 (2026-11-21 10:41): done in 10 s, 1,026 sign-ins (Passwords' other
+19 items have no web address), none with a verification code in Passwords. Live sign-in through
+the hosted relay: homerecording.com signed in, no password in any answer, but the tool said "a
+check" (a hidden reCAPTCHA frame from Google's ad script); 0.8.178 counts only a challenge the
+page shows, and logins_find starts with totals and says how many have codes (a feedback report).
 Live check (0.8.175, Mac locked, 2026-11-21 00:54): groups logins, browser, files, shell: 51 of 51
 worked. A fresh Claude signed in to the-internet.herokuapp.com as tomsmith with the fixture's test
 sign-in (`logins-fixture.sh`); none of its 10 tool results held the password except the test

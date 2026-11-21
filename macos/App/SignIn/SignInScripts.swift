@@ -38,7 +38,15 @@ extension PageScripts {
             var same = inputs.filter(function (e) { return e.form === passwords[0].form && typed(e) && e !== codeField; })[0];
             if (same) userField = same;
           }
-          var captcha = !!document.querySelector('iframe[src*="recaptcha"], iframe[src*="hcaptcha"], iframe[src*="turnstile"], iframe[src*="arkoselabs"], .g-recaptcha, .h-captcha, .cf-turnstile');
+          // A challenge counts only when the page shows it: ad scripts add hidden reCAPTCHA
+          // frames, and invisible reCAPTCHA shows only its badge (homerecording.com, 2026-11-21).
+          var captcha = Array.prototype.some.call(document.querySelectorAll('iframe[src*="recaptcha"], iframe[src*="hcaptcha"], iframe[src*="turnstile"], iframe[src*="arkoselabs"], .g-recaptcha, .h-captcha, .cf-turnstile'), function (e) {
+            if (e.closest('.grecaptcha-badge')) return false;
+            if (e.tagName === 'IFRAME' && /size=invisible|\\/aframe/i.test(e.getAttribute('src') || '')) return false;
+            var s = getComputedStyle(e);
+            if (s.visibility === 'hidden' || s.display === 'none' || Number(s.opacity) === 0) return false;
+            return e.offsetWidth > 0 && e.offsetHeight > 0;
+          });
           function problem() {
             var all = document.querySelectorAll('[role="alert"], [aria-live="assertive"], .error, .alert, .flash, [class*="error"], [id*="error"]');
             for (var i = 0; i < all.length; i++) {
