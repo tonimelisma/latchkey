@@ -71,7 +71,10 @@ interface another app can read (`research.md`), so the only way in is a copy the
   password. Latchkey shall save the file in a folder of its own that isn't synced, read it,
   delete it at once, close Passwords if Latchkey opened it, and say how many sign-ins (and how
   many with verification codes) it now holds. A file that can't be read is deleted too, and the
-  Owner is told why it failed. Passwords comes to the front for this, because the Owner clicked
+  Owner is told why it failed. While it runs, Latchkey's menu and Settings show the step it is
+  on; when it ends, how it ended comes as a notification too, so the Owner knows it is done
+  without opening Latchkey (Toni, 2026-11-21: "why is there no progress indicator? … How do I
+  know it's complete?"). Passwords comes to the front for this, because the Owner clicked
   (Toni, 2026-11-20: "One touch, when you click"; Passwords can't be scripted and asks for the
   Owner's approval on every export, `research.md`, so no export without the Owner exists).
 - **FR-1306** Export shall work only while the Mac is unlocked, and only after the Owner clicked;

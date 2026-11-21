@@ -558,19 +558,25 @@ final class AppModel {
     func exportPasswords() {
         guard !exporting else { return }
         exporting = true
-        signInStatus = "Approve with Touch ID in Passwords…"
+        signInStatus = "Opening Passwords…"
         event(.app, "The Owner started the Passwords export")
         Task {
-            let outcome = await PasswordsExport.run()
+            // Each step shows in the menu and in Settings while it runs.
+            let outcome = await PasswordsExport.run(progress: { [weak self] in self?.signInStatus = $0 })
             exporting = false
             switch outcome {
             case .saved:
-                signInStatus = signInStatus == "Approve with Touch ID in Passwords…" ? "Exported." : signInStatus
+                // The import told the Owner how many it holds, in Settings and a notification.
+                if signInStatus == "Taking in your sign-ins…" { signInStatus = "Exported." }
             case .byHand:
                 signInStatus =
                     "Latchkey needs Accessibility to export for you. Or export by hand: in Passwords choose File → Export All Passwords to File, and save it in the folder that opens."
                 NSWorkspace.shared.open(SignInImport.folder)
-            case .stopped(let why): signInStatus = "The export stopped: \(why)."
+            case .stopped(let why):
+                signInStatus = "The export stopped: \(why). Nothing was saved; Latchkey kept the sign-ins it had."
+                SignInWatcher.shared.post(
+                    title: "Export to Latchkey stopped",
+                    body: "Latchkey stopped because \(why). Nothing was saved. Try again from Latchkey’s menu.")
             }
         }
     }

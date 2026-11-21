@@ -75,7 +75,7 @@ final class SignInWatcher {
         EventLog.shared.record(.app, "Sign-in: posted the weekly reminder to export again")
     }
 
-    private func post(title: String, body: String, category: String?) {
+    func post(title: String, body: String, category: String? = nil) {
         let content = UNMutableNotificationContent()
         content.title = title
         content.body = body

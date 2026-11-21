@@ -163,3 +163,9 @@ paths:
   visible windows with tabs.
 
 Add new gotchas here as they are discovered.
+
+- Another app's save or open panel runs in a process of its own (`openAndSavePanelService`):
+  keys sent to the app alone (`CGEvent.postToPid`) never reach it, and a full path typed into its
+  name field is saved in the current folder with each `/` turned into `:`. And never walk a whole
+  window through Accessibility to find a dialog: Passwords' window with 1,045 items is ~4,500
+  elements and 85 s a look; look in the window's sheets and non-standard windows (2026-11-21).

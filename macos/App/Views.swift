@@ -34,8 +34,12 @@ struct MenuContent: View {
             }
         }
         if model.capabilities.level(CapabilityRegistry.logins) != .off {  // spec 013 FR-1301
-            Button("Export Passwords to Latchkey…") { model.exportPasswords() }
-                .disabled(model.exporting)
+            if model.exporting {
+                // The step it is on, while it runs.
+                Text("Exporting Passwords: \(model.signInStatus ?? "…")")
+            } else {
+                Button("Export Passwords to Latchkey…") { model.exportPasswords() }
+            }
         }
         Button("Settings…") {
             // A menu-bar-only app opens no Settings window until it is a regular, active app;

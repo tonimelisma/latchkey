@@ -21,11 +21,16 @@ enum PasswordsExport {
     static var running = false
 
     /// Runs the export; how it ended. `approve`: how long the Owner has for Touch ID.
-    static func run(into folder: URL = SignInImport.folder, approve: Duration = .seconds(120)) async -> Outcome {
+    /// `progress`: told each step, in words for the Owner.
+    static func run(
+        into folder: URL = SignInImport.folder, approve: Duration = .seconds(120),
+        progress: @escaping (String) -> Void = { _ in }
+    ) async -> Outcome {
         guard !running else { return .stopped("an export is already running") }
         running = true
         defer { running = false }
-        guard AXIsProcessTrusted() else { return .byHand }
+        // Accessibility covers both reading Passwords' dialogs and the two key presses.
+        guard AXIsProcessTrusted(), CGPreflightPostEventAccess() else { return .byHand }
         guard !SystemScreen().isLocked() else { return .stopped("the Mac is locked") }
         try? SignInImport.prepare(folder)
         let wasRunning = !NSRunningApplication.runningApplications(withBundleIdentifier: bundleID).isEmpty
@@ -34,15 +39,21 @@ enum PasswordsExport {
         guard let opened = try? await NSWorkspace.shared.openApplication(at: app, configuration: config) else {
             return .stopped("Passwords didn't open")
         }
-        let pid = opened.processIdentifier
-        let ax = AXUIElementCreateApplication(pid)
-        let outcome = await steps(ax, pid: pid, folder: folder, approve: approve)
+        let ax = AXUIElementCreateApplication(opened.processIdentifier)
+        // A busy Passwords answers late; no single look may hold the export up for long.
+        AXUIElementSetMessagingTimeout(ax, 1)
+        let outcome = await steps(ax, app: opened, folder: folder, approve: approve, progress: progress)
+        // Passwords closes again when Latchkey opened it; after a stop it stays, as it is (FR-1306).
         if outcome == .saved, !wasRunning { opened.terminate() }
         EventLog.shared.record(.app, "Passwords export: \(outcome)", error: outcome != .saved)
         return outcome
     }
 
-    private static func steps(_ ax: AXUIElement, pid: pid_t, folder: URL, approve: Duration) async -> Outcome {
+    private static func steps(
+        _ ax: AXUIElement, app: NSRunningApplication, folder: URL, approve: Duration,
+        progress: (String) -> Void
+    ) async -> Outcome {
+        progress("Approve with Touch ID in Passwords…")
         // 1. The menu item is enabled once Passwords is unlocked (the Owner's Touch ID).
         guard
             let item = await waitFor(
@@ -51,6 +62,7 @@ enum PasswordsExport {
                     menuItem(ax, menu: "File", prefix: "Export All Passwords").flatMap { enabled($0) ? $0 : nil }
                 })
         else { return .stopped("Passwords wasn't unlocked within \(approve.components.seconds / 60) minutes") }
+        progress("Exporting from Passwords…")
         AXUIElementPerformAction(item, kAXPressAction as CFString)
         // 2. The confirmation: Export Passwords.
         guard let export = await waitFor(.seconds(10), { button(ax, prefix: "Export") }) else {
@@ -61,13 +73,16 @@ enum PasswordsExport {
         guard let name = await waitFor(approve, { saveName(ax) }) else {
             return .stopped("Passwords' save panel didn't show")
         }
+        progress("Saving into Latchkey’s folder…")
         let file = "Passwords-\(UUID().uuidString.prefix(8)).csv"
         AXUIElementSetAttributeValue(name, kAXValueAttribute as CFString, file as CFString)
         // Go to Latchkey's folder: Command-Shift-G opens a field of its own (a new element, told
         // apart with CFEqual: Accessibility hands out a new reference on every look), the
         // folder's path, Return. Anything unexpected cancels the panel: nothing is saved.
         let before = fields(ax)
-        key(pid, 5, flags: [.maskCommand, .maskShift])  // G
+        guard await press(app, 5, flags: [.maskCommand, .maskShift]) else {  // G
+            return cancel(ax, "another app came to the front")
+        }
         guard
             let goTo = await waitFor(
                 .seconds(5),
@@ -77,7 +92,10 @@ enum PasswordsExport {
         else { return cancel(ax, "the save panel's Go to Folder didn't open") }
         AXUIElementSetAttributeValue(goTo, kAXValueAttribute as CFString, folder.path as CFString)
         try? await Task.sleep(for: .milliseconds(400))
-        key(pid, 36)  // Return: goes to the folder
+        guard (value(goTo, kAXValueAttribute) as? String) == folder.path else {
+            return cancel(ax, "the save panel's Go to Folder didn't take Latchkey's folder")
+        }
+        guard await press(app, 36) else { return cancel(ax, "another app came to the front") }  // Return
         // The Go to field closes and the name is still Latchkey's, or nothing is saved.
         guard
             await waitFor(
@@ -91,12 +109,17 @@ enum PasswordsExport {
             return cancel(ax, "the save panel's Save button wasn't found")
         }
         AXUIElementPerformAction(save, kAXPressAction as CFString)
+        progress("Taking in your sign-ins…")
         let target = folder.appending(path: file)
         let landed = await waitFor(.seconds(15)) { () -> Bool? in
             // Taken in (and deleted) by the import already, or still there to take.
             FileManager.default.fileExists(atPath: target.path) || SignInWatcher.shared.lastTaken == file ? true : nil
         }
-        if landed == true { return .saved }
+        if landed == true {
+            // The import takes it within a second and tells the Owner how many it holds.
+            _ = await waitFor(.seconds(10)) { SignInWatcher.shared.lastTaken == file ? true : nil }
+            return .saved
+        }
         // Saved somewhere else after all: find the file by its name and wipe it.
         let wiped = wipeStray(file)
         return .stopped(
@@ -166,11 +189,20 @@ enum PasswordsExport {
         return nil
     }
 
-    /// Every element under the app's windows (sheets included), breadth first, at most 4,000.
+    /// Every element of the app's dialogs, breadth first, at most 2,000: the sheets on its windows
+    /// and any window that isn't a standard one. Never a main window's own content: with a
+    /// thousand passwords that is some 4,500 elements and over a minute for one look (2026-11-21).
     private static func everything(_ ax: AXUIElement) -> [AXUIElement] {
         var out: [AXUIElement] = []
-        var queue = (value(ax, kAXWindowsAttribute) as? [AXUIElement]) ?? []
-        while !queue.isEmpty, out.count < 4000 {
+        var queue: [AXUIElement] = []
+        for window in (value(ax, kAXWindowsAttribute) as? [AXUIElement]) ?? [] {
+            if (value(window, kAXSubroleAttribute) as? String) == kAXStandardWindowSubrole {
+                queue.append(contentsOf: children(window).filter { role($0) == kAXSheetRole })
+            } else {
+                queue.append(window)
+            }
+        }
+        while !queue.isEmpty, out.count < 2000 {
             let e = queue.removeFirst()
             out.append(e)
             queue.append(contentsOf: children(e))
@@ -196,12 +228,22 @@ enum PasswordsExport {
             ?? all.first { role($0) == kAXTextFieldRole }
     }
 
-    /// A key press sent to Passwords alone.
-    private static func key(_ pid: pid_t, _ code: CGKeyCode, flags: CGEventFlags = []) {
-        for down in [true, false] {
-            let e = CGEvent(keyboardEventSource: nil, virtualKey: code, keyDown: down)
-            e?.flags = flags
-            e?.postToPid(pid)
+    /// A key press as the keyboard makes it, only while Passwords is in front (brought back once
+    /// if it isn't); false when it can't be. The save panel runs in a process of its own, which
+    /// takes no key sent to Passwords alone (tried 2026-11-21: Go to Folder never opened).
+    private static func press(_ app: NSRunningApplication, _ code: CGKeyCode, flags: CGEventFlags = []) async -> Bool {
+        let front = { NSWorkspace.shared.frontmostApplication?.processIdentifier == app.processIdentifier }
+        if !front() {
+            app.activate()
+            try? await Task.sleep(for: .milliseconds(500))
+            guard front() else { return false }
         }
+        let source = CGEventSource(stateID: .hidSystemState)
+        for down in [true, false] {
+            let e = CGEvent(keyboardEventSource: source, virtualKey: code, keyDown: down)
+            e?.flags = flags
+            e?.post(tap: .cghidEventTap)
+        }
+        return true
     }
 }

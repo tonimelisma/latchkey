@@ -17,6 +17,12 @@ reviews of the build added: the Public Suffix List (no subdomain fills under sha
 page's site from the browser's own address with fills in a script world of Latchkey's own, the
 save panel cancelled on anything unexpected, and Claude's command line and Files can't read the
 import folder. Passkeys need the paid Apple Developer Program.
+The first real export (Toni, 2026-11-21 09:41, 0.8.175) was very slow and stopped at the save
+panel's Go to Folder, telling it only in Settings: each look walked Passwords' whole window
+(1,045 passwords, 85 s a look), and keys sent to Passwords alone never reach the save panel (its
+own process). 0.8.176 looks only in dialogs (0.07 s), posts the two key presses as the keyboard
+does while Passwords is in front, shows each step in the menu and Settings, and sends a
+notification when it stops (the import already sends one when it's done).
 Live check (0.8.175, Mac locked, 2026-11-21 00:54): groups logins, browser, files, shell: 51 of 51
 worked. A fresh Claude signed in to the-internet.herokuapp.com as tomsmith with the fixture's test
 sign-in (`logins-fixture.sh`); none of its 10 tool results held the password except the test
@@ -203,8 +209,8 @@ after the app was quit.
 ## Next steps
 
 0. Sign-in's first real export (spec 013 T11, Toni's step): Latchkey's menu → Export Passwords
-   to Latchkey…, one Touch ID. The export works Passwords' menus and save panel through
-   Accessibility; its English titles and the save panel's Go to Folder are untested until then.
+   to Latchkey…, one Touch ID. The first try (0.8.175) stopped at the save panel; 0.8.176 fixes
+   it (above), tried on TextEdit's save panel, not yet on Passwords'.
    Afterwards: check the log shows the file taken in and deleted, and run the `logins` group
    (its test sign-in step skips once the owner's copies are in). Passkeys wait for the paid
    Apple Developer Program (spec 013 FR-1330).
