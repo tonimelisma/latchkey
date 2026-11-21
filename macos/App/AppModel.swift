@@ -198,6 +198,10 @@ final class AppModel {
             watcher.signInOn = { [weak self] in self?.capabilities.level(CapabilityRegistry.logins) != .off }
             // FR-1350 to FR-1354: Latchkey's own sign-ins, only while Sign-in is On.
             OwnSessions.shared.on = { [weak self] in self?.capabilities.level(CapabilityRegistry.logins) != .off }
+            // FR-1360: code texts only while Messages isn't Off; FR-1362: texts used while locked
+            // (or before a restart) are deleted now if the Mac is unlocked.
+            TextedCodes.shared.on = { [weak self] in self?.capabilities.level(CapabilityRegistry.messages) != .off }
+            Task { await TextedCodes.shared.deletePending() }
             watcher.imported = { [weak self] outcome in
                 self?.refreshSignIns()
                 self?.signInStatus = outcome.told
@@ -492,6 +496,10 @@ final class AppModel {
     private func screenChanged(locked: Bool) {
         event(.power, ScreenLock.line(locked: locked))
         Task { await connection?.sendState() }
+        // Spec 013 FR-1362: code texts used while the Mac was locked are deleted once it isn't.
+        if !locked, ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil {
+            Task { await TextedCodes.shared.deletePending() }
+        }
     }
 
     /// The keep-awake line last logged (FR-620).

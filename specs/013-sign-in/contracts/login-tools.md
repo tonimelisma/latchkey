@@ -24,6 +24,10 @@ Both exist only while the Owner's Sign-in setting is On (FR-1340). Answers are t
 - Answer: the outcome in plain words, then the page as browser_read shows it:
   - "Signed in to <site> as <user>."
   - "<site> now asks for a verification code Latchkey doesn't hold (sent by text or email?)."
+  - A code the site texts (FR-1360, FR-1361) is filled without a word of it; while it hasn't
+    come: "<site> texted a verification code to the owner's phone, and it hasn't reached Messages
+    on this Mac yet. Call logins_sign_in again on this page in a few seconds: …" (not an error;
+    no fallback until 2 minutes have passed).
   - "<site> shows a check Latchkey can't answer (a captcha or a new-device check)." Only a
     challenge the page shows counts: hidden reCAPTCHA frames from ad scripts and the invisible
     reCAPTCHA badge don't (live check 2026-11-21, homerecording.com, a sign-in that had worked).

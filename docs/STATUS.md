@@ -75,7 +75,15 @@ restarts. The two failures: one case expected a sign-in form where the kept sess
 none (the case was updated), and Amazon stayed signed out after the fallback, because a second
 sign-in saved for na.account.amazon.com still held back Safari's amazon.com cookies. 0.8.182
 falls back every sign-in under the same registered name, drops what Latchkey's own try left,
-and opens the page again instead of reloading a code step.
+and opens the page again instead of reloading a code step; 0.8.183 also applies that to a
+fallback recorded earlier. Rechecked live (0.8.183, locked): Amazon's order history opened
+signed in with Safari's sign-in. That check texted Toni two Amazon codes Latchkey couldn't use
+(the second from reloading the code step, fixed in 0.8.182). Texted codes (0.8.184; Toni:
+"Ensure you can use OTP. Mark them read and archive/delete after use"; spec 013 FR-1360 to
+FR-1363): Latchkey takes a code a site texts from Messages, fills it, and deletes the text in
+Messages' window, at once while unlocked, else at the next unlock. Not yet tried live: the
+delete in Messages' window (the Mac was locked); the case `logins.texted_code_deleted` checks
+the log after the next code used.
 Live check (0.8.175, Mac locked, 2026-11-21 00:54): groups logins, browser, files, shell: 51 of 51
 worked. A fresh Claude signed in to the-internet.herokuapp.com as tomsmith with the fixture's test
 sign-in (`logins-fixture.sh`); none of its 10 tool results held the password except the test

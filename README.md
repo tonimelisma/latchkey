@@ -39,8 +39,11 @@ Claude app (phone, web, desktop), can work with what's on your Mac:
   unlocked, so your Safari stays signed in; it keeps that session on your Mac (in its Keychain,
   out of Claude's reach) across restarts. Where its own sign-in can't finish (a code sent by
   text or email, a captcha), it uses your Safari sign-in for that site instead, as below, until
-  your next export. Not yet: passkeys, and codes sent by text or email (Claude can read a text
-  with Messages).
+  your next export. When a site texts you a code, Latchkey takes it from Messages and fills it
+  in itself (Claude never sees it), then deletes that text in Messages: at once while the Mac is
+  unlocked (Messages' window may show that conversation for a moment, the one exception to
+  "never in your way" here), or when you next unlock it. Not yet: passkeys, and codes sent by
+  email.
 - **The screen:** take a picture of it, and control the computer when you ask.
 
 Your Mac never has to accept connections from the internet: Latchkey reaches out to a small

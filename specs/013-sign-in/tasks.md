@@ -24,4 +24,8 @@ Each test is written and seen failing before its code.
   moves to a Safari tab: `SignInToolsTests` (FR-1352)
 - [x] T15 Remove All and uninstall remove the kept sign-ins; README, STATUS, decisions, spec 005
   notes; regression and live cases (FR-1354)
-- [ ] T16 Full tests and lint, install, live check
+- [x] T16 Full tests and lint, install, live check (0.8.181–0.8.183: 915 tests; live, locked: 49 of 55 worked, 4 skipped, the 2 failures fixed and rechecked)
+- [x] T17 Texted codes: `TextedCodes`, `CodeTextWindow`, the flow's texted step, the tool's
+  "call again" answer, deleting at once or at unlock: `TextedCodesTests`, `TextedCodeSignInTests`
+  (FR-1360 to FR-1363); the delete in Messages' window is checked live by
+  `logins.texted_code_deleted` after the next code used while unlocked

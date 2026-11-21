@@ -78,7 +78,7 @@ enum LoginsCapability {
             })
     }
 
-    static func signIn(store: SignInStore, own: OwnPages, move: Move? = nil) -> ToolEntry {
+    static func signIn(store: SignInStore, own: OwnPages, move: Move? = nil, codes: TextedCodes? = nil) -> ToolEntry {
         let move: Move = move ?? { l in try await BrowserCapability.moveToSafari(l, BrowserCapability.browser, own) }
         return
             ToolEntry(
@@ -87,11 +87,13 @@ enum LoginsCapability {
                     description: """
                         Signs in on one of Claude's own pages (opened with browser_read; name it with page, like p4k2) \
                         with the owner's saved password for that page's site: Latchkey fills in the user name and \
-                        password itself, sends them, and fills in the site's verification code too when it has one. \
-                        Claude never sees the password or the code. Works in Latchkey's own browser and in Claude's \
-                        Safari tabs, never in the owner's own tabs. user: which user name, when Latchkey holds several \
-                        for the site (logins_find lists them). It can't answer passkeys, codes sent by text or email, \
-                        or captchas: the answer says what the page asks for. A refused sign-in may be tried once more.
+                        password itself, sends them, and fills in the site's verification code too: from Passwords \
+                        when it has one, else a code the site texts to the owner, taken from Messages (if the text \
+                        is slow, the answer asks to call again on the same page). Claude never sees the password or \
+                        the code. Works in Latchkey's own browser and in Claude's Safari tabs, never in the owner's \
+                        own tabs. user: which user name, when Latchkey holds several for the site (logins_find lists \
+                        them). It can't answer passkeys, codes sent by email, or captchas: the answer says what the \
+                        page asks for. A refused sign-in may be tried once more.
                         """,
                     input: [
                         "page": .stringParam("Claude's page, by the name browser_read gave, like p4k2"),
@@ -99,7 +101,7 @@ enum LoginsCapability {
                     ], readOnly: false, destructive: false, openWorld: true, deadlineMS: 60_000),
                 handler: { args in
                     await BrowserCapability.run {
-                        try await signIn(args, store: store, own: own, move: move)
+                        try await signIn(args, store: store, own: own, move: move, codes: codes)
                     }
                 })
     }
@@ -115,7 +117,9 @@ enum LoginsCapability {
             name: String, page: PageScripts.Page, safari: SafariBrowser
         )?
 
-    private static func signIn(_ args: JSONValue, store: SignInStore, own: OwnPages, move: Move) async throws
+    private static func signIn(
+        _ args: JSONValue, store: SignInStore, own: OwnPages, move: Move, codes given: TextedCodes?
+    ) async throws
         -> ToolResult
     {
         let name = args["page"]?.stringValue.flatMap { $0.trimmingCharacters(in: .whitespaces).isEmpty ? nil : $0 }
@@ -168,8 +172,30 @@ enum LoginsCapability {
                 "\(host) refused this sign-in twice, so Latchkey won't try it again until the owner exports from Passwords again (the password may have changed).",
                 isError: true)
         }
+        // FR-1360, FR-1361: a code the site texts is taken from Messages, waited on while this
+        // call has time (the relay allows 60 s), and over later calls for 2 minutes in all.
+        let started = Date()
+        let callStart = ContinuousClock.now
+        let codes = await MainActor.run { given ?? TextedCodes.shared }
+        final class UsedText: @unchecked Sendable { var id: String? }
+        let usedText = UsedText()
+        let texted: SignInFlow.Texted = {
+            let since = await codes.requested(login.site, now: started)
+            let left = max(0, TextedCodes.window - Date().timeIntervalSince(since))
+            let perCall = await MainActor.run { codes.perCall }
+            let until = min(callStart + perCall, ContinuousClock.now + .seconds(left))
+            if let got = await codes.wait(since: since, until: until) {
+                usedText.id = got.message
+                return (got.code, false)
+            }
+            let pending = await MainActor.run { codes.on() } && Date().timeIntervalSince(since) < TextedCodes.window
+            return (nil, pending)
+        }
         let (outcome, page) = try await SignInFlow.signIn(
-            login, exact: PublicSuffix.isSuffix(login.site), store: store, run: run)
+            login, exact: PublicSuffix.isSuffix(login.site), store: store, run: run, texted: texted)
+        if outcome != .waitingForText { await codes.forget(login.site) }
+        // FR-1362: the text is deleted in Messages once used (now while unlocked, else at unlock).
+        if let used = usedText.id { await codes.used(used, site: host) }
         let who = login.user.isEmpty ? "" : " as \(login.user)"
         var said: String
         var activity: String?
@@ -179,7 +205,10 @@ enum LoginsCapability {
             activity = "Signed in to \(host)\(who)"
         case .needsCode:
             said =
-                "\(host) now asks for a verification code Latchkey doesn't hold (it may have been sent by text or email; Messages can read a text, if it is on)."
+                "\(host) now asks for a verification code Latchkey doesn't hold (no code text reached Messages on this Mac within 2 minutes; it may have been sent by email, or Messages is off in Latchkey's settings)."
+        case .waitingForText:
+            said =
+                "\(host) texted a verification code to the owner's phone, and it hasn't reached Messages on this Mac yet. Call logins_sign_in again on this page in a few seconds: Latchkey takes the code from Messages and fills it in itself."
         case .check:
             said = "\(host) shows a check Latchkey can't answer (a captcha, or a new-device check)."
         case .refused(let words):

@@ -24,6 +24,8 @@ enum SignInFlow {
         case signedIn
         /// The page asks for a code Latchkey doesn't hold.
         case needsCode
+        /// The site texted a code that hasn't arrived in Messages yet (FR-1361): call again.
+        case waitingForText
         /// A captcha or another check Latchkey can't answer.
         case check
         /// The site refused: the page's words, if any.
@@ -49,15 +51,20 @@ enum SignInFlow {
         return host
     }
 
+    /// A code texted to the Owner (FR-1360): the code, or none, and whether one may still come.
+    typealias Texted = () async -> (code: String?, pending: Bool)
+
     /// Signs in with `login` on the page `run` works in; the outcome and the page at the end.
     static func signIn(
         isolation: isolated (any Actor)? = #isolation,
         _ login: SavedSignIn, exact: Bool, store: SignInStore, run: Run, now: () -> Date = Date.init,
-        wait: (Duration) async -> Void = { try? await Task.sleep(for: $0) }
+        wait: (Duration) async -> Void = { try? await Task.sleep(for: $0) }, texted: Texted? = nil
     ) async throws -> (outcome: Outcome, page: PageScripts.Page) {
         var filledAny = false
         do {
-            let r = try await steps(login, exact: exact, store: store, run: run, now: now, wait: wait) {
+            let r = try await steps(
+                login, exact: exact, store: store, run: run, now: now, wait: wait, texted: texted
+            ) {
                 filledAny = true
             }
             // FR-1311: nothing Latchkey filled stays readable on the page.
@@ -72,7 +79,7 @@ enum SignInFlow {
     private static func steps(
         isolation: isolated (any Actor)? = #isolation,
         _ login: SavedSignIn, exact: Bool, store: SignInStore, run: Run, now: () -> Date,
-        wait: (Duration) async -> Void, filled: () -> Void
+        wait: (Duration) async -> Void, texted: Texted?, filled: () -> Void
     ) async throws -> Outcome {
         let totp = login.otp.flatMap { TOTP(uri: $0) }
         var r = try await run(PageScripts.signInState, false)
@@ -85,8 +92,13 @@ enum SignInFlow {
             if page.password && sentPassword || page.code && sentCode { return .refused(page.problem) }
             if page.captcha && !page.password && !page.code { return .check }
             var code = ""
-            if page.code, !page.password {
-                guard let totp else { return .needsCode }
+            if page.code, !page.password, totp == nil {
+                // FR-1360: a code the site texted to the Owner, when Latchkey may use texts.
+                guard let texted else { return .needsCode }
+                let t = await texted()
+                guard let c = t.code else { return t.pending ? .waitingForText : .needsCode }
+                code = c
+            } else if page.code, !page.password, let totp {
                 // A code about to run out waits for the next one; a code sent once is never sent
                 // again in its step (FR-1324).
                 var at = now()

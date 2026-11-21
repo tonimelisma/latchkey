@@ -150,6 +150,27 @@ domain is an own site, under one, or a wider domain of one, as `LockedBrowser.co
 - FR-1355: `BrowserCapability.ownBrowser` names the case: "with Latchkey's own sign-in for
   <site> (if the page asks to sign in, logins_sign_in signs in)".
 
+## D11. Codes texted to the Owner (FR-1360 to FR-1363)
+
+`TextedCodes` (App/SignIn): when `SignInFlow` reaches a code step and the sign-in has no code
+generator, it asks for a texted code. Messages' database (its own read-only connection, as
+`messages_find` reads) is looked at every second for texts not from the Owner that arrived
+since the site's request (the first time it asked, kept for 2 minutes across calls), newest
+first; the first unused one holding a code is taken. A code is a run of 4 to 8 digits standing
+alone, the one next to a word like "code" when there are several. Each text id is used once (in
+memory). One call waits up to 45 s (the relay allows 60 s); with no text by then the answer
+asks for another call, and after 2 minutes the sign-in counts as needing a code (D10's fallback).
+No text is used while Messages is Off.
+
+After use, the text's id joins a list kept in user defaults (an id, no text), and the list is
+worked through at once while the Mac is unlocked, else on the unlock notification and at start:
+`CodeTextWindow.delete` opens `sms://open?message-guid=` without activating Messages, requires the
+window's title to name that conversation's people (a short code must match whole), finds the one
+message on the other side with that text, performs Messages' own "Delete…", answers the sheet,
+and waits until Messages' database no longer lists the message. Recovered from spec 002's
+withdrawn window actions (commit 6b9beb3), delete only. Each id is tried once; a failure is
+logged and the text stays.
+
 ## D9. Tests and checks
 
 - Unit: `SignInDataTests` (CSV, codes with RFC 6238's vectors, site matching), `SignInStoreTests`

@@ -182,6 +182,33 @@ Safari's.
   that the page is "without the owner's sign-ins" (live check 2026-11-21: that read as a
   contradiction next to "Signed in").
 
+### Codes texted to the Owner (Toni, 2026-11-21)
+
+Toni, 2026-11-21, after a live check sent him two Amazon code texts Latchkey couldn't use:
+"Ensure you can use OTP. Mark them read and archive/delete after use"; then, asked: "Delete at
+once when unlocked" and "Any new code text".
+
+- **FR-1360** When a site asks for a verification code during Latchkey's own sign-in and Latchkey
+  holds no code generator for it, Latchkey shall take the code from the newest text in Messages
+  on this Mac that arrived after that sign-in began, isn't from the Owner, and holds a code (4 to
+  8 digits), whoever sent it, and fill it in itself as FR-1322 does; Claude never sees it. Each
+  text is used once. While Messages is Off in Latchkey's settings, or Latchkey can't read
+  Messages, no text is used.
+- **FR-1361** One sign-in call waits for that text for as long as the call's time allows; when the
+  text hasn't come by then, the answer says the site texted a code that hasn't arrived and to call
+  again on the same page, and the next call takes it. A text is waited for up to 2 minutes from
+  the site's request; after that, the sign-in counts as needing a code Latchkey doesn't hold
+  (FR-1352's fallback follows).
+- **FR-1362** After Latchkey used a code text, it shall delete that text in Messages (from all the
+  Owner's devices, kept in Recently Deleted as Messages does), through Messages' own window in
+  the background, without bringing Messages forward: at once while the Mac is unlocked, else as
+  soon as it is unlocked, also after a restart in between. Only that one message, never the
+  conversation. This is an exception Toni chose to never disturbing the user (Constitution IV):
+  Messages' window may show that conversation. When the window can't do it (another language,
+  the message not shown, Accessibility not allowed), the text stays, and Latchkey's log says why.
+- **FR-1363** Latchkey's log records each code text used and deleted (when, the site, never the
+  code or the text).
+
 ### Passkeys (later, not built now)
 
 - **FR-1330** When Latchkey is signed through the paid Apple Developer Program, Latchkey shall take
