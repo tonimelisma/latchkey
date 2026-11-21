@@ -18,3 +18,12 @@ browser entitlement, page loaded as `https://example.com/`) found:
   script with its `publicKey` options. So Latchkey can answer a site's passkey request itself;
   the script must also make `isUserVerifyingPlatformAuthenticatorAvailable` (and conditional
   mediation's check) answer true, or sites won't ask.
+
+## Keeping the copies on the Mac (from Latchkey's own code, 2026-11-20)
+
+Latchkey already keeps its pairing record and activity-log key in the Keychain as items
+accessible after the first unlock, this device only (`kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly`,
+`macos/App/DeviceIdentity.swift`), and reads them while the Mac is locked with the lid closed
+every time it reconnects. Sign-in copies stored the same way are readable whenever Latchkey works
+while locked, never sync to iCloud, and stay on this Mac. The rules in `.claude/rules/macos.md`
+for Keychain reads (count without data, "couldn't read" is not "isn't there") apply.
