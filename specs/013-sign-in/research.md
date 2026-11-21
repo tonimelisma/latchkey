@@ -180,3 +180,17 @@ the plan picks one.
 3. The export's exact content, and Apple's passkey keys loading into CryptoKit as they come.
 4. The hook accepted by real sites (BE/BS, frames, conditional requests).
 5. Keychain reads hours into a lock, lid closed.
+
+## Can Latchkey export by itself? (2026-11-20)
+
+- Passwords has no scripting dictionary (`sdef /System/Applications/Passwords.app`: error -192,
+  no `NSAppleScriptEnabled`; checked on Toni's Mac), so the export can only be run through its
+  window, with Accessibility, while the Mac is unlocked.
+- Passwords stays locked until the Owner approves with Touch ID or the Mac password, and the
+  export asks again ([Apple](https://support.apple.com/guide/passwords/mchl35b12625/mac); community
+  posts). macOS's password prompts are believed to ignore typed input from other programs (not
+  tested: the test would take over Toni's screen). Apple's export to another app (later, with the
+  paid program) asks for Touch ID too. So every export needs the Owner; Latchkey runs every other
+  step (Toni chose "One touch, when you click").
+- To test in the plan: the menu path and dialogs of Passwords on macOS 27 through Accessibility,
+  and choosing the save folder in its save panel.

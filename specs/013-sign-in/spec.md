@@ -25,11 +25,13 @@ interface another app can read (`research.md`), so the only way in is a copy the
 ## User stories
 
 ### US1 (P1): Hand over my sign-ins
-1. Given I'm setting up Latchkey, when I reach the sign-ins step, then Latchkey tells me how to
-   export my passwords from Passwords to a file, and when I do, it takes them in, deletes the
-   file at once, and says how many sign-ins it now holds.
+1. Given I'm setting up Latchkey, when I reach the sign-ins step and click Export, then
+   Latchkey opens Passwords and exports my passwords itself; I only approve with Touch ID.
+   Latchkey takes them in, deletes the file at once, closes Passwords, and says how many
+   sign-ins it now holds (Toni, 2026-11-20: "latchkey needs to export the CSV itself
+   automatically"; "One touch, when you click").
 2. Given a week has passed since my last export, then Latchkey shows a notification (never a
-   window in front) inviting me to export again; clicking it takes me to the same steps.
+   window in front) inviting me to export again; clicking it does the same one-touch export.
 3. Given I export again, then Latchkey's copies are replaced by the new file's: changed passwords
    change, and sign-ins I deleted in Passwords are gone from Latchkey too.
 
@@ -59,12 +61,23 @@ interface another app can read (`research.md`), so the only way in is a copy the
 
 ### Taking the sign-ins in
 
-- **FR-1300** Latchkey shall take sign-ins only from a file the Owner exported from Apple's
-  Passwords app (File → Export All Passwords to File), never from any other source or program.
-- **FR-1301** During setup, and from Latchkey's menu at any time, Latchkey shall show the Owner
-  the steps to export and shall watch for the exported file; when it appears, Latchkey shall
-  read it, delete it at once, and say how many sign-ins (and how many with verification codes)
-  it now holds. A file that can't be read is deleted too, and the Owner is told why it failed.
+- **FR-1300** Latchkey shall take sign-ins only from Apple's Passwords app's export of all
+  passwords to a file, approved by the Owner, never from any other source or program.
+- **FR-1301** When the Owner clicks Export (in setup, in Latchkey's menu, or on the reminder of
+  FR-1304), Latchkey shall open Passwords and run its export itself (File → Export All Passwords
+  to File, the confirmation, the save), so the Owner only approves with Touch ID or their Mac
+  password. Latchkey shall save the file in a folder of its own that isn't synced, read it,
+  delete it at once, close Passwords if Latchkey opened it, and say how many sign-ins (and how
+  many with verification codes) it now holds. A file that can't be read is deleted too, and the
+  Owner is told why it failed. Passwords comes to the front for this, because the Owner clicked
+  (Toni, 2026-11-20: "One touch, when you click"; Passwords can't be scripted and asks for the
+  Owner's approval on every export, `research.md`, so no export without the Owner exists).
+- **FR-1306** Export shall work only while the Mac is unlocked, and only after the Owner clicked;
+  Latchkey shall never start it by itself. When the Owner doesn't approve within 2 minutes, or
+  Passwords' window isn't what Latchkey expects, Latchkey shall stop, leave Passwords open as it
+  is, keep the old copies, and say what happened. Without the Accessibility permission (which
+  Latchkey asks for at setup), Latchkey shall show the steps to export by hand and pick up the
+  file the Owner saves.
 - **FR-1302** The setup step for sign-ins may be skipped; a skipped step shall not count as
   missing setup (it doesn't open the setup window again, spec 001 FR-205).
 - **FR-1303** Each import shall replace every copy Latchkey held with the new file's contents, all
@@ -72,9 +85,9 @@ interface another app can read (`research.md`), so the only way in is a copy the
 - **FR-1304** When 7 days have passed since the last import (or since setup, when there was none),
   Latchkey shall post one notification inviting the Owner to export again, and again every 7
   days until they do or turn the reminder off. The notification shall never bring a window to the
-  front (Constitution IV); clicking it opens the steps of FR-1301 (Toni, 2026-11-20: "can't that be
-  automated without front window": it can't, Passwords needs the Owner's Touch ID for every export
-  and can't be scripted, so a notification is the least intrusive reminder).
+  front (Constitution IV); clicking it starts the export of FR-1301 (Toni, 2026-11-20: "can't that
+  be automated without front window": it can't, Passwords needs the Owner's Touch ID for every
+  export and can't be scripted, so a notification is the least intrusive reminder).
 - **FR-1305** The Owner shall be able to remove every copy from Latchkey's menu, at once; when the
   Owner uninstalls Latchkey, the copies shall be removed with it.
 
@@ -145,5 +158,7 @@ interface another app can read (`research.md`), so the only way in is a copy the
 - A lookalike address (`amaz0n.com`): no match, nothing filled.
 - Several sign-ins for one site: Claude names the user name; without one, Latchkey asks Claude to
   choose from the list.
-- The exported file left in a synced folder (iCloud Drive, Time Machine): Latchkey deletes it at
-  once, and the steps suggest a folder that isn't synced.
+- The exported file: saved in Latchkey's own folder, never iCloud Drive; that folder is left out
+  of Time Machine; the file lives for seconds.
+- The Owner is using Passwords when they click Export: Latchkey uses its open window and leaves
+  it open afterwards.
