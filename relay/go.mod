@@ -5,20 +5,20 @@ go 1.26.10
 toolchain go1.27.4
 
 require (
-	github.com/chromedp/cdproto v0.159.3
-	github.com/chromedp/chromedp v0.23.0
+	github.com/chromedp/cdproto v0.160.4
+	github.com/chromedp/chromedp v0.23.1
 	github.com/coder/websocket v1.8.15
 	github.com/fxamacker/cbor/v2 v2.10.0
 	github.com/go-jose/go-jose/v4 v4.1.9
 	github.com/go-webauthn/webauthn v0.18.2
 	github.com/google/uuid v1.6.0
 	github.com/modelcontextprotocol/go-sdk v1.8.0
-	github.com/pressly/goose/v3 v3.30.0
+	github.com/pressly/goose/v3 v3.30.1
 	github.com/stretchr/testify v1.12.1
 	github.com/wneessen/go-mail v0.8.2
 	github.com/zitadel/oidc/v3 v3.52.0
-	golang.org/x/crypto v0.58.0
-	golang.org/x/net v0.62.0
+	golang.org/x/crypto v0.59.0
+	golang.org/x/net v0.63.0
 	golang.org/x/time v0.16.0
 	modernc.org/sqlite v1.62.0
 )
@@ -39,7 +39,7 @@ require (
 	github.com/gorilla/securecookie v1.1.2 // indirect
 	github.com/kr/text v0.2.0 // indirect
 	github.com/mattn/go-isatty v0.0.24 // indirect
-	github.com/mfridman/interpolate v0.0.2 // indirect
+	github.com/mfridman/interpolate v0.2.0 // indirect
 	github.com/muhlemmer/gu v0.3.1 // indirect
 	github.com/muhlemmer/httpforwarded v0.1.0 // indirect
 	github.com/ncruces/go-strftime v1.1.0 // indirect
