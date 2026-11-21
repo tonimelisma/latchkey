@@ -6,7 +6,7 @@ toolchain go1.27.4
 
 require (
 	github.com/chromedp/cdproto v0.160.4
-	github.com/chromedp/chromedp v0.23.1
+	github.com/chromedp/chromedp v0.24.0
 	github.com/coder/websocket v1.8.15
 	github.com/fxamacker/cbor/v2 v2.10.0
 	github.com/go-jose/go-jose/v4 v4.1.9
