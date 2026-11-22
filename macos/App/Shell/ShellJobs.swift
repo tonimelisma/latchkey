@@ -240,6 +240,8 @@ actor ShellJobs {
             "TMPPREFIX": scratch.path + "/zsh",
             // Xcode's build settings for builds inside the fence (FR-333).
             "XCODE_XCCONFIG_FILE": Fence.Builds.settings(in: scratch).path,
+            // The job's own asset-catalog daemons, never the Owner's shared ones (FR-333).
+            "IBCLIServerForcedRegistryName": "latchkey-\(setup.launch)-\(id)",
         ] { env[k] = v }
         p.environment = env
         let stdin = Pipe()

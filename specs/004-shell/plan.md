@@ -186,7 +186,13 @@ macros (SwiftUI's `@State`). Each job's scratch folder gets `.latchkey/bin/xcode
 `xcodebuild` adds `-IDEPackageSupportDisableManifestSandbox=YES` and
 `-IDEPackageSupportDisablePluginExecutionSandbox=YES`; `swift build|test|run|package` adds
 `--disable-sandbox`; the settings file sets `ENABLE_USER_SCRIPT_SANDBOXING = NO` and
-`SWIFTC_DISABLE_SANDBOX = YES`. Each wrapper runs the next tool of its name on the PATH. The
+`SWIFTC_DISABLE_SANDBOX = YES` and `DISABLE_TASK_SANDBOXING = YES` (Core ML model compiles run
+in a task sandbox; found building Otos, 2026-11-21). Each job also gets
+`IBCLIServerForcedRegistryName=latchkey-<launch>-<job>`: Xcode's asset-catalog daemon
+(`ibtoold`) outlives a build and keeps the fence of the job that started it, its pipes live in
+the user's shared temporary folder, and an asset-catalog build that picked up a fenced one,
+in another job or in the Owner's own Xcode, couldn't write its output; with its own name each
+job starts daemons only it uses, stopped with its leftovers. Each wrapper runs the next tool of its name on the PATH. The
 fence applies to all of it, so what a build may write is unchanged. A program called by full
 path (`/usr/bin/xcodebuild`, `xcrun xcodebuild`) gets no wrapper; the answer then says a program
 tried a sandbox of its own (FR-334), which is told apart from a refused write by

@@ -37,7 +37,11 @@ enum Fence {
     /// asset symbols, the Swift compiler's for macros such as SwiftUI's `@State`). Each job gets
     /// `xcodebuild` and `swift` that turn those off, first on its PATH, and Xcode's build
     /// settings for it in `XCODE_XCCONFIG_FILE`, so `make` and a project's own scripts find them
-    /// too. The fence still applies to everything they start (research.md, "Builds").
+    /// too. The fence still applies to everything they start (research.md, "Builds"). Xcode's
+    /// asset-catalog daemon (ibtoold) outlives a build and keeps the fence of the job that
+    /// started it, and every asset-catalog build that picked it up failed to write, Xcode's
+    /// own outside Latchkey included: each job gets a pool of its own
+    /// (`IBCLIServerForcedRegistryName`).
     enum Builds {
         static func folder(in scratch: URL) -> URL { scratch.appending(path: ".latchkey", directoryHint: .isDirectory) }
         static func bin(in scratch: URL) -> URL {
@@ -52,6 +56,7 @@ enum Fence {
             // Latchkey: Xcode's own sandboxes can't start inside Latchkey's fence (spec 004 FR-333).
             ENABLE_USER_SCRIPT_SANDBOXING = NO
             SWIFTC_DISABLE_SANDBOX = YES
+            DISABLE_TASK_SANDBOXING = YES
 
             """
 

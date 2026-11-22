@@ -110,6 +110,13 @@ scripts, keeps the fence, changes nothing outside the job). The inner sandboxes 
 what the tools could do inside the fence; with them off, a package's manifest or plugin can
 write what the command could (scratch, its folder, Downloads, caches, declared paths).
 
+Later the same day (Otos's cloud-session work): Otos's build stopped at Core ML model
+compiles (`sandbox_apply`, Xcode's task sandbox) and at `CompileAssetCatalogVariant`. A
+kept `xcodebuild` job left two sandboxed `ibtoold` processes; a plain `actool` outside
+Latchkey failed against a fenced daemon and worked once it was stopped; `actool` with
+`IBCLIServerForcedRegistryName` set started a daemon of its own and worked (Xcode 27.2).
+With `DISABLE_TASK_SANDBOXING=YES` Otos built through Latchkey (`** BUILD SUCCEEDED **`).
+
 ## Handing work to macOS (2026-10-28)
 
 Toni chose (2026-10-28) to close the gaps the first version left: opening apps, scripting

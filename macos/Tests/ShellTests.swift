@@ -297,7 +297,19 @@ import Testing
         #expect(lines.prefix(2).allSatisfy { $0.contains("/.latchkey/bin/") }, "Latchkey's own, first: \(r.output)")
         #expect(r.output.contains("SWIFTC_DISABLE_SANDBOX = YES"))
         #expect(r.output.contains("ENABLE_USER_SCRIPT_SANDBOXING = NO"))
+        #expect(r.output.contains("DISABLE_TASK_SANDBOXING = YES"), "Core ML model compiles run in a task sandbox")
         #expect(r.output.contains("Xcode "), "the real xcodebuild still answers: \(r.output)")
+    }
+
+    /// Each job has Xcode's asset-catalog daemon (ibtoold) to itself (FR-333, 2026-11-21): the
+    /// daemon outlives the build, keeps the fence of the job that started it, and every later
+    /// asset-catalog build that found it, in any job or outside Latchkey, failed to write.
+    @Test func eachJobHasItsOwnAssetCatalogDaemon() async throws {
+        let a = try await jobs.run("echo \"[$IBCLIServerForcedRegistryName]\"", folder: nil, wait: .seconds(10))
+        let b = try await jobs.run("echo \"[$IBCLIServerForcedRegistryName]\"", folder: nil, wait: .seconds(10))
+        let name = { (o: String) in o.split(separator: "\n").first { $0.hasPrefix("[") }.map(String.init) ?? "" }
+        #expect(name(a.output).count > 2, "\(a.output)")
+        #expect(name(a.output) != name(b.output), "\(a.output) / \(b.output)")
     }
 
     /// A program that still tries a sandbox of its own is told as such, not as a refused write.
