@@ -134,7 +134,10 @@ final class TextedCodes {
         }
     }
 
-    func forget(_ site: String) { requested[site] = nil }
+    func forget(_ site: String) {
+        requested[site] = nil
+        calls[site] = nil
+    }
 
     /// Whether a code step says the code went by text, not email ("sent to ******0790 via text").
     nonisolated static func saysText(_ page: String) -> Bool {

@@ -131,6 +131,16 @@ permissions Latchkey asks for (setup and Settings → Permissions). Before that:
 login is saved at access.bannerlife.com but signs in at login.bannerlife.com, so 0.8.192 fills
 any page of the same registered site, as Passwords does (Banner then refused the saved
 password); Amazon took the password without a code.
+First live sign-in with a TEXTED code (Toni: "keep doing it until you're successful",
+2026-11-21 19:42 and 19:44, 0.8.198): GitHub (tonimelisma) after the password showed a passkey
+page; Latchkey picked its SMS option, pressed Send SMS, took GitHub's text from Messages, filled
+it, signed in, and deleted the text (in Messages' Recently Deleted, checked in chat.db). What it
+took, each found live: United's six code boxes have no length limit (taken for one field, the
+digits shifted a box), a hidden browser fires no focus events (sent now, with a paste as
+fallback), an empty box's delete acted as Backspace, a masked user name read as a failed fill
+(which also wrongly switched United to Safari), a text sent before the code page was ignored,
+GitHub's passkey page read as "signed in". Amazon, United, and GitHub each skipped the code
+once they trusted Latchkey's browser. The "Signed in" answer now says how the code came.
 Live check (0.8.175, Mac locked, 2026-11-21 00:54): groups logins, browser, files, shell: 51 of 51
 worked. A fresh Claude signed in to the-internet.herokuapp.com as tomsmith with the fixture's test
 sign-in (`logins-fixture.sh`); none of its 10 tool results held the password except the test

@@ -199,7 +199,9 @@ import Testing
         let deleted = TextedCodesTests.Deleted()
         let (r, _, own) = try await run(texts, deleted: deleted)
         defer { own.closeAll() }
-        #expect(r.plainText.contains("Signed in to a.test as ann."), "\(r.plainText)")
+        #expect(
+            r.plainText.contains("Signed in to a.test as ann with a code the site texted to the owner"),
+            "\(r.plainText)")
         #expect(!r.plainText.contains("320518"), "Claude never sees the code")
         #expect(deleted.ids == ["otp-1"])
     }
@@ -240,7 +242,7 @@ import Testing
         let (r, _, own) = try await run(
             .init(), deleted: deleted, args: ["code": .string("320518")], started: started)
         defer { own.closeAll() }
-        #expect(r.plainText.contains("Signed in to a.test as ann."), "\(r.plainText)")
+        #expect(r.plainText.contains("Signed in to a.test as ann"), "\(r.plainText)")
         #expect(r.plainText.contains("archive it with your email tool"))
         #expect(deleted.ids.isEmpty && started.ids.isEmpty, "Apple Mail is never touched")
     }
@@ -281,7 +283,7 @@ import Testing
         let (r, _, own) = try await run(
             .init(), deleted: deleted, args: ["no_email_access": .bool(true)], mail: mail, started: started)
         defer { own.closeAll() }
-        #expect(r.plainText.contains("Signed in to a.test as ann."), "\(r.plainText)")
+        #expect(r.plainText.contains("Signed in to a.test as ann"), "\(r.plainText)")
         #expect(started.ids == ["mail"] && deleted.ids == [key])
     }
 
@@ -322,7 +324,7 @@ import Testing
         ]
         let (r, _, own) = try await run(texts, deleted: .init(), page: Self.citiLike())
         defer { own.closeAll() }
-        #expect(r.plainText.contains("Signed in to a.test as ann."), "\(r.plainText)")
+        #expect(r.plainText.contains("Signed in to a.test as ann"), "\(r.plainText)")
     }
 
     @Test func aSiteThatEndsTheSignInAtThatStepIsNoRefusal() async throws {
@@ -368,7 +370,7 @@ import Testing
         ]
         let (r, _, own) = try await run(texts, deleted: .init(), page: Self.unitedLike)
         defer { own.closeAll() }
-        #expect(r.plainText.contains("Signed in to a.test as ann."), "\(r.plainText)")
+        #expect(r.plainText.contains("Signed in to a.test as ann"), "\(r.plainText)")
     }
 
     /// United's second try (2026-11-21): a widget that knows its active box only from focus events
@@ -412,7 +414,7 @@ import Testing
         ]
         let (r, _, own) = try await run(texts, deleted: .init(), page: Self.reactLike(pasteOnly: pasteOnly))
         defer { own.closeAll() }
-        #expect(r.plainText.contains("Signed in to a.test as ann."), "\(r.plainText)")
+        #expect(r.plainText.contains("Signed in to a.test as ann"), "\(r.plainText)")
     }
 
     /// United's real boxes (probed 2026-11-21): no length limit, no autocomplete, labelled
@@ -448,7 +450,7 @@ import Testing
         ]
         let (r, _, own) = try await run(texts, deleted: .init(), page: Self.unitedReal)
         defer { own.closeAll() }
-        #expect(r.plainText.contains("Signed in to a.test as ann."), "\(r.plainText)")
+        #expect(r.plainText.contains("Signed in to a.test as ann"), "\(r.plainText)")
     }
 
     /// GitHub, 2026-11-21: after the password a passkey page whose "SMS Code" link is hidden
@@ -479,7 +481,7 @@ import Testing
         ]
         let (r, _, own) = try await run(texts, deleted: .init(), page: Self.passkeyThenSms)
         defer { own.closeAll() }
-        #expect(r.plainText.contains("Signed in to a.test as ann."), "\(r.plainText)")
+        #expect(r.plainText.contains("Signed in to a.test as ann"), "\(r.plainText)")
     }
 
     @Test func aPasskeyOnlyPageIsACheckNotSignedIn() async throws {

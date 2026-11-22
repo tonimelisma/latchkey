@@ -215,9 +215,17 @@ enum LoginsCapability {
             }
             return (nil, Date().timeIntervalSince(since) < window)
         }
-        let (outcome, page) = try await SignInFlow.signIn(
-            login, exact: PublicSuffix.isSuffix(login.site), store: store, run: run, texted: texted,
-            mayDeliver: mayDeliver, delivered: { pressed.yes = true })
+        let outcome: SignInFlow.Outcome
+        let page: PageScripts.Page
+        do {
+            (outcome, page) = try await SignInFlow.signIn(
+                login, exact: PublicSuffix.isSuffix(login.site), store: store, run: run, texted: texted,
+                mayDeliver: mayDeliver, delivered: { pressed.yes = true })
+        } catch {
+            // A code was asked for even when the call failed after: not again within 90 s.
+            if pressed.yes { await codes.delivered(login.site) }
+            throw error
+        }
         if pressed.yes { await codes.delivered(login.site) }
         if outcome != .waitingForCode { await codes.forget(login.site) }
         // FR-1362: the text is deleted in Messages once used (now while unlocked, else at unlock).
@@ -235,7 +243,18 @@ enum LoginsCapability {
         var activity: String?
         switch outcome {
         case .signedIn:
-            said = "Signed in to \(host)\(who)."
+            // How the second step went, so the answer shows it (feedback 2026-11-21).
+            let how =
+                if let used = usedText.id {
+                    MailCodes.Place(key: used) == nil
+                        ? " with a code the site texted to the owner, taken from Messages (the text is then deleted)"
+                        : " with a code the site emailed to the owner, taken from Apple Mail"
+                } else if !givenCode.isEmpty {
+                    " with the code you passed"
+                } else {
+                    ""
+                }
+            said = "Signed in to \(host)\(who)\(how)."
             activity = "Signed in to \(host)\(who)"
             // FR-1366: the owner wants code emails read and archived after use.
             if archivedInMail {

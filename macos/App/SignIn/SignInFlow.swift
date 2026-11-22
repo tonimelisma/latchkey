@@ -104,10 +104,12 @@ enum SignInFlow {
             // on its page (Citi keeps its password field there), or on a page past the password
             // that asks for nothing else yet (GitHub's passkey page and its "Send SMS"), at most
             // twice a call and not again while a code sent shortly before may still come.
-            let pastPassword = !page.password && !page.user && !sentCode
+            // Past the password only on a second-step page (a passkey or 2FA page, or a code page
+            // whose code must still be asked for), never on any page (security review 2026-11-21).
+            let pastPassword = !page.password && !page.user && !sentCode && (page.secondFactor || page.code)
             let choosing =
-                page.deliver && deliveries < 2
-                && ((sentPassword && !page.code && !sentDelivery) || (pastPassword && mayDeliver))
+                page.deliver && deliveries < 2 && mayDeliver
+                && ((sentPassword && !page.code && !sentDelivery) || pastPassword)
             // Back at a sign-in form after asking for the code: the site ended the sign-in
             // (Citi did, 2026-11-21); no refusal of the password, which it had taken.
             if sentDelivery && page.password && !page.code && !sentCode { return .check }
