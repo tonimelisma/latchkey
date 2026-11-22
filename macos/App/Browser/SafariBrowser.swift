@@ -581,9 +581,14 @@ actor SafariBrowser {
         claudesTab = true  // a tab Latchkey opened for Claude
         navigated(to: address)
         guard try await settle(after: nil, expectNavigation: true) else {
-            throw Failure.failed(
-                "Safari didn't finish loading \(address) within \(settleLimit.components.seconds) seconds. Read the page as it is with browser_read and page."
-            )
+            // A slow page (or one that sends the tab on to another site, as IKEA's sign-in does)
+            // is answered as it is, under its page name, never with an error that leaves the tab
+            // behind without one (live test 2026-11-21).
+            var p = try await readPage(offset: 0)
+            p.text =
+                "(The page was still loading after \(settleLimit.components.seconds) seconds: read it again in a moment with browser_read and this page's name.)\n"
+                + p.text
+            return p
         }
         return try await readPage(offset: 0)
     }
