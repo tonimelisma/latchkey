@@ -80,25 +80,25 @@ enum LoginsCapability {
             })
     }
 
-    static func fill(store: SignInStore, own: OwnPages, codes: TextedCodes? = nil) -> ToolEntry {
+    static func fill(store: SignInStore, own: OwnPages) -> ToolEntry {
         ToolEntry(
             tool: .make(
                 "logins_fill", title: "Type a Saved Sign-in",
                 description: """
                     Types the owner's saved user name, password, or a verification code into a field of one of \
                     Claude's own pages (opened with browser_read; name it with page, like p4k2), then presses the \
-                    button you name. Claude never sees the password or the code. You do the signing in: read \
+                    button you name. Claude never sees the password or a code from Passwords. You do the signing in: read \
                     the page, name the field by its reference from browser_read (field, like e18), say what to \
                     type (fill: user, password, or code) and, for a password or a code, the button to press right \
                     after (press, like e21: Sign On, Continue). Latchkey types it as a keyboard does, presses that \
                     button, empties what it typed, and answers with the page as it is; read the page after each \
                     fill and judge for yourself whether you are signed in, asked for a code, refused, or stopped \
                     by a check. It never presses anything else: press buttons like "Text me" yourself with \
-                    browser_act. A code comes from Passwords when the sign-in has one, else from a code text in \
-                    Messages (deleted once typed): if none has come, the answer says so at once; call again in a \
-                    few seconds. For a code sent by email, read it with your own email tool and pass it as code \
-                    (then archive that email); only if you have no email tool, pass no_email_access and Latchkey \
-                    reads Apple Mail. user: which user name, when Latchkey holds several (logins_find lists \
+                    browser_act. A code: Latchkey types the sign-in's code from Passwords when it has one; else \
+                    read the code yourself and pass it as code: a texted code with messages_find and \
+                    messages_read (wait and look again as long as you like), then delete that text with \
+                    messages_delete; an emailed one with your own email tool, else mail_find and mail_read, then \
+                    archive that email (mail_archive). user: which user name, when Latchkey holds several (logins_find lists \
                     them). Works in Latchkey's own browser and in Claude's Safari tabs, never in the owner's own \
                     tabs. Some sites' protection against bots turns away Latchkey's own background browser but \
                     lets Safari through (the site ends the sign-in, shows a check, or says nothing works): while \
@@ -115,14 +115,12 @@ enum LoginsCapability {
                         "The button to press right after, like e21 (needed with password and code)"),
                     "user": .stringParam("Which saved user name, when there are several"),
                     "code": .stringParam(
-                        "A verification code you read in the owner's email with your own email tool"),
-                    "no_email_access": .boolParam(
-                        "True only when you have no tool to read the owner's email: Latchkey then reads Apple Mail on the Mac"
+                        "A verification code you read in the owner's texts or email, for fill code (else the one from Passwords)"
                     ),
                 ], required: ["field", "fill"], readOnly: false, destructive: false, openWorld: true,
                 deadlineMS: 30_000),
             handler: { args in
-                await BrowserCapability.run { try await fill(args, store: store, own: own, codes: codes) }
+                await BrowserCapability.run { try await fill(args, store: store, own: own) }
             })
     }
 
@@ -131,12 +129,7 @@ enum LoginsCapability {
         case safari(String, SafariBrowser)
     }
 
-    /// Where a typed code came from, for the answer and the log.
-    private enum Source {
-        case passwords, text(String), mail(String), claude
-    }
-
-    private static func fill(_ args: JSONValue, store: SignInStore, own: OwnPages, codes given: TextedCodes?)
+    private static func fill(_ args: JSONValue, store: SignInStore, own: OwnPages)
         async throws -> ToolResult
     {
         func arg(_ k: String) -> String { args[k]?.stringValue?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "" }
@@ -156,7 +149,6 @@ enum LoginsCapability {
         if !givenCode.isEmpty, givenCode.range(of: #"^[A-Za-z0-9-]{4,10}$"#, options: .regularExpression) == nil {
             return .text("code must be the verification code alone: 4 to 10 letters or digits.", isError: true)
         }
-        let readMail = args["no_email_access"] == .bool(true)
         let target: Target = try await MainActor.run {
             if let s = own.safariCalled(name) { return .safari(s.name, s.browser) }
             return .own(try own.page(name))
@@ -227,12 +219,13 @@ enum LoginsCapability {
         guard let fillHost = PageScripts.fillHost(login, address: address) else {
             return .text("Latchkey types \(login.site)'s sign-in only on \(login.site)'s own pages.", isError: true)
         }
-        let codes = await MainActor.run { given ?? TextedCodes.shared }
         let who = login.user.isEmpty ? "" : " (\(login.user))"
 
         // What to type.
         var value = ""
-        var source = Source.claude
+        var fromPasswords = false
+        // Counted as used only once typed: a field that refused it leaves it for the next call.
+        var usedStep: UInt64?
         switch kind {
         case "user":
             guard !login.user.isEmpty else { return .text("\(host)'s saved sign-in has no user name.", isError: true) }
@@ -256,21 +249,13 @@ enum LoginsCapability {
                         here0.page)
                 }
                 value = totp.code(at: at)
-                store.usedCode(login, step: step)
-                source = .passwords
+                usedStep = step
+                fromPasswords = true
             } else {
-                let since = await MainActor.run { codes.since(login.site) }
-                guard let got = await codes.take(since: since, mail: readMail, site: login.site) else {
-                    let ago = Int(Date().timeIntervalSince(since))
-                    let when = since.formatted(date: .omitted, time: .shortened)
-                    let said =
-                        readMail
-                        ? "No code text or code email from \(host) has reached Messages or Apple Mail on this Mac since \(when) (\(ago) s ago), so nothing was typed. If the site sent one, call again in a few seconds."
-                        : "No code text has reached Messages on this Mac since \(when) (\(ago) s ago), so nothing was typed or pressed. If the site sent the code by text, call again in a few seconds. If it sent it by email: can you read the owner's email with a tool of your own? Then pass the code you find as code (and archive that email after); only if you have no email tool, pass no_email_access true."
-                    return await answer(said, here0.page)
-                }
-                value = got.code
-                source = MailCodes.Place(key: got.message) == nil ? .text(got.message) : .mail(got.message)
+                // Toni, 2026-11-22: "The agent reads the messages, archives them etc".
+                return await answer(
+                    "Latchkey holds no code generator for \(login.site) in Passwords, so nothing was typed. Read the code yourself (a text with messages_find and messages_read, an email with your own email tool or mail_find and mail_read), then call again with code.",
+                    here0.page, isError: true)
             }
         }
 
@@ -313,11 +298,7 @@ enum LoginsCapability {
                 "\(field) didn't hold what Latchkey typed (the page changed it), so nothing was pressed and the field was emptied.",
                 page, isError: true)
         }
-        if kind == "password" { await MainActor.run { codes.passwordTyped(login.site) } }
-        switch source {
-        case .text(let id), .mail(let id): await MainActor.run { codes.markUsed(id) }
-        default: break
-        }
+        if let usedStep { store.usedCode(login, step: usedStep) }
         var page = here0.page
         var pressed = ""
         if !press.isEmpty {
@@ -334,7 +315,7 @@ enum LoginsCapability {
         }
         if kind != "user", let cleared = await clear() { page = cleared }
 
-        // What was typed, and the code's text or email cleaned up right away (FR-1362, FR-1366).
+        // What was typed.
         var said: String
         var activity: String
         let boxes = (typed.boxes ?? 0) > 1 ? " (\(typed.boxes!) boxes)" : ""
@@ -344,34 +325,10 @@ enum LoginsCapability {
             said = "Typed the saved \(what) for \(login.site)\(who) into \(field)\(pressed)."
             activity = "Typed the saved \(what) for \(login.site)\(who)\(pressed)"
         default:
-            let from: String
-            switch source {
-            case .passwords: from = "the code from Passwords"
-            case .text(let id):
-                from = "a code texted to the owner"
-                await codes.used(id, site: host)
-            case .mail(let id):
-                from = "a code from Apple Mail"
-                await codes.used(id, site: host)
-            case .claude: from = "the code you passed"
-            }
+            let from = fromPasswords ? "the code from Passwords" : "the code you passed"
             said = "Typed \(from) into \(field)\(boxes)\(pressed)."
-            switch source {
-            case .text:
-                let locked = await MainActor.run { codes.isLocked() }
-                said +=
-                    locked
-                    ? " The text is deleted in Messages when the Mac is next unlocked."
-                    : " The text is deleted in Messages."
-            case .mail: said += " Latchkey marks that email read and archives it."
-            case .claude:
-                if let place = await codes.mailHolding(value, site: login.site) {
-                    await codes.used(place, site: host)
-                    said += " Latchkey marks the email with that code read and archives it in Apple Mail."
-                } else {
-                    said += " Now mark the email with that code read and archive it with your email tool."
-                }
-            case .passwords: break
+            if !fromPasswords {
+                said += " If it came by text or email, delete that text (messages_delete) or archive that email now."
             }
             activity = "Typed \(from) for \(login.site)\(who)\(pressed)"
         }

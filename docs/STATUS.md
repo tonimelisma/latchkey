@@ -20,6 +20,17 @@ list, no waiting for codes (a code text is looked for since the last password ty
 in 10 minutes; none: said at once), and a code's text or email is cleaned up right after it is
 typed. Removed: SignInFlow (the guessing), the fallback list in OwnSessions, the delivery and
 waiting parts of TextedCodes, the refusal count in SignInStore.
+Codes are Claude's too (Toni, 2026-11-22: "The agent reads the messages, archives them etc, sets
+a wait period they like etc"; then "Give Claude a delete", "Claude reads Apple Mail"): Latchkey no
+longer reads Messages or Mail for codes. logins_fill types a code Claude passes, or the one from
+Passwords. Claude reads a texted code with messages_find and messages_read and deletes the text
+with the new messages_delete (spec 002 FR-180, through Messages' window in the background, at the
+next unlock while locked); an emailed one with its own email tool, else the new Mail capability
+(mail_find, mail_read, mail_archive; spec 008 FR-850 to FR-853, back in part, read and archive
+only). TextedCodes became PendingCleanup (deletes and archives now, or at the next unlock).
+My 11:01 install of the fill-only version restarted Latchkey during Toni's Target order chat and
+renamed its sign-in tool, so that chat lost its page and tool; installs now wait until no chat of
+Toni's is using Latchkey.
 
 CI green again (2026-11-22): every CI run on main had failed since 2026-11-21, when the deploy
 gate's Semgrep (`make semgrep`, run with uvx) reached CI: ubuntu-latest has no uv ("uvx: not

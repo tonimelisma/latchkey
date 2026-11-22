@@ -16,7 +16,11 @@ Latchkey is a small menu bar app for your Mac. It connects your Mac to Claude, s
 Claude app (phone, web, desktop), can work with what's on your Mac:
 
 - **Notes:** find and read your notes; create notes; change plain notes.
-- **Messages:** find and read conversations; send texts and files.
+- **Messages:** find and read conversations; send texts and files; delete one message (Claude
+  does this for a sign-in code text it has used).
+- **Mail:** find and read recent emails in Apple Mail, and mark one read and archive it (for
+  when Claude has no email tool of its own, such as a sign-in code sent by email); nothing is
+  written or sent.
 - **WhatsApp:** find and read chats (from WhatsApp for Mac).
 - **Calendar and Reminders:** see, add, change, and delete events and reminders; answer and send
   invitations.
@@ -34,8 +38,8 @@ Claude app (phone, web, desktop), can work with what's on your Mac:
 - **Signing in:** Claude signs in on its own pages the way you would, reading each page and
   pressing its buttons itself; Latchkey only types your saved user name, password, or a
   verification code into the field Claude names, presses the button Claude names right after,
-  and empties what it typed. Claude never sees a password or a code, only the list of sites and
-  user names, and Latchkey never decides whether a sign-in worked: Claude reads the page.
+  and empties what it typed. Claude never sees a password or a code from Passwords, only the
+  list of sites and user names, and Latchkey never decides whether a sign-in worked: Claude reads the page.
   The passwords and codes come from Apple's Passwords. Latchkey keeps its copy only on your Mac;
   you hand it over with one Touch ID (Latchkey's menu → Export Passwords to Latchkey…), and a
   weekly notification reminds you to do it again. The exported file is deleted as soon as
@@ -47,14 +51,11 @@ Claude app (phone, web, desktop), can work with what's on your Mac:
   across restarts. Some sites' protection against bots turns away that hidden browser but lets
   Safari through: while the Mac is unlocked, Claude can move such a page into a background
   Safari tab of its own and sign in there; while it is locked, Claude tells you the site needs
-  the Mac unlocked. When a site texts you a code, Latchkey takes it from Messages when Claude
-  asks for it and types it (Claude never sees it), then deletes that text in Messages: at once
-  while the Mac is unlocked (Messages' window may show that conversation for a moment, the one
-  exception to "never in your way" here), or when you next unlock it. When a site emails you a
-  code, Claude reads it with an email tool of its own (a Gmail or Outlook connector) and passes
-  it; only if it has none does Latchkey read Apple Mail on your Mac (starting it hidden if
-  needed). The code email is then marked read and archived through Mail's scripting when Mail
-  has it (else Claude archives it with its tool). Not yet: passkeys.
+  the Mac unlocked. A verification code from Passwords is typed by Latchkey; a code a site texts
+  or emails you, Claude reads itself (from Messages, from its own email tool, or from Apple Mail
+  with the Mail tools), waits for as long as it likes, types it with Latchkey, and then deletes
+  that text (through Messages' window in the background, the one exception to "never in your
+  way" here) or archives that email. Not yet: passkeys.
 - **The screen:** take a picture of it, and control the computer when you ask.
 
 Your Mac never has to accept connections from the internet: Latchkey reaches out to a small
@@ -117,7 +118,8 @@ apps. It works in the background instead.
 
 - **Even while the Mac is locked** (lid open or closed): files and the command line; Notes
   (find, read, create, and change plain notes); Messages (find, read, and send to a person or an
-  existing conversation); WhatsApp (find and read); Calendar (everything, including invitations);
+  existing conversation; a message Claude deletes goes at the next unlock); Mail (find and read
+  recent emails; one Claude archives is archived at the next unlock); WhatsApp (find and read); Calendar (everything, including invitations);
   Reminders (create, change, complete, delete); Contacts; location and maps; web pages Claude
   opens itself. While the Mac is locked those open in a hidden browser of Latchkey's own with a
   copy of your Safari sign-ins. **That copy can sign you out in Safari:** a site like Target

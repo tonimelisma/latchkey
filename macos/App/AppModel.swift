@@ -82,7 +82,7 @@ final class AppModel {
     /// Every capability, in menu order.
     static func makeCapabilities() -> [Capability] {
         [
-            NotesCapability.make(), MessagesCapability.make(), WhatsAppCapability.make(),
+            NotesCapability.make(), MessagesCapability.make(), MailCapability.make(), WhatsAppCapability.make(),
             FilesCapability.make(),
             ShellCapability.make(),
             BrowserCapability.make(), LoginsCapability.make(), ComputerCapability.make(), CalendarCapability.make(),
@@ -198,13 +198,9 @@ final class AppModel {
             watcher.signInOn = { [weak self] in self?.capabilities.level(CapabilityRegistry.logins) != .off }
             // FR-1350 to FR-1354: Latchkey's own sign-ins, only while Sign-in is On.
             OwnSessions.shared.on = { [weak self] in self?.capabilities.level(CapabilityRegistry.logins) != .off }
-            // FR-1360: code texts only while Messages isn't Off; FR-1362: texts used while locked
-            // (or before a restart) are deleted now if the Mac is unlocked.
-            TextedCodes.shared.on = { [weak self] in self?.capabilities.level(CapabilityRegistry.messages) != .off }
-            TextedCodes.shared.mayDelete = { [weak self] in
-                self?.capabilities.level(CapabilityRegistry.messages) == .readWrite
-            }
-            Task { await TextedCodes.shared.deletePending() }
+            // Spec 002 FR-180, spec 008 FR-852: what Claude asked to delete or archive while the Mac
+            // was locked (or before a restart) is done now if it is unlocked.
+            Task { await PendingCleanup.shared.deletePending() }
             watcher.imported = { [weak self] outcome in
                 self?.refreshSignIns()
                 self?.signInStatus = outcome.told
@@ -506,7 +502,7 @@ final class AppModel {
         Task { await connection?.sendState() }
         // Spec 013 FR-1362: code texts used while the Mac was locked are deleted once it isn't.
         if !locked, ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil {
-            Task { await TextedCodes.shared.deletePending() }
+            Task { await PendingCleanup.shared.deletePending() }
         }
     }
 

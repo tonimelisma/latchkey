@@ -25,7 +25,8 @@ import Testing
         #expect(!does.isEmpty, "the README has a \"What Latchkey does\" section")
         // The README's words for each capability's title.
         let words = [
-            "Notes": "Notes", "Messages": "Messages", "WhatsApp": "WhatsApp", "Files": "Files", "Shell": "Command line",
+            "Notes": "Notes", "Messages": "Messages", "Mail": "Mail", "WhatsApp": "WhatsApp", "Files": "Files",
+            "Shell": "Command line",
             "Browser": "Safari", "Computer Control": "screen", "Calendar": "Calendar", "Reminders": "Reminders",
             "Contacts": "Contacts", "Location & Maps": "maps", "Sign-in": "Signing in",
         ]

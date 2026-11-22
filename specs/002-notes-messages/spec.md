@@ -182,6 +182,15 @@ As an Owner, I set Notes and Messages each to Off, Read only, or Read & write in
 - **FR-178** Each such change shall be answered as done only once Messages' database shows it
   (within 5 seconds), otherwise as asked for but not yet recorded; changes run one at a time.
 
+- **FR-180** While Messages is Read & write, Claude shall be able to delete one message it names by
+  its id (Toni, 2026-11-22: "Give Claude a delete", so Claude cleans up a sign-in code text it
+  read itself). Messages deletes it from the owner's devices and keeps it in Recently Deleted for
+  30 days. It is done through Messages' own window in the background, without bringing Messages
+  forward (the exception to Constitution IV that Toni chose for code texts on 2026-11-21, spec 013
+  FR-1362, now Claude's to use): while the Mac is unlocked at once, else at the next unlock, also
+  after a restart in between; when the window can't do it, the answer says why. Only that one
+  message, never the conversation.
+
 ### Capability levels
 - **FR-120** Notes and Messages shall each have three levels in the Mac app: Off, Read only, Read &
   write. Only tools allowed by the current level exist for Claude (Constitution III).

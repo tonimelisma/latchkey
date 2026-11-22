@@ -140,6 +140,10 @@ interface another app can read (`research.md`), so the only way in is a copy the
 - **FR-1324** (Withdrawn 2026-11-22: no cap on fills (Toni: "No cap"); Claude reads whether the site took the password. Was: When a sign-in fails, Latchkey shall allow Claude one more try of it; after the second
   failure, Latchkey shall refuse that sign-in until the next import, saying why (Toni, 2026-11-20:
   "Try once more"). A code refused once is never sent again; the retry waits for the next code.)
+- **FR-1375** A code shall be typed only when Claude passes it (read from the owner's texts or
+  email by Claude itself, with whatever waiting Claude likes) or when the sign-in has a code
+  generator in Passwords (each 30-second code typed once, counted as used only once typed);
+  without either, nothing is typed and Claude is told to read the code itself (Toni, 2026-11-22).
 - **FR-1371** Signing in shall be Claude's: Claude reads the page and decides what it shows (a
   sign-in form, a code step, a check, signed in, refused) and which buttons to press, with the
   browser tools; Latchkey only types a saved value into the field Claude names (Toni,
@@ -228,7 +232,7 @@ Toni, 2026-11-21, after a live check sent him two Amazon code texts Latchkey cou
 "Ensure you can use OTP. Mark them read and archive/delete after use"; then, asked: "Delete at
 once when unlocked" and "Any new code text".
 
-- **FR-1360** When Claude asks Latchkey to type a code (FR-1371) and Latchkey holds no code
+- **FR-1360** (Withdrawn 2026-11-22: Claude reads a code from the owner's texts or email itself and passes it to logins_fill (Toni, 2026-11-22: "The agent reads the messages, archives them etc, sets a wait period they like etc"). Cleaning up is Claude's too: messages_delete, spec 002 FR-180; mail_archive, spec 008 FR-852. Was: When Claude asks Latchkey to type a code (FR-1371) and Latchkey holds no code
   generator for the site, Latchkey shall take the code from the newest text in Messages
   on this Mac that arrived after the last password it typed on that site in the last 10 minutes
   (else in the last 3 minutes; security review 2026-11-22), isn't from the Owner, and reads as a code
@@ -236,7 +240,7 @@ once when unlocked" and "Any new code text".
   friend's "meet at 1830"), whoever sent it, and type it as FR-1371 does; Claude never sees it. Each
   text is used once. When none has come, the answer says so at once and Claude asks again in a
   few seconds; nothing waits. While Messages is Off in Latchkey's settings, or Latchkey can't read
-  Messages, no text is used.
+  Messages, no text is used.)
 - **FR-1368** (Withdrawn 2026-11-22: Claude presses the site's buttons itself, "Text me" included (FR-1371). Was: When, after the password, the site asks how to send the code (Citi, 2026-11-21: "We'll
   send a code to +1 ••• 0790", Text me / Call me), Latchkey shall press the text-message option
   (else email), never such a button before the password went; and when the site then returns
@@ -263,7 +267,7 @@ once when unlocked" and "Any new code text".
   again on the same page, and the next call takes it. A text is waited for up to 2 minutes from
   the site's request; after that, the sign-in counts as needing a code Latchkey doesn't hold
   (FR-1352's fallback follows).)
-- **FR-1362** Right after Latchkey typed a code from a text (Toni, 2026-11-22: "Right after typing
+- **FR-1362** (Withdrawn 2026-11-22: Claude reads a code from the owner's texts or email itself and passes it to logins_fill (Toni, 2026-11-22: "The agent reads the messages, archives them etc, sets a wait period they like etc"). Cleaning up is Claude's too: messages_delete, spec 002 FR-180; mail_archive, spec 008 FR-852. Was: Right after Latchkey typed a code from a text (Toni, 2026-11-22: "Right after typing
   it"; it was: only after a sign-in Latchkey judged to have worked), and while Messages is Read &
   write in Latchkey's settings
   (deleting is a change), it shall delete that text in Messages (from all the
@@ -272,9 +276,9 @@ once when unlocked" and "Any new code text".
   soon as it is unlocked, also after a restart in between. Only that one message, never the
   conversation. This is an exception Toni chose to never disturbing the user (Constitution IV):
   Messages' window may show that conversation. When the window can't do it (another language,
-  the message not shown, Accessibility not allowed), the text stays, and Latchkey's log says why.
-- **FR-1363** Latchkey's log records each code text used and deleted (when, the site, never the
-  code or the text).
+  the message not shown, Accessibility not allowed), the text stays, and Latchkey's log says why.)
+- **FR-1363** (Withdrawn 2026-11-22: Claude reads a code from the owner's texts or email itself and passes it to logins_fill (Toni, 2026-11-22: "The agent reads the messages, archives them etc, sets a wait period they like etc"). Cleaning up is Claude's too: messages_delete, spec 002 FR-180; mail_archive, spec 008 FR-852. Was: Latchkey's log records each code text used and deleted (when, the site, never the
+  code or the text).)
 
 ### Codes emailed to the Owner (Toni, 2026-11-21)
 
@@ -283,18 +287,18 @@ MCP instead of Apple Mail tricks. only if the agent says they're not able to acc
 start Apple Mail. Ask the agent specifically if they can access emails. If they can't find it,
 we can't find it via Apple Mail either"; then "yes, script Mail for archiving anyway".
 
-- **FR-1364** When Claude asks for a code and no text with one has arrived, the answer shall ask
+- **FR-1364** (Withdrawn 2026-11-22: Claude reads a code from the owner's texts or email itself and passes it to logins_fill (Toni, 2026-11-22: "The agent reads the messages, archives them etc, sets a wait period they like etc"). Cleaning up is Claude's too: messages_delete, spec 002 FR-180; mail_archive, spec 008 FR-852. Was: When Claude asks for a code and no text with one has arrived, the answer shall ask
   Claude whether it can read the Owner's email with a tool of its own. When it can, Claude finds
   the code and passes it to the next call, which types it; when Claude's tool can't find it, Latchkey shall not look in Apple Mail (the same mailbox).
   A code Claude passes is the code alone (4 to 10 letters or digits). A text that arrives still
-  counts (FR-1360).
-- **FR-1365** Only when Claude says it has no tool for the Owner's email shall Latchkey read
+  counts (FR-1360).)
+- **FR-1365** (Withdrawn 2026-11-22: Claude reads a code from the owner's texts or email itself and passes it to logins_fill (Toni, 2026-11-22: "The agent reads the messages, archives them etc, sets a wait period they like etc"). Cleaning up is Claude's too: messages_delete, spec 002 FR-180; mail_archive, spec 008 FR-852. Was: Only when Claude says it has no tool for the Owner's email shall Latchkey read
   Apple Mail on this Mac for the code: an email received in the time of FR-1360, not in a sent,
   draft, or deleted mailbox, read from Mail's own files (its text, never through its window),
   under FR-1360's rules for a code and only from an email naming the site (its sender or text
   holds the site's registered name, like "citi"; security review 2026-11-21); Apple Mail is started in the background, hidden, when it
-  isn't running.
-- **FR-1366** Right after Latchkey typed an emailed code (it was: after a sign-in that worked), that email shall be marked read
+  isn't running.)
+- **FR-1366** (Withdrawn 2026-11-22: Claude reads a code from the owner's texts or email itself and passes it to logins_fill (Toni, 2026-11-22: "The agent reads the messages, archives them etc, sets a wait period they like etc"). Cleaning up is Claude's too: messages_delete, spec 002 FR-180; mail_archive, spec 008 FR-852. Was: Right after Latchkey typed an emailed code (it was: after a sign-in that worked), that email shall be marked read
   and moved to its account's archive mailbox through Mail's scripting, never its window: the one
   Latchkey read, and the one holding the exact code Claude passed when Mail has it (received in
   the last 10 minutes); Mail is never started for this. Only while the Mac is unlocked (Mail
@@ -302,9 +306,9 @@ we can't find it via Apple Mail either"; then "yes, script Mail for archiving an
   have the email, Claude is asked to archive it with its own tool. Without permission to script
   Mail, the email stays and Latchkey's log says why (no question is shown to the Owner during
   use); "Control Mail" is one of the permissions Latchkey asks for in setup and Settings →
-  Permissions (FR-623), since 2026-11-21.
-- **FR-1367** Latchkey's log records each code email used and archived (when, the site, never the
-  code or the text).
+  Permissions (FR-623), since 2026-11-21.)
+- **FR-1367** (Withdrawn 2026-11-22: Claude reads a code from the owner's texts or email itself and passes it to logins_fill (Toni, 2026-11-22: "The agent reads the messages, archives them etc, sets a wait period they like etc"). Cleaning up is Claude's too: messages_delete, spec 002 FR-180; mail_archive, spec 008 FR-852. Was: Latchkey's log records each code email used and archived (when, the site, never the
+  code or the text).)
 
 ### Passkeys (later, not built now)
 

@@ -2,6 +2,26 @@
 
 **Withdrawn 2026-11-07 (Toni: "remove all mail related functionality. that's better done via APIs"):** the whole Mail capability (every requirement here). Latchkey has no Mail tools; this spec stays as the record.
 
+**Back in part 2026-11-22 (Toni, asked what Claude does with a code emailed to the Owner when it has no email tool of its own: "Claude reads Apple Mail"): FR-850 to FR-853 below only.** Nothing is written or sent; everything else here stays withdrawn.
+
+- **FR-850** While Mail is Read only or Read & write in Latchkey's settings, Claude shall be able to
+  list recent emails in Apple Mail on this Mac (up to the last 7 days, 24 hours unless asked),
+  newest first, optionally only those whose sender or subject holds given words, or only unread
+  ones: each one's id, when it came, sender, subject, mailbox, and whether it is unread. Sent,
+  draft, deleted, and outgoing mailboxes are left out. Mail is started hidden when it isn't
+  running, so new mail arrives.
+- **FR-851** Claude shall be able to read one email by its id: sender, subject, date, mailbox, and
+  its text (HTML as plain text, nothing loaded from the internet), from Mail's own files, or from
+  Mail's scripting when Mail hasn't saved the text yet and the Mac is unlocked. Reading doesn't
+  mark it read. Everything from an email is marked as written by others (FR-806).
+- **FR-852** While Mail is Read & write, Claude shall be able to mark one email read and move it to
+  its account's archive (Archive, or Gmail's All Mail; only marked read when there is none),
+  through Mail's scripting, never its window: at once while the Mac is unlocked, else at the next
+  unlock (Mail froze when scripted behind the lock, 2026-11-02).
+- **FR-853** Mail shall be a capability of its own in Latchkey's settings, Off, Read only, or Read &
+  write, Read & write by default; it needs Full Disk Access (Mail's files) and permission to
+  control Mail (archiving), as Latchkey asks in setup.
+
 Status: Draft for Toni's review (2026-10-29). No tasks or code before the review.
 Scope: the Owner's mail in Apple Mail on the Mac, in every account Mail has: finding and reading
 messages, organising them, drafting, replying, forwarding, and sending. This supersedes the

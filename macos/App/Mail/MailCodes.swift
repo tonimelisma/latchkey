@@ -1,11 +1,10 @@
 import AppKit
 import Foundation
 
-/// Codes a site emails to the Owner, read from Apple Mail on this Mac (spec 013 FR-1364 to
-/// FR-1367): only when Claude said it has no tool of its own to read the Owner's email (Toni,
-/// 2026-11-21: "always prefer direct MCP instead of Apple Mail tricks"). Mail's own index is read
-/// (subject and Mail's summary of the text), no window; Mail is started hidden when it isn't
-/// running; a used email is marked read and archived through Mail's scripting while unlocked.
+/// Apple Mail on this Mac, for Claude's Mail tools (spec 008 FR-850 to FR-853; Toni, 2026-11-22:
+/// "Claude reads Apple Mail", for when Claude has no email tool of its own): Mail's own index and
+/// email files are read, never its window; Mail is started hidden when it isn't running, so new
+/// mail arrives; an email is marked read and archived through Mail's scripting while unlocked.
 enum MailCodes {
     static let bundleID = Permissions.mailApp
 
@@ -53,52 +52,77 @@ enum MailCodes {
         }
     }
 
-    /// Whether an email (its sender line and text) names the site: the site's registered name
-    /// without its suffix ("citi" for online.citi.com, also in citibank.com), or, for a name under
-    /// 3 letters, the whole registered name. An email code from anyone else is never used, nor its
-    /// email archived (security review 2026-11-21).
-    static func names(_ site: String, in text: String) -> Bool {
-        let registered = PublicSuffix.registrable(site)
-        let brand = String(registered.split(separator: ".").first ?? "")
-        let t = text.lowercased()
-        return brand.count >= 3 ? t.contains(brand) : t.contains(registered)
-    }
-
-    /// Mailboxes a code never comes from: what the Owner sent or drafted, and what's deleted.
+    /// Mailboxes the Mail tools leave out: what the Owner sent or drafted, and what's deleted.
     static func skipped(_ mailbox: String) -> Bool {
         let m = mailbox.lowercased()
         return ["sent", "draft", "deleted", "trash", "outbox"].contains { m.contains($0) }
     }
 
-    /// Emails received since `since`, newest first, as texts for `TextedCodes` (subject and Mail's
-    /// summary); nil when Mail's index can't be read.
-    static func recent(_ since: Date) -> [TextedCodes.Text]? {
+    /// One email as Mail's index knows it.
+    struct Email: Sendable, Equatable {
+        var place: Place
+        var date: Date
+        var sender: String
+        var subject: String
+        var unread: Bool
+    }
+
+    private static let select = """
+        SELECT m.ROWID, m.date_received, COALESCE(s.subject, ''), mb.url, COALESCE(a.address, ''),
+          COALESCE(a.comment, ''), m.read
+        FROM messages m LEFT JOIN subjects s ON s.ROWID = m.subject JOIN mailboxes mb ON mb.ROWID = m.mailbox
+          LEFT JOIN addresses a ON a.ROWID = m.sender
+        """
+
+    private static func email(_ r: [SQLite.Value]) -> Email? {
+        guard let id = r[0].int, let place = Place(id: id, url: r[3].text ?? ""), !skipped(place.mailbox) else {
+            return nil
+        }
+        let address = r[4].text ?? "", name = r[5].text ?? ""
+        return Email(
+            place: place, date: Date(timeIntervalSince1970: Double(r[1].int ?? 0)),
+            sender: name.isEmpty || name == address ? address : "\(name) <\(address)>", subject: r[2].text ?? "",
+            unread: (r[6].int ?? 1) == 0)
+    }
+
+    /// Emails received since `since`, newest first, at most `limit`, optionally only those whose
+    /// sender or subject holds the words given; nil when Mail's index can't be read.
+    static func find(
+        since: Date, from: String = "", subject: String = "", unreadOnly: Bool = false, limit: Int = 30,
+        index: URL? = MailCodes.index
+    ) -> [Email]? {
         guard let url = index, let db = try? SQLite.openReadOnly(url) else { return nil }
         defer { SQLite.close(db) }
-        guard
-            let rows = try? SQLite.rows(
-                db,
-                """
-                SELECT m.ROWID, m.date_received, COALESCE(s.subject, ''), COALESCE(su.summary, ''), mb.url,
-                  COALESCE(a.address, '')
-                FROM messages m LEFT JOIN subjects s ON s.ROWID = m.subject
-                  LEFT JOIN summaries su ON su.ROWID = m.summary JOIN mailboxes mb ON mb.ROWID = m.mailbox
-                  LEFT JOIN addresses a ON a.ROWID = m.sender
-                WHERE m.date_received >= ? AND m.deleted = 0 ORDER BY m.date_received DESC LIMIT 20
-                """, bind: [.int(Int64(since.timeIntervalSince1970))])
-        else { return nil }
-        let root = url.deletingLastPathComponent().deletingLastPathComponent()
-        return rows.compactMap { r in
-            guard let id = r[0].int, let place = Place(id: id, url: r[4].text ?? ""), !skipped(place.mailbox)
-            else { return nil }
-            // Mail's summary comes hours later (2026-11-21: 1 of 35 the last 12 hours), so the
-            // email's own text, from its file, once Mail has it.
-            let body = file(of: place, in: root).flatMap { try? Data(contentsOf: $0) }.map(Self.text(ofEmlx:)) ?? ""
-            return TextedCodes.Text(
-                id: place.key,
-                text: ["From: " + (r[5].text ?? ""), r[2].text ?? "", r[3].text ?? "", body].joined(separator: "\n"),
-                date: Date(timeIntervalSince1970: Double(r[1].int ?? 0)))
+        var sql = select + " WHERE m.date_received >= ? AND m.deleted = 0"
+        var bind: [SQLite.Value] = [.int(Int64(since.timeIntervalSince1970))]
+        if !from.isEmpty {
+            sql += " AND (a.address LIKE ? OR a.comment LIKE ?)"
+            bind += [.text("%\(from)%"), .text("%\(from)%")]
         }
+        if !subject.isEmpty {
+            sql += " AND s.subject LIKE ?"
+            bind.append(.text("%\(subject)%"))
+        }
+        if unreadOnly { sql += " AND m.read = 0" }
+        sql += " ORDER BY m.date_received DESC LIMIT ?"
+        bind.append(.int(Int64(max(1, min(limit, 100)) * 2)))
+        guard let rows = try? SQLite.rows(db, sql, bind: bind) else { return nil }
+        return Array(rows.compactMap(email).prefix(limit))
+    }
+
+    /// One email by Mail's id; nil when there is none (or it is in a mailbox the tools leave out).
+    static func email(id: Int64, index: URL? = MailCodes.index) -> Email? {
+        guard let url = index, let db = try? SQLite.openReadOnly(url) else { return nil }
+        defer { SQLite.close(db) }
+        let rows = try? SQLite.rows(db, select + " WHERE m.ROWID = ? AND m.deleted = 0", bind: [.int(id)])
+        return rows?.first.flatMap(email)
+    }
+
+    /// The email's text from its file, once Mail has saved it; nil before.
+    static func text(of e: Email, index: URL? = MailCodes.index) -> String? {
+        guard let url = index else { return nil }
+        let root = url.deletingLastPathComponent().deletingLastPathComponent()
+        return file(of: e.place, in: root).flatMap { try? Data(contentsOf: $0) }.map(Self.text(ofEmlx:))
     }
 
     /// Mail's file for an email: `<account>/<mailbox>.mbox/<store>/Data/<digits>/Messages/<id>.emlx`,
@@ -227,10 +251,10 @@ enum MailCodes {
         config.hides = true
         config.addsToRecentItems = false
         _ = try? await NSWorkspace.shared.openApplication(at: url, configuration: config)
-        EventLog.shared.record(.app, "Sign-in: started Apple Mail in the background for an emailed code")
+        EventLog.shared.record(.app, "Started Apple Mail in the background for Claude's Mail tools")
     }
 
-    /// Marks the email read and moves it to its account's archive (FR-1366): "Archive", or Gmail's
+    /// Marks the email read and moves it to its account's archive (spec 008 FR-852): "Archive", or Gmail's
     /// "All Mail"; when the account has neither, it is only marked read. Only through Mail's
     /// scripting, never its window, and only while the Mac is unlocked (Mail froze when scripted
     /// behind the lock, 2026-11-02).

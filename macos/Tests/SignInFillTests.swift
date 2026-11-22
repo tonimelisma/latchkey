@@ -65,17 +65,8 @@ import Testing
         </script>
         """
 
-    final class Box: @unchecked Sendable {
-        var texts: [TextedCodes.Text] = []
-        var mail: [TextedCodes.Text] = []
-        var deleted: [String] = []
-        var mailStarted = 0
-    }
-
     struct Setup {
         let own: OwnPages
-        let codes: TextedCodes
-        let box: Box
         let tool: ToolEntry
         let store: SignInStore
     }
@@ -84,16 +75,7 @@ import Testing
         let s = SignInStore(vault: MemoryVault())
         try s.replace(with: logins, at: Date(timeIntervalSince1970: 1_800_000_000))
         let own = OwnPages(cookies: { [] }, isLocked: { locked }, record: { _ in })
-        let box = Box()
-        let c = TextedCodes(defaults: nil)
-        c.on = { true }
-        c.recent = { since in box.texts.filter { $0.date >= since } }
-        c.recentMail = { since in box.mail.filter { $0.date >= since } }
-        c.startMail = { box.mailStarted += 1 }
-        c.mailContent = { _ in nil }
-        c.isLocked = { locked }
-        c.deleter = { box.deleted.append($0) }
-        return Setup(own: own, codes: c, box: box, tool: LoginsCapability.fill(store: s, own: own, codes: c), store: s)
+        return Setup(own: own, tool: LoginsCapability.fill(store: s, own: own), store: s)
     }
 
     func call(_ s: Setup, _ page: String, _ args: [String: JSONValue]) async -> ToolResult {
@@ -202,31 +184,38 @@ import Testing
         #expect(on.tools.contains { $0.name == "logins_fill" } && !on.tools.contains { $0.name == "logins_sign_in" })
     }
 
-    // MARK: codes
+    // MARK: codes (Toni, 2026-11-22: "The agent reads the messages, archives them etc")
 
-    @Test func aTextedCodeGoesAcrossTheBoxesAndTheTextIsDeletedRightAway() async throws {
+    @Test func aCodeClaudeReadGoesAcrossTheBoxesAndClaudeIsToldToCleanUp() async throws {
         let s = try setup()
         defer { s.own.closeAll() }
-        s.box.texts = [.init(id: "t1", text: "Citi: your one-time code is 320518", date: Date())]
         let p = try await s.own.open(html: Self.codeBoxes, base: Self.base)
-        let r = await call(s, p, ["field": .string("e3"), "fill": .string("code"), "press": .string("e9")])
+        let r = await call(
+            s, p, ["field": .string("e3"), "fill": .string("code"), "press": .string("e9"), "code": .string("320518")])
         #expect(!r.isError, "\(r.plainText)")
-        #expect(
-            r.plainText.contains("Typed a code texted to the owner into e3 (6 boxes), then pressed e9."),
-            "\(r.plainText)")
-        #expect(r.plainText.contains("Welcome ann"))
-        #expect(!r.plainText.contains("320518"), "Claude never sees the code")
-        #expect(s.box.deleted == ["t1"], "deleted right after typing")
-        let again = await call(s, p, ["field": .string("e3"), "fill": .string("code"), "press": .string("e9")])
-        #expect(!again.plainText.contains("Typed a code"), "each text once")
+        #expect(r.plainText.contains("Typed the code you passed into e3 (6 boxes), then pressed e9."), "\(r.plainText)")
+        #expect(r.plainText.contains("Welcome ann") && r.plainText.contains("messages_delete"))
+        let bad = await call(
+            s, p, ["field": .string("e3"), "fill": .string("code"), "press": .string("e9"), "code": .string("32; x")])
+        #expect(bad.isError && bad.plainText.contains("4 to 10 letters or digits"))
     }
 
-    /// Security review 2026-11-22: a code only into a code field, and never shown back to Claude,
-    /// even by a page that prints what was typed.
-    @Test func aCodeGoesOnlyIntoACodeFieldAndIsNeverShownBack() async throws {
+    /// Without a code from Claude or Passwords, nothing is typed: Claude reads it itself.
+    @Test func withoutACodeClaudeIsToldToReadIt() async throws {
         let s = try setup()
         defer { s.own.closeAll() }
-        s.box.texts = [.init(id: "t2", text: "Your code is 320518", date: Date())]
+        let p = try await s.own.open(html: Self.codeField, base: Self.base)
+        let r = await call(s, p, ["field": .string("e1"), "fill": .string("code"), "press": .string("e2")])
+        #expect(
+            r.isError && r.plainText.contains("messages_read") && r.plainText.contains("mail_read"), "\(r.plainText)")
+        #expect(try await run(s, p, "document.querySelector('[data-latchkey=e1]').value") == "")
+    }
+
+    /// Security review 2026-11-22: a code only into a code field, and never shown back by a page
+    /// that prints what was typed (it matters for a code from Passwords, which Claude never sees).
+    @Test func aCodeGoesOnlyIntoACodeFieldAndIsNeverShownBack() async throws {
+        let s = try setup([SavedSignIn(title: "A", site: "a.test", user: "ann", password: "p", otp: Self.otp)])
+        defer { s.own.closeAll() }
         let p = try await s.own.open(html: Self.onePage(), base: Self.base)
         let search = await call(s, p, ["field": .string("e5"), "fill": .string("code"), "press": .string("e4")])
         #expect(search.isError && search.plainText.contains("isn't a code field"), "\(search.plainText)")
@@ -238,63 +227,8 @@ import Testing
             """
         let q = try await s.own.open(html: echo, base: Self.base)
         let r = await call(s, q, ["field": .string("e1"), "fill": .string("code"), "press": .string("e2")])
-        #expect(r.plainText.contains("You typed •••") && !r.plainText.contains("320518"), "\(r.plainText)")
-    }
-
-    /// Toni, 2026-11-22: nothing waits; Claude calls again.
-    @Test func noCodeYetIsSaidAtOnceAndNothingIsTyped() async throws {
-        let s = try setup()
-        defer { s.own.closeAll() }
-        let p = try await s.own.open(html: Self.codeField, base: Self.base)
-        let start = ContinuousClock.now
-        let r = await call(s, p, ["field": .string("e1"), "fill": .string("code"), "press": .string("e2")])
-        #expect(ContinuousClock.now - start < .seconds(8))
-        #expect(!r.isError, "\(r.plainText)")
-        #expect(r.plainText.contains("No code text has reached Messages"), "\(r.plainText)")
-        #expect(r.plainText.contains("call again in a few seconds") && r.plainText.contains("no_email_access"))
-        #expect(try await run(s, p, "document.querySelector('[data-latchkey=e1]').value") == "")
-        #expect(s.box.mailStarted == 0)
-    }
-
-    /// FR-1360: a code text from before the last password typed on the site is an old one.
-    @Test func aTextFromBeforeThePasswordIsNotUsed() async throws {
-        let s = try setup()
-        defer { s.own.closeAll() }
-        s.box.texts = [.init(id: "old", text: "Your code is 111111", date: Date().addingTimeInterval(-120))]
-        let p = try await s.own.open(html: Self.onePage(), base: Self.base)
-        _ = await call(s, p, ["field": .string("e2"), "fill": .string("password"), "press": .string("e4")])
-        let q = try await s.own.open(html: Self.codeField, base: Self.base)
-        let r = await call(s, q, ["field": .string("e1"), "fill": .string("code"), "press": .string("e2")])
-        #expect(r.plainText.contains("No code text"), "\(r.plainText)")
-        #expect(s.box.deleted.isEmpty)
-    }
-
-    @Test func aCodeClaudeReadInItsEmailIsTypedAndClaudeArchivesIt() async throws {
-        let s = try setup()
-        defer { s.own.closeAll() }
-        let p = try await s.own.open(html: Self.codeField, base: Self.base)
-        let r = await call(
-            s, p, ["field": .string("e1"), "fill": .string("code"), "press": .string("e2"), "code": .string("320518")])
-        #expect(r.plainText.contains("Typed the code you passed into e1, then pressed e2."), "\(r.plainText)")
-        #expect(r.plainText.contains("Welcome ann") && r.plainText.contains("archive it with your email tool"))
-        #expect(s.box.mailStarted == 0)
-        let bad = await call(
-            s, p, ["field": .string("e1"), "fill": .string("code"), "press": .string("e2"), "code": .string("32; x")])
-        #expect(bad.isError && bad.plainText.contains("4 to 10 letters or digits"))
-    }
-
-    @Test func withoutAnEmailToolAppleMailIsReadAndTheEmailArchived() async throws {
-        let s = try setup()
-        defer { s.own.closeAll() }
-        let key = MailCodes.Place(id: 42, account: "ACCT", mailbox: "Inbox").key
-        s.box.mail = [.init(id: key, text: "From: noreply@a.test\nUse 320518 to sign in. Your code", date: Date())]
-        let p = try await s.own.open(html: Self.codeField, base: Self.base)
-        let r = await call(
-            s, p,
-            ["field": .string("e1"), "fill": .string("code"), "press": .string("e2"), "no_email_access": .bool(true)])
-        #expect(r.plainText.contains("Typed a code from Apple Mail into e1"), "\(r.plainText)")
-        #expect(r.plainText.contains("Welcome ann"))
-        #expect(s.box.mailStarted == 1 && s.box.deleted == [key])
+        #expect(r.plainText.contains("You typed •••"), "\(r.plainText)")
+        #expect(r.plainText.range(of: #"You typed \d"#, options: .regularExpression) == nil)
     }
 
     @Test func aCodeFromPasswordsIsTypedOncePerStep() async throws {
@@ -311,7 +245,6 @@ import Testing
     @Test func aRowOfAlikeFieldsTakesTheCodeOneDigitEach() async throws {
         let s = try setup()
         defer { s.own.closeAll() }
-        s.box.texts = [.init(id: "u1", text: "United verification code: 320518", date: Date())]
         let html =
             "<div class=\"otp\">"
             + (1...6).map {
@@ -321,7 +254,8 @@ import Testing
             + "</div><button data-latchkey=\"e9\" id=\"go\">Continue</button>"
             + "<script>document.getElementById('go').onclick = function () { var v = Array.prototype.map.call(document.querySelectorAll('.atm-c-otp-input'), function (b) { return b.value; }).join(''); if (v === '320518') document.body.innerHTML = '<h1>Welcome ann</h1>'; };</script>"
         let p = try await s.own.open(html: html, base: Self.base)
-        let r = await call(s, p, ["field": .string("e1"), "fill": .string("code"), "press": .string("e9")])
+        let r = await call(
+            s, p, ["field": .string("e1"), "fill": .string("code"), "press": .string("e9"), "code": .string("320518")])
         #expect(r.plainText.contains("(6 boxes)") && r.plainText.contains("Welcome ann"), "\(r.plainText)")
     }
 

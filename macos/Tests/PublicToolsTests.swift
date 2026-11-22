@@ -8,18 +8,18 @@ import Testing
     static let read = [
         "notes_find", "notes_read", "messages_find", "messages_read", "files_find", "files_read", "shell_check",
         "browser_read", "computer_look", "calendar_find", "reminders_find", "contacts_find", "location_read",
-        "maps_find", "whatsapp_find", "whatsapp_read", "logins_find",
+        "maps_find", "whatsapp_find", "whatsapp_read", "logins_find", "mail_find", "mail_read",
     ]
     static let write = [
         "notes_change", "messages_send", "files_change", "shell_run", "browser_act", "computer_act",
-        "calendar_change", "reminders_change", "contacts_change", "logins_fill",
+        "calendar_change", "reminders_change", "contacts_change", "logins_fill", "messages_delete", "mail_archive",
     ]
 
-    @MainActor @Test func twentySevenToolsAtFullLevel() {
+    @MainActor @Test func thirtyOneToolsAtFullLevel() {
         let registry = CapabilityRegistry(
             capabilities: AppModel.makeCapabilities(), levels: CapabilityRegistry.defaultLevels)
         let names = registry.tools.map(\.name)
-        #expect(names.count == 27)
+        #expect(names.count == 31)
         #expect(Set(names) == Set(Self.read + Self.write))
         for t in registry.tools {
             #expect(t.annotations?.readOnlyHint == Self.read.contains(t.name), "\(t.name)")

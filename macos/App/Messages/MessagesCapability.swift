@@ -141,7 +141,7 @@ enum MessagesCapability {
     /// 2026-11-07 once each passed on the real Mac).
     static func writeOperations(
         store: @escaping StoreSource, contacts: any ContactsLookup, scripts: any ScriptRunner, staging: URL,
-        confirmWait: Duration = .seconds(5)
+        confirmWait: Duration = .seconds(5), cleanup: PendingCleanup? = nil
     ) -> [ToolEntry] {
         let input: [String: JSONValue] = [
             "to": .stringParam("Who or which conversation to send to"),
@@ -220,7 +220,38 @@ enum MessagesCapability {
                             return r
                         }
                     }
-                })
+                }),
+            ToolEntry(
+                tool: .make(
+                    "messages_delete", title: "Delete a Message",
+                    description:
+                        "Deletes one message in Messages on the Mac, by its id (the \"message …\" at the end of each line of messages_find and messages_read), from all the owner's devices, kept in Recently Deleted as Messages does: for a sign-in code text once you've used it. Done through Messages' window in the background, never bringing Messages forward; while the Mac is locked, at the next unlock.",
+                    input: ["message": .stringParam("The message's id")], required: ["message"], readOnly: false,
+                    destructive: true, openWorld: false, deadlineMS: 30_000),
+                handler: { args in
+                    let id = args["message"]?.stringValue?.trimmingCharacters(in: .whitespaces) ?? ""
+                    guard !id.isEmpty, !id.hasPrefix("mail:") else {
+                        return .text("Name the message with message: its id from messages_read.", isError: true)
+                    }
+                    guard (try? store()?.locate(id)) != nil else {
+                        return .text(
+                            "There's no message \(id.prefix(60)) in Messages (it may be deleted already).",
+                            isError: true)
+                    }
+                    let queue: PendingCleanup
+                    if let cleanup { queue = cleanup } else { queue = await PendingCleanup.shared }
+                    switch await queue.request(id) {
+                    case .done:
+                        var r = ToolResult.text(
+                            "Deleted message \(id) in Messages (it is in Recently Deleted for 30 days).")
+                        r.activity = "Deleted a message in Messages"
+                        return r
+                    case .atUnlock:
+                        return .text("The Mac is locked: message \(id) is deleted as soon as the Mac is unlocked.")
+                    case .failed(let why):
+                        return .text("Message \(id) couldn't be deleted: \(why)", isError: true)
+                    }
+                }),
         ]
     }
 
