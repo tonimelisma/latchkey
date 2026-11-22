@@ -57,7 +57,8 @@ final class OwnSessions {
 
     /// Raised when Latchkey's own sign-in learns what made sites fall back (texted and emailed
     /// codes, typing key by key; 2026-11-21): those sites get one more try of Latchkey's own.
-    static let rules = 3  // 3: United fell back for a fill problem since fixed (2026-11-21)
+    // 3: United fell back for a fill problem since fixed; 4: IKEA when its code email wasn't read (2026-11-21)
+    static let rules = 4
 
     /// A cookie with no expiry is kept this long at most (FR-1353).
     static let sessionLimit: TimeInterval = 14 * 86400

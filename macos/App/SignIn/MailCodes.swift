@@ -127,13 +127,18 @@ enum MailCodes {
     /// else its HTML parts without tags, styles, or scripts; at most 64 KB looked at.
     static func text(ofEmlx data: Data) -> String {
         var d = data.prefix(1 << 20)
-        if let nl = d.firstIndex(of: 0x0A), d[d.startIndex..<nl].allSatisfy({ (0x30...0x39).contains($0) }) {
+        // The byte count, padded with spaces in Mail's files ("44036     ", 2026-11-21).
+        if let nl = d.firstIndex(of: 0x0A),
+            d[d.startIndex..<nl].allSatisfy({ (0x30...0x39).contains($0) || $0 == 0x20 || $0 == 0x0D })
+        {
             d = d[d.index(after: nl)...]
         }
         let parts = leaves(String(decoding: d, as: UTF8.self))
         let plain = parts.filter { $0.type.hasPrefix("text/plain") }.map(\.body)
         let html = parts.filter { $0.type.hasPrefix("text/html") }.map { strip($0.body) }
-        return String((plain.isEmpty ? html : plain).joined(separator: "\n").prefix(65536))
+        // Both: IKEA's plain text glues the code to the next word ("code.123456Please"), while
+        // its HTML keeps it in a cell of its own (2026-11-21).
+        return String((plain + html).joined(separator: "\n").prefix(65536))
     }
 
     /// The email's text parts (type and decoded text), multipart ones opened.
@@ -149,8 +154,9 @@ enum MailCodes {
         }
         let type = header("content-type").lowercased()
         if type.hasPrefix("multipart/") {
-            guard let r = type.range(of: "boundary="),
-                let raw = header("content-type")[r.upperBound...].split(separator: ";").first
+            let full = header("content-type")
+            guard let r = full.range(of: "boundary=", options: .caseInsensitive),
+                let raw = full[r.upperBound...].split(separator: ";").first
             else { return [] }
             let boundary = "--" + raw.trimmingCharacters(in: CharacterSet(charactersIn: "\" "))
             return body.components(separatedBy: boundary).dropFirst().flatMap {

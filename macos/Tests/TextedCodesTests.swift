@@ -580,6 +580,33 @@ import Testing
         #expect(MailCodes.text(ofEmlx: Data(qp.utf8)).contains("Your one-time passcode: 7731="))
     }
 
+    /// IKEA, 2026-11-21: the byte count line is padded with spaces, and the plain text glues the
+    /// code to the next word, while the HTML keeps it apart.
+    @Test func ikeasCodeEmailIsRead() {
+        let html =
+            "<p>Enter the below six-digits in the view where you requested the IKEA One-time code.</p><table><tr><td>482913</td></tr></table><p>Please do not share</p>"
+        let mail = """
+            \("44036     ")
+            From: no.reply@ikea.com
+            Content-Type: multipart/alternative;
+            \tboundary="----_NmP-0e22-Part_1"
+
+            ------_NmP-0e22-Part_1
+            Content-Type: text/plain; charset="utf-8"
+            Content-Transfer-Encoding: quoted-printable
+
+            HejEnter the below six-digits in the view where you requested the IKEA =
+            One-time code.482913Please do not share this with anyone.
+            ------_NmP-0e22-Part_1
+            Content-Type: text/html; charset="utf-8"
+            Content-Transfer-Encoding: quoted-printable
+
+            \(html)
+            ------_NmP-0e22-Part_1--
+            """
+        #expect(TextedCodes.code(in: MailCodes.text(ofEmlx: Data(mail.utf8))) == "482913")
+    }
+
     @Test func theEmailsFileIsWhereMailKeepsIt() throws {
         let root = FileManager.default.temporaryDirectory.appending(path: "mail-\(UUID().uuidString)")
         let dir = root.appending(path: "ACCT/Archive.mbox/STORE-1/Data/6/0/1/Messages")
