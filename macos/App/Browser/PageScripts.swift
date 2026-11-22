@@ -232,8 +232,9 @@ enum PageScripts {
           // What a collapsed button opens (aria-expanded false, aria-controls): GitHub's two-factor
           // "More options" list, hidden by its CSS, not a <details> (2026-11-22, 0.8.223).
           var collapsed = [];
-          document.querySelectorAll('[aria-expanded=false][aria-controls]').forEach(function (b) {
-            (b.getAttribute('aria-controls') || '').split(/\\s+/).forEach(function (id) {
+          // At most 50, so a page with thousands can't make the reading slow.
+          Array.prototype.slice.call(document.querySelectorAll('[aria-expanded=false][aria-controls]'), 0, 50).forEach(function (b) {
+            (b.getAttribute('aria-controls') || '').split(/\\s+/).slice(0, 4).forEach(function (id) {
               var t = id && document.getElementById(id);
               if (t && !t.contains(b)) collapsed.push({ button: b, body: t });
             });
@@ -248,8 +249,12 @@ enum PageScripts {
             if (e.tagName === 'A' || e.tagName === 'BUTTON') {
               var d = e.closest && e.closest('details:not([open])'), sum = d && d.querySelector('summary');
               if (d && !(sum && sum.contains(e))) { closedMenu = d; summaryText = sum ? shortText(sum) : ''; }
-              else for (var k = 0; k < collapsed.length; k++) {
-                if (collapsed[k].body.contains(e)) { closedMenu = collapsed[k].body; summaryText = shortText(collapsed[k].button); break; }
+              else if (st.display === 'none' || st.visibility === 'hidden' || (r.width === 0 && r.height === 0)) {
+                // Only what the page hides: a nav a hamburger "controls" but shows on a wide
+                // window isn't a closed menu (review 2026-11-22).
+                for (var k = 0; k < collapsed.length; k++) {
+                  if (collapsed[k].body.contains(e)) { closedMenu = collapsed[k].body; summaryText = shortText(collapsed[k].button); break; }
+                }
               }
             }
             if (!fileField && !closedMenu && (st.display === 'none' || st.visibility === 'hidden' || (r.width === 0 && r.height === 0))) continue;
@@ -262,6 +267,11 @@ enum PageScripts {
             var item = { ref: ref, kind: kind, label: label };
             if (tag === 'a') item.href = e.href;
             if (type === 'checkbox' || type === 'radio') item.checked = e.checked;
+            else if (tag === 'input' || tag === 'textarea') {
+              var secret = type === 'password' || e.type === 'password' || /(^|\\s)(current-password|new-password|one-time-code|cc-number|cc-csc)(\\s|$)/i.test(e.getAttribute('autocomplete') || '');
+              item.value = secret ? (e.value ? '(hidden)' : '') : String(e.value || '').slice(0, 100);
+            }
+            else if (tag === 'select' && e.selectedIndex >= 0) item.value = e.options[e.selectedIndex].text;
             // A toggle's state as the page tells it (Amazon's "Yes" button, 2026-11-22: only
             // aria-pressed changed, so a click that worked read as "nothing changed").
             var states = [];
@@ -271,11 +281,6 @@ enum PageScripts {
               if (v === 'true' || v === 'mixed') states.push(a[1]); else if (v === 'false') states.push(a[2]);
             });
             if (states.length) item.state = states.join(', ');
-            else if (tag === 'input' || tag === 'textarea') {
-              var secret = type === 'password' || e.type === 'password' || /(^|\\s)(current-password|new-password|one-time-code|cc-number|cc-csc)(\\s|$)/i.test(e.getAttribute('autocomplete') || '');
-              item.value = secret ? (e.value ? '(hidden)' : '') : String(e.value || '').slice(0, 100);
-            }
-            else if (tag === 'select' && e.selectedIndex >= 0) item.value = e.options[e.selectedIndex].text;
             if (fileField && (st.display === 'none' || st.visibility === 'hidden' || r.width < 2 || r.height < 2)) item.label = (item.label ? item.label + ' ' : '') + '(hidden file field)';
             if (closedMenu) {
               if (!item.label) item.label = (e.textContent || '').replace(/\\s+/g, ' ').trim().slice(0, 100);

@@ -147,6 +147,25 @@ import Testing
         #expect(page.elements.first { $0.label == "More options" }?.state == "collapsed")
     }
 
+    /// Review 2026-11-22: a field keeps its value beside an aria state, a plain checkbox has no
+    /// value, and a visible nav that a collapsed hamburger "controls" isn't a closed menu.
+    @Test func statesDontHideValuesAndVisibleNavsArentClosedMenus() async throws {
+        let b = LockedBrowser()
+        defer { b.discard() }
+        let html = """
+            <input role="combobox" aria-expanded="false" value="lamps" aria-label="Search">
+            <label><input type="checkbox" checked> Keep</label>
+            <button aria-expanded="false" aria-controls="nav">Menu</button>
+            <nav id="nav"><a href="https://test.example/shop">Shop</a></nav>
+            """
+        let page = try await b.open(html: html, base: base)
+        let search = try #require(page.elements.first { $0.label == "Search" })
+        #expect(search.value == "lamps" && search.state == "collapsed", "\(search)")
+        let keep = try #require(page.elements.first { $0.kind == "field:checkbox" })
+        #expect(keep.checked == true && keep.value == nil, "\(keep)")
+        #expect(page.elements.contains { $0.label == "Shop" }, "\(page.elements.map(\.label))")
+    }
+
     /// Feedback fb_2W5BWGE50RYV05R5NXCCN7ASC4 (Amazon's returns, 2026-11-22): a click that only
     /// pressed a toggle read as "nothing changed". A control's state is shown and counts.
     @Test func aToggleStateIsShownAndItsChangeCounts() async throws {
