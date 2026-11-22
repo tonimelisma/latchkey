@@ -22,6 +22,32 @@ with the installed version; SCHEDULED waits for a state only Toni can produce.
 | Costco sign-in | NOT VERIFIED | refused in both browsers with no words; Toni to check the saved password |
 | eBay sign-in | NOT VERIFIED | eBay's human check in both browsers; only Toni can answer it |
 
+### Codes experiment (0.8.223, 2026-11-22, fresh Claude Code sessions, Latchkey's own browser)
+
+Way 1 = Claude reads the code and passes it; way 2 = `code_from` (Latchkey finds it, Claude never
+sees it); way 3 = `check_code` (Claude's code typed only if a message holds it). Each run signed
+out first; checked from the raw page reads and Latchkey's log (cookies, deletes), not the
+agent's words.
+
+| Site (code) | Screen | Way 1 | Way 2 | Way 3 |
+|---|---|---|---|---|
+| GitHub (text) | unlocked 13:50–13:57 | VERIFIED | VERIFIED | VERIFIED |
+| United (text) | unlocked 14:08–14:12 | VERIFIED | VERIFIED | VERIFIED |
+| LinkedIn (email) | unlocked 14:13–14:18 | no code asked | VERIFIED | no code asked |
+| Nike (email) | locked 14:29–14:35 | VERIFIED | VERIFIED | VERIFIED |
+| PayPal (text) | locked 14:35–14:40 | no code asked | VERIFIED | no code asked |
+| Airbnb (text) | locked/unlocked 15:00–15:05 | VERIFIED | VERIFIED | VERIFIED (2nd code passed without the check) |
+| Best Buy (email) | locked/unlocked 14:45–14:57 | VERIFIED (40 calls) | VERIFIED | NOT VERIFIED: Best Buy's "Please wait" check sent it home |
+| Uber (text, 4 boxes) | locked 14:40–14:45 | NOT VERIFIED | NOT VERIFIED | NOT VERIFIED (got in by password) |
+| Etsy | unlocked 14:57–15:00 | NOT VERIFIED: fields in shadow roots not listed | same | same |
+| Amazon | unlocked 14:01–14:04 | NOT VERIFIED: "I am human" check before the form | same | same |
+| IKEA, Walmart, Target | unlocked | password only, no code asked: signed in all 9 runs | | |
+
+Fixed after it, in the next install: Etsy's fields in shadow roots, Uber's "1 of 4" boxes and
+widgets that move the focus, GitHub's real "More options" list, a toggle's state (Amazon's
+returns). Two Uber code texts couldn't be deleted (the window didn't show them); the next
+failure says why.
+
 ## Current phase
 
 Fill-only sign-in (Toni, 2026-11-22: "Shouldn't the code just provide what's happening in the

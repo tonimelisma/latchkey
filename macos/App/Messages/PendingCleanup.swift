@@ -142,6 +142,8 @@ enum CodeTextWindow {
                 let hits = balloons().filter { !$0.fromMe && $0.text == located.text }
                 return hits.count == 1 ? hits[0].element : nil
             }
+        } catch is CancellationError {
+            throw CancellationError()
         } catch {
             // What the window showed instead, without any text (two Uber code texts, 2026-11-22,
             // 0.8.223: never found; the next failure says why).

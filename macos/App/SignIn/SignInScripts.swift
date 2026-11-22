@@ -116,7 +116,7 @@ extension PageScripts {
               // code field after this one (the page moves the focus), never anywhere else.
               if (follow && i > 0) {
                 var f = focused();
-                if (f && f !== x && f.tagName === 'INPUT' && seen(f) && codeField(f) && (x.compareDocumentPosition(f) & Node.DOCUMENT_POSITION_FOLLOWING)) { x = f; filled.push(x); }
+                if (f && f !== x && f.tagName === 'INPUT' && seen(f) && codeField(f) && f.getRootNode() === x.getRootNode() && (x.compareDocumentPosition(f) & Node.DOCUMENT_POSITION_FOLLOWING)) { x = f; filled.push(x); }
               }
               var ch = v.charAt(i), up = ch.toUpperCase();
               var code = /[a-z]/i.test(ch) ? 'Key' + up : (/[0-9]/.test(ch) ? 'Digit' + ch : '');
@@ -147,9 +147,9 @@ extension PageScripts {
           var nth = function (x) { var m = /\\b(\\d+) of (\\d+)\\b/.exec(x.getAttribute('aria-label') || ''); return m ? [+m[1], +m[2]] : null; };
           var own = nth(e);
           if (e.maxLength === 1) {
-            boxes = inputs.slice(from).filter(function (x) { return x.maxLength === 1; }).slice(0, value.length);
+            boxes = inputs.slice(from).filter(function (x) { return x.maxLength === 1 && codeField(x); }).slice(0, value.length);
           } else if (own && own[0] === 1 && own[1] === value.length) {
-            boxes = inputs.slice(from, from + value.length).filter(function (x, i) { var n = nth(x); return n && n[0] === i + 1 && n[1] === own[1]; });
+            boxes = inputs.slice(from, from + value.length).filter(function (x, i) { var n = nth(x); return n && n[0] === i + 1 && n[1] === own[1] && codeField(x); });
             if (boxes.length !== value.length) boxes = [];
           } else if (e.className) {
             var alike = inputs.slice(from).filter(function (x) {
@@ -162,7 +162,8 @@ extension PageScripts {
             if (put(e, value, true)) return done;
             // The page spread the code over the boxes after this one itself: held all the same.
             var row = inputs.slice(from, from + value.length);
-            if (row.length > 1 && same(row.map(function (b) { return b.value; }).join(''), value)) {
+            // Only code fields: a page copying digits into another field gets no fill (review 2026-11-22).
+            if (row.length > 1 && row.every(codeField) && same(row.map(function (b) { return b.value; }).join(''), value)) {
               row.forEach(function (b) { if (filled.indexOf(b) < 0) filled.push(b); });
               return 'ok\\t' + JSON.stringify({ step: 'filled', boxes: row.length });
             }
