@@ -29,8 +29,10 @@ next unlock while locked); an emailed one with its own email tool, else the new 
 (mail_find, mail_read, mail_archive; spec 008 FR-850 to FR-853, back in part, read and archive
 only). TextedCodes became PendingCleanup (deletes and archives now, or at the next unlock).
 My 11:01 install of the fill-only version restarted Latchkey during Toni's Target order chat and
-renamed its sign-in tool, so that chat lost its page and tool; installs now wait until no chat of
-Toni's is using Latchkey.
+renamed its sign-in tool, so that chat lost its page and tool. Not yet guarded: nothing in
+install.sh or the hooks checks whether one of Toni's chats is using Latchkey (an earlier version
+of this line said installs wait; they don't). Only an agent memory note says to look at the log
+first; a real guard is among the proposals awaiting Toni's decision.
 Live with 0.8.221 (Mac locked): a fresh Claude Code session signed in to GitHub with only the new
 tools: user name and password with logins_fill, SMS chosen itself, the code read with
 messages_read, typed with logins_fill, the dashboard; the code text queued for deletion at the
