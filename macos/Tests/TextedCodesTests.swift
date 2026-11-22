@@ -167,7 +167,8 @@ import Testing
     func run(
         _ texts: TextedCodesTests.Texts, deleted: TextedCodesTests.Deleted, args: [String: JSONValue] = [:],
         mail: TextedCodesTests.Texts = .init(), started: TextedCodesTests.Deleted = .init(),
-        page html: String = TextedCodeSignInTests.codePage
+        page html: String = TextedCodeSignInTests.codePage,
+        content: @escaping (MailCodes.Place) async -> String? = { _ in nil }
     ) async throws -> (ToolResult, TextedCodes, OwnPages) {
         let s = SignInStore(vault: MemoryVault())
         try s.replace(with: [SignInPageTests.ann], at: Date(timeIntervalSince1970: 1_800_000_000))
@@ -180,6 +181,7 @@ import Testing
             return mail.all.filter { $0.date >= since }
         }
         c.startMail = { started.ids.append("mail") }
+        c.mailContent = content
         let name = try await own.open(html: html, base: SignInToolsTests.base)
         var call = args
         call["page"] = .string(name)
@@ -285,6 +287,36 @@ import Testing
         defer { own.closeAll() }
         #expect(r.plainText.contains("Signed in to a.test as ann"), "\(r.plainText)")
         #expect(started.ids == ["mail"] && deleted.ids == [key])
+    }
+
+    /// IKEA, 2026-11-21: Mail listed the email before downloading its body; the body is asked of
+    /// Mail's scripting.
+    @Test func aCodeRunningIntoTheNextSentenceIsFoundNotOneInsideAWord() {
+        #expect(TextedCodes.code(in: "One-time code.482913Please do not share") == "482913")
+        #expect(TextedCodes.code(in: "Your code: ab482913cd") == nil)
+        #expect(TextedCodes.code(in: "Your code is 482913x") == nil)
+    }
+
+    @Test func aBodyNotYetDownloadedIsAskedOfMail() async throws {
+        let mail = TextedCodesTests.Texts()
+        let key = MailCodes.Place(id: 77, account: "ACCT", mailbox: "Inbox").key
+        mail.all = [
+            .init(
+                id: key, text: "From: no.reply@a.test\nOne-time code to access your account.",
+                date: Date().addingTimeInterval(60))
+        ]
+        let deleted = TextedCodesTests.Deleted()
+        final class Asked: @unchecked Sendable { var n = 0 }
+        let asked = Asked()
+        let (r, _, own) = try await run(
+            .init(), deleted: deleted, args: ["no_email_access": .bool(true)], mail: mail,
+            content: { _ in
+                asked.n += 1
+                return "Enter the below code.320518Please do not share this."
+            })
+        defer { own.closeAll() }
+        #expect(r.plainText.contains("Signed in to a.test as ann"), "\(r.plainText)")
+        #expect(asked.n >= 1 && deleted.ids == [key])
     }
 
     @Test func withoutNoEmailAccessAppleMailIsNeverRead() async throws {

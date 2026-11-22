@@ -243,7 +243,32 @@ enum MailCodes {
         }
     }
 
+    /// The email's text, from Mail's scripting, which downloads a body not yet downloaded; nil
+    /// when Mail doesn't have it.
+    static func content(
+        _ place: Place, runner: any ScriptRunner = OSAScriptRunner(app: Permissions.mailApp, timeout: .seconds(15))
+    )
+        async throws -> String?
+    {
+        let answer = try await runner.run(Script.content, [place.account, place.mailbox, String(place.id)])
+        return answer.hasPrefix("ok\n") ? String(answer.dropFirst(3)) : nil
+    }
+
     enum Script {
+        static let content = """
+            on run argv
+            set accountID to item 1 of argv
+            set boxName to item 2 of argv
+            set wantedID to (item 3 of argv) as integer
+            tell application "Mail"
+            set theAccount to first account whose id is accountID
+            set found to (messages of (mailbox boxName of theAccount) whose id is wantedID)
+            if (count of found) is 0 then return "none"
+            return "ok" & linefeed & (content of item 1 of found)
+            end tell
+            end run
+            """
+
         static let archive = """
             on run argv
             set accountID to item 1 of argv

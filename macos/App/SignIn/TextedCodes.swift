@@ -31,6 +31,8 @@ final class TextedCodes {
     var recentMail: Recent = { MailCodes.recent($0) }
     /// Starts Apple Mail hidden when it isn't running (FR-1365).
     var startMail: () async -> Void = { await MailCodes.start() }
+    /// An email's text from Mail's scripting (FR-1365), for one whose body isn't downloaded yet.
+    var mailContent: (MailCodes.Place) async -> String? = { try? await MailCodes.content($0) }
     /// How long one sign-in call waits for the text: within the relay's 60 s for a call, with
     /// time left for filling the code in.
     var perCall: Duration = .seconds(45)
@@ -53,7 +55,9 @@ final class TextedCodes {
     /// review 2026-11-21: "meet at 1830" must never be filled in, nor deleted).
     nonisolated static func code(in text: String) -> String? {
         let ns = text as NSString
-        guard let re = try? NSRegularExpression(pattern: #"(?<![\p{L}\p{N}])\d{4,8}(?![\p{L}\p{N}])"#) else {
+        // Not inside a word or a longer number; a code may run straight into the next sentence's
+        // capital ("code.123456Please", IKEA's plain text, 2026-11-21), never into a small letter.
+        guard let re = try? NSRegularExpression(pattern: #"(?<![\p{L}\p{N}])\d{4,8}(?![\p{N}\p{Ll}])"#) else {
             return nil
         }
         let hits = re.matches(in: text, range: NSRange(location: 0, length: ns.length))
@@ -117,8 +121,15 @@ final class TextedCodes {
             for t in texts.sorted(by: { $0.date > $1.date }) where !used.contains(t.id) {
                 // An email must name the site (security review 2026-11-21); a text may come from
                 // anyone (Toni: "Any new code text").
-                if MailCodes.Place(key: t.id) != nil, !MailCodes.names(site, in: t.text) { continue }
-                if let code = Self.code(in: t.text) {
+                let place = MailCodes.Place(key: t.id)
+                if place != nil, !MailCodes.names(site, in: t.text) { continue }
+                var text = t.text
+                // Mail lists a new email before it downloads its body (IKEA, 2026-11-21): the
+                // body is asked of Mail's scripting, which downloads it, while the Mac is unlocked.
+                if let place, Self.code(in: text) == nil, !isLocked(), let body = await mailContent(place) {
+                    text += "\n" + body
+                }
+                if let code = Self.code(in: text) {
                     used.insert(t.id)
                     if !site.isEmpty { last[site] = (code, t.id, Date(), false) }
                     return (code, t.id)
