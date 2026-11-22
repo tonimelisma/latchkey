@@ -251,6 +251,13 @@ fresh sign-in answered "refused": Citi's page was still signing in when the call
 and running out of time counted as a refusal and switched Citi to Safari's cookies. Timers and
 the window were as while unlocked. Now running out of time is never a refusal (FR-1370), and
 Citi gets one more try of Latchkey's own browser (sign-in rules 8).
+With 0.8.219, still locked: Citi took the password and reached its "make sure it's you" step
+(the same cookies as the unlocked sign-in at 10:17), then returned to its sign-in form without
+texting a code; answered correctly as Citi ending the sign-in, with the guidance (FR-1369).
+Possibly Citi limiting sign-ins after about eight that day; tries stopped so the account isn't
+locked. Next: the first real locked use of Citi on another day (case
+regressions.logins_locked_citi_slow); if it ends the same way, look at what Citi shows after
+Text me while locked.
 Live check (0.8.175, Mac locked, 2026-11-21 00:54): groups logins, browser, files, shell: 51 of 51
 worked. A fresh Claude signed in to the-internet.herokuapp.com as tomsmith with the fixture's test
 sign-in (`logins-fixture.sh`); none of its 10 tool results held the password except the test
