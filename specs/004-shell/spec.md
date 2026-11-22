@@ -66,7 +66,9 @@ what is left is on one list.
 - **FR-315** Each command shall have its own scratch folder, used by programs for their
   temporary files, and Claude shall be told where it is.
 - **FR-316** When a command's leftovers are removed, its scratch folder shall be moved to the
-  Trash (an empty one is deleted).
+  Trash (an empty one is deleted); one of 100 MB or more is deleted outright, and the answer says
+  so (Toni, 2026-11-21: "Delete big ones outright", after build folders in the Trash, 9.8 GB,
+  filled the Mac's disk).
 - **FR-317** A command, and everything it starts, shall be able to write only to its scratch
   folder, the folder Claude ran it in (unless that is the home folder or a folder above it),
   Downloads, the caches package tools use, and what Claude declared when starting it (FR-318).

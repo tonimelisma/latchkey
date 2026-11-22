@@ -365,13 +365,19 @@ enum Leftovers {
     }
 
     static func describe(
-        job: String, command: String, stopped: [String], stuck: [String], scratch: Bool, kept: Found,
+        job: String, command: String, stopped: [String], stuck: [String], scratch: Bool, scratchDeleted: Bool = false,
+        kept: Found,
         permanent: [URL], why: String?, home: URL
     ) -> Report {
         var parts: [String] = []
         if !stopped.isEmpty { parts.append("stopped what it left running: \(stopped.joined(separator: ", "))") }
         if !stuck.isEmpty { parts.append("couldn't stop: \(stuck.joined(separator: ", "))") }
-        if scratch { parts.append("moved its scratch folder to the Trash") }
+        if scratch {
+            parts.append(
+                scratchDeleted
+                    ? "deleted its scratch folder (over 100 MB, too big to keep in the Trash)"
+                    : "moved its scratch folder to the Trash")
+        }
         if !kept.files.isEmpty {
             let names = kept.files.map { short($0, home: home) }.joined(separator: ", ")
             parts.append("kept the new files \(names)" + (kept.more > 0 ? " and \(kept.more) more" : ""))

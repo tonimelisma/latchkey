@@ -146,6 +146,10 @@ turned off from earlier and never asks again. 0.8.200 says so under the button a
 System Settings → Automation; the text macOS shows with its question names Mail and why; and
 per Apple's guidelines (Privacy: a button before macOS's question isn't titled "Allow") the
 Permissions buttons say "Ask…" or "Open Settings…".
+Emailed codes (0.8.201): IKEA's plain text glues the code to the next word ("code.123456Please"),
+so only the HTML part shows it apart; both parts are read now. Scratch folders (0.8.201; Toni:
+"Delete big ones outright"): the Mac's disk filled (Trash 9.8 GB, 63 scratch folders of other
+Claude sessions' Xcode builds); a scratch folder of 100 MB or more is now deleted, not trashed.
 Live check (0.8.175, Mac locked, 2026-11-21 00:54): groups logins, browser, files, shell: 51 of 51
 worked. A fresh Claude signed in to the-internet.herokuapp.com as tomsmith with the fixture's test
 sign-in (`logins-fixture.sh`); none of its 10 tool results held the password except the test

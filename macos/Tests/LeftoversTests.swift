@@ -303,6 +303,29 @@ final class Reports: @unchecked Sendable {
         #expect(r.left?.contains("moved its scratch folder to the Trash") == true)
     }
 
+    /// Toni, 2026-11-21: build folders moved to the Trash filled the disk; a big scratch folder is
+    /// deleted outright, a small one still goes to the Trash.
+    @Test func aBigScratchFolderIsDeletedNotTrashed() throws {
+        let root = FileManager.default.temporaryDirectory.appending(path: "scratch-\(UUID().uuidString)")
+        final class Trashed: @unchecked Sendable { var urls: [URL] = [] }
+        let trashed = Trashed()
+        var s = ShellSetup.testing(root: root)
+        s.remove = { trashed.urls.append($0) }
+        let big = root.appending(path: "big"), small = root.appending(path: "small")
+        try FileManager.default.createDirectory(at: big, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: small, withIntermediateDirectories: true)
+        try Data(count: 2 * 1024 * 1024).write(to: big.appending(path: "a.bin"))
+        try Data(count: 10).write(to: small.appending(path: "b.txt"))
+        #expect(ShellJobs.discard(big, setup: s, limit: 1024 * 1024), "deleted")
+        #expect(!FileManager.default.fileExists(atPath: big.path) && trashed.urls.isEmpty)
+        #expect(!ShellJobs.discard(small, setup: s, limit: 1024 * 1024), "trashed")
+        #expect(trashed.urls == [small])
+        let words = Leftovers.describe(
+            job: "job1", command: "x", stopped: [], stuck: [], scratch: true, scratchDeleted: true,
+            kept: .init(files: [], more: 0), permanent: [], why: nil, home: root)
+        #expect(words.answer.contains("deleted its scratch folder"))
+    }
+
     @Test func writesOutsideTheFenceFailWithAHint() async throws {
         let outside = root.appending(path: "outside.txt")
         let tool = ShellCapability.operations(jobs: jobs).first { $0.tool.name == "shell_run" }!

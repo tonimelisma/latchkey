@@ -432,8 +432,9 @@ actor ShellJobs {
         let own: Set<pid_t> = [job.process.processIdentifier, job.session() ?? -1]
         let stopped = names.filter { !stuck.contains($0.key) && !own.contains($0.key) }.values
         let scratchUsed = Self.hasContents(job.scratch)
+        var scratchDeleted = false
         if scratchUsed {
-            setup.remove(job.scratch)
+            scratchDeleted = Self.discard(job.scratch, setup: setup)
         } else {
             try? FileManager.default.removeItem(at: job.scratch)
         }
@@ -441,7 +442,8 @@ actor ShellJobs {
         let permanent = job.declared.filter { Fence.isPermanent($0, home: setup.home) }
         let report = Leftovers.describe(
             job: job.id, command: job.command, stopped: stopped.sorted(), stuck: stuck.map(Processes.name(of:)),
-            scratch: scratchUsed, kept: found, permanent: permanent, why: job.why, home: setup.home)
+            scratch: scratchUsed, scratchDeleted: scratchDeleted, kept: found, permanent: permanent, why: job.why,
+            home: setup.home)
         job.swept = true
         job.leaseEnd = nil
         try? FileManager.default.removeItem(at: Self.record(of: job, in: setup))
@@ -468,6 +470,33 @@ actor ShellJobs {
                 guard name.wholeMatch(of: pattern) != nil, !name.hasPrefix(launch + "-") else { return false }
                 return (try? url.resourceValues(forKeys: [.isSymbolicLinkKey]).isSymbolicLink) != true
             }
+    }
+
+    /// A scratch folder this big is deleted outright, not moved to the Trash (Toni, 2026-11-21:
+    /// build folders in the Trash filled the Mac's disk, 9.8 GB).
+    static let trashLimit: Int64 = 100 * 1024 * 1024
+
+    /// Removes a used scratch folder: deleted when it holds `trashLimit` or more, else moved to
+    /// the Trash as before (FR-316); whether it was deleted.
+    static func discard(_ folder: URL, setup: ShellSetup, limit: Int64 = trashLimit) -> Bool {
+        guard size(of: folder, upTo: limit) >= limit else {
+            setup.remove(folder)
+            return false
+        }
+        try? FileManager.default.removeItem(at: folder)
+        return true
+    }
+
+    /// The bytes a folder's files take, counted only up to `limit`.
+    static func size(of folder: URL, upTo limit: Int64) -> Int64 {
+        let keys: [URLResourceKey] = [.totalFileAllocatedSizeKey, .fileSizeKey]
+        guard let walk = FileManager.default.enumerator(at: folder, includingPropertiesForKeys: keys) else { return 0 }
+        var total: Int64 = 0
+        while let url = walk.nextObject() as? URL, total < limit {
+            let v = try? url.resourceValues(forKeys: Set(keys))
+            total += Int64(v?.totalFileAllocatedSize ?? v?.fileSize ?? 0)
+        }
+        return total
     }
 
     private static func hasContents(_ dir: URL) -> Bool {
@@ -505,8 +534,7 @@ actor ShellJobs {
         for file in entries where ["mark", "open"].contains(file.pathExtension) { try? fm.removeItem(at: file) }
         for folder in entries where !["pids", "mark", "open"].contains(folder.pathExtension) {
             if Self.hasContents(folder) {
-                setup.remove(folder)
-                trashed += 1
+                if !Self.discard(folder, setup: setup) { trashed += 1 }
             } else {
                 try? FileManager.default.removeItem(at: folder)
             }
