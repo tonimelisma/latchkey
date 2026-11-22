@@ -234,7 +234,17 @@ sign-in carries a bot-protection service's cookies), read as a refusal; the try 
 then passed the relay's 60 s with the password still in the field. A sign-in call now starts no
 step after 40 s and clears what it filled (FR-1370). And a page script with `return` but no
 `await` failed in Safari tabs ("Return statements are only valid inside functions"); it runs
-as a function now (spec 005 FR-463).
+as a function now (spec 005 FR-463), decided by JavaScriptCore's syntax check before it runs
+(the security review found the first version could run a script twice).
+Live with 0.8.218 (2026-11-22, unlocked): pages in Latchkey's own browser see a 1280×990 window
+at 0,33, as Safari's do; Citi, given one more try there (sign-in rules 7), signed in in
+Latchkey's own browser with its texted code and the text deleted: the browser used while the Mac
+is locked, where Citi had logged the session out the day before. Not yet seen with the Mac
+actually locked. eBay showed its human check in both browsers; the answer gave the new guidance
+and the move into Safari kept the tab. Costco refused the saved password in both browsers, with
+no words, and is blocked until the next export (the saved password may be out of date). A fresh
+Claude Code session saw the new logins_sign_in description, and a script with return gave
+{"twice":4} in a Safari tab.
 Live check (0.8.175, Mac locked, 2026-11-21 00:54): groups logins, browser, files, shell: 51 of 51
 worked. A fresh Claude signed in to the-internet.herokuapp.com as tomsmith with the fixture's test
 sign-in (`logins-fixture.sh`); none of its 10 tool results held the password except the test
