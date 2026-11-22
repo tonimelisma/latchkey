@@ -379,6 +379,12 @@ enum LoginsCapability {
             do {
                 page = try await click(press)
                 pressed = ", then pressed \(press)"
+            } catch SafariBrowser.Failure.elementMissing {
+                // The page went on by itself once the last character was in (Uber's code boxes,
+                // 2026-11-22): what was typed was taken; said as it is, and cleaned up as usual.
+                pressed =
+                    "; \(press) was no longer on the page after the typing (the page had changed by itself), so nothing was pressed"
+                page = (try? await run(PageScripts.signInHere))?.page ?? page
             } catch {
                 page = await clear() ?? page
                 let why = (error as? SafariBrowser.Failure).map(BrowserCapability.explain) ?? "\(error)"

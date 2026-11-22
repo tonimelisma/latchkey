@@ -426,6 +426,27 @@ import Testing
         #expect(r.plainText.contains("(4 boxes)") && r.plainText.contains("Welcome ann"), "\(r.plainText)")
     }
 
+    /// Uber (2026-11-22, 0.8.224): the page goes on by itself once the last digit is in, so the
+    /// button Claude named is gone. Said as it is, no error, and the code's text is cleaned up.
+    @Test func aPageThatGoesOnByItselfAfterTheCodeIsNoError() async throws {
+        let (f, c, d) = codes(texts: [CodeFinder.Message(id: "u1", text: "[Uber] Your code: 3205.", date: Date())])
+        let s = try setup(finder: f, cleanup: c)
+        defer { s.own.closeAll() }
+        let html = """
+            <input data-latchkey="e1" autocomplete="one-time-code"><button data-latchkey="e9">Next</button>
+            <script>document.querySelector('[data-latchkey=e1]').addEventListener('input', function (ev) {
+              if (ev.target.value === '3205') document.body.innerHTML = '<h1>Enter your password</h1>';
+            });</script>
+            """
+        let p = try await s.own.open(html: html, base: Self.base)
+        let r = await call(
+            s, p,
+            ["field": .string("e1"), "fill": .string("code"), "press": .string("e9"), "code_from": .string("text")])
+        #expect(!r.isError, "\(r.plainText)")
+        #expect(r.plainText.contains("e9 was no longer on the page after the typing"), "\(r.plainText)")
+        #expect(r.plainText.contains("Enter your password") && d.keys == ["u1"])
+    }
+
     /// A page that moves the focus to a search box gets no digit there: the code goes on only
     /// into code fields.
     @Test func theFocusNeverTakesACodeOutOfCodeFields() async throws {
@@ -448,12 +469,13 @@ import Testing
         let s = try setup()
         defer { s.own.closeAll() }
         let html = """
-            <form id="f"><lk-input id="u" kind="email"></lk-input><lk-input id="p" kind="password"></lk-input><lk-button></lk-button></form>
+            <form id="f"><lk-input id="u" kind="email"></lk-input><lk-input id="p" kind="password"></lk-input><lk-button></lk-button><lk-slot-button>Continue</lk-slot-button></form>
             <script>
             customElements.define('lk-input', class extends HTMLElement {
               connectedCallback() { var r = this.attachShadow({ mode: 'open' }); var k = this.getAttribute('kind');
                 r.innerHTML = '<label>' + (k === 'email' ? 'Email address' : 'Password') + ' <input type="' + k + '" autocomplete="' + (k === 'email' ? 'username' : 'current-password') + '"></label>'; }
             });
+            customElements.define('lk-slot-button', class extends HTMLElement { connectedCallback() { this.attachShadow({ mode: 'open' }).innerHTML = '<button><slot></slot></button>'; } });
             customElements.define('lk-button', class extends HTMLElement {
               connectedCallback() { var r = this.attachShadow({ mode: 'open' }); r.innerHTML = '<button>Sign in</button>';
                 r.querySelector('button').onclick = function () {
@@ -468,6 +490,7 @@ import Testing
         let email = try #require(page.elements.first { $0.kind == "field:email" }, "\(page.elements)")
         let pw = try #require(page.elements.first { $0.kind == "field:password" })
         let button = try #require(page.elements.first { $0.label == "Sign in" })
+        #expect(page.elements.contains { $0.label == "Continue" }, "a slotted button is named: \(page.elements)")
         let user = await call(s, p, ["field": .string(email.ref), "fill": .string("user")])
         #expect(!user.isError, "\(user.plainText)")
         let r = await call(s, p, ["field": .string(pw.ref), "fill": .string("password"), "press": .string(button.ref)])

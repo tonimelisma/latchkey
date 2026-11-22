@@ -263,6 +263,13 @@ enum PageScripts {
             if (!ref) { ref = 'e' + (next++); e.setAttribute('data-latchkey', ref); }
             var tag = e.tagName.toLowerCase(), type = (e.getAttribute('type') || 'text').toLowerCase();
             var label = (e.getAttribute('aria-label') || e.innerText || e.getAttribute('placeholder') || e.getAttribute('title') || e.getAttribute('name') || e.getAttribute('alt') || (e.labels && e.labels.length ? e.labels[0].innerText : '') || '').replace(/\\s+/g, ' ').trim().slice(0, 100);
+            // A web component's button shows the text the page puts in the component (its slot),
+            // not inside its shadow root (Etsy's Submit, 2026-11-22: listed with no name).
+            if (!label && e.getRootNode && e.getRootNode().host) {
+              var slot = e.querySelector('slot'), host = e.getRootNode().host;
+              var slotted = slot && slot.assignedNodes ? slot.assignedNodes({ flatten: true }).map(function (n) { return n.textContent || ''; }).join(' ') : '';
+              label = (slotted || host.getAttribute('aria-label') || host.innerText || '').replace(/\\s+/g, ' ').trim().slice(0, 100);
+            }
             var kind = tag === 'a' ? 'link' : tag === 'input' ? ((type === 'submit' || type === 'button') ? 'button' : 'field:' + type) : tag === 'textarea' ? 'field:text' : tag === 'select' ? 'choice' : (e.getAttribute('role') || tag);
             if (!label && tag === 'input' && (type === 'submit' || type === 'button')) label = e.value || '';
             var item = { ref: ref, kind: kind, label: label };
