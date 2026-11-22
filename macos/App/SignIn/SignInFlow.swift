@@ -22,6 +22,11 @@ enum SignInFlow {
         var deliver: Bool
         /// A second step with nothing to fill (a passkey or security key page; GitHub, 2026-11-21).
         var secondFactor: Bool
+
+        /// Nothing to fill, press, or answer, and no words from the site.
+        var asksNothing: Bool {
+            !password && !code && !user && !captcha && !deliver && !secondFactor && problem.isEmpty
+        }
     }
 
     enum Outcome: Equatable {
@@ -169,10 +174,13 @@ enum SignInFlow {
             page = try state(r.detail)
             // A site may keep the field it was sent on screen a moment before moving on (IKEA's
             // code page, 2026-11-21: read as a refusal, though the code had signed in): looked at
-            // again for up to 8 s, unless the site says something went wrong.
+            // again for up to 8 s, unless the site says something went wrong. And a page that
+            // shows nothing at all right after the password may still be drawing its next step
+            // (Citi's, 2026-11-21: answered "Signed in" before its "Text me" step showed): up to 3 s.
             var looks = 0
             while looks < 8, page.problem.isEmpty,
                 (step == "code" && page.code) || (step == "password" && page.password)
+                    || (step == "password" && looks < 3 && page.asksNothing)
             {
                 looks += 1
                 await wait(.seconds(1))

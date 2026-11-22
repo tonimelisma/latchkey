@@ -376,6 +376,40 @@ import Testing
         #expect(r.plainText.contains("Signed in to a.test as ann"), "\(r.plainText)")
     }
 
+    /// Citi as it is, 2026-11-21: after the password the page is empty a moment, then "Let’s make
+    /// sure it's you" (no password field) with Text me, then six one-character password boxes.
+    /// It was answered "Signed in", then "no sign-in form", then the password went into a box.
+    static let citiAsItIs = """
+        <title>Sign on</title><div id="app">
+        <input id="u" autocomplete="username"><input id="pw" type="password"><button id="go">Sign on</button></div>
+        <script>
+        var app = document.getElementById('app');
+        document.getElementById('go').onclick = function () {
+          app.innerHTML = '';
+          setTimeout(function () {
+            app.innerHTML = '<h2>Let’s make sure it\\'s you</h2><p>We’ll send a code to +1 ••• ••• 0790.</p><button id="t">Text me</button><button>Call me</button><button>I’ll call Citi for my code</button>';
+            document.getElementById('t').onclick = function () {
+              app.innerHTML = '<h2>Enter the one-time code</h2>' + [0,1,2,3,4,5].map(function (i) { return '<input class="cds-pin-entry-input" type="password" maxlength="1" inputmode="numeric" name="pin_' + i + '">'; }).join('') + '<button id="c">Continue</button>';
+              document.getElementById('c').onclick = function () {
+                var v = Array.prototype.map.call(document.querySelectorAll('.cds-pin-entry-input'), function (b) { return b.value; }).join('');
+                if (v === '320518') app.innerHTML = '<h1>Welcome ann</h1>';
+              };
+            };
+          }, 1500);
+        };
+        </script>
+        """
+
+    @Test func citisVerifyStepAndPasswordTypeCodeBoxesAreAnswered() async throws {
+        let texts = TextedCodesTests.Texts()
+        texts.all = [
+            .init(id: "otp-9", text: "Citi: your one-time code is 320518", date: Date().addingTimeInterval(60))
+        ]
+        let (r, _, own) = try await run(texts, deleted: .init(), page: Self.citiAsItIs)
+        defer { own.closeAll() }
+        #expect(r.plainText.contains("Signed in to a.test as ann"), "\(r.plainText)")
+    }
+
     @Test func aSiteThatEndsTheSignInAtThatStepIsNoRefusal() async throws {
         let (r, _, own) = try await run(.init(), deleted: .init(), page: Self.citiLike(textMeEndsIt: true))
         defer { own.closeAll() }

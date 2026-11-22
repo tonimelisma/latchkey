@@ -177,6 +177,13 @@ Emailed codes (0.8.201): IKEA's plain text glues the code to the next word ("cod
 so only the HTML part shows it apart; both parts are read now. Scratch folders (0.8.201; Toni:
 "Delete big ones outright"): the Mac's disk filled (Trash 9.8 GB, 63 scratch folders of other
 Claude sessions' Xcode builds); a scratch folder of 100 MB or more is now deleted, not trashed.
+Emailed code end to end (0.8.205, 2026-11-21 21:54): a fresh Claude signed in to IKEA with the
+code from Apple Mail, and Latchkey marked that email read and archived it (checked in Mail's
+index). Citi again (Toni: "you log in to citi!", 22:15): answered "Signed in" while Citi still
+drew its "Let’s make sure it's you" page, then found no form on that page, then took Citi's six
+one-character code boxes (password fields) for the password. Now a one-character password field
+is a code box, that page counts as a second step (Text me is pressed), and a page that shows
+nothing right after the password is looked at again for up to 3 s.
 Live check (0.8.175, Mac locked, 2026-11-21 00:54): groups logins, browser, files, shell: 51 of 51
 worked. A fresh Claude signed in to the-internet.herokuapp.com as tomsmith with the fixture's test
 sign-in (`logins-fixture.sh`); none of its 10 tool results held the password except the test

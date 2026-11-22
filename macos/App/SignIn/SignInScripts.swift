@@ -21,7 +21,9 @@ extension PageScripts {
           }
           var inputs = Array.prototype.filter.call(document.querySelectorAll('input'), seen);
           var typed = function (e) { return ['text', 'email', 'tel', 'number', ''].indexOf((e.getAttribute('type') || '').toLowerCase()) >= 0; };
-          var passwords = inputs.filter(function (e) { return e.type === 'password'; });
+          // A one-character password field is a code box, never a password (Citi's six PIN boxes
+          // are password fields, 2026-11-21: the password was typed into the first).
+          var passwords = inputs.filter(function (e) { return e.type === 'password' && e.maxLength !== 1; });
           var current = passwords.filter(function (e) { return !/new-password/i.test(e.getAttribute('autocomplete') || ''); });
           if (current.length) passwords = current;
           var codeField = inputs.filter(function (e) { return /one-time-code/i.test(e.getAttribute('autocomplete') || ''); })[0]
@@ -29,7 +31,7 @@ extension PageScripts {
                  return typed(e) && e.type !== 'password' && (e.maxLength < 0 || e.maxLength >= 4)
                    && /(otp|totp|mfa|2fa|two.?factor|one.?time|verif|security.?code|auth.?code|passcode|pin.?code|\\bcode\\b)/i.test(words(e));
                })[0];
-          var boxes = inputs.filter(function (e) { return typed(e) && e.maxLength === 1; });
+          var boxes = inputs.filter(function (e) { return (typed(e) || e.type === 'password') && e.maxLength === 1; });
           if (boxes.length < 6) boxes = [];
           // Code boxes without a one-character limit (United's, 2026-11-21: six fields labelled
           // "Enter digit 1 of 6", class atm-c-otp-input): a row of 4 to 8 alike fields (same class
@@ -107,7 +109,7 @@ extension PageScripts {
           // page with nothing to type yet (GitHub's passkey page was answered "Signed in").
           var bodyText = ((document.body && document.body.innerText) || '').slice(0, 4000);
           var secondFactor = !passwords.length && !codeField && !boxes.length
-            && /(passkey|security key|two-factor|two factor|2fa|authentication code|verify (it'?s|that it'?s) you)/i.test(bodyText);
+            && /(passkey|security key|two-factor|two factor|2fa|authentication code|(verify|confirm|make sure) (it['’]?s|it is|that it['’]?s|that it is) you|verify your identity)/i.test(bodyText);
         """
 
     /// What the page asks for now: `{ password, code, user, captcha, problem }`. Where the page is
