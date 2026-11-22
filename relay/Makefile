@@ -91,6 +91,7 @@ script-tests:
 	cd .. && scripts/tests/keep_going_test.sh
 	cd .. && scripts/tests/install_pairing_test.sh
 	cd .. && scripts/tests/install_checks_test.sh
+	cd .. && scripts/tests/ci_tools_test.sh
 
 # Every security check; the deploy script and CI run it.
 security: tidy-check vuln secrets semgrep shellcheck deps

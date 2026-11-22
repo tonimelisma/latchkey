@@ -27,6 +27,8 @@ jobs:
         with:
           go-version-file: relay/go.mod
           cache-dependency-path: relay/go.sum
+      # `make semgrep` runs the pinned Semgrep through uvx, which ubuntu-latest doesn't ship.
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
       - name: Security checks
         run: make security
       - name: Build
