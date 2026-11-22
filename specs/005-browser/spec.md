@@ -304,6 +304,9 @@ phone, Claude can't check a reservation in the Owner's account or fill in a form
   when the page's own script keeps the menu from opening (GitHub's two-factor page, 2026-11-22:
   "More options" didn't open and its "SMS Code" link was never listed; its list is the second
   kind, hidden by the page's style).
+- **FR-466** Controls inside a page's open shadow roots (web components) shall be listed, acted
+  on, and typed into like any other, in the page's order (Etsy's sign-in, 2026-11-22: its email
+  and password fields were never listed).
 - **FR-465** A control's state as the page declares it (pressed, checked, selected, expanded or
   collapsed, from its `aria-` attributes) shall be shown with it, and a change in it shall count
   as a change after a click (Amazon's returns, 2026-11-22: a "Yes" toggle that only became

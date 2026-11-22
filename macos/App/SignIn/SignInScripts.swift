@@ -69,13 +69,17 @@ extension PageScripts {
           // A code only into a field that is one (security review 2026-11-22: typed into a search
           // box, a code could come back as page text Claude reads): a password field, a box for
           // one character, or a field marked or named for a code.
-          if (kind === 'code' && type !== 'password' && e.maxLength !== 1) {
+          function codeField(x) {
+            var t = (x.getAttribute('type') || 'text').toLowerCase();
+            if (['text', 'number', 'tel', 'password'].indexOf(t) < 0) return false;
+            if (t === 'password' || x.maxLength === 1) return true;
             var l = '';
-            try { if (e.labels && e.labels.length) l = e.labels[0].innerText || ''; } catch (y) {}
-            var words = [e.name, e.id, e.className, e.getAttribute('placeholder'), e.getAttribute('aria-label'), e.getAttribute('autocomplete'), e.getAttribute('inputmode'), l].join(' ');
-            if (!/(one-time-code|numeric|\\bcode|otp|one.?time|verif|passcode|\\bpin\\b|digit|2fa|mfa|two.?factor|token|security)/i.test(words)) {
-              return 'ok\\t' + JSON.stringify({ step: 'notfield', is: type + ' (not a code)' });
-            }
+            try { if (x.labels && x.labels.length) l = x.labels[0].innerText || ''; } catch (y) {}
+            var words = [x.name, x.id, x.className, x.getAttribute('placeholder'), x.getAttribute('aria-label'), x.getAttribute('autocomplete'), x.getAttribute('inputmode'), l].join(' ');
+            return /(one-time-code|numeric|\\bcode|otp|one.?time|verif|passcode|\\bpin\\b|digit|2fa|mfa|two.?factor|token|security)/i.test(words);
+          }
+          if (kind === 'code' && !codeField(e)) {
+            return 'ok\\t' + JSON.stringify({ step: 'notfield', is: type + ' (not a code)' });
           }
           var filled = window.__latchkeyFilled;
           if (!filled) {
@@ -94,9 +98,12 @@ extension PageScripts {
             var squash = function (t) { return String(t).replace(/[\\s.\\-()]/g, '').toLowerCase(); };
             return squash(a) === squash(b);
           }
-          function put(x, v) {
+          // The focused element, also inside shadow roots.
+          function focused() { var a = document.activeElement; while (a && a.shadowRoot && a.shadowRoot.activeElement) a = a.shadowRoot.activeElement; return a; }
+          function put(x, v, follow) {
             focusOn(x);
             filled.push(x);
+            var start = x;
             // Emptied only when it holds something: a delete in an empty box is Backspace into
             // the box before (United left its first box empty, 2026-11-21).
             if (x.value) {
@@ -104,6 +111,13 @@ extension PageScripts {
               x.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'deleteContentBackward' }));
             }
             for (var i = 0; i < v.length; i++) {
+              // A code widget that moves the focus to its next box after each character (Uber's,
+              // 2026-11-22) gets the next one there, as a keyboard would: only another seen
+              // code field after this one (the page moves the focus), never anywhere else.
+              if (follow && i > 0) {
+                var f = focused();
+                if (f && f !== x && f.tagName === 'INPUT' && seen(f) && codeField(f) && (x.compareDocumentPosition(f) & Node.DOCUMENT_POSITION_FOLLOWING)) { x = f; filled.push(x); }
+              }
               var ch = v.charAt(i), up = ch.toUpperCase();
               var code = /[a-z]/i.test(ch) ? 'Key' + up : (/[0-9]/.test(ch) ? 'Digit' + ch : '');
               var kc = /[a-z0-9]/i.test(ch) ? up.charCodeAt(0) : 0;
@@ -121,16 +135,22 @@ extension PageScripts {
             }
             x.dispatchEvent(new Event('change', { bubbles: true }));
             if (x.blur) x.blur();
-            return same(x.value, v);
+            return x === start && same(x.value, v);
           }
           var done = 'ok\\t' + JSON.stringify({ step: 'filled', boxes: 0 });
           var unheld = 'ok\\t' + JSON.stringify({ step: 'unheld' });
           if (kind !== 'code') return put(e, value) ? done : unheld;
           // The boxes, when the field is one: it and the boxes after it, in the page's order.
-          var inputs = Array.prototype.filter.call(document.querySelectorAll('input'), seen);
+          var inputs = __lkAll('input').filter(seen);
           var from = inputs.indexOf(e), boxes = [];
+          // Boxes named "1 of 4" to "4 of 4" (Uber's, 2026-11-22: each in a wrapper of its own).
+          var nth = function (x) { var m = /\\b(\\d+) of (\\d+)\\b/.exec(x.getAttribute('aria-label') || ''); return m ? [+m[1], +m[2]] : null; };
+          var own = nth(e);
           if (e.maxLength === 1) {
             boxes = inputs.slice(from).filter(function (x) { return x.maxLength === 1; }).slice(0, value.length);
+          } else if (own && own[0] === 1 && own[1] === value.length) {
+            boxes = inputs.slice(from, from + value.length).filter(function (x, i) { var n = nth(x); return n && n[0] === i + 1 && n[1] === own[1]; });
+            if (boxes.length !== value.length) boxes = [];
           } else if (e.className) {
             var alike = inputs.slice(from).filter(function (x) {
               return x.className === e.className && x.parentElement && e.parentElement
@@ -138,7 +158,16 @@ extension PageScripts {
             });
             if (alike.length === value.length && value.length >= 4 && value.length <= 8) boxes = alike;
           }
-          if (!boxes.length) return put(e, value) ? done : unheld;
+          if (!boxes.length) {
+            if (put(e, value, true)) return done;
+            // The page spread the code over the boxes after this one itself: held all the same.
+            var row = inputs.slice(from, from + value.length);
+            if (row.length > 1 && same(row.map(function (b) { return b.value; }).join(''), value)) {
+              row.forEach(function (b) { if (filled.indexOf(b) < 0) filled.push(b); });
+              return 'ok\\t' + JSON.stringify({ step: 'filled', boxes: row.length });
+            }
+            return unheld;
+          }
           if (boxes.length < value.length) return 'ok\\t' + JSON.stringify({ step: 'notfield', is: boxes.length + ' boxes for a ' + value.length + '-character code' });
           boxes.forEach(function (b, i) { put(b, value.charAt(i)); });
           var held = function () { return boxes.map(function (b) { return b.value; }).join(''); };
@@ -165,8 +194,9 @@ extension PageScripts {
     /// there, so no script can read them afterwards (FR-1311). Answers `{ cleared }`.
     static let clearSignIn = """
         (function () {
+          \(PageScripts.deep)
           var n = 0, setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
-          var all = Array.prototype.slice.call(document.querySelectorAll('input[type="password"]')).concat(window.__latchkeyFilled || []);
+          var all = __lkAll('input[type="password"]').concat(window.__latchkeyFilled || []);
           all.forEach(function (e) {
             if (e && e.isConnected && e.value && e.type !== 'email' && !/(^|\\s)(username|email)(\\s|$)/i.test(e.getAttribute('autocomplete') || '')) {
               setter.call(e, ''); n++;

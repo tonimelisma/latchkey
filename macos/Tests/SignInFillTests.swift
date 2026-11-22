@@ -387,6 +387,96 @@ import Testing
         #expect(r.plainText.contains("(6 boxes)") && r.plainText.contains("Welcome ann"), "\(r.plainText)")
     }
 
+    /// Uber's code step (2026-11-22, 0.8.223): four boxes named "1 of 4" to "4 of 4", each in a
+    /// wrapper of its own, no one-character limit: one digit each.
+    @Test func boxesNamedOneOfFourTakeADigitEach() async throws {
+        let s = try setup()
+        defer { s.own.closeAll() }
+        let html =
+            (1...4).map {
+                "<div class=\"w\($0)\"><input data-latchkey=\"e\($0)\" class=\"b\($0)\" aria-label=\"Enter an OTP Code \($0) of 4\"></div>"
+            }
+            .joined()
+            + "<button data-latchkey=\"e9\" id=\"go\">Next</button>"
+            + "<script>document.getElementById('go').onclick = function () { var v = Array.prototype.map.call(document.querySelectorAll('input'), function (b) { return b.value; }).join(''); if (v === '3205') document.body.innerHTML = '<h1>Welcome ann</h1>'; };</script>"
+        let p = try await s.own.open(html: html, base: Self.base)
+        let r = await call(
+            s, p, ["field": .string("e1"), "fill": .string("code"), "press": .string("e9"), "code": .string("3205")])
+        #expect(r.plainText.contains("(4 boxes)") && r.plainText.contains("Welcome ann"), "\(r.plainText)")
+    }
+
+    /// A page that spreads a typed code over the boxes after the first itself: held all the same.
+    @Test func aCodeThePageSpreadsOverTheBoxesIsHeld() async throws {
+        let s = try setup()
+        defer { s.own.closeAll() }
+        let html = """
+            <input data-latchkey="e1" class="c" autocomplete="one-time-code"><input class="d" inputmode="numeric"><input class="d" inputmode="numeric"><input class="d" inputmode="numeric">
+            <button data-latchkey="e9" id="go">Next</button>
+            <script>
+            var boxes = document.querySelectorAll('input');
+            Array.prototype.forEach.call(boxes, function (b, i) {
+              b.addEventListener('input', function () { if (b.value && boxes[i + 1]) boxes[i + 1].focus(); });
+            });
+            document.getElementById('go').onclick = function () { var v = Array.prototype.map.call(boxes, function (b) { return b.value; }).join(''); if (v === '3205') document.body.innerHTML = '<h1>Welcome ann</h1>'; };
+            </script>
+            """
+        let p = try await s.own.open(html: html, base: Self.base)
+        let r = await call(
+            s, p, ["field": .string("e1"), "fill": .string("code"), "press": .string("e9"), "code": .string("3205")])
+        #expect(r.plainText.contains("(4 boxes)") && r.plainText.contains("Welcome ann"), "\(r.plainText)")
+    }
+
+    /// A page that moves the focus to a search box gets no digit there: the code goes on only
+    /// into code fields.
+    @Test func theFocusNeverTakesACodeOutOfCodeFields() async throws {
+        let s = try setup()
+        defer { s.own.closeAll() }
+        let html = """
+            <input data-latchkey="e1" autocomplete="one-time-code"><input id="q" type="search" name="q">
+            <button data-latchkey="e9">Next</button>
+            <script>document.querySelector('[data-latchkey=e1]').addEventListener('input', function () { document.getElementById('q').focus(); });</script>
+            """
+        let p = try await s.own.open(html: html, base: Self.base)
+        _ = await call(
+            s, p, ["field": .string("e1"), "fill": .string("code"), "press": .string("e9"), "code": .string("3205")])
+        #expect(try await run(s, p, "document.getElementById('q').value") == "")
+    }
+
+    /// Etsy's sign-in (2026-11-22, 0.8.223): the fields and the button are inside web components'
+    /// shadow roots. They are listed, typed into, and emptied after.
+    @Test func fieldsInsideShadowRootsAreListedTypedAndEmptied() async throws {
+        let s = try setup()
+        defer { s.own.closeAll() }
+        let html = """
+            <form id="f"><lk-input id="u" kind="email"></lk-input><lk-input id="p" kind="password"></lk-input><lk-button></lk-button></form>
+            <script>
+            customElements.define('lk-input', class extends HTMLElement {
+              connectedCallback() { var r = this.attachShadow({ mode: 'open' }); var k = this.getAttribute('kind');
+                r.innerHTML = '<label>' + (k === 'email' ? 'Email address' : 'Password') + ' <input type="' + k + '" autocomplete="' + (k === 'email' ? 'username' : 'current-password') + '"></label>'; }
+            });
+            customElements.define('lk-button', class extends HTMLElement {
+              connectedCallback() { var r = this.attachShadow({ mode: 'open' }); r.innerHTML = '<button>Sign in</button>';
+                r.querySelector('button').onclick = function () {
+                  var u = document.getElementById('u').shadowRoot.querySelector('input').value, pw = document.getElementById('p').shadowRoot.querySelector('input').value;
+                  window.got = pw.length; if (u === 'ann' && pw === \(PageScripts.literal(Self.ann.password))) document.title = 'Welcome ann';
+                }; }
+            });
+            </script>
+            """
+        let p = try await s.own.open(html: html, base: Self.base)
+        let page = try await s.own.page(p).read(offset: 0)
+        let email = try #require(page.elements.first { $0.kind == "field:email" }, "\(page.elements)")
+        let pw = try #require(page.elements.first { $0.kind == "field:password" })
+        let button = try #require(page.elements.first { $0.label == "Sign in" })
+        let user = await call(s, p, ["field": .string(email.ref), "fill": .string("user")])
+        #expect(!user.isError, "\(user.plainText)")
+        let r = await call(s, p, ["field": .string(pw.ref), "fill": .string("password"), "press": .string(button.ref)])
+        #expect(!r.isError && r.plainText.contains("Welcome ann"), "\(r.plainText)")
+        #expect(
+            try await run(s, p, "document.getElementById('p').shadowRoot.querySelector('input').value") == "",
+            "the password is emptied inside the shadow root too")
+    }
+
     // MARK: sign_in_again on a site Latchkey signs in to itself (FR-1374)
 
     @Test func whileLockedSigningInAgainOnAnOwnSiteSaysSafariWaitsForTheUnlock() async throws {

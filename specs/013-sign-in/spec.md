@@ -176,7 +176,10 @@ interface another app can read (`research.md`), so the only way in is a copy the
 - **FR-1372** A saved password shall be typed only into a password field that isn't a box for
   one character; a user name only into a text, email, or phone field; a code into a text or
   number field, or, when the field Claude names is a box for one character, across it and the
-  boxes for one character after it on the page, one character each; a code only into a field that
+  boxes for one character after it on the page, one character each (also a row of boxes named
+  "1 of 4" to "4 of 4", Uber's, 2026-11-22; and when the page moves the focus to its next code
+  box after each character, the next one is typed there, never into a field that isn't for a
+  code; the boxes together then hold the code); a code only into a field that
   is one (a password field, a one-character box, or a field marked or named for a code:
   one-time-code, numeric, code, PIN, digit), and the typed value is blanked out of the answer
   (security review 2026-11-22: typed into a search box, a code could come back as page text). A

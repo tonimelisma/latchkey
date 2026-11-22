@@ -136,15 +136,35 @@ enum CodeTextWindow {
         else { return }  // gone already
         guard let identity = try store.identity(of: located.conversationID) else { return }
         try await show(guid, conversation: identity)
-        let balloon = try await wait("the message") { () -> AXUIElement? in
-            let hits = balloons().filter { !$0.fromMe && $0.text == located.text }
-            return hits.count == 1 ? hits[0].element : nil
+        let balloon: AXUIElement
+        do {
+            balloon = try await wait("the message") { () -> AXUIElement? in
+                let hits = balloons().filter { !$0.fromMe && $0.text == located.text }
+                return hits.count == 1 ? hits[0].element : nil
+            }
+        } catch {
+            // What the window showed instead, without any text (two Uber code texts, 2026-11-22,
+            // 0.8.223: never found; the next failure says why).
+            throw Problem(message: "Messages' window didn't show the message (\(seen(located.text)))")
         }
         guard performNamed(balloon, "Delete…") else { throw Problem(message: "Messages doesn't offer deleting it") }
         try await confirmSheet()
         _ = try await wait("Messages to delete it", seconds: 10) { () -> Bool? in
             do { return try store.locate(guid) == nil ? true : nil } catch { return nil }
         }
+    }
+
+    /// What the transcript shows, for the error: how many messages, how many from others, how
+    /// many with exactly the text, and the nearest one's length and start, never their text.
+    static func seen(_ text: String) -> String {
+        let all = balloons()
+        let theirs = all.filter { !$0.fromMe }
+        let same = theirs.filter { $0.text == text }.count
+        let head = String(text.prefix(12))
+        let near = theirs.filter { $0.text.hasPrefix(head) }
+        let lengths = near.map { String($0.text.count) }.joined(separator: ", ")
+        return
+            "it shows \(all.count) messages, \(theirs.count) from others, \(same) with exactly its text, \(near.count) starting like it (lengths \(lengths.isEmpty ? "none" : lengths); the message's is \(text.count))"
     }
 
     // MARK: the window

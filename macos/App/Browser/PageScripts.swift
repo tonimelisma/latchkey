@@ -221,13 +221,14 @@ enum PageScripts {
     /// page marks (autocomplete) as a password, a one-time code, or a card number or security
     /// code. Those say only "(hidden)" when filled in; Claude can still type into them.
     static func read(offset: Int) -> String {
-        // nosemgrep: latchkey-page-script-literal -- splices in only two Ints (offset, pageSize).
+        // nosemgrep: latchkey-page-script-literal -- splices in only two Ints (offset, pageSize) and the fixed `deep`.
         """
         (function latchkeyRead(offset, max) {
+          \(deep)
           var root = document.documentElement;
           var next = parseInt(root.getAttribute('data-latchkey-next') || '1', 10);
           var sel = 'a[href], button, input:not([type=hidden]), textarea, select, summary, [role=button], [role=link], [role=tab], [role=menuitem], [role=checkbox], [role=option], [contenteditable=true], [role=combobox], [role=listbox], [role=menu], [role=radio], [role=switch], [aria-haspopup]';
-          var nodes = document.querySelectorAll(sel), out = [];
+          var nodes = __lkAll(sel), out = [];
           function shortText(x) { return (x.innerText || x.textContent || '').replace(/\\s+/g, ' ').trim().slice(0, 40); }
           // What a collapsed button opens (aria-expanded false, aria-controls): GitHub's two-factor
           // "More options" list, hidden by its CSS, not a <details> (2026-11-22, 0.8.223).
@@ -291,7 +292,9 @@ enum PageScripts {
             // Checkboxes and radio buttons are often drawn over on purpose, so they aren't marked.
             var cx = r.left + r.width / 2, cy = r.top + r.height / 2;
             if (!fileField && !closedMenu && type !== 'checkbox' && type !== 'radio' && cx >= 0 && cy >= 0 && cx < innerWidth && cy < innerHeight) {
-              var over = document.elementFromPoint(cx, cy);
+              // Inside a shadow root, its own elementFromPoint (the document's names the host).
+              var place = e.getRootNode && e.getRootNode().elementFromPoint ? e.getRootNode() : document;
+              var over = place.elementFromPoint(cx, cy);
               if (over && over !== e && !e.contains(over) && !over.contains(e) && !(e.labels && Array.prototype.some.call(e.labels, function (l) { return l.contains(over); }))) item.label = (item.label ? item.label + ' ' : '') + '(under another element)';
             }
             out.push(item);
@@ -316,8 +319,30 @@ enum PageScripts {
     }
 
     static func find(_ ref: String) -> String {
-        "var e = document.querySelector('[data-latchkey=' + JSON.stringify(\(literal(ref))) + ']'); if (!e) return 'missing';"
+        deep
+            + "var e = __lkFind('[data-latchkey=' + JSON.stringify(\(literal(ref))) + ']'); if (!e) return 'missing';"
     }
+
+    /// The page's elements matching a selector, also inside its open shadow roots, in the page's
+    /// order (Etsy's sign-in fields are inside web components' shadow roots, 2026-11-22: never
+    /// listed, so Claude couldn't type into them). At most 200 shadow roots are looked into.
+    static let deep = """
+        function __lkAll(sel) {
+          var out = [], roots = 0;
+          (function walk(root) {
+            if (++roots > 200) return;
+            var all = root.querySelectorAll('*');
+            for (var j = 0; j < all.length; j++) {
+              var x = all[j];
+              if (x.matches(sel)) out.push(x);
+              if (x.shadowRoot) walk(x.shadowRoot);
+            }
+          })(document);
+          return out;
+        }
+        function __lkFind(sel) { return document.querySelector(sel) || __lkAll(sel)[0] || null; }
+
+        """
 
     /// Answers "ok", and on a second line the address of the link clicked (JSON-encoded) when it
     /// opens in the same tab: Safari fires the Navigation API's `navigate` event for a link only
@@ -345,7 +370,8 @@ enum PageScripts {
           // (Gmail's filter form, drawn twice, 2026-11-16): the press and click go to it.
           if (e.getBoundingClientRect && document.elementFromPoint) {
             var c = e.getBoundingClientRect(), words = (e.innerText || '').replace(/\\s+/g, ' ').trim();
-            var over = document.elementFromPoint(c.left + c.width / 2, c.top + c.height / 2);
+            var place = e.getRootNode && e.getRootNode().elementFromPoint ? e.getRootNode() : document;
+            var over = place.elementFromPoint(c.left + c.width / 2, c.top + c.height / 2);
             if (words && over && over !== e && !e.contains(over) && !over.contains(e)) {
               for (var up = over; up && up !== document.body; up = up.parentElement) {
                 if ((up.innerText || '').replace(/\\s+/g, ' ').trim() === words) { e = up; break; }

@@ -9,10 +9,11 @@ import Foundation
 extension PageScripts {
     /// The element a reference names, or the page's focused element (or body) without one.
     /// Answers 'missing' when a reference names nothing.
-    private static let target = """
-        var e = a.ref ? document.querySelector('[data-latchkey=' + JSON.stringify(String(a.ref)) + ']') : (document.activeElement || document.body);
-        if (!e) return 'missing';
-        """
+    private static let target =
+        deep + """
+            var e = a.ref ? __lkFind('[data-latchkey=' + JSON.stringify(String(a.ref)) + ']') : (document.activeElement || document.body);
+            if (!e) return 'missing';
+            """
 
     private static func json(_ object: [String: Any]) -> String {
         let data = (try? JSONSerialization.data(withJSONObject: object, options: [.sortedKeys])) ?? Data("{}".utf8)
@@ -229,8 +230,9 @@ extension PageScripts {
         if let amount { args["amount"] = amount }
         return """
             (function (a) {
+              \(deep)
               var e = null;
-              if (a.ref) { e = document.querySelector('[data-latchkey=' + JSON.stringify(String(a.ref)) + ']'); if (!e) return 'missing'; }
+              if (a.ref) { e = __lkFind('[data-latchkey=' + JSON.stringify(String(a.ref)) + ']'); if (!e) return 'missing'; }
               var page = document.scrollingElement || document.documentElement, s = page;
               for (var n = e; n && n !== document.body && n !== document.documentElement; n = n.parentElement) {
                 var st = getComputedStyle(n);
@@ -386,9 +388,10 @@ extension PageScripts {
         if let url { args["url"] = url }
         return """
             (function (a) {
+              \(deep)
               var address = a.url || location.href, suggested = '';
               if (a.ref) {
-                var e = document.querySelector('[data-latchkey=' + JSON.stringify(String(a.ref)) + ']');
+                var e = __lkFind('[data-latchkey=' + JSON.stringify(String(a.ref)) + ']');
                 if (!e) return 'missing';
                 var l = e.closest ? e.closest('a[href], area[href]') : null;
                 var src = l ? l.href : (e.currentSrc || e.src || e.href || (e.data && e.tagName === 'OBJECT' ? e.data : ''));
