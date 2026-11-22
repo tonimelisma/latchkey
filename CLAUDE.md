@@ -277,7 +277,8 @@ applies, except:
   `set -o pipefail; cd "$LATCHKEY_SCRATCH" && git clone -q --depth 1 --branch <branch>
   https://github.com/tonimelisma/latchkey.git lk && cd lk/macos && xcodegen generate --quiet &&
   xcodebuild -project Latchkey.xcodeproj -scheme Latchkey -destination 'platform=macOS'
-  -derivedDataPath "$LATCHKEY_SCRATCH/dd" test -quiet 2>&1 | tail -40`, then `shell_check` the
+  -derivedDataPath "$LATCHKEY_SCRATCH/dd" test -quiet 2>&1 | tail -40; rm -rf "$LATCHKEY_SCRATCH/lk"
+  "$LATCHKEY_SCRATCH/dd"` (the clone and build go, so nothing fills the Trash), then `shell_check` the
   job until it ends (`build` instead of `test` to only build). A pass prints `** TEST BUILD
   SUCCEEDED **` (the build, fenced) and `** TEST EXECUTE SUCCEEDED **` (the tests, outside the
   fence), not `** TEST SUCCEEDED **`; a scratch folder over 100 MB is deleted at the end, so keep
