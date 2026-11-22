@@ -196,6 +196,9 @@ Citi by Latchkey alone (Toni: "log in to citi yourself now", unlocked): the sign
 code asked) but answered "Safari's tabs changed": Citi sent Claude's tab on to online.citi.com,
 and the check inside Safari just before each script accepted only a marked tab or an address
 Latchkey loaded. Now it also takes the address Latchkey's own survey just found the tab at.
+And a click that sends one of the owner's tabs to a page Latchkey can't surely tell is the same
+tab (Citi's End, View All Statements) ran, but was answered "nothing was done to any tab"; it
+is now answered as done, with the tab dropped as before.
 Live check (0.8.175, Mac locked, 2026-11-21 00:54): groups logins, browser, files, shell: 51 of 51
 worked. A fresh Claude signed in to the-internet.herokuapp.com as tomsmith with the fixture's test
 sign-in (`logins-fixture.sh`); none of its 10 tool results held the password except the test

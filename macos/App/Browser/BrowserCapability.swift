@@ -614,6 +614,8 @@ enum BrowserCapability {
             "That page isn't open (it may have been closed). Open one with browser_read and a url, or name one of the owner's tabs with tab."
         case .moved:
             "Safari's tabs changed while Latchkey was using the owner's tab. Try again."
+        case .goneAfterAction:
+            "Done: the action ran in the owner's Safari tab, and the tab then went to a page Latchkey can't surely tell apart from another tab, so it stopped working in it. To see the page, list the tabs with browser_read and tabs, and pick it again."
         case .tabGone:
             "The owner's Safari tab Claude was working in isn't where it was (it was closed, or the tabs in its window changed), so nothing was done to any tab. List the tabs with browser_read and tabs, and pick it again."
         case .javaScriptOff:

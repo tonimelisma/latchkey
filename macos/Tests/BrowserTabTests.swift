@@ -47,6 +47,9 @@ final class FakeSafariTabs: ScriptRunner, @unchecked Sendable {
     /// returned, and the new page has replaced the old one before Latchkey's next script, so
     /// no note of it is ever read: only the click script's own answer names the address.
     var clickGoesTo: String?
+    /// Set to an address: right after the next acting script, the picked tab shows that page
+    /// (no mark, no note of it), as a page a button sent elsewhere by itself.
+    var clickThenElsewhere: String?
     /// What the page's dialogs said, as the script that takes them answers; once (FR-432).
     var dialogsSaid = "[]"
     /// Plays a page whose click handler changes the link's address as it is clicked.
@@ -245,6 +248,11 @@ final class FakeSafariTabs: ScriptRunner, @unchecked Sendable {
                     windows[w].tabs[i].url = goesTo
                     windows[w].tabs[i].mark = nil
                 }
+                if waits, let away = clickThenElsewhere {
+                    clickThenElsewhere = nil
+                    windows[w].tabs[i].url = away
+                    windows[w].tabs[i].mark = nil
+                }
                 let run =
                     wrapped
                     ? String(data: try! JSONEncoder().encode([answer, encoded(inRun)]), encoding: .utf8)! : answer
@@ -424,7 +432,8 @@ final class FakeSafariTabs: ScriptRunner, @unchecked Sendable {
         let b = try await picked(fake)
         fake.clickGoesTo = "https://pay.example.net/"
         fake.clickChangesLink = true
-        await #expect(throws: SafariBrowser.Failure.tabGone) { _ = try await b.click("e1") }
+        // The click ran; then the tab is lost (said as done, 2026-11-21).
+        await #expect(throws: SafariBrowser.Failure.goneAfterAction) { _ = try await b.click("e1") }
         #expect(await b.working() == nil)
         #expect(fake.windows[0].tabs[0].scriptsRun == 0 && fake.windows[0].tabs[0].mark == nil, "the other tab")
     }

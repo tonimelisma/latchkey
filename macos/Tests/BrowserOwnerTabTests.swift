@@ -130,6 +130,17 @@ import Testing
         #expect(own.safariPage(name) == nil && own.list().isEmpty)
     }
 
+    /// Citi, 2026-11-21: a click that sends the Owner's tab to a page Latchkey can't surely tell
+    /// is the same tab ran all the same: Claude is told it was done, never "nothing was done".
+    @Test func aClickThatSendsTheTabOffIsSaidToHaveRun() async throws {
+        let fake = FakeSafariTabs()
+        let b = browser(fake)
+        try await b.pick("10.2")
+        fake.clickThenElsewhere = "https://elsewhere.example.com/"
+        await #expect(throws: SafariBrowser.Failure.goneAfterAction) { _ = try await b.click("e1") }
+        #expect(BrowserCapability.explain(.goneAfterAction).hasPrefix("Done"))
+    }
+
     /// FR-428: Claude closes the Owner's tab it works in; the other tab stays.
     @Test func closesTheOwnersTabItWorksIn() async throws {
         let fake = FakeSafariTabs()

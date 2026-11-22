@@ -123,6 +123,9 @@ actor SafariBrowser {
         case moved
         /// The Owner's tab Claude was working in isn't surely there any more (FR-429).
         case tabGone
+        /// The action ran, then the tab went to a page Latchkey can't surely tell is the same tab
+        /// (Citi's End and View All Statements, 2026-11-21: answered "nothing was done").
+        case goneAfterAction
         /// The Owner's tab didn't answer in time (10 s when found, 6 s right after): it may wait on a
         /// dialog of its own, or be paused or busy (FR-432).
         case dialogWaiting
@@ -320,8 +323,15 @@ actor SafariBrowser {
         let before = try? await stamp()
         try check(
             try await javaScript(PageScripts.click(ref, sameTab: claudesTab), acting: true, answer: answer), ref: ref)
-        _ = try await settle(after: before, expectNavigation: false)
-        return try await readPage(offset: 0)
+        return try await afterAction {
+            _ = try await settle(after: before, expectNavigation: false)
+            return try await readPage(offset: 0)
+        }
+    }
+
+    /// What follows an action that ran: a tab lost now was still acted in, and Claude is told so.
+    private func afterAction<T>(_ work: () async throws -> T) async throws -> T {
+        do { return try await work() } catch Failure.tabGone { throw Failure.goneAfterAction }
     }
 
     func type(_ ref: String, text: String, submit: Bool, answer: DialogAnswer = DialogAnswer()) async throws
@@ -332,16 +342,20 @@ actor SafariBrowser {
         try check(
             try await javaScript(PageScripts.type(ref, text: text, submit: submit), acting: true, answer: answer),
             ref: ref, option: text)
-        if submit { _ = try await settle(after: before, expectNavigation: false) }
-        return try await readPage(offset: 0)
+        return try await afterAction {
+            if submit { _ = try await settle(after: before, expectNavigation: false) }
+            return try await readPage(offset: 0)
+        }
     }
 
     func back() async throws -> PageScripts.Page {
         beginAction(mayNavigate: true)
         let before = try? await stamp()
         _ = try await javaScript(PageScripts.back, acting: true)
-        _ = try await settle(after: before, expectNavigation: true)
-        return try await readPage(offset: 0)
+        return try await afterAction {
+            _ = try await settle(after: before, expectNavigation: true)
+            return try await readPage(offset: 0)
+        }
     }
 
     func run(_ code: String, answer: DialogAnswer = DialogAnswer()) async throws -> String {
@@ -393,8 +407,10 @@ actor SafariBrowser {
         let before = mayNavigate ? try? await stamp() : nil
         let out = try await javaScript(script, acting: mayNavigate, answer: answer, privately: privately)
         let detail = try Self.detail(out, ref: ref)
-        if mayNavigate { _ = try await settle(after: before, expectNavigation: false) }
-        return (detail, try await readPage(offset: 0))
+        return try await afterAction {
+            if mayNavigate { _ = try await settle(after: before, expectNavigation: false) }
+            return (detail, try await readPage(offset: 0))
+        }
     }
 
     /// The part after "ok" and a tab; throws for "missing", "nooption", and the like.
