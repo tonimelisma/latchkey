@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import Testing
 
@@ -62,6 +63,52 @@ import Testing
         _ = try await b.open(html: "<p>Hi</p>", base: base)
         let agent = try await b.run("navigator.userAgent")
         #expect(agent.contains("Safari/605.1.15") && agent.contains("Version/"))
+    }
+
+    /// Citi, 2026-11-22: the page reported a 0×0 window at no place on the screen, which sites'
+    /// protection against bots reads as a robot (Toni: "change the background tab to be more
+    /// real"). Now it is told of a browser window as big as the page plus a toolbar, at the top
+    /// left of the screen, and nothing comes on screen.
+    @Test func thePageIsInABrowserSizedWindowThatNeverShows() async throws {
+        let shownBefore = NSApp.windows.filter(\.isVisible).count
+        let b = LockedBrowser()
+        defer { b.discard() }
+        _ = try await b.open(html: "<p>Hi</p>", base: base)
+        // WebKit asks for the window as the page starts: looked for up to 5 s under load.
+        var n: [Int] = []
+        let deadline = ContinuousClock.now + .seconds(5)
+        repeat {
+            let sizes = try await b.run(
+                "[outerWidth, outerHeight, innerWidth, innerHeight, screenX, screenY].join(' ')")
+            n = sizes.split(separator: " ").compactMap { Int($0) }
+            if n.count == 6, n[0] > 0 { break }
+            try await Task.sleep(for: .milliseconds(100))
+        } while ContinuousClock.now < deadline
+        #expect(n.count == 6 && n[0] == n[2] && n[1] == n[3] + 90, "\(n)")
+        #expect(n.count == 6 && n[5] >= 0, "on the screen, below its top: \(n)")
+        #expect(try await b.run("String(document.hasFocus())") == "false", "never in front")
+        #expect(NSApp.windows.filter(\.isVisible).count == shownBefore, "nothing on screen")
+    }
+
+    /// Live 2026-11-22: "return JSON.stringify(…)" without await failed with "Return statements
+    /// are only valid inside functions"; it runs as a function's body now. An expression is as
+    /// before.
+    @Test func aScriptThatReturnsWithoutAwaitRuns() async throws {
+        let b = LockedBrowser()
+        defer { b.discard() }
+        _ = try await b.open(html: "<p>Hi</p>", base: base)
+        #expect(try await b.run("var x = 2; return JSON.stringify({ x: x * 3 });") == #"{"x":6}"#)
+        #expect(try await b.run("[1, 2].map(function (v) { return v * 2; }).join(',')") == "2,4")
+        #expect(
+            PageScripts.wantsFunction(
+                "return 1", failure: "SyntaxError: Return statements are only valid inside functions."))
+        #expect(!PageScripts.wantsFunction("1 +", failure: "SyntaxError: Unexpected end of script"))
+    }
+
+    @Test func theWindowSitsAtTheTopLeftOfTheFreeArea() {
+        let free = CGRect(x: 0, y: 0, width: 1512, height: 949)
+        let f = LockedBrowser.windowFrame(page: CGSize(width: 1280, height: 900), screen: free)
+        #expect(f == CGRect(x: 0, y: 949 - 990, width: 1280, height: 990))
     }
 
     /// "Safari's cookies" as a test sets them: what `SafariCookies.current` reads from Safari's file.

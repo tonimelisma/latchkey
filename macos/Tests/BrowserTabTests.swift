@@ -50,6 +50,9 @@ final class FakeSafariTabs: ScriptRunner, @unchecked Sendable {
     /// Set to an address: right after the next acting script, the picked tab shows that page
     /// (no mark, no note of it), as a page a button sent elsewhere by itself.
     var clickThenElsewhere: String?
+    /// Set to an address: the next new tab is sent there by its site before Latchkey's first look
+    /// (no mark, not the address loaded), as eBay's sign-in sent Claude's tab to its check page.
+    var newTabGoesTo: String?
     /// What the page's dialogs said, as the script that takes them answers; once (FR-432).
     var dialogsSaid = "[]"
     /// Plays a page whose click handler changes the link's address as it is clicked.
@@ -133,9 +136,11 @@ final class FakeSafariTabs: ScriptRunner, @unchecked Sendable {
                 // Claude's own tab, at the end of the front window, behind the Owner's (FR-455).
                 guard !windows.isEmpty else { return "none" }
                 loads += 1
-                windows[0].tabs.append(FakeTab(url: args[0], title: "Claude's", owner: "claude"))
+                windows[0].tabs.append(FakeTab(url: newTabGoesTo ?? args[0], title: "Claude's", owner: "claude"))
+                newTabGoesTo = nil
                 let n = windows[0].tabs.count
-                return "\(windows[0].id)\t\(n)\t\(n)"
+                let others = windows[0].tabs.dropLast().enumerated().map { "\n\($0.offset + 1)\t\($0.element.url)" }
+                return "\(windows[0].id)\t\(n)\t\(n)" + others.joined()
             case SafariBrowser.Script.tabLoad:
                 let (w, i) = try guarded(args)
                 windows[w].tabs[i].waiting = false  // a new page replaces the one waiting
@@ -503,6 +508,27 @@ final class FakeSafariTabs: ScriptRunner, @unchecked Sendable {
         fake.windows[0].tabs[n].mark = nil
         fake.windows[0].tabs[0].url = "https://mail.example.com/other"
         await #expect(throws: SafariBrowser.Failure.tabGone) { _ = try await b.read(offset: 0) }
+    }
+
+    /// eBay, 2026-11-22: Latchkey's own sign-in hit eBay's check, the page moved into a new Safari
+    /// tab of Claude's, and eBay sent that tab on (signin.ebay.com to www.ebay.com) before Latchkey
+    /// ever marked it: the tab was lost ("isn't where it was"). It is Claude's while every other
+    /// tab is as when it opened, and only then.
+    @Test func aNewTabTheSiteSendsOnAtOnceIsStillClaudes() async throws {
+        let fake = FakeSafariTabs()
+        fake.newTabGoesTo = "https://www.ebay.com/splashui/captcha?ap=1"
+        let b = SafariBrowser(scripts: fake, settleLimit: .milliseconds(300))
+        let page = try await b.openTab("https://signin.ebay.com/signin/")
+        #expect(page?.url == "https://www.ebay.com/splashui/captcha?ap=1")
+        #expect(try await b.read(offset: 0).url == page?.url, "marked now: the next call works too")
+        let other = FakeSafariTabs()
+        other.newTabGoesTo = "https://www.ebay.com/splashui/captcha?ap=1"
+        let c = SafariBrowser(scripts: other, settleLimit: .milliseconds(300))
+        _ = try await c.openTab("https://signin.ebay.com/signin/")
+        let n = other.windows[0].tabs.count - 1
+        other.windows[0].tabs[n].mark = nil
+        other.windows[0].tabs[0].url = "https://mail.example.com/other"  // the owner's tab changed
+        await #expect(throws: SafariBrowser.Failure.tabGone) { _ = try await c.read(offset: 0) }
     }
 
     /// Citi, 2026-11-21: a tab of Claude's own whose page redirected after the load's limit (no

@@ -212,6 +212,28 @@ closing the page closed its tab. Last gap: Citi had fallen back to Safari's sign
 pages opened in Latchkey's own browser with no sign-in, because Safari's Citi cookies end with
 the session and didn't read as signed in; a site that fell back now opens in Safari while
 unlocked (FR-1352).
+Sign-in across sites, live (Toni, 2026-11-22: "Are you sure you are able to log in there now,
+both when the computer is locked and when it is unlocked?", then "is logging in to several other
+sites working?", 0.8.216, unlocked): Citi opened straight in a Safari tab of Claude's and signed
+in in one call (texted code, text deleted); GitHub and Amazon were still signed in with
+Latchkey's own sessions from the day before; United signed in in Latchkey's own browser with a
+texted code. eBay showed its check in Latchkey's own browser; the page moved into a Safari tab of
+Claude's, eBay sent that tab to its check page before Latchkey first found it, and the tab was
+lost (and called the owner's), so it stayed open: a new tab now records the other tabs as it
+opens (spec 005 FR-461). Locked, Citi can't work yet: earlier, in Latchkey's own browser, Citi
+took the password and the texted code, then logged the session out, which was answered as a
+refused password. A probe showed that browser's pages saw a 0×0 window at no place on the
+screen, a sign of a robot; Toni: "change the background tab to be more real so this legitimate
+use case can work. don't do anything malicious" and "ensure the agent gets proper guidance".
+Now its pages are told of a browser-sized window at the top left (FR-462; no stand-ins for
+Safari's own objects or Apple Pay), a sign-out after the code is a check, not a refusal
+(FR-1368), and every such answer tells Claude why and what to do, locked or unlocked (FR-1369).
+Costco: in Latchkey's own browser it answered with its error page after the password (its
+sign-in carries a bot-protection service's cookies), read as a refusal; the try in a Safari tab
+then passed the relay's 60 s with the password still in the field. A sign-in call now starts no
+step after 40 s and clears what it filled (FR-1370). And a page script with `return` but no
+`await` failed in Safari tabs ("Return statements are only valid inside functions"); it runs
+as a function now (spec 005 FR-463).
 Live check (0.8.175, Mac locked, 2026-11-21 00:54): groups logins, browser, files, shell: 51 of 51
 worked. A fresh Claude signed in to the-internet.herokuapp.com as tomsmith with the fixture's test
 sign-in (`logins-fixture.sh`); none of its 10 tool results held the password except the test

@@ -35,7 +35,7 @@ final class TextedCodes {
     var mailContent: (MailCodes.Place) async -> String? = { try? await MailCodes.content($0) }
     /// How long one sign-in call waits for the text: within the relay's 60 s for a call, with
     /// time left for filling the code in.
-    var perCall: Duration = .seconds(45)
+    var perCall: Duration = .seconds(35)
     /// How long a call that hasn't been told about email waits for a text before asking Claude
     /// whether it can read the owner's email (FR-1364).
     var firstWait: Duration = .seconds(20)

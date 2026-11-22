@@ -362,7 +362,7 @@ actor SafariBrowser {
         beginAction()
         if !PageScripts.usesAwait(code) {
             let out = try await javaScript(PageScripts.custom(code), answer: answer)
-            if !PageScripts.evalRefused(out) { return out }
+            if !PageScripts.evalRefused(out), !PageScripts.wantsFunction(code, failure: out) { return out }
         }
         return try await runAsync(code, answer: answer)
     }
@@ -588,12 +588,24 @@ actor SafariBrowser {
         let address = try Self.normalize(url)
         let out = try await call(Script.tabNew, [address]).trimmingCharacters(in: .whitespacesAndNewlines)
         if out == "none" { return nil }
-        let f = out.split(separator: "\t").map { $0.trimmingCharacters(in: .whitespaces) }
+        var lines = out.split(separator: "\n", omittingEmptySubsequences: false)
+        let f = lines.removeFirst().split(separator: "\t").map { $0.trimmingCharacters(in: .whitespaces) }
         guard f.count == 3, let index = Int(f[1]), let count = Int(f[2]) else {
             throw Failure.failed("Safari reported a problem: it didn't say where the new tab is.")
         }
         forget()
-        picked = (f[0], PickedTab(index: index, count: count, address: address, token: Self.newToken()))
+        var tab = PickedTab(index: index, count: count, address: address, token: Self.newToken())
+        // The other tabs as the tab opens: a site that sends the new tab on before Latchkey's
+        // first look (eBay's sign-in to its check page, 2026-11-22) leaves it unmarked, and only
+        // this tells it is still Claude's (`TabSurvey.pick`).
+        let others: [TabSurvey.Row] = lines.compactMap { line in
+            let g = line.split(separator: "\t", maxSplits: 1, omittingEmptySubsequences: false)
+            guard let i = Int(g[0].trimmingCharacters(in: .whitespaces)), i != index else { return nil }
+            let shown = g.count > 1 ? g[1].trimmingCharacters(in: .whitespaces) : ""
+            return TabSurvey.Row(index: i, sameAddress: false, marked: false, address: shown)
+        }
+        if others.count == count - 1 { tab.others = TabSurvey(count: count, rows: others).fingerprint(without: index) }
+        picked = (f[0], tab)
         claudesTab = true  // a tab Latchkey opened for Claude
         navigated(to: address)
         guard try await settle(after: nil, expectNavigation: true) else {
@@ -1229,7 +1241,19 @@ actor SafariBrowser {
         /// Owner has in front, for a page of Claude's (FR-455). Answers "window id<TAB>tab
         /// index<TAB>tab count", or "none" when Safari has no window: a new one would show on
         /// the Owner's screen (Constitution IV), so none is made.
+        /// argv: the address. Answers "window<TAB>index<TAB>count", then "index<TAB>address" for
+        /// every other tab of that window, as the survey reports them (`TabSurvey`), so the new
+        /// tab is known by its window even when the site sends it on before Latchkey marks it.
         static let tabNew = """
+            on clean(s)
+            set s to s as text
+            set AppleScript's text item delimiters to {tab, return, linefeed}
+            set parts to text items of s
+            set AppleScript's text item delimiters to " "
+            set s to parts as text
+            set AppleScript's text item delimiters to ""
+            return s
+            end clean
             on run argv
             set theURL to item 1 of argv
             set sep to character id 9
@@ -1243,7 +1267,15 @@ actor SafariBrowser {
             if isBrowser then
             make new tab at end of tabs of w with properties {URL:theURL}
             set n to count of tabs of w
-            return ((id of w) as text) & sep & (n as text) & sep & (n as text)
+            set out to ((id of w) as text) & sep & (n as text) & sep & (n as text)
+            repeat with i from 1 to (n - 1)
+            set theOther to ""
+            try
+            set theOther to my clean(URL of tab i of w)
+            end try
+            set out to out & linefeed & (i as text) & sep & theOther
+            end repeat
+            return out
             end if
             end repeat
             return "none"

@@ -402,6 +402,33 @@ import Testing
         </script>
         """
 
+    /// Citi, 2026-11-22, in Latchkey's own browser: the code went, then Citi showed its signed-out
+    /// sign-in form. That was answered "refused the sign-in" and counted against the password,
+    /// which Citi had taken; it is a check now, with what to do.
+    static var citiEndsItAfterTheCode: String {
+        citiAsItIs.replacingOccurrences(
+            of: "if (v === '320518') app.innerHTML = '<h1>Welcome ann</h1>';",
+            with:
+                #"app.innerHTML = '<p>Signed off.</p><input id="u2" autocomplete="username"><input id="pw2" type="password"><button>Sign On</button>';"#
+        )
+    }
+
+    @Test func aSiteThatEndsTheSignInAfterTheCodeIsACheckNotARefusal() async throws {
+        #expect(Self.citiEndsItAfterTheCode != Self.citiAsItIs)
+        let texts = TextedCodesTests.Texts()
+        texts.all = [
+            .init(id: "otp-8", text: "Citi: your one-time code is 320518", date: Date().addingTimeInterval(60))
+        ]
+        let deleted = TextedCodesTests.Deleted()
+        let (r, _, own) = try await run(texts, deleted: deleted, page: Self.citiEndsItAfterTheCode)
+        defer { own.closeAll() }
+        #expect(r.plainText.contains("or it ended the sign-in"), "\(r.plainText)")
+        #expect(r.plainText.contains("protection against bots"), "\(r.plainText)")
+        #expect(r.plainText.contains("sign_in_again"), "what to do while unlocked: \(r.plainText)")
+        #expect(!r.plainText.contains("refused"))
+        #expect(deleted.ids.isEmpty, "a code that didn't sign in may not have been one: the text stays")
+    }
+
     @Test func citisVerifyStepAndPasswordTypeCodeBoxesAreAnswered() async throws {
         let texts = TextedCodesTests.Texts()
         texts.all = [

@@ -483,3 +483,24 @@ sign_in_again (FR-459).
 ## The locked tab list past 30 s (2026-11-17)
 
 The first tab list while locked sometimes passed the relay's 30 s; a retry answered at once. The script runner's 12 s limit only began after the Automation permission check, which had none: `AEDeterminePermissionToAutomateTarget` may wait on the target app, and when it gave no clear answer Latchkey opened Safari and asked up to 20 more times. Options: (a) cache the permission for a while (hides a permission the owner turns off); (b) skip the check while locked (a script could then raise the Automation question behind the lock, which stalls Safari scripting: see the gotcha of 2026-10-29); (c) give the check and the script one shared limit. Chosen: (c), with a log line when the check is slow or doesn't answer.
+
+## A page's window in Latchkey's own browser (2026-11-22)
+
+Citi let the sign-in through in a Safari tab of Claude's, but in Latchkey's own browser it logged
+the session out right after its texted code was entered. A probe of both (the same script in each)
+showed what differs: in Latchkey's browser `outerWidth` and `outerHeight` were 0 and `screenY` was
+the screen's height, a well-known sign of an automated browser; `window.safari`, `ApplePaySession`,
+and `navigator.mediaDevices` were missing; the user agent, plugins, languages, screen, time zone,
+and visibility (hidden, as in a background Safari tab) were the same. Toni asked to make the
+background browser "more real so this legitimate use case can work. don't do anything malicious".
+Options tried with a stand-alone WebKit program: (a) the view in a window never put on screen:
+still 0×0; (b) a transparent window on screen behind everything: still 0×0, and it would count
+as a window of Latchkey's on the screen; (c) answering WebKit's own question for the page's
+window (`_webView:getWindowFrameWithCompletionHandler:`, which WebKit asks of any UI delegate
+that answers it, as Safari does; there is no public API for it): the page sees 1280×990 at the
+top left, and there is no window at all. Chosen: (c), a window as big as the page plus Safari's
+90-point toolbar, at the top left of the main screen's free area (FR-462). Rejected: stand-ins for
+`window.safari` or Apple Pay (pretending to be Safari to a bank's fraud checks), and
+`navigator.mediaDevices` (needs camera and microphone permission, whose questions would show on
+the owner's screen). Whether Citi then lets Latchkey's own browser through is checked live; sites
+that still turn it away are signed in to in Safari while the Mac is unlocked (spec 013 FR-1369).

@@ -559,6 +559,14 @@ enum PageScripts {
 
     /// Whether the page's policy refused the eval `custom` uses (GitHub, Google Cloud console:
     /// "unsafe-eval", Trusted Types; 2026-11-01): the script then runs as spliced code.
+    /// A script with `return` outside a function, given as statements (live 2026-11-22: "return
+    /// JSON.stringify(…)" failed with "Return statements are only valid inside functions"): it
+    /// runs as a function's body instead, as a script with await does.
+    static func wantsFunction(_ code: String, failure: String) -> Bool {
+        failure.contains("SyntaxError") && failure.contains("Return")
+            && code.range(of: #"\breturn\b"#, options: .regularExpression) != nil
+    }
+
     static func evalRefused(_ answer: String) -> Bool {
         answer.hasPrefix("Error: EvalError") || answer.contains("unsafe-eval") || answer.contains("Trusted Type")
     }

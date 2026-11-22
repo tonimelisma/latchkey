@@ -94,7 +94,11 @@ enum LoginsCapability {
                         Latchkey reads Apple Mail. Claude never sees the password. Works in Latchkey's own browser \
                         and in Claude's Safari tabs, never in the owner's own tabs. user: which user name, when \
                         Latchkey holds several for the site (logins_find lists them). It can't answer passkeys or \
-                        captchas: the answer says what the page asks for. A refused sign-in may be tried once more.
+                        captchas: the answer says what the page asks for. A refused sign-in may be tried once more. \
+                        Some sites' protection against bots turns away Latchkey's own background browser but lets \
+                        Safari through: while the Mac is unlocked the page then moves into a background Safari tab \
+                        of Claude's, where calling again usually works; while it is locked, the answer says the \
+                        site needs the Mac unlocked.
                         """,
                     input: [
                         "page": .stringParam("Claude's page, by the name browser_read gave, like p4k2"),
@@ -218,9 +222,12 @@ enum LoginsCapability {
         let outcome: SignInFlow.Outcome
         let page: PageScripts.Page
         do {
+            // Each step may take a slow page's 15 s and more (Costco in a Safari tab, 2026-11-22):
+            // none starts after 40 s, so the answer comes within the relay's 60 s.
             (outcome, page) = try await SignInFlow.signIn(
                 login, exact: PublicSuffix.isSuffix(login.site), store: store, run: run, texted: texted,
-                mayDeliver: mayDeliver, delivered: { pressed.yes = true })
+                mayDeliver: mayDeliver, delivered: { pressed.yes = true },
+                stillTime: { ContinuousClock.now < callStart + .seconds(40) })
         } catch {
             // A code was asked for even when the call failed after: not again within 90 s.
             if pressed.yes { await codes.delivered(login.site) }
@@ -286,7 +293,13 @@ enum LoginsCapability {
                 "\(host) asks how to send its verification code, and Latchkey asked \(host) for a code less than 90 seconds ago, so it didn't ask again (each request may replace the last). If that code doesn't come, call logins_sign_in again on this page in \(wait) seconds: Latchkey then asks for a new one and fills it in itself."
         case .check:
             said =
-                "\(host) shows a check Latchkey can't answer (a captcha, a new-device check, or a passkey or security key)."
+                "\(host) shows a check Latchkey can't answer (a captcha, a new-device check, or a passkey or security key), or it ended the sign-in."
+            // Toni, 2026-11-22: Claude is told why, and what to do (Citi and eBay turned away the
+            // background browser, not Safari).
+            if case .own = target {
+                said +=
+                    " Some sites' protection against bots turns away Latchkey's own background browser while letting Safari through."
+            }
         case .refused(let words):
             let n = store.refused(login)
             said =
@@ -302,6 +315,9 @@ enum LoginsCapability {
                 "Latchkey couldn't fill a field of \(host)'s sign-in (the page changed what was typed into it), so that step wasn't sent and nothing counts against the saved sign-in."
         case .wrongSite:
             said = "The page went to another site before Latchkey filled anything, so nothing was filled."
+        case .outOfTime:
+            said =
+                "\(host) was slow to answer, so Latchkey stopped before this call's time ran out and cleared what it filled; nothing counts against the saved sign-in. Read the page with browser_read: if it still asks to sign in, call logins_sign_in again."
         }
         var browser: String
         var result: ToolResult
@@ -328,21 +344,26 @@ enum LoginsCapability {
                 if await MainActor.run(body: { own.isLocked() }) {
                     let copied =
                         " \(instead): this page took a copy of Safari's cookies for it (a site may sign the owner out in Safari when this copy renews its sign-in)"
+                    // While locked Safari isn't used (spec 005 FR-420): Claude is told what that means.
+                    let later =
+                        outcome == .check
+                        ? " If it still asks to sign in, Latchkey can't sign in to \(host) while the Mac is locked: Safari, which such sites let through, is used only while the Mac is unlocked. Tell the owner so; once the Mac is unlocked, open the page again and call logins_sign_in, which then works in a background Safari tab of Claude's."
+                        : ""
                     do {
                         // What Latchkey's own try left goes first; then the page Claude asked to
                         // sign in on opens again (a fresh load: reloading a code step resends it).
                         await l.dropCookies(for: fallen)
                         let again = try await l.open(address)
-                        said += copied + " and opened \(BrowserCapability.host(address)) again."
+                        said += copied + " and opened \(BrowserCapability.host(address)) again." + later
                         result = await BrowserCapability.told(.text(said + "\n\n" + PageScripts.answer(again)), l)
                     } catch {
-                        said += copied + ", but loading it again didn't work: read it again with browser_read."
+                        said += copied + ", but loading it again didn't work: read it again with browser_read." + later
                         result = await BrowserCapability.told(.text(said + "\n\n" + PageScripts.answer(page)), l)
                     }
                 } else if let (n, p, s) = try await move(l) {
                     browser = "a Safari tab of Claude's"
                     said +=
-                        " \(instead): the page moved into a Safari tab of Claude's, signed in as the owner if Safari is."
+                        " \(instead): the page moved into a Safari tab of Claude's, signed in as the owner if Safari is. If the page there asks to sign in, call logins_sign_in again on this page."
                     result = await BrowserCapability.safariAnswer(p, n, s, note: said + "\n\n")
                 } else {
                     said +=
@@ -350,6 +371,12 @@ enum LoginsCapability {
                     result = await BrowserCapability.told(.text(said + "\n\n" + PageScripts.answer(page)), l)
                 }
             } else {
+                if outcome == .check {
+                    said +=
+                        await MainActor.run(body: { own.isLocked() })
+                        ? " Safari, which such sites let through, is used only while the Mac is unlocked: tell the owner, and once it is unlocked, open the page again and call logins_sign_in."
+                        : " browser_read with sign_in_again moves this page into a background Safari tab of Claude's; then call logins_sign_in there."
+                }
                 result = await BrowserCapability.told(.text(said + "\n\n" + PageScripts.answer(page)), l)
             }
         case .safari(let n, let s):

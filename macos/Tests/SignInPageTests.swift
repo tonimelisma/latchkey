@@ -138,6 +138,35 @@ import Testing
         #expect(r.outcome == .wrongSite)
     }
 
+    /// Costco in a Safari tab, 2026-11-22: the call passed the relay's 60 s with the password still
+    /// in the page. Once the time is nearly up no new step starts, and what was filled is cleared.
+    @Test func noStepStartsOnceTheTimeIsUpAndTheFieldsAreCleared() async throws {
+        let b = browser()
+        defer { b.discard() }
+        let twoSteps = """
+            <title>Sign in</title><div id="app"><input name="email" type="text" autocomplete="username">
+            <button id="next">Next</button></div>
+            <script>
+            document.getElementById('next').onclick = function () {
+              document.getElementById('app').innerHTML = '<input name="email" type="text" autocomplete="username" value="ann"><input name="pw" type="password"><button id="go">Sign in</button>';
+              document.getElementById('go').onclick = function () { window.sent = true; };
+            };
+            </script>
+            """
+        _ = try await b.open(html: twoSteps, base: Self.base)
+        var calls = 0
+        let r = try await SignInFlow.signIn(
+            Self.ann, exact: false, store: SignInStore(vault: MemoryVault()), run: run(b), now: { Self.fixed },
+            wait: { _ in },
+            stillTime: {
+                calls += 1
+                return calls == 1
+            })
+        #expect(r.outcome == .outOfTime)
+        #expect(try await b.run("String(window.sent === true)") == "false", "the password step never started")
+        #expect(try await b.run("document.querySelector('[name=pw]').value") == "", "no password in the page")
+    }
+
     /// A page that rewrites JavaScript's own functions can't pass for another site.
     @Test func aPageThatRewritesBuiltInsGetsNothing() async throws {
         let b = browser()

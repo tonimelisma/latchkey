@@ -283,6 +283,20 @@ phone, Claude can't check a reservation in the Owner's account or fill in a form
   Claude closes a page whose tab Latchkey can no longer find surely, Latchkey shall forget the
   page and say so, so no tab of Claude's outlives its page (Toni, 2026-11-21: "you've left all
   the browser tabs open"; every install restarts Latchkey).
+- **FR-461** When Latchkey opens a Safari tab of Claude's and the site sends it on to another
+  address of the same registered site before Latchkey first finds it (eBay's sign-in sent it to
+  its check page, 2026-11-22), the tab shall still be Claude's while every other tab of its window
+  is as it was when the tab opened, and only then; Claude is never told such a tab is the owner's.
+- **FR-462** A page in Latchkey's own browser shall be told it is in a browser window: as big as
+  the page plus a toolbar, at the top left of the main screen's free area, as Safari tells its
+  pages, never 0×0 at no place on the screen; nothing comes on screen (Toni, 2026-11-22: "change
+  the background tab to be more real so this legitimate use case can work. don't do anything
+  malicious": Citi turned the sign-in away after its texted code there, and let Safari through).
+  Latchkey does not pretend to be Safari beyond its user agent (no stand-ins for Safari's own
+  objects or Apple Pay).
+- **FR-463** A script Claude runs in a page that uses `return` outside a function, without
+  `await`, shall run as the body of a function, as a script with `await` does, in both browsers
+  (live 2026-11-22: it failed with "Return statements are only valid inside functions").
 
 Amended by spec 013 FR-1350 to FR-1355 (Toni, 2026-11-21): for a site Latchkey holds a saved
 password for, while Sign-in is On, FR-441, FR-442 and FR-457 copy none of Safari's cookies (nor a

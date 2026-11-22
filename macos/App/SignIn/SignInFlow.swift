@@ -48,6 +48,9 @@ enum SignInFlow {
         case couldntFill
         /// The page is on another site (or moved there) before Latchkey filled anything.
         case wrongSite
+        /// The call's time ran out before the site answered (Costco in a Safari tab, 2026-11-22:
+        /// the relay's 60 s passed with the password still in the page).
+        case outOfTime
     }
 
     static func state(_ detail: String) throws -> State {
@@ -73,13 +76,13 @@ enum SignInFlow {
         isolation: isolated (any Actor)? = #isolation,
         _ login: SavedSignIn, exact: Bool, store: SignInStore, run: Run, now: () -> Date = Date.init,
         wait: (Duration) async -> Void = { try? await Task.sleep(for: $0) }, texted: Texted? = nil,
-        mayDeliver: Bool = true, delivered: () -> Void = {}
+        mayDeliver: Bool = true, delivered: () -> Void = {}, stillTime: () -> Bool = { true }
     ) async throws -> (outcome: Outcome, page: PageScripts.Page) {
         var filledAny = false
         do {
             let r = try await steps(
                 login, exact: exact, store: store, run: run, now: now, wait: wait, texted: texted,
-                mayDeliver: mayDeliver, delivered: delivered
+                mayDeliver: mayDeliver, delivered: delivered, stillTime: stillTime
             ) {
                 filledAny = true
             }
@@ -96,7 +99,7 @@ enum SignInFlow {
         isolation: isolated (any Actor)? = #isolation,
         _ login: SavedSignIn, exact: Bool, store: SignInStore, run: Run, now: () -> Date,
         wait: (Duration) async -> Void, texted: Texted?, mayDeliver: Bool, delivered: () -> Void,
-        filled: () -> Void
+        stillTime: () -> Bool, filled: () -> Void
     ) async throws -> Outcome {
         let totp = login.otp.flatMap { TOTP(uri: $0) }
         var r = try await run(PageScripts.signInState, false)
@@ -118,9 +121,10 @@ enum SignInFlow {
             let choosing =
                 page.deliver && deliveries < 2 && mayDeliver
                 && ((sentPassword && !page.code && !sentDelivery) || pastPassword)
-            // Back at a sign-in form after asking for the code: the site ended the sign-in
-            // (Citi did, 2026-11-21); no refusal of the password, which it had taken.
-            if sentDelivery && page.password && !page.code && !sentCode { return .check }
+            // Back at a sign-in form after asking for the code, or after sending it: the site
+            // ended the sign-in (Citi did, 2026-11-21, and again after the code in Latchkey's own
+            // browser, 2026-11-22); no refusal of the password, which it had taken.
+            if sentDelivery || sentCode, page.password && !page.code { return .check }
             if !choosing, page.password && sentPassword || page.code && sentCode { return .refused(page.problem) }
             if page.captcha && !page.password && !page.code { return .check }
             if !choosing, page.deliver, !mayDeliver, !page.code, sentPassword || pastPassword {
@@ -150,6 +154,9 @@ enum SignInFlow {
                 code = totp.code(at: at)
                 store.usedCode(login, step: totp.step(at: at))
             }
+            // No new step once the call's time is nearly up: the answer must reach Claude within
+            // the relay's limit, with what was filled cleared (FR-1311).
+            guard stillTime() else { return .outOfTime }
             // Where to fill is decided here, from the browser's own address.
             guard let host = host(login, exact: exact, address: r.address) else {
                 return filledAny ? .signedIn : .wrongSite
@@ -184,7 +191,7 @@ enum SignInFlow {
             // shows nothing at all right after the password may still be drawing its next step
             // (Citi's, 2026-11-21: answered "Signed in" before its "Text me" step showed): up to 3 s.
             var looks = 0
-            while looks < 8, page.problem.isEmpty,
+            while looks < 8, page.problem.isEmpty, stillTime(),
                 (step == "code" && page.code) || (step == "password" && page.password)
                     || (step == "password" && looks < 3 && page.asksNothing)
             {
@@ -194,7 +201,7 @@ enum SignInFlow {
                 page = try state(r.detail)
             }
         }
-        if sentDelivery && page.password && !page.code && !sentCode { return .check }
+        if sentDelivery || sentCode, page.password && !page.code { return .check }
         if page.password && sentPassword || page.code && sentCode { return .refused(page.problem) }
         // The user name went, and the site showed no password field after it.
         if sentUser && !sentPassword && !page.password && !page.code && page.user { return .refused(page.problem) }

@@ -205,7 +205,21 @@ once when unlocked" and "Any new code text".
   send a code to +1 ••• 0790", Text me / Call me), Latchkey shall press the text-message option
   (else email), never such a button before the password went; and when the site then returns
   to its sign-in form, the answer shall say the site ended the sign-in (a check), never that it
-  refused the password, and it counts as no refusal.
+  refused the password, and it counts as no refusal. The same holds when the site returns to its
+  sign-in form after the code went (Citi in Latchkey's own browser, 2026-11-22).
+- **FR-1369** When a site shows a check or ends the sign-in in Latchkey's own browser, the answer
+  shall tell Claude that some sites' protection against bots turns away that background browser
+  while letting Safari through, and what to do (Toni, 2026-11-22: "ensure the agent gets proper
+  guidance"): while the Mac is unlocked, call logins_sign_in again on the page, which has moved
+  into a background Safari tab of Claude's (FR-1352) or moves there with browser_read
+  sign_in_again; while it is locked, that Safari is used only while the Mac is unlocked, so Claude
+  tells the owner and tries again once it is. The tool's description says the same.
+- **FR-1370** A sign-in call shall start no new step (filling, sending, looking again) once 40
+  seconds have passed since it began, and shall then clear what it filled (FR-1311) and say the
+  site was slow to answer, counting nothing against the saved sign-in, so its answer reaches
+  Claude within the relay's 60 seconds (Costco in a Safari tab, 2026-11-22: the call passed the
+  60 seconds with the password still in the page). A texted code is waited for at most 35
+  seconds of a call (was 45).
 - **FR-1361** One sign-in call waits for that text for as long as the call's time allows; when the
   text hasn't come by then, the answer says the site texted a code that hasn't arrived and to call
   again on the same page, and the next call takes it. A text is waited for up to 2 minutes from

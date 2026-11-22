@@ -258,6 +258,27 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate {
         return w
     }
 
+    /// The window a page is told it is in, in the screen's coordinates (origin at the bottom
+    /// left): a browser window at the top left of the main screen's free area, as big as the page
+    /// plus a toolbar (Safari's is 90 points). WebKit asks the app for it, as it asks Safari; an
+    /// app that doesn't answer gets a 0×0 window at no place on the screen, which sites'
+    /// protection against bots reads as a robot (Citi turned the sign-in away after its code,
+    /// 2026-11-22; Toni: "change the background tab to be more real so this legitimate use case
+    /// can work"). Nothing comes on screen: there is no window.
+    static func windowFrame(page: CGSize, screen: CGRect?) -> CGRect {
+        let free = screen ?? CGRect(x: 0, y: 0, width: 1512, height: 949)
+        let height = page.height + 90
+        return CGRect(x: free.minX, y: free.maxY - height, width: page.width, height: height)
+    }
+
+    /// Where the never-shown window says it is: at the top left of the main screen's free area,
+    /// as a browser window usually is.
+    static func windowFrame(_ size: CGSize) -> NSRect {
+        let free = NSScreen.main?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1512, height: 949)
+        return NSRect(
+            x: free.minX, y: max(free.minY, free.maxY - size.height - 28), width: size.width, height: size.height)
+    }
+
     /// Safari's own user agent, built from its installed version.
     nonisolated static let safariUserAgent: String = {
         let info =
@@ -384,6 +405,15 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate {
         h.reply(ok, h.kind == "prompt" ? (text ?? h.defaultText) : nil)
         await settle(from: before, atMost: .seconds(2))
         return try await page(offset: 0)
+    }
+
+    /// WebKit's question for the page's window (`windowFrame`). WebKit's own name for it, which
+    /// it asks of any delegate that answers it (WKUIDelegatePrivate); there is no public one.
+    @objc(_webView:getWindowFrameWithCompletionHandler:)
+    nonisolated func pageWindow(_ webView: WKWebView, completion: @escaping @MainActor @Sendable (CGRect) -> Void) {
+        MainActor.assumeIsolated {
+            completion(Self.windowFrame(page: webView.frame.size, screen: NSScreen.main?.visibleFrame))
+        }
     }
 
     /// A link that opens a new window or tab (target=_blank, window.open) opens here instead:
@@ -744,10 +774,14 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate {
                 }
                 return value.map { "\($0)" } ?? "undefined"
             }
-            guard PageScripts.usesAwait(code) else {
+            if !PageScripts.usesAwait(code) {
                 // Given to WebKit as it is: a page's Content Security Policy forbids the eval that
                 // Safari's wrapper uses (seen live on GitHub), but not a script the app itself runs.
-                return try await evaluate(code, text: shown)
+                do { return try await evaluate(code, text: shown) } catch let f as SafariBrowser.Failure {
+                    throw f
+                } catch {
+                    guard PageScripts.wantsFunction(code, failure: PageScripts.failure(error)) else { throw error }
+                }
             }
             var last: Error?
             for body in PageScripts.asyncBodies(code) {
