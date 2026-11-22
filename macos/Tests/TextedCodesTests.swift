@@ -415,6 +415,42 @@ import Testing
         #expect(r.plainText.contains("Signed in to a.test as ann."), "\(r.plainText)")
     }
 
+    /// United's real boxes (probed 2026-11-21): no length limit, no autocomplete, labelled
+    /// "Enter code Enter digit N of 6", class atm-c-otp-input in div.atm-c-otp-input-item. Typed
+    /// whole into the first box, each digit was pushed one box on and the first stayed empty.
+    static let unitedReal = """
+        <title>Sign in</title><div id="app"><input id="pw" type="password"><button id="go">Sign in</button></div>
+        <script>
+        var app = document.getElementById('app');
+        document.getElementById('go').onclick = function () {
+          app.innerHTML = '<p>Enter the verification code sent to ******0790 via text.</p>' + [1,2,3,4,5,6].map(function (n) { return '<div class="atm-c-otp-input-item"><input type="text" inputmode="numeric" autocomplete="off" class="atm-c-otp-input atm-c-otp-input--hover" aria-label="Enter code Enter digit ' + n + ' of 6"></div>'; }).join('') + '<input type="checkbox" name="rememberDevice"><button id="v">Continue</button>';
+          var b = Array.prototype.slice.call(document.querySelectorAll('.atm-c-otp-input')), vals = ['', '', '', '', '', ''];
+          function draw() { b.forEach(function (x, i) { x.value = vals[i]; }); }
+          b.forEach(function (x, i) {
+            x.addEventListener('input', function () {
+              var t = x.value, c = t.slice(-1);
+              if (t.length > 1 && i < 5) { vals[i] = ''; vals[i + 1] = c; draw(); b[i + 1].focus(); return; }
+              vals[i] = c; draw();
+              if (c && i < 5) b[i + 1].focus();
+            });
+          });
+          document.getElementById('v').onclick = function () {
+            app.innerHTML = vals.join('') === '320518' ? '<h1>Welcome ann</h1>' : '<p role="alert">Wrong code</p>';
+          };
+        };
+        </script>
+        """
+
+    @Test func unitedsRealCodeBoxesAreFoundAndFilled() async throws {
+        let texts = TextedCodesTests.Texts()
+        texts.all = [
+            .init(id: "ua-3", text: "Your United verification code is 320518.", date: Date().addingTimeInterval(60))
+        ]
+        let (r, _, own) = try await run(texts, deleted: .init(), page: Self.unitedReal)
+        defer { own.closeAll() }
+        #expect(r.plainText.contains("Signed in to a.test as ann."), "\(r.plainText)")
+    }
+
     @Test func aCodeSentByTextIsSaidSoWithoutAskingAboutEmail() {
         #expect(TextedCodes.saysText("Enter the verification code sent to ******0790 via text."))
         #expect(!TextedCodes.saysText("We sent a code to your email or by text"))

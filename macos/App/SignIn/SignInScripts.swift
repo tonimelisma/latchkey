@@ -31,6 +31,24 @@ extension PageScripts {
                })[0];
           var boxes = inputs.filter(function (e) { return typed(e) && e.maxLength === 1; });
           if (boxes.length < 6) boxes = [];
+          // Code boxes without a one-character limit (United's, 2026-11-21: six fields labelled
+          // "Enter digit 1 of 6", class atm-c-otp-input): a row of 4 to 8 alike fields (same class
+          // and parent class) named for a digit, an OTP, or a code.
+          if (!boxes.length) {
+            var rows = {};
+            inputs.forEach(function (e) {
+              if (!typed(e) || e.type === 'password') return;
+              var p = e.parentElement, key = e.className + '|' + (p ? p.className : '');
+              (rows[key] = rows[key] || []).push(e);
+            });
+            Object.keys(rows).forEach(function (k) {
+              var r = rows[k];
+              if (boxes.length || r.length < 4 || r.length > 8) return;
+              var named = r.every(function (e) { return /(digit|otp|one.?time|code|pin)/i.test(words(e) + ' ' + e.className); });
+              if (named) boxes = r;
+            });
+          }
+          if (boxes.length && boxes.indexOf(codeField) >= 0) codeField = null;
           var userField = inputs.filter(function (e) { return /(^|\\s)(username|email)(\\s|$)/i.test(e.getAttribute('autocomplete') || ''); })[0]
             || inputs.filter(function (e) { return e.type === 'email'; })[0]
             || inputs.filter(function (e) { return typed(e) && e !== codeField && /(user|e-?mail|login|account|identifier|phone)/i.test(words(e)); })[0];

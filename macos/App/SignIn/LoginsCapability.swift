@@ -269,7 +269,7 @@ enum LoginsCapability {
             said = "There's no sign-in form on this page to fill. Open the site's sign-in page, then call again."
         case .couldntFill:
             said =
-                "Latchkey couldn't fill \(host)'s sign-in form (the page changed what was typed into a field), so nothing was sent and nothing counts against the saved sign-in."
+                "Latchkey couldn't fill a field of \(host)'s sign-in (the page changed what was typed into it), so that step wasn't sent and nothing counts against the saved sign-in."
         case .wrongSite:
             said = "The page went to another site before Latchkey filled anything, so nothing was filled."
         }
