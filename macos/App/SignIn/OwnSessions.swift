@@ -51,7 +51,13 @@ final class OwnSessions {
         /// Sites whose own sign-in couldn't finish (FR-1352), for the export of `fellBackFor`.
         var fellBack: [String] = []
         var fellBackFor: Date?
+        /// The sign-in rules the fallbacks were recorded under (`rules`); older ones are dropped.
+        var fellBackRules: Int?
     }
+
+    /// Raised when Latchkey's own sign-in learns what made sites fall back (texted and emailed
+    /// codes, typing key by key; 2026-11-21): those sites get one more try of Latchkey's own.
+    static let rules = 2
 
     /// A cookie with no expiry is kept this long at most (FR-1353).
     static let sessionLimit: TimeInterval = 14 * 86400
@@ -108,7 +114,7 @@ final class OwnSessions {
     /// The sites that fell back for the current export.
     private func fellBack(_ imported: Date) -> [String] {
         guard let c = contents() else { return [] }
-        return c.fellBackFor == imported ? c.fellBack : []
+        return c.fellBackFor == imported && c.fellBackRules == Self.rules ? c.fellBack : []
     }
 
     /// The sites Latchkey signs in to itself: those it holds a sign-in for, minus those that fell
@@ -154,9 +160,10 @@ final class OwnSessions {
     @discardableResult
     func fallBack(_ site: String) -> [String] {
         guard case .some(let held) = signIns.load(), var c = contents() else { return [] }
-        if c.fellBackFor != held.imported {
+        if c.fellBackFor != held.imported || c.fellBackRules != Self.rules {
             c.fellBack = []
             c.fellBackFor = held.imported
+            c.fellBackRules = Self.rules
         }
         let group = PublicSuffix.registrable(site)
         let all = Set(held.logins.map(\.site).filter { PublicSuffix.registrable($0) == group } + [site])

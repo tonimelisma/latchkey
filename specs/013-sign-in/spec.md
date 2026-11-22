@@ -163,7 +163,9 @@ Safari's.
   Safari's cookies for the site and load the page again; while unlocked, move the page into a
   Safari tab of Claude's. The answer says that Latchkey's own sign-in couldn't finish, why, and
   that the Owner's Safari sign-in is used instead (which may sign Safari out on some sites, as
-  before). The site stays on Safari's sign-in until the Owner's next export or Remove All. A site
+  before). The site stays on Safari's sign-in until the Owner's next export or Remove All, or until an
+  update that changes how Latchkey signs in (texted and emailed codes, typing key by key; Toni,
+  2026-11-21: "do it", to try Amazon's texted code live) gives it one more try. A site
   here is every saved sign-in registered under the same name (amazon.com and
   na.account.amazon.com are one; live check 2026-11-21: Amazon's sign-in is in cookies for all of
   amazon.com, which the second saved sign-in still held back), and what Latchkey's own try left

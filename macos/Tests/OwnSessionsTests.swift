@@ -125,10 +125,23 @@ import WebKit
     @Test func aFallbackKeptBeforeTheWholeSiteRuleCoversItToo() throws {
         let n = SavedSignIn(title: "N", site: "na.account.a.test", user: "ann", password: "pw", otp: nil)
         let vault = MemoryVault()
-        let old = OwnSessions.Contents(cookies: [], fellBack: ["a.test"], fellBackFor: Self.imported)
+        let old = OwnSessions.Contents(
+            cookies: [], fellBack: ["a.test"], fellBackFor: Self.imported, fellBackRules: OwnSessions.rules)
         vault.items[OwnSessions.account] = try JSONEncoder().encode(old)
         let (s, _, _) = try Self.sessions([Self.a, n], vault: vault)
         #expect(!s.isOwn("na.account.a.test") && !s.reaches(".a.test"))
+    }
+
+    /// Toni, 2026-11-21: sites that fell back before Latchkey could read texted and emailed codes
+    /// (Amazon) get one more try of Latchkey's own sign-in.
+    @Test func aFallbackUnderOlderRulesGetsAnotherTry() throws {
+        let vault = MemoryVault()
+        let old = OwnSessions.Contents(cookies: [], fellBack: ["a.test"], fellBackFor: Self.imported)
+        vault.items[OwnSessions.account] = try JSONEncoder().encode(old)
+        let (s, _, _) = try Self.sessions([Self.a], vault: vault)
+        #expect(s.isOwn("a.test") && !s.fellBack("a.test"))
+        s.fallBack("a.test")
+        #expect(!s.isOwn("a.test"), "a new fallback holds")
     }
 
     @Test func registeredNames() {
