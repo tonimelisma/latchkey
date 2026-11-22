@@ -278,7 +278,10 @@ applies, except:
   https://github.com/tonimelisma/latchkey.git lk && cd lk/macos && xcodegen generate --quiet &&
   xcodebuild -project Latchkey.xcodeproj -scheme Latchkey -destination 'platform=macOS'
   -derivedDataPath "$LATCHKEY_SCRATCH/dd" test -quiet 2>&1 | tail -40`, then `shell_check` the
-  job until it ends (`build` instead of `test` to only build). Lint the same way with
+  job until it ends (`build` instead of `test` to only build). A pass prints `** TEST BUILD
+  SUCCEEDED **` (the build, fenced) and `** TEST EXECUTE SUCCEEDED **` (the tests, outside the
+  fence), not `** TEST SUCCEEDED **`; a scratch folder over 100 MB is deleted at the end, so keep
+  a log you need in Downloads and delete it after. Lint the same way with
   `swift format lint --strict -r App Shared Helper Tests` in `macos/`. This tests the app
   signed ad hoc (no `Local.xcconfig` there); `make -C macos test` in a local session is the
   signed run.
