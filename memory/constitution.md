@@ -69,3 +69,12 @@ One capability at a time.
 
 ## IX. Open source
 MIT or Apache-2.0. Dependencies must have compatible licenses (no GPL in the relay or app).
+
+## X. A tool reports; Claude judges
+A tool does the one action Claude names and answers with what it did and the state as it is. It
+never decides what that state means (signed in, refused, done), never takes a step Claude didn't
+name, and never retries, waits for content, counts failures, or remembers a choice on its own.
+The tool owns only what Claude must not or cannot do: holding and typing secrets, where a secret
+may go, deadlines (II), never disturbing the user (IV), and cleaning up after itself. Guidance
+goes in the tool's description, not in branching code. (Toni, 2026-11-22, after a sign-in tool
+that guessed page states caused most of a weekend's failures.)

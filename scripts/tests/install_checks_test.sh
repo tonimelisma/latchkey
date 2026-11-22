@@ -56,5 +56,16 @@ check "a relay that doesn't answer audit requests" 1 audit_verdict \
 check "a relay that didn't answer in time" 1 audit_verdict "Audit check not possible: the relay didn't answer"
 check "no audit check line" 1 audit_verdict ""
 
+# Idle before an install (Toni, 2026-11-22): no running call, none for the quiet time.
+calls=$(mktemp -d)
+check "no running-calls folder: idle" 0 idle_verdict "$calls/none" 2000000000 600
+touch -t 202001010000 "$calls"
+check "quiet for long: idle" 0 idle_verdict "$calls" "$(date +%s)" 600
+touch "$calls/call_1.call"
+check "a call running: not idle" 1 idle_verdict "$calls" "$(date +%s)" 600
+rm "$calls/call_1.call"
+check "a call ended just now: not idle" 1 idle_verdict "$calls" "$(date +%s)" 600
+rm -rf "$calls"
+
 [ "$fails" = 0 ] && echo "all install check tests pass" || echo "$fails install check tests failed"
 [ "$fails" = 0 ]

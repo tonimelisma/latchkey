@@ -1,11 +1,13 @@
 # Spec 013: Signing in by itself — WHAT and WHY
 
 Status: Approved and built (Toni, 2026-11-20: "do the whole thing"); plan `plan.md`, tasks
-`tasks.md`, tools `contracts/login-tools.md`. Two tools, `logins_find` and `logins_sign_in`
-(Toni, 2026-11-21, after the MCP research in `research.md`).
-Scope: Latchkey signs in to sites by itself with copies of the Owner's existing passwords and
-verification codes, which the Owner hands over from Apple's Passwords app. Latchkey, never
-Claude, fills in the secret; Claude never sees it.
+`tasks.md`, tools `contracts/login-tools.md`. Two tools, `logins_find` and `logins_fill` (was
+`logins_sign_in` until 2026-11-22; Toni, 2026-11-21, after the MCP research in `research.md`).
+Scope: Claude signs in to sites with copies of the Owner's existing passwords and verification
+codes, which the Owner hands over from Apple's Passwords app. Claude reads each page and decides
+what to do; Latchkey types the saved secret into the field Claude names and presses the button
+Claude names (FR-1371, Constitution X), so Claude never sees a password or a code from
+Passwords. Codes the site texts or emails, Claude reads itself (FR-1375).
 Out of scope: registering passkeys of Latchkey's own on the Owner's accounts (Toni, 2026-11-20:
 "that'll mess up everything"); a live link to Apple's Passwords (none exists: `research.md`);
 other password managers; creating accounts or changing passwords.
@@ -38,11 +40,11 @@ interface another app can read (`research.md`), so the only way in is a copy the
    change, and sign-ins I deleted in Passwords are gone from Latchkey too.
 
 ### US2 (P1): Claude gets past a sign-in page while I'm away
-1. Given Claude reaches a site's sign-in page and Latchkey holds a sign-in for that site, when
-   Claude asks Latchkey to sign in, then Latchkey fills in and sends the sign-in itself and
-   Claude goes on from the signed-in page.
-2. Given the site then asks for a verification code that Latchkey holds, then Latchkey fills in
-   the current code too.
+1. Given Claude reaches a site's sign-in page and Latchkey holds a sign-in for that site, then
+   Claude has Latchkey type the user name and the password into the fields it names and press the
+   button it names, reads the page that follows, and goes on (FR-1371).
+2. Given the site then asks for a verification code, then Claude has Latchkey type the current
+   code from Passwords, or reads a texted or emailed code itself and passes it (FR-1375).
 3. Given Latchkey holds no sign-in for the site, then Claude is told so at once, in plain words.
 4. This works in Latchkey's own browser (Mac locked, or a site I'm not signed in to) and in
    Claude's own Safari tabs (Mac unlocked).
@@ -50,8 +52,9 @@ interface another app can read (`research.md`), so the only way in is a copy the
 ### US3 (P1): Claude knows what it can sign in to, and never holds a secret
 1. Given Claude asks, then it gets the list of sites Latchkey can sign in to, with the user name
    for each, and never a password or code.
-2. Claude never sees a password or a code: not in a page it reads, not in an answer, not in
-   Latchkey's log or traces.
+2. Claude never sees a password or a code from Passwords: not in a page it reads, not in an
+   answer, not in Latchkey's log or traces. (A code the site texts or emails, Claude reads itself;
+   Toni, 2026-11-22.)
 
 ### US4 (P1): I decide
 1. Sign-in is a setting of its own in Latchkey, on by default; given I turn it Off, then no
@@ -335,15 +338,16 @@ we can't find it via Apple Mail either"; then "yes, script Mail for archiving an
 
 ## Edge cases
 
-- A site that sends a code by text or email after the password: Latchkey says so; Claude may read
-  the text with Messages, if that is on.
-- A site that asks for a new-device check, or a captcha: Latchkey stops and says so.
-- A site where the code goes after the password in the same field (Apple's list,
-  `research.md`): Latchkey fills the password and code together.
+- A site that sends a code by text or email after the password: Claude reads it with Messages or
+  its email tool (or Mail's tools) and passes it (FR-1375).
+- A site that asks for a new-device check, or a captcha: Claude sees it on the page; Latchkey
+  never answers it.
+- A site whose protection against bots turns Latchkey's own browser away: Claude moves the page
+  into Safari while unlocked, or tells the Owner the site needs the Mac unlocked (FR-1373).
 - A sign-in form inside a frame from another site: not filled (FR-1321).
 - A lookalike address (`amaz0n.com`): no match, nothing filled.
 - Several sign-ins for one site: Claude names the user name; without one, Latchkey asks Claude to
-  choose from the list.
+  choose from the list (not for a code Claude passes).
 - The exported file: saved in Latchkey's own folder, never iCloud Drive; that folder is left out
   of Time Machine; the file lives for seconds.
 - The Owner is using Passwords when they click Export: Latchkey uses its open window and leaves

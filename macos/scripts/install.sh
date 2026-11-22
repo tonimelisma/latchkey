@@ -75,6 +75,24 @@ PAIRED_BEFORE=$(paired_before "$OLD_LINE" "$(pairing_record)")
 PREVIOUS_DMG=""
 [ "$OLD_VERSION" != "$VERSION" ] && [ -f "build/Latchkey-$OLD_VERSION.dmg" ] && PREVIOUS_DMG="build/Latchkey-$OLD_VERSION.dmg"
 
+# Never restart Latchkey under one of Toni's chats (Toni, 2026-11-22: "Batch + wait for idle"):
+# wait until no call runs and none has for 10 minutes, checking every 30 s for up to 30 minutes,
+# then give up and install nothing (Constitution II). LATCHKEY_INSTALL_NOW=1 skips the wait: only
+# when Toni says so (CLAUDE.md, "Every finished batch ships").
+CALLS="$HOME/Library/Application Support/Latchkey/Running calls"
+if [ "${LATCHKEY_INSTALL_NOW:-}" != 1 ]; then
+  waited=0
+  until why=$(idle_verdict "$CALLS" "$(date +%s)" 600); do
+    if [ $waited -ge 1800 ]; then
+      echo "install: Latchkey was in use for 30 minutes ($why); not installing now" >&2
+      exit 3
+    fi
+    [ $waited = 0 ] && echo "install: waiting until Latchkey has been idle for 10 minutes ($why)"
+    sleep 30
+    waited=$((waited + 30))
+  done
+fi
+
 if pgrep -x Latchkey >/dev/null; then
   pkill -TERM -x Latchkey
   i=0

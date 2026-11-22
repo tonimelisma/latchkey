@@ -125,7 +125,9 @@ paths:
   relay's address takes `systemLog: false` and its own private `Logger` line.
 - A relay closes the connection with 4005 on any message type it doesn't know. No backwards
   compatibility (Toni, 2026-10-27, one user): deploy the relay before installing an app that
-  sends a new message type, and the app needs no fallback for older relays.
+  sends a new message type, and the app needs no fallback for older relays. Tool names are a
+  different matter: open chats keep the tool list they started with, so a renamed tool breaks
+  them (Toni accepts that, 2026-11-22; `.claude/rules/tool-design.md`).
 
 - Never block a thread in async code (`Process.waitUntilExit`, a semaphore, `DispatchGroup.wait`):
   Swift runs async code on a small shared pool, and one blocked thread stalls every task

@@ -19,6 +19,11 @@
 #   - When Toni's latest message says stop, pause, or wait, the hook lets the turn end.
 #   - Any failure here (no jq, unreadable input or transcript) lets the turn end.
 #   - Claude Code itself ends the turn after 8 send-backs in a row.
+# Claims need evidence (Toni, 2026-11-22: CLAUDE.md, "Done means Toni's conditions"): when no
+# item is open and Claude's last message says something works, is fixed, or is done, but names no
+# VERIFIED, NOT VERIFIED, or SCHEDULED row, the turn is sent back once (never again in the same
+# chain of send-backs: stop_hook_active) to lead with the rows, or to end unchanged when the
+# message claims nothing about one of Toni's conditions.
 # Tested by scripts/tests/keep_going_test.sh.
 
 input=$(cat) || exit 0
@@ -54,7 +59,17 @@ list="${KEEP_GOING_DIR:-$HOME/.claude/worklists}/$session.md"
 	fi
 }
 
-open=$(grep -E '^[[:space:]]*- \[ \]' "$list" 2>/dev/null) || exit 0
-[ -n "$open" ] || exit 0
+open=$(grep -E '^[[:space:]]*- \[ \]' "$list" 2>/dev/null)
+if [ -z "$open" ]; then
+	active=$(printf '%s' "$input" | jq -r '.stop_hook_active // false' 2>/dev/null) || exit 0
+	[ "$active" = true ] && exit 0
+	said=$(jq -rs '[.[] | select(.type == "assistant")
+		| (.message.content | if type == "string" then . else ([.[]? | select(.type == "text") | .text] | join(" ")) end)
+		| select(type == "string" and length > 0)] | last // ""' "$transcript" 2>/dev/null) || exit 0
+	printf '%s' "$said" | grep -Eiq '(^|[^a-z])(works|working|fixed|done|signed in|succeeded)([^a-z]|$)' || exit 0
+	printf '%s' "$said" | grep -Eq 'VERIFIED|SCHEDULED' && exit 0
+	jq -n '{decision: "block", reason: "Your last message says something works, is fixed, or is done, without Toni'"'"'s condition rows (CLAUDE.md, \"Done means Toni'"'"'s conditions\"). If it is about something Toni asked to work, rewrite it to lead with each condition as VERIFIED (live run in that exact state: version, time, what was seen), NOT VERIFIED, or SCHEDULED. If it claims nothing of the kind, end the turn again unchanged."}'
+	exit 0
+fi
 jq -n --arg r "Don't end the turn yet: the work list ($list) still has open items. Do the next one that can move forward without Toni. Mark an item [x] when done and verified, or [toni] with what only Toni can do; end the turn only when no [ ] items are left.
 $open" '{decision: "block", reason: $r}'

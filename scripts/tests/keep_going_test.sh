@@ -58,6 +58,26 @@ said "<system-reminder>notice</system-reminder>"
 jq -cn '{type: "user", message: {content: [{type: "tool_result", content: "x"}]}}' >>"$tr"
 lets_end "notices and tool results don't hide Toni's stop"
 
+# Claims need evidence (2026-11-22): with nothing open, a "works"/"done" message without the rows
+# is sent back once; with the rows, or a second time, or with no claim, the turn ends.
+wrote() { jq -cn --arg c "$1" '{type: "assistant", message: {role: "assistant", content: [{type: "text", text: $c}]}}' >>"$tr"; }
+again() { jq -cn --arg s "$sid" --arg t "$tr" '{session_id: $s, transcript_path: $t, stop_hook_active: true}' | "$root/scripts/keep-going.sh"; }
+printf -- '- [x] sign in to Citi\n' >"$list"
+: >"$tr"
+said "can you sign in to Citi while locked?"
+wrote "Citi sign-in works now."
+blocks "a claim without rows is sent back"
+if [ -z "$(again)" ]; then ok "only once: the second stop ends the turn"; else bad "only once: the second stop ends the turn"; fi
+: >"$tr"
+said "can you sign in to Citi while locked?"
+wrote "Locked, fresh sign-in: NOT VERIFIED (scheduled). Unlocked: VERIFIED 0.8.218 10:17. The unlocked case works."
+lets_end "a claim with rows ends the turn"
+: >"$tr"
+said "what is the weather"
+wrote "It is sunny in Walnut Creek."
+lets_end "no claim: the turn ends"
+printf -- '- [ ] sweep\n' >"$list"
+
 : >"$tr"
 said "stop"
 said "go on"

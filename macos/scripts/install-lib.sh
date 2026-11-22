@@ -144,3 +144,26 @@ audit_verdict() {
   esac
   return 1
 }
+
+# idle_verdict <running-calls folder> <now, epoch seconds> <quiet seconds>: whether Latchkey is
+# idle enough to restart (Toni, 2026-11-22: "Batch + wait for idle", after an install restarted
+# it in the middle of his Target order). The app keeps one file per running call in that folder
+# (spec 001 FR-667), so no file means no call runs, and the folder's change time is when a call
+# last started or ended. Exit 0 when idle; 1 with the reason otherwise. No folder: no call since
+# the app's data folder was made, so idle.
+idle_verdict() {
+  dir=$1 now=$2 quiet=$3
+  [ -d "$dir" ] || return 0
+  running=$(find "$dir" -maxdepth 1 -name '*.call' 2>/dev/null | wc -l | tr -d ' ')
+  if [ "$running" != 0 ]; then
+    echo "$running call(s) running"
+    return 1
+  fi
+  changed=$(stat -f %m "$dir" 2>/dev/null || echo 0)
+  ago=$((now - changed))
+  if [ "$ago" -lt "$quiet" ]; then
+    echo "the last call ended $ago s ago"
+    return 1
+  fi
+  return 0
+}

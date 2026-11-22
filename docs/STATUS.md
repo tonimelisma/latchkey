@@ -6,6 +6,22 @@ Xcode signing ready (2026-10-20): Toni's Xcode account has a valid "Apple Develo
 (certificate expires 2027-07-22). Keep the team ID out of committed project files
 (open source); put it in a gitignored `macos/Local.xcconfig` as `DEVELOPMENT_TEAM`.
 
+## Open acceptance (CLAUDE.md, "Done means Toni's conditions")
+
+Each row is a condition Toni asked about. VERIFIED only by a live run in that exact condition
+with the installed version; SCHEDULED waits for a state only Toni can produce.
+
+| Condition (Toni's words) | Status | Evidence |
+|---|---|---|
+| Citi, fresh sign-in, Mac unlocked, background | VERIFIED | 0.8.218, 10:17 2026-11-22, Latchkey's own browser, dashboard shown (old one-call tool) |
+| Citi, fresh sign-in, Mac locked, background | NOT VERIFIED | 0.8.219, 10:36: Citi ended the sign-in at its code step (old tool); not yet run with logins_fill; scheduled for the codes experiment |
+| Citi, already signed in, Mac locked | VERIFIED | 0.8.219, 10:2x 2026-11-22, the dashboard opened with Latchkey's kept sign-in |
+| GitHub, fresh sign-in, Mac locked, with logins_fill and a texted code | VERIFIED | 0.8.221, 12:09 2026-11-22, fresh Claude Code session, dashboard shown |
+| Texted code deleted after use | VERIFIED | 0.8.222, 12:52 2026-11-22, at unlock; gone from its conversation in chat.db |
+| Mail tools find and read, Mac locked | VERIFIED | 0.8.221, 12:09 2026-11-22, fresh session listed 30 and read the newest |
+| Costco sign-in | NOT VERIFIED | refused in both browsers with no words; Toni to check the saved password |
+| eBay sign-in | NOT VERIFIED | eBay's human check in both browsers; only Toni can answer it |
+
 ## Current phase
 
 Fill-only sign-in (Toni, 2026-11-22: "Shouldn't the code just provide what's happening in the
@@ -29,10 +45,15 @@ next unlock while locked); an emailed one with its own email tool, else the new 
 (mail_find, mail_read, mail_archive; spec 008 FR-850 to FR-853, back in part, read and archive
 only). TextedCodes became PendingCleanup (deletes and archives now, or at the next unlock).
 My 11:01 install of the fill-only version restarted Latchkey during Toni's Target order chat and
-renamed its sign-in tool, so that chat lost its page and tool. Not yet guarded: nothing in
-install.sh or the hooks checks whether one of Toni's chats is using Latchkey (an earlier version
-of this line said installs wait; they don't). Only an agent memory note says to look at the log
-first; a real guard is among the proposals awaiting Toni's decision.
+renamed its sign-in tool, so that chat lost its page and tool. Since the research on tool design
+and agent process (Toni's decisions, 2026-11-22): `install.sh` waits until no call runs and none
+has for 10 minutes (from the app's running-calls folder, spec 001 FR-667), gives up after 30;
+CLAUDE.md has "Done means Toni's conditions" (VERIFIED / NOT VERIFIED / SCHEDULED rows, the
+"Open acceptance" table above), batch installs, a security review before commit for sign-in,
+browser, Messages, Mail; Constitution X "a tool reports; Claude judges"; `.claude/rules/`
+tool-design.md, secrets-and-pages.md, relay.md; the end-of-turn hook sends back once a "works"
+or "done" without rows; CLAUDE.md is 254 lines (was 371; cloud sessions, commands, hooks, and
+worktree details moved to docs/).
 Live with 0.8.221 (Mac locked): a fresh Claude Code session signed in to GitHub with only the new
 tools: user name and password with logins_fill, SMS chosen itself, the code read with
 messages_read, typed with logins_fill, the dashboard; the code text queued for deletion at the
@@ -475,6 +496,10 @@ hosted relay (email via Resend); real Claude called
 after the app was quit.
 
 ## Next steps
+
+1. Codes experiment (Toni, 2026-11-22: "test all approaches for robustness on a wide variety of
+   web sites"): Claude reads codes / Latchkey fetches codes / middle path, on many sites; report.
+2. Citi fresh sign-in with the Mac locked, with logins_fill (Open acceptance row).
 
 0. Sign-in's first real export (spec 013 T11, Toni's step): Latchkey's menu → Export Passwords
    to Latchkey…, one Touch ID. The first try (0.8.175) stopped at the save panel; 0.8.176 fixes

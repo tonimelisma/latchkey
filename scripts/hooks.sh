@@ -57,7 +57,7 @@ session-start)
   [ -n "$ends" ] && ends="Loose ends in this repository (CLAUDE.md, \"Nothing left behind\"). Resolve them before or alongside the user's request, without being asked:
 $ends"
   if cloud; then
-    ends="This is a Claude Code cloud session: follow CLAUDE.md, \"Cloud sessions\".${setup:+
+    ends="This is a Claude Code cloud session: follow CLAUDE.md, \"Cloud sessions\", and docs/cloud-sessions.md.${setup:+
 $setup}${ends:+
 $ends}"
   fi
