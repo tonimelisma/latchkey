@@ -167,6 +167,32 @@ import Testing
         #expect(try await b.run("document.querySelector('[name=pw]').value") == "", "no password in the page")
     }
 
+    /// Citi while the Mac was locked, 2026-11-22: its page still showed the password form, with
+    /// no words, when the call's time ran out; that was answered as a refusal and switched Citi to
+    /// Safari's cookies. Time running out is never a refusal.
+    @Test func timeRunningOutWhileTheFormStillShowsIsNoRefusal() async throws {
+        let b = browser()
+        defer { b.discard() }
+        let slow = """
+            <title>Sign in</title>
+            <form id="f"><input name="email" type="text" autocomplete="username">
+            <input name="pw" type="password"><button type="submit">Sign on</button></form>
+            <script>document.getElementById('f').addEventListener('submit', function (ev) { ev.preventDefault(); window.sent = true; });</script>
+            """
+        _ = try await b.open(html: slow, base: Self.base)
+        var calls = 0
+        let store = SignInStore(vault: MemoryVault())
+        let r = try await SignInFlow.signIn(
+            Self.ann, exact: false, store: store, run: run(b), now: { Self.fixed }, wait: { _ in },
+            stillTime: {
+                calls += 1
+                return calls <= 3
+            })
+        #expect(r.outcome == .outOfTime)
+        #expect(try await b.run("String(window.sent === true)") == "true", "the password went")
+        #expect(!store.blocked(Self.ann))
+    }
+
     /// A page that rewrites JavaScript's own functions can't pass for another site.
     @Test func aPageThatRewritesBuiltInsGetsNothing() async throws {
         let b = browser()

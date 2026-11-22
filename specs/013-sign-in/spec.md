@@ -219,7 +219,9 @@ once when unlocked" and "Any new code text".
   site was slow to answer, counting nothing against the saved sign-in, so its answer reaches
   Claude within the relay's 60 seconds (Costco in a Safari tab, 2026-11-22: the call passed the
   60 seconds with the password still in the page). A texted code is waited for at most 35
-  seconds of a call (was 45).
+  seconds of a call (was 45). Time running out while the site still shows the field it was sent
+  on, with no words from the site, is never a refusal and never switches the site to Safari's
+  sign-in (Citi while the Mac was locked, 2026-11-22: its slow page was still signing in).
 - **FR-1361** One sign-in call waits for that text for as long as the call's time allows; when the
   text hasn't come by then, the answer says the site texted a code that hasn't arrived and to call
   again on the same page, and the next call takes it. A text is waited for up to 2 minutes from

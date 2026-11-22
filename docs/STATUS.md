@@ -245,6 +245,12 @@ and the move into Safari kept the tab. Costco refused the saved password in both
 no words, and is blocked until the next export (the saved password may be out of date). A fresh
 Claude Code session saw the new logins_sign_in description, and a script with return gave
 {"twice":4} in a Safari tab.
+Citi with the Mac locked (Toni: "Mac is locked now, check Citi", 0.8.218): Latchkey's own Citi
+sign-in from earlier was still alive (the dashboard opened). After signing that session out, a
+fresh sign-in answered "refused": Citi's page was still signing in when the call's 40 s ran out,
+and running out of time counted as a refusal and switched Citi to Safari's cookies. Timers and
+the window were as while unlocked. Now running out of time is never a refusal (FR-1370), and
+Citi gets one more try of Latchkey's own browser (sign-in rules 8).
 Live check (0.8.175, Mac locked, 2026-11-21 00:54): groups logins, browser, files, shell: 51 of 51
 worked. A fresh Claude signed in to the-internet.herokuapp.com as tomsmith with the fixture's test
 sign-in (`logins-fixture.sh`); none of its 10 tool results held the password except the test

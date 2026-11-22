@@ -200,6 +200,15 @@ enum SignInFlow {
                 r = try await run(PageScripts.signInState, false)
                 page = try state(r.detail)
             }
+            // The call's time ran out while the site still showed the field it was sent on, with
+            // no words: not known yet, never a refusal (Citi in Latchkey's own browser while the
+            // Mac was locked, 2026-11-22: its slow page was still signing in when the 40 s ran out,
+            // and the "refusal" switched it to Safari's cookies, dropping that sign-in).
+            if !stillTime(), page.problem.isEmpty,
+                (step == "password" && page.password) || (step == "code" && page.code)
+            {
+                return .outOfTime
+            }
         }
         if sentDelivery || sentCode, page.password && !page.code { return .check }
         if page.password && sentPassword || page.code && sentCode { return .refused(page.problem) }
