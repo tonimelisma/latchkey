@@ -81,9 +81,21 @@ func TestCancelledCallIsAudited(t *testing.T) {
 		defer close(done)
 		_, _ = cs.CallTool(cctx, &mcp.CallToolParams{Name: "battery_status"})
 	}()
-	<-started
+	// Bounded waits: under load (a 4-CPU cloud VM building in the background) a wait without a
+	// deadline hung the package for its whole 10 minutes instead of failing.
+	select {
+	case <-started:
+	case <-done:
+		t.Fatal("the call ended before it reached the Mac")
+	case <-time.After(10 * time.Second):
+		t.Fatal("the call never reached the Mac")
+	}
 	cancel()
-	<-done
+	select {
+	case <-done:
+	case <-time.After(10 * time.Second):
+		t.Fatal("the cancelled call didn't return")
+	}
 	require.Eventually(t, func() bool {
 		entries, err := e.store.AuditForUser(context.Background(), e.user.ID, 10)
 		return err == nil && len(entries) == 1 && entries[0].Outcome == store.OutcomeError && entries[0].CallID != ""

@@ -14,9 +14,25 @@
 #                           finds one of the deployment's private values in the repository.
 #                           A seat belt, not a wall; tested by scripts/tests/hooks_guard_test.sh.
 #   hooks.sh after-bash     After a shell command: runs scripts/tidy.sh after every `git push`.
+#
+# In a Claude Code cloud session (CLAUDE_CODE_REMOTE=true: a fresh Ubuntu VM with one clone of
+# the repository; CLAUDE.md, "Cloud sessions"):
+#   session-start  first runs scripts/cloud-setup.sh (it installs jq, so it comes before the jq
+#                  check), skips tidy.sh, and still reports loose ends.
+#   guard          unchanged: the same refusals, and the private-values check before a push,
+#                  which there reads the values from the environment and refuses the push when
+#                  none are set (scripts/private-values-check.sh).
+#   after-bash     skips tidy.sh.
+# tidy.sh is skipped because nothing it cleans exists in the VM (no worktrees, Mac builds, relay
+# images, or main checkout to fast-forward) and GitHub's proxy refuses the branch deletions it
+# would try; the next tidy.sh on the Mac deletes merged branches. scripts/keep-going.sh (the Stop
+# hook) is unchanged: the VM keeps the session's own ~/.claude/worklists.
 here=$(cd "$(dirname "$0")" && pwd)
 input=$(cat)
 field() { printf '%s' "$input" | jq -r "$1 // empty"; }
+cloud() { [ "${CLAUDE_CODE_REMOTE:-}" = true ]; }
+setup=""
+if [ "$1" = session-start ] && cloud; then setup=$("$here/cloud-setup.sh" 2>&1); fi
 
 # Without jq the hook's input can't be read. The guard then refuses every command that mentions
 # git (with the reason), rather than letting everything through.
@@ -24,10 +40,11 @@ if ! command -v jq >/dev/null 2>&1; then
   case "$1" in
   guard)
     printf '%s' "$input" | grep -q 'git' || exit 0
-    printf '%s\n' '{"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "deny", "permissionDecisionReason": "Blocked: scripts/hooks.sh needs jq to check git commands, and jq is not installed. Install it (brew install jq), then run the command again."}}'
+    printf '%s\n' '{"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "deny", "permissionDecisionReason": "Blocked: scripts/hooks.sh needs jq to check git commands, and jq is not installed. Install it (brew install jq; apt-get install jq in a cloud session), then run the command again."}}'
     ;;
   session-start)
-    echo "scripts/hooks.sh needs jq, which is not installed: the checks for unfinished work and private values are not running, and git commands are refused. Install it: brew install jq"
+    [ -n "$setup" ] && echo "$setup"
+    echo "scripts/hooks.sh needs jq, which is not installed: the checks for unfinished work and private values are not running, and git commands are refused. Install it: brew install jq (apt-get install jq in a cloud session)"
     ;;
   esac
   exit 0
@@ -35,11 +52,17 @@ fi
 
 case "$1" in
 session-start)
-  "$here/tidy.sh" >/dev/null 2>&1
+  cloud || "$here/tidy.sh" >/dev/null 2>&1
   ends=$("$here/loose-ends.sh" "$(field .cwd)")
+  [ -n "$ends" ] && ends="Loose ends in this repository (CLAUDE.md, \"Nothing left behind\"). Resolve them before or alongside the user's request, without being asked:
+$ends"
+  if cloud; then
+    ends="This is a Claude Code cloud session: follow CLAUDE.md, \"Cloud sessions\".${setup:+
+$setup}${ends:+
+$ends}"
+  fi
   [ -n "$ends" ] || exit 0
-  jq -n --arg c "Loose ends in this repository (CLAUDE.md, \"Nothing left behind\"). Resolve them before or alongside the user's request, without being asked:
-$ends" '{hookSpecificOutput: {hookEventName: "SessionStart", additionalContext: $c}}'
+  jq -n --arg c "$ends" '{hookSpecificOutput: {hookEventName: "SessionStart", additionalContext: $c}}'
   ;;
 stop)
   [ "$(field .stop_hook_active)" = true ] && exit 0
@@ -79,6 +102,7 @@ $found"
     '{hookSpecificOutput: {hookEventName: "PreToolUse", permissionDecision: "deny", permissionDecisionReason: $r}}'
   ;;
 after-bash)
+  cloud && exit 0
   field .tool_input.command | grep -q 'git push' && "$here/tidy.sh"
   exit 0
   ;;

@@ -46,13 +46,13 @@ func OpenGroups() (*Groups, error) {
 	}
 	g := &Groups{root: root}
 	service := filepath.Join(root, "service")
-	if err := os.MkdirAll(service, 0o755); err != nil {
+	if err := os.MkdirAll(service, 0o750); err != nil {
 		return nil, fmt.Errorf("the service's control group isn't writable: %w", err)
 	}
-	if err := os.WriteFile(filepath.Join(service, "cgroup.procs"), []byte(strconv.Itoa(os.Getpid())), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(service, "cgroup.procs"), []byte(strconv.Itoa(os.Getpid())), 0o600); err != nil {
 		return nil, fmt.Errorf("can't move into the service's control group: %w", err)
 	}
-	if err := os.MkdirAll(filepath.Join(root, "jobs"), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(root, "jobs"), 0o750); err != nil {
 		return nil, err
 	}
 	return g, nil
@@ -62,10 +62,10 @@ func OpenGroups() (*Groups, error) {
 // it (clone3's CLONE_INTO_CGROUP, so not even its first instant runs outside).
 func (g *Groups) New(id string) (string, *os.File, error) {
 	path := filepath.Join(g.root, "jobs", id)
-	if err := os.Mkdir(path, 0o755); err != nil && !errors.Is(err, os.ErrExist) {
+	if err := os.Mkdir(path, 0o750); err != nil && !errors.Is(err, os.ErrExist) {
 		return "", nil, err
 	}
-	f, err := os.Open(path)
+	f, err := os.Open(path) //nolint:gosec // a job's group under the program's own control group
 	if err != nil {
 		return "", nil, err
 	}
@@ -80,7 +80,7 @@ func (g *Groups) Count(path string) int {
 // Kill stops everything in the group and removes it; it returns how many processes it stopped.
 func (g *Groups) Kill(path string) (int, error) {
 	n := len(pids(path))
-	if err := os.WriteFile(filepath.Join(path, "cgroup.kill"), []byte("1"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(path, "cgroup.kill"), []byte("1"), 0o600); err != nil {
 		// No cgroup.kill (kernels before 5.14): signal each; another user's processes may stay.
 		for _, pid := range pids(path) {
 			_ = syscall.Kill(pid, syscall.SIGKILL)
@@ -115,7 +115,7 @@ func (g *Groups) Leftovers() []string {
 }
 
 func pids(path string) []int {
-	f, err := os.Open(filepath.Join(path, "cgroup.procs"))
+	f, err := os.Open(filepath.Join(path, "cgroup.procs")) //nolint:gosec // a job's group under the program's own control group
 	if err != nil {
 		return nil
 	}

@@ -11,10 +11,14 @@ ok() { printf 'ok   %s\n' "$1"; }
 bad() { printf 'FAIL %s\n' "$1"; fails=$((fails + 1)); [ -f "$work/out" ] && sed 's/^/     /' "$work/out"; }
 # run <dir>: runs the check there; output in $work/out, exit code in $code.
 run() { (cd "$1" && "$check") >"$work/out" 2>&1; code=$?; }
+crun() { (cd "$1" && CLAUDE_CODE_REMOTE=true "$check") >"$work/out" 2>&1; code=$?; } # as in a cloud session
 is() { if [ "$code" = "$1" ]; then ok "$2"; else bad "$2 (exit $code, wanted $1)"; fi; }
 has() { if grep -q -- "$1" "$work/out"; then ok "$2"; else bad "$2"; fi; }
 hasnt() { if grep -qi -- "$1" "$work/out"; then bad "$2"; else ok "$2"; fi; }
 commit() { git -C "$repo" -c user.name=t -c user.email=t@example.com commit -q "$@"; }
+# The same results in a cloud session and on the Mac: the cloud cases below set these themselves.
+unset CLAUDE_CODE_REMOTE LATCHKEY_PRIVATE_DEPLOY_HOST LATCHKEY_PRIVATE_DEPLOY_DNS_ZONE LATCHKEY_PRIVATE_DEPLOY_VM \
+  LATCHKEY_PRIVATE_DEPLOY_PROJECT LATCHKEY_PRIVATE_DEVELOPMENT_TEAM LATCHKEY_PRIVATE_LATCHKEY_DEFAULT_RELAY_HOST
 
 repo="$work/repo"
 git init -q "$repo"
@@ -108,6 +112,37 @@ has 'docs/readme.md:1' "names the worktree's file"
 (cd "$work" && "$check") >"$work/out" 2>&1
 code=$?
 is 2 "outside a repository it fails as 'could not check'"
+
+# A cloud session: no private files, the values come from LATCHKEY_PRIVATE_<setting>.
+cloud="$work/cloud"
+git init -q "$cloud"
+git -C "$cloud" checkout -q -b main
+echo "A relay at relay.example.com." >"$cloud/readme.md"
+git -C "$cloud" add readme.md
+git -C "$cloud" -c user.name=t -c user.email=t@example.com commit -q -m start
+run "$cloud"
+is 0 "no files and no values, outside a cloud session: nothing to compare with"
+crun "$cloud"
+is 2 "no files and no values in a cloud session: could not check, so a push is refused"
+has 'LATCHKEY_PRIVATE_DEPLOY_HOST' "says which variables to set"
+export LATCHKEY_PRIVATE_DEPLOY_HOST=latch.privatezone.test LATCHKEY_PRIVATE_DEVELOPMENT_TEAM=TEAM123XYZ
+crun "$cloud"
+is 0 "clean repository passes with the values from the environment"
+echo "see https://latch.privatezone.test/mcp" >>"$cloud/readme.md"
+crun "$cloud"
+is 1 "value from the environment in a tracked file fails"
+has 'DEPLOY_HOST' "names the setting"
+hasnt 'privatezone' "never prints the value"
+git -C "$cloud" checkout -q readme.md
+echo "team TEAM123XYZ" >"$cloud/team.md"
+git -C "$cloud" add team.md
+git -C "$cloud" -c user.name=t -c user.email=t@example.com commit -q -m team
+git -C "$cloud" rm -q team.md
+git -C "$cloud" -c user.name=t -c user.email=t@example.com commit -q -m "no team"
+run "$cloud"
+is 1 "value from the environment in the history fails (on the Mac too)"
+has 'DEVELOPMENT_TEAM' "names the team setting"
+unset LATCHKEY_PRIVATE_DEPLOY_HOST LATCHKEY_PRIVATE_DEVELOPMENT_TEAM
 
 [ "$fails" = 0 ] && echo "all passed" || echo "$fails failed"
 [ "$fails" = 0 ]

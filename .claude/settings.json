@@ -6,8 +6,8 @@
           {
             "type": "command",
             "command": "\"$CLAUDE_PROJECT_DIR\"/scripts/hooks.sh session-start || true",
-            "timeout": 60,
-            "statusMessage": "Checking for unfinished or unpushed work"
+            "timeout": 590,
+            "statusMessage": "Checking for unfinished or unpushed work (and setting up a cloud session)"
           }
         ]
       }

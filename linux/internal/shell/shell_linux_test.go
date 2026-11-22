@@ -3,6 +3,7 @@
 package shell_test
 
 import (
+	"context"
 	"os"
 	"os/exec"
 	"os/user"
@@ -28,7 +29,7 @@ func needGroups(t *testing.T) {
 
 // pgrep reports whether a process with this exact command line runs, by anyone.
 func running(marker string) bool {
-	out, _ := exec.Command("pgrep", "-f", marker).Output()
+	out, _ := exec.CommandContext(context.Background(), "pgrep", "-f", marker).Output()
 	return strings.TrimSpace(string(out)) != ""
 }
 

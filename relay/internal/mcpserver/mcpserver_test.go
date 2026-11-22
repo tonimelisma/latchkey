@@ -100,6 +100,12 @@ func (e *env) connectMac() *testagent.Conn {
 	require.NoError(e.t, err)
 	e.t.Cleanup(func() { _ = c.Close() })
 	require.Eventually(e.t, func() bool { return e.hub.Online(e.device.ID) }, 5*time.Second, 10*time.Millisecond)
+	// Online comes with the hello; the tool list is the agent's next frame. A call sent between
+	// the two finds no such tool (seen on a busy 4-CPU Linux VM, 2026-11-21).
+	require.Eventually(e.t, func() bool {
+		st, err := e.store.DeviceState(context.Background(), e.device.ID)
+		return err == nil && len(st.ToolsJSON) > 0
+	}, 5*time.Second, 10*time.Millisecond, "the Mac's tool list")
 	return c
 }
 

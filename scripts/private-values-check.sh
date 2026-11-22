@@ -4,12 +4,17 @@
 # can't know these values; this script reads them from the gitignored files that hold them:
 #   .env                          DEPLOY_HOST, DEPLOY_DNS_ZONE, DEPLOY_VM, DEPLOY_PROJECT
 #   macos/Config/Local.xcconfig   DEVELOPMENT_TEAM, LATCHKEY_DEFAULT_RELAY_HOST
-# (taken from the main checkout when a worktree has no copy). Run it inside the repository to
-# check. It prints where a value was found and which setting it is, never the value.
+# (taken from the main checkout when a worktree has no copy), and from environment variables
+# named LATCHKEY_PRIVATE_<setting> (e.g. LATCHKEY_PRIVATE_DEPLOY_HOST): a Claude Code cloud
+# session has neither file, so Toni sets these in the cloud environment (not secrets, only kept
+# out of the repository; CLAUDE.md, "Cloud sessions"). Run it inside the repository to check. It
+# prints where a value was found and which setting it is, never the value.
 # Matching is literal and ignores case. Values under 6 characters and the cloud zone (DEPLOY_ZONE,
 # a generic region name) are not searched: they would match ordinary text. The reversed DNS zone
 # in the app's bundle ID is not a match (only the forward form is searched).
-# Exit: 0 clean (or no private files to compare with), 1 found, 2 could not check.
+# Exit: 0 clean (or no private values to compare with, outside a cloud session), 1 found, 2 could
+# not check (also: a cloud session, CLAUDE_CODE_REMOTE=true, with no values at all, so pushes from
+# the cloud are refused until the values are set rather than pushed unchecked).
 # Used by `make secrets` in relay/ and before every `git push` from Claude Code (scripts/hooks.sh).
 # Tested by scripts/tests/private_values_test.sh.
 set -u
@@ -71,10 +76,23 @@ $2
 
 env_file=$(private_file .env)
 xc_file=$(private_file macos/Config/Local.xcconfig)
-if [ -z "$env_file" ] && [ -z "$xc_file" ]; then
+names="DEPLOY_HOST DEPLOY_DNS_ZONE DEPLOY_VM DEPLOY_PROJECT DEVELOPMENT_TEAM LATCHKEY_DEFAULT_RELAY_HOST"
+from_env=""
+for name in $names; do
+  eval "v=\${LATCHKEY_PRIVATE_$name:-}"
+  [ -n "$v" ] && from_env="$from_env $name"
+done
+if [ -z "$env_file" ] && [ -z "$xc_file" ] && [ -z "$from_env" ]; then
+  if [ "${CLAUDE_CODE_REMOTE:-}" = true ]; then
+    echo "private-values-check: this cloud session has none of the deployment's private values to compare with, so nothing can be pushed from it yet. Toni sets them once in the cloud environment's environment variables, one line each:$(for n in $names; do printf ' LATCHKEY_PRIVATE_%s=<value>' "$n"; done) (CLAUDE.md, \"Cloud sessions\")" >&2
+    exit 2
+  fi
   echo "private-values-check: no .env or macos/Config/Local.xcconfig here; nothing to compare with"
   exit 0
 fi
+for name in $from_env; do
+  eval "check \"\$name\" \"\$LATCHKEY_PRIVATE_$name\""
+done
 if [ -n "$env_file" ]; then
   for name in DEPLOY_HOST DEPLOY_DNS_ZONE DEPLOY_VM DEPLOY_PROJECT; do
     check "$name" "$(env_value "$name" "$env_file")"

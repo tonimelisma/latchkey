@@ -61,9 +61,16 @@ semgrep:
 		--config p/secrets --config p/dockerfile --config scripts/semgrep/latchkey.yml \
 		--exclude 'scripts/semgrep' --exclude 'CLAUDE-SECURITY-*' --exclude '.claude/worktrees'
 
-# Every tracked shell script, at warning level and above (needs Docker).
+# Every tracked shell script, at warning level and above: with the installed ShellCheck when it is
+# the pinned version (a cloud session's scripts/cloud-setup.sh installs it), otherwise the pinned
+# Docker image.
+SHELLCHECK_VERSION = $(patsubst koalaman/shellcheck:v%,%,$(firstword $(subst @, ,$(SHELLCHECK_IMAGE))))
 shellcheck:
-	cd .. && git ls-files -z '*.sh' | xargs -0 docker run --rm -v "$$PWD:/mnt:ro" -w /mnt $(SHELLCHECK_IMAGE) -S warning
+	cd .. && if shellcheck --version 2>/dev/null | grep -qx 'version: $(SHELLCHECK_VERSION)'; then \
+	  git ls-files -z '*.sh' | xargs -0 shellcheck -S warning; \
+	else \
+	  git ls-files -z '*.sh' | xargs -0 docker run --rm -v "$$PWD:/mnt:ro" -w /mnt $(SHELLCHECK_IMAGE) -S warning; \
+	fi
 
 # Known vulnerabilities in dependencies: the relay's Go modules (OSV database) and the Mac app's
 # Sparkle. Fails on any.
@@ -77,6 +84,7 @@ script-tests:
 	cd .. && python3 -m unittest discover -q -s deploy/tests -p 'test_*.py'
 	cd .. && scripts/tests/private_values_test.sh
 	cd .. && scripts/tests/hooks_guard_test.sh
+	cd .. && scripts/tests/hooks_cloud_test.sh
 	cd .. && scripts/tests/tidy_test.sh
 	cd .. && scripts/tests/release_tag_test.sh
 	cd .. && scripts/tests/loose_ends_test.sh

@@ -1,12 +1,30 @@
 # Status
 
-Last updated: 2026-11-21 (Shell builds: task sandbox off, asset-catalog daemon per command; builds work in Shell, spec 004 FR-333 and FR-334; Sign-in built, spec 013; Claude's feedback tool, reports copied to the Mac's Feedback folder; pages are read once they stop changing; every issue becomes a regression case; clicks press down and up before clicking, so Gmail's buttons answer; signed-in sites in Safari tabs of Claude's while unlocked; sign-in cookies in Latchkey's log, for Safari's Target sign-outs; full traces everywhere, in daily files, for evals; Claude's pages always in Latchkey's own browser, by name, with dialogs Claude answers; the locked browser takes Safari's cookies again with every page; public download on GitHub with a new-version notice; never disturb the user: Mail, WhatsApp sending, Notes' window editing, Messages' window actions, Reminders' window setters removed; test sweep on exit; releases are tags on commits; cloud-only files read again; machine list shows Latchkey versions; WhatsApp built; Add to Claude button; plugin withdrawn; README rewritten as a short product page; relay web pages redone; purkki paired; spec 010 shipped)
+Last updated: 2026-11-21 (development in Claude Code cloud sessions; Shell builds: task sandbox off, asset-catalog daemon per command; builds work in Shell, spec 004 FR-333 and FR-334; Sign-in built, spec 013; Claude's feedback tool, reports copied to the Mac's Feedback folder; pages are read once they stop changing; every issue becomes a regression case; clicks press down and up before clicking, so Gmail's buttons answer; signed-in sites in Safari tabs of Claude's while unlocked; sign-in cookies in Latchkey's log, for Safari's Target sign-outs; full traces everywhere, in daily files, for evals; Claude's pages always in Latchkey's own browser, by name, with dialogs Claude answers; the locked browser takes Safari's cookies again with every page; public download on GitHub with a new-version notice; never disturb the user: Mail, WhatsApp sending, Notes' window editing, Messages' window actions, Reminders' window setters removed; test sweep on exit; releases are tags on commits; cloud-only files read again; machine list shows Latchkey versions; WhatsApp built; Add to Claude button; plugin withdrawn; README rewritten as a short product page; relay web pages redone; purkki paired; spec 010 shipped)
 
 Xcode signing ready (2026-10-20): Toni's Xcode account has a valid "Apple Development" certificate
 (certificate expires 2027-07-22). Keep the team ID out of committed project files
 (open source); put it in a gitignored `macos/Local.xcconfig` as `DEVELOPMENT_TEAM`.
 
 ## Current phase
+
+Development in Claude Code cloud sessions (Toni, 2026-11-21; CLAUDE.md "Cloud sessions"): the
+hooks know a cloud session (`CLAUDE_CODE_REMOTE=true`). Session start runs
+`scripts/cloud-setup.sh` (jq, lsof, the pinned ShellCheck, uv, and Go modules, tools and test
+builds warmed in the background), skips `tidy.sh`, and still reports loose ends; no `tidy.sh`
+after a push; the guard is unchanged, and the private-values check reads the values from
+`LATCHKEY_PRIVATE_*` environment variables there and refuses a push when none are set. Relay
+and Linux work runs in the VM; the Mac app builds and tests on the Mac through Latchkey's
+`shell_run` from a clone in the command's scratch folder; deploys, Linux releases, installs and
+live checks stay in a local session. Checked in `docker run ubuntu:24.04`: the real session-start
+hook on a bare image, then `make test`, `make lint`, `make security` and `make script-tests`
+(`scripts/tests/hooks_cloud_test.sh` covers the hooks in both places), on 4 CPUs like the
+cloud VM. Found on the way: the pinned linters built with an older Go refuse the relay's 1.27
+(the setup puts the relay's toolchain first); `make -C linux lint` on Linux checks the Linux-only
+files the Mac never lints, and found 8 issues (fixed: tighter cgroup modes, a bounded `pgrep`);
+five relay tests raced on a busy VM, one hanging the package for 10 minutes (they now wait for
+the call, the stored row, and the tool list instead of fixed times). Toni's steps: the
+private values and three allowed domains in the cloud environment (Next steps, item 0a).
 
 Builds in Shell (Toni, 2026-11-21: "fix and test"; a feedback report): no Xcode project could
 build through `shell_run`, locked or unlocked, since SwiftPM, Xcode, and the Swift compiler start
@@ -335,6 +353,11 @@ after the app was quit.
 
 ## Next steps
 
+0a. Cloud sessions (Toni's step, once, in claude.ai/code's environment settings): add the six
+   `LATCHKEY_PRIVATE_…` environment variables (CLAUDE.md "Cloud sessions"; the values are in
+   `.env` and `macos/Config/Local.xcconfig`), or no push from a cloud session gets through; and
+   allow `semgrep.dev`, `vuln.go.dev` and `api.osv.dev` (Custom network, package managers kept),
+   or `make security` can't run there.
 0. Sign-in's first real export (spec 013 T11, Toni's step): Latchkey's menu → Export Passwords
    to Latchkey…, one Touch ID. The first try (0.8.175) stopped at the save panel; 0.8.176 fixes
    it (above), tried on TextEdit's save panel, not yet on Passwords'.

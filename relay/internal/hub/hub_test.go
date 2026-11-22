@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"net/http/httptest"
 	"path/filepath"
@@ -98,9 +99,15 @@ func ctxT(t *testing.T) context.Context {
 	return ctx
 }
 
+// state is the device's stored row; before the hub's first write (it writes right after
+// changing what it holds in memory) the empty one, so a test polling it waits instead of failing
+// (seen on a busy 4-CPU Linux VM, 2026-11-21).
 func (e *env) state() store.DeviceState {
 	e.t.Helper()
 	st, err := e.store.DeviceState(context.Background(), e.device.ID)
+	if errors.Is(err, store.ErrNotFound) {
+		return store.DeviceState{}
+	}
 	require.NoError(e.t, err)
 	return st
 }
@@ -392,10 +399,23 @@ func TestCallDeadlineCancelsAndDropsLateResult(t *testing.T) {
 
 func TestCallClientCancelled(t *testing.T) {
 	e := setup(t, nil)
-	e.agent.Handler = func(context.Context, *agentproto.Call) *agentproto.Result { return nil }
+	got := make(chan struct{})
+	var once sync.Once
+	e.agent.Handler = func(context.Context, *agentproto.Call) *agentproto.Result {
+		once.Do(func() { close(got) })
+		return nil
+	}
 	c := e.dial()
 	ctx, cancel := context.WithCancel(context.Background())
-	go func() { time.Sleep(100 * time.Millisecond); cancel() }()
+	// Cancelled once the Mac has the call: a fixed 100 ms could come first under load, and a call
+	// cancelled before it is sent has nothing to cancel on the Mac.
+	go func() {
+		select {
+		case <-got:
+		case <-time.After(5 * time.Second):
+		}
+		cancel()
+	}()
 	_, err := e.hub.Call(ctx, e.device.ID, "battery_status", nil, 5*time.Second, nil)
 	require.ErrorIs(t, err, context.Canceled)
 	select {
