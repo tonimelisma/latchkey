@@ -32,8 +32,10 @@ cloud VM. Found on the way: the pinned linters built with an older Go refuse the
 (the setup puts the relay's toolchain first); `make -C linux lint` on Linux checks the Linux-only
 files the Mac never lints, and found 8 issues (fixed: tighter cgroup modes, a bounded `pgrep`);
 five relay tests raced on a busy VM, one hanging the package for 10 minutes (they now wait for
-the call, the stored row, and the tool list instead of fixed times). Toni's steps: the
-private values and three allowed domains in the cloud environment (Next steps, item 0a).
+the call, the stored row, and the tool list instead of fixed times). The cloud
+environment "Default" has the six `LATCHKEY_PRIVATE_…` variables (added through Latchkey's
+browser, 2026-11-21) and Full network access, so the three domains `make security` needs are
+reachable.
 
 Builds in Shell (Toni, 2026-11-21: "fix and test"; a feedback report): no Xcode project could
 build through `shell_run`, locked or unlocked, since SwiftPM, Xcode, and the Swift compiler start
@@ -375,11 +377,6 @@ after the app was quit.
 
 ## Next steps
 
-0a. Cloud sessions (Toni's step, once, in claude.ai/code's environment settings): add the six
-   `LATCHKEY_PRIVATE_…` environment variables (CLAUDE.md "Cloud sessions"; the values are in
-   `.env` and `macos/Config/Local.xcconfig`), or no push from a cloud session gets through; and
-   allow `semgrep.dev`, `vuln.go.dev` and `api.osv.dev` (Custom network, package managers kept),
-   or `make security` can't run there.
 0. Sign-in's first real export (spec 013 T11, Toni's step): Latchkey's menu → Export Passwords
    to Latchkey…, one Touch ID. The first try (0.8.175) stopped at the save panel; 0.8.176 fixes
    it (above), tried on TextEdit's save panel, not yet on Passwords'.
