@@ -155,6 +155,13 @@ import Testing
         #expect(several.isError && several.plainText.contains("ann, bob"), "\(several.plainText)")
         let bob = await call(s, p, ["field": .string("e1"), "fill": .string("user"), "user": .string("bob")])
         #expect(!bob.isError && bob.plainText.contains("(bob)"))
+        let code = try await s.own.open(html: Self.codeField, base: Self.base)
+        let passed = await call(
+            s, code,
+            ["field": .string("e1"), "fill": .string("code"), "press": .string("e2"), "code": .string("320518")])
+        #expect(
+            !passed.isError && passed.plainText.contains("Welcome ann"),
+            "a code Claude passes needs no user: \(passed.plainText)")
         let other = try await s.own.open(html: Self.onePage(), base: URL(string: "https://b.test/login")!)
         let none = await call(s, other, ["field": .string("e1"), "fill": .string("user")])
         #expect(none.isError && none.plainText.contains("no saved sign-in for b.test"), "\(none.plainText)")

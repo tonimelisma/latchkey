@@ -144,6 +144,7 @@ interface another app can read (`research.md`), so the only way in is a copy the
   email by Claude itself, with whatever waiting Claude likes) or when the sign-in has a code
   generator in Passwords (each 30-second code typed once, counted as used only once typed);
   without either, nothing is typed and Claude is told to read the code itself (Toni, 2026-11-22).
+  A code Claude passes needs no saved sign-in chosen when the site has several.
 - **FR-1371** Signing in shall be Claude's: Claude reads the page and decides what it shows (a
   sign-in form, a code step, a check, signed in, refused) and which buttons to press, with the
   browser tools; Latchkey only types a saved value into the field Claude names (Toni,

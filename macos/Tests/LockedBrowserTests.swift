@@ -106,6 +106,26 @@ import Testing
         #expect(!PageScripts.returnsOutsideFunction("document.title"))
     }
 
+    /// Feedback fb_CSBD7DB4HB727KS0GZ646SQ8PM (GitHub's two-factor page, 2026-11-22): the links of a
+    /// closed menu weren't listed, so Claude couldn't click "SMS Code". Now they are, marked, and
+    /// clicking the menu itself opens it.
+    @Test func aClosedMenusLinksAreListedAndTheMenuOpens() async throws {
+        let b = LockedBrowser()
+        defer { b.discard() }
+        let html = """
+            <details id="d"><summary>More options</summary>
+            <div><a href="https://test.example/sms">SMS Code</a><a href="https://test.example/recovery">Recovery code</a></div></details>
+            """
+        let page = try await b.open(html: html, base: base)
+        let sms = try #require(page.elements.first { $0.label.contains("SMS Code") }, "\(page.elements)")
+        #expect(sms.label.contains("(in a closed menu «More options»)"), "\(sms.label)")
+        let summary = try #require(page.elements.first { $0.label == "More options" })
+        _ = try await b.click(summary.ref)
+        #expect(try await b.run("String(document.getElementById('d').open)") == "true", "the click opened it")
+        let opened = try await b.read(offset: 0)
+        #expect(opened.elements.contains { $0.label == "SMS Code" }, "listed plainly once open")
+    }
+
     @Test func theWindowSitsAtTheTopLeftOfTheFreeArea() {
         let free = CGRect(x: 0, y: 0, width: 1512, height: 949)
         let f = LockedBrowser.windowFrame(page: CGSize(width: 1280, height: 900), screen: free)

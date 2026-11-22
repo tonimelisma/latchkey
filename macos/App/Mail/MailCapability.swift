@@ -80,9 +80,13 @@ enum MailCapability {
                 guard !found.isEmpty else {
                     return .text("No email in Apple Mail matches, in the last \(hours) hour\(hours == 1 ? "" : "s").")
                 }
+                let more =
+                    found.count >= 30
+                    ? "\nThe newest 30 only: there may be more; narrow with from, subject, unread_only, or fewer hours."
+                    : ""
                 return .text(
                     "Emails in Apple Mail, newest first (the last \(hours) hour\(hours == 1 ? "" : "s")). \(marking)\n"
-                        + found.map(line).joined(separator: "\n"))
+                        + found.map(line).joined(separator: "\n") + more)
             })
     }
 

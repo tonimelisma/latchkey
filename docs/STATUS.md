@@ -31,6 +31,13 @@ only). TextedCodes became PendingCleanup (deletes and archives now, or at the ne
 My 11:01 install of the fill-only version restarted Latchkey during Toni's Target order chat and
 renamed its sign-in tool, so that chat lost its page and tool; installs now wait until no chat of
 Toni's is using Latchkey.
+Live with 0.8.221 (Mac locked): a fresh Claude Code session signed in to GitHub with only the new
+tools: user name and password with logins_fill, SMS chosen itself, the code read with
+messages_read, typed with logins_fill, the dashboard; the code text queued for deletion at the
+next unlock. mail_find listed 30 emails and mail_read read the newest. Its two reports, fixed:
+links in GitHub's closed "More options" menu weren't listed (now listed, marked, spec 005
+FR-464), and a code it passed still asked which of seven GitHub sign-ins (no longer). mail_find
+now says when it stops at 30.
 
 CI green again (2026-11-22): every CI run on main had failed since 2026-11-21, when the deploy
 gate's Semgrep (`make semgrep`, run with uvx) reached CI: ubuntu-latest has no uv ("uvx: not

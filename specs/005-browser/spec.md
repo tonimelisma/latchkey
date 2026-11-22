@@ -298,6 +298,10 @@ phone, Claude can't check a reservation in the Owner's account or fill in a form
   `await`, shall run as the body of a function, as a script with `await` does, in both browsers
   (live 2026-11-22: it failed with "Return statements are only valid inside functions"). Which
   way it runs is decided before it runs, from its syntax alone, and it runs once.
+- **FR-464** A link or button inside a closed menu (a closed `<details>`) shall be listed with the
+  page's controls, marked "(in a closed menu «<the menu's name>»)", so Claude can click it even
+  when the page's own script keeps the menu from opening (GitHub's two-factor page, 2026-11-22:
+  "More options" didn't open and its "SMS Code" link was never listed).
 
 Amended by spec 013 FR-1350 to FR-1355 (Toni, 2026-11-21): for a site Latchkey holds a saved
 password for, while Sign-in is On, FR-441, FR-442 and FR-457 copy none of Safari's cookies (nor a

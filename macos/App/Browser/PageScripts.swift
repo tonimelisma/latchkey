@@ -228,7 +228,13 @@ enum PageScripts {
             var e = nodes[i], r = e.getBoundingClientRect(), st = getComputedStyle(e);
             // A file field is listed also when the page hides it behind a button of its own (FR-437).
             var fileField = e.tagName === 'INPUT' && (e.type || '').toLowerCase() === 'file' && !e.disabled;
-            if (!fileField && (st.display === 'none' || st.visibility === 'hidden' || (r.width === 0 && r.height === 0))) continue;
+            // A link or button in a closed menu (a closed <details>, GitHub's "More options" with its
+            // "SMS Code" link, 2026-11-22: never listed, so Claude couldn't click it) is listed, marked.
+            var closedMenu = (e.tagName === 'A' || e.tagName === 'BUTTON') && e.closest && e.closest('details:not([open])');
+            if (closedMenu && closedMenu.contains(e) && e.parentElement && e.tagName !== 'SUMMARY' && !(closedMenu.querySelector('summary') && closedMenu.querySelector('summary').contains(e))) {
+              var summaryText = closedMenu.querySelector('summary') ? (closedMenu.querySelector('summary').innerText || '').replace(/\\s+/g, ' ').trim().slice(0, 40) : '';
+            } else closedMenu = null;
+            if (!fileField && !closedMenu && (st.display === 'none' || st.visibility === 'hidden' || (r.width === 0 && r.height === 0))) continue;
             var ref = e.getAttribute('data-latchkey');
             if (!ref) { ref = 'e' + (next++); e.setAttribute('data-latchkey', ref); }
             var tag = e.tagName.toLowerCase(), type = (e.getAttribute('type') || 'text').toLowerCase();
@@ -244,11 +250,15 @@ enum PageScripts {
             }
             else if (tag === 'select' && e.selectedIndex >= 0) item.value = e.options[e.selectedIndex].text;
             if (fileField && (st.display === 'none' || st.visibility === 'hidden' || r.width < 2 || r.height < 2)) item.label = (item.label ? item.label + ' ' : '') + '(hidden file field)';
+            if (closedMenu) {
+              if (!item.label) item.label = (e.textContent || '').replace(/\\s+/g, ' ').trim().slice(0, 100);
+              item.label += ' (in a closed menu' + (summaryText ? ' «' + summaryText + '»' : '') + ')';
+            }
             // Under another element at its centre, as the page shows it: a mouse can't reach it
             // (Gmail draws its filter form twice, one copy over the other, 2026-11-16).
             // Checkboxes and radio buttons are often drawn over on purpose, so they aren't marked.
             var cx = r.left + r.width / 2, cy = r.top + r.height / 2;
-            if (!fileField && type !== 'checkbox' && type !== 'radio' && cx >= 0 && cy >= 0 && cx < innerWidth && cy < innerHeight) {
+            if (!fileField && !closedMenu && type !== 'checkbox' && type !== 'radio' && cx >= 0 && cy >= 0 && cx < innerWidth && cy < innerHeight) {
               var over = document.elementFromPoint(cx, cy);
               if (over && over !== e && !e.contains(over) && !over.contains(e) && !(e.labels && Array.prototype.some.call(e.labels, function (l) { return l.contains(over); }))) item.label = (item.label ? item.label + ' ' : '') + '(under another element)';
             }

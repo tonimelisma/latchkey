@@ -7,7 +7,8 @@
 - **FR-850** While Mail is Read only or Read & write in Latchkey's settings, Claude shall be able to
   list recent emails in Apple Mail on this Mac (up to the last 7 days, 24 hours unless asked),
   newest first, optionally only those whose sender or subject holds given words, or only unread
-  ones: each one's id, when it came, sender, subject, mailbox, and whether it is unread. Sent,
+  ones, at most 30, saying so when there may be more: each one's id, when it came, sender,
+  subject, mailbox, and whether it is unread. Sent,
   draft, deleted, and outgoing mailboxes are left out. Mail is started hidden when it isn't
   running, so new mail arrives.
 - **FR-851** Claude shall be able to read one email by its id: sender, subject, date, mailbox, and

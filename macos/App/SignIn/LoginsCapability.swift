@@ -210,7 +210,9 @@ enum LoginsCapability {
                     "\(host) has no saved sign-in for \(wantedUser). Its user names: \(users(here)).", isError: true)
             }
         }
-        if Set(chosen.map { $0.user.lowercased() }).count > 1 {
+        // A code Claude passes is Claude's own: no saved sign-in needs choosing (feedback
+        // fb_CSBD7DB4HB727KS0GZ646SQ8PM, 2026-11-22: GitHub's seven sign-ins asked for one).
+        if Set(chosen.map { $0.user.lowercased() }).count > 1, !(kind == "code" && !givenCode.isEmpty) {
             return .text("\(host) has several saved sign-ins: \(users(chosen)). Call again with user.", isError: true)
         }
         let login = chosen[0]
