@@ -199,7 +199,11 @@ final class AppModel {
             // FR-1350 to FR-1354: Latchkey's own sign-ins, only while Sign-in is On.
             OwnSessions.shared.on = { [weak self] in self?.capabilities.level(CapabilityRegistry.logins) != .off }
             // Spec 002 FR-180, spec 008 FR-852: what Claude asked to delete or archive while the Mac
-            // was locked (or before a restart) is done now if it is unlocked.
+            // was locked (or before a restart) is done now if it is unlocked, while still allowed.
+            PendingCleanup.shared.mayDo = { [weak self] key in
+                let id = MailCodes.Place(key: key) != nil ? CapabilityRegistry.mail : CapabilityRegistry.messages
+                return self?.capabilities.level(id) == .readWrite
+            }
             Task { await PendingCleanup.shared.deletePending() }
             watcher.imported = { [weak self] outcome in
                 self?.refreshSignIns()

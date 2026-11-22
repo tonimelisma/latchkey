@@ -35,6 +35,19 @@ import Testing
         #expect(done.ids == ["msg-1"] && c.pending.isEmpty)
     }
 
+    /// Security review 2026-11-22: a delete queued while locked doesn't run once the Owner turned
+    /// Messages (or Mail) down.
+    @Test func aQueuedChangeNoLongerAllowedIsDropped() async {
+        let done = Done()
+        var locked = true
+        let c = cleanup(locked: { locked }, done: done)
+        _ = await c.request("msg-1")
+        c.mayDo = { _ in false }
+        locked = false
+        await c.deletePending()
+        #expect(done.ids.isEmpty && c.pending.isEmpty)
+    }
+
     @Test func whyItCouldntIsSaidAndItIsntTriedForever() async {
         let c = cleanup()
         c.deleter = { _ in throw CodeTextWindow.Problem(message: "Messages' window didn't show the message") }

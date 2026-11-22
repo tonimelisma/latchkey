@@ -36,6 +36,10 @@ final class PendingCleanup {
         }
     }
     var isLocked: () -> Bool = { SystemScreen().isLocked() }
+    /// Whether the change is still allowed when it runs: Messages (a message) or Mail (an email)
+    /// still Read & write in Latchkey's settings (security review 2026-11-22: a delete queued while
+    /// locked must not outlive the Owner turning the capability down). Set by the app; true in tests.
+    var mayDo: (String) -> Bool = { _ in true }
     private var deleting = false
 
     /// How a cleanup went.
@@ -69,6 +73,11 @@ final class PendingCleanup {
         deleting = true
         defer { deleting = false }
         for key in pending {
+            guard mayDo(key) else {
+                record(key, "it is no longer allowed in Latchkey's settings")
+                pending.removeAll { $0 == key }
+                continue
+            }
             do {
                 try await deleter(key)
                 record(key, nil)
