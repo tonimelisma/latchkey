@@ -47,6 +47,12 @@ extension PageScripts {
             if (s.visibility === 'hidden' || s.display === 'none' || Number(s.opacity) === 0) return false;
             return e.offsetWidth > 0 && e.offsetHeight > 0;
           });
+          // A human check of the site's own, with no captcha frame (Amazon's "Check the box to
+          // continue. I am human" checkpoint, 2026-11-21): known by what the page says.
+          if (!captcha) {
+            var said = ((document.body && document.body.innerText) || '').slice(0, 4000);
+            captcha = /\\b(i am human|i'?m not a robot|verify (that )?you('| a)re (a )?human|are you a (robot|human)|human verification|confirm you('| a)re (a )?human)\\b/i.test(said);
+          }
           // The site's own words about the sign-in: a shown error element first, then a shown
           // alert; never a link (Citi's "Skip to Content" link is marked as a live region).
           function problem() {

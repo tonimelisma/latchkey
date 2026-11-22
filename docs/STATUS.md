@@ -110,6 +110,11 @@ signed-out home (Citi's bot protection, not worked around). 0.8.188: after the p
 "how to send the code" step is answered with its text option (FR-1368), a site that then ends
 the sign-in is a check, not a refusal, long notices and banners are never the site's words,
 and "Sign on" buttons count. Citi itself needs Toni to sign in once in Safari.
+Live Amazon test with codes (Toni: "do it", 2026-11-21 17:50, 0.8.190, Mac unlocked): sites that
+fell back under older sign-in rules (Amazon) got one more try of Latchkey's own sign-in; Amazon
+took the password and asked for no code this time, but showed its "I am human" checkbox, which
+Latchkey answered as signed in. 0.8.191 reads a page that asks to confirm being human as a
+check. A code text or email is still not tried live: no site has sent one since.
 Live check (0.8.175, Mac locked, 2026-11-21 00:54): groups logins, browser, files, shell: 51 of 51
 worked. A fresh Claude signed in to the-internet.herokuapp.com as tomsmith with the fixture's test
 sign-in (`logins-fixture.sh`); none of its 10 tool results held the password except the test

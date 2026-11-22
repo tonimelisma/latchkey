@@ -161,6 +161,20 @@ import Testing
         #expect(try await signIn(b).outcome == .check)
     }
 
+    /// Amazon, 2026-11-21: after the password, "Check the box to continue. I am human" (no captcha
+    /// frame) was answered "Signed in".
+    @Test func aHumanCheckWithoutACaptchaFrameIsACheck() async throws {
+        let b = browser()
+        defer { b.discard() }
+        let page = Self.onePage().replacingOccurrences(
+            of: "'<h1>Welcome ann</h1>'",
+            with: PageScripts.literal(
+                "<p>Hello, ann</p><h2>Check the box to continue.</h2><label><input type=\"checkbox\"> I am human</label>"
+            ))
+        _ = try await b.open(html: page, base: Self.base)
+        #expect(try await signIn(b).outcome == .check)
+    }
+
     /// Live check 2026-11-21 (homerecording.com): a forum's page after signing in carried Google
     /// ads, whose script adds a hidden reCAPTCHA frame; Latchkey answered "a check it can't
     /// answer" though Claude was signed in. Only a challenge the page shows counts.
