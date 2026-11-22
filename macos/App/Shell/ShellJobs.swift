@@ -25,6 +25,8 @@ actor ShellJobs {
         var refusedHandoff = false
         /// True when it shows a refused change of settings (FR-329).
         var refusedSettings = false
+        /// True when it shows a program starting a sandbox of its own (FR-334).
+        var nestedSandbox = false
         /// What the self-check at start found broken (FR-330); nil when all is well.
         var fenceWarning: String?
         /// Programs a command started that macOS stopped, this job's or a just-finished one's (FR-332).
@@ -216,6 +218,7 @@ actor ShellJobs {
         let mark = Fence.mark(of: scratch)
         try Data().write(to: mark)
         try Data().write(to: Fence.control(of: scratch))
+        try Fence.Builds.write(in: scratch)
         let fence = Fence.profile(
             scratch: scratch, folder: URL(filePath: dir), declared: declared, home: setup.home, own: setup.own,
             uses: uses, mark: mark, systemTemp: setup.systemTemp)
@@ -224,7 +227,7 @@ actor ShellJobs {
         // "--": a command starting with "-" is the command, not more options for zsh.
         p.arguments = [
             "-q", "/dev/null", "/usr/bin/sandbox-exec", "-p", fence, "/bin/zsh", "-l", "-c", "--",
-            uses.contains(.open) ? Self.openInBackground + command : command,
+            Fence.Builds.path + (uses.contains(.open) ? Self.openInBackground : "") + command,
         ]
         p.currentDirectoryURL = URL(filePath: dir)
         var env = ProcessInfo.processInfo.environment
@@ -235,6 +238,8 @@ actor ShellJobs {
             "HOMEBREW_TEMP": scratch.path,
             // zsh's here-documents and =(…) go to /tmp/zsh… otherwise (bug report 2026-11-03).
             "TMPPREFIX": scratch.path + "/zsh",
+            // Xcode's build settings for builds inside the fence (FR-333).
+            "XCODE_XCCONFIG_FILE": Fence.Builds.settings(in: scratch).path,
         ] { env[k] = v }
         p.environment = env
         let stdin = Pipe()
@@ -710,7 +715,7 @@ actor ShellJobs {
             job: job.id, command: job.command, output: text, dropped: dropped, finished: finished,
             exitCode: finished ? job.process.terminationStatus : nil, left: left,
             refusedWrite: refused.write, refusedHandoff: refused.handoff, refusedSettings: refused.settings,
-            fenceWarning: fenceWarning, stopped: stoppedPrograms(answering: job))
+            nestedSandbox: refused.nestedSandbox, fenceWarning: fenceWarning, stopped: stoppedPrograms(answering: job))
     }
 
     /// macOS writes a crash report seconds after the stop, often after the job's answer: so jobs

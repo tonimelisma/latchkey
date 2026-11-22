@@ -199,3 +199,123 @@ import Testing
         #expect(cap.entries(at: .readOnly).isEmpty)
     }
 }
+
+/// Builds inside the fence (spec 004 FR-333, FR-334; feedback report 2026-11-21): macOS won't
+/// start a sandbox inside another, so SwiftPM's, Xcode's, and the Swift compiler's own sandboxes
+/// failed with "sandbox_apply: Operation not permitted" and no Xcode project could build through
+/// Shell. Latchkey turns those inner sandboxes off; the fence still applies.
+@Suite struct FencedBuildTests {
+    /// The app's fence, with the user's own temporary and cache folders writable: build tools
+    /// save their files through them (atomic saves, xcrun's cache), as in the app.
+    let jobs: ShellJobs = {
+        var setup = ShellSetup.testing()
+        setup.systemTemp = ShellSetup.app.systemTemp
+        return ShellJobs(setup: setup)
+    }()
+
+    /// A small package with a SwiftUI view: building it compiles the manifest (SwiftPM's sandbox)
+    /// and expands `@State` (the compiler's macro plugin, run in a sandbox of its own).
+    private func package() throws -> URL {
+        let dir = FileManager.default.temporaryDirectory.appending(path: "fenced-build-\(UUID().uuidString)")
+        let sources = dir.appending(path: "Sources/P")
+        try FileManager.default.createDirectory(at: sources, withIntermediateDirectories: true)
+        try """
+        // swift-tools-version:5.9
+        import PackageDescription
+        let package = Package(
+            name: "P", platforms: [.macOS(.v14)], products: [.library(name: "P", targets: ["P"])],
+            targets: [.target(name: "P")])
+        """.write(to: dir.appending(path: "Package.swift"), atomically: true, encoding: .utf8)
+        try """
+        import SwiftUI
+        public struct Counter: View {
+            @State private var count = 0
+            public init() {}
+            public var body: some View { Button("\\(count)") { count += 1 } }
+        }
+        """.write(to: sources.appending(path: "Counter.swift"), atomically: true, encoding: .utf8)
+        return dir
+    }
+
+    /// Runs `command` in `folder` and waits for it to finish, however long a build takes.
+    private func finished(
+        _ command: String, in folder: URL, uses: Set<Fence.Use> = []
+    ) async throws -> (output: String, exit: Int32?, refusedWrite: Bool) {
+        // SwiftPM's cache in the real home, which the app's fence allows (a test's home is its own).
+        let cache = OwnFiles.real(URL.homeDirectory).appending(path: "Library/Caches/org.swift.swiftpm").path
+        var r = try await jobs.run(
+            command, folder: folder.path, wait: .seconds(30), writes: [cache], why: "SwiftPM's cache", uses: uses)
+        var output = r.output
+        var refused = r.refusedWrite
+        for _ in 0..<20 where !r.finished {
+            r = try await jobs.check(r.job, wait: .seconds(30))
+            output += r.output
+            refused = refused || r.refusedWrite
+        }
+        #expect(r.finished, "still running: \(output)")
+        return (output, r.exitCode, refused)
+    }
+
+    @Test func swiftBuildsAPackageInsideTheFence() async throws {
+        let dir = try package()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let r = try await finished("swift build 2>&1", in: dir)
+        #expect(r.exit == 0, "\(r.output)")
+        #expect(!r.output.contains("sandbox_apply"), "\(r.output)")
+        #expect(!r.refusedWrite, "\(r.output)")
+    }
+
+    @Test func swiftPackageCommandsReadTheManifest() async throws {
+        let dir = try package()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let r = try await finished("swift package describe 2>&1", in: dir)
+        #expect(r.exit == 0, "\(r.output)")
+        #expect(r.output.contains("Name: P"), "\(r.output)")
+    }
+
+    /// Xcode tells a package folder by macOS's file types (LaunchServices), so a package needs
+    /// `open` declared; a project (`.xcodeproj`) doesn't (live check of Latchkey's own build).
+    @Test func xcodebuildBuildsAPackageInsideTheFence() async throws {
+        let dir = try package()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let r = try await finished(
+            "xcodebuild -scheme P -destination platform=macOS -derivedDataPath dd build CODE_SIGNING_ALLOWED=NO 2>&1 | tail -20",
+            in: dir, uses: [.open])
+        #expect(r.output.contains("** BUILD SUCCEEDED **"), "\(r.output)")
+        #expect(!r.output.contains("sandbox_apply"), "\(r.output)")
+    }
+
+    /// `make`, scripts, and other shells find the same `xcodebuild` and `swift`, and Xcode's own
+    /// build settings come from the environment, so builds a project's own scripts start work too.
+    @Test func buildToolsAreFoundFromScriptsToo() async throws {
+        let r = try await jobs.run(
+            "sh -c 'command -v xcodebuild; command -v swift'; cat \"$XCODE_XCCONFIG_FILE\"; xcodebuild -version | head -1",
+            folder: nil, wait: .seconds(30))
+        #expect(r.finished)
+        let lines = r.output.split(separator: "\n").map(String.init)
+        #expect(lines.count >= 2, "\(r.output)")
+        #expect(lines.prefix(2).allSatisfy { $0.contains("/.latchkey/bin/") }, "Latchkey's own, first: \(r.output)")
+        #expect(r.output.contains("SWIFTC_DISABLE_SANDBOX = YES"))
+        #expect(r.output.contains("ENABLE_USER_SCRIPT_SANDBOXING = NO"))
+        #expect(r.output.contains("Xcode "), "the real xcodebuild still answers: \(r.output)")
+    }
+
+    /// A program that still tries a sandbox of its own is told as such, not as a refused write.
+    @Test func aNestedSandboxIsToldApart() {
+        let refused = Fence.refusals(in: "sandbox-exec: sandbox_apply: Operation not permitted\n")
+        #expect(!refused.write)
+        #expect(refused.nestedSandbox)
+        let write = Fence.refusals(in: "touch: /etc/x: Operation not permitted\n")
+        #expect(write.write)
+        #expect(!write.nestedSandbox)
+    }
+
+    @Test func theAnswerExplainsANestedSandbox() async throws {
+        let run = try #require(ShellCapability.operations(jobs: jobs).first { $0.tool.name == "shell_run" })
+        let r = await run.handler(
+            .object(["command": .string("/usr/bin/sandbox-exec -p '(version 1)(allow default)' /usr/bin/true")]))
+        let text = r.content.jsonText
+        #expect(text.contains("sandbox of its own"), "\(text)")
+        #expect(!text.contains("A write was refused"), "\(text)")
+    }
+}

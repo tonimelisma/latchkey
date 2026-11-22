@@ -1,12 +1,20 @@
 # Status
 
-Last updated: 2026-11-21 (Sign-in built, spec 013; Claude's feedback tool, reports copied to the Mac's Feedback folder; pages are read once they stop changing; every issue becomes a regression case; clicks press down and up before clicking, so Gmail's buttons answer; signed-in sites in Safari tabs of Claude's while unlocked; sign-in cookies in Latchkey's log, for Safari's Target sign-outs; full traces everywhere, in daily files, for evals; Claude's pages always in Latchkey's own browser, by name, with dialogs Claude answers; the locked browser takes Safari's cookies again with every page; public download on GitHub with a new-version notice; never disturb the user: Mail, WhatsApp sending, Notes' window editing, Messages' window actions, Reminders' window setters removed; test sweep on exit; releases are tags on commits; cloud-only files read again; machine list shows Latchkey versions; WhatsApp built; Add to Claude button; plugin withdrawn; README rewritten as a short product page; relay web pages redone; purkki paired; spec 010 shipped)
+Last updated: 2026-11-21 (builds work in Shell, spec 004 FR-333 and FR-334; Sign-in built, spec 013; Claude's feedback tool, reports copied to the Mac's Feedback folder; pages are read once they stop changing; every issue becomes a regression case; clicks press down and up before clicking, so Gmail's buttons answer; signed-in sites in Safari tabs of Claude's while unlocked; sign-in cookies in Latchkey's log, for Safari's Target sign-outs; full traces everywhere, in daily files, for evals; Claude's pages always in Latchkey's own browser, by name, with dialogs Claude answers; the locked browser takes Safari's cookies again with every page; public download on GitHub with a new-version notice; never disturb the user: Mail, WhatsApp sending, Notes' window editing, Messages' window actions, Reminders' window setters removed; test sweep on exit; releases are tags on commits; cloud-only files read again; machine list shows Latchkey versions; WhatsApp built; Add to Claude button; plugin withdrawn; README rewritten as a short product page; relay web pages redone; purkki paired; spec 010 shipped)
 
 Xcode signing ready (2026-10-20): Toni's Xcode account has a valid "Apple Development" certificate
 (certificate expires 2027-07-22). Keep the team ID out of committed project files
 (open source); put it in a gitignored `macos/Local.xcconfig` as `DEVELOPMENT_TEAM`.
 
 ## Current phase
+
+Builds in Shell (Toni, 2026-11-21: "fix and test"; a feedback report): no Xcode project could
+build through `shell_run`, locked or unlocked, since SwiftPM, Xcode, and the Swift compiler start
+sandboxes of their own and macOS refuses one inside Latchkey's fence. Each command now gets
+`xcodebuild` and `swift` that turn those off, first on its PATH (so `make` and scripts use them
+too), and Xcode's matching settings in `XCODE_XCCONFIG_FILE`; the fence still applies. An answer
+tells a program starting its own sandbox apart from a refused write. Tests build a SwiftUI
+package with `swift build` and `xcodebuild` inside the fence; a regression case builds this app.
 
 The relay's server, locked down and watched (Toni, 2026-11-21: "a high risk target"; docs/threat-model.md
 "The relay's server", plan D29): `deploy/harden.sh` closes SSH to all but Google's IAP tunnel

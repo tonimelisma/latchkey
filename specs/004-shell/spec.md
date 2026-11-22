@@ -120,6 +120,14 @@ what is left is on one list.
   even when the command's exit status hides it; for a program with windows it shall say what
   makes it run inside the fence (bug report 2026-11-03: headless Chrome aborted three times, the
   command said exit status 0, and only crash dialogs on the Owner's screen told).
+- **FR-333** A command shall be able to build software with Apple's build tools inside the
+  fence: `xcodebuild` and `swift` (building, testing, running, and package commands), also when
+  `make` or a project's own script starts them, with the fence still applying to everything they
+  start (Toni, 2026-11-21: "fix and test"; a feedback report of 2026-11-21: no Xcode project
+  could build through Shell, locked or unlocked, because those tools start sandboxes of their
+  own, which macOS refuses inside another).
+- **FR-334** When a command's output shows a program starting a sandbox of its own, the answer
+  shall say so and how to run that program without it, not that a write was refused.
 - A scratch shell in a throwaway Linux container was considered and left out (Toni,
   2026-10-27).
 

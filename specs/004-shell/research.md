@@ -89,6 +89,27 @@ anyway). Fencing `~/.ssh` means ssh can't add a new server to `known_hosts` from
 unless declared; it warns and connects anyway. The watcher (FR-325) leaves `~/.ssh` out for that
 reason, and doesn't watch git hooks (projects can be anywhere).
 
+## Builds (2026-11-21)
+
+A feedback report: building this repo's Mac app through `shell_run` failed every time, locked or
+unlocked. Checked on this Mac (macOS 27.0.1, Xcode 27.2), through the installed app, locked:
+package resolution failed ("Invalid manifest"), then asset symbols ("sandbox-exec:
+sandbox_apply: Operation not permitted"), then every SwiftUI macro ("external macro
+implementation type 'SwiftUIMacros.StateMacro' could not be found"). macOS has no profile rule
+that lets a sandboxed process start another sandbox. With the four switches in plan D9 the
+full app built (`** BUILD SUCCEEDED **`), also when started by `make`; `ASSETCATALOG_COMPILER_
+GENERATE_ASSET_SYMBOLS` can stay on, since the asset step's sandbox is the build-script one.
+`swift package describe` failed the same way and worked with `--disable-sandbox`.
+
+Options weighed (Claude's, low level): shell functions in the command (simplest, but `make`
+and scripts call the real tools); writing Xcode's own settings (`defaults write
+com.apple.dt.Xcode`; changes the Owner's Xcode outside Latchkey, and the settings service is
+refused in the fence anyway); running builds outside the fence (would let a build write
+anywhere); wrappers first on the PATH plus `XCODE_XCCONFIG_FILE` (chosen: reaches `make` and
+scripts, keeps the fence, changes nothing outside the job). The inner sandboxes only narrowed
+what the tools could do inside the fence; with them off, a package's manifest or plugin can
+write what the command could (scratch, its folder, Downloads, caches, declared paths).
+
 ## Handing work to macOS (2026-10-28)
 
 Toni chose (2026-10-28) to close the gaps the first version left: opening apps, scripting

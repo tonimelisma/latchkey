@@ -31,6 +31,73 @@ enum Fence {
     /// app and could then run anything.
     static let scriptRunner = "/usr/bin/osascript"
 
+    /// Builds inside the fence (FR-333): macOS won't start a sandbox inside another, so the
+    /// sandboxes build tools start for themselves fail with "sandbox_apply: Operation not
+    /// permitted" (SwiftPM's for package manifests and plugins, Xcode's for build scripts and
+    /// asset symbols, the Swift compiler's for macros such as SwiftUI's `@State`). Each job gets
+    /// `xcodebuild` and `swift` that turn those off, first on its PATH, and Xcode's build
+    /// settings for it in `XCODE_XCCONFIG_FILE`, so `make` and a project's own scripts find them
+    /// too. The fence still applies to everything they start (research.md, "Builds").
+    enum Builds {
+        static func folder(in scratch: URL) -> URL { scratch.appending(path: ".latchkey", directoryHint: .isDirectory) }
+        static func bin(in scratch: URL) -> URL {
+            folder(in: scratch).appending(path: "bin", directoryHint: .isDirectory)
+        }
+        static func settings(in scratch: URL) -> URL { folder(in: scratch).appending(path: "fence.xcconfig") }
+
+        /// Put first on the PATH after the login files have run (they may reorder it).
+        static let path = "path=(\"$LATCHKEY_SCRATCH/.latchkey/bin\" $path)\n"
+
+        static let xcconfig = """
+            // Latchkey: Xcode's own sandboxes can't start inside Latchkey's fence (spec 004 FR-333).
+            ENABLE_USER_SCRIPT_SANDBOXING = NO
+            SWIFTC_DISABLE_SANDBOX = YES
+
+            """
+
+        /// Finds the real tool: the next one on the PATH after Latchkey's own folder.
+        private static func wrapper(_ tool: String, _ run: String) -> String {
+            """
+            #!/bin/sh
+            # Latchkey: \(tool)'s own sandboxes can't start inside Latchkey's fence (spec 004 FR-333).
+            here=$(cd "${0%/*}" && pwd -P)
+            PATH=$(printf '%s' "$PATH" | tr ':' '\\n' | while IFS= read -r d; do
+                [ "$(cd "$d" 2>/dev/null && pwd -P)" = "$here" ] || printf '%s:' "$d"; done)
+            PATH=${PATH%:}
+            real=$(command -v \(tool)) || { echo "\(tool): command not found" >&2; exit 127; }
+            \(run)
+
+            """
+        }
+
+        static let xcodebuild = wrapper(
+            "xcodebuild",
+            #"exec "$real" -IDEPackageSupportDisableManifestSandbox=YES -IDEPackageSupportDisablePluginExecutionSandbox=YES "$@""#
+        )
+
+        /// `--disable-sandbox` is an option of SwiftPM's commands only.
+        static let swift = wrapper(
+            "swift",
+            #"""
+            case "$1" in
+                build | test | run | package) sub=$1; shift; exec "$real" "$sub" --disable-sandbox "$@" ;;
+            esac
+            exec "$real" "$@"
+            """#)
+
+        /// Writes the tools into a job's scratch folder.
+        static func write(in scratch: URL) throws {
+            let fm = FileManager.default
+            try fm.createDirectory(at: bin(in: scratch), withIntermediateDirectories: true)
+            for (name, text) in [("xcodebuild", xcodebuild), ("swift", swift)] {
+                let url = bin(in: scratch).appending(path: name)
+                try Data(text.utf8).write(to: url)
+                try fm.setAttributes([.posixPermissions: 0o755], ofItemAtPath: url.path)
+            }
+            try Data(xcconfig.utf8).write(to: settings(in: scratch))
+        }
+    }
+
     /// The job's mark beside its scratch folder: its fence refuses reading it, which tells the
     /// job's processes apart from every other process wherever they went (FR-327).
     static func mark(of scratch: URL) -> URL {
@@ -204,7 +271,7 @@ enum Fence {
     static func looksLikeSystemLog(_ text: String) -> Bool { text.contains("Cannot run while sandboxed") }
 
     /// What an output shows was refused (FR-320, FR-328, FR-329).
-    static func refusals(in text: String) -> (write: Bool, handoff: Bool, settings: Bool) {
+    static func refusals(in text: String) -> (write: Bool, handoff: Bool, settings: Bool, nestedSandbox: Bool) {
         let lines = text.split(separator: "\n").map { $0.lowercased() }
         let script = lines.contains {
             $0.contains("operation not permitted: osascript") || $0.contains("osascript: operation not permitted")
@@ -218,16 +285,23 @@ enum Fence {
             ].contains { needle in
                 lines.contains { $0.contains(needle.lowercased()) }
             }
+        // A program starting a sandbox of its own inside the fence (FR-334), not a write.
+        func nested(_ line: String) -> Bool { line.contains("sandbox_apply") || line.contains("sandbox_init") }
+        let nestedSandbox = lines.contains { nested($0) && $0.contains("operation not permitted") }
         let write = lines.contains {
-            $0.contains("operation not permitted") && !$0.contains("osascript")
+            $0.contains("operation not permitted") && !$0.contains("osascript") && !nested($0)
         }
         let settings = lines.contains { $0.contains("could not write domain") }
-        return (write, handoff, settings)
+        return (write, handoff, settings, nestedSandbox)
     }
 
     /// Added too while Latchkey lacks Full Disk Access (spec 001 FR-625).
     static let privacyHint =
         "[Or macOS's privacy protection refused a read: Latchkey doesn't have Full Disk Access. The Mac's owner can turn it on in System Settings → Privacy & Security → Full Disk Access.]"
+
+    /// Added to an answer whose output shows a program starting a sandbox of its own (FR-334).
+    static let nestedSandboxHint =
+        "[A program tried to start a sandbox of its own, which macOS doesn't allow inside Latchkey's fence. xcodebuild and swift already run with theirs turned off (call them by name, not by full path); for another program use its option to run without its own sandbox (Chrome: --no-sandbox). The fence still applies.]"
 
     /// Added to an answer whose output shows a refused write (FR-320).
     static let hint =

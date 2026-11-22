@@ -177,6 +177,22 @@ service when a settings file was declared was the first version; the service wri
 for its caller, Latchkey's own included (security review, 2026-10-28). `launchctl submit` and `bootstrap` already fail inside any sandbox. Each refusal adds
 its hint to the answer. `shell_run` takes `uses` (a list; `open` is its one value).
 
+Builds (FR-333, FR-334, 2026-11-21): macOS refuses a sandbox inside another
+("sandbox_apply: Operation not permitted"), and Apple's build tools start their own: SwiftPM for
+package manifests and plugins, Xcode for build scripts and asset symbols, the Swift compiler for
+macros (SwiftUI's `@State`). Each job's scratch folder gets `.latchkey/bin/xcodebuild` and
+`.latchkey/bin/swift`, put first on the PATH after the login files have run (they reorder it), and
+`.latchkey/fence.xcconfig`, named by `XCODE_XCCONFIG_FILE`, which Xcode applies to every build.
+`xcodebuild` adds `-IDEPackageSupportDisableManifestSandbox=YES` and
+`-IDEPackageSupportDisablePluginExecutionSandbox=YES`; `swift build|test|run|package` adds
+`--disable-sandbox`; the settings file sets `ENABLE_USER_SCRIPT_SANDBOXING = NO` and
+`SWIFTC_DISABLE_SANDBOX = YES`. Each wrapper runs the next tool of its name on the PATH. The
+fence applies to all of it, so what a build may write is unchanged. A program called by full
+path (`/usr/bin/xcodebuild`, `xcrun xcodebuild`) gets no wrapper; the answer then says a program
+tried a sandbox of its own (FR-334), which is told apart from a refused write by
+`sandbox_apply`/`sandbox_init` on the line. Xcode tells a Swift package folder by macOS's file
+types, which needs `open` declared; `swift build` doesn't; a project (`.xcodeproj`) needs neither.
+
 ## D10. What a job left (FR-321, FR-323)
 
 When the leftovers are swept, the answer that reports the end (or the next one) and the activity
