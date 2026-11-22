@@ -113,11 +113,11 @@ interface another app can read (`research.md`), so the only way in is a copy the
 
 ### Signing in
 
-- **FR-1320** While Sign-in is On, Claude shall be able to ask Latchkey to sign in on a page of its
-  own (in Latchkey's own browser or in one of Claude's Safari tabs), optionally naming which user
-  name when Latchkey holds more than one for the site (Toni, 2026-11-20: "When Claude asks").
-  Latchkey shall never fill a sign-in Claude didn't ask for, and never in the Owner's own Safari
-  tabs.
+- **FR-1320** While Sign-in is On, Claude shall be able to ask Latchkey to type a saved user name,
+  password, or code on a page of its own (in Latchkey's own browser or in one of Claude's Safari
+  tabs; FR-1371), optionally naming which user name when Latchkey holds more than one for the
+  site (Toni, 2026-11-20: "When Claude asks"). Latchkey shall never fill anything Claude didn't
+  ask for, and never in the Owner's own Safari tabs.
 - **FR-1321** Latchkey shall fill a sign-in only into a page at an `https` address whose host is the
   site the sign-in was saved for or one of its subdomains (a sign-in saved for `amazon.com` fills on
   `www.amazon.com`), into the page itself and never into a frame from another site (Toni,
@@ -131,20 +131,50 @@ interface another app can read (`research.md`), so the only way in is a copy the
 - **FR-1328** Which site a page is on shall be decided from the browser's own record of its
   address, never from anything the page's scripts report, and the page shall be checked again
   just before each fill (security review, 2026-11-21).
-- **FR-1322** When the page asks for a user name and password (on one page or one after the other),
+- **FR-1322** (Withdrawn 2026-11-22: sign-in is Claude's now, with Latchkey typing only what Claude names (FR-1371); Toni: "Shouldn't the code just provide what's happening in the browser and the agent makes the presumptions?" Was: When the page asks for a user name and password (on one page or one after the other),
   Latchkey shall fill them in and send the form; when the page asks for a verification code and the
-  sign-in has one, Latchkey shall fill in the current code and send it.
-- **FR-1323** The answer shall say what happened in plain words: signed in, which step the page now
+  sign-in has one, Latchkey shall fill in the current code and send it.)
+- **FR-1323** (Withdrawn 2026-11-22: sign-in is Claude's now, with Latchkey typing only what Claude names (FR-1371); Toni: "Shouldn't the code just provide what's happening in the browser and the agent makes the presumptions?" Was: The answer shall say what happened in plain words: signed in, which step the page now
   asks for (a code Latchkey doesn't hold, a new-device check, a captcha), or what the page said
-  when it refused; it shall never contain the secret.
-- **FR-1324** When a sign-in fails, Latchkey shall allow Claude one more try of it; after the second
+  when it refused; it shall never contain the secret.)
+- **FR-1324** (Withdrawn 2026-11-22: no cap on fills (Toni: "No cap"); Claude reads whether the site took the password. Was: When a sign-in fails, Latchkey shall allow Claude one more try of it; after the second
   failure, Latchkey shall refuse that sign-in until the next import, saying why (Toni, 2026-11-20:
-  "Try once more"). A code refused once is never sent again; the retry waits for the next code.
+  "Try once more"). A code refused once is never sent again; the retry waits for the next code.)
+- **FR-1371** Signing in shall be Claude's: Claude reads the page and decides what it shows (a
+  sign-in form, a code step, a check, signed in, refused) and which buttons to press, with the
+  browser tools; Latchkey only types a saved value into the field Claude names (Toni,
+  2026-11-22: "Fill-only tool"). Claude names the page, the field (by its reference), what to
+  type (the saved user name, the saved password, or a verification code), and, for a password
+  or a code, the button to press right after. Latchkey types the value key by key as a keyboard
+  does, presses that button as a click does, lets the page settle as after any click, empties
+  every field it typed into that is still on the page (FR-1311), and answers with what it typed
+  where and the page as it is. It never judges whether the sign-in worked, never presses a
+  button Claude didn't name, and never types anything Claude didn't ask for. A user name may be
+  typed without a button.
+- **FR-1372** A saved password shall be typed only into a password field that isn't a box for
+  one character; a user name only into a text, email, or phone field; a code into a text or
+  number field, or, when the field Claude names is a box for one character, across it and the
+  boxes for one character after it on the page, one character each. A field Latchkey can't type
+  into, or one that doesn't hold what was typed, is said so, and nothing is pressed. All of it
+  only on the page's own site (FR-1321, FR-1328), in the page itself, never in a frame.
+- **FR-1373** The tool's description shall tell Claude to read the page after each fill and judge
+  for itself, and that some sites' protection against bots turns away Latchkey's own background
+  browser while letting Safari through: while the Mac is unlocked, browser_read sign_in_again
+  moves the page into a background Safari tab of Claude's, where Claude signs in again; while it
+  is locked, Claude tells the owner the site needs the Mac unlocked (Toni, 2026-11-22: "ensure
+  the agent gets proper guidance").
+- **FR-1374** browser_read sign_in_again on a page of a site Latchkey signs in to itself (FR-1350)
+  shall, while the Mac is unlocked, move the page into a Safari tab of Claude's at the same
+  address under the same name (amends FR-1351 for that page only; the next page of the site
+  opens in Latchkey's own browser again: Toni, "Decide fresh each time"); while it is locked,
+  say that Latchkey's own browser keeps its own sign-in for that site, copies none of Safari's,
+  and that Safari's can be used once the Mac is unlocked.
 - **FR-1325** When Latchkey holds no sign-in for the page's site, the answer shall say so at once.
 - **FR-1326** While Sign-in is On, Claude shall be able to list the sites Latchkey can sign in to,
   with the user name for each and whether it has a verification code, never a password or code.
-- **FR-1327** Every sign-in Latchkey makes shall go into Latchkey's activity log: the site, the user
-  name, the browser, and the outcome, never the secret.
+- **FR-1327** Every fill Latchkey makes shall go into Latchkey's activity log: the site, the user
+  name, what was typed (user name, password, or code, and where the code came from), the button
+  pressed, and the browser, never the secret.
 
 ### Latchkey's own sign-ins, so Safari stays signed in (Toni, 2026-11-21)
 
@@ -161,7 +191,7 @@ Safari's.
   FR-457 for those sites.
 - **FR-1351** While the Mac is unlocked, a page of such a site shall open in Latchkey's own
   browser, not in a Safari tab of Claude's. Amends spec 005 FR-455 and FR-459 for those sites.
-- **FR-1352** When Latchkey's own sign-in can't finish on such a site (the site asks for a code
+- **FR-1352** (Withdrawn 2026-11-22: Claude moves a page into Safari itself with browser_read sign_in_again, and nothing is remembered for the next chat (Toni: "Decide fresh each time"); FR-1374. Was: When Latchkey's own sign-in can't finish on such a site (the site asks for a code
   Latchkey doesn't hold, shows a check it can't answer, or refuses the password), Latchkey shall
   use the Owner's Safari sign-in for that site as spec 005 does: while the Mac is locked, take
   Safari's cookies for the site and load the page again; while unlocked, move the page into a
@@ -173,7 +203,7 @@ Safari's.
   here is every saved sign-in registered under the same name (amazon.com and
   na.account.amazon.com are one; live check 2026-11-21: Amazon's sign-in is in cookies for all of
   amazon.com, which the second saved sign-in still held back), and what Latchkey's own try left
-  in its browser for it is dropped before the copy.
+  in its browser for it is dropped before the copy.)
 - **FR-1353** The cookies a site sets in Latchkey's own browser for a site of FR-1350 (its own
   sign-in) shall be kept on this Mac across Latchkey's restarts and updates, in Latchkey's
   Keychain as the sign-ins are (FR-1310), never readable by Claude's command line or Files tools,
@@ -194,41 +224,44 @@ Toni, 2026-11-21, after a live check sent him two Amazon code texts Latchkey cou
 "Ensure you can use OTP. Mark them read and archive/delete after use"; then, asked: "Delete at
 once when unlocked" and "Any new code text".
 
-- **FR-1360** When a site asks for a verification code during Latchkey's own sign-in and Latchkey
-  holds no code generator for it, Latchkey shall take the code from the newest text in Messages
-  on this Mac that arrived after that sign-in began, isn't from the Owner, and reads as a code
+- **FR-1360** When Claude asks Latchkey to type a code (FR-1371) and Latchkey holds no code
+  generator for the site, Latchkey shall take the code from the newest text in Messages
+  on this Mac that arrived after the last password it typed on that site in the last 10 minutes
+  (else in the last 10 minutes), isn't from the Owner, and reads as a code
   text (4 to 8 digits next to a word like "code" or "OTP"; security review 2026-11-21: never a
-  friend's "meet at 1830"), whoever sent it, and fill it in itself as FR-1322 does; Claude never sees it. Each
-  text is used once. While Messages is Off in Latchkey's settings, or Latchkey can't read
+  friend's "meet at 1830"), whoever sent it, and type it as FR-1371 does; Claude never sees it. Each
+  text is used once. When none has come, the answer says so at once and Claude asks again in a
+  few seconds; nothing waits. While Messages is Off in Latchkey's settings, or Latchkey can't read
   Messages, no text is used.
-- **FR-1368** When, after the password, the site asks how to send the code (Citi, 2026-11-21: "We'll
+- **FR-1368** (Withdrawn 2026-11-22: Claude presses the site's buttons itself, "Text me" included (FR-1371). Was: When, after the password, the site asks how to send the code (Citi, 2026-11-21: "We'll
   send a code to +1 ••• 0790", Text me / Call me), Latchkey shall press the text-message option
   (else email), never such a button before the password went; and when the site then returns
   to its sign-in form, the answer shall say the site ended the sign-in (a check), never that it
   refused the password, and it counts as no refusal. The same holds when the site returns to its
-  sign-in form after the code went (Citi in Latchkey's own browser, 2026-11-22).
-- **FR-1369** When a site shows a check or ends the sign-in in Latchkey's own browser, the answer
+  sign-in form after the code went (Citi in Latchkey's own browser, 2026-11-22).)
+- **FR-1369** (Withdrawn 2026-11-22: the guidance is in the tool's description (FR-1373); no answer judges what the site did. Was: When a site shows a check or ends the sign-in in Latchkey's own browser, the answer
   shall tell Claude that some sites' protection against bots turns away that background browser
   while letting Safari through, and what to do (Toni, 2026-11-22: "ensure the agent gets proper
   guidance"): while the Mac is unlocked, call logins_sign_in again on the page, which has moved
   into a background Safari tab of Claude's (FR-1352) or moves there with browser_read
   sign_in_again; while it is locked, that Safari is used only while the Mac is unlocked, so Claude
-  tells the owner and tries again once it is. The tool's description says the same.
-- **FR-1370** A sign-in call shall start no new step (filling, sending, looking again) once 40
+  tells the owner and tries again once it is. The tool's description says the same.)
+- **FR-1370** (Withdrawn 2026-11-22: each fill is one step, with no waiting for a code, so no call runs long. Was: A sign-in call shall start no new step (filling, sending, looking again) once 40
   seconds have passed since it began, and shall then clear what it filled (FR-1311) and say the
   site was slow to answer, counting nothing against the saved sign-in, so its answer reaches
   Claude within the relay's 60 seconds (Costco in a Safari tab, 2026-11-22: the call passed the
   60 seconds with the password still in the page). A texted code is waited for at most 35
   seconds of a call (was 45). Time running out while the site still shows the field it was sent
   on, with no words from the site, is never a refusal and never switches the site to Safari's
-  sign-in (Citi while the Mac was locked, 2026-11-22: its slow page was still signing in).
-- **FR-1361** One sign-in call waits for that text for as long as the call's time allows; when the
+  sign-in (Citi while the Mac was locked, 2026-11-22: its slow page was still signing in).)
+- **FR-1361** (Withdrawn 2026-11-22: nothing waits for a code; Claude calls again (Toni: "Shouldn't the agent do that too?"). Was: One sign-in call waits for that text for as long as the call's time allows; when the
   text hasn't come by then, the answer says the site texted a code that hasn't arrived and to call
   again on the same page, and the next call takes it. A text is waited for up to 2 minutes from
   the site's request; after that, the sign-in counts as needing a code Latchkey doesn't hold
-  (FR-1352's fallback follows).
-- **FR-1362** After Latchkey signed in with a code text (only then: a text whose code the site
-  refused may not have been one), and while Messages is Read & write in Latchkey's settings
+  (FR-1352's fallback follows).)
+- **FR-1362** Right after Latchkey typed a code from a text (Toni, 2026-11-22: "Right after typing
+  it"; it was: only after a sign-in Latchkey judged to have worked), and while Messages is Read &
+  write in Latchkey's settings
   (deleting is a change), it shall delete that text in Messages (from all the
   Owner's devices, kept in Recently Deleted as Messages does), through Messages' own window in
   the background, without bringing Messages forward: at once while the Mac is unlocked, else as
@@ -246,19 +279,18 @@ MCP instead of Apple Mail tricks. only if the agent says they're not able to acc
 start Apple Mail. Ask the agent specifically if they can access emails. If they can't find it,
 we can't find it via Apple Mail either"; then "yes, script Mail for archiving anyway".
 
-- **FR-1364** When a site asks for a code and no text with one has arrived within the call's
-  first 20 seconds, the answer shall ask Claude whether it can read the Owner's email with a tool
-  of its own. When it can, Claude finds the code and passes it to the next call, which fills it
-  in; when Claude's tool can't find it, Latchkey shall not look in Apple Mail (the same mailbox).
+- **FR-1364** When Claude asks for a code and no text with one has arrived, the answer shall ask
+  Claude whether it can read the Owner's email with a tool of its own. When it can, Claude finds
+  the code and passes it to the next call, which types it; when Claude's tool can't find it, Latchkey shall not look in Apple Mail (the same mailbox).
   A code Claude passes is the code alone (4 to 10 letters or digits). A text that arrives still
   counts (FR-1360).
 - **FR-1365** Only when Claude says it has no tool for the Owner's email shall Latchkey read
-  Apple Mail on this Mac for the code: an email received after the site's request, not in a sent,
+  Apple Mail on this Mac for the code: an email received in the time of FR-1360, not in a sent,
   draft, or deleted mailbox, read from Mail's own files (its text, never through its window),
   under FR-1360's rules for a code and only from an email naming the site (its sender or text
   holds the site's registered name, like "citi"; security review 2026-11-21); Apple Mail is started in the background, hidden, when it
   isn't running.
-- **FR-1366** After a sign-in that worked with an emailed code, that email shall be marked read
+- **FR-1366** Right after Latchkey typed an emailed code (it was: after a sign-in that worked), that email shall be marked read
   and moved to its account's archive mailbox through Mail's scripting, never its window: the one
   Latchkey read, and the one holding the exact code Claude passed when Mail has it (received in
   the last 10 minutes); Mail is never started for this. Only while the Mac is unlocked (Mail

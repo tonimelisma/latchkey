@@ -149,4 +149,24 @@ import Testing
         #expect(r.content.jsonText.contains("Safari tab of Claude's"))
         #expect(own.safariPage(name) != nil, "the same name, now in Safari")
     }
+
+    /// Spec 013 FR-1374 (Toni, 2026-11-22: Claude decides, "Decide fresh each time"): a page of a
+    /// site Latchkey signs in to itself moves into Safari when Claude asks, while unlocked; the
+    /// next page of that site opens in Latchkey's own browser again.
+    @Test func signingInAgainOnAnOwnSiteMovesThatPageIntoSafari() async throws {
+        let fake = FakeSafariTabs()
+        let signIns = SignInStore(vault: MemoryVault())
+        try signIns.replace(with: [SignInFillTests.ann], at: Date(timeIntervalSince1970: 1_800_000_000))
+        let sessions = OwnSessions(signIns: signIns, vault: MemoryVault())
+        sessions.on = { true }
+        let own = OwnPages(cookies: { [] }, isLocked: { false }, record: { _ in }, sessions: sessions)
+        defer { own.closeAll() }
+        let name = try await own.open(html: "<p>Sign in</p>", base: URL(string: "https://a.test/login")!)
+        let r = await tools(fake, own: own)["browser_read"]!.handler(
+            .object(["sign_in_again": .bool(true), "page": .string(name)]))
+        #expect(!r.isError, "\(r.content.jsonText)")
+        #expect(own.safariPage(name) != nil, "the same name, now in Safari")
+        #expect(fake.windows[0].tabs.last?.url == "https://a.test/login")
+        #expect(!own.inSafari("https://a.test/other"), "nothing remembered: the next page starts in Latchkey's own")
+    }
 }

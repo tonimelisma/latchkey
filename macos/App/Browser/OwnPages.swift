@@ -183,13 +183,9 @@ final class OwnPages {
     /// unlocked, for a site the Owner is signed in to.
     func inSafari(_ url: String) -> Bool {
         guard !isLocked(), let host = URL(string: url)?.host(), !host.isEmpty else { return false }
-        // Spec 013 FR-1351: a site Latchkey signs in to itself stays in its own browser.
+        // Spec 013 FR-1351: a site Latchkey signs in to itself stays in its own browser; Claude
+        // moves a page of it into Safari with sign_in_again (FR-1374).
         if sessions?.isOwn(host) == true { return false }
-        // FR-1352: where Latchkey's own sign-in couldn't finish, Safari's is used, also when
-        // Safari's sign-in cookies end with the session and so don't read as signed in (Citi's,
-        // 2026-11-21: its pages opened in Latchkey's own browser without any sign-in, where Citi
-        // turns the sign-in away).
-        if sessions?.fellBackOn(host) == true { return true }
         return signedIn(host)
     }
 

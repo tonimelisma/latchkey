@@ -33,3 +33,9 @@ Each test is written and seen failing before its code.
   `MailCodes` (Mail's index and email files, started hidden only without an email tool, archived
   through Mail's scripting while unlocked, also for a code Claude found): `TextedCodeSignInTests`,
   `MailCodesTests`, `ScriptSyntaxTests` (FR-1364 to FR-1367); live with the next code emailed
+- [x] T19 Fill-only (Toni, 2026-11-22; FR-1371 to FR-1374): `logins_fill` and `fillField` replace
+  `logins_sign_in` and `SignInFlow`; no refusal count, fallback list, or waiting; sign_in_again
+  moves an own site's page into Safari while unlocked: `SignInFillTests`, `SignInRoutingTests`,
+  `OwnSessionsTests`, `TextedCodesTests`; regression cases rewritten for logins_fill
+- [ ] T20 Full tests and lint, install, live check with a fresh Claude (the-internet.herokuapp.com
+  fixture, then GitHub, United, Citi)

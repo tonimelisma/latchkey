@@ -3,7 +3,7 @@ import Testing
 
 @testable import Latchkey
 
-/// Spec 013: where the copies live, and what a refusal does (FR-1303, FR-1305, FR-1310, FR-1324).
+/// Spec 013: where the copies live (FR-1303, FR-1305, FR-1310).
 @Suite struct SignInStoreTests {
     static let a = SavedSignIn(title: "A", site: "a.test", user: "ann", password: "pw-a", otp: nil)
     static let b = SavedSignIn(title: "B", site: "b.test", user: "bob", password: "pw-b", otp: nil)
@@ -59,18 +59,6 @@ import Testing
         let store = SignInStore(vault: MemoryVault())
         try store.replace(with: [Self.a, Self.b, Self.b2], at: Date())
         #expect(store.load().logins.filter { SiteMatch.fills(site: $0.site, on: "https://www.b.test/x") }.count == 2)
-    }
-
-    @Test func theSecondRefusalBlocksUntilTheNextImport() throws {
-        let store = SignInStore(vault: MemoryVault())
-        try store.replace(with: [Self.a], at: Date())
-        #expect(!store.blocked(Self.a))
-        #expect(store.refused(Self.a) == 1)
-        #expect(!store.blocked(Self.a))
-        #expect(store.refused(Self.a) == 2)
-        #expect(store.blocked(Self.a))
-        try store.replace(with: [Self.a], at: Date())
-        #expect(!store.blocked(Self.a))
     }
 
     @Test func aCodeIsSentOncePerStep() throws {

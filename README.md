@@ -31,29 +31,30 @@ Claude app (phone, web, desktop), can work with what's on your Mac:
   hidden browser of Latchkey's own; and read and act in your own Safari tabs when you ask.
   Claude's Safari tabs close when Claude is done with them, after 30 minutes unused, or when
   Latchkey quits; your own tabs stay.
-- **Signing in:** when a page of Claude's asks to sign in, Latchkey signs in for it with your
-  saved password from Apple's Passwords, and the site's verification code when Passwords has
-  it. Latchkey fills them in itself: Claude never sees a password or a code, only the list of
-  sites and user names. Latchkey keeps its copy only on your Mac; you hand it over with one
-  Touch ID (Latchkey's menu → Export Passwords to Latchkey…), and a weekly notification
-  reminds you to do it again. The exported file is deleted as soon as Latchkey has read it, and
-  an export that stops leaves no file behind. It fills only on the site a password was saved for, never on
-  another site's page, and never in your own Safari tabs. For a site it has your password for,
-  Latchkey's own browser signs in with its own session instead of copying Safari's, locked or
-  unlocked, so your Safari stays signed in; it keeps that session on your Mac (in its Keychain,
-  out of Claude's reach) across restarts. Where its own sign-in can't finish (a code sent by
-  text or email, a captcha), it uses your Safari sign-in for that site instead, as below, until
-  your next export. Some sites' protection against bots turns away Latchkey's hidden browser
-  but lets Safari through (Citi does): those sign in only while the Mac is unlocked, in a
-  background Safari tab, and Claude is told so while it is locked. When a site texts you a code, Latchkey takes it from Messages and fills it
-  in itself (Claude never sees it), then deletes that text in Messages: at once while the Mac is
-  unlocked (Messages' window may show that conversation for a moment, the one exception to
-  "never in your way" here), or when you next unlock it. When a site emails you a code, Claude
-  is asked first whether it can read your email with a tool of its own (a Gmail or Outlook
-  connector) and passes the code it finds; only if it has none does Latchkey read Apple Mail on
-  your Mac (starting it hidden if needed). Either way, once signed in, the code email is marked
-  read and archived through Mail's scripting when Mail has it (else Claude archives it with its
-  tool). Not yet: passkeys.
+- **Signing in:** Claude signs in on its own pages the way you would, reading each page and
+  pressing its buttons itself; Latchkey only types your saved user name, password, or a
+  verification code into the field Claude names, presses the button Claude names right after,
+  and empties what it typed. Claude never sees a password or a code, only the list of sites and
+  user names, and Latchkey never decides whether a sign-in worked: Claude reads the page.
+  The passwords and codes come from Apple's Passwords. Latchkey keeps its copy only on your Mac;
+  you hand it over with one Touch ID (Latchkey's menu → Export Passwords to Latchkey…), and a
+  weekly notification reminds you to do it again. The exported file is deleted as soon as
+  Latchkey has read it, and an export that stops leaves no file behind. It types only on the
+  site a password was saved for, a password only into a password field, never on another site's
+  page, and never in your own Safari tabs. For a site it has your password for, Latchkey's own
+  browser keeps its own sign-in instead of copying Safari's, locked or unlocked, so your Safari
+  stays signed in; it keeps that sign-in on your Mac (in its Keychain, out of Claude's reach)
+  across restarts. Some sites' protection against bots turns away that hidden browser but lets
+  Safari through: while the Mac is unlocked, Claude can move such a page into a background
+  Safari tab of its own and sign in there; while it is locked, Claude tells you the site needs
+  the Mac unlocked. When a site texts you a code, Latchkey takes it from Messages when Claude
+  asks for it and types it (Claude never sees it), then deletes that text in Messages: at once
+  while the Mac is unlocked (Messages' window may show that conversation for a moment, the one
+  exception to "never in your way" here), or when you next unlock it. When a site emails you a
+  code, Claude reads it with an email tool of its own (a Gmail or Outlook connector) and passes
+  it; only if it has none does Latchkey read Apple Mail on your Mac (starting it hidden if
+  needed). The code email is then marked read and archived through Mail's scripting when Mail
+  has it (else Claude archives it with its tool). Not yet: passkeys.
 - **The screen:** take a picture of it, and control the computer when you ask.
 
 Your Mac never has to accept connections from the internet: Latchkey reaches out to a small

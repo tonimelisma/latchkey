@@ -2,9 +2,10 @@ import AppKit
 import ApplicationServices
 import Foundation
 
-/// Codes a site texts to the Owner during Latchkey's own sign-in (spec 013 FR-1360 to FR-1363):
-/// taken from Messages' database, filled by Latchkey, never shown to Claude, each text used once,
-/// then deleted in Messages (at once while unlocked, else at the next unlock).
+/// Codes a site texts to the Owner (spec 013 FR-1360 to FR-1363): taken from Messages' database
+/// when Claude asks Latchkey to type a code (FR-1371), never shown to Claude, each text used once,
+/// then deleted in Messages (at once while unlocked, else at the next unlock). Nothing waits for a
+/// code: Claude asks again (Toni, 2026-11-22).
 @MainActor
 final class TextedCodes {
     static let shared = TextedCodes()
@@ -20,9 +21,6 @@ final class TextedCodes {
     /// can't be read now. Tests give their own.
     typealias Recent = @Sendable (Date) -> [Text]?
 
-    /// How long a site's request for a code is waited on, over one or more calls (FR-1361).
-    var window: TimeInterval = 120
-
     /// Whether texts may be used: Messages isn't Off in Latchkey's settings. Set by the app; Off
     /// until then and in tests.
     var on: () -> Bool = { false }
@@ -33,18 +31,9 @@ final class TextedCodes {
     var startMail: () async -> Void = { await MailCodes.start() }
     /// An email's text from Mail's scripting (FR-1365), for one whose body isn't downloaded yet.
     var mailContent: (MailCodes.Place) async -> String? = { try? await MailCodes.content($0) }
-    /// How long one sign-in call waits for the text: within the relay's 60 s for a call, with
-    /// time left for filling the code in.
-    var perCall: Duration = .seconds(35)
-    /// How long a call that hasn't been told about email waits for a text before asking Claude
-    /// whether it can read the owner's email (FR-1364).
-    var firstWait: Duration = .seconds(20)
     private var used: Set<String> = []
-    /// The last code taken for each site, when, and whether it was tried again (FR-1361: a code a
-    /// call took but couldn't finish with is tried once more by the next call; United, 2026-11-21).
-    private var last: [String: (code: String, message: String, at: Date, again: Bool)] = [:]
-    /// When each site first asked for a code, for the 2 minutes of FR-1361.
-    private var requested: [String: Date] = [:]
+    /// When Latchkey last typed a password on each site: code texts are looked for since then.
+    private var passwords: [String: Date] = [:]
     private let defaults: UserDefaults?
     static let pendingKey = "signInCodeTextsToDelete"
 
@@ -72,94 +61,49 @@ final class TextedCodes {
         return nil
     }
 
-    /// When `site` first asked for a code: from the first sign-in call on it in the last 10
-    /// minutes, since the code may be sent before Latchkey sees the code page (GitHub's "Send SMS"
-    /// was pressed a call earlier and its text missed, 2026-11-21); noted now when it hadn't.
-    func requested(_ site: String, now: Date = Date()) -> Date {
-        if let at = requested[site], now.timeIntervalSince(at) < window { return at }
-        let from = calls[site].flatMap { now.timeIntervalSince($0) < 600 ? $0 : nil } ?? now
-        requested[site] = from
-        return from
+    /// Notes that Latchkey typed `site`'s password now (FR-1360).
+    func passwordTyped(_ site: String, at: Date = Date()) { passwords[site] = at }
+
+    /// Since when a code for `site` counts (FR-1360): the last password Latchkey typed there in
+    /// the last 10 minutes, else the last 10 minutes.
+    func since(_ site: String, now: Date = Date()) -> Date {
+        let tenMinutes = now.addingTimeInterval(-600)
+        guard let at = passwords[site], at > tenMinutes else { return tenMinutes }
+        return at
     }
 
-    /// The first sign-in call on each site in the last 10 minutes.
-    private var calls: [String: Date] = [:]
-    /// When a button that sends a code was last pressed on each site.
-    private var deliveredAt: [String: Date] = [:]
-
-    func noteCall(_ site: String, now: Date = Date()) {
-        if let at = calls[site], now.timeIntervalSince(at) < 600 { return }
-        calls[site] = now
-    }
-
-    /// Whether a button that sends a code may be pressed: not within 90 s of the last, so each
-    /// call doesn't send another text.
-    func mayDeliver(_ site: String, now: Date = Date()) -> Bool {
-        deliveredAt[site].map { now.timeIntervalSince($0) >= 90 } ?? true
-    }
-
-    func delivered(_ site: String, now: Date = Date()) { deliveredAt[site] = now }
-
-    /// Seconds until a button that sends a code may be pressed again on `site`.
-    func untilDelivery(_ site: String, now: Date = Date()) -> Int {
-        deliveredAt[site].map { max(0, Int((90 - now.timeIntervalSince($0)).rounded(.up))) } ?? 0
-    }
-
-    /// A code text (and with `mail`, a code email in Apple Mail) that arrived since `since` and
-    /// wasn't used, waiting for one until `until`; the code and the text's id. Nil when none came,
-    /// or neither texts nor (with `mail`) Mail can be used.
-    func wait(
-        since: Date, until: ContinuousClock.Instant, poll: Duration = .seconds(1), mail: Bool = false, site: String = ""
-    ) async -> (code: String, message: String)? {
+    /// The newest code text (and with `mail`, a code email in Apple Mail naming the site) that
+    /// arrived since `since` and wasn't used: the code and the text's id. One look, no waiting;
+    /// nil when none has come, or neither texts nor (with `mail`) Mail can be used.
+    func take(since: Date, mail: Bool = false, site: String = "") async -> (code: String, message: String)? {
         let texts = on(), recent = recent, recentMail = recentMail
         guard texts || mail else { return nil }
         if mail { await startMail() }
-        while true {
-            // Messages and Mail date what arrives; a few seconds' slack for clocks and saving.
-            let from = since.addingTimeInterval(-5)
-            let found = await Task.detached { () -> [Text]? in
-                let a = texts ? recent(from) : nil
-                let b = mail ? recentMail(from) : nil
-                return a == nil && b == nil ? nil : (a ?? []) + (b ?? [])
-            }.value
-            guard let texts = found else { return nil }
-            for t in texts.sorted(by: { $0.date > $1.date }) where !used.contains(t.id) {
-                // An email must name the site (security review 2026-11-21); a text may come from
-                // anyone (Toni: "Any new code text").
-                let place = MailCodes.Place(key: t.id)
-                if place != nil, !MailCodes.names(site, in: t.text) { continue }
-                var text = t.text
-                // Mail lists a new email before it downloads its body (IKEA, 2026-11-21): the
-                // body is asked of Mail's scripting, which downloads it, while the Mac is unlocked.
-                if let place, Self.code(in: text) == nil, !isLocked(), let body = await mailContent(place) {
-                    text += "\n" + body
-                }
-                if let code = Self.code(in: text) {
-                    used.insert(t.id)
-                    if !site.isEmpty { last[site] = (code, t.id, Date(), false) }
-                    return (code, t.id)
-                }
+        // Messages and Mail date what arrives; a few seconds' slack for clocks and saving.
+        let from = since.addingTimeInterval(-5)
+        let found = await Task.detached { () -> [Text]? in
+            let a = texts ? recent(from) : nil
+            let b = mail ? recentMail(from) : nil
+            return a == nil && b == nil ? nil : (a ?? []) + (b ?? [])
+        }.value
+        guard let texts = found else { return nil }
+        for t in texts.sorted(by: { $0.date > $1.date }) where !used.contains(t.id) {
+            // An email must name the site (security review 2026-11-21); a text may come from
+            // anyone (Toni: "Any new code text").
+            let place = MailCodes.Place(key: t.id)
+            if place != nil, !MailCodes.names(site, in: t.text) { continue }
+            var text = t.text
+            // Mail lists a new email before it downloads its body (IKEA, 2026-11-21): the
+            // body is asked of Mail's scripting, which downloads it, while the Mac is unlocked.
+            if let place, Self.code(in: text) == nil, !isLocked(), let body = await mailContent(place) {
+                text += "\n" + body
             }
-            // No new one: the code an earlier call took for this site, once, while it is fresh.
-            if !site.isEmpty, let l = last[site], !l.again, Date().timeIntervalSince(l.at) < 300 {
-                last[site]?.again = true
-                return (l.code, l.message)
+            if let code = Self.code(in: text) {
+                used.insert(t.id)
+                return (code, t.id)
             }
-            guard ContinuousClock.now + poll < until else { return nil }
-            try? await Task.sleep(for: poll)
         }
-    }
-
-    func forget(_ site: String) {
-        requested[site] = nil
-        calls[site] = nil
-    }
-
-    /// Whether a code step says the code went by text, not email ("sent to ******0790 via text").
-    nonisolated static func saysText(_ page: String) -> Bool {
-        let t = page.lowercased()
-        let text = t.range(of: #"\b(via text|by text|text message|texted|sms)\b"#, options: .regularExpression) != nil
-        return text && !t.contains("email") && !t.contains("e-mail")
+        return nil
     }
 
     /// The email in Apple Mail from the last 10 minutes holding exactly `code` (one Claude read with

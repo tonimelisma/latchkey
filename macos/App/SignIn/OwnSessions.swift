@@ -46,21 +46,12 @@ final class OwnSessions {
         }
     }
 
+    /// What is kept. An item written while sites could fall back to Safari's sign-in (`fellBack`,
+    /// withdrawn FR-1352) still reads: the extra keys are left out (Toni, 2026-11-22: "Decide
+    /// fresh each time").
     struct Contents: Codable, Equatable {
         var cookies: [Kept] = []
-        /// Sites whose own sign-in couldn't finish (FR-1352), for the export of `fellBackFor`.
-        var fellBack: [String] = []
-        var fellBackFor: Date?
-        /// The sign-in rules the fallbacks were recorded under (`rules`); older ones are dropped.
-        var fellBackRules: Int?
     }
-
-    /// Raised when Latchkey's own sign-in learns what made sites fall back (texted and emailed
-    /// codes, typing key by key; 2026-11-21): those sites get one more try of Latchkey's own.
-    // 3: United fell back for a fill problem since fixed; 4: IKEA when its code email wasn't read (2026-11-21)
-    // 5, 6: IKEA again (code email body, a code page moving on late; 2026-11-21)
-    // 7: pages see a browser-sized window; Citi, eBay, Costco fell back (2026-11-22)
-    static let rules = 8  // 8: time running out is no refusal; Citi fell back so while locked (2026-11-22)
 
     /// A cookie with no expiry is kept this long at most (FR-1353).
     static let sessionLimit: TimeInterval = 14 * 86400
@@ -72,8 +63,8 @@ final class OwnSessions {
     /// start; until then (and in tests, which never reach the Owner's real sign-ins) it is Off.
     var on: () -> Bool = { false }
     private var cached: Contents?
-    /// The own sites, worked out once per export and fallback list.
-    private var sitesFor: (imported: Date, fellBack: [String], sites: [String])?
+    /// The own sites, worked out once per export.
+    private var sitesFor: (imported: Date, sites: [String])?
 
     init(signIns: SignInStore, vault: any PairingVault, now: @escaping () -> Date = Date.init) {
         self.signIns = signIns
@@ -114,23 +105,13 @@ final class OwnSessions {
         cached = c
     }
 
-    /// The sites that fell back for the current export.
-    private func fellBack(_ imported: Date) -> [String] {
-        guard let c = contents() else { return [] }
-        return c.fellBackFor == imported && c.fellBackRules == Self.rules ? c.fellBack : []
-    }
-
-    /// The sites Latchkey signs in to itself: those it holds a sign-in for, minus those that fell
-    /// back; none while Sign-in is Off.
+    /// The sites Latchkey signs in to itself: those it holds a sign-in for; none while Sign-in is
+    /// Off.
     func sites() -> [String] {
         guard on(), case .some(let held) = signIns.load() else { return [] }
-        let back = fellBack(held.imported)
-        if let s = sitesFor, s.imported == held.imported, s.fellBack == back { return s.sites }
-        // A site that fell back takes every held site registered under its name with it (FR-1352),
-        // also for a fallback recorded before that rule.
-        let groups = Set(back.map { PublicSuffix.registrable($0) })
-        let sites = Set(held.logins.map(\.site)).filter { !groups.contains(PublicSuffix.registrable($0)) }.sorted()
-        sitesFor = (held.imported, back, sites)
+        if let s = sitesFor, s.imported == held.imported { return s.sites }
+        let sites = Set(held.logins.map(\.site)).sorted()
+        sitesFor = (held.imported, sites)
         return sites
     }
 
@@ -158,45 +139,6 @@ final class OwnSessions {
             $0 == d || $0.hasSuffix("." + d) || d.hasSuffix("." + $0)
                 || (mine != nil && SiteMatch.registered($0) == mine)
         }
-    }
-
-    /// FR-1352: the site's own sign-in couldn't finish; Safari's is used there until the next
-    /// export, for every held site registered under the same name (live check 2026-11-21: Amazon's
-    /// sign-in cookies are for all of amazon.com, and a second sign-in saved for
-    /// na.account.amazon.com kept them from the copy). The sites that fell back.
-    @discardableResult
-    func fallBack(_ site: String) -> [String] {
-        guard case .some(let held) = signIns.load(), var c = contents() else { return [] }
-        if c.fellBackFor != held.imported || c.fellBackRules != Self.rules {
-            c.fellBack = []
-            c.fellBackFor = held.imported
-            c.fellBackRules = Self.rules
-        }
-        let group = PublicSuffix.registrable(site)
-        let all = Set(held.logins.map(\.site).filter { PublicSuffix.registrable($0) == group } + [site])
-        let new = all.subtracting(c.fellBack).sorted()
-        guard !new.isEmpty else { return all.sorted() }
-        c.fellBack += new
-        c.cookies.removeAll { k in all.contains { reachesOnly($0, k.domain) } }
-        save(c)
-        return all.sorted()
-    }
-
-    /// FR-1352: whether `host` is on a held site whose own sign-in fell back to Safari's.
-    func fellBackOn(_ host: String) -> Bool {
-        let h = Self.bare(host)
-        guard !h.isEmpty, on(), case .some(let held) = signIns.load() else { return false }
-        return fellBack(held.imported).contains { SiteMatch.fills(site: $0, on: "https://\(h)/") }
-    }
-
-    func fellBack(_ site: String) -> Bool {
-        guard case .some(let held) = signIns.load() else { return false }
-        return fellBack(held.imported).contains(site)
-    }
-
-    private func reachesOnly(_ site: String, _ domain: String) -> Bool {
-        let d = Self.bare(domain)
-        return site == d || site.hasSuffix("." + d) || d.hasSuffix("." + site)
     }
 
     /// FR-1353: keeps the cookies of `all` (what the store holds now) that reach an own site, in

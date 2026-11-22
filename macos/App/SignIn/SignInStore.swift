@@ -24,7 +24,6 @@ final class SignInStore: @unchecked Sendable {
     private let vault: any PairingVault
     private let lock = NSLock()
     private var cached: Contents?
-    private var refusals: [String: Int] = [:]
     private var codes: Set<String> = []
 
     init(vault: any PairingVault) { self.vault = vault }
@@ -52,7 +51,6 @@ final class SignInStore: @unchecked Sendable {
         try lock.withLock {
             try vault.write(data, Self.account)
             cached = c
-            refusals = [:]
             codes = []
         }
     }
@@ -62,22 +60,9 @@ final class SignInStore: @unchecked Sendable {
         lock.withLock {
             vault.delete(Self.account)
             cached = nil
-            refusals = [:]
             codes = []
         }
     }
-
-    /// Counts a refusal by the site; the count after it.
-    @discardableResult
-    func refused(_ s: SavedSignIn) -> Int {
-        lock.withLock {
-            refusals[Self.key(s), default: 0] += 1
-            return refusals[Self.key(s)]!
-        }
-    }
-
-    /// Refused twice since the last import: not tried again until the next (FR-1324).
-    func blocked(_ s: SavedSignIn) -> Bool { lock.withLock { refusals[Self.key(s), default: 0] >= 2 } }
 
     func mayUseCode(_ s: SavedSignIn, step: UInt64) -> Bool {
         lock.withLock { !codes.contains(Self.key(s) + "\n\(step)") }

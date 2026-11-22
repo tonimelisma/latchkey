@@ -12,7 +12,7 @@ import Testing
     ]
     static let write = [
         "notes_change", "messages_send", "files_change", "shell_run", "browser_act", "computer_act",
-        "calendar_change", "reminders_change", "contacts_change", "logins_sign_in",
+        "calendar_change", "reminders_change", "contacts_change", "logins_fill",
     ]
 
     @MainActor @Test func twentySevenToolsAtFullLevel() {

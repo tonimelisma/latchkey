@@ -184,11 +184,12 @@ enum BrowserCapability {
                                 "That page is in Safari itself, which is already signed in as the owner: there is nothing to take again. If a site asks to sign in there, the owner is signed out of it in Safari."
                             )
                         }
-                        // Spec 013 FR-1350: a site Latchkey signs in to itself takes no copy.
-                        if let site = await l.ownSite {
-                            let name = await l.name
+                        // Spec 013 FR-1350, FR-1374: a site Latchkey signs in to itself takes no copy;
+                        // while unlocked its page moves into Safari when Claude asks (below), and
+                        // while locked Claude is told Safari waits for the unlock.
+                        if let site = await l.ownSite, await l.signedInFromSafari {
                             return .text(
-                                "Latchkey signs in to \(site) itself, with its own sign-in, so that the owner's Safari stays signed in: there is no copy of Safari's to take. If the page asks to sign in, call logins_sign_in with page \"\(name)\"; if that can't finish, it uses the owner's Safari sign-in instead."
+                                "Latchkey signs in to \(site) itself in its own browser and takes none of Safari's sign-ins for it, so that the owner's Safari stays signed in. Safari's own sign-in can be used once the Mac is unlocked: then call browser_read with sign_in_again again, and the page moves into a background Safari tab of Claude's. Until then, type the saved sign-in here with logins_fill, or tell the owner the site needs the Mac unlocked."
                             )
                         }
                         // FR-459: while the Mac is unlocked no copy is taken; the page moves into
@@ -584,7 +585,7 @@ enum BrowserCapability {
     static func ownBrowser(_ name: String, signedIn: Bool = true, own: String? = nil) -> String {
         let how =
             if let own {
-                "with Latchkey's own sign-in for \(own), not a copy of Safari's, so the owner's Safari stays signed in (if the page asks to sign in, logins_sign_in signs in)"
+                "with Latchkey's own sign-in for \(own), not a copy of Safari's, so the owner's Safari stays signed in (if the page asks to sign in, type the saved sign-in with logins_fill)"
             } else if signedIn {
                 "signed in with a copy of Safari's sign-ins (the Mac is locked; a site may sign the owner out in Safari when this copy renews its sign-in)"
             } else {

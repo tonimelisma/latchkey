@@ -243,3 +243,22 @@ the plan picks one.
   was already refused (Latchkey's own files). So the live check's test sign-in is placed by
   `macos/scripts/state-check/logins-fixture.sh`, run by the operator, never by Claude; it refuses
   while Latchkey holds sign-ins it didn't leave (security review, 2026-11-21).
+
+## Fill-only sign-in (2026-11-22)
+
+Toni: "It sounds like you've built [it] completely in the wrong way. It's just deterministic code.
+Is it making guesses on whether a page was logged in or not? Shouldn't the code just provide
+what's happening in the browser and the agent makes the presumptions?" The one-call sign-in read
+each page with word and field patterns (a password page, a code step, "make sure it's you", a
+captcha, a passkey page), waited fixed times (3, 8, 40 s), decided "signed in", "refused",
+"check", pressed "Text me" itself, counted refusals, and switched a site to Safari's sign-in. Two
+days of live tests (Citi, Costco, eBay, Amazon, IKEA, United, GitHub) found most failures there:
+"Signed in" on Citi's code step, "refused" when Citi was slow and when Costco's bot check
+answered, a call past the relay's 60 s, a switch that dropped a half-done sign-in. Options:
+(a) fill-only: Latchkey types one saved value into the field Claude names and presses the button
+Claude names, nothing else; Claude reads the page (more calls, about 5 to 8 a sign-in; no
+guessing, no long calls). (b) one call that fills and presses the form's button but reports only
+facts (fewer calls; still decides which button and how long to wait). Toni chose (a). What stays
+in Latchkey is only what Claude must not see or do: the secrets, the site and field-type checks,
+emptying the fields, finding and deleting the code's text. A password or code is always typed
+together with the press, then emptied, so no script Claude runs can read it in between.

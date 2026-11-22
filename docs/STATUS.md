@@ -8,6 +8,19 @@ Xcode signing ready (2026-10-20): Toni's Xcode account has a valid "Apple Develo
 
 ## Current phase
 
+Fill-only sign-in (Toni, 2026-11-22: "Shouldn't the code just provide what's happening in the
+browser and the agent makes the presumptions?"; then "Fill-only tool", "No cap", "Decide fresh
+each time", "Shouldnt tve agent do that too?", "Right after typing it"; spec 013 FR-1371 to
+FR-1374): logins_sign_in, which ran a whole sign-in and guessed what each page meant, is replaced
+by logins_fill. Claude names the field, what to type (user name, password, or a code), and the
+button to press after; Latchkey types, presses, empties what it typed, and answers with the page
+as it is. Claude presses "Text me" and the like itself, judges every page, and moves a page into
+Safari with sign_in_again while unlocked (nothing remembered). No refusal count, no fallback
+list, no waiting for codes (a code text is looked for since the last password typed on the site
+in 10 minutes; none: said at once), and a code's text or email is cleaned up right after it is
+typed. Removed: SignInFlow (the guessing), the fallback list in OwnSessions, the delivery and
+waiting parts of TextedCodes, the refusal count in SignInStore.
+
 CI green again (2026-11-22): every CI run on main had failed since 2026-11-21, when the deploy
 gate's Semgrep (`make semgrep`, run with uvx) reached CI: ubuntu-latest has no uv ("uvx: not
 found"). The workflow now sets up uv (astral-sh/setup-uv, pinned to a commit);

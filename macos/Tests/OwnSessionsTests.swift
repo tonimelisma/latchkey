@@ -107,43 +107,16 @@ import WebKit
         #expect(c.expiresDate == later)
     }
 
-    @Test func aFallenBackSiteIsSafarisUntilTheNextExport() throws {
-        let (s, store, _) = try Self.sessions()
-        s.keep([Self.cookie("a.test"), Self.cookie(".g.test", "SID")])
-        s.fallBack("a.test")
-        #expect(!s.isOwn("a.test") && s.fellBack("a.test") && s.isOwn("accounts.g.test"))
-        #expect(s.kept().map(\.name) == ["SID"], "its kept sign-in goes")
-        try store.replace(with: [Self.a, Self.g], at: Self.imported.addingTimeInterval(60))
-        #expect(s.isOwn("a.test") && !s.fellBack("a.test"), "the next export tries Latchkey's own again")
-    }
-
-    @Test func aFallbackCoversEverySignInUnderTheSameName() throws {
-        let n = SavedSignIn(title: "N", site: "na.account.a.test", user: "ann", password: "pw", otp: nil)
-        let (s, _, _) = try Self.sessions([Self.a, n, Self.g])
-        #expect(s.fallBack("a.test") == ["a.test", "na.account.a.test"])
-        #expect(!s.isOwn("na.account.a.test") && !s.reaches(".a.test") && s.isOwn("accounts.g.test"))
-    }
-
-    @Test func aFallbackKeptBeforeTheWholeSiteRuleCoversItToo() throws {
-        let n = SavedSignIn(title: "N", site: "na.account.a.test", user: "ann", password: "pw", otp: nil)
+    /// Toni, 2026-11-22 ("Decide fresh each time"): a site that fell back under the old sign-in
+    /// (kept in the item as fellBack) is Latchkey's own again; the rest of the item still reads.
+    @Test func anOldFallbackIsForgottenAndTheItemStillReads() throws {
         let vault = MemoryVault()
-        let old = OwnSessions.Contents(
-            cookies: [], fellBack: ["a.test"], fellBackFor: Self.imported, fellBackRules: OwnSessions.rules)
-        vault.items[OwnSessions.account] = try JSONEncoder().encode(old)
-        let (s, _, _) = try Self.sessions([Self.a, n], vault: vault)
-        #expect(!s.isOwn("na.account.a.test") && !s.reaches(".a.test"))
-    }
-
-    /// Toni, 2026-11-21: sites that fell back before Latchkey could read texted and emailed codes
-    /// (Amazon) get one more try of Latchkey's own sign-in.
-    @Test func aFallbackUnderOlderRulesGetsAnotherTry() throws {
-        let vault = MemoryVault()
-        let old = OwnSessions.Contents(cookies: [], fellBack: ["a.test"], fellBackFor: Self.imported)
-        vault.items[OwnSessions.account] = try JSONEncoder().encode(old)
+        vault.items[OwnSessions.account] = Data(
+            #"{"cookies":[],"fellBack":["a.test"],"fellBackFor":0,"fellBackRules":8}"#.utf8)
         let (s, _, _) = try Self.sessions([Self.a], vault: vault)
-        #expect(s.isOwn("a.test") && !s.fellBack("a.test"))
-        s.fallBack("a.test")
-        #expect(!s.isOwn("a.test"), "a new fallback holds")
+        #expect(s.isOwn("a.test"))
+        s.keep([Self.cookie("a.test")])
+        #expect(s.kept().count == 1)
     }
 
     @Test func registeredNames() {
@@ -159,7 +132,6 @@ import WebKit
         vault.unreadable = [OwnSessions.account]
         let (s, _, _) = try Self.sessions(vault: vault)
         s.keep([Self.cookie("a.test")])
-        s.fallBack("a.test")
         #expect(vault.changes.isEmpty)
     }
 
@@ -216,19 +188,6 @@ import WebKit
         let own = OwnPages(cookies: { signedIn }, isLocked: { false }, record: { _ in }, sessions: s)
         #expect(!own.inSafari("https://a.test/account"), "Latchkey signs in there itself")
         #expect(own.inSafari("https://b.test/account"), "a site with no saved password: the owner's Safari, as before")
-    }
-
-    /// Citi, 2026-11-21: a site whose own sign-in fell back opens in Safari while unlocked, even
-    /// when its Safari cookies end with the session (so don't read as signed in); locked, never.
-    @Test func aFallenBackSiteOpensInSafariWithoutALastingSignIn() throws {
-        let (s, _, _) = try OwnSessionsTests.sessions(clock: .live())
-        s.fallBack("a.test")
-        var locked = false
-        let own = OwnPages(cookies: { [] }, isLocked: { locked }, record: { _ in }, sessions: s)
-        #expect(own.inSafari("https://a.test/login"))
-        #expect(!own.inSafari("https://b.test/"), "another site without a sign-in stays in Latchkey's browser")
-        locked = true
-        #expect(!own.inSafari("https://a.test/login"), "while locked every page is Latchkey's own")
     }
 
     @Test func keptSignInsComeBackInANewStore() async throws {

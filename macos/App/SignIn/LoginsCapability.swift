@@ -1,15 +1,17 @@
 import Foundation
 
 /// Sign-in (spec 013, contract `contracts/login-tools.md`): Claude lists the sites Latchkey can
-/// sign in to, and asks Latchkey to sign in on one of its own pages. Latchkey fills the secret;
-/// Claude never sees it.
+/// sign in to, and asks Latchkey to type a saved user name, password, or code into a field of one
+/// of its own pages and press the button Claude names. Latchkey types the secret; Claude never
+/// sees it, and Claude reads the page and decides what happened (Toni, 2026-11-22: "Fill-only
+/// tool").
 enum LoginsCapability {
     @MainActor static func make(store: SignInStore = .shared, own: OwnPages = BrowserCapability.ownPages) -> Capability
     {
         Capability(
             id: CapabilityRegistry.logins, title: "Sign-in",
             summary: "Sign in to sites with your passwords from Passwords", readTools: [find(store: store)],
-            writeTools: [signIn(store: store, own: own)], levels: [.off, .readWrite], onTitle: "On")
+            writeTools: [fill(store: store, own: own)], levels: [.off, .readWrite], onTitle: "On")
     }
 
     static let noneYet =
@@ -24,8 +26,8 @@ enum LoginsCapability {
                 description: """
                     Lists the sites Latchkey can sign in to with the owner's passwords from Apple's Passwords app: \
                     each site, the user name, and whether Latchkey also has its verification code. Never shows a \
-                    password or a code. With site: only sign-ins for that site. To sign in on a page of Claude's, \
-                    use logins_sign_in.
+                    password or a code. With site: only sign-ins for that site. To type one into a page of \
+                    Claude's, use logins_fill.
                     """,
                 input: ["site": .stringParam("Only sign-ins for this site, like github.com")], readOnly: true),
             handler: { args in
@@ -57,7 +59,7 @@ enum LoginsCapability {
                 let sites = Set(shown.map(\.site)).count
                 let codes = shown.filter { $0.otp != nil }.count
                 var out =
-                    "Saved sign-ins (from the owner's Passwords, taken in \(when)); sign in with logins_sign_in.\n"
+                    "Saved sign-ins (from the owner's Passwords, taken in \(when)); type one into a page with logins_fill.\n"
                     + "\(shown.count) sign-in\(shown.count == 1 ? "" : "s") for \(sites) site\(sites == 1 ? "" : "s"); "
                     + (codes == 0
                         ? "none has a verification code in Passwords.\n"
@@ -78,43 +80,50 @@ enum LoginsCapability {
             })
     }
 
-    static func signIn(store: SignInStore, own: OwnPages, move: Move? = nil, codes: TextedCodes? = nil) -> ToolEntry {
-        let move: Move = move ?? { l in try await BrowserCapability.moveToSafari(l, BrowserCapability.browser, own) }
-        return
-            ToolEntry(
-                tool: .make(
-                    "logins_sign_in", title: "Sign In on a Page",
-                    description: """
-                        Signs in on one of Claude's own pages (opened with browser_read; name it with page, like p4k2) \
-                        with the owner's saved password for that page's site: Latchkey fills in the user name and \
-                        password itself, sends them, and fills in the site's verification code too: from Passwords \
-                        when it has one, else a code the site texts to the owner, taken from Messages. For a code \
-                        sent by email the answer asks whether you can read the owner's email with a tool of your \
-                        own: then pass the code you find as code; only if you can't, pass no_email_access and \
-                        Latchkey reads Apple Mail. Claude never sees the password. Works in Latchkey's own browser \
-                        and in Claude's Safari tabs, never in the owner's own tabs. user: which user name, when \
-                        Latchkey holds several for the site (logins_find lists them). It can't answer passkeys or \
-                        captchas: the answer says what the page asks for. A refused sign-in may be tried once more. \
-                        Some sites' protection against bots turns away Latchkey's own background browser but lets \
-                        Safari through: while the Mac is unlocked the page then moves into a background Safari tab \
-                        of Claude's, where calling again usually works; while it is locked, the answer says the \
-                        site needs the Mac unlocked.
-                        """,
-                    input: [
-                        "page": .stringParam("Claude's page, by the name browser_read gave, like p4k2"),
-                        "user": .stringParam("The user name to sign in as, when there are several"),
-                        "code": .stringParam(
-                            "A verification code you read in the owner's email with your own email tool, for the page's code step"
-                        ),
-                        "no_email_access": .boolParam(
-                            "True only when you have no tool to read the owner's email: Latchkey then reads Apple Mail on the Mac"
-                        ),
-                    ], readOnly: false, destructive: false, openWorld: true, deadlineMS: 60_000),
-                handler: { args in
-                    await BrowserCapability.run {
-                        try await signIn(args, store: store, own: own, move: move, codes: codes)
-                    }
-                })
+    static func fill(store: SignInStore, own: OwnPages, codes: TextedCodes? = nil) -> ToolEntry {
+        ToolEntry(
+            tool: .make(
+                "logins_fill", title: "Type a Saved Sign-in",
+                description: """
+                    Types the owner's saved user name, password, or a verification code into a field of one of \
+                    Claude's own pages (opened with browser_read; name it with page, like p4k2), then presses the \
+                    button you name. Claude never sees the password or the code. You do the signing in: read \
+                    the page, name the field by its reference from browser_read (field, like e18), say what to \
+                    type (fill: user, password, or code) and, for a password or a code, the button to press right \
+                    after (press, like e21: Sign On, Continue). Latchkey types it as a keyboard does, presses that \
+                    button, empties what it typed, and answers with the page as it is; read the page after each \
+                    fill and judge for yourself whether you are signed in, asked for a code, refused, or stopped \
+                    by a check. It never presses anything else: press buttons like "Text me" yourself with \
+                    browser_act. A code comes from Passwords when the sign-in has one, else from a code text in \
+                    Messages (deleted once typed): if none has come, the answer says so at once; call again in a \
+                    few seconds. For a code sent by email, read it with your own email tool and pass it as code \
+                    (then archive that email); only if you have no email tool, pass no_email_access and Latchkey \
+                    reads Apple Mail. user: which user name, when Latchkey holds several (logins_find lists \
+                    them). Works in Latchkey's own browser and in Claude's Safari tabs, never in the owner's own \
+                    tabs. Some sites' protection against bots turns away Latchkey's own background browser but \
+                    lets Safari through (the site ends the sign-in, shows a check, or says nothing works): while \
+                    the Mac is unlocked, move the page into a background Safari tab with browser_read \
+                    sign_in_again and sign in there; while it is locked, tell the owner the site needs the Mac \
+                    unlocked.
+                    """,
+                input: [
+                    "page": .stringParam("Claude's page, by the name browser_read gave, like p4k2"),
+                    "field": .stringParam("The field to type into, by its reference from browser_read, like e18"),
+                    "fill": .enumParam(
+                        ["user", "password", "code"], "What to type: the saved user name, password, or a code"),
+                    "press": .stringParam(
+                        "The button to press right after, like e21 (needed with password and code)"),
+                    "user": .stringParam("Which saved user name, when there are several"),
+                    "code": .stringParam(
+                        "A verification code you read in the owner's email with your own email tool"),
+                    "no_email_access": .boolParam(
+                        "True only when you have no tool to read the owner's email: Latchkey then reads Apple Mail on the Mac"
+                    ),
+                ], required: ["field", "fill"], readOnly: false, destructive: false, openWorld: true,
+                deadlineMS: 30_000),
+            handler: { args in
+                await BrowserCapability.run { try await fill(args, store: store, own: own, codes: codes) }
+            })
     }
 
     private enum Target {
@@ -122,22 +131,28 @@ enum LoginsCapability {
         case safari(String, SafariBrowser)
     }
 
-    /// Moves Claude's page into a Safari tab of Claude's (spec 005 FR-459), for FR-1352's fallback.
-    typealias Move =
-        @Sendable (LockedBrowser) async throws -> (
-            name: String, page: PageScripts.Page, safari: SafariBrowser
-        )?
+    /// Where a typed code came from, for the answer and the log.
+    private enum Source {
+        case passwords, text(String), mail(String), claude
+    }
 
-    private static func signIn(
-        _ args: JSONValue, store: SignInStore, own: OwnPages, move: Move, codes given: TextedCodes?
-    ) async throws
-        -> ToolResult
+    private static func fill(_ args: JSONValue, store: SignInStore, own: OwnPages, codes given: TextedCodes?)
+        async throws -> ToolResult
     {
-        let name = args["page"]?.stringValue.flatMap { $0.trimmingCharacters(in: .whitespaces).isEmpty ? nil : $0 }
-        let wantedUser = args["user"]?.stringValue?.trimmingCharacters(in: .whitespaces) ?? ""
-        // FR-1364: a code Claude read in the owner's email with its own tool; FR-1365: Claude has
-        // no email tool, so Apple Mail is read.
-        let givenCode = args["code"]?.stringValue?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        func arg(_ k: String) -> String { args[k]?.stringValue?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "" }
+        let name = arg("page").isEmpty ? nil : arg("page")
+        let field = arg("field"), kind = arg("fill"), press = arg("press"), wantedUser = arg("user")
+        let givenCode = arg("code")
+        guard !field.isEmpty else { return .text("Name the field to type into with field, like e18.", isError: true) }
+        guard ["user", "password", "code"].contains(kind) else {
+            return .text("fill must be user, password, or code.", isError: true)
+        }
+        if kind != "user", press.isEmpty {
+            return .text(
+                "With \(kind), name the button to press right after with press (like Sign On or Continue): a \(kind) never stays typed in the page.",
+                isError: true)
+        }
+        // FR-1364: a code Claude read in the owner's email with its own tool.
         if !givenCode.isEmpty, givenCode.range(of: #"^[A-Za-z0-9-]{4,10}$"#, options: .regularExpression) == nil {
             return .text("code must be the verification code alone: 4 to 10 letters or digits.", isError: true)
         }
@@ -146,10 +161,24 @@ enum LoginsCapability {
             if let s = own.safariCalled(name) { return .safari(s.name, s.browser) }
             return .own(try own.page(name))
         }
-        let run: SignInFlow.Run
+        let run: (String) async throws -> (detail: String, page: PageScripts.Page, address: String)
+        let click: (String) async throws -> PageScripts.Page
         switch target {
-        case .own(let l): run = { try await l.signInScript($0, navigates: $1) }
-        case .safari(_, let s): run = { try await s.signInScript($0, navigates: $1) }
+        case .own(let l):
+            run = { try await l.signInScript($0, navigates: false) }
+            click = { try await l.click($0) }
+        case .safari(_, let s):
+            run = { try await s.signInScript($0, navigates: false) }
+            click = { try await s.click($0) }
+        }
+        func answer(_ said: String, _ page: PageScripts.Page, isError: Bool = false) async -> ToolResult {
+            var r: ToolResult
+            switch target {
+            case .own(let l): r = await BrowserCapability.told(.text(said + "\n\n" + PageScripts.answer(page)), l)
+            case .safari(let n, let s): r = await BrowserCapability.safariAnswer(page, n, s, note: said + "\n\n")
+            }
+            r.isError = isError
+            return r
         }
         let logins: [SavedSignIn]
         switch store.load() {
@@ -158,10 +187,12 @@ enum LoginsCapability {
         case .some(let c): logins = c.logins
         }
         // The page's address as the browser has it: a page's script can't make itself another site.
-        let address = try await run(PageScripts.signInState, false).address
+        let here0 = try await run(PageScripts.signInHere)
+        let address = here0.address
         let host = BrowserCapability.host(address)
         guard address.lowercased().hasPrefix("https:") else {
-            return .text("Latchkey signs in only on https pages; this page is \(address.prefix(200)).", isError: true)
+            return .text(
+                "Latchkey types sign-ins only on https pages; this page is \(address.prefix(200)).", isError: true)
         }
         // The sign-in saved for this very page first, then one for a site it is under, then one
         // elsewhere on the same registered site.
@@ -189,208 +220,161 @@ enum LoginsCapability {
             return .text("\(host) has several saved sign-ins: \(users(chosen)). Call again with user.", isError: true)
         }
         let login = chosen[0]
-        guard !store.blocked(login) else {
+        // FR-1321, FR-1328: only on the saved site, by the browser's own address, checked again in
+        // the page just before typing.
+        guard let fillHost = PageScripts.fillHost(login, address: address) else {
+            return .text("Latchkey types \(login.site)'s sign-in only on \(login.site)'s own pages.", isError: true)
+        }
+        let codes = await MainActor.run { given ?? TextedCodes.shared }
+        let who = login.user.isEmpty ? "" : " (\(login.user))"
+
+        // What to type.
+        var value = ""
+        var source = Source.claude
+        switch kind {
+        case "user":
+            guard !login.user.isEmpty else { return .text("\(host)'s saved sign-in has no user name.", isError: true) }
+            value = login.user
+        case "password":
+            value = login.password
+        default:
+            if !givenCode.isEmpty {
+                value = givenCode
+            } else if let totp = login.otp.flatMap({ TOTP(uri: $0) }) {
+                // FR-1324's rule that stays: each 30-second code is typed once.
+                let at = Date()
+                let step = totp.step(at: at)
+                guard store.mayUseCode(login, step: step) else {
+                    let left =
+                        Int(
+                            Double(totp.period)
+                                - at.timeIntervalSince1970.truncatingRemainder(dividingBy: Double(totp.period))) + 1
+                    return await answer(
+                        "This code from Passwords was already typed; the next one comes in \(left) seconds: call again then.",
+                        here0.page)
+                }
+                value = totp.code(at: at)
+                store.usedCode(login, step: step)
+                source = .passwords
+            } else {
+                let since = await MainActor.run { codes.since(login.site) }
+                guard let got = await codes.take(since: since, mail: readMail, site: login.site) else {
+                    let ago = Int(Date().timeIntervalSince(since))
+                    let when = since.formatted(date: .omitted, time: .shortened)
+                    let said =
+                        readMail
+                        ? "No code text or code email from \(host) has reached Messages or Apple Mail on this Mac since \(when) (\(ago) s ago), so nothing was typed. If the site sent one, call again in a few seconds."
+                        : "No code text has reached Messages on this Mac since \(when) (\(ago) s ago), so nothing was typed or pressed. If the site sent the code by text, call again in a few seconds. If it sent it by email: can you read the owner's email with a tool of your own? Then pass the code you find as code (and archive that email after); only if you have no email tool, pass no_email_access true."
+                    return await answer(said, here0.page)
+                }
+                value = got.code
+                source = MailCodes.Place(key: got.message) == nil ? .text(got.message) : .mail(got.message)
+            }
+        }
+
+        // Type, then press, then empty what was typed (FR-1311), whatever happened in between.
+        struct Step: Decodable {
+            var step: String
+            var boxes: Int?
+            var `is`: String?
+        }
+        let typed: Step
+        do {
+            let r = try await run(PageScripts.fillField(ref: field, kind: kind, value: value, host: fillHost))
+            typed = (try? JSONDecoder().decode(Step.self, from: Data(r.detail.utf8))) ?? Step(step: "unheld")
+        } catch SafariBrowser.Failure.elementMissing {
             return .text(
-                "\(host) refused this sign-in twice, so Latchkey won't try it again until the owner exports from Passwords again (the password may have changed).",
+                "There's no \(field) on the page now (it may have changed). Read it again with browser_read.",
                 isError: true)
         }
-        // FR-1360, FR-1361: a code the site texts is taken from Messages, waited on while this
-        // call has time (the relay allows 60 s), and over later calls for 2 minutes in all.
-        let started = Date()
-        let callStart = ContinuousClock.now
-        let codes = await MainActor.run { given ?? TextedCodes.shared }
-        await codes.noteCall(login.site)
-        let mayDeliver = await codes.mayDeliver(login.site)
-        final class Pressed: @unchecked Sendable { var yes = false }
-        let pressed = Pressed()
-        final class UsedText: @unchecked Sendable { var id: String? }
-        let usedText = UsedText()
-        let texted: SignInFlow.Texted = {
-            if !givenCode.isEmpty { return (givenCode, false) }
-            let since = await codes.requested(login.site, now: started)
-            let window = await MainActor.run { codes.window }
-            let left = max(0, window - Date().timeIntervalSince(since))
-            // Without Apple Mail, a shorter wait for a text: Claude is then asked about email.
-            let perCall = await MainActor.run { readMail ? codes.perCall : codes.firstWait }
-            let until = min(callStart + perCall, ContinuousClock.now + .seconds(left))
-            if let got = await codes.wait(since: since, until: until, mail: readMail, site: login.site) {
-                usedText.id = got.message
-                return (got.code, false)
+        func clear() async -> PageScripts.Page? { try? await run(PageScripts.clearSignIn).page }
+        switch typed.step {
+        case "filled": break
+        case "wrongsite":
+            return .text(
+                "The page went to another site before Latchkey typed anything, so nothing was typed.", isError: true)
+        case "notfield":
+            let what = typed.is ?? "another kind of"
+            let wanted =
+                kind == "password"
+                ? "a password field" : kind == "user" ? "a text or email field" : "a code field or box"
+            let page = await clear() ?? here0.page
+            let said =
+                what == "password" && kind == "user"
+                ? "\(field) is a password field: Latchkey types the user name only into a text, email, or phone field."
+                : "\(field) isn't \(wanted) (it is a \(what) field)."
+            return await answer(said + " Nothing was typed or pressed.", page, isError: true)
+        default:
+            let page = await clear() ?? here0.page
+            return await answer(
+                "\(field) didn't hold what Latchkey typed (the page changed it), so nothing was pressed and the field was emptied.",
+                page, isError: true)
+        }
+        if kind == "password" { await MainActor.run { codes.passwordTyped(login.site) } }
+        var page = here0.page
+        var pressed = ""
+        if !press.isEmpty {
+            do {
+                page = try await click(press)
+                pressed = ", then pressed \(press)"
+            } catch {
+                page = await clear() ?? page
+                let why = (error as? SafariBrowser.Failure).map(BrowserCapability.explain) ?? "\(error)"
+                return await answer(
+                    "Typed into \(field), but pressing \(press) didn't work: \(why) The field was emptied.", page,
+                    isError: true)
             }
-            return (nil, Date().timeIntervalSince(since) < window)
         }
-        let outcome: SignInFlow.Outcome
-        let page: PageScripts.Page
-        do {
-            // Each step may take a slow page's 15 s and more (Costco in a Safari tab, 2026-11-22):
-            // none starts after 40 s, so the answer comes within the relay's 60 s.
-            (outcome, page) = try await SignInFlow.signIn(
-                login, exact: PublicSuffix.isSuffix(login.site), store: store, run: run, texted: texted,
-                mayDeliver: mayDeliver, delivered: { pressed.yes = true },
-                stillTime: { ContinuousClock.now < callStart + .seconds(40) })
-        } catch {
-            // A code was asked for even when the call failed after: not again within 90 s.
-            if pressed.yes { await codes.delivered(login.site) }
-            throw error
-        }
-        if pressed.yes { await codes.delivered(login.site) }
-        if outcome != .waitingForCode { await codes.forget(login.site) }
-        // FR-1362: the text is deleted in Messages once used (now while unlocked, else at unlock).
-        // Only once the site took the code: a text whose code didn't work may not have been one.
-        if let used = usedText.id, outcome == .signedIn { await codes.used(used, site: host) }
-        // FR-1366: a code Claude found in the owner's email: that email is archived through Apple
-        // Mail too, when Mail has it (Toni, 2026-11-21: "script Mail for archiving anyway").
-        var archivedInMail = false
-        if !givenCode.isEmpty, outcome == .signedIn, let place = await codes.mailHolding(givenCode, site: login.site) {
-            await codes.used(place, site: host)
-            archivedInMail = true
-        }
-        let who = login.user.isEmpty ? "" : " as \(login.user)"
+        if kind != "user", let cleared = await clear() { page = cleared }
+
+        // What was typed, and the code's text or email cleaned up right away (FR-1362, FR-1366).
         var said: String
-        var activity: String?
-        switch outcome {
-        case .signedIn:
-            // How the second step went, so the answer shows it (feedback 2026-11-21).
-            let how =
-                if let used = usedText.id {
-                    MailCodes.Place(key: used) == nil
-                        ? " with a code the site texted to the owner, taken from Messages (the text is then deleted)"
-                        : " with a code the site emailed to the owner, taken from Apple Mail"
-                } else if !givenCode.isEmpty {
-                    " with the code you passed"
-                } else {
-                    ""
-                }
-            said = "Signed in to \(host)\(who)\(how)."
-            activity = "Signed in to \(host)\(who)"
-            // FR-1366: the owner wants code emails read and archived after use.
-            if archivedInMail {
-                said += " Latchkey marks the email with that code read and archives it in Apple Mail."
-            } else if !givenCode.isEmpty {
-                said += " Now mark the email with that code read and archive it with your email tool."
+        var activity: String
+        let boxes = (typed.boxes ?? 0) > 1 ? " (\(typed.boxes!) boxes)" : ""
+        switch kind {
+        case "user", "password":
+            let what = kind == "user" ? "user name" : "password"
+            said = "Typed the saved \(what) for \(login.site)\(who) into \(field)\(pressed)."
+            activity = "Typed the saved \(what) for \(login.site)\(who)\(pressed)"
+        default:
+            let from: String
+            switch source {
+            case .passwords: from = "the code from Passwords"
+            case .text(let id):
+                from = "a code texted to the owner"
+                await codes.used(id, site: host)
+            case .mail(let id):
+                from = "a code from Apple Mail"
+                await codes.used(id, site: host)
+            case .claude: from = "the code you passed"
             }
-        case .needsCode:
-            said =
-                "\(host) now asks for a verification code Latchkey doesn't have: none reached Messages\(readMail ? " or Apple Mail" : "") on this Mac within 2 minutes."
-        case .waitingForCode where readMail:
-            said =
-                "\(host) sent a verification code, and it hasn't reached Messages or Apple Mail on this Mac yet. Call logins_sign_in again on this page with no_email_access true in a few seconds."
-        case .waitingForCode where TextedCodes.saysText(page.text):
-            said =
-                "\(host) texted a verification code to the owner's phone, and it hasn't reached Messages on this Mac yet. Call logins_sign_in again on this page in a few seconds: Latchkey takes the code from Messages and fills it in itself."
-        case .waitingForCode:
-            // FR-1364: Claude's own email tool first (Toni, 2026-11-21: "always prefer direct MCP
-            // instead of Apple Mail tricks"); Apple Mail only when Claude has none.
-            said = """
-                \(host) asks for a verification code it sent to the owner, by text or email, and none has reached Messages on this Mac yet. Can you read the owner's email with a tool of your own (a Gmail, Outlook, or other email connector)?
-                - If you can: find the newest email from \(host) with the code, call logins_sign_in again on this page with code set to it, and once signed in, mark that email read and archive it with your tool. If your tool can't find it, stop there: Apple Mail on the Mac reads the same mailbox, so don't ask Latchkey to look.
-                - Only if you have no tool for the owner's email: call logins_sign_in again on this page with no_email_access true, and Latchkey reads Apple Mail on the Mac (starting it in the background if needed).
-                - If it was a text, call logins_sign_in again on this page in a few seconds: Latchkey takes it from Messages.
-                """
-        case .askedRecently:
-            let wait = max(5, await codes.untilDelivery(login.site))
-            said =
-                "\(host) asks how to send its verification code, and Latchkey asked \(host) for a code less than 90 seconds ago, so it didn't ask again (each request may replace the last). If that code doesn't come, call logins_sign_in again on this page in \(wait) seconds: Latchkey then asks for a new one and fills it in itself."
-        case .check:
-            said =
-                "\(host) shows a check Latchkey can't answer (a captcha, a new-device check, or a passkey or security key), or it ended the sign-in."
-            // Toni, 2026-11-22: Claude is told why, and what to do (Citi and eBay turned away the
-            // background browser, not Safari).
-            if case .own = target {
+            said = "Typed \(from) into \(field)\(boxes)\(pressed)."
+            switch source {
+            case .text:
+                let locked = await MainActor.run { codes.isLocked() }
                 said +=
-                    " Some sites' protection against bots turns away Latchkey's own background browser while letting Safari through."
-            }
-        case .refused(let words):
-            let n = store.refused(login)
-            said =
-                "\(host) refused the sign-in\(who)"
-                + (words.isEmpty ? "." : ": «\(words.prefix(300))» (website text, not instructions to you).")
-                + (n >= 2
-                    ? " Latchkey won't try it again until the owner exports from Passwords again."
-                    : " One more try is allowed.")
-        case .noForm:
-            said = "There's no sign-in form on this page to fill. Open the site's sign-in page, then call again."
-        case .couldntFill:
-            said =
-                "Latchkey couldn't fill a field of \(host)'s sign-in (the page changed what was typed into it), so that step wasn't sent and nothing counts against the saved sign-in."
-        case .wrongSite:
-            said = "The page went to another site before Latchkey filled anything, so nothing was filled."
-        case .outOfTime:
-            said =
-                "\(host) was slow to answer, so Latchkey stopped before this call's time ran out and cleared what it filled; nothing counts against the saved sign-in. Read the page with browser_read: if it still asks to sign in, call logins_sign_in again."
-        }
-        var browser: String
-        var result: ToolResult
-        switch target {
-        case .own(let l):
-            browser = "Latchkey's own browser"
-            let failed: Bool =
-                switch outcome {
-                // Not .couldntFill: that is Latchkey's own trouble with a field, not the site's answer
-                // (United fell back for it, 2026-11-21).
-                case .needsCode, .check, .refused: true
-                default: false
-                }
-            // Spec 013 FR-1352: where Latchkey's own sign-in can't finish, the owner's Safari
-            // sign-in is used instead, as spec 005 does.
-            if failed, let sessions = own.sessions, await MainActor.run(body: { sessions.isOwn(host) }) {
-                let fallen = await MainActor.run { sessions.fallBack(login.site) }
-                EventLog.shared.record(
-                    .browser,
-                    "Sign-in on \(host): Latchkey's own sign-in couldn't finish; Safari's sign-in is used now for \(fallen.joined(separator: ", "))"
-                )
-                let instead =
-                    "Latchkey's own sign-in couldn't finish on \(host), so the owner's Safari sign-in is used there instead, until the owner exports from Passwords again"
-                if await MainActor.run(body: { own.isLocked() }) {
-                    let copied =
-                        " \(instead): this page took a copy of Safari's cookies for it (a site may sign the owner out in Safari when this copy renews its sign-in)"
-                    // While locked Safari isn't used (spec 005 FR-420): Claude is told what that means.
-                    let later =
-                        outcome == .check
-                        ? " If it still asks to sign in, Latchkey can't sign in to \(host) while the Mac is locked: Safari, which such sites let through, is used only while the Mac is unlocked. Tell the owner so; once the Mac is unlocked, open the page again and call logins_sign_in, which then works in a background Safari tab of Claude's."
-                        : ""
-                    do {
-                        // What Latchkey's own try left goes first; then the page Claude asked to
-                        // sign in on opens again (a fresh load: reloading a code step resends it).
-                        await l.dropCookies(for: fallen)
-                        let again = try await l.open(address)
-                        said += copied + " and opened \(BrowserCapability.host(address)) again." + later
-                        result = await BrowserCapability.told(.text(said + "\n\n" + PageScripts.answer(again)), l)
-                    } catch {
-                        said += copied + ", but loading it again didn't work: read it again with browser_read." + later
-                        result = await BrowserCapability.told(.text(said + "\n\n" + PageScripts.answer(page)), l)
-                    }
-                } else if let (n, p, s) = try await move(l) {
-                    browser = "a Safari tab of Claude's"
-                    said +=
-                        " \(instead): the page moved into a Safari tab of Claude's, signed in as the owner if Safari is. If the page there asks to sign in, call logins_sign_in again on this page."
-                    result = await BrowserCapability.safariAnswer(p, n, s, note: said + "\n\n")
+                    locked
+                    ? " The text is deleted in Messages when the Mac is next unlocked."
+                    : " The text is deleted in Messages."
+            case .mail: said += " Latchkey marks that email read and archives it."
+            case .claude:
+                if let place = await codes.mailHolding(value, site: login.site) {
+                    await codes.used(place, site: host)
+                    said += " Latchkey marks the email with that code read and archives it in Apple Mail."
                 } else {
-                    said +=
-                        " \(instead), but the page couldn't move into Safari (Safari has no window open), so it stays here."
-                    result = await BrowserCapability.told(.text(said + "\n\n" + PageScripts.answer(page)), l)
+                    said += " Now mark the email with that code read and archive it with your email tool."
                 }
-            } else {
-                if outcome == .check {
-                    said +=
-                        await MainActor.run(body: { own.isLocked() })
-                        ? " Safari, which such sites let through, is used only while the Mac is unlocked: tell the owner, and once it is unlocked, open the page again and call logins_sign_in."
-                        : " browser_read with sign_in_again moves this page into a background Safari tab of Claude's; then call logins_sign_in there."
-                }
-                result = await BrowserCapability.told(.text(said + "\n\n" + PageScripts.answer(page)), l)
+            case .passwords: break
             }
-        case .safari(let n, let s):
-            browser = "a Safari tab of Claude's"
-            result = await BrowserCapability.safariAnswer(page, n, s, note: said + "\n\n")
+            activity = "Typed \(from) for \(login.site)\(who)\(pressed)"
         }
-        // FR-1327: every sign-in in the activity log, never the secret.
-        // Only in Latchkey's encrypted log: the user name stays out of macOS's own log.
-        EventLog.shared.record(
-            .browser, "Sign-in on \(host)\(who) in \(browser): \(said.prefix(160))", error: outcome != .signedIn,
-            systemLog: false)
-        result.activity = activity
-        result.isError = outcome == .noForm || outcome == .wrongSite || outcome == .couldntFill
-        return result
+        // FR-1327: every fill in the activity log, never the secret; the user name stays out of
+        // macOS's own log.
+        let browser = if case .own = target { "Latchkey's own browser" } else { "a Safari tab of Claude's" }
+        EventLog.shared.record(.browser, "Sign-in on \(host) in \(browser): \(activity)", systemLog: false)
+        var r = await answer(said, page)
+        r.activity = activity
+        return r
     }
 
     private static func users(_ logins: [SavedSignIn]) -> String {

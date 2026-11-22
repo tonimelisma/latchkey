@@ -13,46 +13,50 @@ Both exist only while the Owner's Sign-in setting is On (FR-1340). Answers are t
   "Latchkey holds no sign-ins yet. The Mac's owner can hand them over from Latchkey's menu →
   Export Passwords to Latchkey…".
 
-## logins_sign_in (write)
+## logins_fill (write; replaces logins_sign_in, 2026-11-22)
 
-- Title: "Sign In on a Page". Annotations: readOnly false, destructive false, idempotent false,
-  openWorld true. Limit 30 s.
-- Input: `page` (Claude's page, like "p4k2", as browser_read named it; required when several are
-  open), `user` (optional: the user name to sign in as, from logins_find).
-- Works in Claude's own pages only (Latchkey's own browser, or a Safari tab of Claude's), never in
-  the Owner's tabs.
-- Answer: the outcome in plain words, then the page as browser_read shows it:
-  - "Signed in to <site> as <user>."
-  - "<site> now asks for a verification code Latchkey doesn't hold (sent by text or email?)."
-  - A code the site texts (FR-1360, FR-1361) is filled without a word of it. Inputs `code` (a
-    code Claude read in the owner's email with its own tool, 4 to 10 letters or digits) and
-    `no_email_access` (true: Claude has no email tool; Latchkey reads Apple Mail), FR-1364,
-    FR-1365. When no code came within 20 s (45 s with `no_email_access`), not an error, no
-    fallback until 2 minutes have passed: "<site> asks for a verification code it sent to the
-    owner, by text or email, and none has reached Messages on this Mac yet. Can you read the
-    owner's email with a tool of your own …?" with the three ways on (pass `code` and archive
-    the email; only without an email tool, `no_email_access`; for a text, call again). With
-    `no_email_access`: "… hasn't reached Messages or Apple Mail on this Mac yet. Call … again
-    with no_email_access true …". After a sign-in with `code`: "Latchkey marks the email with
-    that code read and archives it in Apple Mail." or, when Mail doesn't have it, "Now mark the
-    email with that code read and archive it with your email tool." (FR-1366).
-  - "<site> shows a check Latchkey can't answer (a captcha or a new-device check)." Only a
-    challenge the page shows counts: hidden reCAPTCHA frames from ad scripts and the invisible
-    reCAPTCHA badge don't (live check 2026-11-21, homerecording.com, a sign-in that had worked).
-  - "<site> refused the sign-in: «page's words». One more try is allowed." / "…Latchkey won't
-    try it again until the owner exports from Passwords again."
-  - In Latchkey's own browser, after a code it doesn't hold, a check, or a refusal on a site it
-    signs in to itself (FR-1352), the line goes on: "Latchkey's own sign-in couldn't finish on
-    <site>, so the owner's Safari sign-in is used there instead, until the owner exports from
-    Passwords again:" then, locked, "this page took a copy of Safari's cookies for it … and
-    opened <site> again." (or "…but loading it again didn't work: read it again with browser_read."),
-    unlocked, "the page moved into a Safari tab of Claude's, signed in as the owner if Safari
-    is." (or "…couldn't move into Safari (Safari has no window open), so it stays here.").
-  - The first line of every answer from Latchkey's own browser on such a site (FR-1355): "…
-    Claude's page "<name>", with Latchkey's own sign-in for <site>, not a copy of Safari's, so the
-    owner's Safari stays signed in (if the page asks to sign in, logins_sign_in signs in)."
-    `browser_read sign_in_again` there: "Latchkey signs in to <site> itself … call
-    logins_sign_in with page "<name>"; if that can't finish, it uses the owner's Safari sign-in
-    instead."
-  - Errors (isError): no sign-in for the page's site (with the sites it does hold, at most 20);
-    several user names (listed: call again with user); not https; the Owner's tab; no page.
+Toni, 2026-11-22: "Fill-only tool". Latchkey types; Claude reads the page and decides (FR-1371).
+
+- Title: "Type a Saved Sign-in". Annotations: readOnly false, destructive false, openWorld true.
+  Limit 30 s (one fill and one press; nothing waits for a code).
+- Input: `page` (Claude's page, like "p4k2"), `field` (required: the field's reference from
+  browser_read, like "e18"), `fill` (required: `user`, `password`, or `code`), `press` (the
+  button's reference to press right after; required for `password` and `code`), `user` (which
+  saved user name, when there are several), `code` (a code Claude read in the owner's email with
+  its own tool, 4 to 10 letters or digits; with `fill` `code`), `no_email_access` (true: Claude
+  has no email tool, so Latchkey reads Apple Mail for the code).
+- What goes where (FR-1372): `password` only into an `input type=password` that isn't a
+  one-character box; `user` only into a text, email, or phone input; `code` into a text, number,
+  or password input, or across one-character boxes starting at `field`.
+- Where the code comes from, in order: the code `code` Claude passed; the current code of the
+  sign-in's generator from Passwords (each 30-second code once); the newest unused code text in
+  Messages since the last password typed on the site in the last 10 minutes (else the last 10
+  minutes); with `no_email_access`, the newest code email in Apple Mail naming the site, in the
+  same time. None found: not an error, nothing typed or pressed: "No code text has reached
+  Messages on this Mac since <time> (<n> s ago). If the site sent one by text, call again in a
+  few seconds; if by email, can you read the owner's email with a tool of your own? Then pass
+  the code as code (and archive that email after); only if you have none, pass no_email_access
+  true." After typing a texted code: "The text is deleted in Messages." (or "… when the Mac is
+  next unlocked."); an emailed one from Apple Mail: "Latchkey marks that email read and archives
+  it."; Claude's own: "Now mark the email with that code read and archive it with your email
+  tool." unless Mail has it.
+- Answer: "Typed the saved <user name|password> for <site> (<user>) into <field>[, then pressed
+  <press>]." / "Typed a code <texted to the owner|from Passwords|from Apple Mail|you passed>
+  into <field> (<n> boxes)…, then pressed <press>." Then the page as browser_read shows it (with
+  password and code fields hidden). Never "signed in", "refused", or any judgement of the page.
+- Errors (isError, nothing pressed): no sign-in for the page's site (the sites it holds, at most
+  20); several user names (listed); not https; the Owner's tab; no page; the field missing; the
+  wrong kind of field ("e12 isn't a password field: it is a text field"); the field didn't hold
+  what was typed (a page that rewrites input); `press` missing for password or code.
+
+## browser_read sign_in_again on a site Latchkey signs in to itself (FR-1374)
+
+- Unlocked: the page moves into a background Safari tab of Claude's at the same address, under the
+  same name; the answer is that tab's page, as for any other site (FR-459).
+- Locked: "Latchkey signs in to <site> itself in its own browser and takes none of Safari's
+  sign-ins for it. Safari's own sign-in can be used once the Mac is unlocked: then call
+  browser_read with sign_in_again again."
+- The first line of every answer from Latchkey's own browser on such a site (FR-1355): "…
+  Claude's page "<name>", with Latchkey's own sign-in for <site>, not a copy of Safari's, so the
+  owner's Safari stays signed in (if the page asks to sign in, type the saved sign-in with
+  logins_fill)."

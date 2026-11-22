@@ -69,46 +69,47 @@ version, when there was none) is 7 days old or more, and no reminder went out in
 post one notification (category `signins.export`). A click starts D3. The setting and the dates
 are in user defaults; never a window (Constitution IV).
 
-## D5. The tools (FR-1320, FR-1326, FR-1340; contract `contracts/login-tools.md`)
+## D5. The tools (FR-1320, FR-1326, FR-1340, FR-1371; contract `contracts/login-tools.md`)
 
 A capability `logins` ("Sign-in"), levels Off and On (On by default), with a read tool
-`logins_find` and a write tool `logins_sign_in` (Toni, 2026-11-21: "Two: logins_find +
+`logins_find` and a write tool `logins_fill` (Toni, 2026-11-21: "Two: logins_find +
 logins_sign_in", after the MCP research: a read-only tool is approved without asking in Claude's
-apps). Off: neither exists (Constitution III).
+apps; 2026-11-22: the write tool became `logins_fill`, "Fill-only tool"). Off: neither exists
+(Constitution III).
 
-## D6. Filling a page (FR-1321, FR-1322, FR-1311)
+## D6. Typing into a page (FR-1321, FR-1328, FR-1371, FR-1372, FR-1311)
 
-`logins_sign_in` takes `page` (Claude's page, as the browser tools name it) and an optional
-`user`. It works only in Claude's own pages: Latchkey's own browser, or a Safari tab of Claude's
-(spec 005 FR-455); never the Owner's tabs. Steps, at most four per call:
+`logins_fill` takes `page`, `field` (a reference from the page reading), `fill` (`user`,
+`password`, `code`), `press` (needed for a password or a code), `user`, `code`,
+`no_email_access`. It works only in Claude's own pages: Latchkey's own browser, or a Safari tab of
+Claude's (spec 005 FR-455); never the Owner's tabs. One call:
 
-1. Read the page's address; pick the sign-ins whose site fills there (`SiteMatch`). None: say so
-   (FR-1325). Several user names and none given: list them.
-2. Run the step script (`PageScripts.signInStep`) in the page's main frame only. It checks the
-   page is https on that site itself (so a page that moved meanwhile gets nothing), finds the
-   visible fields (password, verification code, or a user name alone, as on a two-page sign-in),
-   fills them with the field's own value setter and input events, and sends the form (its submit
-   button, else Enter).
-3. Wait for the page to settle (the browsers' own action wait), look again (`signInState`), and
-   go on: a code field and a code held fills the code; a password field again after the password
-   was sent is a failure; nothing to fill is done.
-4. Last, clear every password field and any code field Latchkey filled that is still on the page
-   (`clearSignIn`), so no script of Claude's can read them; page reads already hide such fields
-   (spec 005 FR-410).
+1. Read the page's address from the browser (`signInHere`, the browser's own record); pick the
+   sign-ins whose site fills there (`SiteMatch`, `fillHost`). None: say so (FR-1325). Several
+   user names and none given: list them.
+2. Find the value: the user name, the password, or a code (D11, D12, the generator from
+   Passwords once per step, or the one Claude passed). No code yet: say so at once, type nothing.
+3. Run `PageScripts.fillField` in the page's main frame only: it checks the page is https on that
+   host itself, finds the field by its reference, refuses a field of the wrong kind (FR-1372),
+   types key by key (key events with codes, beforeinput, the caret, input), and for a code from a
+   one-character box (or the first of a row of alike fields) types one character a box, pasting
+   whole into the first when the boxes won't take it so. It answers whether the field holds it.
+4. Press the button Claude named with the browsers' own click (which waits for the page to
+   settle), then run `clearSignIn`, which empties every password field and every field Latchkey
+   typed into that is still there: a password or a code never stays in the page for a script of
+   Claude's to read. A user name may be typed alone.
+5. Answer what was typed where and what was pressed, then the page as browser_read shows it. No
+   judgement of the page, ever.
 
-Secrets reach the page only inside the script: in Latchkey's own browser through WebKit
-directly; in Safari always through the 0600 script file in a 0700 folder, removed right after,
-never as an `osascript` argument (which other programs can see). Options weighed: typing with
-keystrokes (needs the front window, Constitution IV) vs the value setter; the value setter
-chosen, as the browser tools' own `type` does.
+Secrets reach the page only inside the script: in Latchkey's own browser through WebKit directly,
+in its own content world; in Safari always through the 0600 script file in a 0700 folder,
+removed right after, never as an `osascript` argument (which other programs can see).
 
-## D7. Outcome and retries (FR-1323, FR-1324, FR-1327)
+## D7. Retries and the log (FR-1324 withdrawn, FR-1327)
 
-The answer names the outcome in words (signed in; asks for a code Latchkey doesn't hold; a
-captcha or new-device check; the site refused, with the page's words), then the page as the
-browser tools show it. A refusal counts against that sign-in (site and user name, in memory); the
-second refusal blocks it until the next import. A code is never sent twice in one time step.
-Every sign-in goes into the activity log (site, user name, browser, outcome).
+No cap (Toni, 2026-11-22: "No cap"): Claude decides whether to try again. A code from Passwords is
+still typed once per 30-second step. Every fill goes into the activity log (site, user name, what
+was typed and where the code came from, the button, the browser), never the secret.
 
 ## D8. Where the Owner sees it (FR-1301, FR-1302, FR-1305)
 
@@ -117,7 +118,11 @@ section with how many sign-ins Latchkey holds and from when, Export from Passwor
 and the reminder switch. The menu has Export Passwords to Latchkey…. Setup gets a sixth step,
 "Hand over your sign-ins (optional)", which never counts as missing (FR-1302).
 
-## D10. Latchkey's own sign-ins (FR-1350 to FR-1355)
+## D10. Latchkey's own sign-ins (FR-1350, FR-1351, FR-1353 to FR-1355, FR-1374)
+
+(2026-11-22: FR-1352's fallback is withdrawn; there is no fallback list. Claude moves a page into
+Safari with sign_in_again while unlocked, FR-1374; locked, the answer says Safari waits for the
+unlock. Kept items written with the old fallback keys still read: Codable leaves them out.)
 
 `OwnSessions` (App/SignIn) knows the own sites: those a held sign-in fills on (`SiteMatch.fills`),
 minus the sites that fell back to Safari (FR-1352), while Sign-in is On. It answers two questions
@@ -150,7 +155,11 @@ domain is an own site, under one, or a wider domain of one, as `LockedBrowser.co
 - FR-1355: `BrowserCapability.ownBrowser` names the case: "with Latchkey's own sign-in for
   <site> (if the page asks to sign in, logins_sign_in signs in)".
 
-## D11. Codes texted to the Owner (FR-1360 to FR-1363)
+## D11. Codes texted to the Owner (FR-1360, FR-1362, FR-1363)
+
+(2026-11-22: one look, no waiting; texts since the last password Latchkey typed on the site in
+the last 10 minutes, else the last 10 minutes; the text deleted right after the code is typed.
+FR-1361 and the delivery throttle are withdrawn.)
 
 `TextedCodes` (App/SignIn): when `SignInFlow` reaches a code step and the sign-in has no code
 generator, it asks for a texted code. Messages' database (its own read-only connection, as

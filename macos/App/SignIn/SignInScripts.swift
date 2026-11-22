@@ -1,262 +1,132 @@
 import Foundation
 
-/// The page scripts of signing in (spec 013 FR-1321, FR-1322, FR-1311; plan D6). They run in the
+/// The page scripts of signing in (spec 013 FR-1371, FR-1372, FR-1311; plan D6). They run in the
 /// page's main frame only (never in a frame from another site), check the page's own address
-/// before filling, and answer "ok", a tab, and JSON, as the browser actions do. Every value is
-/// spliced with `literal()`.
+/// before typing, and answer "ok", a tab, and JSON, as the browser actions do. Every value is
+/// spliced with `literal()`. They type only into the field Claude named; what the page means is
+/// Claude's to read (Toni, 2026-11-22: "Fill-only tool").
 extension PageScripts {
-    /// The shared helpers: which fields are visible, and which of them is the user name, the
-    /// password, or a verification code.
-    private static let signInHelpers = """
-          function seen(e) {
-            if (!e || e.disabled || e.readOnly) return false;
-            var s = getComputedStyle(e);
-            if (s.visibility === 'hidden' || s.display === 'none' || Number(s.opacity) === 0) return false;
-            return !!(e.offsetWidth || e.offsetHeight || e.getClientRects().length);
-          }
-          function words(e) {
-            var l = '';
-            try { if (e.labels && e.labels.length) l = e.labels[0].innerText || ''; } catch (x) {}
-            return [e.name, e.id, e.getAttribute('placeholder'), e.getAttribute('aria-label'), e.getAttribute('autocomplete'), l].join(' ');
-          }
-          var inputs = Array.prototype.filter.call(document.querySelectorAll('input'), seen);
-          var typed = function (e) { return ['text', 'email', 'tel', 'number', ''].indexOf((e.getAttribute('type') || '').toLowerCase()) >= 0; };
-          // A one-character password field is a code box, never a password (Citi's six PIN boxes
-          // are password fields, 2026-11-21: the password was typed into the first).
-          var passwords = inputs.filter(function (e) { return e.type === 'password' && e.maxLength !== 1; });
-          var current = passwords.filter(function (e) { return !/new-password/i.test(e.getAttribute('autocomplete') || ''); });
-          if (current.length) passwords = current;
-          var codeField = inputs.filter(function (e) { return /one-time-code/i.test(e.getAttribute('autocomplete') || ''); })[0]
-            || inputs.filter(function (e) {
-                 return typed(e) && e.type !== 'password' && (e.maxLength < 0 || e.maxLength >= 4)
-                   && /(otp|totp|mfa|2fa|two.?factor|one.?time|verif|security.?code|auth.?code|passcode|pin.?code|\\bcode\\b)/i.test(words(e));
-               })[0];
-          var boxes = inputs.filter(function (e) { return (typed(e) || e.type === 'password') && e.maxLength === 1; });
-          if (boxes.length < 6) boxes = [];
-          // Code boxes without a one-character limit (United's, 2026-11-21: six fields labelled
-          // "Enter digit 1 of 6", class atm-c-otp-input): a row of 4 to 8 alike fields (same class
-          // and parent class) named for a digit, an OTP, or a code.
-          if (!boxes.length) {
-            var rows = {};
-            inputs.forEach(function (e) {
-              if (!typed(e) || e.type === 'password') return;
-              var p = e.parentElement, key = e.className + '|' + (p ? p.className : '');
-              (rows[key] = rows[key] || []).push(e);
-            });
-            Object.keys(rows).forEach(function (k) {
-              var r = rows[k];
-              if (boxes.length || r.length < 4 || r.length > 8) return;
-              var named = r.every(function (e) { return /(digit|otp|one.?time|code|pin)/i.test(words(e) + ' ' + e.className); });
-              if (named) boxes = r;
-            });
-          }
-          if (boxes.length && boxes.indexOf(codeField) >= 0) codeField = null;
-          var userField = inputs.filter(function (e) { return /(^|\\s)(username|email)(\\s|$)/i.test(e.getAttribute('autocomplete') || ''); })[0]
-            || inputs.filter(function (e) { return e.type === 'email'; })[0]
-            || inputs.filter(function (e) { return typed(e) && e !== codeField && /(user|e-?mail|login|account|identifier|phone)/i.test(words(e)); })[0];
-          if (passwords.length && userField && passwords[0].form && userField.form !== passwords[0].form) {
-            var same = inputs.filter(function (e) { return e.form === passwords[0].form && typed(e) && e !== codeField; })[0];
-            if (same) userField = same;
-          }
-          // A challenge counts only when the page shows it: ad scripts add hidden reCAPTCHA
-          // frames, and invisible reCAPTCHA shows only its badge (homerecording.com, 2026-11-21).
-          var captcha = Array.prototype.some.call(document.querySelectorAll('iframe[src*="recaptcha"], iframe[src*="hcaptcha"], iframe[src*="turnstile"], iframe[src*="arkoselabs"], .g-recaptcha, .h-captcha, .cf-turnstile'), function (e) {
-            if (e.closest('.grecaptcha-badge')) return false;
-            if (e.tagName === 'IFRAME' && /size=invisible|\\/aframe/i.test(e.getAttribute('src') || '')) return false;
-            var s = getComputedStyle(e);
-            if (s.visibility === 'hidden' || s.display === 'none' || Number(s.opacity) === 0) return false;
-            return e.offsetWidth > 0 && e.offsetHeight > 0;
-          });
-          // A human check of the site's own, with no captcha frame (Amazon's "Check the box to
-          // continue. I am human" checkpoint, 2026-11-21): known by what the page says.
-          if (!captcha) {
-            var said = ((document.body && document.body.innerText) || '').slice(0, 4000);
-            captcha = /\\b(i am human|i'?m not a robot|verify (that )?you('| a)re (a )?human|are you a (robot|human)|human verification|confirm you('| a)re (a )?human)\\b/i.test(said);
-          }
-          // The site's own words about the sign-in: a shown error element first, then a shown
-          // alert; never a link (Citi's "Skip to Content" link is marked as a live region).
-          function problem() {
-            var groups = ['.error, [class*="error"], [id*="error"]', '[role="alert"], [aria-live="assertive"], .alert, .flash'];
-            for (var g = 0; g < groups.length; g++) {
-              var all = document.querySelectorAll(groups[g]);
-              for (var i = 0; i < all.length; i++) {
-                var el = all[i];
-                if (el.tagName === 'A' || (el.closest && el.closest('a'))) continue;
-                var t = (el.innerText || '').replace(/\\s+/g, ' ').trim();
-                if (!t || /^skip to\\b/i.test(t) || !(el.offsetWidth || el.offsetHeight)) continue;
-                // A notice about something else (Citi's holiday scam warning, 2026-11-21) is long:
-                // the site's words about a sign-in are a sentence or two.
-                if (t.length > 160 || /^alert section/i.test(t)) continue;
-                var s = getComputedStyle(el);
-                if (s.visibility === 'hidden' || s.display === 'none') continue;
-                return t.slice(0, 300);
-              }
-            }
-            return '';
-          }
-          // A step asking how to send the code ("We'll send a code to +1 ••• 0790": Text me / Call
-          // me; Citi, 2026-11-21): the buttons that send it, by text message first, then email.
-          // Shown ones first; a hidden one too (GitHub keeps its "SMS Code" link under "More
-          // options", 2026-11-21), which is only pressed where no password or user name is asked.
-          var delivery = Array.prototype.slice.call(document.querySelectorAll('button, [role="button"], input[type="submit"], input[type="button"], a'))
-            .map(function (b) { return { el: b, t: (b.innerText || b.textContent || b.value || '').replace(/\\s+/g, ' ').trim(), shown: seen(b) }; })
-            .filter(function (x) { return x.t.length < 40; })
-            .sort(function (a, b) { return (b.shown ? 1 : 0) - (a.shown ? 1 : 0); });
-          var bySms = delivery.filter(function (x) { return /^(text( me)?|send (me )?(a )?(text|sms)( message| code)?|sms( code)?|text message|use (a )?(text|sms)( message)?)\\b/i.test(x.t); })[0];
-          var byMail = delivery.filter(function (x) { return /^(email( me)?|send (me )?(an )?email|e-mail( me)?)\\b/i.test(x.t); })[0];
-          var deliver = bySms || byMail;
-          // A second step Latchkey has no field for: a passkey, a security key, an app's code
-          // page with nothing to type yet (GitHub's passkey page was answered "Signed in").
-          var bodyText = ((document.body && document.body.innerText) || '').slice(0, 4000);
-          var secondFactor = !passwords.length && !codeField && !boxes.length
-            && /(passkey|security key|two-factor|two factor|2fa|authentication code|(verify|confirm|make sure) (it['’]?s|it is|that it['’]?s|that it is) you|verify your identity)/i.test(bodyText);
-        """
+    /// Nothing but the answer: for the browser's own record of the page's address (FR-1328).
+    static let signInHere = "'ok\\t{}'"
 
-    /// What the page asks for now: `{ password, code, user, captcha, problem }`. Where the page is
-    /// comes from the browser, never from here.
-    // nosemgrep: latchkey-page-script-literal -- splices in only the constant signInHelpers.
-    static let signInState = """
-        (function () {
-        \(signInHelpers)
-          return 'ok\\t' + JSON.stringify({ password: passwords.length > 0,
-            code: !!codeField || boxes.length > 0, user: !!userField, captcha: captcha, problem: problem(),
-            deliver: !!deliver, secondFactor: secondFactor });
-        })()
-        """
+    /// The host to type on, when the browser's address is one `login` fills on (FR-1321): its
+    /// registered site, or for a site that is itself a public suffix, only its own host.
+    static func fillHost(_ login: SavedSignIn, address: String) -> String? {
+        guard SiteMatch.fills(site: login.site, on: address), var host = URL(string: address)?.host()?.lowercased()
+        else { return nil }
+        if host.hasSuffix(".") { host.removeLast() }
+        guard !PublicSuffix.isSuffix(login.site) || host == login.site else { return nil }
+        return host
+    }
 
-    /// Fills what the page asks for and sends it: the password (with the user name when there is
-    /// a field for it), else the verification code, else the user name alone (a two-page
-    /// sign-in). Latchkey has checked the page's address itself (`SiteMatch`); the script checks
-    /// again that the page is still https at `host`, with the browser's own `location` and `===`
-    /// only, which no page script can change (security review, 2026-11-21). Answers `{ step }`:
-    /// password, code, user, none, or wrongsite.
-    static func signInStep(
-        host: String, user: String, password: String, code: String, userSent: Bool = false,
-        mayDeliver: Bool = false
-    ) -> String {
-        // nosemgrep: latchkey-page-script-literal -- besides literal(), only the constant signInHelpers.
+    /// Types `value` into the field `ref`, as `kind` allows (FR-1372): "password" only into a
+    /// password field that isn't a one-character box; "user" only into a text, email, or phone
+    /// field; "code" into a text, number, phone, or password field, or, from a one-character box
+    /// (or the first of a row of alike fields, United's six, 2026-11-21), across it and the boxes
+    /// after it, one character each, pasted whole into the first when the boxes won't take it so.
+    /// Key by key, as a keyboard does (Citi's input mask keeps nothing else, 2026-11-21). Answers
+    /// `{ step: "filled", boxes }`, `{ step: "wrongsite" }`, `{ step: "notfield", is }` (what the
+    /// field is), or `{ step: "unheld" }` (the page changed what was typed); "missing" when there
+    /// is no such field.
+    static func fillField(ref: String, kind: String, value: String, host: String) -> String {
+        // nosemgrep: latchkey-page-script-literal -- besides literal() and find(), nothing.
         """
-        (function (host, user, pass, code, userSent, mayDeliver) {
-          if (location.protocol !== 'https:' || location.hostname !== host) return 'ok\\twrongsite';
-        \(signInHelpers)
+        (function (host, kind, value) {
+          if (location.protocol !== 'https:' || location.hostname !== host) return 'ok\\t' + JSON.stringify({ step: 'wrongsite' });
+          \(find(ref))
+          function seen(x) {
+            if (!x || x.disabled || x.readOnly) return false;
+            var st = getComputedStyle(x);
+            if (st.visibility === 'hidden' || st.display === 'none') return false;
+            return !!(x.offsetWidth || x.offsetHeight || x.getClientRects().length);
+          }
+          var type = e.tagName === 'INPUT' ? (e.getAttribute('type') || 'text').toLowerCase() : e.tagName.toLowerCase();
+          function no() { return 'ok\\t' + JSON.stringify({ step: 'notfield', is: type + (e.maxLength === 1 ? ' box' : '') }); }
+          if (e.tagName !== 'INPUT' || !seen(e)) return no();
+          if (kind === 'password' && (type !== 'password' || e.maxLength === 1)) return no();
+          if (kind === 'user' && ['text', 'email', 'tel'].indexOf(type) < 0) return no();
+          if (kind === 'code' && ['text', 'number', 'tel', 'password'].indexOf(type) < 0) return no();
           var filled = window.__latchkeyFilled;
           if (!filled) {
             filled = [];
             try { Object.defineProperty(window, '__latchkeyFilled', { value: filled, enumerable: false }); } catch (x) {}
           }
-          // Typed one character at a time, as a keyboard does (key events with codes, beforeinput,
-          // the text put in at the caret, input): input masks take nothing else (Citi's user ID
-          // kept only "uu" of "dummyuser", 2026-11-21). A page script may handle a key itself
-          // (preventDefault); then its own handling stands. True when the field holds the value.
           var setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
-          // Latchkey's browser is hidden, so focus() fires no focus event; code widgets that track
-          // the active box by focus events (United's, 2026-11-21) get them sent here.
-          function focusOn(e) {
-            if (e.focus) e.focus();
-            e.dispatchEvent(new FocusEvent('focusin', { bubbles: true }));
-            e.dispatchEvent(new FocusEvent('focus'));
+          // A browser of Latchkey's own is hidden, so focus() fires no focus event; code widgets
+          // that track the active box by focus events (United's, 2026-11-21) get them sent here.
+          function focusOn(x) {
+            if (x.focus) x.focus();
+            x.dispatchEvent(new FocusEvent('focusin', { bubbles: true }));
+            x.dispatchEvent(new FocusEvent('focus'));
           }
-          function put(e, v) {
-            focusOn(e);
-            filled.push(e);
-            // Emptied only when it holds something: code boxes take a delete in an empty box as
-            // Backspace into the box before (United left its first box empty, 2026-11-21).
-            if (e.value) {
-              setter.call(e, '');
-              e.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'deleteContentBackward' }));
+          function same(a, b) {
+            var squash = function (t) { return String(t).replace(/[\\s.\\-()]/g, '').toLowerCase(); };
+            return squash(a) === squash(b);
+          }
+          function put(x, v) {
+            focusOn(x);
+            filled.push(x);
+            // Emptied only when it holds something: a delete in an empty box is Backspace into
+            // the box before (United left its first box empty, 2026-11-21).
+            if (x.value) {
+              setter.call(x, '');
+              x.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'deleteContentBackward' }));
             }
             for (var i = 0; i < v.length; i++) {
               var ch = v.charAt(i), up = ch.toUpperCase();
               var code = /[a-z]/i.test(ch) ? 'Key' + up : (/[0-9]/.test(ch) ? 'Digit' + ch : '');
               var kc = /[a-z0-9]/i.test(ch) ? up.charCodeAt(0) : 0;
-              var go = e.dispatchEvent(new KeyboardEvent('keydown', { key: ch, code: code, keyCode: kc, which: kc, bubbles: true, cancelable: true }));
-              go = e.dispatchEvent(new KeyboardEvent('keypress', { key: ch, code: code, keyCode: ch.charCodeAt(0), charCode: ch.charCodeAt(0), which: ch.charCodeAt(0), bubbles: true, cancelable: true })) && go;
-              go = e.dispatchEvent(new InputEvent('beforeinput', { data: ch, inputType: 'insertText', bubbles: true, cancelable: true })) && go;
+              var go = x.dispatchEvent(new KeyboardEvent('keydown', { key: ch, code: code, keyCode: kc, which: kc, bubbles: true, cancelable: true }));
+              go = x.dispatchEvent(new KeyboardEvent('keypress', { key: ch, code: code, keyCode: ch.charCodeAt(0), charCode: ch.charCodeAt(0), which: ch.charCodeAt(0), bubbles: true, cancelable: true })) && go;
+              go = x.dispatchEvent(new InputEvent('beforeinput', { data: ch, inputType: 'insertText', bubbles: true, cancelable: true })) && go;
               if (go) {
-                var was = e.value, s = e.selectionStart, t = e.selectionEnd;
+                var was = x.value, s = x.selectionStart, t = x.selectionEnd;
                 if (s === null || s === undefined) { s = was.length; t = was.length; }
-                setter.call(e, was.slice(0, s) + ch + was.slice(t));
-                try { e.setSelectionRange(s + 1, s + 1); } catch (x) {}
-                e.dispatchEvent(new InputEvent('input', { data: ch, inputType: 'insertText', bubbles: true }));
+                setter.call(x, was.slice(0, s) + ch + was.slice(t));
+                try { x.setSelectionRange(s + 1, s + 1); } catch (y) {}
+                x.dispatchEvent(new InputEvent('input', { data: ch, inputType: 'insertText', bubbles: true }));
               }
-              e.dispatchEvent(new KeyboardEvent('keyup', { key: ch, code: code, keyCode: kc, which: kc, bubbles: true }));
+              x.dispatchEvent(new KeyboardEvent('keyup', { key: ch, code: code, keyCode: kc, which: kc, bubbles: true }));
             }
-            e.dispatchEvent(new Event('change', { bubbles: true }));
-            if (e.blur) e.blur();
-            return same(e.value, v);
+            x.dispatchEvent(new Event('change', { bubbles: true }));
+            if (x.blur) x.blur();
+            return same(x.value, v);
           }
-          // A field may format what is typed (spaces, dashes, dots, capitals): the same then.
-          function same(a, b) {
-            var squash = function (s) { return String(s).replace(/[\\s.\\-()]/g, '').toLowerCase(); };
-            return squash(a) === squash(b);
-          }
-          // A user name the page already shows, as typed or masked ("******768"): left as it is.
-          function shown(e, v) { return same(e.value, v) || (/[*•●]/.test(e.value) && e.value.length >= 3); }
-          function send(e) {
-            var form = e.form || (e.closest && e.closest('form'));
-            var buttons = form ? Array.prototype.filter.call(form.querySelectorAll('button, input[type="submit"]'), seen) : [];
-            var b = buttons.filter(function (b) { return (b.getAttribute('type') || 'submit').toLowerCase() === 'submit'; })[0];
-            if (!b) {
-              var near = Array.prototype.filter.call(document.querySelectorAll('button, [role="button"], input[type="submit"]'), seen);
-              b = near.filter(function (b) { return /^\\s*(sign ?in|sign ?on|log ?in|log ?on|next|continue|submit|verify|confirm)\\b/i.test(b.innerText || b.value || ''); })[0];
-            }
-            if (b) { b.click(); return; }
-            if (form) { if (form.requestSubmit) form.requestSubmit(); else form.submit(); return; }
-            ['keydown', 'keypress', 'keyup'].forEach(function (k) {
-              e.dispatchEvent(new KeyboardEvent(k, { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true }));
+          var done = 'ok\\t' + JSON.stringify({ step: 'filled', boxes: 0 });
+          var unheld = 'ok\\t' + JSON.stringify({ step: 'unheld' });
+          if (kind !== 'code') return put(e, value) ? done : unheld;
+          // The boxes, when the field is one: it and the boxes after it, in the page's order.
+          var inputs = Array.prototype.filter.call(document.querySelectorAll('input'), seen);
+          var from = inputs.indexOf(e), boxes = [];
+          if (e.maxLength === 1) {
+            boxes = inputs.slice(from).filter(function (x) { return x.maxLength === 1; }).slice(0, value.length);
+          } else if (e.className) {
+            var alike = inputs.slice(from).filter(function (x) {
+              return x.className === e.className && x.parentElement && e.parentElement
+                && x.parentElement.className === e.parentElement.className;
             });
+            if (alike.length === value.length && value.length >= 4 && value.length <= 8) boxes = alike;
           }
-          // Nothing is sent when a field doesn't hold what was typed: the site would refuse an
-          // empty or changed form, and that is no refusal of the password (Citi, 2026-11-21).
-          var unfilled = 'ok\\t' + JSON.stringify({ step: 'unfilled' });
-          // After the password, a step asking how to send the code: its text-message button (or
-          // email), never before (a sign-in page may offer "email me a link" beside the password).
-          if (mayDeliver && deliver) {
-            deliver.el.click();
-            return 'ok\\t' + JSON.stringify({ step: 'delivery' });
-          }
-          if (passwords.length && pass) {
-            if (userField && user && !shown(userField, user) && !put(userField, user)) return unfilled;
-            if (!put(passwords[0], pass)) return unfilled;
-            send(passwords[0]);
-            return 'ok\\t' + JSON.stringify({ step: 'password' });
-          }
-          if ((codeField || boxes.length) && code) {
-            if (boxes.length) {
-              var all = true;
-              boxes.forEach(function (b, i) { all = put(b, code.charAt(i)) && all; });
-              // Every box holds its digit at the end, not only when it was typed.
-              var heldCode = function () { return boxes.map(function (b) { return b.value; }).join(''); };
-              if (!same(heldCode(), code.slice(0, boxes.length))) {
-                // Else the whole code pasted into the first box, as password managers do.
-                boxes.forEach(function (b) { if (b.value) { focusOn(b); setter.call(b, ''); b.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'deleteContentBackward' })); } });
-                var first = boxes[0];
-                focusOn(first);
-                var data = null;
-                try { data = new DataTransfer(); data.setData('text/plain', code); } catch (x) {}
-                var go = first.dispatchEvent(new ClipboardEvent('paste', { clipboardData: data, bubbles: true, cancelable: true }));
-                if (go) {
-                  first.dispatchEvent(new InputEvent('beforeinput', { data: code, inputType: 'insertFromPaste', bubbles: true, cancelable: true }));
-                  setter.call(first, code);
-                  first.dispatchEvent(new InputEvent('input', { data: code, inputType: 'insertFromPaste', bubbles: true }));
-                }
-                filled.push.apply(filled, boxes);
-              }
-              if (!same(heldCode(), code.slice(0, boxes.length))) return unfilled;
-              send(boxes[boxes.length - 1]);
-            } else {
-              if (!put(codeField, code)) return unfilled;
-              send(codeField);
+          if (!boxes.length) return put(e, value) ? done : unheld;
+          if (boxes.length < value.length) return 'ok\\t' + JSON.stringify({ step: 'notfield', is: boxes.length + ' boxes for a ' + value.length + '-character code' });
+          boxes.forEach(function (b, i) { put(b, value.charAt(i)); });
+          var held = function () { return boxes.map(function (b) { return b.value; }).join(''); };
+          if (!same(held(), value)) {
+            // Else the whole code pasted into the first box, as password managers do.
+            boxes.forEach(function (b) { if (b.value) { focusOn(b); setter.call(b, ''); b.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'deleteContentBackward' })); } });
+            var first = boxes[0];
+            focusOn(first);
+            var data = null;
+            try { data = new DataTransfer(); data.setData('text/plain', value); } catch (y) {}
+            if (first.dispatchEvent(new ClipboardEvent('paste', { clipboardData: data, bubbles: true, cancelable: true }))) {
+              first.dispatchEvent(new InputEvent('beforeinput', { data: value, inputType: 'insertFromPaste', bubbles: true, cancelable: true }));
+              setter.call(first, value);
+              first.dispatchEvent(new InputEvent('input', { data: value, inputType: 'insertFromPaste', bubbles: true }));
             }
-            return 'ok\\t' + JSON.stringify({ step: 'code' });
           }
-          if (userField && user && !passwords.length && !userSent) {
-            if (!put(userField, user)) return unfilled;
-            send(userField);
-            return 'ok\\t' + JSON.stringify({ step: 'user' });
-          }
-          return 'ok\\t' + JSON.stringify({ step: 'none' });
-        })(\(literal(host)), \(literal(user)), \(literal(password)), \(literal(code)), \(literal(userSent ? "1" : "")) === '1', \(literal(mayDeliver ? "1" : "")) === '1')
+          if (!same(held(), value)) return unheld;
+          return 'ok\\t' + JSON.stringify({ step: 'filled', boxes: boxes.length });
+        })(\(literal(host)), \(literal(kind)), \(literal(value)))
         """
     }
 

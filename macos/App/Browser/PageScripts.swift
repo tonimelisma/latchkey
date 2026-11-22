@@ -273,7 +273,7 @@ enum PageScripts {
         """
     }
 
-    private static func find(_ ref: String) -> String {
+    static func find(_ ref: String) -> String {
         "var e = document.querySelector('[data-latchkey=' + JSON.stringify(\(literal(ref))) + ']'); if (!e) return 'missing';"
     }
 
