@@ -12,8 +12,9 @@ CI green again (2026-11-22): every CI run on main had failed since 2026-11-21, w
 gate's Semgrep (`make semgrep`, run with uvx) reached CI: ubuntu-latest has no uv ("uvx: not
 found"). The workflow now sets up uv (astral-sh/setup-uv, pinned to a commit);
 `scripts/tests/ci_tools_test.sh` fails when the Makefile uses uvx and CI doesn't set up uv. The
-first green-security run then failed `TestCalls` ("mac offline"): five hub tests called the Mac
-right after dialing, before the hub held the connection; they now wait for it to be online first.
+first green-security run then failed `TestCalls` ("mac offline"): hub tests called the Mac right
+after dialing, before the hub held the connection; the tests' `dial` now waits until the hub
+holds it, so every hub test starts online.
 
 Xcode tests in Shell (Toni, 2026-11-21: "Test step outside fence"; spec 004 FR-335): no app's
 unit tests could run through `shell_run`. macOS opens an app for a sandboxed program without

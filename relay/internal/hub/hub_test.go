@@ -77,11 +77,15 @@ func setup(t *testing.T, tweak func(*hub.Config)) *env {
 	return e
 }
 
+// dial connects the agent and waits until the hub holds the connection: the handshake's
+// welcome comes before the hub registers it, so a call right after a bare dial can find the
+// Mac offline on a busy runner (TestCalls and others on CI, 2026-11-22).
 func (e *env) dial() *testagent.Conn {
 	e.t.Helper()
 	c, err := e.agent.Dial(ctxT(e.t))
 	require.NoError(e.t, err)
 	e.t.Cleanup(func() { _ = c.Close() })
+	e.waitOnline(true)
 	return c
 }
 
@@ -352,7 +356,6 @@ func TestGoodbyeUserDisconnectedRevokes(t *testing.T) {
 func TestCalls(t *testing.T) {
 	e := setup(t, nil)
 	e.dial()
-	e.waitOnline(true) // the dial returns before the hub holds the connection (CI, 2026-11-22)
 
 	res, err := e.hub.Call(ctxT(t), e.device.ID, "battery_status", json.RawMessage(`{}`), time.Second, nil)
 	require.NoError(t, err)
@@ -378,7 +381,6 @@ func TestCallDeadlineCancelsAndDropsLateResult(t *testing.T) {
 		return &agentproto.Result{ID: call.ID, Content: []byte(`[{"type":"text","text":"` + call.Tool + `"}]`)}
 	}
 	c := e.dial()
-	e.waitOnline(true) // the dial returns before the hub holds the connection (CI, 2026-11-22)
 
 	start := time.Now()
 	_, err := e.hub.Call(ctxT(t), e.device.ID, "slow", nil, 300*time.Millisecond, nil)
@@ -437,7 +439,6 @@ func TestConcurrentCalls(t *testing.T) {
 		return &agentproto.Result{ID: call.ID, Content: call.Arguments}
 	}
 	e.dial()
-	e.waitOnline(true) // the dial returns before the hub holds the connection (CI, 2026-11-22)
 	var wg sync.WaitGroup
 	for i := range 20 {
 		wg.Go(func() {
@@ -460,7 +461,6 @@ func TestProgressIsForwarded(t *testing.T) {
 		return &agentproto.Result{ID: call.ID, Content: []byte(`[]`)}
 	}
 	c = e.dial()
-	e.waitOnline(true) // the dial returns before the hub holds the connection (CI, 2026-11-22)
 	var got []*agentproto.Progress
 	_, err := e.hub.Call(ctxT(t), e.device.ID, "x", nil, time.Second, func(p *agentproto.Progress) { got = append(got, p) })
 	require.NoError(t, err)
@@ -492,7 +492,6 @@ func TestDisconnectDuringCall(t *testing.T) {
 		return nil
 	}
 	c = e.dial()
-	e.waitOnline(true) // the dial returns before the hub holds the connection (CI, 2026-11-22)
 	_, err := e.hub.Call(ctxT(t), e.device.ID, "x", nil, 5*time.Second, nil)
 	require.ErrorIs(t, err, hub.ErrDisconnected)
 }
