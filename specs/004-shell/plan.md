@@ -192,7 +192,10 @@ in a task sandbox; found building Otos, 2026-11-21). Each job also gets
 (`ibtoold`) outlives a build and keeps the fence of the job that started it, its pipes live in
 the user's shared temporary folder, and an asset-catalog build that picked up a fenced one,
 in another job or in the Owner's own Xcode, couldn't write its output; with its own name each
-job starts daemons only it uses, stopped with its leftovers. Each wrapper runs the next tool of its name on the PATH. The
+job starts daemons only it uses, stopped with its leftovers. Exporting an app icon made in
+Icon Composer (`.icon`) needs LaunchServices, so such a build declares `open` like a package
+folder does; its error ("Failed to create a catalog from the Icon Studio document") adds the
+`open` hint. Each wrapper runs the next tool of its name on the PATH. The
 fence applies to all of it, so what a build may write is unchanged. A program called by full
 path (`/usr/bin/xcodebuild`, `xcrun xcodebuild`) gets no wrapper; the answer then says a program
 tried a sandbox of its own (FR-334), which is told apart from a refused write by

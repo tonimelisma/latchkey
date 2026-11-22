@@ -306,7 +306,7 @@ enum Fence {
 
     /// Added to an answer whose output shows a refused open or script (FR-328).
     static let handoffHint =
-        "[Opening apps, files, or links through macOS (open) is refused unless declared: what it starts runs outside the fence; run it again with uses [\"open\"] if the owner's task needs it. Scripting other apps (osascript) isn't possible from Shell: use Latchkey's own tools for Notes, Messages, Calendar, Reminders, Contacts, Safari, or Computer control. Starting background services (launchctl, brew services) isn't possible either.]"
+        "[Opening apps, files, or links through macOS (open) is refused unless declared: what it starts runs outside the fence; run it again with uses [\"open\"] if the owner's task needs it. Scripting other apps (osascript) isn't possible from Shell: use Latchkey's own tools for Notes, Messages, Calendar, Reminders, Contacts, Safari, or Computer control. Starting background services (launchctl, brew services) isn't possible either. A build that exports an app icon made in Icon Composer (.icon) needs uses [\"open\"] too.]"
 
     /// Added to an answer whose output shows a refused change of settings (FR-329).
     static let settingsHint =
@@ -330,6 +330,9 @@ enum Fence {
             || [
                 "unable to find application", "kLSExecutableIncorrectFormat", "(-10814)",
                 "no application knows how to open",
+                // An app icon made in Icon Composer is exported through macOS's file types
+                // (FR-333, building Otos, 2026-11-21).
+                "failed to create a catalog from the icon studio document",
                 "application isn’t running. (-600)", "application isn't running. (-600)",
             ].contains { needle in
                 lines.contains { $0.contains(needle.lowercased()) }

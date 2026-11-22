@@ -423,6 +423,15 @@ import Testing
         #expect(!write.nestedSandbox)
     }
 
+    /// An app icon made in Icon Composer needs macOS's file types, so the answer says to declare
+    /// open (building Otos through Latchkey, 2026-11-21).
+    @Test func anIconComposerIconAsksForOpen() {
+        let refused = Fence.refusals(
+            in: "error: Failed to create a catalog from the Icon Studio document: /x/Otos.icon\n")
+        #expect(refused.handoff)
+        #expect(Fence.handoffHint.contains("Icon Composer"))
+    }
+
     @Test func theAnswerExplainsANestedSandbox() async throws {
         let run = try #require(ShellCapability.operations(jobs: jobs).first { $0.tool.name == "shell_run" })
         let r = await run.handler(
