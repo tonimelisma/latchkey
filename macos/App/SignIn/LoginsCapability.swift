@@ -332,6 +332,18 @@ enum LoginsCapability {
         }
 
         if kind != "user" { secret = value }
+        // The button is on the page before anything is typed, so a button gone after the typing
+        // can only be the page going on by itself (review 2026-11-22: a wrong reference must not
+        // count as sent and clean up the code's message).
+        if !press.isEmpty {
+            do {
+                _ = try await run("(function () { \(PageScripts.find(press)) return 'ok\\t{}'; })()")
+            } catch SafariBrowser.Failure.elementMissing {
+                return .text(
+                    "There's no \(press) on the page to press, so nothing was typed. Read the page again with browser_read.",
+                    isError: true)
+            }
+        }
         // Type, then press, then empty what was typed (FR-1311), whatever happened in between.
         struct Step: Decodable {
             var step: String

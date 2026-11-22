@@ -447,6 +447,21 @@ import Testing
         #expect(r.plainText.contains("Enter your password") && d.keys == ["u1"])
     }
 
+    /// Review 2026-11-22: a button that isn't on the page before the typing is an error, nothing
+    /// is typed, and the code's message stays.
+    @Test func aButtonNotOnThePageTypesNothing() async throws {
+        let (f, c, d) = codes(texts: [CodeFinder.Message(id: "u2", text: "Your code: 3205", date: Date())])
+        let s = try setup(finder: f, cleanup: c)
+        defer { s.own.closeAll() }
+        let p = try await s.own.open(html: Self.codeField, base: Self.base)
+        let r = await call(
+            s, p,
+            ["field": .string("e1"), "fill": .string("code"), "press": .string("e77"), "code_from": .string("text")])
+        #expect(r.isError && r.plainText.contains("There's no e77 on the page"), "\(r.plainText)")
+        #expect(try await run(s, p, "document.querySelector('[data-latchkey=e1]').value") == "")
+        #expect(d.keys.isEmpty)
+    }
+
     /// A page that moves the focus to a search box gets no digit there: the code goes on only
     /// into code fields.
     @Test func theFocusNeverTakesACodeOutOfCodeFields() async throws {
