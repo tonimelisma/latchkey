@@ -330,6 +330,58 @@ import Testing
         #expect(r.plainText.contains("shows a check Latchkey can't answer"), "\(r.plainText)")
         #expect(!r.plainText.contains("refused"))
     }
+
+    /// United, 2026-11-21: a MileagePlus number shown masked after the first step, then six
+    /// one-digit boxes whose input moves to the next box and whose delete in an empty box clears
+    /// the box before (the first box came out empty).
+    static let unitedLike = """
+        <title>Sign in</title><div id="app">
+        <input id="user" autocomplete="username"><button id="next">Continue</button></div>
+        <script>
+        var app = document.getElementById('app');
+        document.getElementById('next').onclick = function () {
+          if (document.getElementById('user').value.toLowerCase() !== 'ann') return;
+          app.innerHTML = '<input id="user" autocomplete="username" value="******ann"><input id="pw" type="password"><button id="go">Sign in</button>';
+          document.getElementById('go').onclick = function () {
+            app.innerHTML = '<p>Enter the verification code sent via text.</p>' + [0,1,2,3,4,5].map(function (i) { return '<input class="b" maxlength="1" inputmode="numeric">'; }).join('') + '<button id="v">Continue</button>';
+            var b = Array.prototype.slice.call(document.querySelectorAll('.b'));
+            b.forEach(function (x, i) {
+              x.addEventListener('input', function (ev) {
+                if (ev.inputType === 'deleteContentBackward' && !x.value && i > 0) { b[i - 1].value = ''; b[i - 1].focus(); return; }
+                if (x.value && i < 5) b[i + 1].focus();
+              });
+            });
+            document.getElementById('v').onclick = function () {
+              var c = b.map(function (x) { return x.value; }).join('');
+              app.innerHTML = c === '320518' ? '<h1>Welcome ann</h1>' : '<p role="alert">Wrong code</p>';
+            };
+          };
+        };
+        </script>
+        """
+
+    @Test func sixCodeBoxesAreFilledWholeAfterAMaskedUserName() async throws {
+        let texts = TextedCodesTests.Texts()
+        texts.all = [
+            .init(id: "ua-1", text: "Your United verification code is 320518.", date: Date().addingTimeInterval(60))
+        ]
+        let (r, _, own) = try await run(texts, deleted: .init(), page: Self.unitedLike)
+        defer { own.closeAll() }
+        #expect(r.plainText.contains("Signed in to a.test as ann."), "\(r.plainText)")
+    }
+
+    /// A code a call took but couldn't finish with is tried once more by the next call.
+    @Test func aCodeTakenEarlierIsTriedOnceMore() async {
+        let texts = TextedCodesTests.Texts()
+        let start = Date()
+        texts.all = [.init(id: "t1", text: "Your code is 445566", date: start.addingTimeInterval(1))]
+        let c = TextedCodesTests().codes(texts)
+        #expect(await c.wait(since: start, until: .now + .seconds(1), site: "a.test")?.code == "445566")
+        #expect(await c.wait(since: start, until: .now + .seconds(1), site: "a.test")?.code == "445566", "once more")
+        #expect(
+            await c.wait(since: start, until: .now + .milliseconds(200), poll: .milliseconds(50), site: "a.test") == nil
+        )
+    }
 }
 
 /// Apple Mail's side (FR-1365, FR-1366).

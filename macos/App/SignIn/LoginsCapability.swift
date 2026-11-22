@@ -277,7 +277,9 @@ enum LoginsCapability {
             browser = "Latchkey's own browser"
             let failed: Bool =
                 switch outcome {
-                case .needsCode, .check, .refused, .couldntFill: true
+                // Not .couldntFill: that is Latchkey's own trouble with a field, not the site's answer
+                // (United fell back for it, 2026-11-21).
+                case .needsCode, .check, .refused: true
                 default: false
                 }
             // Spec 013 FR-1352: where Latchkey's own sign-in can't finish, the owner's Safari

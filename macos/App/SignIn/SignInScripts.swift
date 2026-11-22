@@ -124,8 +124,12 @@ extension PageScripts {
           function put(e, v) {
             if (e.focus) e.focus();
             filled.push(e);
-            setter.call(e, '');
-            e.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'deleteContentBackward' }));
+            // Emptied only when it holds something: code boxes take a delete in an empty box as
+            // Backspace into the box before (United left its first box empty, 2026-11-21).
+            if (e.value) {
+              setter.call(e, '');
+              e.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'deleteContentBackward' }));
+            }
             for (var i = 0; i < v.length; i++) {
               var ch = v.charAt(i), up = ch.toUpperCase();
               var code = /[a-z]/i.test(ch) ? 'Key' + up : (/[0-9]/.test(ch) ? 'Digit' + ch : '');
@@ -144,9 +148,15 @@ extension PageScripts {
             }
             e.dispatchEvent(new Event('change', { bubbles: true }));
             if (e.blur) e.blur();
-            var squash = function (s) { return String(s).replace(/[\\s-]/g, ''); };
-            return squash(e.value) === squash(v);
+            return same(e.value, v);
           }
+          // A field may format what is typed (spaces, dashes, dots, capitals): the same then.
+          function same(a, b) {
+            var squash = function (s) { return String(s).replace(/[\\s.\\-()]/g, '').toLowerCase(); };
+            return squash(a) === squash(b);
+          }
+          // A user name the page already shows, as typed or masked ("******768"): left as it is.
+          function shown(e, v) { return same(e.value, v) || (/[*•●]/.test(e.value) && e.value.length >= 3); }
           function send(e) {
             var form = e.form || (e.closest && e.closest('form'));
             var buttons = form ? Array.prototype.filter.call(form.querySelectorAll('button, input[type="submit"]'), seen) : [];
@@ -171,7 +181,7 @@ extension PageScripts {
             return 'ok\\t' + JSON.stringify({ step: 'delivery' });
           }
           if (passwords.length && pass) {
-            if (userField && user && userField.value !== user && !put(userField, user)) return unfilled;
+            if (userField && user && !shown(userField, user) && !put(userField, user)) return unfilled;
             if (!put(passwords[0], pass)) return unfilled;
             send(passwords[0]);
             return 'ok\\t' + JSON.stringify({ step: 'password' });
@@ -180,7 +190,9 @@ extension PageScripts {
             if (boxes.length) {
               var all = true;
               boxes.forEach(function (b, i) { all = put(b, code.charAt(i)) && all; });
-              if (!all) return unfilled;
+              // Every box holds its digit at the end, not only when it was typed.
+              var held = boxes.map(function (b) { return b.value; }).join('');
+              if (!all || !same(held, code.slice(0, boxes.length))) return unfilled;
               send(boxes[boxes.length - 1]);
             } else {
               if (!put(codeField, code)) return unfilled;

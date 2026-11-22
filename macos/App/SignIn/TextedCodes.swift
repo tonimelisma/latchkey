@@ -38,6 +38,9 @@ final class TextedCodes {
     /// whether it can read the owner's email (FR-1364).
     var firstWait: Duration = .seconds(20)
     private var used: Set<String> = []
+    /// The last code taken for each site, when, and whether it was tried again (FR-1361: a code a
+    /// call took but couldn't finish with is tried once more by the next call; United, 2026-11-21).
+    private var last: [String: (code: String, message: String, at: Date, again: Bool)] = [:]
     /// When each site first asked for a code, for the 2 minutes of FR-1361.
     private var requested: [String: Date] = [:]
     private let defaults: UserDefaults?
@@ -96,8 +99,14 @@ final class TextedCodes {
                 if MailCodes.Place(key: t.id) != nil, !MailCodes.names(site, in: t.text) { continue }
                 if let code = Self.code(in: t.text) {
                     used.insert(t.id)
+                    if !site.isEmpty { last[site] = (code, t.id, Date(), false) }
                     return (code, t.id)
                 }
+            }
+            // No new one: the code an earlier call took for this site, once, while it is fresh.
+            if !site.isEmpty, let l = last[site], !l.again, Date().timeIntervalSince(l.at) < 300 {
+                last[site]?.again = true
+                return (l.code, l.message)
             }
             guard ContinuousClock.now + poll < until else { return nil }
             try? await Task.sleep(for: poll)
