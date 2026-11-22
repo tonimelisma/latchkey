@@ -297,6 +297,23 @@ import Testing
         #expect(TextedCodes.code(in: "Your code is 482913x") == nil)
     }
 
+    /// IKEA, 2026-11-21: after a right code its page kept the code field a moment before moving
+    /// on, and Latchkey called it refused (and switched the site to Safari).
+    @Test func aCodePageThatMovesOnLateIsSignedInNotRefused() async throws {
+        let texts = TextedCodesTests.Texts()
+        texts.all = [.init(id: "late-1", text: "Your code is 320518", date: Date().addingTimeInterval(60))]
+        let slow = Self.codePage.replacingOccurrences(
+            of:
+                "if (document.getElementById('otp').value === '320518') { app.innerHTML = '<h1>Welcome ann</h1>'; return; }",
+            with:
+                "if (document.getElementById('otp').value === '320518') { setTimeout(function () { app.innerHTML = '<h1>Welcome ann</h1>'; }, 1500); return; }"
+        )
+        #expect(slow != Self.codePage)
+        let (r, _, own) = try await run(texts, deleted: .init(), page: slow)
+        defer { own.closeAll() }
+        #expect(r.plainText.contains("Signed in to a.test as ann"), "\(r.plainText)")
+    }
+
     @Test func aBodyNotYetDownloadedIsAskedOfMail() async throws {
         let mail = TextedCodesTests.Texts()
         let key = MailCodes.Place(id: 77, account: "ACCT", mailbox: "Inbox").key

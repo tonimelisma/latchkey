@@ -167,6 +167,18 @@ enum SignInFlow {
             filledAny = true
             r = try await run(PageScripts.signInState, false)
             page = try state(r.detail)
+            // A site may keep the field it was sent on screen a moment before moving on (IKEA's
+            // code page, 2026-11-21: read as a refusal, though the code had signed in): looked at
+            // again for up to 8 s, unless the site says something went wrong.
+            var looks = 0
+            while looks < 8, page.problem.isEmpty,
+                (step == "code" && page.code) || (step == "password" && page.password)
+            {
+                looks += 1
+                await wait(.seconds(1))
+                r = try await run(PageScripts.signInState, false)
+                page = try state(r.detail)
+            }
         }
         if sentDelivery && page.password && !page.code && !sentCode { return .check }
         if page.password && sentPassword || page.code && sentCode { return .refused(page.problem) }
