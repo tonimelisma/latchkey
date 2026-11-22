@@ -159,7 +159,11 @@ enum LoginsCapability {
         guard address.lowercased().hasPrefix("https:") else {
             return .text("Latchkey signs in only on https pages; this page is \(address.prefix(200)).", isError: true)
         }
-        let here = logins.filter { SiteMatch.fills(site: $0.site, on: address) }
+        // The sign-in saved for this very page first, then one for a site it is under, then one
+        // elsewhere on the same registered site.
+        let pageHost = host.lowercased()
+        func near(_ l: SavedSignIn) -> Int { l.site == pageHost ? 0 : pageHost.hasSuffix("." + l.site) ? 1 : 2 }
+        let here = logins.filter { SiteMatch.fills(site: $0.site, on: address) }.sorted { near($0) < near($1) }
         guard !here.isEmpty else {
             let sites = Array(Set(logins.map(\.site))).sorted()
             return .text(

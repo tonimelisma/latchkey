@@ -45,11 +45,13 @@ import WebKit
     @Test func theSitesWithAPasswordAreLatchkeysOwn() throws {
         let (s, _, _) = try Self.sessions()
         #expect(s.isOwn("a.test") && s.isOwn("www.a.test") && s.isOwn("accounts.g.test"))
-        #expect(!s.isOwn("b.test") && !s.isOwn("g.test") && !s.isOwn("evil-a.test"))
+        #expect(!s.isOwn("b.test") && !s.isOwn("evil-a.test"))
+        // Any page of the same registered site, as Passwords fills (2026-11-21).
+        #expect(s.isOwn("g.test") && s.isOwn("login.g.test"))
         #expect(s.ownSite("www.a.test") == "a.test")
         // A cookie reaches an own site from the site, under it, or a wider domain of it.
         #expect(s.reaches(".a.test") && s.reaches("x.a.test") && s.reaches(".g.test") && s.reaches("accounts.g.test"))
-        #expect(!s.reaches("b.test") && !s.reaches("other.g.test") && !s.reaches("evil-a.test"))
+        #expect(!s.reaches("b.test") && !s.reaches("evil-a.test") && s.reaches("other.g.test"))
     }
 
     @Test func whileSignInIsOffNothingIsOwn() throws {

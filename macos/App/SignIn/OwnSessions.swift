@@ -150,7 +150,11 @@ final class OwnSessions {
     func reaches(_ domain: String) -> Bool {
         let d = Self.bare(domain)
         guard !d.isEmpty else { return false }
-        return sites().contains { $0 == d || $0.hasSuffix("." + d) || d.hasSuffix("." + $0) }
+        let mine = SiteMatch.registered(d)
+        return sites().contains {
+            $0 == d || $0.hasSuffix("." + d) || d.hasSuffix("." + $0)
+                || (mine != nil && SiteMatch.registered($0) == mine)
+        }
     }
 
     /// FR-1352: the site's own sign-in couldn't finish; Safari's is used there until the next

@@ -123,7 +123,11 @@ interface another app can read (`research.md`), so the only way in is a copy the
   `www.amazon.com`), into the page itself and never into a frame from another site (Toni,
   2026-11-20: "Its site and subdomains"). A site that is itself a public suffix (a shared host
   such as `herokuapp.com`, by the Public Suffix List), or an international or malformed name,
-  fills on its own host only.
+  fills on its own host only. "Its site" is the registered site, as Passwords and Safari fill: a
+  sign-in saved at `access.bannerlife.com` fills on `login.bannerlife.com` (live test 2026-11-21:
+  Banner Life's sign-in page is on a sibling host); the one saved for the page's own host is
+  used first. A shared host's customers are each their own registered site, and an IP address
+  fills only on itself.
 - **FR-1328** Which site a page is on shall be decided from the browser's own record of its
   address, never from anything the page's scripts report, and the page shall be checked again
   just before each fill (security review, 2026-11-21).

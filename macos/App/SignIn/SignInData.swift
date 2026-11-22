@@ -113,7 +113,22 @@ enum SiteMatch {
             var host = u.host()?.lowercased()
         else { return false }
         if host.hasSuffix(".") { host.removeLast() }  // "example.com." is example.com
-        return host == site || (host.hasSuffix("." + site) && !PublicSuffix.isSuffix(site))
+        if host == site || (host.hasSuffix("." + site) && !PublicSuffix.isSuffix(site)) { return true }
+        // Any page of the same registered site, as Passwords and Safari fill (Banner Life's
+        // login.bannerlife.com for a sign-in saved at access.bannerlife.com, 2026-11-21); never
+        // across a shared host's customers (each is its own registered site) or IP addresses.
+        guard let mine = registered(site) else { return false }
+        return registered(host) == mine
+    }
+
+    /// The registered site of a host ("login.bannerlife.com" -> "bannerlife.com"); nil for an IP
+    /// address, a name without a dot, or a public suffix itself.
+    static func registered(_ host: String) -> String? {
+        let h = host.lowercased()
+        guard h.contains("."), !h.contains(":"), !h.allSatisfy({ $0.isNumber || $0 == "." }) else { return nil }
+        let r = PublicSuffix.registrable(h)
+        guard r.contains("."), !PublicSuffix.isSuffix(r) else { return nil }
+        return r
     }
 }
 

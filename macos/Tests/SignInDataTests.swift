@@ -99,6 +99,14 @@ import Testing
         #expect(SiteMatch.fills(site: "herokuapp.com", on: "https://herokuapp.com/"))
         #expect(SiteMatch.fills(site: "the-internet.herokuapp.com", on: "https://the-internet.herokuapp.com/login"))
         #expect(!SiteMatch.fills(site: "the-internet.herokuapp.com", on: "https://other.herokuapp.com/login"))
+        // Banner Life, 2026-11-21: saved at access.bannerlife.com, signed in at login.bannerlife.com.
+        #expect(SiteMatch.fills(site: "access.bannerlife.com", on: "https://login.bannerlife.com/signin"))
+        #expect(SiteMatch.fills(site: "na.account.amazon.com", on: "https://www.amazon.com/ap/signin"))
+        #expect(!SiteMatch.fills(site: "access.bannerlife.com", on: "https://bannerlife.com.evil.test/"))
+        #expect(!SiteMatch.fills(site: "access.bannerlife.com", on: "https://evilbannerlife.com/"))
+        #expect(!SiteMatch.fills(site: "a.the-internet.herokuapp.com", on: "https://b.other.herokuapp.com/"))
+        #expect(!SiteMatch.fills(site: "192.168.0.1", on: "https://10.0.0.1/"), "IP addresses only exactly")
+        #expect(SiteMatch.fills(site: "192.168.0.1", on: "https://192.168.0.1/"))
         #expect(SiteMatch.site(of: "https://www.github.io/") == "www.github.io")
         #expect(SiteMatch.fills(site: "bbc.co.uk", on: "https://account.bbc.co.uk/signin"))
         // A trailing dot is the same host; it never gets past the suffix check.
