@@ -243,6 +243,9 @@ enum LoginsCapability {
         case .waitingForCode where readMail:
             said =
                 "\(host) sent a verification code, and it hasn't reached Messages or Apple Mail on this Mac yet. Call logins_sign_in again on this page with no_email_access true in a few seconds."
+        case .waitingForCode where TextedCodes.saysText(page.text):
+            said =
+                "\(host) texted a verification code to the owner's phone, and it hasn't reached Messages on this Mac yet. Call logins_sign_in again on this page in a few seconds: Latchkey takes the code from Messages and fills it in itself."
         case .waitingForCode:
             // FR-1364: Claude's own email tool first (Toni, 2026-11-21: "always prefer direct MCP
             // instead of Apple Mail tricks"); Apple Mail only when Claude has none.

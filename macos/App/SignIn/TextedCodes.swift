@@ -115,6 +115,13 @@ final class TextedCodes {
 
     func forget(_ site: String) { requested[site] = nil }
 
+    /// Whether a code step says the code went by text, not email ("sent to ******0790 via text").
+    nonisolated static func saysText(_ page: String) -> Bool {
+        let t = page.lowercased()
+        let text = t.range(of: #"\b(via text|by text|text message|texted|sms)\b"#, options: .regularExpression) != nil
+        return text && !t.contains("email") && !t.contains("e-mail")
+    }
+
     /// The email in Apple Mail from the last 10 minutes holding exactly `code` (one Claude read with
     /// its own email tool), for archiving it (FR-1366); nil when Mail doesn't have it. Mail is
     /// only read here, never started.

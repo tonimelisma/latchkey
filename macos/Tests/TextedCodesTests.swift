@@ -221,8 +221,9 @@ import Testing
         let deleted = TextedCodesTests.Deleted()
         let (r, c, own) = try await run(texts, deleted: deleted)
         defer { own.closeAll() }
-        #expect(r.plainText.contains("none has reached Messages on this Mac yet"), "\(r.plainText)")
-        #expect(r.plainText.contains("Can you read the owner's email with a tool of your own"))
+        // The page says the code was texted: no question about email (United, 2026-11-21).
+        #expect(r.plainText.contains("texted a verification code"), "\(r.plainText)")
+        #expect(!r.plainText.contains("Can you read the owner's email"))
         #expect(!r.isError)
         let later = Date().addingTimeInterval(5)
         #expect(c.requested("a.test", now: later) < later, "the next call waits for the same text")
@@ -368,6 +369,56 @@ import Testing
         let (r, _, own) = try await run(texts, deleted: .init(), page: Self.unitedLike)
         defer { own.closeAll() }
         #expect(r.plainText.contains("Signed in to a.test as ann."), "\(r.plainText)")
+    }
+
+    /// United's second try (2026-11-21): a widget that knows its active box only from focus events
+    /// (which a hidden browser doesn't fire on focus()) and redraws every box from its own state;
+    /// a paste into the first box spreads the whole code.
+    static func reactLike(pasteOnly: Bool = false) -> String {
+        """
+        <title>Sign in</title><div id="app"><input id="pw" type="password"><button id="go">Sign in</button></div>
+        <script>
+        var app = document.getElementById('app');
+        document.getElementById('go').onclick = function () {
+          app.innerHTML = '<p>Enter the code sent to ******0790 via text.</p><div id="w">' + [0,1,2,3,4,5].map(function () { return '<input class="b" maxlength="1" autocomplete="one-time-code">'; }).join('') + '</div><button id="v">Continue</button>';
+          var b = Array.prototype.slice.call(document.querySelectorAll('.b')), vals = ['', '', '', '', '', ''], active = 0;
+          function draw() { b.forEach(function (x, i) { x.value = vals[i]; }); }
+          b.forEach(function (x, i) {
+            x.addEventListener('focusin', function () { active = i; });
+            x.addEventListener('paste', function (ev) {
+              ev.preventDefault();
+              var t = (ev.clipboardData && ev.clipboardData.getData('text/plain')) || '';
+              t.split('').slice(0, 6).forEach(function (c, k) { vals[k] = c; }); draw();
+            });
+            x.addEventListener('input', function (ev) {
+              if (\(pasteOnly ? "true" : "false")) { draw(); return; }
+              var c = x.value.slice(-1); vals[active] = c; draw();
+              if (c && active < 5) { active++; b[active].focus(); }
+            });
+          });
+          document.getElementById('v').onclick = function () {
+            app.innerHTML = vals.join('') === '320518' ? '<h1>Welcome ann</h1>' : '<p role="alert">Wrong code</p>';
+          };
+        };
+        </script>
+        """
+    }
+
+    @Test(arguments: [false, true])
+    func codeBoxesThatFollowFocusEventsOrTakeOnlyAPaste(_ pasteOnly: Bool) async throws {
+        let texts = TextedCodesTests.Texts()
+        texts.all = [
+            .init(id: "ua-2", text: "Your United verification code is 320518.", date: Date().addingTimeInterval(60))
+        ]
+        let (r, _, own) = try await run(texts, deleted: .init(), page: Self.reactLike(pasteOnly: pasteOnly))
+        defer { own.closeAll() }
+        #expect(r.plainText.contains("Signed in to a.test as ann."), "\(r.plainText)")
+    }
+
+    @Test func aCodeSentByTextIsSaidSoWithoutAskingAboutEmail() {
+        #expect(TextedCodes.saysText("Enter the verification code sent to ******0790 via text."))
+        #expect(!TextedCodes.saysText("We sent a code to your email or by text"))
+        #expect(!TextedCodes.saysText("Enter the code we emailed you"))
     }
 
     /// A code a call took but couldn't finish with is tried once more by the next call.

@@ -121,8 +121,15 @@ extension PageScripts {
           // kept only "uu" of "dummyuser", 2026-11-21). A page script may handle a key itself
           // (preventDefault); then its own handling stands. True when the field holds the value.
           var setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
-          function put(e, v) {
+          // Latchkey's browser is hidden, so focus() fires no focus event; code widgets that track
+          // the active box by focus events (United's, 2026-11-21) get them sent here.
+          function focusOn(e) {
             if (e.focus) e.focus();
+            e.dispatchEvent(new FocusEvent('focusin', { bubbles: true }));
+            e.dispatchEvent(new FocusEvent('focus'));
+          }
+          function put(e, v) {
+            focusOn(e);
             filled.push(e);
             // Emptied only when it holds something: code boxes take a delete in an empty box as
             // Backspace into the box before (United left its first box empty, 2026-11-21).
@@ -191,8 +198,23 @@ extension PageScripts {
               var all = true;
               boxes.forEach(function (b, i) { all = put(b, code.charAt(i)) && all; });
               // Every box holds its digit at the end, not only when it was typed.
-              var held = boxes.map(function (b) { return b.value; }).join('');
-              if (!all || !same(held, code.slice(0, boxes.length))) return unfilled;
+              var heldCode = function () { return boxes.map(function (b) { return b.value; }).join(''); };
+              if (!same(heldCode(), code.slice(0, boxes.length))) {
+                // Else the whole code pasted into the first box, as password managers do.
+                boxes.forEach(function (b) { if (b.value) { focusOn(b); setter.call(b, ''); b.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'deleteContentBackward' })); } });
+                var first = boxes[0];
+                focusOn(first);
+                var data = null;
+                try { data = new DataTransfer(); data.setData('text/plain', code); } catch (x) {}
+                var go = first.dispatchEvent(new ClipboardEvent('paste', { clipboardData: data, bubbles: true, cancelable: true }));
+                if (go) {
+                  first.dispatchEvent(new InputEvent('beforeinput', { data: code, inputType: 'insertFromPaste', bubbles: true, cancelable: true }));
+                  setter.call(first, code);
+                  first.dispatchEvent(new InputEvent('input', { data: code, inputType: 'insertFromPaste', bubbles: true }));
+                }
+                filled.push.apply(filled, boxes);
+              }
+              if (!same(heldCode(), code.slice(0, boxes.length))) return unfilled;
               send(boxes[boxes.length - 1]);
             } else {
               if (!put(codeField, code)) return unfilled;
