@@ -477,6 +477,25 @@ final class FakeSafariTabs: ScriptRunner, @unchecked Sendable {
         #expect(fake.userWindow.current == 1, "back also when the shot failed")
     }
 
+    /// Citi, 2026-11-21: Claude's own tab, sent on by the site (www.citi.com to online.citi.com,
+    /// no mark, not an address Latchkey loaded) after the load's limit: found again and used, not
+    /// "Safari's tabs changed" on every call. Another tab changing still loses it.
+    @Test func claudesOwnTabIsUsedAfterTheSiteSendsItOn() async throws {
+        let fake = FakeSafariTabs()
+        let b = SafariBrowser(scripts: fake, settleLimit: .milliseconds(200))
+        _ = try await b.openTab("https://www.citi.com/")
+        try await Task.sleep(for: .milliseconds(1500))  // past the load's allowance
+        let n = fake.windows[0].tabs.count - 1
+        fake.windows[0].tabs[n].url = "https://online.citi.com/US/ag/dashboard/summary"
+        fake.windows[0].tabs[n].mark = nil
+        let page = try await b.read(offset: 0)
+        #expect(page.url == "https://online.citi.com/US/ag/dashboard/summary")
+        #expect(try await b.read(offset: 0).url == page.url, "marked again: the next call works too")
+        fake.windows[0].tabs[n].mark = nil
+        fake.windows[0].tabs[0].url = "https://mail.example.com/other"
+        await #expect(throws: SafariBrowser.Failure.tabGone) { _ = try await b.read(offset: 0) }
+    }
+
     /// Citi, 2026-11-21: a tab of Claude's own whose page redirected after the load's limit (no
     /// mark, not the address loaded) is still Claude's while every other tab is as it was; an
     /// owner's tab never is, and a change to any other tab loses it.

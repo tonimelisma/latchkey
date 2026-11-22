@@ -784,6 +784,13 @@ actor SafariBrowser {
         t.others = survey.fingerprint(without: index)
         let row = survey.rows.first { $0.index == index }
         if row?.marked == true { t.fingerprint = survey.fingerprint }
+        // A tab found without its mark (a tab of Claude's own that the site sent on, Citi's
+        // www.citi.com to online.citi.com, 2026-11-21): the script's own check, just before it
+        // acts, takes it only at the address found here, so a page that changes in between is
+        // still left alone. Without it every script there failed with "tabs changed".
+        if row?.marked != true, let shown = row?.address, !shown.isEmpty, !loading.contains(shown) {
+            loading.append(shown)
+        }
         picked?.tab = t
         return Found(window: window, tab: t, loading: loading, waiting: row?.waiting ?? false)
     }
