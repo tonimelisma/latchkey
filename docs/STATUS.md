@@ -199,6 +199,12 @@ Latchkey loaded. Now it also takes the address Latchkey's own survey just found 
 And a click that sends one of the owner's tabs to a page Latchkey can't surely tell is the same
 tab (Citi's End, View All Statements) ran, but was answered "nothing was done to any tab"; it
 is now answered as done, with the tab dropped as before.
+Then (0.8.215, 2026-11-22 00:00) Latchkey signed in to Citi by itself in one call: password, Text
+me, the texted code from Messages into the six boxes, the dashboard; the text was deleted, and
+closing the page closed its tab. Last gap: Citi had fallen back to Safari's sign-in, yet its
+pages opened in Latchkey's own browser with no sign-in, because Safari's Citi cookies end with
+the session and didn't read as signed in; a site that fell back now opens in Safari while
+unlocked (FR-1352).
 Live check (0.8.175, Mac locked, 2026-11-21 00:54): groups logins, browser, files, shell: 51 of 51
 worked. A fresh Claude signed in to the-internet.herokuapp.com as tomsmith with the fixture's test
 sign-in (`logins-fixture.sh`); none of its 10 tool results held the password except the test

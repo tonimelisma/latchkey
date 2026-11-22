@@ -218,6 +218,19 @@ import WebKit
         #expect(own.inSafari("https://b.test/account"), "a site with no saved password: the owner's Safari, as before")
     }
 
+    /// Citi, 2026-11-21: a site whose own sign-in fell back opens in Safari while unlocked, even
+    /// when its Safari cookies end with the session (so don't read as signed in); locked, never.
+    @Test func aFallenBackSiteOpensInSafariWithoutALastingSignIn() throws {
+        let (s, _, _) = try OwnSessionsTests.sessions(clock: .live())
+        s.fallBack("a.test")
+        var locked = false
+        let own = OwnPages(cookies: { [] }, isLocked: { locked }, record: { _ in }, sessions: s)
+        #expect(own.inSafari("https://a.test/login"))
+        #expect(!own.inSafari("https://b.test/"), "another site without a sign-in stays in Latchkey's browser")
+        locked = true
+        #expect(!own.inSafari("https://a.test/login"), "while locked every page is Latchkey's own")
+    }
+
     @Test func keptSignInsComeBackInANewStore() async throws {
         let (s, _, _) = try OwnSessionsTests.sessions(clock: .live())
         s.keep([

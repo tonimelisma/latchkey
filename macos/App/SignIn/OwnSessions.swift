@@ -180,6 +180,13 @@ final class OwnSessions {
         return all.sorted()
     }
 
+    /// FR-1352: whether `host` is on a held site whose own sign-in fell back to Safari's.
+    func fellBackOn(_ host: String) -> Bool {
+        let h = Self.bare(host)
+        guard !h.isEmpty, on(), case .some(let held) = signIns.load() else { return false }
+        return fellBack(held.imported).contains { SiteMatch.fills(site: $0, on: "https://\(h)/") }
+    }
+
     func fellBack(_ site: String) -> Bool {
         guard case .some(let held) = signIns.load() else { return false }
         return fellBack(held.imported).contains(site)
