@@ -774,14 +774,10 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate {
                 }
                 return value.map { "\($0)" } ?? "undefined"
             }
-            if !PageScripts.usesAwait(code) {
+            if !PageScripts.usesAwait(code), !PageScripts.returnsOutsideFunction(code) {
                 // Given to WebKit as it is: a page's Content Security Policy forbids the eval that
                 // Safari's wrapper uses (seen live on GitHub), but not a script the app itself runs.
-                do { return try await evaluate(code, text: shown) } catch let f as SafariBrowser.Failure {
-                    throw f
-                } catch {
-                    guard PageScripts.wantsFunction(code, failure: PageScripts.failure(error)) else { throw error }
-                }
+                return try await evaluate(code, text: shown)
             }
             var last: Error?
             for body in PageScripts.asyncBodies(code) {

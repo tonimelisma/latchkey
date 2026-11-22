@@ -360,9 +360,9 @@ actor SafariBrowser {
 
     func run(_ code: String, answer: DialogAnswer = DialogAnswer()) async throws -> String {
         beginAction()
-        if !PageScripts.usesAwait(code) {
+        if !PageScripts.usesAwait(code), !PageScripts.returnsOutsideFunction(code) {
             let out = try await javaScript(PageScripts.custom(code), answer: answer)
-            if !PageScripts.evalRefused(out), !PageScripts.wantsFunction(code, failure: out) { return out }
+            if !PageScripts.evalRefused(out) { return out }
         }
         return try await runAsync(code, answer: answer)
     }

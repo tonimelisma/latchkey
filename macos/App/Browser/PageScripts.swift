@@ -1,4 +1,5 @@
 import Foundation
+import JavaScriptCore
 
 /// JavaScript that runs inside the page (spec 005 plan D3). Values from Claude are JSON-encoded
 /// into the script, never spliced in as code.
@@ -559,12 +560,15 @@ enum PageScripts {
 
     /// Whether the page's policy refused the eval `custom` uses (GitHub, Google Cloud console:
     /// "unsafe-eval", Trusted Types; 2026-11-01): the script then runs as spliced code.
-    /// A script with `return` outside a function, given as statements (live 2026-11-22: "return
-    /// JSON.stringify(…)" failed with "Return statements are only valid inside functions"): it
-    /// runs as a function's body instead, as a script with await does.
-    static func wantsFunction(_ code: String, failure: String) -> Bool {
-        failure.contains("SyntaxError") && failure.contains("Return")
-            && code.range(of: #"\breturn\b"#, options: .regularExpression) != nil
+    /// Whether Claude's script has `return` outside a function: valid as a function's body, not as
+    /// a script (live 2026-11-22: "return JSON.stringify(…)" failed with "Return statements are
+    /// only valid inside functions"). It then runs as a function's body, as a script with await
+    /// does. Decided here, by JavaScriptCore's syntax check in Latchkey itself, before the script
+    /// runs: no page takes part, nothing runs, and the script runs once (security review
+    /// 2026-11-22: never run again because of what a run gave).
+    static func returnsOutsideFunction(_ code: String) -> Bool {
+        guard code.range(of: #"\breturn\b"#, options: .regularExpression) != nil else { return false }
+        return !SyntaxCheck.valid(code) && SyntaxCheck.valid("(function () {\n" + code + "\n})")
     }
 
     static func evalRefused(_ answer: String) -> Bool {
@@ -608,4 +612,17 @@ struct DialogAnswer: Sendable, Equatable {
     var text: String?
     /// Whether Claude answered anything in advance.
     var given: Bool { confirm != nil || text != nil }
+}
+
+/// JavaScriptCore's syntax check, in a context of Latchkey's own: parses, never runs.
+enum SyntaxCheck {
+    static func valid(_ code: String) -> Bool {
+        let group = JSContextGroupCreate()
+        defer { JSContextGroupRelease(group) }
+        let context = JSGlobalContextCreateInGroup(group, nil)
+        defer { JSGlobalContextRelease(context) }
+        let script = JSStringCreateWithUTF8CString(code)
+        defer { JSStringRelease(script) }
+        return JSCheckScriptSyntax(context, script, nil, 1, nil)
+    }
 }

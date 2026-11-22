@@ -99,10 +99,11 @@ import Testing
         _ = try await b.open(html: "<p>Hi</p>", base: base)
         #expect(try await b.run("var x = 2; return JSON.stringify({ x: x * 3 });") == #"{"x":6}"#)
         #expect(try await b.run("[1, 2].map(function (v) { return v * 2; }).join(',')") == "2,4")
-        #expect(
-            PageScripts.wantsFunction(
-                "return 1", failure: "SyntaxError: Return statements are only valid inside functions."))
-        #expect(!PageScripts.wantsFunction("1 +", failure: "SyntaxError: Unexpected end of script"))
+        #expect(try await b.run("window.runs = (window.runs || 0) + 1; return window.runs") == "1", "run once")
+        #expect(PageScripts.returnsOutsideFunction("var a = 1; return a"))
+        #expect(!PageScripts.returnsOutsideFunction("[1].map(function (v) { return v; })"))
+        #expect(!PageScripts.returnsOutsideFunction("1 +"), "not valid either way: run as written, its error told")
+        #expect(!PageScripts.returnsOutsideFunction("document.title"))
     }
 
     @Test func theWindowSitsAtTheTopLeftOfTheFreeArea() {

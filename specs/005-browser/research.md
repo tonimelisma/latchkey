@@ -504,3 +504,15 @@ top left, and there is no window at all. Chosen: (c), a window as big as the pag
 `navigator.mediaDevices` (needs camera and microphone permission, whose questions would show on
 the owner's screen). Whether Citi then lets Latchkey's own browser through is checked live; sites
 that still turn it away are signed in to in Safari while the Mac is unlocked (spec 013 FR-1369).
+
+## Scripts with `return` (2026-11-22)
+
+Claude wrote `return JSON.stringify(…)` without `await`; Safari's eval wrapper (and WebKit's
+`evaluateJavaScript`) refuse a `return` outside a function. Options: (a) run it as written and,
+on that SyntaxError, run it again as a function's body: the security review of the first version
+found that a page can shape what a run gives, so a script that clicked could run twice; (b) a
+parse check in the page (`if (false) { … }` through the page's eval): runs nothing of Claude's,
+but in Safari it uses the page's own eval, which a page can replace; (c) JavaScriptCore's
+`JSCheckScriptSyntax` in a context of Latchkey's own: invalid as a script, valid inside a
+function, means a function's body. Chosen: (c); no page takes part, nothing runs, and the script
+runs once (FR-463).
