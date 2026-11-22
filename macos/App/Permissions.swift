@@ -28,7 +28,9 @@ enum Permissions {
     static let messagesApp = "com.apple.MobileSMS"
     static let safariApp = "com.apple.Safari"
     /// Every app Latchkey scripts, asked for in setup whatever the levels (Toni, 2026-10-31).
-    static let scriptedApps = [notesApp, messagesApp, safariApp]
+    /// Mail: only to mark a sign-in code email read and archive it after use (spec 013 FR-1366).
+    static let mailApp = "com.apple.mail"
+    static let scriptedApps = [notesApp, messagesApp, safariApp, mailApp]
 
     enum Automation: Sendable, Equatable { case allowed, denied, notAsked }
 
@@ -142,6 +144,7 @@ struct ApprovalFacts {
     var notes: Permissions.Automation
     var messages: Permissions.Automation
     var safari: Permissions.Automation
+    var mail: Permissions.Automation = .allowed
     var contacts: CNAuthorizationStatus
     var calendars = false
     var reminders = false
@@ -194,6 +197,10 @@ struct Approval: Identifiable, Equatable {
             Approval(
                 id: "messages", title: "Control Messages", purpose: "To send messages for you.",
                 state: state(f.messages == .allowed)),
+            Approval(
+                id: "mail", title: "Control Mail",
+                purpose: "To mark sign-in code emails read and archive them after use.",
+                state: state(f.mail == .allowed)),
             Approval(
                 id: "contacts", title: "Contacts",
                 purpose: "To look up, add, and change contacts, and show names in messages.",

@@ -175,7 +175,14 @@ final class TextedCodes {
             } catch {
                 let why =
                     (error as? CodeTextWindow.Problem)?.message
-                    ?? (error as? ScriptError).map { MessagesCapability.explain($0) } ?? "\(error)"
+                    ?? (error as? ScriptError).map { e -> String in
+                        guard email else { return MessagesCapability.explain(e) }
+                        if case .notAllowed = e {
+                            return
+                                "Latchkey isn't allowed to control Mail. The Mac's owner can allow it in Latchkey's Settings → Permissions."
+                        }
+                        return MessagesCapability.explain(e).replacingOccurrences(of: "Messages", with: "Mail")
+                    } ?? "\(error)"
                 EventLog.shared.record(
                     .app, "A used sign-in code \(email ? "email stays in Mail" : "text stays in Messages"): \(why)",
                     error: true)

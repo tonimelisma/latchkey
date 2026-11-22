@@ -988,7 +988,8 @@ final class AppModel {
             ApprovalFacts(
                 helper: helperStatus == .enabled, fullDiskAccess: fullDiskAccess,
                 notes: control(of: Permissions.notesApp), messages: control(of: Permissions.messagesApp),
-                safari: control(of: Permissions.safariApp), contacts: contactsStatus,
+                safari: control(of: Permissions.safariApp), mail: control(of: Permissions.mailApp),
+                contacts: contactsStatus,
                 calendars: calendarStatus == .fullAccess, reminders: remindersStatus == .fullAccess,
                 location: locationAccess,
                 safariJavaScript: safariJavaScript, screenRecording: screenRecording, accessibility: accessibility,

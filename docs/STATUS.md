@@ -115,6 +115,14 @@ fell back under older sign-in rules (Amazon) got one more try of Latchkey's own 
 took the password and asked for no code this time, but showed its "I am human" checkbox, which
 Latchkey answered as signed in. 0.8.191 reads a page that asks to confirm being human as a
 check. A code text or email is still not tried live: no site has sent one since.
+First live sign-in with a code (2026-11-21 18:26, 0.8.192): IKEA by its one-time-code way; a
+fresh Claude had no working email tool, passed no_email_access, and Latchkey read the code from
+Apple Mail and signed in. Archiving the code email failed: macOS hadn't been asked to let
+Latchkey control Mail (and the log line named Messages). 0.8.193 adds "Control Mail" to the
+permissions Latchkey asks for (setup and Settings → Permissions). Before that: Banner Life's
+login is saved at access.bannerlife.com but signs in at login.bannerlife.com, so 0.8.192 fills
+any page of the same registered site, as Passwords does (Banner then refused the saved
+password); Amazon took the password without a code.
 Live check (0.8.175, Mac locked, 2026-11-21 00:54): groups logins, browser, files, shell: 51 of 51
 worked. A fresh Claude signed in to the-internet.herokuapp.com as tomsmith with the fixture's test
 sign-in (`logins-fixture.sh`); none of its 10 tool results held the password except the test

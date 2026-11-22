@@ -7,7 +7,7 @@ import Foundation
 /// (subject and Mail's summary of the text), no window; Mail is started hidden when it isn't
 /// running; a used email is marked read and archived through Mail's scripting while unlocked.
 enum MailCodes {
-    static let bundleID = "com.apple.mail"
+    static let bundleID = Permissions.mailApp
 
     /// Mail's index: the newest `V<n>` folder's (Mail moves to a new one with major versions).
     static var index: URL? {
@@ -228,7 +228,9 @@ enum MailCodes {
     /// "All Mail"; when the account has neither, it is only marked read. Only through Mail's
     /// scripting, never its window, and only while the Mac is unlocked (Mail froze when scripted
     /// behind the lock, 2026-11-02).
-    static func archive(_ place: Place, runner: any ScriptRunner = OSAScriptRunner(app: bundleID)) async throws {
+    static func archive(_ place: Place, runner: any ScriptRunner = OSAScriptRunner(app: Permissions.mailApp))
+        async throws
+    {
         let answer = try await runner.run(Script.archive, [place.account, place.mailbox, String(place.id)])
         guard answer.hasPrefix("ok") else {
             throw CodeTextWindow.Problem(message: answer.isEmpty ? "Mail didn't answer" : answer)

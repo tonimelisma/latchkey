@@ -248,7 +248,9 @@ we can't find it via Apple Mail either"; then "yes, script Mail for archiving an
   the last 10 minutes); Mail is never started for this. Only while the Mac is unlocked (Mail
   froze when scripted behind the lock, 2026-11-02), else at the next unlock. When Mail doesn't
   have the email, Claude is asked to archive it with its own tool. Without permission to script
-  Mail, the email stays and Latchkey's log says why (no question is shown to the Owner).
+  Mail, the email stays and Latchkey's log says why (no question is shown to the Owner during
+  use); "Control Mail" is one of the permissions Latchkey asks for in setup and Settings →
+  Permissions (FR-623), since 2026-11-21.
 - **FR-1367** Latchkey's log records each code email used and archived (when, the site, never the
   code or the text).
 
