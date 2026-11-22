@@ -125,6 +125,9 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: $(LATCHKEY_APP_ID).xcodetests
         PRODUCT_NAME: LatchkeyXcodeTests
+        # Signed under its bundle identifier, as the helper is (package.sh checks it).
+        GENERATE_INFOPLIST_FILE: YES
+        CREATE_INFOPLIST_SECTION_IN_BINARY: YES
         CODE_SIGN_STYLE: Automatic
         SKIP_INSTALL: YES
   LatchkeyTests:
