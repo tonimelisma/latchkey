@@ -221,6 +221,26 @@ import Testing
         #expect(!again.plainText.contains("Typed a code"), "each text once")
     }
 
+    /// Security review 2026-11-22: a code only into a code field, and never shown back to Claude,
+    /// even by a page that prints what was typed.
+    @Test func aCodeGoesOnlyIntoACodeFieldAndIsNeverShownBack() async throws {
+        let s = try setup()
+        defer { s.own.closeAll() }
+        s.box.texts = [.init(id: "t2", text: "Your code is 320518", date: Date())]
+        let p = try await s.own.open(html: Self.onePage(), base: Self.base)
+        let search = await call(s, p, ["field": .string("e5"), "fill": .string("code"), "press": .string("e4")])
+        #expect(search.isError && search.plainText.contains("isn't a code field"), "\(search.plainText)")
+        let name = await call(s, p, ["field": .string("e1"), "fill": .string("code"), "press": .string("e4")])
+        #expect(name.isError && name.plainText.contains("not a code"), "\(name.plainText)")
+        let echo = """
+            <label>Verification code <input data-latchkey="e1" name="code"></label><button data-latchkey="e2" id="b">Go</button>
+            <script>document.getElementById('b').onclick = function () { document.body.innerHTML = '<p>You typed ' + document.querySelector('[name=code]').value + '</p>'; };</script>
+            """
+        let q = try await s.own.open(html: echo, base: Self.base)
+        let r = await call(s, q, ["field": .string("e1"), "fill": .string("code"), "press": .string("e2")])
+        #expect(r.plainText.contains("You typed •••") && !r.plainText.contains("320518"), "\(r.plainText)")
+    }
+
     /// Toni, 2026-11-22: nothing waits; Claude calls again.
     @Test func noCodeYetIsSaidAtOnceAndNothingIsTyped() async throws {
         let s = try setup()

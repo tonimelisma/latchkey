@@ -26,8 +26,14 @@ Toni, 2026-11-22: "Fill-only tool". Latchkey types; Claude reads the page and de
   its own tool, 4 to 10 letters or digits; with `fill` `code`), `no_email_access` (true: Claude
   has no email tool, so Latchkey reads Apple Mail for the code).
 - What goes where (FR-1372): `password` only into an `input type=password` that isn't a
-  one-character box; `user` only into a text, email, or phone input; `code` into a text, number,
-  or password input, or across one-character boxes starting at `field`.
+  one-character box; `user` only into a text, email, or phone input; `code` into a password input,
+  across one-character boxes starting at `field`, or into a text, number, or phone input marked or
+  named for a code (one-time-code, numeric, code, otp, verif, PIN, digit, 2FA, token, security);
+  else "… (it is a text (not a code) field)". A password or code Latchkey typed is shown as •••
+  wherever it appears in the answer. A code text a refused field didn't take stays for the next
+  call.
+- Codes from texts count since the last password typed on the site in the last 10 minutes, else
+  only the last 3 minutes.
 - Where the code comes from, in order: the code `code` Claude passed; the current code of the
   sign-in's generator from Passwords (each 30-second code once); the newest unused code text in
   Messages since the last password typed on the site in the last 10 minutes (else the last 10

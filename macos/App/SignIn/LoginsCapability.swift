@@ -171,7 +171,9 @@ enum LoginsCapability {
             run = { try await s.signInScript($0, navigates: false) }
             click = { try await s.click($0) }
         }
-        func answer(_ said: String, _ page: PageScripts.Page, isError: Bool = false) async -> ToolResult {
+        var secret = ""
+        func answer(_ said: String, _ shown: PageScripts.Page, isError: Bool = false) async -> ToolResult {
+            let page = PageScripts.redacted(shown, secret)
             var r: ToolResult
             switch target {
             case .own(let l): r = await BrowserCapability.told(.text(said + "\n\n" + PageScripts.answer(page)), l)
@@ -272,6 +274,7 @@ enum LoginsCapability {
             }
         }
 
+        if kind != "user" { secret = value }
         // Type, then press, then empty what was typed (FR-1311), whatever happened in between.
         struct Step: Decodable {
             var step: String
@@ -311,6 +314,10 @@ enum LoginsCapability {
                 page, isError: true)
         }
         if kind == "password" { await MainActor.run { codes.passwordTyped(login.site) } }
+        switch source {
+        case .text(let id), .mail(let id): await MainActor.run { codes.markUsed(id) }
+        default: break
+        }
         var page = here0.page
         var pressed = ""
         if !press.isEmpty {

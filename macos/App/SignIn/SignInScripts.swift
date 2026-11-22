@@ -19,6 +19,26 @@ extension PageScripts {
         return host
     }
 
+    /// The page with `secret` blanked out of its text, title, address, and controls (security
+    /// review 2026-11-22: a page that shows what was typed must not show it to Claude).
+    static func redacted(_ p: Page, _ secret: String) -> Page {
+        guard secret.count >= 4 else { return p }
+        let forms = Set([secret, secret.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? secret])
+        func blank(_ s: String) -> String { forms.reduce(s) { $0.replacingOccurrences(of: $1, with: "•••") } }
+        var r = p
+        r.title = blank(p.title)
+        r.url = blank(p.url)
+        r.text = blank(p.text)
+        r.elements = p.elements.map { e in
+            var x = e
+            x.label = blank(e.label)
+            x.href = e.href.map(blank)
+            x.value = e.value.map(blank)
+            return x
+        }
+        return r
+    }
+
     /// Types `value` into the field `ref`, as `kind` allows (FR-1372): "password" only into a
     /// password field that isn't a one-character box; "user" only into a text, email, or phone
     /// field; "code" into a text, number, phone, or password field, or, from a one-character box
@@ -46,6 +66,17 @@ extension PageScripts {
           if (kind === 'password' && (type !== 'password' || e.maxLength === 1)) return no();
           if (kind === 'user' && ['text', 'email', 'tel'].indexOf(type) < 0) return no();
           if (kind === 'code' && ['text', 'number', 'tel', 'password'].indexOf(type) < 0) return no();
+          // A code only into a field that is one (security review 2026-11-22: typed into a search
+          // box, a code could come back as page text Claude reads): a password field, a box for
+          // one character, or a field marked or named for a code.
+          if (kind === 'code' && type !== 'password' && e.maxLength !== 1) {
+            var l = '';
+            try { if (e.labels && e.labels.length) l = e.labels[0].innerText || ''; } catch (y) {}
+            var words = [e.name, e.id, e.className, e.getAttribute('placeholder'), e.getAttribute('aria-label'), e.getAttribute('autocomplete'), e.getAttribute('inputmode'), l].join(' ');
+            if (!/(one-time-code|numeric|\\bcode|otp|one.?time|verif|passcode|\\bpin\\b|digit|2fa|mfa|two.?factor|token|security)/i.test(words)) {
+              return 'ok\\t' + JSON.stringify({ step: 'notfield', is: type + ' (not a code)' });
+            }
+          }
           var filled = window.__latchkeyFilled;
           if (!filled) {
             filled = [];

@@ -65,8 +65,11 @@ import Testing
         let c = codes(texts)
         let first = await c.take(since: start)
         #expect(first?.code == "333333" && first?.message == "b")
+        #expect(await c.take(since: start)?.message == "b", "not used until typed")
+        c.markUsed("b")
         let second = await c.take(since: start)
         #expect(second?.code == "222222", "each text once")
+        c.markUsed("a")
         #expect(await c.take(since: start) == nil, "the old one came before")
     }
 
@@ -79,16 +82,16 @@ import Testing
     }
 
     /// FR-1360: texts since the last password typed on the site in the last 10 minutes, else the
-    /// last 10 minutes.
+    /// last 3 minutes.
     @Test func codesAreLookedForSinceTheLastPassword() {
         let c = codes(Texts())
         let t0 = Date()
-        #expect(c.since("a.test", now: t0) == t0.addingTimeInterval(-600))
+        #expect(c.since("a.test", now: t0) == t0.addingTimeInterval(-180), "no password typed: the last 3 minutes")
         c.passwordTyped("a.test", at: t0.addingTimeInterval(-60))
         #expect(c.since("a.test", now: t0) == t0.addingTimeInterval(-60))
         #expect(
-            c.since("a.test", now: t0.addingTimeInterval(700)) == t0.addingTimeInterval(100), "older than 10 minutes")
-        #expect(c.since("b.test", now: t0) == t0.addingTimeInterval(-600), "per site")
+            c.since("a.test", now: t0.addingTimeInterval(700)) == t0.addingTimeInterval(520), "older than 10 minutes")
+        #expect(c.since("b.test", now: t0) == t0.addingTimeInterval(-180), "per site")
     }
 
     @Test func aUsedTextIsDeletedAtOnceWhileUnlocked() async {

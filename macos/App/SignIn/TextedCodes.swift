@@ -65,16 +65,20 @@ final class TextedCodes {
     func passwordTyped(_ site: String, at: Date = Date()) { passwords[site] = at }
 
     /// Since when a code for `site` counts (FR-1360): the last password Latchkey typed there in
-    /// the last 10 minutes, else the last 10 minutes.
+    /// the last 10 minutes, else only the last 3 minutes (security review 2026-11-22: no reaching
+    /// back to another site's code text).
     func since(_ site: String, now: Date = Date()) -> Date {
-        let tenMinutes = now.addingTimeInterval(-600)
-        guard let at = passwords[site], at > tenMinutes else { return tenMinutes }
+        guard let at = passwords[site], at > now.addingTimeInterval(-600) else { return now.addingTimeInterval(-180) }
         return at
     }
 
+    /// Notes that the code of text or email `id` was typed: it is never taken again.
+    func markUsed(_ id: String) { used.insert(id) }
+
     /// The newest code text (and with `mail`, a code email in Apple Mail naming the site) that
     /// arrived since `since` and wasn't used: the code and the text's id. One look, no waiting;
-    /// nil when none has come, or neither texts nor (with `mail`) Mail can be used.
+    /// nil when none has come, or neither texts nor (with `mail`) Mail can be used. It counts as
+    /// used only once typed (`markUsed`): a field that refused it leaves it for the next call.
     func take(since: Date, mail: Bool = false, site: String = "") async -> (code: String, message: String)? {
         let texts = on(), recent = recent, recentMail = recentMail
         guard texts || mail else { return nil }
@@ -98,10 +102,7 @@ final class TextedCodes {
             if let place, Self.code(in: text) == nil, !isLocked(), let body = await mailContent(place) {
                 text += "\n" + body
             }
-            if let code = Self.code(in: text) {
-                used.insert(t.id)
-                return (code, t.id)
-            }
+            if let code = Self.code(in: text) { return (code, t.id) }
         }
         return nil
     }

@@ -154,7 +154,11 @@ interface another app can read (`research.md`), so the only way in is a copy the
 - **FR-1372** A saved password shall be typed only into a password field that isn't a box for
   one character; a user name only into a text, email, or phone field; a code into a text or
   number field, or, when the field Claude names is a box for one character, across it and the
-  boxes for one character after it on the page, one character each. A field Latchkey can't type
+  boxes for one character after it on the page, one character each; a code only into a field that
+  is one (a password field, a one-character box, or a field marked or named for a code:
+  one-time-code, numeric, code, PIN, digit), and the typed value is blanked out of the answer
+  (security review 2026-11-22: typed into a search box, a code could come back as page text). A
+  code's text is used up only once typed. A field Latchkey can't type
   into, or one that doesn't hold what was typed, is said so, and nothing is pressed. All of it
   only on the page's own site (FR-1321, FR-1328), in the page itself, never in a frame.
 - **FR-1373** The tool's description shall tell Claude to read the page after each fill and judge
@@ -227,7 +231,7 @@ once when unlocked" and "Any new code text".
 - **FR-1360** When Claude asks Latchkey to type a code (FR-1371) and Latchkey holds no code
   generator for the site, Latchkey shall take the code from the newest text in Messages
   on this Mac that arrived after the last password it typed on that site in the last 10 minutes
-  (else in the last 10 minutes), isn't from the Owner, and reads as a code
+  (else in the last 3 minutes; security review 2026-11-22), isn't from the Owner, and reads as a code
   text (4 to 8 digits next to a word like "code" or "OTP"; security review 2026-11-21: never a
   friend's "meet at 1830"), whoever sent it, and type it as FR-1371 does; Claude never sees it. Each
   text is used once. When none has come, the answer says so at once and Claude asks again in a
