@@ -218,10 +218,13 @@ actor ShellJobs {
         let mark = Fence.mark(of: scratch)
         try Data().write(to: mark)
         try Data().write(to: Fence.control(of: scratch))
-        try Fence.Builds.write(in: scratch, testLauncher: uses.contains(.open) ? Fence.Builds.testLauncher : nil)
+        let testLauncher = Fence.testLauncher(
+            uses: uses, scratch: scratch, folder: URL(filePath: dir), declared: declared, home: setup.home,
+            systemTemp: setup.systemTemp)
+        try Fence.Builds.write(in: scratch, testLauncher: testLauncher)
         let fence = Fence.profile(
             scratch: scratch, folder: URL(filePath: dir), declared: declared, home: setup.home, own: setup.own,
-            uses: uses, mark: mark, systemTemp: setup.systemTemp)
+            uses: uses, mark: mark, systemTemp: setup.systemTemp, testLauncher: testLauncher)
         let p = Process()
         p.executableURL = URL(filePath: "/usr/bin/script")
         // "--": a command starting with "-" is the command, not more options for zsh.

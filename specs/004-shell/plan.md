@@ -210,10 +210,15 @@ after about six minutes; the same with a sandbox that allows everything). The ap
 `Contents/MacOS/LatchkeyXcodeTests`, a small C program (`macos/XcodeTests/main.c`): it refuses
 every argument list without exactly one `test-without-building` or with any other action or
 mode (`build`, `test`, `archive`, `-exportArchive`, ...), drops `DYLD_*`, `DEVELOPER_DIR`,
-`TOOLCHAINS` and `XCODE_XCCONFIG_FILE`, and runs `/usr/bin/xcodebuild`. When the job declared
-`open`, the profile adds `(allow process-exec (literal <launcher>) (with no-sandbox))`, as for
-`ps` and `top`, and refuses writes inside the `.app` that holds it, so a command can't replace
-it even in a build the job can write; the job's `xcodebuild` then turns `test` into
+`TOOLCHAINS` and `XCODE_XCCONFIG_FILE`, and starts `/usr/bin/xcodebuild` responsible for
+itself (`responsibility_spawnattrs_setdisclaim`, libsystem's, the call macOS's own launchers
+use; nothing runs when it is missing), then passes on signals and returns its status: a program
+Latchkey starts is otherwise Latchkey's to macOS's privacy checks, and outside the fence it would
+write and send Apple Events with Latchkey's permissions (security review 2026-11-21). When the
+job declared `open` and no folder above the launcher is writable by the job (else a parent could
+be swapped for one holding another program of that name; same review), the profile adds
+`(allow process-exec (literal <launcher>) (with no-sandbox))`, as for `ps` and `top`, and
+refuses writes inside the `.app` that holds it; the job's `xcodebuild` then turns `test` into
 `build-for-testing` (fenced, with the switches above) followed by `test-without-building`
 through the launcher, and hands `test-without-building` to it directly. Without `open` the
 wrapper refuses tests at once (exit 64) with how to declare it. The test step can then write

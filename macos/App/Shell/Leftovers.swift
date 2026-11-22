@@ -220,14 +220,7 @@ enum Fence {
         mark: URL? = nil, systemTemp: URL? = nil, testLauncher: URL? = Builds.testLauncher
     ) -> String {
         let realHome = OwnFiles.real(home)
-        var allowed = ["/dev", OwnFiles.real(scratch).path]
-        // The user's own temporary and cache folders under /private/var/folders (…/T, …/C).
-        if let systemTemp { allowed.append(systemTemp.path) }
-        allowed.append(realHome.appending(path: "Downloads").path)
-        allowed += caches.map { realHome.appending(path: $0).path }
-        let working = OwnFiles.real(folder)
-        if !tooBroad(working, home: realHome) { allowed.append(working.path) }
-        allowed += declared.map(\.path)
+        let allowed = writable(scratch: scratch, folder: folder, declared: declared, home: home, systemTemp: systemTemp)
         var rules = [
             "(version 1)", "(allow default)", "(deny file-write*)",
             "(allow file-write* " + allowed.map { "(subpath \(quote($0)))" }.joined(separator: " ") + ")",
@@ -280,8 +273,10 @@ enum Fence {
             "(allow process-exec " + unfenced.map { "(literal \(quote($0)))" }.joined(separator: " ")
                 + " (with no-sandbox))")
         // Tests outside the fence, only with open (FR-335): the launcher, which the command can't
-        // change (nothing in Latchkey's app is writable from the fence, wherever it was built).
-        if uses.contains(.open), let testLauncher {
+        // change: no folder above it is writable from the fence (else a parent could be swapped
+        // for one holding another program by that name; security review 2026-11-21), and writes
+        // inside its app are refused.
+        if uses.contains(.open), let testLauncher, outsideWritable(testLauncher, allowed) {
             let launcher = OwnFiles.real(testLauncher)
             var app = launcher
             while app.pathComponents.count > 1, app.pathExtension != "app" { app.deleteLastPathComponent() }
@@ -289,6 +284,40 @@ enum Fence {
             rules.append("(allow process-exec (literal \(quote(launcher.path))) (with no-sandbox))")
         }
         return rules.joined(separator: "\n")
+    }
+
+    /// The folders a command may write in (FR-317, FR-318), real paths.
+    static func writable(scratch: URL, folder: URL, declared: [URL], home: URL, systemTemp: URL?) -> [String] {
+        let realHome = OwnFiles.real(home)
+        var allowed = ["/dev", OwnFiles.real(scratch).path]
+        // The user's own temporary and cache folders under /private/var/folders (…/T, …/C).
+        if let systemTemp { allowed.append(systemTemp.path) }
+        allowed.append(realHome.appending(path: "Downloads").path)
+        allowed += caches.map { realHome.appending(path: $0).path }
+        let working = OwnFiles.real(folder)
+        if !tooBroad(working, home: realHome) { allowed.append(working.path) }
+        allowed += declared.map(\.path)
+        return allowed
+    }
+
+    /// True when no folder above `program`, nor it, is in or holds a writable place, so the
+    /// command can't put something else at its path.
+    static func outsideWritable(_ program: URL, _ writable: [String]) -> Bool {
+        let parts = OwnFiles.parts(OwnFiles.real(program))
+        return !writable.contains { place in
+            let p = OwnFiles.parts(URL(filePath: place))
+            return parts.starts(with: p) || p.starts(with: parts)
+        }
+    }
+
+    /// The test launcher a job gets (FR-335): only when it declared open and the launcher can't
+    /// be changed from its fence.
+    static func testLauncher(
+        uses: Set<Use>, scratch: URL, folder: URL, declared: [URL], home: URL, systemTemp: URL?
+    ) -> URL? {
+        guard uses.contains(.open), let launcher = Builds.testLauncher else { return nil }
+        let allowed = writable(scratch: scratch, folder: folder, declared: declared, home: home, systemTemp: systemTemp)
+        return outsideWritable(launcher, allowed) ? launcher : nil
     }
 
     private static func quote(_ s: String) -> String {

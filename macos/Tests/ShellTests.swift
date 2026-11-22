@@ -329,6 +329,26 @@ import Testing
         #expect(profile([.open]).contains(out))
         #expect(profile([.open]).contains("(deny file-write* (subpath \"/Applications/Latchkey.app\"))"))
         #expect(!profile([]).contains("LatchkeyXcodeTests\") (with no-sandbox)"))
+        // Security review 2026-11-21: a launcher below a folder the command may write (a build
+        // in the job's folder, a declared path) could be swapped through a parent: no rule then.
+        let built = setup.home.appending(path: "project/build/Latchkey.app/Contents/MacOS/LatchkeyXcodeTests")
+        let inWorking = Fence.profile(
+            scratch: scratch, folder: setup.home.appending(path: "project"), declared: [], home: setup.home,
+            own: setup.own, uses: [.open], testLauncher: built)
+        #expect(!inWorking.contains("LatchkeyXcodeTests\") (with no-sandbox)"), "\(inWorking)")
+        let declared = Fence.profile(
+            scratch: scratch, folder: setup.home, declared: [URL(filePath: "/Applications")], home: setup.home,
+            own: setup.own, uses: [.open], testLauncher: launcher)
+        #expect(!declared.contains(out))
+        let own = Fence.Builds.testLauncher
+        #expect(own != nil, "the launcher is in the app")
+        func jobs(_ declared: [URL], _ uses: Set<Fence.Use>) -> URL? {
+            Fence.testLauncher(
+                uses: uses, scratch: scratch, folder: setup.home, declared: declared, home: setup.home, systemTemp: nil)
+        }
+        #expect(jobs([], [.open]) == own)
+        #expect(jobs([], []) == nil)
+        if let own { #expect(jobs([own.deletingLastPathComponent()], [.open]) == nil) }
     }
 
     /// The job's `xcodebuild`: `test` builds inside the fence (`build-for-testing`), then hands

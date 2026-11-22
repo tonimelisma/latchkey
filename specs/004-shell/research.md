@@ -138,7 +138,12 @@ launcher, since `(with no-sandbox)` on a script leaves its interpreter sandboxed
 `sandbox_check` said 1 for a script, 0 for a C program, and the tests passed in 13 s through it);
 an argument check that refuses other actions rather than an allowlist of options, since the test
 code runs outside anyway; the environment cleared of what picks another xcodebuild or loads code
-into it.
+into it. The automated security review of the first version found two gaps, both closed: the
+unfenced xcodebuild was Latchkey's child, so macOS's privacy checks would have counted it as
+Latchkey (Full Disk Access, Apple Events) with no fence, more than an opened app gets; it is now
+started responsible for itself. And the exec rule names a path: for a build of the app in a
+folder the job can write, a parent could be swapped; the rule is now left out then (the
+installed app's `/Applications` is never writable from the fence).
 
 ## Handing work to macOS (2026-10-28)
 
