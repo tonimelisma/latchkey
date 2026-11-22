@@ -262,3 +262,30 @@ facts (fewer calls; still decides which button and how long to wait). Toni chose
 in Latchkey is only what Claude must not see or do: the secrets, the site and field-type checks,
 emptying the fields, finding and deleting the code's text. A password or code is always typed
 together with the press, then emptied, so no script Claude runs can read it in between.
+
+## Codes experiment (2026-11-22)
+
+Toni: "test all approaches for robustness on a wide variety of web sites, and inform me what the
+results are". Three ways to get a texted or emailed code into the page, all in `logins_fill`:
+
+1. Claude reads it (messages_read / mail_read or its own email tool) and passes `code`; Claude
+   deletes or archives the message. Claude sees the digits.
+2. `code_from`: Latchkey finds and types it; Claude never sees the digits (closest to Apple's and
+   1Password's own autofill of codes, and to the origin-bound code line `@site #code`).
+3. `check_code`: Claude passes the code it read; Latchkey types it only if a recent message that
+   may be the site's holds it, so a code made up or read off a web page is never typed.
+
+What "may be the site's" means (security review 2026-11-22): a text whose site-bound last line
+names another site never is; an email must name the site as a whole word; any other text may
+be (Toni, 2026-11-21: "Any new code text"), since most code texts come from short numbers and
+name no domain. So another site's plain code text that came in the same few minutes can be
+typed; of several, one naming the site is taken first. Kept as Toni decided; noted here for the
+results report.
+
+Low-level choices (decided here, not product choices): the window a code counts in is from the
+password Latchkey typed on the site within 10 minutes, else the last 3 minutes (a code older than
+that belongs to another sign-in); the newest unused message wins (an older resend is the fallback
+once the newest is used); a message is marked used only after the code was typed and the button
+pressed, so a refused field leaves it for the next call; Latchkey cleans up in ways 2 and 3
+because it knows which message it used, while in way 1 Claude does. The reading is in
+`CodeFinder` (Messages' database, Apple Mail's files; never a window).

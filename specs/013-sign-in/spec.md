@@ -148,6 +148,20 @@ interface another app can read (`research.md`), so the only way in is a copy the
   generator in Passwords (each 30-second code typed once, counted as used only once typed);
   without either, nothing is typed and Claude is told to read the code itself (Toni, 2026-11-22).
   A code Claude passes needs no saved sign-in chosen when the site has several.
+- **FR-1376** (Experimental, for comparison; Toni, 2026-11-22: "test all approaches for robustness
+  on a wide variety of web sites, and inform me what the results are".) Besides FR-1375, a texted
+  or emailed code shall be typable two more ways, each chosen by Claude per call:
+  (a) Latchkey finds it: when Claude asks for the code from the owner's texts or email, Latchkey
+  shall type the newest code not yet used from a message that may be the site's (a text whose
+  site-bound last line names another site never is; an email must name the site), that came since
+  the password Latchkey last typed on that site in the last 10 minutes (else in the last 3
+  minutes), without showing it to Claude; with none yet, it shall say so without an error, and
+  Claude calls again when it likes. (b) Latchkey checks Claude's code: when Claude passes a code
+  and asks for the check, Latchkey shall type it only if such a message holds exactly that code.
+  Either way, once the code is typed and the button pressed, that message shall never be taken
+  again and shall be deleted (a text) or archived (an email) at once, or at the next unlock while
+  locked, only while Messages or Mail is Read & write. Neither reads anything while Messages
+  (texts) or Mail (email) is Off.
 - **FR-1371** Signing in shall be Claude's: Claude reads the page and decides what it shows (a
   sign-in form, a code step, a check, signed in, refused) and which buttons to press, with the
   browser tools; Latchkey only types a saved value into the field Claude names (Toni,

@@ -38,6 +38,18 @@ Toni, 2026-11-22: "Fill-only tool". Latchkey types; Claude reads the page and de
   for <site> in Passwords, so nothing was typed. Read the code yourself (…), then call again with
   code." After a code Claude passed: "If it came by text or email, delete that text
   (messages_delete) or archive that email now."
+- The codes experiment (FR-1376): `code_from` (`text` or `email`, with `fill` `code`, without
+  `code` or `check_code`): Latchkey finds the site's newest unused code since the password it
+  typed (10 minutes, else the last 3) and types it; the answer never holds it: "Typed the code
+  from the owner's <texts|email> into <field>, then pressed <press>. Latchkey deleted the text it
+  came in." (or "archived the email it came in", "will … when the Mac is next unlocked",
+  "couldn't …: <why>", "<Messages|Mail> isn't Read & write in Latchkey's settings, so … stays").
+  None yet (no error): "No <text|email> with a code for <site> has come since HH:MM (<n> seconds
+  ago), so nothing was typed. If the site said it sent one, wait as long as you like and call
+  again." Messages or Mail Off: an error. `check_code` true (with `code`): typed only if a text or
+  email for the site since then holds exactly that code, else an error "No text or email for
+  <site> since HH:MM holds that code, so nothing was typed."; then cleaned up as above. Choices:
+  research.md "Codes experiment".
 - Answer: "Typed the saved <user name|password> for <site> (<user>) into <field>[, then pressed
   <press>]." / "Typed <the code from Passwords|the code you passed> into <field> (<n> boxes),
   then pressed <press>." Then the page as browser_read shows it (with

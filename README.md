@@ -55,7 +55,11 @@ Claude app (phone, web, desktop), can work with what's on your Mac:
   or emails you, Claude reads itself (from Messages, from its own email tool, or from Apple Mail
   with the Mail tools), waits for as long as it likes, types it with Latchkey, and then deletes
   that text (through Messages' window in the background, the one exception to "never in your
-  way" here) or archives that email. Not yet: passkeys.
+  way" here) or archives that email. Being compared on many sites, two more ways for such a
+  code: Latchkey finds the site's newest code in your texts or email itself and types it
+  without Claude seeing it, or types Claude's code only if a recent text or email from that site
+  holds it; either way Latchkey then deletes that text or archives that email. Neither reads
+  anything while Messages or Mail is Off in Latchkey's settings. Not yet: passkeys.
 - **The screen:** take a picture of it, and control the computer when you ask.
 
 Your Mac never has to accept connections from the internet: Latchkey reaches out to a small

@@ -205,6 +205,14 @@ final class AppModel {
                 return self?.capabilities.level(id) == .readWrite
             }
             Task { await PendingCleanup.shared.deletePending() }
+            // Spec 013 FR-1376: Latchkey reads texts and email for a code only while Messages and
+            // Mail aren't Off.
+            CodeFinder.shared.textsOn = { [weak self] in
+                (self?.capabilities.level(CapabilityRegistry.messages) ?? .off) != .off
+            }
+            CodeFinder.shared.mailOn = { [weak self] in
+                (self?.capabilities.level(CapabilityRegistry.mail) ?? .off) != .off
+            }
             watcher.imported = { [weak self] outcome in
                 self?.refreshSignIns()
                 self?.signInStatus = outcome.told

@@ -499,6 +499,9 @@ after the app was quit.
 
 1. Codes experiment (Toni, 2026-11-22: "test all approaches for robustness on a wide variety of
    web sites"): Claude reads codes / Latchkey fetches codes / middle path, on many sites; report.
+   The two new ways are built (logins_fill `code_from` and `check_code`, spec 013 FR-1376,
+   reviewed before commit); next: run each way on non-bank sites, checking each result
+   independently, then banks one at a time ("once all non-bank sites are incredibly robust").
 2. Citi fresh sign-in with the Mac locked, with logins_fill (Open acceptance row).
 
 0. Sign-in's first real export (spec 013 T11, Toni's step): Latchkey's menu → Export Passwords

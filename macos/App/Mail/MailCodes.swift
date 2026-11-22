@@ -52,6 +52,19 @@ enum MailCodes {
         }
     }
 
+    /// Whether an email's text names `site`: its registered name's first part ("github" for
+    /// github.com) when that is 3 letters or more, else the whole registered name, as a whole word
+    /// (security review 2026-11-21: an email's code is taken only from an email about that site;
+    /// 2026-11-22: "citi" isn't named by "capacities", nor "app" by "apple").
+    static func names(_ site: String, in text: String) -> Bool {
+        let registered = PublicSuffix.registrable(site).lowercased()
+        let brand = String(registered.split(separator: ".").first ?? "")
+        let word = brand.count >= 3 ? brand : registered
+        guard !word.isEmpty else { return false }
+        let pattern = "(?<![\\p{L}\\p{N}])" + NSRegularExpression.escapedPattern(for: word) + "(?![\\p{L}\\p{N}])"
+        return text.lowercased().range(of: pattern, options: .regularExpression) != nil
+    }
+
     /// Mailboxes the Mail tools leave out: what the Owner sent or drafted, and what's deleted.
     static func skipped(_ mailbox: String) -> Bool {
         let m = mailbox.lowercased()

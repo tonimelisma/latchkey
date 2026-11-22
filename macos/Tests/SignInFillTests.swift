@@ -71,11 +71,33 @@ import Testing
         let store: SignInStore
     }
 
-    func setup(_ logins: [SavedSignIn] = [ann], locked: Bool = false) throws -> Setup {
+    func setup(
+        _ logins: [SavedSignIn] = [ann], locked: Bool = false, finder: CodeFinder? = nil,
+        cleanup: PendingCleanup? = nil
+    ) throws -> Setup {
         let s = SignInStore(vault: MemoryVault())
         try s.replace(with: logins, at: Date(timeIntervalSince1970: 1_800_000_000))
         let own = OwnPages(cookies: { [] }, isLocked: { locked }, record: { _ in })
-        return Setup(own: own, tool: LoginsCapability.fill(store: s, own: own), store: s)
+        return Setup(
+            own: own, tool: LoginsCapability.fill(store: s, own: own, finder: finder, cleanup: cleanup), store: s)
+    }
+
+    /// A finder that reads `texts` and `mail` as given, and a cleanup that notes what it deleted.
+    final class Deleted { var keys: [String] = [] }
+    func codes(texts: [CodeFinder.Message] = [], mail: [CodeFinder.Message] = [], locked: Bool = false)
+        -> (CodeFinder, PendingCleanup, Deleted)
+    {
+        let f = CodeFinder()
+        f.textsOn = { true }
+        f.mailOn = { true }
+        f.texts = { _ in texts }
+        f.mail = { _ in mail }
+        f.startMail = {}
+        let c = PendingCleanup(defaults: nil)
+        let d = Deleted()
+        c.deleter = { d.keys.append($0) }
+        c.isLocked = { locked }
+        return (f, c, d)
     }
 
     func call(_ s: Setup, _ page: String, _ args: [String: JSONValue]) async -> ToolResult {
@@ -245,6 +267,105 @@ import Testing
         let r = await call(s, p, ["field": .string("e1"), "fill": .string("code"), "press": .string("e2")])
         #expect(r.plainText.contains("Typed the code from Passwords into e1, then pressed e2."), "\(r.plainText)")
         #expect(r.plainText.contains("Code was 6 long"))
+    }
+
+    // MARK: the codes experiment's ways 2 and 3 (FR-1376)
+
+    /// Way 2: Latchkey finds the code in a text, types it unseen, and deletes that text; the same
+    /// text is never taken twice, and with none come yet it says so without an error.
+    @Test func aCodeFromTheOwnersTextsIsTypedUnseenAndTheTextDeleted() async throws {
+        let now = Date()
+        let (f, c, d) = codes(texts: [CodeFinder.Message(id: "g1", text: "Your A code is 320518", date: now)])
+        let s = try setup(finder: f, cleanup: c)
+        defer { s.own.closeAll() }
+        let p = try await s.own.open(html: Self.codeField, base: Self.base)
+        let args: [String: JSONValue] = [
+            "field": .string("e1"), "fill": .string("code"), "press": .string("e2"), "code_from": .string("text"),
+        ]
+        let r = await call(s, p, args)
+        #expect(!r.isError, "\(r.plainText)")
+        #expect(
+            r.plainText.contains("Typed the code from the owner's texts into e1, then pressed e2."), "\(r.plainText)")
+        #expect(r.plainText.contains("Welcome ann") && r.plainText.contains("deleted the text it came in"))
+        #expect(!r.plainText.contains("320518") && !r.plainText.contains("messages_delete"))
+        #expect(d.keys == ["g1"])
+        let q = try await s.own.open(html: Self.codeField, base: Self.base)
+        let again = await call(s, q, args)
+        #expect(
+            !again.isError && again.plainText.contains("No text with a code for a.test has come since"),
+            "\(again.plainText)")
+        #expect(try await run(s, q, "document.querySelector('[data-latchkey=e1]').value") == "")
+    }
+
+    /// Way 2 with email: an email that doesn't name the site, or a text bound to another site, is
+    /// never taken; a locked Mac archives the email at the next unlock.
+    @Test func aCodeFromEmailNamesTheSiteAndIsArchivedAtUnlockWhileLocked() async throws {
+        let now = Date()
+        let key = MailCodes.Place(id: 9, account: "acc", mailbox: "INBOX").key
+        let (f, c, d) = codes(
+            texts: [CodeFinder.Message(id: "t", text: "Your code is 111111\n@evil.test #111111", date: now)],
+            mail: [
+                CodeFinder.Message(id: "mail:1\tacc\tINBOX", text: "From: Shop\nYour code is 999999", date: now),
+                CodeFinder.Message(
+                    id: key, text: "From: A.test\nYour a code is 320518", date: now.addingTimeInterval(-5)),
+            ], locked: true)
+        let s = try setup(finder: f, cleanup: c)
+        defer { s.own.closeAll() }
+        let p = try await s.own.open(html: Self.codeField, base: Self.base)
+        let none = await call(
+            s, p,
+            ["field": .string("e1"), "fill": .string("code"), "press": .string("e2"), "code_from": .string("text")])
+        #expect(none.plainText.contains("No text with a code"), "the text names another site: \(none.plainText)")
+        let r = await call(
+            s, p,
+            ["field": .string("e1"), "fill": .string("code"), "press": .string("e2"), "code_from": .string("email")])
+        #expect(
+            r.plainText.contains("Welcome ann")
+                && r.plainText.contains("archive the email it came in when the Mac is next unlocked"), "\(r.plainText)")
+        #expect(d.keys.isEmpty && c.pending == [key])
+    }
+
+    /// Way 3: Claude's code is typed only when a message for the site holds it.
+    @Test func aCheckedCodeIsTypedOnlyWhenAMessageHoldsIt() async throws {
+        let (f, c, d) = codes(texts: [CodeFinder.Message(id: "g2", text: "A code: 320518", date: Date())])
+        let s = try setup(finder: f, cleanup: c)
+        defer { s.own.closeAll() }
+        let p = try await s.own.open(html: Self.codeField, base: Self.base)
+        func args(_ code: String) -> [String: JSONValue] {
+            [
+                "field": .string("e1"), "fill": .string("code"), "press": .string("e2"), "code": .string(code),
+                "check_code": .bool(true),
+            ]
+        }
+        let wrong = await call(s, p, args("777777"))
+        #expect(
+            wrong.isError && wrong.plainText.contains("holds that code, so nothing was typed"), "\(wrong.plainText)")
+        #expect(try await run(s, p, "document.querySelector('[data-latchkey=e1]').value") == "")
+        let r = await call(s, p, args("320518"))
+        #expect(r.plainText.contains("Typed the code you passed (a message for a.test holds it)"), "\(r.plainText)")
+        #expect(r.plainText.contains("Welcome ann") && d.keys == ["g2"])
+    }
+
+    @Test func theCodeWaysAreOneAtATimeAndNeedTheCapabilityOn() async throws {
+        let (f, c, _) = codes()
+        f.textsOn = { false }
+        let s = try setup(finder: f, cleanup: c)
+        defer { s.own.closeAll() }
+        let p = try await s.own.open(html: Self.codeField, base: Self.base)
+        let off = await call(
+            s, p,
+            ["field": .string("e1"), "fill": .string("code"), "press": .string("e2"), "code_from": .string("text")])
+        #expect(off.isError && off.plainText.contains("Messages is Off"), "\(off.plainText)")
+        let both = await call(
+            s, p,
+            [
+                "field": .string("e1"), "fill": .string("code"), "press": .string("e2"), "code_from": .string("text"),
+                "code": .string("123456"),
+            ])
+        #expect(both.isError && both.plainText.contains("without code or check_code"))
+        let lone = await call(
+            s, p, ["field": .string("e1"), "fill": .string("code"), "press": .string("e2"), "check_code": .bool(true)])
+        #expect(lone.isError && lone.plainText.contains("check_code goes with"))
     }
 
     /// United's code boxes (2026-11-21): six fields with no one-character limit, alike in class and
