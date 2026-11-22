@@ -851,6 +851,19 @@ final class AppModel {
     /// Every question macOS asks with its own dialog, one after another, each waiting for its
     /// answer; then System Settings for the first approval only it can give. Run at first
     /// pairing and from setup's Allow All, so nothing is asked later on an unattended Mac.
+    /// What Ask Now couldn't ask, in words (shown under the button).
+    var askNote: String?
+
+    static func appName(_ bundleID: String) -> String {
+        switch bundleID {
+        case Permissions.notesApp: "Notes"
+        case Permissions.messagesApp: "Messages"
+        case Permissions.safariApp: "Safari"
+        case Permissions.mailApp: "Mail"
+        default: bundleID
+        }
+    }
+
     func allowAll() async {
         guard !allowingAll else { return }
         allowingAll = true
@@ -871,6 +884,20 @@ final class AppModel {
         for app in Permissions.scriptedApps where control(of: app) == .notAsked { await allowControl(of: app) }
         if localNetwork != true { await allowLocalNetwork() }
         await checkApprovals()
+        // An app turned off for Latchkey earlier is never asked again by macOS: say so and open
+        // the place to turn it on, instead of ending silently (Mail, 2026-11-21).
+        let off = Permissions.scriptedApps.filter { control(of: $0) == .denied }.map(Self.appName)
+        if off.isEmpty {
+            askNote = nil
+        } else {
+            askNote =
+                "\(off.joined(separator: ", ")) \(off.count == 1 ? "was" : "were") turned off for Latchkey earlier, so macOS won't ask again. In System Settings → Privacy & Security → Automation, under Latchkey, turn on \(off.joined(separator: " and "))."
+            Permissions.openAutomationSettings()
+            event(
+                .permissions,
+                "Allow All: turned off earlier, so not asked: \(off.joined(separator: ", ")); opened Automation settings"
+            )
+        }
         event(.permissions, "Allow All: questions done, missing \(missingSetup.joined(separator: ", "))")
         openSwitches()
     }

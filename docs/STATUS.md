@@ -141,6 +141,11 @@ fallback), an empty box's delete acted as Backspace, a masked user name read as 
 (which also wrongly switched United to Safari), a text sent before the code page was ignored,
 GitHub's passkey page read as "signed in". Amazon, United, and GitHub each skipped the code
 once they trusted Latchkey's browser. The "Signed in" answer now says how the code came.
+Setup's Ask Now did nothing for Mail (Toni, 2026-11-21): macOS had Latchkey's control of Mail
+turned off from earlier and never asks again. 0.8.200 says so under the button and opens
+System Settings → Automation; the text macOS shows with its question names Mail and why; and
+per Apple's guidelines (Privacy: a button before macOS's question isn't titled "Allow") the
+Permissions buttons say "Ask…" or "Open Settings…".
 Live check (0.8.175, Mac locked, 2026-11-21 00:54): groups logins, browser, files, shell: 51 of 51
 worked. A fresh Claude signed in to the-internet.herokuapp.com as tomsmith with the fixture's test
 sign-in (`logins-fixture.sh`); none of its 10 tool results held the password except the test

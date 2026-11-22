@@ -245,37 +245,39 @@ struct PermissionsPane: View {
     /// The same actions as the setup window's steps.
     @ViewBuilder private func actions(_ id: String) -> some View {
         switch id {
-        case "helper": Button("Allow…") { model.approveHelper() }
-        case "disk": Button("Allow…") { Permissions.openFullDiskAccessSettings() }
-        case "notifications": Button("Allow…") { Task { await model.allowNotifications() } }
-        case "localNetwork": Button("Allow…") { Task { await model.allowLocalNetwork() } }
-        case "screenAccess": Button("Allow…") { Task { await model.confirmScreenAccess() } }
+        // Apple's guidelines (Privacy): a button leading to macOS's question isn't titled
+        // "Allow"; it says what happens: macOS asks, or System Settings opens.
+        case "helper": Button("Open Settings…") { model.approveHelper() }
+        case "disk": Button("Open Settings…") { Permissions.openFullDiskAccessSettings() }
+        case "notifications": Button("Ask…") { Task { await model.allowNotifications() } }
+        case "localNetwork": Button("Ask…") { Task { await model.allowLocalNetwork() } }
+        case "screenAccess": Button("Ask…") { Task { await model.confirmScreenAccess() } }
         case "notes": control(Permissions.notesApp)
         case "messages": control(Permissions.messagesApp)
         case "safari": control(Permissions.safariApp)
         case "mail": control(Permissions.mailApp)
         case "contacts":
             if model.contactsStatus == .notDetermined {
-                Button("Allow…") { Task { await model.allowContacts() } }
+                Button("Ask…") { Task { await model.allowContacts() } }
             } else {
-                Button("Allow…") { Permissions.openContactsSettings() }
+                Button("Open Settings…") { Permissions.openContactsSettings() }
             }
-        case "calendars": Button("Allow…") { Task { await model.allowEvents(.events) } }
-        case "reminders": Button("Allow…") { Task { await model.allowEvents(.reminders) } }
-        case "location": Button("Allow…") { model.allowLocation() }
+        case "calendars": Button("Ask…") { Task { await model.allowEvents(.events) } }
+        case "reminders": Button("Ask…") { Task { await model.allowEvents(.reminders) } }
+        case "location": Button("Ask…") { model.allowLocation() }
         case "safariJS":
             Button("Check") { Task { await model.checkSafariJavaScript() } }
-        case "screen": Button("Allow…") { model.allowScreenRecording() }
-        case "accessibility": Button("Allow…") { model.allowAccessibility() }
+        case "screen": Button("Open Settings…") { model.allowScreenRecording() }
+        case "accessibility": Button("Open Settings…") { model.allowAccessibility() }
         default: EmptyView()
         }
     }
 
     @ViewBuilder private func control(_ app: String) -> some View {
         if model.control(of: app) == .denied {
-            Button("Allow…") { Permissions.openAutomationSettings() }
+            Button("Open Settings…") { Permissions.openAutomationSettings() }
         } else {
-            Button("Allow…") { Task { await model.allowControl(of: app) } }
+            Button("Ask…") { Task { await model.allowControl(of: app) } }
         }
     }
 }
@@ -530,6 +532,10 @@ struct SetupView: View {
                         ProgressView().controlSize(.small)
                         Text("Asking…").foregroundStyle(.secondary)
                     }
+                }
+                if let note = model.askNote {
+                    Text(note).font(.callout).foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
             step("switches", "Turn on Latchkey in System Settings") {
