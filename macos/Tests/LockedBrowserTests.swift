@@ -126,6 +126,47 @@ import Testing
         #expect(opened.elements.contains { $0.label == "SMS Code" }, "listed plainly once open")
     }
 
+    /// Feedback fb_1N4REDVYTDJXR3KTNMETHMMDRM (0.8.223): GitHub's real "More options" isn't a
+    /// <details>: a button with aria-expanded false and aria-controls, its list hidden by CSS.
+    @Test func linksBehindACollapsedButtonAreListed() async throws {
+        let b = LockedBrowser()
+        defer { b.discard() }
+        let html = """
+            <style>.closed #alts { visibility: hidden }</style>
+            <div class="closed"><button aria-expanded="false" aria-controls="alts">More options</button>
+            <ul id="alts"><li><a href="https://test.example/sms"></a><a href="https://test.example/recovery">Recovery code</a></li></ul></div>
+            <a href="https://test.example/plain" style="visibility:hidden">Hidden elsewhere</a>
+            """
+        let page = try await b.open(html: html, base: base)
+        let labels = page.elements.map(\.label)
+        #expect(labels.contains("Recovery code (in a closed menu «More options»)"), "\(labels)")
+        #expect(
+            page.elements.contains { $0.href?.hasSuffix("/sms") == true && $0.label.contains("closed menu") },
+            "\(page.elements)")
+        #expect(!labels.contains { $0.contains("Hidden elsewhere") }, "other hidden links stay out")
+        #expect(page.elements.first { $0.label == "More options" }?.state == "collapsed")
+    }
+
+    /// Feedback fb_2W5BWGE50RYV05R5NXCCN7ASC4 (Amazon's returns, 2026-11-22): a click that only
+    /// pressed a toggle read as "nothing changed". A control's state is shown and counts.
+    @Test func aToggleStateIsShownAndItsChangeCounts() async throws {
+        let b = LockedBrowser()
+        defer { b.discard() }
+        let html = """
+            <button id="y" aria-pressed="false" onclick="this.setAttribute('aria-pressed','true')">Yes</button>
+            <button aria-expanded="false">Menu</button>
+            """
+        let before = try await b.open(html: html, base: base)
+        let yes = try #require(before.elements.first { $0.label == "Yes" })
+        #expect(yes.state == "not pressed")
+        #expect(before.elements.first { $0.label == "Menu" }?.state == "collapsed")
+        #expect(PageScripts.answer(before).contains("Yes (not pressed)"))
+        _ = try await b.click(yes.ref)
+        let after = try await b.read(offset: 0)
+        #expect(after.elements.first { $0.label == "Yes" }?.state == "pressed")
+        #expect(!PageScripts.unchanged(before, after), "the toggle's change is a change")
+    }
+
     @Test func theWindowSitsAtTheTopLeftOfTheFreeArea() {
         let free = CGRect(x: 0, y: 0, width: 1512, height: 949)
         let f = LockedBrowser.windowFrame(page: CGSize(width: 1280, height: 900), screen: free)

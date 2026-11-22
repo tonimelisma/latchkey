@@ -21,6 +21,7 @@ extension PageScripts {
             if let href = e.href { line += " → \(shortHref(href, on: p.url))" }
             if let v = e.value, !v.isEmpty { line += " (now: \(v))" }
             if let c = e.checked { line += c ? " (checked)" : " (not checked)" }
+            if let st = e.state, !st.isEmpty { line += " (\(st))" }
             if used + line.count + 1 > elementsBudget { break }
             lines.append(line)
             used += line.count + 1
