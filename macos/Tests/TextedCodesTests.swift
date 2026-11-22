@@ -168,7 +168,8 @@ import Testing
         _ texts: TextedCodesTests.Texts, deleted: TextedCodesTests.Deleted, args: [String: JSONValue] = [:],
         mail: TextedCodesTests.Texts = .init(), started: TextedCodesTests.Deleted = .init(),
         page html: String = TextedCodeSignInTests.codePage,
-        content: @escaping (MailCodes.Place) async -> String? = { _ in nil }
+        content: @escaping (MailCodes.Place) async -> String? = { _ in nil },
+        before: (TextedCodes) -> Void = { _ in }
     ) async throws -> (ToolResult, TextedCodes, OwnPages) {
         let s = SignInStore(vault: MemoryVault())
         try s.replace(with: [SignInPageTests.ann], at: Date(timeIntervalSince1970: 1_800_000_000))
@@ -182,6 +183,7 @@ import Testing
         }
         c.startMail = { started.ids.append("mail") }
         c.mailContent = content
+        before(c)
         let name = try await own.open(html: html, base: SignInToolsTests.base)
         var call = args
         call["page"] = .string(name)
@@ -408,6 +410,16 @@ import Testing
         let (r, _, own) = try await run(texts, deleted: .init(), page: Self.citiAsItIs)
         defer { own.closeAll() }
         #expect(r.plainText.contains("Signed in to a.test as ann"), "\(r.plainText)")
+    }
+
+    /// Citi, 2026-11-21: a code was asked for a moment before (in another page): the step asking
+    /// how to send one was answered "a check"; now Claude is told to call again shortly.
+    @Test func aCodeAskedForMomentsAgoIsSaidSoNotACheck() async throws {
+        let (r, _, own) = try await run(
+            .init(), deleted: .init(), page: Self.citiAsItIs, before: { $0.delivered("a.test") })
+        defer { own.closeAll() }
+        #expect(r.plainText.contains("less than 90 seconds ago"), "\(r.plainText)")
+        #expect(!r.plainText.contains("check Latchkey can't answer"))
     }
 
     @Test func aSiteThatEndsTheSignInAtThatStepIsNoRefusal() async throws {

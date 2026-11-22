@@ -450,7 +450,15 @@ enum BrowserCapability {
                         }
                         // FR-455: a Safari tab of Claude's closes, and the page with it.
                         if let n = Asked.safariName {
-                            let address = try await here(browser).closeWorking()
+                            let address: String?
+                            do { address = try await here(browser).closeWorking() } catch Failure.tabGone {
+                                // Its tab was closed, or Latchkey can't be sure which it is: the page
+                                // is forgotten, so it isn't listed for ever (2026-11-21).
+                                await MainActor.run { own.forget(n) }
+                                return .text(
+                                    "Claude's page \"\(n)\" was a Safari tab of Claude's that isn't where it was (closed, or the tabs in its window changed), so Latchkey closed nothing and forgot the page. If its tab is still open, list the tabs with browser_read and tabs, and close it by its reference."
+                                )
+                            }
                             await MainActor.run { own.forget(n) }
                             var r = ToolResult.text("Closed Claude's page \"\(n)\", a Safari tab of Claude's.")
                             r.activity = "Closed Claude's Safari tab showing \(host(address ?? ""))"

@@ -386,6 +386,11 @@ final class AppModel {
     /// Quit: tell the relay, restore sleep (FR-035).
     func shutdown() async {
         if uninstalling { return }
+        // Spec 005 FR-460: Claude's Safari tabs don't outlive Latchkey (2.5 s of the 6 s to quit).
+        _ = await Deadline.first(within: .milliseconds(2500)) {
+            await BrowserCapability.ownPages.closeSafariTabs()
+            return true
+        }
         await connection?.stop(goodbye: .userQuit, state: agentState)
         // Nothing more can be answered: every call still running is recorded as cut off (FR-666).
         if let trace, inFlight.recordQuit(record: { try trace.record($0) }) > 0 { loadRecentActivity() }

@@ -29,6 +29,8 @@ Claude app (phone, web, desktop), can work with what's on your Mac:
 - **Safari and the web:** open pages and read, click, type, upload, and download: sites you are
   signed in to in a background Safari tab of Claude's (your real sign-in), other sites in a
   hidden browser of Latchkey's own; and read and act in your own Safari tabs when you ask.
+  Claude's Safari tabs close when Claude is done with them, after 30 minutes unused, or when
+  Latchkey quits; your own tabs stay.
 - **Signing in:** when a page of Claude's asks to sign in, Latchkey signs in for it with your
   saved password from Apple's Passwords, and the site's verification code when Passwords has
   it. Latchkey fills them in itself: Claude never sees a password or a code, only the list of

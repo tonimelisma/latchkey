@@ -260,6 +260,19 @@ final class OwnPages {
         order.removeAll { $0 == name }
     }
 
+    /// Closes every Safari tab of Claude's, before Latchkey quits: the pages are kept in memory
+    /// only, so a tab left open would outlive its page with nothing to close it (every install
+    /// restarts Latchkey; Toni, 2026-11-21: "you've left all the browser tabs open").
+    func closeSafariTabs() async {
+        let tabs = order.compactMap { n -> SafariBrowser? in
+            if case .safari(let s)? = pages[n]?.kind { s } else { nil }
+        }
+        for n in order where safariPage(n) != nil { forget(n) }
+        await withTaskGroup(of: Void.self) { group in
+            for s in tabs { group.addTask { _ = try? await s.closeWorking() } }
+        }
+    }
+
     /// Closes the pages unused for `after` seconds (FR-446); their names.
     func closeIdle(after: TimeInterval = 1800, now: Date = Date()) -> [String] {
         let idle = order.filter { pages[$0].map { now.timeIntervalSince($0.used) >= after } ?? false }

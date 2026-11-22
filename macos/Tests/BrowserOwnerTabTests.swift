@@ -117,6 +117,19 @@ import Testing
         #expect(r.contains("tabs"), "tells Claude to list the tabs again")
     }
 
+    /// FR-460: Claude's Safari tabs close when Latchkey quits; the Owner's stay (2026-11-21:
+    /// every install restarted Latchkey and left Claude's tabs open with no page to close them).
+    @MainActor @Test func claudesSafariTabsCloseAtQuit() async throws {
+        let fake = FakeSafariTabs()
+        let b = browser(fake)
+        try await b.pick("10.2")
+        let own = OwnPages(cookies: { [] }, isLocked: { false }, record: { _ in })
+        let name = try own.adopt(b, address: "https://news.example.com/")
+        await own.closeSafariTabs()
+        #expect(fake.ownerTabs.map(\.url) == ["https://mail.example.com/"])
+        #expect(own.safariPage(name) == nil && own.list().isEmpty)
+    }
+
     /// FR-428: Claude closes the Owner's tab it works in; the other tab stays.
     @Test func closesTheOwnersTabItWorksIn() async throws {
         let fake = FakeSafariTabs()

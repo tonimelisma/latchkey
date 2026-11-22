@@ -280,6 +280,10 @@ enum LoginsCapability {
                 - Only if you have no tool for the owner's email: call logins_sign_in again on this page with no_email_access true, and Latchkey reads Apple Mail on the Mac (starting it in the background if needed).
                 - If it was a text, call logins_sign_in again on this page in a few seconds: Latchkey takes it from Messages.
                 """
+        case .askedRecently:
+            let wait = max(5, await codes.untilDelivery(login.site))
+            said =
+                "\(host) asks how to send its verification code, and Latchkey asked \(host) for a code less than 90 seconds ago, so it didn't ask again (each request may replace the last). If that code doesn't come, call logins_sign_in again on this page in \(wait) seconds: Latchkey then asks for a new one and fills it in itself."
         case .check:
             said =
                 "\(host) shows a check Latchkey can't answer (a captcha, a new-device check, or a passkey or security key)."

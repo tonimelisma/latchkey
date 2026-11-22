@@ -183,7 +183,13 @@ index). Citi again (Toni: "you log in to citi!", 22:15): answered "Signed in" wh
 drew its "Let’s make sure it's you" page, then found no form on that page, then took Citi's six
 one-character code boxes (password fields) for the password. Now a one-character password field
 is a code box, that page counts as a second step (Text me is pressed), and a page that shows
-nothing right after the password is looked at again for up to 3 s.
+nothing right after the password is looked at again for up to 3 s (0.8.212). Then Citi was
+signed in in Safari by hand (Latchkey's log shows no code used), and every statement Citi lists
+was already in OneDrive. Tabs (Toni: "you've left all the browser tabs open"): Claude's pages
+are kept in memory only and every install restarts Latchkey, so their Safari tabs outlived
+them; now Latchkey closes Claude's Safari tabs when it quits (spec 005 FR-460), a page whose
+tab is gone is forgotten when closed, and a code asked for moments ago is said so instead of
+"a check".
 Live check (0.8.175, Mac locked, 2026-11-21 00:54): groups logins, browser, files, shell: 51 of 51
 worked. A fresh Claude signed in to the-internet.herokuapp.com as tomsmith with the fixture's test
 sign-in (`logins-fixture.sh`); none of its 10 tool results held the password except the test

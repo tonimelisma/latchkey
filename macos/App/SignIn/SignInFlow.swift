@@ -37,6 +37,9 @@ enum SignInFlow {
         case waitingForCode
         /// A captcha or another check Latchkey can't answer.
         case check
+        /// The page asks how to send a code, and Latchkey asked this site for one moments ago
+        /// (Citi, 2026-11-21: answered "a check").
+        case askedRecently
         /// The site refused: the page's words, if any.
         case refused(String)
         /// Nothing on the page to fill.
@@ -120,6 +123,9 @@ enum SignInFlow {
             if sentDelivery && page.password && !page.code && !sentCode { return .check }
             if !choosing, page.password && sentPassword || page.code && sentCode { return .refused(page.problem) }
             if page.captcha && !page.password && !page.code { return .check }
+            if !choosing, page.deliver, !mayDeliver, !page.code, sentPassword || pastPassword {
+                return .askedRecently
+            }
             if page.secondFactor && !choosing { return .check }
             var code = ""
             if choosing {

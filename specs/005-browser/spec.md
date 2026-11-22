@@ -279,6 +279,10 @@ phone, Claude can't check a reservation in the Owner's account or fill in a form
 - **FR-459** While the Mac is unlocked, when Claude asks to sign in again in a page of
   Latchkey's own browser (FR-442), the page shall move into a Safari tab of Claude's at the same
   address, under the same name.
+- **FR-460** When Latchkey quits, it shall close every Safari tab of Claude's (FR-455), and when
+  Claude closes a page whose tab Latchkey can no longer find surely, Latchkey shall forget the
+  page and say so, so no tab of Claude's outlives its page (Toni, 2026-11-21: "you've left all
+  the browser tabs open"; every install restarts Latchkey).
 
 Amended by spec 013 FR-1350 to FR-1355 (Toni, 2026-11-21): for a site Latchkey holds a saved
 password for, while Sign-in is On, FR-441, FR-442 and FR-457 copy none of Safari's cookies (nor a

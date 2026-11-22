@@ -100,6 +100,11 @@ final class TextedCodes {
 
     func delivered(_ site: String, now: Date = Date()) { deliveredAt[site] = now }
 
+    /// Seconds until a button that sends a code may be pressed again on `site`.
+    func untilDelivery(_ site: String, now: Date = Date()) -> Int {
+        deliveredAt[site].map { max(0, Int((90 - now.timeIntervalSince($0)).rounded(.up))) } ?? 0
+    }
+
     /// A code text (and with `mail`, a code email in Apple Mail) that arrived since `since` and
     /// wasn't used, waiting for one until `until`; the code and the text's id. Nil when none came,
     /// or neither texts nor (with `mail`) Mail can be used.
