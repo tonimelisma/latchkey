@@ -94,12 +94,20 @@ extension PageScripts {
           }
           // A step asking how to send the code ("We'll send a code to +1 ••• 0790": Text me / Call
           // me; Citi, 2026-11-21): the buttons that send it, by text message first, then email.
-          var delivery = Array.prototype.filter.call(document.querySelectorAll('button, [role="button"], input[type="submit"], input[type="button"], a'), seen)
-            .map(function (b) { return { el: b, t: (b.innerText || b.value || '').replace(/\\s+/g, ' ').trim() }; })
-            .filter(function (x) { return x.t.length < 40; });
-          var bySms = delivery.filter(function (x) { return /^(text( me)?|send (me )?(a )?(text|sms)( message)?|sms|text message)\\b/i.test(x.t); })[0];
+          // Shown ones first; a hidden one too (GitHub keeps its "SMS Code" link under "More
+          // options", 2026-11-21), which is only pressed where no password or user name is asked.
+          var delivery = Array.prototype.slice.call(document.querySelectorAll('button, [role="button"], input[type="submit"], input[type="button"], a'))
+            .map(function (b) { return { el: b, t: (b.innerText || b.textContent || b.value || '').replace(/\\s+/g, ' ').trim(), shown: seen(b) }; })
+            .filter(function (x) { return x.t.length < 40; })
+            .sort(function (a, b) { return (b.shown ? 1 : 0) - (a.shown ? 1 : 0); });
+          var bySms = delivery.filter(function (x) { return /^(text( me)?|send (me )?(a )?(text|sms)( message| code)?|sms( code)?|text message|use (a )?(text|sms)( message)?)\\b/i.test(x.t); })[0];
           var byMail = delivery.filter(function (x) { return /^(email( me)?|send (me )?(an )?email|e-mail( me)?)\\b/i.test(x.t); })[0];
           var deliver = bySms || byMail;
+          // A second step Latchkey has no field for: a passkey, a security key, an app's code
+          // page with nothing to type yet (GitHub's passkey page was answered "Signed in").
+          var bodyText = ((document.body && document.body.innerText) || '').slice(0, 4000);
+          var secondFactor = !passwords.length && !codeField && !boxes.length
+            && /(passkey|security key|two-factor|two factor|2fa|authentication code|verify (it'?s|that it'?s) you)/i.test(bodyText);
         """
 
     /// What the page asks for now: `{ password, code, user, captcha, problem }`. Where the page is
@@ -110,7 +118,7 @@ extension PageScripts {
         \(signInHelpers)
           return 'ok\\t' + JSON.stringify({ password: passwords.length > 0,
             code: !!codeField || boxes.length > 0, user: !!userField, captcha: captcha, problem: problem(),
-            deliver: !!deliver && !codeField && !boxes.length });
+            deliver: !!deliver, secondFactor: secondFactor });
         })()
         """
 
@@ -122,11 +130,11 @@ extension PageScripts {
     /// password, code, user, none, or wrongsite.
     static func signInStep(
         host: String, user: String, password: String, code: String, userSent: Bool = false,
-        passwordSent: Bool = false
+        mayDeliver: Bool = false
     ) -> String {
         // nosemgrep: latchkey-page-script-literal -- besides literal(), only the constant signInHelpers.
         """
-        (function (host, user, pass, code, userSent, passwordSent) {
+        (function (host, user, pass, code, userSent, mayDeliver) {
           if (location.protocol !== 'https:' || location.hostname !== host) return 'ok\\twrongsite';
         \(signInHelpers)
           var filled = window.__latchkeyFilled;
@@ -201,7 +209,7 @@ extension PageScripts {
           var unfilled = 'ok\\t' + JSON.stringify({ step: 'unfilled' });
           // After the password, a step asking how to send the code: its text-message button (or
           // email), never before (a sign-in page may offer "email me a link" beside the password).
-          if (passwordSent && deliver && !codeField && !boxes.length) {
+          if (mayDeliver && deliver) {
             deliver.el.click();
             return 'ok\\t' + JSON.stringify({ step: 'delivery' });
           }
@@ -246,7 +254,7 @@ extension PageScripts {
             return 'ok\\t' + JSON.stringify({ step: 'user' });
           }
           return 'ok\\t' + JSON.stringify({ step: 'none' });
-        })(\(literal(host)), \(literal(user)), \(literal(password)), \(literal(code)), \(literal(userSent ? "1" : "")) === '1', \(literal(passwordSent ? "1" : "")) === '1')
+        })(\(literal(host)), \(literal(user)), \(literal(password)), \(literal(code)), \(literal(userSent ? "1" : "")) === '1', \(literal(mayDeliver ? "1" : "")) === '1')
         """
     }
 

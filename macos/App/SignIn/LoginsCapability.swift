@@ -195,6 +195,10 @@ enum LoginsCapability {
         let started = Date()
         let callStart = ContinuousClock.now
         let codes = await MainActor.run { given ?? TextedCodes.shared }
+        await codes.noteCall(login.site)
+        let mayDeliver = await codes.mayDeliver(login.site)
+        final class Pressed: @unchecked Sendable { var yes = false }
+        let pressed = Pressed()
         final class UsedText: @unchecked Sendable { var id: String? }
         let usedText = UsedText()
         let texted: SignInFlow.Texted = {
@@ -212,7 +216,9 @@ enum LoginsCapability {
             return (nil, Date().timeIntervalSince(since) < window)
         }
         let (outcome, page) = try await SignInFlow.signIn(
-            login, exact: PublicSuffix.isSuffix(login.site), store: store, run: run, texted: texted)
+            login, exact: PublicSuffix.isSuffix(login.site), store: store, run: run, texted: texted,
+            mayDeliver: mayDeliver, delivered: { pressed.yes = true })
+        if pressed.yes { await codes.delivered(login.site) }
         if outcome != .waitingForCode { await codes.forget(login.site) }
         // FR-1362: the text is deleted in Messages once used (now while unlocked, else at unlock).
         // Only once the site took the code: a text whose code didn't work may not have been one.
@@ -256,7 +262,8 @@ enum LoginsCapability {
                 - If it was a text, call logins_sign_in again on this page in a few seconds: Latchkey takes it from Messages.
                 """
         case .check:
-            said = "\(host) shows a check Latchkey can't answer (a captcha, or a new-device check)."
+            said =
+                "\(host) shows a check Latchkey can't answer (a captcha, a new-device check, or a passkey or security key)."
         case .refused(let words):
             let n = store.refused(login)
             said =

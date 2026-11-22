@@ -18,8 +18,10 @@ enum SignInFlow {
         var user: Bool
         var captcha: Bool
         var problem: String
-        /// A step asking how to send the code, with a text or email button (Citi, 2026-11-21).
+        /// A button that sends the code by text or email, or picks that way (Citi, GitHub).
         var deliver: Bool
+        /// A second step with nothing to fill (a passkey or security key page; GitHub, 2026-11-21).
+        var secondFactor: Bool
     }
 
     enum Outcome: Equatable {
@@ -62,12 +64,14 @@ enum SignInFlow {
     static func signIn(
         isolation: isolated (any Actor)? = #isolation,
         _ login: SavedSignIn, exact: Bool, store: SignInStore, run: Run, now: () -> Date = Date.init,
-        wait: (Duration) async -> Void = { try? await Task.sleep(for: $0) }, texted: Texted? = nil
+        wait: (Duration) async -> Void = { try? await Task.sleep(for: $0) }, texted: Texted? = nil,
+        mayDeliver: Bool = true, delivered: () -> Void = {}
     ) async throws -> (outcome: Outcome, page: PageScripts.Page) {
         var filledAny = false
         do {
             let r = try await steps(
-                login, exact: exact, store: store, run: run, now: now, wait: wait, texted: texted
+                login, exact: exact, store: store, run: run, now: now, wait: wait, texted: texted,
+                mayDeliver: mayDeliver, delivered: delivered
             ) {
                 filledAny = true
             }
@@ -83,7 +87,8 @@ enum SignInFlow {
     private static func steps(
         isolation: isolated (any Actor)? = #isolation,
         _ login: SavedSignIn, exact: Bool, store: SignInStore, run: Run, now: () -> Date,
-        wait: (Duration) async -> Void, texted: Texted?, filled: () -> Void
+        wait: (Duration) async -> Void, texted: Texted?, mayDeliver: Bool, delivered: () -> Void,
+        filled: () -> Void
     ) async throws -> Outcome {
         let totp = login.otp.flatMap { TOTP(uri: $0) }
         var r = try await run(PageScripts.signInState, false)
@@ -92,18 +97,27 @@ enum SignInFlow {
         var sentCode = false
         var sentUser = false
         var sentDelivery = false
+        var deliveries = 0
         var filledAny = false
-        steps: for _ in 0..<5 {
-            // After the password, a step asking how to send the code is pressed, not a refusal
-            // (Citi keeps its password field on that page, 2026-11-21).
-            let choosing = sentPassword && page.deliver && !page.code && !sentDelivery
+        steps: for _ in 0..<6 {
+            // A button that sends the code (or picks the text way) is pressed: after the password
+            // on its page (Citi keeps its password field there), or on a page past the password
+            // that asks for nothing else yet (GitHub's passkey page and its "Send SMS"), at most
+            // twice a call and not again while a code sent shortly before may still come.
+            let pastPassword = !page.password && !page.user && !sentCode
+            let choosing =
+                page.deliver && deliveries < 2
+                && ((sentPassword && !page.code && !sentDelivery) || (pastPassword && mayDeliver))
             // Back at a sign-in form after asking for the code: the site ended the sign-in
             // (Citi did, 2026-11-21); no refusal of the password, which it had taken.
             if sentDelivery && page.password && !page.code && !sentCode { return .check }
             if !choosing, page.password && sentPassword || page.code && sentCode { return .refused(page.problem) }
             if page.captcha && !page.password && !page.code { return .check }
+            if page.secondFactor && !choosing { return .check }
             var code = ""
-            if page.code, !page.password, totp == nil {
+            if choosing {
+                // The button first; the code comes after it.
+            } else if page.code, !page.password, totp == nil {
                 // FR-1360: a code the site texted to the Owner, when Latchkey may use texts.
                 guard let texted else { return .needsCode }
                 let t = await texted()
@@ -131,7 +145,7 @@ enum SignInFlow {
             r = try await run(
                 PageScripts.signInStep(
                     host: host, user: login.user, password: login.password, code: code, userSent: sentUser,
-                    passwordSent: choosing), true)
+                    mayDeliver: choosing), true)
             struct Step: Decodable { var step: String }
             let step =
                 r.detail == "wrongsite"
@@ -140,7 +154,10 @@ enum SignInFlow {
             case "password": sentPassword = true
             case "code": sentCode = true
             case "user": sentUser = true
-            case "delivery": sentDelivery = true
+            case "delivery":
+                sentDelivery = true
+                deliveries += 1
+                delivered()
             case "wrongsite": return filledAny ? .signedIn : .wrongSite
             case "unfilled": return .couldntFill
             default: break steps  // nothing more to fill: what the page shows decides
@@ -154,7 +171,7 @@ enum SignInFlow {
         // The user name went, and the site showed no password field after it.
         if sentUser && !sentPassword && !page.password && !page.code && page.user { return .refused(page.problem) }
         if page.code && totp == nil && !page.password { return .needsCode }
-        if page.captcha { return .check }
+        if page.captcha || page.secondFactor { return .check }
         return filledAny ? .signedIn : .noForm
     }
 }

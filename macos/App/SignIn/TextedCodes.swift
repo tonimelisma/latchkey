@@ -68,12 +68,33 @@ final class TextedCodes {
         return nil
     }
 
-    /// When `site` first asked for a code; noted now when it hadn't.
+    /// When `site` first asked for a code: from the first sign-in call on it in the last 10
+    /// minutes, since the code may be sent before Latchkey sees the code page (GitHub's "Send SMS"
+    /// was pressed a call earlier and its text missed, 2026-11-21); noted now when it hadn't.
     func requested(_ site: String, now: Date = Date()) -> Date {
         if let at = requested[site], now.timeIntervalSince(at) < window { return at }
-        requested[site] = now
-        return now
+        let from = calls[site].flatMap { now.timeIntervalSince($0) < 600 ? $0 : nil } ?? now
+        requested[site] = from
+        return from
     }
+
+    /// The first sign-in call on each site in the last 10 minutes.
+    private var calls: [String: Date] = [:]
+    /// When a button that sends a code was last pressed on each site.
+    private var deliveredAt: [String: Date] = [:]
+
+    func noteCall(_ site: String, now: Date = Date()) {
+        if let at = calls[site], now.timeIntervalSince(at) < 600 { return }
+        calls[site] = now
+    }
+
+    /// Whether a button that sends a code may be pressed: not within 90 s of the last, so each
+    /// call doesn't send another text.
+    func mayDeliver(_ site: String, now: Date = Date()) -> Bool {
+        deliveredAt[site].map { now.timeIntervalSince($0) >= 90 } ?? true
+    }
+
+    func delivered(_ site: String, now: Date = Date()) { deliveredAt[site] = now }
 
     /// A code text (and with `mail`, a code email in Apple Mail) that arrived since `since` and
     /// wasn't used, waiting for one until `until`; the code and the text's id. Nil when none came,

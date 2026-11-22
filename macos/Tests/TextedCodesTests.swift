@@ -451,6 +451,59 @@ import Testing
         #expect(r.plainText.contains("Signed in to a.test as ann."), "\(r.plainText)")
     }
 
+    /// GitHub, 2026-11-21: after the password a passkey page whose "SMS Code" link is hidden
+    /// under "More options"; then "Send SMS" with the code field; the text came before Latchkey
+    /// looked at the code page and was missed, and the passkey page was answered "Signed in".
+    static let passkeyThenSms = """
+        <title>Sign in</title><div id="app"><input id="login" autocomplete="username"><input id="pw" type="password"><button id="go">Sign in</button></div>
+        <script>
+        var app = document.getElementById('app'); window.sent = 0;
+        document.getElementById('go').onclick = function () {
+          app.innerHTML = '<h1>Two-factor authentication</h1><p>Use your passkey</p><button id="pk">Use passkey</button><details><summary>More options</summary><a href="#" id="sms">SMS Code</a></details>';
+          document.getElementById('sms').onclick = function (ev) {
+            ev.preventDefault();
+            app.innerHTML = '<h1>Two-factor authentication</h1><button id="send">Send SMS</button><label>Authentication code <input id="otp" autocomplete="one-time-code"></label><button id="v">Verify</button>';
+            document.getElementById('send').onclick = function () { window.sent++; };
+            document.getElementById('v').onclick = function () {
+              app.innerHTML = document.getElementById('otp').value === '320518' && window.sent === 1 ? '<h1>Welcome ann</h1>' : '<p role="alert">Wrong code</p>';
+            };
+          };
+        };
+        </script>
+        """
+
+    @Test func aPasskeyPageGoesToTheTextWayAndItsCodeIsUsed() async throws {
+        let texts = TextedCodesTests.Texts()
+        texts.all = [
+            .init(id: "gh-1", text: "320518 is your GitHub authentication code.", date: Date().addingTimeInterval(60))
+        ]
+        let (r, _, own) = try await run(texts, deleted: .init(), page: Self.passkeyThenSms)
+        defer { own.closeAll() }
+        #expect(r.plainText.contains("Signed in to a.test as ann."), "\(r.plainText)")
+    }
+
+    @Test func aPasskeyOnlyPageIsACheckNotSignedIn() async throws {
+        let page = Self.passkeyThenSms.replacingOccurrences(
+            of: "<details><summary>More options</summary><a href=\"#\" id=\"sms\">SMS Code</a></details>", with: "")
+        let (r, _, own) = try await run(.init(), deleted: .init(), page: page)
+        defer { own.closeAll() }
+        #expect(r.plainText.contains("passkey or security key"), "\(r.plainText)")
+        #expect(!r.plainText.contains("Signed in"))
+    }
+
+    /// The code page may be reached a call after the text was sent: it still counts.
+    @Test func aTextSentBeforeTheCodePageCounts() {
+        let c = TextedCodesTests().codes(.init())
+        let t0 = Date()
+        c.noteCall("a.test", now: t0)
+        #expect(c.requested("a.test", now: t0.addingTimeInterval(40)) == t0)
+        #expect(c.mayDeliver("a.test", now: t0))
+        c.delivered("a.test", now: t0)
+        #expect(
+            !c.mayDeliver("a.test", now: t0.addingTimeInterval(30))
+                && c.mayDeliver("a.test", now: t0.addingTimeInterval(91)))
+    }
+
     @Test func aCodeSentByTextIsSaidSoWithoutAskingAboutEmail() {
         #expect(TextedCodes.saysText("Enter the verification code sent to ******0790 via text."))
         #expect(!TextedCodes.saysText("We sent a code to your email or by text"))
