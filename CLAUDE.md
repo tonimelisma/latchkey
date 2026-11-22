@@ -271,17 +271,17 @@ applies, except:
   first, and it writes outside the command's fence (gcloud's settings, Docker, the deploy lock).
   A cloud session merges to `main` and lists "deploy the relay" or "release the Linux program"
   as a step for a local session at the end.
-- Mac app: build on the Mac through Latchkey's `shell_run` (Toni's MacBook in `machines`), from
-  the pushed branch in the command's scratch folder (moved to the Trash when it ends):
+- Mac app: build and test on the Mac through Latchkey's `shell_run` (Toni's MacBook in
+  `machines`), from the pushed branch in the command's scratch folder (deleted or moved to the
+  Trash when it ends), with `uses: ["open"]` (the tests run in an app; spec 004 FR-335):
   `set -o pipefail; cd "$LATCHKEY_SCRATCH" && git clone -q --depth 1 --branch <branch>
   https://github.com/tonimelisma/latchkey.git lk && cd lk/macos && xcodegen generate --quiet &&
   xcodebuild -project Latchkey.xcodeproj -scheme Latchkey -destination 'platform=macOS'
-  -derivedDataPath "$LATCHKEY_SCRATCH/dd" build -quiet 2>&1 | tail -40`, then `shell_check` the
-  job until it ends. Lint the same way with `swift format lint --strict -r App Shared Helper
-  Tests` in `macos/`. The unit tests don't run that way yet (2026-11-21: with `test` and
-  `uses: ["open"]` the build passes but the test runner hangs before connecting; without
-  `open`, xcodebuild aborts launching the test host), so `make -C macos test` stays a step for a
-  local session.
+  -derivedDataPath "$LATCHKEY_SCRATCH/dd" test -quiet 2>&1 | tail -40`, then `shell_check` the
+  job until it ends (`build` instead of `test` to only build). Lint the same way with
+  `swift format lint --strict -r App Shared Helper Tests` in `macos/`. This tests the app
+  signed ad hoc (no `Local.xcconfig` there); `make -C macos test` in a local session is the
+  signed run.
   Never run `make -C macos install` through Latchkey: it quits Latchkey, which stops the command
   mid-install (spec 004 FR-309). The install stays a step for a local session, listed at the end.
 - Screenshots of the Mac app: `computer_look`, only while the Mac is unlocked, and never acting

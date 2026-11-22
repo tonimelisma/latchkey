@@ -117,6 +117,29 @@ Latchkey failed against a fenced daemon and worked once it was stopped; `actool`
 `IBCLIServerForcedRegistryName` set started a daemon of its own and worked (Xcode 27.2).
 With `DISABLE_TASK_SANDBOXING=YES` Otos built through Latchkey (`** BUILD SUCCEEDED **`).
 
+## Tests (2026-11-21)
+
+Found while making cloud sessions build this app on the Mac through `shell_run`: builds passed,
+`xcodebuild test` never did. With `uses: ["open"]`: "The test runner hung before establishing
+connection" after about six minutes; without: xcodebuild aborted (SIGABRT in
+`IDELaunchServicesLauncher`) since LaunchServices is refused. Checked on this Mac (Xcode 27.2):
+the same tests passed outside any sandbox and failed under `sandbox-exec` with a profile that
+allows everything, so no single rule of the fence is the cause. `ps eww` of the test app under
+the sandbox showed no `DYLD_INSERT_LIBRARIES` and no `XCTest…` variables; `testmanagerd` logged
+the harness session and never "Received new test session connection" from the app. macOS opens
+an app for a sandboxed caller without the caller's environment (an unsandboxed app with
+injected libraries would be a way out of the sandbox).
+
+Options put to Toni: the test step outside the fence through a launcher in Latchkey's app, only
+with `open` (chosen: the build and its scripts stay fenced; the tests already run outside in the
+app LaunchServices opens); all of xcodebuild outside with `open` (simpler; build scripts could
+write anywhere); tests stay out of Shell (no change). Low-level choices (Claude's): a compiled
+launcher, since `(with no-sandbox)` on a script leaves its interpreter sandboxed (checked:
+`sandbox_check` said 1 for a script, 0 for a C program, and the tests passed in 13 s through it);
+an argument check that refuses other actions rather than an allowlist of options, since the test
+code runs outside anyway; the environment cleared of what picks another xcodebuild or loads code
+into it.
+
 ## Handing work to macOS (2026-10-28)
 
 Toni chose (2026-10-28) to close the gaps the first version left: opening apps, scripting

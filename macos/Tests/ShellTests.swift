@@ -312,6 +312,107 @@ import Testing
         #expect(name(a.output) != name(b.output), "\(a.output) / \(b.output)")
     }
 
+    /// Tests outside the fence (FR-335; Toni, 2026-11-21: "Test step outside fence"): a test app
+    /// LaunchServices opens for a sandboxed xcodebuild gets none of Xcode's test settings, so it
+    /// never connects ("The test runner hung before establishing connection"). Only Latchkey's
+    /// own launcher leaves the fence, only with open, and the command can't replace it.
+    @Test func onlyTheTestLauncherLeavesTheFenceAndOnlyWithOpen() {
+        let setup = ShellSetup.testing()
+        let launcher = URL(filePath: "/Applications/Latchkey.app/Contents/MacOS/LatchkeyXcodeTests")
+        let scratch = setup.scratchRoot.appending(path: "x-job1")
+        func profile(_ uses: Set<Fence.Use>) -> String {
+            Fence.profile(
+                scratch: scratch, folder: setup.home, declared: [], home: setup.home, own: setup.own, uses: uses,
+                testLauncher: launcher)
+        }
+        let out = "(allow process-exec (literal \"\(launcher.path)\") (with no-sandbox))"
+        #expect(profile([.open]).contains(out))
+        #expect(profile([.open]).contains("(deny file-write* (subpath \"/Applications/Latchkey.app\"))"))
+        #expect(!profile([]).contains("LatchkeyXcodeTests\") (with no-sandbox)"))
+    }
+
+    /// The job's `xcodebuild`: `test` builds inside the fence (`build-for-testing`), then hands
+    /// the test step (`test-without-building`) to the launcher; without open, tests are refused
+    /// with how to declare it; everything else goes to the real tool as before.
+    @Test func xcodebuildTestBuildsInsideAndTestsThroughTheLauncher() throws {
+        let dir = FileManager.default.temporaryDirectory.appending(path: "xcodebuild-test-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let real = dir.appending(path: "real")
+        try FileManager.default.createDirectory(at: real, withIntermediateDirectories: true)
+        func script(_ url: URL, _ text: String) throws {
+            try Data(("#!/bin/sh\n" + text + "\n").utf8).write(to: url)
+            try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: url.path)
+        }
+        try script(real.appending(path: "xcodebuild"), #"echo "real $*"; [ -z "$FAIL" ]"#)
+        let launcher = dir.appending(path: "launcher")
+        try script(launcher, #"echo "launcher $*""#)
+        func run(_ args: String, launcher: URL?, env: String = "") throws -> (out: String, status: Int32) {
+            let scratch = dir.appending(path: "s-\(UUID().uuidString)")
+            try Fence.Builds.write(in: scratch, testLauncher: launcher)
+            let p = Process()
+            p.executableURL = URL(filePath: "/bin/sh")
+            let bin = Fence.Builds.bin(in: scratch).path
+            p.arguments = ["-c", "\(env) PATH='\(bin):\(real.path):/usr/bin:/bin' xcodebuild \(args) 2>&1"]
+            let pipe = Pipe()
+            p.standardOutput = pipe
+            try p.run()
+            p.waitUntilExit()
+            return (
+                String(decoding: pipe.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self), p.terminationStatus
+            )
+        }
+        let flags = "-IDEPackageSupportDisableManifestSandbox=YES -IDEPackageSupportDisablePluginExecutionSandbox=YES"
+        let test = try run("-scheme 'My App' test -quiet", launcher: launcher)
+        #expect(test.status == 0, "\(test.out)")
+        #expect(
+            test.out
+                == "real \(flags) -scheme My App build-for-testing -quiet\nlauncher -scheme My App test-without-building -quiet\n"
+        )
+        let only = try run("-scheme S test-without-building", launcher: launcher)
+        #expect(only.out == "launcher -scheme S test-without-building\n")
+        let failed = try run("-scheme S test", launcher: launcher, env: "FAIL=1")
+        #expect(failed.status != 0)
+        #expect(!failed.out.contains("launcher"), "no tests after a failed build: \(failed.out)")
+        let build = try run("-scheme S build", launcher: launcher)
+        #expect(build.out == "real \(flags) -scheme S build\n")
+        let closed = try run("-scheme S test", launcher: nil)
+        #expect(closed.status == 64)
+        #expect(closed.out.contains(#"uses: ["open"]"#), "\(closed.out)")
+        #expect(!closed.out.contains("real "), "nothing built: \(closed.out)")
+    }
+
+    /// The launcher runs `xcodebuild test-without-building` and nothing else, with Apple's own
+    /// xcodebuild whatever the command's environment says (it runs outside the fence).
+    @Test func theLauncherRunsOnlyTheTestStep() throws {
+        let launcher = try #require(Fence.Builds.testLauncher, "the launcher is in the app")
+        func run(_ args: [String], env: [String: String] = [:]) throws -> (out: String, status: Int32) {
+            let p = Process()
+            p.executableURL = launcher
+            p.arguments = args
+            p.environment = ProcessInfo.processInfo.environment.merging(env) { $1 }
+            let pipe = Pipe()
+            p.standardOutput = pipe
+            p.standardError = pipe
+            try p.run()
+            p.waitUntilExit()
+            return (
+                String(decoding: pipe.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self), p.terminationStatus
+            )
+        }
+        for args in [
+            ["build"], ["-scheme", "S"], ["test"], ["test-without-building", "archive"],
+            ["test-without-building", "-exportArchive"],
+        ] {
+            let r = try run(args)
+            #expect(r.status == 64, "\(args): \(r.out)")
+            #expect(r.out.contains("test-without-building"), "\(args): \(r.out)")
+        }
+        // A made-up developer folder would pick another xcodebuild: it is dropped.
+        let r = try run(["test-without-building", "-version"], env: ["DEVELOPER_DIR": "/nonexistent"])
+        #expect(r.status == 0, "\(r.out)")
+        #expect(r.out.contains("Xcode "), "\(r.out)")
+    }
+
     /// A program that still tries a sandbox of its own is told as such, not as a refused write.
     @Test func aNestedSandboxIsToldApart() {
         let refused = Fence.refusals(in: "sandbox-exec: sandbox_apply: Operation not permitted\n")

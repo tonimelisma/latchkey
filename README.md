@@ -24,7 +24,8 @@ Claude app (phone, web, desktop), can work with what's on your Mac:
   directions.
 - **Files:** find, read (including PDFs and pictures), write, move, and trash files.
 - **Command line:** run commands, as you, never as administrator, including builds with
-  Xcode's and Swift's tools.
+  Xcode's and Swift's tools, and an app's tests when Claude says it will open apps (the tests
+  then run outside the command's limits on where it may write, as an opened app does).
 - **Safari and the web:** open pages and read, click, type, upload, and download: sites you are
   signed in to in a background Safari tab of Claude's (your real sign-in), other sites in a
   hidden browser of Latchkey's own; and read and act in your own Safari tabs when you ask.

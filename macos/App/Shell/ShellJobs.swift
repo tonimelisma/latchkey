@@ -218,7 +218,7 @@ actor ShellJobs {
         let mark = Fence.mark(of: scratch)
         try Data().write(to: mark)
         try Data().write(to: Fence.control(of: scratch))
-        try Fence.Builds.write(in: scratch)
+        try Fence.Builds.write(in: scratch, testLauncher: uses.contains(.open) ? Fence.Builds.testLauncher : nil)
         let fence = Fence.profile(
             scratch: scratch, folder: URL(filePath: dir), declared: declared, home: setup.home, own: setup.own,
             uses: uses, mark: mark, systemTemp: setup.systemTemp)

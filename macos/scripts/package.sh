@@ -39,6 +39,9 @@ codesign --verify --deep --strict "$APP"
 test -x "$APP/Contents/MacOS/LatchkeyHelper"
 plutil -lint -s "$APP/Contents/Library/LaunchDaemons/net.melisma.latchkey.helper.plist"
 codesign -d -r- "$APP/Contents/MacOS/LatchkeyHelper" 2>&1 | grep -q 'identifier "net.melisma.latchkey.helper"'
+# Shell's test launcher (spec 004 FR-335), signed as the app's own.
+test -x "$APP/Contents/MacOS/LatchkeyXcodeTests"
+codesign -d -r- "$APP/Contents/MacOS/LatchkeyXcodeTests" 2>&1 | grep -q 'identifier "net.melisma.latchkey.xcodetests"'
 # No signed code in the app may carry the debugging entitlement: with it, any program running as
 # the Owner can take over the app's process and use its privacy permissions (security scan,
 # 2026-10-24). Release builds don't inject it (project.yml); this keeps it that way.

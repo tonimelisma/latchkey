@@ -130,6 +130,13 @@ what is left is on one list.
   own, which macOS refuses inside another).
 - **FR-334** When a command's output shows a program starting a sandbox of its own, the answer
   shall say so and how to run that program without it, not that a write was refused.
+- **FR-335** When a command that declared `open` runs an Xcode project's tests (`xcodebuild test`
+  or `test-without-building`, also from `make` or a script), the build shall stay inside the
+  fence and only the test step shall run outside it, through Latchkey's own test launcher, which
+  runs nothing else and which the command can't change; without `open`, the tests shall be
+  refused at once with how to declare it (Toni, 2026-11-21: "Test step outside fence"; found
+  2026-11-21: an app LaunchServices opens for a fenced program gets none of Xcode's test
+  settings, so no app's unit tests could run through Shell).
 - A scratch shell in a throwaway Linux container was considered and left out (Toni,
   2026-10-27).
 

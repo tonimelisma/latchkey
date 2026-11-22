@@ -199,6 +199,26 @@ tried a sandbox of its own (FR-334), which is told apart from a refused write by
 `sandbox_apply`/`sandbox_init` on the line. Xcode tells a Swift package folder by macOS's file
 types, which needs `open` declared; `swift build` doesn't; a project (`.xcodeproj`) needs neither.
 
+Tests (FR-335, 2026-11-21): xcodebuild runs an app's unit tests in the app, which LaunchServices
+opens with Xcode's test settings in its environment (`DYLD_INSERT_LIBRARIES`,
+`XCTestSessionIdentifier`); for a sandboxed caller macOS opens the app without them, so it starts
+as a plain app and xcodebuild gives up ("The test runner hung before establishing connection",
+after about six minutes; the same with a sandbox that allows everything). The app carries
+`Contents/MacOS/LatchkeyXcodeTests`, a small C program (`macos/XcodeTests/main.c`): it refuses
+every argument list without exactly one `test-without-building` or with any other action or
+mode (`build`, `test`, `archive`, `-exportArchive`, ...), drops `DYLD_*`, `DEVELOPER_DIR`,
+`TOOLCHAINS` and `XCODE_XCCONFIG_FILE`, and runs `/usr/bin/xcodebuild`. When the job declared
+`open`, the profile adds `(allow process-exec (literal <launcher>) (with no-sandbox))`, as for
+`ps` and `top`, and refuses writes inside the `.app` that holds it, so a command can't replace
+it even in a build the job can write; the job's `xcodebuild` then turns `test` into
+`build-for-testing` (fenced, with the switches above) followed by `test-without-building`
+through the launcher, and hands `test-without-building` to it directly. Without `open` the
+wrapper refuses tests at once (exit 64) with how to declare it. The test step can then write
+anywhere, and so can the tests, which run in an app LaunchServices opened outside the fence
+anyway: the reach `open` already grants (Toni chose this over running all of xcodebuild outside
+and over keeping tests out of Shell, 2026-11-21). A script can't be the launcher: the kernel
+starts its interpreter, which stays in the sandbox (checked).
+
 ## D10. What a job left (FR-321, FR-323)
 
 When the leftovers are swept, the answer that reports the end (or the next one) and the activity

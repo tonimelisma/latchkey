@@ -75,10 +75,44 @@ enum Fence {
             """
         }
 
-        static let xcodebuild = wrapper(
-            "xcodebuild",
-            #"exec "$real" -IDEPackageSupportDisableManifestSandbox=YES -IDEPackageSupportDisablePluginExecutionSandbox=YES "$@""#
-        )
+        /// Shell's test launcher in Latchkey's own app (FR-335): the one program the fence starts
+        /// outside, when the command declared open. A test app LaunchServices opens for a
+        /// sandboxed xcodebuild gets none of Xcode's test settings and never connects ("The test
+        /// runner hung before establishing connection"), so the test step runs through it while
+        /// the build stays inside (research.md, "Tests").
+        static var testLauncher: URL? {
+            Bundle.main.url(forAuxiliaryExecutable: "LatchkeyXcodeTests").map { OwnFiles.real($0) }
+        }
+
+        private static let noSandboxes =
+            "-IDEPackageSupportDisableManifestSandbox=YES -IDEPackageSupportDisablePluginExecutionSandbox=YES"
+
+        /// `test` builds inside the fence (`build-for-testing`), then hands the test step
+        /// (`test-without-building`) to the launcher; without one (no open declared), tests are
+        /// refused at once with how to declare it, instead of hanging for minutes.
+        static func xcodebuild(testLauncher: URL?) -> String {
+            let launcher =
+                testLauncher.map { "'" + $0.path.replacingOccurrences(of: "'", with: #"'\''"#) + "'" } ?? "''"
+            return wrapper(
+                "xcodebuild",
+                """
+                launcher=\(launcher)
+                tests=no
+                for a do { [ "$a" = test ] || [ "$a" = test-without-building ]; } && tests=yes; done
+                [ "$tests" = yes ] || exec "$real" \(noSandboxes) "$@"
+                if [ -z "$launcher" ]; then
+                    echo 'xcodebuild: tests run outside the fence (spec 004 FR-335): run the command again with uses: ["open"].' >&2
+                    exit 64
+                fi
+                build() {
+                    for a do shift; [ "$a" = test ] && a=build-for-testing; set -- "$@" "$a"; done
+                    "$real" \(noSandboxes) "$@"
+                }
+                for a do [ "$a" = test ] && { build "$@" || exit; break; }; done
+                for a do shift; [ "$a" = test ] && a=test-without-building; set -- "$@" "$a"; done
+                exec "$launcher" "$@"
+                """)
+        }
 
         /// `--disable-sandbox` is an option of SwiftPM's commands only.
         static let swift = wrapper(
@@ -90,11 +124,12 @@ enum Fence {
             exec "$real" "$@"
             """#)
 
-        /// Writes the tools into a job's scratch folder.
-        static func write(in scratch: URL) throws {
+        /// Writes the tools into a job's scratch folder; `testLauncher` only when the command
+        /// declared open (FR-335).
+        static func write(in scratch: URL, testLauncher: URL?) throws {
             let fm = FileManager.default
             try fm.createDirectory(at: bin(in: scratch), withIntermediateDirectories: true)
-            for (name, text) in [("xcodebuild", xcodebuild), ("swift", swift)] {
+            for (name, text) in [("xcodebuild", xcodebuild(testLauncher: testLauncher)), ("swift", swift)] {
                 let url = bin(in: scratch).appending(path: name)
                 try Data(text.utf8).write(to: url)
                 try fm.setAttributes([.posixPermissions: 0o755], ofItemAtPath: url.path)
@@ -182,7 +217,7 @@ enum Fence {
 
     static func profile(
         scratch: URL, folder: URL, declared: [URL], home: URL, own: OwnFiles, uses: Set<Use> = [],
-        mark: URL? = nil, systemTemp: URL? = nil
+        mark: URL? = nil, systemTemp: URL? = nil, testLauncher: URL? = Builds.testLauncher
     ) -> String {
         let realHome = OwnFiles.real(home)
         var allowed = ["/dev", OwnFiles.real(scratch).path]
@@ -244,6 +279,15 @@ enum Fence {
         rules.append(
             "(allow process-exec " + unfenced.map { "(literal \(quote($0)))" }.joined(separator: " ")
                 + " (with no-sandbox))")
+        // Tests outside the fence, only with open (FR-335): the launcher, which the command can't
+        // change (nothing in Latchkey's app is writable from the fence, wherever it was built).
+        if uses.contains(.open), let testLauncher {
+            let launcher = OwnFiles.real(testLauncher)
+            var app = launcher
+            while app.pathComponents.count > 1, app.pathExtension != "app" { app.deleteLastPathComponent() }
+            if app.pathExtension == "app" { rules.append("(deny file-write* (subpath \(quote(app.path))))") }
+            rules.append("(allow process-exec (literal \(quote(launcher.path))) (with no-sandbox))")
+        }
         return rules.joined(separator: "\n")
     }
 

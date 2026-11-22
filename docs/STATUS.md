@@ -1,12 +1,21 @@
 # Status
 
-Last updated: 2026-11-21 (development in Claude Code cloud sessions; Shell builds: task sandbox off, asset-catalog daemon per command; builds work in Shell, spec 004 FR-333 and FR-334; Sign-in built, spec 013; Claude's feedback tool, reports copied to the Mac's Feedback folder; pages are read once they stop changing; every issue becomes a regression case; clicks press down and up before clicking, so Gmail's buttons answer; signed-in sites in Safari tabs of Claude's while unlocked; sign-in cookies in Latchkey's log, for Safari's Target sign-outs; full traces everywhere, in daily files, for evals; Claude's pages always in Latchkey's own browser, by name, with dialogs Claude answers; the locked browser takes Safari's cookies again with every page; public download on GitHub with a new-version notice; never disturb the user: Mail, WhatsApp sending, Notes' window editing, Messages' window actions, Reminders' window setters removed; test sweep on exit; releases are tags on commits; cloud-only files read again; machine list shows Latchkey versions; WhatsApp built; Add to Claude button; plugin withdrawn; README rewritten as a short product page; relay web pages redone; purkki paired; spec 010 shipped)
+Last updated: 2026-11-21 (Xcode tests in Shell, spec 004 FR-335; development in Claude Code cloud sessions; Shell builds: task sandbox off, asset-catalog daemon per command; builds work in Shell, spec 004 FR-333 and FR-334; Sign-in built, spec 013; Claude's feedback tool, reports copied to the Mac's Feedback folder; pages are read once they stop changing; every issue becomes a regression case; clicks press down and up before clicking, so Gmail's buttons answer; signed-in sites in Safari tabs of Claude's while unlocked; sign-in cookies in Latchkey's log, for Safari's Target sign-outs; full traces everywhere, in daily files, for evals; Claude's pages always in Latchkey's own browser, by name, with dialogs Claude answers; the locked browser takes Safari's cookies again with every page; public download on GitHub with a new-version notice; never disturb the user: Mail, WhatsApp sending, Notes' window editing, Messages' window actions, Reminders' window setters removed; test sweep on exit; releases are tags on commits; cloud-only files read again; machine list shows Latchkey versions; WhatsApp built; Add to Claude button; plugin withdrawn; README rewritten as a short product page; relay web pages redone; purkki paired; spec 010 shipped)
 
 Xcode signing ready (2026-10-20): Toni's Xcode account has a valid "Apple Development" certificate
 (certificate expires 2027-07-22). Keep the team ID out of committed project files
 (open source); put it in a gitignored `macos/Local.xcconfig` as `DEVELOPMENT_TEAM`.
 
 ## Current phase
+
+Xcode tests in Shell (Toni, 2026-11-21: "Test step outside fence"; spec 004 FR-335): no app's
+unit tests could run through `shell_run`. macOS opens an app for a sandboxed program without
+the program's environment, so the test app Xcode opens never got its test settings and
+xcodebuild gave up after about six minutes ("The test runner hung before establishing
+connection"). With `open` declared, the job's `xcodebuild test` now builds inside the fence and
+runs the test step through `LatchkeyXcodeTests`, a small program in Latchkey's app that the
+fence starts outside and that runs only `xcodebuild test-without-building`; without `open`,
+tests are refused at once. Regression case `regressions.shell_xcode_tests_in_fence`.
 
 Development in Claude Code cloud sessions (Toni, 2026-11-21; CLAUDE.md "Cloud sessions"): the
 hooks know a cloud session (`CLAUDE_CODE_REMOTE=true`). Session start runs

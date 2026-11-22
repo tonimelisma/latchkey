@@ -63,6 +63,11 @@ targets:
         embed: true
         copy:
           destination: executables
+      # Shell's test launcher (spec 004 FR-335): the one program its fence starts outside.
+      - target: LatchkeyXcodeTests
+        embed: true
+        copy:
+          destination: executables
       - package: Sparkle
       - package: MimeFoundation
     # The helper's launchd plist, made from the one template with this configuration's
@@ -111,6 +116,17 @@ targets:
         SKIP_INSTALL: YES
     excludes:
       - "*.plist"
+  LatchkeyXcodeTests:
+    type: tool
+    platform: macOS
+    sources:
+      - XcodeTests
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: $(LATCHKEY_APP_ID).xcodetests
+        PRODUCT_NAME: LatchkeyXcodeTests
+        CODE_SIGN_STYLE: Automatic
+        SKIP_INSTALL: YES
   LatchkeyTests:
     type: bundle.unit-test
     platform: macOS
