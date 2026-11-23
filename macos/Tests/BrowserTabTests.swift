@@ -213,6 +213,10 @@ final class FakeSafariTabs: ScriptRunner, @unchecked Sendable {
                         #"{"title":"The owner's page","url":"\#(tab.url)","total":5,"text":"\#(tab.owner)","elements":[]}"#
                 } else if js.contains("document.title") {
                     answer = "\(tab.title)\t\(tab.url)"
+                } else if js.contains("return 'started'") {
+                    answer = "started"  // Claude's script, started as an async function (FR-470)
+                } else if js.contains("if (r.state === 'running')") {
+                    answer = #"{"state":"done","value":"ok"}"#  // and what it gave
                 } else {
                     answer = "ok"
                 }
