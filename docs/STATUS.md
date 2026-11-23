@@ -549,6 +549,9 @@ after the app was quit.
 
 ## Next steps
 
+000. Leftover branch `ci-baseline` on GitHub (main plus the Mac CI job, used to compare test
+    failures on 2026-11-23): a cloud session can't delete branches; delete it on GitHub, or a
+    session on the Mac does with `git push origin --delete ci-baseline`.
 00. Live checks of the 2026-11-23 feedback fixes, once Toni allows Latchkey calls again: the new
     cases in `regressions-browser`, `regressions-computer`, and `regressions-other`
     (`state-check.sh`), unlocked and locked; then move the 172 reports to `Feedback/Handled`
