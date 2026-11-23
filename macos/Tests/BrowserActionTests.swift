@@ -208,7 +208,9 @@ enum ActionPage {
     /// fails to start ("The variable theAnswer is not defined", 2026-11-22).
     @Test func onlyValidBodiesAreTried() {
         #expect(PageScripts.asyncBodies("const a = 1; return a") == ["const a = 1; return a"])
-        #expect(PageScripts.asyncBodies("(async () => { return 1 })()").first == "return (\n(async () => { return 1 })()\n);")
+        #expect(
+            PageScripts.asyncBodies("(async () => { return 1 })()").first
+                == "return (\n(async () => { return 1 })()\n);")
         #expect(PageScripts.asyncBodies("document.title").count >= 1)
         #expect(PageScripts.asyncBodies("this is not ) javascript") == ["this is not ) javascript"])
     }
@@ -225,7 +227,8 @@ enum ActionPage {
             </body></html>
             """)
         for _ in 0..<50 {
-            let ready = try? await p.run("document.querySelector('iframe').contentDocument.querySelector('input') ? 'y' : 'n'")
+            let ready = try? await p.run(
+                "document.querySelector('iframe').contentDocument.querySelector('input') ? 'y' : 'n'")
             if ready == "y" { break }
             try await Task.sleep(for: .milliseconds(20))
         }
@@ -235,7 +238,8 @@ enum ActionPage {
         let user = try #require(r.elements.first { $0.label == "User ID" }?.ref)
         #expect(r.text.contains("Sign in"), "the frame's text too")
         _ = try await p.run(PageScripts.type(user, text: "toni", submit: false))
-        #expect(try await p.run("document.querySelector('iframe').contentDocument.querySelector('input').value") == "toni")
+        let typed = try await p.run("document.querySelector('iframe').contentDocument.querySelector('input').value")
+        #expect(typed == "toni")
     }
 
     /// What an opened menu shows is listed before the rest, so the cap never hides it (Etsy's
@@ -243,8 +247,9 @@ enum ActionPage {
     @Test func anOpenMenusItemsComeFirst() async throws {
         let p = TestPage()
         let many = (0..<420).map { "<a href='#l\($0)'>link \($0)</a>" }.joined()
-        try await p.load(
-            "<html><body>\(many)<button aria-expanded='true' aria-controls='m'>You</button><ul id='m'><li><a href='/logout'>Sign out</a></li></ul></body></html>")
+        let menu = "<button aria-expanded='true' aria-controls='m'>You</button>"
+            + "<ul id='m'><li><a href='/logout'>Sign out</a></li></ul>"
+        try await p.load("<html><body>\(many)\(menu)</body></html>")
         let r = try PageScripts.decode(try await p.run(PageScripts.read(offset: 0)))
         #expect(r.elements.first?.label == "Sign out")
         #expect(r.elements.count == 400 && r.unlisted > 0)

@@ -97,7 +97,8 @@ final class OwnPages {
             let used = pages[oldest]?.used, now.timeIntervalSince(used) >= Self.idleBeforeReplaced
         {
             close(oldest)
-            record("Closed Claude's page \(oldest), unused for \(Int(now.timeIntervalSince(used) / 60)) minutes, for a new page")
+            let minutes = Int(now.timeIntervalSince(used) / 60)
+            record("Closed Claude's page \(oldest), unused for \(minutes) minutes, for a new page")
             return
         }
         throw Problem.full(

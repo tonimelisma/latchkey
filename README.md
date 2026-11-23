@@ -25,7 +25,7 @@ Claude app (phone, web, desktop), can work with what's on your Mac:
 - **Calendar and Reminders:** see, add, change, and delete events and reminders; answer and send
   invitations.
 - **Contacts, location, and maps:** look people up, add or change contacts, find places and
-  directions.
+  directions. When Claude says where to look, it gets only places within 50 km of there.
 - **Files:** find, read (including PDFs and pictures), write, move, and trash files.
 - **Command line:** run commands, as you, never as administrator, including builds with
   Xcode's and Swift's tools, and an app's tests when Claude says it will open apps (the tests
@@ -34,7 +34,10 @@ Claude app (phone, web, desktop), can work with what's on your Mac:
   signed in to in a background Safari tab of Claude's (your real sign-in), other sites in a
   hidden browser of Latchkey's own; and read and act in your own Safari tabs when you ask.
   Claude's Safari tabs close when Claude is done with them, after 30 minutes unused, or when
-  Latchkey quits; your own tabs stay.
+  Latchkey quits; your own tabs stay. Claude keeps at most 10 pages open; when all 10 are open,
+  the one unused longest makes way for a new one once nobody has used it for 5 minutes. Two
+  chats working in your Safari tabs at once take turns, so one chat's click never lands in the
+  tab another chat picked.
 - **Signing in:** Claude signs in on its own pages the way you would, reading each page and
   pressing its buttons itself; Latchkey only types your saved user name, password, or a
   verification code into the field Claude names, presses the button Claude names right after,
@@ -60,7 +63,8 @@ Claude app (phone, web, desktop), can work with what's on your Mac:
   without Claude seeing it, or types Claude's code only if a recent text or email from that site
   holds it; either way Latchkey then deletes that text or archives that email. Neither reads
   anything while Messages or Mail is Off in Latchkey's settings. Not yet: passkeys.
-- **The screen:** take a picture of it, and control the computer when you ask.
+- **The screen:** take a picture of it, and control the computer when you ask. Without the
+  pointer, Claude can press an app's buttons and pick a row in its lists or sidebar.
 
 Your Mac never has to accept connections from the internet: Latchkey reaches out to a small
 service of yours online, the relay, and Claude talks to the relay. You decide which of these
