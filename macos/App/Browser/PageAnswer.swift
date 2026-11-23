@@ -27,9 +27,8 @@ extension PageScripts {
             used += line.count + 1
         }
         var elements = lines.isEmpty ? "" : "\n\nOn the page:\n" + lines.joined(separator: "\n")
-        if lines.count < p.elements.count {
-            elements += "\n(\(p.elements.count - lines.count) more not listed; a script can find them.)"
-        }
+        let more = p.elements.count - lines.count + p.unlisted
+        if more > 0 { elements += "\n(\(more) more not listed; a script can find them.)" }
         let room = max(ResultLimit.characters - head.count - elements.count - 160, 1_000)
         var shown = ""
         var count = 0

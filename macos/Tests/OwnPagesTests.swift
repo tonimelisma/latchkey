@@ -202,6 +202,21 @@ import Testing
         #expect(p.list().count == 2)
     }
 
+    /// FR-446a (Toni, 2026-11-23: "Close the oldest idle"): with the limit reached, the page
+    /// unused longest gives way once no one has used it for 5 minutes; a page in use never does.
+    @Test func theOldestIdlePageGivesWayWhenAllAreOpen() async throws {
+        let p = pages(limit: 2)
+        defer { p.closeAll() }
+        let a = try await p.open(html: "<title>A</title><p>a</p>", base: base)
+        let b = try await p.open(html: "<title>B</title><p>b</p>", base: base)
+        #expect(throws: OwnPages.Problem.self) { try p.makeRoom(now: Date().addingTimeInterval(60)) }
+        #expect(p.list().count == 2, "used a minute ago: nothing closed")
+        _ = try p.page(b)  // b used now, a stays the oldest
+        try p.makeRoom(now: Date().addingTimeInterval(OwnPages.idleBeforeReplaced + 1))
+        #expect(p.list().map(\.name) == [b], "a, unused longest, gave way")
+        #expect(throws: OwnPages.Problem.self) { _ = try p.page(a) }
+    }
+
     @Test func pagesUnusedForHalfAnHourClose() async throws {
         let p = pages()
         defer { p.closeAll() }
@@ -227,6 +242,32 @@ import Testing
             let range = text.range(of: #"page "p[a-z0-9]{4}""#, options: .regularExpression)
         else { return nil }
         return String(text[range].dropFirst(6).dropLast())
+    }
+
+    /// A url without page opens a new page, never the only page open when that is a Safari tab
+    /// of Claude's: it may be another chat's (2026-11-22: a Procare sync's url loaded into another
+    /// chat's claude.ai page, and that chat's next click landed on Procare).
+    @Test func aURLWithoutPageNeverLoadsIntoAnotherChatsSafariPage() async throws {
+        let fake = FakeSafariTabs()
+        let p = OwnPages(cookies: { [] }, isLocked: { false })
+        defer { p.closeAll() }
+        let t = tools(fake, p)
+        let other = SafariBrowser(scripts: fake, settleLimit: .seconds(3))
+        try await other.pick("10.2")
+        let theirs = try p.adopt(other, address: "https://news.example.com/")
+        let r = await t["browser_read"]!.handler(.object(["url": .string("about:blank")]))
+        #expect(!r.isError, "\(r.content.jsonText)")
+        #expect(r.content.jsonText.contains("From Latchkey's own browser"), "a new page of its own")
+        #expect(name(in: r) != theirs)
+        #expect(fake.windows[0].tabs[1].url == "https://news.example.com/", "the other chat's tab wasn't touched")
+    }
+
+    /// The page an answer is from, read from its own first line only.
+    @Test func thePageNameComesFromTheAnswersOwnLine() {
+        let own = ToolResult.text(
+            "From Latchkey's own browser, not Safari: Claude's page \"pk2m4\", x.\nTitle\nFrom x: Claude's page \"pzzzz\"")
+        #expect(BrowserCapability.pageName(in: own) == "pk2m4")
+        #expect(BrowserCapability.pageName(in: .text("Title\nBody: Claude's page \"pk2m4\"")) == nil, "page text")
     }
 
     @Test func openingTwiceGivesTwoNamedPagesAndNoSafariTab() async {

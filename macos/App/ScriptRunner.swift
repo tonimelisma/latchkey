@@ -225,3 +225,39 @@ struct ProcessCommands: CommandRunner {
         var data = Data()
     }
 }
+
+/// One caller at a time, in order, each waiting at most a limit for its turn (Constitution II):
+/// two chats picking the owner's Safari tabs at once must not interleave a pick and an action
+/// (a click meant for an E*TRADE tab landed on another chat's Target checkout, 2026-11-19).
+actor OneAtATime {
+    private var busy = false
+    private var waiting: [(id: UInt64, turn: CheckedContinuation<Bool, Never>)] = []
+    private var nextID: UInt64 = 0
+
+    /// Waits for its turn up to `limit`; false when it didn't come (then nothing is held).
+    func enter(within limit: Duration) async -> Bool {
+        if !busy {
+            busy = true
+            return true
+        }
+        nextID += 1
+        let id = nextID
+        return await withCheckedContinuation { (turn: CheckedContinuation<Bool, Never>) in
+            waiting.append((id, turn))
+            Task {
+                try? await Task.sleep(for: limit)
+                await self.giveUp(id)
+            }
+        }
+    }
+
+    private func giveUp(_ id: UInt64) {
+        guard let i = waiting.firstIndex(where: { $0.id == id }) else { return }
+        waiting.remove(at: i).turn.resume(returning: false)
+    }
+
+    /// Ends the turn: the next caller's starts.
+    func leave() {
+        if waiting.isEmpty { busy = false } else { waiting.removeFirst().turn.resume(returning: true) }
+    }
+}

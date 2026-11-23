@@ -25,6 +25,8 @@ enum LocationCapability {
 
     static let modes = ["driving", "walking", "transit"]
     static let maxPlaces = 25
+    /// How far from near a place may be (Toni, 2026-11-23).
+    static let nearbyMetres: Double = 50_000
 
     static func tools(backend: any PlacesBackend, zone: @escaping CalendarCapability.Zone) -> [ToolEntry] {
         [
@@ -47,7 +49,7 @@ enum LocationCapability {
                         """,
                     input: [
                         "query": .stringParam("What to look for"),
-                        "near": .stringParam("Where to look: an address, lat,lon, or here"),
+                        "near": .stringParam("Where to look: an address, lat,lon, or here; only places within 50 km of it come back"),
                         "to": .stringParam("Where to go: an address, lat,lon, or here"),
                         "from": .stringParam("Where from (default here)"),
                         "mode": .enumParam(modes, "How to travel (default driving)"),
@@ -102,7 +104,16 @@ enum LocationCapability {
                 (center, around) = (fix.coordinate, "the Mac")
             }
             let limit = min(try args.integer("limit", in: 1...Int.max) ?? 10, maxPlaces)
-            let places = try await backend.search(query, near: center, limit: limit)
+            let named = args["near"]?.stringValue.map { !$0.isEmpty } ?? false
+            var places = try await backend.search(query, near: center, limit: named ? maxPlaces : limit)
+            // With near, only places in that area (Toni, 2026-11-23: "Only nearby, else none"):
+            // Apple Maps answered "BARC" near Ubud with Basra, Iraq, 8,385 km away.
+            if named, let center {
+                places = Array(places.filter { center.distance(to: $0.coordinate) <= nearbyMetres }.prefix(limit))
+                guard !places.isEmpty else {
+                    throw PlacesFailure.nothingNear(query, Int(nearbyMetres / 1000), around)
+                }
+            }
             guard !places.isEmpty else { throw PlacesFailure.nothingFound(query) }
             var lines = ["Places for “\(query)” near \(around):"]
             lines += places.map { p in
@@ -171,6 +182,8 @@ enum LocationCapability {
                 case .noFix:
                     "The Mac couldn't tell where it is just now (no Wi-Fi networks nearby, or no answer within 10 seconds)."
                 case .nothingFound(let what): "Apple Maps found nothing for “\(what)”."
+                case .nothingNear(let what, let km, let around):
+                    "Apple Maps found nothing for “\(what)” within \(km) km of \(around). Try other words (the local name, or what kind of place it is, like \"metro station\"), or leave out near."
                 case .noRoute(let why): "Apple Maps has no route for that: \(why)"
                 case .failed(let why): "Apple Maps didn't answer: \(why)"
                 }

@@ -108,7 +108,7 @@ extension BrowserCapability {
                         return await acted(
                             shown > 0
                                 ? "Hovered over \(ref); \(shown) more things on the page show now."
-                                : "Hovered over \(ref); nothing new shows (a menu styled to open only under a real pointer doesn't open from a script; clicking it often does).",
+                                : "Hovered over \(ref). The page as it is now is below; a menu may draw itself a moment later, or open only under a real pointer (clicking it often opens it).",
                             done.page, l, browser, activity: "Hovered over \(ref) on \(host(done.page.url))")
                     }
                 }),

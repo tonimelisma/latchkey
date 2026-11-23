@@ -196,6 +196,58 @@ enum ActionPage {
         #expect(try await async("await Promise.resolve(2) * 21") == #"{"state":"done","value":"42"}"#)
         #expect(try await async("const a = 1; return a + 1") == #"{"state":"done","value":"2"}"#)
         #expect(try await async("throw new Error('nope')").contains("nope"))
+        // 2026-11-22: an async arrow's own return no longer hides the value of the call around it,
+        // and statements with await give the last one's value.
+        #expect(
+            try await async("(async () => { await 0; return 'inner'; })()") == #"{"state":"done","value":"inner"}"#)
+        #expect(
+            try await async("const a = await Promise.resolve(1);\na + 1") == #"{"state":"done","value":"2"}"#)
+    }
+
+    /// Only bodies JavaScriptCore's syntax check takes are tried, so Safari never runs one that
+    /// fails to start ("The variable theAnswer is not defined", 2026-11-22).
+    @Test func onlyValidBodiesAreTried() {
+        #expect(PageScripts.asyncBodies("const a = 1; return a") == ["const a = 1; return a"])
+        #expect(PageScripts.asyncBodies("(async () => { return 1 })()").first == "return (\n(async () => { return 1 })()\n);")
+        #expect(PageScripts.asyncBodies("document.title").count >= 1)
+        #expect(PageScripts.asyncBodies("this is not ) javascript") == ["this is not ) javascript"])
+    }
+
+    /// 2026-11-22: a link without an address that a script makes a button (Citi's Sign Off), and
+    /// the fields of a same-site frame (Chase's sign-in form) are listed and can be typed into;
+    /// a bare anchor isn't listed.
+    @Test func hreflessLinksAndSameSiteFramesAreListed() async throws {
+        let p = TestPage()
+        try await p.load(
+            """
+            <html><body><a id='off' onclick='document.title="off"'>Sign Off</a><a name='top'></a>
+            <iframe srcdoc="<html><body><p>Sign in</p><input name='user' placeholder='User ID'></body></html>"></iframe>
+            </body></html>
+            """)
+        for _ in 0..<50 {
+            let ready = try? await p.run("document.querySelector('iframe').contentDocument.querySelector('input') ? 'y' : 'n'")
+            if ready == "y" { break }
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        let r = try PageScripts.decode(try await p.run(PageScripts.read(offset: 0)))
+        #expect(r.elements.contains { $0.label == "Sign Off" && $0.kind == "link" })
+        #expect(r.elements.filter { $0.kind == "link" }.count == 1, "the bare anchor stays out")
+        let user = try #require(r.elements.first { $0.label == "User ID" }?.ref)
+        #expect(r.text.contains("Sign in"), "the frame's text too")
+        _ = try await p.run(PageScripts.type(user, text: "toni", submit: false))
+        #expect(try await p.run("document.querySelector('iframe').contentDocument.querySelector('input').value") == "toni")
+    }
+
+    /// What an opened menu shows is listed before the rest, so the cap never hides it (Etsy's
+    /// "You" menu, 2026-11-22).
+    @Test func anOpenMenusItemsComeFirst() async throws {
+        let p = TestPage()
+        let many = (0..<420).map { "<a href='#l\($0)'>link \($0)</a>" }.joined()
+        try await p.load(
+            "<html><body>\(many)<button aria-expanded='true' aria-controls='m'>You</button><ul id='m'><li><a href='/logout'>Sign out</a></li></ul></body></html>")
+        let r = try PageScripts.decode(try await p.run(PageScripts.read(offset: 0)))
+        #expect(r.elements.first?.label == "Sign out")
+        #expect(r.elements.count == 400 && r.unlisted > 0)
     }
 
     /// In a tab of Claude's own, a link that would open a new tab opens in this one (Costco,

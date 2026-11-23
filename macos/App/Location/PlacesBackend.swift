@@ -60,6 +60,8 @@ enum PlacesFailure: Error, Equatable {
     case location(LocationAccess)
     case noFix
     case nothingFound(String)
+    /// With near: nothing within `nearbyMetres` of it (the query, the km, the place named).
+    case nothingNear(String, Int, String)
     case noRoute(String)
     case failed(String)
 }

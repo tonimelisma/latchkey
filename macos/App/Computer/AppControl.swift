@@ -71,6 +71,14 @@ struct AppControl: Sendable {
         elements: { AppWindowReader.elements(of: $0.pid) },
         press: { e in
             guard let el = e.element else { return false }
+            // A row of a list or sidebar, or a cell or text in one, is selected as a click would
+            // (Toni, 2026-11-23: "press selects the row"): SwiftUI's sidebar rows take no press,
+            // and pressing their text did nothing (Otos, 2026-11-20). No pointer moves.
+            if let row = AppControl.row(around: el),
+                AXUIElementSetAttributeValue(row, kAXSelectedAttribute as CFString, kCFBooleanTrue) == .success
+            {
+                return true
+            }
             return AXUIElementPerformAction(el, kAXPressAction as CFString) == .success
         },
         focus: { e in
@@ -231,8 +239,41 @@ enum AppWindowReader {
     ]
 
     private static func label(_ e: AXUIElement) -> String {
-        [kAXTitleAttribute, kAXDescriptionAttribute, kAXHelpAttribute].lazy.compactMap { string(e, $0) }
-            .first { !$0.isEmpty } ?? ""
+        if let l = [kAXTitleAttribute, kAXDescriptionAttribute, kAXHelpAttribute].lazy.compactMap({ string(e, $0) })
+            .first(where: { !$0.isEmpty })
+        {
+            return l
+        }
+        // A window's close, minimize, and zoom buttons have no title: their kind names them
+        // ("close button"; 2026-11-20, the close button had to be guessed).
+        if let sub = string(e, kAXSubroleAttribute), windowButtons.contains(sub) {
+            return string(e, kAXRoleDescriptionAttribute) ?? ""
+        }
+        return ""
+    }
+
+    private static let windowButtons: Set<String> = [
+        "AXCloseButton", "AXMinimizeButton", "AXZoomButton", "AXFullScreenButton",
+    ]
+
+    /// The row `e` is, or is in (a cell, or text in a cell), within three levels; nil when none,
+    /// or when it can't be selected.
+    static func row(around e: AXUIElement) -> AXUIElement? {
+        var current: AXUIElement? = e
+        for _ in 0..<4 {
+            guard let c = current else { return nil }
+            if string(c, kAXRoleAttribute) == "AXRow" {
+                var settable: DarwinBoolean = false
+                let ok = AXUIElementIsAttributeSettable(c, kAXSelectedAttribute as CFString, &settable) == .success
+                return ok && settable.boolValue ? c : nil
+            }
+            var parent: CFTypeRef?
+            guard AXUIElementCopyAttributeValue(c, kAXParentAttribute as CFString, &parent) == .success,
+                let p = parent, CFGetTypeID(p) == AXUIElementGetTypeID()
+            else { return nil }
+            current = (p as! AXUIElement)
+        }
+        return nil
     }
 
     /// Each element once: a table's cells are its rows' children and its columns' too, and its
