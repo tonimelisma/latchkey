@@ -42,7 +42,13 @@ agent's words.
 | Etsy (email) | locked 16:50–16:55 | VERIFIED (0.8.226) | VERIFIED (0.8.226) | VERIFIED (0.8.226; a stale code refused first) |
 | Amazon | unlocked and locked | NOT VERIFIED: its "I am human" box (before the form, or after the code), never ticked | same | same |
 | Citi (bank, text) | locked 16:55–17:01 | VERIFIED (0.8.226) | VERIFIED (0.8.226) | VERIFIED (0.8.226) |
-| Chase (bank) | locked 17:01–17:10 | NOT VERIFIED: its code step is blank: the page counted as hidden, so its components never started (fix in progress) | same | same |
+| Chase (bank) | locked 17:01–17:10 | NOT VERIFIED: its code step was blank (the page counted as hidden); fixed in 0.8.228 (pages visible, unit-tested), not yet run live on Chase | same | same |
+| Bank of America (bank, text) | unlocked 18:59–19:06 | VERIFIED (0.8.226) | VERIFIED (0.8.226) | VERIFIED (0.8.226) |
+
+Not yet run: Capital One, Amex, US Bank, Discover, Fidelity, Schwab (Toni, 2026-11-22: "wrap up
+the work. what doesn't work, doesn't work"). Leftovers: two identical Uber code texts and two
+Bank of America code texts couldn't be deleted by 0.8.226 (fixed in 0.8.228 and the release after
+it; deleted after that install); one Uber code went to WhatsApp (no delete there).
 | IKEA, Walmart, Target | unlocked | password only, no code asked: signed in all 9 runs | | |
 
 Comparison: all three ways are as reliable as each other once the page works; every failure was
@@ -587,12 +593,11 @@ after the app was quit.
    `linux release` stopped before tagging ("SERVER_SIGNING_KEY is neither set nor in ../.env");
    `relay image` passed its checks and was refused the push ("denied: permission_denied:
    write_package") until the package grants this repository's Actions write access.
-1. Codes experiment (Toni, 2026-11-22: "test all approaches for robustness on a wide variety of
-   web sites"): Claude reads codes / Latchkey fetches codes / middle path, on many sites; report.
-   The two new ways are built (logins_fill `code_from` and `check_code`, spec 013 FR-1376,
-   reviewed before commit); next: run each way on non-bank sites, checking each result
-   independently, then banks one at a time ("once all non-bank sites are incredibly robust").
-2. Citi fresh sign-in with the Mac locked, with logins_fill (Open acceptance row).
+1. Codes experiment: done and reported (table under "Open acceptance"). Open: Chase live on 0.8.228
+   or later; the other banks (Capital One, Amex, US Bank, Discover, Fidelity, Schwab); Toni to
+   choose which way to keep (or all three).
+2. The Mac's updater isn't set up on Toni's Mac (`macos/scripts/updater-setup.sh`, once, Toni's
+   step); installs ran by hand until then.
 
 0. Sign-in's first real export (spec 013 T11, Toni's step): Latchkey's menu → Export Passwords
    to Latchkey…, one Touch ID. The first try (0.8.175) stopped at the save panel; 0.8.176 fixes
