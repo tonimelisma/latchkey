@@ -349,3 +349,21 @@ class RepeatLimit(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class Owners(unittest.TestCase):
+    def test_a_listed_uid_is_the_owner(self):
+        self.assertIn("1001", sentinel.OwnerUids(["1001"], [], name_of=lambda u: None))
+
+    def test_an_automation_account_is_known_by_its_name(self):
+        names = {4242: "sa_123456789"}
+        owners = sentinel.OwnerUids(["1001"], ["sa_123456789"], name_of=names.get)
+        self.assertIn("4242", owners)
+        self.assertEqual(sentinel.classify_audit({"key": "lk_sudoers", "auid": "4242"}, owners, False), sentinel.NOTICE)
+
+    def test_anyone_else_is_not(self):
+        owners = sentinel.OwnerUids(["1001"], ["sa_123456789"], name_of={4243: "intruder"}.get)
+        self.assertNotIn("4243", owners)
+        self.assertNotIn(sentinel.AUID_UNSET, owners)
+        self.assertNotIn("x", owners)
+        self.assertEqual(sentinel.classify_audit({"key": "lk_sudoers", "auid": "4243"}, owners, False), sentinel.WARNING)

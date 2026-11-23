@@ -202,8 +202,22 @@ What reaches the server:
   Login (no SSH keys in metadata or in home folders; the old local accounts are locked). sshd
   takes keys only, no root, no forwarding, current ciphers. Remote desktop, the duplicate SSH
   rule and the "all internal traffic" rule are gone.
-- hackernews no longer deploys over SSH from GitHub: the server pulls its public image every
-  5 minutes (`latchkey-update-apps`), so nothing from outside can sign in to deploy. Its compose
+- Neither app deploys over SSH: the server pulls their public images every 5 minutes
+  (`latchkey-update-apps`), so nothing from outside signs in to deploy. A relay image is used
+  only when cosign finds it signed, keyless, by this repository's `relay-image.yml` on main
+  (Sigstore's certificate names the workflow and branch; the signature is in Sigstore's public
+  transparency log); an unhealthy one is rolled back and skipped. So pushing an image to ghcr.io
+  alone (a stolen package token) can't change the relay; changing what runs takes a commit on
+  main that passes the workflow (and its "production" approval, when the owner sets one).
+- Two automation identities may also reach the server, both through Workload Identity
+  Federation (GitHub's short-lived identity token, no stored key; `deploy/gcp-wif-setup.sh`),
+  and only for jobs of Toni's repositories on main: `latchkey-infra` (this repository's infra
+  workflow in its environment "infra": the relay's settings and `deploy/harden.sh`, with project
+  IAM admin among its roles, so whoever can run that workflow on main is as strong as the
+  project's owner; the environment's approval rule is the guard) and `hackernews-admin`
+  (hackernews's admin jobs: SSH through IAP to this VM, OS Login admin on it alone). Their IAP
+  use and sessions are expected, so the alert and the sentinel count them as Toni's; every cloud
+  change they make still emails Toni ("cloud project changed"). Its compose
   file is in this repository, so a push to hackernews changes the app, never its limits: no
   root inside, no capabilities, no new privileges, its own network with Caddy only.
 - The relay shares the network `latchkey-front` with Caddy alone, and believes forwarded client
@@ -231,7 +245,7 @@ Intrusion detection: everything is reported off the server, to Cloud Logging, wh
 account can write but not delete; Cloud Monitoring emails Toni (`deploy/alerts.py`):
 - the sentinel (`deploy/server/host/sentinel.py`) reports a WARNING for: a change to a watched
   file (the relay's folder, Caddy's, sshd, sudoers, accounts, cron, systemd units, Docker's
-  settings, the loader, PAM, apt sources) made outside Toni's own SSH session and outside a
+  settings, the loader, PAM, apt sources) made outside Toni's own SSH session (or the automation identities') and outside a
   package update; any session or sudo by anyone else; a command run inside a container other
   than its health check and the deploy's and backup's own; an unknown container, or a known one
   started privileged, on the host's namespaces, with extra capabilities or other mounts; a new
@@ -241,13 +255,17 @@ account can write but not delete; Cloud Monitoring emails Toni (`deploy/alerts.p
   Audit rules are locked (`-e 2`): changing them takes a reboot. Every root command in a
   session is recorded (INFO) as the server's history.
 - alerts also fire when the sentinel's heartbeat stops for 30 minutes (killed, or the server
-  down), when anyone but Toni goes through the IAP tunnel, on any change to the cloud project
+  down), when anyone but Toni and the two automation identities goes through the IAP tunnel, on any change to the cloud project
   by anyone but Google's own agents, and when the relay doesn't answer for 10 minutes.
 - the relay emails the account owner when a Mac pairs, a Claude app gets access, or the account
   is recovered (spec 001), so a stolen account shows up at once even with the server intact.
 
 Accepted: Toni's Google account is the root of trust (project owner, IAP, OS Login); it must
-have 2-step verification with a passkey or security key. hackernews shares the kernel, so a
+have 2-step verification with a passkey or security key. Next to it, Toni's GitHub account: it
+can change main, the workflows and the environments' approval rules, and so the relay's image
+and the infra identity. purkki is reached by no workflow and no identity: it only pulls the
+Linux program, signed with `SERVER_SIGNING_KEY` (a repository secret, used only by
+`linux-release.yml` in the environment "release"). hackernews shares the kernel, so a
 kernel escape from its container would reach the relay; it runs without root or capabilities
 to make that hard. An intruder who is already root can stop the sentinel, which the missing
 heartbeat reports, but not erase what it already sent.
@@ -259,5 +277,5 @@ heartbeat reports, but not erase what it already sent.
 2. Cut it off: stop the VM (`gcloud compute instances stop`), keep the disk for evidence (snapshot it).
 3. Treat the relay's keys as stolen: on a fresh server, deploy, then `relay reset-keys --confirm`
    (everyone signs in again, every Mac pairs again), and rotate `RESEND_API_KEY` and the Cloudflare
-   token in `.env`. Restore the database from a snapshot older than the first warning.
-4. Then `deploy/harden.sh` on the new server, and see what the warning says got in.
+   token (the infra environment's secrets). Restore the database from a snapshot older than the first warning.
+4. Then the infra workflow's `harden` on the new server, and see what the warning says got in.

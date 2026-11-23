@@ -71,6 +71,14 @@ previous version when Docker's health check or https://<host>/healthz fails with
 applies configuration (relay.env, compose file, Caddy block, DNS, email domain) and restarts the
 running version, under the updater's lock; image building, the upload over SSH and the
 key-file database copy (long done) are gone. Tested by `deploy/tests/update_apps_test.sh`.
+Infrastructure changes run in `infra.yml` (repository_dispatch `infra` with task `configure` or
+`harden`; environment `infra`), signed in to Google Cloud as `latchkey-infra` through Workload
+Identity Federation; `deploy/gcp-wif-setup.sh` (the owner, once, in Cloud Shell) makes the pool,
+GitHub's provider (this repository and hackernews, on main), `latchkey-infra` and
+`hackernews-admin`. `harden.sh` accepts the owner or exactly `latchkey-infra`; the IAP alert
+leaves out the owner and both identities, and the sentinel counts their sessions as the owner's
+(OS Login names `sa_<id>`, uids looked up on the server). `ci_tools_test.sh` checks that every
+action is pinned and every releasing, deploying or infrastructure job is in its environment.
 
 Fill-only sign-in (Toni, 2026-11-22: "Shouldn't the code just provide what's happening in the
 browser and the agent makes the presumptions?"; then "Fill-only tool", "No cap", "Decide fresh

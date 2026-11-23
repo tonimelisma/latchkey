@@ -28,6 +28,7 @@ Standard library only. Tested by deploy/tests/test_sentinel.py (the pure functio
 
 import json
 import os
+import pwd
 import re
 import signal
 import subprocess
@@ -231,6 +232,36 @@ def parse_audit_line(line):
 # init_module loads a module from memory, with no file to check (finit_module, which modprobe
 # uses, loads one from a file): x86-64 and 32-bit syscall numbers.
 INIT_MODULE_FROM_MEMORY = {("c000003e", "175"), ("40000003", "128")}
+
+
+class OwnerUids:
+    """The owners' login uids, for `auid in owner_uids`: those in the settings, and any uid whose
+    account name is one of the owners' users. The automation service accounts (latchkey-infra,
+    hackernews-admin) are listed by their OS Login names (sa_<unique id>); their uids exist only
+    once they have signed in here, so they are looked up when one shows up (OS Login answers)."""
+
+    def __init__(self, uids, users, name_of=None):
+        self.uids = {str(u) for u in uids}
+        self.users = set(users)
+        self.name_of = name_of or _account_name
+
+    def __contains__(self, auid):
+        auid = str(auid)
+        if auid in self.uids:
+            return True
+        if not auid.isdigit() or auid == AUID_UNSET:
+            return False
+        if self.name_of(int(auid)) in self.users:
+            self.uids.add(auid)
+            return True
+        return False
+
+
+def _account_name(uid):
+    try:
+        return pwd.getpwuid(uid).pw_name
+    except (KeyError, OverflowError):
+        return None
 
 
 def classify_audit(event, owner_uids, from_dpkg):
@@ -675,8 +706,8 @@ def main():
     os.makedirs(STATE_DIR, mode=0o700, exist_ok=True)
     with open(CONFIG_PATH) as f:
         cfg = json.load(f)
-    owner_uids = set(str(u) for u in cfg.get("owner_uids", []))
     owner_users = set(cfg.get("owner_users", []))
+    owner_uids = OwnerUids(cfg.get("owner_uids", []), owner_users)
     out = Shipper(metadata("project/project-id"), metadata("instance/id"), metadata("instance/zone").rsplit("/", 1)[-1])
     if "--test" in sys.argv:
         out.emit(WARNING, "test", "Test alert from the Latchkey sentinel: the alert path works. Nothing is wrong.")

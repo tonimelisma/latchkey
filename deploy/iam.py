@@ -5,8 +5,10 @@ answer; tested by deploy/tests/test_iam.py.
   has-role MEMBER ROLE           the IAM policy grants ROLE to MEMBER ("serviceAccount:...")
   add-iap-audit                  prints the IAM policy with IAP's data access log turned on;
                                  fails (prints nothing) when it already is
-  sentinel-config                the OS Login profile to the sentinel's settings
-                                 (deploy/server/host/sentinel.py): the owner's accounts
+  sentinel-config [--existing FILE] [--user NAME]...
+                                 the OS Login profile to the sentinel's settings
+                                 (deploy/server/host/sentinel.py): the owner's accounts, with
+                                 those in FILE (the server's settings so far) and the users named
   metadata-ok                    the VM's metadata turns on OS Login and blocks project SSH keys
   vm-ok SA SCOPES                the VM runs as SA with exactly SCOPES (comma-separated), with
                                  Secure Boot, vTPM and integrity monitoring on
@@ -45,13 +47,20 @@ def add_iap_audit(policy):
     return policy
 
 
-def sentinel_config(profile):
+def sentinel_config(profile, existing=None, extra_users=()):
+    """The owners' OS Login users and uids: the profile's (the account running harden.sh), the
+    server's settings so far (earlier runs, by the owner or by latchkey-infra), and extra users
+    (the automation service accounts, sa_<unique id>, whose uids only the server knows)."""
     accounts = profile.get("posixAccounts") or []
-    users = sorted({a["username"] for a in accounts if a.get("username")})
-    uids = sorted({str(a["uid"]) for a in accounts if a.get("uid")})
+    users = {a["username"] for a in accounts if a.get("username")}
+    uids = {str(a["uid"]) for a in accounts if a.get("uid")}
     if not users or not uids:
         raise SystemExit("FAIL: the OS Login profile has no account (has OS Login been used once?)")
-    return {"owner_users": users, "owner_uids": uids}
+    existing = existing if isinstance(existing, dict) else {}
+    users |= {u for u in existing.get("owner_users", []) if isinstance(u, str) and u}
+    uids |= {str(u) for u in existing.get("owner_uids", []) if str(u).isdigit()}
+    users |= {u for u in extra_users if u}
+    return {"owner_users": sorted(users), "owner_uids": sorted(uids)}
 
 
 def vm_ok(vm, sa, scopes):
@@ -86,7 +95,23 @@ def main(argv):
         json.dump(new, sys.stdout)
         return 0
     if cmd == "sentinel-config":
-        json.dump(sentinel_config(data), sys.stdout)
+        args, existing, extra = argv[2:], None, []
+        while args:
+            if args[0] == "--existing" and len(args) > 1:
+                try:
+                    with open(args[1]) as f:
+                        raw_old = f.read()
+                    existing = json.loads(raw_old) if raw_old.strip() else None
+                except (OSError, ValueError):
+                    existing = None
+                args = args[2:]
+            elif args[0] == "--user" and len(args) > 1:
+                extra.append(args[1])
+                args = args[2:]
+            else:
+                print(__doc__, file=sys.stderr)
+                return 2
+        json.dump(sentinel_config(data, existing, extra), sys.stdout)
         print()
         return 0
     if cmd == "vm-ok":

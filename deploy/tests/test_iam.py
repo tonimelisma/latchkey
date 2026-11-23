@@ -44,6 +44,13 @@ class Iam(unittest.TestCase):
         p = {"auditConfigs": [{"service": "allServices", "auditLogConfigs": [{"logType": "DATA_READ"}, {"logType": "ADMIN_READ"}]}]}
         self.assertIsNone(iam.add_iap_audit(p))
 
+    def test_sentinel_config_merges_earlier_owners_and_automation(self):
+        prof = {"posixAccounts": [{"username": "sa_111", "uid": "5001"}]}
+        old = {"owner_users": ["owner_example_com"], "owner_uids": ["34248051"]}
+        self.assertEqual(iam.sentinel_config(prof, old, ["sa_222"]),
+                         {"owner_users": ["owner_example_com", "sa_111", "sa_222"], "owner_uids": ["34248051", "5001"]})
+        self.assertEqual(iam.sentinel_config(prof, "not a dict"), {"owner_users": ["sa_111"], "owner_uids": ["5001"]})
+
     def test_sentinel_config(self):
         prof = {"posixAccounts": [{"username": "owner_example_com", "uid": "34248051", "primary": True}]}
         self.assertEqual(iam.sentinel_config(prof), {"owner_users": ["owner_example_com"], "owner_uids": ["34248051"]})
@@ -71,7 +78,7 @@ class Iam(unittest.TestCase):
 
 class Alerts(unittest.TestCase):
     def setUp(self):
-        self.ps = {p["displayName"]: p for p in alerts.policies("proj", "relay.example.com", "owner@example.com", "projects/proj/notificationChannels/1", "check-1")}
+        self.ps = {p["displayName"]: p for p in alerts.policies("proj", "relay.example.com", ["owner@example.com"], "projects/proj/notificationChannels/1", "check-1")}
 
     def test_every_alert_is_there_and_emails_the_owner(self):
         self.assertEqual(sorted(self.ps), sorted("Latchkey: " + n for n in (
@@ -115,10 +122,12 @@ class Alerts(unittest.TestCase):
         self.assertTrue(alerts.differs(want, have))
 
     def test_iap_by_others(self):
-        self.assertIn('principalEmail!="owner@example.com"', alerts.iap_filter("proj", "owner@example.com"))
+        f = alerts.iap_filter("proj", ["owner@example.com", "latchkey-infra@proj.iam.gserviceaccount.com"])
+        self.assertIn('principalEmail!="owner@example.com"', f)
+        self.assertIn('principalEmail!="latchkey-infra@proj.iam.gserviceaccount.com"', f)
 
     def test_uptime_alert_needs_a_check(self):
-        ps = alerts.policies("proj", "h", "o@e.com", "c", "")
+        ps = alerts.policies("proj", "h", ["o@e.com"], "c", "")
         self.assertNotIn("Latchkey: relay not answering", [p["displayName"] for p in ps])
 
 

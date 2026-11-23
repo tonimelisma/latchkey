@@ -3,11 +3,22 @@
 # with alerts emailed to the owner (Toni, 2026-11-21). Safe to rerun: each step changes only
 # what differs. What and why: docs/threat-model.md, "The relay's server".
 #
-# Reads from the repository's .env (gitignored), like deploy/deploy.sh:
+# Runs in the infra workflow (.github/workflows/infra.yml, task "harden"), signed in to Google
+# Cloud as the service account latchkey-infra through Workload Identity Federation (no stored key;
+# deploy/gcp-wif-setup.sh), or by the owner signed in to gcloud. Either way the identity is
+# checked: the owner's own account, or exactly latchkey-infra in this project.
+# Reads from the repository's .env (gitignored) when there is one, else from the environment (the
+# workflow's secrets), like deploy/deploy.sh:
 #   DEPLOY_HOST, DEPLOY_VM, DEPLOY_PROJECT, DEPLOY_ZONE   the relay's host name and its VM
 #   ALERT_EMAIL         where alerts go
+#   OWNER_ACCOUNT       the owner's Google account; needed when the service account runs this
+#                       (signed in as the owner, it is that account)
 #   APP_BUCKETS         optional: Cloud Storage buckets the server's other apps back up to
 #                       (comma-separated); the server's own account may use only these
+# The owner and the two automation identities (latchkey-infra, and hackernews-admin for the app
+# that shares the server) are the ones whose IAP use and server sessions are expected: the alert
+# "server sign-in by someone else" leaves them out, and the sentinel counts their sessions as the
+# owner's (docs/threat-model.md, "The relay's server").
 #
 # In the cloud project: the VM runs as its own service account that may only write logs and
 # metrics (and use APP_BUCKETS), never Google's default one with Editor; Secure Boot; deletion
@@ -20,7 +31,7 @@
 # it) takes about two minutes; the Macs reconnect by themselves.
 set -eu
 LOCK=$HOME/Library/Caches/net.melisma.latchkey.deploy.lock
-if [ "${LATCHKEY_DEPLOY_LOCKED:-}" != "$LOCK" ]; then
+if [ -x /usr/bin/lockf ] && [ "${LATCHKEY_DEPLOY_LOCKED:-}" != "$LOCK" ]; then
   LATCHKEY_DEPLOY_LOCKED=$LOCK exec /usr/bin/lockf -t 900 "$LOCK" "$0" "$@"
 fi
 LC_ALL=C
@@ -28,7 +39,7 @@ export LC_ALL
 cd "$(dirname "$0")/.."
 . deploy/lib.sh
 scripts/link-local-files.sh
-load_env ./.env
+load_settings ./.env DEPLOY_HOST DEPLOY_VM DEPLOY_PROJECT DEPLOY_ZONE ALERT_EMAIL OWNER_ACCOUNT APP_BUCKETS
 : "${DEPLOY_HOST:?missing in .env}" "${DEPLOY_VM:?missing in .env}" "${DEPLOY_PROJECT:?missing in .env}" "${DEPLOY_ZONE:?missing in .env}"
 : "${ALERT_EMAIL:?missing in .env (where alerts go)}"
 check_host DEPLOY_HOST "$DEPLOY_HOST"
@@ -56,11 +67,23 @@ gc() {
 gcv() { gcloud "$@" --project "$PROJECT" --quiet 2>/dev/null; }
 ssh_vm() { vm_ssh "$VM" "$PROJECT" "$ZONE" "$1"; }
 
-OWNER=$(gcloud config get account 2>/dev/null)
-check_contact "$OWNER" || { echo "FAIL: gcloud isn't signed in with an email account" >&2; exit 1; }
+INFRA_SA=latchkey-infra@$PROJECT.iam.gserviceaccount.com
+HN_SA=hackernews-admin@$PROJECT.iam.gserviceaccount.com
+RUNNER=$(gcloud config get account 2>/dev/null || true)
+[ -n "$RUNNER" ] || RUNNER=$(gcloud auth list --filter=status:ACTIVE --format='value(account)' 2>/dev/null | head -1)
+check_contact "$RUNNER" || { echo "FAIL: gcloud isn't signed in with an email account" >&2; exit 1; }
+case $RUNNER in
+  *.gserviceaccount.com)
+    [ "$RUNNER" = "$INFRA_SA" ] || { echo "FAIL: gcloud is signed in as a service account other than latchkey-infra" >&2; exit 1; }
+    OWNER=${OWNER_ACCOUNT-}
+    check_contact "$OWNER" || { echo "FAIL: OWNER_ACCOUNT (the owner's Google account) is needed when latchkey-infra runs this" >&2; exit 1; }
+    ;;
+  *) OWNER=$RUNNER ;;
+esac
+mask "$OWNER"
 gcv projects get-iam-policy "$PROJECT" --format=json >"$tmp/iam.json"
 python3 -I deploy/iam.py is-owner "$OWNER" <"$tmp/iam.json" ||
-  { echo "FAIL: $OWNER, signed in to gcloud, isn't an owner of the project" >&2; exit 1; }
+  { echo "FAIL: the owner's account ($OWNER) isn't an owner of the project" >&2; exit 1; }
 
 # Each cloud change below is made only when something differs: every write is an admin action,
 # and each one emails the owner ("Latchkey: cloud project changed"), so a rerun stays quiet.
@@ -83,9 +106,18 @@ if gcv compute project-info describe --format='value(commonInstanceMetadata.item
   gc compute project-info remove-metadata --keys ssh-keys >/dev/null
   echo "  - SSH keys in the project's metadata removed"
 fi
-# The owner's OS Login account: its sessions are the owner's own (the sentinel stays quiet).
+# The OS Login accounts whose sessions are the owner's own (the sentinel stays quiet): the one
+# running this (the owner, or latchkey-infra), those already on the server from earlier runs, and
+# the two automation service accounts, by their OS Login names (sa_<unique id>; the server
+# resolves their numbers when they sign in).
 gcv compute os-login describe-profile --format=json >"$tmp/profile.json"
-python3 -I deploy/iam.py sentinel-config <"$tmp/profile.json" >"$tmp/sentinel.json"
+ssh_vm 'sudo cat /etc/latchkey-sentinel.json 2>/dev/null || true' >"$tmp/sentinel-old.json"
+set --
+for sa in "$INFRA_SA" "$HN_SA"; do
+  id=$(gcv iam service-accounts describe "$sa" --format='value(uniqueId)' || true)
+  case $id in '' | *[!0-9]*) ;; *) set -- "$@" --user "sa_$id" ;; esac
+done
+python3 -I deploy/iam.py sentinel-config --existing "$tmp/sentinel-old.json" "$@" <"$tmp/profile.json" >"$tmp/sentinel.json"
 
 echo "• the server"
 cp -R deploy/server/host "$tmp/host"
@@ -136,6 +168,7 @@ if ! python3 -I deploy/iam.py vm-ok "$SA" "$SCOPES" <"$tmp/vm.json"; then
   # relay's DNS record would point at nothing.
   IP=$(gcv compute instances describe "$VM" --zone "$ZONE" --format='value(networkInterfaces[0].accessConfigs[0].natIP)')
   check_ip "$IP"
+  mask "$IP"
   if [ -z "$(gcv compute addresses list --filter="address=$IP" --format='value(name)')" ]; then
     echo "FAIL: the VM's address $IP isn't reserved, so stopping it would change it. Reserve it first:" >&2
     echo "      gcloud compute addresses create $VM-ip --addresses $IP --region ${ZONE%-*} --project $PROJECT" >&2
@@ -169,7 +202,8 @@ ssh_vm 'sudo docker ps --format "{{.Names}} {{.Status}}"; sudo systemctl is-acti
 
 echo "• alerts"
 TOKEN=$(gcloud auth print-access-token 2>/dev/null)
-PROJECT="$PROJECT" HOST="$HOST" ALERT_EMAIL="$ALERT_EMAIL" OWNER_EMAIL="$OWNER" TOKEN="$TOKEN" \
+mask "$TOKEN"
+PROJECT="$PROJECT" HOST="$HOST" ALERT_EMAIL="$ALERT_EMAIL" OWNER_EMAIL="$OWNER" TRUSTED_EMAILS="$INFRA_SA,$HN_SA" TOKEN="$TOKEN" \
   python3 -I deploy/alerts.py | tee "$tmp/alerts.out"
 if grep -q '^CREATED .*sentinel warning' "$tmp/alerts.out"; then
   echo "• one test alert to $ALERT_EMAIL (the sentinel's path, end to end)"
