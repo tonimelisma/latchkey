@@ -293,7 +293,7 @@ enum PageScripts {
             var kind = tag === 'a' ? 'link' : tag === 'input' ? ((type === 'submit' || type === 'button') ? 'button' : 'field:' + type) : tag === 'textarea' ? 'field:text' : tag === 'select' ? 'choice' : (e.getAttribute('role') || tag);
             if (!label && tag === 'input' && (type === 'submit' || type === 'button')) label = e.value || '';
             var item = { ref: ref, kind: kind, label: label };
-            if (tag === 'a') item.href = e.href;
+            if (tag === 'a' && e.hasAttribute('href')) item.href = e.href;
             if (type === 'checkbox' || type === 'radio') item.checked = e.checked;
             else if (tag === 'input' || tag === 'textarea') {
               var secret = type === 'password' || e.type === 'password' || /(^|\\s)(current-password|new-password|one-time-code|cc-number|cc-csc)(\\s|$)/i.test(e.getAttribute('autocomplete') || '');
@@ -320,7 +320,8 @@ enum PageScripts {
             var cx = r.left + r.width / 2, cy = r.top + r.height / 2;
             if (!fileField && !closedMenu && type !== 'checkbox' && type !== 'radio' && cx >= 0 && cy >= 0 && cx < innerWidth && cy < innerHeight) {
               // Inside a shadow root, its own elementFromPoint (the document's names the host).
-              var place = e.getRootNode && e.getRootNode().elementFromPoint ? e.getRootNode() : document;
+              // In a frame, the frame's document (its coordinates are the frame's).
+              var place = e.getRootNode && e.getRootNode().elementFromPoint ? e.getRootNode() : (e.ownerDocument || document);
               var over = place.elementFromPoint(cx, cy);
               if (over && over !== e && !e.contains(over) && !over.contains(e) && !(e.labels && Array.prototype.some.call(e.labels, function (l) { return l.contains(over); }))) item.label = (item.label ? item.label + ' ' : '') + '(under another element)';
             }

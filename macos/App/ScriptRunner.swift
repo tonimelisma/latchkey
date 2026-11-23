@@ -229,7 +229,7 @@ struct ProcessCommands: CommandRunner {
 /// One caller at a time, in order, each waiting at most a limit for its turn (Constitution II):
 /// two chats picking the owner's Safari tabs at once must not interleave a pick and an action
 /// (a click meant for an E*TRADE tab landed on another chat's Target checkout, 2026-11-19).
-actor OneAtATime {
+actor TakingTurns {
     private var busy = false
     private var waiting: [(id: UInt64, turn: CheckedContinuation<Bool, Never>)] = []
     private var nextID: UInt64 = 0

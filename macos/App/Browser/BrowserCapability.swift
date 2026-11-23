@@ -27,6 +27,8 @@ enum BrowserCapability {
         @TaskLocal static var page: String?
         /// Whether the call names one of the owner's Safari tabs.
         @TaskLocal static var tab = false
+        /// Where browser_open puts the name of the page it opened (FR-471's screenshot).
+        @TaskLocal static var opened: OpenedName?
         /// The Safari tab of Claude's the call's page is (FR-455), and that page's name.
         @TaskLocal static var safari: SafariBrowser?
         @TaskLocal static var safariName: String?
@@ -36,18 +38,15 @@ enum BrowserCapability {
     /// owner's tabs' (FR-424).
     static func here(_ owner: SafariBrowser) -> SafariBrowser { Asked.safari ?? owner }
 
-    /// The name of the page an answer is from, as its own first line (never the page's text,
-    /// which follows) says: "From …: Claude's page "p4k2"".
-    static func pageName(in r: ToolResult) -> String? {
-        guard case .array(let parts) = r.content, case .object(let first)? = parts.first,
-            let text = first["text"]?.stringValue
-        else { return nil }
-        for line in text.split(separator: "\n", maxSplits: 3).prefix(3) where line.hasPrefix("From ") {
-            guard let start = line.range(of: "Claude's page \"") else { continue }
-            let name = line[start.upperBound...].prefix { $0 != "\"" }
-            if name.count == 5, name.allSatisfy({ OwnPages.alphabet.contains($0) }) { return String(name) }
+    /// The name of the page browser_open opened, as the app knows it (never read from an
+    /// answer, part of which the page writes; security review 2026-11-23).
+    final class OpenedName: @unchecked Sendable {
+        private let lock = NSLock()
+        private var stored: String?
+        var name: String? {
+            get { lock.withLock { stored } }
+            set { lock.withLock { stored = newValue } }
         }
-        return nil
     }
 
     /// FR-455: the first line of an answer from a Safari tab of Claude's.
@@ -84,6 +83,7 @@ enum BrowserCapability {
                         // FR-455: a page that is a Safari tab of Claude's loads the address there.
                         if let s = Asked.safari, let n = Asked.safariName {
                             let p = try await s.load(url)
+                            Asked.opened?.name = n
                             await MainActor.run { own.noteAddress(n, p.url) }
                             return await safariAnswer(offset > 0 ? try await s.read(offset: offset) : p, n, s)
                         }
@@ -100,6 +100,7 @@ enum BrowserCapability {
                                     let n = try await MainActor.run {
                                         try own.adopt(s, address: p.url, name: named?.lowercased())
                                     }
+                                    Asked.opened?.name = n
                                     return await safariAnswer(offset > 0 ? try await s.read(offset: offset) : p, n, s)
                                 }
                             } catch {
@@ -110,6 +111,7 @@ enum BrowserCapability {
                                 "Safari has no window open, so this page is in Latchkey's own browser instead, without the owner's sign-ins (no Safari window is opened on the owner's screen).\n"
                         }
                         let l = try await MainActor.run { try named.map { try own.page($0) } ?? own.make() }
+                        Asked.opened?.name = await l.name
                         let opened: PageScripts.Page
                         do { opened = try await l.open(url) } catch {
                             if named == nil { _ = await own.close(l.name) }

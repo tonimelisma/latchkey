@@ -54,6 +54,10 @@ extension PageScripts {
         (function (host, kind, value) {
           if (location.protocol !== 'https:' || location.hostname !== host) return 'ok\\t' + JSON.stringify({ step: 'wrongsite' });
           \(find(ref))
+          // A field in a frame only when the frame is on the same host too (security review
+          // 2026-11-23: a sibling subdomain can join a frame through document.domain).
+          var fl = e.ownerDocument && e.ownerDocument.location;
+          if (!fl || fl.protocol !== 'https:' || fl.hostname !== host) return 'ok\\t' + JSON.stringify({ step: 'wrongsite' });
           function seen(x) {
             if (!x || x.disabled || x.readOnly) return false;
             var st = getComputedStyle(x);

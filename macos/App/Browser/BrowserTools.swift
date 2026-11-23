@@ -29,8 +29,9 @@ extension BrowserCapability {
                         guard let tab else { return await body() }
                         // The pick and the action are one turn: another chat's pick can't come
                         // in between (a click meant for one tab landed in another chat's tab,
-                        // 2026-11-19). Waited for at most 15 s, within the tool's 30 s.
-                        guard await browser.turns.enter(within: .seconds(15)) else {
+                        // 2026-11-19). Waited for at most 5 s, so the action still ends well
+                        // within the tool's 30 s (review: never after Claude was told it failed).
+                        guard await browser.turns.enter(within: .seconds(5)) else {
                             return .text(
                                 "Another chat is working in the owner's Safari tabs right now, so nothing was done. Call again in a moment.",
                                 isError: true)
@@ -98,11 +99,13 @@ extension BrowserCapability {
                             rest = args
                         }
                         return await asked(rest, ops, browser: browser, own: own, opening: true) {
-                            let opened = await ops.call("browser_open", rest)
+                            let named = BrowserCapability.OpenedName()
+                            let opened = await BrowserCapability.Asked.$opened.withValue(named) {
+                                await ops.call("browser_open", rest)
+                            }
                             // screenshot with url: the new page's picture too (2026-11-22: only
                             // its text came back).
-                            guard args["screenshot"] == .bool(true), !opened.isError,
-                                let name = BrowserCapability.pageName(in: opened)
+                            guard args["screenshot"] == .bool(true), !opened.isError, let name = named.name
                             else { return opened }
                             var shot = rest
                             if case .object(var o) = shot {
