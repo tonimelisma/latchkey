@@ -72,3 +72,28 @@ jobs:
         run: make -C relay script-tests
       - name: Workflows (actionlint)
         run: go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.8
+  # The Mac app's build, unit tests and lint, on GitHub's Mac runner, so a cloud session can test
+  # Mac changes without the owner's Mac (2026-11-23). Signed ad hoc: no team, no Local.xcconfig.
+  mac:
+    runs-on: macos-26
+    timeout-minutes: 60
+    defaults:
+      run:
+        working-directory: macos
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Tools
+        run: |
+          brew install xcodegen
+          xcodebuild -version
+          sw_vers
+      - name: Lint
+        run: swift format lint --strict -r App Shared Helper Tests
+      - name: Test
+        run: |
+          set -o pipefail
+          xcodegen generate --quiet
+          xcodebuild -project Latchkey.xcodeproj -scheme Latchkey -destination 'platform=macOS' \
+            -derivedDataPath "$RUNNER_TEMP/dd" test -quiet 2>&1 | tail -150
