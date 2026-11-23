@@ -11,7 +11,7 @@
 #   hooks.sh guard          Before a shell command: refuses git commands that can lose work
 #                           (stash except list/show, force-push in any spelling, hard reset,
 #                           ...), and any `git push` while scripts/private-values-check.sh
-#                           finds one of the deployment's private values in the repository.
+#                           finds a working relay's address or a signing team in the repository.
 #                           A seat belt, not a wall; tested by scripts/tests/hooks_guard_test.sh.
 #   hooks.sh after-bash     After a shell command: runs scripts/tidy.sh after every `git push`.
 #
@@ -19,9 +19,8 @@
 # the repository; CLAUDE.md, "Cloud sessions"):
 #   session-start  first runs scripts/cloud-setup.sh (it installs jq, so it comes before the jq
 #                  check), skips tidy.sh, and still reports loose ends.
-#   guard          unchanged: the same refusals, and the private-values check before a push,
-#                  which there reads the values from the environment and refuses the push when
-#                  none are set (scripts/private-values-check.sh).
+#   guard          unchanged: the same refusals, and the private-values check before a push
+#                  (scripts/private-values-check.sh; it needs no private values).
 #   after-bash     skips tidy.sh.
 # tidy.sh is skipped because nothing it cleans exists in the VM (no worktrees, Mac builds, relay
 # images, or main checkout to fast-forward); GitHub deletes merged pull requests' branches. scripts/keep-going.sh (the Stop

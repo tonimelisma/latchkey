@@ -95,7 +95,7 @@ Say:
 Then open Claude's add-connector dialog with the address filled in (spec 009 FR-915). Put the
 link in single quotes, since an unquoted `&` ends the command early. `<encoded>` is the
 connector address with every `:` written `%3A` and every `/` written `%2F`; for
-`https://1-2-3-4.sslip.io/mcp` it is `https%3A%2F%2F1-2-3-4.sslip.io%2Fmcp`:
+`https://192-0-2-10.sslip.io/mcp` it is `https%3A%2F%2F192-0-2-10.sslip.io%2Fmcp`:
 
 ```
 open 'https://claude.ai/customize/connectors?modal=add-custom-connector&connectorName=Latchkey&connectorUrl=<encoded>'

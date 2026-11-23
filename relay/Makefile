@@ -44,9 +44,8 @@ tidy-check:
 vuln:
 	$(GOVULNCHECK) ./...
 
-# Secrets committed anywhere in the repository's history, and this deployment's private values
-# (relay host, DNS zone, VM, cloud project, Apple team ID: read from the gitignored .env and
-# macos/Config/Local.xcconfig) in tracked files or history. Fails on any.
+# Secrets committed anywhere in the repository's history, and a working relay's address or an
+# Apple signing team where only placeholders may be. Fails on any.
 secrets:
 	cd .. && scripts/private-values-check.sh
 	cd .. && $(GITLEAKS) git --redact --no-banner .

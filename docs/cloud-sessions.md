@@ -42,12 +42,9 @@ applies, except:
   background, logged to `~/.cache/latchkey-cloud-setup.log`, done when `…log.done` exists), skips
   `tidy.sh`, and still reports loose ends. The guard is unchanged. No `tidy.sh` after a push
   (nothing to tidy: GitHub deletes merged branches). The work list for `keep-going.sh` is `~/.claude/worklists/<session id>.md` in the VM.
-- Pushes need the private values: the cloud environment's variables `LATCHKEY_PRIVATE_DEPLOY_HOST`,
-  `LATCHKEY_PRIVATE_DEPLOY_DNS_ZONE`, `LATCHKEY_PRIVATE_DEPLOY_VM`, `LATCHKEY_PRIVATE_DEPLOY_PROJECT`,
-  `LATCHKEY_PRIVATE_DEVELOPMENT_TEAM`, `LATCHKEY_PRIVATE_LATCHKEY_DEFAULT_RELAY_HOST` (Toni sets
-  them once; they aren't secrets, only kept out of the repository). Without any of them
-  `private-values-check.sh` can't check, and the guard refuses every push. Never put a secret
-  (`.env`'s keys and tokens) in the environment: everyone using it can read it.
+- Pushes are checked the same way as on the Mac: `private-values-check.sh` refuses a working
+  relay's address or a signing team anywhere a push would publish, and needs no private values.
+  Never put a secret (`.env`'s keys and tokens) in the environment: everyone using it can read it.
 - Relay and Linux program: `make test`, `make lint` and `make script-tests` in `relay/` and
   `linux/` run here. `make security` also fetches from `semgrep.dev`, `vuln.go.dev` and
   `api.osv.dev`, which the default "Limited" network blocks; they work once those are in the
