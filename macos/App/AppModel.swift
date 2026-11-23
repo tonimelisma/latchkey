@@ -191,6 +191,7 @@ final class AppModel {
             Task { await WhatsAppOldDevice.removeOnce() }
         }
         leftoverTimer = Self.tidyEveryMinute()
+        updates.watchCalls(inFlight)  // FR-072b
         updates.startDailyCheck(current: Self.version)  // FR-669
         if ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil {
             // Spec 013: the import folder and the weekly reminder.
