@@ -1,0 +1,125 @@
+# Spec 014: Problem reports to Latchkey's developer — WHAT and WHY
+
+Status: Draft for Toni's review (2026-11-23). No code yet. Replaces spec 001 FR-691 to FR-693
+once built (the relay keeping reports, delivering them to the Mac, the Mac's Feedback folder).
+Research and the options weighed: `research.md`. How: `plan.md`.
+
+## Problem
+
+Claude files a report with the `feedback` tool whenever something done with Latchkey didn't
+fully work (spec 001 FR-690). On 2026-11-23, 172 reports had piled up in Toni's Mac's Feedback
+folder. Reading them took Latchkey shell calls on the Mac, each needing approval and cut off at
+50 KB; marking them handled was impossible from Claude (Latchkey's shell can't write in
+Latchkey's own folder, and macOS refuses a script Latchkey opens in Terminal); they held
+verification codes, phone digits and account numbers in plain text; and they only ever reached
+Toni because he is a user too. Other users' reports never reach the developer.
+
+## Parties
+
+- **A user**: their Claude chats, their machines, their account on a relay.
+- **A relay operator**: anyone; often the user. Carries every Latchkey call for its accounts.
+- **The developer** (Toni for Latchkey; a fork's own developer otherwise): owns the intake and
+  the development agent. Has no access to any relay, and sees a user's report only when that
+  user chose to share.
+
+## User stories
+
+### US1 (P1): I choose whether my problem reports go to the developer
+1. Given a new install, then sharing is Off, and Claude sees no `feedback` tool and is never
+   asked to file reports.
+2. Given I turn sharing on, then the screen says what is sent, what is masked, who can read it,
+   and that I can turn it off at any time.
+3. Given I turn it off, then nothing more is sent, and reports not yet delivered are dropped.
+
+### US2 (P1): Claude reports what didn't work, without my secrets
+1. Given sharing is on and a tool fails, then the answer reminds Claude to file a report.
+2. Given Claude files a report that contains a verification code or a card number, then the
+   report that leaves the relay shows it masked.
+3. Given my Mac is offline, then filing still works.
+
+### US3 (P1): The developer's agent works through the reports
+1. Given reports have arrived, when the developer's agent starts a session, then it sees how
+   many are open, reads them, and dispositions each (fixed, duplicate, expected, can't fix),
+   without any user's Mac or relay.
+2. Given the intake were broken into, then the reports in it can't be read.
+
+### US4 (P2): I run my own relay
+1. Given I host a relay, then I can send its users' shared reports to Latchkey's developer
+   (the default), to another developer, or nowhere.
+
+## Requirements
+
+### Opting in
+- **FR-1400** The Mac app shall offer one setting, "Share problem reports with Latchkey's
+  developer", Off for a new install.
+- **FR-1401** While sharing is Off, Claude shall not see the `feedback` tool, nor any
+  instruction or answer line about it (Constitution III).
+- **FR-1402** When the Owner turns sharing on, the app shall say, before it takes effect, what a
+  report holds, what is masked, that only the developer can read it, and that it can be turned
+  off at any time.
+- **FR-1403** The setting shall belong to the account on its relay (the relay answers
+  `feedback`); the Mac app sets it. Turning it off shall drop the account's reports not yet
+  delivered.
+
+### Asking Claude to report
+- **FR-1405** While sharing is on, the relay's instructions to Claude shall ask it to file a report
+  whenever anything done with Latchkey didn't fully work: an error, no response, a wrong or
+  unclear answer, a workaround, or giving up.
+- **FR-1406** While sharing is on, every tool answer that is an error shall end with one short
+  line naming `feedback`.
+
+### Filing
+- **FR-1410** The relay shall answer `feedback` itself (summary, details, optionally the machine),
+  whether or not any machine is online.
+- **FR-1411** Before a report leaves the relay, verification codes, runs of 8 or more digits, and
+  anything shaped like a password or a key shall be masked. Claude's instructions shall also ask
+  it never to put codes, passwords, or full numbers in a report.
+- **FR-1412** A shared report shall hold: the summary and details (masked), the Claude app, the
+  relay's and the machine's Latchkey versions, the machine's system version and screen state
+  (locked or not), and a reporter tag that groups one account's reports without identifying it
+  (it differs per relay and can't be reversed). It shall hold no account, email address,
+  machine name, or relay address.
+- **FR-1413** The relay shall encrypt each report to the developer's public key from its
+  settings before storing or sending it; it never stores a report it could read.
+- **FR-1414** The relay shall send each encrypted report to the intake address from its
+  settings, retrying until the intake accepts it, then delete it. A report not accepted within
+  7 days shall be deleted, and the relay's log shall say so.
+- **FR-1415** A relay operator shall be able to set the intake address and developer key, or turn
+  sharing off for the whole relay; then the setting of FR-1400 shall say sharing is unavailable
+  on this relay, and FR-1401 applies. By default a relay sends to Latchkey's developer.
+  [NEEDS CLARIFICATION: should a self-hosted relay send to Latchkey's developer by default, or
+  only once its operator sets an intake?]
+- **FR-1416** The answer to `feedback` shall say the report was queued for the developer, and
+  never repeat its contents.
+
+### The intake (the developer's)
+- **FR-1420** The intake shall accept encrypted reports from anyone, at most 64 KB each, each
+  with a small proof of work, and refuse anything else.
+- **FR-1421** The intake shall limit how many reports one sending address may deliver per hour.
+- **FR-1422** The intake shall never hold the developer's private key; it stores each encrypted
+  report with the time it arrived.
+- **FR-1423** With the developer's token, the intake shall list open reports, give one, and take
+  a disposition: fixed (with the change and its regression case), duplicate (of which report),
+  expected, can't fix, or for the developer to decide.
+- **FR-1424** A report shall stay in the intake until it is dispositioned (Toni, 2026-11-23: "they
+  stay there until the dev agent dispositions them"). [NEEDS CLARIFICATION: at disposition,
+  delete the report and keep only its id, arrival time, disposition and change; or keep the
+  whole report for a time?]
+- **FR-1425** The intake shall be a program in this repository that a fork's developer can run
+  for themselves.
+
+### The developer's agent
+- **FR-1430** The developer's agent shall open reports with the developer's private key inside its
+  own session; the key is never in the repository, CI, the intake, or any relay.
+- **FR-1431** Report contents shall never be written to the repository, its pull requests, or CI
+  logs; a regression case describes the problem in the agent's own words (CLAUDE.md, "Every
+  issue becomes a regression case").
+
+## Success criteria
+
+- **SC-1401** With sharing Off, no `feedback` tool and no line about it appears (test suite).
+- **SC-1402** A report filed with sharing on reaches the intake encrypted; the relay's database
+  and the intake's hold no readable report at any time (test suite).
+- **SC-1403** A report holding "Your code is 123456" and a 16-digit number arrives masked (test).
+- **SC-1404** The developer's agent lists, opens, and dispositions reports with no user's machine
+  or relay involved.
