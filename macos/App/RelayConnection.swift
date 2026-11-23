@@ -30,14 +30,15 @@ struct ConnectionHooks: Sendable {
     var notice: @Sendable (Notice) async -> Void
     /// The Claude apps with access, each time the relay sends the list (FR-192).
     var clients: @Sendable ([ClientEntry]) async -> Void = { _ in }
-    /// Saves Claude's feedback reports and answers with the ids saved (FR-693); none by default.
-    var feedback: @Sendable ([FeedbackReport]) async -> [String] = { _ in [] }
     /// Each time a connection is established (after `welcome`); not awaited by the connection.
     var connected: @Sendable () async -> Void = {}
     /// The name to ask for in hello (spec 010 FR-1002); nil keeps the relay's.
     var name: @Sendable () async -> String? = { nil }
     /// The name the relay kept, from each welcome.
     var welcomed: @Sendable (String?) async -> Void = { _ in }
+    /// Whether the relay's operator blocks forwarding problem reports, from each welcome (spec 014
+    /// FR-1415a).
+    var reportsBlocked: @Sendable (Bool) async -> Void = { _ in }
 }
 
 /// The one outbound WebSocket to the relay (plan D1, agent-protocol.md). Reconnects by itself
@@ -315,6 +316,7 @@ actor RelayConnection {
         }
         heartbeat = TimeInterval(max(welcome.heartbeatIntervalS, 1))
         await hooks.welcomed(welcome.name)
+        await hooks.reportsBlocked(welcome.reportsBlocked ?? false)
     }
 
     private func serve(_ t: URLSessionWebSocketTask) async throws {
@@ -334,9 +336,7 @@ actor RelayConnection {
             case .notice(let n): await hooks.notice(n)
             case .clients(let c): await hooks.clients(c.clients)
             case .audit(let page): answerAudit(page.id, page)
-            case .feedback(let f):
-                let saved = await hooks.feedback(f.reports)
-                if !saved.isEmpty { try await send(.feedbackSaved(FeedbackSaved(ids: saved)), on: t) }
+            case .feedback: break  // only to an app that announced the feature; this one doesn't
             default: throw ProtocolError.violation("unexpected message")
             }
         }

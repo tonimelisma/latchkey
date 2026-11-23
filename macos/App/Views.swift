@@ -324,11 +324,33 @@ struct ConnectionPane: View {
 }
 
 struct GeneralPane: View {
-    let model: AppModel
+    @Bindable var model: AppModel
+    @State private var askingToShare = false
 
     var body: some View {
         Form {
             Toggle("Start at Login", isOn: Binding(get: { model.startsAtLogin }, set: { model.setStartsAtLogin($0) }))
+            // Spec 014 FR-1400 to FR-1402, FR-1415a: off until the Owner turns it on, after
+            // reading what it means.
+            Section {
+                Toggle(
+                    "Share Problem Reports with Latchkey's Developer",
+                    isOn: Binding(
+                        get: { model.shareReports && !model.reportsBlocked },
+                        set: { on in if on { askingToShare = true } else { model.shareReports = false } })
+                )
+                .disabled(model.reportsBlocked)
+            } footer: {
+                Text(
+                    model.reportsBlocked
+                        ? "This relay doesn't forward problem reports."
+                        : "When something Claude does with Latchkey doesn't work, Claude writes a short report for "
+                            + "Latchkey's developer, so it gets fixed."
+                )
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+            }
+            LabeledContent("Version", value: AppModel.version)
             LabeledContent("Version", value: AppModel.version)
             if model.updates.available {
                 LabeledContent("Updates") {
@@ -341,6 +363,18 @@ struct GeneralPane: View {
             }
         }
         .formStyle(.grouped)
+        .alert("Share Problem Reports?", isPresented: $askingToShare) {
+            Button("Share Reports") { model.shareReports = true }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text(
+                "When something Claude does with Latchkey doesn't work, Claude writes a report of what it tried "
+                    + "and what went wrong, and sends it to Latchkey's developer so it gets fixed.\n\n"
+                    + "Claude is told to leave out your passwords, codes, account numbers, and the text of your "
+                    + "messages and emails. Reports are encrypted so only the developer can read them, and carry "
+                    + "no name, email address, or machine name.\n\nYou can turn this off at any time."
+            )
+        }
     }
 }
 

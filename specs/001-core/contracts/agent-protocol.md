@@ -367,6 +367,12 @@ to Unicode letter case (" 2", " 3", … appended), and `welcome` carries the nam
 ```
 
 A Mac's state adds `screen_locked` (true or false, optional: left out when not known; FR-671).
+A Mac's state also adds `share_reports` (true or false, optional): the Owner's choice to share
+problem reports with Latchkey's developer (spec 014 FR-1400, FR-1403); the relay offers the
+`feedback` tool only while a machine of the account sends true. The welcome adds
+`reports_blocked: true` when the relay's operator blocks forwarding them (spec 014 FR-1415a). The
+`feedback` and `feedback_saved` messages (spec 001 FR-692, FR-693) are withdrawn: the Mac no longer
+announces the `feedback` feature, and the relay sends no reports to a Mac.
 The Mac reads it as it is for every state it sends, the heartbeat's too, and sends a state at
 once when macOS says the screen was locked or unlocked.
 

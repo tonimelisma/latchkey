@@ -48,6 +48,18 @@ final class AppModel {
     var keepAwakeEnabled: Bool {
         didSet { defaults.set(keepAwakeEnabled, forKey: Keys.keepAwake); Task { await refresh() } }
     }
+    /// Share problem reports with Latchkey's developer (spec 014 FR-1400): Off for a new install;
+    /// the relay hears it with the next state, sent at once.
+    var shareReports: Bool {
+        didSet {
+            defaults.set(shareReports, forKey: Keys.shareReports)
+            let said = shareReports ? "are shared with Latchkey's developer" : "are no longer shared"
+            event(.connection, "Problem reports \(said)")
+            Task { await connection?.sendState() }
+        }
+    }
+    /// The relay's operator blocks forwarding problem reports (spec 014 FR-1415a).
+    private(set) var reportsBlocked = false
     private(set) var capabilities: CapabilityRegistry
     private(set) var startsAtLogin = SMAppService.mainApp.status == .enabled
     /// Pause Claude's Access (FR-602); read from storage at once, so it holds from the start.
@@ -99,6 +111,7 @@ final class AppModel {
         static let localNetwork = LocalNetwork.defaultsKey
         static let screenAccess = "screenAccessConfirmed"
         static let machineName = "machineName"
+        static let shareReports = "shareProblemReports"
     }
 
     /// The name this Mac asks to be shown by to Claude.
@@ -129,6 +142,7 @@ final class AppModel {
     init() {
         let d = UserDefaults.standard
         keepAwakeEnabled = d.object(forKey: Keys.keepAwake) as? Bool ?? true
+        shareReports = d.object(forKey: Keys.shareReports) as? Bool ?? false
         var levels = CapabilityRegistry.defaultLevels  // FR-121
         for (id, raw) in d.dictionary(forKey: Keys.levels) as? [String: String] ?? [:] {
             if let level = AccessLevel(rawValue: raw) { levels[id] = level }
@@ -530,6 +544,7 @@ final class AppModel {
     var agentState: AgentState {
         var s = power.agentState(keepAwake: keepAwake)
         s.screenLocked = SystemScreen().isLocked()  // FR-671
+        s.shareReports = shareReports  // spec 014 FR-1403
         return s
     }
 
@@ -1191,10 +1206,10 @@ final class AppModel {
             status: { [weak self] s in await self?.connectionChanged(s) },
             notice: { [weak self] n in await self?.show(n) },
             clients: { [weak self] list in await self?.clientsChanged(list) },
-            feedback: { reports in FeedbackFolder.standard.save(reports) },
             connected: { [weak self] in await self?.checkAudit() },
             name: { [weak self] in await MainActor.run { self?.nameForClaude } },
-            welcomed: { [weak self] name in await MainActor.run { self?.shownName = name } })
+            welcomed: { [weak self] name in await MainActor.run { self?.shownName = name } },
+            reportsBlocked: { [weak self] blocked in await MainActor.run { self?.reportsBlocked = blocked } })
         device = identity.deviceID
         let c = RelayConnection(identity: identity, hooks: hooks)
         connection = c
