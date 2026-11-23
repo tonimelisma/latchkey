@@ -4,6 +4,16 @@
 
 # Where the relay's files live on the VM.
 REMOTE_DIR=/opt/latchkey
+# The lock the server's updater (deploy/server/host/update-apps.sh) holds while it changes a
+# container; a deploy takes it too before restarting the relay.
+UPDATE_LOCK=/run/latchkey-update-apps.lock
+
+# mask VALUE: in GitHub Actions, hides VALUE in the workflow's log, which is public (the
+# repository's secrets are hidden already; this is for what the deploy reads, like the VM's
+# address). Elsewhere nothing.
+mask() {
+  [ "${GITHUB_ACTIONS:-}" != true ] || [ -z "$1" ] || printf '::add-mask::%s\n' "$1"
+}
 
 # check_host NAME VALUE: values that end up inside command strings, sed and awk programs, URLs and
 # remote commands (host names, the DNS zone, the VM, project and cloud zone names) may hold only
@@ -155,14 +165,22 @@ check_ip() {
   esac
 }
 
-# check_tag VALUE: an image tag made from a commit hash.
-check_tag() {
-  case $1 in
-    '' | *[!0-9a-f]*)
-      echo "FAIL: unexpected image tag" >&2
-      return 1
-      ;;
-  esac
+# load_settings FILE NAME...: the settings from FILE (.env) when it exists, else from the
+# environment, where the infra workflow (.github/workflows/infra.yml) puts them from the
+# repository's secrets. Either way none of NAME... stays exported (as load_env).
+load_settings() {
+  _file=$1
+  shift
+  if [ -f "$_file" ]; then
+    load_env "$_file"
+    return
+  fi
+  for _name in "$@"; do
+    eval "_value=\${$_name-}"
+    unset "$_name"
+    eval "$_name=\$_value"
+  done
+  unset _name _value
 }
 
 # load_env FILE: reads the settings as plain shell variables. Nothing is exported, so the tools
@@ -196,44 +214,6 @@ require_deployable() {
     echo "      Rebase on origin/main and push (git fetch origin && git rebase origin/main && git push origin HEAD:main), then deploy again." >&2
     return 1
   fi
-}
-
-# upload_image TAG TMPDIR: copies the image latchkey-relay:TAG to the VM and loads it there. Each
-# stage is its own command, so a failure of any of them stops the deploy (a pipeline would report
-# only its last stage). The VM checks the upload's SHA-256 before loading it; the upload lives in
-# a root-only folder that is removed whatever happens.
-upload_image() {
-  docker save -o "$2/image.tar" "latchkey-relay:$1" || return 1
-  gzip -f "$2/image.tar" || return 1
-  _sum=$(shasum -a 256 "$2/image.tar.gz") || return 1
-  _sum=${_sum%% *}
-  case $_sum in '' | *[!0-9a-f]*) echo "FAIL: could not checksum the image" >&2; return 1 ;; esac
-  ssh_vm "sudo sh -euc '
-install -d -m 755 $REMOTE_DIR
-d=\$(mktemp -d $REMOTE_DIR/.upload.XXXXXX)
-trap \"rm -rf \$d\" EXIT
-cat > \$d/image.tar.gz
-echo \"$_sum  \$d/image.tar.gz\" | sha256sum -c - >/dev/null
-docker load -q -i \$d/image.tar.gz >/dev/null
-docker image inspect latchkey-relay:$1 >/dev/null
-'" <"$2/image.tar.gz" || { echo "FAIL: the image did not arrive intact on the server" >&2; return 1; }
-  rm -f "$2/image.tar.gz"
-}
-
-# IMAGE_REPO is where the public relay image is published (spec 009 FR-911).
-IMAGE_REPO=ghcr.io/tonimelisma/latchkey-relay
-
-# publish_image TAG: builds the relay for Intel and Arm servers and pushes it as TAG and latest,
-# signing in with the GitHub CLI's token (it needs the write:packages scope: once,
-# `gh auth refresh -s write:packages`). Relays set up by docs/setup-with-claude.md update to
-# latest by themselves, so this runs with every deploy, after the checks (spec 009 plan D6).
-publish_image() {
-  _user=$(gh api user --jq .login) || return 1
-  gh auth token | docker login ghcr.io -u "$_user" --password-stdin >/dev/null ||
-    { echo "FAIL: couldn't sign in to ghcr.io (does the GitHub CLI's token have write:packages? gh auth refresh -s write:packages)" >&2; return 1; }
-  docker buildx build -q --platform linux/amd64,linux/arm64 --build-arg VERSION="$1" \
-    -t "$IMAGE_REPO:$1" -t "$IMAGE_REPO:latest" --push relay >/dev/null ||
-    { echo "FAIL: couldn't build or publish the image" >&2; return 1; }
 }
 
 # caddyfile_with_block HOST SNIPPET_FILE: prints the Caddyfile on stdin with HOST's site block
@@ -296,10 +276,7 @@ finish_or_roll_back() {
 
 # roll_back HOST NEW_TAG PREVIOUS_TAG [TRIES]: prints the failed relay's logs, puts the previous
 # settings files back, starts the previous image (PREVIOUS_TAG, empty on a first deploy), and
-# checks that it answers. Always fails, so the deploy does. When this deploy copied the database
-# first (DB_SAVED set: the first start of a version that encrypts the stored keys), the copy is
-# put back before the previous version starts; if that fails the relay stays stopped, because
-# the previous version can't read a converted database.
+# checks that it answers. Always fails, so the deploy does.
 roll_back() {
   echo "Last log lines of version $2:"
   ssh_vm 'sudo docker logs --tail 50 latchkey-relay 2>&1' || true
@@ -308,20 +285,12 @@ roll_back() {
     return 1
   fi
   echo "• going back to $3"
-  if [ -n "${DB_SAVED-}" ]; then
-    echo "• putting back the database from before this version"
-    if ! restore_database; then
-      echo "FAIL: version $2 was not healthy, and the database copy could not be put back. The relay stays stopped."
-      echo "      The copy is in $REMOTE_DIR/db-before-keys on the server; version $3 can't read the database as it is now."
-      return 1
-    fi
-  fi
   ssh_vm "set -e
 cd $REMOTE_DIR
 for f in docker-compose.yml relay.env; do
   if sudo test -f \$f.prev; then sudo cp -p \$f.prev \$f; fi
 done
-sudo TAG=$3 docker compose up -d --remove-orphans --quiet-pull" || true
+sudo flock -w 900 $UPDATE_LOCK env TAG=$3 docker compose up -d --remove-orphans --quiet-pull" || true
   if wait_healthy "$1" "${4:-30}"; then
     echo "FAIL: version $2 was not healthy; rolled back to $3, which is answering again."
   else
@@ -350,57 +319,7 @@ chown $KEY_OWNER $REMOTE_DIR/keys/relay
 }
 
 # key_file_state: prints "present" or "absent". Anything else (a failed connection) must stop the
-# deploy: "absent" decides that the database is copied first and, on a rollback, that the key file
-# the failed version made is deleted.
+# deploy.
 key_file_state() {
   ssh_vm "if sudo test -f $REMOTE_DIR/keys/relay/relay.key; then echo present; else echo absent; fi" | tr -d ' \r\n'
-}
-
-# save_database: before the first start of a version that encrypts the stored keys, stops the
-# relay and copies its database files into a root-only folder. A version from before can't read
-# the database once it is converted, so a rollback needs this copy (restore_database). Fails,
-# stopping and changing nothing, when the running relay's database can't be found.
-save_database() {
-  ssh_vm "sudo sh -euc '
-src=
-for m in \$(docker inspect --format \"{{range .Mounts}}{{.Destination}}={{.Source}} {{end}}\" latchkey-relay); do
-  case \$m in /data=*) src=\${m#/data=} ;; esac
-done
-test -n \"\$src\"
-test -f \"\$src/relay.db\"
-d=$REMOTE_DIR/db-before-keys
-rm -rf \$d \$d.new
-install -d -m 700 \$d.new
-docker stop -t 20 latchkey-relay >/dev/null
-for f in relay.db relay.db-wal relay.db-shm; do
-  if [ -f \"\$src/\$f\" ]; then cp -p \"\$src/\$f\" \$d.new/\$f; fi
-done
-printf %s \"\$src\" > \$d.new/source
-mv \$d.new \$d
-'"
-}
-
-# restore_database: puts the copy made by save_database back over the database, deletes the key
-# file the failed version created (nothing is encrypted with it any more), and deletes the copy.
-# The caller starts the previous version afterwards.
-restore_database() {
-  ssh_vm "sudo sh -euc '
-d=$REMOTE_DIR/db-before-keys
-test -f \$d/relay.db
-src=\$(cat \$d/source)
-test -n \"\$src\"
-docker stop -t 20 latchkey-relay >/dev/null 2>&1 || true
-rm -f \"\$src/relay.db-wal\" \"\$src/relay.db-shm\"
-for f in relay.db relay.db-wal relay.db-shm; do
-  if [ -f \$d/\$f ]; then cp -p \$d/\$f \"\$src/\$f\"; fi
-done
-rm -f $REMOTE_DIR/keys/relay/relay.key
-rm -rf \$d
-'"
-}
-
-# discard_saved_database: once the new version answers, the copy (which holds the keys
-# unencrypted) is deleted.
-discard_saved_database() {
-  ssh_vm "sudo rm -rf $REMOTE_DIR/db-before-keys $REMOTE_DIR/db-before-keys.new"
 }

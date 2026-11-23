@@ -1,6 +1,6 @@
 # Latchkey: runs latchkey-update-apps every 5 minutes.
 [Unit]
-Description=Update hackernews and Caddy every 5 minutes
+Description=Update the relay, hackernews and Caddy every 5 minutes
 
 [Timer]
 OnBootSec=3min

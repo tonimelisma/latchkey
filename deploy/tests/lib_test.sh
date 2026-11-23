@@ -44,8 +44,6 @@ X=1"
 expect 0 "IPv4 accepted" check_ip 203.0.113.7
 expect 1 "empty address refused" check_ip ""
 expect 1 "address with text refused" check_ip "203.0.113.7; id"
-expect 0 "image tag accepted" check_tag 1a2b3c4
-expect 1 "odd image tag refused" check_tag 'x;y'
 
 # --- .env is read without exporting anything ---
 cat >"$work/env" <<'EOF'
@@ -142,93 +140,13 @@ grep -q 'still not answering' "$work/out" && ok "failed rollback is reported" ||
 expect 1 "unhealthy first deploy fails" run_finish down ""
 grep -q 'compose up' "$work/ssh.log" && bad "first deploy has nothing to roll back to" || ok "first deploy has nothing to roll back to"
 
-# --- the image upload: any failing stage fails the deploy ---
-mkdir "$work/bin" "$work/remote"
+mkdir "$work/bin"
 cat >"$work/bin/sudo" <<'EOF'
 #!/bin/sh
 exec "$@"
 EOF
-cat >"$work/bin/docker" <<'EOF'
-#!/bin/sh
-echo "docker $*" >>"$DOCKER_LOG"
-case "$1" in
-save) [ -z "${FAIL_SAVE-}" ] || exit 1; printf 'image-bytes' >"$3" ;;
-load) [ -z "${FAIL_LOAD-}" ] || exit 1 ;;
-esac
-exit 0
-EOF
-command -v sha256sum >/dev/null 2>&1 || cat >"$work/bin/sha256sum" <<'EOF'
-#!/bin/sh
-exec shasum -a 256 "$@"
-EOF
-chmod +x "$work/bin/"*
-run_upload() {
-  (
-    PATH="$work/bin:$PATH"
-    DOCKER_LOG="$work/docker.log"
-    export DOCKER_LOG FAIL_SAVE FAIL_LOAD
-    : >"$DOCKER_LOG"
-    REMOTE_DIR="$work/remote"
-    ssh_vm() { if [ -n "${CORRUPT-}" ]; then echo garbage | sh -c "$1"; else sh -c "$1"; fi; }
-    mkdir -p "$work/tmp" && upload_image abc1234 "$work/tmp"
-  )
-}
-FAIL_SAVE='' FAIL_LOAD='' CORRUPT=''
-expect 0 "image upload succeeds" run_upload
-grep -q 'docker load' "$work/docker.log" && ok "image is loaded on the server" || bad "image is loaded on the server"
-[ -z "$(ls -A "$work/remote")" ] && ok "no upload left on the server" || bad "no upload left on the server"
-FAIL_SAVE=1
-expect 1 "failing docker save fails the deploy" run_upload
-grep -q 'docker load' "$work/docker.log" && bad "nothing is loaded after a failed save" || ok "nothing is loaded after a failed save"
-FAIL_SAVE='' FAIL_LOAD=1
-expect 1 "failing docker load fails the deploy" run_upload
-FAIL_LOAD='' CORRUPT=1
-expect 1 "upload damaged on the way fails the deploy" run_upload
-grep -q 'docker load' "$work/docker.log" && bad "a damaged upload is never loaded" || ok "a damaged upload is never loaded"
-[ -z "$(ls -A "$work/remote")" ] && ok "no damaged upload left on the server" || bad "no damaged upload left on the server"
-
-# --- the public image for Intel and Arm servers, with every deploy (spec 009 FR-911) ---
-cat >"$work/bin/gh" <<'EOF'
-#!/bin/sh
-case "$*" in
-"auth token") echo gho_test-token ;;
-"api user --jq .login") echo tonimelisma ;;
-*) exit 1 ;;
-esac
-EOF
-cat >"$work/bin/docker" <<'EOF'
-#!/bin/sh
-echo "docker $*" >>"$DOCKER_LOG"
-case "$1" in
-save) [ -z "${FAIL_SAVE-}" ] || exit 1; printf 'image-bytes' >"$3" ;;
-load) [ -z "${FAIL_LOAD-}" ] || exit 1 ;;
-login) read -r token; [ "$token" = gho_test-token ] || exit 1; [ -z "${FAIL_LOGIN-}" ] || exit 1 ;;
-buildx) [ -z "${FAIL_PUSH-}" ] || exit 1 ;;
-esac
-exit 0
-EOF
-chmod +x "$work/bin/"*
-run_publish() {
-  (
-    PATH="$work/bin:$PATH"
-    DOCKER_LOG="$work/docker.log"
-    export DOCKER_LOG FAIL_LOGIN FAIL_PUSH
-    : >"$DOCKER_LOG"
-    publish_image abc1234
-  )
-}
-FAIL_LOGIN='' FAIL_PUSH=''
-expect 0 "image published" run_publish
-grep -q 'login ghcr.io -u tonimelisma --password-stdin' "$work/docker.log" && ok "signed in to the registry with the GitHub CLI's token" || bad "signed in to the registry with the GitHub CLI's token"
-grep 'buildx build' "$work/docker.log" | grep -q -- '--platform linux/amd64,linux/arm64' && ok "built for Intel and Arm servers" || bad "built for Intel and Arm servers"
-grep 'buildx build' "$work/docker.log" | grep -q -- '-t ghcr.io/tonimelisma/latchkey-relay:abc1234 -t ghcr.io/tonimelisma/latchkey-relay:latest' && ok "tagged with the version and latest" || bad "tagged with the version and latest"
-grep 'buildx build' "$work/docker.log" | grep -q -- '--push' && ok "pushed" || bad "pushed"
-FAIL_LOGIN=1
-expect 1 "a refused registry sign-in fails the deploy" run_publish
-grep -q 'buildx' "$work/docker.log" && bad "nothing is built after a refused sign-in" || ok "nothing is built after a refused sign-in"
-FAIL_LOGIN='' FAIL_PUSH=1
-expect 1 "a failed push fails the deploy" run_publish
-FAIL_PUSH=''
+: >"$work/bin/docker"
+chmod +x "$work/bin/sudo" "$work/bin/docker"
 
 # --- the server's Caddyfile: checked by Caddy, put back if refused ---
 run_caddy() {
@@ -258,8 +176,7 @@ expect 0 "valid Caddyfile is installed" run_caddy
 cmp -s "$work/Caddyfile.1" "$work/live/Caddyfile" && ok "new Caddyfile is in place" || bad "new Caddyfile is in place"
 cmp -s "$work/Caddyfile" "$work/live/Caddyfile.before-latchkey-deploy" && ok "previous Caddyfile kept as a backup" || bad "previous Caddyfile kept as a backup"
 
-# --- the key file's folder, and the database copy kept across the first start of a version that
-# --- encrypts the relay's stored keys (an earlier version can't read them afterwards) ---
+# --- the key file's folder ---
 cat >"$work/bin/docker" <<'EOF'
 #!/bin/sh
 echo "docker $*" >>"$DOCKER_LOG"
@@ -298,65 +215,17 @@ grep -q "chown 65532:65532 $work/srv/keys/relay\$" "$work/docker.log" && ok "inn
 expect 0 "preparing the key folder again changes nothing" on_server prepare_key_dir
 
 [ "$(on_server key_file_state)" = absent ] && ok "no key file yet is reported" || bad "no key file yet is reported"
-printf 'plain-db' >"$work/vol/relay.db"
-printf 'plain-wal' >"$work/vol/relay.db-wal"
-: >"$work/docker.log"
-expect 0 "database is copied before the first start" on_server save_database
-grep -q 'docker stop' "$work/docker.log" && ok "relay is stopped before the copy" || bad "relay is stopped before the copy"
-[ "$(cat "$work/srv/db-before-keys/relay.db" 2>/dev/null)" = plain-db ] && ok "database file is in the copy" || bad "database file is in the copy"
-[ "$(cat "$work/srv/db-before-keys/relay.db-wal" 2>/dev/null)" = plain-wal ] && ok "its write-ahead log is in the copy" || bad "its write-ahead log is in the copy"
-[ "$(mode "$work/srv/db-before-keys")" = drwx------ ] && ok "the copy is for root only" || bad "the copy is for root only"
-
-# The new version started, made its key file and converted the database; then it has to go.
-printf 'sealed-db' >"$work/vol/relay.db"
-rm -f "$work/vol/relay.db-wal"
-printf 'sealed-shm' >"$work/vol/relay.db-shm"
 printf 'key' >"$work/srv/keys/relay/relay.key"
 [ "$(on_server key_file_state)" = present ] && ok "an existing key file is reported" || bad "an existing key file is reported"
-expect 0 "database copy is put back" on_server restore_database
-[ "$(cat "$work/vol/relay.db")" = plain-db ] && ok "the database is the one from before" || bad "the database is the one from before"
-[ "$(cat "$work/vol/relay.db-wal" 2>/dev/null)" = plain-wal ] && ok "with its write-ahead log" || bad "with its write-ahead log"
-[ ! -e "$work/vol/relay.db-shm" ] && ok "the newer version's leftovers are gone" || bad "the newer version's leftovers are gone"
-[ ! -e "$work/srv/keys/relay/relay.key" ] && ok "the failed version's key file is gone" || bad "the failed version's key file is gone"
-[ ! -e "$work/srv/db-before-keys" ] && ok "no copy with unencrypted keys is left" || bad "no copy with unencrypted keys is left"
-expect 1 "nothing to put back fails" on_server restore_database
 
-expect 0 "database is copied again" on_server save_database
-expect 0 "the copy is deleted after a healthy start" on_server discard_saved_database
-[ ! -e "$work/srv/db-before-keys" ] && ok "no copy is left after a healthy start" || bad "no copy is left after a healthy start"
-NO_CONTAINER=1
-: >"$work/docker.log"
-expect 1 "no running relay to copy from fails" on_server save_database
-grep -q 'docker stop' "$work/docker.log" && bad "nothing is stopped when the copy can't be made" || ok "nothing is stopped when the copy can't be made"
-[ ! -e "$work/srv/db-before-keys" ] && ok "a failed copy leaves nothing" || bad "a failed copy leaves nothing"
-NO_CONTAINER=''
-
-# A rollback across that first start puts the database back before the previous version starts.
-run_keys_rollback() { # <restore result: 0 or 1>
-  : >"$work/ssh.log"
-  (
-    ssh_vm() { printf '%s\n' "$1" >>"$work/ssh.log"; }
-    probe() { [ -n "$(grep 'compose up' "$work/ssh.log")" ]; }
-    DB_SAVED=1
-    eval "restore_database() { echo restore >>\"$work/ssh.log\"; return $1; }"
-    roll_back relay.example.com newtag oldtag 2
-  )
-}
-expect 1 "rollback across the first start fails the deploy" run_keys_rollback 0
-[ "$(grep -n '^restore$' "$work/ssh.log" | cut -d: -f1)" -lt "$(grep -n 'compose up' "$work/ssh.log" | cut -d: -f1)" ] 2>/dev/null &&
-  ok "database is put back before the previous version starts" || bad "database is put back before the previous version starts"
-expect 1 "rollback whose database can't be put back fails" run_keys_rollback 1
-grep -q 'compose up' "$work/ssh.log" && bad "previous version isn't started on a database it can't read" || ok "previous version isn't started on a database it can't read"
-grep -q 'stays stopped' "$work/out" && ok "that the relay is down is said" || bad "that the relay is down is said"
-: >"$work/ssh.log"
+# --- settings from the environment when there is no .env (the infra workflow) ---
 (
-  ssh_vm() { printf '%s\n' "$1" >>"$work/ssh.log"; }
-  probe() { true; }
-  restore_database() { echo restore >>"$work/ssh.log"; }
-  roll_back relay.example.com newtag oldtag 2
-) >/dev/null 2>&1
-grep -q '^restore$' "$work/ssh.log" && bad "ordinary rollback leaves the database alone" || ok "ordinary rollback leaves the database alone"
-grep -q 'compose up' "$work/ssh.log" && ok "ordinary rollback still starts the previous version" || bad "ordinary rollback still starts the previous version"
+  export DEPLOY_HOST=relay.example.com RESEND_API_KEY=re_test
+  load_settings "$work/no-such-file" DEPLOY_HOST RESEND_API_KEY OPERATOR_NAME
+  [ "$DEPLOY_HOST" = relay.example.com ] && ok "settings are taken from the environment" || bad "settings are taken from the environment"
+  if env | grep -q '^RESEND_API_KEY='; then bad "a key from the environment is no longer exported"; else ok "a key from the environment is no longer exported"; fi
+  [ -z "$OPERATOR_NAME" ] && ok "an unset setting stays empty" || bad "an unset setting stays empty"
+)
 
 # --- the operator's details for the terms and the privacy policy (FR-193): free text from .env
 # --- that must reach the relay exactly, through the server's relay.env and docker compose ---
