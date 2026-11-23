@@ -44,19 +44,13 @@ security checks, tests, signed image through a workflow like `relay-image.yml`):
   dispositioned (FR-1424): the fix, its regression case, or the reason in the agent's reply is the
   record, nothing stays in the intake.
 
-## D4a. Names and hosting (FR-1426)
+## D4a. Name and hosting (FR-1426)
 
-Order matters, so no relay is ever unreachable and no old name sends reports to a relay:
-1. The hosted relay gets its new, hard-to-guess name (a DNS record, its certificate, its own
-   settings; in the private repository that holds its deployment), and both names answer for a
-   while.
-2. Everything that points at the relay moves to the new name: Toni's Claude connector, the Mac
-   app's relay address (`Local.xcconfig`, never committed), purkki's Linux program.
-3. The latchkey name moves to the intake on pilvi (its container beside the relay's, behind the
-   same reverse proxy, with its own certificate).
-4. Only then does the relays' default intake address, the latchkey name, go into this repository.
-
-Toni's steps: the DNS records, and changing the connector's address in Claude's settings.
+The intake's container runs on pilvi beside the relay's, behind the same Caddy, at
+`latchkey-feedback.melisma.net` (an A record to pilvi, made 2026-11-23), with Caddy's usual
+certificate for that one name. Its deployment lives with pilvi's, in the private deployment
+repository; this repository holds the program and its image workflow. The relays' default intake
+address is that name.
 
 ## D5. The developer's agent (FR-1430, FR-1431)
 

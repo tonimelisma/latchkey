@@ -115,11 +115,14 @@ Toni because he is a user too. Other users' reports never reach the developer.
   it. Git is the history").
 - **FR-1425** The intake shall be a program in this repository that a fork's developer can run
   for themselves.
-- **FR-1426** Latchkey's own intake shall answer at the easy-to-remember name (latchkey on Toni's
-  domain), which relays use by default; the hosted relay moves to a name that is hard to guess
-  (Toni, 2026-11-23: "I prefer latchkey being for feedback, and moving our own relay to a more
-  hard to guess DNS name"). The intake runs on pilvi, Toni's GCP VM (Toni). The relay's new name
-  is never written in this repository (CLAUDE.md).
+- **FR-1426** Latchkey's own intake shall answer at `latchkey-feedback.melisma.net`, which relays
+  use by default; it runs on pilvi, Toni's GCP VM, with an ordinary certificate (the name is
+  public by design: relays must know it, and it only takes in encrypted reports; it is not derived
+  from the relay's name, which is never written here, CLAUDE.md). The hosted relay
+  keeps its name (Toni, 2026-11-23: after the pilvi agent's findings, moving it would have meant
+  re-registered passkeys, a re-added connector, re-paired machines, a mail-name split and a stored
+  DNS token for a small gain against mass scanning; "let's get a new hostname for the feedback.
+  something specific to latchkey"). The DNS record exists since 2026-11-23.
 
 ### The developer's agent
 - **FR-1430** The developer's agent shall open reports with the developer's private key inside its
