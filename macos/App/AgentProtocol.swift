@@ -41,13 +41,17 @@ struct AgentState: Codable, Equatable, Sendable {
     var uptimeS: Int64? = nil
     /// Whether the Mac's screen is locked (spec 001 FR-671); left out when not known.
     var screenLocked: Bool? = nil
+    /// The Owner's choice to share problem reports with Latchkey's developer (spec 014 FR-1400,
+    /// FR-1403).
+    var shareReports: Bool? = nil
     var observedAt: Date
 
     enum CodingKeys: String, CodingKey {
         case batteryPercent = "battery_percent", powerSource = "power_source", charging
         case timeRemainingMin = "time_remaining_min", thermalState = "thermal_state"
         case lowPowerMode = "low_power_mode", lidClosed = "lid_closed", timeZone = "time_zone"
-        case keepAwake = "keep_awake", uptimeS = "uptime_s", screenLocked = "screen_locked", observedAt = "observed_at"
+        case keepAwake = "keep_awake", uptimeS = "uptime_s", screenLocked = "screen_locked"
+        case shareReports = "share_reports", observedAt = "observed_at"
     }
 
     func encode(to encoder: Encoder) throws {
@@ -63,6 +67,7 @@ struct AgentState: Codable, Equatable, Sendable {
         try c.encode(keepAwake, forKey: .keepAwake)
         try c.encodeIfPresent(uptimeS, forKey: .uptimeS)  // left out when nil
         try c.encodeIfPresent(screenLocked, forKey: .screenLocked)
+        try c.encodeIfPresent(shareReports, forKey: .shareReports)
         try c.encode(observedAt, forKey: .observedAt)
     }
 }
@@ -122,7 +127,9 @@ struct Hello: Codable, Sendable {
 
     /// `clients`: send the list of Claude apps with access, and keep it current (FR-190, FR-192).
     /// `audit`: answer `audit_request` with this Mac's audit (FR-634).
-    static let supportedFeatures = ["clients", "audit", "feedback"]
+    /// Reports no longer come to the Mac (spec 014, replacing spec 001 FR-692, FR-693): the
+    /// feedback feature isn't announced, so no relay sends them.
+    static let supportedFeatures = ["clients", "audit"]
 
     /// The hello this app sends: always with the features it supports, its kind, and its name.
     static func make(
@@ -139,8 +146,11 @@ struct Welcome: Codable, Sendable {
     var heartbeatIntervalS: Int; var serverTime: Date
     /// The name the relay kept for this Mac, when the hello asked for one (spec 010 FR-1002).
     var name: String?
+    /// The relay's operator blocks forwarding problem reports (spec 014 FR-1415a).
+    var reportsBlocked: Bool?
     enum CodingKeys: String, CodingKey {
         case heartbeatIntervalS = "heartbeat_interval_s", serverTime = "server_time", name
+        case reportsBlocked = "reports_blocked"
     }
 }
 
