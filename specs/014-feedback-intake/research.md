@@ -53,9 +53,11 @@ the developer owns that anyone may write to and only the developer can read.
   hour by default.
 - **Reporter tag**: HMAC-SHA256 of the account id under a secret of the relay's own, first 8
   bytes, hex: stable per account on one relay, meaningless elsewhere.
-- **Masking**: before sealing: 4 to 8 digits next to "code", "PIN", "OTP" or "verification"; any
-  run of 8 or more digits (spaces and dashes allowed); strings that look like keys or tokens
-  (long base64 or hex). Replaced by "[masked]". Masking is best effort; the opt-in screen says so.
+- **What goes in a report** is Claude's judgment, not the relay's (Toni, 2026-11-23: "the user's
+  agent needs to be trusted not to submit anything dangerous"). Masking with patterns on the relay
+  was proposed and withdrawn: deterministic matching misses some secrets and mangles harmless
+  text, and it would be the relay judging content (Constitution X). The tool's description says
+  what stays out.
 
 ## Still for Toni
 
