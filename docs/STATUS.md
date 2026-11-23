@@ -89,12 +89,13 @@ Toni 2026-11-23); two hangs of several minutes with no answer (0H0161, 442MP3), 
 hosted relay's log, kept outside this repository; places not in Apple Maps; Amazon's, Target's and
 Uber's bot walls; Safari's throttling of background tabs.
 
-Moving reports to `Feedback/Handled` through Latchkey's `shell_run` doesn't work: the shell's
-fence denies writes to Latchkey's own folder even when declared (FR-319), and an exception for
-the Feedback folder was refused in review as weakening that fence. Toni's step (once, in
-Terminal on the Mac): `cd ~/Library/Application\ Support/Latchkey/Feedback && mkdir -p Handled
-&& mv 2026-11-1[7-9]T*.md 2026-11-2[0-2]T*.md 2026-11-23T0[0-5]*.md Handled/` (the 172 reports of
-2026-11-17 to 2026-11-23 05:45 UTC). How later reports get moved is Toni's choice.
+Moving reports to `Feedback/Handled` can't be done by Claude through Latchkey: the shell's fence
+denies writes to Latchkey's own folder even when declared (FR-319), and a script opened in
+Terminal from the shell is refused by macOS ("Sandbox is not allowed to open documents in
+Terminal"). Toni ran the move script himself on 2026-11-23: all 172 reports are in `Handled`.
+The feedback design is being reworked so that Claude can mark reports handled (Toni, 2026-11-23:
+email is not a serious channel; who owns each step: the user's chat, the relay, the Mac, the
+developer's agent).
 
 ## Current phase
 
@@ -550,13 +551,9 @@ after the app was quit.
 
 ## Next steps
 
-000. Leftover branches on GitHub from 2026-11-23: `ci-baseline` (main plus a CI job, used to
-    compare test failures) and `feedback-fixes` (the same work as the merged
-    `feedback-fixes-2`, before its rebase); a cloud session can't delete branches. Both hold
-    nothing that isn't on main.
 00. The 2026-11-23 feedback fixes have regression cases but no live run (Toni, 2026-11-23: no
-    test sessions against his real data; end-to-end testing is a backlog item). Toni's Terminal
-    step above moves the 172 reports to `Feedback/Handled`.
+    test sessions against his real data; end-to-end testing is a backlog item). Next: options
+    for a feedback design where Claude can mark reports handled, for Toni to choose.
 
 0. Cloud-first setup: done 2026-11-23 except the updater on the Mac (`macos/scripts/updater-setup.sh`)
    and `LATCHKEY_CHECK_TO` in the cloud environment. The package `latchkey-relay` gives this
