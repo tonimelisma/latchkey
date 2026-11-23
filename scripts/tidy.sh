@@ -2,8 +2,11 @@
 # Removes what's left over after work is merged (Toni, 2026-10-23). Runs automatically after every
 # `git push` through the Claude Code hook in .claude/settings.json; safe to run by hand any time.
 #
-# - Branches merged into origin/main, locally and on GitHub, except main, the current branch, and
-#   any branch checked out in a worktree. Unmerged branches are never touched.
+# - Local branches merged into origin/main, except main, the current branch, and any branch
+#   checked out in a worktree. Unmerged branches are never touched. Branches on GitHub are left
+#   alone: GitHub deletes a pull request's branch when it is merged (the repository's
+#   "Automatically delete head branches" setting, on since 2026-11-22), and the remote-tracking
+#   refs of deleted ones are pruned here.
 # - Finished worktrees under .claude/worktrees (merged, clean, no live session), worktree
 #   records whose folder no longer exists, and remote-tracking refs gone from GitHub.
 # - Mac build leftovers that could stand in for the installed app: every disk image in macos/build
@@ -83,12 +86,6 @@ keep() { [ "$1" = main ] || [ "$1" = "$current" ] || printf '%s\n' "$inuse" | gr
 for b in $(git for-each-ref --format='%(refname:short)' --merged refs/remotes/origin/main refs/heads/); do
   keep "$b" && continue
   drop_branch "$b" && echo "tidy: deleted local branch $b"
-done
-
-for b in $(git for-each-ref --format='%(refname:lstrip=3)' --merged refs/remotes/origin/main refs/remotes/origin/); do
-  [ "$b" = HEAD ] && continue
-  keep "$b" && continue
-  git push --quiet --delete origin "refs/heads/$b" 2>/dev/null && echo "tidy: deleted remote branch $b"
 done
 
 git worktree prune

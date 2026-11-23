@@ -1,5 +1,7 @@
 # Every push and pull request: the relay's tests, lint, and security checks (known vulnerabilities,
-# committed secrets, untidy modules). Actions are pinned to commit SHAs; Dependabot updates them.
+# committed secrets, untidy modules); the Linux program's tests and lint; the deploy and repository
+# scripts' tests; and the workflows themselves (actionlint). Actions are pinned to commit SHAs;
+# Dependabot updates them.
 name: ci
 on:
   push:
@@ -37,3 +39,36 @@ jobs:
         run: make lint
       - name: Test (race detector, headless Chrome)
         run: make test
+  linux:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: linux
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
+        with:
+          go-version-file: linux/go.mod
+          cache-dependency-path: linux/go.sum
+      - name: Lint (also the Linux-only files)
+        run: make lint
+      - name: Test (race detector)
+        run: make test
+  scripts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
+        with:
+          go-version-file: relay/go.mod
+          cache-dependency-path: relay/go.sum
+      - name: Deploy and repository script tests
+        run: make -C relay script-tests
+      - name: Workflows (actionlint)
+        run: go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.8

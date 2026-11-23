@@ -50,6 +50,13 @@ failure says why.
 
 ## Current phase
 
+Cloud-first (Toni, 2026-11-23: everything happens in cloud sessions except what needs macOS;
+the Mac only builds and tests the Mac app): in progress on branch `claude/latchkey-cloud-first-0xfzcv`.
+So far: CI also runs the Linux program's tests and lint, the script tests, and actionlint on
+the workflows (`install-lib.sh`'s idle check read GNU stat wrongly on Linux, so two script tests
+had failed there); `tidy.sh` no longer deletes branches on GitHub (GitHub deletes a merged pull
+request's branch itself).
+
 Fill-only sign-in (Toni, 2026-11-22: "Shouldn't the code just provide what's happening in the
 browser and the agent makes the presumptions?"; then "Fill-only tool", "No cap", "Decide fresh
 each time", "Shouldnt tve agent do that too?", "Right after typing it"; spec 013 FR-1371 to

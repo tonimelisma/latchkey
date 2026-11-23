@@ -72,11 +72,11 @@ tidy
 
 yes "main kept" g -C "$main" rev-parse --verify -q refs/heads/main
 no "merged local branch deleted" g -C "$main" rev-parse --verify -q refs/heads/merged
-no "merged remote branch deleted" g -C "$work/origin.git" rev-parse --verify -q refs/heads/merged
+yes "merged remote branch left to GitHub" g -C "$work/origin.git" rev-parse --verify -q refs/heads/merged
 yes "unmerged local branch kept" g -C "$main" rev-parse --verify -q refs/heads/unmerged
 yes "unmerged remote branch kept" g -C "$work/origin.git" rev-parse --verify -q refs/heads/unmerged
 no "merged local ref starting with - deleted" g -C "$main" rev-parse --verify -q refs/heads/-q
-no "merged remote ref starting with - deleted" g -C "$work/origin.git" rev-parse --verify -q refs/heads/-q
+yes "merged remote ref starting with - left to GitHub" g -C "$work/origin.git" rev-parse --verify -q refs/heads/-q
 if grep -qi 'usage\|unknown option\|unknown switch' "$work/out"; then bad "no ref name was read as an option"; else ok "no ref name was read as an option"; fi
 
 no "finished worktree removed, with its build products" test -e "$main/.claude/worktrees/finished"

@@ -159,7 +159,10 @@ idle_verdict() {
     echo "$running call(s) running"
     return 1
   fi
-  changed=$(stat -f %m "$dir" 2>/dev/null || echo 0)
+  # BSD stat (the Mac); GNU stat (the script tests on Linux) reads -f as "file system" and
+  # prints something else, so a non-number falls through to its own form.
+  changed=$(stat -f %m "$dir" 2>/dev/null || true)
+  case $changed in '' | *[!0-9]*) changed=$(stat -c %Y "$dir" 2>/dev/null || echo 0) ;; esac
   ago=$((now - changed))
   if [ "$ago" -lt "$quiet" ]; then
     echo "the last call ended $ago s ago"
