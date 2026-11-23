@@ -635,8 +635,8 @@ So that a stolen account or a rogue connector shows up in the Owner's inbox at o
   without needing Apple's Developer ID (Toni, 2026-11-23: "yes, implement sparkle"; it had waited
   for a Developer ID since 2026-11-09). A build without the key falls back to FR-669.
 - **FR-072a** When a newer release is published, the app shall download it in the background
-  without showing anything (Constitution IV). It shall look for one every hour. [Proposed by
-  Claude while Toni was away, 2026-11-23: hourly is Sparkle's shortest interval; Toni to confirm.]
+  without showing anything (Constitution IV). It shall look for one every hour (Toni, 2026-11-23:
+  hourly, Sparkle's shortest interval, while he is the main user; daily before others use it).
 - **FR-072b** The app shall install a downloaded update only while it is idle: no tool call
   running and none started or ended for 10 minutes (Toni, 2026-11-22, the install script's rule);
   then it quits, is replaced, and starts again by itself.
