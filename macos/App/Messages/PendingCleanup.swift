@@ -140,7 +140,10 @@ enum CodeTextWindow {
         do {
             balloon = try await wait("the message") { () -> AXUIElement? in
                 let hits = balloons().filter { !$0.fromMe && $0.text == located.text }
-                return hits.count == 1 ? hits[0].element : nil
+                // A balloon whose place can't be read: look again (review 2026-11-22).
+                let placed = hits.compactMap { h in frame(h.element).map { (h.element, $0.minY) } }
+                guard placed.count == hits.count else { return nil }
+                return pick(placed, laterSame: located.laterSame, earlierSame: located.earlierSame)
             }
         } catch is CancellationError {
             throw CancellationError()
@@ -154,6 +157,19 @@ enum CodeTextWindow {
         _ = try await wait("Messages to delete it", seconds: 10) { () -> Bool? in
             do { return try store.locate(guid) == nil ? true : nil } catch { return nil }
         }
+    }
+
+    /// Which of the shown messages with the same text is this one: the only one; or, when a site
+    /// sent the same text again (two '[Uber] Your code' texts, 2026-11-22: never deleted, since
+    /// both matched), the one with as many like it below it as Messages' database counts later,
+    /// top to bottom as the window shows them. Only when the window shows every one like it
+    /// (review 2026-11-22: with one scrolled out of view the count would point at another).
+    static func pick<T>(_ hits: [(T, CGFloat)], laterSame: Int, earlierSame: Int) -> T? {
+        // One shown, none like it later: this one (the window shows it, scrolled to it), as ever.
+        if hits.count == 1 { return laterSame == 0 ? hits[0].0 : nil }
+        guard hits.count == laterSame + 1 + earlierSame else { return nil }
+        let topDown = hits.sorted { $0.1 < $1.1 }
+        return topDown[topDown.count - 1 - laterSame].0
     }
 
     /// What the transcript shows, for the error: how many messages, how many from others, how

@@ -13,6 +13,17 @@ import WebKit
 @MainActor
 final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate {
     private var web: WKWebView?
+    /// The window the view is in, never on screen (`holder`). It holds the view, so it goes when
+    /// this browser goes, discarded or not: else the view lives on and WebKit calls back into a
+    /// browser that is gone (a crash in the tests, 2026-11-22).
+    private var holderWindow: NSWindow?
+
+    isolated deinit {
+        web?.navigationDelegate = nil
+        web?.uiDelegate = nil
+        holderWindow?.orderOut(nil)
+        holderWindow?.contentView = nil
+    }
     /// The page's name, as Claude passes it (FR-445); set by `OwnPages`.
     var name = ""
     /// What the page's own dialogs said since the last answer, told to Claude with the next
@@ -240,8 +251,41 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate {
         // Sites see Safari, as they do in the Owner's Safari: some refuse an app's own web view
         // (Google's sign-in, for one).
         w.customUserAgent = Self.safariUserAgent
+        holderWindow = Self.holder(for: w)
         web = w
         return w
+    }
+
+    /// A window for the view that never comes on screen: far off every screen, see-through,
+    /// never taking the mouse or the keyboard, in no window list, behind every other window, never
+    /// brought forward (Constitution IV). Without a window WebKit counts every page hidden and
+    /// holds back its animation frames, so pages that draw themselves on one never appear
+    /// (Chase's sign-in steps, 2026-11-22: blank, its components never started); and an
+    /// off-screen window would count as covered, so WebKit's check for that is off for this view
+    /// (its own setting, as Safari has for its tabs; no public name). Spec 005 FR-467.
+    static func holder(for view: WKWebView) -> NSWindow {
+        let window = NSWindow(
+            contentRect: NSRect(x: -30_000, y: -30_000, width: view.frame.width, height: view.frame.height),
+            styleMask: [.borderless], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        window.alphaValue = 0
+        window.ignoresMouseEvents = true
+        window.isExcludedFromWindowsMenu = true
+        window.sharingType = .none  // never listed by screen sharing or recording
+        window.hidesOnDeactivate = false
+        window.collectionBehavior = [.transient, .ignoresCycle, .fullScreenNone]
+        window.level = NSWindow.Level(rawValue: NSWindow.Level.normal.rawValue - 1)
+        window.contentView = view
+        // Called directly: key-value coding has no such key and throws (2026-11-22, a hang in the
+        // tests). Only the window ordered in with this off makes the page visible (tried: no
+        // window, a window not ordered in, and the check left on all leave it hidden).
+        let occlusion = Selector(("_setWindowOcclusionDetectionEnabled:"))
+        if let method = class_getInstanceMethod(Swift.type(of: view), occlusion) {
+            typealias Setter = @convention(c) (AnyObject, Selector, Bool) -> Void
+            unsafeBitCast(method_getImplementation(method), to: Setter.self)(view, occlusion, false)
+        }
+        window.orderBack(nil)
+        return window
     }
 
     /// The window a page is told it is in, in the screen's coordinates (origin at the bottom
@@ -435,6 +479,9 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate {
         web?.navigationDelegate = nil
         web?.uiDelegate = nil
         web = nil
+        holderWindow?.orderOut(nil)
+        holderWindow?.contentView = nil
+        holderWindow = nil
         dialogs = []
         finished?.resume(returning: false)
         finished = nil

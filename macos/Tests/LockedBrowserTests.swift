@@ -1,6 +1,7 @@
 import AppKit
 import Foundation
 import Testing
+import WebKit
 
 @testable import Latchkey
 
@@ -70,7 +71,9 @@ import Testing
     /// real"). Now it is told of a browser window as big as the page plus a toolbar, at the top
     /// left of the screen, and nothing comes on screen.
     @Test func thePageIsInABrowserSizedWindowThatNeverShows() async throws {
-        let shownBefore = NSApp.windows.filter(\.isVisible).count
+        // Seen: ordered in and not see-through (FR-467's window is ordered in, but see-through).
+        let seen = { NSApp.windows.filter { $0.isVisible && $0.alphaValue > 0 }.count }
+        let shownBefore = seen()
         let b = LockedBrowser()
         defer { b.discard() }
         _ = try await b.open(html: "<p>Hi</p>", base: base)
@@ -87,7 +90,7 @@ import Testing
         #expect(n.count == 6 && n[0] == n[2] && n[1] == n[3] + 90, "\(n)")
         #expect(n.count == 6 && n[5] >= 0, "on the screen, below its top: \(n)")
         #expect(try await b.run("String(document.hasFocus())") == "false", "never in front")
-        #expect(NSApp.windows.filter(\.isVisible).count == shownBefore, "nothing on screen")
+        #expect(seen() == shownBefore, "nothing on screen")
     }
 
     /// Live 2026-11-22: "return JSON.stringify(…)" without await failed with "Return statements
@@ -184,6 +187,26 @@ import Testing
         let after = try await b.read(offset: 0)
         #expect(after.elements.first { $0.label == "Yes" }?.state == "pressed")
         #expect(!PageScripts.unchanged(before, after), "the toggle's change is a change")
+    }
+
+    /// Chase (2026-11-22, 0.8.226): a page in Latchkey's own browser counted as hidden and got
+    /// no animation frames, so components that start on one never appeared. Now it is visible
+    /// and gets them, from a window that is never on any screen and takes no input.
+    @Test func pagesAreVisibleAndGetAnimationFramesFromAWindowNeverOnScreen() async throws {
+        let b = LockedBrowser()
+        defer { b.discard() }
+        _ = try await b.open(html: "<p>hi</p>", base: base)
+        let raf = try await b.run(
+            "return await new Promise(r => { const t = setTimeout(() => r('timeout'), 3000); requestAnimationFrame(() => { clearTimeout(t); r('raf'); }); })"
+        )
+        #expect(raf == "raf")
+        #expect(try await b.run("document.visibilityState") == "visible")
+        let windows = NSApplication.shared.windows.filter { $0.contentView is WKWebView }
+        #expect(!windows.isEmpty)
+        for w in windows {
+            #expect(w.alphaValue == 0 && w.ignoresMouseEvents && !w.canBecomeKey)
+            #expect(!NSScreen.screens.contains { $0.frame.intersects(w.frame) }, "never on a screen")
+        }
     }
 
     @Test func theWindowSitsAtTheTopLeftOfTheFreeArea() {

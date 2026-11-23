@@ -304,6 +304,11 @@ phone, Claude can't check a reservation in the Owner's account or fill in a form
   when the page's own script keeps the menu from opening (GitHub's two-factor page, 2026-11-22:
   "More options" didn't open and its "SMS Code" link was never listed; its list is the second
   kind, hidden by the page's style).
+- **FR-467** A page in Latchkey's own browser shall count as visible and get animation frames, as
+  a page in a Safari window does, while nothing comes on screen: its window is far off every
+  screen, see-through, takes no mouse or keyboard, is in no window list, behind every other
+  window, and never brought forward (Chase's sign-in, 2026-11-22: with the page hidden its
+  components never started and its code step was blank).
 - **FR-466** Controls inside a page's open shadow roots (web components) shall be listed, acted
   on, and typed into like any other, in the page's order (Etsy's sign-in, 2026-11-22: its email
   and password fields were never listed).

@@ -270,6 +270,8 @@ final class MessagesStore: @unchecked Sendable {
         /// Later messages in the same conversation on the same side with the same text: the window
         /// shows them below this one.
         var laterSame: Int
+        /// Earlier ones like that: the window shows them above it.
+        var earlierSame: Int = 0
         /// The Mac owner's current tapback on it.
         var myReaction: Reaction.Kind?
     }
@@ -316,6 +318,13 @@ final class MessagesStore: @unchecked Sendable {
                 limit: 500, titles: [:], keep: { Self.clean($0) == loc.text })
         }
         loc.laterSame = later.count
+        let earlier = try locked {
+            try messageRows(
+                where: "j.chat_id = ? AND m.is_from_me = ? AND \(Self.seconds("m.date")) < ?",
+                bind: [.int(chat), .int(loc.fromMe ? 1 : 0), .double(loc.date.timeIntervalSinceReferenceDate)],
+                limit: 500, titles: [:], keep: { Self.clean($0) == loc.text })
+        }
+        loc.earlierSame = earlier.count
         return loc
     }
 

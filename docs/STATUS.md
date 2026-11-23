@@ -14,7 +14,7 @@ with the installed version; SCHEDULED waits for a state only Toni can produce.
 | Condition (Toni's words) | Status | Evidence |
 |---|---|---|
 | Citi, fresh sign-in, Mac unlocked, background | VERIFIED | 0.8.218, 10:17 2026-11-22, Latchkey's own browser, dashboard shown (old one-call tool) |
-| Citi, fresh sign-in, Mac locked, background | NOT VERIFIED | 0.8.219, 10:36: Citi ended the sign-in at its code step (old tool); not yet run with logins_fill; scheduled for the codes experiment |
+| Citi, fresh sign-in, Mac locked, background | VERIFIED | 0.8.226, 16:55–17:01 2026-11-22, Mac locked since 15:22, Latchkey's own browser, fresh Claude Code sessions: all three ways of typing the texted code reached the Citibank Account Dashboard |
 | Citi, already signed in, Mac locked | VERIFIED | 0.8.219, 10:2x 2026-11-22, the dashboard opened with Latchkey's kept sign-in |
 | GitHub, fresh sign-in, Mac locked, with logins_fill and a texted code | VERIFIED | 0.8.221, 12:09 2026-11-22, fresh Claude Code session, dashboard shown |
 | Texted code deleted after use | VERIFIED | 0.8.222, 12:52 2026-11-22, at unlock; gone from its conversation in chat.db |
@@ -37,13 +37,20 @@ agent's words.
 | Nike (email) | locked 14:29–14:35 | VERIFIED | VERIFIED | VERIFIED |
 | PayPal (text) | locked 14:35–14:40 | no code asked | VERIFIED | no code asked |
 | Airbnb (text) | locked/unlocked 15:00–15:05 | VERIFIED | VERIFIED | VERIFIED (2nd code passed without the check) |
-| Best Buy (email) | locked/unlocked 14:45–14:57 | VERIFIED (40 calls) | VERIFIED | NOT VERIFIED: Best Buy's "Please wait" check sent it home |
-| Uber (text, 4 boxes) | locked 14:40–14:45 | NOT VERIFIED | NOT VERIFIED | NOT VERIFIED (got in by password) |
-| Etsy | unlocked 14:57–15:00 | NOT VERIFIED: fields in shadow roots not listed | same | same |
-| Amazon | unlocked 14:01–14:04 | NOT VERIFIED: "I am human" check before the form | same | same |
+| Best Buy (email) | locked/unlocked 14:45–15:42 | VERIFIED (40 calls) | VERIFIED | VERIFIED (0.8.224; the first try, on 0.8.223, was sent home by its "Please wait" check) |
+| Uber (text, 4 boxes) | locked 16:14–16:21 | VERIFIED (0.8.225) | VERIFIED (0.8.225) | NOT VERIFIED: after about 9 sign-ins Uber refused texts and offered only WhatsApp |
+| Etsy (email) | locked 16:50–16:55 | VERIFIED (0.8.226) | VERIFIED (0.8.226) | VERIFIED (0.8.226; a stale code refused first) |
+| Amazon | unlocked and locked | NOT VERIFIED: its "I am human" box (before the form, or after the code), never ticked | same | same |
+| Citi (bank, text) | locked 16:55–17:01 | VERIFIED (0.8.226) | VERIFIED (0.8.226) | VERIFIED (0.8.226) |
+| Chase (bank) | locked 17:01–17:10 | NOT VERIFIED: its code step is blank: the page counted as hidden, so its components never started (fix in progress) | same | same |
 | IKEA, Walmart, Target | unlocked | password only, no code asked: signed in all 9 runs | | |
 
-Fixed after it, in the next install: Etsy's fields in shadow roots, Uber's "1 of 4" boxes and
+Comparison: all three ways are as reliable as each other once the page works; every failure was
+the page (shadow roots, code boxes, hidden menus, focus-moving widgets, hidden pages) or a site's
+bot wall. Way 2 uses the fewest calls (Citi 9 against 17 and 15) and Claude never sees the code;
+way 3 refused a stale code twice (Etsy, Airbnb), costing a retry.
+
+Fixed during it (0.8.224 to 0.8.226): Etsy's fields in shadow roots, Uber's "1 of 4" boxes and
 widgets that move the focus, GitHub's real "More options" list, a toggle's state (Amazon's
 returns). Two Uber code texts couldn't be deleted (the window didn't show them); the next
 failure says why.

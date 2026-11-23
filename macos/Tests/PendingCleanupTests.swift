@@ -65,6 +65,21 @@ import Testing
 }
 
 /// Spec 002 FR-180: messages_delete, through the cleanup, for a message Messages has.
+/// Two '[Uber] Your code' texts with the same text, 2026-11-22: the window shows both, so the one
+/// to delete is told by how many like it come later.
+@Suite struct SameTextPickTests {
+    @Test func theOnlyOneOrTheOneWithAsManyBelowItAsComeLater() {
+        #expect(CodeTextWindow.pick([("a", 10)], laterSame: 0, earlierSame: 0) == "a")
+        #expect(CodeTextWindow.pick([("a", 10)], laterSame: 0, earlierSame: 3) == "a", "older ones scrolled away")
+        #expect(CodeTextWindow.pick([("a", 10)], laterSame: 1, earlierSame: 0) == nil, "a later one isn't shown")
+        let two = [("lower", CGFloat(200)), ("upper", CGFloat(100))]
+        #expect(CodeTextWindow.pick(two, laterSame: 0, earlierSame: 1) == "lower", "the newest is the bottom one")
+        #expect(CodeTextWindow.pick(two, laterSame: 1, earlierSame: 0) == "upper")
+        #expect(CodeTextWindow.pick(two, laterSame: 1, earlierSame: 1) == nil, "one of three isn't shown: unsure")
+        #expect(CodeTextWindow.pick([(String, CGFloat)](), laterSame: 0, earlierSame: 0) == nil)
+    }
+}
+
 @Suite struct MessagesDeleteTests {
     @Test func deletesTheMessageClaudeNames() async throws {
         let db = try MessagesFixture.make()
