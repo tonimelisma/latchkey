@@ -587,7 +587,8 @@ after the app was quit.
    `MAC_CERTIFICATE_P12`/`MAC_CERTIFICATE_PASSWORD`, `MAC_DEVELOPMENT_TEAM`; the environments
    `release` and `production` deploy from `main` only (security review). Open: the first signed
    release installed on the Mac once (it ran 0.8.226; the Mac's updater was never set up), then
-   the next release arriving by itself. To confirm with Toni: hourly checks, building in CI.
+   the next release arriving by itself. To confirm with Toni: building in CI. Hourly checks confirmed (2026-11-23); switch to daily
+   (`SUScheduledCheckInterval` 86400) before Latchkey is announced to other people.
    Afterwards: remove the Mac's updater scripts (`macos/scripts/auto-update.sh`,
    `updater-setup.sh`), and say in README.md that Latchkey updates itself.
 
