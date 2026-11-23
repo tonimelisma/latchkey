@@ -83,7 +83,7 @@ enum BrowserCapability {
                         // FR-455: a page that is a Safari tab of Claude's loads the address there.
                         if let s = Asked.safari, let n = Asked.safariName {
                             let p = try await s.load(url)
-                            Asked.opened?.name = n
+                            if let opened = Asked.opened { opened.name = n }
                             await MainActor.run { own.noteAddress(n, p.url) }
                             return await safariAnswer(offset > 0 ? try await s.read(offset: offset) : p, n, s)
                         }
@@ -100,7 +100,7 @@ enum BrowserCapability {
                                     let n = try await MainActor.run {
                                         try own.adopt(s, address: p.url, name: named?.lowercased())
                                     }
-                                    Asked.opened?.name = n
+                                    if let opened = Asked.opened { opened.name = n }
                                     return await safariAnswer(offset > 0 ? try await s.read(offset: offset) : p, n, s)
                                 }
                             } catch {
@@ -111,7 +111,7 @@ enum BrowserCapability {
                                 "Safari has no window open, so this page is in Latchkey's own browser instead, without the owner's sign-ins (no Safari window is opened on the owner's screen).\n"
                         }
                         let l = try await MainActor.run { try named.map { try own.page($0) } ?? own.make() }
-                        Asked.opened?.name = await l.name
+                        if let opened = Asked.opened { opened.name = await l.name }
                         let opened: PageScripts.Page
                         do { opened = try await l.open(url) } catch {
                             if named == nil { _ = await own.close(l.name) }
