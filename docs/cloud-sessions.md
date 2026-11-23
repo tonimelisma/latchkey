@@ -69,6 +69,13 @@ applies, except:
   values they read with `::add-mask::`, and the secrets are hidden by GitHub). No workflow and no
   identity ever reaches an installed Linux server: it only pulls signed Linux releases.
   Secrets are the owner's (CLAUDE.md, "Owner setup"); a session never handles a secret's value.
+- Mac app without the Mac: every push runs the app's lint and build (gating) and its unit tests
+  (reported, not gating) on GitHub's macOS runner, the `mac` job of `ci.yml` (2026-11-23). The
+  runner is macOS 26 and slower: about 30 tests miss their timing limits there on main too, so
+  compare a branch's failed tests (the job prints each with why, and any crash report) with
+  main's. It runs no live check; those still need the Mac.
+- Feedback reports can't be moved to `Feedback/Handled` through `shell_run`: Shell's fence denies
+  writes to Latchkey's own folder even when declared (spec 004 FR-319); list the moves for Toni.
 - Mac app: build and test on the Mac through Latchkey's `shell_run` (Toni's MacBook in
   `machines`), from the pushed branch in the command's scratch folder (deleted or moved to the
   Trash when it ends), with `uses: ["open"]` (the tests run in an app; spec 004 FR-335):
