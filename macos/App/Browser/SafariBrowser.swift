@@ -391,7 +391,8 @@ actor SafariBrowser {
                 } catch Failure.tabGone {
                     // The script ran and sent the tab elsewhere (location.href = …): said so,
                     // never as if nothing was done.
-                    return "The script ran and sent the tab to another page before it finished, so Latchkey no longer knows the tab: list the tabs with browser_read tabs and name it again."
+                    return
+                        "The script ran and sent the tab to another page before it finished, so Latchkey no longer knows the tab: list the tabs with browser_read tabs and name it again."
                 }
                 switch r {
                 case "running": continue
