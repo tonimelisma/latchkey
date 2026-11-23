@@ -8,7 +8,8 @@ The Mac app's Settings gets "Share problem reports with Latchkey's developer" be
 capabilities, Off by default, with the explanation of FR-1402 shown before it takes effect. The
 app sends the account's choice to the relay in its state message (a new field, contract
 `contracts/feedback-intake.md`), and the relay keeps one flag per account. A relay whose operator
-turned sharing off says so in its welcome, and the app shows the setting as unavailable.
+added the block (FR-1415a) says so in its welcome, and the app says this relay doesn't forward
+problem reports.
 
 ## D2. Asking Claude (FR-1401, FR-1405, FR-1406)
 
@@ -26,12 +27,13 @@ A sender goroutine posts each to the intake with backoff, deletes it on acceptan
 it after 7 days with a log line. The relay's own report table and the delivery to the Mac
 (spec 001 FR-691 to FR-693) are removed; existing rows are deleted at upgrade.
 
-Operator settings (environment): `FEEDBACK_INTAKE_URL`, `FEEDBACK_DEVELOPER_KEY` (base64 public
-key), `FEEDBACK_SHARING` (`on` by default, `off` to disable the relay-wide).
+Operator settings (environment): `FEEDBACK_INTAKE_URL` and `FEEDBACK_DEVELOPER_KEY` (base64
+public key), both defaulting to Latchkey's developer (FR-1415); `FEEDBACK_BLOCK=1` adds the
+operator's block (FR-1415a).
 
 ## D4. The intake (FR-1420 to FR-1425)
 
-A Go program in `intake/` (proposed layout), SQLite, one container, the relay's tooling (lint,
+A Go program in `intake/` (its own module; `research.md`, "repository layout"), SQLite, one container, the relay's tooling (lint,
 security checks, tests, signed image through a workflow like `relay-image.yml`):
 
 - `POST /v1/reports`: body = sealed report; headers carry the proof-of-work nonce and hour.
@@ -40,6 +42,20 @@ security checks, tests, signed image through a workflow like `relay-image.yml`):
 - `GET /v1/reports?state=open`, `GET /v1/reports/{id}`, `POST /v1/reports/{id}/disposition`:
   only with the developer's token (bearer); sealed bytes out, dispositions in.
 - Disposition and retention per FR-1424 (open question).
+
+## D4a. Names and hosting (FR-1426)
+
+Order matters, so no relay is ever unreachable and no old name sends reports to a relay:
+1. The hosted relay gets its new, hard-to-guess name (a DNS record, its certificate, its own
+   settings; in the private repository that holds its deployment), and both names answer for a
+   while.
+2. Everything that points at the relay moves to the new name: Toni's Claude connector, the Mac
+   app's relay address (`Local.xcconfig`, never committed), purkki's Linux program.
+3. The latchkey name moves to the intake on pilvi (its container beside the relay's, behind the
+   same reverse proxy, with its own certificate).
+4. Only then does the relays' default intake address, the latchkey name, go into this repository.
+
+Toni's steps: the DNS records, and changing the connector's address in Claude's settings.
 
 ## D5. The developer's agent (FR-1430, FR-1431)
 
