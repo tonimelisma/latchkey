@@ -29,6 +29,9 @@ jobs:
           echo "fb55d430229e0c00c4c354e682f2ac86f413f28468fbf83cd8b85d0a703a0fdb  $RUNNER_TEMP/xcodegen.zip" | shasum -a 256 -c
           unzip -q "$RUNNER_TEMP/xcodegen.zip" -d "$RUNNER_TEMP/xcodegen"
           echo "$RUNNER_TEMP/xcodegen/xcodegen/bin" >>"$GITHUB_PATH"
+      - name: Lint (swift format, as make lint)
+        working-directory: macos
+        run: swift format lint --strict -r App Shared Helper Tests
       - name: Build for testing (signed ad hoc)
         working-directory: macos
         run: |
