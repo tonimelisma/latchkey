@@ -91,7 +91,7 @@ relay_update() {
   case $rev in *[!0-9a-f]* | '') once relay.problem "norev $digest" "relay: $digest names no commit; not used"; return 0 ;; esac
   [ "${#rev}" = 40 ] || { once relay.problem "norev $digest" "relay: $digest names no commit; not used"; return 0; }
   tag=$(printf '%s' "$rev" | cut -c1-12)
-  docker tag "$RELAY@$digest" "latchkey-relay:$tag"
+  docker tag "$RELAY@$digest" "latchkey-relay:$tag" || return 0
   prev=$(docker inspect --format '{{.Config.Image}}' latchkey-relay 2>/dev/null || true)
   prev=${prev#latchkey-relay:}
   case $prev in *[!0-9a-f]*) prev='' ;; esac

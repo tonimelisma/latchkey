@@ -53,7 +53,7 @@ case $APP_BUCKETS in *[!a-z0-9._,-]* | ,* | *, | *,,*) echo "FAIL: --buckets mus
 POOL=github
 PROVIDER=github-actions
 OWNER_LOGIN=tonimelisma
-LATCHKEY_REPO=tonimelisma/latchkey
+THIS_REPO=tonimelisma/latchkey
 HN_REPO=tonimelisma/hackernews
 INFRA_SA=latchkey-infra@$PROJECT.iam.gserviceaccount.com
 HN_SA=hackernews-admin@$PROJECT.iam.gserviceaccount.com
@@ -109,7 +109,7 @@ echo "• the identity pool and GitHub's provider"
 gq iam workload-identity-pools describe "$POOL" --location global ||
   g iam workload-identity-pools create "$POOL" --location global --display-name "GitHub Actions" \
     --description "GitHub Actions jobs of the owner's repositories on main (deploy/gcp-wif-setup.sh)" >/dev/null
-CONDITION="assertion.repository_owner == '$OWNER_LOGIN' && assertion.repository in ['$LATCHKEY_REPO', '$HN_REPO'] && assertion.ref == 'refs/heads/main'"
+CONDITION="assertion.repository_owner == '$OWNER_LOGIN' && assertion.repository in ['$THIS_REPO', '$HN_REPO'] && assertion.ref == 'refs/heads/main'"
 MAPPING="google.subject=assertion.sub,attribute.repository=assertion.repository,attribute.ref=assertion.ref,attribute.repository_environment=assertion.repository + '@' + ('environment' in assertion ? assertion.environment : '')"
 if gq iam workload-identity-pools providers describe "$PROVIDER" --location global --workload-identity-pool "$POOL"; then
   g iam workload-identity-pools providers update-oidc "$PROVIDER" --location global --workload-identity-pool "$POOL" \
@@ -131,7 +131,7 @@ gq iam service-accounts describe "$HN_SA" ||
 sleep 5
 
 echo "• who may act as them"
-sa_role "$INFRA_SA" "$PRINCIPALS/attribute.repository_environment/$LATCHKEY_REPO@infra" roles/iam.workloadIdentityUser
+sa_role "$INFRA_SA" "$PRINCIPALS/attribute.repository_environment/$THIS_REPO@infra" roles/iam.workloadIdentityUser
 sa_role "$HN_SA" "$PRINCIPALS/attribute.repository/$HN_REPO" roles/iam.workloadIdentityUser
 
 echo "• latchkey-infra's roles"
