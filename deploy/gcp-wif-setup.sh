@@ -109,9 +109,18 @@ echo "• the identity pool and GitHub's provider"
 gq iam workload-identity-pools describe "$POOL" --location global ||
   g iam workload-identity-pools create "$POOL" --location global --display-name "GitHub Actions" \
     --description "GitHub Actions jobs of the owner's repositories on main (deploy/gcp-wif-setup.sh)" >/dev/null
-CONDITION="assertion.repository_owner == '$OWNER_LOGIN' && assertion.repository in ['$THIS_REPO', '$HN_REPO'] && assertion.ref == 'refs/heads/main'"
+# Only these events: pull_request_target and workflow_run also run on main but can run a fork's
+# pull request code, which must never become one of these accounts (security review, 2026-11-23).
+CONDITION="assertion.repository_owner == '$OWNER_LOGIN' && assertion.repository in ['$THIS_REPO', '$HN_REPO'] && assertion.ref == 'refs/heads/main' && assertion.event_name in ['push', 'schedule', 'workflow_dispatch', 'repository_dispatch']"
 MAPPING="google.subject=assertion.sub,attribute.repository=assertion.repository,attribute.ref=assertion.ref,attribute.repository_environment=assertion.repository + '@' + ('environment' in assertion ? assertion.environment : '')"
-if gq iam workload-identity-pools providers describe "$PROVIDER" --location global --workload-identity-pool "$POOL"; then
+# Rewritten only when it differs: every write is a "cloud project changed" alert.
+if g iam workload-identity-pools providers describe "$PROVIDER" --location global --workload-identity-pool "$POOL" \
+  --format=json >"$tmp/provider.json" 2>/dev/null; then
+  python3 -I -c 'import json,sys
+p=json.load(open(sys.argv[1])); m=dict(kv.split("=",1) for kv in sys.argv[3].split(",attribute.") if kv)
+m={(k if k.startswith("google.") else "attribute."+k):v for k,v in m.items()}
+sys.exit(0 if p.get("attributeCondition")==sys.argv[2] and p.get("attributeMapping")==m else 1)' \
+    "$tmp/provider.json" "$CONDITION" "$MAPPING" ||
   g iam workload-identity-pools providers update-oidc "$PROVIDER" --location global --workload-identity-pool "$POOL" \
     --issuer-uri https://token.actions.githubusercontent.com --attribute-mapping "$MAPPING" --attribute-condition "$CONDITION" >/dev/null
 else
@@ -151,7 +160,24 @@ done
 
 echo "• hackernews-admin's roles"
 project_role "serviceAccount:$HN_SA" roles/compute.viewer
-project_role "serviceAccount:$HN_SA" roles/iap.tunnelResourceAccessor "expression=destination.port == 22,title=ssh-only,description=SSH through IAP only"
+# IAP's tunnel to this VM's SSH port only, not to any other VM the project may get: the condition
+# names the VM's internal address (security review, 2026-11-23).
+VM_IP=$(g compute instances describe "$VM" --zone "$ZONE" --format='value(networkInterfaces[0].networkIP)')
+case $VM_IP in '' | *[!0-9.]*) echo "FAIL: couldn't read the VM's internal address" >&2; exit 1 ;; esac
+TUNNEL="destination.ip == '$VM_IP' && destination.port == 22"
+g projects get-iam-policy "$PROJECT" --format=json >"$tmp/project.json"
+if ! python3 -I -c 'import json,sys
+p=json.load(open(sys.argv[1]))
+sys.exit(0 if any(b.get("role")=="roles/iap.tunnelResourceAccessor" and sys.argv[2] in b.get("members",[]) and (b.get("condition") or {}).get("expression")==sys.argv[3] for b in p.get("bindings",[])) else 1)' \
+  "$tmp/project.json" "serviceAccount:$HN_SA" "$TUNNEL"; then
+  # An earlier, wider grant (any VM's port 22) goes first.
+  if has_binding "$tmp/project.json" "serviceAccount:$HN_SA" roles/iap.tunnelResourceAccessor; then
+    g projects remove-iam-policy-binding "$PROJECT" --member "serviceAccount:$HN_SA" --role roles/iap.tunnelResourceAccessor --all >/dev/null
+  fi
+  g projects add-iam-policy-binding "$PROJECT" --member "serviceAccount:$HN_SA" --role roles/iap.tunnelResourceAccessor \
+    --condition "expression=$TUNNEL,title=ssh-to-$VM,description=SSH through IAP to this VM only" >/dev/null
+  echo "  - roles/iap.tunnelResourceAccessor (this VM's SSH only) for hackernews-admin"
+fi
 vm_role "serviceAccount:$HN_SA" roles/compute.osAdminLogin
 sa_role "$VM_SA" "serviceAccount:$HN_SA" roles/iam.serviceAccountUser
 

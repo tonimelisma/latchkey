@@ -21,6 +21,10 @@
 *.mobileprovision
 *.dmg
 
+# google-github-actions/auth's credentials file, written into the checkout during an infra run:
+# deploy/deploy.sh refuses a checkout with untracked files, so without this every configure failed.
+gha-creds-*.json
+
 # Security scanner reports at the top of the checkout (they quote findings; relay/Makefile keeps
 # them out of scans too). Anchored: .claude/claude-security-guidance.md is a tracked file.
 /CLAUDE-SECURITY-*

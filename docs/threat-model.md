@@ -211,11 +211,14 @@ What reaches the server:
   main that passes the workflow (and its "production" approval, when the owner sets one).
 - Two automation identities may also reach the server, both through Workload Identity
   Federation (GitHub's short-lived identity token, no stored key; `deploy/gcp-wif-setup.sh`),
-  and only for jobs of Toni's repositories on main: `latchkey-infra` (this repository's infra
+  and only for jobs of Toni's repositories on main started by a push, a schedule or a dispatch
+  (never `pull_request_target` or `workflow_run`, which also run on main but can run a fork's
+  pull request code): `latchkey-infra` (this repository's infra
   workflow in its environment "infra": the relay's settings and `deploy/harden.sh`, with project
   IAM admin among its roles, so whoever can run that workflow on main is as strong as the
   project's owner; the environment's approval rule is the guard) and `hackernews-admin`
-  (hackernews's admin jobs: SSH through IAP to this VM, OS Login admin on it alone). Their IAP
+  (hackernews's admin jobs: SSH through IAP to this VM's port 22 alone, by its internal address,
+  OS Login admin on it alone). Their IAP
   use and sessions are expected, so the alert and the sentinel count them as Toni's; every cloud
   change they make still emails Toni ("cloud project changed"). Its compose
   file is in this repository, so a push to hackernews changes the app, never its limits: no

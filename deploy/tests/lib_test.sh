@@ -378,5 +378,16 @@ grep -q '^-w /opt/latchkey -p wa -k lk_relay$' "$root/deploy/server/host/audit.r
 if grep -o -- '-k [^ ]*' "$root/deploy/server/host/audit.rules" | grep -v -- '-k lk_' | grep -q .; then bad "audit keys start with lk_"; else ok "audit keys start with lk_"; fi
 python3 -c 'import json,sys; json.load(open(sys.argv[1]))' "$root/deploy/server/host/docker-daemon.json" && ok "Docker settings are JSON" || bad "Docker settings are JSON"
 
+# --- Workload Identity Federation (deploy/gcp-wif-setup.sh; security review 2026-11-23) ---
+wif=$root/deploy/gcp-wif-setup.sh
+grep -q "assertion.event_name in \['push', 'schedule', 'workflow_dispatch', 'repository_dispatch'\]" "$wif" &&
+  ok "GitHub's token counts only for push, schedule and dispatch runs, never a fork's pull request" ||
+  bad "GitHub's token counts only for push, schedule and dispatch runs, never a fork's pull request"
+grep -q "TUNNEL=\"destination.ip == '\$VM_IP' && destination.port == 22\"" "$wif" &&
+  ok "hackernews-admin's tunnel reaches only this VM's SSH" || bad "hackernews-admin's tunnel reaches only this VM's SSH"
+grep -qx 'gha-creds-\*.json' "$root/.gitignore" &&
+  ok "the auth action's credentials file isn't an untracked change (deploy.sh would refuse the checkout)" ||
+  bad "the auth action's credentials file isn't an untracked change"
+
 [ "$fails" = 0 ] && echo "all passed" || echo "$fails failed"
 [ "$fails" = 0 ]
