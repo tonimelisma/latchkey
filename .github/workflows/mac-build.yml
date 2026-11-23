@@ -1,0 +1,48 @@
+# Builds the Mac app on macOS for every change to macos/ (pull requests and main), so Swift that
+# was written in a cloud session (no Swift there) is compiled before it merges, and runs the
+# update tests (spec 001 FR-072 to FR-072d). Signed ad hoc, as the Mac's own test runs are; the
+# full test suite still runs on the Mac (docs/cloud-sessions.md). No secrets, read-only token.
+name: mac build
+on:
+  push:
+    branches: [main]
+    paths: ["macos/**", ".github/workflows/mac-build.yml"]
+  pull_request:
+    paths: ["macos/**", ".github/workflows/mac-build.yml"]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: mac-build-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  build:
+    runs-on: macos-26
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: XcodeGen, pinned by checksum
+        run: |
+          curl -sSfL -o "$RUNNER_TEMP/xcodegen.zip" https://github.com/yonaskolb/XcodeGen/releases/download/2.45.0/xcodegen.zip
+          echo "fb55d430229e0c00c4c354e682f2ac86f413f28468fbf83cd8b85d0a703a0fdb  $RUNNER_TEMP/xcodegen.zip" | shasum -a 256 -c
+          unzip -q "$RUNNER_TEMP/xcodegen.zip" -d "$RUNNER_TEMP/xcodegen"
+          echo "$RUNNER_TEMP/xcodegen/xcodegen/bin" >>"$GITHUB_PATH"
+      - name: Build for testing (signed ad hoc)
+        working-directory: macos
+        run: |
+          set -o pipefail
+          xcodebuild -version
+          xcodegen generate --quiet
+          xcodebuild -project Latchkey.xcodeproj -scheme Latchkey -destination 'platform=macOS' \
+            -derivedDataPath "$RUNNER_TEMP/dd" CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM= \
+            build-for-testing -quiet
+      - name: Update tests
+        working-directory: macos
+        run: |
+          set -o pipefail
+          xcodebuild -project Latchkey.xcodeproj -scheme Latchkey -destination 'platform=macOS' \
+            -derivedDataPath "$RUNNER_TEMP/dd" CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM= \
+            -only-testing:LatchkeyTests/UpdateGateTests -only-testing:LatchkeyTests/ReleaseCheckTests \
+            test-without-building -quiet

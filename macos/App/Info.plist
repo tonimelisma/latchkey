@@ -54,6 +54,10 @@
 	<string>$(LATCHKEY_DEFAULT_RELAY_HOST)</string>
 	<key>SUEnableAutomaticChecks</key>
 	<true/>
+	<key>SUAutomaticallyUpdate</key>
+	<true/>
+	<key>SUScheduledCheckInterval</key>
+	<integer>3600</integer>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>
