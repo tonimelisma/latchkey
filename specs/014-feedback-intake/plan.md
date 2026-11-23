@@ -39,9 +39,10 @@ security checks, tests, signed image through a workflow like `relay-image.yml`):
 - `POST /v1/reports`: body = sealed report; headers carry the proof-of-work nonce and hour.
   Refuses bodies over 64 KB, a bad proof, a body that doesn't parse as an HPKE message of the
   expected suite, or a sender over its hourly limit. Answers 202 with the report's id.
-- `GET /v1/reports?state=open`, `GET /v1/reports/{id}`, `POST /v1/reports/{id}/disposition`:
-  only with the developer's token (bearer); sealed bytes out, dispositions in.
-- Disposition and retention per FR-1424 (open question).
+- `GET /v1/reports`, `GET /v1/reports/{id}`, `DELETE /v1/reports/{id}`: only with the
+  developer's token (bearer); sealed bytes out. The agent deletes a report once it is
+  dispositioned (FR-1424): the fix, its regression case, or the reason in the agent's reply is the
+  record, nothing stays in the intake.
 
 ## D4a. Names and hosting (FR-1426)
 

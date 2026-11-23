@@ -106,13 +106,13 @@ Toni because he is a user too. Other users' reports never reach the developer.
 - **FR-1421** The intake shall limit how many reports one sending address may deliver per hour.
 - **FR-1422** The intake shall never hold the developer's private key; it stores each encrypted
   report with the time it arrived.
-- **FR-1423** With the developer's token, the intake shall list open reports, give one, and take
-  a disposition: fixed (with the change and its regression case), duplicate (of which report),
-  expected, can't fix, or for the developer to decide.
-- **FR-1424** A report shall stay in the intake until it is dispositioned (Toni, 2026-11-23: "they
-  stay there until the dev agent dispositions them"). [NEEDS CLARIFICATION: at disposition,
-  delete the report and keep only its id, arrival time, disposition and change; or keep the
-  whole report for a time?]
+- **FR-1423** With the developer's token, the intake shall list open reports, give one, and
+  delete one once the developer's agent has dispositioned it (fixed, duplicate, expected, can't
+  fix).
+- **FR-1424** A report shall stay in the intake until it is dispositioned, then be deleted with
+  nothing kept: the repository's history (the fixing change and its regression case) is the
+  record (Toni, 2026-11-23: "they stay there until the dev agent dispositions them"; "Just delete
+  it. Git is the history").
 - **FR-1425** The intake shall be a program in this repository that a fork's developer can run
   for themselves.
 - **FR-1426** Latchkey's own intake shall answer at the easy-to-remember name (latchkey on Toni's
