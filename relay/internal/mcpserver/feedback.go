@@ -223,6 +223,14 @@ func (s *Server) sendDueReports(ctx context.Context) {
 			s.opts.Logger.Warn("report dropped: the intake didn't accept it within 7 days", "report", rep.ID, "tries", rep.Tries)
 			continue
 		}
+		// The Owner's choice is checked again right before sending, not only when the report was
+		// filed: sharing turned off meanwhile, or the sharing machine was removed, means the
+		// report never leaves (FR-1403; security review 2026-11-23).
+		if !s.sharing(s.machines(ctx, rep.UserID)) {
+			_ = s.store.ReportDone(ctx, rep.ID)
+			s.opts.Logger.Info("report dropped: the owner no longer shares", "report", rep.ID)
+			continue
+		}
 		hour := reports.Hour(s.opts.Now())
 		nonce := reports.Prove(rep.Sealed, hour, work)
 		req, err := http.NewRequestWithContext(ctx, http.MethodPost, strings.TrimRight(r.IntakeURL, "/")+"/v1/reports", bytes.NewReader(rep.Sealed))

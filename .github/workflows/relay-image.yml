@@ -1,4 +1,5 @@
-# Publishes the relay image to ghcr.io/tonimelisma/latchkey-relay whenever relay/ changes on main
+# Publishes the relay image to ghcr.io/tonimelisma/latchkey-relay (and the developer's intake for
+# problem reports, ghcr.io/tonimelisma/latchkey-intake, spec 014) whenever relay/ changes on main
 # (or on repository_dispatch "relay-image"), tagged with the commit and "latest", and signs it with
 # cosign, keyless: the signature names this workflow on main (GitHub's identity token, Sigstore's
 # certificate and transparency log). That is the production deploy: a host that verifies the
@@ -99,3 +100,31 @@ jobs:
             --certificate-oidc-issuer https://token.actions.githubusercontent.com \
             "ghcr.io/tonimelisma/latchkey-relay@$DIGEST" >/dev/null
           echo "Published and signed ghcr.io/tonimelisma/latchkey-relay@$DIGEST (${GITHUB_SHA::12}); hosts that verify the signature switch to it." >>"$GITHUB_STEP_SUMMARY"
+      # The developer's intake for problem reports (spec 014), from the same module and checks.
+      - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        id: intake
+        with:
+          context: relay
+          file: relay/Dockerfile.intake
+          platforms: linux/amd64,linux/arm64
+          push: true
+          provenance: mode=max
+          sbom: true
+          build-args: VERSION=${{ steps.version.outputs.short }}
+          labels: |
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+          tags: |
+            ghcr.io/tonimelisma/latchkey-intake:${{ github.sha }}
+            ghcr.io/tonimelisma/latchkey-intake:latest
+      - name: Sign the intake image (keyless) and check it
+        env:
+          DIGEST: ${{ steps.intake.outputs.digest }}
+        run: |
+          case $DIGEST in sha256:*) ;; *) echo "no digest from the intake build" >&2; exit 1 ;; esac
+          cosign sign --yes "ghcr.io/tonimelisma/latchkey-intake@$DIGEST"
+          cosign verify \
+            --certificate-identity "https://github.com/${{ github.repository }}/.github/workflows/relay-image.yml@refs/heads/main" \
+            --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+            "ghcr.io/tonimelisma/latchkey-intake@$DIGEST" >/dev/null
+          echo "Published and signed ghcr.io/tonimelisma/latchkey-intake@$DIGEST (${GITHUB_SHA::12})." >>"$GITHUB_STEP_SUMMARY"
