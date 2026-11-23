@@ -170,3 +170,26 @@ idle_verdict() {
   fi
   return 0
 }
+
+# release_to_install <commit> <main ref>: prints the version to install, x.y.z of the commit's
+# tag mac-<x.y.z> (made by CI, .github/workflows/mac-tag.yml), or says why not and fails: the
+# commit has no such tag (CI hasn't tagged it yet, or it changed no Mac code), isn't on main, or
+# isn't the newest release (installing it would take back a newer one).
+release_to_install() {
+  _tag=$(git tag --points-at "$1" --list 'mac-[0-9]*' --sort=-v:refname | head -1)
+  if [ -z "$_tag" ]; then
+    echo "install: this commit has no release tag mac-<x.y.z>. CI tags each change to the Mac app on main" >&2
+    echo "install: (the workflow \"mac tag\"); wait for it, or check out the newest tagged commit" >&2
+    return 1
+  fi
+  if ! git merge-base --is-ancestor "$1" "$2"; then
+    echo "install: $_tag isn't on main" >&2
+    return 1
+  fi
+  _newest=$(git tag --list 'mac-[0-9]*' --sort=-v:refname | head -1)
+  if [ "$_newest" != "$_tag" ]; then
+    echo "install: $_tag isn't the newest release ($_newest is); installing it would take back a newer one" >&2
+    return 1
+  fi
+  printf '%s\n' "${_tag#mac-}"
+}
