@@ -14,7 +14,3 @@ regexes = ['''^ory_rt_AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8\.3RoVBAJ3lVhnY
 [[allowlists]]
 description = "Spec 013 tests: RFC 6238's published test secret (\"12345678901234567890\" in base32)"
 regexes = ['''GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ''']
-
-[[allowlists]]
-description = "deploy/gcp-wif-setup.sh: a repository name (owner/name), not a key"
-regexes = ['''^tonimelisma/latchkey$''']

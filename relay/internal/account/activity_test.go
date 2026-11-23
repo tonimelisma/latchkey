@@ -56,7 +56,7 @@ func TestActivityPage(t *testing.T) {
 	u, _ := e.store.UserByEmail(ctx, "owner@example.com")
 	other, err := e.store.CreateUser(ctx, "other@example.com", e.clock.now())
 	require.NoError(t, err)
-	d, err := e.store.CreateDevice(ctx, store.NewDevice{UserID: u.ID, Name: "purkki", Kind: store.KindLinux, PublicKey: []byte("k")}, e.clock.now())
+	d, err := e.store.CreateDevice(ctx, store.NewDevice{UserID: u.ID, Name: "homeserver", Kind: store.KindLinux, PublicKey: []byte("k")}, e.clock.now())
 	require.NoError(t, err)
 
 	start := e.clock.now().Add(-24 * time.Hour)
@@ -94,7 +94,7 @@ func TestActivityPage(t *testing.T) {
 	assert.Contains(t, joined, "Machine connected")
 	assert.Contains(t, joined, "Signed in with a passkey")
 	assert.Contains(t, joined, "shell_check")
-	assert.Contains(t, joined, "purkki")
+	assert.Contains(t, joined, "homeserver")
 	assert.Contains(t, joined, `<time datetime="`)
 	assert.NotContains(t, joined, "operator only")
 	assert.NotContains(t, joined, "theirs_tool")

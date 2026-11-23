@@ -14,7 +14,7 @@ How the product works: [how-it-works.md](how-it-works.md).
 | Relay (Go) | `relay/` | `make test`, `make lint`, `make run`, `make claude-check`, `make mac-check` |
 | Linux server program (Go) | `linux/` | `make test`, `make lint`, `make test-linux` (every test on Debian with systemd in Docker), `make check` (end to end: relay, pretend Mac, the program installed in a container, a real MCP client); releases by `.github/workflows/linux-release.yml` |
 | Mac app and helper (Swift) | `macos/` | `make test`, `make lint`, `make run`, `make dmg`, `make install` (CI's newest release tag: build, install into Applications, start, and fail if the update lost the pairing; the Mac's updater runs it for each new tag), `scripts/readme-shots.sh` (redraws the app's pictures in docs/images) |
-| Hosted relay deployment | `deploy/` | new versions: `.github/workflows/relay-image.yml` and the server's own updater; configuration and hardening: `.github/workflows/infra.yml` (`deploy/deploy.sh`, `deploy/harden.sh`); one-time Google Cloud setup: `deploy/gcp-wif-setup.sh` |
+| Relay image | `.github/workflows/relay-image.yml` | publishes and signs `ghcr.io/tonimelisma/latchkey-relay` on every relay change on main; hosts that verify the signature pull it (the hosted relay's server is run outside this repository) |
 | Cleanup after merging | `scripts/` | `scripts/tidy.sh` (runs automatically after every push and at every session start from Claude Code; removes worktrees as soon as their work is merged); `scripts/loose-ends.sh` lists work not yet on main (checked when a Claude Code session starts and before each turn ends) |
 
 ## How this repo is organized (spec-driven)

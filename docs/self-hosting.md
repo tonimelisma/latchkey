@@ -201,9 +201,100 @@ Claude only connects over HTTPS. Pick one:
 - **The server is part of it.** Whoever is root on the relay's server holds its key file and
   database. Give the relay a server or network of its own, open only 80 and 443 to the
   internet, keep SSH behind a VPN or your cloud's tunnel, and turn on automatic security
-  updates. The hosted relay's setup is in `deploy/harden.sh` and docs/threat-model.md, "The
-  relay's server" (Google Cloud; the sentinel in `deploy/server/host/` works on any Ubuntu
-  server that can write to Cloud Logging).
+  updates.
+
+### Example: Docker Compose behind Caddy
+
+A locked-down setup with Caddy in front, both in one compose file. Put the relay's settings
+(`PUBLIC_URL`, the SMTP settings, `ALLOWED_EMAILS`, …; no `ACME_EMAIL`, Caddy does HTTPS) in
+`relay.env` next to it. The relay believes forwarded addresses only from the compose network's
+range, which only Caddy shares.
+
+```yaml
+services:
+  relay:
+    image: ghcr.io/tonimelisma/latchkey-relay:latest
+    restart: unless-stopped
+    env_file: relay.env
+    environment:
+      KEY_FILE: /keys/relay.key        # outside the data volume (see "The key file")
+      TRUSTED_PROXIES: 172.30.0.0/24   # the network below
+    volumes:
+      - latchkey-data:/data
+      - /srv/latchkey-key:/keys        # add :ro after the first start
+    networks: [front]
+    read_only: true                    # only /data, /keys and /tmp are writable
+    tmpfs:
+      - /tmp:size=16m,mode=1777        # SQLite's temporary files
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 160m
+    pids_limit: 200
+    logging:                           # at most 30 MB of container logs
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports: ["80:80", "443:443"]
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    networks: [front]
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m
+    cap_drop: [ALL]
+    cap_add: [NET_BIND_SERVICE]
+    security_opt:
+      - no-new-privileges:true
+networks:
+  front:
+    ipam:
+      config:
+        - subnet: 172.30.0.0/24
+volumes:
+  latchkey-data:
+  caddy-data:
+  caddy-config:
+```
+
+The key folder is made once, owned by the relay's user, and must be writable on the first
+start: the relay creates the key file itself and refuses to overwrite one that exists. Once the
+file is there you may mount the folder read-only (`/srv/latchkey-key:/keys:ro`).
+
+```sh
+sudo install -d -m 700 -o 65532 -g 65532 /srv/latchkey-key
+```
+
+The `Caddyfile`. Redirects carry one-time codes (the pairing code in `latchkey://paired?code=…`,
+OAuth authorization codes), so the access log leaves out the `Location` response header; it
+also drops the `Cookie` and `Authorization` request headers, which Caddy redacts by default,
+so that stays true if a global option ever turns the redaction off.
+
+```
+relay.example.com {
+	log {
+		output file /data/latchkey-access.log {
+			roll_size 10MiB
+			roll_keep_for 720h
+		}
+		format filter {
+			wrap json
+			fields {
+				resp_headers>Location delete
+				request>headers>Cookie delete
+				request>headers>Authorization delete
+			}
+		}
+	}
+	reverse_proxy relay:8080
+}
+```
 
 ## Terms and privacy policy
 
@@ -285,6 +376,16 @@ For a relay that's only yours, leave out every `SMTP_*` setting and set `SETUP_C
 docker pull ghcr.io/tonimelisma/latchkey-relay:latest
 docker rm -f latchkey-relay
 # run the same docker run command again
+```
+
+`latest` follows every relay release on main. Each image is signed with cosign, keyless, by the
+repository's image workflow; to check one before you run it:
+
+```sh
+cosign verify \
+  --certificate-identity https://github.com/tonimelisma/latchkey/.github/workflows/relay-image.yml@refs/heads/main \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  ghcr.io/tonimelisma/latchkey-relay:latest
 ```
 
 The database is migrated automatically on start. When a new version changes the database's
