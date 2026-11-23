@@ -19,19 +19,34 @@ VERSION=${VERSION:-$(git describe --tags --exact-match --match 'mac-[0-9]*' HEAD
   echo "package: this commit has no release tag mac-<x.y.z>; make install gives it one" >&2
   exit 1
 }
+# Sparkle compares the build number (CFBundleVersion): x*1000000 + y*1000 + z of x.y.z, so it
+# grows with every release (Updates.swift, UpdateGate.buildNumber, keeps the same rule).
+BUILD=$(printf '%s\n' "$VERSION" | awk -F. 'NF == 3 && $1 ~ /^[0-9]+$/ && $2 ~ /^[0-9]+$/ && $3 ~ /^[0-9]+$/ && $2 < 1000 && $3 < 1000 { printf "%d", $1 * 1000000 + $2 * 1000 + $3 }')
+[ -n "$BUILD" ] || {
+  echo "package: version $VERSION isn't x.y.z with y and z below 1000" >&2
+  exit 1
+}
 OUT=build/package
 rm -rf "$OUT"
 mkdir -p "$OUT/stage"
 
 xcodegen generate --quiet
 # Fresh products: an incremental build once kept a stale, differently signed helper copy inside
-# the app.
+# the app. XCODEBUILD_SIGNING: extra build settings for signing, words without spaces (CI's
+# release job signs with a certificate it imported: CODE_SIGN_STYLE=Manual
+# CODE_SIGN_IDENTITY=<its SHA-1>); empty on the Mac, which signs as Xcode is set up.
 rm -rf build/DerivedData/Build/Products/Release
+# shellcheck disable=SC2086 # XCODEBUILD_SIGNING is split into its words on purpose
 xcodebuild -project Latchkey.xcodeproj -scheme Latchkey -configuration Release \
-  -destination 'platform=macOS' -derivedDataPath build/DerivedData MARKETING_VERSION="$VERSION" LATCHKEY_DEFAULT_RELAY_HOST= build -quiet
+  -destination 'platform=macOS' -derivedDataPath build/DerivedData MARKETING_VERSION="$VERSION" CURRENT_PROJECT_VERSION="$BUILD" \
+  LATCHKEY_DEFAULT_RELAY_HOST= ${XCODEBUILD_SIGNING:-} build -quiet
 APP=build/DerivedData/Build/Products/Release/Latchkey.app
 
 codesign --verify --deep --strict "$APP"
+[ "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP/Contents/Info.plist")" = "$BUILD" ] || {
+  echo "package: the app's build number isn't $BUILD" >&2
+  exit 1
+}
 [ -z "$(/usr/libexec/PlistBuddy -c 'Print :LatchkeyDefaultRelayHost' "$APP/Contents/Info.plist" 2>/dev/null)" ] || {
   echo "package: the app carries a default relay address" >&2
   exit 1

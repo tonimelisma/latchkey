@@ -2,7 +2,10 @@
 # Publishes the installed release's disk image on GitHub (spec 001 FR-670): release mac-<version>
 # with the asset Latchkey.dmg, so https://github.com/tonimelisma/latchkey/releases/latest/download/Latchkey.dmg
 # is always the newest Mac app. install.sh runs it after an install passed its checks.
-#   scripts/publish.sh <version>
+#   scripts/publish.sh <version> [asset…]
+# The assets after the version (CI's release job: Sparkle's update archive and appcast.xml,
+# FR-072c) go with it; when the release already exists, they are added to it (replacing ones of
+# the same name), so the feed is published whichever of CI and the Mac publishes first.
 # The app is signed for development, not notarized (no Developer ID yet; Toni, 2026-11-09): a
 # downloaded copy opens after Privacy & Security → Open Anyway, once.
 # Refuses an image that holds one of the deployment's private values (the relay's address, the
@@ -11,14 +14,24 @@
 # Only the newest three Mac releases are kept, so GitHub's list of 50 newest releases, which the
 # Linux program and its installer read, always has Linux releases in it; older tags stay.
 set -eu
-VERSION=${1:?usage: scripts/publish.sh <version>}
+VERSION=${1:?usage: scripts/publish.sh <version> [asset…]}
+shift
+for asset in "$@"; do
+  case $asset in /*) ;; *) echo "publish: give $asset as a full path" >&2; exit 1 ;; esac
+  [ -f "$asset" ] || { echo "publish: $asset is missing" >&2; exit 1; }
+done
 cd "$(dirname "$0")/.."
 DMG=build/Latchkey-$VERSION.dmg
 TAG=mac-$VERSION
 KEEP=3
 [ -f "$DMG" ] || { echo "publish: $DMG is missing" >&2; exit 1; }
 if gh release view "$TAG" >/dev/null 2>&1; then
-  echo "publish: $TAG is already published"
+  if [ $# -gt 0 ]; then
+    gh release upload "$TAG" --clobber "$@"
+    echo "publish: $TAG was already published; added $*"
+  else
+    echo "publish: $TAG is already published"
+  fi
   exit 0
 fi
 
@@ -81,7 +94,7 @@ NOTES="Download **Latchkey.dmg** below, open it, and drag Latchkey to Applicatio
 The first time you open it, macOS says it can't check Latchkey (it isn't notarized by Apple yet). Click **Done**, open **System Settings → Privacy & Security**, scroll down, click **Open Anyway** next to Latchkey, and confirm. After that it opens like any app. Each new version you download asks this once again.
 
 Latchkey's menu tells you when a newer version is out. How to set it up: https://github.com/tonimelisma/latchkey#get-started"
-gh release create "$TAG" --verify-tag --latest --title "Latchkey $VERSION" --notes "$NOTES" "$work/Latchkey.dmg"
+gh release create "$TAG" --verify-tag --latest --title "Latchkey $VERSION" --notes "$NOTES" "$work/Latchkey.dmg" "$@"
 echo "publish: published $TAG"
 
 # Older Mac releases go (their tags stay).

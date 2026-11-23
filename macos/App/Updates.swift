@@ -3,23 +3,32 @@ import Foundation
 import Observation
 import Sparkle
 
-/// Updates (spec 001 FR-072, FR-669). Signed updates with Sparkle 2 run only when the build
-/// carries an EdDSA public key (with a Developer ID, later). Until then the app looks at GitHub's
-/// releases once a day and, when a newer Latchkey is out, offers its download page in the menu
-/// and in Settings; installing stays the Owner's.
+/// Updates (spec 001 FR-072 to FR-072d, FR-669). A build that carries Latchkey's own update key
+/// (EdDSA, `SPARKLE_PUBLIC_ED_KEY`; no Developer ID needed) updates itself with Sparkle 2: it
+/// checks the published feed every hour, downloads a newer release in the background without
+/// showing anything (Constitution IV), and installs it only while Latchkey is idle
+/// (`UpdateGate`). A build without the key looks at GitHub's releases once a day and, when a
+/// newer Latchkey is out, offers its download page in the menu and in Settings (FR-669).
 @MainActor
 @Observable
 final class Updates {
     @ObservationIgnored private let controller: SPUStandardUpdaterController?
+    /// Sparkle holds its delegate weakly; this keeps it.
+    @ObservationIgnored private let gate: UpdateGate
     /// A newer Latchkey on GitHub, once the daily check has found one.
     private(set) var notice: ReleaseNotice?
     @ObservationIgnored private var checking: Task<Void, Never>?
 
     init() {
         let key = Bundle.main.object(forInfoDictionaryKey: "SUPublicEDKey") as? String ?? ""
+        gate = UpdateGate(
+            marks: AppIdentity.current.supportDirectory.appending(
+                path: CallMarks.folderName, directoryHint: .isDirectory))
+        // Never in a test run: the test host must not look for or install updates.
+        let testing = ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
         controller =
-            key.isEmpty
-            ? nil : SPUStandardUpdaterController(startingUpdater: true, updaterDelegate: nil, userDriverDelegate: nil)
+            key.isEmpty || testing
+            ? nil : SPUStandardUpdaterController(startingUpdater: true, updaterDelegate: gate, userDriverDelegate: nil)
     }
 
     /// Sparkle's own check is available (a build with an update key).
@@ -59,6 +68,80 @@ final class Updates {
     func openDownload() {
         guard let notice else { return }
         NSWorkspace.shared.open(notice.page)
+    }
+}
+
+/// Holds a downloaded update until Latchkey is idle (FR-072b; Toni, 2026-11-22: an install had
+/// restarted Latchkey in the middle of his Target order): no call running and none started or
+/// ended for 10 minutes, the same rule the Mac's install script used (`idle_verdict`). Sparkle
+/// asks before installing a downloaded update on quit; the gate keeps its install block, looks
+/// every minute, and installs (Sparkle quits, replaces, and starts the app again) once idle.
+@MainActor
+final class UpdateGate: NSObject, SPUUpdaterDelegate {
+    static let quiet: TimeInterval = 10 * 60
+    private let marks: URL
+    private var install: (() -> Void)?
+    private var watching: Task<Void, Never>?
+
+    init(marks: URL) { self.marks = marks }
+
+    // Sparkle calls its delegate on the main thread.
+    nonisolated func updater(
+        _ updater: SPUUpdater, willInstallUpdateOnQuit item: SUAppcastItem,
+        immediateInstallationBlock: @escaping () -> Void
+    ) -> Bool {
+        let version = item.displayVersionString
+        nonisolated(unsafe) let block = immediateInstallationBlock  // used on the main thread only
+        MainActor.assumeIsolated { hold(block, version: version) }
+        return true
+    }
+
+    private func hold(_ block: @escaping () -> Void, version: String) {
+        install = block
+        guard watching == nil else { return }
+        EventLog.shared.record(.app, "Latchkey \(version) is downloaded; it installs once Latchkey is idle")
+        watching = Task { [weak self] in
+            while !Task.isCancelled {
+                guard let self else { return }
+                if Self.isIdle(marks: self.marks, now: Date(), quiet: Self.quiet) {
+                    self.watching = nil
+                    EventLog.shared.record(.app, "Installing Latchkey \(version) now that Latchkey is idle")
+                    // Sparkle quits the app: never from inside a main-queue job (.claude/rules/macos.md).
+                    self.perform(#selector(self.installNow), with: nil, afterDelay: 0)
+                    return
+                }
+                try? await Task.sleep(for: .seconds(60))
+            }
+        }
+    }
+
+    @objc private func installNow() {
+        let block = install
+        install = nil
+        block?()
+    }
+
+    /// Whether Latchkey is idle: no running-call mark in `marks`, and the folder (whose change
+    /// time is when a call last started or ended) unchanged for `quiet`. No folder: no call ever
+    /// ran, so idle.
+    nonisolated static func isIdle(marks: URL, now: Date, quiet: TimeInterval) -> Bool {
+        let manager = FileManager.default
+        guard let names = try? manager.contentsOfDirectory(atPath: marks.path) else { return true }
+        if names.contains(where: { $0.hasSuffix(".call") }) { return false }
+        guard let changed = (try? manager.attributesOfItem(atPath: marks.path))?[.modificationDate] as? Date
+        else { return true }
+        return now.timeIntervalSince(changed) >= quiet
+    }
+
+    /// The build number Sparkle compares (CFBundleVersion) for release `x.y.z`: x·1,000,000 +
+    /// y·1,000 + z, so it grows with every release; nil for anything else. Kept in step with
+    /// `macos/scripts/package.sh`.
+    nonisolated static func buildNumber(_ version: String) -> Int? {
+        let parts = version.split(separator: ".", omittingEmptySubsequences: false).map { Int($0) }
+        guard parts.count == 3, let x = parts[0], let y = parts[1], let z = parts[2],
+            x >= 0, (0..<1000).contains(y), (0..<1000).contains(z)
+        else { return nil }
+        return x * 1_000_000 + y * 1000 + z
     }
 }
 

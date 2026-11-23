@@ -532,8 +532,21 @@ after the app was quit.
    what to test end to end without touching his real accounts and apps (a test macOS user or
    VM, test accounts, a recorded relay), how agent evals are run and scored, and what a release
    needs before it counts as checked. Research first, then a proposal for Toni.
-2. The Mac's updater isn't set up on Toni's Mac (`macos/scripts/updater-setup.sh`, once, Toni's
-   step); installs ran by hand until then.
+2. Signed updates with Sparkle (Toni, 2026-11-23: "yes, implement sparkle"; spec 001 FR-072 to
+   FR-072d, plan D9): built while Toni was away. The app's update gate (installs only while
+   idle), the build number, the update feed (`macos/scripts/appcast.sh`), and the CI release job
+   (`mac-tag.yml`, job `release` on macOS) are in; `mac-build.yml` compiles each macOS change.
+   Off until Toni's one-time setup (CLAUDE.md, "Owner setup"): make the update key on the Mac
+   (Sparkle's `generate_keys`; its public half into `SPARKLE_PUBLIC_ED_KEY` in
+   `macos/Config/Base.xcconfig`, its private half, `generate_keys -x`, into the secret
+   `SPARKLE_PRIVATE_KEY`), and export the "Apple Development" certificate as .p12 into
+   `MAC_CERTIFICATE_P12` and `MAC_CERTIFICATE_PASSWORD`, with `MAC_DEVELOPMENT_TEAM`. Both can be
+   done with `gh secret set` on the Mac so no value passes through a session. Then: run the
+   release job again for the newest tag (workflow_dispatch with its version), install that
+   release on the Mac once by hand or by the updater (installed builds before it have no key),
+   and see the next release arrive by itself. To confirm with Toni: hourly checks, building in
+   CI. Afterwards: remove the Mac's updater (`macos/scripts/auto-update.sh`,
+   `updater-setup.sh`), and say in README.md that Latchkey updates itself.
 
 0. Sign-in's first real export (spec 013 T11, Toni's step): Latchkey's menu → Export Passwords
    to Latchkey…, one Touch ID. The first try (0.8.175) stopped at the save panel; 0.8.176 fixes
@@ -556,8 +569,8 @@ after the app was quit.
    2025-12-15 and has no API for personal accounts, so only the hit-or-miss web page is left.
 5. A downloaded copy on another Mac: the public download was checked on this Mac only (it opens
    after Open Anyway); the first person on another Mac confirms Open Anyway and setup there.
-6. Notarized download and self-updating (Apple Developer Program, $99 a year): later, Toni's
-   call; Sparkle is already in the app, off until an update key exists.
+6. Notarized download (Apple Developer Program, $99 a year): later, Toni's call. Self-updating no
+   longer needs it (item 2 above).
 
 For Toni (only he can): delete the ~96 old "Latchkey check" test messages in his two
 conversations with himself and the WhatsApp test message in his own chat; optionally switch off

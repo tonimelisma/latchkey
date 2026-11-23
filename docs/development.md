@@ -2,7 +2,8 @@
 
 Latchkey is in testing (version 0.8): every capability is built and checked live on a real Mac.
 Every installed version is also the public download (GitHub release `mac-<x.y.z>`, asset
-`Latchkey.dmg`; `macos/scripts/publish.sh`, run by `make -C macos install`). It is signed for
+`Latchkey.dmg`; `macos/scripts/publish.sh`, run by CI's Mac release job and by
+`make -C macos install`), with Sparkle's update archive and feed (spec 001 FR-072). It is signed for
 development, not notarized, so a downloaded copy opens after System Settings → Privacy &
 Security → Open Anyway, once per version. The relay's image is published
 at `ghcr.io/tonimelisma/latchkey-relay` ([self-hosting.md](self-hosting.md)). Current work: [STATUS.md](STATUS.md).

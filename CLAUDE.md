@@ -165,19 +165,20 @@ the targeted tests, then the full checks once per batch. In order:
      this repository (2026-11-23).
    - `linux/` changed: `linux-release.yml` tags, signs and publishes; installed servers (Toni's
      home server too, which no workflow ever reaches) update themselves within a day.
-   - `macos/` changed: `mac-tag.yml` tags the commit `mac-<x.y.z>`; the Mac's updater
-     (`macos/scripts/auto-update.sh`, a launchd agent) builds and installs that tag within
-     15 minutes. The install waits until Latchkey has been idle (no tool call for 10 minutes,
-     none running; it gives up after 30 and tries again next time; Toni, 2026-11-22, after an
-     install restarted Latchkey in the middle of his Target order), quits the running app
-     cleanly, replaces `/Applications/Latchkey.app`, starts it, checks it (pairing and
-     permissions carry over), and publishes the disk image. Toni never installs by hand.
-     Skipping the idle wait (`install-now`) only when Toni says so. Installs run one at a time,
-     and only CI's newest tag is installed.
+   - `macos/` changed: `mac-build.yml` compiles it on macOS for the pull request;
+     after the merge `mac-tag.yml` tags the commit `mac-<x.y.z>`, then builds it on macOS,
+     signs it (Toni's development certificate and Latchkey's update key) and publishes it with
+     its disk image and Sparkle's update feed (spec 001 FR-072 to FR-072d). Every installed
+     copy updates itself within the hour: it downloads in the background without showing
+     anything, and installs only once Latchkey has been idle (no tool call for 10 minutes, none
+     running; Toni, 2026-11-22, after an install restarted Latchkey in the middle of his Target
+     order). Toni never installs by hand. Until the first signed release is installed on Toni's
+     Mac, the Mac's updater (`macos/scripts/auto-update.sh`, a launchd agent, if it
+     is set up) still builds and installs each tag the same way; it goes once Sparkle runs.
    Repository_dispatch from a session: `gh api repos/tonimelisma/latchkey/dispatches -f
    event_type=<type>` (`relay-image`, `linux-release`, `mac-tag`).
-6. Watch the workflow runs (`gh api repos/tonimelisma/latchkey/actions/runs`) and, for the Mac,
-   the updater's log through Latchkey (`docs/cloud-sessions.md`, "The Mac's updater").
+6. Watch the workflow runs (`gh api repos/tonimelisma/latchkey/actions/runs`): for the Mac, the
+   `release` job of `mac tag` publishes the release; installed copies pick it up themselves.
 
 ## Nothing left behind (Toni, 2026-10-23 and 2026-10-24)
 
@@ -247,11 +248,13 @@ Latchkey's `shell_run`; the Mac installs releases itself.
 
 ## Owner setup (only Toni can do these; once)
 
-- Repository secrets: `SERVER_SIGNING_KEY` (environment `release`).
+- Repository secrets: `SERVER_SIGNING_KEY` (environment `release`). For Mac releases, also in
+  `release`: `MAC_CERTIFICATE_P12` (the "Apple Development" certificate with its key, exported
+  from Keychain Access, base64), `MAC_CERTIFICATE_PASSWORD`, `MAC_DEVELOPMENT_TEAM`, and
+  `SPARKLE_PRIVATE_KEY` (Sparkle's `generate_keys -x`), whose public key goes into
+  `SPARKLE_PUBLIC_ED_KEY` in `macos/Config/Base.xcconfig` (public; committed).
 - ghcr.io package `latchkey-relay`: Package settings → Manage Actions access → this repository
   with Write (so the image workflow can publish it).
-- On the Mac, once: `macos/scripts/updater-setup.sh` from the main checkout (later installs keep
-  it current).
 - Optional: required reviewers on the environments `release`, `production`; a tag
   ruleset so only GitHub Actions creates `mac-*` and `linux-*` tags.
 
@@ -267,8 +270,8 @@ Latchkey's `shell_run`; the Mac installs releases itself.
 All commands, with details: `docs/commands.md`. The ones used every day:
 - Relay (`relay/`): `make test`, `make lint` (0 issues), `make security`, `make script-tests`;
   releases and configuration through the workflows ("Every finished batch ships").
-- Mac app (`macos/`): `make test`, `make lint`; installs by the Mac's updater (`make install`
-  installs CI's newest tag by hand).
+- Mac app (`macos/`): `make test`, `make lint`; releases by `mac-tag.yml`, installed copies
+  update themselves (`make install` installs CI's newest tag by hand).
 - Linux program (`linux/`): `make test`, `make lint`; releases by `linux-release.yml`.
 - Screen states (`macos/scripts/state-check/`): not run for now (no test sessions against Toni's
   real data, 2026-11-23; end-to-end testing is a backlog item).

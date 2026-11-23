@@ -631,8 +631,21 @@ So that a stolen account or a rogue connector shows up in the Owner's inbox at o
   being checked), with a button that does what the setup step does. Changes made in System
   Settings show within a second while the window is open. (Amended 2026-10-31: every permission
   is needed whatever the levels, FR-623.)
-- **FR-072** The app shall update itself through signed updates. (Waits for a Developer ID; until
-  then FR-669 tells the Owner about a new version, 2026-11-09.)
+- **FR-072** The app shall update itself through updates signed with Latchkey's own update key,
+  without needing Apple's Developer ID (Toni, 2026-11-23: "yes, implement sparkle"; it had waited
+  for a Developer ID since 2026-11-09). A build without the key falls back to FR-669.
+- **FR-072a** When a newer release is published, the app shall download it in the background
+  without showing anything (Constitution IV). It shall look for one every hour. [Proposed by
+  Claude while Toni was away, 2026-11-23: hourly is Sparkle's shortest interval; Toni to confirm.]
+- **FR-072b** The app shall install a downloaded update only while it is idle: no tool call
+  running and none started or ended for 10 minutes (Toni, 2026-11-22, the install script's rule);
+  then it quits, is replaced, and starts again by itself.
+- **FR-072c** Every Mac release shall be built, signed with the Owner's development certificate
+  (so the installed app keeps its permissions and pairing) and with the update key, and published
+  by CI, with the disk image (FR-670), the update archive, and the update feed, which lists only
+  the newest release.
+- **FR-072d** Each release's build number shall grow with its release number, so an installed
+  copy always sees a newer release as newer.
 - **FR-669** While the app has no signed updates, it shall check once a day whether a newer
   release of the Mac app is published and, when one is, offer to download it from the menu and
   from Settings; installing stays the Owner's (Toni, 2026-11-09). The check sends no account,

@@ -86,7 +86,8 @@ applies, except:
   installs.
   Never run `make -C macos install` through Latchkey: it quits Latchkey, which stops the command
   mid-install (spec 004 FR-309). The Mac's updater installs instead (below).
-- The Mac's updater (`macos/scripts/auto-update.sh`; launchd agent `net.melisma.latchkey.updater`,
+- The Mac's updater, until Sparkle updates the installed app (CLAUDE.md, "Every finished batch
+  ships"; spec 001 FR-072) (`macos/scripts/auto-update.sh`; launchd agent `net.melisma.latchkey.updater`,
   set up by `macos/scripts/updater-setup.sh`): every 15 minutes it installs the newest
   `mac-<x.y.z>` tag on main when that isn't the installed version, from its own clone in
   `~/Library/Caches/net.melisma.latchkey.updater`, signed with the main checkout's

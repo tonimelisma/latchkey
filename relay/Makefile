@@ -84,6 +84,7 @@ script-tests:
 	cd .. && scripts/tests/hooks_cloud_test.sh
 	cd .. && scripts/tests/tidy_test.sh
 	cd .. && scripts/tests/release_tag_test.sh
+	cd .. && scripts/tests/appcast_test.sh
 	cd .. && scripts/tests/loose_ends_test.sh
 	cd .. && scripts/tests/keep_going_test.sh
 	cd .. && scripts/tests/install_pairing_test.sh

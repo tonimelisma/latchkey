@@ -941,3 +941,29 @@ Choices made here (low-level, contracts/trace-files.md):
   result, `fsync` included.
 
 
+
+## Signed updates without a Developer ID (FR-072 to FR-072d, 2026-11-23)
+
+Toni asked for Sparkle while away; these were weighed and chosen by Claude, for his review.
+
+- Where releases are built. On Toni's Mac by the updater script (today's builds; ties releases
+  to his Mac being on and a launchd agent he didn't know about) or in GitHub Actions on a macOS
+  runner with his development certificate as a secret (every release built the same way,
+  nothing to run on his Mac). Chosen: Actions. Cost: a one-time export of the certificate.
+- Signing. Ad hoc in CI (each build a new identity: macOS would drop the app's privacy
+  permissions and Keychain access at every update) or the same "Apple Development" certificate
+  the Mac uses (same team and identity: permissions carry over). Chosen: the certificate.
+- Feed location. `releases/latest/download/appcast.xml` (the Mac release is marked latest,
+  Linux releases aren't), a fixed release only for the feed, or GitHub Pages. Chosen: latest,
+  the same link the disk image already uses; no new hosting.
+- Build number. Sparkle compares CFBundleVersion, which was 1 in every build. Chosen:
+  x·1,000,000 + y·1,000 + z (8231 for 0.8.231), above 1 and growing with every release;
+  refused when y or z reaches 1000.
+- When to install. Sparkle's default installs on quit, which a menu bar app rarely does; the
+  delegate installs as soon as Latchkey is idle by the install script's own rule (Toni,
+  2026-11-22). Check interval: hourly, Sparkle's shortest (the updater checked every 15 minutes).
+- Gatekeeper. Sparkle removes the quarantine flag from an update it has verified, so an update
+  needs no Open Anyway; only the first download on another Mac does (notarization needs the
+  Developer ID). Not yet seen on a real update: the first signed release checks it.
+- Not done without Toni: making the update key (its private half must never pass through a
+  Claude session) and exporting the certificate.

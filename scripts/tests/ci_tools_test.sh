@@ -40,6 +40,7 @@ gate() { # <workflow> <job> <environment>
 gate relay-image.yml image production
 gate linux-release.yml release release
 gate mac-tag.yml tag release
+gate mac-tag.yml release release
 # Nothing outside those jobs gets write access to the repository, packages or an identity token.
 for f in "$root"/.github/workflows/*.yml; do
   if awk '
