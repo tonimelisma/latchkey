@@ -107,13 +107,13 @@ extension BrowserCapability {
                             // its text came back).
                             guard args["screenshot"] == .bool(true), !opened.isError, let name = named.name
                             else { return opened }
-                            var asked = rest
-                            if case .object(var o) = asked {
+                            var forShot = rest
+                            if case .object(var o) = forShot {
                                 o["page"] = .string(name)
                                 o["url"] = nil
-                                asked = .object(o)
+                                forShot = .object(o)
                             }
-                            let shot = asked
+                            let shot = forShot
                             let picture = await asked(shot, ops, browser: browser, own: own) {
                                 await ops.call("browser_screenshot", shot)
                             }
