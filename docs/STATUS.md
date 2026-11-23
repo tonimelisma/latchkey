@@ -515,14 +515,13 @@ after the app was quit.
 
 ## Next steps
 
-0. Cloud-first, what only Toni can do (CLAUDE.md, "Owner setup"): the secrets, the package's
-   Actions access, the updater on the Mac (`macos/scripts/updater-setup.sh`), `LATCHKEY_CHECK_TO`
-   in the cloud environment. Then check on the Mac: the updater installs the first CI-tagged
-   release; the relay image from the workflow is published and its signature verifies.
-   First runs after the merge (2026-11-23, commit 66c726b): `mac tag` made `mac-0.8.227`;
-   `linux release` stopped before tagging ("SERVER_SIGNING_KEY is neither set nor in ../.env");
-   `relay image` passed its checks and was refused the push ("denied: permission_denied:
-   write_package") until the package grants this repository's Actions write access.
+0. Cloud-first setup: done 2026-11-23 except the updater on the Mac (`macos/scripts/updater-setup.sh`)
+   and `LATCHKEY_CHECK_TO` in the cloud environment. The package `latchkey-relay` gives this
+   repository's Actions Write access and `SERVER_SIGNING_KEY` is in the environment `release`
+   (both set through Latchkey on the Mac). First good runs: `relay image` published `:latest`
+   sha256:35885c897c3383754d4fe8639b32ea365c33b265d3745095044f7705de4423b3, and `cosign verify`
+   (identity relay-image.yml on refs/heads/main) passes; `linux release` made `linux-0.1.7`;
+   `mac tag` made `mac-0.8.230`.
 1. Codes experiment: done and reported (table under "Open acceptance"). Open: Chase live on 0.8.228
    or later; the other banks (Capital One, Amex, US Bank, Discover, Fidelity, Schwab); Toni to
    choose which way to keep (or all three).

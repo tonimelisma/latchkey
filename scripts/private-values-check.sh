@@ -2,8 +2,9 @@
 # Fails if a working relay's address or an Apple signing team is written in the repository (Toni,
 # 2026-11-23: no working relay's host name ever goes into the repository). Needs no private
 # values: wherever a relay's address is written, it must be a placeholder name, and the signing
-# team setting must be empty. Checked: tracked files, and the added lines and messages of commits
-# not yet on any remote (what a push would publish).
+# team setting must be empty. Checked: tracked files, and the added lines and messages of branch
+# commits on no remote and under no tag (releases are tags made on GitHub, so tagged history is
+# already published).
 # Where a relay's address is written:
 #   PUBLIC_URL=https://<host>, a connector URL https://<host>/mcp, a pairing link's relay=<url>,
 #   LATCHKEY_DEFAULT_RELAY_HOST = <host>
@@ -85,7 +86,7 @@ files "$team_re"
 scan_teams <"$tmp"
 
 # Commits a push would publish: their messages and added lines.
-if ! commits=$(git -C "$top" rev-list --all --not --remotes 2>/dev/null); then
+if ! commits=$(git -C "$top" rev-list --branches --not --remotes --tags 2>/dev/null); then
   echo "private-values-check: could not list the commits" >&2
   exit 2
 fi
