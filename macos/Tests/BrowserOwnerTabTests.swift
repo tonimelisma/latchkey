@@ -87,8 +87,10 @@ import Testing
         let b = browser(fake)
         try await b.pick("10.2")
         fake.scriptGoesTo = "https://news.example.com/next"
-        _ = try await b.run("location.href = '/next'")
-        await #expect(throws: SafariBrowser.Failure.tabGone) { _ = try await b.read(offset: 0) }
+        // FR-470: the script runs as an async function, and the tab is seen gone while its
+        // result is collected: said as run, with what to do.
+        #expect(try await b.run("location.href = '/next'").hasPrefix("The script ran"))
+        await #expect(throws: SafariBrowser.Failure.self) { _ = try await b.read(offset: 0) }
         #expect(await b.working() == nil)
     }
 
