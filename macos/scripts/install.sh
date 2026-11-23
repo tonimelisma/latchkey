@@ -16,20 +16,19 @@ if [ "${LATCHKEY_INSTALL_LOCKED:-}" != "$LOCK" ]; then
   LATCHKEY_INSTALL_LOCKED=$LOCK exec /usr/bin/lockf -t 900 "$LOCK" "$0" "$@"
 fi
 cd "$(dirname "$0")/.."
-# Never replace newer work: the build must contain everything already on GitHub's main, so an
-# install can't take back what another session shipped. Checked inside the lock, after a fetch.
-git fetch -q origin main
-if ! git merge-base --is-ancestor refs/remotes/origin/main HEAD; then
-  echo "install: this checkout lacks commits already on origin/main (another session shipped);" >&2
-  echo "install: rebase onto origin/main, retest, push to main, then install" >&2
-  exit 1
-fi
+# Only a release is installed: a commit on GitHub's main carrying the tag mac-<x.y.z> that CI gave
+# it (.github/workflows/mac-tag.yml; Toni, 2026-11-04: releases are tags on commits, so two
+# sessions never ship the same number; 2026-11-23: CI makes them, in the environment "release").
+# Never replace newer work: it must be the newest such tag, so an install can't take back what
+# another session shipped. Checked inside the lock, after a fetch. The Mac's updater
+# (auto-update.sh) checks out exactly that commit; a local session installs from a checkout of it.
+git fetch -q --force origin main '+refs/tags/mac-*:refs/tags/mac-*'
 # shellcheck source=macos/scripts/install-lib.sh
 . scripts/install-lib.sh
-# The version is this commit's release tag, mac-<x.y.z> on GitHub, given or reused here (Toni,
-# 2026-11-04: releases are tags on commits, so two sessions never ship the same number). The
-# image is built inside the lock, for this number.
-VERSION=$(../scripts/release-tag.sh mac-)
+if ! VERSION=$(release_to_install HEAD refs/remotes/origin/main); then
+  exit 1
+fi
+# The image is built inside the lock, for this number.
 VERSION=$VERSION ./scripts/package.sh >/dev/null
 DMG=build/Latchkey-$VERSION.dmg
 [ -f "$DMG" ] || { echo "install: $DMG not found after building it" >&2; exit 1; }
@@ -187,3 +186,6 @@ case "$started" in *"not paired"*) ;; *) audit_verdict "$audit" || failed=1 ;; e
 # first: publish.sh opens it to check it, and a second open of an open image fails.
 hdiutil detach -quiet "$MNT" 2>/dev/null || true
 ./scripts/publish.sh "$VERSION"
+# The updater keeps this Mac on the newest release from now on (auto-update.sh); its script is
+# refreshed with every install. A problem there doesn't fail the install that worked.
+./scripts/updater-setup.sh || echo "install: the updater couldn't be set up; installs still work by hand" >&2

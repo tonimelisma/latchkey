@@ -28,7 +28,8 @@ dmg: project
 	./scripts/package.sh
 
 # Builds the disk image, installs it into /Applications, and starts it (every increment, CLAUDE.md).
-# The version is the commit's release tag, given by install.sh (scripts/release-tag.sh).
+# The version is the commit's release tag mac-<x.y.z>, made by CI (.github/workflows/mac-tag.yml);
+# install.sh refuses a commit without it. Afterwards it sets up the updater (updater-setup.sh).
 install: project
 	./scripts/install.sh
 

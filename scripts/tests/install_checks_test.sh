@@ -67,5 +67,23 @@ rm "$calls/call_1.call"
 check "a call ended just now: not idle" 1 idle_verdict "$calls" "$(date +%s)" 600
 rm -rf "$calls"
 
+# Only a release is installed: the commit's CI tag, on main, the newest one.
+repo=$(mktemp -d)
+g() { git -C "$repo" -c user.name=t -c user.email=t@example.com "$@"; }
+g init -q -b main
+for n in one two three; do echo "$n" >"$repo/f"; g add f; g commit -q -m "$n"; done
+g tag mac-0.8.9 HEAD~2
+g tag mac-0.8.10 HEAD~1
+inrepo() { (cd "$repo" && "$@"); }
+check "an untagged commit isn't installed" 1 inrepo release_to_install HEAD main
+check "an older release isn't installed over a newer one" 1 inrepo release_to_install HEAD~2 main
+check "the newest release is installed" 0 inrepo release_to_install HEAD~1 main
+[ "$(inrepo release_to_install HEAD~1 main)" = 0.8.10 ] && ok "by its number (10 after 9, as numbers)" || bad "by its number (10 after 9, as numbers)"
+g checkout -q -b side HEAD~1
+echo side >"$repo/f"; g commit -q -am side
+g tag mac-0.8.11
+check "a release tag off main isn't installed" 1 inrepo release_to_install HEAD main
+rm -rf "$repo"
+
 [ "$fails" = 0 ] && echo "all install check tests pass" || echo "$fails install check tests failed"
 [ "$fails" = 0 ]
