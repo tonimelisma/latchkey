@@ -1,6 +1,6 @@
 # Status
 
-Last updated: 2026-11-23 (the hosted relay's server moved out of this repository; CI sets up uv for Semgrep again; Xcode tests in Shell, spec 004 FR-335; development in Claude Code cloud sessions; Shell builds: task sandbox off, asset-catalog daemon per command; builds work in Shell, spec 004 FR-333 and FR-334; Sign-in built, spec 013; Claude's feedback tool, reports copied to the Mac's Feedback folder; pages are read once they stop changing; every issue becomes a regression case; clicks press down and up before clicking, so Gmail's buttons answer; signed-in sites in Safari tabs of Claude's while unlocked; sign-in cookies in Latchkey's log, for Safari's Target sign-outs; full traces everywhere, in daily files, for evals; Claude's pages always in Latchkey's own browser, by name, with dialogs Claude answers; the locked browser takes Safari's cookies again with every page; public download on GitHub with a new-version notice; never disturb the user: Mail, WhatsApp sending, Notes' window editing, Messages' window actions, Reminders' window setters removed; test sweep on exit; releases are tags on commits; cloud-only files read again; machine list shows Latchkey versions; WhatsApp built; Add to Claude button; plugin withdrawn; README rewritten as a short product page; relay web pages redone; Linux home server paired; spec 010 shipped)
+Last updated: 2026-11-23 (172 feedback reports sorted and their open causes fixed: other chats' pages, owner-tab turns, Safari scripts, page limit, frames and menus, maps near, sidebar rows; the Mac app's tests in CI on GitHub's Mac runner; the hosted relay's server moved out of this repository; CI sets up uv for Semgrep again; Xcode tests in Shell, spec 004 FR-335; development in Claude Code cloud sessions; Shell builds: task sandbox off, asset-catalog daemon per command; builds work in Shell, spec 004 FR-333 and FR-334; Sign-in built, spec 013; Claude's feedback tool, reports copied to the Mac's Feedback folder; pages are read once they stop changing; every issue becomes a regression case; clicks press down and up before clicking, so Gmail's buttons answer; signed-in sites in Safari tabs of Claude's while unlocked; sign-in cookies in Latchkey's log, for Safari's Target sign-outs; full traces everywhere, in daily files, for evals; Claude's pages always in Latchkey's own browser, by name, with dialogs Claude answers; the locked browser takes Safari's cookies again with every page; public download on GitHub with a new-version notice; never disturb the user: Mail, WhatsApp sending, Notes' window editing, Messages' window actions, Reminders' window setters removed; test sweep on exit; releases are tags on commits; cloud-only files read again; machine list shows Latchkey versions; WhatsApp built; Add to Claude button; plugin withdrawn; README rewritten as a short product page; relay web pages redone; Linux home server paired; spec 010 shipped)
 
 Xcode signing ready (2026-10-20): Toni's Xcode account has a valid "Apple Development" certificate
 (certificate expires 2027-07-22). Keep the team ID out of committed project files
@@ -60,6 +60,40 @@ Fixed during it (0.8.224 to 0.8.226): Etsy's fields in shadow roots, Uber's "1 o
 widgets that move the focus, GitHub's real "More options" list, a toggle's state (Amazon's
 returns). Two Uber code texts couldn't be deleted (the window didn't show them); the next
 failure says why.
+
+## Feedback reports, 2026-11-17 to 2026-11-23 (sorted 2026-11-23)
+
+All 172 reports were read in full and checked against the code. 123 were already fixed (76),
+expected (the screen asleep while locked, the relay's VM stopped, an install's restart, Safari's
+background tabs; 25), bot walls (9), saved passwords only Toni can fix (4), places not in Apple
+Maps (4), by design (3) or not explained (2). 49 had a cause still open; the fixes below are on main, with
+unit tests run in CI on GitHub's Mac runner and a regression case each. None has been run live:
+Toni asked (2026-11-23) for no Latchkey calls and no live checks until he is back.
+
+| Open cause | Reports | Fix (spec) | Live |
+|---|---|---|---|
+| A url without page loaded into another chat's Safari page | 4 | FR-468 | NOT VERIFIED |
+| Two chats in the owner's Safari tabs at once: a click landed in another chat's tab | 2 | FR-469 | NOT VERIFIED |
+| Ten-page limit filled by finished chats' pages | 15 | FR-446a | NOT VERIFIED |
+| Scripts with await or statements failed in Safari tabs; async arrows lost their value | 6 | FR-470 | NOT VERIFIED |
+| url with screenshot gave no picture | 1 | FR-471 | NOT VERIFIED |
+| Same-site frames, links without address, opened menus not listed | 7 | FR-472 | NOT VERIFIED |
+| A hover answered "nothing new shows" though a menu opened | 1 | wording only (Constitution X) | NOT VERIFIED |
+| Typing with submit into a rich editor sent nothing | 1 | FR-473 | NOT VERIFIED |
+| maps_find with near gave far places | 7 | spec 007 FR-732a | NOT VERIFIED |
+| Sidebar rows not selectable; window buttons unnamed | 5 | spec 006 FR-515, FR-516 | NOT VERIFIED |
+
+Not fixed: Airbnb's late Continue button (by design: Claude types the code with browser_act,
+Toni 2026-11-23); two hangs of several minutes with no answer (0H0161, 442MP3), which need the
+hosted relay's log, kept outside this repository; places not in Apple Maps; Amazon's, Target's and
+Uber's bot walls; Safari's throttling of background tabs.
+
+Moving reports to `Feedback/Handled` through Latchkey's `shell_run` doesn't work: the shell's
+fence denies writes to Latchkey's own folder even when declared (FR-319), and an exception for
+the Feedback folder was refused in review as weakening that fence. Toni's step (once, in
+Terminal on the Mac): `cd ~/Library/Application\ Support/Latchkey/Feedback && mkdir -p Handled
+&& mv 2026-11-1[7-9]T*.md 2026-11-2[0-2]T*.md 2026-11-23T0[0-5]*.md Handled/` (the 172 reports of
+2026-11-17 to 2026-11-23 05:45 UTC). How later reports get moved is Toni's choice.
 
 ## Current phase
 
@@ -514,6 +548,11 @@ hosted relay (email via Resend); real Claude called
 after the app was quit.
 
 ## Next steps
+
+00. Live checks of the 2026-11-23 feedback fixes, once Toni allows Latchkey calls again: the new
+    cases in `regressions-browser`, `regressions-computer`, and `regressions-other`
+    (`state-check.sh`), unlocked and locked; then move the 172 reports to `Feedback/Handled`
+    (Toni's Terminal step above).
 
 0. Cloud-first setup: done 2026-11-23 except the updater on the Mac (`macos/scripts/updater-setup.sh`)
    and `LATCHKEY_CHECK_TO` in the cloud environment. The package `latchkey-relay` gives this
