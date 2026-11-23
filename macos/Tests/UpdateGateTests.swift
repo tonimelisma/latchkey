@@ -52,6 +52,23 @@ struct UpdateGateTests {
         #expect(UpdateGate.isIdle(marks: missing, now: Date(), quiet: 10 * 60))
     }
 
+    @Test func callsInMemoryKeepItBusy() {
+        let now = Date()
+        #expect(UpdateGate.isIdle(running: 0, lastChange: now.addingTimeInterval(-11 * 60), now: now, quiet: 10 * 60))
+        #expect(!UpdateGate.isIdle(running: 1, lastChange: now.addingTimeInterval(-60 * 60), now: now, quiet: 10 * 60))
+        #expect(!UpdateGate.isIdle(running: 0, lastChange: now.addingTimeInterval(-60), now: now, quiet: 10 * 60))
+    }
+
+    @MainActor @Test func runningCallsAreCountedWithTheirLastChange() {
+        let calls = CallsInFlight(marks: nil)
+        let before = calls.lastChange
+        calls.begin(CallMark(callID: "c1", at: Date(), tool: "t", arguments: "{}"))
+        #expect(calls.runningCount == 1)
+        #expect(calls.lastChange >= before)
+        _ = calls.end("c1")
+        #expect(calls.runningCount == 0)
+    }
+
     @Test func buildNumberGrowsWithTheReleaseNumber() {
         #expect(UpdateGate.buildNumber("0.8.231") == 8231)
         #expect(UpdateGate.buildNumber("1.0.0") == 1_000_000)

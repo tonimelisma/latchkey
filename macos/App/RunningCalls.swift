@@ -78,12 +78,17 @@ final class CallsInFlight {
     let marks: CallMarks?
     private var running: [String: CallMark] = [:]
     private var cutOff: Set<String> = []
+    /// When a call last started or ended (the launch, before any): with `runningCount`, what
+    /// the update gate reads besides the marks on disk, which exist only with an activity log.
+    private(set) var lastChange = Date()
+    var runningCount: Int { running.count }
 
     init(marks: CallMarks?) { self.marks = marks }
 
     /// Before the call runs: kept in memory, and its mark written.
     func begin(_ mark: CallMark) {
         running[mark.callID] = mark
+        lastChange = Date()
         do {
             try marks?.write(mark)
         } catch {
@@ -96,6 +101,7 @@ final class CallsInFlight {
     /// not recorded again.
     func end(_ callID: String) -> Bool {
         running[callID] = nil
+        lastChange = Date()
         return cutOff.remove(callID) == nil
     }
 

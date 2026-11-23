@@ -53,6 +53,8 @@ jobs:
           if [ -n "$AGAIN" ]; then
             case $AGAIN in *[!0-9.]* | '') echo "not a version: $AGAIN" >&2; exit 1 ;; esac
             git rev-parse -q --verify "refs/tags/mac-$AGAIN" >/dev/null || { echo "no tag mac-$AGAIN" >&2; exit 1; }
+            # Only a release made on main is built and signed again.
+            git merge-base --is-ancestor "refs/tags/mac-$AGAIN" origin/main || { echo "mac-$AGAIN isn't on main" >&2; exit 1; }
             echo "version=$AGAIN" >>"$GITHUB_OUTPUT"
             echo "Building mac-$AGAIN again" | tee -a "$GITHUB_STEP_SUMMARY"
             exit 0
@@ -156,11 +158,10 @@ jobs:
         run: |
           zip="$RUNNER_TEMP/Latchkey-$VERSION.zip"
           ditto -c -k --keepParent build/DerivedData/Build/Products/Release/Latchkey.app "$zip"
-          key="$RUNNER_TEMP/sparkle.key"
-          (umask 077 && printf '%s' "$SPARKLE_KEY" >"$key")
-          out=$(build/DerivedData/SourcePackages/artifacts/sparkle/Sparkle/bin/sign_update --ed-key-file "$key" "$zip")
-          rm -f "$key"
+          # The private key goes in on standard input, never to a file.
+          out=$(printf '%s' "$SPARKLE_KEY" | build/DerivedData/SourcePackages/artifacts/sparkle/Sparkle/bin/sign_update --ed-key-file - "$zip")
           signature=$(printf '%s' "$out" | sed -n 's/.*sparkle:edSignature="\([^"]*\)".*/\1/p')
+          [ -n "$signature" ] || { echo "::error::sign_update gave no signature"; exit 1; }
           length=$(stat -f %z "$zip")
           url="https://github.com/${GITHUB_REPOSITORY}/releases/download/mac-$VERSION/Latchkey-$VERSION.zip"
           ./scripts/appcast.sh "$VERSION" "$url" "$length" "$signature" >"$RUNNER_TEMP/appcast.xml"
@@ -177,4 +178,4 @@ jobs:
           KEYCHAIN: ${{ steps.keychain.outputs.keychain }}
         run: |
           [ -z "$KEYCHAIN" ] || security delete-keychain "$KEYCHAIN" || true
-          rm -f "$RUNNER_TEMP/sparkle.key" "$RUNNER_TEMP/cert.p12" macos/Config/Local.xcconfig
+          rm -f "$RUNNER_TEMP/cert.p12" macos/Config/Local.xcconfig

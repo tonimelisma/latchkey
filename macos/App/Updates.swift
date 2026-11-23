@@ -24,11 +24,17 @@ final class Updates {
         gate = UpdateGate(
             marks: AppIdentity.current.supportDirectory.appending(
                 path: CallMarks.folderName, directoryHint: .isDirectory))
-        // Never in a test run: the test host must not look for or install updates.
+        // Only the installed app: never a test run, and never a Debug build (it would replace
+        // itself with the release build).
         let testing = ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
         controller =
-            key.isEmpty || testing
+            key.isEmpty || testing || AppIdentity.current != .release
             ? nil : SPUStandardUpdaterController(startingUpdater: true, updaterDelegate: gate, userDriverDelegate: nil)
+    }
+
+    /// The calls running now (FR-072b): the gate waits for them as well as for the marks on disk.
+    func watchCalls(_ calls: CallsInFlight) {
+        gate.calls = { [weak calls] in calls.map { ($0.runningCount, $0.lastChange) } }
     }
 
     /// Sparkle's own check is available (a build with an update key).
@@ -80,6 +86,8 @@ final class Updates {
 final class UpdateGate: NSObject, SPUUpdaterDelegate {
     static let quiet: TimeInterval = 10 * 60
     private let marks: URL
+    /// The calls in memory: how many run and when one last started or ended.
+    var calls: (@MainActor () -> (running: Int, lastChange: Date)?)?
     private var install: (() -> Void)?
     private var watching: Task<Void, Never>?
 
@@ -103,7 +111,7 @@ final class UpdateGate: NSObject, SPUUpdaterDelegate {
         watching = Task { [weak self] in
             while !Task.isCancelled {
                 guard let self else { return }
-                if Self.isIdle(marks: self.marks, now: Date(), quiet: Self.quiet) {
+                if self.idleNow() {
                     self.watching = nil
                     EventLog.shared.record(.app, "Installing Latchkey \(version) now that Latchkey is idle")
                     // Sparkle quits the app: never from inside a main-queue job (.claude/rules/macos.md).
@@ -116,9 +124,32 @@ final class UpdateGate: NSObject, SPUUpdaterDelegate {
     }
 
     @objc private func installNow() {
+        // A call may have started since the last look: then keep waiting.
+        guard idleNow() else {
+            if let block = install {
+                install = nil
+                hold(block, version: "the downloaded update")
+            }
+            return
+        }
         let block = install
         install = nil
         block?()
+    }
+
+    /// Idle by both the marks on disk and the calls in memory (marks exist only while the
+    /// activity log is open, so the disk alone could say idle while a call runs).
+    private func idleNow() -> Bool {
+        let now = Date()
+        guard Self.isIdle(marks: marks, now: now, quiet: Self.quiet) else { return false }
+        guard let state = calls?() else { return calls == nil }
+        return Self.isIdle(running: state.running, lastChange: state.lastChange, now: now, quiet: Self.quiet)
+    }
+
+    /// Whether the calls in memory leave Latchkey idle: none running and none started or ended
+    /// for `quiet`.
+    nonisolated static func isIdle(running: Int, lastChange: Date, now: Date, quiet: TimeInterval) -> Bool {
+        running == 0 && now.timeIntervalSince(lastChange) >= quiet
     }
 
     /// Whether Latchkey is idle: no running-call mark in `marks`, and the folder (whose change
