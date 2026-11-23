@@ -247,7 +247,8 @@ enum ActionPage {
     @Test func anOpenMenusItemsComeFirst() async throws {
         let p = TestPage()
         let many = (0..<420).map { "<a href='#l\($0)'>link \($0)</a>" }.joined()
-        let menu = "<button aria-expanded='true' aria-controls='m'>You</button>"
+        let menu =
+            "<button aria-expanded='true' aria-controls='m'>You</button>"
             + "<ul id='m'><li><a href='/logout'>Sign out</a></li></ul>"
         try await p.load("<html><body>\(many)\(menu)</body></html>")
         let r = try PageScripts.decode(try await p.run(PageScripts.read(offset: 0)))
