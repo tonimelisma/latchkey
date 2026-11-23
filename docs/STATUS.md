@@ -576,16 +576,15 @@ after the app was quit.
    FR-072d, plan D9): built while Toni was away. The app's update gate (installs only while
    idle), the build number, the update feed (`macos/scripts/appcast.sh`), and the CI release job
    (`mac-tag.yml`, job `release` on macOS) are in; `mac-build.yml` compiles each macOS change.
-   Off until Toni's one-time setup (CLAUDE.md, "Owner setup"): make the update key on the Mac
-   (Sparkle's `generate_keys`; its public half into `SPARKLE_PUBLIC_ED_KEY` in
-   `macos/Config/Base.xcconfig`, its private half, `generate_keys -x`, into the secret
-   `SPARKLE_PRIVATE_KEY`), and export the "Apple Development" certificate as .p12 into
-   `MAC_CERTIFICATE_P12` and `MAC_CERTIFICATE_PASSWORD`, with `MAC_DEVELOPMENT_TEAM`. Both can be
-   done with `gh secret set` on the Mac so no value passes through a session. Then: run the
-   release job again for the newest tag (workflow_dispatch with its version), install that
-   release on the Mac once by hand or by the updater (installed builds before it have no key),
-   and see the next release arrive by itself. To confirm with Toni: hourly checks, building in
-   CI. Afterwards: remove the Mac's updater (`macos/scripts/auto-update.sh`,
+   Set up 2026-11-23 (through Latchkey on the Mac, no value through a session): the update key
+   (made with Sparkle 2.10.0's `generate_keys`, private half in the login keychain and the secret
+   `SPARKLE_PRIVATE_KEY`, public half in `macos/Config/Base.xcconfig`), the valid "Apple
+   Development" identity (SHA-1 EC6E5A8C…; a revoked one with the same name was left out) in
+   `MAC_CERTIFICATE_P12`/`MAC_CERTIFICATE_PASSWORD`, `MAC_DEVELOPMENT_TEAM`; the environments
+   `release` and `production` deploy from `main` only (security review). Open: the first signed
+   release installed on the Mac once (it ran 0.8.226; the Mac's updater was never set up), then
+   the next release arriving by itself. To confirm with Toni: hourly checks, building in CI.
+   Afterwards: remove the Mac's updater scripts (`macos/scripts/auto-update.sh`,
    `updater-setup.sh`), and say in README.md that Latchkey updates itself.
 
 0. Sign-in's first real export (spec 013 T11, Toni's step): Latchkey's menu → Export Passwords
