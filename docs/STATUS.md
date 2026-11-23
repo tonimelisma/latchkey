@@ -79,6 +79,17 @@ GitHub's provider (this repository and hackernews, on main), `latchkey-infra` an
 leaves out the owner and both identities, and the sentinel counts their sessions as the owner's
 (OS Login names `sa_<id>`, uids looked up on the server). `ci_tools_test.sh` checks that every
 action is pinned and every releasing, deploying or infrastructure job is in its environment.
+The Mac updates itself (`macos/scripts/auto-update.sh`): a per-user launchd agent
+(`net.melisma.latchkey.updater`, written by `updater-setup.sh`, which every `make -C macos install`
+runs) checks GitHub every 15 minutes, at login, and when a request file appears in
+`~/Library/Caches/net.melisma.latchkey.updater/requests` (`now`, or `install-now` to skip the idle
+wait), and when the newest `mac-<x.y.z>` tag on main isn't the installed version, checks that
+commit out in its own clone and runs the usual install (signed with the main checkout's
+Local.xcconfig, the 10-minute idle wait, publish.sh). launchd is its parent, so the install
+quitting Latchkey doesn't stop it, and Claude can start it through Shell by writing a request.
+Log: `~/Library/Logs/Latchkey Updater.log`. `install.sh` installs only a commit carrying CI's
+tag that is the newest release (it no longer tags from the Mac). Tested by
+`scripts/tests/auto_update_test.sh` and `install_checks_test.sh`; not yet run on the Mac.
 
 Fill-only sign-in (Toni, 2026-11-22: "Shouldn't the code just provide what's happening in the
 browser and the agent makes the presumptions?"; then "Fill-only tool", "No cap", "Decide fresh
