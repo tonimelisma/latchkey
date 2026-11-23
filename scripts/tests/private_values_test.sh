@@ -92,5 +92,18 @@ git -C "$repo" push -q origin main 2>/dev/null
 run
 is 0 "commits already on a remote aren't checked again"
 
+# History under a release tag (fetched from GitHub) is published already.
+git -C "$repo" checkout -q -b old
+printf 'PUBLIC_URL=https://%s\n' "$host" >"$repo/docs/old.md"
+git -C "$repo" add docs/old.md
+commit -m "old"
+git -C "$repo" rm -q docs/old.md
+commit -m "old removed"
+git -C "$repo" tag linux-0.0.1
+git -C "$repo" checkout -q main
+git -C "$repo" branch -q -D old
+run
+is 0 "tagged history isn't checked again"
+
 [ "$fails" = 0 ] && echo "private_values_test: all passed"
 exit "$fails"
