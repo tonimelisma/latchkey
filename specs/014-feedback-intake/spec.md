@@ -1,7 +1,8 @@
 # Spec 014: Problem reports to Latchkey's developer — WHAT and WHY
 
-Status: Draft for Toni's review (2026-11-23). No code yet. Replaces spec 001 FR-691 to FR-693
-once built (the relay keeping reports, delivering them to the Mac, the Mac's Feedback folder).
+Status: Built (Toni, 2026-11-23: "finish all the work without stopping"); tasks `tasks.md`.
+Replaces spec 001 FR-691 to FR-693 (the relay keeping reports, delivering them to the Mac, the
+Mac's Feedback folder), now withdrawn.
 Research and the options weighed: `research.md`. How: `plan.md`.
 
 ## Problem
@@ -63,9 +64,10 @@ Toni because he is a user too. Other users' reports never reach the developer.
   delivered.
 
 ### Asking Claude to report
-- **FR-1405** While sharing is on, the relay's instructions to Claude shall ask it to file a report
-  whenever anything done with Latchkey didn't fully work: an error, no response, a wrong or
-  unclear answer, a workaround, or giving up.
+- **FR-1405** While sharing is on, the `feedback` tool's description shall ask Claude to file a
+  report whenever anything done with Latchkey didn't fully work: an error, no response, a wrong or
+  unclear answer, a workaround, or giving up. (The relay's general instructions to Claude are
+  fixed for a whole session, so they no longer mention reports at all; FR-1401.)
 - **FR-1406** While sharing is on, every tool answer that is an error shall end with one short
   line naming `feedback`.
 

@@ -859,25 +859,29 @@ pasted its report into another session. Toni: "whenever an agent tries to use la
 any way unsuccessful, they should file a feedback that goes somewhere where [Claude] can
 investigate". Every issue found this way also becomes a regression case (CLAUDE.md).
 
-- **FR-690** While any machine is paired, the relay shall offer Claude a tool of its own,
+- **FR-690** (amended 2026-11-23 by spec 014 FR-1401: only while the Owner shares problem reports.) While any machine is paired, the relay shall offer Claude a tool of its own,
   `feedback`, which takes a short summary and the details of what was tried (tools, arguments,
   answers) and, optionally, the machine it was about. Its description shall ask Claude to file
   one whenever anything done with Latchkey didn't fully work: a tool error, a page that didn't
   respond, an answer that was wrong or unclear, a workaround that was needed, or giving up.
-- **FR-691** The relay shall answer `feedback` itself, whether or not any machine is online, and
+- **FR-691** (withdrawn 2026-11-23, replaced by spec 014: the relay keeps no readable report,
+  and reports go only to the developer's intake, for users who chose to share them.) The relay shall answer `feedback` itself, whether or not any machine is online, and
   keep each report (its time, the Claude app's name, the machine named, the summary, and the
   details) with its text sealed under the relay's key file (FR-186), until the account is
   deleted.
-- **FR-692** When a report is filed and a Mac of the account that understands feedback is
+- **FR-692** (withdrawn 2026-11-23, replaced by spec 014: the relay keeps no readable report,
+  and reports go only to the developer's intake, for users who chose to share them.) When a report is filed and a Mac of the account that understands feedback is
   connected, the relay shall send it to that Mac at once; otherwise it shall send every report
   that Mac hasn't saved yet right after the Mac's next welcome. A report is sent until a Mac says
   it saved it, then never again. Only Macs get reports (not Linux servers).
-- **FR-693** The Mac app shall save each report it receives as a plain text file of its own in
+- **FR-693** (withdrawn 2026-11-23, replaced by spec 014: the relay keeps no readable report,
+  and reports go only to the developer's intake, for users who chose to share them.) The Mac app shall save each report it receives as a plain text file of its own in
   the folder `Feedback` inside its data folder, named by its time and id, and tell the relay
   which reports it saved. A report already saved is not written again.
 - **FR-694** No one shall be notified of a report (Toni, 2026-11-16: "No notification"); reports
   are read when someone investigates.
-- **FR-695** The relay's server instructions to Claude shall say that `feedback` exists and when
+- **FR-695** (amended 2026-11-23 by spec 014 FR-1405: the `feedback` tool's description says it
+  instead, and only while the Owner shares reports.) The relay's server instructions to Claude shall say that `feedback` exists and when
   to use it.
 
 ## Success criteria

@@ -170,11 +170,13 @@ apps. It works in the background instead.
   included), in files of one day each that nothing ever rewrites or deletes. Your Mac's are
   encrypted, the relay's are encrypted and go when you delete your account, and you can
   export them all in one shape, to run evals over everything that happened.
-- **Claude reports what didn't work.** Whenever something Claude did through Latchkey didn't
-  fully work, it files a short report with Latchkey's feedback tool. The relay keeps it
-  encrypted and copies it to your Mac as a text file in Latchkey's folder
-  (`~/Library/Application Support/Latchkey/Feedback`), so it can be looked into and fixed.
-  Nobody is notified.
+- **Claude can report what didn't work, if you want.** Off unless you turn on "Share Problem
+  Reports with Latchkey's Developer" in Latchkey's settings. Then, whenever something Claude did
+  through Latchkey didn't fully work, Claude writes a short report (told to leave out your
+  passwords, codes, account numbers, and message texts), and your relay sends it, encrypted so
+  only Latchkey's developer can read it, with no name, email address, or machine name. Nothing is
+  kept on your side, and you can turn it off at any time. Someone running their own relay can
+  block forwarding reports from it.
 - **It never interrupts you.** What Claude does on your Mac happens in the background, except
   computer control, which you'll see.
 - **Nothing is left behind.** What Claude starts is cleaned up when it's done.

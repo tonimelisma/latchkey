@@ -209,17 +209,16 @@ pull requests' branches; nothing to tidy after a cloud push).
 
 ## Every issue becomes a regression case (Toni, 2026-11-16)
 
-Claude's own reports of what didn't work, filed through the relay's `feedback` tool, arrive as
-files in `~/Library/Application Support/Latchkey/Feedback` (spec 001 FR-690 to FR-695). Pending
-ones are the files directly in that folder; handled ones are in `Feedback/Handled`. At the start
-of every session (Toni, 2026-11-23), list the pending reports (in a cloud session through
-Latchkey's `shell_run`) and, if there are any, ask Toni with AskUserQuestion, naming each report's
-summary in a few words: look into them in this session, start a separate session for them
-(`create_session`, its prompt naming the report files), or leave them for now. Each report
-looked into is an issue found (below): fixed in that session where it can be, with its
-regression case, otherwise reported to Toni with what was learned. A report is handled once its
-fix is on main or Toni has heard why not; then move it to `Feedback/Handled` (`shell_run` with
-that folder in `writes`).
+Problem reports that users chose to share (Toni's own too) reach the developer's intake, sealed
+to the developer's key (spec 014; `docs/cloud-sessions.md`, "Problem reports"). At the start of
+every session (Toni, 2026-11-23), list the open reports with `go run ./cmd/latchkey-reports list`
+in `relay/` and, if there are any, ask Toni with AskUserQuestion, naming each report's summary in
+a few words: look into them in this session, start a separate session for them
+(`create_session`), or leave them for now. Each report looked into is an issue found (below):
+fixed in that session where it can be, with its regression case, otherwise reported to Toni with
+what was learned. Report contents never go into the repository, a pull request, or a CI log. A
+report is dispositioned once its fix is on main or Toni has heard why not; then delete it with
+`latchkey-reports delete <id>` (nothing is kept: git is the history).
 
 Every issue found in Latchkey (by Toni, an agent's feedback report, or
 a test) gets a case in a regressions group of `macos/scripts/state-check/cases.json`

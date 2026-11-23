@@ -19,10 +19,14 @@ then says this relay doesn't forward problem reports.
 ## Relay → intake (FR-1420)
 
 `POST {FEEDBACK_INTAKE_URL}/v1/reports`
-- Body: `hpke.Seal(developerKey, HKDFSHA256, ChaCha20Poly1305, info="latchkey-report-v1",
-  plaintext)`, KEM `MLKEM768X25519`; at most 64 KB.
-- Headers: `Latchkey-Work-Hour: <UTC hour, RFC 3339 to the hour>`, `Latchkey-Work-Nonce: <hex>`.
-- Answers: 202 `{"id": "<id>"}`; 400 malformed; 413 too big; 403 bad proof; 429 over the limit.
+- Body: the 4 bytes `LKR1`, then `hpke.Seal(developerKey, HKDFSHA256, ChaCha20Poly1305,
+  info="latchkey-report-v1", plaintext)`, KEM `MLKEM768X25519`; at most 64 KB.
+- Proof of work: SHA-256 of (SHA-256 of the body, the hour, the nonce as 8 bytes big-endian)
+  starts with 20 zero bits; the hour is the current or the previous UTC hour, written
+  `2006-01-02T15Z`.
+- Headers: `Latchkey-Work-Hour: <the hour>`, `Latchkey-Work-Nonce: <decimal>`.
+- Answers: 202 `{"id": "<id>"}`; 400 malformed; 413 too big; 403 bad proof; 429 over the limit;
+  503 full.
 
 Plaintext (JSON):
 
