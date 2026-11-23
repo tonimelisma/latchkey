@@ -74,12 +74,16 @@ struct AppControl: Sendable {
             // A row of a list or sidebar, or a cell or text in one, is selected as a click would
             // (Toni, 2026-11-23: "press selects the row"): SwiftUI's sidebar rows take no press,
             // and pressing their text did nothing (Otos, 2026-11-20). No pointer moves.
-            if let row = AppControl.row(around: el),
+            // Only for a row, a cell, or text: a button or checkbox in a row is pressed (review).
+            if ["AXRow", "AXCell", "AXStaticText"].contains(e.role), let row = AppWindowReader.row(around: el),
                 AXUIElementSetAttributeValue(row, kAXSelectedAttribute as CFString, kCFBooleanTrue) == .success
             {
                 return true
             }
-            return AXUIElementPerformAction(el, kAXPressAction as CFString) == .success
+            if AXUIElementPerformAction(el, kAXPressAction as CFString) == .success { return true }
+            // Anything else in a row that takes no press: the row.
+            guard let row = AppWindowReader.row(around: el) else { return false }
+            return AXUIElementSetAttributeValue(row, kAXSelectedAttribute as CFString, kCFBooleanTrue) == .success
         },
         focus: { e in
             guard let el = e.element else { return false }

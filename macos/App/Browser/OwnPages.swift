@@ -238,7 +238,7 @@ final class OwnPages {
             let n = name.trimmingCharacters(in: .whitespaces).lowercased()
             guard var e = pages[n], e.browser != nil else {
                 throw Problem.none(
-                    "Claude has no page \"\(name.prefix(20))\" open (it may have been closed after 30 minutes unused, or when Latchkey restarted). Open the address again with browser_read and url."
+                    "Claude has no page \"\(name.prefix(20))\" open (it may have been closed after 30 minutes unused, given way to a newer page after 5 minutes unused while 10 were open, or closed when Latchkey restarted). Open the address again with browser_read and url."
                         + (pages.isEmpty ? "" : "\n\n" + listing()))
             }
             e.used = Date()

@@ -29,9 +29,9 @@ struct DeadlineTests {
 
 /// Calls naming the owner's Safari tabs take turns (2026-11-19: another chat's pick came between
 /// a pick and its click), and a turn that doesn't come within its limit is given up.
-struct OneAtATimeTests {
+struct TakingTurnsTests {
     @Test func aSecondCallerWaitsForTheFirstToLeave() async {
-        let gate = OneAtATime()
+        let gate = TakingTurns()
         #expect(await gate.enter(within: .seconds(5)))
         let second = Task { await gate.enter(within: .seconds(5)) }
         try? await Task.sleep(for: .milliseconds(100))
@@ -42,7 +42,7 @@ struct OneAtATimeTests {
     }
 
     @Test func aTurnThatDoesntComeIsGivenUp() async {
-        let gate = OneAtATime()
+        let gate = TakingTurns()
         #expect(await gate.enter(within: .seconds(1)))
         #expect(!(await gate.enter(within: .milliseconds(100))))
         await gate.leave()

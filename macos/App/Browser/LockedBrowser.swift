@@ -812,18 +812,10 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate {
                 // Safari's wrapper uses (seen live on GitHub), but not a script the app itself runs.
                 return try await evaluate(code, text: shown)
             }
-            var last: Error?
-            for body in PageScripts.asyncBodies(code) {
-                do {
-                    return try await evaluate(PageScripts.asyncFunction(body), async: true, text: shown)
-                } catch let f as SafariBrowser.Failure {
-                    throw f
-                } catch {
-                    last = error
-                    guard PageScripts.failure(error).contains("SyntaxError") else { break }
-                }
-            }
-            throw last ?? SafariBrowser.Failure.failed("The script didn't run.")
+            // One body, chosen by the syntax check, run once (security review 2026-11-23: a page
+            // could throw a SyntaxError from its own code and have Claude's run again).
+            let body = PageScripts.asyncBodies(code).first ?? code
+            return try await evaluate(PageScripts.asyncFunction(body), async: true, text: shown)
         } catch let f as SafariBrowser.Failure {
             throw f
         } catch {

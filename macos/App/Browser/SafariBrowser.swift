@@ -115,7 +115,7 @@ struct TabSurvey: Equatable {
 /// pages are Latchkey's own browser's (FR-444, `OwnPages`), never Safari's.
 actor SafariBrowser {
     /// Calls that name one of the owner's tabs pick it and act on it as one turn (2026-11-19).
-    nonisolated let turns = OneAtATime()
+    nonisolated let turns = TakingTurns()
     enum Failure: Error, Equatable {
         /// No tab of the Owner's is picked (or Latchkey's own page isn't open).
         case noWindow
@@ -373,9 +373,14 @@ actor SafariBrowser {
     /// ones, as Safari's `do JavaScript` doesn't wait for a promise.
     private func runAsync(_ code: String, answer: DialogAnswer) async throws -> String {
         let id = Self.newToken()
-        for body in PageScripts.asyncBodies(code) {
+        // One body, chosen by the syntax check, run once: what the page answers never makes
+        // Claude's code run again (security review 2026-11-23: a page that breaks the start
+        // script after Claude's code ran would have run it twice).
+        for body in PageScripts.asyncBodies(code).prefix(1) {
             let started = try await javaScript(PageScripts.startAsync(id: id, body: body), answer: answer)
-            guard started == "started" else { continue }
+            guard started == "started" else {
+                return "Error: the script didn't start in the page" + (started.isEmpty ? "." : ": \(started)")
+            }
             let deadline = ContinuousClock.now + asyncLimit
             while ContinuousClock.now < deadline {
                 try await Task.sleep(for: .milliseconds(100))

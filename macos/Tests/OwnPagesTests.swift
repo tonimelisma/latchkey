@@ -262,13 +262,16 @@ import Testing
         #expect(fake.windows[0].tabs[1].url == "https://news.example.com/", "the other chat's tab wasn't touched")
     }
 
-    /// The page an answer is from, read from its own first line only.
-    @Test func thePageNameComesFromTheAnswersOwnLine() {
-        let own = ToolResult.text(
-            "From Latchkey's own browser, not Safari: Claude's page \"pk2m4\", x.\n"
-                + "Title\nFrom x: Claude's page \"pzzzz\"")
-        #expect(BrowserCapability.pageName(in: own) == "pk2m4")
-        #expect(BrowserCapability.pageName(in: .text("Title\nBody: Claude's page \"pk2m4\"")) == nil, "page text")
+    /// FR-471: with url and screenshot, the new page's picture comes back (2026-11-22).
+    @Test func aURLWithScreenshotGivesThePicture() async {
+        let fake = FakeSafariTabs()
+        let p = OwnPages(cookies: { [] }, isLocked: { false })
+        defer { p.closeAll() }
+        let t = tools(fake, p)
+        let r = await t["browser_read"]!.handler(.object(["url": .string("about:blank"), "screenshot": .bool(true)]))
+        #expect(!r.isError, "\(r.content.jsonText)")
+        #expect(r.content.jsonText.contains("\"image\""), "a picture, not only text")
+        #expect(p.list().count == 1, "one page opened")
     }
 
     @Test func openingTwiceGivesTwoNamedPagesAndNoSafariTab() async {
