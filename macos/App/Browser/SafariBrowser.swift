@@ -384,7 +384,15 @@ actor SafariBrowser {
             let deadline = ContinuousClock.now + asyncLimit
             while ContinuousClock.now < deadline {
                 try await Task.sleep(for: .milliseconds(100))
-                let r = try await javaScript(PageScripts.asyncResult(id: id))
+                let r: String
+                do {
+                    // With Claude's dialog answer too: a confirm may come while the script runs.
+                    r = try await javaScript(PageScripts.asyncResult(id: id), answer: answer)
+                } catch Failure.tabGone {
+                    // The script ran and sent the tab elsewhere (location.href = …): said so,
+                    // never as if nothing was done.
+                    return "The script ran and the page went elsewhere before it finished; read the page again."
+                }
                 switch r {
                 case "running": continue
                 case "gone": return "The page changed before the script finished."
