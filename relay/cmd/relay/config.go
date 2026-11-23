@@ -1,6 +1,7 @@
 package main
 
 import (
+	"crypto/hpke"
 	"errors"
 	"fmt"
 	"net"
@@ -13,6 +14,7 @@ import (
 	"github.com/tonimelisma/latchkey/relay/internal/limit"
 	"github.com/tonimelisma/latchkey/relay/internal/oauth"
 	"github.com/tonimelisma/latchkey/relay/internal/store"
+	"github.com/tonimelisma/latchkey/relay/reports"
 )
 
 // config is the relay's environment configuration (plan D10).
@@ -40,6 +42,12 @@ type config struct {
 	// SetupCode lets the first account be created without email (spec 009 FR-907); with it, the
 	// email server is optional (FR-908).
 	SetupCode string
+	// Problem reports the users chose to share (spec 014): REPORTS_INTAKE_URL and
+	// REPORTS_DEVELOPER_KEY default to Latchkey's developer (FR-1415); REPORTS_BLOCK=1 adds the
+	// operator's block (FR-1415a).
+	ReportsIntakeURL string
+	ReportsKey       hpke.PublicKey
+	ReportsBlocked   bool
 }
 
 // minSetupCode is the shortest setup code accepted, letters and digits counted without dashes
@@ -116,6 +124,27 @@ func loadConfig(getenv func(string) string) (config, error) {
 	}
 	if c.AllowedClientHosts, err = oauth.ParseAllowedHosts(getenv("ALLOWED_CLIENT_HOSTS")); err != nil {
 		errs = append(errs, fmt.Errorf("ALLOWED_CLIENT_HOSTS: %w", err))
+	}
+	c.ReportsIntakeURL = strings.TrimSpace(getenv("REPORTS_INTAKE_URL"))
+	if c.ReportsIntakeURL == "" {
+		c.ReportsIntakeURL = reports.DefaultIntakeURL
+	}
+	if u, err := url.Parse(c.ReportsIntakeURL); err != nil || u.Scheme != "https" || u.Host == "" {
+		errs = append(errs, errors.New("REPORTS_INTAKE_URL must be an https address"))
+	}
+	key := strings.TrimSpace(getenv("REPORTS_DEVELOPER_KEY"))
+	if key == "" {
+		key = reports.DefaultDeveloperKey()
+	}
+	if c.ReportsKey, err = reports.PublicKey(key); err != nil {
+		errs = append(errs, fmt.Errorf("REPORTS_DEVELOPER_KEY: %w", err))
+	}
+	switch b := strings.TrimSpace(getenv("REPORTS_BLOCK")); b {
+	case "", "0", "false":
+	case "1", "true":
+		c.ReportsBlocked = true
+	default:
+		errs = append(errs, errors.New("REPORTS_BLOCK must be 1 or 0"))
 	}
 	if c.KeyFile = getenv("KEY_FILE"); c.KeyFile == "" && c.DataDir != "" {
 		c.KeyFile = filepath.Join(c.DataDir, store.DefaultKeyFileName)

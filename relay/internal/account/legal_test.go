@@ -48,7 +48,7 @@ var storedData = map[string]string{
 	"client_authorizations": "A note of each approval",
 	"audit_log":             "An activity log",
 	"events":                "A record of events on your account",
-	"feedback":              "Problem reports Claude files",
+	"report_outbox":         "Problem reports to Latchkey's developer",
 	"blocked_emails":        "A list of blocked email addresses",
 	"operator_log":          "A record of what the operator did",
 }

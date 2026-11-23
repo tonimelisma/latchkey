@@ -120,7 +120,10 @@ type State struct {
 	// UptimeS is how long a Linux server has been up, in seconds (spec 010); a Mac leaves it out.
 	UptimeS *int64 `json:"uptime_s,omitempty"`
 	// ScreenLocked is whether a Mac's screen is locked (FR-671); left out when not known.
-	ScreenLocked *bool     `json:"screen_locked,omitempty"`
+	ScreenLocked *bool `json:"screen_locked,omitempty"`
+	// ShareReports is the Owner's choice to send problem reports to Latchkey's developer (spec
+	// 014 FR-1400, FR-1403); left out by an app that doesn't offer it.
+	ShareReports *bool     `json:"share_reports,omitempty"`
 	ObservedAt   time.Time `json:"observed_at"`
 }
 
@@ -205,6 +208,9 @@ type Welcome struct {
 	// Name is the name the relay kept for the machine, sent when the hello asked for one (spec
 	// 010 FR-1002).
 	Name string `json:"name,omitempty"`
+	// ReportsBlocked: this relay's operator added the block on forwarding problem reports (spec
+	// 014 FR-1415a).
+	ReportsBlocked bool `json:"reports_blocked,omitempty"`
 }
 
 // StateUpdate is the heartbeat and change report.

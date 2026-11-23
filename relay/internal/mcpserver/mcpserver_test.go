@@ -56,7 +56,8 @@ func setupWith(t *testing.T, opts mcpserver.Options) *env {
 	var ms *mcpserver.Server
 	h := hub.New(st, hub.Config{
 		HeartbeatInterval: time.Second, OfflineAfter: 3 * time.Second, PingInterval: time.Hour,
-		OnToolsChanged: func(userID string) { ms.ToolsChanged(userID) },
+		OnToolsChanged:   func(userID string) { ms.ToolsChanged(userID) },
+		OnSharingChanged: func(userID string) { ms.SharingChanged(userID) },
 	})
 	ms = mcpserver.New(st, h, opts)
 	verifier := func(_ context.Context, token string, _ *http.Request) (*auth.TokenInfo, error) {
@@ -206,7 +207,7 @@ func TestOnline(t *testing.T) {
 			e.pair()
 			e.connectMac()
 			cs := e.client(v, nil)
-			assert.Equal(t, []string{"battery_status", "feedback", "machines"}, toolNames(t, cs))
+			assert.Equal(t, []string{"battery_status", "machines"}, toolNames(t, cs))
 
 			res := call(t, cs, "battery_status")
 			assert.False(t, res.IsError)
@@ -253,7 +254,7 @@ func TestOffline(t *testing.T) {
 			require.Eventually(t, func() bool { return !e.hub.Online(e.device.ID) }, 5*time.Second, 10*time.Millisecond)
 
 			cs := e.client(v, nil)
-			assert.Equal(t, []string{"battery_status", "feedback", "machines"}, toolNames(t, cs), "last reported tools stay listed (FR-013)")
+			assert.Equal(t, []string{"battery_status", "machines"}, toolNames(t, cs), "last reported tools stay listed (FR-013)")
 
 			start := time.Now()
 			res := call(t, cs, "battery_status")
@@ -328,7 +329,7 @@ func TestToolListChanged(t *testing.T) {
 			mu.Unlock()
 		},
 	})
-	require.Equal(t, []string{"battery_status", "feedback", "machines"}, toolNames(t, cs))
+	require.Equal(t, []string{"battery_status", "machines"}, toolNames(t, cs))
 
 	// The Owner turns System info off: its tool must vanish (FR-061, FR-062, SC-08).
 	require.NoError(t, c.Send(ctx(t), &agentproto.ToolsUpdate{Tools: []*mcp.Tool{}}))
@@ -337,7 +338,7 @@ func TestToolListChanged(t *testing.T) {
 		defer mu.Unlock()
 		return notified > 0
 	}, 5*time.Second, 10*time.Millisecond, "list_changed sent")
-	assert.Equal(t, []string{"feedback", "machines"}, toolNames(t, cs), "only the relay's own tools stay while one is paired")
+	assert.Equal(t, []string{"machines"}, toolNames(t, cs), "only the relay's own tools stay while one is paired")
 
 	res, err := cs.CallTool(ctx(t), &mcp.CallToolParams{Name: "battery_status"})
 	if err == nil {

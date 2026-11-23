@@ -37,6 +37,9 @@ type Options struct {
 	SessionTimeout time.Duration
 	// Traces receives each call's full trace (FR-683); nil traces nothing.
 	Traces *trace.Store
+	// Reports is where problem reports the Owner chose to share go (spec 014); with no
+	// developer key or intake, or with the operator's block, no feedback tool is offered.
+	Reports ReportsOptions
 }
 
 // DefaultSessionTimeout is how long an unused session lives (FR-090).
@@ -208,6 +211,9 @@ type Server struct {
 	// loadTools reads the tools an Owner's server offers (ownerTools); a field so a test can
 	// interleave two syncs.
 	loadTools func(ctx context.Context, userID string) []*mcp.Tool
+
+	// reportsKick wakes the report sender after a report is filed (spec 014).
+	reportsKick chan struct{}
 }
 
 // userServer is one Owner's MCP server; its tool list is the union of that Owner's machines'
@@ -233,7 +239,10 @@ func New(st *store.Store, h *hub.Hub, opts Options) *Server {
 	if opts.SessionTimeout <= 0 {
 		opts.SessionTimeout = DefaultSessionTimeout
 	}
-	s := &Server{store: st, hub: h, opts: opts, users: map[string]*userServer{}, sdkLog: sdkLogger(opts.Logger)}
+	s := &Server{
+		store: st, hub: h, opts: opts, users: map[string]*userServer{}, sdkLog: sdkLogger(opts.Logger),
+		reportsKick: make(chan struct{}, 1),
+	}
 	s.loadTools = s.ownerTools
 	sdkLog := s.sdkLog
 	// An idle session is closed by the SDK (its next request gets 404 and the client starts a new
@@ -335,7 +344,8 @@ func (s *Server) ToolsChanged(userID string) {
 // ownerTools is the union of the Owner's machines' stored tools, plus the machines tool (spec
 // 010 plan D2).
 func (s *Server) ownerTools(ctx context.Context, userID string) []*mcp.Tool {
-	return mergedTools(s.machines(ctx, userID))
+	ms := s.machines(ctx, userID)
+	return mergedTools(ms, s.sharing(ms))
 }
 
 // syncTools makes the Owner's server offer exactly the merged tool list. The lock is taken
@@ -470,6 +480,10 @@ func (s *Server) forward(userID, toolName string) mcp.ToolHandler {
 				line += "\n" + others
 			}
 			appendStatusLine(result, line)
+		}
+		// FR-1406: while the Owner shares problem reports, an error reminds Claude of feedback.
+		if result.IsError && s.sharing(ms) {
+			result.Content = append(result.Content, &mcp.TextContent{Text: feedbackLine})
 		}
 		s.audit(ctx, userID, d.ID, callID, client, toolName, outcome, start)
 		s.trace(userID, start, callID, client, toolName, d.Name, req, result, outcome)

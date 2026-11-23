@@ -90,7 +90,7 @@ func ptr[T any](v T) *T { return &v }
 
 // mergedTools is what Claude sees: the machines tool (while any machine is paired) and one tool
 // per name any machine offers, with descriptions per kind of machine and the machine argument.
-func mergedTools(ms []machine) []*mcp.Tool {
+func mergedTools(ms []machine, sharing bool) []*mcp.Tool {
 	if len(ms) == 0 {
 		return nil
 	}
@@ -103,7 +103,10 @@ func mergedTools(ms []machine) []*mcp.Tool {
 		}
 	}
 	slices.Sort(names)
-	out := []*mcp.Tool{machinesTool, feedbackTool}
+	out := []*mcp.Tool{machinesTool}
+	if sharing { // spec 014 FR-1401: no tool while the Owner doesn't share
+		out = append(out, feedbackTool)
+	}
 	for _, name := range names {
 		out = append(out, mergeTool(name, ms))
 	}
@@ -416,6 +419,4 @@ func machinesResult(ms []machine, now time.Time) *mcp.CallToolResult {
 const instructions = "Latchkey reaches the owner's own machines: Macs and Linux servers. " +
 	"The machines tool lists them, whether each is online, and what each offers. " +
 	"When more than one machine offers a tool, pass the machine's name as machine; when only one does, leave it out. " +
-	"Every answer ends with the answering machine's state and the other machines. " +
-	"Whenever anything done with Latchkey didn't fully work (an error, no response, a wrong answer, a workaround, or giving up), " +
-	"file a report with the feedback tool before answering the user."
+	"Every answer ends with the answering machine's state and the other machines."
