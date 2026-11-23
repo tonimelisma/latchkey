@@ -41,7 +41,6 @@ Plaintext (JSON):
 ## Developer → intake (FR-1423)
 
 With `Authorization: Bearer <developer token>`:
-- `GET /v1/reports?state=open` → `[{"id", "arrived"}]`
+- `GET /v1/reports` → `[{"id", "arrived"}]`, oldest first
 - `GET /v1/reports/{id}` → the sealed bytes
-- `POST /v1/reports/{id}/disposition` `{"outcome": "fixed|duplicate|expected|cant_fix|for_developer",
-  "change": "<commit or PR>", "case": "<regression case id>", "duplicate_of": "<id>"}`
+- `DELETE /v1/reports/{id}` → 204; the report is gone, nothing kept (FR-1424)

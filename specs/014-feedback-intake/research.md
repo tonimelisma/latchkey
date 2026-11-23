@@ -74,6 +74,4 @@ relay's build and image), or a separate repository (cleanest split, but a second
 sessions, CI, and specs). A top-level folder keeps one repository and one spec process while the
 intake builds, tests, and ships on its own; shared code stays in neither.
 
-## Still for Toni
-
-- At disposition: delete the report, keeping only its outcome, or keep it for a time (FR-1424).
+- At disposition the report is deleted, nothing kept; git is the history (FR-1424).
