@@ -105,7 +105,7 @@ jobs:
           grep -E "error:|Expectation failed|Fatal error|crashed|' failed |✘" "$RUNNER_TEMP/test.log" | head -300 || true
           grep -E "Restarting after|unexpected exit|crashed" "$RUNNER_TEMP/test.log" | head -40 || true
           # The test host's crash reports: which test crashed, and where.
-          for f in $(ls -t ~/Library/Logs/DiagnosticReports/*.ips 2>/dev/null | head -3); do
+          find ~/Library/Logs/DiagnosticReports -name '*.ips' -mmin -60 2>/dev/null | head -3 | while read -r f; do
             echo "== $f"
             tail -n +2 "$f" | jq -r '.threads[]? | select(.triggered == true) | .frames[:25][] | "\(.imageIndex) \(.symbol // "?") \(.sourceFile // "")"' || head -80 "$f"
           done
