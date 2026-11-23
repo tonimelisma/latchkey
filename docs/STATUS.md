@@ -90,6 +90,12 @@ quitting Latchkey doesn't stop it, and Claude can start it through Shell by writ
 Log: `~/Library/Logs/Latchkey Updater.log`. `install.sh` installs only a commit carrying CI's
 tag that is the newest release (it no longer tags from the Mac). Tested by
 `scripts/tests/auto_update_test.sh` and `install_checks_test.sh`; not yet run on the Mac.
+Live checks from the cloud: a fresh cloud session from claude.ai runs the cases with its own
+Latchkey tools (`state-check.sh prompt`, `record`, `merge`; screen state and the focus watcher
+through `shell_run`; docs/cloud-sessions.md, "Live checks"). Merging goes through pull requests
+(rebase), which GitHub deletes after the merge; `tidy.sh` and `loose-ends.sh` recognise rebased
+work (`git cherry`). CLAUDE.md and docs/cloud-sessions.md now describe this process, with the
+"Owner setup" list.
 
 Fill-only sign-in (Toni, 2026-11-22: "Shouldn't the code just provide what's happening in the
 browser and the agent makes the presumptions?"; then "Fill-only tool", "No cap", "Decide fresh
@@ -564,6 +570,12 @@ after the app was quit.
 
 ## Next steps
 
+0. Cloud-first, what only Toni can do (CLAUDE.md, "Owner setup"): the secrets, the Google Cloud
+   setup (`deploy/gcp-wif-setup.sh` in Cloud Shell), the package's Actions access, the updater on
+   the Mac (`macos/scripts/updater-setup.sh`), `LATCHKEY_CHECK_TO` in the cloud environment. Then
+   check on the Mac: the updater installs the first CI-tagged release; the first relay image
+   from the workflow is signed and the server switches to it (its log, `latchkey-update-apps`);
+   the infra workflow's `harden` runs as `latchkey-infra` and the alerts stay quiet.
 1. Codes experiment (Toni, 2026-11-22: "test all approaches for robustness on a wide variety of
    web sites"): Claude reads codes / Latchkey fetches codes / middle path, on many sites; report.
    The two new ways are built (logins_fill `code_from` and `check_code`, spec 013 FR-1376,

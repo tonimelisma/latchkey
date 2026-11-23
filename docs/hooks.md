@@ -24,8 +24,9 @@ Enforced by hooks in `.claude/settings.json` (`scripts/hooks.sh`):
   with `git branch -d`; never remove a worktree with `discard_changes` unless its commits are on
   main.
 - After every push and at every session start, `scripts/tidy.sh` runs automatically (Claude Code
-  hook in `.claude/settings.json`): branches merged into main (local and GitHub; never main, the
-  current branch, or a branch checked out in a worktree), finished worktrees (as soon as merged),
+  hook in `.claude/settings.json`; not in a cloud session): local branches merged into main, also
+  by a pull request's rebase (never main, the current branch, or a branch checked out in a
+  worktree; GitHub deletes merged pull requests' branches itself), finished worktrees (as soon as merged),
   stale refs, every disk image except the newest release's (highest `mac-` tag), built apps
   under `macos/build/DerivedData/Build/Products` (in the main checkout and in removed worktrees),
   and all but the newest relay Docker image. Last, it fast-forwards the main checkout when it is

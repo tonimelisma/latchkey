@@ -2,7 +2,7 @@
 # Removes what's left over after work is merged (Toni, 2026-10-23). Runs automatically after every
 # `git push` through the Claude Code hook in .claude/settings.json; safe to run by hand any time.
 #
-# - Local branches merged into origin/main, except main, the current branch, and any branch
+# - Local branches merged into origin/main (also by a pull request's rebase), except main, the current branch, and any branch
 #   checked out in a worktree. Unmerged branches are never touched. Branches on GitHub are left
 #   alone: GitHub deletes a pull request's branch when it is merged (the repository's
 #   "Automatically delete head branches" setting, on since 2026-11-22), and the remote-tracking
@@ -38,12 +38,20 @@ running_inside() { # <folder>: some process of this user has its working directo
     substr($0, 1, 1) == "n" { d = substr($0, 2); if (d == p || index(d, p "/") == 1) found = 1 }
     END { exit !found }'
 }
+# on_main <ref>: all of ref's work is on origin/main: ref is an ancestor of it, or each of ref's
+# commits since they parted has its change on main already (a pull request merged by rebase,
+# which gives the commits new names; git cherry compares the changes themselves).
+on_main() {
+  git merge-base --is-ancestor "$1" refs/remotes/origin/main 2>/dev/null && return 0
+  _cherry=$(git cherry refs/remotes/origin/main "$1" 2>/dev/null) || return 1
+  [ -n "$_cherry" ] && ! printf '%s\n' "$_cherry" | grep -q '^+'
+}
 # drop_branch <name>: deletes a local branch whose commits are all on origin/main. `git branch -d`
 # alone refuses a branch with no upstream while the main checkout is still behind origin/main
 # (it is fast-forwarded last), which left a helper's branch behind on 2026-10-25; the ancestor
 # check is what makes deleting the ref safe.
 drop_branch() {
-  git merge-base --is-ancestor "refs/heads/$1" refs/remotes/origin/main 2>/dev/null || return 1
+  on_main "refs/heads/$1" || return 1
   git branch -q -d -- "$1" 2>/dev/null || git update-ref -d "refs/heads/$1"
 }
 git worktree list --porcelain | awk '
@@ -55,7 +63,7 @@ git worktree list --porcelain | awk '
   [ -d "$wt" ] || continue
   branch=$(git -C "$wt" symbolic-ref --quiet --short HEAD 2>/dev/null || echo "")
   [ -n "$branch" ] || continue
-  git merge-base --is-ancestor "refs/heads/$branch" refs/remotes/origin/main 2>/dev/null || continue
+  on_main "refs/heads/$branch" || continue
   [ -z "$(git -C "$wt" status --porcelain 2>/dev/null)" ] || continue
   worked=no
   git reflog show --format=%gs "refs/heads/$branch" 2>/dev/null | grep -qv '^branch: Created' && worked=yes
@@ -83,7 +91,7 @@ current=$(git symbolic-ref --quiet --short HEAD 2>/dev/null || echo "")
 inuse=$(git worktree list --porcelain | sed -n 's|^branch refs/heads/||p')
 keep() { [ "$1" = main ] || [ "$1" = "$current" ] || printf '%s\n' "$inuse" | grep -qxF -e "$1"; }
 
-for b in $(git for-each-ref --format='%(refname:short)' --merged refs/remotes/origin/main refs/heads/); do
+for b in $(git for-each-ref --format='%(refname:short)' refs/heads/); do
   keep "$b" && continue
   drop_branch "$b" && echo "tidy: deleted local branch $b"
 done

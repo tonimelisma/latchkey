@@ -1,4 +1,9 @@
-# Cloud sessions (claude.ai/code; 2026-11-21)
+# Cloud sessions (claude.ai/code; 2026-11-21, cloud-first since 2026-11-23)
+
+All development happens in cloud sessions (Toni, 2026-11-23). The Mac is used only for what
+physically needs macOS: building and testing the Mac app, and the Mac's own checks. Whatever a
+cloud session's GitHub proxy refuses (tag pushes, releases, branch deletion, deploys) runs in
+GitHub Actions, started by a merge to main or by repository_dispatch.
 
 Moved from CLAUDE.md on 2026-11-22 (it keeps a pointer); the session-start hook tells a cloud
 session to follow this file. Toni's standing rules for all his projects, from his personal instructions, which don't reach
@@ -26,15 +31,17 @@ included, so it reaches the Mac; started with `claude --cloud` it has none. Ever
 applies, except:
 
 - No worktree: the VM's clone is the session's own. Skip `EnterWorktree`, `ExitWorktree` and
-  `link-local-files.sh`; commit on the session's branch and fast-forward `main` as usual.
-  GitHub's proxy refuses branch deletions and tag pushes, so the merged branch stays on GitHub
-  until the Mac's `tidy.sh` deletes it, and nothing that tags (`scripts/release-tag.sh`, an
-  install, a Linux release) can run here.
+  `link-local-files.sh`; commit on the session's branch, push it early and often (the VM is
+  reclaimed), and merge through its pull request (CLAUDE.md, "Git and worktrees"): the REST API
+  works (`gh api repos/tonimelisma/latchkey/pulls`, `…/pulls/<n>/merge` with
+  `merge_method=rebase`), GraphQL doesn't, so `gh pr create` fails. GitHub deletes the branch
+  after the merge. The proxy refuses tag pushes, release writes and branch deletions: those
+  happen in the workflows below.
 - Hooks (`scripts/hooks.sh`): session start runs `scripts/cloud-setup.sh` first (jq, lsof, the
   pinned ShellCheck, uv; Go modules, the pinned Go tools and Semgrep, and test builds warm in the
   background, logged to `~/.cache/latchkey-cloud-setup.log`, done when `…log.done` exists), skips
-  `tidy.sh`, and still reports loose ends. The guard is unchanged. No `tidy.sh` after a push. The
-  work list for `keep-going.sh` is `~/.claude/worklists/<session id>.md` in the VM.
+  `tidy.sh`, and still reports loose ends. The guard is unchanged. No `tidy.sh` after a push
+  (nothing to tidy: GitHub deletes merged branches). The work list for `keep-going.sh` is `~/.claude/worklists/<session id>.md` in the VM.
 - Pushes need the private values: the cloud environment's variables `LATCHKEY_PRIVATE_DEPLOY_HOST`,
   `LATCHKEY_PRIVATE_DEPLOY_DNS_ZONE`, `LATCHKEY_PRIVATE_DEPLOY_VM`, `LATCHKEY_PRIVATE_DEPLOY_PROJECT`,
   `LATCHKEY_PRIVATE_DEVELOPMENT_TEAM`, `LATCHKEY_PRIVATE_LATCHKEY_DEFAULT_RELAY_HOST` (Toni sets
@@ -48,12 +55,24 @@ applies, except:
   full `make test` once the warm-up is done (its `.done` file): the relay's timing tests are
   sensitive to a busy 4-CPU VM. On Linux, `make lint` also checks the Linux-only files the Mac
   never sees (`*_linux.go`).
-- Deploys and releases stay on the Mac, in a local session: `deploy/deploy.sh` and
-  `make -C linux release` need `.env`'s secrets, the Mac's gcloud and GitHub sign-ins, and a tag
-  push. They don't go through Latchkey's `shell_run` either: a production deploy can't be tried
-  first, and it writes outside the command's fence (gcloud's settings, Docker, the deploy lock).
-  A cloud session merges to `main` and lists "deploy the relay" or "release the Linux program"
-  as a step for a local session at the end.
+- Releases, deploys and infrastructure run in GitHub Actions (CLAUDE.md, "Every finished batch
+  ships"; actions pinned by SHA, checked by `scripts/tests/ci_tools_test.sh`). Started by a merge
+  to main when their folder changed, or from here with repository_dispatch, which the proxy
+  allows (`gh api repos/tonimelisma/latchkey/dispatches -f event_type=<type>`):
+
+  | Workflow | On merge when | Dispatch type | Environment | What it does |
+  |---|---|---|---|---|
+  | `ci.yml` | every push | | | relay tests, lint, security; Linux tests, lint; script tests; actionlint |
+  | `relay-image.yml` | `relay/` | `relay-image` | `production` | checks, then the signed image; the server switches to it itself |
+  | `linux-release.yml` | `linux/` | `linux-release` | `release` | tag `linux-<x.y.z>`, signed release; servers update within a day |
+  | `mac-tag.yml` | `macos/` | `mac-tag` | `release` | tag `mac-<x.y.z>`; the Mac's updater installs it |
+  | `infra.yml` | never | `infra` + `client_payload[task]` | `infra` | `configure` (deploy/deploy.sh) or `harden` (deploy/harden.sh), as `latchkey-infra` |
+
+  Follow a run with `gh api repos/tonimelisma/latchkey/actions/runs?per_page=5` and its jobs'
+  logs; the logs are public, so nothing the scripts print may be private (they hide the
+  values they read with `::add-mask::`, and the secrets are hidden by GitHub). No workflow and no
+  identity ever reaches purkki: it only pulls signed Linux releases.
+  Secrets are the owner's (CLAUDE.md, "Owner setup"); a session never handles a secret's value.
 - Mac app: build and test on the Mac through Latchkey's `shell_run` (Toni's MacBook in
   `machines`), from the pushed branch in the command's scratch folder (deleted or moved to the
   Trash when it ends), with `uses: ["open"]` (the tests run in an app; spec 004 FR-335):
@@ -67,12 +86,51 @@ applies, except:
   fence), not `** TEST SUCCEEDED **`; a scratch folder over 100 MB is deleted at the end, so keep
   a log you need in Downloads and delete it after. Lint the same way with
   `swift format lint --strict -r App Shared Helper Tests` in `macos/`. This tests the app
-  signed ad hoc (no `Local.xcconfig` there); `make -C macos test` in a local session is the
-  signed run.
+  signed ad hoc (no `Local.xcconfig` there); the Mac's updater makes the signed build when it
+  installs.
   Never run `make -C macos install` through Latchkey: it quits Latchkey, which stops the command
-  mid-install (spec 004 FR-309). The install stays a step for a local session, listed at the end.
+  mid-install (spec 004 FR-309). The Mac's updater installs instead (below).
+- The Mac's updater (`macos/scripts/auto-update.sh`; launchd agent `net.melisma.latchkey.updater`,
+  set up by `macos/scripts/updater-setup.sh`): every 15 minutes it installs the newest
+  `mac-<x.y.z>` tag on main when that isn't the installed version, from its own clone in
+  `~/Library/Caches/net.melisma.latchkey.updater`, signed with the main checkout's
+  Local.xcconfig, after Latchkey has been idle for 10 minutes. launchd, not Latchkey, is its
+  parent, so the install quitting Latchkey doesn't stop it. Through Latchkey's `shell_run`
+  (Shell can't run launchctl, but it can write a declared file):
+  - start it now: `mkdir -p ~/Library/Caches/net.melisma.latchkey.updater/requests && touch
+    ~/Library/Caches/net.melisma.latchkey.updater/requests/now`, with `writes` declaring that
+    folder ("start Latchkey's updater"); `install-now` instead of `now` skips the idle wait, only
+    when Toni says so;
+  - see what it did: `sh ~/Library/Caches/net.melisma.latchkey.updater/auto-update.sh status`
+    (installed version, newest release, last failure, the log's end; the whole log is
+    `~/Library/Logs/Latchkey Updater.log`).
+  Every Latchkey call counts as use, so after a request don't call Latchkey for about 12 minutes
+  (the idle wait), then read the status once. A run that finds Latchkey busy for 30 minutes
+  tries again 15 minutes later; a failed install, after 6 hours or on the next request.
 - Screenshots of the Mac app: `computer_look`, only while the Mac is unlocked, and never acting
   in the user's windows (above).
-- Live checks (`claude -p` and `state-check.sh`) come after the install or deploy, so they run
-  in the same local session. A cloud session can try Latchkey's tools through its own connector
-  (with the tool list it started with) to look at behavior, but that is not the live check.
+- Live checks (CLAUDE.md, "Every finished batch ships", 7) come after the new version runs: the
+  relay's image workflow and the server's switch (its summary says when), the Mac's updater
+  ("installed Latchkey <x.y.z>" in its status). A session's Latchkey connector keeps the tool
+  list it started with, so the check runs in a session started after that: a fresh cloud
+  session from claude.ai (which has Toni's connectors; `claude --cloud` sessions have none), for
+  example one this session creates with the prompt below. It runs the cases itself, one group
+  at a time, with its own Latchkey tools:
+  1. The screen state, before and after each group, through `shell_run` (it answers locked
+     too): `cd "$LATCHKEY_SCRATCH" && git clone -q --depth 1 https://github.com/tonimelisma/latchkey.git lk &&
+     swift lk/macos/scripts/state-check/screen-state.swift` (one word: unlocked, locked,
+     lid_closed, lid_closed_locked).
+  2. What disturbed the person at the Mac: a `shell_run` job with `keep_minutes` that compiles
+     and runs `focus-watch.swift` from the same clone (`swiftc -O -o fw … && ./fw`), read with
+     `shell_check` at the end; a focus change during a group is a finding (Constitution IV).
+  3. The cases: `state-check.sh prompt <group> "Latchkey check $(date +%m%d-%H%M) <state>"
+     "<machine>"` here (needs `LATCHKEY_CHECK_TO`) prints exactly what `claude -p` would get; do
+     what it says with this session's Latchkey tools and end with its JSON block.
+  4. File it: save the reply and `state-check.sh record <results dir> <state> <group> <reply
+     file> <before> <after> <from> <to>`; after the groups, the `sweep` group the same way (it
+     removes every test item by the tag's start, "Latchkey check", and must report all works),
+     then `state-check.sh merge <results dir> <state> <app version>` and, for a refresh of
+     `docs/use-cases.md`, `state-check.sh report <results dir>`. The results folder is outside
+     the repository (the scratchpad).
+  The rows this verifies are those of the screen state it ran in, quoted with the app's version
+  and the time ("Done means Toni's conditions").
