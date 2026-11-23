@@ -1,3 +1,4 @@
+import ApplicationServices
 import Foundation
 import SQLite3
 import Testing
@@ -77,6 +78,26 @@ import Testing
         #expect(CodeTextWindow.pick(two, laterSame: 1, earlierSame: 0) == "upper")
         #expect(CodeTextWindow.pick(two, laterSame: 1, earlierSame: 1) == nil, "one of three isn't shown: unsure")
         #expect(CodeTextWindow.pick([(String, CGFloat)](), laterSame: 0, earlierSame: 0) == nil)
+    }
+}
+
+/// Bank of America, 2026-11-22: the window shows a code text with one character more than the
+/// database holds; it is found by its letters and digits, and only when no exact one is shown.
+@Suite struct ShownTextMatchTests {
+    let ax = AXUIElementCreateApplication(getpid())
+    func b(_ t: String, me: Bool = false) -> CodeTextWindow.Balloon { .init(element: ax, text: t, fromMe: me) }
+
+    @Test func exactFirstThenTheSameLettersAndDigits() {
+        let stored = "BofA: Your code is 123456. Don't share it."
+        #expect(
+            CodeTextWindow.matching([b("<#> BofA: Your code is 123456. Don't share it."), b(stored)], stored).map(
+                \.text) == [stored])
+        #expect(CodeTextWindow.matching([b("BofA: Your code is 123456. Don't share it.\u{200E}")], stored).count == 1)
+        #expect(
+            CodeTextWindow.matching([b("BofA: Your code is 654321. Don't share it.")], stored).isEmpty, "another code")
+        #expect(CodeTextWindow.matching([b(stored, me: true)], stored).isEmpty, "the owner's own")
+        #expect(CodeTextWindow.matching([b("...")], "!!!").isEmpty, "no letters or digits: nothing")
+        #expect(CodeTextWindow.matching([b("ok!")], "OK").isEmpty, "no code in it: exact only")
     }
 }
 
