@@ -182,3 +182,28 @@ func TestAnErrorRemindsClaudeOfFeedbackWhileSharing(t *testing.T) {
 	require.NotNil(t, last)
 	assert.Contains(t, last.Text, "feedback tool")
 }
+
+// FR-1403 (security review 2026-11-23): the sender checks the Owner's choice again before each
+// send; a report queued while sharing was on never leaves once it is off, even if the drop at
+// the change was missed.
+func TestTheSenderChecksSharingAgain(t *testing.T) {
+	e, intake, _ := sharingEnv(t, false)
+	e.pair()
+	share := true
+	e.agent.State.ShareReports = &share
+	e.connectMac()
+	cs := e.client(stateful, nil)
+	require.Eventually(t, func() bool { return strings.Contains(strings.Join(toolNames(t, cs), ","), "feedback") },
+		5*time.Second, 20*time.Millisecond)
+	res, err := cs.CallTool(ctx(t), &mcp.CallToolParams{Name: "feedback", Arguments: map[string]any{"summary": "x", "details": "y"}})
+	require.NoError(t, err)
+	require.False(t, res.IsError, text(t, res))
+	// The machine is removed (unpairing doesn't pass through the sharing change).
+	require.NoError(t, e.store.RevokeDevice(context.Background(), e.device.ID, time.Now()))
+	go e.ms.SendReports(ctx(t))
+	require.Eventually(t, func() bool {
+		due, err := e.store.DueReports(context.Background(), time.Now().Add(48*time.Hour), 10)
+		return err == nil && len(due) == 0
+	}, 5*time.Second, 20*time.Millisecond, "dropped by the sender")
+	assert.Empty(t, intake.received(), "never sent")
+}

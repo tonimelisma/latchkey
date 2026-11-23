@@ -1,0 +1,22 @@
+# The developer's intake for problem reports (spec 014): one static binary on a distroless base,
+# its database in /data. Built from the relay's module, which holds the report format it shares
+# with the relays. Base images pinned by digest, as the relay's.
+FROM --platform=$BUILDPLATFORM golang:1.27.4@sha256:205c7636d74e0ffbe3d007162df7d74f859f5a8c8322dfb9f907977686c126cf AS build
+ARG TARGETOS TARGETARCH
+WORKDIR /src
+COPY go.mod go.sum ./
+RUN go mod download
+COPY . .
+ARG VERSION=dev
+RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -trimpath -ldflags "-s -w -X main.version=${VERSION}" -o /out/latchkey-intake ./cmd/latchkey-intake \
+ && mkdir -p /out/data
+
+FROM gcr.io/distroless/static-debian12:nonroot@sha256:afa5c872c891853ca7fcf1f12c3edb23f7eeef36189728842dd51042ff57f7ab
+COPY --from=build /out/latchkey-intake /latchkey-intake
+COPY --from=build --chown=nonroot:nonroot /out/data /data
+ENV DATA_DIR=/data PORT=8080
+VOLUME /data
+EXPOSE 8080
+USER nonroot
+HEALTHCHECK --interval=30s --timeout=5s CMD ["/latchkey-intake", "healthcheck"]
+ENTRYPOINT ["/latchkey-intake"]
