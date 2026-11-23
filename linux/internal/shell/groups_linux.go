@@ -24,6 +24,18 @@ type Groups struct {
 
 const cgroupFS = "/sys/fs/cgroup"
 
+// cgroup2Magic is the file system type of a cgroup v2 hierarchy (CGROUP2_SUPER_MAGIC).
+const cgroup2Magic = 0x63677270
+
+// isCgroup2 is whether dir is a cgroup v2 hierarchy. On a host with the older, mixed layout,
+// /sys/fs/cgroup is a plain memory file system: folders made there are no control groups, and
+// starting a command inside one fails ("bad file descriptor"; found 2026-11-22 in a cloud VM,
+// where every command then failed to start).
+func isCgroup2(dir string) bool {
+	var st syscall.Statfs_t
+	return syscall.Statfs(dir, &st) == nil && st.Type == cgroup2Magic
+}
+
 // OpenGroups moves the program into <own>/service and prepares <own>/jobs. It fails where
 // there is no cgroup v2 or the group isn't the program's to change (run outside the service).
 func OpenGroups() (*Groups, error) {
@@ -37,7 +49,7 @@ func OpenGroups() (*Groups, error) {
 			own = rest
 		}
 	}
-	if own == "" {
+	if own == "" || !isCgroup2(cgroupFS) {
 		return nil, errors.New("no cgroup v2 hierarchy")
 	}
 	root := filepath.Join(cgroupFS, own)

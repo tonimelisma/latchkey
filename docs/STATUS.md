@@ -57,6 +57,19 @@ failure says why.
 
 ## Current phase
 
+Cloud-first, review fixes (2026-11-23, a second cloud session given the same task, whose own
+implementation was superseded by the one merged below and ported onto it): the infra workflow's
+`configure` failed on every run, since google-github-actions/auth writes its credentials file into
+the checkout and `deploy.sh` refuses untracked files (`.gitignore` now has `gha-creds-*.json`);
+Google accepts GitHub's token only for push, schedule and dispatch runs (a `pull_request_target`
+or `workflow_run` run on main can carry a fork's code); hackernews-admin's IAP tunnel reaches only
+this VM's SSH (a condition on its internal address; an earlier wider grant is replaced); a rerun of
+`gcp-wif-setup.sh` rewrites the provider only when it differs (each write emails Toni). The Linux
+program, on a host with the older, mixed cgroup layout, took `/sys/fs/cgroup` (a plain memory file
+system there) for its control groups and every command failed to start ("bad file descriptor",
+found in this cloud VM): it now requires a cgroup v2 file system and otherwise runs without groups,
+saying so. Tests: `deploy/tests/lib_test.sh`, `linux/internal/shell` (both pass in the VM).
+
 Cloud-first (Toni, 2026-11-23: everything happens in cloud sessions except what needs macOS;
 the Mac only builds and tests the Mac app): in progress on branch `claude/latchkey-cloud-first-0xfzcv`.
 So far: CI also runs the Linux program's tests and lint, the script tests, and actionlint on
