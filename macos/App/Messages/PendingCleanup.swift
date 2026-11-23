@@ -139,7 +139,7 @@ enum CodeTextWindow {
         let balloon: AXUIElement
         do {
             balloon = try await wait("the message") { () -> AXUIElement? in
-                let hits = balloons().filter { !$0.fromMe && $0.text == located.text }
+                let hits = matching(balloons(), located.text)
                 // A balloon whose place can't be read: look again (review 2026-11-22).
                 let placed = hits.compactMap { h in frame(h.element).map { (h.element, $0.minY) } }
                 guard placed.count == hits.count else { return nil }
@@ -172,17 +172,36 @@ enum CodeTextWindow {
         return topDown[topDown.count - 1 - laterSame].0
     }
 
+    /// The Owner's correspondents' messages showing this text: exactly, or, when none does, with
+    /// the same letters and digits in the same order (Bank of America's code texts, 2026-11-22:
+    /// shown with one character more than Messages' database holds, so never found).
+    static func matching(_ shown: [Balloon], _ text: String) -> [Balloon] {
+        let theirs = shown.filter { !$0.fromMe }
+        let exact = theirs.filter { $0.text == text }
+        if !exact.isEmpty { return exact }
+        // Only for a text with a code in it: "OK" and "ok!" are different messages (review).
+        let key = squashed(text)
+        guard key.count >= 6, key.contains(where: \.isNumber) else { return [] }
+        return theirs.filter { squashed($0.text) == key }
+    }
+
+    static func squashed(_ text: String) -> String {
+        String(String.UnicodeScalarView(text.unicodeScalars.filter { CharacterSet.alphanumerics.contains($0) }))
+            .lowercased()
+    }
+
     /// What the transcript shows, for the error: how many messages, how many from others, how
     /// many with exactly the text, and the nearest one's length and start, never their text.
     static func seen(_ text: String) -> String {
         let all = balloons()
         let theirs = all.filter { !$0.fromMe }
         let same = theirs.filter { $0.text == text }.count
+        let alike = theirs.filter { squashed($0.text) == squashed(text) }.count
         let head = String(text.prefix(12))
         let near = theirs.filter { $0.text.hasPrefix(head) }
         let lengths = near.map { String($0.text.count) }.joined(separator: ", ")
         return
-            "it shows \(all.count) messages, \(theirs.count) from others, \(same) with exactly its text, \(near.count) starting like it (lengths \(lengths.isEmpty ? "none" : lengths); the message's is \(text.count))"
+            "it shows \(all.count) messages, \(theirs.count) from others, \(same) with exactly its text, \(alike) with its letters and digits, \(near.count) starting like it (lengths \(lengths.isEmpty ? "none" : lengths); the message's is \(text.count))"
     }
 
     // MARK: the window
