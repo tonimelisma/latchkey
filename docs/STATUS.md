@@ -61,6 +61,16 @@ secret `SERVER_SIGNING_KEY`) and publishes the Linux program whenever linux/ cha
 environment `release` and also start on repository_dispatch (`linux-release`, `mac-tag`).
 `release-tag.sh` takes `RELEASE_TAG_ON_MAIN=1` there (a commit on main the tip has moved past;
 never a number below an already released commit).
+Relay releases are automatic: `relay-image.yml` (on relay/ changes on main; environment
+`production`) runs the security checks, lint and tests, publishes the multi-arch image to ghcr.io
+as `<commit>` and `latest`, and signs it with cosign, keyless. The server's own updater
+(`latchkey-update-apps`, every 5 minutes, as for hackernews) switches to a new `latest` only when
+cosign finds it signed by that workflow on main, restarts the relay on it, and goes back to the
+previous version when Docker's health check or https://<host>/healthz fails within 3 minutes
+(remembering the bad image). No credentials reach the server. `deploy/deploy.sh` now only
+applies configuration (relay.env, compose file, Caddy block, DNS, email domain) and restarts the
+running version, under the updater's lock; image building, the upload over SSH and the
+key-file database copy (long done) are gone. Tested by `deploy/tests/update_apps_test.sh`.
 
 Fill-only sign-in (Toni, 2026-11-22: "Shouldn't the code just provide what's happening in the
 browser and the agent makes the presumptions?"; then "Fill-only tool", "No cap", "Decide fresh

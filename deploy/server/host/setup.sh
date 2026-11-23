@@ -140,6 +140,26 @@ if docker network inspect reverse_proxy >/dev/null 2>&1 &&
   [ "$(docker network inspect reverse_proxy --format '{{len .Containers}}')" = 0 ]; then
   docker network rm reverse_proxy >/dev/null && say "removed the old shared network"
 fi
+# cosign, with which the updater checks that a new relay image was signed by this repository's
+# image workflow on main. A pinned release, used only if its checksum is the one written here.
+COSIGN_VERSION=v3.1.3
+case $(dpkg --print-architecture) in
+  amd64) cosign_sum=4629c757b7618056f8ddd7e2625ae9fdd94c0372a65049520bc7d9df9efc7f71 cosign_arch=amd64 ;;
+  arm64) cosign_sum=c5d324e091826b0d7a78eb16fef316450b4eb9aaec045611c08ba06f5e73220a cosign_arch=arm64 ;;
+  *) echo "FAIL: no cosign for this server's architecture" >&2; exit 1 ;;
+esac
+if ! echo "$cosign_sum  /usr/local/bin/cosign" | sha256sum -c --status 2>/dev/null; then
+  d=$(mktemp -d /root/cosign.XXXXXX)
+  curl -fsSL --max-time 120 -o "$d/cosign" "https://github.com/sigstore/cosign/releases/download/$COSIGN_VERSION/cosign-linux-$cosign_arch"
+  if ! echo "$cosign_sum  $d/cosign" | sha256sum -c --status; then
+    rm -rf "$d"
+    echo "FAIL: the cosign download doesn't have the expected checksum" >&2
+    exit 1
+  fi
+  install -m 755 -o root -g root "$d/cosign" /usr/local/bin/cosign
+  rm -rf "$d"
+  say "installed cosign $COSIGN_VERSION"
+fi
 # A changed updater checks Caddy again at once instead of waiting for its week.
 if put update-apps.sh /usr/local/sbin/latchkey-update-apps 755; then rm -f /var/lib/latchkey-update-apps/caddy.checked; fi
 put latchkey-update-apps.service /etc/systemd/system/latchkey-update-apps.service 644 || true

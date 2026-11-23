@@ -1,6 +1,6 @@
-# Latchkey: keeps hackernews and Caddy current (update-apps.sh), installed by deploy/harden.sh.
+# Latchkey: keeps the relay, hackernews and Caddy current (update-apps.sh), installed by deploy/harden.sh.
 [Unit]
-Description=Update hackernews and Caddy from their public images
+Description=Update the relay, hackernews and Caddy from their public images
 After=docker.service
 Requires=docker.service
 
