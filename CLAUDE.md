@@ -216,9 +216,17 @@ pull requests' branches; nothing to tidy after a cloud push).
 
 ## Every issue becomes a regression case (Toni, 2026-11-16)
 
-Claude's own reports of what didn't work arrive as files in
-`~/Library/Application Support/Latchkey/Feedback` (spec 001 FR-690 to FR-695); read new ones at
-the start of a session about Latchkey's behavior, and treat each as an issue found.
+Claude's own reports of what didn't work, filed through the relay's `feedback` tool, arrive as
+files in `~/Library/Application Support/Latchkey/Feedback` (spec 001 FR-690 to FR-695). Pending
+ones are the files directly in that folder; handled ones are in `Feedback/Handled`. At the start
+of every session (Toni, 2026-11-23), list the pending reports (in a cloud session through
+Latchkey's `shell_run`) and, if there are any, ask Toni with AskUserQuestion, naming each report's
+summary in a few words: look into them in this session, start a separate session for them
+(`create_session`, its prompt naming the report files), or leave them for now. Each report
+looked into is an issue found (below): fixed in that session where it can be, with its
+regression case, otherwise reported to Toni with what was learned. A report is handled once its
+fix is on main or Toni has heard why not; then move it to `Feedback/Handled` (`shell_run` with
+that folder in `writes`).
 
 Every issue found in Latchkey (by Toni, an agent's feedback report, a live check, or
 a test) gets a case in a regressions group of `macos/scripts/state-check/cases.json`
