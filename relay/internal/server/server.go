@@ -48,6 +48,9 @@ type Relay struct {
 	DrainMail func(context.Context)
 	// grantExpired records an approval the purge removed and tells the rest of the relay.
 	grantExpired func(context.Context, store.Grant)
+	// SendReports delivers the problem reports users chose to share to the developer's intake
+	// until ctx ends (spec 014 FR-1414). Run it in its own goroutine.
+	SendReports func(ctx context.Context)
 }
 
 // Options configures the relay.
@@ -71,6 +74,9 @@ type Options struct {
 	// Traces keeps each account's full trace (FR-683): every relay has one (TraceOptions); nil
 	// keeps none, for tests that don't look at traces.
 	Traces *trace.Store
+	// Reports is where the problem reports users chose to share go (spec 014); the zero value
+	// offers no feedback tool.
+	Reports mcpserver.ReportsOptions
 }
 
 // TraceDirName is the trace folder's name in the relay's data folder.
@@ -133,6 +139,8 @@ func New(ctx context.Context, o Options) (*Relay, error) {
 	hc.Logger = o.Logger
 	hc.Events = rec
 	hc.OnToolsChanged = func(userID string) { ms.ToolsChanged(userID) }
+	hc.OnSharingChanged = func(userID string) { ms.SharingChanged(userID) }
+	hc.ReportsBlocked = o.Reports.Blocked
 	hc.NoticesOnConnect = func(ctx context.Context, d store.Device, previous time.Time) []*agentproto.Notice {
 		return acc.NoticesOnConnect(ctx, d, previous)
 	}
@@ -148,7 +156,7 @@ func New(ctx context.Context, o Options) (*Relay, error) {
 		return removed
 	}
 	h := hub.New(o.Store, hc)
-	ms = mcpserver.New(o.Store, h, mcpserver.Options{Logger: o.Logger, Version: o.Version, Traces: o.Traces})
+	ms = mcpserver.New(o.Store, h, mcpserver.Options{Logger: o.Logger, Version: o.Version, Traces: o.Traces, Reports: o.Reports})
 
 	auth := &authBridge{}
 	oc := oauth.Config{
@@ -204,6 +212,7 @@ func New(ctx context.Context, o Options) (*Relay, error) {
 		return nil, err
 	}
 	r.WatchOperator = w.run
+	r.SendReports = ms.SendReports
 	return r, nil
 }
 

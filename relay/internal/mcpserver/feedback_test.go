@@ -2,7 +2,12 @@ package mcpserver_test
 
 import (
 	"context"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -11,85 +16,169 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/tonimelisma/latchkey/relay/agentproto"
+	"github.com/tonimelisma/latchkey/relay/internal/mcpserver"
+	"github.com/tonimelisma/latchkey/relay/reports"
 )
 
-// Spec 001 FR-690 to FR-692, end to end with a real MCP client: a report filed while the Mac is
-// offline reaches it after its next welcome; one filed while it is online reaches it at once; a
-// report the Mac saved is never sent again; a Mac without the feature never gets one.
-func TestFeedbackReachesTheMacUntilItSavesIt(t *testing.T) {
-	e := setup(t)
-	e.pair()
-	e.agent.Features = []string{agentproto.FeatureClients, agentproto.FeatureAudit, agentproto.FeatureFeedback}
-	first := e.connectMac()
-	cs := e.client(stateful, nil)
-	require.NoError(t, first.Close())
-	require.Eventually(t, func() bool { return !e.hub.Online(e.device.ID) }, 5*time.Second, 10*time.Millisecond)
+// fakeIntake keeps what relays send it, checking the proof of work as the intake does.
+type fakeIntake struct {
+	mu     sync.Mutex
+	got    [][]byte
+	status int
+}
 
-	file := func(summary, details string) string {
-		res, err := cs.CallTool(ctx(t), &mcp.CallToolParams{Name: "feedback", Arguments: map[string]any{
-			"summary": summary, "details": details, "machine": "Toni's MacBook Pro",
-		}})
-		require.NoError(t, err)
-		require.False(t, res.IsError, text(t, res))
-		return text(t, res)
+func (f *fakeIntake) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	body, _ := io.ReadAll(r.Body)
+	nonce, _ := strconv.ParseUint(r.Header.Get("Latchkey-Work-Nonce"), 10, 64)
+	if r.URL.Path != "/v1/reports" || !reports.Shaped(body) || !reports.Proven(body, r.Header.Get("Latchkey-Work-Hour"), nonce, 4) {
+		http.Error(w, "bad", http.StatusBadRequest)
+		return
 	}
-	answer := file("Create filter ignored the click", "browser_act click e56: same page")
-	assert.Contains(t, answer, "kept for the owner")
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.status != 0 {
+		w.WriteHeader(f.status)
+		return
+	}
+	f.got = append(f.got, body)
+	w.WriteHeader(http.StatusAccepted)
+}
 
-	// Missing summary: told, nothing kept.
-	res, err := cs.CallTool(ctx(t), &mcp.CallToolParams{Name: "feedback", Arguments: map[string]any{"summary": " ", "details": "x"}})
+func (f *fakeIntake) received() [][]byte {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([][]byte(nil), f.got...)
+}
+
+func sharingEnv(t *testing.T, blocked bool) (*env, *fakeIntake, string) {
+	t.Helper()
+	pub, priv, err := reports.GenerateKey()
+	require.NoError(t, err)
+	pk, err := reports.PublicKey(pub)
+	require.NoError(t, err)
+	intake := &fakeIntake{}
+	srv := httptest.NewServer(intake)
+	t.Cleanup(srv.Close)
+	e := setupWith(t, mcpserver.Options{Reports: mcpserver.ReportsOptions{
+		IntakeURL: srv.URL, DeveloperKey: pk, Blocked: blocked, Client: srv.Client(), WorkBits: 4,
+	}})
+	return e, intake, priv
+}
+
+// Spec 014 FR-1401, FR-1403, FR-1410 to FR-1414, end to end with a real MCP client: no feedback
+// tool until the Mac says the Owner shares; then a report goes to the intake sealed, opens with
+// the developer's key with the fields of FR-1412, and the relay keeps nothing readable.
+func TestSharedReportsReachTheIntakeSealed(t *testing.T) {
+	e, intake, priv := sharingEnv(t, false)
+	go e.ms.SendReports(ctx(t))
+	e.pair()
+	mac := e.connectMac()
+	cs := e.client(stateful, nil)
+	assert.NotContains(t, toolNames(t, cs), "feedback", "FR-1401: not shared, no tool")
+
+	share := true
+	e.agent.State.ShareReports = &share
+	require.NoError(t, mac.Send(ctx(t), &agentproto.StateUpdate{State: e.agent.State}))
+	require.Eventually(t, func() bool { return strings.Contains(strings.Join(toolNames(t, cs), ","), "feedback") },
+		5*time.Second, 20*time.Millisecond, "sharing on: the tool appears")
+
+	res, err := cs.CallTool(ctx(t), &mcp.CallToolParams{Name: "feedback", Arguments: map[string]any{
+		"summary": "Create filter ignored the click", "details": "browser_act click e56: same page",
+	}})
+	require.NoError(t, err)
+	require.False(t, res.IsError, text(t, res))
+	assert.Contains(t, text(t, res), "queued for Latchkey's developer")
+	assert.NotContains(t, text(t, res), "e56", "FR-1416: the answer doesn't repeat the report")
+
+	require.Eventually(t, func() bool { return len(intake.received()) == 1 }, 10*time.Second, 20*time.Millisecond)
+	k, err := reports.PrivateKey(priv)
+	require.NoError(t, err)
+	r, err := reports.Open(k, intake.received()[0])
+	require.NoError(t, err)
+	assert.Equal(t, "Create filter ignored the click", r.Summary)
+	assert.Equal(t, "browser_act click e56: same page", r.Details)
+	assert.NotEmpty(t, r.Client)
+	assert.NotEmpty(t, r.MachineVersion+r.System, "the only machine's versions")
+	assert.NotContains(t, r.Details+r.Summary+r.Client+r.System, e.user.Email, "FR-1412: no email address")
+
+	// Delivered: nothing left in the outbox.
+	due, err := e.store.DueReports(context.Background(), time.Now().Add(time.Hour), 10)
+	require.NoError(t, err)
+	assert.Empty(t, due)
+
+	// Missing summary: told, nothing sent.
+	res, err = cs.CallTool(ctx(t), &mcp.CallToolParams{Name: "feedback", Arguments: map[string]any{"summary": " ", "details": "x"}})
 	require.NoError(t, err)
 	assert.True(t, res.IsError)
 
-	mac := e.connectMac()
-	got := receive(t, mac.Feedback)
-	require.Len(t, got.Reports, 1)
-	r := got.Reports[0]
-	assert.Equal(t, "Create filter ignored the click", r.Summary)
-	assert.Equal(t, "browser_act click e56: same page", r.Details)
-	assert.Equal(t, "Toni's MacBook Pro", r.Machine)
-	assert.NotEmpty(t, r.Client)
-	assert.True(t, strings.HasPrefix(r.ID, "fb_"))
-
-	// Filed while online: sent at once (with the one not yet saved).
-	file("second", "")
-	got = receive(t, mac.Feedback)
-	require.Len(t, got.Reports, 2)
-	require.NoError(t, mac.Send(ctx(t), &agentproto.FeedbackSaved{IDs: []string{got.Reports[0].ID, got.Reports[1].ID}}))
-	require.Eventually(t, func() bool {
-		w, err := e.store.WaitingFeedback(context.Background(), e.user.ID, 50)
-		return err == nil && len(w) == 0
-	}, 5*time.Second, 10*time.Millisecond)
-
-	// Saved reports never come again.
-	require.NoError(t, mac.Close())
-	require.Eventually(t, func() bool { return !e.hub.Online(e.device.ID) }, 5*time.Second, 10*time.Millisecond)
-	again := e.connectMac()
-	select {
-	case m := <-again.Feedback:
-		t.Fatalf("saved reports sent again: %v", m.Reports)
-	case <-time.After(300 * time.Millisecond):
-	}
-
-	// A Mac without the feature gets nothing and stays connected.
-	require.NoError(t, again.Close())
-	require.Eventually(t, func() bool { return !e.hub.Online(e.device.ID) }, 5*time.Second, 10*time.Millisecond)
-	e.agent.Features = []string{agentproto.FeatureClients}
-	old := e.connectMac()
-	file("third", "")
-	time.Sleep(200 * time.Millisecond)
-	assert.True(t, e.hub.Online(e.device.ID), "an app without the feature isn't sent a message it doesn't know")
-	_ = old
+	// Sharing off: the tool goes.
+	off := false
+	e.agent.State.ShareReports = &off
+	require.NoError(t, mac.Send(ctx(t), &agentproto.StateUpdate{State: e.agent.State}))
+	require.Eventually(t, func() bool { return !strings.Contains(strings.Join(toolNames(t, cs), ","), "feedback") },
+		5*time.Second, 20*time.Millisecond, "sharing off: the tool is gone")
 }
 
-func receive[T any](t *testing.T, ch chan T) T {
-	t.Helper()
-	select {
-	case m := <-ch:
-		return m
-	case <-time.After(5 * time.Second):
-		var zero T
-		t.Fatal("nothing received")
-		return zero
+// FR-1414: a report the intake doesn't accept yet stays sealed in the outbox and is retried;
+// FR-1403: turning sharing off drops it.
+func TestAWaitingReportIsDroppedWhenSharingStops(t *testing.T) {
+	e, intake, _ := sharingEnv(t, false)
+	intake.status = http.StatusServiceUnavailable
+	e.pair()
+	share := true
+	e.agent.State.ShareReports = &share
+	mac := e.connectMac()
+	cs := e.client(stateful, nil)
+	require.Eventually(t, func() bool { return strings.Contains(strings.Join(toolNames(t, cs), ","), "feedback") },
+		5*time.Second, 20*time.Millisecond)
+	secret := "the words of this report"
+	res, err := cs.CallTool(ctx(t), &mcp.CallToolParams{Name: "feedback", Arguments: map[string]any{"summary": "x", "details": secret}})
+	require.NoError(t, err)
+	require.False(t, res.IsError, text(t, res))
+	go e.ms.SendReports(ctx(t))
+	require.Eventually(t, func() bool {
+		due, err := e.store.DueReports(context.Background(), time.Now().Add(48*time.Hour), 10)
+		return err == nil && len(due) == 1 && due[0].Tries >= 1
+	}, 10*time.Second, 20*time.Millisecond, "kept, tried once, due again later")
+	due, _ := e.store.DueReports(context.Background(), time.Now().Add(48*time.Hour), 10)
+	assert.NotContains(t, string(due[0].Sealed), secret, "the relay holds only sealed bytes")
+
+	off := false
+	e.agent.State.ShareReports = &off
+	require.NoError(t, mac.Send(ctx(t), &agentproto.StateUpdate{State: e.agent.State}))
+	require.Eventually(t, func() bool {
+		due, err := e.store.DueReports(context.Background(), time.Now().Add(48*time.Hour), 10)
+		return err == nil && len(due) == 0
+	}, 5*time.Second, 20*time.Millisecond, "sharing off: waiting reports dropped")
+}
+
+// FR-1415a: with the operator's block, no tool, whatever the Owner chose.
+func TestTheOperatorsBlockOffersNoTool(t *testing.T) {
+	e, _, _ := sharingEnv(t, true)
+	e.pair()
+	share := true
+	e.agent.State.ShareReports = &share
+	e.connectMac()
+	cs := e.client(stateful, nil)
+	time.Sleep(200 * time.Millisecond)
+	assert.NotContains(t, toolNames(t, cs), "feedback")
+}
+
+// FR-1406: while the Owner shares problem reports, an error answer ends with a reminder of the
+// feedback tool; without sharing it doesn't (TestMacErrorResultPassesThrough).
+func TestAnErrorRemindsClaudeOfFeedbackWhileSharing(t *testing.T) {
+	e, _, _ := sharingEnv(t, false)
+	e.pair()
+	share := true
+	e.agent.State.ShareReports = &share
+	e.agent.Handler = func(_ context.Context, call *agentproto.Call) *agentproto.Result {
+		return &agentproto.Result{ID: call.ID, IsError: true, Content: []byte(`[{"type":"text","text":"No battery found."}]`)}
 	}
+	e.connectMac()
+	cs := e.client(stateful, nil)
+	res := call(t, cs, "battery_status")
+	require.True(t, res.IsError)
+	last, _ := res.Content[len(res.Content)-1].(*mcp.TextContent)
+	require.NotNil(t, last)
+	assert.Contains(t, last.Text, "feedback tool")
 }

@@ -20,6 +20,7 @@ import (
 	"golang.org/x/crypto/acme/autocert"
 
 	"github.com/tonimelisma/latchkey/relay/internal/account"
+	"github.com/tonimelisma/latchkey/relay/internal/mcpserver"
 	"github.com/tonimelisma/latchkey/relay/internal/server"
 	"github.com/tonimelisma/latchkey/relay/internal/store"
 	"github.com/tonimelisma/latchkey/relay/internal/trace"
@@ -82,6 +83,7 @@ func run(ctx context.Context) error {
 		PublicURL: cfg.PublicURL, Store: db, AllowedEmails: cfg.AllowedEmails, Logger: logger, Version: version,
 		TrustedProxies: cfg.TrustedProxies, AllowedClients: cfg.AllowedClientHosts, Operator: cfg.Operator,
 		Mailer: mailer(cfg), SetupCode: cfg.SetupCode, Traces: traces,
+		Reports: mcpserver.ReportsOptions{IntakeURL: cfg.ReportsIntakeURL, DeveloperKey: cfg.ReportsKey, Blocked: cfg.ReportsBlocked},
 	})
 	if err != nil {
 		return err
@@ -107,6 +109,7 @@ func run(ctx context.Context) error {
 	}
 
 	go server.Purge(ctx, r, logger)
+	go r.SendReports(ctx) // spec 014 FR-1414
 	go r.WatchOperator(ctx, server.OperatorPoll)
 
 	// Listen first, so the service manager is told the relay is ready only once it accepts

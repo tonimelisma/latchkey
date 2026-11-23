@@ -22,3 +22,7 @@ regexes = ['''^tonimelisma/latchkey$''']
 [[allowlists]]
 description = "Sparkle's public update key (EdDSA public half; public by design, spec 001 FR-072)"
 regexes = ['''taGyPBum8bkweq78chQL0mQhqfMc9jrnXd564\+e\+adE=''']
+
+[[allowlists]]
+description = "Spec 014: Latchkey's developer's PUBLIC key for problem reports (public by design; its private half is never in the repository)"
+paths = ['''^relay/reports/developer\.pub$''']

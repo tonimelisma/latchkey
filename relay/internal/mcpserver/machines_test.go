@@ -45,7 +45,7 @@ func TestMergedToolsOneKind(t *testing.T) {
 		{Device: mac("A"), Tools: []*mcp.Tool{macShell}},
 		{Device: mac("B"), Tools: []*mcp.Tool{macShell, {Name: "notes_find", InputSchema: map[string]any{"type": "object"}}}},
 	}
-	tools := mergedTools(ms)
+	tools := mergedTools(ms, true)
 	names := []string{}
 	for _, tool := range tools {
 		names = append(names, tool.Name)
@@ -60,7 +60,7 @@ func TestMergedToolsOneKind(t *testing.T) {
 	notes := tools[1]
 	assert.Contains(t, props(t, notes), "machine", "a tool without properties gets the machine argument too")
 
-	assert.Nil(t, mergedTools(nil), "nothing paired: no tools at all, not even machines")
+	assert.Nil(t, mergedTools(nil, true), "nothing paired: no tools at all, not even machines")
 }
 
 // Toni, 2026-10-31: one tool, with a part per kind of machine and the options only one kind has
@@ -93,7 +93,7 @@ func TestMergedToolsPerKindNotes(t *testing.T) {
 		{Device: mac("Old Mac"), LastSeen: old, Tools: []*mcp.Tool{shellTool("an older app's text", nil)}},
 		{Device: mac("New Mac"), LastSeen: now, Tools: []*mcp.Tool{macShell, macFiles}},
 	}
-	tools := mergedTools(ms)
+	tools := mergedTools(ms, true)
 	require.Len(t, tools, 4)
 	files, shell := tools[2], tools[3]
 

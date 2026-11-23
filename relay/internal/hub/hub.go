@@ -55,6 +55,11 @@ type Config struct {
 
 	// OnToolsChanged is called when a user's Mac tool list may have changed.
 	OnToolsChanged func(userID string)
+	// OnSharingChanged is called when a machine's choice to share problem reports changed
+	// (spec 014 FR-1401, FR-1403).
+	OnSharingChanged func(userID string)
+	// ReportsBlocked is told to every machine in its welcome (spec 014 FR-1415a).
+	ReportsBlocked bool
 	// NoticesOnConnect returns notices to send right after welcome. previous is the device's
 	// previous connection time (zero if none).
 	NoticesOnConnect func(ctx context.Context, d store.Device, previous time.Time) []*agentproto.Notice
@@ -119,6 +124,9 @@ func New(st *store.Store, cfg Config) *Hub {
 	}
 	if cfg.Logger == nil {
 		cfg.Logger = slog.Default()
+	}
+	if cfg.OnSharingChanged == nil {
+		cfg.OnSharingChanged = func(string) {}
 	}
 	if cfg.OnToolsChanged == nil {
 		cfg.OnToolsChanged = func(string) {}
@@ -370,7 +378,9 @@ func (h *Hub) start(ctx context.Context, c *conn, hello *agentproto.Hello) bool 
 		_ = c.ws.Close(agentproto.CloseProtocolViolation, "machine kind doesn't match the pairing")
 		return false
 	}
-	welcome := &agentproto.Welcome{HeartbeatIntervalS: int(h.cfg.HeartbeatInterval / time.Second)}
+	welcome := &agentproto.Welcome{
+		HeartbeatIntervalS: int(h.cfg.HeartbeatInterval / time.Second), ReportsBlocked: h.cfg.ReportsBlocked,
+	}
 	if hello.Name != "" { // the machine's own name for itself (spec 010 FR-1002)
 		name, err := h.store.RenameDevice(ctx, c.device.ID, store.CleanDeviceName(hello.Name, c.device.Name))
 		if err != nil {
@@ -390,7 +400,6 @@ func (h *Hub) start(ctx context.Context, c *conn, hello *agentproto.Hello) bool 
 	c.setTools(hello.Tools)
 	c.clientsFeature = hello.Has(agentproto.FeatureClients) && c.device.Kind == store.KindMac // only a Mac lists and removes apps (spec 010)
 	c.auditFeature = hello.Has(agentproto.FeatureAudit)
-	c.feedbackFeature = hello.Has(agentproto.FeatureFeedback) && c.device.Kind == store.KindMac // only a Mac saves reports (FR-692)
 	c.keepAwake = hello.State.KeepAwake
 
 	err = write(ctx, c.ws, welcome)
@@ -438,7 +447,6 @@ func (h *Hub) start(ctx context.Context, c *conn, hello *agentproto.Hello) bool 
 	c.connectedEvent(ctx, hello, previous.StateJSON)
 	h.cfg.OnToolsChanged(c.device.UserID)
 	c.sendClients(ctx, true) // right after welcome, to an agent that announced the feature
-	c.sendFeedback(ctx)      // reports filed while it was away (FR-692)
 	if h.cfg.NoticesOnConnect != nil {
 		for _, n := range h.cfg.NoticesOnConnect(ctx, c.device, previous.ConnectedAt) {
 			if err := c.send(ctx, n); err != nil {
@@ -513,11 +521,6 @@ type conn struct {
 
 	auditFeature bool // the agent announced audit_request and audit (FR-634)
 
-	// Claude's feedback reports (FR-692): whether the agent announced the feature; feedbackMu
-	// keeps two sends from crossing.
-	feedbackFeature bool
-	feedbackMu      sync.Mutex
-
 	frames *rate.Limiter // frames the Mac may send (FR-091)
 
 	// Apps with access (FR-190): whether the agent announced the feature, and under clientsMu
@@ -566,15 +569,22 @@ func (c *conn) closeWith(reason error, code websocket.StatusCode, text string) {
 	go func() { _ = c.ws.Close(code, text) }()
 }
 
-func (c *conn) setState(s agentproto.State) {
+// setState takes the machine's state and reports whether its choice to share problem reports
+// changed (spec 014).
+func (c *conn) setState(s agentproto.State) bool {
 	data, err := json.Marshal(s)
 	if err != nil {
-		return
+		return false
 	}
 	c.mu.Lock()
+	defer c.mu.Unlock()
+	var old agentproto.State
+	_ = json.Unmarshal(c.state.StateJSON, &old)
 	c.state.StateJSON = data
-	c.mu.Unlock()
+	return sharing(old) != sharing(s)
 }
+
+func sharing(s agentproto.State) bool { return s.ShareReports != nil && *s.ShareReports }
 
 // setTools takes the Mac's tool list and reports whether it differs from the one held.
 func (c *conn) setTools(tools []*mcp.Tool) bool {
@@ -696,7 +706,9 @@ func (c *conn) run(ctx context.Context) {
 func (c *conn) handle(ctx context.Context, msg agentproto.Message) bool {
 	switch m := msg.(type) {
 	case *agentproto.StateUpdate:
-		c.setState(m.State)
+		if c.setState(m.State) {
+			defer c.hub.cfg.OnSharingChanged(c.device.UserID) // after it is stored
+		}
 		c.persist(ctx)
 		c.keepAwakeChanged(ctx, m.State.KeepAwake)
 	case *agentproto.ToolsUpdate:
@@ -752,11 +764,8 @@ func (c *conn) handle(ctx context.Context, msg agentproto.Message) bool {
 		}
 		c.answerAudit(ctx, m)
 	case *agentproto.FeedbackSaved:
-		if !c.feedbackFeature {
-			c.closeWith(ErrDisconnected, agentproto.CloseProtocolViolation, "feedback_saved without the feedback feature")
-			return false
-		}
-		c.feedbackSaved(ctx, m)
+		// Reports no longer go to the Mac (spec 014, replacing spec 001 FR-692): an older app's
+		// note that it saved some changes nothing.
 	default:
 		c.closeWith(ErrDisconnected, agentproto.CloseProtocolViolation,
 			fmt.Sprintf("%s is not an agent message", msg.MessageType()))
