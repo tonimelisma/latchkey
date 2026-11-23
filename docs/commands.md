@@ -17,14 +17,19 @@ Relay (run in `relay/`):
 - `make mac-check`: the Mac app's real connection code against a private relay (battery vs
   pmset, tool off, silent network cut, reconnect)
 
-Hosted relay: `deploy/deploy.sh` deploys to the host and Google Cloud VM named in the gitignored
-`.env` (see the script's header), behind that VM's Caddy; needs `CLOUDFLARE_API_TOKEN` and `RESEND_API_KEY`
-(send-only) in the gitignored `.env`, plus `RESEND_ADMIN_KEY` (full access) for the first run that
-sets up the sending domain (removed from `.env` 2026-10-25, once the domain was verified).
-It deploys only a clean checkout at origin/main, and goes back to the previous version if the new
-relay doesn't answer. `.env` may also hold `OPERATOR_NAME`, `OPERATOR_CONTACT`, `OPERATOR_LAW`,
-`OPERATOR_PROVIDERS`, and `BACKUP_DAYS` (free text in single quotes): they switch on the relay's
-terms and privacy pages. `deploy/backup-schedule.sh` turns on the nightly copy of the server's
+Hosted relay (docs/cloud-sessions.md, "Releases"): new versions ship by themselves after a merge
+(`relay-image.yml` publishes and signs the image; the server's `latchkey-update-apps` checks the
+signature, switches, and rolls back an unhealthy one). `deploy/deploy.sh` applies the
+configuration (relay.env, compose file, Caddy block, Cloudflare DNS, the Resend domain) and
+restarts the running version; `deploy/harden.sh` locks the server and project down. Both run in
+the infra workflow (repository_dispatch `infra`, `client_payload[task]` `configure` or `harden`)
+as `latchkey-infra` (Workload Identity Federation; set up once with `deploy/gcp-wif-setup.sh`),
+with the settings from the environment `infra`'s secrets, or by the owner with a gitignored
+`.env` (see the scripts' headers): `CLOUDFLARE_API_TOKEN`, `RESEND_API_KEY` (send-only),
+`RESEND_ADMIN_KEY` (full access, only to set up the sending domain), optional `OPERATOR_NAME`,
+`OPERATOR_CONTACT`, `OPERATOR_LAW`, `OPERATOR_PROVIDERS`, `BACKUP_DAYS` (they switch on the
+relay's terms and privacy pages). A deploy applies only a clean checkout of main and goes back to
+the previous settings if the relay doesn't answer. `deploy/backup-schedule.sh` turns on the nightly copy of the server's
 disk (kept 14 days).
 Operator commands run inside the relay's container: `docker exec latchkey-relay /relay account
 list | account suspend <email> [reason] | account unsuspend <email> | account delete <email> |
@@ -37,8 +42,10 @@ Mac app (run in `macos/`; `project.yml` is the source, the `.xcodeproj` is gener
 - `make lint` / `make fmt`: swift-format
 - `make build` / `make run`: build, or build and open the app
 - `make dmg`: the installable disk image, `build/Latchkey-<version>.dmg`, for a commit that
-  already has its release tag (`make install` gives one)
-- `make install`: the disk image, installed into /Applications and started (every increment)
+  already has its release tag (CI's `mac-tag.yml` gives one)
+- `make install`: CI's newest release tag, built, installed into /Applications and started; the
+  Mac's updater (`scripts/auto-update.sh`, a launchd agent set up by `scripts/updater-setup.sh`)
+  runs it by itself for every new tag
 - Signing: copy `Config/Local.xcconfig.example` to `Config/Local.xcconfig` and set your team ID
 
 Linux server program (run in `linux/`, its own Go module; spec 010):

@@ -56,15 +56,25 @@ fi
 # Stashes are shared by every worktree and invisible on GitHub.
 git stash list --format='%gd %s' | while read -r s; do echo "stash $s (turn it into a commit on main or a branch)"; done
 
+# on_main <ref>: all of ref's work is on origin/main: ref is an ancestor of it, or each of ref's
+# commits since they parted has its change on main already (a pull request merged by rebase,
+# which gives the commits new names; git cherry compares the changes themselves).
+on_main() {
+  git merge-base --is-ancestor "$1" refs/remotes/origin/main 2>/dev/null && return 0
+  _cherry=$(git cherry refs/remotes/origin/main "$1" 2>/dev/null) || return 1
+  [ -n "$_cherry" ] && ! printf '%s\n' "$_cherry" | grep -q '^+'
+}
 # Branches nobody is working on that hold work main doesn't have.
 for b in $(git for-each-ref --format='%(refname:short)' --no-merged origin/main refs/heads/); do
   in_worktree "$b" && continue
+  on_main "refs/heads/$b" && continue
   echo "local branch $b: $(ahead "$b" origin/main) commits not on main, not checked out anywhere"
 done
 for b in $(git for-each-ref --format='%(refname:lstrip=3)' --no-merged origin/main refs/remotes/origin/); do
   [ "$b" = HEAD ] && continue
   in_worktree "$b" && continue
   git rev-parse --quiet --verify "refs/heads/$b" >/dev/null && continue
+  on_main "refs/remotes/origin/$b" && continue
   echo "GitHub branch $b: $(ahead "origin/$b" origin/main) commits not on main"
 done
 for b in $(git for-each-ref --format='%(refname:short)' refs/heads/); do
@@ -87,7 +97,7 @@ git worktree list --porcelain | awk '
   case "$lock" in *"claude agent "*) ;; *) continue ;; esac
   b=$(git -C "$wt" symbolic-ref --quiet --short HEAD 2>/dev/null || echo "")
   [ -n "$b" ] || continue
-  git merge-base --is-ancestor "refs/heads/$b" refs/remotes/origin/main 2>/dev/null || continue
+  on_main "refs/heads/$b" || continue
   [ -z "$(git -C "$wt" status --porcelain 2>/dev/null)" ] || continue
   git reflog show --format=%gs "refs/heads/$b" 2>/dev/null | grep -qv '^branch: Created' || continue
   if command -v lsof >/dev/null 2>&1 && lsof -a -u "$(id -u)" -d cwd -Fn 2>/dev/null | awk -v p="$wt" '

@@ -526,7 +526,8 @@ Serves FR-032, FR-033, FR-034, FR-036, FR-063.
 
 ### D9. Mac app packaging
 Serves FR-070, FR-071, FR-072, FR-669, FR-670; Constitution IV.
-- Public download (FR-670, 2026-11-09): `make install` tags the commit, builds one disk image
+- Public download (FR-670, 2026-11-09): `make install` (since 2026-11-23 on the commit CI tagged,
+  `mac-tag.yml`, run by the Mac's updater) builds one disk image
   for everyone (`package.sh` empties `LATCHKEY_DEFAULT_RELAY_HOST`, and checks the app carries
   none), installs it, and after the install's checks pass `scripts/publish.sh` publishes GitHub
   release `mac-<x.y.z>` with the asset `Latchkey.dmg`, marked latest, so

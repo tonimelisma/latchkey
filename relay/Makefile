@@ -93,6 +93,7 @@ script-tests:
 	cd .. && scripts/tests/install_pairing_test.sh
 	cd .. && scripts/tests/install_checks_test.sh
 	cd .. && scripts/tests/auto_update_test.sh
+	cd .. && scripts/tests/state_check_test.sh
 	cd .. && scripts/tests/ci_tools_test.sh
 
 # Every security check; the deploy script and CI run it.

@@ -62,6 +62,11 @@ Mac app's choice (D9).
 
 ## D6. Public images with every deploy (FR-911)
 
+Since 2026-11-23 (cloud-first, docs/decisions.md): `.github/workflows/relay-image.yml` builds and
+pushes the same two tags (the full commit hash and `latest`) after every relay change on main,
+with the workflow's own token, and signs them with cosign, keyless; the hosted server updates
+from the signed `latest` by itself. The two points below are the earlier way, from the Mac.
+
 - `deploy/deploy.sh` builds `linux/amd64` and `linux/arm64` with `docker buildx` and pushes
   `ghcr.io/tonimelisma/latchkey-relay:<git short hash>` and `:latest`, after the security checks
   and before the server is updated (Toni, 2026-10-31: "with every deploy"); the server still

@@ -9,6 +9,14 @@
 #                                              in it; ends when all four are done (default 4 days)
 #   state-check.sh report <results dir>        writes docs/use-cases.md from the results
 #
+# A cloud session (claude.ai/code, with the Latchkey connector) runs the cases itself instead of
+# `claude -p`, with these, which need only jq (docs/cloud-sessions.md, "Live checks"):
+#   state-check.sh prompt <group> <tag> <machine>      the exact instructions a run gets
+#   state-check.sh record <results dir> <state> <group> <reply file> <before> <after> <from> <to>
+#                                              files a reply (ending in the ```json block) as
+#                                              that group's result in that state
+#   state-check.sh merge <results dir> <state> <app version>   that state's result file
+#
 # The results folder must be outside the repository (Claude Code run inside a worktree would run
 # the project's end-of-turn hooks). Results hold only works/refused/failed and a short reason.
 # LATCHKEY_CHECK_TO: the owner's own address, for the cases that need it (marked as checks).
@@ -18,26 +26,59 @@ repo="$(git -C "$here" rev-parse --show-toplevel 2>/dev/null || echo /nonexisten
 cases="$here/cases.json"
 states=(unlocked locked lid_closed lid_closed_locked)
 
-usage() { sed -n 6,9p "$0" >&2; exit 2; }
+usage() { sed -n 6,18p "$0" >&2; exit 2; }
 [[ $# -ge 2 ]] || usage
 cmd=$1
-dir=$(mkdir -p "$2" && cd "$2" && pwd)
-case "$dir/" in "$repo"/*) echo "The results folder must be outside the repository." >&2; exit 2 ;; esac
+if [[ $cmd != prompt ]]; then
+    dir=$(mkdir -p "$2" && cd "$2" && pwd)
+    case "$dir/" in "$repo"/*) echo "The results folder must be outside the repository." >&2; exit 2 ;; esac
+fi
 
 screen_state() { swift "$here/screen-state.swift"; }
 
-# One capability's cases in one Claude Code run; writes <dir>/<state>/<group>.json.
-run_group() {
-    local state=$1 group=$2 tag=$3 out="$dir/$1"
-    local mac tomorrow prompt
-    mac=$(scutil --get ComputerName)
-    tomorrow=$(date -v+1d +%Y-%m-%d)
-    prompt=$(jq -r --arg g "$group" --arg tag "$tag" --arg to "$LATCHKEY_CHECK_TO" --arg day "$tomorrow" --arg mac "$mac" '
+# make_prompt <group> <tag> <machine>: the instructions for one capability's cases.
+make_prompt() {
+    local group=$1 tag=$2 mac=$3 tomorrow
+    tomorrow=$(date -v+1d +%Y-%m-%d 2>/dev/null || date -d tomorrow +%Y-%m-%d)
+    jq -r --arg g "$group" --arg tag "$tag" --arg to "$LATCHKEY_CHECK_TO" --arg day "$tomorrow" --arg mac "$mac" '
         .groups[] | select(.id == $g) |
         "You are running an automated check of Latchkey, unattended. Use only Latchkey tools and always pass machine: \"\($mac)\". Do the cases below in order without asking anything. Test data you make is named with the tag \"\($tag)\" (in notes, file names, events, cards, subjects); cleaning it up is part of the cases.\n\nFor each case record one result:\n- works: the tool did what the case asks (check its answer says so).\n- refused: the tool answered plainly that it can'\''t do this now, for example because the screen is off, asleep, or locked.\n- failed: an error, a timeout, a wrong or empty result, or a refusal that gives no clear reason.\n- skipped: it needed something an earlier case didn'\''t produce.\nIn note, give the tool'\''s own reason for refused or failed, at most 25 words, and never personal content (no names, addresses, subjects, or message, note, or file text).\n\nCases:\n" +
         ([.cases[] | "- \(.id): \(.steps)"] | join("\n") | gsub("\\{TAG\\}"; $tag) | gsub("\\{TO\\}"; $to) | gsub("\\{TOMORROW\\}"; $day)) +
         "\n\nEnd your reply with exactly one ```json block: an array with one object per case, in order: {\"id\": \"...\", \"result\": \"works|refused|failed|skipped\", \"note\": \"...\"}."
-    ' "$cases")
+    ' "$cases"
+}
+
+# record_group <state> <group> <reply file> <before> <after> <from> <to>: the reply's ```json
+# block as <dir>/<state>/<group>.json, or every case "failed" when there is none.
+record_group() {
+    local state=$1 group=$2 reply=$3 before=$4 after=$5 from=$6 to=$7 out="$dir/$1"
+    mkdir -p "$out"
+    if awk '/^```json/{on=1; next} /^```/{on=0} on' "$reply" | jq -e --arg b "$before" --arg a "$after" \
+        --arg f "$from" --arg t "$to" \
+        'if type == "array" and length > 0 then {seen: [$b, $a] | unique, from: $f, to: $t, cases: .} else error("no cases") end' \
+        >"$out/$group.json" 2>/dev/null && [[ -s $out/$group.json ]]; then
+        return 0
+    fi
+    jq -n --arg b "$before" --arg a "$after" --arg g "$group" --slurpfile c "$cases" \
+            --arg f "$from" --arg t "$to" \
+            '{seen: [$b, $a] | unique, from: $f, to: $t, cases: [$c[0].groups[] | select(.id == $g) | .cases[] |
+              {id, result: "failed", note: "The check run itself didn'\''t finish or report"}]}' >"$out/$group.json"
+}
+
+# merge_state <state> <app version>: that state's groups into <dir>/<state>.result.json.
+merge_state() {
+    jq -s --arg s "$1" --arg t "$(date '+%F %T')" --arg v "$2" \
+        '{state: $s, finished: $t, app: $v, cases: (map(.seen as $seen | .cases[] | . + {seen: $seen}))}' \
+        "$dir/$1"/*.json >"$dir/$1.result.json"
+    jq -r '.cases | group_by(.result) | map("\(.[0].result): \(length)") | join(", ")' "$dir/$1.result.json"
+}
+
+# One capability's cases in one Claude Code run; writes <dir>/<state>/<group>.json.
+run_group() {
+    local state=$1 group=$2 tag=$3 out="$dir/$1"
+    local mac prompt
+    mac=$(scutil --get ComputerName)
+    prompt=$(make_prompt "$group" "$tag" "$mac")
     local before after from
     before=$(screen_state)
     from=$(date +%T)
@@ -54,14 +95,9 @@ $prompt"
         sleep 30
     done
     after=$(screen_state)
-    jq -r '.result // empty' "$out/$group.raw.txt" 2>/dev/null |
-        awk '/^```json/{on=1; next} /^```/{on=0} on' | jq --arg b "$before" --arg a "$after" \
-        --arg f "$from" --arg t "$(date +%T)" \
-        '{seen: [$b, $a] | unique, from: $f, to: $t, cases: .}' >"$out/$group.json" 2>/dev/null ||
-        jq -n --arg b "$before" --arg a "$after" --arg g "$group" --slurpfile c "$cases" \
-            --arg f "$from" --arg t "$(date +%T)" \
-            '{seen: [$b, $a] | unique, from: $f, to: $t, cases: [$c[0].groups[] | select(.id == $g) | .cases[] |
-              {id, result: "failed", note: "The check run itself didn'\''t finish or report"}]}' >"$out/$group.json"
+    jq -r '.result // empty' "$out/$group.raw.txt" 2>/dev/null >"$out/$group.reply.txt" || : >"$out/$group.reply.txt"
+    record_group "$state" "$group" "$out/$group.reply.txt" "$before" "$after" "$from" "$(date +%T)"
+    rm -f "$out/$group.reply.txt"
 }
 
 # Removes every test item any run left (the sweep group, by the tag's common start, "Latchkey
@@ -106,11 +142,7 @@ run_all() {
     trap - EXIT INT TERM
     local swept=0
     sweep "$state" "$watcher" || swept=1
-    jq -s --arg s "$state" --arg t "$(date '+%F %T')" \
-        --arg v "$(defaults read /Applications/Latchkey.app/Contents/Info.plist CFBundleShortVersionString 2>/dev/null || echo unknown)" \
-        '{state: $s, finished: $t, app: $v, cases: (map(.seen as $seen | .cases[] | . + {seen: $seen}))}' \
-        "$dir/$state"/*.json >"$dir/$state.result.json"
-    jq -r '.cases | group_by(.result) | map("\(.[0].result): \(length)") | join(", ")' "$dir/$state.result.json"
+    merge_state "$state" "$(defaults read /Applications/Latchkey.app/Contents/Info.plist CFBundleShortVersionString 2>/dev/null || echo unknown)"
     return "$swept"
 }
 
@@ -153,6 +185,11 @@ EOF
 
 case "$cmd" in
 group) run_group "$3" "$4" "$5" ;;
+prompt)
+    : "${LATCHKEY_CHECK_TO:?set LATCHKEY_CHECK_TO to the address to send checks to}"
+    make_prompt "$2" "${3:?tag}" "${4:?machine}" ;;
+record) record_group "${3:?state}" "${4:?group}" "${5:?reply file}" "${6:?before}" "${7:?after}" "${8:?from}" "${9:?to}" ;;
+merge) merge_state "${3:?state}" "${4:?app version}" ;;
 run) run_all "${@:3}" ;;
 wait)
     days=${3:-4}

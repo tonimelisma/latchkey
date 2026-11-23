@@ -29,6 +29,21 @@ check() { (cd "$main" && scripts/loose-ends.sh) >"$work/out" 2>&1; }
 check
 [ -s "$work/out" ] && bad "a clean repository has no loose ends" || ok "a clean repository has no loose ends"
 
+# A branch whose pull request was merged by rebase (the same change on main, another commit).
+g -C "$main" checkout -q -b rebased
+echo rebased >"$main/rebased.txt"
+g -C "$main" add rebased.txt
+g -C "$main" commit -q -m "rebased work"
+g -C "$main" checkout -q main
+g clone -q "$work/origin.git" "$work/rebaser" 2>/dev/null
+g -C "$work/rebaser" fetch -q "$main" rebased
+g -C "$work/rebaser" -c user.name=other cherry-pick FETCH_HEAD >/dev/null
+g -C "$work/rebaser" push -q origin HEAD:main
+g -C "$main" pull -q --ff-only origin main
+check
+lacks "a branch merged by rebase isn't a loose end" "local branch rebased"
+g -C "$main" branch -q -D rebased
+
 # A helper's worktree whose work is on main, still on disk and locked by a running session.
 wt() { g -C "$main" worktree add -q "$main/.claude/worktrees/$1" -b "$1" 2>/dev/null; }
 wt agent-done

@@ -24,8 +24,7 @@
 #                  none are set (scripts/private-values-check.sh).
 #   after-bash     skips tidy.sh.
 # tidy.sh is skipped because nothing it cleans exists in the VM (no worktrees, Mac builds, relay
-# images, or main checkout to fast-forward) and GitHub's proxy refuses the branch deletions it
-# would try; the next tidy.sh on the Mac deletes merged branches. scripts/keep-going.sh (the Stop
+# images, or main checkout to fast-forward); GitHub deletes merged pull requests' branches. scripts/keep-going.sh (the Stop
 # hook) is unchanged: the VM keeps the session's own ~/.claude/worklists.
 here=$(cd "$(dirname "$0")" && pwd)
 input=$(cat)

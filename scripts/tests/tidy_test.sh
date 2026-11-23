@@ -45,6 +45,17 @@ g -C "$main" add unmerged.txt
 g -C "$main" commit -q -m "unfinished work"
 g -C "$main" push -q origin unmerged
 g -C "$main" checkout -q main
+# A branch merged by a pull request's rebase: the same change on main under another commit.
+g -C "$main" checkout -q -b rebased
+echo rebased >"$main/rebased.txt"
+g -C "$main" add rebased.txt
+g -C "$main" commit -q -m "rebased work"
+g -C "$main" checkout -q main
+g -C "$main" clone -q "$work/origin.git" "$work/rebaser" 2>/dev/null
+g -C "$work/rebaser" fetch -q "$main" rebased
+g -C "$work/rebaser" -c user.name=other -c user.email=o@example.com cherry-pick FETCH_HEAD >/dev/null
+g -C "$work/rebaser" push -q origin HEAD:main
+g -C "$main" pull -q --ff-only origin main
 # A ref whose name starts with "-" (git branch refuses to make one, but a fetch can bring it).
 g -C "$main" update-ref refs/heads/-q refs/heads/main
 g -C "$main" push -q origin refs/heads/-q:refs/heads/-q
@@ -73,6 +84,7 @@ tidy
 yes "main kept" g -C "$main" rev-parse --verify -q refs/heads/main
 no "merged local branch deleted" g -C "$main" rev-parse --verify -q refs/heads/merged
 yes "merged remote branch left to GitHub" g -C "$work/origin.git" rev-parse --verify -q refs/heads/merged
+no "a branch merged by rebase is deleted locally" g -C "$main" rev-parse --verify -q refs/heads/rebased
 yes "unmerged local branch kept" g -C "$main" rev-parse --verify -q refs/heads/unmerged
 yes "unmerged remote branch kept" g -C "$work/origin.git" rev-parse --verify -q refs/heads/unmerged
 no "merged local ref starting with - deleted" g -C "$main" rev-parse --verify -q refs/heads/-q

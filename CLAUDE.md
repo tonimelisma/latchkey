@@ -123,10 +123,13 @@ see "Cloud sessions"):
   main checkout (`.env`, `CLAUDE.local.md`, `macos/Config/Local.xcconfig`). The Mac Makefile,
   `package.sh`, and `deploy/deploy.sh` run it themselves; `package.sh` refuses to build without the
   signing team, because a differently signed app loses the installed app's permissions and pairing.
-- Merge by fast-forward: `git fetch origin && git rebase origin/main`, then `git push origin
-  HEAD:<branch>` and `git push origin HEAD:main`. If main moved meanwhile (another session),
-  rebase again and retest. Never force-push (one exception, approved by Toni 2026-10-23:
-  rewriting history to remove the relay's address).
+- Merge through a pull request: `git fetch origin && git rebase origin/main`, push the branch,
+  open its pull request and, once CI's checks pass, merge it with the method "rebase" (a linear
+  history; from a cloud session through the REST API: `gh api repos/tonimelisma/latchkey/pulls`,
+  then `gh api -X PUT …/pulls/<n>/merge -f merge_method=rebase`). GitHub deletes the merged
+  branch itself; `tidy.sh` and `loose-ends.sh` know rebased work. If main moved meanwhile
+  (another session), rebase again and retest. Never force-push (one exception, approved by Toni
+  2026-10-23: rewriting history to remove the relay's address).
 - A worktree is removed the moment its work is on main (Toni, 2026-10-24): `ExitWorktree`
   (`remove`), after checking nothing is uncommitted and `git merge-base --is-ancestor HEAD
   refs/remotes/origin/main` succeeds (only then with `discard_changes: true`). A helper agent's
@@ -148,27 +151,39 @@ the targeted tests, then the full checks once per batch. In order:
    diff by a review subagent before commit, its findings fixed or answered in the same commit
    (Toni, 2026-11-22; three such bugs were found only after install that weekend).
 2. Never write a version number by hand: a release is a tag on a commit on main (`mac-<x.y.z>` for the
-   Mac app, `linux-<x.y.z>` for Linux; Linux was `server-v<x.y.z>` until 0.1.4), given at install or release time by
+   Mac app, `linux-<x.y.z>` for Linux; Linux was `server-v<x.y.z>` until 0.1.4), made by CI with
    `scripts/release-tag.sh` (the highest tag + 1; GitHub refuses a taken one, so sessions never
    share a number; Toni, 2026-11-04). A commit already tagged keeps its number.
 3. Update specs, `docs/STATUS.md`, `docs/decisions.md`, and `README.md` in the same commit.
-4. Commit (files by name) and fast-forward `main` (above).
-5. If `relay/` changed: `deploy/deploy.sh`. If `linux/` changed:
-   `make -C linux release` (installed servers update themselves within a day).
-6. If `macos/` changed: `make -C macos install` waits until Latchkey has been idle (no tool call
-   for 10 minutes, none running; it gives up after 30 and installs nothing; Toni, 2026-11-22,
-   after an install restarted Latchkey in the middle of his Target order), then builds the disk
-   image, quits the running app cleanly, replaces `/Applications/Latchkey.app`, starts it, and
-   checks it reports the new version (pairing and permissions carry over). Toni never installs
-   by hand. `LATCHKEY_INSTALL_NOW=1` skips the wait: only when Toni says so. Installs and
-   deploys run one at a time (a lock; the next waits), and an install refuses a checkout that
-   isn't exactly origin/main, so merge and push first, then install (2026-11-04). The install
-   tags the commit, then builds the image for that number.
-7. If behavior changed: a live check through the hosted relay with a fresh Claude Code session
-   (`claude -p "<prompt>" --allowedTools=mcp__claude_ai_Latchkey`: with a space instead of `=`,
-   the option takes the prompt as a second tool name); this session's own connector keeps the
-   tool list it started with. Check only what changed: run `state-check.sh run <dir> <group…>`
-   with the groups whose code changed, never every group by habit (Toni, 2026-11-05: a full run
+4. Commit (files by name) and merge into `main` (above).
+5. Merging ships (Toni, 2026-11-23: cloud-first; `docs/cloud-sessions.md`, "Releases"). Each
+   releasing job runs in an approval environment (`release`, `production`, `infra`):
+   - `relay/` changed: `relay-image.yml` tests, publishes and signs the image; the server checks
+     the signature and switches to it within 5 minutes, back to the previous one if unhealthy.
+     Relay settings, DNS, the email domain, `deploy/harden.sh`: the infra workflow
+     (repository_dispatch `infra`, task `configure` or `harden`).
+   - `linux/` changed: `linux-release.yml` tags, signs and publishes; installed servers (purkki
+     too, which no workflow ever reaches) update themselves within a day.
+   - `macos/` changed: `mac-tag.yml` tags the commit `mac-<x.y.z>`; the Mac's updater
+     (`macos/scripts/auto-update.sh`, a launchd agent) builds and installs that tag within
+     15 minutes. The install waits until Latchkey has been idle (no tool call for 10 minutes,
+     none running; it gives up after 30 and tries again next time; Toni, 2026-11-22, after an
+     install restarted Latchkey in the middle of his Target order), quits the running app
+     cleanly, replaces `/Applications/Latchkey.app`, starts it, checks it (pairing and
+     permissions carry over), and publishes the disk image. Toni never installs by hand.
+     Skipping the idle wait (`install-now`) only when Toni says so. Installs run one at a time,
+     and only CI's newest tag is installed.
+   Repository_dispatch from a session: `gh api repos/tonimelisma/latchkey/dispatches -f
+   event_type=<type>` (`relay-image`, `linux-release`, `mac-tag`, or `infra` with
+   `-F client_payload[task]=configure|harden`).
+6. Watch the workflow runs (`gh api repos/tonimelisma/latchkey/actions/runs`) and, for the Mac,
+   the updater's log through Latchkey (`docs/cloud-sessions.md`, "The Mac's updater").
+7. If behavior changed: a live check through the hosted relay once the new version runs, from a
+   session whose Latchkey connector started after it (a session keeps the tool list it started
+   with): a fresh cloud session from claude.ai runs the cases itself with
+   `state-check.sh prompt|record|merge` (`docs/cloud-sessions.md`, "Live checks"); on the Mac,
+   `state-check.sh run <dir> <group…>` with fresh `claude -p` sessions. Check only what changed:
+   the groups whose code changed, never every group by habit (Toni, 2026-11-05: a full run
    sends about six emails). A full run is for changes every tool shares (the connection, the
    relay's tool handling) and for refreshing `docs/use-cases.md` in a new screen state. The run
    counts for the acceptance rows of the screen state it ran in, no other ("Done means Toni's
@@ -193,7 +208,8 @@ loose ends are listed at session start; `scripts/keep-going.sh` keeps Claude on 
 Toni; Stop always works) and stops a turn once that claims "works" or "done" without the
 acceptance rows; commands that lose work (stash, force-push, hard reset, `clean -f`,
 `branch -D`) and pushes with a private value are refused; `scripts/tidy.sh` cleans merged
-branches, worktrees, and old builds after every push.
+local branches, worktrees, and old builds after every push on the Mac (GitHub deletes merged
+pull requests' branches; nothing to tidy after a cloud push).
 - Delete temporary files (scratch scripts, copies of databases, old app copies, servers' `/tmp`
   files) as soon as the task that needed them is done; scratchpad folders end empty.
 - Never commit the hosted relay's address, its server details, or the Apple team ID; they live in
@@ -224,9 +240,29 @@ Mail, WhatsApp sending, Notes' window editing, Messages' window actions, Reminde
 
 ## Cloud sessions (claude.ai/code; 2026-11-21)
 
-A cloud session (`CLAUDE_CODE_REMOTE=true`, a fresh Ubuntu VM run as root, no Swift or macOS)
-follows `docs/cloud-sessions.md` (the session-start hook says so): no worktree, Mac builds and
-tests through Latchkey's `shell_run`, deploys and installs left as steps for a local session.
+Development happens in cloud sessions (Toni, 2026-11-23); the Mac only builds and tests what
+needs macOS. A cloud session (`CLAUDE_CODE_REMOTE=true`, a fresh Ubuntu VM run as root, no Swift
+or macOS) follows `docs/cloud-sessions.md` (the session-start hook says so): no worktree;
+releases, deploys and infrastructure through GitHub Actions; Mac builds and tests through
+Latchkey's `shell_run`; the Mac installs releases itself; live checks with its own Latchkey tools.
+
+## Owner setup (only Toni can do these; once)
+
+- Repository secrets: `SERVER_SIGNING_KEY` (environment `release`). Environment `infra`:
+  `GCP_WORKLOAD_IDENTITY_PROVIDER`, `GCP_SERVICE_ACCOUNT` (printed by `deploy/gcp-wif-setup.sh`),
+  `DEPLOY_HOST`, `DEPLOY_DNS_ZONE`, `DEPLOY_VM`, `DEPLOY_PROJECT`, `DEPLOY_ZONE`, `ALLOWED_EMAILS`,
+  `ALERT_EMAIL`, `OWNER_ACCOUNT`, `CLOUDFLARE_API_TOKEN`, `RESEND_API_KEY`, optional
+  `RESEND_ADMIN_KEY`, `OPERATOR_NAME`, `OPERATOR_CONTACT`, `OPERATOR_LAW`, `OPERATOR_PROVIDERS`,
+  `BACKUP_DAYS`, `APP_BUCKETS` (the values in `.env` today).
+- Google Cloud Shell, once: `sh deploy/gcp-wif-setup.sh --project … --zone … --vm …`; the same two
+  printed values go into hackernews's secrets. Then the infra workflow's `harden` once.
+- ghcr.io package `latchkey-relay`: Package settings → Manage Actions access → this repository
+  with Write (so the image workflow can publish it).
+- On the Mac, once: `macos/scripts/updater-setup.sh` from the main checkout (later installs keep
+  it current).
+- Cloud environment variable `LATCHKEY_CHECK_TO` (the live checks' own address).
+- Optional: required reviewers on the environments `release`, `production`, `infra`; a tag
+  ruleset so only GitHub Actions creates `mac-*` and `linux-*` tags.
 
 ## Gotchas
 
@@ -238,14 +274,15 @@ tests through Latchkey's `shell_run`, deploys and installs left as steps for a l
 ## Commands
 
 All commands, with details: `docs/commands.md`. The ones used every day:
-- Relay (`relay/`): `make test`, `make lint` (0 issues), `make security`; deploy with
-  `deploy/deploy.sh` (needs `.env`).
-- Mac app (`macos/`): `make test`, `make lint`, `make install` (the installed app; see "Every
-  finished batch ships").
-- Linux program (`linux/`): `make test`, `make lint`, `make release`.
+- Relay (`relay/`): `make test`, `make lint` (0 issues), `make security`, `make script-tests`;
+  releases and configuration through the workflows ("Every finished batch ships").
+- Mac app (`macos/`): `make test`, `make lint`; installs by the Mac's updater (`make install`
+  installs CI's newest tag by hand).
+- Linux program (`linux/`): `make test`, `make lint`; releases by `linux-release.yml`.
 - Screen states (`macos/scripts/state-check/`): `state-check.sh run|wait|report <folder outside
   the repo> [groups]` runs the use cases in `cases.json` with real Claude Code in the Mac's
-  current screen state; needs `LATCHKEY_CHECK_TO` (from `CLAUDE.local.md`).
+  current screen state; `prompt|record|merge` for a cloud session running them itself; needs
+  `LATCHKEY_CHECK_TO` (from `CLAUDE.local.md`, or the cloud environment).
 
 <!-- Maintainers: keep this file under ~200 lines (Anthropic's guidance for CLAUDE.md). Status and
 decisions live in docs/, topic knowledge in .claude/rules/, procedures in docs/. A rule that must
