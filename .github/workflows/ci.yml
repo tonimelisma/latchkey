@@ -91,18 +91,22 @@ jobs:
           sw_vers
       - name: Lint
         run: swift format lint --strict -r App Shared Helper Tests
-      # The unit tests' results are reported, not a gate: on GitHub's runner (macOS 26, slower)
-      # about 30 tests miss their timing limits or need the owner's Mac, on main as on a branch
-      # (2026-11-23); compare a branch's failures with main's. Lint and the build gate.
-      - name: Test
-        continue-on-error: true
+      # Lint and the build gate. The unit tests' results are reported, not a gate: on GitHub's
+      # runner (macOS 26, slower) about 30 tests miss their timing limits or need the owner's Mac,
+      # on main as on a branch (2026-11-23); compare a branch's failures with main's.
+      - name: Build
         run: |
           set -o pipefail
           xcodegen generate --quiet
+          xcodebuild -project Latchkey.xcodeproj -scheme Latchkey -destination 'platform=macOS' \
+            -derivedDataPath "$RUNNER_TEMP/dd" build-for-testing -quiet 2>&1 | tail -60
+      - name: Test
+        continue-on-error: true
+        run: |
           rc=0
           xcodebuild -project Latchkey.xcodeproj -scheme Latchkey -destination 'platform=macOS' \
             -derivedDataPath "$RUNNER_TEMP/dd" -resultBundlePath "$RUNNER_TEMP/tests.xcresult" \
-            test > "$RUNNER_TEMP/test.log" 2>&1 || rc=$?
+            test-without-building > "$RUNNER_TEMP/test.log" 2>&1 || rc=$?
           # Each failed test with why (the log names it only).
           xcrun xcresulttool get test-results summary --path "$RUNNER_TEMP/tests.xcresult" \
             | jq -r '.testFailures[]? | "FAILURE \(.testIdentifierString): \(.failureText)"' | head -300 || true
