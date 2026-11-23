@@ -3,7 +3,7 @@
 # pushes and release writes, so they happen here). The release job tags the commit
 # linux-<x.y.z> (scripts/release-tag.sh), builds both architectures, signs them with the
 # repository secret SERVER_SIGNING_KEY, and publishes them with SHA256SUMS and install.sh.
-# Installed servers (purkki among them) find it themselves within a day and check each download's
+# Installed servers find it themselves within a day and check each download's
 # signature against the key built into the program; no workflow ever reaches a server.
 # The release job runs in the environment "release", where the owner can require an approval.
 name: linux release

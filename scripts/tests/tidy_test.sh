@@ -1,6 +1,5 @@
 #!/bin/sh
-# Tests for scripts/tidy.sh in a temporary repository with its own "origin". Docker is replaced
-# by a stub, so no real image is touched.
+# Tests for scripts/tidy.sh in a temporary repository with its own "origin".
 # Run: scripts/tests/tidy_test.sh (or `make -C relay script-tests`).
 set -u
 root=$(cd "$(dirname "$0")/../.." && pwd)
@@ -13,12 +12,6 @@ bad() { printf 'FAIL %s\n' "$1"; fails=$((fails + 1)); }
 yes() { name=$1; shift; if "$@" >/dev/null 2>&1; then ok "$name"; else bad "$name"; fi; }
 no() { name=$1; shift; if "$@" >/dev/null 2>&1; then bad "$name"; else ok "$name"; fi; }
 g() { git -c user.name=t -c user.email=t@example.com -c init.defaultBranch=main "$@"; }
-
-mkdir "$work/bin"
-printf '#!/bin/sh\nexit 1\n' >"$work/bin/docker"
-chmod +x "$work/bin/docker"
-PATH="$work/bin:$PATH"
-export PATH
 
 main="$work/main"
 g init -q --bare "$work/origin.git"

@@ -1,10 +1,9 @@
 # Publishes the relay image to ghcr.io/tonimelisma/latchkey-relay whenever relay/ changes on main
 # (or on repository_dispatch "relay-image"), tagged with the commit and "latest", and signs it with
 # cosign, keyless: the signature names this workflow on main (GitHub's identity token, Sigstore's
-# certificate and transparency log). That is the production deploy: the hosted relay's server
-# checks the signature and switches to the new image by itself within 5 minutes
-# (deploy/server/host/update-apps.sh), and self-hosted relays that follow "latest" update too
-# (spec 009 FR-911). Nothing is published unless the security checks, lint and the full test suite
+# certificate and transparency log). That is the production deploy: a host that verifies the
+# signature switches to the new image by itself, and self-hosted relays that follow "latest" update
+# too (spec 009 FR-911). Nothing is published unless the security checks, lint and the full test suite
 # pass; multi-arch (x86 and ARM servers), with an SBOM and build provenance. The publishing job
 # runs in the environment "production", where the owner can require an approval.
 name: relay image
@@ -75,7 +74,7 @@ jobs:
           provenance: mode=max
           sbom: true
           build-args: VERSION=${{ steps.version.outputs.short }}
-          # The server's updater names the local image after this commit (latchkey-relay:<12>).
+          # The commit the image was built from, for a host's updater to name it by.
           labels: |
             org.opencontainers.image.revision=${{ github.sha }}
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
@@ -84,14 +83,14 @@ jobs:
             ghcr.io/tonimelisma/latchkey-relay:latest
       - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
         with:
-          cosign-release: v3.1.3 # the version the server checks with (deploy/server/host/setup.sh)
+          cosign-release: v3.1.3 # the version a host that verifies the signature checks with
       - name: Sign the image (keyless)
         env:
           DIGEST: ${{ steps.build.outputs.digest }}
         run: |
           case $DIGEST in sha256:*) ;; *) echo "no digest from the build" >&2; exit 1 ;; esac
           cosign sign --yes "ghcr.io/tonimelisma/latchkey-relay@$DIGEST"
-      - name: Check the signature as the server will
+      - name: Check the signature as a host that verifies it will
         env:
           DIGEST: ${{ steps.build.outputs.digest }}
         run: |
@@ -99,4 +98,4 @@ jobs:
             --certificate-identity "https://github.com/${{ github.repository }}/.github/workflows/relay-image.yml@refs/heads/main" \
             --certificate-oidc-issuer https://token.actions.githubusercontent.com \
             "ghcr.io/tonimelisma/latchkey-relay@$DIGEST" >/dev/null
-          echo "Published and signed ghcr.io/tonimelisma/latchkey-relay@$DIGEST (${GITHUB_SHA::12}); the hosted relay's server switches to it within 5 minutes." >>"$GITHUB_STEP_SUMMARY"
+          echo "Published and signed ghcr.io/tonimelisma/latchkey-relay@$DIGEST (${GITHUB_SHA::12}); hosts that verify the signature switch to it." >>"$GITHUB_STEP_SUMMARY"

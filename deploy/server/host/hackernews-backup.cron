@@ -1,4 +1,0 @@
-# hackernews's nightly backup to Cloud Storage (its own script, scripts/backup-sqlite.sh in its
-# repository), as root: it runs docker, which the old local accounts no longer may.
-# deploy/harden.sh installs this as /etc/cron.d/hackernews-backup.
-0 3 * * * root /opt/hackernews/scripts/backup-sqlite.sh >> /var/log/hackernews-backup.log 2>&1

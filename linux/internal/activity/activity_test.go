@@ -318,7 +318,7 @@ func TestMemoryKeepsTheNewest1000(t *testing.T) {
 
 // The relay times a call as it sends it, a moment before the server logs it: asked from the
 // server's first logged call exactly, the relay left that call out, and every audit check named
-// it missing (purkki, 2026-11-01 to 2026-11-04). Entries from before the log began count only
+// it missing (a Linux server, 2026-11-01 to 2026-11-04). Entries from before the log began count only
 // when the log has them.
 func TestTheLogsFirstCallIsComparedToo(t *testing.T) {
 	start := time.Date(2026, 11, 1, 17, 1, 22, 786_000_000, time.UTC)

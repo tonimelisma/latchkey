@@ -122,13 +122,6 @@ if [ -n "$main" ] && [ -d "$main" ]; then
   done
 fi
 
-# Relay images built by deploy/deploy.sh: keep the newest only.
-if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
-  docker images latchkey-relay --format '{{.CreatedAt}}|{{.Repository}}:{{.Tag}}' | sort -r | tail -n +2 |
-    cut -d'|' -f2 | while read -r image; do
-      docker rmi -f "$image" >/dev/null 2>&1 && echo "tidy: removed image $image"
-    done
-fi
 
 # The main checkout follows main: fast-forward only, and only when it is on main with nothing
 # uncommitted or untracked and no commits of its own. Last, because it may replace this script.

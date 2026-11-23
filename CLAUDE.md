@@ -120,8 +120,8 @@ see "Cloud sessions"):
   latest `origin/main` under `.claude/worktrees/`). Never edit, build, or commit in the main
   checkout at `~/Development/latchkey`; it stays on `main`, untouched.
 - In a fresh worktree, `scripts/link-local-files.sh` links the gitignored personal files from the
-  main checkout (`.env`, `CLAUDE.local.md`, `macos/Config/Local.xcconfig`). The Mac Makefile,
-  `package.sh`, and `deploy/deploy.sh` run it themselves; `package.sh` refuses to build without the
+  main checkout (`.env`, `CLAUDE.local.md`, `macos/Config/Local.xcconfig`). The Mac Makefile and
+  `package.sh` run it themselves; `package.sh` refuses to build without the
   signing team, because a differently signed app loses the installed app's permissions and pairing.
 - Merge through a pull request: `git fetch origin && git rebase origin/main`, push the branch,
   open its pull request and, once CI's checks pass, merge it with the method "rebase" (a linear
@@ -157,13 +157,12 @@ the targeted tests, then the full checks once per batch. In order:
 3. Update specs, `docs/STATUS.md`, `docs/decisions.md`, and `README.md` in the same commit.
 4. Commit (files by name) and merge into `main` (above).
 5. Merging ships (Toni, 2026-11-23: cloud-first; `docs/cloud-sessions.md`, "Releases"). Each
-   releasing job runs in an approval environment (`release`, `production`, `infra`):
-   - `relay/` changed: `relay-image.yml` tests, publishes and signs the image; the server checks
-     the signature and switches to it within 5 minutes, back to the previous one if unhealthy.
-     Relay settings, DNS, the email domain, `deploy/harden.sh`: the infra workflow
-     (repository_dispatch `infra`, task `configure` or `harden`).
-   - `linux/` changed: `linux-release.yml` tags, signs and publishes; installed servers (purkki
-     too, which no workflow ever reaches) update themselves within a day.
+   releasing job runs in an approval environment (`release`, `production`):
+   - `relay/` changed: `relay-image.yml` tests, publishes and signs the image; hosts that verify
+     its signature pull it themselves. The hosted relay's server and its deployment live outside
+     this repository (2026-11-23).
+   - `linux/` changed: `linux-release.yml` tags, signs and publishes; installed servers (Toni's
+     home server too, which no workflow ever reaches) update themselves within a day.
    - `macos/` changed: `mac-tag.yml` tags the commit `mac-<x.y.z>`; the Mac's updater
      (`macos/scripts/auto-update.sh`, a launchd agent) builds and installs that tag within
      15 minutes. The install waits until Latchkey has been idle (no tool call for 10 minutes,
@@ -174,8 +173,7 @@ the targeted tests, then the full checks once per batch. In order:
      Skipping the idle wait (`install-now`) only when Toni says so. Installs run one at a time,
      and only CI's newest tag is installed.
    Repository_dispatch from a session: `gh api repos/tonimelisma/latchkey/dispatches -f
-   event_type=<type>` (`relay-image`, `linux-release`, `mac-tag`, or `infra` with
-   `-F client_payload[task]=configure|harden`).
+   event_type=<type>` (`relay-image`, `linux-release`, `mac-tag`).
 6. Watch the workflow runs (`gh api repos/tonimelisma/latchkey/actions/runs`) and, for the Mac,
    the updater's log through Latchkey (`docs/cloud-sessions.md`, "The Mac's updater").
 7. If behavior changed: a live check through the hosted relay once the new version runs, from a
@@ -243,25 +241,18 @@ Mail, WhatsApp sending, Notes' window editing, Messages' window actions, Reminde
 Development happens in cloud sessions (Toni, 2026-11-23); the Mac only builds and tests what
 needs macOS. A cloud session (`CLAUDE_CODE_REMOTE=true`, a fresh Ubuntu VM run as root, no Swift
 or macOS) follows `docs/cloud-sessions.md` (the session-start hook says so): no worktree;
-releases, deploys and infrastructure through GitHub Actions; Mac builds and tests through
+releases through GitHub Actions; Mac builds and tests through
 Latchkey's `shell_run`; the Mac installs releases itself; live checks with its own Latchkey tools.
 
 ## Owner setup (only Toni can do these; once)
 
-- Repository secrets: `SERVER_SIGNING_KEY` (environment `release`). Environment `infra`:
-  `GCP_WORKLOAD_IDENTITY_PROVIDER`, `GCP_SERVICE_ACCOUNT` (printed by `deploy/gcp-wif-setup.sh`),
-  `DEPLOY_HOST`, `DEPLOY_DNS_ZONE`, `DEPLOY_VM`, `DEPLOY_PROJECT`, `DEPLOY_ZONE`, `ALLOWED_EMAILS`,
-  `ALERT_EMAIL`, `OWNER_ACCOUNT`, `CLOUDFLARE_API_TOKEN`, `RESEND_API_KEY`, optional
-  `RESEND_ADMIN_KEY`, `OPERATOR_NAME`, `OPERATOR_CONTACT`, `OPERATOR_LAW`, `OPERATOR_PROVIDERS`,
-  `BACKUP_DAYS`, `APP_BUCKETS` (the values in `.env` today).
-- Google Cloud Shell, once: `sh deploy/gcp-wif-setup.sh --project … --zone … --vm …`; the same two
-  printed values go into hackernews's secrets. Then the infra workflow's `harden` once.
+- Repository secrets: `SERVER_SIGNING_KEY` (environment `release`).
 - ghcr.io package `latchkey-relay`: Package settings → Manage Actions access → this repository
   with Write (so the image workflow can publish it).
 - On the Mac, once: `macos/scripts/updater-setup.sh` from the main checkout (later installs keep
   it current).
 - Cloud environment variable `LATCHKEY_CHECK_TO` (the live checks' own address).
-- Optional: required reviewers on the environments `release`, `production`, `infra`; a tag
+- Optional: required reviewers on the environments `release`, `production`; a tag
   ruleset so only GitHub Actions creates `mac-*` and `linux-*` tags.
 
 ## Gotchas

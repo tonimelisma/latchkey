@@ -12,25 +12,14 @@ Relay (run in `relay/`):
 - `make run`: run locally with development defaults (data in `relay/.data/`)
 - `make security`: every security check (known vulnerabilities, committed secrets and private
   values, Semgrep, ShellCheck, tidy modules); the deploy runs it first
-- `make script-tests`: tests of the deploy and repository scripts (no server, no network)
+- `make script-tests`: tests of the repository scripts (no server, no network)
 
 - `make mac-check`: the Mac app's real connection code against a private relay (battery vs
   pmset, tool off, silent network cut, reconnect)
 
-Hosted relay (docs/cloud-sessions.md, "Releases"): new versions ship by themselves after a merge
-(`relay-image.yml` publishes and signs the image; the server's `latchkey-update-apps` checks the
-signature, switches, and rolls back an unhealthy one). `deploy/deploy.sh` applies the
-configuration (relay.env, compose file, Caddy block, Cloudflare DNS, the Resend domain) and
-restarts the running version; `deploy/harden.sh` locks the server and project down. Both run in
-the infra workflow (repository_dispatch `infra`, `client_payload[task]` `configure` or `harden`)
-as `latchkey-infra` (Workload Identity Federation; set up once with `deploy/gcp-wif-setup.sh`),
-with the settings from the environment `infra`'s secrets, or by the owner with a gitignored
-`.env` (see the scripts' headers): `CLOUDFLARE_API_TOKEN`, `RESEND_API_KEY` (send-only),
-`RESEND_ADMIN_KEY` (full access, only to set up the sending domain), optional `OPERATOR_NAME`,
-`OPERATOR_CONTACT`, `OPERATOR_LAW`, `OPERATOR_PROVIDERS`, `BACKUP_DAYS` (they switch on the
-relay's terms and privacy pages). A deploy applies only a clean checkout of main and goes back to
-the previous settings if the relay doesn't answer. `deploy/backup-schedule.sh` turns on the nightly copy of the server's
-disk (kept 14 days).
+Hosted relay: new versions ship by themselves after a merge (`relay-image.yml` publishes the
+image and signs it with cosign, keyless; hosts that verify the signature pull it). The hosted
+relay's server and its deployment live outside this repository.
 Operator commands run inside the relay's container: `docker exec latchkey-relay /relay account
 list | account suspend <email> [reason] | account unsuspend <email> | account delete <email> |
 block <email> [reason] | unblock <email> | block list`; `relay reset-keys --confirm` (relay

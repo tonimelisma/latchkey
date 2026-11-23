@@ -1,6 +1,6 @@
 # Status
 
-Last updated: 2026-11-22 (CI sets up uv for Semgrep again; Xcode tests in Shell, spec 004 FR-335; development in Claude Code cloud sessions; Shell builds: task sandbox off, asset-catalog daemon per command; builds work in Shell, spec 004 FR-333 and FR-334; Sign-in built, spec 013; Claude's feedback tool, reports copied to the Mac's Feedback folder; pages are read once they stop changing; every issue becomes a regression case; clicks press down and up before clicking, so Gmail's buttons answer; signed-in sites in Safari tabs of Claude's while unlocked; sign-in cookies in Latchkey's log, for Safari's Target sign-outs; full traces everywhere, in daily files, for evals; Claude's pages always in Latchkey's own browser, by name, with dialogs Claude answers; the locked browser takes Safari's cookies again with every page; public download on GitHub with a new-version notice; never disturb the user: Mail, WhatsApp sending, Notes' window editing, Messages' window actions, Reminders' window setters removed; test sweep on exit; releases are tags on commits; cloud-only files read again; machine list shows Latchkey versions; WhatsApp built; Add to Claude button; plugin withdrawn; README rewritten as a short product page; relay web pages redone; purkki paired; spec 010 shipped)
+Last updated: 2026-11-23 (the hosted relay's server moved out of this repository; CI sets up uv for Semgrep again; Xcode tests in Shell, spec 004 FR-335; development in Claude Code cloud sessions; Shell builds: task sandbox off, asset-catalog daemon per command; builds work in Shell, spec 004 FR-333 and FR-334; Sign-in built, spec 013; Claude's feedback tool, reports copied to the Mac's Feedback folder; pages are read once they stop changing; every issue becomes a regression case; clicks press down and up before clicking, so Gmail's buttons answer; signed-in sites in Safari tabs of Claude's while unlocked; sign-in cookies in Latchkey's log, for Safari's Target sign-outs; full traces everywhere, in daily files, for evals; Claude's pages always in Latchkey's own browser, by name, with dialogs Claude answers; the locked browser takes Safari's cookies again with every page; public download on GitHub with a new-version notice; never disturb the user: Mail, WhatsApp sending, Notes' window editing, Messages' window actions, Reminders' window setters removed; test sweep on exit; releases are tags on commits; cloud-only files read again; machine list shows Latchkey versions; WhatsApp built; Add to Claude button; plugin withdrawn; README rewritten as a short product page; relay web pages redone; Linux home server paired; spec 010 shipped)
 
 Xcode signing ready (2026-10-20): Toni's Xcode account has a valid "Apple Development" certificate
 (certificate expires 2027-07-22). Keep the team ID out of committed project files
@@ -63,65 +63,11 @@ failure says why.
 
 ## Current phase
 
-Cloud-first, review fixes (2026-11-23, a second cloud session given the same task, whose own
-implementation was superseded by the one merged below and ported onto it): the infra workflow's
-`configure` failed on every run, since google-github-actions/auth writes its credentials file into
-the checkout and `deploy.sh` refuses untracked files (`.gitignore` now has `gha-creds-*.json`);
-Google accepts GitHub's token only for push, schedule and dispatch runs (a `pull_request_target`
-or `workflow_run` run on main can carry a fork's code); hackernews-admin's IAP tunnel reaches only
-this VM's SSH (a condition on its internal address; an earlier wider grant is replaced); a rerun of
-`gcp-wif-setup.sh` rewrites the provider only when it differs (each write emails Toni). The Linux
-program, on a host with the older, mixed cgroup layout, took `/sys/fs/cgroup` (a plain memory file
-system there) for its control groups and every command failed to start ("bad file descriptor",
-found in this cloud VM): it now requires a cgroup v2 file system and otherwise runs without groups,
-saying so. Tests: `deploy/tests/lib_test.sh`, `linux/internal/shell` (both pass in the VM).
-
-Cloud-first (Toni, 2026-11-23: everything happens in cloud sessions except what needs macOS;
-the Mac only builds and tests the Mac app): in progress on branch `claude/latchkey-cloud-first-0xfzcv`.
-So far: CI also runs the Linux program's tests and lint, the script tests, and actionlint on
-the workflows (`install-lib.sh`'s idle check read GNU stat wrongly on Linux, so two script tests
-had failed there); `tidy.sh` no longer deletes branches on GitHub (GitHub deletes a merged pull
-request's branch itself). Releases are made on GitHub: `linux-release.yml` tags, signs (repository
-secret `SERVER_SIGNING_KEY`) and publishes the Linux program whenever linux/ changes on main;
-`mac-tag.yml` gives each Mac app change on main its `mac-<x.y.z>` tag; both run in the
-environment `release` and also start on repository_dispatch (`linux-release`, `mac-tag`).
-`release-tag.sh` takes `RELEASE_TAG_ON_MAIN=1` there (a commit on main the tip has moved past;
-never a number below an already released commit).
-Relay releases are automatic: `relay-image.yml` (on relay/ changes on main; environment
-`production`) runs the security checks, lint and tests, publishes the multi-arch image to ghcr.io
-as `<commit>` and `latest`, and signs it with cosign, keyless. The server's own updater
-(`latchkey-update-apps`, every 5 minutes, as for hackernews) switches to a new `latest` only when
-cosign finds it signed by that workflow on main, restarts the relay on it, and goes back to the
-previous version when Docker's health check or https://<host>/healthz fails within 3 minutes
-(remembering the bad image). No credentials reach the server. `deploy/deploy.sh` now only
-applies configuration (relay.env, compose file, Caddy block, DNS, email domain) and restarts the
-running version, under the updater's lock; image building, the upload over SSH and the
-key-file database copy (long done) are gone. Tested by `deploy/tests/update_apps_test.sh`.
-Infrastructure changes run in `infra.yml` (repository_dispatch `infra` with task `configure` or
-`harden`; environment `infra`), signed in to Google Cloud as `latchkey-infra` through Workload
-Identity Federation; `deploy/gcp-wif-setup.sh` (the owner, once, in Cloud Shell) makes the pool,
-GitHub's provider (this repository and hackernews, on main), `latchkey-infra` and
-`hackernews-admin`. `harden.sh` accepts the owner or exactly `latchkey-infra`; the IAP alert
-leaves out the owner and both identities, and the sentinel counts their sessions as the owner's
-(OS Login names `sa_<id>`, uids looked up on the server). `ci_tools_test.sh` checks that every
-action is pinned and every releasing, deploying or infrastructure job is in its environment.
-The Mac updates itself (`macos/scripts/auto-update.sh`): a per-user launchd agent
-(`net.melisma.latchkey.updater`, written by `updater-setup.sh`, which every `make -C macos install`
-runs) checks GitHub every 15 minutes, at login, and when a request file appears in
-`~/Library/Caches/net.melisma.latchkey.updater/requests` (`now`, or `install-now` to skip the idle
-wait), and when the newest `mac-<x.y.z>` tag on main isn't the installed version, checks that
-commit out in its own clone and runs the usual install (signed with the main checkout's
-Local.xcconfig, the 10-minute idle wait, publish.sh). launchd is its parent, so the install
-quitting Latchkey doesn't stop it, and Claude can start it through Shell by writing a request.
-Log: `~/Library/Logs/Latchkey Updater.log`. `install.sh` installs only a commit carrying CI's
-tag that is the newest release (it no longer tags from the Mac). Tested by
-`scripts/tests/auto_update_test.sh` and `install_checks_test.sh`; not yet run on the Mac.
-Live checks from the cloud: a fresh cloud session from claude.ai runs the cases with its own
-Latchkey tools (`state-check.sh prompt`, `record`, `merge`; screen state and the focus watcher
-through `shell_run`; docs/cloud-sessions.md, "Live checks"). Merging goes through pull requests
-(rebase), which GitHub deletes after the merge; `tidy.sh` and `loose-ends.sh` recognise rebased
-work (`git cherry`). CLAUDE.md and docs/cloud-sessions.md now describe this process, with the
-"Owner setup" list.
+The hosted relay's server moved out of this repository (Toni, 2026-11-23): its deployment
+scripts, the infra workflow and the server's description now live in a private repository.
+Latchkey keeps the app, its release pipeline (`relay-image.yml` publishes and signs the relay
+image; hosts that verify the signature pull it) and generic self-hosting docs, with a locked-down
+Docker Compose and Caddy example in docs/self-hosting.md.
 
 Fill-only sign-in (Toni, 2026-11-22: "Shouldn't the code just provide what's happening in the
 browser and the agent makes the presumptions?"; then "Fill-only tool", "No cap", "Decide fresh
@@ -205,33 +151,6 @@ sandboxes of their own and macOS refuses one inside Latchkey's fence. Each comma
 too), and Xcode's matching settings in `XCODE_XCCONFIG_FILE`; the fence still applies. An answer
 tells a program starting its own sandbox apart from a refused write. Tests build a SwiftUI
 package with `swift build` and `xcodebuild` inside the fence; a regression case builds this app.
-
-The relay's server, locked down and watched (Toni, 2026-11-21: "a high risk target"; docs/threat-model.md
-"The relay's server", plan D29): `deploy/harden.sh` closes SSH to all but Google's IAP tunnel
-with OS Login, gives the VM its own least-privilege account, Secure Boot and automatic updates
-with a nightly reboot when needed, removes unneeded packages and services, puts hackernews (which
-shares the server) in a container without root on its own network, and its deploys become pulls
-by the server; the sentinel and cloud alerts email Toni on anything that shouldn't happen.
-Done live 2026-11-21 (three runs, the last one quiet): only 80 and 443 open (22 to IAP only),
-Secure Boot on, kernel 7.0 with all 65 pending updates, the VM on `relay-vm` (the default account
-lost Editor), 44 locked audit rules, the sentinel's heartbeats in Cloud Logging, five alerts
-and an uptime check, one test alert sent; the relay shares `latchkey-front` with Caddy only;
-hackernews runs as uid 1000 without capabilities, its GitHub deploy job and SSH secrets removed
-(hackernews 9be196f, which also made its image run as non-root); Caddy moved to the newest 2.x
-by the weekly check. The relay emails the owner on a paired machine, an allowed app and a
-recovery (spec 001 FR-696 to FR-699a), deployed as 50e1d08. Fixed on the way, each found by the
-live runs or the automated security review: the SSH settings' undo ran out during the updates
-(now applied last and checked), the Caddy check lacked a scratch /data, reruns wrote unchanged
-cloud settings and the SSH permission check counted as a cloud change (each would email Toni),
-the sentinel trusted process names and a host-wide "dpkg is running" flag, and the hub's Close
-returned before a closed connection's last trace line (the long-flaky "traces: directory not
-empty" tests). Live check after: a fresh Claude Code session saw both machines and used a tool.
-All alerts reached the alert address (11 on the first day, from the runs themselves); one was a
-false alarm, hackernews's own health check (wget) seen as a foreign program, fixed the same day.
-hackernews's nightly backup was in the locked account's crontab, which lost docker: it now runs
-from /etc/cron.d as root, and a run as cron does it wrote today's copy to its bucket through
-`relay-vm`. Its deploys were checked end to end: back on the previous image, the timer found
-CI's newest (9be196f), switched to it and logged it healthy.
 
 Security emails (Toni, 2026-11-21; spec 001 FR-696 to FR-699, plan D5): the relay emails the
 Owner whenever a machine is paired, an app is allowed on the consent page (not on a refresh), or
@@ -596,12 +515,10 @@ after the app was quit.
 
 ## Next steps
 
-0. Cloud-first, what only Toni can do (CLAUDE.md, "Owner setup"): the secrets, the Google Cloud
-   setup (`deploy/gcp-wif-setup.sh` in Cloud Shell), the package's Actions access, the updater on
-   the Mac (`macos/scripts/updater-setup.sh`), `LATCHKEY_CHECK_TO` in the cloud environment. Then
-   check on the Mac: the updater installs the first CI-tagged release; the first relay image
-   from the workflow is signed and the server switches to it (its log, `latchkey-update-apps`);
-   the infra workflow's `harden` runs as `latchkey-infra` and the alerts stay quiet.
+0. Cloud-first, what only Toni can do (CLAUDE.md, "Owner setup"): the secrets, the package's
+   Actions access, the updater on the Mac (`macos/scripts/updater-setup.sh`), `LATCHKEY_CHECK_TO`
+   in the cloud environment. Then check on the Mac: the updater installs the first CI-tagged
+   release; the relay image from the workflow is published and its signature verifies.
    First runs after the merge (2026-11-23, commit 66c726b): `mac tag` made `mac-0.8.227`;
    `linux release` stopped before tagging ("SERVER_SIGNING_KEY is neither set nor in ../.env");
    `relay image` passed its checks and was refused the push ("denied: permission_denied:
@@ -639,11 +556,95 @@ after the app was quit.
 For Toni (only he can): delete the ~96 old "Latchkey check" test messages in his two
 conversations with himself and the WhatsApp test message in his own chat; optionally switch off
 Latchkey's unused Mail permission (System Settings → Privacy & Security → Automation → Latchkey).
-The relay's server (2026-11-21): make sure the Google account that owns the project has 2-step
-verification with a passkey or security key, since it is now the only way into the server
-(docs/threat-model.md, "Accepted"). The alerts reach the alert address (checked).
 
 ## History (newest first; what was done and found, kept as the record)
+
+Cloud-first, review fixes (2026-11-23, a second cloud session given the same task, whose own
+implementation was superseded by the one merged below and ported onto it): the infra workflow's
+`configure` failed on every run, since google-github-actions/auth writes its credentials file into
+the checkout and `deploy.sh` refuses untracked files (`.gitignore` now has `gha-creds-*.json`);
+Google accepts GitHub's token only for push, schedule and dispatch runs (a `pull_request_target`
+or `workflow_run` run on main can carry a fork's code); hackernews-admin's IAP tunnel reaches only
+this VM's SSH (a condition on its internal address; an earlier wider grant is replaced); a rerun of
+`gcp-wif-setup.sh` rewrites the provider only when it differs (each write emails Toni). The Linux
+program, on a host with the older, mixed cgroup layout, took `/sys/fs/cgroup` (a plain memory file
+system there) for its control groups and every command failed to start ("bad file descriptor",
+found in this cloud VM): it now requires a cgroup v2 file system and otherwise runs without groups,
+saying so. Tests: `deploy/tests/lib_test.sh`, `linux/internal/shell` (both pass in the VM).
+
+Cloud-first (Toni, 2026-11-23: everything happens in cloud sessions except what needs macOS;
+the Mac only builds and tests the Mac app): in progress on branch `claude/latchkey-cloud-first-0xfzcv`.
+So far: CI also runs the Linux program's tests and lint, the script tests, and actionlint on
+the workflows (`install-lib.sh`'s idle check read GNU stat wrongly on Linux, so two script tests
+had failed there); `tidy.sh` no longer deletes branches on GitHub (GitHub deletes a merged pull
+request's branch itself). Releases are made on GitHub: `linux-release.yml` tags, signs (repository
+secret `SERVER_SIGNING_KEY`) and publishes the Linux program whenever linux/ changes on main;
+`mac-tag.yml` gives each Mac app change on main its `mac-<x.y.z>` tag; both run in the
+environment `release` and also start on repository_dispatch (`linux-release`, `mac-tag`).
+`release-tag.sh` takes `RELEASE_TAG_ON_MAIN=1` there (a commit on main the tip has moved past;
+never a number below an already released commit).
+Relay releases are automatic: `relay-image.yml` (on relay/ changes on main; environment
+`production`) runs the security checks, lint and tests, publishes the multi-arch image to ghcr.io
+as `<commit>` and `latest`, and signs it with cosign, keyless. The server's own updater
+(`latchkey-update-apps`, every 5 minutes, as for hackernews) switches to a new `latest` only when
+cosign finds it signed by that workflow on main, restarts the relay on it, and goes back to the
+previous version when Docker's health check or https://<host>/healthz fails within 3 minutes
+(remembering the bad image). No credentials reach the server. `deploy/deploy.sh` now only
+applies configuration (relay.env, compose file, Caddy block, DNS, email domain) and restarts the
+running version, under the updater's lock; image building, the upload over SSH and the
+key-file database copy (long done) are gone. Tested by `deploy/tests/update_apps_test.sh`.
+Infrastructure changes run in `infra.yml` (repository_dispatch `infra` with task `configure` or
+`harden`; environment `infra`), signed in to Google Cloud as `latchkey-infra` through Workload
+Identity Federation; `deploy/gcp-wif-setup.sh` (the owner, once, in Cloud Shell) makes the pool,
+GitHub's provider (this repository and hackernews, on main), `latchkey-infra` and
+`hackernews-admin`. `harden.sh` accepts the owner or exactly `latchkey-infra`; the IAP alert
+leaves out the owner and both identities, and the sentinel counts their sessions as the owner's
+(OS Login names `sa_<id>`, uids looked up on the server). `ci_tools_test.sh` checks that every
+action is pinned and every releasing, deploying or infrastructure job is in its environment.
+The Mac updates itself (`macos/scripts/auto-update.sh`): a per-user launchd agent
+(`net.melisma.latchkey.updater`, written by `updater-setup.sh`, which every `make -C macos install`
+runs) checks GitHub every 15 minutes, at login, and when a request file appears in
+`~/Library/Caches/net.melisma.latchkey.updater/requests` (`now`, or `install-now` to skip the idle
+wait), and when the newest `mac-<x.y.z>` tag on main isn't the installed version, checks that
+commit out in its own clone and runs the usual install (signed with the main checkout's
+Local.xcconfig, the 10-minute idle wait, publish.sh). launchd is its parent, so the install
+quitting Latchkey doesn't stop it, and Claude can start it through Shell by writing a request.
+Log: `~/Library/Logs/Latchkey Updater.log`. `install.sh` installs only a commit carrying CI's
+tag that is the newest release (it no longer tags from the Mac). Tested by
+`scripts/tests/auto_update_test.sh` and `install_checks_test.sh`; not yet run on the Mac.
+Live checks from the cloud: a fresh cloud session from claude.ai runs the cases with its own
+Latchkey tools (`state-check.sh prompt`, `record`, `merge`; screen state and the focus watcher
+through `shell_run`; docs/cloud-sessions.md, "Live checks"). Merging goes through pull requests
+(rebase), which GitHub deletes after the merge; `tidy.sh` and `loose-ends.sh` recognise rebased
+work (`git cherry`). CLAUDE.md and docs/cloud-sessions.md now describe this process, with the
+"Owner setup" list.
+
+The relay's server, locked down and watched (Toni, 2026-11-21: "a high risk target"; docs/threat-model.md
+"The relay's server", plan D29): `deploy/harden.sh` closes SSH to all but Google's IAP tunnel
+with OS Login, gives the VM its own least-privilege account, Secure Boot and automatic updates
+with a nightly reboot when needed, removes unneeded packages and services, puts hackernews (which
+shares the server) in a container without root on its own network, and its deploys become pulls
+by the server; the sentinel and cloud alerts email Toni on anything that shouldn't happen.
+Done live 2026-11-21 (three runs, the last one quiet): only 80 and 443 open (22 to IAP only),
+Secure Boot on, kernel 7.0 with all 65 pending updates, the VM on `relay-vm` (the default account
+lost Editor), 44 locked audit rules, the sentinel's heartbeats in Cloud Logging, five alerts
+and an uptime check, one test alert sent; the relay shares `latchkey-front` with Caddy only;
+hackernews runs as uid 1000 without capabilities, its GitHub deploy job and SSH secrets removed
+(hackernews 9be196f, which also made its image run as non-root); Caddy moved to the newest 2.x
+by the weekly check. The relay emails the owner on a paired machine, an allowed app and a
+recovery (spec 001 FR-696 to FR-699a), deployed as 50e1d08. Fixed on the way, each found by the
+live runs or the automated security review: the SSH settings' undo ran out during the updates
+(now applied last and checked), the Caddy check lacked a scratch /data, reruns wrote unchanged
+cloud settings and the SSH permission check counted as a cloud change (each would email Toni),
+the sentinel trusted process names and a host-wide "dpkg is running" flag, and the hub's Close
+returned before a closed connection's last trace line (the long-flaky "traces: directory not
+empty" tests). Live check after: a fresh Claude Code session saw both machines and used a tool.
+All alerts reached the alert address (11 on the first day, from the runs themselves); one was a
+false alarm, hackernews's own health check (wget) seen as a foreign program, fixed the same day.
+hackernews's nightly backup was in the locked account's crontab, which lost docker: it now runs
+from /etc/cron.d as root, and a run as cron does it wrote today's copy to its bucket through
+`relay-vm`. Its deploys were checked end to end: back on the previous image, the timer found
+CI's newest (9be196f), switched to it and logged it healthy.
 
 Hands-on check of every tool (2026-11-07, Toni: "manual testing, since it looks like the automated
 testing isn't picking up issues"), through the hosted relay on the installed app, unlocked and

@@ -78,11 +78,8 @@ deps:
 	$(OSV_SCANNER) -L go.mod
 	../scripts/sparkle-advisories.sh
 
-# Tests of the deploy and repository scripts, in temporary folders: no server, no network.
+# Tests of the repository scripts, in temporary folders: no server, no network.
 script-tests:
-	cd .. && deploy/tests/lib_test.sh
-	cd .. && deploy/tests/update_apps_test.sh
-	cd .. && python3 -m unittest discover -q -s deploy/tests -p 'test_*.py'
 	cd .. && scripts/tests/private_values_test.sh
 	cd .. && scripts/tests/hooks_guard_test.sh
 	cd .. && scripts/tests/hooks_cloud_test.sh

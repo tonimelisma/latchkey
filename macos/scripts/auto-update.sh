@@ -1,6 +1,6 @@
 #!/bin/sh
-# The Mac's updater: builds and installs the newest Mac release, the way the hosted relay's server
-# and purkki update themselves. A per-user launchd agent (net.melisma.latchkey.updater, set up by
+# The Mac's updater: builds and installs the newest Mac release, the way the relay's hosts and the
+# Linux servers update themselves. A per-user launchd agent (net.melisma.latchkey.updater, set up by
 # macos/scripts/updater-setup.sh, which `make -C macos install` runs) starts it every 15 minutes,
 # at login, and whenever a request file appears in its requests folder. launchd is its parent, so
 # quitting Latchkey (which every install does) never stops it, and Claude can start it through

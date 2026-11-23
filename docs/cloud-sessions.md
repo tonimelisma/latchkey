@@ -55,7 +55,7 @@ applies, except:
   full `make test` once the warm-up is done (its `.done` file): the relay's timing tests are
   sensitive to a busy 4-CPU VM. On Linux, `make lint` also checks the Linux-only files the Mac
   never sees (`*_linux.go`).
-- Releases, deploys and infrastructure run in GitHub Actions (CLAUDE.md, "Every finished batch
+- Releases run in GitHub Actions (CLAUDE.md, "Every finished batch
   ships"; actions pinned by SHA, checked by `scripts/tests/ci_tools_test.sh`). Started by a merge
   to main when their folder changed, or from here with repository_dispatch, which the proxy
   allows (`gh api repos/tonimelisma/latchkey/dispatches -f event_type=<type>`):
@@ -63,15 +63,14 @@ applies, except:
   | Workflow | On merge when | Dispatch type | Environment | What it does |
   |---|---|---|---|---|
   | `ci.yml` | every push | | | relay tests, lint, security; Linux tests, lint; script tests; actionlint |
-  | `relay-image.yml` | `relay/` | `relay-image` | `production` | checks, then the signed image; the server switches to it itself |
+  | `relay-image.yml` | `relay/` | `relay-image` | `production` | checks, then the signed image; hosts that verify the signature pull it |
   | `linux-release.yml` | `linux/` | `linux-release` | `release` | tag `linux-<x.y.z>`, signed release; servers update within a day |
   | `mac-tag.yml` | `macos/` | `mac-tag` | `release` | tag `mac-<x.y.z>`; the Mac's updater installs it |
-  | `infra.yml` | never | `infra` + `client_payload[task]` | `infra` | `configure` (deploy/deploy.sh) or `harden` (deploy/harden.sh), as `latchkey-infra` |
 
   Follow a run with `gh api repos/tonimelisma/latchkey/actions/runs?per_page=5` and its jobs'
   logs; the logs are public, so nothing the scripts print may be private (they hide the
   values they read with `::add-mask::`, and the secrets are hidden by GitHub). No workflow and no
-  identity ever reaches purkki: it only pulls signed Linux releases.
+  identity ever reaches an installed Linux server: it only pulls signed Linux releases.
   Secrets are the owner's (CLAUDE.md, "Owner setup"); a session never handles a secret's value.
 - Mac app: build and test on the Mac through Latchkey's `shell_run` (Toni's MacBook in
   `machines`), from the pushed branch in the command's scratch folder (deleted or moved to the
@@ -110,7 +109,7 @@ applies, except:
 - Screenshots of the Mac app: `computer_look`, only while the Mac is unlocked, and never acting
   in the user's windows (above).
 - Live checks (CLAUDE.md, "Every finished batch ships", 7) come after the new version runs: the
-  relay's image workflow and the server's switch (its summary says when), the Mac's updater
+  relay's image workflow and the hosted server's switch to it, the Mac's updater
   ("installed Latchkey <x.y.z>" in its status). A session's Latchkey connector keeps the tool
   list it started with, so the check runs in a session started after that: a fresh cloud
   session from claude.ai (which has Toni's connectors; `claude --cloud` sessions have none), for

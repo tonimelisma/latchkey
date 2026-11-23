@@ -1,9 +1,9 @@
 #!/bin/sh
-# In a git worktree, links the gitignored personal files from the main checkout: .env (deploy
+# In a git worktree, links the gitignored personal files from the main checkout: .env (private
 # settings and keys), CLAUDE.local.md, and macos/Config/Local.xcconfig (signing team and default
 # relay). Without Local.xcconfig a worktree build would be signed differently, and macOS would
 # treat it as another app (permissions, Keychain, pairing). Does nothing in the main checkout.
-# Called by the Mac app's Makefile, package.sh, and deploy/deploy.sh; LATCHKEY_LOCAL_FILES_FROM
+# Called by the Mac app's Makefile and package.sh; LATCHKEY_LOCAL_FILES_FROM
 # names another checkout to link from (the Mac's updater).
 set -eu
 here=$(git -C "$(dirname "$0")" rev-parse --show-toplevel)
