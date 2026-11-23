@@ -55,7 +55,12 @@ the Mac only builds and tests the Mac app): in progress on branch `claude/latchk
 So far: CI also runs the Linux program's tests and lint, the script tests, and actionlint on
 the workflows (`install-lib.sh`'s idle check read GNU stat wrongly on Linux, so two script tests
 had failed there); `tidy.sh` no longer deletes branches on GitHub (GitHub deletes a merged pull
-request's branch itself).
+request's branch itself). Releases are made on GitHub: `linux-release.yml` tags, signs (repository
+secret `SERVER_SIGNING_KEY`) and publishes the Linux program whenever linux/ changes on main;
+`mac-tag.yml` gives each Mac app change on main its `mac-<x.y.z>` tag; both run in the
+environment `release` and also start on repository_dispatch (`linux-release`, `mac-tag`).
+`release-tag.sh` takes `RELEASE_TAG_ON_MAIN=1` there (a commit on main the tip has moved past;
+never a number below an already released commit).
 
 Fill-only sign-in (Toni, 2026-11-22: "Shouldn't the code just provide what's happening in the
 browser and the agent makes the presumptions?"; then "Fill-only tool", "No cap", "Decide fresh
