@@ -555,9 +555,8 @@ after the app was quit.
     test sessions against his real data; end-to-end testing is a backlog item).
 0. Problem reports to the developer (spec 014, `specs/014-feedback-intake/`): answered by Toni
    2026-11-23 (self-hosted relays forward by default, an operator can add a block, the intake on
-   pilvi at the latchkey name, the hosted relay to a hard-to-guess name). A dispositioned
-   report is deleted; git is the history. No open questions: next, tasks, code, and the name move
-   (plan D4a); until it ships, reports
+   pilvi at `latchkey-feedback.melisma.net`, DNS record made; the relay keeps its name). A dispositioned
+   report is deleted; git is the history. No open questions: next, tasks and code; until it ships, reports
    keep arriving in the Mac's Feedback folder.
 
 0. Cloud-first setup: done 2026-11-23 except the updater on the Mac (`macos/scripts/updater-setup.sh`)
