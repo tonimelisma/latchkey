@@ -576,6 +576,10 @@ after the app was quit.
    check on the Mac: the updater installs the first CI-tagged release; the first relay image
    from the workflow is signed and the server switches to it (its log, `latchkey-update-apps`);
    the infra workflow's `harden` runs as `latchkey-infra` and the alerts stay quiet.
+   First runs after the merge (2026-11-23, commit 66c726b): `mac tag` made `mac-0.8.227`;
+   `linux release` stopped before tagging ("SERVER_SIGNING_KEY is neither set nor in ../.env");
+   `relay image` passed its checks and was refused the push ("denied: permission_denied:
+   write_package") until the package grants this repository's Actions write access.
 1. Codes experiment (Toni, 2026-11-22: "test all approaches for robustness on a wide variety of
    web sites"): Claude reads codes / Latchkey fetches codes / middle path, on many sites; report.
    The two new ways are built (logins_fill `code_from` and `check_code`, spec 013 FR-1376,
