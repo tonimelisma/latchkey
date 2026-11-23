@@ -237,7 +237,7 @@ enum PageScripts {
           // (Etsy's opened "You" menu with its Sign out, 2026-11-22).
           var opened = [];
           Array.prototype.slice.call(document.querySelectorAll('[aria-expanded=true][aria-controls]'), 0, 50).forEach(function (b) {
-            (b.getAttribute('aria-controls') || '').split(/\s+/).slice(0, 4).forEach(function (id) {
+            (b.getAttribute('aria-controls') || '').split(/\\s+/).slice(0, 4).forEach(function (id) {
               var t = id && document.getElementById(id);
               if (t) opened.push(t);
             });
@@ -381,7 +381,7 @@ enum PageScripts {
             var d = null;
             try { d = fs[j].contentDocument; } catch (err) { d = null; }
             var r = fs[j].getBoundingClientRect();
-            if (d && d.body && r.width > 0 && r.height > 0) t += '\n' + (d.body.innerText || '');
+            if (d && d.body && r.width > 0 && r.height > 0) t += '\\n' + (d.body.innerText || '');
           }
           return t;
         }

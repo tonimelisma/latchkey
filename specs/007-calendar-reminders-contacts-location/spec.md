@@ -167,6 +167,9 @@ accounts, and in Apple Maps.
 - **FR-732** While On, Claude shall be able to search Apple Maps for places by name or kind
   near an address, coordinates, or the Mac, with each place's address, phone, web address, and
   distance.
+- **FR-732a** When Claude names where to look (near), only places within 50 km of it shall be
+  listed; with none, the answer shall say nothing was found within 50 km of it. (Toni,
+  2026-11-23, "Only nearby, else none": "BARC" near Ubud gave Basra, Iraq, 8,385 km away.)
 - **FR-733** While On, Claude shall be able to get directions and travel time between two
   places (addresses, coordinates, or the Mac's location) by car or on foot, with the steps, and
   the travel time by public transport, optionally for a departure or arrival time.

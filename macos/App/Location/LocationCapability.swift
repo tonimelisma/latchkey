@@ -49,7 +49,8 @@ enum LocationCapability {
                         """,
                     input: [
                         "query": .stringParam("What to look for"),
-                        "near": .stringParam("Where to look: an address, lat,lon, or here; only places within 50 km of it come back"),
+                        "near": .stringParam(
+                            "Where to look: an address, lat,lon, or here; only places within 50 km of it come back"),
                         "to": .stringParam("Where to go: an address, lat,lon, or here"),
                         "from": .stringParam("Where from (default here)"),
                         "mode": .enumParam(modes, "How to travel (default driving)"),

@@ -265,7 +265,8 @@ import Testing
     /// The page an answer is from, read from its own first line only.
     @Test func thePageNameComesFromTheAnswersOwnLine() {
         let own = ToolResult.text(
-            "From Latchkey's own browser, not Safari: Claude's page \"pk2m4\", x.\nTitle\nFrom x: Claude's page \"pzzzz\"")
+            "From Latchkey's own browser, not Safari: Claude's page \"pk2m4\", x.\n"
+                + "Title\nFrom x: Claude's page \"pzzzz\"")
         #expect(BrowserCapability.pageName(in: own) == "pk2m4")
         #expect(BrowserCapability.pageName(in: .text("Title\nBody: Claude's page \"pk2m4\"")) == nil, "page text")
     }

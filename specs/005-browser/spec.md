@@ -225,6 +225,11 @@ phone, Claude can't check a reservation in the Owner's account or fill in a form
 - **FR-446** A page of Claude's unused for 30 minutes shall be closed with its cookies (as
   FR-411). At most 10 pages shall be open at once: an eleventh is refused with the list of pages
   and how to close one, so no chat's page is closed for another's.
+- **FR-446a** When 10 pages are open and Claude opens another, the page unused longest shall be
+  closed for it if no one has used it for 5 minutes; otherwise the new page is refused as in
+  FR-446, saying each was used in the last 5 minutes. (Toni, 2026-11-23, "Close the oldest idle":
+  on 2026-11-22 pages left by finished chats filled the limit eleven times, and chats then closed
+  each other's pages to make room.)
 - **FR-447** Claude shall work in one of the Owner's tabs only in a call that names that tab; a
   call that names no tab shall work in Claude's own page. (2026-11-15, follows from FR-445: one
   chat's tab no longer becomes another chat's. Amends FR-425's "Claude shall keep working in
@@ -316,6 +321,29 @@ phone, Claude can't check a reservation in the Owner's account or fill in a form
   collapsed, from its `aria-` attributes) shall be shown with it, and a change in it shall count
   as a change after a click (Amazon's returns, 2026-11-22: a "Yes" toggle that only became
   pressed read as "Nothing on the page changed").
+- **FR-468** A call with an address and no page shall open a new page (FR-445), never load the
+  address into the one page open, which may be another chat's (2026-11-22: a Procare sync loaded
+  into another chat's claude.ai page, and that chat's next click landed on Procare).
+- **FR-469** Calls that name one of the Owner's tabs shall pick it and act in it as one turn, one
+  call at a time; a call whose turn doesn't come within 15 s shall do nothing and say another chat
+  is working in the Owner's tabs (2026-11-19: another chat's pick came between a pick and a click,
+  and a click meant for an E*TRADE tab landed on another chat's Target checkout).
+- **FR-470** A script Claude runs in a Safari tab shall run as code in an async function, never
+  through the page's `eval`, its value being that of its one expression or last statement, or
+  what it returns; which of these the script is shall be decided by a syntax check in Latchkey,
+  never by what the page answers (2026-11-22: scripts with await or several statements failed in
+  Safari tabs with an AppleScript error, an async arrow's value was lost, and Amex's page
+  replaced `eval`). Amends FR-463.
+- **FR-471** `browser_read` with an address and `screenshot` shall answer with the new page's
+  picture (2026-11-22: only its text came back).
+- **FR-472** The list of what is on a page shall include the controls of frames from the page's
+  own site (and their text with the page's), links without an address that have words (scripts
+  make them buttons), and, first, what an opened menu or dialog shows; past 400 items it shall
+  say how many more weren't listed (2026-11-22: Chase's sign-in frame, Citi's Sign Off, Etsy's
+  opened menu).
+- **FR-473** Typing into a page's rich text editor shall go through the editor as typing does, and
+  submit without a form shall send Enter down, press and up (2026-11-23: claude.ai's prompt box
+  was emptied and nothing sent).
 
 Amended by spec 013 FR-1350 to FR-1355 (Toni, 2026-11-21): for a site Latchkey holds a saved
 password for, while Sign-in is On, FR-441, FR-442 and FR-457 copy none of Safari's cookies (nor a

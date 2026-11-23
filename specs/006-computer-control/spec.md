@@ -71,6 +71,11 @@ Claude can use them the way the Owner would.
 - **FR-514** After pressing, typing, or choosing in a named app, the answer shall name every other
   field, checkbox, or dropdown from the last look whose value changed (bug report 2026-11-03: a
   press on one dropdown seemed to check two checkboxes elsewhere).
+- **FR-515** Pressing a row of a list, outline, or sidebar in a named app, or a cell or text in
+  one, shall select that row through Accessibility, with no pointer moved and no window brought
+  forward (Toni, 2026-11-23, "press selects the row": SwiftUI sidebar rows in Otos took no press).
+- **FR-516** A window's close, minimize, zoom, and full-screen buttons shall be listed by their
+  kind ("close button") when they have no title (2026-11-20: the close button had to be guessed).
 
 ## Success criteria
 
