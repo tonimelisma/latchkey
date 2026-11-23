@@ -67,8 +67,9 @@ All 172 reports were read in full and checked against the code. 123 were already
 expected (the screen asleep while locked, the relay's VM stopped, an install's restart, Safari's
 background tabs; 25), bot walls (9), saved passwords only Toni can fix (4), places not in Apple
 Maps (4), by design (3) or not explained (2). 49 had a cause still open; the fixes below are on main, with
-unit tests run in CI on GitHub's Mac runner and a regression case each. None has been run live:
-Toni asked (2026-11-23) for no Latchkey calls and no live checks until he is back.
+unit tests run on GitHub's Mac runner (`mac-build.yml`) and a regression case each. None has
+been run live: Toni asked (2026-11-23) for no Latchkey calls and no test sessions against his
+real data.
 
 | Open cause | Reports | Fix (spec) | Live |
 |---|---|---|---|
@@ -549,13 +550,13 @@ after the app was quit.
 
 ## Next steps
 
-000. Leftover branch `ci-baseline` on GitHub (main plus the Mac CI job, used to compare test
-    failures on 2026-11-23): a cloud session can't delete branches; delete it on GitHub, or a
-    session on the Mac does with `git push origin --delete ci-baseline`.
-00. Live checks of the 2026-11-23 feedback fixes, once Toni allows Latchkey calls again: the new
-    cases in `regressions-browser`, `regressions-computer`, and `regressions-other`
-    (`state-check.sh`), unlocked and locked; then move the 172 reports to `Feedback/Handled`
-    (Toni's Terminal step above).
+000. Leftover branches on GitHub from 2026-11-23: `ci-baseline` (main plus a CI job, used to
+    compare test failures) and `feedback-fixes` (the same work as the merged
+    `feedback-fixes-2`, before its rebase); a cloud session can't delete branches. Both hold
+    nothing that isn't on main.
+00. The 2026-11-23 feedback fixes have regression cases but no live run (Toni, 2026-11-23: no
+    test sessions against his real data; end-to-end testing is a backlog item). Toni's Terminal
+    step above moves the 172 reports to `Feedback/Handled`.
 
 0. Cloud-first setup: done 2026-11-23 except the updater on the Mac (`macos/scripts/updater-setup.sh`)
    and `LATCHKEY_CHECK_TO` in the cloud environment. The package `latchkey-relay` gives this
