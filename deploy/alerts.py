@@ -2,18 +2,20 @@
 
 Run by deploy/harden.sh, which passes everything in the environment:
   PROJECT       the Google Cloud project        HOST         the relay's public host name
-  ALERT_EMAIL   where alerts go                 OWNER_EMAIL  the Google account that runs it
+  ALERT_EMAIL   where alerts go                 OWNER_EMAIL  the owner's Google account
+  TRUSTED_EMAILS  optional, comma-separated: the automation service accounts that may use the
+                IAP tunnel (latchkey-infra, hackernews-admin; deploy/gcp-wif-setup.sh)
   TOKEN         an access token for the API (gcloud auth print-access-token)
 
 Alerts (each named "Latchkey: ..." and created or updated in place, so reruns are safe):
 - the sentinel reported a WARNING (deploy/server/host/sentinel.py);
 - the cloud project changed: an admin action by anyone but Google's own service agents
   (firewall, VM, metadata and SSH keys, IAM, service accounts, ...);
-- someone other than the owner went through the IAP tunnel to the server;
+- someone other than the owner and the automation accounts went through the IAP tunnel;
 - the sentinel went silent for 30 minutes (stopped, killed, or the server down);
 - the relay didn't answer https://HOST/healthz from Google's checkers for 10 minutes.
 Prints the names of the alerts it created, so harden.sh can send one test alert the first time.
-Standard library only; the pure parts are tested by deploy/tests/test_alerts.py.
+Standard library only; the pure parts are tested by deploy/tests/test_iam.py.
 """
 
 import json
@@ -74,11 +76,12 @@ def differs(want, have):
     return str(want) != str(have)
 
 
-def iap_filter(project, owner):
+def iap_filter(project, trusted):
+    """IAP's access log, leaving out the trusted principals (the owner first)."""
+    left_out = " AND ".join(f'protoPayload.authenticationInfo.principalEmail!="{t}"' for t in trusted)
     return (
         f'logName="projects/{project}/logs/cloudaudit.googleapis.com%2Fdata_access" AND '
-        f'protoPayload.serviceName="iap.googleapis.com" AND '
-        f'protoPayload.authenticationInfo.principalEmail!="{owner}"'
+        f'protoPayload.serviceName="iap.googleapis.com" AND {left_out}'
     )
 
 
@@ -101,7 +104,7 @@ def log_policy(name, log_filter, labels, doc, channel):
     }
 
 
-def policies(project, host, owner, channel, uptime_id):
+def policies(project, host, trusted, channel, uptime_id):
     what_to_do = (
         "If this wasn't you: open the server's log in Cloud Logging "
         f"(log `latchkey-sentinel` in project `{project}`) and docs/threat-model.md, "
@@ -118,13 +121,14 @@ def policies(project, host, owner, channel, uptime_id):
             "cloud project changed", cloud_change_filter(project),
             {"method": "EXTRACT(protoPayload.methodName)", "who": "EXTRACT(protoPayload.authenticationInfo.principalEmail)"},
             "Someone changed the relay's Google Cloud project (its firewall, server, keys or "
-            "permissions). Expected when you ran deploy/harden.sh or changed it yourself. " + what_to_do,
+            "permissions). Expected when you ran deploy/harden.sh or the infra workflow, or changed it yourself. " + what_to_do,
             channel,
         ),
         log_policy(
-            "server sign-in by someone else", iap_filter(project, owner),
+            "server sign-in by someone else", iap_filter(project, trusted),
             {"who": "EXTRACT(protoPayload.authenticationInfo.principalEmail)", "method": "EXTRACT(protoPayload.methodName)"},
-            "Someone other than the owner tried to reach the relay's server through Google's IAP tunnel. " + what_to_do,
+            "Someone other than the owner and the automation accounts (latchkey-infra, hackernews-admin) "
+            "tried to reach the relay's server through Google's IAP tunnel. " + what_to_do,
             channel,
         ),
         {
@@ -220,6 +224,7 @@ class Api:
 def main():
     project, host = os.environ["PROJECT"], os.environ["HOST"]
     email, owner = os.environ["ALERT_EMAIL"], os.environ["OWNER_EMAIL"]
+    trusted = [owner] + [t for t in os.environ.get("TRUSTED_EMAILS", "").split(",") if t]
     api = Api(project, os.environ["TOKEN"])
     mon = f"https://monitoring.googleapis.com/v3/projects/{project}"
     created = []
@@ -256,7 +261,7 @@ def main():
     uptime_id = check["name"].rsplit("/", 1)[-1]
 
     existing = {p["displayName"]: p for p in api.list_all(f"{mon}/alertPolicies", "alertPolicies")}
-    for policy in policies(project, host, owner, channel, uptime_id):
+    for policy in policies(project, host, trusted, channel, uptime_id):
         have = existing.get(policy["displayName"])
         if have is None:
             api.call("POST", f"{mon}/alertPolicies", policy)

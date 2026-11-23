@@ -1,0 +1,79 @@
+# The relay's rare infrastructure changes, started from a session with repository_dispatch
+# (POST /repos/tonimelisma/latchkey/dispatches {"event_type": "infra", "client_payload": {"task": …}})
+# or by hand (Run workflow):
+#   configure  deploy/deploy.sh: the relay's settings (relay.env), compose file and Caddy block,
+#              Cloudflare DNS and the Resend sending domain; restarts the running version with
+#              them, back to the previous settings if it doesn't answer
+#   harden     deploy/harden.sh: the server's and the cloud project's lockdown, the sentinel, alerts
+# The job signs in to Google Cloud as latchkey-infra through Workload Identity Federation (GitHub's
+# identity token; no key is stored; deploy/gcp-wif-setup.sh), which only a job of this repository
+# on main in the environment "infra" may do. The settings and keys are that environment's secrets;
+# GitHub hides them in this public log, and the scripts hide what they read (the VM's address, the
+# owner's account). New relay versions don't come through here (relay-image.yml; the server
+# updates itself). Never reaches any other server.
+name: infra
+on:
+  repository_dispatch:
+    types: [infra]
+  workflow_dispatch:
+    inputs:
+      task:
+        description: What to change
+        type: choice
+        options: [configure, harden]
+permissions:
+  contents: read
+concurrency:
+  group: infra
+  cancel-in-progress: false
+jobs:
+  infra:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    environment: infra
+    permissions:
+      contents: read
+      id-token: write # Workload Identity Federation
+    steps:
+      - name: Task
+        id: task
+        env:
+          FROM_DISPATCH: ${{ github.event.client_payload.task }}
+          FROM_INPUT: ${{ inputs.task }}
+        run: |
+          task=${FROM_INPUT:-$FROM_DISPATCH}
+          case $task in
+            configure) echo "script=deploy/deploy.sh" >>"$GITHUB_OUTPUT" ;;
+            harden) echo "script=deploy/harden.sh" >>"$GITHUB_OUTPUT" ;;
+            *) echo "unknown task; use configure or harden" >&2; exit 1 ;;
+          esac
+          echo "Task: $task" >>"$GITHUB_STEP_SUMMARY"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3.0.0
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+      - uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3.0.1
+      - name: Run
+        env:
+          SCRIPT: ${{ steps.task.outputs.script }}
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_DNS_ZONE: ${{ secrets.DEPLOY_DNS_ZONE }}
+          DEPLOY_VM: ${{ secrets.DEPLOY_VM }}
+          DEPLOY_PROJECT: ${{ secrets.DEPLOY_PROJECT }}
+          DEPLOY_ZONE: ${{ secrets.DEPLOY_ZONE }}
+          ALLOWED_EMAILS: ${{ secrets.ALLOWED_EMAILS }}
+          OPERATOR_NAME: ${{ secrets.OPERATOR_NAME }}
+          OPERATOR_CONTACT: ${{ secrets.OPERATOR_CONTACT }}
+          OPERATOR_LAW: ${{ secrets.OPERATOR_LAW }}
+          OPERATOR_PROVIDERS: ${{ secrets.OPERATOR_PROVIDERS }}
+          BACKUP_DAYS: ${{ secrets.BACKUP_DAYS }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          RESEND_ADMIN_KEY: ${{ secrets.RESEND_ADMIN_KEY }}
+          ALERT_EMAIL: ${{ secrets.ALERT_EMAIL }}
+          OWNER_ACCOUNT: ${{ secrets.OWNER_ACCOUNT }}
+          APP_BUCKETS: ${{ secrets.APP_BUCKETS }}
+        run: sh "$SCRIPT"
