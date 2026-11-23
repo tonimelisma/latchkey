@@ -1,6 +1,6 @@
 # Spec 014 plan: problem reports to the developer — HOW
 
-Draft for Toni's review; nothing here is built yet. Choices and options: `research.md`.
+Built 2026-11-23. Choices and options: `research.md`; tasks: `tasks.md`.
 
 ## D1. The setting (FR-1400 to FR-1403)
 
@@ -14,31 +14,38 @@ problem reports.
 ## D2. Asking Claude (FR-1401, FR-1405, FR-1406)
 
 The relay builds its tool list and server instructions per account: with the flag off,
-`feedback` and every mention of it are left out. With it on, the instructions keep today's
-paragraph, and the relay appends one line to every error answer it passes to Claude (the
-relay sees every answer, so no Mac change is needed).
+`feedback` and every mention of it are left out (the general instructions no longer mention it
+at all; the tool's description carries the guidance, FR-1405). With it on, the relay appends one
+line to every error answer it passes to Claude (the relay sees every answer, so no Mac change is
+needed). A machine whose `share_reports` changes makes the relay re-sync the tool list.
 
 ## D3. Filing on the relay (FR-1410 to FR-1416)
 
-`feedback` is answered by the relay as today, its description saying what must stay out of a
-report (FR-1411). It builds the report of FR-1412 from what Claude wrote, unchanged, seals it with `crypto/hpke` to the configured developer key, finds the proof of
-work, and stores only the sealed bytes in an outbox table (`id`, `sealed`, `created`, `tries`).
-A sender goroutine posts each to the intake with backoff, deletes it on acceptance, and deletes
-it after 7 days with a log line. The relay's own report table and the delivery to the Mac
-(spec 001 FR-691 to FR-693) are removed; existing rows are deleted at upgrade.
+`feedback` is answered by the relay as before, its description saying what must stay out of a
+report (FR-1411). It builds the report of FR-1412 from what Claude wrote, unchanged, seals it
+with `crypto/hpke` to the configured developer key (package `relay/reports`), and stores only the
+sealed bytes in the `report_outbox` table. A sender goroutine finds each report's proof of work
+for the current hour, posts it to the intake with backoff, deletes it on acceptance or a lasting
+refusal, and deletes it after 7 days with a log line. Before each send it checks again that the
+account still shares (security review 2026-11-23), so a report filed just before sharing went
+off, or for a machine since removed, never leaves. The relay's old report table and the delivery
+to the Mac (spec 001 FR-691 to FR-693, withdrawn) are removed; migration 00015 drops the old rows.
 
-Operator settings (environment): `FEEDBACK_INTAKE_URL` and `FEEDBACK_DEVELOPER_KEY` (base64
-public key), both defaulting to Latchkey's developer (FR-1415); `FEEDBACK_BLOCK=1` adds the
-operator's block (FR-1415a).
+Operator settings (environment): `REPORTS_INTAKE_URL` and `REPORTS_DEVELOPER_KEY` (base64 public
+key), both defaulting to Latchkey's developer (`relay/reports/defaults.go`, FR-1415);
+`REPORTS_BLOCK=1` adds the operator's block (FR-1415a).
 
 ## D4. The intake (FR-1420 to FR-1425)
 
-A Go program in `intake/` (its own module; `research.md`, "repository layout"), SQLite, one container, the relay's tooling (lint,
-security checks, tests, signed image through a workflow like `relay-image.yml`):
+A Go program in the relay's module (`relay/cmd/latchkey-intake`, `relay/internal/intake`;
+`research.md`, "repository layout"), SQLite, one container (`relay/Dockerfile.intake`), with the
+relay's lint, security checks and tests, published and signed by `relay-image.yml` as
+`ghcr.io/tonimelisma/latchkey-intake`:
 
 - `POST /v1/reports`: body = sealed report; headers carry the proof-of-work nonce and hour.
-  Refuses bodies over 64 KB, a bad proof, a body that doesn't parse as an HPKE message of the
-  expected suite, or a sender over its hourly limit. Answers 202 with the report's id.
+  Refuses bodies over 64 KB, a bad proof, a body without the report's shape (the `LKR1` mark and
+  at least the HPKE encapsulation and tag), a sender over its hourly limit, or more than 10,000
+  waiting reports. Answers 202 with the report's id.
 - `GET /v1/reports`, `GET /v1/reports/{id}`, `DELETE /v1/reports/{id}`: only with the
   developer's token (bearer); sealed bytes out. The agent deletes a report once it is
   dispositioned (FR-1424): the fix, its regression case, or the reason in the agent's reply is the
@@ -56,9 +63,10 @@ address is that name.
 
 - The token: given to the cloud environment with `request_credential` for the intake's host, so
   the session's network proxy adds it and the agent never sees it.
-- The private key: a variable of Toni's personal cloud environment; `intake open` (a small
-  command of the intake program, `go run ./intake/cmd/open`) reads sealed reports on stdin and
-  prints them, only inside the session.
+- The private key: `LATCHKEY_REPORTS_KEY`, a variable of Toni's personal cloud environment (Toni
+  sets it; it is written nowhere else). `latchkey-reports list` (`relay/cmd/latchkey-reports`)
+  fetches the open reports and prints them opened, only inside the session; `latchkey-reports
+  delete <id>` deletes a dispositioned one.
 - `docs/cloud-sessions.md` and CLAUDE.md's session start change from "list the Mac's Feedback
   folder" to "count open reports at the intake".
 

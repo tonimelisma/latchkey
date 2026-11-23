@@ -1,6 +1,6 @@
 # Status
 
-Last updated: 2026-11-23 (172 feedback reports sorted and their open causes fixed: other chats' pages, owner-tab turns, Safari scripts, page limit, frames and menus, maps near, sidebar rows; the Mac app's tests in CI on GitHub's Mac runner; the hosted relay's server moved out of this repository; CI sets up uv for Semgrep again; Xcode tests in Shell, spec 004 FR-335; development in Claude Code cloud sessions; Shell builds: task sandbox off, asset-catalog daemon per command; builds work in Shell, spec 004 FR-333 and FR-334; Sign-in built, spec 013; Claude's feedback tool, reports copied to the Mac's Feedback folder; pages are read once they stop changing; every issue becomes a regression case; clicks press down and up before clicking, so Gmail's buttons answer; signed-in sites in Safari tabs of Claude's while unlocked; sign-in cookies in Latchkey's log, for Safari's Target sign-outs; full traces everywhere, in daily files, for evals; Claude's pages always in Latchkey's own browser, by name, with dialogs Claude answers; the locked browser takes Safari's cookies again with every page; public download on GitHub with a new-version notice; never disturb the user: Mail, WhatsApp sending, Notes' window editing, Messages' window actions, Reminders' window setters removed; test sweep on exit; releases are tags on commits; cloud-only files read again; machine list shows Latchkey versions; WhatsApp built; Add to Claude button; plugin withdrawn; README rewritten as a short product page; relay web pages redone; Linux home server paired; spec 010 shipped)
+Last updated: 2026-11-23 (problem reports to the developer built, spec 014; 172 feedback reports sorted and their open causes fixed: other chats' pages, owner-tab turns, Safari scripts, page limit, frames and menus, maps near, sidebar rows; the Mac app's tests in CI on GitHub's Mac runner; the hosted relay's server moved out of this repository; CI sets up uv for Semgrep again; Xcode tests in Shell, spec 004 FR-335; development in Claude Code cloud sessions; Shell builds: task sandbox off, asset-catalog daemon per command; builds work in Shell, spec 004 FR-333 and FR-334; Sign-in built, spec 013; Claude's feedback tool, reports copied to the Mac's Feedback folder; pages are read once they stop changing; every issue becomes a regression case; clicks press down and up before clicking, so Gmail's buttons answer; signed-in sites in Safari tabs of Claude's while unlocked; sign-in cookies in Latchkey's log, for Safari's Target sign-outs; full traces everywhere, in daily files, for evals; Claude's pages always in Latchkey's own browser, by name, with dialogs Claude answers; the locked browser takes Safari's cookies again with every page; public download on GitHub with a new-version notice; never disturb the user: Mail, WhatsApp sending, Notes' window editing, Messages' window actions, Reminders' window setters removed; test sweep on exit; releases are tags on commits; cloud-only files read again; machine list shows Latchkey versions; WhatsApp built; Add to Claude button; plugin withdrawn; README rewritten as a short product page; relay web pages redone; Linux home server paired; spec 010 shipped)
 
 Xcode signing ready (2026-10-20): Toni's Xcode account has a valid "Apple Development" certificate
 (certificate expires 2027-07-22). Keep the team ID out of committed project files
@@ -553,11 +553,12 @@ after the app was quit.
 
 00. The 2026-11-23 feedback fixes have regression cases but no live run (Toni, 2026-11-23: no
     test sessions against his real data; end-to-end testing is a backlog item).
-0. Problem reports to the developer (spec 014, `specs/014-feedback-intake/`): answered by Toni
-   2026-11-23 (self-hosted relays forward by default, an operator can add a block, the intake on
-   pilvi at `latchkey-feedback.melisma.net`, DNS record made; the relay keeps its name). A dispositioned
-   report is deleted; git is the history. No open questions: next, tasks and code; until it ships, reports
-   keep arriving in the Mac's Feedback folder.
+0. Problem reports to the developer (spec 014, `specs/014-feedback-intake/`): built and merged
+   2026-11-23 (relay, intake, the developer's command, the Mac app's setting). Left for Toni:
+   the private key into his personal cloud environment (`LATCHKEY_REPORTS_KEY`, from the file
+   handed to him), the intake's token as a network secret for its host, and the deploy prompt for
+   pilvi's agent; then turning sharing on in Latchkey's settings. Until the intake runs, relays
+   keep shared reports for up to 7 days and retry.
 
 0. Cloud-first setup: done 2026-11-23 except the updater on the Mac (`macos/scripts/updater-setup.sh`)
    and `LATCHKEY_CHECK_TO` in the cloud environment. The package `latchkey-relay` gives this

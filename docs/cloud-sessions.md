@@ -79,8 +79,12 @@ applies, except:
   (2026-11-23). The runner is macOS 26 and slower: about 30 tests miss their timing limits there
   on main too, so compare a branch's failed tests (printed with why, and any crash report) with
   main's.
-- Feedback reports can't be moved to `Feedback/Handled` through `shell_run`: Shell's fence denies
-  writes to Latchkey's own folder even when declared (spec 004 FR-319); list the moves for Toni.
+- Problem reports (spec 014): `go run ./cmd/latchkey-reports list` in `relay/` lists the open
+  reports at the intake (`latchkey-feedback.melisma.net`) and opens them;
+  `latchkey-reports delete <id>` deletes a dispositioned one. It needs the developer's private
+  key in `LATCHKEY_REPORTS_KEY` (a variable of Toni's personal cloud environment, set by Toni)
+  and the intake's token, which the session's network proxy adds for that host once Toni saved it
+  as a network secret (`request_credential`). Report contents stay in the session's output.
 - Mac app: build and test on the Mac through Latchkey's `shell_run` (Toni's MacBook in
   `machines`), from the pushed branch in the command's scratch folder (deleted or moved to the
   Trash when it ends), with `uses: ["open"]` (the tests run in an app; spec 004 FR-335):

@@ -72,10 +72,14 @@ the developer owns that anyone may write to and only the developer can read.
 
 ## Decided here: repository layout
 
-`intake/` at the top level, its own Go module beside `relay/` and `linux/`. Options weighed:
-inside `relay/` (shares the module and tooling, but couples a developer-only service to every
-relay's build and image), or a separate repository (cleanest split, but a second place for
-sessions, CI, and specs). A top-level folder keeps one repository and one spec process while the
-intake builds, tests, and ships on its own; shared code stays in neither.
+Inside the relay's Go module: `relay/reports` (the format both sides share: fields, sealing,
+proof of work), `relay/internal/intake` and `relay/cmd/latchkey-intake` (the intake), and
+`relay/cmd/latchkey-reports` (the developer's command), with its own image built by the relay's
+image workflow from `relay/Dockerfile.intake`. Options weighed: a top-level `intake/` module (the
+first plan: a cleaner split, but the report format would have been copied, or reached across
+modules with replace directives that break the Docker builds), or a separate repository (a second
+place for sessions, CI, and specs). One module keeps the format in one place and gives the
+intake the relay's lint, security checks, tests, and signed images; the relay's own binary
+doesn't include the intake.
 
 - At disposition the report is deleted, nothing kept; git is the history (FR-1424).
