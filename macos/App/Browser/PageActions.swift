@@ -249,7 +249,7 @@ extension PageScripts {
                 case 'bottom': dy = s.scrollHeight; break;
               }
               var on = e || document.elementFromPoint(innerWidth / 2, innerHeight / 2) || document.body;
-              var took = !on.dispatchEvent(new WheelEvent('wheel', { deltaX: dx, deltaY: dy, deltaMode: 0, bubbles: true, composed: true, cancelable: true, composed: true, clientX: innerWidth / 2, clientY: innerHeight / 2 }));
+              var took = !on.dispatchEvent(new WheelEvent('wheel', { deltaX: dx, deltaY: dy, deltaMode: 0, bubbles: true, composed: true, cancelable: true, clientX: innerWidth / 2, clientY: innerHeight / 2 }));
               var x0 = s.scrollLeft, y0 = s.scrollTop;
               if (!took) {
                 if (a.dir === 'top') s.scrollTop = 0; else if (a.dir === 'bottom') s.scrollTop = s.scrollHeight;
