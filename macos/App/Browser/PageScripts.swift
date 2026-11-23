@@ -438,11 +438,11 @@ enum PageScripts {
             var proto = e.tagName === 'TEXTAREA' ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
             Object.getOwnPropertyDescriptor(proto, 'value').set.call(e, text);
           }
-          e.dispatchEvent(new Event('input', { bubbles: true }));
+          e.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
           e.dispatchEvent(new Event('change', { bubbles: true }));
           if (submit) {
             if (e.form) { if (e.form.requestSubmit) e.form.requestSubmit(); else e.form.submit(); }
-            else e.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true }));
+            else e.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true, composed: true }));
           }
           return 'ok';
         })(\(literal(text)), \(submit))

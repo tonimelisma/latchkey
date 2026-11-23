@@ -462,6 +462,31 @@ import Testing
         #expect(d.keys.isEmpty)
     }
 
+    /// Etsy's code step (2026-11-22, 0.8.225): its code field is inside a component that hears
+    /// typing only by events that cross its shadow root (composed, as a keyboard's are), and
+    /// Submit stays off until it does.
+    @Test func typingReachesAComponentOutsideItsShadowRoot() async throws {
+        let s = try setup()
+        defer { s.own.closeAll() }
+        let html = """
+            <lk-code id="c"></lk-code><button data-latchkey="e9" id="go" disabled>Submit</button>
+            <script>
+            customElements.define('lk-code', class extends HTMLElement {
+              connectedCallback() { this.attachShadow({ mode: 'open' }).innerHTML = '<label>Your 6-digit code <input autocomplete="one-time-code"></label>'; }
+            });
+            var c = document.getElementById('c'), go = document.getElementById('go');
+            c.addEventListener('input', function () { go.disabled = c.shadowRoot.querySelector('input').value.length !== 6; });
+            go.onclick = function () { if (c.shadowRoot.querySelector('input').value === '320518') document.title = 'Welcome ann'; };
+            </script>
+            """
+        let p = try await s.own.open(html: html, base: Self.base)
+        let field = try #require(try await s.own.page(p).read(offset: 0).elements.first { $0.kind == "field:text" })
+        let r = await call(
+            s, p,
+            ["field": .string(field.ref), "fill": .string("code"), "press": .string("e9"), "code": .string("320518")])
+        #expect(r.plainText.contains("Welcome ann"), "\(r.plainText)")
+    }
+
     /// A page that moves the focus to a search box gets no digit there: the code goes on only
     /// into code fields.
     @Test func theFocusNeverTakesACodeOutOfCodeFields() async throws {

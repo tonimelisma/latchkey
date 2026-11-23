@@ -131,10 +131,10 @@ extension PageScripts {
                 var v = String(x.value || ''), st = 0, en = v.length;
                 try { if (x.selectionStart !== null) { st = x.selectionStart; en = x.selectionEnd; } } catch (z) {}
                 if (back) { if (st === en && st > 0) st -= 1; text = ''; }
-                x.dispatchEvent(new InputEvent('beforeinput', { bubbles: true, cancelable: true, inputType: back ? 'deleteContentBackward' : 'insertText', data: back ? null : text }));
+                x.dispatchEvent(new InputEvent('beforeinput', { bubbles: true, composed: true, cancelable: true, inputType: back ? 'deleteContentBackward' : 'insertText', data: back ? null : text }));
                 setValue(x, v.slice(0, st) + text + v.slice(en));
                 try { x.setSelectionRange(st + text.length, st + text.length); } catch (z) {}
-                x.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: back ? 'deleteContentBackward' : 'insertText', data: back ? null : text }));
+                x.dispatchEvent(new InputEvent('input', { bubbles: true, composed: true, inputType: back ? 'deleteContentBackward' : 'insertText', data: back ? null : text }));
               }
               function scroller(x) {
                 for (var n = x; n && n !== document.body && n !== document.documentElement; n = n.parentElement) {
@@ -169,7 +169,7 @@ extension PageScripts {
                   else if (tag === 'SELECT' && /^Arrow(Up|Down)$|^Home$|^End$/.test(k.key) && t.options.length) {
                     var j = t.selectedIndex, m = t.options.length - 1;
                     j = k.key === 'ArrowUp' ? Math.max(j - 1, 0) : k.key === 'ArrowDown' ? Math.min(j + 1, m) : k.key === 'Home' ? 0 : m;
-                    if (j !== t.selectedIndex) { t.selectedIndex = j; t.dispatchEvent(new Event('input', { bubbles: true })); t.dispatchEvent(new Event('change', { bubbles: true })); }
+                    if (j !== t.selectedIndex) { t.selectedIndex = j; t.dispatchEvent(new Event('input', { bubbles: true, composed: true })); t.dispatchEvent(new Event('change', { bubbles: true })); }
                     what = 'chose ' + t.options[t.selectedIndex].text.trim().slice(0, 80);
                   }
                   else if (!editable(t) && /^(ArrowUp|ArrowDown|ArrowLeft|ArrowRight|PageUp|PageDown|Home|End| )$/.test(k.key)) {
@@ -249,7 +249,7 @@ extension PageScripts {
                 case 'bottom': dy = s.scrollHeight; break;
               }
               var on = e || document.elementFromPoint(innerWidth / 2, innerHeight / 2) || document.body;
-              var took = !on.dispatchEvent(new WheelEvent('wheel', { deltaX: dx, deltaY: dy, deltaMode: 0, bubbles: true, cancelable: true, composed: true, clientX: innerWidth / 2, clientY: innerHeight / 2 }));
+              var took = !on.dispatchEvent(new WheelEvent('wheel', { deltaX: dx, deltaY: dy, deltaMode: 0, bubbles: true, composed: true, cancelable: true, composed: true, clientX: innerWidth / 2, clientY: innerHeight / 2 }));
               var x0 = s.scrollLeft, y0 = s.scrollTop;
               if (!took) {
                 if (a.dir === 'top') s.scrollTop = 0; else if (a.dir === 'bottom') s.scrollTop = s.scrollHeight;
@@ -303,7 +303,7 @@ extension PageScripts {
             if (e.focus) e.focus();
             if (e.multiple) Array.prototype.forEach.call(e.options, function (o) { o.selected = picked.indexOf(o) >= 0; });
             else e.value = picked[picked.length - 1].value;
-            e.dispatchEvent(new Event('input', { bubbles: true }));
+            e.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
             e.dispatchEvent(new Event('change', { bubbles: true }));
             return 'ok\\t' + JSON.stringify(Array.prototype.filter.call(e.options, function (o) { return o.selected; }).map(function (o) { return clean(o.text); }));
           }
@@ -317,7 +317,7 @@ extension PageScripts {
             var it = items.find(function (x) { return clean(x.textContent) === clean(a.options[i]) || x.getAttribute('data-value') === a.options[i]; });
             if (!it) return 'nooption\\t' + JSON.stringify(items.slice(0, 50).map(function (x) { return clean(x.textContent).slice(0, 80); }));
             if (it.scrollIntoView) it.scrollIntoView({ block: 'nearest' });
-            ['pointerdown', 'mousedown', 'pointerup', 'mouseup'].forEach(function (t) { it.dispatchEvent(new MouseEvent(t, { bubbles: true, cancelable: true, view: window })); });
+            ['pointerdown', 'mousedown', 'pointerup', 'mouseup'].forEach(function (t) { it.dispatchEvent(new MouseEvent(t, { bubbles: true, composed: true, cancelable: true, view: window })); });
             it.click();
             done.push(clean(it.textContent).slice(0, 80));
           }
@@ -360,7 +360,7 @@ extension PageScripts {
                 if (input.disabled) return 'notfile';
                 if (!input.multiple && a.files.length > 1) return 'single';
                 input.files = dt.files;
-                input.dispatchEvent(new Event('input', { bubbles: true }));
+                input.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
                 input.dispatchEvent(new Event('change', { bubbles: true }));
                 return 'ok\\t' + JSON.stringify(['field', input.files.length]);
               }

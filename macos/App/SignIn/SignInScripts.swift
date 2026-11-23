@@ -91,8 +91,8 @@ extension PageScripts {
           // that track the active box by focus events (United's, 2026-11-21) get them sent here.
           function focusOn(x) {
             if (x.focus) x.focus();
-            x.dispatchEvent(new FocusEvent('focusin', { bubbles: true }));
-            x.dispatchEvent(new FocusEvent('focus'));
+            x.dispatchEvent(new FocusEvent('focusin', { bubbles: true, composed: true }));
+            x.dispatchEvent(new FocusEvent('focus', { composed: true }));
           }
           function same(a, b) {
             var squash = function (t) { return String(t).replace(/[\\s.\\-()]/g, '').toLowerCase(); };
@@ -108,7 +108,7 @@ extension PageScripts {
             // the box before (United left its first box empty, 2026-11-21).
             if (x.value) {
               setter.call(x, '');
-              x.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'deleteContentBackward' }));
+              x.dispatchEvent(new InputEvent('input', { bubbles: true, composed: true, inputType: 'deleteContentBackward' }));
             }
             for (var i = 0; i < v.length; i++) {
               // A code widget that moves the focus to its next box after each character (Uber's,
@@ -121,17 +121,17 @@ extension PageScripts {
               var ch = v.charAt(i), up = ch.toUpperCase();
               var code = /[a-z]/i.test(ch) ? 'Key' + up : (/[0-9]/.test(ch) ? 'Digit' + ch : '');
               var kc = /[a-z0-9]/i.test(ch) ? up.charCodeAt(0) : 0;
-              var go = x.dispatchEvent(new KeyboardEvent('keydown', { key: ch, code: code, keyCode: kc, which: kc, bubbles: true, cancelable: true }));
-              go = x.dispatchEvent(new KeyboardEvent('keypress', { key: ch, code: code, keyCode: ch.charCodeAt(0), charCode: ch.charCodeAt(0), which: ch.charCodeAt(0), bubbles: true, cancelable: true })) && go;
-              go = x.dispatchEvent(new InputEvent('beforeinput', { data: ch, inputType: 'insertText', bubbles: true, cancelable: true })) && go;
+              var go = x.dispatchEvent(new KeyboardEvent('keydown', { key: ch, code: code, keyCode: kc, which: kc, bubbles: true, composed: true, cancelable: true }));
+              go = x.dispatchEvent(new KeyboardEvent('keypress', { key: ch, code: code, keyCode: ch.charCodeAt(0), charCode: ch.charCodeAt(0), which: ch.charCodeAt(0), bubbles: true, composed: true, cancelable: true })) && go;
+              go = x.dispatchEvent(new InputEvent('beforeinput', { data: ch, inputType: 'insertText', bubbles: true, composed: true, cancelable: true })) && go;
               if (go) {
                 var was = x.value, s = x.selectionStart, t = x.selectionEnd;
                 if (s === null || s === undefined) { s = was.length; t = was.length; }
                 setter.call(x, was.slice(0, s) + ch + was.slice(t));
                 try { x.setSelectionRange(s + 1, s + 1); } catch (y) {}
-                x.dispatchEvent(new InputEvent('input', { data: ch, inputType: 'insertText', bubbles: true }));
+                x.dispatchEvent(new InputEvent('input', { data: ch, inputType: 'insertText', bubbles: true, composed: true }));
               }
-              x.dispatchEvent(new KeyboardEvent('keyup', { key: ch, code: code, keyCode: kc, which: kc, bubbles: true }));
+              x.dispatchEvent(new KeyboardEvent('keyup', { key: ch, code: code, keyCode: kc, which: kc, bubbles: true, composed: true }));
             }
             x.dispatchEvent(new Event('change', { bubbles: true }));
             if (x.blur) x.blur();
@@ -174,15 +174,15 @@ extension PageScripts {
           var held = function () { return boxes.map(function (b) { return b.value; }).join(''); };
           if (!same(held(), value)) {
             // Else the whole code pasted into the first box, as password managers do.
-            boxes.forEach(function (b) { if (b.value) { focusOn(b); setter.call(b, ''); b.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'deleteContentBackward' })); } });
+            boxes.forEach(function (b) { if (b.value) { focusOn(b); setter.call(b, ''); b.dispatchEvent(new InputEvent('input', { bubbles: true, composed: true, inputType: 'deleteContentBackward' })); } });
             var first = boxes[0];
             focusOn(first);
             var data = null;
             try { data = new DataTransfer(); data.setData('text/plain', value); } catch (y) {}
-            if (first.dispatchEvent(new ClipboardEvent('paste', { clipboardData: data, bubbles: true, cancelable: true }))) {
-              first.dispatchEvent(new InputEvent('beforeinput', { data: value, inputType: 'insertFromPaste', bubbles: true, cancelable: true }));
+            if (first.dispatchEvent(new ClipboardEvent('paste', { clipboardData: data, bubbles: true, composed: true, cancelable: true }))) {
+              first.dispatchEvent(new InputEvent('beforeinput', { data: value, inputType: 'insertFromPaste', bubbles: true, composed: true, cancelable: true }));
               setter.call(first, value);
-              first.dispatchEvent(new InputEvent('input', { data: value, inputType: 'insertFromPaste', bubbles: true }));
+              first.dispatchEvent(new InputEvent('input', { data: value, inputType: 'insertFromPaste', bubbles: true, composed: true }));
             }
           }
           if (!same(held(), value)) return unheld;
