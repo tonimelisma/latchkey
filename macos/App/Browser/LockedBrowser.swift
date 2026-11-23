@@ -12,17 +12,38 @@ import WebKit
 /// Claude's answers look the same; it has one page and no tabs.
 @MainActor
 final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate {
-    private var web: WKWebView?
+    private var web: WKWebView? {
+        didSet { leftovers.web = web }
+    }
     /// The window the view is in, never on screen (`holder`). It holds the view, so it goes when
     /// this browser goes, discarded or not: else the view lives on and WebKit calls back into a
     /// browser that is gone (a crash in the tests, 2026-11-22).
-    private var holderWindow: NSWindow?
+    private var holderWindow: NSWindow? {
+        didSet { leftovers.window = holderWindow }
+    }
+    /// Tidies the view and its window away on the main thread when this browser goes, from
+    /// whichever thread lets go of it last. An `isolated deinit` did this until 2026-11-23, and
+    /// crashed on macOS 26 when a browser was let go off the main thread (a failed page load in
+    /// browser_open; seen in CI on GitHub's macOS 26 runner).
+    private let leftovers = Leftovers()
 
-    isolated deinit {
-        web?.navigationDelegate = nil
-        web?.uiDelegate = nil
-        holderWindow?.orderOut(nil)
-        holderWindow?.contentView = nil
+    private final class Leftovers: @unchecked Sendable {
+        var web: WKWebView?
+        var window: NSWindow?
+
+        deinit {
+            nonisolated(unsafe) let web = web
+            nonisolated(unsafe) let window = window
+            guard web != nil || window != nil else { return }
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated {
+                    web?.navigationDelegate = nil
+                    web?.uiDelegate = nil
+                    window?.orderOut(nil)
+                    window?.contentView = nil
+                }
+            }
+        }
     }
     /// The page's name, as Claude passes it (FR-445); set by `OwnPages`.
     var name = ""
