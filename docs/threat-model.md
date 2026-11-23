@@ -158,8 +158,9 @@ Boundaries, each a place where input must be treated as hostile:
     or a shell command line except where the tool's purpose is to run it (`shell_run`, the
     JavaScript action in `browser_act`), and read-only tools don't change anything.
 12. No secret (relay address, server details, team ID, API keys, tokens) is committed, logged, or
-    returned in an error. `scripts/private-values-check.sh` enforces the first part (`make
-    secrets` and the push guard); the proxy's access log leaves out redirect targets; the app's
+    returned in an error. `scripts/private-values-check.sh` enforces the first part for relay
+    addresses and the team ID, which may only be placeholders (`make secrets` and the push guard),
+    and gitleaks for keys and tokens; the proxy's access log leaves out redirect targets; the app's
     log carries the relay address only as private data.
 13. A Read only browser read never returns what password, one-time-code or card fields hold
     (spec 005 FR-410).

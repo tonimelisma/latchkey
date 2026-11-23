@@ -19,8 +19,8 @@ Enforced by hooks in `.claude/settings.json` (`scripts/hooks.sh`):
 - Commands that can lose work are refused: `git stash` in any spelling (only `list` and `show`
   are allowed), force-push (`-f`, `--force…`, or a `+refspec`), `git reset --hard`,
   `git clean -f`, `git branch -D`, `git checkout -- .`. A `git push` is also refused while
-  `scripts/private-values-check.sh` finds one of the deployment's private values in a tracked
-  file or any commit. Without `jq`, every command that mentions git is refused. Delete merged branches
+  `scripts/private-values-check.sh` finds a working relay's address or an Apple signing team
+  in a tracked file or a commit not yet pushed (only placeholders such as `relay.example.com`). Without `jq`, every command that mentions git is refused. Delete merged branches
   with `git branch -d`; never remove a worktree with `discard_changes` unless its commits are on
   main.
 - After every push and at every session start, `scripts/tidy.sh` runs automatically (Claude Code

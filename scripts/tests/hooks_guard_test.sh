@@ -10,17 +10,17 @@ fails=0
 ok() { printf 'ok   %s\n' "$1"; }
 bad() { printf 'FAIL %s\n' "$1"; fails=$((fails + 1)); }
 
-# A clean repository to run in, and one that holds a private value.
+# A clean repository to run in, and one that names a relay (built from pieces, so this file
+# holds only placeholders).
 for r in clean dirty; do
   git init -q "$work/$r"
   git -C "$work/$r" checkout -q -b main
-  printf '.env\n' >"$work/$r/.gitignore"
-  echo "DEPLOY_HOST=latch.privatezone.test" >"$work/$r/.env"
   echo hello >"$work/$r/file"
-  git -C "$work/$r" add .gitignore file
+  git -C "$work/$r" add file
   git -C "$work/$r" -c user.name=t -c user.email=t@example.com commit -q -m start
 done
-echo "see latch.privatezone.test" >"$work/dirty/file"
+host="latch.private""zone.net"
+echo "PUBLIC_URL=https://$host" >"$work/dirty/file"
 
 # guard <dir> <command>: prints the hook's answer.
 guard() { jq -n --arg c "$2" --arg d "$1" '{cwd: $d, tool_input: {command: $c}}' | "$hooks" guard; }

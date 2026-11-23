@@ -210,8 +210,9 @@ local branches, worktrees, and old builds after every push on the Mac (GitHub de
 pull requests' branches; nothing to tidy after a cloud push).
 - Delete temporary files (scratch scripts, copies of databases, old app copies, servers' `/tmp`
   files) as soon as the task that needed them is done; scratchpad folders end empty.
-- Never commit the hosted relay's address, its server details, or the Apple team ID; they live in
-  the gitignored `.env`, `macos/Config/Local.xcconfig`, and `CLAUDE.local.md` (Toni, 2026-10-23).
+- Never commit a working relay's address or the Apple team ID: the repository holds only
+  placeholders such as `relay.example.com` (Toni, 2026-10-23 and 2026-11-23); the real values live
+  in the gitignored `macos/Config/Local.xcconfig` and `CLAUDE.local.md`. The push guard checks it.
 
 ## Every issue becomes a regression case (Toni, 2026-11-16)
 

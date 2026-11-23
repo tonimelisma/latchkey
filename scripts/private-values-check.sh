@@ -1,110 +1,105 @@
 #!/bin/sh
-# Fails if one of this deployment's private values is in the repository: in a tracked file, or in
-# any commit (contents or message) reachable from any branch, tag or other ref. Secret scanners
-# can't know these values; this script reads them from the gitignored files that hold them:
-#   .env                          DEPLOY_HOST, DEPLOY_DNS_ZONE, DEPLOY_VM, DEPLOY_PROJECT
-#   macos/Config/Local.xcconfig   DEVELOPMENT_TEAM, LATCHKEY_DEFAULT_RELAY_HOST
-# (taken from the main checkout when a worktree has no copy), and from environment variables
-# named LATCHKEY_PRIVATE_<setting> (e.g. LATCHKEY_PRIVATE_DEPLOY_HOST): a Claude Code cloud
-# session has neither file, so Toni sets these in the cloud environment (not secrets, only kept
-# out of the repository; CLAUDE.md, "Cloud sessions"). Run it inside the repository to check. It
-# prints where a value was found and which setting it is, never the value.
-# Matching is literal and ignores case. Values under 6 characters and the cloud zone (DEPLOY_ZONE,
-# a generic region name) are not searched: they would match ordinary text. The reversed DNS zone
-# in the app's bundle ID is not a match (only the forward form is searched).
-# Exit: 0 clean (or no private values to compare with, outside a cloud session), 1 found, 2 could
-# not check (also: a cloud session, CLAUDE_CODE_REMOTE=true, with no values at all, so pushes from
-# the cloud are refused until the values are set rather than pushed unchecked).
-# Used by `make secrets` in relay/ and before every `git push` from Claude Code (scripts/hooks.sh).
-# Tested by scripts/tests/private_values_test.sh.
+# Fails if a working relay's address or an Apple signing team is written in the repository (Toni,
+# 2026-11-23: no working relay's host name ever goes into the repository). Needs no private
+# values: wherever a relay's address is written, it must be a placeholder name, and the signing
+# team setting must be empty. Checked: tracked files, and the added lines and messages of commits
+# not yet on any remote (what a push would publish).
+# Where a relay's address is written:
+#   PUBLIC_URL=https://<host>, a connector URL https://<host>/mcp, a pairing link's relay=<url>,
+#   LATCHKEY_DEFAULT_RELAY_HOST = <host>
+# Placeholders: example.com, .net, .org and their subdomains, any name under .example, .test,
+# .invalid or .localhost, localhost, loopback addresses, sslip.io names of documentation addresses
+# (192.0.2.x, 198.51.100.x, 203.0.113.x), and variables or templates ($HOST, {{HOST}}, <name>).
+# Signing team: DEVELOPMENT_TEAM = <ten letters and digits> fails unless it is the placeholder
+# ABCDE12345; the real team lives only in the gitignored macos/Config/Local.xcconfig.
+# It prints where it found something and what kind, never the value.
+# Exit: 0 clean, 1 found, 2 could not check. Used by `make secrets` in relay/ and before every
+# `git push` from Claude Code (scripts/hooks.sh). Tested by scripts/tests/private_values_test.sh.
 set -u
 top=$(git rev-parse --show-toplevel 2>/dev/null) || { echo "private-values-check: not inside a git repository" >&2; exit 2; }
-common=$(git -C "$top" rev-parse --path-format=absolute --git-common-dir) || exit 2
-main=$(dirname "$common")
 
-# private_file PATH: the worktree's copy, else the main checkout's; empty when neither exists.
-private_file() {
-  for dir in "$top" "$main"; do
-    if [ -f "$dir/$1" ]; then
-      printf '%s\n' "$dir/$1"
-      return
-    fi
-  done
+# What to look for (extended regular expressions; case is ignored for the addresses).
+q="'" # a single quote, for the patterns below
+url_end="[^]/?#\"$q\`<>()[:space:],;|\\]"
+addr_re="PUBLIC_URL[\"$q ]*[=:][\"$q ]*https?://$url_end+|https?://$url_end+/mcp([^a-z0-9_./-]|\$)|relay=https?(%3a|:)(%2f|/)(%2f|/)[^&\"$q\`<>()[:space:]]+|LATCHKEY_DEFAULT_RELAY_HOST[\"$q ]*[=:][\"$q ]*[^\"${q}[:space:]/]*[.][^\"${q}[:space:]/]+"
+team_re="DEVELOPMENT_TEAM[\"$q ]*[=:][\"$q ]*[A-Z0-9]{10}([^A-Za-z0-9]|\$)"
+
+# placeholder HOST: succeeds when HOST can't be anyone's working relay.
+placeholder() {
+  h=$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')
+  h=${h##*@}
+  case $h in
+    \[*) h=${h%%]*}] ;;
+    *) h=${h%%:*} ;;
+  esac
+  h=${h%.}
+  case $h in
+    '' | '$'* | '{'* | '<'* | '('* | '%'* | \\* | '…'* | '...'*) return 0 ;;
+    localhost | *.localhost | 127.* | '[::1]' | 0.0.0.0) return 0 ;;
+    example.com | *.example.com | example.net | *.example.net | example.org | *.example.org) return 0 ;;
+    example | *.example | test | *.test | invalid | *.invalid) return 0 ;;
+    192-0-2-*.sslip.io | 198-51-100-*.sslip.io | 203-0-113-*.sslip.io) return 0 ;;
+  esac
+  return 1
 }
 
-# env_value NAME FILE: NAME=value (optionally exported or quoted) from a shell settings file.
-env_value() {
-  sed -n "s/^[[:space:]]*\(export[[:space:]]\{1,\}\)\{0,1\}$1=//p" "$2" | tail -1 |
-    sed "s/[[:space:]]*\$//; s/^[\"']//; s/[\"']\$//"
-}
-
-# xcconfig_value NAME FILE: NAME = value from an Xcode settings file.
-xcconfig_value() {
-  sed -n "s/^[[:space:]]*$1[[:space:]]*=[[:space:]]*//p" "$2" | tail -1 |
-    sed 's|[[:space:]]*//.*$||; s/[[:space:]]*$//'
+# host_of MATCH: the host name a match names.
+host_of() {
+  case $1 in
+    [Ll][Aa][Tt][Cc][Hh][Kk][Ee][Yy]_*) printf '%s' "$1" | sed "s/^[^=:]*[=:][\" $q]*//" ;;
+    *) printf '%s' "$1" | sed 's/%3[Aa]/:/g; s/%2[Ff]/\//g; s|^.*://||; s|[/?#].*$||' ;;
+  esac
 }
 
 found=0
-seen='
-'
-# check NAME VALUE
-check() {
-  [ "${#2}" -ge 6 ] || return 0
-  case $seen in *"
-$2
-"*) return 0 ;; esac
-  seen="$seen$2
-"
-  hits=$(git -C "$top" grep -n -i -F -e "$2" -- . 2>/dev/null | cut -d: -f1,2)
-  if [ -n "$hits" ]; then
-    printf '%s\n' "$hits" | sed "s/^/private value ($1) in a tracked file: /"
-    found=1
-  fi
-  if ! commits=$(git -C "$top" log --all -i -S"$2" --format=%h 2>/dev/null); then
-    echo "private-values-check: could not search the history" >&2
-    exit 2
-  fi
-  for c in $commits; do
-    echo "private value ($1) in the history: commit $c adds or removes it"
+tab=$(printf '\t')
+# scan_addresses, scan_teams: read "<place><tab><match>" lines and report each match that names
+# a real host or team.
+scan_addresses() {
+  while IFS="$tab" read -r place match; do
+    placeholder "$(host_of "$match")" && continue
+    echo "a relay's address in $place: use a placeholder such as relay.example.com"
     found=1
   done
-  for c in $(git -C "$top" log --all -i -F --grep="$2" --format=%h 2>/dev/null); do
-    echo "private value ($1) in the history: message of commit $c"
+}
+scan_teams() {
+  while IFS="$tab" read -r place match; do
+    value=$(printf '%s' "$match" | sed "s/^[^=:]*[=:][\" $q]*//" | cut -c1-10)
+    [ "$value" = ABCDE12345 ] && continue
+    echo "a signing team in $place: leave DEVELOPMENT_TEAM empty (it lives in macos/Config/Local.xcconfig)"
     found=1
   done
 }
 
-env_file=$(private_file .env)
-xc_file=$(private_file macos/Config/Local.xcconfig)
-names="DEPLOY_HOST DEPLOY_DNS_ZONE DEPLOY_VM DEPLOY_PROJECT DEVELOPMENT_TEAM LATCHKEY_DEFAULT_RELAY_HOST"
-from_env=""
-for name in $names; do
-  eval "v=\${LATCHKEY_PRIVATE_$name:-}"
-  [ -n "$v" ] && from_env="$from_env $name"
+tmp=$(mktemp) || exit 2
+trap 'rm -f "$tmp" "$tmp.c"' EXIT
+# files PATTERN [-i]: tracked files' matches as "<file>:<line><tab><match>" in $tmp.
+files() { # shellcheck disable=SC2086 # $2 is an optional flag
+  git -C "$top" grep -n -I -o -E ${2:-} -e "$1" -- . >"$tmp.c" 2>/dev/null
+  [ $? -le 1 ] || { echo "private-values-check: could not search the files" >&2; exit 2; }
+  sed "s/^\([^:]*:[0-9]*\):/\1$tab/" "$tmp.c" >"$tmp"
+}
+files "$addr_re" -i
+scan_addresses <"$tmp"
+files "$team_re"
+scan_teams <"$tmp"
+
+# Commits a push would publish: their messages and added lines.
+if ! commits=$(git -C "$top" rev-list --all --not --remotes 2>/dev/null); then
+  echo "private-values-check: could not list the commits" >&2
+  exit 2
+fi
+for c in $commits; do
+  short=$(git -C "$top" rev-parse --short "$c")
+  git -C "$top" show --format=%B "$c" | grep -v '^-' >"$tmp.c"
+  grep -n -o -i -E -e "$addr_re" "$tmp.c" | sed "s/^\([0-9]*\):/commit $short, line \1$tab/" >"$tmp"
+  scan_addresses <"$tmp"
+  grep -n -o -E -e "$team_re" "$tmp.c" | sed "s/^\([0-9]*\):/commit $short, line \1$tab/" >"$tmp"
+  scan_teams <"$tmp"
 done
-if [ -z "$env_file" ] && [ -z "$xc_file" ] && [ -z "$from_env" ]; then
-  if [ "${CLAUDE_CODE_REMOTE:-}" = true ]; then
-    echo "private-values-check: this cloud session has none of the deployment's private values to compare with, so nothing can be pushed from it yet. Toni sets them once in the cloud environment's environment variables, one line each:$(for n in $names; do printf ' LATCHKEY_PRIVATE_%s=<value>' "$n"; done) (CLAUDE.md, \"Cloud sessions\")" >&2
-    exit 2
-  fi
-  echo "private-values-check: no .env or macos/Config/Local.xcconfig here; nothing to compare with"
-  exit 0
-fi
-for name in $from_env; do
-  eval "check \"\$name\" \"\$LATCHKEY_PRIVATE_$name\""
-done
-if [ -n "$env_file" ]; then
-  for name in DEPLOY_HOST DEPLOY_DNS_ZONE DEPLOY_VM DEPLOY_PROJECT; do
-    check "$name" "$(env_value "$name" "$env_file")"
-  done
-fi
-if [ -n "$xc_file" ]; then
-  for name in DEVELOPMENT_TEAM LATCHKEY_DEFAULT_RELAY_HOST; do
-    check "$name" "$(xcconfig_value "$name" "$xc_file")"
-  done
-fi
+
 if [ "$found" = 1 ]; then
-  echo "FAIL: private values of this deployment are in the repository (CLAUDE.md: they live only in .env, macos/Config/Local.xcconfig and CLAUDE.local.md). Remove them before pushing."
+  echo "FAIL: a working relay's address or a signing team is written in the repository; only placeholders may be."
   exit 1
 fi
 exit 0

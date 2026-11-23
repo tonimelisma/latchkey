@@ -128,8 +128,8 @@ Development in Claude Code cloud sessions (Toni, 2026-11-21; CLAUDE.md "Cloud se
 hooks know a cloud session (`CLAUDE_CODE_REMOTE=true`). Session start runs
 `scripts/cloud-setup.sh` (jq, lsof, the pinned ShellCheck, uv, and Go modules, tools and test
 builds warmed in the background), skips `tidy.sh`, and still reports loose ends; no `tidy.sh`
-after a push; the guard is unchanged, and the private-values check reads the values from
-`LATCHKEY_PRIVATE_*` environment variables there and refuses a push when none are set. Relay
+after a push; the guard is unchanged, and the private-values check needs no private values (since
+2026-11-23: it refuses any relay address or signing team that isn't a placeholder). Relay
 and Linux work runs in the VM; the Mac app builds and tests on the Mac through Latchkey's
 `shell_run` from a clone in the command's scratch folder; deploys, Linux releases, installs and
 live checks stay in a local session. Checked in `docker run ubuntu:24.04`: the real session-start
