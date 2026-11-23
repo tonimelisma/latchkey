@@ -552,8 +552,11 @@ after the app was quit.
 ## Next steps
 
 00. The 2026-11-23 feedback fixes have regression cases but no live run (Toni, 2026-11-23: no
-    test sessions against his real data; end-to-end testing is a backlog item). Next: options
-    for a feedback design where Claude can mark reports handled, for Toni to choose.
+    test sessions against his real data; end-to-end testing is a backlog item).
+0. Problem reports to the developer (spec 014, draft: `specs/014-feedback-intake/`): Toni's
+   review of the spec, research and plan, and his answers to its open questions (self-hosted
+   relays' default, what is kept at disposition, where the intake runs, the `intake/` folder).
+   Then tasks, then code; until it ships, reports keep arriving in the Mac's Feedback folder.
 
 0. Cloud-first setup: done 2026-11-23 except the updater on the Mac (`macos/scripts/updater-setup.sh`)
    and `LATCHKEY_CHECK_TO` in the cloud environment. The package `latchkey-relay` gives this
