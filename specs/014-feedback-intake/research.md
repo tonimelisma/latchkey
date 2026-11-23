@@ -59,10 +59,21 @@ the developer owns that anyone may write to and only the developer can read.
   text, and it would be the relay judging content (Constitution X). The tool's description says
   what stays out.
 
+## Answered by Toni (2026-11-23)
+
+- Self-hosted relays forward to Latchkey's developer by default; the user's opt-in decides
+  (FR-1415). An operator can add a block (FR-1415a).
+- The intake runs on pilvi, at the latchkey name; the hosted relay moves to a hard-to-guess name
+  (FR-1426).
+
+## Decided here: repository layout
+
+`intake/` at the top level, its own Go module beside `relay/` and `linux/`. Options weighed:
+inside `relay/` (shares the module and tooling, but couples a developer-only service to every
+relay's build and image), or a separate repository (cleanest split, but a second place for
+sessions, CI, and specs). A top-level folder keeps one repository and one spec process while the
+intake builds, tests, and ships on its own; shared code stays in neither.
+
 ## Still for Toni
 
-- Self-hosted relays: send to Latchkey's developer by default, or only once their operator sets
-  an intake (FR-1415).
 - At disposition: delete the report, keeping only its outcome, or keep it for a time (FR-1424).
-- Where the intake's VM runs and its address (needs Toni's account).
-- Repository layout: a new top-level folder `intake/` (proposed), or inside `relay/`.

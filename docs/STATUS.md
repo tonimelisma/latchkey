@@ -553,10 +553,11 @@ after the app was quit.
 
 00. The 2026-11-23 feedback fixes have regression cases but no live run (Toni, 2026-11-23: no
     test sessions against his real data; end-to-end testing is a backlog item).
-0. Problem reports to the developer (spec 014, draft: `specs/014-feedback-intake/`): Toni's
-   review of the spec, research and plan, and his answers to its open questions (self-hosted
-   relays' default, what is kept at disposition, where the intake runs, the `intake/` folder).
-   Then tasks, then code; until it ships, reports keep arriving in the Mac's Feedback folder.
+0. Problem reports to the developer (spec 014, `specs/014-feedback-intake/`): answered by Toni
+   2026-11-23 (self-hosted relays forward by default, an operator can add a block, the intake on
+   pilvi at the latchkey name, the hosted relay to a hard-to-guess name). Open: what is kept at
+   disposition (FR-1424). Then tasks, code, and the name move (plan D4a); until it ships, reports
+   keep arriving in the Mac's Feedback folder.
 
 0. Cloud-first setup: done 2026-11-23 except the updater on the Mac (`macos/scripts/updater-setup.sh`)
    and `LATCHKEY_CHECK_TO` in the cloud environment. The package `latchkey-relay` gives this

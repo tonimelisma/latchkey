@@ -11,10 +11,10 @@ The Mac's existing state message gains one field:
 `share_reports` absent means false. The relay stores it per account; false drops the account's
 waiting reports (FR-1403).
 
-## Relay → Mac: sharing unavailable (FR-1415)
+## Relay → Mac: the operator's block (FR-1415a)
 
-The welcome message gains `"reports_sharing": "on" | "off"`; with "off" the app shows the
-setting as unavailable on this relay.
+The welcome message gains `"reports_blocked": true` when the operator added the block; the app
+then says this relay doesn't forward problem reports.
 
 ## Relay → intake (FR-1420)
 

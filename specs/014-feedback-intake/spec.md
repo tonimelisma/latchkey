@@ -44,8 +44,9 @@ Toni because he is a user too. Other users' reports never reach the developer.
 2. Given the intake were broken into, then the reports in it can't be read.
 
 ### US4 (P2): I run my own relay
-1. Given I host a relay, then I can send its users' shared reports to Latchkey's developer
-   (the default), to another developer, or nowhere.
+1. Given I host a relay, then my users' shared reports go to Latchkey's developer by default
+   (they chose to send them); I can point them at another developer's intake, or add a block so
+   my relay forwards none.
 
 ## Requirements
 
@@ -87,11 +88,15 @@ Toni because he is a user too. Other users' reports never reach the developer.
 - **FR-1414** The relay shall send each encrypted report to the intake address from its
   settings, retrying until the intake accepts it, then delete it. A report not accepted within
   7 days shall be deleted, and the relay's log shall say so.
-- **FR-1415** A relay operator shall be able to set the intake address and developer key, or turn
-  sharing off for the whole relay; then the setting of FR-1400 shall say sharing is unavailable
-  on this relay, and FR-1401 applies. By default a relay sends to Latchkey's developer.
-  [NEEDS CLARIFICATION: should a self-hosted relay send to Latchkey's developer by default, or
-  only once its operator sets an intake?]
+- **FR-1415** Every relay, self-hosted ones included, shall forward its users' shared reports to
+  Latchkey's developer by default: the user decides to send, so the opt-in is the user's (Toni,
+  2026-11-23: "self-hosted relays will relay feedback since it's the end users deciding to send
+  it, that's where the opt-in is"). A relay operator may set another intake address and developer
+  key (a fork's developer).
+- **FR-1415a** A relay operator may also block forwarding on their relay, as an additional block
+  on top of the user's choice (Toni: "don't call it an opt out. just say it's an additional
+  block"). While blocked, the setting of FR-1400 shall say this relay doesn't forward problem
+  reports, and FR-1401 applies.
 - **FR-1416** The answer to `feedback` shall say the report was queued for the developer, and
   never repeat its contents.
 
@@ -110,6 +115,11 @@ Toni because he is a user too. Other users' reports never reach the developer.
   whole report for a time?]
 - **FR-1425** The intake shall be a program in this repository that a fork's developer can run
   for themselves.
+- **FR-1426** Latchkey's own intake shall answer at the easy-to-remember name (latchkey on Toni's
+  domain), which relays use by default; the hosted relay moves to a name that is hard to guess
+  (Toni, 2026-11-23: "I prefer latchkey being for feedback, and moving our own relay to a more
+  hard to guess DNS name"). The intake runs on pilvi, Toni's GCP VM (Toni). The relay's new name
+  is never written in this repository (CLAUDE.md).
 
 ### The developer's agent
 - **FR-1430** The developer's agent shall open reports with the developer's private key inside its
