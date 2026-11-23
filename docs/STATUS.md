@@ -525,6 +525,13 @@ after the app was quit.
 1. Codes experiment: done and reported (table under "Open acceptance"). Open: Chase live on 0.8.228
    or later; the other banks (Capital One, Amex, US Bank, Discover, Fidelity, Schwab); Toni to
    choose which way to keep (or all three).
+3. End-to-end testing and evals (Toni, 2026-11-23: "add a backlog item to figure out how to do e2e
+   testing and evals properly"). Claude's live test sessions against Toni's real Mac data were
+   removed the same day (CLAUDE.md step 7, `docs/cloud-sessions.md` "Live checks"); the scripts
+   in `macos/scripts/state-check/` and the cases in `cases.json` are kept but not run. To decide:
+   what to test end to end without touching his real accounts and apps (a test macOS user or
+   VM, test accounts, a recorded relay), how agent evals are run and scored, and what a release
+   needs before it counts as checked. Research first, then a proposal for Toni.
 2. The Mac's updater isn't set up on Toni's Mac (`macos/scripts/updater-setup.sh`, once, Toni's
    step); installs ran by hand until then.
 

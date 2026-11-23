@@ -19,11 +19,13 @@ So, for every request:
   criteria: screen state (unlocked / locked / lid closed), browser (Safari tab / Latchkey's own),
   fresh vs already signed in, the site or app. Each row is its own work-list item, and the first
   reply lists the rows and how each will be checked.
-- A row is VERIFIED only by a live run in that exact condition with the installed version,
+- A row is VERIFIED only by a real run in that exact condition with the installed version,
   quoted with version, time, and the result seen (the page, the database), not Claude's words.
-  Unit tests, a run in another screen state, or reasoning from code verify nothing.
-- A row only Toni can produce (the Mac locked, the lid closed) is SCHEDULED: start
-  `state-check.sh wait` for its group in the background and say so.
+  Unit tests, a run in another screen state, or reasoning from code verify nothing. Claude
+  starts no test sessions of its own against Toni's real data (Toni, 2026-11-23); how to test
+  end to end is an open backlog item (`docs/STATUS.md`, "Next steps").
+- A row only Toni can produce (the Mac locked, the lid closed) is NOT VERIFIED until Toni runs
+  it; say so.
 - Every answer to "can you / does it / is it working" leads with the rows, like "Locked, fresh
   sign-in: NOT VERIFIED (scheduled for the next lock) | Unlocked: VERIFIED 0.8.218 10:17". Never
   "done", "works", or "should work" for a row that isn't verified.
@@ -176,16 +178,6 @@ the targeted tests, then the full checks once per batch. In order:
    event_type=<type>` (`relay-image`, `linux-release`, `mac-tag`).
 6. Watch the workflow runs (`gh api repos/tonimelisma/latchkey/actions/runs`) and, for the Mac,
    the updater's log through Latchkey (`docs/cloud-sessions.md`, "The Mac's updater").
-7. If behavior changed: a live check through the hosted relay once the new version runs, from a
-   session whose Latchkey connector started after it (a session keeps the tool list it started
-   with): a fresh cloud session from claude.ai runs the cases itself with
-   `state-check.sh prompt|record|merge` (`docs/cloud-sessions.md`, "Live checks"); on the Mac,
-   `state-check.sh run <dir> <group…>` with fresh `claude -p` sessions. Check only what changed:
-   the groups whose code changed, never every group by habit (Toni, 2026-11-05: a full run
-   sends about six emails). A full run is for changes every tool shares (the connection, the
-   relay's tool handling) and for refreshing `docs/use-cases.md` in a new screen state. The run
-   counts for the acceptance rows of the screen state it ran in, no other ("Done means Toni's
-   conditions").
 
 ## Nothing left behind (Toni, 2026-10-23 and 2026-10-24)
 
@@ -228,12 +220,12 @@ regression case, otherwise reported to Toni with what was learned. A report is h
 fix is on main or Toni has heard why not; then move it to `Feedback/Handled` (`shell_run` with
 that folder in `writes`).
 
-Every issue found in Latchkey (by Toni, an agent's feedback report, a live check, or
+Every issue found in Latchkey (by Toni, an agent's feedback report, or
 a test) gets a case in a regressions group of `macos/scripts/state-check/cases.json`
 ("regressions", or "regressions-browser", "-shell", "-computer", "-other" by area), in the same
 commit as its fix: the id names it, `case` says what went wrong and when, `steps` say
-how a fresh agent checks it and what counts as working. Cases never write anything they don't
-remove. Run `state-check.sh run <dir> <its group>` after every fix that touches a case's area.
+how it is checked and what counts as working. Cases never write anything they don't remove.
+No test session runs them for now (Toni, 2026-11-23; end-to-end testing is a backlog item).
 
 ## Never disturb the user (Toni, 2026-11-07; Constitution IV)
 
@@ -251,7 +243,7 @@ Development happens in cloud sessions (Toni, 2026-11-23); the Mac only builds an
 needs macOS. A cloud session (`CLAUDE_CODE_REMOTE=true`, a fresh Ubuntu VM run as root, no Swift
 or macOS) follows `docs/cloud-sessions.md` (the session-start hook says so): no worktree;
 releases through GitHub Actions; Mac builds and tests through
-Latchkey's `shell_run`; the Mac installs releases itself; live checks with its own Latchkey tools.
+Latchkey's `shell_run`; the Mac installs releases itself.
 
 ## Owner setup (only Toni can do these; once)
 
@@ -260,7 +252,6 @@ Latchkey's `shell_run`; the Mac installs releases itself; live checks with its o
   with Write (so the image workflow can publish it).
 - On the Mac, once: `macos/scripts/updater-setup.sh` from the main checkout (later installs keep
   it current).
-- Cloud environment variable `LATCHKEY_CHECK_TO` (the live checks' own address).
 - Optional: required reviewers on the environments `release`, `production`; a tag
   ruleset so only GitHub Actions creates `mac-*` and `linux-*` tags.
 
@@ -279,10 +270,8 @@ All commands, with details: `docs/commands.md`. The ones used every day:
 - Mac app (`macos/`): `make test`, `make lint`; installs by the Mac's updater (`make install`
   installs CI's newest tag by hand).
 - Linux program (`linux/`): `make test`, `make lint`; releases by `linux-release.yml`.
-- Screen states (`macos/scripts/state-check/`): `state-check.sh run|wait|report <folder outside
-  the repo> [groups]` runs the use cases in `cases.json` with real Claude Code in the Mac's
-  current screen state; `prompt|record|merge` for a cloud session running them itself; needs
-  `LATCHKEY_CHECK_TO` (from `CLAUDE.local.md`, or the cloud environment).
+- Screen states (`macos/scripts/state-check/`): not run for now (no test sessions against Toni's
+  real data, 2026-11-23; end-to-end testing is a backlog item).
 
 <!-- Maintainers: keep this file under ~200 lines (Anthropic's guidance for CLAUDE.md). Status and
 decisions live in docs/, topic knowledge in .claude/rules/, procedures in docs/. A rule that must

@@ -102,9 +102,7 @@ paths:
   and the helper's version after every install (FR-622) and fails when one is wrong.
 - Never pause, disconnect, or turn down capabilities on the installed app for a check: Toni's own
   Claude sessions use it (a live Pause test stalled one of his sessions mid-order, 2026-10-26).
-  Test those in unit tests or with `make mac-check`. Run `claude -p` live checks from outside
-  the repository: inside a worktree the project's end-of-turn hooks make that session commit
-  and push the worktree's work.
+  Test those in unit tests or with `make mac-check`. No `claude -p` live checks (2026-11-23).
 - Settings… sets the activation policy to `.regular` and activates before `openSettings()`, the
   usual advice for menu-bar-only apps (otherwise the window may not open or opens behind).
 
