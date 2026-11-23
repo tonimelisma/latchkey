@@ -3,8 +3,13 @@
 # are tags on commits, so git settles which session gets which number (Toni, 2026-11-04: two
 # sessions bumping the version file both made 0.8.112, and a rebase drops the second, identical bump
 # without a conflict).
-# Usage: scripts/release-tag.sh <prefix>   (v for the Mac app, server-v for the Linux program)
-# The commit must be GitHub's main exactly. A commit that already has such a tag keeps it, so
+# Usage: scripts/release-tag.sh <prefix>   (mac- for the Mac app, linux- for the Linux program)
+# Run by the release workflows on GitHub (.github/workflows/mac-tag.yml, linux-release.yml), which
+# push the tag with the workflow's own token: a cloud session's proxy refuses tag pushes.
+# The commit must be GitHub's main exactly. RELEASE_TAG_ON_MAIN=1 (the workflows) relaxes that to
+# "a commit on main": main may have moved on while the workflow waited for its turn. Then a commit
+# older than one already released gets no number (exit 3, nothing printed), so numbers always rise
+# along main. A commit that already has such a tag keeps it, so
 # installing it again gives the same number. Otherwise the number is the highest such tag's patch
 # + 1 (NEXT_VERSION=x.y.z names it instead: the first release, or a new series). GitHub refuses a
 # tag name that's taken; then the tags are fetched again and the next number is tried.
@@ -17,7 +22,12 @@ while :; do
   attempt=$((attempt + 1))
   # GitHub's tags replace this checkout's: a local tag of the same name may be stale.
   git fetch -q origin main "+refs/tags/$prefix*:refs/tags/$prefix*"
-  if [ "$head" != "$(git rev-parse refs/remotes/origin/main)" ]; then
+  if [ "${RELEASE_TAG_ON_MAIN:-}" = 1 ]; then
+    if ! git merge-base --is-ancestor "$head" refs/remotes/origin/main; then
+      echo "release-tag: this commit isn't on GitHub's main" >&2
+      exit 1
+    fi
+  elif [ "$head" != "$(git rev-parse refs/remotes/origin/main)" ]; then
     echo "release-tag: this commit isn't GitHub's main; push it to main first (rebase onto origin/main and retest if main moved)" >&2
     exit 1
   fi
@@ -25,6 +35,10 @@ while :; do
   if [ -n "$mine" ]; then
     echo "${mine#"$prefix"}"
     exit 0
+  fi
+  if [ -n "$(git tag --contains HEAD --list "${prefix}[0-9]*" | head -1)" ]; then
+    echo "release-tag: a newer commit on main is already released as $(git tag --contains HEAD --list "${prefix}[0-9]*" --sort=v:refname | head -1); this one gets no number" >&2
+    exit 3
   fi
   last=$(git tag --list "${prefix}[0-9]*" --sort=-v:refname | head -1)
   if [ -n "${NEXT_VERSION:-}" ] && [ "$attempt" = 1 ]; then

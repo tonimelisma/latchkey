@@ -1,0 +1,40 @@
+# Gives every change to the Mac app on main its release number: the tag mac-<x.y.z>
+# (scripts/release-tag.sh), pushed with the workflow's own token (a cloud session's proxy refuses
+# tag pushes). The Mac's updater (macos/scripts/auto-update.sh) builds and installs only commits
+# carrying such a tag, so this job, in the environment "release" (where the owner can require an
+# approval), is also the gate for what the Mac installs. Also on repository_dispatch "mac-tag".
+name: mac tag
+on:
+  push:
+    branches: [main]
+    paths: ["macos/**"]
+  repository_dispatch:
+    types: [mac-tag]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: release-mac
+  cancel-in-progress: false
+jobs:
+  tag:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: release
+    permissions:
+      contents: write # the tag
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # release-tag.sh reads the tags and main's history
+      - name: Tag this commit mac-<next number>
+        env:
+          RELEASE_TAG_ON_MAIN: "1"
+        run: |
+          rc=0
+          version=$(scripts/release-tag.sh mac-) || rc=$?
+          case $rc in
+            0) echo "Tagged mac-$version" | tee -a "$GITHUB_STEP_SUMMARY" ;;
+            3) echo "A newer commit already has a Mac release number; nothing to tag" | tee -a "$GITHUB_STEP_SUMMARY" ;;
+            *) exit "$rc" ;;
+          esac

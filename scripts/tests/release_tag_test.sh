@@ -91,4 +91,27 @@ is "a number taken meanwhile is refused by GitHub and the next one is used" "$go
 is "the taken number still points at a's commit" "$(tag_of mac-0.8.13)" "$(g -C "$work/b" rev-parse HEAD~1)"
 is "the new number points at b's commit" "$(tag_of mac-0.8.14)" "$(g -C "$work/b" rev-parse HEAD)"
 
+# --- the workflows: a commit on main that main has moved past ---
+g -C "$work/a" pull -q origin main
+commit a seven
+behind=$(g -C "$work/a" rev-parse HEAD)
+commit a eight
+g -C "$work/a" checkout -q --detach "$behind"
+is "without RELEASE_TAG_ON_MAIN, a commit behind main gets no number" "$(release a mac-)" ""
+got=$(cd "$work/a" && RELEASE_TAG_ON_MAIN=1 scripts/release-tag.sh mac- 2>"$work/err")
+is "with it, a commit on main but behind its tip gets the next number" "$got" "0.8.15"
+is "on that commit" "$(tag_of mac-0.8.15)" "$behind"
+g -C "$work/a" checkout -q main && g -C "$work/a" pull -q origin main
+commit a nine
+older=$(g -C "$work/a" rev-parse HEAD)
+commit a ten
+is "the tip is released" "$(release a mac-)" "0.8.16"
+g -C "$work/a" checkout -q --detach "$older"
+got=$(cd "$work/a" && RELEASE_TAG_ON_MAIN=1 scripts/release-tag.sh mac- 2>"$work/err"; echo "exit $?")
+is "a commit older than a released one gets no number (exit 3)" "$got" "exit 3"
+echo local >>"$work/a/file.txt"
+g -C "$work/a" commit -q -am "off main"
+got=$(cd "$work/a" && RELEASE_TAG_ON_MAIN=1 scripts/release-tag.sh mac- 2>"$work/err"; echo "exit $?")
+is "a commit that isn't on main gets no number even so" "$got" "exit 1"
+
 [ "$fails" -eq 0 ] && echo "release_tag_test: all passed" || { echo "release_tag_test: $fails failed"; exit 1; }

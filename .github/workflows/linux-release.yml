@@ -1,0 +1,61 @@
+# Publishes the Linux program (spec 010 plan D12) after every change to linux/ reaches main, or
+# when a session asks with repository_dispatch "linux-release" (a cloud session's proxy refuses tag
+# pushes and release writes, so they happen here). The release job tags the commit
+# linux-<x.y.z> (scripts/release-tag.sh), builds both architectures, signs them with the
+# repository secret SERVER_SIGNING_KEY, and publishes them with SHA256SUMS and install.sh.
+# Installed servers (purkki among them) find it themselves within a day and check each download's
+# signature against the key built into the program; no workflow ever reaches a server.
+# The release job runs in the environment "release", where the owner can require an approval.
+name: linux release
+on:
+  push:
+    branches: [main]
+    paths: ["linux/**"]
+  repository_dispatch:
+    types: [linux-release]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: release-linux
+  cancel-in-progress: false
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: linux
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
+        with:
+          go-version-file: linux/go.mod
+          cache-dependency-path: linux/go.sum
+      - name: Lint
+        run: make lint
+      - name: Test
+        run: make test
+  release:
+    needs: checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: release
+    permissions:
+      contents: write # the tag and the release
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # release-tag.sh reads the tags and main's history
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
+        with:
+          go-version-file: linux/go.mod
+          cache-dependency-path: linux/go.sum
+      - name: Tag, build, sign, publish
+        env:
+          SERVER_SIGNING_KEY: ${{ secrets.SERVER_SIGNING_KEY }}
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG_ON_MAIN: "1"
+        run: sh linux/scripts/release.sh
