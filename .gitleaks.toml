@@ -18,3 +18,7 @@ regexes = ['''GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ''']
 [[allowlists]]
 description = "A repository name (owner/name), not a key, in a deleted setup script's history"
 regexes = ['''^tonimelisma/latchkey$''']
+
+[[allowlists]]
+description = "Sparkle's public update key (EdDSA public half; public by design, spec 001 FR-072)"
+regexes = ['''taGyPBum8bkweq78chQL0mQhqfMc9jrnXd564\+e\+adE=''']
