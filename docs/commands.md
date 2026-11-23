@@ -45,7 +45,8 @@ Linux server program (run in `linux/`, its own Go module; spec 010):
 - `make release`: build, sign (`SERVER_SIGNING_KEY` in `.env`), tag the commit (must be origin/main)
   `linux-<next number>` and publish it there (every increment ships)
 
-Screen states (`macos/scripts/state-check/`): `state-check.sh run|wait|report <folder outside the
+Screen states (`macos/scripts/state-check/`; not run for now: no test sessions against Toni's
+real data, 2026-11-23, end-to-end testing is a backlog item): `state-check.sh run|wait|report <folder outside the
 repo>` tries every use case in `cases.json` through the hosted relay with real Claude Code, in
 the screen state the Mac is in (unlocked, locked, lid closed; Toni dropped display asleep but unlocked, 2026-11-04); `report` writes
 `docs/use-cases.md`. Each run also logs what took focus, raised a window, moved the pointer, or

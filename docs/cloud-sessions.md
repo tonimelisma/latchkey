@@ -105,28 +105,5 @@ applies, except:
   tries again 15 minutes later; a failed install, after 6 hours or on the next request.
 - Screenshots of the Mac app: `computer_look`, only while the Mac is unlocked, and never acting
   in the user's windows (above).
-- Live checks (CLAUDE.md, "Every finished batch ships", 7) come after the new version runs: the
-  relay's image workflow and the hosted server's switch to it, the Mac's updater
-  ("installed Latchkey <x.y.z>" in its status). A session's Latchkey connector keeps the tool
-  list it started with, so the check runs in a session started after that: a fresh cloud
-  session from claude.ai (which has Toni's connectors; `claude --cloud` sessions have none), for
-  example one this session creates with the prompt below. It runs the cases itself, one group
-  at a time, with its own Latchkey tools:
-  1. The screen state, before and after each group, through `shell_run` (it answers locked
-     too): `cd "$LATCHKEY_SCRATCH" && git clone -q --depth 1 https://github.com/tonimelisma/latchkey.git lk &&
-     swift lk/macos/scripts/state-check/screen-state.swift` (one word: unlocked, locked,
-     lid_closed, lid_closed_locked).
-  2. What disturbed the person at the Mac: a `shell_run` job with `keep_minutes` that compiles
-     and runs `focus-watch.swift` from the same clone (`swiftc -O -o fw … && ./fw`), read with
-     `shell_check` at the end; a focus change during a group is a finding (Constitution IV).
-  3. The cases: `state-check.sh prompt <group> "Latchkey check $(date +%m%d-%H%M) <state>"
-     "<machine>"` here (needs `LATCHKEY_CHECK_TO`) prints exactly what `claude -p` would get; do
-     what it says with this session's Latchkey tools and end with its JSON block.
-  4. File it: save the reply and `state-check.sh record <results dir> <state> <group> <reply
-     file> <before> <after> <from> <to>`; after the groups, the `sweep` group the same way (it
-     removes every test item by the tag's start, "Latchkey check", and must report all works),
-     then `state-check.sh merge <results dir> <state> <app version>` and, for a refresh of
-     `docs/use-cases.md`, `state-check.sh report <results dir>`. The results folder is outside
-     the repository (the scratchpad).
-  The rows this verifies are those of the screen state it ran in, quoted with the app's version
-  and the time ("Done means Toni's conditions").
+- No live checks: Claude starts no test sessions against Toni's real data (Toni, 2026-11-23).
+  How to test end to end, and how to run evals, is a backlog item (`docs/STATUS.md`).
