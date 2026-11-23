@@ -27,14 +27,14 @@ Toni because he is a user too. Other users' reports never reach the developer.
 ### US1 (P1): I choose whether my problem reports go to the developer
 1. Given a new install, then sharing is Off, and Claude sees no `feedback` tool and is never
    asked to file reports.
-2. Given I turn sharing on, then the screen says what is sent, what is masked, who can read it,
-   and that I can turn it off at any time.
+2. Given I turn sharing on, then the screen says what is sent, that Claude is told to leave my
+   secrets out, who can read it, and that I can turn it off at any time.
 3. Given I turn it off, then nothing more is sent, and reports not yet delivered are dropped.
 
 ### US2 (P1): Claude reports what didn't work, without my secrets
 1. Given sharing is on and a tool fails, then the answer reminds Claude to file a report.
-2. Given Claude files a report that contains a verification code or a card number, then the
-   report that leaves the relay shows it masked.
+2. Given Claude files a report, then it describes what failed without my passwords, codes, or
+   full numbers: my own Claude decides what goes in, as it decides everything else it does.
 3. Given my Mac is offline, then filing still works.
 
 ### US3 (P1): The developer's agent works through the reports
@@ -55,8 +55,8 @@ Toni because he is a user too. Other users' reports never reach the developer.
 - **FR-1401** While sharing is Off, Claude shall not see the `feedback` tool, nor any
   instruction or answer line about it (Constitution III).
 - **FR-1402** When the Owner turns sharing on, the app shall say, before it takes effect, what a
-  report holds, what is masked, that only the developer can read it, and that it can be turned
-  off at any time.
+  report holds, that Claude writes it and is told to leave secrets out, that only the developer
+  can read it, and that it can be turned off at any time.
 - **FR-1403** The setting shall belong to the account on its relay (the relay answers
   `feedback`); the Mac app sets it. Turning it off shall drop the account's reports not yet
   delivered.
@@ -71,10 +71,13 @@ Toni because he is a user too. Other users' reports never reach the developer.
 ### Filing
 - **FR-1410** The relay shall answer `feedback` itself (summary, details, optionally the machine),
   whether or not any machine is online.
-- **FR-1411** Before a report leaves the relay, verification codes, runs of 8 or more digits, and
-  anything shaped like a password or a key shall be masked. Claude's instructions shall also ask
-  it never to put codes, passwords, or full numbers in a report.
-- **FR-1412** A shared report shall hold: the summary and details (masked), the Claude app, the
+- **FR-1411** The `feedback` tool's description shall tell Claude that the report goes to
+  Latchkey's developer and must not contain passwords, verification codes, full account or card
+  numbers, message or email texts, or anything else private that the problem doesn't need. The
+  relay doesn't inspect or change what Claude wrote: the user's own Claude is trusted with what
+  it submits, as with everything else it does (Toni, 2026-11-23; Constitution X). Withdrawn idea:
+  masking on the relay (pattern matching misses and mangles).
+- **FR-1412** A shared report shall hold: the summary and details as Claude wrote them, the Claude app, the
   relay's and the machine's Latchkey versions, the machine's system version and screen state
   (locked or not), and a reporter tag that groups one account's reports without identifying it
   (it differs per relay and can't be reversed). It shall hold no account, email address,
@@ -120,6 +123,6 @@ Toni because he is a user too. Other users' reports never reach the developer.
 - **SC-1401** With sharing Off, no `feedback` tool and no line about it appears (test suite).
 - **SC-1402** A report filed with sharing on reaches the intake encrypted; the relay's database
   and the intake's hold no readable report at any time (test suite).
-- **SC-1403** A report holding "Your code is 123456" and a 16-digit number arrives masked (test).
+- **SC-1403** The `feedback` tool's description names what must stay out of a report (test).
 - **SC-1404** The developer's agent lists, opens, and dispositions reports with no user's machine
   or relay involved.

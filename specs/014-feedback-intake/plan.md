@@ -19,8 +19,8 @@ relay sees every answer, so no Mac change is needed).
 
 ## D3. Filing on the relay (FR-1410 to FR-1416)
 
-`feedback` is answered by the relay as today. It builds the report of FR-1412, masks it
-(`research.md`), seals it with `crypto/hpke` to the configured developer key, finds the proof of
+`feedback` is answered by the relay as today, its description saying what must stay out of a
+report (FR-1411). It builds the report of FR-1412 from what Claude wrote, unchanged, seals it with `crypto/hpke` to the configured developer key, finds the proof of
 work, and stores only the sealed bytes in an outbox table (`id`, `sealed`, `created`, `tries`).
 A sender goroutine posts each to the intake with backoff, deletes it on acceptance, and deletes
 it after 7 days with a log line. The relay's own report table and the delivery to the Mac
@@ -53,7 +53,7 @@ security checks, tests, signed image through a workflow like `relay-image.yml`):
 
 ## D6. Tests
 
-- Relay: tool absent and no line with the flag off; masking cases; the outbox never holds
+- Relay: tool absent and no line with the flag off; the description names what stays out; the outbox never holds
   plaintext (the database is searched for the report's words); retry, acceptance, and the 7-day
   drop; turning sharing off drops waiting reports.
 - Intake: refuses big, unproven, malformed, and over-limit bodies; the developer endpoints need
