@@ -5,7 +5,7 @@ extension BrowserCapability {
     /// Runs one call with what it asked for (FR-445, FR-447): the page it names, and whether it
     /// names one of the owner's tabs, which it picks first.
     static func asked(
-        _ args: JSONValue, _ ops: Operations, browser: SafariBrowser, own: OwnPages,
+        _ args: JSONValue, _ ops: Operations, browser: SafariBrowser, own: OwnPages, opening: Bool = false,
         _ body: @escaping @Sendable () async -> ToolResult
     ) async -> ToolResult {
         let page: String?
@@ -19,16 +19,26 @@ extension BrowserCapability {
         await own.forgetCopiesIfUnlocked()
         // FR-455: a page of Claude's that is a Safari tab of Claude's is worked in through its own
         // driver (not when the call names one of the owner's tabs).
-        let safari = tab == nil ? await own.safariCalled(page) : nil
+        // A url without page opens a new page: never the only page open, which may be another
+        // chat's (a Procare sync's url loaded into a claude.ai page of another chat, 2026-11-22).
+        let safari = tab == nil && !(opening && page == nil) ? await own.safariCalled(page) : nil
         return await Asked.$page.withValue(page) {
             await Asked.$tab.withValue(tab != nil) {
                 await Asked.$safari.withValue(safari?.browser) {
                     await Asked.$safariName.withValue(safari?.name) {
-                        if let tab {
-                            let picked = await ops.call("browser_tabs", .object(["select": tab]))
-                            if picked.isError { return picked }
+                        guard let tab else { return await body() }
+                        // The pick and the action are one turn: another chat's pick can't come
+                        // in between (a click meant for one tab landed in another chat's tab,
+                        // 2026-11-19). Waited for at most 15 s, within the tool's 30 s.
+                        guard await browser.turns.enter(within: .seconds(15)) else {
+                            return .text(
+                                "Another chat is working in the owner's Safari tabs right now, so nothing was done. Call again in a moment.",
+                                isError: true)
                         }
-                        return await body()
+                        let picked = await ops.call("browser_tabs", .object(["select": tab]))
+                        let r = picked.isError ? picked : await body()
+                        await browser.turns.leave()
+                        return r
                     }
                 }
             }
@@ -87,8 +97,23 @@ extension BrowserCapability {
                         } else {
                             rest = args
                         }
-                        return await asked(rest, ops, browser: browser, own: own) {
-                            await ops.call("browser_open", rest)
+                        return await asked(rest, ops, browser: browser, own: own, opening: true) {
+                            let opened = await ops.call("browser_open", rest)
+                            // screenshot with url: the new page's picture too (2026-11-22: only
+                            // its text came back).
+                            guard args["screenshot"] == .bool(true), !opened.isError,
+                                let name = BrowserCapability.pageName(in: opened)
+                            else { return opened }
+                            var shot = rest
+                            if case .object(var o) = shot {
+                                o["page"] = .string(name)
+                                o["url"] = nil
+                                shot = .object(o)
+                            }
+                            let picture = await asked(shot, ops, browser: browser, own: own) {
+                                await ops.call("browser_screenshot", shot)
+                            }
+                            return picture.isError ? opened : picture
                         }
                     }
                     if args["tabs"] == .bool(true), args["tab"]?.isPresent != true {

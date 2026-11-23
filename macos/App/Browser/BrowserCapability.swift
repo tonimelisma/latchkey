@@ -36,6 +36,20 @@ enum BrowserCapability {
     /// owner's tabs' (FR-424).
     static func here(_ owner: SafariBrowser) -> SafariBrowser { Asked.safari ?? owner }
 
+    /// The name of the page an answer is from, as its own first line (never the page's text,
+    /// which follows) says: "From …: Claude's page "p4k2"".
+    static func pageName(in r: ToolResult) -> String? {
+        guard case .array(let parts) = r.content, case .object(let first)? = parts.first,
+            let text = first["text"]?.stringValue
+        else { return nil }
+        for line in text.split(separator: "\n", maxSplits: 3).prefix(3) where line.hasPrefix("From ") {
+            guard let start = line.range(of: "Claude's page \"") else { continue }
+            let name = line[start.upperBound...].prefix { $0 != "\"" }
+            if name.count == 5, name.allSatisfy({ OwnPages.alphabet.contains($0) }) { return String(name) }
+        }
+        return nil
+    }
+
     /// FR-455: the first line of an answer from a Safari tab of Claude's.
     static func safariLine(_ name: String) -> String {
         "From a Safari tab of Claude's, in the owner's Safari (signed in as the owner), in the background: Claude's page \"\(name)\". Pass page \"\(name)\" to keep working in it (other chats may have pages too)."

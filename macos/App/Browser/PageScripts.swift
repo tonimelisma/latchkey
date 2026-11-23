@@ -13,6 +13,8 @@ enum PageScripts {
         var offset = 0
         var text: String
         var elements: [Element]
+        /// Things to act on past the page's 400 listed.
+        var unlisted = 0
 
         init(title: String, url: String, total: Int, offset: Int = 0, text: String, elements: [Element]) {
             self.title = title
@@ -23,7 +25,7 @@ enum PageScripts {
             self.elements = elements
         }
 
-        private enum CodingKeys: String, CodingKey { case title, url, total, offset, text, elements }
+        private enum CodingKeys: String, CodingKey { case title, url, total, offset, text, elements, unlisted }
 
         init(from decoder: any Decoder) throws {
             let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -33,6 +35,7 @@ enum PageScripts {
             offset = try c.decodeIfPresent(Int.self, forKey: .offset) ?? 0
             text = try c.decode(String.self, forKey: .text)
             elements = try c.decode([Element].self, forKey: .elements)
+            unlisted = try c.decodeIfPresent(Int.self, forKey: .unlisted) ?? 0
         }
     }
 
@@ -227,8 +230,22 @@ enum PageScripts {
           \(deep)
           var root = document.documentElement;
           var next = parseInt(root.getAttribute('data-latchkey-next') || '1', 10);
-          var sel = 'a[href], button, input:not([type=hidden]), textarea, select, summary, [role=button], [role=link], [role=tab], [role=menuitem], [role=checkbox], [role=option], [contenteditable=true], [role=combobox], [role=listbox], [role=menu], [role=radio], [role=switch], [aria-haspopup]';
+          // A link with no address is a button by script (Citi's Sign Off, 2026-11-22).
+          var sel = 'a[href], a:not([href]), button, input:not([type=hidden]), textarea, select, summary, [role=button], [role=link], [role=tab], [role=menuitem], [role=checkbox], [role=option], [contenteditable=true], [role=combobox], [role=listbox], [role=menu], [role=radio], [role=switch], [aria-haspopup]';
           var nodes = __lkAll(sel), out = [];
+          // What an open menu or dialog shows goes first, so the 400-item cap never hides it
+          // (Etsy's opened "You" menu with its Sign out, 2026-11-22).
+          var opened = [];
+          Array.prototype.slice.call(document.querySelectorAll('[aria-expanded=true][aria-controls]'), 0, 50).forEach(function (b) {
+            (b.getAttribute('aria-controls') || '').split(/\s+/).slice(0, 4).forEach(function (id) {
+              var t = id && document.getElementById(id);
+              if (t) opened.push(t);
+            });
+          });
+          Array.prototype.slice.call(document.querySelectorAll('[role=menu], [role=dialog], dialog[open], [popover]'), 0, 50).forEach(function (t) { opened.push(t); });
+          function inOpened(x) { for (var k = 0; k < opened.length; k++) if (opened[k].contains(x)) return true; return false; }
+          if (opened.length) nodes = nodes.filter(inOpened).concat(nodes.filter(function (x) { return !inOpened(x); }));
+          var unlisted = 0;
           function shortText(x) { return (x.innerText || x.textContent || '').replace(/\\s+/g, ' ').trim().slice(0, 40); }
           // What a collapsed button opens (aria-expanded false, aria-controls): GitHub's two-factor
           // "More options" list, hidden by its CSS, not a <details> (2026-11-22, 0.8.223).
@@ -240,7 +257,8 @@ enum PageScripts {
               if (t && !t.contains(b)) collapsed.push({ button: b, body: t });
             });
           });
-          for (var i = 0; i < nodes.length && out.length < 400; i++) {
+          for (var i = 0; i < nodes.length; i++) {
+            if (out.length >= 400) { unlisted++; continue; }
             var e = nodes[i], r = e.getBoundingClientRect(), st = getComputedStyle(e);
             // A file field is listed also when the page hides it behind a button of its own (FR-437).
             var fileField = e.tagName === 'INPUT' && (e.type || '').toLowerCase() === 'file' && !e.disabled;
@@ -259,6 +277,8 @@ enum PageScripts {
               }
             }
             if (!fileField && !closedMenu && (st.display === 'none' || st.visibility === 'hidden' || (r.width === 0 && r.height === 0))) continue;
+            // A link without an address and without words is an anchor, not a button.
+            if (e.tagName === 'A' && !e.hasAttribute('href') && !(e.innerText || e.getAttribute('aria-label') || '').trim()) continue;
             var ref = e.getAttribute('data-latchkey');
             if (!ref) { ref = 'e' + (next++); e.setAttribute('data-latchkey', ref); }
             var tag = e.tagName.toLowerCase(), type = (e.getAttribute('type') || 'text').toLowerCase();
@@ -319,8 +339,8 @@ enum PageScripts {
             found++;
           }
           root.setAttribute('data-latchkey-next', String(next));
-          var text = (document.body && document.body.innerText) || '';
-          return JSON.stringify({ title: document.title, url: location.href, total: text.length, offset: offset, text: text.slice(offset, offset + max), elements: out });
+          var text = ((document.body && document.body.innerText) || '') + __lkFrameText();
+          return JSON.stringify({ title: document.title, url: location.href, total: text.length, offset: offset, text: text.slice(offset, offset + max), elements: out, unlisted: unlisted });
         })(\(max(offset, 0)), \(pageSize))
         """
     }
@@ -343,9 +363,27 @@ enum PageScripts {
               var x = all[j];
               if (x.matches(sel)) out.push(x);
               if (x.shadowRoot) walk(x.shadowRoot);
+              // A frame of the same site, as its page shows it (Chase's sign-in form, 2026-11-22);
+              // another site's frame can't be read and stays out.
+              if (x.tagName === 'IFRAME' || x.tagName === 'FRAME') {
+                var d = null;
+                try { d = x.contentDocument; } catch (err) { d = null; }
+                if (d && d.documentElement) walk(d);
+              }
             }
           })(document);
           return out;
+        }
+        function __lkFrameText() {
+          var t = '';
+          var fs = __lkAll('iframe, frame');
+          for (var j = 0; j < fs.length && j < 20; j++) {
+            var d = null;
+            try { d = fs[j].contentDocument; } catch (err) { d = null; }
+            var r = fs[j].getBoundingClientRect();
+            if (d && d.body && r.width > 0 && r.height > 0) t += '\n' + (d.body.innerText || '');
+          }
+          return t;
         }
         function __lkFind(sel) { return document.querySelector(sel) || __lkAll(sel)[0] || null; }
 
@@ -433,7 +471,13 @@ enum PageScripts {
             if (!o) return 'nooption';
             e.value = o.value;
           } else if (e.isContentEditable) {
-            e.textContent = text;
+            // As typing would, through the editor (claude.ai's prompt box, 2026-11-23: text set
+            // directly was dropped by its editor, which then sent nothing).
+            var sel = window.getSelection(), range = document.createRange();
+            range.selectNodeContents(e);
+            sel.removeAllRanges();
+            sel.addRange(range);
+            if (!document.execCommand('insertText', false, text)) e.textContent = text;
           } else {
             var proto = e.tagName === 'TEXTAREA' ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
             Object.getOwnPropertyDescriptor(proto, 'value').set.call(e, text);
@@ -442,7 +486,12 @@ enum PageScripts {
           e.dispatchEvent(new Event('change', { bubbles: true }));
           if (submit) {
             if (e.form) { if (e.form.requestSubmit) e.form.requestSubmit(); else e.form.submit(); }
-            else e.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true, composed: true }));
+            else {
+              // Enter as a keyboard gives it: down, press, up.
+              ['keydown', 'keypress', 'keyup'].forEach(function (k) {
+                e.dispatchEvent(new KeyboardEvent(k, { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true, cancelable: true, composed: true }));
+              });
+            }
           }
           return 'ok';
         })(\(literal(text)), \(submit))
@@ -533,8 +582,12 @@ enum PageScripts {
     /// The function bodies to try for Claude's script: as one expression whose value is
     /// returned, then as written (statements ending in `return`). A body that isn't valid
     /// JavaScript fails to start, and the next is tried.
+    /// Which ones are valid is decided by JavaScriptCore's syntax check here, never by what the
+    /// page answers (`.claude/rules/secrets-and-pages.md`, 1): in Safari an invalid body made
+    /// AppleScript fail ("The variable theAnswer is not defined") before the next was tried, so
+    /// await and statements failed in Safari tabs; and a `return` inside a function (an async
+    /// arrow's) no longer hides the value of the expression around it (2026-11-22).
     static func asyncBodies(_ code: String) -> [String] {
-        if code.range(of: #"\breturn\b"#, options: .regularExpression) != nil { return [code] }
         var one = code.trimmingCharacters(in: .whitespacesAndNewlines)
         while one.hasSuffix(";") { one.removeLast() }
         var bodies = ["return (\n" + one + "\n);"]
@@ -544,7 +597,9 @@ enum PageScripts {
             if !tail.isEmpty { bodies.append(head + "\nreturn (\n" + tail + "\n);") }
         }
         bodies.append(code)
-        return bodies
+        let valid = bodies.filter { SyntaxCheck.valid("(async function () {\n" + $0 + "\n})") }
+        // None valid: as written, so the page's own error says what is wrong.
+        return valid.isEmpty ? [code] : valid
     }
 
     /// Where the last top-level statement starts: after the last `;` or line break outside

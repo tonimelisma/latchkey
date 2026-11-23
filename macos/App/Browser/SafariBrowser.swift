@@ -114,6 +114,8 @@ struct TabSurvey: Equatable {
 /// listed, and read and acted in when a call names one (FR-424 to FR-431, FR-447). Claude's own
 /// pages are Latchkey's own browser's (FR-444, `OwnPages`), never Safari's.
 actor SafariBrowser {
+    /// Calls that name one of the owner's tabs pick it and act on it as one turn (2026-11-19).
+    nonisolated let turns = OneAtATime()
     enum Failure: Error, Equatable {
         /// No tab of the Owner's is picked (or Latchkey's own page isn't open).
         case noWindow
@@ -360,10 +362,9 @@ actor SafariBrowser {
 
     func run(_ code: String, answer: DialogAnswer = DialogAnswer()) async throws -> String {
         beginAction()
-        if !PageScripts.usesAwait(code), !PageScripts.returnsOutsideFunction(code) {
-            let out = try await javaScript(PageScripts.custom(code), answer: answer)
-            if !PageScripts.evalRefused(out) { return out }
-        }
+        // Always as spliced code in an async function, never through the page's eval: a page's
+        // policy may forbid eval, or the page may replace it (Amex: "eval is disabled",
+        // 2026-11-19), and the answer never depends on what the page says about it.
         return try await runAsync(code, answer: answer)
     }
 
@@ -1134,6 +1135,12 @@ actor SafariBrowser {
                 + """
                 if waiting then error "LATCHKEY_DIALOG_WAITING"
                 set theAnswer to do JavaScript theCode in t
+                -- A script whose value is undefined gives no result at all: theAnswer is then unset.
+                try
+                theAnswer
+                on error
+                set theAnswer to ""
+                end try
                 if theAnswer is missing value then set theAnswer to ""
                 set theGoal to ""
                 set theNothing to quote & quote

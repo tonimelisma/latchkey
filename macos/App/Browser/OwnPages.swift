@@ -84,13 +84,30 @@ final class OwnPages {
         }
     }
 
-    /// A new page, not yet showing anything; refused when `limit` are open (FR-446).
-    func make() throws -> LockedBrowser {
-        guard pages.count < limit else {
-            throw Problem.full(
-                "\(limit) pages of Claude's are open, the most at once, so no new one was opened. Close one with browser_act (action close, page), or open the address in one of them with browser_read (url and page).\n\n"
-                    + listing())
+    /// How long a page must go unused before a new page may take its place when `limit` are
+    /// open (Toni, 2026-11-23: "Close the oldest idle"; FR-446a). Pages of finished chats filled
+    /// the limit eleven times on 2026-11-22, and chats then closed each other's pages.
+    static let idleBeforeReplaced: TimeInterval = 300
+
+    /// With `limit` pages open, closes the one unused longest if no one has used it for
+    /// `idleBeforeReplaced`; else refuses with the list (FR-446).
+    func makeRoom(now: Date = Date()) throws {
+        guard pages.count >= limit else { return }
+        if let oldest = order.min(by: { (pages[$0]?.used ?? now) < (pages[$1]?.used ?? now) }),
+            let used = pages[oldest]?.used, now.timeIntervalSince(used) >= Self.idleBeforeReplaced
+        {
+            close(oldest)
+            record("Closed Claude's page \(oldest), unused for \(Int(now.timeIntervalSince(used) / 60)) minutes, for a new page")
+            return
         }
+        throw Problem.full(
+            "\(limit) pages of Claude's are open, the most at once, and each was used in the last \(Int(Self.idleBeforeReplaced / 60)) minutes, so no new one was opened. Close one of yours with browser_act (action close, page), or open the address in one of yours with browser_read (url and page); don't close another chat's.\n\n"
+                + listing())
+    }
+
+    /// A new page, not yet showing anything; with `limit` open, the oldest idle one gives way (FR-446a).
+    func make() throws -> LockedBrowser {
+        try makeRoom()
         if store == nil {
             let s = WKWebsiteDataStore.nonPersistent()
             store = s
@@ -136,11 +153,7 @@ final class OwnPages {
             pages[name] = Entry(kind: .safari(safari), used: Date(), address: address)
             return name
         }
-        guard pages.count < limit else {
-            throw Problem.full(
-                "\(limit) pages of Claude's are open, the most at once, so no new one was opened. Close one with browser_act (action close, page), or open the address in one of them with browser_read (url and page).\n\n"
-                    + listing())
-        }
+        try makeRoom()
         let n = name ?? newName()
         pages[n] = Entry(kind: .safari(safari), used: Date(), address: address)
         order.append(n)

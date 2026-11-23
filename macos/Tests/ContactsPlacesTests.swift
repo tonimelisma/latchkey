@@ -608,6 +608,18 @@ final class FakePlaces: PlacesBackend, @unchecked Sendable {
         #expect(fake.lastSearchCenter == Coordinate(latitude: 37.5, longitude: -122.2))
     }
 
+    /// Toni, 2026-11-23 ("Only nearby, else none"): with near, a far place of a similar name is
+    /// left out, and nothing nearby is said as such ("BARC" near Ubud gave Basra, Iraq).
+    @Test func withNearOnlyNearbyPlaces() async throws {
+        let near = resultText(
+            try await tool("maps_find").handler(.object(["query": .string("coffee"), "near": .string("37.9,-122.06")])))
+        #expect(near.contains("Philz Coffee"), "1 km away: kept")
+        let far = try await tool("maps_find").handler(
+            .object(["query": .string("coffee"), "near": .string("-8.65,115.2")]))
+        #expect(far.isError && resultText(far).contains("within 50 km of"))
+        #expect(!resultText(far).contains("Philz"))
+    }
+
     @Test func givesDirectionsAndTransitTimes() async throws {
         let drive = resultText(try await tool("maps_find").handler(.object(["to": .string("SFO")])))
         #expect(drive.contains("Driving from the Mac to SFO, CA: 45 min, 42.0 km (26.1 mi) via I-680 S."))

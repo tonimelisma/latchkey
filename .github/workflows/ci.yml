@@ -95,5 +95,9 @@ jobs:
         run: |
           set -o pipefail
           xcodegen generate --quiet
+          rc=0
           xcodebuild -project Latchkey.xcodeproj -scheme Latchkey -destination 'platform=macOS' \
-            -derivedDataPath "$RUNNER_TEMP/dd" test -quiet 2>&1 | tail -150
+            -derivedDataPath "$RUNNER_TEMP/dd" test > "$RUNNER_TEMP/test.log" 2>&1 || rc=$?
+          grep -E "error:|Expectation failed|Fatal error|crashed|' failed |✘" "$RUNNER_TEMP/test.log" | head -300 || true
+          tail -40 "$RUNNER_TEMP/test.log"
+          exit "$rc"
