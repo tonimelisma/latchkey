@@ -30,9 +30,12 @@ Claude app (phone, web, desktop), can work with what's on your Mac:
 - **Command line:** run commands, as you, never as administrator, including builds with
   Xcode's and Swift's tools, and an app's tests when Claude says it will open apps (the tests
   then run outside the command's limits on where it may write, as an opened app does).
-- **Safari and the web:** open pages and read, click, type, upload, and download: sites you are
-  signed in to in a background Safari tab of Claude's (your real sign-in), other sites in a
-  hidden browser of Latchkey's own; and read and act in your own Safari tabs when you ask.
+- **Safari and the web:** open pages and read, click, type, upload, and download, in a hidden
+  browser of Latchkey's own that works in the background where you don't see it; when you ask
+  to watch, Claude opens the page in a background Safari tab of its own instead (your real
+  sign-in; you click the tab to watch). A file a page offers to save while Claude works in it
+  (a "Download" button) goes to your Downloads folder, as in Safari; a page can't save one on
+  its own. And Claude reads and acts in your own Safari tabs when you ask.
   Claude's Safari tabs close when Claude is done with them, after 30 minutes unused, or when
   Latchkey quits; your own tabs stay. Claude keeps at most 10 pages open; when all 10 are open,
   the one unused longest makes way for a new one once nobody has used it for 5 minutes. Two
@@ -139,11 +142,12 @@ apps. It works in the background instead.
   that browser asks to confirm something ("Remove item?"), Claude is shown the question and
   answers it; if it doesn't within 5 minutes, the page gets Cancel. Every answer says which
   browser it came from, and every answer from the Mac says whether it is locked or unlocked.
-- **Only while the Mac is unlocked:** web pages of sites you are signed in to, which open in a
-  background tab of Claude's at the end of your front Safari window, with your real sign-in, so
-  nothing is copied and nothing signs you out (your front tab stays in front; other sites open
-  in Latchkey's hidden browser, with none of your sign-ins, and sites it has your password for
-  open there too, signed in with its own session); your own Safari tabs (Claude reads
+- **Only while the Mac is unlocked:** pages you asked to watch, which open in a background tab of
+  Claude's at the end of your front Safari window, with your real sign-in, so nothing is copied
+  and nothing signs you out (your front tab stays in front). Every other page opens in
+  Latchkey's hidden browser, which while unlocked takes none of your Safari sign-ins (so Safari
+  stays signed in): Claude signs in there with a password Latchkey has saved, or moves the page
+  into a Safari tab of its own when the site needs your Safari sign-in; your own Safari tabs (Claude reads
   and acts in them in the background when you ask; Safari mostly stops answering while the Mac
   is locked); looking at the screen; computer control; handing your sign-ins over from
   Passwords (you click Export, and approve with Touch ID).

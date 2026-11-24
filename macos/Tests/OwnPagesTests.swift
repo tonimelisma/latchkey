@@ -255,7 +255,7 @@ import Testing
         let other = SafariBrowser(scripts: fake, settleLimit: .seconds(3))
         try await other.pick("10.2")
         let theirs = try p.adopt(other, address: "https://news.example.com/")
-        let r = await t["browser_read"]!.handler(.object(["url": .string("about:blank")]))
+        let r = await t["browser_look"]!.handler(.object(["url": .string("about:blank")]))
         #expect(!r.isError, "\(r.content.jsonText)")
         #expect(r.content.jsonText.contains("From Latchkey's own browser"), "a new page of its own")
         #expect(name(in: r) != theirs)
@@ -268,7 +268,7 @@ import Testing
         let p = OwnPages(cookies: { [] }, isLocked: { false })
         defer { p.closeAll() }
         let t = tools(fake, p)
-        let r = await t["browser_read"]!.handler(.object(["url": .string("about:blank"), "screenshot": .bool(true)]))
+        let r = await t["browser_look"]!.handler(.object(["url": .string("about:blank"), "screenshot": .bool(true)]))
         #expect(!r.isError, "\(r.content.jsonText)")
         #expect(r.content.jsonText.contains("\"image\""), "a picture, not only text")
         #expect(p.list().count == 1, "one page opened")
@@ -280,19 +280,19 @@ import Testing
         defer { p.closeAll() }
         let t = tools(fake, p)
         let tabsBefore = fake.windows.flatMap(\.tabs).count
-        let first = await t["browser_read"]!.handler(.object(["url": .string("about:blank")]))
+        let first = await t["browser_look"]!.handler(.object(["url": .string("about:blank")]))
         #expect(!first.isError, "\(first.content.jsonText)")
         #expect(first.content.jsonText.contains("From Latchkey's own browser"), "FR-443")
-        let second = await t["browser_read"]!.handler(.object(["url": .string("about:blank")]))
+        let second = await t["browser_look"]!.handler(.object(["url": .string("about:blank")]))
         let a = name(in: first)
         let b = name(in: second)
         #expect(a != nil && b != nil && a != b)
         #expect(fake.windows.flatMap(\.tabs).count == tabsBefore, "no tab of Claude's in Safari")
-        let unnamed = await t["browser_read"]!.handler(.object([:]))
+        let unnamed = await t["browser_look"]!.handler(.object([:]))
         #expect(unnamed.isError && unnamed.content.jsonText.contains(a ?? "?"), "several: refused with the list")
-        let named = await t["browser_read"]!.handler(.object(["page": .string(a ?? "")]))
+        let named = await t["browser_look"]!.handler(.object(["page": .string(a ?? "")]))
         #expect(!named.isError, "\(named.content.jsonText)")
-        let list = await t["browser_read"]!.handler(.object(["tabs": .bool(true)]))
+        let list = await t["browser_look"]!.handler(.object(["tabs": .bool(true)]))
         #expect(list.content.jsonText.contains(a ?? "?") && list.content.jsonText.contains(b ?? "?"), "FR-451")
     }
 
@@ -302,12 +302,12 @@ import Testing
         let p = OwnPages(cookies: { [] }, isLocked: { false })
         defer { p.closeAll() }
         let t = tools(fake, p)
-        let opened = await t["browser_read"]!.handler(.object(["url": .string("about:blank")]))
+        let opened = await t["browser_look"]!.handler(.object(["url": .string("about:blank")]))
         #expect(!opened.isError)
-        let tab = await t["browser_read"]!.handler(.object(["tab": .string("10.2")]))
+        let tab = await t["browser_look"]!.handler(.object(["tab": .string("10.2")]))
         #expect(!tab.isError && tab.content.jsonText.contains("tab 10.2"), "\(tab.content.jsonText)")
         let run = fake.windows[0].tabs[1].scriptsRun
-        let own = await t["browser_read"]!.handler(.object([:]))
+        let own = await t["browser_look"]!.handler(.object([:]))
         #expect(!own.isError && own.content.jsonText.contains("Latchkey's own browser"), "\(own.content.jsonText)")
         #expect(fake.windows[0].tabs[1].scriptsRun == run, "not the Owner's tab")
         let again = await t["browser_act"]!.handler(
@@ -321,7 +321,7 @@ import Testing
         let p = OwnPages(cookies: { [] }, isLocked: { false })
         defer { p.closeAll() }
         let t = tools(fake, p)
-        let opened = await t["browser_read"]!.handler(.object(["url": .string("about:blank")]))
+        let opened = await t["browser_look"]!.handler(.object(["url": .string("about:blank")]))
         let page = name(in: opened) ?? ""
         let act = await t["browser_act"]!.handler(
             .object([
@@ -341,27 +341,54 @@ import Testing
 }
 
 /// Serves one file over HTTP on 127.0.0.1, for a test of how Latchkey's own browser takes a file.
+/// `headers`: more response headers (each ending in \r\n); `mode`: the whole file, the head and
+/// half the file and then nothing more (a save still arriving), or half and then the connection
+/// closed (a save that fails). Counts the requests it answered.
 final class OneFileServer: @unchecked Sendable {
+    enum Mode: Sendable { case whole, stall, cut }
     private let listener: NWListener
     let port: UInt16
+    private let counted: Counter
+    var requests: Int { counted.value }
 
-    private init(listener: NWListener, port: UInt16) {
-        self.listener = listener
-        self.port = port
+    final class Counter: @unchecked Sendable {
+        private let lock = NSLock()
+        private var n = 0
+        var value: Int { lock.withLock { n } }
+        func add() { lock.withLock { n += 1 } }
     }
 
-    static func start(type: String, body: Data) async throws -> OneFileServer {
+    private init(listener: NWListener, port: UInt16, counted: Counter) {
+        self.listener = listener
+        self.port = port
+        self.counted = counted
+    }
+
+    static func start(type: String, body: Data, headers: String = "", mode: Mode = .whole) async throws
+        -> OneFileServer
+    {
         let params = NWParameters.tcp
         params.requiredLocalEndpoint = NWEndpoint.hostPort(host: "127.0.0.1", port: .any)
         let listener = try NWListener(using: params)
+        let counted = Counter()
         listener.newConnectionHandler = { @Sendable connection in
             connection.start(queue: .global())
             connection.receive(minimumIncompleteLength: 1, maximumLength: 65536) { @Sendable _, _, _, _ in
+                counted.add()
                 let head =
-                    "HTTP/1.1 200 OK\r\nContent-Type: \(type)\r\nContent-Length: \(body.count)\r\nConnection: close\r\n\r\n"
-                connection.send(
-                    content: Data(head.utf8) + body,
-                    completion: .contentProcessed { @Sendable _ in connection.cancel() })
+                    "HTTP/1.1 200 OK\r\nContent-Type: \(type)\r\nContent-Length: \(body.count)\r\n\(headers)Connection: close\r\n\r\n"
+                switch mode {
+                case .whole:
+                    connection.send(
+                        content: Data(head.utf8) + body,
+                        completion: .contentProcessed { @Sendable _ in connection.cancel() })
+                case .stall:
+                    connection.send(content: Data(head.utf8) + body.prefix(body.count / 2), completion: .idempotent)
+                case .cut:
+                    connection.send(
+                        content: Data(head.utf8) + body.prefix(body.count / 2),
+                        completion: .contentProcessed { @Sendable _ in connection.cancel() })
+                }
             }
         }
         let ready = AsyncStream<UInt16?> { continuation in
@@ -380,7 +407,7 @@ final class OneFileServer: @unchecked Sendable {
         listener.start(queue: .global())
         for await port in ready {
             guard let port else { break }
-            return OneFileServer(listener: listener, port: port)
+            return OneFileServer(listener: listener, port: port, counted: counted)
         }
         listener.cancel()
         throw SafariBrowser.Failure.failed("the test's server didn't start")

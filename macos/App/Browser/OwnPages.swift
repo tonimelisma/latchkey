@@ -102,7 +102,7 @@ final class OwnPages {
             return
         }
         throw Problem.full(
-            "\(limit) pages of Claude's are open, the most at once, and each was used in the last \(Int(Self.idleBeforeReplaced / 60)) minutes, so no new one was opened. Close one of yours with browser_act (action close, page), or open the address in one of yours with browser_read (url and page); don't close another chat's.\n\n"
+            "\(limit) pages of Claude's are open, the most at once, and each was used in the last \(Int(Self.idleBeforeReplaced / 60)) minutes, so no new one was opened. Close one of yours with browser_act (action close, page), or open the address in one of yours with browser_look (url and page); don't close another chat's.\n\n"
                 + listing())
     }
 
@@ -180,29 +180,6 @@ final class OwnPages {
     /// Notes the address a Safari page now shows, for the list.
     func noteAddress(_ name: String, _ address: String) { pages[name]?.address = address }
 
-    /// FR-455: whether the Owner is signed in to `host` in Safari, as far as Safari's cookie file
-    /// tells: a sign-in cookie (`CookieWatch.isSignIn`) for the site that lasts more than a day
-    /// (a bot-protection cookie lasts minutes). Reading more sites as signed in only opens them
-    /// in a Safari tab, which is safe.
-    func signedIn(_ host: String) -> Bool {
-        let site = host.lowercased()
-        let day = Date().addingTimeInterval(86400)
-        return cookies().contains {
-            LockedBrowser.covers($0.domain, site) && CookieWatch.isSignIn(name: $0.name, httpOnly: $0.httpOnly)
-                && $0.expires > day
-        }
-    }
-
-    /// FR-455, FR-457: whether a page of `url` opens in a Safari tab of Claude's: while the Mac is
-    /// unlocked, for a site the Owner is signed in to.
-    func inSafari(_ url: String) -> Bool {
-        guard !isLocked(), let host = URL(string: url)?.host(), !host.isEmpty else { return false }
-        // Spec 013 FR-1351: a site Latchkey signs in to itself stays in its own browser; Claude
-        // moves a page of it into Safari with sign_in_again (FR-1374).
-        if sessions?.isOwn(host) == true { return false }
-        return signedIn(host)
-    }
-
     /// FR-458: once the Mac is unlocked, the copies of Safari's cookies taken while it was locked
     /// are dropped, so no copy competes with Safari's own sign-ins while the Owner can use them.
     func forgetCopiesIfUnlocked() async {
@@ -238,7 +215,7 @@ final class OwnPages {
             let n = name.trimmingCharacters(in: .whitespaces).lowercased()
             guard var e = pages[n], e.browser != nil else {
                 throw Problem.none(
-                    "Claude has no page \"\(name.prefix(20))\" open (it may have been closed after 30 minutes unused, given way to a newer page after 5 minutes unused while 10 were open, or closed when Latchkey restarted). Open the address again with browser_read and url."
+                    "Claude has no page \"\(name.prefix(20))\" open (it may have been closed after 30 minutes unused, given way to a newer page after 5 minutes unused while 10 were open, or closed when Latchkey restarted). Open the address again with browser_look and url."
                         + (pages.isEmpty ? "" : "\n\n" + listing()))
             }
             e.used = Date()
@@ -247,7 +224,7 @@ final class OwnPages {
         }
         switch pages.count {
         case 0:
-            throw Problem.none("Claude has no page open. Open one with browser_read and url.")
+            throw Problem.none("Claude has no page open. Open one with browser_look and url.")
         case 1:
             return try page(order.last)
         default:

@@ -57,7 +57,7 @@ import Testing
             ActivityFormat.title(Self.entry("files_read", #"{"path":"~/notes.txt"}"#, failed: true))
                 == "\(time)  Files: ~/notes.txt (failed)")
         #expect(
-            ActivityFormat.title(Self.entry("browser_read", #"{"url":"https://example.com"}"#))
+            ActivityFormat.title(Self.entry("browser_look", #"{"url":"https://example.com"}"#))
                 == "\(time)  Browser: https://example.com")
         #expect(ActivityFormat.title(Self.entry("shell_check", "{}")) == "\(time)  Shell: check", "no target")
         let long = String(repeating: "a", count: 100)

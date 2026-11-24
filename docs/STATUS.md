@@ -62,6 +62,16 @@ widgets that move the focus, GitHub's real "More options" list, a toggle's state
 returns). Two Uber code texts couldn't be deleted (the window didn't show them); the next
 failure says why.
 
+## Problem reports of 2026-11-24 (0.8.235, Mac unlocked)
+
+Two reports from Toni's own chats; fixed on main with unit tests (GitHub's Mac runner) and a
+regression case each; no live run (Toni runs them).
+
+| Report | Cause | Fix (spec) | Live |
+|---|---|---|---|
+| A file a page offered to save in Latchkey's own browser opened the file's address instead, ending Claude's script; nothing reached Downloads | Latchkey's own browser had no download handling, so WebKit went to the address | Saved into Downloads during Claude's action, as Safari does; a page can't save on its own (spec 005 FR-475 to FR-477) | NOT VERIFIED |
+| Procare's sign-in in Latchkey's own browser came back unchanged with no error; Safari signed in at once | Procare's hidden robot check turns away the background browser and says nothing; Latchkey can't tell why | logins_fill's description says a site may say nothing and that Claude judges from the page, then moves it to Safari (spec 013 FR-1373); pages also default to the background browser now, Safari only to watch, tool renamed `browser_look` (spec 005 FR-474; Toni) | NOT VERIFIED |
+
 ## Feedback reports, 2026-11-17 to 2026-11-23 (sorted 2026-11-23)
 
 All 172 reports were read in full and checked against the code. 123 were already fixed (76),

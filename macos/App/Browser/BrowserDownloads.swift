@@ -66,6 +66,16 @@ enum BrowserDownloads {
             let ext = (out as NSString).pathExtension
             out = String(out.prefix(200 - ext.count - 1)) + (ext.isEmpty ? "" : "." + ext)
         }
+        // A file name is at most 255 bytes; room is left for " 99" (`free`).
+        while out.utf8.count > 240 {
+            let ext = (out as NSString).pathExtension
+            let base = (out as NSString).deletingPathExtension
+            guard !base.isEmpty else {
+                out = String(out.dropLast())
+                continue
+            }
+            out = String(base.dropLast()) + (ext.isEmpty ? "" : "." + ext)
+        }
         return out
     }
 
@@ -99,13 +109,45 @@ enum BrowserDownloads {
         throw SafariBrowser.Failure.failed("Latchkey couldn't save the file in \(folder.path).")
     }
 
-    /// Moves a file Latchkey downloaded itself into `folder` under a free name.
+    /// Moves a file Latchkey downloaded itself into `folder` under a free name; never over a file
+    /// that appears meanwhile (moveItem refuses an existing one, and the next free name is tried).
     static func move(_ file: URL, name: String, from address: String, in folder: URL = downloads) throws -> URL {
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-        let url = free(name, in: folder)
-        try FileManager.default.moveItem(at: file, to: url)
-        quarantine(url, from: address)
-        return url
+        var last: Error?
+        for _ in 0..<20 {
+            let url = free(name, in: folder)
+            do {
+                try FileManager.default.moveItem(at: file, to: url)
+                quarantine(url, from: address)
+                return url
+            } catch {
+                last = error
+                guard FileManager.default.fileExists(atPath: url.path) else { break }
+            }
+        }
+        throw last ?? SafariBrowser.Failure.failed("Latchkey couldn't save the file in \(folder.path).")
+    }
+
+    /// Where WebKit writes a page's save while it arrives (spec 005 FR-475): a hidden name of
+    /// Latchkey's own, new each time, so nobody else's file is ever written or removed.
+    static let stagingPrefix = ".latchkey-saving-"
+    static func stagingFile(in folder: URL) -> URL {
+        folder.appending(path: stagingPrefix + UUID().uuidString + ".part")
+    }
+
+    /// Removes staging files left by a save that never ended (Latchkey quit or crashed): only
+    /// Latchkey's own names, older than an hour, and not one running now.
+    static func sweepStaging(in folder: URL, keeping running: Set<URL>, now: Date = Date()) {
+        let fm = FileManager.default
+        guard let names = try? fm.contentsOfDirectory(atPath: folder.path) else { return }
+        for n in names where n.hasPrefix(stagingPrefix) && n.hasSuffix(".part") {
+            let url = folder.appending(path: n)
+            guard !running.contains(where: { $0.lastPathComponent == n }),
+                let changed = (try? fm.attributesOfItem(atPath: url.path))?[.modificationDate] as? Date,
+                now.timeIntervalSince(changed) > 3600
+            else { continue }
+            try? fm.removeItem(at: url)
+        }
     }
 
     /// The quarantine mark browsers put on downloads (`com.apple.quarantine`).
