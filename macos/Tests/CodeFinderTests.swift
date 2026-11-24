@@ -122,9 +122,10 @@ import Testing
     /// still counts within the finder's own limit, which the tests set long.
     @Test func aReadThatStartsLateStillCountsWithinTheLimit() async {
         let f = finder()
+        let late = [M(id: "late", text: "Your code is 222222", date: Self.now)]
         f.texts = { _ in
             Thread.sleep(forTimeInterval: 11)
-            return [M(id: "late", text: "Your code is 222222", date: Self.now)]
+            return late
         }
         #expect(await f.find(site: "a.test", email: false, since: Self.now)?.id == "late")
     }
@@ -135,9 +136,10 @@ import Testing
         let gate = DispatchSemaphore(value: 0)
         let f = finder()
         f.readLimit = .milliseconds(100)
+        let never = [M(id: "never", text: "Your code is 222222", date: Self.now)]
         f.texts = { _ in
             gate.wait()
-            return [M(id: "never", text: "Your code is 222222", date: Self.now)]
+            return never
         }
         #expect(await f.find(site: "a.test", email: false, since: Self.now) == nil)
         gate.signal()
