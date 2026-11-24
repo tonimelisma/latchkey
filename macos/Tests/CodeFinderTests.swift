@@ -18,6 +18,8 @@ import Testing
         f.texts = { _ in texts }
         f.mail = { _ in mail }
         f.startMail = {}
+        // Long, so a busy test runner's wait for a thread can't decide a test (regression below).
+        f.readLimit = .seconds(600)
         return f
     }
 
@@ -112,23 +114,32 @@ import Testing
         #expect(await f.holding("444444", site: "a.test", since: Self.now) == Self.mailKey)
         #expect(await f.holding("999999", site: "a.test", since: Self.now) == nil)
     }
-}
 
-/// TEMPORARY diagnostic for the macOS runner (removed before merge).
-@MainActor @Suite struct CodeFinderDiagnosticTests {
-    @Test(arguments: 0..<6) func diagnosticTiming(_ n: Int) async {
-        let calledAt = Locked<ContinuousClock.Instant?>(nil)
-        let at = Date(timeIntervalSince1970: 1_800_000_000)
-        let f = CodeFinder()
-        f.textsOn = { true }
+    /// Regression (mac build on GitHub's macOS runner, 2026-11-24): the three tests above that
+    /// call `find` or `holding` failed on every run, though nothing in them was wrong. The runner
+    /// was so busy that the stand-in texts were read 21 to 31 s after the call (runs 45348160266,
+    /// 45348152855), past the 10 s limit, and the lookup answered nil. A read that waits past 10 s
+    /// still counts within the finder's own limit, which the tests set long.
+    @Test func aReadThatStartsLateStillCountsWithinTheLimit() async {
+        let f = finder()
         f.texts = { _ in
-            calledAt.mutate { $0 = $0 ?? ContinuousClock.now }
-            return [CodeFinder.Message(id: "t", text: "Your code is 222222", date: at)]
+            Thread.sleep(forTimeInterval: 11)
+            return [M(id: "late", text: "Your code is 222222", date: Self.now)]
         }
-        let start = ContinuousClock.now
-        let r = await f.find(site: "a.test", email: false, since: at)
-        let called = calledAt.value.map { "\($0 - start)" } ?? "never"
-        let took = ContinuousClock.now - start
-        Issue.record("DIAG \(n): took \(took), source called after \(called), result \(String(describing: r))")
+        #expect(await f.find(site: "a.test", email: false, since: Self.now)?.id == "late")
+    }
+
+    /// A read that never answers gives no code once the limit passes (Constitution II): the
+    /// stand-in is held until the lookup has answered, so no timing decides it.
+    @Test func aReadThatNeverAnswersGivesNothingAtTheLimit() async {
+        let gate = DispatchSemaphore(value: 0)
+        let f = finder()
+        f.readLimit = .milliseconds(100)
+        f.texts = { _ in
+            gate.wait()
+            return [M(id: "never", text: "Your code is 222222", date: Self.now)]
+        }
+        #expect(await f.find(site: "a.test", email: false, since: Self.now) == nil)
+        gate.signal()
     }
 }

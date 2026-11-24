@@ -93,6 +93,7 @@ import Testing
         f.texts = { _ in texts }
         f.mail = { _ in mail }
         f.startMail = {}
+        f.readLimit = .seconds(600)  // a busy runner's wait for a thread decides nothing (CodeFinderTests)
         let c = PendingCleanup(defaults: nil)
         let d = Deleted()
         c.deleter = { d.keys.append($0) }
