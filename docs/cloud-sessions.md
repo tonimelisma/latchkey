@@ -69,9 +69,9 @@ applies, except:
   values they read with `::add-mask::`, and the secrets are hidden by GitHub). No workflow and no
   identity ever reaches an installed Linux server: it only pulls signed Linux releases.
   Secrets are the owner's (CLAUDE.md, "Owner setup"); a session never handles a secret's value.
-- pilvi (the GCP VM of the hosted relay and of the feedback intake): anything that happens there
-  is done by pilvi's own agent, never by a session here or through Latchkey's shell (Toni,
-  2026-11-23). A session that needs something on pilvi writes a self-contained prompt for Toni to
+- The hosted relay's server (it also runs the feedback intake; run outside this repository):
+  anything that happens there is done by that server's own agent, never by a session here or
+  through Latchkey's shell (Toni, 2026-11-23). A session that needs something there writes a self-contained prompt for Toni to
   give that agent: the goal, the current state, the rules (no interruption, nothing secret
   written in public), what to check, and what to report back.
 - Mac app without the Mac: `mac-build.yml` lints and builds the app (gating) and runs the whole
