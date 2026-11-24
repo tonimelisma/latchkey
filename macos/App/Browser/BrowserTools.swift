@@ -51,14 +51,16 @@ extension BrowserCapability {
         return [
             ToolEntry(
                 tool: .make(
-                    "browser_read", title: "Read the Web",
+                    "browser_look", title: "Read the Web",
                     description: """
-                        Opens and reads web pages on the Mac. Claude's own pages: while the Mac is unlocked, a \
-                        site the owner is signed in to in Safari opens in a background Safari tab of Claude's \
-                        (the owner's real sign-in; the owner's front tab stays in front), and any other site in \
-                        Latchkey's own browser without the owner's sign-ins; while the Mac is locked, every page \
-                        is in Latchkey's own browser with a copy of Safari's sign-ins (a site may then sign the \
-                        owner out in Safari). Each answer says which. With url: opens that page in a new page of \
+                        Opens and reads web pages on the Mac. Claude's own pages open in Latchkey's own \
+                        browser, in the background, where nobody sees them: while the Mac is unlocked without \
+                        the owner's Safari sign-ins (type a saved sign-in with logins_fill, or move the page \
+                        into Safari with sign_in_again), while it is locked with a copy of Safari's sign-ins (a \
+                        site may then sign the owner out in Safari). Only when the owner asks to see what Claude \
+                        does, pass show_in_safari with url: the page opens in a background Safari tab of \
+                        Claude's in the owner's front window, signed in as the owner (the owner's front tab \
+                        stays in front; the owner clicks the tab to watch). Each answer says which. With url: opens that page in a new page of \
                         Claude's own and answers with its name, like p4k2; with url and page, opens it in that \
                         page. Pass page on every later call (other chats may have pages open \
                         too; with several open, a call without page is refused with the list). tabs: lists every \
@@ -83,6 +85,9 @@ extension BrowserCapability {
                             "Use this tab of the owner's: its reference from the tab list, like 4213.2"),
                         "tabs": .boolParam("List every tab of every Safari window, and Claude's own pages"),
                         "screenshot": .boolParam("Show the page as an image"),
+                        "show_in_safari": .boolParam(
+                            "With url, only when the owner asked to see what Claude does: open the page in a Safari tab of Claude's the owner can watch (Mac unlocked)"
+                        ),
                         "sign_in_again": .boolParam(
                             "Claude's page is signed out but needs the owner's sign-in: move it into Safari (unlocked) or take Safari's cookies again (locked)"
                         ),
@@ -150,7 +155,7 @@ extension BrowserCapability {
                     "browser_act", title: "Act on the Page",
                     description: """
                         Acts on a page, in the background, then answers with the page: Claude's own page (name \
-                        it with page, like p4k2, as browser_read gave it), or a tab of the owner's Safari (name \
+                        it with page, like p4k2, as browser_look gave it), or a tab of the owner's Safari (name \
                         it with tab on each call, like 4213.2). action: click (ref: a link or button), type \
                         (ref: a field, text; or a list and the option's text; submit sends the form), select \
                         (ref: a list, options: the texts to choose, several in a list that takes several), key \
@@ -174,10 +179,10 @@ extension BrowserCapability {
                         """,
                     input: [
                         "action": .enumParam(actions, "What to do"),
-                        "page": .stringParam("Claude's page, by the name browser_read gave, like p4k2"),
+                        "page": .stringParam("Claude's page, by the name browser_look gave, like p4k2"),
                         "tab": .stringParam(
                             "A tab of the owner's instead: its reference from the tab list, like 4213.2"),
-                        "ref": .stringParam("The element's reference from browser_read, like e12"),
+                        "ref": .stringParam("The element's reference from browser_look, like e12"),
                         "text": .stringParam("For type: the text, or the option to choose"),
                         "submit": .boolParam("For type: send the form afterwards"),
                         "code": .stringParam("For script: the JavaScript"),

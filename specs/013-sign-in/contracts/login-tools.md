@@ -20,7 +20,7 @@ Toni, 2026-11-22: "Fill-only tool". Latchkey types; Claude reads the page and de
 - Title: "Type a Saved Sign-in". Annotations: readOnly false, destructive false, openWorld true.
   Limit 30 s (one fill and one press; nothing waits for a code).
 - Input: `page` (Claude's page, like "p4k2"), `field` (required: the field's reference from
-  browser_read, like "e18"), `fill` (required: `user`, `password`, or `code`), `press` (the
+  browser_look, like "e18"), `fill` (required: `user`, `password`, or `code`), `press` (the
   button's reference to press right after; required for `password` and `code`), `user` (which
   saved user name, when there are several), `code` (a code Claude read in the owner's texts or
   email, 4 to 10 letters or digits; with `fill` `code`).
@@ -52,20 +52,20 @@ Toni, 2026-11-22: "Fill-only tool". Latchkey types; Claude reads the page and de
   research.md "Codes experiment".
 - Answer: "Typed the saved <user name|password> for <site> (<user>) into <field>[, then pressed
   <press>]." / "Typed <the code from Passwords|the code you passed> into <field> (<n> boxes),
-  then pressed <press>." Then the page as browser_read shows it (with
+  then pressed <press>." Then the page as browser_look shows it (with
   password and code fields hidden). Never "signed in", "refused", or any judgement of the page.
 - Errors (isError, nothing pressed): no sign-in for the page's site (the sites it holds, at most
   20); several user names (listed); not https; the Owner's tab; no page; the field missing; the
   wrong kind of field ("e12 isn't a password field: it is a text field"); the field didn't hold
   what was typed (a page that rewrites input); `press` missing for password or code.
 
-## browser_read sign_in_again on a site Latchkey signs in to itself (FR-1374)
+## browser_look sign_in_again on a site Latchkey signs in to itself (FR-1374)
 
 - Unlocked: the page moves into a background Safari tab of Claude's at the same address, under the
   same name; the answer is that tab's page, as for any other site (FR-459).
 - Locked: "Latchkey signs in to <site> itself in its own browser and takes none of Safari's
   sign-ins for it. Safari's own sign-in can be used once the Mac is unlocked: then call
-  browser_read with sign_in_again again."
+  browser_look with sign_in_again again."
 - The first line of every answer from Latchkey's own browser on such a site (FR-1355): "…
   Claude's page "<name>", with Latchkey's own sign-in for <site>, not a copy of Safari's, so the
   owner's Safari stays signed in (if the page asks to sign in, type the saved sign-in with

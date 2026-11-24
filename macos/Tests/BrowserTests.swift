@@ -224,8 +224,8 @@ final class PageLoad: NSObject, WKNavigationDelegate {
                 browser: SafariBrowser(scripts: FakeSafariTabs()), own: pages
             )
             .map { ($0.tool.name, $0) })
-        let viaRead = await consolidated["browser_read"]!.handler(.object(["url": .string(url)]))
-        #expect(viaRead.isError, "browser_read with a url: \(url)")
+        let viaRead = await consolidated["browser_look"]!.handler(.object(["url": .string(url)]))
+        #expect(viaRead.isError, "browser_look with a url: \(url)")
         #expect(pages.list().isEmpty)
     }
 
@@ -247,7 +247,7 @@ final class PageLoad: NSObject, WKNavigationDelegate {
         let read = Dictionary(
             uniqueKeysWithValues: BrowserCapability.readTools(browser: b, own: OwnPages(cookies: { [] })).map {
                 ($0.tool.name, $0)
-            })["browser_read"]!
+            })["browser_look"]!
         let r = await read.handler(.object(["tab": .string("10.2")]))
         #expect(r.isError)
         #expect(r.content.jsonText.contains("Allow JavaScript from Apple Events"), "\(r.content.jsonText)")

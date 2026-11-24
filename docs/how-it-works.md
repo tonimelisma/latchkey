@@ -53,7 +53,7 @@ Claude (web, Desktop, phone)  ──HTTPS──▶  Latchkey relay  ◀──out
   | WhatsApp (WhatsApp for Mac's database; current while that app runs) | `whatsapp_find`, `whatsapp_read` | (nothing: sending was withdrawn on 2026-11-07) |
   | Files | `files_find`, `files_read` (text, PDFs, documents, images) | `files_change` (write, edit, folders, move, copy, Trash) |
   | Shell | | `shell_run`, `shell_check` (long and interactive commands; writes fenced, leftovers removed) |
-  | Browser (Claude's pages in Latchkey's own browser with your Safari logins; your Safari tabs when you ask) | `browser_read` | `browser_act` (click, type, script, answer a page's dialog, close a page) |
+  | Browser (Claude's pages in Latchkey's own browser with your Safari logins; your Safari tabs when you ask) | `browser_look` | `browser_act` (click, type, script, answer a page's dialog, close a page) |
   | Computer control (while unlocked) | `computer_look` | `computer_act` (mouse, keyboard, apps) |
   | Calendar (every account on the Mac) | `calendar_find` (events, free time) | `calendar_change` (create, move, repeat, delete) |
   | Reminders | `reminders_find` (with flags, tags, subtasks, sections) | `reminders_change` (create, complete, change, delete; new and deleted lists; flags, tags, subtasks, and sections aren't changed) |

@@ -7,7 +7,7 @@ import Testing
 @Suite struct PublicToolsTests {
     static let read = [
         "notes_find", "notes_read", "messages_find", "messages_read", "files_find", "files_read", "shell_check",
-        "browser_read", "computer_look", "calendar_find", "reminders_find", "contacts_find", "location_read",
+        "browser_look", "computer_look", "calendar_find", "reminders_find", "contacts_find", "location_read",
         "maps_find", "whatsapp_find", "whatsapp_read", "logins_find", "mail_find", "mail_read",
     ]
     static let write = [

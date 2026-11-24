@@ -89,9 +89,9 @@ enum LoginsCapability {
                 "logins_fill", title: "Type a Saved Sign-in",
                 description: """
                     Types the owner's saved user name, password, or a verification code into a field of one of \
-                    Claude's own pages (opened with browser_read; name it with page, like p4k2), then presses the \
+                    Claude's own pages (opened with browser_look; name it with page, like p4k2), then presses the \
                     button you name. Claude never sees the password or a code from Passwords. You do the signing in: read \
-                    the page, name the field by its reference from browser_read (field, like e18), say what to \
+                    the page, name the field by its reference from browser_look (field, like e18), say what to \
                     type (fill: user, password, or code) and, for a password or a code, the button to press right \
                     after (press, like e21: Sign On, Continue). Latchkey types it as a keyboard does, presses that \
                     button, empties what it typed, and answers with the page as it is; read the page after each \
@@ -109,14 +109,16 @@ enum LoginsCapability {
                     for this site since the password holds it, then deletes or archives that message. user: which user name, when Latchkey holds several (logins_find lists \
                     them). Works in Latchkey's own browser and in Claude's Safari tabs, never in the owner's own \
                     tabs. Some sites' protection against bots turns away Latchkey's own background browser but \
-                    lets Safari through (the site ends the sign-in, shows a check, or says nothing works): while \
-                    the Mac is unlocked, move the page into a background Safari tab with browser_read \
+                    lets Safari through (the site ends the sign-in, shows a check, or says nothing: the same \
+                    sign-in page comes back with no error, often with a hidden "reCAPTCHA" badge; Latchkey \
+                    can't tell why, so judge from the page): while \
+                    the Mac is unlocked, move the page into a background Safari tab with browser_look \
                     sign_in_again and sign in there; while it is locked, tell the owner the site needs the Mac \
                     unlocked.
                     """,
                 input: [
-                    "page": .stringParam("Claude's page, by the name browser_read gave, like p4k2"),
-                    "field": .stringParam("The field to type into, by its reference from browser_read, like e18"),
+                    "page": .stringParam("Claude's page, by the name browser_look gave, like p4k2"),
+                    "field": .stringParam("The field to type into, by its reference from browser_look, like e18"),
                     "fill": .enumParam(
                         ["user", "password", "code"], "What to type: the saved user name, password, or a code"),
                     "press": .stringParam(
@@ -340,7 +342,7 @@ enum LoginsCapability {
                 _ = try await run("(function () { \(PageScripts.find(press)) return 'ok\\t{}'; })()")
             } catch SafariBrowser.Failure.elementMissing {
                 return .text(
-                    "There's no \(press) on the page to press, so nothing was typed. Read the page again with browser_read.",
+                    "There's no \(press) on the page to press, so nothing was typed. Read the page again with browser_look.",
                     isError: true)
             }
         }
@@ -356,7 +358,7 @@ enum LoginsCapability {
             typed = (try? JSONDecoder().decode(Step.self, from: Data(r.detail.utf8))) ?? Step(step: "unheld")
         } catch SafariBrowser.Failure.elementMissing {
             return .text(
-                "There's no \(field) on the page now (it may have changed). Read it again with browser_read.",
+                "There's no \(field) on the page now (it may have changed). Read it again with browser_look.",
                 isError: true)
         }
         func clear() async -> PageScripts.Page? { try? await run(PageScripts.clearSignIn).page }

@@ -225,7 +225,7 @@ import Testing
 
     @Test func theListNamesEveryTabAndIsTheWebsites() async {
         let t = tools(FakeSafariTabs())
-        let r = await t["browser_read"]!.handler(.object(["tabs": .bool(true)]))
+        let r = await t["browser_look"]!.handler(.object(["tabs": .bool(true)]))
         #expect(!r.isError, "\(r.content.jsonText)")
         let text = r.content.jsonText
         #expect(text.contains("10.1") && text.contains("10.2"))
@@ -236,7 +236,7 @@ import Testing
     @Test func aPickedTabIsNamedInEveryAnswer() async {
         let fake = FakeSafariTabs()
         let t = tools(fake)
-        let r = await t["browser_read"]!.handler(.object(["tab": .string("10.2")]))
+        let r = await t["browser_look"]!.handler(.object(["tab": .string("10.2")]))
         #expect(!r.isError, "\(r.content.jsonText)")
         #expect(r.content.jsonText.contains("tab 10.2"), "FR-431")
         // FR-447: each call names the tab it works in.
@@ -259,7 +259,7 @@ import Testing
     /// The old integer still works as a tab number.
     @Test func aNumberStillPicksATab() async {
         let fake = FakeSafariTabs()
-        let r = await tools(fake)["browser_read"]!.handler(.object(["tab": .number(2)]))
+        let r = await tools(fake)["browser_look"]!.handler(.object(["tab": .number(2)]))
         #expect(!r.isError, "\(r.content.jsonText)")
         #expect(r.content.jsonText.contains("tab 10.2"))
     }
@@ -271,9 +271,9 @@ import Testing
         let own = OwnPages(cookies: { [] }, isLocked: { true })
         defer { own.closeAll() }
         let t = tools(fake, own: own)
-        let list = await t["browser_read"]!.handler(.object(["tabs": .bool(true)]))
+        let list = await t["browser_look"]!.handler(.object(["tabs": .bool(true)]))
         #expect(list.content.jsonText.contains("10.2") && list.content.jsonText.contains("no page of its own"))
-        let read = await t["browser_read"]!.handler(.object(["tab": .string("10.2")]))
+        let read = await t["browser_look"]!.handler(.object(["tab": .string("10.2")]))
         #expect(!read.isError, "\(read.content.jsonText)")
         #expect(read.content.jsonText.contains("tab 10.2"))
         #expect(fake.windows[0].tabs[1].scriptsRun > 0, "read through Safari")
@@ -283,12 +283,12 @@ import Testing
     /// to take; in Latchkey's own browser it needs a page.
     @Test func signingInAgainIsForLatchkeysOwnBrowser() async {
         let fake = FakeSafariTabs()
-        let safari = await tools(fake)["browser_read"]!.handler(
+        let safari = await tools(fake)["browser_look"]!.handler(
             .object(["sign_in_again": .bool(true), "tab": .string("10.2")]))
         #expect(!safari.isError && safari.content.jsonText.contains("Safari itself"), "\(safari.content.jsonText)")
         let own = OwnPages(cookies: { [] })
         defer { own.closeAll() }
-        let locked = await tools(fake, own: own)["browser_read"]!.handler(
+        let locked = await tools(fake, own: own)["browser_look"]!.handler(
             .object(["sign_in_again": .bool(true)]))
         #expect(locked.isError, "no page open yet: \(locked.content.jsonText)")
     }
@@ -300,13 +300,13 @@ import Testing
         defer { own.closeAll() }
         _ = try await own.open(html: "<p>hello there</p>", base: URL(string: "https://example.test/")!)
         let t = tools(fake, own: own)
-        let read = await t["browser_read"]!.handler(.object([:]))
+        let read = await t["browser_look"]!.handler(.object([:]))
         #expect(!read.isError, "\(read.content.jsonText)")
         #expect(read.content.jsonText.contains("From Latchkey's own browser, not Safari"))
         #expect(read.content.jsonText.contains("hello there"))
-        let picture = await t["browser_read"]!.handler(.object(["screenshot": .bool(true)]))
+        let picture = await t["browser_look"]!.handler(.object(["screenshot": .bool(true)]))
         #expect(picture.content.jsonText.contains("From Latchkey's own browser, not Safari"))
-        let safari = await tools(fake)["browser_read"]!.handler(.object(["tab": .number(2)]))
+        let safari = await tools(fake)["browser_look"]!.handler(.object(["tab": .number(2)]))
         #expect(!safari.content.jsonText.contains("Latchkey's own browser"))
     }
 
@@ -317,7 +317,7 @@ import Testing
         let b = SafariBrowser(scripts: SilentSafari())
         let t = Dictionary(
             uniqueKeysWithValues: BrowserCapability.readTools(browser: b, own: own).map { ($0.tool.name, $0) })
-        let list = await t["browser_read"]!.handler(.object(["tabs": .bool(true)]))
+        let list = await t["browser_look"]!.handler(.object(["tabs": .bool(true)]))
         #expect(list.content.jsonText.contains("unlocks the Mac"))
     }
 }
@@ -332,7 +332,7 @@ import Testing
         defer { own.closeAll() }
         let read = Dictionary(
             uniqueKeysWithValues: BrowserCapability.readTools(browser: b, own: own).map { ($0.tool.name, $0) })[
-                "browser_read"]!
+                "browser_look"]!
         let started = ContinuousClock.now
         let list = await read.handler(.object(["tabs": .bool(true)]))
         #expect(list.content.jsonText.contains("unlocks the Mac"), "\(list.content.jsonText)")
