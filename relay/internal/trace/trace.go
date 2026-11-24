@@ -27,6 +27,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 )
 
@@ -430,8 +431,24 @@ func (s *Store) Delete(accountID string) error {
 	lock := s.lock(accountID)
 	lock.Lock()
 	defer lock.Unlock()
-	return os.RemoveAll(filepath.Join(s.o.Dir, accountID))
+	// The lock keeps out only this process's writers. The operator's delete runs in its own
+	// process while the relay may still be writing a line it began before the account was gone
+	// from the database (regression 2026-11-24: "directory not empty"): try again while the
+	// folder keeps gaining files. Such a writer never makes the folder again (append checks the
+	// account first), so this ends; within a deadline all the same (Constitution II).
+	dir := filepath.Join(s.o.Dir, accountID)
+	deadline := time.Now().Add(deleteLimit)
+	for {
+		err := os.RemoveAll(dir)
+		if err == nil || !errors.Is(err, syscall.ENOTEMPTY) || time.Now().After(deadline) {
+			return err
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
 }
+
+// deleteLimit bounds Delete's tries while another process still writes the account's folder.
+const deleteLimit = 5 * time.Second
 
 var dayFileRE = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}\.trace$`)
 
