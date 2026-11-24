@@ -1,0 +1,40 @@
+{
+  "_meta": {
+    "latchkey/deadline_ms": 10000
+  },
+  "annotations": {
+    "destructiveHint": false,
+    "idempotentHint": false,
+    "openWorldHint": false,
+    "readOnlyHint": true
+  },
+  "description": "Latchkey's own recent log on this server, for finding out why something in Latchkey isn't working: its connection to the relay, pairing, settings, pause, updates, and the audit check. Newest last, one line each: time, category, ERROR when it was one, text. It holds no tool calls, commands, file names, or the relay's address. Optional: lines (default 200, up to 1000) and category (one kind only).",
+  "inputSchema": {
+    "properties": {
+      "category": {
+        "description": "Only lines of this kind",
+        "enum": [
+          "app",
+          "connection",
+          "pairing",
+          "settings",
+          "pause",
+          "update",
+          "audit"
+        ],
+        "type": "string"
+      },
+      "lines": {
+        "description": "How many of the newest lines (default 200, up to 1000)",
+        "type": "integer"
+      },
+      "machine": {
+        "description": "The machine to use, by name, as the machines tool lists it. Leave it out when only one machine offers this tool.",
+        "type": "string"
+      }
+    },
+    "type": "object"
+  },
+  "name": "latchkey_log",
+  "title": "Latchkey's Log"
+}

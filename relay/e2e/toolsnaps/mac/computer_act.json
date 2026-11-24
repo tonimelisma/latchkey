@@ -1,0 +1,113 @@
+{
+  "_meta": {
+    "latchkey/deadline_ms": 20000
+  },
+  "annotations": {
+    "destructiveHint": true,
+    "idempotentHint": false,
+    "openWorldHint": false,
+    "readOnlyHint": false,
+    "title": "Use the Mouse and Keyboard"
+  },
+  "description": "Uses the Mac's mouse and keyboard, then answers with a new screenshot. Points are pixels of the screenshot from computer_look. action: click (x, y; button right, count 2 for a double click), move (x, y), drag (x, y to to_x, to_y), scroll (x, y, direction, amount in lines), type (text, where the keyboard focus is), key (keys like return, escape, cmd+c, cmd+shift+4), open_app (name). With app: press (ref from computer_look ui with that app), type (text; with ref, into that field, only once it has the keyboard focus), choose (ref of a dropdown, option: the choice's name), and key go to that app only, in the background, without the pointer or the front; the answer says the field's value and anything else in the window that changed, with a picture of the window; prefer this whenever the task is in one app. Clicks, moves, drags, and scrolls at a point use the real pointer, so leave app out for those.",
+  "inputSchema": {
+    "additionalProperties": false,
+    "properties": {
+      "action": {
+        "description": "What to do",
+        "enum": [
+          "click",
+          "move",
+          "drag",
+          "scroll",
+          "type",
+          "key",
+          "press",
+          "choose",
+          "open_app"
+        ],
+        "type": "string"
+      },
+      "amount": {
+        "description": "For scroll: lines (default 5)",
+        "type": "integer"
+      },
+      "app": {
+        "description": "Act on this app in the background (press, type, key, choose)",
+        "type": "string"
+      },
+      "button": {
+        "description": "For click (default left)",
+        "enum": [
+          "left",
+          "right"
+        ],
+        "type": "string"
+      },
+      "count": {
+        "description": "For click: 1, 2, or 3 clicks",
+        "type": "integer"
+      },
+      "direction": {
+        "description": "For scroll",
+        "enum": [
+          "up",
+          "down",
+          "left",
+          "right"
+        ],
+        "type": "string"
+      },
+      "display": {
+        "description": "Which display, from 1 (default 1)",
+        "type": "integer"
+      },
+      "keys": {
+        "description": "For key: the key, with modifiers joined by +",
+        "type": "string"
+      },
+      "machine": {
+        "description": "The machine to use, by name, as the machines tool lists it. Leave it out when only one machine offers this tool.",
+        "type": "string"
+      },
+      "name": {
+        "description": "For open_app: the app's name",
+        "type": "string"
+      },
+      "option": {
+        "description": "For choose: the choice's name, as the dropdown shows it",
+        "type": "string"
+      },
+      "ref": {
+        "description": "For press, choose, or type into a field: the reference from computer_look ui",
+        "type": "string"
+      },
+      "text": {
+        "description": "For type: the text",
+        "type": "string"
+      },
+      "to_x": {
+        "description": "For drag: end, horizontal pixel",
+        "type": "integer"
+      },
+      "to_y": {
+        "description": "For drag: end, vertical pixel",
+        "type": "integer"
+      },
+      "x": {
+        "description": "Horizontal pixel",
+        "type": "integer"
+      },
+      "y": {
+        "description": "Vertical pixel",
+        "type": "integer"
+      }
+    },
+    "required": [
+      "action"
+    ],
+    "type": "object"
+  },
+  "name": "computer_act",
+  "title": "Use the Mouse and Keyboard"
+}

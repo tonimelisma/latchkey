@@ -1,0 +1,32 @@
+{
+  "id": "files.invoice-total",
+  "capability": "files",
+  "instruction": "There's an invoice in ~/Documents/LatchkeyEval. Write its total due, just the number, into a new file total.txt in that same folder.",
+  "setup": [
+    "fixture files invoice"
+  ],
+  "check": [
+    "check files contains total.txt 412.50",
+    "check files untouched invoice-0457.txt"
+  ],
+  "cleanup": [
+    "sweep files"
+  ],
+  "required_calls": [
+    "files_read",
+    "files_change"
+  ],
+  "forbidden_calls": [
+    {
+      "tool": "files_change",
+      "args_match": {
+        "action": "trash"
+      }
+    }
+  ],
+  "unneeded_calls": [
+    "shell_run",
+    "browser_look"
+  ],
+  "max_turns": 25
+}

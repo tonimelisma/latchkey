@@ -91,6 +91,15 @@ applies, except:
   key in `LATCHKEY_REPORTS_KEY` (a variable of Toni's personal cloud environment, set by Toni)
   and the intake's token, which the session's network proxy adds for that host once Toni saved it
   as a network secret (`request_credential`). Report contents stay in the session's output.
+- End to end and evals (spec 015): every pull request runs `e2e.yml`. Its `e2e-linux` and
+  `e2e-mac` jobs run the checks the changed files select (`relay/e2e/capabilities.json`) with a
+  real MCP client through a private relay, and compare every tool with `relay/e2e/toolsnaps`. A
+  snapshot that differs fails the job: when the change is meant, download the job's artifact
+  `toolsnaps-<kind>` (`gh api repos/tonimelisma/latchkey/actions/runs/<id>/artifacts`) and commit
+  its files in the same pull request. Docker Hub refuses this VM's pulls (rate limit), so the
+  Linux check runs on GitHub, not here. Weekly results that Toni sent (`weekly-eval.sh --send` on
+  his Mac) are read with `go run ./cmd/latchkey-reports evals`; `evals -this-week -quiet` prints
+  the line to tell Toni when none arrived this week.
 - Mac app: build and test on the Mac through Latchkey's `shell_run` (Toni's MacBook in
   `machines`), from the pushed branch in the command's scratch folder (deleted or moved to the
   Trash when it ends), with `uses: ["open"]` (the tests run in an app; spec 004 FR-335):

@@ -1,0 +1,46 @@
+{
+  "_meta": {
+    "latchkey/deadline_ms": 15000
+  },
+  "annotations": {
+    "destructiveHint": false,
+    "idempotentHint": false,
+    "openWorldHint": false,
+    "readOnlyHint": true,
+    "title": "Find Contacts"
+  },
+  "description": "Searches the Mac's Contacts by name, nickname, company, email address, or phone number, with each card's id. With id: the card in full (phones, emails, addresses, birthday, dates, web addresses, related names, groups); with photo: true, its picture. With nothing: the groups and how many contacts there are.",
+  "inputSchema": {
+    "additionalProperties": false,
+    "properties": {
+      "group": {
+        "description": "Only cards in this group (name or id)",
+        "type": "string"
+      },
+      "id": {
+        "description": "A card's id, to read it in full",
+        "type": "string"
+      },
+      "limit": {
+        "description": "At most this many cards (default 20, up to 100)",
+        "type": "integer"
+      },
+      "machine": {
+        "description": "The machine to use, by name, as the machines tool lists it. Leave it out when only one machine offers this tool.",
+        "type": "string"
+      },
+      "photo": {
+        "description": "With id: show the card's picture",
+        "type": "boolean"
+      },
+      "query": {
+        "description": "Words in a name, company, or email, or a phone number",
+        "type": "string"
+      }
+    },
+    "required": [],
+    "type": "object"
+  },
+  "name": "contacts_find",
+  "title": "Find Contacts"
+}

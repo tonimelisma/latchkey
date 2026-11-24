@@ -1,0 +1,58 @@
+{
+  "_meta": {
+    "latchkey/deadline_ms": 30000
+  },
+  "annotations": {
+    "destructiveHint": false,
+    "idempotentHint": false,
+    "openWorldHint": false,
+    "readOnlyHint": true,
+    "title": "Find WhatsApp Messages"
+  },
+  "description": "Searches WhatsApp. With text or dates: finds messages, newest first, optionally only in one chat. With neither: lists chats (people and groups), newest first, optionally only those whose name or number matches person, or only unread ones; each with its id for whatsapp_read.",
+  "inputSchema": {
+    "additionalProperties": false,
+    "properties": {
+      "chat": {
+        "description": "Only messages in this chat (its id from whatsapp_find, or its name)",
+        "type": "string"
+      },
+      "limit": {
+        "description": "At most this many (default 20 chats or 50 messages, up to 200)",
+        "type": "integer"
+      },
+      "machine": {
+        "description": "The machine to use, by name, as the machines tool lists it. Leave it out when only one machine offers this tool.",
+        "type": "string"
+      },
+      "offset": {
+        "description": "Skip this many, for the next page",
+        "type": "integer"
+      },
+      "person": {
+        "description": "A person's or group's name, or a phone number",
+        "type": "string"
+      },
+      "since": {
+        "description": "Only messages from this time on (ISO 8601)",
+        "type": "string"
+      },
+      "text": {
+        "description": "Words in the messages",
+        "type": "string"
+      },
+      "unread": {
+        "description": "Only chats with unread messages",
+        "type": "boolean"
+      },
+      "until": {
+        "description": "Only messages before this time (ISO 8601)",
+        "type": "string"
+      }
+    },
+    "required": [],
+    "type": "object"
+  },
+  "name": "whatsapp_find",
+  "title": "Find WhatsApp Messages"
+}

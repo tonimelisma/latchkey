@@ -1,0 +1,48 @@
+{
+  "_meta": {
+    "latchkey/deadline_ms": 10000
+  },
+  "annotations": {
+    "destructiveHint": false,
+    "idempotentHint": false,
+    "openWorldHint": false,
+    "readOnlyHint": true,
+    "title": "Latchkey's Log"
+  },
+  "description": "Latchkey's own recent log on this Mac, for finding out why something in Latchkey isn't working: its connection to the relay, keep-awake, sleep and wake, macOS permissions, setup, pause, pairing, errors it showed, and (browser) which sign-in cookies Claude's pages took from Safari and which ones a site changed, by name. Newest last, one line each: time, category, ERROR when it was one, text. It holds no tool calls, messages, file names, cookie values, or the relay's address. Optional: lines (default 200, up to 1000) and category (one kind only).",
+  "inputSchema": {
+    "additionalProperties": false,
+    "properties": {
+      "category": {
+        "description": "Only lines of this kind",
+        "enum": [
+          "app",
+          "connection",
+          "keepawake",
+          "helper",
+          "power",
+          "permissions",
+          "setup",
+          "pause",
+          "pairing",
+          "activity",
+          "audit",
+          "browser"
+        ],
+        "type": "string"
+      },
+      "lines": {
+        "description": "How many of the newest lines (default 200, up to 1000)",
+        "type": "integer"
+      },
+      "machine": {
+        "description": "The machine to use, by name, as the machines tool lists it. Leave it out when only one machine offers this tool.",
+        "type": "string"
+      }
+    },
+    "required": [],
+    "type": "object"
+  },
+  "name": "latchkey_log",
+  "title": "Latchkey's Log"
+}

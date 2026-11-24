@@ -1,0 +1,62 @@
+{
+  "_meta": {
+    "latchkey/deadline_ms": 15000
+  },
+  "annotations": {
+    "destructiveHint": false,
+    "idempotentHint": false,
+    "openWorldHint": false,
+    "readOnlyHint": true,
+    "title": "Find Calendar Events"
+  },
+  "description": "Lists and searches events in the Mac's calendars (iCloud, Google, Exchange, and others), repeating events as their single occurrences, with each event's id. With id: that event in full (notes, attendees, alarms, repeats). With free: true, the free times of at least minutes (default 30) in the range, within hours (default 08:00-20:00), across all calendars. With nothing: the calendars and the next 7 days. Dates: YYYY-MM-DD, or YYYY-MM-DDTHH:MM in the Mac's time zone (optionally with Z or ±HH:MM); from defaults to the start of today, to to 7 days later (30 with a query).",
+  "inputSchema": {
+    "additionalProperties": false,
+    "properties": {
+      "calendar": {
+        "description": "Only this calendar (name or id)",
+        "type": "string"
+      },
+      "free": {
+        "description": "List free times instead of events",
+        "type": "boolean"
+      },
+      "from": {
+        "description": "Start of the range",
+        "type": "string"
+      },
+      "hours": {
+        "description": "For free: the part of each day to look in (default 08:00-20:00)",
+        "type": "string"
+      },
+      "id": {
+        "description": "An event's id, to read it in full",
+        "type": "string"
+      },
+      "limit": {
+        "description": "At most this many events (default 50, up to 200)",
+        "type": "integer"
+      },
+      "machine": {
+        "description": "The machine to use, by name, as the machines tool lists it. Leave it out when only one machine offers this tool.",
+        "type": "string"
+      },
+      "minutes": {
+        "description": "For free: the shortest free time to list (default 30)",
+        "type": "integer"
+      },
+      "query": {
+        "description": "Words in the title, location, or notes",
+        "type": "string"
+      },
+      "to": {
+        "description": "End of the range",
+        "type": "string"
+      }
+    },
+    "required": [],
+    "type": "object"
+  },
+  "name": "calendar_find",
+  "title": "Find Calendar Events"
+}

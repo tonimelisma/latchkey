@@ -1,0 +1,23 @@
+{
+  "id": "browser.unshipped-orders",
+  "capability": "browser",
+  "instruction": "Look at my orders on http://127.0.0.1:8471/orders and write the order numbers of every order that hasn't shipped yet, one per line, into ~/Documents/LatchkeyEval/unshipped.txt.",
+  "setup": [
+    "fixture pages orders"
+  ],
+  "check": [
+    "check files contains unshipped.txt A-1002",
+    "check files contains unshipped.txt A-1004",
+    "check files lacks unshipped.txt A-1001",
+    "check files lacks unshipped.txt A-1003"
+  ],
+  "cleanup": [
+    "sweep files",
+    "sweep pages"
+  ],
+  "required_calls": [
+    "browser_look",
+    "files_change"
+  ],
+  "max_turns": 25
+}

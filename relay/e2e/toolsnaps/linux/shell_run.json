@@ -1,0 +1,55 @@
+{
+  "_meta": {
+    "latchkey/deadline_ms": 45000
+  },
+  "annotations": {
+    "destructiveHint": true,
+    "idempotentHint": false,
+    "openWorldHint": true,
+    "readOnlyHint": false
+  },
+  "description": "Runs a command in bash (a login shell) on the server, as the owner's account. Waits up to wait seconds (default and most 30); a longer command keeps running as a job (check it with shell_check). With job and input: types input into that job (then Enter unless enter is false). With job and stop: stops it (Ctrl-C, then forcibly). sudo works for what the owner allowed without a password, and answers at once otherwise; it never waits for one. Each command has its own scratch folder ($LATCHKEY_SCRATCH, also $TMPDIR), deleted when it finishes. Whatever it leaves running is stopped when it finishes, unless keep_minutes asks to keep it (checking the job keeps it longer; 24 hours at most).",
+  "inputSchema": {
+    "properties": {
+      "command": {
+        "description": "The command line",
+        "type": "string"
+      },
+      "enter": {
+        "description": "With input: press Enter after (default true)",
+        "type": "boolean"
+      },
+      "folder": {
+        "description": "Run in this folder (default: home)",
+        "type": "string"
+      },
+      "input": {
+        "description": "With job: what to type",
+        "type": "string"
+      },
+      "job": {
+        "description": "A running job's id, to type into or stop",
+        "type": "string"
+      },
+      "keep_minutes": {
+        "description": "Keep what it leaves running, and its scratch folder, this many minutes after it finishes (0 to 1440)",
+        "type": "integer"
+      },
+      "machine": {
+        "description": "The machine to use, by name, as the machines tool lists it. Leave it out when only one machine offers this tool.",
+        "type": "string"
+      },
+      "stop": {
+        "description": "With job: stop it",
+        "type": "boolean"
+      },
+      "wait": {
+        "description": "Seconds to wait for it to finish (1 to 30, default 30)",
+        "type": "integer"
+      }
+    },
+    "type": "object"
+  },
+  "name": "shell_run",
+  "title": "Run a Command"
+}

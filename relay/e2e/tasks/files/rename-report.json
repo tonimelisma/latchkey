@@ -1,0 +1,31 @@
+{
+  "id": "files.rename-report",
+  "capability": "files",
+  "instruction": "Rename draft-report.txt in ~/Documents/LatchkeyEval to final-report.txt.",
+  "setup": [
+    "fixture files drafts"
+  ],
+  "check": [
+    "check files exists final-report.txt",
+    "check files missing draft-report.txt",
+    "check files contains final-report.txt 'draft 3'"
+  ],
+  "cleanup": [
+    "sweep files"
+  ],
+  "required_calls": [
+    "files_change"
+  ],
+  "forbidden_calls": [
+    {
+      "tool": "files_change",
+      "args_match": {
+        "action": "trash"
+      }
+    }
+  ],
+  "unneeded_calls": [
+    "shell_run"
+  ],
+  "max_turns": 25
+}

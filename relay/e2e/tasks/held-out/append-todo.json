@@ -1,0 +1,28 @@
+{
+  "id": "files.append-todo",
+  "capability": "files",
+  "instruction": "Add 'Call the plumber' as a new last line of todo.txt in ~/Documents/LatchkeyEval. Keep everything else in it.",
+  "setup": [
+    "fixture files todo"
+  ],
+  "check": [
+    "check files contains todo.txt 'Call the plumber'",
+    "check files contains todo.txt 'Book the car service'",
+    "check files contains todo.txt 'Buy printer paper'"
+  ],
+  "cleanup": [
+    "sweep files"
+  ],
+  "required_calls": [
+    "files_change"
+  ],
+  "forbidden_calls": [
+    {
+      "tool": "files_change",
+      "args_match": {
+        "action": "trash"
+      }
+    }
+  ],
+  "max_turns": 25
+}

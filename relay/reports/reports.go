@@ -111,6 +111,13 @@ func Seal(pk hpke.PublicKey, r Report) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	return SealRaw(pk, plain)
+}
+
+// SealRaw encrypts any JSON entry for the intake to the developer's public key: a problem report,
+// or a weekly eval result (spec 015 FR-1530), which carries "kind": "eval". The intake can't
+// tell them apart.
+func SealRaw(pk hpke.PublicKey, plain []byte) ([]byte, error) {
 	ct, err := hpke.Seal(pk, kdf, aead, []byte(Info), plain)
 	if err != nil {
 		return nil, err
@@ -125,15 +132,33 @@ func Seal(pk hpke.PublicKey, r Report) ([]byte, error) {
 // Open decrypts a sealed report with the developer's private key.
 func Open(k hpke.PrivateKey, sealed []byte) (Report, error) {
 	var r Report
-	if !bytes.HasPrefix(sealed, []byte(Magic)) {
-		return r, errors.New("not a sealed Latchkey report")
-	}
-	plain, err := hpke.Open(k, kdf, aead, []byte(Info), sealed[len(Magic):])
+	plain, err := OpenRaw(k, sealed)
 	if err != nil {
-		return r, fmt.Errorf("the report doesn't open with this key: %w", err)
+		return r, err
 	}
 	err = json.Unmarshal(plain, &r)
 	return r, err
+}
+
+// OpenRaw decrypts a sealed entry and returns its JSON.
+func OpenRaw(k hpke.PrivateKey, sealed []byte) ([]byte, error) {
+	if !bytes.HasPrefix(sealed, []byte(Magic)) {
+		return nil, errors.New("not a sealed Latchkey report")
+	}
+	plain, err := hpke.Open(k, kdf, aead, []byte(Info), sealed[len(Magic):])
+	if err != nil {
+		return nil, fmt.Errorf("the report doesn't open with this key: %w", err)
+	}
+	return plain, nil
+}
+
+// Kind is an opened entry's kind: "eval" for a weekly result, "" for a problem report.
+func Kind(plain []byte) string {
+	var k struct {
+		Kind string `json:"kind"`
+	}
+	_ = json.Unmarshal(plain, &k)
+	return k.Kind
 }
 
 // minSealed is the shortest a sealed report can be: the magic, the KEM's encapsulation, and the

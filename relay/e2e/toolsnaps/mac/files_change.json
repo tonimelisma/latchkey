@@ -1,0 +1,62 @@
+{
+  "_meta": {
+    "latchkey/deadline_ms": 10000
+  },
+  "annotations": {
+    "destructiveHint": true,
+    "idempotentHint": false,
+    "openWorldHint": false,
+    "readOnlyHint": false,
+    "title": "Change Files"
+  },
+  "description": "Changes files on the Mac. action: write (path, text; an existing file only with overwrite), append (path, text: added at the end), edit (path, find: an exact passage that appears once, text: its replacement), create_folder (path), move or copy (path, to: the new path or a folder to put it in; never replaces an existing file), trash (path: moves it to the Trash, where it can be put back).",
+  "inputSchema": {
+    "additionalProperties": false,
+    "properties": {
+      "action": {
+        "description": "What to do",
+        "enum": [
+          "write",
+          "append",
+          "edit",
+          "create_folder",
+          "move",
+          "copy",
+          "trash"
+        ],
+        "type": "string"
+      },
+      "find": {
+        "description": "For edit: the exact passage to replace",
+        "type": "string"
+      },
+      "machine": {
+        "description": "The machine to use, by name, as the machines tool lists it. Leave it out when only one machine offers this tool.",
+        "type": "string"
+      },
+      "overwrite": {
+        "description": "For write: replace an existing file",
+        "type": "boolean"
+      },
+      "path": {
+        "description": "The file or folder",
+        "type": "string"
+      },
+      "text": {
+        "description": "The text to write, add, or put in place of find",
+        "type": "string"
+      },
+      "to": {
+        "description": "For move and copy: where to",
+        "type": "string"
+      }
+    },
+    "required": [
+      "action",
+      "path"
+    ],
+    "type": "object"
+  },
+  "name": "files_change",
+  "title": "Change Files"
+}

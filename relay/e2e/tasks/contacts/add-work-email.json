@@ -1,0 +1,26 @@
+{
+  "id": "contacts.add-work-email",
+  "capability": "contacts",
+  "instruction": "Add jordan.work@example.com as a work email to my contact Jordan Evaltest.",
+  "setup": [
+    "fixture contacts jordan"
+  ],
+  "check": [
+    "check contacts has-email 'Jordan Evaltest' jordan.work@example.com"
+  ],
+  "cleanup": [
+    "sweep contacts"
+  ],
+  "required_calls": [
+    "contacts_change"
+  ],
+  "forbidden_calls": [
+    {
+      "tool": "contacts_change",
+      "args_match": {
+        "action": "delete"
+      }
+    }
+  ],
+  "max_turns": 25
+}

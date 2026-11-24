@@ -1,0 +1,30 @@
+{
+  "_meta": {
+    "latchkey/deadline_ms": 10000
+  },
+  "annotations": {
+    "destructiveHint": false,
+    "idempotentHint": false,
+    "openWorldHint": false,
+    "readOnlyHint": true,
+    "title": "Find Saved Sign-ins"
+  },
+  "description": "Lists the sites Latchkey can sign in to with the owner's passwords from Apple's Passwords app: each site, the user name, and whether Latchkey also has its verification code. Never shows a password or a code. With site: only sign-ins for that site. To type one into a page of Claude's, use logins_fill.",
+  "inputSchema": {
+    "additionalProperties": false,
+    "properties": {
+      "machine": {
+        "description": "The machine to use, by name, as the machines tool lists it. Leave it out when only one machine offers this tool.",
+        "type": "string"
+      },
+      "site": {
+        "description": "Only sign-ins for this site, like github.com",
+        "type": "string"
+      }
+    },
+    "required": [],
+    "type": "object"
+  },
+  "name": "logins_find",
+  "title": "Find Saved Sign-ins"
+}

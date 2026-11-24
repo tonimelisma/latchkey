@@ -1,0 +1,55 @@
+{
+  "_meta": {
+    "latchkey/deadline_ms": 20000
+  },
+  "annotations": {
+    "destructiveHint": false,
+    "idempotentHint": false,
+    "openWorldHint": false,
+    "readOnlyHint": true,
+    "title": "Look at the Screen"
+  },
+  "description": "Looks at the Mac's screen. show: screenshot (default; coordinates for computer_act are pixels of this image), ui (the front window's buttons, fields, and text with their positions: faster and more exact than a screenshot), apps (the running apps). With app: that app's front window only, even behind other windows, without bringing it forward or disturbing the owner: screenshot is a picture of just that window, ui lists its buttons, fields, and text with references like e3 for computer_act with the same app, 300 at a time: after (a reference) continues, match (a word) lists only what has it, within (a reference) only what is inside that element, all from the same look. Prefer app whenever the task is in one app. Works only while the Mac is unlocked with its screen on.",
+  "inputSchema": {
+    "additionalProperties": false,
+    "properties": {
+      "after": {
+        "description": "With app and ui: continue after this reference",
+        "type": "string"
+      },
+      "app": {
+        "description": "An app's name, to look at its window in the background",
+        "type": "string"
+      },
+      "display": {
+        "description": "Which display, from 1 (the main one)",
+        "type": "integer"
+      },
+      "machine": {
+        "description": "The machine to use, by name, as the machines tool lists it. Leave it out when only one machine offers this tool.",
+        "type": "string"
+      },
+      "match": {
+        "description": "With app and ui: only elements whose text has this",
+        "type": "string"
+      },
+      "show": {
+        "description": "What to look at (default screenshot)",
+        "enum": [
+          "screenshot",
+          "ui",
+          "apps"
+        ],
+        "type": "string"
+      },
+      "within": {
+        "description": "With app and ui: only elements inside this reference",
+        "type": "string"
+      }
+    },
+    "required": [],
+    "type": "object"
+  },
+  "name": "computer_look",
+  "title": "Look at the Screen"
+}

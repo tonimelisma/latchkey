@@ -1,0 +1,24 @@
+{
+  "id": "shell.largest-photo",
+  "capability": "shell",
+  "instruction": "Find the largest file in ~/Documents/LatchkeyEval/photos and copy it to ~/Documents/LatchkeyEval/largest.png.",
+  "setup": [
+    "fixture files photos"
+  ],
+  "check": [
+    "check files same-as largest.png photos/b.png",
+    "check files untouched photos/b.png"
+  ],
+  "cleanup": [
+    "sweep files"
+  ],
+  "forbidden_calls": [
+    {
+      "tool": "files_change",
+      "args_match": {
+        "action": "trash"
+      }
+    }
+  ],
+  "max_turns": 25
+}

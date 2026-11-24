@@ -1,0 +1,70 @@
+{
+  "_meta": {
+    "latchkey/deadline_ms": 30000
+  },
+  "annotations": {
+    "destructiveHint": false,
+    "idempotentHint": false,
+    "openWorldHint": true,
+    "readOnlyHint": false,
+    "title": "Type a Saved Sign-in"
+  },
+  "description": "Types the owner's saved user name, password, or a verification code into a field of one of Claude's own pages (opened with browser_look; name it with page, like p4k2), then presses the button you name. Claude never sees the password or a code from Passwords. You do the signing in: read the page, name the field by its reference from browser_look (field, like e18), say what to type (fill: user, password, or code) and, for a password or a code, the button to press right after (press, like e21: Sign On, Continue). Latchkey types it as a keyboard does, presses that button, empties what it typed, and answers with the page as it is; read the page after each fill and judge for yourself whether you are signed in, asked for a code, refused, or stopped by a check. It never presses anything else: press buttons like \"Text me\" yourself with browser_act. A code: Latchkey types the sign-in's code from Passwords when it has one. A code the site texted or emailed can be typed three ways (being compared; any works): (1) read it yourself and pass it as code: a texted code with messages_find and messages_read (wait and look again as long as you like), then delete that text with messages_delete; an emailed one with your own email tool, else mail_find and mail_read, then archive that email (mail_archive). (2) code_from text or email: Latchkey finds the newest code for this site that came since it typed the password, types it without showing it to you, and deletes the text or archives the email; if none has come yet, it says so: wait as long as you like and call again. (3) code with check_code true: Latchkey types your code only if a text or email for this site since the password holds it, then deletes or archives that message. user: which user name, when Latchkey holds several (logins_find lists them). Works in Latchkey's own browser and in Claude's Safari tabs, never in the owner's own tabs. Some sites' protection against bots turns away Latchkey's own background browser but lets Safari through (the site ends the sign-in, shows a check, or says nothing: the same sign-in page comes back with no error, often with a hidden \"reCAPTCHA\" badge; Latchkey can't tell why, so judge from the page): while the Mac is unlocked, move the page into a background Safari tab with browser_look sign_in_again and sign in there; while it is locked, tell the owner the site needs the Mac unlocked.",
+  "inputSchema": {
+    "additionalProperties": false,
+    "properties": {
+      "check_code": {
+        "description": "With code: type it only if a recent text or email for this site holds it",
+        "type": "boolean"
+      },
+      "code": {
+        "description": "A verification code you read in the owner's texts or email, for fill code (else the one from Passwords)",
+        "type": "string"
+      },
+      "code_from": {
+        "description": "For fill code: Latchkey finds the site's newest code in the owner's texts or email and types it, unseen",
+        "enum": [
+          "text",
+          "email"
+        ],
+        "type": "string"
+      },
+      "field": {
+        "description": "The field to type into, by its reference from browser_look, like e18",
+        "type": "string"
+      },
+      "fill": {
+        "description": "What to type: the saved user name, password, or a code",
+        "enum": [
+          "user",
+          "password",
+          "code"
+        ],
+        "type": "string"
+      },
+      "machine": {
+        "description": "The machine to use, by name, as the machines tool lists it. Leave it out when only one machine offers this tool.",
+        "type": "string"
+      },
+      "page": {
+        "description": "Claude's page, by the name browser_look gave, like p4k2",
+        "type": "string"
+      },
+      "press": {
+        "description": "The button to press right after, like e21 (needed with password and code)",
+        "type": "string"
+      },
+      "user": {
+        "description": "Which saved user name, when there are several",
+        "type": "string"
+      }
+    },
+    "required": [
+      "field",
+      "fill"
+    ],
+    "type": "object"
+  },
+  "name": "logins_fill",
+  "title": "Type a Saved Sign-in"
+}

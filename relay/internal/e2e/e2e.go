@@ -544,3 +544,33 @@ func NewCallback(ctx context.Context) (*Callback, error) {
 
 // Close stops listening.
 func (c *Callback) Close() { c.close() }
+
+// Passkeys returns the passkeys the virtual authenticator holds, as JSON, so a later browser can
+// sign in to the same account (the test Mac's stored account, spec 015 research.md decision 4a).
+func (b *Browser) Passkeys() ([]byte, error) {
+	ctx, cancel := context.WithTimeout(b.ctx, 10*time.Second)
+	defer cancel()
+	got, err := chromedp.Call(ctx, webauthn.GetCredentials, webauthn.GetCredentialsParams{AuthenticatorID: b.authenticator})
+	if err != nil {
+		return nil, err
+	}
+	return json.Marshal(got.Credentials) //nolint:gosec // a test account's passkey, kept in the test Mac only
+}
+
+// AddPasskeys puts passkeys from Passkeys into this browser's virtual authenticator, for the
+// account email.
+func (b *Browser) AddPasskeys(data []byte, email string) error {
+	var creds []*webauthn.Credential
+	if err := json.Unmarshal(data, &creds); err != nil {
+		return err
+	}
+	ctx, cancel := context.WithTimeout(b.ctx, 10*time.Second)
+	defer cancel()
+	for _, c := range creds {
+		if _, err := chromedp.Call(ctx, webauthn.AddCredential, webauthn.AddCredentialParams{AuthenticatorID: b.authenticator, Credential: c}); err != nil {
+			return err
+		}
+	}
+	b.email = email
+	return nil
+}

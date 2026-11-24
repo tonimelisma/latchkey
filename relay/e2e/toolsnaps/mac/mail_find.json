@@ -1,0 +1,42 @@
+{
+  "_meta": {
+    "latchkey/deadline_ms": 10000
+  },
+  "annotations": {
+    "destructiveHint": false,
+    "idempotentHint": false,
+    "openWorldHint": false,
+    "readOnlyHint": true,
+    "title": "Find Recent Emails"
+  },
+  "description": "Lists recent emails in Apple Mail on the Mac, newest first: each one's id, when it came, the sender, the subject, its mailbox, and whether it is unread (sent, drafts, and deleted mail are left out). For when you have no email tool of your own, as for a sign-in code sent by email: then read it with mail_read, type it with logins_fill code, and archive the email with mail_archive. hours: how far back (default 24, at most 168); from: words in the sender's name or address; subject: words in the subject; unread_only. Mail is started hidden when it isn't running, so new mail arrives: if what you wait for isn't there yet, look again in a few seconds.",
+  "inputSchema": {
+    "additionalProperties": false,
+    "properties": {
+      "from": {
+        "description": "Words in the sender's name or address",
+        "type": "string"
+      },
+      "hours": {
+        "description": "How many hours back (default 24, at most 168)",
+        "type": "integer"
+      },
+      "machine": {
+        "description": "The machine to use, by name, as the machines tool lists it. Leave it out when only one machine offers this tool.",
+        "type": "string"
+      },
+      "subject": {
+        "description": "Words in the subject",
+        "type": "string"
+      },
+      "unread_only": {
+        "description": "Only unread emails",
+        "type": "boolean"
+      }
+    },
+    "required": [],
+    "type": "object"
+  },
+  "name": "mail_find",
+  "title": "Find Recent Emails"
+}

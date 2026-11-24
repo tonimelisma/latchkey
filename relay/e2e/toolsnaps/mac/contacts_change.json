@@ -1,0 +1,186 @@
+{
+  "_meta": {
+    "latchkey/deadline_ms": 15000
+  },
+  "annotations": {
+    "destructiveHint": true,
+    "idempotentHint": false,
+    "openWorldHint": false,
+    "readOnlyHint": false,
+    "title": "Change Contacts"
+  },
+  "description": "Creates, changes, or deletes a card in the Mac's Contacts. action: create (at least a name or company), update (id and only the fields to change; a list such as phones replaces the card's whole list, so read the card first), delete (id; the card is removed from every device the Contacts sync with). An empty text clears a field. birthday is YYYY-MM-DD, or --MM-DD without a year. Groups: create_group (name), rename_group (group and the new name), delete_group (group; its cards stay in Contacts), add_to_group and remove_from_group (group and id, or ids for several cards).",
+  "inputSchema": {
+    "additionalProperties": false,
+    "properties": {
+      "action": {
+        "description": "What to do",
+        "enum": [
+          "create",
+          "update",
+          "delete",
+          "create_group",
+          "rename_group",
+          "delete_group",
+          "add_to_group",
+          "remove_from_group"
+        ],
+        "type": "string"
+      },
+      "addresses": {
+        "description": "The whole list of postal addresses; [] removes all",
+        "items": {
+          "properties": {
+            "city": {
+              "description": "city",
+              "type": "string"
+            },
+            "country": {
+              "description": "country",
+              "type": "string"
+            },
+            "label": {
+              "description": "label",
+              "type": "string"
+            },
+            "postal_code": {
+              "description": "postal code",
+              "type": "string"
+            },
+            "state": {
+              "description": "state",
+              "type": "string"
+            },
+            "street": {
+              "description": "street",
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        "type": "array"
+      },
+      "birthday": {
+        "description": "YYYY-MM-DD or --MM-DD",
+        "type": "string"
+      },
+      "department": {
+        "description": "Department",
+        "type": "string"
+      },
+      "emails": {
+        "description": "The whole list (it replaces the card's); [] removes all",
+        "items": {
+          "properties": {
+            "label": {
+              "description": "home, work, mobile, iphone, main, other, or your own",
+              "type": "string"
+            },
+            "value": {
+              "description": "The email address",
+              "type": "string"
+            }
+          },
+          "required": [
+            "value"
+          ],
+          "type": "object"
+        },
+        "type": "array"
+      },
+      "family_name": {
+        "description": "Last name",
+        "type": "string"
+      },
+      "given_name": {
+        "description": "First name",
+        "type": "string"
+      },
+      "group": {
+        "description": "The group (name or id, from contacts_find)",
+        "type": "string"
+      },
+      "id": {
+        "description": "The card's id, from contacts_find",
+        "type": "string"
+      },
+      "ids": {
+        "description": "For add_to_group and remove_from_group: several cards' ids",
+        "items": {
+          "type": "string"
+        },
+        "type": "array"
+      },
+      "job_title": {
+        "description": "Job title",
+        "type": "string"
+      },
+      "machine": {
+        "description": "The machine to use, by name, as the machines tool lists it. Leave it out when only one machine offers this tool.",
+        "type": "string"
+      },
+      "middle_name": {
+        "description": "Middle name",
+        "type": "string"
+      },
+      "name": {
+        "description": "For create_group and rename_group: the group's name",
+        "type": "string"
+      },
+      "nickname": {
+        "description": "Nickname",
+        "type": "string"
+      },
+      "organization": {
+        "description": "Company",
+        "type": "string"
+      },
+      "phones": {
+        "description": "The whole list (it replaces the card's); [] removes all",
+        "items": {
+          "properties": {
+            "label": {
+              "description": "home, work, mobile, iphone, main, other, or your own",
+              "type": "string"
+            },
+            "value": {
+              "description": "The phone number",
+              "type": "string"
+            }
+          },
+          "required": [
+            "value"
+          ],
+          "type": "object"
+        },
+        "type": "array"
+      },
+      "urls": {
+        "description": "The whole list (it replaces the card's); [] removes all",
+        "items": {
+          "properties": {
+            "label": {
+              "description": "home, work, mobile, iphone, main, other, or your own",
+              "type": "string"
+            },
+            "value": {
+              "description": "The web address",
+              "type": "string"
+            }
+          },
+          "required": [
+            "value"
+          ],
+          "type": "object"
+        },
+        "type": "array"
+      }
+    },
+    "required": [
+      "action"
+    ],
+    "type": "object"
+  },
+  "name": "contacts_change",
+  "title": "Change Contacts"
+}

@@ -1,0 +1,23 @@
+{
+  "id": "browser.rsvp-form",
+  "capability": "browser",
+  "instruction": "Open http://127.0.0.1:8471/rsvp and RSVP yes for 2 guests under the name Alex Test.",
+  "setup": [
+    "fixture pages rsvp"
+  ],
+  "check": [
+    "check pages got /rsvp-sent 'name=Alex Test' guests=2 answer=yes"
+  ],
+  "cleanup": [
+    "sweep pages"
+  ],
+  "required_calls": [
+    "browser_look",
+    "browser_act"
+  ],
+  "unneeded_calls": [
+    "shell_run",
+    "computer_act"
+  ],
+  "max_turns": 25
+}

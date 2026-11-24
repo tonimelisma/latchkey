@@ -1,0 +1,35 @@
+{
+  "id": "notes.add-to-shopping-list",
+  "capability": "notes",
+  "covers": [
+    "regressions.never_disturb_front_app"
+  ],
+  "instruction": "Add oat milk to my Shopping list note in the LatchkeyEval folder in Notes.",
+  "setup": [
+    "fixture notes shopping"
+  ],
+  "check": [
+    "check notes body-contains 'Shopping list' 'oat milk'",
+    "check notes body-contains 'Shopping list' eggs",
+    "check notes body-contains 'Shopping list' coffee"
+  ],
+  "cleanup": [
+    "sweep notes"
+  ],
+  "required_calls": [
+    "notes_change"
+  ],
+  "forbidden_calls": [
+    {
+      "tool": "notes_change",
+      "args_match": {
+        "action": "delete"
+      }
+    }
+  ],
+  "unneeded_calls": [
+    "computer_act",
+    "shell_run"
+  ],
+  "max_turns": 25
+}

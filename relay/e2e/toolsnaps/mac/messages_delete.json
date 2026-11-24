@@ -1,0 +1,32 @@
+{
+  "_meta": {
+    "latchkey/deadline_ms": 30000
+  },
+  "annotations": {
+    "destructiveHint": true,
+    "idempotentHint": false,
+    "openWorldHint": false,
+    "readOnlyHint": false,
+    "title": "Delete a Message"
+  },
+  "description": "Deletes one message in Messages on the Mac, by its id (the \"message …\" at the end of each line of messages_find and messages_read), from all the owner's devices, kept in Recently Deleted as Messages does: for a sign-in code text once you've used it. Done through Messages' window in the background, never bringing Messages forward; while the Mac is locked, at the next unlock.",
+  "inputSchema": {
+    "additionalProperties": false,
+    "properties": {
+      "machine": {
+        "description": "The machine to use, by name, as the machines tool lists it. Leave it out when only one machine offers this tool.",
+        "type": "string"
+      },
+      "message": {
+        "description": "The message's id",
+        "type": "string"
+      }
+    },
+    "required": [
+      "message"
+    ],
+    "type": "object"
+  },
+  "name": "messages_delete",
+  "title": "Delete a Message"
+}

@@ -1,0 +1,21 @@
+{
+  "id": "notes.create-planning",
+  "capability": "notes",
+  "instruction": "Create a note titled 'Planning 2027' in the LatchkeyEval folder in Notes, listing three points: budget, hiring, offsite.",
+  "setup": [],
+  "check": [
+    "check notes body-contains 'Planning 2027' budget",
+    "check notes body-contains 'Planning 2027' hiring",
+    "check notes body-contains 'Planning 2027' offsite"
+  ],
+  "cleanup": [
+    "sweep notes"
+  ],
+  "required_calls": [
+    "notes_change"
+  ],
+  "unneeded_calls": [
+    "computer_act"
+  ],
+  "max_turns": 25
+}

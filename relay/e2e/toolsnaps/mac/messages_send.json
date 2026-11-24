@@ -1,0 +1,41 @@
+{
+  "_meta": {
+    "latchkey/deadline_ms": 30000
+  },
+  "annotations": {
+    "destructiveHint": false,
+    "idempotentHint": false,
+    "openWorldHint": true,
+    "readOnlyHint": false,
+    "title": "Send a Message"
+  },
+  "description": "Sends a message from the Mac's Messages app: text, files, or both. to is a name from Contacts, a phone number, an email address, a group's name, or a conversation id from messages_find; for a person with several numbers and no conversation yet, the one Messages knows on iMessage, else a mobile number, is used and named in the answer. Attachments are paths of files on the Mac. If a name matches several people, nothing is sent and the choices are returned.",
+  "inputSchema": {
+    "additionalProperties": false,
+    "properties": {
+      "attachments": {
+        "description": "Paths of files on the Mac to send",
+        "items": {
+          "type": "string"
+        },
+        "type": "array"
+      },
+      "machine": {
+        "description": "The machine to use, by name, as the machines tool lists it. Leave it out when only one machine offers this tool.",
+        "type": "string"
+      },
+      "text": {
+        "description": "The message text",
+        "type": "string"
+      },
+      "to": {
+        "description": "Who or which conversation to send to",
+        "type": "string"
+      }
+    },
+    "required": [],
+    "type": "object"
+  },
+  "name": "messages_send",
+  "title": "Send a Message"
+}

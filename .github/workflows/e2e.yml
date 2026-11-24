@@ -1,0 +1,140 @@
+# End-to-end checks of the capabilities a pull request changes (spec 015 FR-1500 to FR-1506):
+# a real MCP client through a private relay started for the run, calling the real Linux program
+# (e2e-linux) and the Mac app's real tools (e2e-mac), each checked on the machine's own state,
+# and every tool compared with its snapshot in relay/e2e/toolsnaps. Both jobs always run, so they
+# can be required checks, and pass at once when nothing they cover changed. No Claude, no secrets,
+# nothing reaches anyone's own Mac. A snapshot that differs fails the job and is uploaded as an
+# artifact (toolsnaps-<kind>) to commit in the same pull request.
+name: e2e
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+concurrency:
+  group: e2e-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  pick:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      linux: ${{ steps.pick.outputs.linux }}
+      mac: ${{ steps.pick.outputs.mac }}
+      linux_checks: ${{ steps.pick.outputs.linux_checks }}
+      mac_checks: ${{ steps.pick.outputs.mac_checks }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # the diff against the pull request's base
+          persist-credentials: false
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
+        with:
+          go-version-file: relay/go.mod
+          cache-dependency-path: relay/go.sum
+      - id: pick
+        working-directory: relay
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+        run: go run ./cmd/e2e pick -base "$BASE"
+
+  e2e-linux:
+    needs: pick
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: relay
+    steps:
+      - name: Nothing selected
+        if: needs.pick.outputs.linux != 'true'
+        working-directory: .
+        run: echo "No change to the relay or the Linux program; nothing to check."
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: needs.pick.outputs.linux == 'true'
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
+        if: needs.pick.outputs.linux == 'true'
+        with:
+          go-version-file: relay/go.mod
+          cache-dependency-path: relay/go.sum
+      - name: The relay's own tools (private relay, pretend Mac, headless Chrome)
+        if: contains(needs.pick.outputs.linux_checks, 'relay')
+        run: go run ./cmd/e2e relay -update-snapshots
+      - name: The Linux program (Debian container with systemd)
+        if: contains(needs.pick.outputs.linux_checks, 'linux')
+        run: go run ./cmd/linuxcheck -toolsnaps e2e/toolsnaps/linux -update-snapshots
+      - name: Tool snapshots unchanged
+        if: needs.pick.outputs.linux == 'true'
+        run: |
+          git add -N e2e/toolsnaps
+          if ! git diff --exit-code --stat -- e2e/toolsnaps; then
+            git diff -- e2e/toolsnaps | head -200
+            echo "::error::What Claude sees of a tool changed. If it is meant, commit the snapshots from the artifact toolsnaps-linux (or run the check with -update-snapshots) in this pull request."
+            exit 1
+          fi
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: failure() && needs.pick.outputs.linux == 'true'
+        with:
+          name: toolsnaps-linux
+          path: relay/e2e/toolsnaps
+
+  e2e-mac:
+    needs: pick
+    runs-on: macos-26
+    timeout-minutes: 60
+    defaults:
+      run:
+        working-directory: relay
+    steps:
+      - name: Nothing selected
+        if: needs.pick.outputs.mac != 'true'
+        working-directory: .
+        run: echo "No change to the Mac app; nothing to check."
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: needs.pick.outputs.mac == 'true'
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
+        if: needs.pick.outputs.mac == 'true'
+        with:
+          go-version-file: relay/go.mod
+          cache-dependency-path: relay/go.sum
+      - name: XcodeGen, pinned by checksum
+        if: needs.pick.outputs.mac == 'true'
+        working-directory: .
+        run: |
+          curl -sSfL -o "$RUNNER_TEMP/xcodegen.zip" https://github.com/yonaskolb/XcodeGen/releases/download/2.45.0/xcodegen.zip
+          echo "fb55d430229e0c00c4c354e682f2ac86f413f28468fbf83cd8b85d0a703a0fdb  $RUNNER_TEMP/xcodegen.zip" | shasum -a 256 -c
+          unzip -q "$RUNNER_TEMP/xcodegen.zip" -d "$RUNNER_TEMP/xcodegen"
+          echo "$RUNNER_TEMP/xcodegen/xcodegen/bin" >>"$GITHUB_PATH"
+      - name: Build for testing (signed ad hoc)
+        if: needs.pick.outputs.mac == 'true'
+        working-directory: macos
+        run: |
+          set -o pipefail
+          xcodegen generate --quiet
+          xcodebuild -project Latchkey.xcodeproj -scheme Latchkey -destination 'platform=macOS' \
+            -derivedDataPath "$RUNNER_TEMP/dd" CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM= \
+            build-for-testing -quiet
+      - name: The Mac app's real tools through a private relay
+        if: needs.pick.outputs.mac == 'true'
+        env:
+          CHECKS: ${{ needs.pick.outputs.mac_checks }}
+        run: go run ./cmd/e2e mac -checks "$CHECKS" -derived-data "$RUNNER_TEMP/dd" -update-snapshots
+      - name: Tool snapshots unchanged
+        if: needs.pick.outputs.mac == 'true'
+        run: |
+          git add -N e2e/toolsnaps
+          if ! git diff --exit-code --stat -- e2e/toolsnaps; then
+            git diff -- e2e/toolsnaps | head -200
+            echo "::error::What Claude sees of a tool changed. If it is meant, commit the snapshots from the artifact toolsnaps-mac in this pull request."
+            exit 1
+          fi
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: failure() && needs.pick.outputs.mac == 'true'
+        with:
+          name: toolsnaps-mac
+          path: relay/e2e/toolsnaps
