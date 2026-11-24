@@ -267,25 +267,19 @@ final class HangingServerC: @unchecked Sendable {
 
     /// The scripts Safari runs work in a real page whose eval throws.
     @MainActor @Test func theAsyncRouteRunsWhereThePageReplacedEval() async throws {
-        let p = TestPage()
-        // In a window that never comes on screen, as Latchkey's own browser keeps its pages: on
-        // GitHub's runner a view without one didn't finish loading within 30 s.
-        let holder = LockedBrowser.holder(for: p.view)
-        defer {
-            holder.contentView = nil
-            holder.close()
-        }
-        try await p.load(
-            """
-            <html><head><title>Amex</title><script>
-            window.eval = function () { throw new Error('eval is disabled'); };
-            </script></head><body><p>Hi</p></body></html>
-            """)
+        // A real page in Latchkey's own browser (a bare web view didn't finish loading on GitHub's
+        // runner); Safari's start and result scripts are run in it as they are.
+        let p = LockedBrowser(cookies: { [] })
+        defer { p.discard() }
+        _ = try await p.open(
+            html: "<title>Amex</title><script>window.eval = function () { throw new Error('eval is disabled'); };"
+                + "</script><p>Hi</p>",
+            base: URL(string: "https://shop.example.com/")!)
         func run(_ code: String) async throws -> String {
             let id = UUID().uuidString
             let body = try #require(PageScripts.asyncBodies(code).first)
             #expect(try await p.run(PageScripts.startAsync(id: id, body: body)) == "started")
-            for _ in 0..<100 {
+            for _ in 0..<500 {
                 let r = try await p.run(PageScripts.asyncResult(id: id))
                 if r != "running" { return r }
                 try await Task.sleep(for: .milliseconds(20))
