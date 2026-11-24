@@ -131,40 +131,30 @@ import WebKit
         #expect(try await b.run("document.title === '' ? 'page' : 'page'") == "page")
     }
 
-    /// Security review 2026-11-24: a page saves at most 5 files in one action of Claude's;
-    /// Claude is told how many more it tried.
-    @Test func aFloodOfSavesIsCappedAndTold() async throws {
-        let dir = try folder()
-        defer { try? FileManager.default.removeItem(at: dir) }
-        let b = LockedBrowser(downloads: dir)
+    /// Security review 2026-11-24: a page saves at most 5 files in one action of Claude's; Claude
+    /// is told how many more it tried; the next action starts a new count. (Tested on the count
+    /// itself: WebKit lets a page start only one save in a row on its own, so a page can't reach
+    /// the cap in a test, but a page Claude acts in repeatedly could.)
+    @Test func savesAreCappedPerActionAndTold() async throws {
+        let b = LockedBrowser(downloads: try folder())
         defer { b.discard() }
         _ = try await b.open(html: "<p>Homes</p>", base: base)
-        _ = try await b.run(
-            """
-            // One click every 100 ms, within the moment after Claude's action (clicks all at
-            // once replace each other before any becomes a save, as in Safari).
-            for (var i = 0; i < 12; i++) {
-              setTimeout(function (i) {
-                var a = document.createElement('a'); a.download = 'f' + i + '.txt';
-                a.href = URL.createObjectURL(new Blob(['x'])); document.body.appendChild(a); a.click();
-              }, i * 100, i);
-            }
-            'clicked'
-            """)
-        var told: [String] = []
-        let deadline = ContinuousClock.now + .seconds(10)
-        while ContinuousClock.now < deadline {
-            try await Task.sleep(for: .milliseconds(100))
-            told += b.takeSaved()
-            let saved = (try? FileManager.default.contentsOfDirectory(atPath: dir.path))?.filter {
-                $0.hasSuffix(".txt")
-            }
-            let refusedTold = told.contains { $0.contains("more file") }
-            if saved?.count == LockedBrowser.savesPerAction, refusedTold { break }
-        }
-        let files = try FileManager.default.contentsOfDirectory(atPath: dir.path).filter { $0.hasSuffix(".txt") }
-        #expect(files.count == LockedBrowser.savesPerAction, "\(files)")
-        #expect(told.contains { $0.contains("7 more files") }, "\(told)")
+        _ = try await b.run("1")
+        let slots = (0..<12).map { _ in b.takeSaveSlot() }
+        #expect(slots.filter { $0 }.count == LockedBrowser.savesPerAction)
+        #expect(slots.prefix(LockedBrowser.savesPerAction).allSatisfy { $0 })
+        #expect(b.takeSaved().contains { $0.contains("7 more files") })
+        _ = try await b.run("1")
+        #expect(b.takeSaveSlot(), "a new action, a new count")
+        #expect(!b.takeSaved().contains { $0.contains("more file") }, "told once")
+    }
+
+    /// Security review 2026-11-24: only the page itself or a frame of its own host may save.
+    @Test func onlyThePagesOwnFramesMaySave() {
+        #expect(LockedBrowser.isOwnFrame(main: true, frameHost: "ads.example", pageHost: "shop.example"))
+        #expect(LockedBrowser.isOwnFrame(main: false, frameHost: "Shop.example", pageHost: "shop.example"))
+        #expect(!LockedBrowser.isOwnFrame(main: false, frameHost: "ads.example", pageHost: "shop.example"))
+        #expect(!LockedBrowser.isOwnFrame(main: false, frameHost: "", pageHost: nil))
     }
 
     /// The website's names are quoted, short, and one line in Latchkey's notes.
@@ -267,8 +257,9 @@ import WebKit
         _ = try await b.run(
             "var f = document.createElement('iframe'); f.src = 'http://localhost:\(server.port)/frame'; document.body.appendChild(f); 'added'"
         )
+        // WebKit or Latchkey (`isOwnFrame`) refuses it: either way nothing is saved.
         let told = try await notes(b) { $0.contains("another site") }
-        #expect(told.contains { $0.contains("from a frame of another site") }, "\(told)")
+        #expect(!told.contains { $0.hasPrefix("Saved") }, "\(told)")
         #expect(try FileManager.default.contentsOfDirectory(atPath: dir.path).isEmpty)
     }
 

@@ -559,9 +559,18 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownl
         MainActor.assumeIsolated { started(download) }
     }
 
+    /// FR-476: a save may come from the page itself or a frame of the page's own host, never a
+    /// frame of another site in it (security review 2026-11-24).
+    nonisolated static func isOwnFrame(main: Bool, frameHost: String, pageHost: String?) -> Bool {
+        if main { return true }
+        guard let pageHost, !pageHost.isEmpty else { return false }
+        return frameHost.lowercased() == pageHost.lowercased()
+    }
+
     /// FR-476: at most `savesPerAction` saves per action of Claude's (a page could start
-    /// hundreds); the rest are refused and counted for Claude.
-    private func takeSaveSlot() -> Bool {
+    /// hundreds); the rest are refused and counted for Claude. Each action of Claude's starts a
+    /// new count (`begin`).
+    func takeSaveSlot() -> Bool {
         guard savesInWindow < Self.savesPerAction else {
             savesRefused += 1
             return false
@@ -756,8 +765,8 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownl
             if navigationAction.shouldPerformDownload {
                 // Only the page's own frames, not another site's frame in it (security review).
                 let source = navigationAction.sourceFrame
-                let ownFrame =
-                    source.isMainFrame || source.securityOrigin.host.lowercased() == webView.url?.host()?.lowercased()
+                let ownFrame = Self.isOwnFrame(
+                    main: source.isMainFrame, frameHost: source.securityOrigin.host, pageHost: webView.url?.host())
                 if !mayDownload || !ownFrame {
                     saved(
                         "The page tried to save a file (\(Self.shown(url))) "
