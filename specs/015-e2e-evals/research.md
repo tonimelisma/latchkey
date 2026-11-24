@@ -94,18 +94,37 @@ built.
    the VM: Claude's process sits in Toni's session, and his Mac needs the relay's port. (b) Inside
    the test Mac: everything of the run lives in the copy and goes with it. Chosen: (b), FR-1512,
    FR-1514. The token is passed into the copy for the run only.
-2. **Where the token lives on Toni's Mac.** (a) A file: readable by anything Toni runs. (b) His
-   login keychain, read by the start script. Chosen: (b), set once by Toni (`claude setup-token`).
-3. **How the weekly results fit the intake's 64 KB entries.** (a) Change the intake's limit:
+2. **Where the token lives on the Mac that runs the tests.** (a) A file: readable by anything
+   the person runs. (b) Their login keychain (service `latchkey-eval-claude-token`), read by the
+   start script. Chosen: (b), set once (`claude setup-token`, pasted at the image script's
+   password prompt).
+3. **How the weekly results fit the intake's 64 KB entries** (only when sent, FR-1530). (a) Change the intake's limit:
    touches spec 014. (b) Send a summary (per task: passes, calls, errors, tokens; failed tries'
    tool calls cut to fit), compressed, split into several entries when larger, each sealed to the
    developer's key with `kind: "eval"` inside the sealed part. Chosen: (b); the intake stays as it
    is and can't tell results from reports.
-4. **How the real Mac app pairs on GitHub's runner without a person.** (a) A URL-scheme pairing
-   link: the app asks the Owner (FR-054a), a dialog the runner can't answer without
-   Accessibility. (b) A launch setting compiled only into Debug builds, accepting a pairing link
-   for a relay on localhost without asking. Chosen: (b), with a test that release builds don't
-   contain it. Security review before commit (pairing).
+4. **How the real Mac app's tools run on GitHub's runner without a person.** (a) A URL-scheme
+   pairing link: the app asks the Owner (FR-054a), a dialog the runner can't answer, and release
+   builds refuse a relay without TLS (FR-054b). (b) A Debug-only launch setting that pairs
+   without asking: a new pairing path in the app, needing a security review, for a test. (c) A
+   Swift test hosted by the app, as `LiveRelayTests` already is for `maccheck`: it pairs with
+   `PairingFlow.exchange(save: false)` and serves the app's real capabilities
+   (`AppModel.makeCapabilities()`, the same tools, handlers and descriptions) through the real
+   `RelayConnection`. Chosen: (c), no change to the app; what it doesn't cover (the menu, the
+   app's own pairing and permissions screens) is unit-tested already and covered weekly by the
+   installed release in the test Mac.
+4a. **How the installed release in the test Mac is paired without a person each week.** The
+   release refuses a relay without TLS, and a pairing link asks the Owner. Chosen: pair once,
+   while the image is prepared (one Connect click with the permissions): the image holds a
+   private relay's database, a test certificate authority trusted by the test Mac (the relay
+   answers at `https://relay.latchkey.test:8443`, a name only that Mac resolves), and the
+   account's passkey exported from Chrome's virtual authenticator. Each copy starts that relay
+   from the stored database, adds the stored passkey to a new virtual authenticator, signs in
+   and approves a fresh client token: the real sign-in and OAuth flows, no stored token.
+4b. **The base image.** Cirrus Labs' `ghcr.io/cirruslabs/macos-tahoe-base` (macOS 26; SSH on,
+   user `admin`; to confirm at build time). Chrome for Testing's headless shell and Claude Code
+   are installed into it by the image script; the `e2e` program is built for darwin/arm64 from
+   the clone and copied in each run, so the run always uses the clone's own code.
 5. **The path-to-capability map.** One file, `relay/e2e/capabilities.json` (paths as globs, each
    capability's checks); shared paths select everything. Chosen over per-check annotations so
    one file says what runs.

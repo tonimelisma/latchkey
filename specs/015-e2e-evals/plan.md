@@ -1,22 +1,23 @@
 # Spec 015 plan: end-to-end tests and evals — HOW
 
-Status: Draft for Toni's review (2026-11-24). Requirements: `spec.md`. Findings and the
+Status: Approved by Toni (2026-11-24); being built (`tasks.md`). Requirements: `spec.md`. Findings and the
 low-level choices Claude made: `research.md`. Formats: `contracts/task-format.md`,
 `contracts/eval-result.md`.
 
 ## Shape
 
 ```
-Per pull request (GitHub, blocks merging)          Weekly (Toni starts it on his Mac)
+Per pull request (GitHub, blocks merging)          Weekly (started by hand, any clone)
   e2e.yml                                            macos/scripts/weekly-eval.sh
    ├─ pick: changed paths → capabilities              ├─ tart clone latchkey-eval → run copy
    ├─ e2e-linux (ubuntu): relay + Linux program        ├─ inside the copy:
    │    real MCP client, toolsnaps relay/linux         │    newest signed release, private relay,
-   └─ e2e-mac (macos-26): Debug Mac app + relay        │    checks (all), ~20 tasks × 3 with
+   └─ e2e-mac (macos-26): app capabilities + relay     │    checks (all), ~20 tasks × 3 with
         real MCP client, local pages, toolsnaps mac    │    Claude Code (Sonnet, ≤ 1 hour)
-                                                       │    → sealed results → developer intake
+                                                       ├─ results file in the clone (always),
+                                                       │  sealed to the intake with --send
                                                        └─ tart delete the copy
-Cloud session start: no result this week? → one line to Toni: what to run.
+Toni's cloud session start: no sent result this week? → one line: what to run.
 ```
 
 ## Decisions
@@ -47,13 +48,14 @@ them (research.md decision 6):
 - `e2e-linux` (ubuntu-latest): the relay's own tools (`machines`, `feedback`, offline answers)
   with a pretend Mac, and the real Linux program in its systemd container (as `linuxcheck`):
   shell, files, pause, a capability turned off disappears (Constitution III).
-- `e2e-mac` (macos-26): the Mac app built for Debug, signed ad hoc, started with the Debug-only
-  pairing setting (research.md decision 4), paired with a private relay on the runner. Checks:
-  files (find, read, change, a picture), shell (run, check, the fence), Latchkey's own browser on
-  pages the check serves (read, act, a local sign-in form typed with a test login, a download
-  saved), a capability turned off disappears, the Mac going offline answers at once
-  (Constitution II). Everything else is listed as skipped with the reason (FR-1506): Notes,
-  Calendar, Reminders, Contacts, Messages, Mail, WhatsApp, computer control, Passwords.
+- `e2e-mac` (macos-26): the app's real capabilities served by a Swift test the app hosts
+  (`macos/Tests/E2EHostTests.swift`, the way `LiveRelayTests` serves `maccheck`; research.md
+  decision 4), paired with a private relay on the runner and driven by `e2e mac`. Checks: files
+  (find, read, change, a picture), shell (run, check), Latchkey's own browser on pages the check
+  serves (read, act, a download saved), a capability turned off disappears, the Mac going
+  offline answers at once (Constitution II). Everything else is listed as skipped with the
+  reason (FR-1506): Notes, Calendar, Reminders, Contacts, Messages, Mail, WhatsApp, computer
+  control, Passwords, location.
 Deadlines are generous (no tight timing on the slower runner), since every check blocks (Toni,
 "All block"); a check that turns flaky is fixed, never made optional. Adding `e2e-linux` and
 `e2e-mac` to the `main` ruleset's required checks is a settings change a cloud session can't
@@ -68,45 +70,52 @@ downloads them and commits them in the same pull request. This also makes the ru
 whose behavior changes gets a new name" (`.claude/rules/tool-design.md`) visible in review.
 
 ### D5. The weekly run (FR-1510 to FR-1517)
-`macos/scripts/weekly-eval.sh`, run by Toni in Terminal from the main checkout (it only reads
-it). It:
-1. checks Tart and the prepared image `latchkey-eval` exist, else says what to do (D6);
-2. reads the Claude token from Toni's login keychain (research.md decision 2) and keeps his Mac
-   awake for the run (`caffeinate -i`);
-3. clones the image to a run copy and starts it without a window (`tart run --no-graphics`), so
-   nothing appears on Toni's screen (FR-1514);
+`macos/scripts/weekly-eval.sh [--send]`, run in Terminal from any clone on an Apple silicon Mac
+(it only reads the clone, and writes `e2e-results/`, which git ignores). It:
+1. checks Tart and the prepared image `latchkey-eval` exist, else says to run the image script
+   (D6);
+2. reads the Claude token from the login keychain (research.md decision 2), builds `e2e` for
+   darwin/arm64 from the clone, and keeps the Mac awake for the run (`caffeinate -i`);
+3. clones the image to a run copy and starts it without a window (`tart run --no-graphics`),
+   so nothing appears on the screen (FR-1514);
 4. inside the copy, over SSH to the VM only: installs the newest signed Mac release (same
-   signature, so the image's permissions hold), starts a private relay, pairs, and runs
+   signature, so the image's permissions and pairing hold), starts the stored relay, signs in
+   with the stored passkey and approves a fresh client token (research.md decision 4a), and runs
    `e2e weekly` with the token in its environment only (no `ANTHROPIC_API_KEY`, never `--bare`);
 5. `e2e weekly` runs every check (FR-1516), then each task 3 times from a fresh start state
-   (setup, Claude Code with only Latchkey's tools, check, cleanup), stopping new tasks at one
-   hour (FR-1515); it seals the results to the developer's key and sends them to the intake
-   (D7);
-6. stops and deletes the copy whatever happened (a trap), and prints one line: sent, or why not.
+   (setup, Claude Code with only Latchkey's tools, check, cleanup), starting no new task after
+   one hour (FR-1515), and writes the result (`contracts/eval-result.md`);
+6. copies the result into `e2e-results/<run>.json` in the clone and prints the summary; with
+   `--send`, seals it to the developer's key and sends it to the intake (D7);
+7. stops and deletes the copy whatever happened (a trap), and prints one line: where the result
+   is, sent or not, or why it stopped.
 Claude Code runs with `--mcp-config` + `--strict-mcp-config`, `--allowedTools "mcp__latchkey__*"`,
-no built-in tools, `--max-turns` from the task, `--output-format stream-json --verbose`, an
-isolated `CLAUDE_CONFIG_DIR`; a run whose `system/init` shows Latchkey not connected stops
-before any task (FR-1523).
+`--tools ""` (no built-in tools), `--max-turns` from the task, `--output-format stream-json
+--verbose`, `--model sonnet`, an isolated `CLAUDE_CONFIG_DIR`; a run whose `system/init` shows
+Latchkey not connected stops before any task (FR-1523).
 
 ### D6. The prepared image (FR-1512, FR-1513)
-`macos/scripts/eval-image.sh` (Toni, once): pulls a macOS base image with Tart, installs Claude
-Code, Go's `e2e` binary and the newest Latchkey release in it, creates the test data sets with
-`e2e fixture` (Notes, Calendar, Reminders, Contacts, files, a test keychain of fake logins for
-the local pages; every item tagged), then opens the VM's window once so Toni approves
-Latchkey's permissions (Full Disk Access, Automation, Accessibility, Screen Recording; Screen
-Recording can only be approved by hand), and shuts it down. The weekly run checks the
-permissions first and reports `missing_permissions` instead of failing tasks (FR-1513). Done
-again only after a new macOS or a signature change.
+`macos/scripts/eval-image.sh`, once, from any clone: pulls the base image (research.md decision
+4b), installs Chrome's headless shell, Claude Code and the newest Latchkey release, makes the
+test certificate authority and trusts it in the test Mac, creates the relay's account and the
+pairing (`e2e prepare`, inside the copy), creates the test data sets with `e2e fixture`, asks
+for the Claude token at a password prompt (into the login keychain), then opens the VM's window
+once for the person to click Connect and approve Latchkey's permissions (Full Disk Access,
+Automation, Accessibility, Screen Recording; Screen Recording can only be approved by hand), and
+shuts it down. The weekly run checks the permissions first and reports `missing_permissions`
+instead of failing tasks (FR-1513). Done again only after a new macOS or a signature change.
 
 ### D7. Results and the reminder (FR-1511, FR-1530 to FR-1533)
-Results are sealed and sent as `contracts/eval-result.md` says, through the intake's existing
-endpoint (no intake change). `latchkey-reports` gains `evals` (list weekly results, joined by
-run, compared with the previous run: new failures, fixed, flaky) and `list` keeps showing only
-problem reports. The session-start hook (`scripts/hooks.sh`, cloud sessions only, where the
-developer's key is) runs `latchkey-reports evals --this-week`; with none it prints: "The weekly
-test run hasn't run this week: on your Mac, run macos/scripts/weekly-eval.sh in Terminal (about
-an hour; nothing to approve)." The session tells Toni that line. Each new failure becomes an
-issue found (FR-1532); results are deleted once dispositioned (FR-1533).
+Every run writes `e2e-results/<run>.json` in the clone (FR-1530, FR-1530a): a developer's agent
+in that clone reads it directly. With `--send`, the same result is sealed and sent as
+`contracts/eval-result.md` says, through the intake's existing endpoint (no intake change).
+`latchkey-reports` gains `evals` (list sent results, joined by run, compared with the previous
+run: new failures, fixed, flaky) and `list` keeps showing only problem reports. The session-start
+hook (`scripts/hooks.sh`, cloud sessions with the developer's key only) runs `latchkey-reports
+evals --this-week -quiet`; with none it prints: "The weekly test run hasn't run this week: on your
+Mac, run macos/scripts/weekly-eval.sh --send in Terminal (about an hour; nothing to approve)."
+The session tells Toni that line. Each new failure becomes an issue found (FR-1532); sent results
+are deleted once dispositioned (FR-1533).
 
 ### D8. Tasks (FR-1520 to FR-1526)
 About 20 tasks in `relay/e2e/tasks/` (format: `contracts/task-format.md`), spread over the
@@ -128,23 +137,23 @@ accounts stay NOT VERIFIED until Toni runs them.
 
 1. Shared start-up in `relay/internal/e2e`, `e2e pick` with its map, `e2e snap` with the relay
    and Linux snapshots, `e2e.yml` with `e2e-linux` (D1 to D4).
-2. The Debug pairing setting (security review), `e2e-mac` with its checks and the Mac snapshots
-   (D3, D4).
+2. `E2EHostTests`, `e2e mac` with its checks and the Mac snapshots, `e2e-mac` (D3, D4).
 3. `e2e fixture` and the task format, tried on GitHub's macOS runner for files and the browser
    (D8).
-4. `eval-image.sh` and `weekly-eval.sh`, then Toni's one-time image setup (D5, D6).
+4. `e2e prepare`, `eval-image.sh` and `weekly-eval.sh`, then the one-time image setup (D5, D6).
 5. Sealed results, `latchkey-reports evals`, the session-start line (D7).
 6. The task set, held-out and planted-instruction tasks (D8); docs (D9).
 
-## Toni's steps (all together, once)
+## Steps only a person at the Mac can do (all together, once)
 
-1. Make the subscription token: `claude setup-token` on his Mac, saved in his login keychain by
-   `eval-image.sh` when it asks (one paste into a password prompt, never into a chat).
-2. Run `macos/scripts/eval-image.sh` and approve Latchkey's permissions in the test Mac's
-   window when it opens (one sitting, about 10 minutes).
-3. Approve adding `e2e-linux` and `e2e-mac` to the required checks of `main` (one command run
-   through Latchkey on his Mac, the way the ruleset was set on 2026-11-24).
-Then each week, only if the session says it hasn't run: `macos/scripts/weekly-eval.sh`.
+1. Run `macos/scripts/eval-image.sh` in Terminal from the clone (about 30 minutes, mostly
+   downloads). When it asks, run `claude setup-token` and paste the token at its password
+   prompt (never into a chat). When the test Mac's window opens, click Connect and approve
+   Latchkey's permissions (about 10 minutes).
+2. Toni only: approve one Latchkey call that adds `e2e-linux` and `e2e-mac` to the required
+   checks of `main` (the way the ruleset was set on 2026-11-24; a cloud session's proxy refuses
+   settings writes).
+Then each week, when a session says so: `macos/scripts/weekly-eval.sh --send`.
 
 ## Consistency check (CLAUDE.md step 3a)
 
@@ -154,7 +163,7 @@ Then each week, only if the session says it hasn't run: `macos/scripts/weekly-ev
   FR-1526 D8 and the task contract; FR-1530 to FR-1533 D7 and the result contract; FR-1540,
   FR-1541 D9.
 - No new message crosses the relay–Mac boundary: the checks use the existing MCP surface and
-  agent protocol. The only new pairing path is Debug-only (research.md decision 4).
+  agent protocol. No new pairing path: the Swift host test and the test Mac use the existing ones (research.md decisions 4, 4a).
 - The intake (spec 014) is unchanged: results use its existing endpoint and 64 KB limit.
 - Spec 001 FR-680 to FR-689 (traces) are unchanged: the copy's traces go with the copy.
 - The regression-tests work (`docs/regression-coverage.md`) adds unit and CI tests; this spec
@@ -164,7 +173,7 @@ Then each week, only if the session says it hasn't run: `macos/scripts/weekly-ev
 ## Constitution check
 
 - I (outbound only): the Mac app dials out to a relay on the same runner or inside the copy;
-  nothing listens on Toni's Mac. Pass.
+  nothing listens on the host Mac. Pass.
 - II (fail fast): every check, task and the whole weekly run has a deadline; an offline-machine
   answer is itself checked. Pass.
 - III (disabled means nonexistent): checked on both runners (a capability turned off vanishes

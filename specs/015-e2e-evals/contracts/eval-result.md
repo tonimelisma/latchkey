@@ -1,7 +1,8 @@
 # Contract: a weekly result in the developer's intake (FR-1530 to FR-1533)
 
-Sent from inside the test Mac copy to the intake's existing report endpoint (spec 014
-FR-1420), sealed to the developer's key exactly as a problem report is; the intake can't tell
+Always written to `e2e-results/<run>.json` in the clone the run started from (FR-1530; one
+file, not split, not sealed). With `--send`, also sent to the intake's existing report endpoint
+(spec 014 FR-1420), sealed to the developer's key exactly as a problem report is; the intake can't tell
 the two apart. Each sealed entry is at most 64 KB; a larger result is split into parts
 (research.md decision 3).
 

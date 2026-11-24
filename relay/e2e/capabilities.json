@@ -1,0 +1,35 @@
+{
+  "comment": "Spec 015 FR-1500: which end-to-end checks a pull request's changed files select. A path under 'shared' selects every capability. A capability with no checks on a runner is reported as skipped with its reason (FR-1506) and runs in the weekly test Mac run. relay/internal/evals tests that every source file matches a path here.",
+  "shared": [
+    "relay/agentproto/**",
+    "relay/internal/server/**",
+    "relay/internal/hub/**",
+    "relay/internal/mcpserver/**",
+    "relay/internal/e2e/**",
+    "relay/internal/evals/**",
+    "relay/internal/testagent/**",
+    "relay/cmd/e2e/**",
+    "relay/e2e/capabilities.json",
+    "relay/go.mod",
+    "relay/go.sum",
+    ".github/workflows/e2e.yml"
+  ],
+  "capabilities": {
+    "relay": {"runner": "linux", "checks": ["relay"], "paths": ["relay/**"]},
+    "linux": {"runner": "linux", "checks": ["linux"], "paths": ["linux/**", "relay/cmd/linuxcheck/**", "relay/e2e/toolsnaps/linux/**"]},
+    "mac": {"runner": "mac", "checks": ["core"], "paths": ["macos/App/*", "relay/e2e/toolsnaps/mac/latchkey_*", "macos/Shared/**", "macos/Helper/**", "macos/project.yml", "macos/Config/**", "macos/Tests/E2EHostTests.swift", "macos/App/Assets.xcassets/**"], "selects": ["files", "shell", "browser", "logins", "notes", "messages", "mail", "whatsapp", "computer", "calendar", "reminders", "contacts", "location"]},
+    "files": {"runner": "mac", "checks": ["files"], "paths": ["macos/App/Files/**", "relay/e2e/toolsnaps/mac/files_*"]},
+    "shell": {"runner": "mac", "checks": ["shell"], "paths": ["macos/App/Shell/**", "relay/e2e/toolsnaps/mac/shell_*"]},
+    "browser": {"runner": "mac", "checks": ["browser"], "paths": ["macos/App/Browser/**", "relay/e2e/toolsnaps/mac/browser_*"]},
+    "logins": {"runner": "mac", "checks": [], "skip": "needs the Owner's Passwords, which GitHub's Mac runner doesn't have", "paths": ["macos/App/SignIn/**", "relay/e2e/toolsnaps/mac/logins_*"]},
+    "notes": {"runner": "mac", "checks": [], "skip": "needs Automation permission for Notes, which GitHub's Mac runner can't grant", "paths": ["macos/App/Notes/**", "relay/e2e/toolsnaps/mac/notes_*"]},
+    "messages": {"runner": "mac", "checks": [], "skip": "needs Messages and Full Disk Access, which GitHub's Mac runner doesn't have", "paths": ["macos/App/Messages/**", "relay/e2e/toolsnaps/mac/messages_*"]},
+    "mail": {"runner": "mac", "checks": [], "skip": "needs an Apple Mail account and Full Disk Access, which GitHub's Mac runner doesn't have", "paths": ["macos/App/Mail/**", "relay/e2e/toolsnaps/mac/mail_*"]},
+    "whatsapp": {"runner": "mac", "checks": [], "skip": "needs WhatsApp signed in, which no test machine has", "paths": ["macos/App/WhatsApp/**", "relay/e2e/toolsnaps/mac/whatsapp_*"]},
+    "computer": {"runner": "mac", "checks": [], "skip": "needs Accessibility and Screen Recording, which GitHub's Mac runner can't grant", "paths": ["macos/App/Computer/**", "relay/e2e/toolsnaps/mac/computer_*"]},
+    "calendar": {"runner": "mac", "checks": [], "skip": "needs Calendar access, which GitHub's Mac runner can't grant", "paths": ["macos/App/Calendar/**", "relay/e2e/toolsnaps/mac/calendar_*"]},
+    "reminders": {"runner": "mac", "checks": [], "skip": "needs Reminders access, which GitHub's Mac runner can't grant", "paths": ["macos/App/Reminders/**", "relay/e2e/toolsnaps/mac/reminders_*"]},
+    "contacts": {"runner": "mac", "checks": [], "skip": "needs Contacts access, which GitHub's Mac runner can't grant", "paths": ["macos/App/Contacts/**", "relay/e2e/toolsnaps/mac/contacts_*"]},
+    "location": {"runner": "mac", "checks": [], "skip": "needs Location Services, which GitHub's Mac runner can't grant", "paths": ["macos/App/Location/**", "relay/e2e/toolsnaps/mac/location_*", "relay/e2e/toolsnaps/mac/maps_*"]}
+  }
+}

@@ -1,7 +1,6 @@
 # Spec 015: End-to-end tests and evals — WHAT and WHY
 
-Status: Draft for Toni's review (2026-11-24). No tasks or code until Toni has reviewed it
-(CLAUDE.md, "Development process", step 6).
+Status: Approved by Toni (2026-11-24: "sounds liek a great plan. build it uflly"); tasks `tasks.md`.
 Research, sources and the options weighed: `research.md`. How: `plan.md`.
 
 ## Problem
@@ -29,6 +28,9 @@ Toni's conditions") says verifies nothing.
 - Every per-pull-request end-to-end check blocks merging ("All block").
 - The weekly run is started by Toni by hand: "prompt to run it manually if not run that week".
 - Weekly results go, encrypted to the developer's key, to the developer's intake (spec 014).
+- The Mac tests run from the repository: anyone who clones it can run them from their own Mac
+  (Toni, 2026-11-24). "if someone is running tests, they are a developer, so the results should
+  stay local for their dev agent": results stay in their copy unless they ask to send them.
 - Every tool's name, description and inputs are snapshotted; a change fails until the snapshot
   is updated in the same commit.
 - The weekly set: about 20 tasks, 3 tries each, capped at one hour.
@@ -54,7 +56,7 @@ Toni's conditions") says verifies nothing.
    then it fails, naming the tool.
 4. Nothing in a pull request's checks reaches Toni's Mac, his data, or his approvals.
 
-### US2 (P1): Once a week, real Claude does real tasks on a test Mac
+### US2 (P1): Once a week, real Claude does real tasks on a test Mac, from any clone
 1. Given no weekly run this week, when a cloud session starts, then it tells Toni in one line
    what to run, a single action on his Mac.
 2. Given Toni starts it, then it runs with no further approval or question, on a fresh copy of
@@ -103,15 +105,18 @@ Toni's conditions") says verifies nothing.
   screen state it has no) shall be listed as skipped with the reason, never counted as passed.
 
 ### Weekly run (the test Mac on Toni's Mac)
-- **FR-1510** The weekly run shall be started by Toni by hand with a single action on his Mac
-  (Toni, 2026-11-24). It shall ask nothing further and need no Latchkey approval.
+- **FR-1510** The weekly run shall be started by hand with a single command from a clone of the
+  repository, on any Apple silicon Mac (Toni, 2026-11-24: anyone with the repository can run
+  it). It shall ask nothing further and need no Latchkey approval.
 - **FR-1511** When a cloud session starts and no weekly result has arrived in the current week
   (Monday to Sunday, Toni's time zone), the session shall tell Toni in one line that the weekly
-  run is due and the single action that starts it.
+  run is due and the single command that starts it (with the option that sends the results to
+  the intake).
 - **FR-1512** Each run shall use a fresh copy of a prepared test Mac image that holds only test
   data and Latchkey's permissions approved once; the copy shall be deleted at the end, pass or
   fail, and nothing of the run shall stay on Toni's Mac except the prepared image.
-- **FR-1513** Preparing the image shall be a one-time step for Toni, done again only when its
+- **FR-1513** Preparing the image shall be a one-time step, run from the repository by whoever
+  runs the tests, done again only when its
   permissions are lost (a new macOS, or Latchkey's signature changing); the run shall say so
   plainly when a permission is missing instead of failing tasks one by one.
 - **FR-1514** The run shall never touch Toni's own session: no window brought to the front, no
@@ -144,9 +149,13 @@ Toni's conditions") says verifies nothing.
   to the tasks themselves; reports shall give its score separately.
 
 ### Results
-- **FR-1530** The weekly results shall go to the developer's intake (spec 014), encrypted to the
-  developer's key, as their own kind of entry, apart from problem reports; nothing in them
-  shall hold Toni's data (the test Mac has none).
+- **FR-1530** The weekly results shall always be written to a file in the clone the run started
+  from (outside version control) and summed up in Terminal. Only when the person running it asks
+  (an option on the command) shall they also go to the developer's intake (spec 014), encrypted
+  to the developer's key, as their own kind of entry, apart from problem reports; nothing in them
+  shall hold anyone's own data (the test Mac has none).
+- **FR-1530a** A developer's agent working in the same clone shall be able to read the local
+  results file directly; Toni's cloud sessions read the sent ones (FR-1531).
 - **FR-1531** A cloud session shall list and read the weekly results with the developer's
   command, as it reads problem reports, and compare them with the previous week's: new
   failures, fixed tasks, flaky tasks.

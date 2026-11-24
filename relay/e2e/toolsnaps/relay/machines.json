@@ -1,0 +1,15 @@
+{
+  "annotations": {
+    "idempotentHint": false,
+    "openWorldHint": false,
+    "readOnlyHint": true
+  },
+  "description": "Lists the machines Claude can reach through Latchkey: each one's name, whether it's a Mac or a Linux server, whether it's online (or when it was last seen), and the tools it offers. Call it when you don't know which machine to use; then pass the name as machine to the other tools.",
+  "inputSchema": {
+    "additionalProperties": false,
+    "properties": {},
+    "type": "object"
+  },
+  "name": "machines",
+  "title": "Your Machines"
+}
