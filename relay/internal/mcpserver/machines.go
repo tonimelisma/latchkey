@@ -185,6 +185,15 @@ func kindPhrase(kind string) string {
 	return "Mac"
 }
 
+// onlyPhrase says that only machines of this kind have something: "Mac only", "Linux servers
+// only".
+func onlyPhrase(kind string) string {
+	if kind == store.KindLinux {
+		return "Linux servers only"
+	}
+	return kindPhrase(kind) + " only"
+}
+
 func copyTool(t *mcp.Tool) *mcp.Tool {
 	data, err := json.Marshal(t)
 	if err != nil {
@@ -211,11 +220,15 @@ func toMap(v any) (map[string]any, bool) {
 
 // unionSchema unites object schemas: every property of any of them (the first definition wins,
 // enum values are united), a property some kinds lack marked "(Mac only)" or "(Linux servers
-// only)", and required only what all require.
+// only)", enum values some kinds lack named the same way in the property's description (Toni,
+// 2026-11-24: a Mac refused latchkey_log's "settings", which only Linux servers have), and
+// required only what all require.
 func unionSchema(schemas []map[string]any, kinds []string) map[string]any {
 	out := map[string]any{"type": "object"}
 	props := map[string]any{}
 	has := map[string][]string{}
+	enumKinds := map[string][]string{}          // property → the kinds whose schema has an enum for it
+	valueKinds := map[string]map[any][]string{} // property → enum value → the kinds that take it
 	var order []string
 	for i, s := range schemas {
 		p, _ := s["properties"].(map[string]any)
@@ -227,6 +240,15 @@ func unionSchema(schemas []map[string]any, kinds []string) map[string]any {
 		for _, k := range keys {
 			has[k] = append(has[k], kinds[i])
 			prop, _ := p[k].(map[string]any)
+			if vals, ok := prop["enum"].([]any); ok {
+				enumKinds[k] = append(enumKinds[k], kinds[i])
+				if valueKinds[k] == nil {
+					valueKinds[k] = map[any][]string{}
+				}
+				for _, v := range vals {
+					valueKinds[k][v] = append(valueKinds[k][v], kinds[i])
+				}
+			}
 			old, seen := props[k].(map[string]any)
 			if !seen {
 				props[k] = prop
@@ -246,17 +268,27 @@ func unionSchema(schemas []map[string]any, kinds []string) map[string]any {
 		}
 	}
 	for _, k := range order {
+		if len(enumKinds[k]) > 1 {
+			prop, _ := props[k].(map[string]any)
+			vals, _ := prop["enum"].([]any)
+			var notes []string
+			for _, v := range vals {
+				if ks := valueKinds[k][v]; len(ks) < len(enumKinds[k]) {
+					notes = append(notes, fmt.Sprint(v)+": "+onlyPhrase(ks[0]))
+				}
+			}
+			if len(notes) > 0 {
+				desc, _ := prop["description"].(string)
+				prop["description"] = strings.TrimSpace(desc + " (" + strings.Join(notes, "; ") + ")")
+			}
+		}
 		if len(has[k]) < len(kinds) {
 			prop, _ := props[k].(map[string]any)
 			if prop == nil {
 				prop = map[string]any{}
 			}
 			desc, _ := prop["description"].(string)
-			note := "(" + kindPhrase(has[k][0]) + " only)"
-			if has[k][0] == store.KindLinux {
-				note = "(Linux servers only)"
-			}
-			prop["description"] = strings.TrimSpace(desc + " " + note)
+			prop["description"] = strings.TrimSpace(desc + " (" + onlyPhrase(has[k][0]) + ")")
 			props[k] = prop
 		}
 	}
