@@ -64,6 +64,27 @@ import Testing
         #expect(fake.calls.isEmpty, "Notes' scripting was never asked about a note its database doesn't have")
     }
 
+    /// The same through Notes' scripting, used for a database layout Latchkey doesn't know: Notes'
+    /// -1728 is "no such note", not "Notes reported an error: Can't get note id …" (2026-11-24).
+    @Test func aGoneNoteReadThroughNotesScriptingIsNoSuchNote() async throws {
+        let fake = FakeScripts()
+        fake.answer = { _, args in
+            throw ScriptError.failed(
+                "execution error: Notes got an error: Can't get note id \"\(args.first ?? "")\". (-1728)")
+        }
+        await #expect {
+            _ = try await NotesScriptReader(scripts: fake).read(id: Self.goneID)
+        } throws: { error in
+            guard case NotesStore.Failure.noSuchNote(let id) = error else { return false }
+            return id == Self.goneID
+        }
+        // Any other failure of Notes is still told as it is.
+        fake.answer = { _, _ in throw ScriptError.failed("execution error: Notes got an error: busy (-600)") }
+        await #expect(throws: ScriptError.failed("execution error: Notes got an error: busy (-600)")) {
+            _ = try await NotesScriptReader(scripts: fake).read(id: Self.goneID)
+        }
+    }
+
     // MARK: regressions.calendar_repeat_said
 
     /// 2026-11-02 (0.8.85): making an event repeat set the repeat, but the update's answer didn't
@@ -133,6 +154,7 @@ import Testing
         #expect(!resultText(found).contains("Lisbon"), "\(resultText(found))")
         // With no query, notes_find also lists the folders; the bad number is still named.
         let bare = await find.handler(.object(["limit": bad]))
+        #expect(bare.isError, "an error, not the folders beside it: \(resultText(bare))")
         #expect(resultText(bare).contains("limit"), "\(resultText(bare))")
         #expect(!resultText(bare).contains("Groceries"), "\(resultText(bare))")
     }
