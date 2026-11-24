@@ -281,6 +281,10 @@ func (m *macCheck) files() error {
 	return nil
 }
 
+// pageRE finds the name an answer gives Claude's page: page "pk3wz" (OwnPages: p and four of
+// its letters and digits).
+var pageRE = regexp.MustCompile(`page "(p[a-z0-9]{4})"`)
+
 var jobRE = regexp.MustCompile(`\b(job\d+)\b`) // ShellJobs names jobs job1, job2, …
 
 func (m *macCheck) shell() error {
@@ -329,8 +333,12 @@ func (m *macCheck) browser() error {
 	if err != nil {
 		return err
 	}
-	page := regexp.MustCompile(`\bp[0-9a-z]{3}\b`).FindString(t)
+	page := ""
+	if g := pageRE.FindStringSubmatch(t); g != nil {
+		page = g[1]
+	}
 	if page == "" || !strings.Contains(t, "Page marker "+m.marker) {
+		step("browser_look answered: %q", short(t))
 		return fmt.Errorf("browser_look of the served page: %q", t)
 	}
 	step("browser_look opened the served page as %s", page)
