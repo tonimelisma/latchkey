@@ -46,7 +46,7 @@ extension PageScripts {
         let start = min(max(p.offset, 0), total)
         let next = min(start + units, total)
         if next < total {
-            out += "\n\n(Characters \(start)–\(next) of \(total). Read on with browser_read and offset \(next).)"
+            out += "\n\n(Characters \(start)–\(next) of \(total). Read on with browser_look and offset \(next).)"
         }
         return out + elements
     }

@@ -82,7 +82,9 @@ applies, except:
   unit test suite (reported, not gating) on GitHub's macOS runner for every change to `macos/`
   (2026-11-23). The runner is macOS 26 and slower: about 30 tests miss their timing limits there
   on main too, so compare a branch's failed tests (printed with why, and any crash report) with
-  main's.
+  main's. There, work behind a deadline can wait longer than the deadline just for a thread (a
+  stand-in read 21 to 31 s late, 2026-11-24), so a test sets such a limit long unless the limit
+  is what it checks (`CodeFinder.readLimit`).
 - Problem reports (spec 014): `go run ./cmd/latchkey-reports list` in `relay/` lists the open
   reports at the intake (`latchkey-feedback.melisma.net`) and opens them;
   `latchkey-reports delete <id>` deletes a dispositioned one. It needs the developer's private

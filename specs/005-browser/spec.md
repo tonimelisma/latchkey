@@ -263,7 +263,9 @@ phone, Claude can't check a reservation in the Owner's account or fill in a form
 - **FR-454** When a site replaces, removes, or adds a sign-in cookie in Claude's pages, Latchkey
   shall record in Latchkey's log, once per site for changes made together, which ones, by name,
   and whether each replaced or removed one was still Safari's copy; never a value.
-- **FR-455** While the Mac is unlocked, when Claude opens a page of a site the Owner is signed in
+- **FR-455** (Amended 2026-11-24 by FR-474: a page opens in a Safari tab only when Claude asks to
+  show it, and the sign-in cookie no longer decides; Toni: "all actions should default to the
+  background browser actually, unless the user wants to see whatever's going on". Was:) While the Mac is unlocked, when Claude opens a page of a site the Owner is signed in
   to in Safari (Safari holds a sign-in cookie for it lasting more than a day), the page shall
   open in a new background tab of Claude's at the end of the Owner's front Safari window, with
   the tab in front unchanged, and later calls that name the page shall work in that tab; any
@@ -334,7 +336,7 @@ phone, Claude can't check a reservation in the Owner's account or fill in a form
   never by what the page answers (2026-11-22: scripts with await or several statements failed in
   Safari tabs with an AppleScript error, an async arrow's value was lost, and Amex's page
   replaced `eval`). Amends FR-463.
-- **FR-471** `browser_read` with an address and `screenshot` shall answer with the new page's
+- **FR-471** `browser_look` with an address and `screenshot` shall answer with the new page's
   picture (2026-11-22: only its text came back).
 - **FR-472** The list of what is on a page shall include the controls of frames from the page's
   own site (and their text with the page's), links without an address that have words (scripts
@@ -344,6 +346,39 @@ phone, Claude can't check a reservation in the Owner's account or fill in a form
 - **FR-473** Typing into a page's rich text editor shall go through the editor as typing does, and
   submit without a form shall send Enter down, press and up (2026-11-23: claude.ai's prompt box
   was emptied and nothing sent).
+- **FR-474** Claude's pages shall open in Latchkey's own browser, locked or unlocked, whatever
+  sites the Owner is signed in to in Safari. Only when Claude asks to show a page (the Owner asked
+  to see what Claude does) and the Mac is unlocked shall it open in a new background tab of
+  Claude's at the end of the Owner's front Safari window, as FR-455 said (the tab in front
+  unchanged); while locked it shall open in Latchkey's own browser and Claude shall be told
+  nobody can watch. Signing in there is as before: a saved sign-in typed by Latchkey (spec 013),
+  or the page moved into Safari with sign_in_again (FR-459, FR-1374). The page tool is renamed
+  `browser_look` (its behavior changed; open chats are restarted). (Toni, 2026-11-24: "all
+  actions should default to the background browser actually, unless the user wants to see
+  whatever's going on"; "A show in Safari option", "As today: saved password or Safari",
+  "Rename it".) Showing also applies to a site Latchkey signs in to itself: the tab then has
+  Safari's own sign-in, as with sign_in_again (spec 013 FR-1374). Amends FR-455, FR-444, and spec
+  013 FR-1351 for a page Claude shows.
+- **FR-475** When a page in Latchkey's own browser offers a file to save during Claude's own
+  action (a link marked to save, often a file the page made itself; or a file the server sends
+  as an attachment, or one no page shows, except a PDF, FR-452), Latchkey shall save it into the
+  Mac's Downloads folder as Safari does, under the file's own name and never over another file,
+  marked as downloaded from the web, and the page shall stay where it was (problem report
+  2026-11-24: the page went to the file's address, which ended Claude's script, and nothing was
+  saved; Toni: "Save it, like Safari"). A file over 500 MB (or saves running together past it),
+  or still arriving after 10 minutes, shall be stopped and nothing kept; a file arriving is
+  written under a name of Latchkey's own and gets its name only once complete, so a stopped save
+  never removes anyone else's file. A click that started a save shall not also load the link
+  (it would save the file twice). A page that shows Claude's page in a Safari tab of Claude's
+  (FR-474) saves as Safari does.
+- **FR-476** A save the page starts on its own, more than 5 seconds after Claude's last action or
+  after Claude opened another page, a save from a frame of another site, and any save past the
+  fifth in one action shall save nothing, and Claude shall be told (a page must not fill
+  Downloads by itself). The website's file names and addresses shall be quoted in what Claude is
+  told, marked as the website's (security review 2026-11-24).
+- **FR-477** Claude's next answer from that page shall say what was saved, with the file's path,
+  or why nothing was; an answer shall wait for the saves started during Claude's last action,
+  at most 20 seconds, and say which are still arriving.
 
 Amended by spec 013 FR-1350 to FR-1355 (Toni, 2026-11-21): for a site Latchkey holds a saved
 password for, while Sign-in is On, FR-441, FR-442 and FR-457 copy none of Safari's cookies (nor a
