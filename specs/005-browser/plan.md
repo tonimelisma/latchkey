@@ -479,6 +479,34 @@ next call after unlock removes the store's cookies (`removeData`) and the pages'
 A picture drawn in Latchkey's own browser (FR-439) copies only while locked too. Not chosen: a
 setting, or Claude choosing the browser per page (Toni's rule decides from the sign-in itself).
 
+## D14. The background browser by default, Safari to watch, and pages' own saves (FR-474 to FR-477, 2026-11-24)
+
+Serves FR-474 to FR-477 (problem reports 2026-11-24; Toni's answers in the spec). `browser_open`
+no longer reads Safari's sign-in cookies (`OwnPages.signedIn` and `inSafari` are gone): it opens
+a Safari page (D13's `openTab`) only when the call has `show_in_safari` and `isLocked()` is false;
+while locked it opens Latchkey's own page with a note. The public page tool is `browser_look`
+(the internal operation keeps its name `browser_read`); every text Claude reads names
+`browser_look`.
+
+`LockedBrowser` is also a `WKDownloadDelegate`. The navigation-action check answers `.download`
+for an action WebKit marks `shouldPerformDownload` (a link with `download`), and the response
+check answers `.download` for a main-frame attachment (`Content-Disposition: attachment`) or a
+type WebKit can't show (not a PDF, which stays FR-452's file page), both only while `mayDownload`:
+during Claude's action (`acting`) or within `downloadWindow` (5 s) after it ends (`end()` sets
+`actedUntil`; opening a page clears it). Else the action is cancelled with a note. The
+destination is `BrowserDownloads.free(name)` in Downloads, the name from
+`BrowserDownloads.name` (disposition, then WebKit's suggested name); on finish the file is
+quarantined. A watcher task cancels a save past 500 MB (`directLimit`) or 10 minutes and removes
+its part-file; closing the page does the same. Notes (at most 5 per answer) go to Claude through
+`told`, which first waits up to 20 s for saves running then.
+
+Options weighed for where the save's outcome is told: (a) in the next answer through `told`,
+after waiting for running saves (chosen: every answer from the page already goes there, and a
+script's own answer is the script's value); (b) a wait inside each action for a save that may
+start (rejected: a fixed wait for something that may never come, against
+`.claude/rules/tool-design.md`); (c) a separate tool to list saves (rejected: one more step for
+Claude, and the answer has the path anyway).
+
 ## Testing
 
 A stand-in script runner answers like Safari: open, read (page JSON), click, type, missing

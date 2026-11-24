@@ -47,37 +47,48 @@ import Testing
         return seen
     }
 
-    /// FR-455: a site the owner is signed in to has a sign-in cookie in Safari (HttpOnly, or
-    /// named for a token) that lasts more than a day; a bot-protection cookie of 30 minutes or an
-    /// analytics cookie scripts set doesn't count.
-    @Test func signedInSitesAreThoseWithALongLivedSignInCookie() {
-        let pages = OwnPages(
-            cookies: {
-                [
-                    Self.cookie(".target.example", "refreshToken", httpOnly: true, days: 30),
-                    Self.cookie(".shop.example", "__cf_bm", httpOnly: true, days: 0.02),
-                    Self.cookie(".news.example", "_ga", httpOnly: false, days: 365),
-                    Self.cookie("app.example", "idToken", httpOnly: false, days: 7),
-                ]
-            }, isLocked: { false })
-        #expect(pages.signedIn("www.target.example"))
-        #expect(pages.signedIn("app.example"))
-        #expect(!pages.signedIn("www.shop.example"))
-        #expect(!pages.signedIn("news.example"))
-        #expect(!pages.signedIn("example.com"))
-    }
-
-    /// FR-455, FR-457: only while unlocked does a signed-in site go to Safari.
-    @Test func safariOnlyWhileUnlockedAndOnlyForSignedInSites() {
+    /// FR-455 (amended 2026-11-24, Toni: "all actions should default to the background browser
+    /// actually, unless the user wants to see whatever's going on"): while unlocked, a site the
+    /// owner is signed in to in Safari opens in Latchkey's own browser unless Claude asks to show
+    /// it; while locked, show_in_safari opens nothing in Safari and says why.
+    @Test func pagesOpenInTheBackgroundBrowserUnlessShown() async throws {
+        let fake = FakeSafariTabs()
         let locked = Flag(false)
-        let pages = OwnPages(
+        let own = OwnPages(
             cookies: { [Self.cookie(".shop.example", "session", httpOnly: true, days: 30)] },
             isLocked: { locked.value })
-        #expect(pages.inSafari("https://www.shop.example/cart"))
-        #expect(!pages.inSafari("https://other.example/"))
-        #expect(!pages.inSafari("about:blank"))
+        defer { own.closeAll() }
+        let t = tools(fake, own: own)
+        let r = await t["browser_look"]!.handler(.object(["url": .string("about:blank")]))
+        #expect(!r.isError, "\(r.content.jsonText)")
+        #expect(fake.windows[0].tabs.count == 2, "no Safari tab")
+        #expect(r.content.jsonText.contains("From Latchkey's own browser"), "\(r.content.jsonText)")
         locked.value = true
-        #expect(!pages.inSafari("https://www.shop.example/cart"))
+        let shown = await t["browser_look"]!.handler(
+            .object(["url": .string("about:blank"), "show_in_safari": .bool(true)]))
+        #expect(!shown.isError, "\(shown.content.jsonText)")
+        #expect(fake.windows[0].tabs.count == 2, "locked: no Safari tab")
+        #expect(shown.content.jsonText.contains("nobody can watch"), "\(shown.content.jsonText)")
+    }
+
+    /// The description says pages open in the background and when to show one in Safari.
+    @Test func theDescriptionSaysWhenToShowAPageInSafari() {
+        let read = BrowserCapability.readTools(browser: SafariBrowser(scripts: FakeSafariTabs()), own: OwnPages(cookies: { [] }))
+            .first { $0.tool.name == "browser_look" }
+        let d = read?.tool.description ?? ""
+        #expect(d.contains("in the background") && d.contains("show_in_safari") && d.contains("asks to see"))
+        #expect(!d.contains("a site the owner is signed in to in Safari opens in a background Safari tab"))
+    }
+
+    /// The case of the report: a signed-in site, unlocked, without show_in_safari, never reaches
+    /// Safari (the open is refused in a test without network only after the choice is made).
+    @Test func aSignedInSiteIsNotMovedToSafariOnItsOwn() async throws {
+        let fake = FakeSafariTabs()
+        let own = OwnPages(
+            cookies: { [Self.cookie(".shop.example", "session", httpOnly: true, days: 30)] }, isLocked: { false })
+        defer { own.closeAll() }
+        _ = await tools(fake, own: own)["browser_look"]!.handler(.object(["url": .string("https://www.shop.example/cart")]))
+        #expect(fake.windows[0].tabs.count == 2, "no Safari tab of Claude's")
     }
 
     /// FR-456: while the Mac is unlocked, Claude's pages in Latchkey's own browser take none of
@@ -99,15 +110,16 @@ import Testing
         #expect(!after.contains("sid="), "unlocked again: the copy is gone: \(after)")
     }
 
-    /// FR-455: a signed-in site opens in a background Safari tab of Claude's; later calls by its
-    /// name work there; a url with its name loads in the same tab; close closes the tab.
-    @Test func aSignedInSiteOpensInASafariTabOfClaudesWhileUnlocked() async throws {
+    /// FR-455: with show_in_safari, a page opens in a background Safari tab of Claude's; later
+    /// calls by its name work there; a url with its name loads in the same tab; close closes it.
+    @Test func aShownPageOpensInASafariTabOfClaudesWhileUnlocked() async throws {
         let fake = FakeSafariTabs()
         let own = OwnPages(
             cookies: { [Self.cookie(".shop.example", "session", httpOnly: true, days: 30)] }, isLocked: { false })
         defer { own.closeAll() }
         let t = tools(fake, own: own)
-        let r = await t["browser_read"]!.handler(.object(["url": .string("https://www.shop.example/cart")]))
+        let r = await t["browser_look"]!.handler(
+            .object(["url": .string("https://www.shop.example/cart"), "show_in_safari": .bool(true)]))
         #expect(!r.isError, "\(r.content.jsonText)")
         #expect(fake.windows[0].tabs.count == 3)
         #expect(fake.windows[0].tabs.last?.url == "https://www.shop.example/cart")
@@ -117,13 +129,13 @@ import Testing
         let name = try #require(Self.pageName(text), "\(text)")
 
         let before = fake.windows[0].tabs[2].scriptsRun
-        let read = await t["browser_read"]!.handler(.object(["page": .string(name)]))
+        let read = await t["browser_look"]!.handler(.object(["page": .string(name)]))
         #expect(!read.isError, "\(read.content.jsonText)")
         #expect(fake.windows[0].tabs[2].scriptsRun > before, "read in Claude's Safari tab")
         #expect(fake.windows[0].tabs[0].scriptsRun == 0 && fake.windows[0].tabs[1].scriptsRun == 0)
         #expect(own.listing().contains(name))
 
-        let again = await t["browser_read"]!.handler(
+        let again = await t["browser_look"]!.handler(
             .object(["url": .string("https://www.shop.example/orders"), "page": .string(name)]))
         #expect(!again.isError, "\(again.content.jsonText)")
         #expect(fake.windows[0].tabs.count == 3 && fake.windows[0].tabs[2].url == "https://www.shop.example/orders")
@@ -141,7 +153,7 @@ import Testing
         let own = OwnPages(cookies: { [] }, isLocked: { false })
         defer { own.closeAll() }
         let name = try await own.open(html: "<p>Signed out</p>", base: URL(string: "https://www.shop.example/")!)
-        let r = await tools(fake, own: own)["browser_read"]!.handler(
+        let r = await tools(fake, own: own)["browser_look"]!.handler(
             .object(["sign_in_again": .bool(true), "page": .string(name)]))
         #expect(!r.isError, "\(r.content.jsonText)")
         #expect(fake.windows[0].tabs.count == 3)
@@ -162,11 +174,12 @@ import Testing
         let own = OwnPages(cookies: { [] }, isLocked: { false }, record: { _ in }, sessions: sessions)
         defer { own.closeAll() }
         let name = try await own.open(html: "<p>Sign in</p>", base: URL(string: "https://a.test/login")!)
-        let r = await tools(fake, own: own)["browser_read"]!.handler(
+        let r = await tools(fake, own: own)["browser_look"]!.handler(
             .object(["sign_in_again": .bool(true), "page": .string(name)]))
         #expect(!r.isError, "\(r.content.jsonText)")
         #expect(own.safariPage(name) != nil, "the same name, now in Safari")
         #expect(fake.windows[0].tabs.last?.url == "https://a.test/login")
-        #expect(!own.inSafari("https://a.test/other"), "nothing remembered: the next page starts in Latchkey's own")
+        _ = await tools(fake, own: own)["browser_look"]!.handler(.object(["url": .string("https://a.test/other")]))
+        #expect(fake.windows[0].tabs.count == 3, "nothing remembered: the next page starts in Latchkey's own")
     }
 }

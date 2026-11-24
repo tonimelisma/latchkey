@@ -255,7 +255,7 @@ import Testing
         let other = SafariBrowser(scripts: fake, settleLimit: .seconds(3))
         try await other.pick("10.2")
         let theirs = try p.adopt(other, address: "https://news.example.com/")
-        let r = await t["browser_read"]!.handler(.object(["url": .string("about:blank")]))
+        let r = await t["browser_look"]!.handler(.object(["url": .string("about:blank")]))
         #expect(!r.isError, "\(r.content.jsonText)")
         #expect(r.content.jsonText.contains("From Latchkey's own browser"), "a new page of its own")
         #expect(name(in: r) != theirs)
@@ -268,7 +268,7 @@ import Testing
         let p = OwnPages(cookies: { [] }, isLocked: { false })
         defer { p.closeAll() }
         let t = tools(fake, p)
-        let r = await t["browser_read"]!.handler(.object(["url": .string("about:blank"), "screenshot": .bool(true)]))
+        let r = await t["browser_look"]!.handler(.object(["url": .string("about:blank"), "screenshot": .bool(true)]))
         #expect(!r.isError, "\(r.content.jsonText)")
         #expect(r.content.jsonText.contains("\"image\""), "a picture, not only text")
         #expect(p.list().count == 1, "one page opened")
@@ -280,19 +280,19 @@ import Testing
         defer { p.closeAll() }
         let t = tools(fake, p)
         let tabsBefore = fake.windows.flatMap(\.tabs).count
-        let first = await t["browser_read"]!.handler(.object(["url": .string("about:blank")]))
+        let first = await t["browser_look"]!.handler(.object(["url": .string("about:blank")]))
         #expect(!first.isError, "\(first.content.jsonText)")
         #expect(first.content.jsonText.contains("From Latchkey's own browser"), "FR-443")
-        let second = await t["browser_read"]!.handler(.object(["url": .string("about:blank")]))
+        let second = await t["browser_look"]!.handler(.object(["url": .string("about:blank")]))
         let a = name(in: first)
         let b = name(in: second)
         #expect(a != nil && b != nil && a != b)
         #expect(fake.windows.flatMap(\.tabs).count == tabsBefore, "no tab of Claude's in Safari")
-        let unnamed = await t["browser_read"]!.handler(.object([:]))
+        let unnamed = await t["browser_look"]!.handler(.object([:]))
         #expect(unnamed.isError && unnamed.content.jsonText.contains(a ?? "?"), "several: refused with the list")
-        let named = await t["browser_read"]!.handler(.object(["page": .string(a ?? "")]))
+        let named = await t["browser_look"]!.handler(.object(["page": .string(a ?? "")]))
         #expect(!named.isError, "\(named.content.jsonText)")
-        let list = await t["browser_read"]!.handler(.object(["tabs": .bool(true)]))
+        let list = await t["browser_look"]!.handler(.object(["tabs": .bool(true)]))
         #expect(list.content.jsonText.contains(a ?? "?") && list.content.jsonText.contains(b ?? "?"), "FR-451")
     }
 
@@ -302,12 +302,12 @@ import Testing
         let p = OwnPages(cookies: { [] }, isLocked: { false })
         defer { p.closeAll() }
         let t = tools(fake, p)
-        let opened = await t["browser_read"]!.handler(.object(["url": .string("about:blank")]))
+        let opened = await t["browser_look"]!.handler(.object(["url": .string("about:blank")]))
         #expect(!opened.isError)
-        let tab = await t["browser_read"]!.handler(.object(["tab": .string("10.2")]))
+        let tab = await t["browser_look"]!.handler(.object(["tab": .string("10.2")]))
         #expect(!tab.isError && tab.content.jsonText.contains("tab 10.2"), "\(tab.content.jsonText)")
         let run = fake.windows[0].tabs[1].scriptsRun
-        let own = await t["browser_read"]!.handler(.object([:]))
+        let own = await t["browser_look"]!.handler(.object([:]))
         #expect(!own.isError && own.content.jsonText.contains("Latchkey's own browser"), "\(own.content.jsonText)")
         #expect(fake.windows[0].tabs[1].scriptsRun == run, "not the Owner's tab")
         let again = await t["browser_act"]!.handler(
@@ -321,7 +321,7 @@ import Testing
         let p = OwnPages(cookies: { [] }, isLocked: { false })
         defer { p.closeAll() }
         let t = tools(fake, p)
-        let opened = await t["browser_read"]!.handler(.object(["url": .string("about:blank")]))
+        let opened = await t["browser_look"]!.handler(.object(["url": .string("about:blank")]))
         let page = name(in: opened) ?? ""
         let act = await t["browser_act"]!.handler(
             .object([

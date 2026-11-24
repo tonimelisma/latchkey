@@ -1,0 +1,113 @@
+import Foundation
+import Testing
+import WebKit
+
+@testable import Latchkey
+
+/// Spec 005 FR-475 to FR-477: a file the page offers to save (a link with `download`, often a
+/// blob the page made itself) is saved into Downloads during Claude's own action, as Safari
+/// saves it, instead of the page going to the file's address (problem report 2026-11-24: the
+/// page went to the blob's address, which ended Claude's script, and nothing was saved).
+@MainActor @Suite struct BrowserSavedFilesTests {
+    let base = URL(string: "https://test.example/")!
+
+    /// A folder of the test's own for Downloads; removed at the end.
+    func folder() throws -> URL {
+        let f = FileManager.default.temporaryDirectory.appending(path: "saved-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: f, withIntermediateDirectories: true)
+        return f
+    }
+
+    /// Looks for the browser's notes of saved files for up to 10 s (the save ends on its own).
+    func notes(_ b: LockedBrowser, until: (String) -> Bool) async throws -> [String] {
+        var told: [String] = []
+        let deadline = ContinuousClock.now + .seconds(10)
+        while !told.contains(where: until), ContinuousClock.now < deadline {
+            try await Task.sleep(for: .milliseconds(50))
+            told += b.takeSaved()
+        }
+        return told
+    }
+
+    static let makeAndClick = """
+        var blob = new Blob(['{"homes": 3}'], {type: 'application/json'});
+        var a = document.createElement('a');
+        a.download = 'homes.json';
+        a.href = URL.createObjectURL(blob);
+        document.body.appendChild(a);
+        a.click();
+        'clicked'
+        """
+
+    @Test func aFileThePageMakesIsSavedDuringClaudesScriptAndThePageStays() async throws {
+        let dir = try folder()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let b = LockedBrowser(downloads: dir)
+        defer { b.discard() }
+        _ = try await b.open(html: "<p>Homes</p>", base: base)
+        #expect(try await b.run(Self.makeAndClick) == "clicked")
+        let told = try await notes(b) { $0.contains("homes.json") }
+        let file = dir.appending(path: "homes.json")
+        #expect(told.contains { $0.contains("Saved") && $0.contains(file.path) }, "\(told)")
+        #expect(try String(contentsOf: file, encoding: .utf8) == #"{"homes": 3}"#)
+        // Marked as downloaded from the web, as Safari marks its downloads (FR-438).
+        #expect(getxattr(file.path, "com.apple.quarantine", nil, 0, 0, 0) > 0)
+        // The page is where it was: the script's page, not the blob's address.
+        #expect(try await b.read(offset: 0).url == "https://test.example/")
+        #expect(try await b.run("document.body.innerText.trim()") == "Homes")
+    }
+
+    /// Never over another file: a second save of the same name gets "name 2".
+    @Test func aSecondSaveOfTheSameNameGetsAFreeName() async throws {
+        let dir = try folder()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        try Data("old".utf8).write(to: dir.appending(path: "homes.json"))
+        let b = LockedBrowser(downloads: dir)
+        defer { b.discard() }
+        _ = try await b.open(html: "<p>Homes</p>", base: base)
+        _ = try await b.run(Self.makeAndClick)
+        let told = try await notes(b) { $0.contains("homes 2.json") }
+        #expect(told.contains { $0.contains("homes 2.json") }, "\(told)")
+        #expect(try String(contentsOf: dir.appending(path: "homes.json"), encoding: .utf8) == "old")
+    }
+
+    /// Security: a page saves nothing on its own, only during Claude's action and the moment
+    /// after it (a click's save can start just after the click returned). Claude is told.
+    @Test func aPagesOwnSaveLaterIsRefusedAndThePageStays() async throws {
+        let dir = try folder()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let b = LockedBrowser(downloads: dir, downloadWindow: .zero)
+        defer { b.discard() }
+        _ = try await b.open(
+            html: """
+                <p>Homes</p><script>
+                setTimeout(function () {
+                  var a = document.createElement('a'); a.download = 'later.json';
+                  a.href = URL.createObjectURL(new Blob(['x'])); document.body.appendChild(a); a.click();
+                }, 300)
+                </script>
+                """, base: base)
+        let told = try await notes(b) { $0.contains("on its own") }
+        #expect(told.contains { $0.contains("a file the page made") && $0.contains("nothing was saved") }, "\(told)")
+        #expect(try FileManager.default.contentsOfDirectory(atPath: dir.path).isEmpty)
+        #expect(try await b.read(offset: 0).url == "https://test.example/")
+    }
+
+    /// The note goes to Claude with the next answer from the page, after the browser line.
+    @Test func theNoteIsInTheNextAnswer() async throws {
+        let dir = try folder()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let b = LockedBrowser(downloads: dir)
+        defer { b.discard() }
+        _ = try await b.open(html: "<p>Homes</p>", base: base)
+        _ = try await b.run(Self.makeAndClick)
+        var said = ""
+        let deadline = ContinuousClock.now + .seconds(10)
+        while !said.contains("homes.json"), ContinuousClock.now < deadline {
+            try await Task.sleep(for: .milliseconds(50))
+            said = await BrowserCapability.told(.text("the page"), b).plainText
+        }
+        #expect(said.contains("homes.json") && said.contains("the page"), "\(said)")
+        #expect(!(await BrowserCapability.told(.text("the page"), b).plainText.contains("homes.json")), "told once")
+    }
+}
