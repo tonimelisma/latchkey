@@ -141,9 +141,13 @@ import WebKit
         _ = try await b.open(html: "<p>Homes</p>", base: base)
         _ = try await b.run(
             """
+            // One click every 100 ms, within the moment after Claude's action (clicks all at
+            // once replace each other before any becomes a save, as in Safari).
             for (var i = 0; i < 12; i++) {
-              var a = document.createElement('a'); a.download = 'f' + i + '.txt';
-              a.href = URL.createObjectURL(new Blob(['x'])); document.body.appendChild(a); a.click();
+              setTimeout(function (i) {
+                var a = document.createElement('a'); a.download = 'f' + i + '.txt';
+                a.href = URL.createObjectURL(new Blob(['x'])); document.body.appendChild(a); a.click();
+              }, i * 100, i);
             }
             'clicked'
             """)
