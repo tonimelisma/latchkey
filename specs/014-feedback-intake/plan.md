@@ -22,7 +22,11 @@ needed). A machine whose `share_reports` changes makes the relay re-sync the too
 ## D3. Filing on the relay (FR-1410 to FR-1416)
 
 `feedback` is answered by the relay as before, its description saying what must stay out of a
-report (FR-1411). It builds the report of FR-1412 from what Claude wrote, unchanged, seals it
+report (FR-1411) and asking Claude to name every machine involved in its `machines` argument
+(FR-1410a; the older single `machine` is still accepted from chats that started before). The
+machines part (`reportMachines`) matches the names to the account's machines, case-insensitively,
+and gives each one's kind, versions and screen state, never its name; with no name that matches,
+every online machine (FR-1412, report format 2, 2026-11-24). It builds the report of FR-1412 from what Claude wrote, unchanged, seals it
 with `crypto/hpke` to the configured developer key (package `relay/reports`), and stores only the
 sealed bytes in the `report_outbox` table. A sender goroutine finds each report's proof of work
 for the current hour, posts it to the intake with backoff, deletes it on acceptance or a lasting

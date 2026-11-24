@@ -42,16 +42,30 @@ const WorkBits = 20
 
 // Report is what a sealed report holds (FR-1412, contract feedback-intake.md).
 type Report struct {
-	Format         int       `json:"format"`
-	At             time.Time `json:"at"`
-	Summary        string    `json:"summary"`
-	Details        string    `json:"details"`
-	Client         string    `json:"client,omitempty"`
-	RelayVersion   string    `json:"relay_version,omitempty"`
-	MachineVersion string    `json:"machine_version,omitempty"`
-	System         string    `json:"system,omitempty"`
-	Screen         string    `json:"screen,omitempty"`
-	Reporter       string    `json:"reporter,omitempty"`
+	Format       int       `json:"format"`
+	At           time.Time `json:"at"`
+	Summary      string    `json:"summary"`
+	Details      string    `json:"details"`
+	Client       string    `json:"client,omitempty"`
+	RelayVersion string    `json:"relay_version,omitempty"`
+	// MachineVersion, System and Screen: format 1 only (one machine). Format 2 uses Machines.
+	MachineVersion string `json:"machine_version,omitempty"`
+	System         string `json:"system,omitempty"`
+	Screen         string `json:"screen,omitempty"`
+	// Machines (format 2): each machine Claude named as involved, or, when it named none,
+	// every machine online at the time (Toni, 2026-11-24). Never a machine's name (FR-1412).
+	Machines []Machine `json:"machines,omitempty"`
+	Reporter string    `json:"reporter,omitempty"`
+}
+
+// Machine is what a report says about one machine (FR-1412).
+type Machine struct {
+	// Named: Claude named it as involved; false for one listed because Claude named none.
+	Named   bool   `json:"named,omitempty"`
+	Kind    string `json:"kind,omitempty"` // "mac" or "linux"
+	Version string `json:"version,omitempty"`
+	System  string `json:"system,omitempty"`
+	Screen  string `json:"screen,omitempty"` // "locked" or "unlocked"; Macs only
 }
 
 // PublicKey reads a developer public key written as base64 (as GenerateKey gives it).

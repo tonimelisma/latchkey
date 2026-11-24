@@ -49,8 +49,9 @@ var feedbackTool = &mcp.Tool{
 		"a page or app didn't respond, an answer was wrong, unclear, or missing something, you needed a workaround or " +
 		"several tries, or you gave up; one report per problem, even when you found a way around it. " +
 		"summary: one line saying what went wrong. details: what you were doing, each tool you called with its arguments " +
-		"and what it answered (the relevant parts), what you expected, and what you tried next. machine: the machine it " +
-		"was about, if any. The report leaves the owner's hands: never put in it passwords, verification codes, full " +
+		"and what it answered (the relevant parts), what you expected, and what you tried next. machines: every machine " +
+		"the problem involved, by name as the machines tool lists them; name each one whenever a machine was involved " +
+		"(the report then carries its Latchkey and system versions and screen state, never its name). The report leaves the owner's hands: never put in it passwords, verification codes, full " +
 		"account or card numbers, the text of messages or emails, or anything else private the problem doesn't need; " +
 		"describe them instead (\"a 6-digit code\", \"the bank's statements page\"). It is encrypted so only the " +
 		"developer can read it. Works even when no machine is online.",
@@ -59,7 +60,12 @@ var feedbackTool = &mcp.Tool{
 		"properties": map[string]any{
 			"summary": map[string]any{"type": "string", "description": "One line: what went wrong"},
 			"details": map[string]any{"type": "string", "description": "What you did, each tool call with its arguments and answer, what you expected, what you tried next; nothing private"},
-			"machine": map[string]any{"type": "string", "description": "The machine it was about, by name, if any"},
+			"machines": map[string]any{
+				"type": "array", "items": map[string]any{"type": "string"},
+				"description": "Every machine the problem involved, by name as the machines tool lists them; empty only when none was",
+			},
+			// Chats that started before 2026-11-24 still send the single name.
+			"machine": map[string]any{"type": "string", "description": "One machine it was about; use machines instead"},
 		},
 		"required":             []string{"summary", "details"},
 		"additionalProperties": false,
@@ -118,7 +124,18 @@ func (s *Server) fileFeedback(userID string) mcp.ToolHandler {
 		case summary == "":
 			result, outcome = errorResult("Give a summary: one line saying what went wrong."), store.OutcomeError
 		default:
-			r := s.report(userID, ms, text("machine", agentproto.MaxFeedbackName), summary,
+			var named []string
+			if one := text("machine", agentproto.MaxFeedbackName); one != "" {
+				named = append(named, one)
+			}
+			if list, ok := args["machines"].([]any); ok {
+				for _, v := range list {
+					if n, ok := v.(string); ok && strings.TrimSpace(n) != "" && len(named) < 16 {
+						named = append(named, truncate(strings.TrimSpace(n), agentproto.MaxFeedbackName))
+					}
+				}
+			}
+			r := s.report(userID, ms, named, summary,
 				text("details", agentproto.MaxFeedbackDetails), truncate(client, agentproto.MaxFeedbackName), start)
 			id := agentproto.NewFeedbackID()
 			sealed, err := reports.Seal(s.opts.Reports.DeveloperKey, r)
@@ -143,31 +160,51 @@ func (s *Server) fileFeedback(userID string) mcp.ToolHandler {
 
 // report builds what a shared report holds (FR-1412): no account, email address, machine name,
 // or relay address.
-func (s *Server) report(userID string, ms []machine, named, summary, details, client string, at time.Time) reports.Report {
-	r := reports.Report{At: at.UTC(), Summary: summary, Details: details, Client: client, RelayVersion: s.opts.Version}
+func (s *Server) report(userID string, ms []machine, named []string, summary, details, client string, at time.Time) reports.Report {
+	r := reports.Report{Format: 2, At: at.UTC(), Summary: summary, Details: details, Client: client, RelayVersion: s.opts.Version}
 	if tag, err := s.store.ReporterTag(userID); err == nil {
 		r.Reporter = tag
 	}
-	var m *machine
-	for i := range ms {
-		if named != "" && strings.EqualFold(ms[i].Device.Name, named) {
-			m = &ms[i]
-		}
-	}
-	if m == nil && len(ms) == 1 {
-		m = &ms[0]
-	}
-	if m != nil {
-		r.MachineVersion = m.Device.AppVersion
-		r.System = m.Device.OSVersion
-		if m.Device.Kind == store.KindMac && m.Device.OSVersion != "" {
-			r.System = "macOS " + m.Device.OSVersion
-		}
-		if m.State != nil && m.State.ScreenLocked != nil {
-			r.Screen = map[bool]string{true: "locked", false: "unlocked"}[*m.State.ScreenLocked]
-		}
-	}
+	r.Machines = reportMachines(ms, named)
 	return r
+}
+
+// reportMachines says what a report holds about machines (FR-1412; Toni, 2026-11-24): each
+// machine Claude named, or, when it named none it knows, every machine online now. Names that
+// match no machine are left out; a machine's name never goes in.
+func reportMachines(ms []machine, named []string) []reports.Machine {
+	var out []reports.Machine
+	for _, m := range ms {
+		for _, n := range named {
+			if strings.EqualFold(m.Device.Name, n) {
+				out = append(out, machineFacts(m, true))
+				break
+			}
+		}
+	}
+	if len(out) > 0 {
+		return out
+	}
+	for _, m := range ms {
+		if m.Online {
+			out = append(out, machineFacts(m, false))
+		}
+	}
+	return out
+}
+
+func machineFacts(m machine, named bool) reports.Machine {
+	f := reports.Machine{Named: named, Kind: m.Device.Kind, Version: m.Device.AppVersion, System: m.Device.OSVersion}
+	if f.Kind == "" {
+		f.Kind = store.KindMac
+	}
+	if f.Kind == store.KindMac && f.System != "" {
+		f.System = "macOS " + f.System
+	}
+	if m.State != nil && m.State.ScreenLocked != nil {
+		f.Screen = map[bool]string{true: "locked", false: "unlocked"}[*m.State.ScreenLocked]
+	}
+	return f
 }
 
 // kickReports wakes the sender at once.
