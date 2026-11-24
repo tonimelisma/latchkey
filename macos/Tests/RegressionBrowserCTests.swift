@@ -268,6 +268,13 @@ final class HangingServerC: @unchecked Sendable {
     /// The scripts Safari runs work in a real page whose eval throws.
     @MainActor @Test func theAsyncRouteRunsWhereThePageReplacedEval() async throws {
         let p = TestPage()
+        // In a window that never comes on screen, as Latchkey's own browser keeps its pages: on
+        // GitHub's runner a view without one didn't finish loading within 30 s.
+        let holder = LockedBrowser.holder(for: p.view)
+        defer {
+            holder.contentView = nil
+            holder.close()
+        }
         try await p.load(
             """
             <html><head><title>Amex</title><script>
