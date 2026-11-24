@@ -642,6 +642,17 @@ Latchkey's unused Mail permission (System Settings → Privacy & Security → Au
 
 ## History (newest first; what was done and found, kept as the record)
 
+Regression tests (2026-11-24, pull request #41; CLAUDE.md, "Every issue becomes a regression
+case"): every one of the 118 cases in the regressions groups now names the automated test that
+covers it, in `docs/regression-coverage.md`: 78 had one already, 26 got a new one, 12 have
+Latchkey's own decision tested while the rest needs a real site, the locked screen, macOS's
+privacy system or another app's window, and 2 can't be tested at all (Contacts' real iCloud
+records; the real Passwords app's export). For four cases a decision moved into a function
+tests can call, with no change in behavior (the Automation check before a script, setup's note
+for apps turned off earlier, a window button's name, which presses select a row). Found by the
+new tests and fixed: a deleted note read through Notes' scripting still gave Notes' raw -1728
+error; notes_find with only a bad limit listed the folders and wasn't an error.
+
 Cloud-first, review fixes (2026-11-23, a second cloud session given the same task, whose own
 implementation was superseded by the one merged below and ported onto it): the infra workflow's
 `configure` failed on every run, since google-github-actions/auth writes its credentials file into
