@@ -458,3 +458,47 @@ func BenchmarkAppendScreenshot(b *testing.B) {
 		s.Append("usr_a", t0, l)
 	}
 }
+
+// FR-687, regression (2026-11-24, TestOperatorDeleteRemovesTracesWhileTheRelayRuns failed once
+// on CI with "directory not empty"): the operator's delete runs in another process with its own
+// Store, so the per-account lock doesn't keep the relay's writer out. A writer that saw the
+// folder before the account was deleted adds day files while RemoveAll empties it. The delete
+// still succeeds, and the folder ends gone.
+func TestDeleteSucceedsWhileAnotherProcessWritesTheAccount(t *testing.T) {
+	var gone sync.Map // accounts deleted in the database
+	exists := func(id string) bool { _, deleted := gone.Load(id); return !deleted }
+	writer, dir := open(t, func(o *Options) { o.AccountExists = exists })
+	deleter, err := New(Options{
+		Dir: dir, Key: writer.o.Key, FreeSpace: (&fakeDisk{free: 100 << 30}).space, AccountExists: exists,
+	})
+	require.NoError(t, err)
+
+	for round := range 30 {
+		id := "usr_" + strings.Repeat("r", 1+round%5) + string(rune('a'+round%26))
+		writer.Append(id, t0, call("first", `{}`))
+		require.DirExists(t, filepath.Join(dir, id))
+		stop := make(chan struct{})
+		var wg sync.WaitGroup
+		for w := range 4 { // the relay's calls in flight, each on its own day file
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				for d := 0; ; d++ {
+					select {
+					case <-stop:
+						return
+					default:
+					}
+					writer.Append(id, t0.AddDate(0, 0, -(w*1000+d)), call("late", `{}`))
+				}
+			}()
+		}
+		time.Sleep(2 * time.Millisecond)
+		gone.Store(id, true)      // the operator deletes the account in the database first …
+		err := deleter.Delete(id) // … then its traces, while the writers still run
+		close(stop)
+		wg.Wait()
+		require.NoError(t, err, "round %d", round)
+		assert.NoDirExists(t, filepath.Join(dir, id), "round %d", round)
+	}
+}
