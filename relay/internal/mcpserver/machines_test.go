@@ -111,6 +111,11 @@ func TestMergedToolsPerKindNotes(t *testing.T) {
 
 	fp := props(t, files)
 	assert.Equal(t, []any{"write", "trash", "delete"}, fp["action"].(map[string]any)["enum"], "enum values united")
+	// Toni, 2026-11-24: latchkey_log offered "settings" to a Mac, which refused it; values only
+	// some kinds take are named in the option's description.
+	assert.Equal(t, "(trash: Mac only; delete: Linux servers only)", fp["action"].(map[string]any)["description"],
+		"values one kind lacks are marked")
+	assert.NotContains(t, fp["path"].(map[string]any), "description", "an option whose values all kinds share isn't marked")
 	assert.Equal(t, []any{"action"}, schemaOf(t, files)["required"], "required only what both require")
 	assert.Contains(t, files.Description, "On a Linux server: Changes files on the server; delete removes for good.")
 }
