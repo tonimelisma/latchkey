@@ -52,9 +52,10 @@ func chromePath() string {
 // Browser is headless Chrome with a virtual platform authenticator (a passkey that always
 // verifies the user).
 type Browser struct {
-	ctx    context.Context
-	cancel func()
-	email  string // the account SignUp created
+	ctx           context.Context
+	cancel        func()
+	email         string // the account SignUp created
+	authenticator webauthn.AuthenticatorID
 }
 
 // NewBrowser starts Chrome.
@@ -72,12 +73,14 @@ func NewBrowser(ctx context.Context) (*Browser, error) {
 		_, err = chromedp.Call(bctx, webauthn.Enable, webauthn.EnableParams{EnableUI: new(false)})
 	}
 	if err == nil {
-		_, err = chromedp.Call(bctx, webauthn.AddVirtualAuthenticator, webauthn.AddVirtualAuthenticatorParams{
+		var added webauthn.AddVirtualAuthenticatorResult
+		added, err = chromedp.Call(bctx, webauthn.AddVirtualAuthenticator, webauthn.AddVirtualAuthenticatorParams{
 			Options: &webauthn.VirtualAuthenticatorOptions{
 				Protocol: webauthn.AuthenticatorProtocolCtap2, Transport: webauthn.AuthenticatorTransportInternal,
 				HasResidentKey: true, HasUserVerification: true, IsUserVerified: true, AutomaticPresenceSimulation: true,
 			},
 		})
+		b.authenticator = added.AuthenticatorID
 	}
 	if err != nil {
 		b.Close()
@@ -339,8 +342,16 @@ func (b *Browser) CheckLayout(base string, paths ...string) error {
 		w, h   int64
 		mobile bool
 	}{{320, 568, true}, {375, 812, true}, {1280, 720, false}}
+	// The sign-in page offers passkey autofill, which the virtual passkey answers by itself: it
+	// signs in and sends the page to /account, racing the next page this check opens (that load
+	// was aborted with net::ERR_ABORTED on GitHub's runner, 2026-11-24). While the layout is
+	// checked, the passkey waits for a person, as a real one does, so each page stays put.
+	if err := b.presence(false); err != nil {
+		return err
+	}
 	defer func() {
 		_, _ = chromedp.Call(b.ctx, emulation.ClearDeviceMetricsOverride, cdp.Empty{})
+		_ = b.presence(true)
 	}()
 	for _, s := range sizes {
 		if _, err := chromedp.Call(b.ctx, emulation.SetDeviceMetricsOverride, emulation.SetDeviceMetricsOverrideParams{
@@ -360,6 +371,17 @@ func (b *Browser) CheckLayout(base string, paths ...string) error {
 				return fmt.Errorf("%s at %d px: %s", p, s.w, problem)
 			}
 		}
+	}
+	return nil
+}
+
+// presence sets whether the virtual passkey answers by itself, as a person tapping it would.
+func (b *Browser) presence(on bool) error {
+	_, err := chromedp.Call(b.ctx, webauthn.SetAutomaticPresenceSimulation, webauthn.SetAutomaticPresenceSimulationParams{
+		AuthenticatorID: b.authenticator, Enabled: on,
+	})
+	if err != nil {
+		return fmt.Errorf("passkey presence: %w", err)
 	}
 	return nil
 }
