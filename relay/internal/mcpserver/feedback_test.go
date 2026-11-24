@@ -2,6 +2,7 @@ package mcpserver_test
 
 import (
 	"context"
+	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -98,8 +99,26 @@ func TestSharedReportsReachTheIntakeSealed(t *testing.T) {
 	assert.Equal(t, "Create filter ignored the click", r.Summary)
 	assert.Equal(t, "browser_act click e56: same page", r.Details)
 	assert.NotEmpty(t, r.Client)
-	assert.NotEmpty(t, r.MachineVersion+r.System, "the only machine's versions")
-	assert.NotContains(t, r.Details+r.Summary+r.Client+r.System, e.user.Email, "FR-1412: no email address")
+	assert.Equal(t, 2, r.Format)
+	require.Len(t, r.Machines, 1, "none named: the online machine")
+	assert.NotEmpty(t, r.Machines[0].Version+r.Machines[0].System, "its versions")
+	assert.False(t, r.Machines[0].Named)
+	assert.NotContains(t, r.Details+r.Summary+r.Client+r.Machines[0].System, e.user.Email, "FR-1412: no email address")
+
+	// Claude names the machine involved: the report marks it named, and never holds its name.
+	res, err = cs.CallTool(ctx(t), &mcp.CallToolParams{Name: "feedback", Arguments: map[string]any{
+		"summary": "Shell answered late", "details": "shell_run: 31 s", "machines": []any{"toni's macbook pro"},
+	}})
+	require.NoError(t, err)
+	require.False(t, res.IsError, text(t, res))
+	require.Eventually(t, func() bool { return len(intake.received()) == 2 }, 10*time.Second, 20*time.Millisecond)
+	r, err = reports.Open(k, intake.received()[1])
+	require.NoError(t, err)
+	require.Len(t, r.Machines, 1)
+	assert.True(t, r.Machines[0].Named, "the machine Claude named")
+	sealedJSON, err := json.Marshal(r)
+	require.NoError(t, err)
+	assert.NotContains(t, strings.ToLower(string(sealedJSON)), "macbook", "FR-1412: never a machine's name")
 
 	// Delivered: nothing left in the outbox.
 	due, err := e.store.DueReports(context.Background(), time.Now().Add(time.Hour), 10)

@@ -32,15 +32,23 @@ Plaintext (JSON):
 
 ```json
 {
-  "format": 1,
-  "at": "2026-11-23T05:45:16Z",
+  "format": 2,
+  "at": "2026-11-24T05:45:16Z",
   "summary": "…", "details": "…",
   "client": "Anthropic/ClaudeAI",
-  "relay_version": "…", "machine_version": "…", "system": "macOS 27.0.1",
-  "screen": "locked" ,
+  "relay_version": "…",
+  "machines": [
+    {"named": true, "kind": "mac", "version": "0.8.235", "system": "macOS 27.0.1", "screen": "locked"}
+  ],
   "reporter": "3f9a0c1d2b4e5f60"
 }
 ```
+
+`machines` (format 2, 2026-11-24): each machine Claude named in the tool's `machines` argument,
+`named: true`; when it named none (or only names that match no machine), every machine online
+at the time, without `named`. Never a machine's name. Format 1 reports (before 2026-11-24) had
+one machine's `machine_version`, `system` and `screen` at the top level instead, filled only
+when Claude named it or it was the only machine; the developer's command reads both.
 
 ## Developer → intake (FR-1423)
 

@@ -72,8 +72,11 @@ Toni because he is a user too. Other users' reports never reach the developer.
   line naming `feedback`.
 
 ### Filing
-- **FR-1410** The relay shall answer `feedback` itself (summary, details, optionally the machine),
-  whether or not any machine is online.
+- **FR-1410** The relay shall answer `feedback` itself (summary, details, and the machines the
+  problem involved), whether or not any machine is online.
+- **FR-1410a** The `feedback` tool's description shall ask Claude to name every machine the
+  problem involved, whenever one was (Toni, 2026-11-24: "make claude also name the machines
+  involved in the feedback specifically").
 - **FR-1411** The `feedback` tool's description shall tell Claude that the report goes to
   Latchkey's developer and must not contain passwords, verification codes, full account or card
   numbers, message or email texts, or anything else private that the problem doesn't need. The
@@ -81,8 +84,9 @@ Toni because he is a user too. Other users' reports never reach the developer.
   it submits, as with everything else it does (Toni, 2026-11-23; Constitution X). Withdrawn idea:
   masking on the relay (pattern matching misses and mangles).
 - **FR-1412** A shared report shall hold: the summary and details as Claude wrote them, the Claude app, the
-  relay's and the machine's Latchkey versions, the machine's system version and screen state
-  (locked or not), and a reporter tag that groups one account's reports without identifying it
+  relay's Latchkey version, and for each machine Claude named as involved, or, when it named
+  none, for every machine online at the time (Toni, 2026-11-24), the machine's kind, Latchkey
+  version, system version and screen state (locked or not), and a reporter tag that groups one account's reports without identifying it
   (it differs per relay and can't be reversed). It shall hold no account, email address,
   machine name, or relay address.
 - **FR-1413** The relay shall encrypt each report to the developer's public key from its
