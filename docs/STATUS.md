@@ -1,6 +1,7 @@
 # Status
 
-Last updated: 2026-11-24 (the problem-report intake runs; problem reports to the developer built, spec 014; 172 feedback reports sorted and their open causes fixed: other chats' pages, owner-tab turns, Safari scripts, page limit, frames and menus, maps near, sidebar rows; the Mac app's tests in CI on GitHub's Mac runner; the hosted relay's server moved out of this repository; CI sets up uv for Semgrep again; Xcode tests in Shell, spec 004 FR-335; development in Claude Code cloud sessions; Shell builds: task sandbox off, asset-catalog daemon per command; builds work in Shell, spec 004 FR-333 and FR-334; Sign-in built, spec 013; Claude's feedback tool, reports copied to the Mac's Feedback folder; pages are read once they stop changing; every issue becomes a regression case; clicks press down and up before clicking, so Gmail's buttons answer; signed-in sites in Safari tabs of Claude's while unlocked; sign-in cookies in Latchkey's log, for Safari's Target sign-outs; full traces everywhere, in daily files, for evals; Claude's pages always in Latchkey's own browser, by name, with dialogs Claude answers; the locked browser takes Safari's cookies again with every page; public download on GitHub with a new-version notice; never disturb the user: Mail, WhatsApp sending, Notes' window editing, Messages' window actions, Reminders' window setters removed; test sweep on exit; releases are tags on commits; cloud-only files read again; machine list shows Latchkey versions; WhatsApp built; Add to Claude button; plugin withdrawn; README rewritten as a short product page; relay web pages redone; Linux home server paired; spec 010 shipped)
+Last updated: 2026-11-24. What changed when is in git (`git log`); this line is only a date, so
+parallel sessions don't collide on it (Toni, 2026-11-24).
 
 Xcode signing ready (2026-10-20): Toni's Xcode account has a valid "Apple Development" certificate
 (certificate expires 2027-07-22). Keep the team ID out of committed project files
@@ -551,6 +552,12 @@ after the app was quit.
 
 ## Next steps
 
+000. Cloud-first git (Toni, 2026-11-24; CLAUDE.md, "Git"): one branch and pull request per
+     session, never replaced; squash merges by auto-merge; `branch-cleanup.yml` deletes closed
+     pull requests' branches; `tidy.sh` and `loose-ends.sh` know squash merges. Left for Toni, in
+     GitHub's settings: the ruleset on `main` (pull requests only, checks `relay`, `linux`,
+     `scripts` required, no force-push or deletion), "Allow auto-merge" on, and squash as the
+     only merge method (steps in his reply of 2026-11-24).
 00. The 2026-11-23 feedback fixes have regression cases but no live run (Toni, 2026-11-23: no
     test sessions against his real data; end-to-end testing is a backlog item).
 0. Problem reports to the developer (spec 014, `specs/014-feedback-intake/`): built and merged

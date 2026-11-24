@@ -1,6 +1,7 @@
 # Removing worktrees
 
-Moved from CLAUDE.md ("Git and worktrees") on 2026-11-22.
+Moved from CLAUDE.md ("Git and worktrees") on 2026-11-22. Only for a local session on the Mac:
+cloud sessions have no worktrees (CLAUDE.md, "Git").
 
 - A worktree is removed the moment its work is on main (Toni, 2026-10-24): no stale copies on
   disk or branches in git. A session leaves with `ExitWorktree` (`remove`) as soon as its task is
@@ -15,6 +16,10 @@ Moved from CLAUDE.md ("Git and worktrees") on 2026-11-22.
   on disk before a turn can end. Only a copy with no commits of its own waits an hour, since a
   helper agent may still be starting in it. `ExitWorktree` (`remove`) refuses whenever the session
   made commits, even when they are already on GitHub's main (it counts from where the branch
-  started). So before leaving: check that nothing is uncommitted and that `git merge-base
-  --is-ancestor HEAD refs/remotes/origin/main` succeeds, then call it with `discard_changes: true`.
-  That check is the only thing that makes the override safe; without it, never use it.
+  started). So before leaving: check that nothing is uncommitted and that the work is safe on
+  GitHub: `git merge-base --is-ancestor HEAD refs/remotes/origin/main` succeeds, or (a squash
+  merge, since 2026-11-24, puts other commits on main) the branch's pull request is merged and
+  its head is this HEAD (`gh api repos/tonimelisma/latchkey/pulls/<n> --jq '.merged, .head.sha'`).
+  Then call it with `discard_changes: true`. That check is the only thing that makes the override
+  safe; without it, never use it. `tidy.sh` and `loose-ends.sh` treat a branch as finished the
+  same way: on main, or gone from GitHub with its commits kept under a pull request.

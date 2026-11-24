@@ -49,6 +49,32 @@ g -C "$work/rebaser" fetch -q "$main" rebased
 g -C "$work/rebaser" -c user.name=other -c user.email=o@example.com cherry-pick FETCH_HEAD >/dev/null
 g -C "$work/rebaser" push -q origin HEAD:main
 g -C "$main" pull -q --ff-only origin main
+# A branch whose pull request was squash-merged (Toni, 2026-11-24): other commits on main, the
+# branch deleted on GitHub, its commits kept under refs/pull/<n>/head.
+g -C "$main" checkout -q -b squashed
+echo one >"$main/squashed.txt"
+g -C "$main" add squashed.txt
+g -C "$main" commit -q -m "squashed one"
+echo two >>"$main/squashed.txt"
+g -C "$main" commit -q -am "squashed two"
+g -C "$main" push -q origin squashed
+g -C "$work/origin.git" update-ref refs/pull/7/head refs/heads/squashed
+g -C "$work/rebaser" pull -q --ff-only origin main
+cp "$main/squashed.txt" "$work/rebaser/squashed.txt"
+g -C "$work/rebaser" add squashed.txt
+g -C "$work/rebaser" -c user.name=other -c user.email=o@example.com commit -q -m "Squashed (#7)"
+g -C "$work/rebaser" push -q origin HEAD:main
+g -C "$work/origin.git" update-ref -d refs/heads/squashed
+g -C "$main" checkout -q main
+g -C "$main" pull -q --ff-only origin main
+# One whose pull request is open: on GitHub and under refs/pull/, not merged.
+g -C "$main" checkout -q -b open-pr
+echo open >"$main/open.txt"
+g -C "$main" add open.txt
+g -C "$main" commit -q -m "open work"
+g -C "$main" push -q origin open-pr
+g -C "$work/origin.git" update-ref refs/pull/8/head refs/heads/open-pr
+g -C "$main" checkout -q main
 # A ref whose name starts with "-" (git branch refuses to make one, but a fetch can bring it).
 g -C "$main" update-ref refs/heads/-q refs/heads/main
 g -C "$main" push -q origin refs/heads/-q:refs/heads/-q
@@ -78,6 +104,8 @@ yes "main kept" g -C "$main" rev-parse --verify -q refs/heads/main
 no "merged local branch deleted" g -C "$main" rev-parse --verify -q refs/heads/merged
 yes "merged remote branch left to GitHub" g -C "$work/origin.git" rev-parse --verify -q refs/heads/merged
 no "a branch merged by rebase is deleted locally" g -C "$main" rev-parse --verify -q refs/heads/rebased
+no "a branch whose pull request was squash-merged is deleted locally" g -C "$main" rev-parse --verify -q refs/heads/squashed
+yes "one whose pull request is open is kept" g -C "$main" rev-parse --verify -q refs/heads/open-pr
 yes "unmerged local branch kept" g -C "$main" rev-parse --verify -q refs/heads/unmerged
 yes "unmerged remote branch kept" g -C "$work/origin.git" rev-parse --verify -q refs/heads/unmerged
 no "merged local ref starting with - deleted" g -C "$main" rev-parse --verify -q refs/heads/-q

@@ -112,34 +112,34 @@ IMPORTANT: Toni makes every product and engineering choice. Claude proposes; Ton
 - Don't re-ask what `docs/decisions.md` already records.
 - Record each answer in the spec or plan and in `docs/decisions.md`, in the same commit.
 
-## Git and worktrees
+## Git (cloud-first; Toni, 2026-11-24)
 
-Every session or task that changes files works in its own git worktree (Toni,
-2026-10-23), so agents never overlap in one checkout (a cloud session's VM is its own checkout:
-see "Cloud sessions"):
+Development happens in cloud sessions, each its own VM and checkout ("Cloud sessions"). GitHub's
+`main` is protected by a ruleset (changes only through a pull request whose CI checks passed; no
+force-push or deletion of `main`), so the rules below are habits, and GitHub enforces the rest.
 
-- Before the first change, call `EnterWorktree` with a short task name (it branches from the
-  latest `origin/main` under `.claude/worktrees/`). Never edit, build, or commit in the main
-  checkout at `~/Development/latchkey`; it stays on `main`, untouched.
-- In a fresh worktree, `scripts/link-local-files.sh` links the gitignored personal files from the
-  main checkout (`.env`, `CLAUDE.local.md`, `macos/Config/Local.xcconfig`). The Mac Makefile and
-  `package.sh` run it themselves; `package.sh` refuses to build without the
-  signing team, because a differently signed app loses the installed app's permissions and pairing.
-- Merge through a pull request: `git fetch origin && git rebase origin/main`, push the branch,
-  open its pull request and, once CI's checks pass, merge it with the method "rebase" (a linear
-  history; from a cloud session through the REST API: `gh api repos/tonimelisma/latchkey/pulls`,
-  then `gh api -X PUT …/pulls/<n>/merge -f merge_method=rebase`). GitHub deletes the merged
-  branch itself; `tidy.sh` and `loose-ends.sh` know rebased work. If main moved meanwhile
-  (another session), rebase again and retest. Never force-push (one exception, approved by Toni
-  2026-10-23: rewriting history to remove the relay's address).
-- A worktree is removed the moment its work is on main (Toni, 2026-10-24): `ExitWorktree`
-  (`remove`), after checking nothing is uncommitted and `git merge-base --is-ancestor HEAD
-  refs/remotes/origin/main` succeeds (only then with `discard_changes: true`). A helper agent's
-  worktree is removed by whoever merges it. Details: `docs/git-worktrees.md`.
+- One session, one branch, one pull request. Work on the branch the session started on (or one
+  named for the task), push early and often, and open its pull request as soon as there is a
+  commit (a draft while unfinished), so other sessions see what is taken.
+- A pull request's branch is never replaced. Fixes, review changes, and catching up with main go
+  onto the same branch as new commits: when main moved, merge it in (`git fetch origin && git
+  merge origin/main`, or GitHub's "Update branch"), fix any conflict, retest, push. Never rebase
+  a pushed branch, never close a pull request to redo it under another name, never force-push
+  (one exception, approved by Toni 2026-10-23: rewriting history to remove the relay's address).
+- Merge by squash (one commit per pull request on `main`; the merge method "squash"). Once its
+  pull request is open, turn on auto-merge (`enable_pr_auto_merge`, method squash) and GitHub
+  merges it when CI passes. Without auto-merge, merge once every check passed:
+  `gh api -X PUT repos/tonimelisma/latchkey/pulls/<n>/merge -f merge_method=squash`.
+- GitHub deletes a merged pull request's branch; `.github/workflows/branch-cleanup.yml` deletes a
+  closed one's (its commits stay in the pull request). Nobody deletes branches by hand, and
+  never through Latchkey on the Mac.
 - Stage files by name, never `git add -A` or `git add .` (unfinished work of others was committed
-  that way on 2026-10-23). Never stash (the stash is shared between worktrees; see below).
-- Public remote `github.com/tonimelisma/latchkey` (public since 2026-10-31), default branch `main`. Small commits. Open
+  that way on 2026-10-23). Never stash.
+- Public remote `github.com/tonimelisma/latchkey` (public since 2026-10-31), default branch `main`. Open
   PRs only when asked.
+- A local session on the Mac (only for what needs macOS) works in its own worktree, never in the
+  main checkout at `~/Development/latchkey`, which stays on `main`, untouched: `EnterWorktree`,
+  `scripts/link-local-files.sh`, and leaving it once merged: `docs/git-worktrees.md`.
 
 ## Every finished batch ships (Toni, 2026-10-23; batches 2026-11-22)
 
@@ -198,9 +198,10 @@ loose ends are listed at session start; `scripts/keep-going.sh` keeps Claude on 
 `~/.claude/worklists/<session id>.md` (`- [ ]` open, `- [x]` done and verified, `- [toni]` only
 Toni; Stop always works) and stops a turn once that claims "works" or "done" without the
 acceptance rows; commands that lose work (stash, force-push, hard reset, `clean -f`,
-`branch -D`) and pushes with a private value are refused; `scripts/tidy.sh` cleans merged
-local branches, worktrees, and old builds after every push on the Mac (GitHub deletes merged
-pull requests' branches; nothing to tidy after a cloud push).
+`branch -D`) and pushes with a private value are refused; `scripts/tidy.sh` cleans finished
+local branches (merged, or their pull request closed), worktrees, and old builds after every push
+on the Mac (on GitHub, merged branches go by themselves and closed ones by the cleanup workflow;
+nothing to tidy after a cloud push).
 - Delete temporary files (scratch scripts, copies of databases, old app copies, servers' `/tmp`
   files) as soon as the task that needed them is done; scratchpad folders end empty.
 - Never commit a working relay's address or the Apple team ID: the repository holds only
