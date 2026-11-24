@@ -70,8 +70,11 @@ func TestRegressionDAuditCountsTheLogsFirstCall(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	ws, _, err := websocket.Dial(ctx, "ws"+strings.TrimPrefix(srv.URL, "http"), nil)
+	ws, resp, err := websocket.Dial(ctx, "ws"+strings.TrimPrefix(srv.URL, "http"), nil)
 	require.NoError(t, err)
+	if resp != nil && resp.Body != nil {
+		_ = resp.Body.Close()
+	}
 	defer ws.CloseNow() //nolint:errcheck // the test's end
 
 	a := &Agent{Paths: p, Log: log}

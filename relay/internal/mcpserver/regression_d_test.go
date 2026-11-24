@@ -60,5 +60,4 @@ func TestRegressionDFeedbackWhileNoMachineIsOnline(t *testing.T) {
 	assert.NotContains(t, allTextD(res), "nothing failed", "the answer doesn't repeat the report")
 	require.Eventually(t, func() bool { return len(intake.received()) == 1 }, 10*time.Second, 20*time.Millisecond)
 	assert.NotContains(t, string(intake.received()[0]), "nothing failed", "only sealed bytes leave the relay")
-
 }
