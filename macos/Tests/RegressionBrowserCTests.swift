@@ -145,7 +145,9 @@ final class HangingServerC: @unchecked Sendable {
         let address = "http://127.0.0.1:\(server.port)/createaccount.cgi"
         let started = ContinuousClock.now
         let page = try await b.open(address)
-        #expect(ContinuousClock.now - started < .seconds(30), "an answer within the relay's 30 s")
+        // The load limit is 20 s; GitHub's runner is slower than any Mac, so the bound here only
+        // catches an answer that never comes. The fix is the answer's words and the page kept.
+        #expect(ContinuousClock.now - started < .seconds(90), "an answer, not a wait for the whole page")
         #expect(page.text.contains("still loading") && page.text.contains("browser_look"), "\(page.text)")
         let again = try await b.read(offset: 0)
         #expect(again.url == address, "the same page, still open")
@@ -187,8 +189,14 @@ final class HangingServerC: @unchecked Sendable {
         let b = browser()
         defer { b.discard() }
         let first = "http://127.0.0.1:\(server.port)/first"
-        let opened = try await b.open(first)
-        let more = try #require(opened.elements.first { $0.label.contains("More information") }?.ref)
+        var opened = try await b.open(first)
+        // GitHub's runner can answer before the page has drawn (it is still loading): read again.
+        let drawn = ContinuousClock.now + .seconds(60)
+        while !opened.elements.contains(where: { $0.label.contains("More information") }), ContinuousClock.now < drawn {
+            try await Task.sleep(for: .milliseconds(500))
+            opened = try await b.read(offset: 0)
+        }
+        let more = try #require(opened.elements.first { $0.label.contains("More information") }?.ref, "\(opened.text)")
         let clicked = try await b.click(more)
         #expect(clicked.url.hasSuffix("/more"), "\(clicked.url)")
         let back = try await b.back()

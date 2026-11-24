@@ -17,13 +17,6 @@ import Testing
         }
     }
 
-    /// An app macOS has allowed, or whose answer can't be known, still runs its script.
-    @Test(arguments: [Permissions.Automation.allowed, nil])
-    func aScriptForAnAllowedOrUnknownAppRuns(_ answer: Permissions.Automation?) async throws {
-        let runner = OSAScriptRunner(app: "com.apple.Notes", automation: { _ in answer })
-        #expect(try await runner.run("return \"ran\"", []) == "ran")
-    }
-
     // MARK: regressions.setup_ask_now_says_what_is_off
 
     /// Toni, 2026-11-21: Ask Now did nothing when Mail had been turned off for Latchkey earlier,

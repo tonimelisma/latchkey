@@ -125,6 +125,8 @@ import Testing
             </script>
             """
         let p = try await s.own.open(html: SignInFillTests.onePage() + ads, base: Self.base)
+        let user = await call(s, p, ["field": .string("e1"), "fill": .string("user")])
+        #expect(!user.isError, "\(user.plainText)")
         let r = await call(s, p, ["field": .string("e2"), "fill": .string("password"), "press": .string("e3")])
         #expect(!r.isError, "\(r.plainText)")
         #expect(r.plainText.contains("Welcome ann"), "the page as it is: \(r.plainText)")
