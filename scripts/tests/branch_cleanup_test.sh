@@ -21,14 +21,17 @@ cat >"$work/bin/gh" <<'EOF'
 case "$*" in
   "api repos/o/r --jq .default_branch") echo main ;;
   "api --paginate repos/o/r/branches?per_page=100 "*)
-    printf '%s\n' "a1 main" "b2 merged-gone" "c3 closed-done" "d4 closed-then-pushed" \
-      "e5 still-open" "f6 no-pr" "a7 reopened-elsewhere" "a8 odd#closed-done" ;;
-  *"head=o:closed-done "*) echo "closed c3 12" ;;
-  *"head=o:closed-then-pushed "*) echo "closed d0 13" ;;
-  *"head=o:still-open "*) echo "open e5 14" ;;
+    printf '%s\n' "a1 true main" "b2 false merged-gone" "c3 false closed-done" "d4 false closed-then-pushed" \
+      "e5 false still-open" "f6 false no-pr" "a7 false reopened-elsewhere" "a8 false odd#closed-done" \
+      "a9 true guarded" "b1 false outsider-closed" ;;
+  *"head=o:closed-done "*) echo "closed c3 12 OWNER" ;;
+  *"head=o:closed-then-pushed "*) echo "closed d0 13 OWNER" ;;
+  *"head=o:still-open "*) echo "open e5 14 OWNER" ;;
   *"head=o:no-pr "*) ;;
-  *"head=o:merged-gone "*) echo "closed b2 11" ;;
-  *"head=o:reopened-elsewhere "*) printf '%s\n' "closed a7 15" "open a7 16" ;;
+  *"head=o:guarded "*) echo "closed a9 17 OWNER" ;;
+  *"head=o:outsider-closed "*) echo "closed b1 18 NONE" ;;
+  *"head=o:merged-gone "*) echo "closed b2 11 COLLABORATOR" ;;
+  *"head=o:reopened-elsewhere "*) printf '%s\n' "closed a7 15 OWNER" "open a7 16 OWNER" ;;
   "api -X DELETE repos/o/r/git/refs/heads/"*) echo "${4#repos/o/r/git/refs/heads/}" >>"$DELETES" ;;
   *) echo "unexpected gh call: $*" >&2; exit 1 ;;
 esac
@@ -49,6 +52,9 @@ kept "one whose pull request is open is kept" still-open
 kept "one with any open pull request is kept" reopened-elsewhere
 kept "one without a pull request is kept" no-pr
 has "and named" "kept no-pr: no pull request"
+kept "a protected branch is never touched" guarded
+kept "one whose only closed pull request was opened by an outsider is kept" outsider-closed
+has "and named, with why" "kept outsider-closed: its closed pull request was opened by someone who can't write here"
 kept "a name with characters that would change the API path is never deleted" "odd#closed-done"
 has "and is named for a person" "kept odd#closed-done: an unusual name, delete it by hand"
 
