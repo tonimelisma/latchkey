@@ -30,6 +30,13 @@ Sealed payload (JSON; `reports.SealRaw`, the same sealing as a problem report):
 }
 ```
 
+- `mac` (each part): HMAC-SHA256 of the part with `mac` empty, keyed with SHA-256 of
+  "latchkey-eval-sign-v1", a zero byte and the developer's private key text (`evals.SignKey`).
+  Anyone can seal to the public key and post to the intake, so the developer's command ignores a
+  run whose parts don't verify, whose parts don't agree (numbering 1 to `parts` once each, the
+  same run, start and version), or that starts in the future (security review, 2026-11-24). So
+  `--send` needs the developer's private key on the Mac that runs the tests
+  (`~/.config/latchkey-reports/developer.key`, or `LATCHKEY_REPORTS_KEY[_FILE]`).
 - A failed try also holds its tool calls with arguments and answers, cut to fit; never any
   data of Toni's (the copy holds none).
 - `setup_ok: false` with `missing_permissions` when the image lost a permission (FR-1513); then

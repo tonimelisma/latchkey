@@ -183,7 +183,8 @@ func TestSealPartsAndCompare(t *testing.T) {
 		tr.Tally()
 		r.Tasks = append(r.Tasks, tr)
 	}
-	parts, err := SealParts(pk, r)
+	sign := SignKey(priv)
+	parts, err := SealParts(pk, sign, r)
 	if err != nil || len(parts) < 2 {
 		t.Fatalf("%d parts, %v", len(parts), err)
 	}
@@ -200,12 +201,26 @@ func TestSealPartsAndCompare(t *testing.T) {
 		_ = json.Unmarshal(plain, &res)
 		opened = append(opened, res)
 	}
-	joined, err := Join(opened)
-	if err != nil || len(joined.Tasks) != 60 {
+	now := time.Now()
+	joined, err := Join(slices.Clone(opened), sign, now)
+	if err != nil || len(joined.Tasks) != 60 || joined.MAC != "" {
 		t.Fatalf("joined %d tasks, %v", len(joined.Tasks), err)
 	}
-	if _, err := Join(opened[1:]); err == nil {
+	if _, err := Join(slices.Clone(opened[1:]), sign, now); err == nil {
 		t.Fatal("a missing part went unnoticed")
+	}
+	if _, err := Join(slices.Clone(opened), SignKey("someone else's key"), now); err == nil {
+		t.Fatal("parts not signed with the developer's key were accepted")
+	}
+	forged := slices.Clone(opened)
+	forged[0].SetupOK = false // changed after signing
+	if _, err := Join(forged, sign, now); err == nil {
+		t.Fatal("a changed part was accepted")
+	}
+	twice := append(slices.Clone(opened[:1]), opened[0])
+	twice[0].Parts, twice[1].Parts = 2, 2
+	if _, err := Join(twice, sign, now); err == nil {
+		t.Fatal("the same part twice was accepted")
 	}
 
 	prev := Result{Tasks: []TaskResult{{ID: "a", PassAll: true, PassAny: true}, {ID: "b"}, {ID: "c", PassAll: true, PassAny: true}}}

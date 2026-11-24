@@ -1,10 +1,15 @@
 package evals
 
 import (
+	"crypto/hmac"
 	"crypto/hpke"
+	"crypto/sha256"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/tonimelisma/latchkey/relay/reports"
@@ -33,6 +38,41 @@ type Result struct {
 	NotRun []string `json:"not_run,omitempty"`
 	// RowsUnreachable: conditions no test here can produce (FR-1541).
 	RowsUnreachable []string `json:"rows_unreachable"`
+	// MAC proves a sent part came from someone holding the developer's private key: anyone can
+	// seal to the public key and post to the intake, so an unsigned "result" could hide the
+	// weekly reminder or plant failures (security review, 2026-11-24). See Sign.
+	MAC string `json:"mac,omitempty"`
+}
+
+// SignKey derives the key that signs sent results from the developer's private key (its base64
+// text): only the developer's own Mac and sessions hold it.
+func SignKey(developerPrivate string) []byte {
+	h := sha256.Sum256([]byte("latchkey-eval-sign-v1\x00" + strings.TrimSpace(developerPrivate)))
+	return h[:]
+}
+
+func (r Result) mac(key []byte) (string, error) {
+	r.MAC = ""
+	b, err := json.Marshal(r)
+	if err != nil {
+		return "", err
+	}
+	m := hmac.New(sha256.New, key)
+	m.Write(b)
+	return base64.StdEncoding.EncodeToString(m.Sum(nil)), nil
+}
+
+// Sign sets the part's MAC.
+func (r *Result) Sign(key []byte) error {
+	m, err := r.mac(key)
+	r.MAC = m
+	return err
+}
+
+// Verify says whether the part's MAC is right.
+func (r Result) Verify(key []byte) bool {
+	want, err := r.mac(key)
+	return err == nil && r.MAC != "" && hmac.Equal([]byte(want), []byte(r.MAC))
 }
 
 // CheckResult is one scripted end-to-end check of the run (FR-1516).
@@ -84,10 +124,10 @@ func (r Result) Summarize() Summary {
 
 // SealParts seals a result to the developer's key in as many parts as it takes to keep each
 // under the intake's limit (research.md decision 3): the checks go with part 1, the tasks are
-// shared out in order.
-func SealParts(pk hpke.PublicKey, r Result) ([][]byte, error) {
+// shared out in order; each part signed with signKey (SignKey).
+func SealParts(pk hpke.PublicKey, signKey []byte, r Result) ([][]byte, error) {
 	for n := 1; n <= 64; n *= 2 {
-		parts, err := sealIn(pk, r, n)
+		parts, err := sealIn(pk, signKey, r, n)
 		if err == nil {
 			return parts, nil
 		}
@@ -100,7 +140,7 @@ func SealParts(pk hpke.PublicKey, r Result) ([][]byte, error) {
 
 var errTooLong = errors.New("too long")
 
-func sealIn(pk hpke.PublicKey, r Result, n int) ([][]byte, error) {
+func sealIn(pk hpke.PublicKey, signKey []byte, r Result, n int) ([][]byte, error) {
 	if n > 1 && n > len(r.Tasks) {
 		return nil, errTooLong
 	}
@@ -113,6 +153,9 @@ func sealIn(pk hpke.PublicKey, r Result, n int) ([][]byte, error) {
 		p.Tasks = r.Tasks[lo:hi]
 		if i > 0 {
 			p.Checks, p.NotRun = nil, nil
+		}
+		if err := p.Sign(signKey); err != nil {
+			return nil, err
 		}
 		plain, err := json.Marshal(p)
 		if err != nil {
@@ -127,13 +170,25 @@ func sealIn(pk hpke.PublicKey, r Result, n int) ([][]byte, error) {
 	return out, nil
 }
 
-// Join puts a run's parts back together.
-func Join(parts []Result) (Result, error) {
+// Join puts a run's parts back together: each part signed with signKey, numbered once from 1 to
+// Parts, all agreeing on the run, and started no later than now.
+func Join(parts []Result, signKey []byte, now time.Time) (Result, error) {
 	if len(parts) == 0 {
 		return Result{}, errors.New("no parts")
 	}
 	sort.Slice(parts, func(i, j int) bool { return parts[i].Part < parts[j].Part })
 	r := parts[0]
+	for i, p := range parts {
+		switch {
+		case !p.Verify(signKey):
+			return r, fmt.Errorf("part %d isn't signed with the developer's key: not a result of ours, ignored", p.Part)
+		case p.Part != i+1 || p.Parts != r.Parts || p.Run != r.Run || !p.Started.Equal(r.Started) || p.Latchkey != r.Latchkey:
+			return r, errors.New("the run's parts don't agree (numbering, run, start or version)")
+		}
+	}
+	if r.Started.After(now.Add(time.Hour)) {
+		return r, errors.New("the run says it started in the future")
+	}
 	if len(parts) != r.Parts {
 		return r, errors.New("some parts of the run haven't arrived")
 	}
@@ -141,7 +196,7 @@ func Join(parts []Result) (Result, error) {
 	for _, p := range parts {
 		r.Tasks = append(r.Tasks, p.Tasks...)
 	}
-	r.Part, r.Parts = 1, 1
+	r.Part, r.Parts, r.MAC = 1, 1, ""
 	return r, nil
 }
 

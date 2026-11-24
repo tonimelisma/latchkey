@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -20,7 +21,9 @@ import (
 // sendCmd seals a weekly result to the developer's key and sends it to the developer's intake
 // (FR-1530), only when the person running the tests asked (weekly-eval.sh --send). The key and
 // intake are Latchkey's developer's unless LATCHKEY_DEVELOPER_KEY and LATCHKEY_INTAKE_URL name a
-// fork's.
+// fork's. Each part is signed with a key derived from the developer's private key
+// (LATCHKEY_REPORTS_KEY, LATCHKEY_REPORTS_KEY_FILE, or ~/.config/latchkey-reports/developer.key),
+// so only the developer's own runs count (anyone can post to the intake).
 func sendCmd(args []string) error {
 	if len(args) != 1 {
 		return errors.New("usage: e2e send <result.json>")
@@ -48,7 +51,11 @@ func sendCmd(args []string) error {
 	if u := strings.TrimSpace(os.Getenv("LATCHKEY_INTAKE_URL")); u != "" {
 		intake = u
 	}
-	parts, err := evals.SealParts(pk, r)
+	private, err := developerPrivate()
+	if err != nil {
+		return err
+	}
+	parts, err := evals.SealParts(pk, evals.SignKey(private), r)
 	if err != nil {
 		return err
 	}
@@ -80,4 +87,27 @@ func sendCmd(args []string) error {
 	}
 	fmt.Printf("sent %s to %s in %d part(s), sealed to the developer's key\n", r.Run, intake, len(parts))
 	return nil
+}
+
+// developerPrivate is the developer's private key text, which only the developer holds.
+func developerPrivate() (string, error) {
+	if k := strings.TrimSpace(os.Getenv("LATCHKEY_REPORTS_KEY")); k != "" {
+		return k, nil
+	}
+	f := os.Getenv("LATCHKEY_REPORTS_KEY_FILE")
+	if f == "" {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return "", err
+		}
+		f = filepath.Join(home, ".config", "latchkey-reports", "developer.key")
+	}
+	b, err := os.ReadFile(f) //nolint:gosec // the developer's own key file
+	if err != nil {
+		return "", fmt.Errorf("--send is for the developer's own runs: it signs with the developer's private key, and %s can't be read (%w); without --send the result stays in this clone", f, err)
+	}
+	if _, err := reports.PrivateKey(string(b)); err != nil {
+		return "", fmt.Errorf("%s: %w", f, err)
+	}
+	return strings.TrimSpace(string(b)), nil
 }

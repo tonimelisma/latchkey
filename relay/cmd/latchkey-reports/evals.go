@@ -39,7 +39,11 @@ func evalsCmd(args []string, now time.Time, w io.Writer) error {
 	if err != nil {
 		return err
 	}
-	runs := joinRuns(entries)
+	private, err := keyText()
+	if err != nil {
+		return err
+	}
+	runs := joinRuns(entries, evals.SignKey(private), now)
 	if *thisWeek {
 		start := weekStart(now)
 		for _, r := range runs {
@@ -60,8 +64,9 @@ func evalsCmd(args []string, now time.Time, w io.Writer) error {
 }
 
 // joinRuns groups the weekly results' parts by run, oldest first, each compared with the one
-// before it.
-func joinRuns(entries []entry) []weeklyRun {
+// before it. A run whose parts aren't signed with the developer's key is listed with the error
+// and counts for nothing (anyone can post to the intake).
+func joinRuns(entries []entry, signKey []byte, now time.Time) []weeklyRun {
 	parts := map[string][]evals.Result{}
 	ids := map[string][]string{}
 	for _, e := range entries {
@@ -77,7 +82,7 @@ func joinRuns(entries []entry) []weeklyRun {
 	}
 	var out []weeklyRun
 	for name, ps := range parts {
-		joined, err := evals.Join(ps)
+		joined, err := evals.Join(ps, signKey, now)
 		r := weeklyRun{Run: name, IDs: ids[name], Started: ps[0].Started, Latchkey: ps[0].Latchkey}
 		if err != nil {
 			r.Error = err.Error()
@@ -106,4 +111,3 @@ func weekStart(now time.Time) time.Time {
 	y, m, day := now.AddDate(0, 0, -d).Date()
 	return time.Date(y, m, day, 0, 0, 0, 0, now.Location())
 }
-

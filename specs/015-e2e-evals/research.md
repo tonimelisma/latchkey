@@ -102,7 +102,12 @@ built.
    touches spec 014. (b) Send a summary (per task: passes, calls, errors, tokens; failed tries'
    tool calls cut to fit), compressed, split into several entries when larger, each sealed to the
    developer's key with `kind: "eval"` inside the sealed part. Chosen: (b); the intake stays as it
-   is and can't tell results from reports.
+   is and can't tell results from reports. Since anyone can post to the intake, each part is also
+   signed with a key derived from the developer's private key, and the developer's command
+   ignores what doesn't verify (security review 2026-11-24; options weighed: a new signing key on
+   the Mac, which would need its public half committed from the Mac; HPKE's authenticated mode,
+   which needs a sender key the intake's format doesn't carry; the derived HMAC key, which needs
+   nothing new because only the developer holds the private key). Chosen: the derived key.
 4. **How the real Mac app's tools run on GitHub's runner without a person.** (a) A URL-scheme
    pairing link: the app asks the Owner (FR-054a), a dialog the runner can't answer, and release
    builds refuse a relay without TLS (FR-054b). (b) A Debug-only launch setting that pairs

@@ -8,8 +8,13 @@ import (
 	"github.com/tonimelisma/latchkey/relay/internal/evals"
 )
 
+var testSign = evals.SignKey("the developer's key, for the test")
+
 func evalEntry(t *testing.T, id string, r evals.Result) entry {
 	t.Helper()
+	if err := r.Sign(testSign); err != nil {
+		t.Fatal(err)
+	}
 	b, err := json.Marshal(r)
 	if err != nil {
 		t.Fatal(err)
@@ -28,9 +33,10 @@ func TestJoinRuns(t *testing.T) {
 		evalEntry(t, "rep_2b", evals.Result{Kind: "eval", Run: "ev_2", Part: 2, Parts: 2, Started: week2, Tasks: []evals.TaskResult{{ID: "files.b", PassAny: true, Passes: 1, Of: 3}}}),
 		evalEntry(t, "rep_2a", evals.Result{Kind: "eval", Run: "ev_2", Part: 1, Parts: 2, Started: week2, Tasks: []evals.TaskResult{fail}}),
 		evalEntry(t, "rep_3", evals.Result{Kind: "eval", Run: "ev_3", Part: 1, Parts: 2, Started: week2}),
+		forged(t, "rep_4", evals.Result{Kind: "eval", Run: "ev_4", Part: 1, Parts: 1, Started: week2}),
 	}
-	runs := joinRuns(entries)
-	if len(runs) != 3 || runs[0].Run != "ev_1" {
+	runs := joinRuns(entries, testSign, week2.Add(time.Hour))
+	if len(runs) != 4 || runs[0].Run != "ev_1" {
 		t.Fatalf("%+v", runs)
 	}
 	var two weeklyRun
@@ -40,6 +46,9 @@ func TestJoinRuns(t *testing.T) {
 		}
 		if r.Run == "ev_3" && r.Error == "" {
 			t.Error("a run missing a part isn't flagged")
+		}
+		if r.Run == "ev_4" && (r.Error == "" || r.Result != nil) {
+			t.Error("a result not signed with the developer's key counted (anyone can post to the intake)")
 		}
 	}
 	if len(two.IDs) != 2 || two.Summary.Tasks != 2 || two.Comparison == nil ||
@@ -57,4 +66,14 @@ func TestWeekStart(t *testing.T) {
 	if got := weekStart(mon); got.Day() != 23 {
 		t.Fatalf("%v", got)
 	}
+}
+
+// forged is a result someone without the developer's key sealed and posted.
+func forged(t *testing.T, id string, r evals.Result) entry {
+	t.Helper()
+	if err := r.Sign(evals.SignKey("not the developer's")); err != nil {
+		t.Fatal(err)
+	}
+	b, _ := json.Marshal(r)
+	return entry{ID: id, Plain: b}
 }
