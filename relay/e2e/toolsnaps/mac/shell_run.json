@@ -1,0 +1,79 @@
+{
+  "_meta": {
+    "latchkey/deadline_ms": 45000
+  },
+  "annotations": {
+    "destructiveHint": true,
+    "idempotentHint": false,
+    "openWorldHint": true,
+    "readOnlyHint": false,
+    "title": "Run a Command"
+  },
+  "description": "Runs a command in the Mac owner's login shell (zsh), as them, never as administrator. Waits up to wait seconds (default and most 30); a longer command keeps running as a job (check it with shell_check). With job and input: types input into that job (then Enter unless enter is false). With job and stop: stops it (Ctrl-C, then forcibly). A command writes only to its own scratch folder ($LATCHKEY_SCRATCH, also $TMPDIR; moved to the Trash when it finishes), the folder it runs in (unless that is the home folder), Downloads, and package caches; anything else fails unless declared in writes (with why), and so does changing settings (defaults write: declare ~/Library/Preferences/\u003cdomain\u003e.plist). Opening apps, files, or links through macOS (open) fails unless declared in uses, and opens them behind the app the owner is using (/usr/bin/open brings it to the front, when the owner wants to see it); a program with windows (an app such as Chrome or Preview, even headless) also starts only with open declared (Chrome needs --no-sandbox too), and /usr/bin/log never runs inside the fence; builds work (xcodebuild and swift, also from make and scripts, run with their own sandboxes turned off, since macOS can't start one inside the fence; give xcodebuild a -derivedDataPath it may write, and declare open to build a Swift package folder with xcodebuild, which swift build doesn't need, or an app whose icon was made in Icon Composer); scripting other apps (osascript) and starting background services (launchctl, brew services) aren't possible. Whatever it leaves running is stopped when it finishes, unless keep_minutes asks to keep it (checking the job keeps it longer; 24 hours at most).",
+  "inputSchema": {
+    "additionalProperties": false,
+    "properties": {
+      "command": {
+        "description": "The command line",
+        "type": "string"
+      },
+      "enter": {
+        "description": "With input: press Enter after (default true)",
+        "type": "boolean"
+      },
+      "folder": {
+        "description": "Run in this folder (default: home)",
+        "type": "string"
+      },
+      "input": {
+        "description": "With job: what to type",
+        "type": "string"
+      },
+      "job": {
+        "description": "A running job's id, to type into or stop",
+        "type": "string"
+      },
+      "keep_minutes": {
+        "description": "Keep what the command leaves running (a server, a watcher) and its scratch folder this many minutes after it finishes (0 to 1440, default 0)",
+        "type": "integer"
+      },
+      "machine": {
+        "description": "The machine to use, by name, as the machines tool lists it. Leave it out when only one machine offers this tool.",
+        "type": "string"
+      },
+      "stop": {
+        "description": "With job: stop it",
+        "type": "boolean"
+      },
+      "uses": {
+        "description": "What the command does beyond the fence, only when the owner's task needs it: open (apps, files, links through macOS). What it starts runs outside the fence and keeps running.",
+        "items": {
+          "enum": [
+            "open"
+          ],
+          "type": "string"
+        },
+        "type": "array"
+      },
+      "wait": {
+        "description": "Seconds to wait for it to finish (1 to 30, default 30)",
+        "type": "integer"
+      },
+      "why": {
+        "description": "With writes: what the command writes there, for the owner's list",
+        "type": "string"
+      },
+      "writes": {
+        "description": "Folders or files outside the allowed places the command will write (full paths or ~/…); results meant to stay",
+        "items": {
+          "type": "string"
+        },
+        "type": "array"
+      }
+    },
+    "required": [],
+    "type": "object"
+  },
+  "name": "shell_run",
+  "title": "Run a Command"
+}

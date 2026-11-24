@@ -325,15 +325,15 @@ func (m *macCheck) browser() error {
 		return err
 	}
 	defer p.close()
-	t, err := m.text("browser_read", map[string]any{"url": p.base + "/"})
+	t, err := m.text("browser_look", map[string]any{"url": p.base + "/"})
 	if err != nil {
 		return err
 	}
 	page := regexp.MustCompile(`\bp[0-9a-z]{3}\b`).FindString(t)
 	if page == "" || !strings.Contains(t, "Page marker "+m.marker) {
-		return fmt.Errorf("browser_read of the served page: %q", t)
+		return fmt.Errorf("browser_look of the served page: %q", t)
 	}
-	step("browser_read opened the served page as %s", page)
+	step("browser_look opened the served page as %s", page)
 	reveal := refFor(t, "Reveal")
 	field := refFor(t, "Search words")
 	if reveal == "" || field == "" {
@@ -342,7 +342,7 @@ func (m *macCheck) browser() error {
 	if _, err := m.text("browser_act", map[string]any{"action": "click", "page": page, "ref": reveal}); err != nil {
 		return err
 	}
-	if t, err = m.text("browser_read", map[string]any{"page": page}); err != nil {
+	if t, err = m.text("browser_look", map[string]any{"page": page}); err != nil {
 		return err
 	}
 	if !strings.Contains(t, "Revealed 42") {

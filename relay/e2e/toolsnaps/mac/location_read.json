@@ -1,0 +1,26 @@
+{
+  "_meta": {
+    "latchkey/deadline_ms": 15000
+  },
+  "annotations": {
+    "destructiveHint": false,
+    "idempotentHint": false,
+    "openWorldHint": false,
+    "readOnlyHint": true,
+    "title": "Where Is the Mac"
+  },
+  "description": "Gives the Mac's current location: coordinates, how accurate they are, when they were measured, and the street address. The Mac measures it from nearby Wi-Fi.",
+  "inputSchema": {
+    "additionalProperties": false,
+    "properties": {
+      "machine": {
+        "description": "The machine to use, by name, as the machines tool lists it. Leave it out when only one machine offers this tool.",
+        "type": "string"
+      }
+    },
+    "required": [],
+    "type": "object"
+  },
+  "name": "location_read",
+  "title": "Where Is the Mac"
+}

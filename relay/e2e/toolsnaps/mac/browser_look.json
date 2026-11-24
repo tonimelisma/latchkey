@@ -1,0 +1,62 @@
+{
+  "_meta": {
+    "latchkey/deadline_ms": 30000
+  },
+  "annotations": {
+    "destructiveHint": false,
+    "idempotentHint": false,
+    "openWorldHint": true,
+    "readOnlyHint": true,
+    "title": "Read the Web"
+  },
+  "description": "Opens and reads web pages on the Mac. Claude's own pages open in Latchkey's own browser, in the background, where nobody sees them: while the Mac is unlocked without the owner's Safari sign-ins (type a saved sign-in with logins_fill, or move the page into Safari with sign_in_again), while it is locked with a copy of Safari's sign-ins (a site may then sign the owner out in Safari). Only when the owner asks to see what Claude does, pass show_in_safari with url: the page opens in a background Safari tab of Claude's in the owner's front window, signed in as the owner (the owner's front tab stays in front; the owner clicks the tab to watch). Each answer says which. With url: opens that page in a new page of Claude's own and answers with its name, like p4k2; with url and page, opens it in that page. Pass page on every later call (other chats may have pages open too; with several open, a call without page is refused with the list). tabs: lists every tab of every Safari window of the owner's, each with a reference like 4213.2 (window, then tab), and Claude's own pages. With tab: reads that tab of the owner's, in the background (name it on each call that should use it). With back: goes back. With nothing else: reads the page. Answers with the page's text and the links, buttons, and fields on it, each with a reference like e12 for browser_act. Long pages come in parts; pass offset to read on. screenshot: shows the page as an image. sign_in_again: when a page of Claude's in Latchkey's own browser is signed out but needs the owner's sign-in: while the Mac is unlocked, moves it into a Safari tab of Claude's at the same address; while locked, takes Safari's cookies again and loads the page again. A page's confirm or prompt that Claude didn't answer in advance waits for Claude: the answer says what it asks, and browser_act action dialog answers it. A page that is a file (a PDF) isn't shown: save it with browser_act download.",
+  "inputSchema": {
+    "additionalProperties": false,
+    "properties": {
+      "back": {
+        "description": "Go back to the previous page",
+        "type": "boolean"
+      },
+      "machine": {
+        "description": "The machine to use, by name, as the machines tool lists it. Leave it out when only one machine offers this tool.",
+        "type": "string"
+      },
+      "offset": {
+        "description": "Read the page from this character",
+        "type": "integer"
+      },
+      "page": {
+        "description": "Claude's page to use, by the name an earlier answer gave, like p4k2",
+        "type": "string"
+      },
+      "screenshot": {
+        "description": "Show the page as an image",
+        "type": "boolean"
+      },
+      "show_in_safari": {
+        "description": "With url, only when the owner asked to see what Claude does: open the page in a Safari tab of Claude's the owner can watch (Mac unlocked)",
+        "type": "boolean"
+      },
+      "sign_in_again": {
+        "description": "Claude's page is signed out but needs the owner's sign-in: move it into Safari (unlocked) or take Safari's cookies again (locked)",
+        "type": "boolean"
+      },
+      "tab": {
+        "description": "Use this tab of the owner's: its reference from the tab list, like 4213.2",
+        "type": "string"
+      },
+      "tabs": {
+        "description": "List every tab of every Safari window, and Claude's own pages",
+        "type": "boolean"
+      },
+      "url": {
+        "description": "A page to open",
+        "type": "string"
+      }
+    },
+    "required": [],
+    "type": "object"
+  },
+  "name": "browser_look",
+  "title": "Read the Web"
+}

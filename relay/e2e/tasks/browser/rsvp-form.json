@@ -12,7 +12,7 @@
     "sweep pages"
   ],
   "required_calls": [
-    "browser_read",
+    "browser_look",
     "browser_act"
   ],
   "unneeded_calls": [

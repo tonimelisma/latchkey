@@ -1,0 +1,118 @@
+{
+  "_meta": {
+    "latchkey/deadline_ms": 30000
+  },
+  "annotations": {
+    "destructiveHint": true,
+    "idempotentHint": false,
+    "openWorldHint": true,
+    "readOnlyHint": false,
+    "title": "Act on the Page"
+  },
+  "description": "Acts on a page, in the background, then answers with the page: Claude's own page (name it with page, like p4k2, as browser_look gave it), or a tab of the owner's Safari (name it with tab on each call, like 4213.2). action: click (ref: a link or button), type (ref: a field, text; or a list and the option's text; submit sends the form), select (ref: a list, options: the texts to choose, several in a list that takes several), key (keys: like \"Enter\", \"Tab Tab\", \"Escape\", \"ArrowDown\", \"cmd+a\", pressed in ref or the focused field), hover (ref), scroll (direction: down, up, left, right, top, bottom; amount in pixels; ref to scroll inside an element), upload (ref: a file field or drop place, paths: files on the Mac), download (ref: a link, or url, or neither for the page itself, e.g. a PDF: saved to the Mac's Downloads folder, and the answer names the path for files_read), script (code: JavaScript run in the page; its result is returned, or the error the page gave; await works, and it runs also where the page forbids eval), dialog (answers the dialog Claude's page waits on: confirm true for OK or false for Cancel, prompt_text for a prompt), close (closes the page or the owner's tab). Clicks, keys, and hover are a script's, not a real mouse's or keyboard's: a click presses down and up at the element's centre, then clicks. Most pages take them. When the answer says the page didn't change, try key Enter or Space in the element, or a script that sends the events the page listens for; computer control is the last way, and only while the Mac is unlocked. The page's own dialogs: an alert is dismissed and told; confirm and prompt_text answer a dialog the action brings up in advance (in Claude's page also one that comes up to 5 seconds later); otherwise, in Claude's page a confirm or prompt waits for Claude's answer (action dialog; Cancel after 5 minutes), and in the owner's tabs it gets Cancel.",
+  "inputSchema": {
+    "additionalProperties": false,
+    "properties": {
+      "action": {
+        "description": "What to do",
+        "enum": [
+          "click",
+          "type",
+          "select",
+          "key",
+          "hover",
+          "scroll",
+          "upload",
+          "download",
+          "script",
+          "dialog",
+          "close"
+        ],
+        "type": "string"
+      },
+      "amount": {
+        "description": "For scroll: pixels (default most of what shows)",
+        "type": "integer"
+      },
+      "code": {
+        "description": "For script: the JavaScript",
+        "type": "string"
+      },
+      "confirm": {
+        "description": "OK (true) or Cancel (false) to a confirm dialog: for dialog, or in advance for this action",
+        "type": "boolean"
+      },
+      "direction": {
+        "description": "For scroll: which way (default down)",
+        "enum": [
+          "down",
+          "up",
+          "left",
+          "right",
+          "top",
+          "bottom"
+        ],
+        "type": "string"
+      },
+      "keys": {
+        "description": "For key: keys like Enter, Tab, Escape, ArrowDown, cmd+a",
+        "items": {
+          "type": "string"
+        },
+        "type": "array"
+      },
+      "machine": {
+        "description": "The machine to use, by name, as the machines tool lists it. Leave it out when only one machine offers this tool.",
+        "type": "string"
+      },
+      "options": {
+        "description": "For select: the options' texts or values",
+        "items": {
+          "type": "string"
+        },
+        "type": "array"
+      },
+      "page": {
+        "description": "Claude's page, by the name browser_look gave, like p4k2",
+        "type": "string"
+      },
+      "paths": {
+        "description": "For upload: the files' paths on the Mac",
+        "items": {
+          "type": "string"
+        },
+        "type": "array"
+      },
+      "prompt_text": {
+        "description": "The text for a prompt dialog: for dialog, or in advance for this action",
+        "type": "string"
+      },
+      "ref": {
+        "description": "The element's reference from browser_look, like e12",
+        "type": "string"
+      },
+      "submit": {
+        "description": "For type: send the form afterwards",
+        "type": "boolean"
+      },
+      "tab": {
+        "description": "A tab of the owner's instead: its reference from the tab list, like 4213.2",
+        "type": "string"
+      },
+      "text": {
+        "description": "For type: the text, or the option to choose",
+        "type": "string"
+      },
+      "url": {
+        "description": "For download: an address to save instead of a link",
+        "type": "string"
+      }
+    },
+    "required": [
+      "action"
+    ],
+    "type": "object"
+  },
+  "name": "browser_act",
+  "title": "Act on the Page"
+}

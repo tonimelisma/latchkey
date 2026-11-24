@@ -1,0 +1,46 @@
+{
+  "_meta": {
+    "latchkey/deadline_ms": 30000
+  },
+  "annotations": {
+    "destructiveHint": false,
+    "idempotentHint": false,
+    "openWorldHint": false,
+    "readOnlyHint": true,
+    "title": "Find Messages"
+  },
+  "description": "Searches Messages (iMessage, SMS, RCS). With text or dates: finds messages across all history, newest first, optionally only with a person. With neither: lists recent conversations, optionally only those with a person or group name, each with its id for messages_read.",
+  "inputSchema": {
+    "additionalProperties": false,
+    "properties": {
+      "limit": {
+        "description": "At most this many (default 20 conversations or 50 messages)",
+        "type": "integer"
+      },
+      "machine": {
+        "description": "The machine to use, by name, as the machines tool lists it. Leave it out when only one machine offers this tool.",
+        "type": "string"
+      },
+      "person": {
+        "description": "A name from Contacts, a number, an email address, or a group's name",
+        "type": "string"
+      },
+      "since": {
+        "description": "Only messages from this time on (ISO 8601)",
+        "type": "string"
+      },
+      "text": {
+        "description": "Words in the messages",
+        "type": "string"
+      },
+      "until": {
+        "description": "Only messages before this time (ISO 8601)",
+        "type": "string"
+      }
+    },
+    "required": [],
+    "type": "object"
+  },
+  "name": "messages_find",
+  "title": "Find Messages"
+}

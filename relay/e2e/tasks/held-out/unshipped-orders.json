@@ -16,7 +16,7 @@
     "sweep pages"
   ],
   "required_calls": [
-    "browser_read",
+    "browser_look",
     "files_change"
   ],
   "max_turns": 25
