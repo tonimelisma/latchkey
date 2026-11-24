@@ -916,11 +916,8 @@ final class AppModel {
         // An app turned off for Latchkey earlier is never asked again by macOS: say so and open
         // the place to turn it on, instead of ending silently (Mail, 2026-11-21).
         let off = Permissions.scriptedApps.filter { control(of: $0) == .denied }.map(Self.appName)
-        if off.isEmpty {
-            askNote = nil
-        } else {
-            askNote =
-                "\(off.joined(separator: ", ")) \(off.count == 1 ? "was" : "were") turned off for Latchkey earlier, so macOS won't ask again. In System Settings → Privacy & Security → Automation, under Latchkey, turn on \(off.joined(separator: " and "))."
+        askNote = Self.turnedOffNote(off)
+        if !off.isEmpty {
             Permissions.openAutomationSettings()
             event(
                 .permissions,
@@ -929,6 +926,14 @@ final class AppModel {
         }
         event(.permissions, "Allow All: questions done, missing \(missingSetup.joined(separator: ", "))")
         openSwitches()
+    }
+
+    /// Setup's note when apps were turned off for Latchkey earlier: macOS never asks about them
+    /// again, so the note says where to turn them on (Mail, 2026-11-21). Nil when none is off.
+    nonisolated static func turnedOffNote(_ off: [String]) -> String? {
+        guard !off.isEmpty else { return nil }
+        return
+            "\(off.joined(separator: ", ")) \(off.count == 1 ? "was" : "were") turned off for Latchkey earlier, so macOS won't ask again. In System Settings → Privacy & Security → Automation, under Latchkey, turn on \(off.joined(separator: " and "))."
     }
 
     /// The questions macOS asks in its own dialog, for setup's checklist: all allowed means the

@@ -22,6 +22,8 @@ struct OSAScriptRunner: ScriptRunner {
     /// its question during use, so it isn't run (FR-623).
     var app: String?
     var timeout: Duration = .seconds(25)
+    /// macOS's Automation answer for `app` (a stand-in in tests).
+    var automation: @Sendable (String) async -> Permissions.Automation? = { await Permissions.automationOpening($0) }
 
     func run(_ script: String, _ args: [String]) async throws -> String {
         let clock = ContinuousClock()
@@ -35,7 +37,7 @@ struct OSAScriptRunner: ScriptRunner {
             guard
                 let answer = await Deadline.first(
                     within: timeout,
-                    { () async -> Permissions.Automation?? in .some(await Permissions.automationOpening(app)) })
+                    { [automation] () async -> Permissions.Automation?? in .some(await automation(app)) })
             else {
                 EventLog.shared.record(
                     .permissions,
