@@ -281,7 +281,7 @@ func (m *macCheck) files() error {
 	return nil
 }
 
-var jobRE = regexp.MustCompile(`"job"\s*:\s*"([^"]+)"|\bjob[: ]+([A-Za-z0-9_-]{2,})`)
+var jobRE = regexp.MustCompile(`\b(job\d+)\b`) // ShellJobs names jobs job1, job2, …
 
 func (m *macCheck) shell() error {
 	t, err := m.text("shell_run", map[string]any{"command": "echo $((6*7)); sw_vers -productName"})
@@ -300,7 +300,8 @@ func (m *macCheck) shell() error {
 	if g == nil {
 		return fmt.Errorf("a long command didn't become a job: %q", t)
 	}
-	job := g[1] + g[2]
+	step("the long command became a job: %q", short(t))
+	job := g[1]
 	deadline := time.Now().Add(60 * time.Second)
 	for {
 		t, err = m.text("shell_check", map[string]any{"job": job, "wait": 10})
