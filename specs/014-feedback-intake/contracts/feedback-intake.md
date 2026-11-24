@@ -33,6 +33,7 @@ Plaintext (JSON):
 ```json
 {
   "format": 2,
+  "id": "fb_…",
   "at": "2026-11-24T05:45:16Z",
   "summary": "…", "details": "…",
   "client": "Anthropic/ClaudeAI",
@@ -43,6 +44,9 @@ Plaintext (JSON):
   "reporter": "3f9a0c1d2b4e5f60"
 }
 ```
+
+`id` (2026-11-24): the id the `feedback` tool gave Claude, so the user's chat and the developer's
+list name the same report; the intake's own id (`rep_…`) only addresses the stored copy.
 
 `machines` (format 2, 2026-11-24): each machine Claude named in the tool's `machines` argument,
 `named: true`; when it named none (or only names that match no machine), every machine online
