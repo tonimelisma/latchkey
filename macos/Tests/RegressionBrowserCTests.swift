@@ -1,4 +1,5 @@
 import Foundation
+import JavaScriptCore
 import Network
 import Testing
 import WebKit
@@ -265,32 +266,31 @@ final class HangingServerC: @unchecked Sendable {
             SafariBrowser.Script.tabJavaScript.contains("try\ntheAnswer\non error\nset theAnswer to \"\"\nend try"))
     }
 
-    /// The scripts Safari runs work in a real page whose eval throws.
-    @MainActor @Test func theAsyncRouteRunsWhereThePageReplacedEval() async throws {
-        // A real page in Latchkey's own browser (a bare web view didn't finish loading on GitHub's
-        // runner); Safari's start and result scripts are run in it as they are.
-        let p = LockedBrowser(cookies: { [] })
-        defer { p.discard() }
-        _ = try await p.open(
-            html: "<title>Amex</title><script>window.eval = function () { throw new Error('eval is disabled'); };"
-                + "</script><p>Hi</p>",
-            base: URL(string: "https://shop.example.com/")!)
-        func run(_ code: String) async throws -> String {
+    /// The scripts Safari runs work where the page's eval throws. Run in JavaScriptCore itself,
+    /// the engine of Safari's pages, with a stand-in window and document: a web view here loaded
+    /// too slowly on GitHub's runner and held up the browser tests beside it (2026-11-24).
+    @Test func theAsyncRouteRunsWhereThePageReplacedEval() throws {
+        let js = try #require(JSContext())
+        js.evaluateScript(
+            "var window = this; var document = { title: 'Amex' };"
+                + " window.eval = function () { throw new Error('eval is disabled'); };")
+        func run(_ code: String) throws -> String {
             let id = UUID().uuidString
             let body = try #require(PageScripts.asyncBodies(code).first)
-            #expect(try await p.run(PageScripts.startAsync(id: id, body: body)) == "started")
-            for _ in 0..<500 {
-                let r = try await p.run(PageScripts.asyncResult(id: id))
+            #expect(js.evaluateScript(PageScripts.startAsync(id: id, body: body))?.toString() == "started")
+            // JavaScriptCore runs the promise's steps after each script it is given.
+            for _ in 0..<20 {
+                let r = js.evaluateScript(PageScripts.asyncResult(id: id))?.toString() ?? ""
                 if r != "running" { return r }
-                try await Task.sleep(for: .milliseconds(20))
             }
             return "still running"
         }
+        #expect(js.exception == nil, "\(String(describing: js.exception))")
         #expect(
-            try await run("const t = await Promise.resolve(document.title);\nt.length")
+            try run("const t = await Promise.resolve(document.title);\nt.length")
                 == #"{"state":"done","value":"4"}"#)
         #expect(
-            try await run("(async () => { await 0; return document.title })()")
+            try run("(async () => { await 0; return document.title })()")
                 == #"{"state":"done","value":"Amex"}"#)
     }
 
