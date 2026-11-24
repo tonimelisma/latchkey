@@ -55,7 +55,7 @@ import Testing
         let t = Dictionary(
             uniqueKeysWithValues: BrowserCapability.readOperations(browser: b, own: pages).map { ($0.tool.name, $0) })
         _ = await t["browser_open"]!.handler(.object(["url": .string("about:blank")]))
-        let read = await t["browser_look"]!.handler(.object(["offset": bad]))
+        let read = await t["browser_read"]!.handler(.object(["offset": bad]))
         #expect(read.isError)
         #expect(read.content.jsonText.contains("offset"))
         let tabs = await t["browser_tabs"]!.handler(.object(["select": bad]))
