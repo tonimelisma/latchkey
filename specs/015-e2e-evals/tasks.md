@@ -63,7 +63,9 @@ weekly run, by the person running it.
 Built: T01 to T19. Checked here (cloud session): Go unit tests (`internal/evals`, `cmd/e2e`,
 `cmd/latchkey-reports`, `reports`), `e2e relay` end to end against a private relay with headless
 Chrome, the scripts' test. Checked on GitHub: `e2e-linux` (the relay and Linux checks, Linux
-snapshots taken from its artifact), `e2e-mac` (see the pull request). Not run anywhere yet: the
+snapshots taken from its artifact), `e2e-mac` (all four checks passed on macos-26 once the
+browser tool's new name and the page and job names were read right; Mac snapshots taken from
+its artifact). Not run anywhere yet: the
 weekly run and the image script (they need an Apple silicon Mac with Tart; only a person at that
 Mac can approve the test Mac's permissions). T20: adding the two checks to `main`'s required
 checks is Toni's step.

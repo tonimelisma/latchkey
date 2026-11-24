@@ -599,9 +599,16 @@ after the app was quit.
    (Sonnet, the subscription token) does 20 tasks (4 held out, 3 with planted instructions) 3
    times each in a throwaway test Mac, scored on the end state. Results stay in the clone, or go
    to the developer's intake with `--send` (`latchkey-reports evals`).
-   Rows: per-PR Linux checks VERIFIED (GitHub run on pull request #43, 2026-11-24, both checks
-   passed); per-PR Mac checks: see pull request #43's `e2e-mac`; weekly run and image script NOT
-   VERIFIED (never run: they need Toni's Mac).
+   Rows: per-PR Linux checks VERIFIED (pull request #43, 2026-11-24: the relay's own tools and
+   the real Linux program in its container, snapshots compared); per-PR Mac checks VERIFIED
+   (pull request #43, 2026-11-24, GitHub's macos-26 runner: files read, written, edited and
+   trashed as seen on disk; shell run and a job checked; Latchkey's own browser opened a served
+   page, clicked, sent a form and saved a download; Files turned off left Claude's list and came
+   back; the offline answer in 29 ms; all 32 Mac tools compared with their snapshots); a changed
+   snapshot fails the job VERIFIED (the first runs failed on the missing snapshots, uploaded
+   them, and passed once they were committed); weekly run and image script NOT VERIFIED (never
+   run: they need an Apple silicon Mac with Tart, and a person to approve the test Mac's
+   permissions).
    Left for Toni, together: (1) on his Mac, `macos/scripts/eval-image.sh` in Terminal from the
    repository (it asks for the `claude setup-token` token at a password prompt; approve
    Latchkey's permissions and click Connect in the test Mac's window); (2) approve one Latchkey
