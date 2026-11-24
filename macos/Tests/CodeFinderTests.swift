@@ -128,6 +128,7 @@ import Testing
         let start = ContinuousClock.now
         let r = await f.find(site: "a.test", email: false, since: at)
         let called = calledAt.value.map { "\($0 - start)" } ?? "never"
-        Issue.record("DIAG \(n): took \(ContinuousClock.now - start), source called after \(called), result \(String(describing: r))")
+        let took = ContinuousClock.now - start
+        Issue.record("DIAG \(n): took \(took), source called after \(called), result \(String(describing: r))")
     }
 }
