@@ -579,13 +579,14 @@ after the app was quit.
 1. Codes experiment: done and reported (table under "Open acceptance"). Open: Chase live on 0.8.228
    or later; the other banks (Capital One, Amex, US Bank, Discover, Fidelity, Schwab); Toni to
    choose which way to keep (or all three).
-3. End-to-end testing and evals (Toni, 2026-11-23: "add a backlog item to figure out how to do e2e
-   testing and evals properly"). Claude's live test sessions against Toni's real Mac data were
-   removed the same day (CLAUDE.md step 7, `docs/cloud-sessions.md` "Live checks"); the scripts
-   in `macos/scripts/state-check/` and the cases in `cases.json` are kept but not run. To decide:
-   what to test end to end without touching his real accounts and apps (a test macOS user or
-   VM, test accounts, a recorded relay), how agent evals are run and scored, and what a release
-   needs before it counts as checked. Research first, then a proposal for Toni.
+3. End-to-end testing and evals (Toni, 2026-11-23): researched and specified 2026-11-24
+   (`specs/015-e2e-evals/`: spec, research, plan, contracts), with Toni's choices recorded in
+   `docs/decisions.md`. Waiting for Toni's review of the spec before tasks or code. In short: per
+   pull request, scripted end-to-end checks of the changed capabilities on GitHub's Linux and
+   macOS runners (blocking) and tool snapshots; weekly, Toni runs one command that has real
+   Claude do about 20 tasks 3 times each in a throwaway virtual Mac, results to the developer's
+   intake. Toni's one-time steps once it is built: the subscription token, approving Latchkey's
+   permissions in the test Mac once, adding the two new required checks.
 2. Signed updates with Sparkle (Toni, 2026-11-23: "yes, implement sparkle"; spec 001 FR-072 to
    FR-072d, plan D9): built while Toni was away. The app's update gate (installs only while
    idle), the build number, the update feed (`macos/scripts/appcast.sh`), and the CI release job
