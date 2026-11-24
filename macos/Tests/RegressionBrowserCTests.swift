@@ -146,7 +146,7 @@ final class HangingServerC: @unchecked Sendable {
         let started = ContinuousClock.now
         let page = try await b.open(address)
         #expect(ContinuousClock.now - started < .seconds(30), "an answer within the relay's 30 s")
-        #expect(page.text.contains("still loading") && page.text.contains("browser_read"), "\(page.text)")
+        #expect(page.text.contains("still loading") && page.text.contains("browser_look"), "\(page.text)")
         let again = try await b.read(offset: 0)
         #expect(again.url == address, "the same page, still open")
     }
@@ -207,7 +207,8 @@ final class HangingServerC: @unchecked Sendable {
         let b = SafariBrowser(scripts: fake, settleLimit: .seconds(3))
         let own = OwnPages(cookies: { [] }, isLocked: { false }, record: { _ in })
         defer { own.closeAll() }
-        let read = BrowserCapability.readTools(browser: b, own: own).first { $0.tool.name == "browser_read" }!
+        let read = try #require(
+            BrowserCapability.readTools(browser: b, own: own).first { $0.tool.name == "browser_look" })
         #expect(await b.turns.enter(within: .seconds(1)), "another chat's turn")
         let call = Task { await read.handler(.object(["tab": .string("10.2")])) }
         try await Task.sleep(for: .milliseconds(500))
@@ -224,7 +225,8 @@ final class HangingServerC: @unchecked Sendable {
         let b = SafariBrowser(scripts: fake, settleLimit: .seconds(3))
         let own = OwnPages(cookies: { [] }, isLocked: { false }, record: { _ in })
         defer { own.closeAll() }
-        let read = BrowserCapability.readTools(browser: b, own: own).first { $0.tool.name == "browser_read" }!
+        let read = try #require(
+            BrowserCapability.readTools(browser: b, own: own).first { $0.tool.name == "browser_look" })
         #expect(await b.turns.enter(within: .seconds(1)))
         let r = await read.handler(.object(["tab": .string("10.1")]))
         await b.turns.leave()
