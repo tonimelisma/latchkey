@@ -138,6 +138,7 @@ func (s *Server) fileFeedback(userID string) mcp.ToolHandler {
 			r := s.report(userID, ms, named, summary,
 				text("details", agentproto.MaxFeedbackDetails), truncate(client, agentproto.MaxFeedbackName), start)
 			id := agentproto.NewFeedbackID()
+			r.ID = id
 			sealed, err := reports.Seal(s.opts.Reports.DeveloperKey, r)
 			if err == nil {
 				err = s.store.AddReport(ctx, store.OutboxReport{ID: id, UserID: userID, Created: start.UTC(), Sealed: sealed})

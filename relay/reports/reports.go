@@ -42,7 +42,10 @@ const WorkBits = 20
 
 // Report is what a sealed report holds (FR-1412, contract feedback-intake.md).
 type Report struct {
-	Format       int       `json:"format"`
+	Format int `json:"format"`
+	// ID is the id the feedback tool gave Claude (fb_…), so the user's chat and the developer's
+	// list name the same report (Toni, 2026-11-24).
+	ID           string    `json:"id,omitempty"`
 	At           time.Time `json:"at"`
 	Summary      string    `json:"summary"`
 	Details      string    `json:"details"`

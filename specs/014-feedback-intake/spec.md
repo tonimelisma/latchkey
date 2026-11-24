@@ -89,6 +89,8 @@ Toni because he is a user too. Other users' reports never reach the developer.
   version, system version and screen state (locked or not), and a reporter tag that groups one account's reports without identifying it
   (it differs per relay and can't be reversed). It shall hold no account, email address,
   machine name, or relay address.
+- **FR-1412a** A shared report shall hold the id the `feedback` answer gave Claude, so the user's
+  chat and the developer's list name the same report (Toni, 2026-11-24).
 - **FR-1413** The relay shall encrypt each report to the developer's public key from its
   settings before storing or sending it; it never stores a report it could read.
 - **FR-1414** The relay shall send each encrypted report to the intake address from its

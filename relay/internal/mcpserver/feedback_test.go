@@ -100,6 +100,8 @@ func TestSharedReportsReachTheIntakeSealed(t *testing.T) {
 	assert.Equal(t, "browser_act click e56: same page", r.Details)
 	assert.NotEmpty(t, r.Client)
 	assert.Equal(t, 2, r.Format)
+	assert.Contains(t, text(t, res), r.ID, "the report holds the id the tool gave Claude")
+	assert.True(t, strings.HasPrefix(r.ID, "fb_"), r.ID)
 	require.Len(t, r.Machines, 1, "none named: the online machine")
 	assert.NotEmpty(t, r.Machines[0].Version+r.Machines[0].System, "its versions")
 	assert.False(t, r.Machines[0].Named)
