@@ -155,7 +155,8 @@ import WebKit
             let saved = (try? FileManager.default.contentsOfDirectory(atPath: dir.path))?.filter {
                 $0.hasSuffix(".txt")
             }
-            if saved?.count == LockedBrowser.savesPerAction, told.contains(where: { $0.contains("more file") }) { break }
+            let refusedTold = told.contains { $0.contains("more file") }
+            if saved?.count == LockedBrowser.savesPerAction, refusedTold { break }
         }
         let files = try FileManager.default.contentsOfDirectory(atPath: dir.path).filter { $0.hasSuffix(".txt") }
         #expect(files.count == LockedBrowser.savesPerAction, "\(files)")

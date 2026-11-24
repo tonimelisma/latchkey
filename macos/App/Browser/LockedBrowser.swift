@@ -626,7 +626,9 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownl
                 )
             } catch {
                 try? FileManager.default.removeItem(at: staging)
-                saved("The page's file \(Self.quoted(r.name)) arrived but couldn't be put in \(downloadsFolder.path); nothing was saved.")
+                saved(
+                    "The page's file \(Self.quoted(r.name)) arrived but couldn't be put in \(downloadsFolder.path); nothing was saved."
+                )
             }
         }
     }

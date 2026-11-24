@@ -73,8 +73,9 @@ import Testing
 
     /// The description says pages open in the background and when to show one in Safari.
     @Test func theDescriptionSaysWhenToShowAPageInSafari() {
-        let read = BrowserCapability.readTools(browser: SafariBrowser(scripts: FakeSafariTabs()), own: OwnPages(cookies: { [] }))
-            .first { $0.tool.name == "browser_look" }
+        let all = BrowserCapability.readTools(
+            browser: SafariBrowser(scripts: FakeSafariTabs()), own: OwnPages(cookies: { [] }))
+        let read = all.first { $0.tool.name == "browser_look" }
         let d = read?.tool.description ?? ""
         #expect(d.contains("in the background") && d.contains("show_in_safari") && d.contains("asks to see"))
         #expect(!d.contains("a site the owner is signed in to in Safari opens in a background Safari tab"))
@@ -87,7 +88,8 @@ import Testing
         let own = OwnPages(
             cookies: { [Self.cookie(".shop.example", "session", httpOnly: true, days: 30)] }, isLocked: { false })
         defer { own.closeAll() }
-        _ = await tools(fake, own: own)["browser_look"]!.handler(.object(["url": .string("https://www.shop.example/cart")]))
+        let look = tools(fake, own: own)["browser_look"]!
+        _ = await look.handler(.object(["url": .string("https://www.shop.example/cart")]))
         #expect(fake.windows[0].tabs.count == 2, "no Safari tab of Claude's")
     }
 
