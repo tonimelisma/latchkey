@@ -217,7 +217,7 @@ func (a *Agent) session(ctx context.Context, s config.Settings, key *devicekey.K
 		return err
 	}
 	dialCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
-	ws, _, err := websocket.Dial(dialCtx, target, &websocket.DialOptions{Subprotocols: []string{agentproto.Subprotocol}})
+	ws, _, err := websocket.Dial(dialCtx, target, &websocket.DialOptions{Subprotocols: []string{agentproto.Subprotocol}}) //nolint:bodyclose // the websocket package closes the handshake response itself
 	cancel()
 	if err != nil {
 		return err

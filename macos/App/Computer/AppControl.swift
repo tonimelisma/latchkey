@@ -75,7 +75,7 @@ struct AppControl: Sendable {
             // (Toni, 2026-11-23: "press selects the row"): SwiftUI's sidebar rows take no press,
             // and pressing their text did nothing (Otos, 2026-11-20). No pointer moves.
             // Only for a row, a cell, or text: a button or checkbox in a row is pressed (review).
-            if ["AXRow", "AXCell", "AXStaticText"].contains(e.role), let row = AppWindowReader.row(around: el),
+            if AppWindowReader.selectsRow(role: e.role), let row = AppWindowReader.row(around: el),
                 AXUIElementSetAttributeValue(row, kAXSelectedAttribute as CFString, kCFBooleanTrue) == .success
             {
                 return true
@@ -243,18 +243,27 @@ enum AppWindowReader {
     ]
 
     private static func label(_ e: AXUIElement) -> String {
-        if let l = [kAXTitleAttribute, kAXDescriptionAttribute, kAXHelpAttribute].lazy.compactMap({ string(e, $0) })
-            .first(where: { !$0.isEmpty })
-        {
-            return l
-        }
-        // A window's close, minimize, and zoom buttons have no title: their kind names them
-        // ("close button"; 2026-11-20, the close button had to be guessed).
-        if let sub = string(e, kAXSubroleAttribute), windowButtons.contains(sub) {
-            return string(e, kAXRoleDescriptionAttribute) ?? ""
-        }
+        label(
+            title: string(e, kAXTitleAttribute), description: string(e, kAXDescriptionAttribute),
+            help: string(e, kAXHelpAttribute), subrole: string(e, kAXSubroleAttribute),
+            roleDescription: { string(e, kAXRoleDescriptionAttribute) })
+    }
+
+    /// An element's name: its title, description, or help, the first not empty. A window's
+    /// close, minimize, and zoom buttons have no title: their kind names them ("close button";
+    /// 2026-11-20, the close button had to be guessed).
+    static func label(
+        title: String?, description: String?, help: String?, subrole: String?, roleDescription: () -> String?
+    ) -> String {
+        if let l = [title, description, help].lazy.compactMap({ $0 }).first(where: { !$0.isEmpty }) { return l }
+        if let subrole, windowButtons.contains(subrole) { return roleDescription() ?? "" }
         return ""
     }
+
+    /// Whether a press on an element of this role selects the row it is in, as a click would
+    /// (Toni, 2026-11-23: "press selects the row"; SwiftUI's sidebar rows take no press). Only a
+    /// row, a cell, or text: a button or checkbox in a row is pressed (review).
+    static func selectsRow(role: String) -> Bool { ["AXRow", "AXCell", "AXStaticText"].contains(role) }
 
     private static let windowButtons: Set<String> = [
         "AXCloseButton", "AXMinimizeButton", "AXZoomButton", "AXFullScreenButton",

@@ -175,21 +175,6 @@ import WebKit
         #expect(try await cookies(own, b).contains("safari_b"), "other sites take Safari's while locked, as before")
     }
 
-    @Test func whileUnlockedAnOwnSiteStaysInLatchkeysBrowser() throws {
-        let (s, _, _) = try OwnSessionsTests.sessions(clock: .live())
-        let signedIn = [
-            SafariCookies.Cookie(
-                domain: "a.test", name: "session", path: "/", value: "x", secure: true, httpOnly: true,
-                expires: Date().addingTimeInterval(30 * 86400)),
-            SafariCookies.Cookie(
-                domain: "b.test", name: "session", path: "/", value: "x", secure: true, httpOnly: true,
-                expires: Date().addingTimeInterval(30 * 86400)),
-        ]
-        let own = OwnPages(cookies: { signedIn }, isLocked: { false }, record: { _ in }, sessions: s)
-        #expect(!own.inSafari("https://a.test/account"), "Latchkey signs in there itself")
-        #expect(own.inSafari("https://b.test/account"), "a site with no saved password: the owner's Safari, as before")
-    }
-
     @Test func keptSignInsComeBackInANewStore() async throws {
         let (s, _, _) = try OwnSessionsTests.sessions(clock: .live())
         s.keep([

@@ -221,8 +221,11 @@ what was learned. Report contents never go into the repository, a pull request, 
 report is dispositioned once its fix is on main or Toni has heard why not; then delete it with
 `latchkey-reports delete <id>` (nothing is kept: git is the history).
 
-Every issue found in Latchkey (by Toni, an agent's feedback report, or
-a test) gets a case in a regressions group of `macos/scripts/state-check/cases.json`
+Every issue found in Latchkey (by Toni, an agent's feedback report, a review, or a test, also
+one caught before merge) gets, in the same commit as its fix, an automated regression test that
+fails without the fix and runs in CI (`make test`, or `mac-build.yml` for the Mac app): the point
+is that a fixed bug can't come back unnoticed (Toni, 2026-11-24). Where the issue also shows on
+the installed app, it gets a case in a regressions group of `macos/scripts/state-check/cases.json`
 ("regressions", or "regressions-browser", "-shell", "-computer", "-other" by area), in the same
 commit as its fix: the id names it, `case` says what went wrong and when, `steps` say
 how it is checked and what counts as working. Cases never write anything they don't remove.

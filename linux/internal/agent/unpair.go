@@ -24,7 +24,7 @@ func Unpair(ctx context.Context, s config.Settings, key *devicekey.Key, version 
 	}
 	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
-	ws, _, err := websocket.Dial(ctx, target, &websocket.DialOptions{Subprotocols: []string{agentproto.Subprotocol}})
+	ws, _, err := websocket.Dial(ctx, target, &websocket.DialOptions{Subprotocols: []string{agentproto.Subprotocol}}) //nolint:bodyclose // the websocket package closes the handshake response itself
 	if err != nil {
 		return err
 	}

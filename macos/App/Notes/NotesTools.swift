@@ -17,7 +17,8 @@ extension NotesCapability {
                     ], readOnly: true, deadlineMS: 30_000),
                 handler: { args in
                     let search = await ops.call("notes_search", args)
-                    guard !args.hasAny("query", "folder") else { return search }
+                    // A refused search (a bad limit) is the answer, not the folders beside it.
+                    guard !args.hasAny("query", "folder"), !search.isError else { return search }
                     return await ops.call("notes_folders", .object([:])) + search
                 }),
             ToolEntry(

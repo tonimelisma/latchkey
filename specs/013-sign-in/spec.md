@@ -188,11 +188,14 @@ interface another app can read (`research.md`), so the only way in is a copy the
   only on the page's own site (FR-1321, FR-1328), in the page itself, never in a frame.
 - **FR-1373** The tool's description shall tell Claude to read the page after each fill and judge
   for itself, and that some sites' protection against bots turns away Latchkey's own background
-  browser while letting Safari through: while the Mac is unlocked, browser_read sign_in_again
+  browser while letting Safari through: while the Mac is unlocked, browser_look sign_in_again
   moves the page into a background Safari tab of Claude's, where Claude signs in again; while it
   is locked, Claude tells the owner the site needs the Mac unlocked (Toni, 2026-11-22: "ensure
-  the agent gets proper guidance").
-- **FR-1374** browser_read sign_in_again on a page of a site Latchkey signs in to itself (FR-1350)
+  the agent gets proper guidance"). It shall also say that such a site may say nothing at all:
+  the same sign-in page comes back with no error, often with a hidden "reCAPTCHA" badge, and
+  that Latchkey can't tell why, so Claude judges from the page (problem report 2026-11-24,
+  Procare; Toni: "keep the rule, provide hints to claude").
+- **FR-1374** browser_look sign_in_again on a page of a site Latchkey signs in to itself (FR-1350)
   shall, while the Mac is unlocked, move the page into a Safari tab of Claude's at the same
   address under the same name (amends FR-1351 for that page only; the next page of the site
   opens in Latchkey's own browser again: Toni, "Decide fresh each time"); while it is locked,
@@ -220,7 +223,7 @@ Safari's.
   FR-457 for those sites.
 - **FR-1351** While the Mac is unlocked, a page of such a site shall open in Latchkey's own
   browser, not in a Safari tab of Claude's. Amends spec 005 FR-455 and FR-459 for those sites.
-- **FR-1352** (Withdrawn 2026-11-22: Claude moves a page into Safari itself with browser_read sign_in_again, and nothing is remembered for the next chat (Toni: "Decide fresh each time"); FR-1374. Was: When Latchkey's own sign-in can't finish on such a site (the site asks for a code
+- **FR-1352** (Withdrawn 2026-11-22: Claude moves a page into Safari itself with browser_look sign_in_again, and nothing is remembered for the next chat (Toni: "Decide fresh each time"); FR-1374. Was: When Latchkey's own sign-in can't finish on such a site (the site asks for a code
   Latchkey doesn't hold, shows a check it can't answer, or refuses the password), Latchkey shall
   use the Owner's Safari sign-in for that site as spec 005 does: while the Mac is locked, take
   Safari's cookies for the site and load the page again; while unlocked, move the page into a
@@ -272,7 +275,7 @@ once when unlocked" and "Any new code text".
   shall tell Claude that some sites' protection against bots turns away that background browser
   while letting Safari through, and what to do (Toni, 2026-11-22: "ensure the agent gets proper
   guidance"): while the Mac is unlocked, call logins_sign_in again on the page, which has moved
-  into a background Safari tab of Claude's (FR-1352) or moves there with browser_read
+  into a background Safari tab of Claude's (FR-1352) or moves there with browser_look
   sign_in_again; while it is locked, that Safari is used only while the Mac is unlocked, so Claude
   tells the owner and tries again once it is. The tool's description says the same.)
 - **FR-1370** (Withdrawn 2026-11-22: each fill is one step, with no waiting for a code, so no call runs long. Was: A sign-in call shall start no new step (filling, sending, looking again) once 40

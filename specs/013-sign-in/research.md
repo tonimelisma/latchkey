@@ -289,3 +289,14 @@ once the newest is used); a message is marked used only after the code was typed
 pressed, so a refused field leaves it for the next call; Latchkey cleans up in ways 2 and 3
 because it knows which message it used, while in way 1 Claude does. The reading is in
 `CodeFinder` (Messages' database, Apple Mail's files; never a window).
+
+Read limit in tests (2026-11-24; low-level, decided here): three `CodeFinderTests` failed on every
+`mac build` run on GitHub's macOS runner. Recorded timings showed why: the runner was so busy that
+the stand-in texts were read 21 to 31 s after the call, past the read's fixed 10 s limit, so the
+lookup answered nil, as it should in the app (Constitution II). The finder logic was right; the
+tests depended on getting a thread within 10 s. Options: (a) a `readLimit` on the finder, 10 s
+in the app, long in the tests, so the tests still go through the real queue and deadline; (b) a
+stand-in for the whole read step, deterministic but skipping the queue and deadline in every test;
+(c) retry or skip the tests on the runner, which hides the cause. Chose (a), with a test that a
+read starting after 11 s still counts, and one that a read that never answers gives nil at its
+limit (the stand-in is held until the lookup answers, so no timing decides it).

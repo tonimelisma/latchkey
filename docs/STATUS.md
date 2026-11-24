@@ -62,6 +62,16 @@ widgets that move the focus, GitHub's real "More options" list, a toggle's state
 returns). Two Uber code texts couldn't be deleted (the window didn't show them); the next
 failure says why.
 
+## Problem reports of 2026-11-24 (0.8.235, Mac unlocked)
+
+Two reports from Toni's own chats; fixed on main with unit tests (GitHub's Mac runner) and a
+regression case each; no live run (Toni runs them).
+
+| Report | Cause | Fix (spec) | Live |
+|---|---|---|---|
+| A file a page offered to save in Latchkey's own browser opened the file's address instead, ending Claude's script; nothing reached Downloads | Latchkey's own browser had no download handling, so WebKit went to the address | Saved into Downloads during Claude's action, as Safari does; a page can't save on its own (spec 005 FR-475 to FR-477) | NOT VERIFIED |
+| Procare's sign-in in Latchkey's own browser came back unchanged with no error; Safari signed in at once | Procare's hidden robot check turns away the background browser and says nothing; Latchkey can't tell why | logins_fill's description says a site may say nothing and that Claude judges from the page, then moves it to Safari (spec 013 FR-1373); pages also default to the background browser now, Safari only to watch, tool renamed `browser_look` (spec 005 FR-474; Toni) | NOT VERIFIED |
+
 ## Feedback reports, 2026-11-17 to 2026-11-23 (sorted 2026-11-23)
 
 All 172 reports were read in full and checked against the code. 123 were already fixed (76),
@@ -632,6 +642,17 @@ conversations with himself and the WhatsApp test message in his own chat; option
 Latchkey's unused Mail permission (System Settings → Privacy & Security → Automation → Latchkey).
 
 ## History (newest first; what was done and found, kept as the record)
+
+Regression tests (2026-11-24, pull request #41; CLAUDE.md, "Every issue becomes a regression
+case"): every one of the 118 cases in the regressions groups now names the automated test that
+covers it, in `docs/regression-coverage.md`: 78 had one already, 26 got a new one, 12 have
+Latchkey's own decision tested while the rest needs a real site, the locked screen, macOS's
+privacy system or another app's window, and 2 can't be tested at all (Contacts' real iCloud
+records; the real Passwords app's export). For four cases a decision moved into a function
+tests can call, with no change in behavior (the Automation check before a script, setup's note
+for apps turned off earlier, a window button's name, which presses select a row). Found by the
+new tests and fixed: a deleted note read through Notes' scripting still gave Notes' raw -1728
+error; notes_find with only a bad limit listed the folders and wasn't an error.
 
 Cloud-first, review fixes (2026-11-23, a second cloud session given the same task, whose own
 implementation was superseded by the one merged below and ported onto it): the infra workflow's

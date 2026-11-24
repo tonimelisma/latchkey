@@ -392,7 +392,7 @@ actor SafariBrowser {
                     // The script ran and sent the tab elsewhere (location.href = …): said so,
                     // never as if nothing was done.
                     return
-                        "The script ran and sent the tab to another page before it finished, so Latchkey no longer knows the tab: list the tabs with browser_read tabs and name it again."
+                        "The script ran and sent the tab to another page before it finished, so Latchkey no longer knows the tab: list the tabs with browser_look tabs and name it again."
                 }
                 switch r {
                 case "running": continue
@@ -569,7 +569,7 @@ actor SafariBrowser {
             let last = parts.last, let number = Int(last), number >= 1, parts.count == 1 || Int(parts[0]) != nil
         else {
             throw Failure.failed(
-                "\"\(reference.prefix(40))\" isn't a tab from the list. Tabs are named like 4213.2 (window, then tab); list them with browser_read and tabs."
+                "\"\(reference.prefix(40))\" isn't a tab from the list. Tabs are named like 4213.2 (window, then tab); list them with browser_look and tabs."
             )
         }
         var id = parts.count == 2 ? String(parts[0]) : nil
@@ -582,7 +582,7 @@ actor SafariBrowser {
                 Script.tabPick, [id, String(number), PageScripts.tabMark(token) + PageScripts.tabCheck(token)])
         } catch Failure.failed(let message) where message.contains("LATCHKEY_NO_TAB") {
             throw Failure.failed(
-                "Safari has no tab \(id).\(number) now. List the tabs again with browser_read and tabs.")
+                "Safari has no tab \(id).\(number) now. List the tabs again with browser_look and tabs.")
         }
         let f = out.trimmingCharacters(in: .newlines).split(
             separator: "\t", maxSplits: 2, omittingEmptySubsequences: false)
@@ -629,7 +629,7 @@ actor SafariBrowser {
             // behind without one (live test 2026-11-21).
             var p = try await readPage(offset: 0)
             p.text =
-                "(The page was still loading after \(settleLimit.components.seconds) seconds: read it again in a moment with browser_read and this page's name.)\n"
+                "(The page was still loading after \(settleLimit.components.seconds) seconds: read it again in a moment with browser_look and this page's name.)\n"
                 + p.text
             return p
         }
@@ -647,7 +647,7 @@ actor SafariBrowser {
         navigated(to: address)
         guard try await settle(after: before, expectNavigation: true) else {
             throw Failure.failed(
-                "Safari didn't finish loading \(address) within \(settleLimit.components.seconds) seconds. Read the page as it is with browser_read and page."
+                "Safari didn't finish loading \(address) within \(settleLimit.components.seconds) seconds. Read the page as it is with browser_look and page."
             )
         }
         return try await readPage(offset: 0)

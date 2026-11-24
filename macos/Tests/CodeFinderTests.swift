@@ -18,6 +18,8 @@ import Testing
         f.texts = { _ in texts }
         f.mail = { _ in mail }
         f.startMail = {}
+        // Long, so a busy test runner's wait for a thread can't decide a test (regression below).
+        f.readLimit = .seconds(600)
         return f
     }
 
@@ -111,5 +113,35 @@ import Testing
         #expect(await f.holding("222222", site: "a.test", since: Self.now) == "t")
         #expect(await f.holding("444444", site: "a.test", since: Self.now) == Self.mailKey)
         #expect(await f.holding("999999", site: "a.test", since: Self.now) == nil)
+    }
+
+    /// Regression (mac build on GitHub's macOS runner, 2026-11-24): the three tests above that
+    /// call `find` or `holding` failed on every run, though nothing in them was wrong. The runner
+    /// was so busy that the stand-in texts were read 21 to 31 s after the call (runs 45348160266,
+    /// 45348152855), past the 10 s limit, and the lookup answered nil. A read that waits past 10 s
+    /// still counts within the finder's own limit, which the tests set long.
+    @Test func aReadThatStartsLateStillCountsWithinTheLimit() async {
+        let f = finder()
+        let late = [M(id: "late", text: "Your code is 222222", date: Self.now)]
+        f.texts = { _ in
+            Thread.sleep(forTimeInterval: 11)
+            return late
+        }
+        #expect(await f.find(site: "a.test", email: false, since: Self.now)?.id == "late")
+    }
+
+    /// A read that never answers gives no code once the limit passes (Constitution II): the
+    /// stand-in is held until the lookup has answered, so no timing decides it.
+    @Test func aReadThatNeverAnswersGivesNothingAtTheLimit() async {
+        let gate = DispatchSemaphore(value: 0)
+        let f = finder()
+        f.readLimit = .milliseconds(100)
+        let never = [M(id: "never", text: "Your code is 222222", date: Self.now)]
+        f.texts = { _ in
+            gate.wait()
+            return never
+        }
+        #expect(await f.find(site: "a.test", email: false, since: Self.now) == nil)
+        gate.signal()
     }
 }
