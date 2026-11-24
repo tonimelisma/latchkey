@@ -29,7 +29,13 @@ struct NotesScriptReader: NotesReader {
     }
 
     func read(id: String) async throws -> NotesStore.Note {
-        let out = try await scripts.run(Script.read, [id])
+        let out: String
+        do {
+            out = try await scripts.run(Script.read, [id])
+        } catch ScriptError.failed(let message) where message.contains("(-1728)") {
+            // Notes' "Can't get note id …" (2026-11-24: the raw error reached Claude here).
+            throw NotesStore.Failure.noSuchNote(id)
+        }
         let parts = out.split(separator: "\n", maxSplits: 1, omittingEmptySubsequences: false)
         let f = parts[0].split(separator: "\t", omittingEmptySubsequences: false).map(String.init)
         let locked = f[safe: 3] == "true"
