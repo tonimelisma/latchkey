@@ -341,27 +341,54 @@ import Testing
 }
 
 /// Serves one file over HTTP on 127.0.0.1, for a test of how Latchkey's own browser takes a file.
+/// `headers`: more response headers (each ending in \r\n); `mode`: the whole file, the head and
+/// half the file and then nothing more (a save still arriving), or half and then the connection
+/// closed (a save that fails). Counts the requests it answered.
 final class OneFileServer: @unchecked Sendable {
+    enum Mode: Sendable { case whole, stall, cut }
     private let listener: NWListener
     let port: UInt16
+    private let counted: Counter
+    var requests: Int { counted.value }
 
-    private init(listener: NWListener, port: UInt16) {
-        self.listener = listener
-        self.port = port
+    final class Counter: @unchecked Sendable {
+        private let lock = NSLock()
+        private var n = 0
+        var value: Int { lock.withLock { n } }
+        func add() { lock.withLock { n += 1 } }
     }
 
-    static func start(type: String, body: Data) async throws -> OneFileServer {
+    private init(listener: NWListener, port: UInt16, counted: Counter) {
+        self.listener = listener
+        self.port = port
+        self.counted = counted
+    }
+
+    static func start(type: String, body: Data, headers: String = "", mode: Mode = .whole) async throws
+        -> OneFileServer
+    {
         let params = NWParameters.tcp
         params.requiredLocalEndpoint = NWEndpoint.hostPort(host: "127.0.0.1", port: .any)
         let listener = try NWListener(using: params)
+        let counted = Counter()
         listener.newConnectionHandler = { @Sendable connection in
             connection.start(queue: .global())
             connection.receive(minimumIncompleteLength: 1, maximumLength: 65536) { @Sendable _, _, _, _ in
+                counted.add()
                 let head =
-                    "HTTP/1.1 200 OK\r\nContent-Type: \(type)\r\nContent-Length: \(body.count)\r\nConnection: close\r\n\r\n"
-                connection.send(
-                    content: Data(head.utf8) + body,
-                    completion: .contentProcessed { @Sendable _ in connection.cancel() })
+                    "HTTP/1.1 200 OK\r\nContent-Type: \(type)\r\nContent-Length: \(body.count)\r\n\(headers)Connection: close\r\n\r\n"
+                switch mode {
+                case .whole:
+                    connection.send(
+                        content: Data(head.utf8) + body,
+                        completion: .contentProcessed { @Sendable _ in connection.cancel() })
+                case .stall:
+                    connection.send(content: Data(head.utf8) + body.prefix(body.count / 2), completion: .idempotent)
+                case .cut:
+                    connection.send(
+                        content: Data(head.utf8) + body.prefix(body.count / 2),
+                        completion: .contentProcessed { @Sendable _ in connection.cancel() })
+                }
             }
         }
         let ready = AsyncStream<UInt16?> { continuation in
@@ -380,7 +407,7 @@ final class OneFileServer: @unchecked Sendable {
         listener.start(queue: .global())
         for await port in ready {
             guard let port else { break }
-            return OneFileServer(listener: listener, port: port)
+            return OneFileServer(listener: listener, port: port, counted: counted)
         }
         listener.cancel()
         throw SafariBrowser.Failure.failed("the test's server didn't start")

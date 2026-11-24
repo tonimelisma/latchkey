@@ -199,4 +199,144 @@ import WebKit
         #expect(FileManager.default.fileExists(atPath: running.path))
         #expect(FileManager.default.fileExists(atPath: mine.path))
     }
+
+    // MARK: the security review's findings (2026-11-24), each with its own test
+
+    /// A page served over HTTP from the test's own server, with `html`.
+    func served(_ server: OneFileServer) -> URL { URL(string: "http://127.0.0.1:\(server.port)/")! }
+
+    /// Finding 1: Claude's click on a save link to a web address saves it once (the click's
+    /// fallback doesn't load the link again), and the page stays a page.
+    @Test func aClickOnAWebSaveLinkFetchesAndSavesOnce() async throws {
+        let dir = try folder()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let server = try await OneFileServer.start(type: "text/plain", body: Data("notes".utf8))
+        defer { server.stop() }
+        let b = LockedBrowser(downloads: dir)
+        defer { b.discard() }
+        let page = try await b.open(html: #"<a download="x.txt" href="/x.txt">Save it</a>"#, base: served(server))
+        let link = try #require(page.elements.first { $0.label.contains("Save it") }, "\(page.elements)")
+        _ = try await b.click(link.ref)
+        let told = try await notes(b) { $0.contains("Saved") }
+        #expect(told.contains { $0.contains("x.txt") }, "\(told)")
+        try await Task.sleep(for: .seconds(1))
+        #expect(try FileManager.default.contentsOfDirectory(atPath: dir.path) == ["x.txt"])
+        #expect(server.requests == 1, "fetched once, not again by the click's fallback")
+        #expect(b.fileNoteIfAny == nil)
+        #expect(try await b.read(offset: 0).url == served(server).absoluteString)
+    }
+
+    /// Finding 1: a link to a file the server sends as an attachment is saved under the server's
+    /// name, and the page doesn't become "a file" (WebKit ends that load with 102).
+    @Test func anAttachmentIsSavedAndThePageStaysAPage() async throws {
+        let dir = try folder()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let server = try await OneFileServer.start(
+            type: "text/plain", body: Data("a,b\n1,2\n".utf8),
+            headers: "Content-Disposition: attachment; filename=\"report.csv\"\r\n")
+        defer { server.stop() }
+        let b = LockedBrowser(downloads: dir)
+        defer { b.discard() }
+        let page = try await b.open(html: #"<a href="/export">Export</a>"#, base: served(server))
+        let link = try #require(page.elements.first { $0.label.contains("Export") }, "\(page.elements)")
+        _ = try await b.click(link.ref)
+        let told = try await notes(b) { $0.contains("report.csv") }
+        #expect(told.contains { $0.contains("Saved") && $0.contains("report.csv") }, "\(told)")
+        #expect(try String(contentsOf: dir.appending(path: "report.csv"), encoding: .utf8) == "a,b\n1,2\n")
+        #expect(server.requests == 1)
+        #expect(b.fileNoteIfAny == nil, "the page is still a page")
+        #expect(try await b.run("'still here'") == "still here")
+    }
+
+    /// Finding 3: a frame of another site in the page saves nothing, even during Claude's action.
+    @Test func aFrameOfAnotherSiteSavesNothing() async throws {
+        let dir = try folder()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let frame = """
+            <script>
+            var a = document.createElement('a'); a.download = 'theirs.txt';
+            a.href = URL.createObjectURL(new Blob(['x'])); document.body.appendChild(a); a.click();
+            </script>
+            """
+        let server = try await OneFileServer.start(type: "text/html", body: Data(frame.utf8))
+        defer { server.stop() }
+        let b = LockedBrowser(downloads: dir)
+        defer { b.discard() }
+        _ = try await b.open(html: "<p>Homes</p>", base: served(server))
+        // localhost is another site than 127.0.0.1 to the browser.
+        _ = try await b.run(
+            "var f = document.createElement('iframe'); f.src = 'http://localhost:\(server.port)/frame'; document.body.appendChild(f); 'added'"
+        )
+        let told = try await notes(b) { $0.contains("another site") }
+        #expect(told.contains { $0.contains("from a frame of another site") }, "\(told)")
+        #expect(try FileManager.default.contentsOfDirectory(atPath: dir.path).isEmpty)
+    }
+
+    /// Finding 5: a save still arriving is told as such, and a later action's answer doesn't wait
+    /// for it; closing the page stops it and leaves nothing in Downloads.
+    @Test func aSaveStillArrivingIsToldAndNotWaitedForLater() async throws {
+        let dir = try folder()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let server = try await OneFileServer.start(
+            type: "application/octet-stream", body: Data(repeating: 7, count: 2_000_000), mode: .stall)
+        defer { server.stop() }
+        let b = LockedBrowser(downloads: dir)
+        let page = try await b.open(html: #"<a download="big.bin" href="/big.bin">Big</a>"#, base: served(server))
+        let link = try #require(page.elements.first { $0.label.contains("Big") }, "\(page.elements)")
+        _ = try await b.click(link.ref)
+        let told = try await notes(b) { $0.contains("Still saving") }
+        #expect(told.contains { $0.contains("Still saving") && $0.contains("big.bin") }, "\(told)")
+        _ = try await b.run("1")  // a later action of Claude's
+        let start = ContinuousClock.now
+        await b.savesEnded()
+        #expect(ContinuousClock.now - start < .seconds(3), "the earlier save isn't waited for")
+        b.discard()
+        let deadline = ContinuousClock.now + .seconds(5)
+        var left = ["?"]
+        while !left.isEmpty, ContinuousClock.now < deadline {
+            try await Task.sleep(for: .milliseconds(100))
+            left = (try? FileManager.default.contentsOfDirectory(atPath: dir.path)) ?? []
+        }
+        #expect(left.isEmpty, "the stopped save's staging file is gone: \(left)")
+    }
+
+    /// Finding 2: a save that fails removes only its own staging file, never the owner's file of
+    /// the same name.
+    @Test func aFailedSaveLeavesTheOwnersFileOfThatName() async throws {
+        let dir = try folder()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        try Data("mine".utf8).write(to: dir.appending(path: "x.txt"))
+        let server = try await OneFileServer.start(
+            type: "text/plain", body: Data(repeating: 65, count: 200_000), mode: .cut)
+        defer { server.stop() }
+        let b = LockedBrowser(downloads: dir)
+        defer { b.discard() }
+        let page = try await b.open(html: #"<a download="x.txt" href="/x.txt">Save it</a>"#, base: served(server))
+        let link = try #require(page.elements.first { $0.label.contains("Save it") }, "\(page.elements)")
+        _ = try await b.click(link.ref)
+        let told = try await notes(b) { $0.contains("couldn't be saved") }
+        #expect(told.contains { $0.contains("couldn't be saved") }, "\(told)")
+        #expect(try String(contentsOf: dir.appending(path: "x.txt"), encoding: .utf8) == "mine")
+        #expect(try FileManager.default.contentsOfDirectory(atPath: dir.path) == ["x.txt"], "no staging left")
+    }
+
+    /// Finding 5: an answer without text to carry the notes leaves them for the next answer.
+    @Test func notesWaitForAnAnswerWithText() async throws {
+        let dir = try folder()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let b = LockedBrowser(downloads: dir)
+        defer { b.discard() }
+        _ = try await b.open(html: "<p>Homes</p>", base: base)
+        _ = try await b.run(Self.makeAndClick)
+        let deadline = ContinuousClock.now + .seconds(10)
+        while !FileManager.default.fileExists(atPath: dir.appending(path: "homes.json").path),
+            ContinuousClock.now < deadline
+        {
+            try await Task.sleep(for: .milliseconds(50))
+        }
+        try await Task.sleep(for: .milliseconds(200))
+        let picture = ToolResult.image(Data([0x89, 0x50]), mimeType: "image/png")
+        _ = await BrowserCapability.told(picture, b)
+        #expect(b.takeSaved().contains { $0.contains("homes.json") }, "kept for the next answer")
+    }
 }
