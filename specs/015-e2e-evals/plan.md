@@ -110,10 +110,12 @@ Every run writes `e2e-results/<run>.json` in the clone (FR-1530, FR-1530a): a de
 in that clone reads it directly. With `--send`, the same result is sealed and sent as
 `contracts/eval-result.md` says, through the intake's existing endpoint (no intake change).
 `latchkey-reports` gains `evals` (list sent results, joined by run, compared with the previous
-run: new failures, fixed, flaky) and `list` keeps showing only problem reports. The session-start
-hook (`scripts/hooks.sh`, cloud sessions with the developer's key only) runs `latchkey-reports
-evals --this-week -quiet`; with none it prints: "The weekly test run hasn't run this week: on your
-Mac, run macos/scripts/weekly-eval.sh --send in Terminal (about an hour; nothing to approve)."
+run: new failures, fixed, flaky) and `list` keeps showing only problem reports. At session start
+(CLAUDE.md, beside the problem reports, which need the same key; as a hook it would add a network
+call to every session start) a session runs `latchkey-reports evals -this-week -quiet`; with none
+it prints: "The weekly test run hasn't run this week: on your Mac, run
+macos/scripts/weekly-eval.sh --send in Terminal from the repository (about an hour; nothing to
+approve)."
 The session tells Toni that line. Each new failure becomes an issue found (FR-1532); sent results
 are deleted once dispositioned (FR-1533).
 
@@ -141,7 +143,7 @@ accounts stay NOT VERIFIED until Toni runs them.
 3. `e2e fixture` and the task format, tried on GitHub's macOS runner for files and the browser
    (D8).
 4. `e2e prepare`, `eval-image.sh` and `weekly-eval.sh`, then the one-time image setup (D5, D6).
-5. Sealed results, `latchkey-reports evals`, the session-start line (D7).
+5. Sealed results, `latchkey-reports evals`, the session-start step (D7).
 6. The task set, held-out and planted-instruction tasks (D8); docs (D9).
 
 ## Steps only a person at the Mac can do (all together, once)

@@ -1,6 +1,6 @@
 # Spec 015 tasks
 
-Approved by Toni 2026-11-24 ("build it fully"). Each task names the requirements it serves.
+Approved by Toni 2026-11-24 ("build it fully"). Status per task at the end. Each task names the requirements it serves.
 `[P]` = can be done in parallel with the task before it. Tests first where a test can run in a
 cloud session (Go); Swift and the test Mac are checked on GitHub's macOS runner and, for the
 weekly run, by the person running it.
@@ -51,9 +51,19 @@ weekly run, by the person running it.
   and `OpenRaw`. Test first.
 - T17 `latchkey-reports evals [--this-week] [-quiet]`: sent results by run, compared with the
   previous one; `list` shows problem reports only (FR-1531). Test first.
-- T18 The session-start line (`scripts/hooks.sh`) when no result was sent this week (FR-1511).
+- T18 The session-start step (CLAUDE.md) that tells Toni when no result was sent this week (FR-1511).
 
 ## Milestone 6: docs and release
 - T19 `docs/commands.md`, `docs/cloud-sessions.md`, CLAUDE.md "Done means Toni's conditions"
   (FR-1541), STATUS, decisions, README (testing paragraph).
 - T20 CI green on the pull request; the two new checks named for Toni to make required.
+
+## Status (2026-11-24)
+
+Built: T01 to T19. Checked here (cloud session): Go unit tests (`internal/evals`, `cmd/e2e`,
+`cmd/latchkey-reports`, `reports`), `e2e relay` end to end against a private relay with headless
+Chrome, the scripts' test. Checked on GitHub: `e2e-linux` (the relay and Linux checks, Linux
+snapshots taken from its artifact), `e2e-mac` (see the pull request). Not run anywhere yet: the
+weekly run and the image script (they need an Apple silicon Mac with Tart; only a person at that
+Mac can approve the test Mac's permissions). T20: adding the two checks to `main`'s required
+checks is Toni's step.

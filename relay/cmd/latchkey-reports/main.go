@@ -1,7 +1,8 @@
 // latchkey-reports is the developer's command for problem reports (spec 014 FR-1423, FR-1430):
 //
 //	latchkey-reports keygen <private-key-file>  makes a key pair; prints the public key
-//	latchkey-reports list                       the waiting reports, opened
+//	latchkey-reports list                       the waiting problem reports, opened
+//	latchkey-reports evals [-this-week [-quiet]]  the weekly eval results sent (spec 015 FR-1531)
 //	latchkey-reports delete <id>...             deletes dispositioned reports (nothing is kept)
 //
 // It reads the intake's address from LATCHKEY_INTAKE_URL (default Latchkey's), the developer's
@@ -32,7 +33,7 @@ func main() {
 	}
 }
 
-const usage = "usage: latchkey-reports keygen <private-key-file> | list | delete <id> [<id>]"
+const usage = "usage: latchkey-reports keygen <private-key-file> | list | evals [-this-week [-quiet]] | delete <id> [<id>]"
 
 func run(args []string) error {
 	if len(args) == 0 {
@@ -54,6 +55,8 @@ func run(args []string) error {
 		return nil
 	case "list":
 		return list()
+	case "evals":
+		return evalsCmd(args[1:], time.Now(), os.Stdout)
 	case "delete":
 		if len(args) < 2 {
 			return errors.New(usage)
@@ -127,32 +130,65 @@ type opened struct {
 	Error   string          `json:"error,omitempty"`
 }
 
-func list() error {
+// entry is one waiting entry, opened: a problem report or a part of a weekly result.
+type entry struct {
+	ID      string
+	Arrived time.Time
+	Plain   []byte
+	Err     error
+}
+
+func fetch() ([]entry, error) {
 	k, err := key()
 	if err != nil {
-		return err
+		return nil, err
 	}
 	var body []byte
 	if err := call(http.MethodGet, "/v1/reports", &body); err != nil {
-		return err
+		return nil, err
 	}
 	var waiting []struct {
 		ID      string    `json:"id"`
 		Arrived time.Time `json:"arrived"`
 	}
 	if err := json.Unmarshal(body, &waiting); err != nil {
-		return err
+		return nil, err
 	}
-	out := make([]opened, 0, len(waiting))
+	out := make([]entry, 0, len(waiting))
 	for _, w := range waiting {
-		o := opened{ID: w.ID, Arrived: w.Arrived}
+		e := entry{ID: w.ID, Arrived: w.Arrived}
 		var sealed []byte
 		if err := call(http.MethodGet, "/v1/reports/"+w.ID, &sealed); err != nil {
-			o.Error = err.Error()
-		} else if r, err := reports.Open(k, sealed); err != nil {
-			o.Error = err.Error() // junk or another key's: delete it after a look
+			e.Err = err
 		} else {
-			o.Report = &r
+			e.Plain, e.Err = reports.OpenRaw(k, sealed)
+		}
+		out = append(out, e)
+	}
+	return out, nil
+}
+
+// list prints the waiting problem reports; weekly results are under evals.
+func list() error {
+	entries, err := fetch()
+	if err != nil {
+		return err
+	}
+	out := []opened{}
+	for _, e := range entries {
+		o := opened{ID: e.ID, Arrived: e.Arrived}
+		switch {
+		case e.Err != nil:
+			o.Error = e.Err.Error() // junk or another key's: delete it after a look
+		case reports.Kind(e.Plain) == "eval":
+			continue
+		default:
+			var r reports.Report
+			if err := json.Unmarshal(e.Plain, &r); err != nil {
+				o.Error = err.Error()
+			} else {
+				o.Report = &r
+			}
 		}
 		out = append(out, o)
 	}

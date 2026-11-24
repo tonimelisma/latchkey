@@ -589,14 +589,24 @@ after the app was quit.
 1. Codes experiment: done and reported (table under "Open acceptance"). Open: Chase live on 0.8.228
    or later; the other banks (Capital One, Amex, US Bank, Discover, Fidelity, Schwab); Toni to
    choose which way to keep (or all three).
-3. End-to-end testing and evals (Toni, 2026-11-23): researched and specified 2026-11-24
-   (`specs/015-e2e-evals/`: spec, research, plan, contracts), with Toni's choices recorded in
-   `docs/decisions.md`. Waiting for Toni's review of the spec before tasks or code. In short: per
-   pull request, scripted end-to-end checks of the changed capabilities on GitHub's Linux and
-   macOS runners (blocking) and tool snapshots; weekly, Toni runs one command that has real
-   Claude do about 20 tasks 3 times each in a throwaway virtual Mac, results to the developer's
-   intake. Toni's one-time steps once it is built: the subscription token, approving Latchkey's
-   permissions in the test Mac once, adding the two new required checks.
+3. End-to-end testing and evals (spec 015, `specs/015-e2e-evals/`): approved and built
+   2026-11-24 (Toni: "build it fully"). Per pull request, `e2e.yml` checks the capabilities the
+   changed files select with a real MCP client through a private relay, on GitHub's Linux runner
+   (the relay's own tools; the real Linux program) and Mac runner (the app's real files, shell
+   and own-browser tools, served by the Swift host test `E2EHostTests`), and compares every tool
+   with its snapshot (`relay/e2e/toolsnaps`). Weekly, from any clone on an Apple silicon Mac with
+   Tart: `macos/scripts/eval-image.sh` once, then `weekly-eval.sh [--send]`: real Claude Code
+   (Sonnet, the subscription token) does 20 tasks (4 held out, 3 with planted instructions) 3
+   times each in a throwaway test Mac, scored on the end state. Results stay in the clone, or go
+   to the developer's intake with `--send` (`latchkey-reports evals`).
+   Rows: per-PR Linux checks VERIFIED (GitHub run on pull request #43, 2026-11-24, both checks
+   passed); per-PR Mac checks: see pull request #43's `e2e-mac`; weekly run and image script NOT
+   VERIFIED (never run: they need Toni's Mac).
+   Left for Toni, together: (1) on his Mac, `macos/scripts/eval-image.sh` in Terminal from the
+   repository (it asks for the `claude setup-token` token at a password prompt; approve
+   Latchkey's permissions and click Connect in the test Mac's window); (2) approve one Latchkey
+   call that adds `e2e-linux` and `e2e-mac` to `main`'s required checks; then weekly, when a
+   session says so, `macos/scripts/weekly-eval.sh --send`.
 2. Signed updates with Sparkle (Toni, 2026-11-23: "yes, implement sparkle"; spec 001 FR-072 to
    FR-072d, plan D9): built while Toni was away. The app's update gate (installs only while
    idle), the build number, the update feed (`macos/scripts/appcast.sh`), and the CI release job
