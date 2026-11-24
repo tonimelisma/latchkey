@@ -554,10 +554,11 @@ after the app was quit.
 
 000. Cloud-first git (Toni, 2026-11-24; CLAUDE.md, "Git"): one branch and pull request per
      session, never replaced; squash merges by auto-merge; `branch-cleanup.yml` deletes closed
-     pull requests' branches; `tidy.sh` and `loose-ends.sh` know squash merges. Left for Toni, in
-     GitHub's settings: the ruleset on `main` (pull requests only, checks `relay`, `linux`,
-     `scripts` required, no force-push or deletion), "Allow auto-merge" on, and squash as the
-     only merge method (steps in his reply of 2026-11-24).
+     pull requests' branches; `tidy.sh` and `loose-ends.sh` know squash merges. GitHub's settings
+     set 2026-11-24 (through `gh` on Toni's Mac, at his word; a cloud session's proxy refuses
+     settings writes): squash the only merge method, auto-merge and "Update branch" on, merged
+     branches deleted; ruleset `main` active (pull requests only, squash; checks `relay`,
+     `linux`, `scripts` required; no force-push or deletion of `main`).
 00. The 2026-11-23 feedback fixes have regression cases but no live run (Toni, 2026-11-23: no
     test sessions against his real data; end-to-end testing is a backlog item).
 0. Problem reports to the developer (spec 014, `specs/014-feedback-intake/`): built and merged
