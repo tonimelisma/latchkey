@@ -26,4 +26,4 @@ run here; the Mac app's tests run on GitHub's macOS runner (`mac-build.yml`).
   spec 001's withdrawn requirements, the agent protocol contract; regression cases
 - [toni] T9 Toni: the private key into his personal cloud environment (`LATCHKEY_REPORTS_KEY`),
   the intake's token as a network secret for the intake's host, and the deploy prompt for
-  pilvi's agent
+  the hosted server's own agent

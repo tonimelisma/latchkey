@@ -557,7 +557,7 @@ after the app was quit.
    2026-11-23 (relay, intake, the developer's command, the Mac app's setting). Left for Toni:
    the private key into his personal cloud environment (`LATCHKEY_REPORTS_KEY`, from the file
    handed to him), the intake's token as a network secret for its host, and the deploy prompt for
-   pilvi's agent; then turning sharing on in Latchkey's settings. Until the intake runs, relays
+   the hosted server's own agent; then turning sharing on in Latchkey's settings. Until the intake runs, relays
    keep shared reports for up to 7 days and retry.
 
 0. Cloud-first setup: done 2026-11-23 except the updater on the Mac (`macos/scripts/updater-setup.sh`)

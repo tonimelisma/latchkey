@@ -53,10 +53,9 @@ relay's lint, security checks and tests, published and signed by `relay-image.ym
 
 ## D4a. Name and hosting (FR-1426)
 
-The intake's container runs on pilvi beside the relay's, behind the same Caddy, at
-`latchkey-feedback.melisma.net` (an A record to pilvi, made 2026-11-23), with Caddy's usual
-certificate for that one name. Its deployment lives with pilvi's, in the private deployment
-repository; this repository holds the program and its image workflow. The relays' default intake
+The intake runs on the developer's own server, which is run outside this repository, at
+`latchkey-feedback.melisma.net` (its DNS record made 2026-11-23), with an ordinary certificate
+for that one name. Its deployment lives with that server's, in a private repository; this repository holds the program and its image workflow. The relays' default intake
 address is that name.
 
 ## D5. The developer's agent (FR-1430, FR-1431)

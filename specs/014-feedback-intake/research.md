@@ -63,10 +63,10 @@ the developer owns that anyone may write to and only the developer can read.
 
 - Self-hosted relays forward to Latchkey's developer by default; the user's opt-in decides
   (FR-1415). An operator can add a block (FR-1415a).
-- The intake runs on pilvi at `latchkey-feedback.melisma.net`; the hosted relay keeps its name
+- The intake runs on the developer's own server at `latchkey-feedback.melisma.net`; the hosted relay keeps its name
   (FR-1426). Weighed and dropped the same day: moving the relay to a hard-to-guess name. It would
   have needed a wildcard certificate (else the name is in the public certificate logs within
-  minutes), so a Cloudflare token stored on pilvi; one hard switch (passkeys, connector, pairing,
+  minutes), so a DNS token stored on the server; one hard switch (passkeys, connector, pairing,
   mail's own name); for one extra layer against bots that scan for new flaws, while sign-in is
   what secures the relay.
 
