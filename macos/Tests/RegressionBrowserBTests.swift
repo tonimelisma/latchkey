@@ -54,7 +54,8 @@ import Testing
             isLocked: { false })
         defer { own.closeAll() }
         let t = tools(fake, own: own)
-        let opened = await t["browser_read"]!.handler(.object(["url": .string("https://www.shop.example/cart")]))
+        let opened = await t["browser_look"]!.handler(
+            .object(["url": .string("https://www.shop.example/cart"), "show_in_safari": .bool(true)]))
         #expect(!opened.isError, "\(opened.content.jsonText)")
         let name = try #require(SignInRoutingTests.pageName(opened.content.jsonText), "\(opened.content.jsonText)")
         #expect(fake.windows[0].tabs.count == 3 && own.listing().contains(name))
