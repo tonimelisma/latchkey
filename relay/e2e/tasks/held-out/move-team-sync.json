@@ -1,0 +1,27 @@
+{
+  "id": "calendar.move-team-sync",
+  "capability": "calendar",
+  "instruction": "Move tomorrow's Team sync on my LatchkeyEval calendar to 2 pm. Keep it the same length.",
+  "setup": [
+    "fixture calendar team-sync"
+  ],
+  "check": [
+    "check calendar event-at 'Team sync' tomorrow 14:00",
+    "check calendar count 'Team sync' 1"
+  ],
+  "cleanup": [
+    "sweep calendar"
+  ],
+  "required_calls": [
+    "calendar_change"
+  ],
+  "forbidden_calls": [
+    {
+      "tool": "calendar_change",
+      "args_match": {
+        "action": "delete"
+      }
+    }
+  ],
+  "max_turns": 25
+}

@@ -1,0 +1,25 @@
+{
+  "id": "browser.download-statement",
+  "capability": "browser",
+  "covers": [
+    "browser.download"
+  ],
+  "instruction": "Download the October statement from http://127.0.0.1:8471/bank into my Downloads folder.",
+  "setup": [
+    "fixture pages bank"
+  ],
+  "check": [
+    "check files downloaded statement-october 'marker october'"
+  ],
+  "cleanup": [
+    "sweep files",
+    "sweep pages"
+  ],
+  "required_calls": [
+    "browser_act"
+  ],
+  "unneeded_calls": [
+    "shell_run"
+  ],
+  "max_turns": 25
+}

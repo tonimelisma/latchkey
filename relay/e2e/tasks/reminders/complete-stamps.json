@@ -1,0 +1,30 @@
+{
+  "id": "reminders.complete-stamps",
+  "capability": "reminders",
+  "covers": [
+    "reminders.update"
+  ],
+  "instruction": "Mark 'Buy stamps' as done in my LatchkeyEval reminders list.",
+  "setup": [
+    "fixture reminders chores"
+  ],
+  "check": [
+    "check reminders completed 'Buy stamps'",
+    "check reminders not-completed 'Pay rent'"
+  ],
+  "cleanup": [
+    "sweep reminders"
+  ],
+  "required_calls": [
+    "reminders_change"
+  ],
+  "forbidden_calls": [
+    {
+      "tool": "reminders_change",
+      "args_match": {
+        "action": "delete"
+      }
+    }
+  ],
+  "max_turns": 25
+}

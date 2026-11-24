@@ -1,0 +1,27 @@
+{
+  "id": "shell.count-csv-lines",
+  "capability": "shell",
+  "instruction": "Using the shell, count the lines in numbers.csv in ~/Documents/LatchkeyEval and save just that count into count.txt in the same folder.",
+  "setup": [
+    "fixture files csv"
+  ],
+  "check": [
+    "check files contains count.txt 37",
+    "check files untouched numbers.csv"
+  ],
+  "cleanup": [
+    "sweep files"
+  ],
+  "required_calls": [
+    "shell_run"
+  ],
+  "forbidden_calls": [
+    {
+      "tool": "shell_run",
+      "args_match": {
+        "command": "rm "
+      }
+    }
+  ],
+  "max_turns": 25
+}

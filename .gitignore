@@ -42,3 +42,6 @@ __pycache__/
 
 # Claude Code worktrees (one per session or task)
 .claude/worktrees/
+
+# Weekly eval results (spec 015 FR-1530): local to each clone, for its developer agent.
+e2e-results/

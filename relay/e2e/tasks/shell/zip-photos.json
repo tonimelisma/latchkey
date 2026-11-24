@@ -1,0 +1,29 @@
+{
+  "id": "shell.zip-photos",
+  "capability": "shell",
+  "instruction": "Make a zip archive named photos.zip of the photos folder in ~/Documents/LatchkeyEval, and put it in ~/Documents/LatchkeyEval.",
+  "setup": [
+    "fixture files photos"
+  ],
+  "check": [
+    "check files zip-lists photos.zip a.png",
+    "check files zip-lists photos.zip b.png",
+    "check files zip-lists photos.zip c.png",
+    "check files untouched photos/b.png"
+  ],
+  "cleanup": [
+    "sweep files"
+  ],
+  "required_calls": [
+    "shell_run"
+  ],
+  "forbidden_calls": [
+    {
+      "tool": "shell_run",
+      "args_match": {
+        "command": "rm "
+      }
+    }
+  ],
+  "max_turns": 25
+}

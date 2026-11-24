@@ -10,7 +10,8 @@ import Testing
 /// on anyone's own Mac by hand (it serves that Mac's real files and shell).
 @Suite(.enabled(if: ProcessInfo.processInfo.environment["LATCHKEY_E2E_RELAY"] != nil))
 struct E2EHostTests {
-    @Test(.timeLimit(.minutes(20))) func serveRealCapabilities() async throws {
+    /// On the main actor: the app makes its capabilities there.
+    @MainActor @Test(.timeLimit(.minutes(20))) func serveRealCapabilities() async throws {
         let env = ProcessInfo.processInfo.environment
         let relay = try #require(env["LATCHKEY_E2E_RELAY"].flatMap(URL.init(string:)))
         let code = try #require(env["LATCHKEY_E2E_CODE"])

@@ -1,0 +1,22 @@
+{
+  "id": "calendar.add-dentist",
+  "capability": "calendar",
+  "instruction": "Put a dentist appointment on my LatchkeyEval calendar the day after tomorrow at 3 pm, for an hour.",
+  "setup": [
+    "fixture calendar empty"
+  ],
+  "check": [
+    "check calendar event-at Dentist in-2-days 15:00",
+    "check calendar count Dentist 1"
+  ],
+  "cleanup": [
+    "sweep calendar"
+  ],
+  "required_calls": [
+    "calendar_change"
+  ],
+  "unneeded_calls": [
+    "computer_act"
+  ],
+  "max_turns": 25
+}

@@ -1,0 +1,22 @@
+{
+  "id": "reminders.passport-due",
+  "capability": "reminders",
+  "covers": [
+    "reminders.create"
+  ],
+  "instruction": "Add a reminder to renew my passport to my LatchkeyEval list, due on the first day of next month.",
+  "setup": [
+    "fixture reminders empty"
+  ],
+  "check": [
+    "check reminders exists passport",
+    "check reminders due-on passport first-of-next-month"
+  ],
+  "cleanup": [
+    "sweep reminders"
+  ],
+  "required_calls": [
+    "reminders_change"
+  ],
+  "max_turns": 25
+}

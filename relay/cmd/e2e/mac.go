@@ -486,11 +486,14 @@ func randomWord() string {
 	return hex.EncodeToString(b)
 }
 
-func testPNG() []byte {
-	img := image.NewRGBA(image.Rect(0, 0, 32, 32))
-	for x := range 32 {
-		for y := range 32 {
-			img.Set(x, y, color.RGBA{R: uint8(x * 8), G: 80, B: uint8(y * 8), A: 255}) //nolint:gosec // small numbers
+func testPNG() []byte { return testPNGSized(32) }
+
+// testPNGSized is a test picture of size × size pixels (bigger is a bigger file).
+func testPNGSized(size int) []byte {
+	img := image.NewRGBA(image.Rect(0, 0, size, size))
+	for x := range size {
+		for y := range size {
+			img.Set(x, y, color.RGBA{R: uint8(x * 7), G: uint8(x * y), B: uint8(y * 5), A: 255}) //nolint:gosec // small numbers
 		}
 	}
 	var b bytes.Buffer

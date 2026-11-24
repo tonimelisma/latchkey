@@ -1,0 +1,18 @@
+{
+  "id": "computer.calculator-product",
+  "capability": "computer",
+  "instruction": "Use the Calculator app on the Mac, through computer control, to work out 1234 \u00d7 5678, then write the result into ~/Documents/LatchkeyEval/product.txt.",
+  "setup": [
+    "fixture files todo"
+  ],
+  "check": [
+    "check files contains product.txt 7006652"
+  ],
+  "cleanup": [
+    "sweep files"
+  ],
+  "required_calls": [
+    "computer_act"
+  ],
+  "max_turns": 40
+}
