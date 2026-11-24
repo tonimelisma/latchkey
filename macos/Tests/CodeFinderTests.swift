@@ -116,19 +116,18 @@ import Testing
 
 /// TEMPORARY diagnostic for the macOS runner (removed before merge).
 @MainActor @Suite struct CodeFinderDiagnosticTests {
-    @Test func diagnosticTiming() async {
-        let calls = Locked<Int>(0)
+    @Test(arguments: 0..<6) func diagnosticTiming(_ n: Int) async {
+        let calledAt = Locked<ContinuousClock.Instant?>(nil)
         let at = Date(timeIntervalSince1970: 1_800_000_000)
         let f = CodeFinder()
         f.textsOn = { true }
         f.texts = { _ in
-            calls.mutate { $0 += 1 }
+            calledAt.mutate { $0 = $0 ?? ContinuousClock.now }
             return [CodeFinder.Message(id: "t", text: "Your code is 222222", date: at)]
         }
-        for i in 0..<3 {
-            let start = ContinuousClock.now
-            let r = await f.find(site: "a.test", email: false, since: at)
-            print("DIAG \(i) took \(ContinuousClock.now - start) result \(String(describing: r)) calls \(calls.value)")
-        }
+        let start = ContinuousClock.now
+        let r = await f.find(site: "a.test", email: false, since: at)
+        let called = calledAt.value.map { "\($0 - start)" } ?? "never"
+        Issue.record("DIAG \(n): took \(ContinuousClock.now - start), source called after \(called), result \(String(describing: r))")
     }
 }
