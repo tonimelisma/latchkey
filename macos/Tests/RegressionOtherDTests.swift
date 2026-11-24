@@ -17,7 +17,8 @@ import Testing
             let dir = app.appendingPathComponent(folder)
             let files = try FileManager.default.subpathsOfDirectory(atPath: dir.path).filter { $0.hasSuffix(".swift") }
             for file in files {
-                out.append(("\(folder)/\(file)", try String(contentsOf: dir.appendingPathComponent(file), encoding: .utf8)))
+                out.append(
+                    ("\(folder)/\(file)", try String(contentsOf: dir.appendingPathComponent(file), encoding: .utf8)))
             }
         }
         return out
@@ -112,7 +113,9 @@ import Testing
         // And taking the repeat off is said too.
         let newID = backend.inner.stored[0].id
         let off = await change.handler(
-            .object(["action": .string("update"), "id": .string(newID), "repeat": .string("none"), "span": .string("future")]))
+            .object([
+                "action": .string("update"), "id": .string(newID), "repeat": .string("none"), "span": .string("future"),
+            ]))
         #expect(!off.isError, "\(resultText(off))")
         #expect(resultText(off).contains("no longer repeats"), "\(resultText(off))")
     }

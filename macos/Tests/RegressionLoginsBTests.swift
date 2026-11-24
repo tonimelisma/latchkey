@@ -48,14 +48,14 @@ import Testing
         // After the press the page never settles: it writes a line every 100 ms.
         let html =
             SignInFillTests.onePage(expect: "something else")
-            + """
-            <div id="busy"></div><script>
-            document.getElementById('f').addEventListener('submit', function () {
-              var n = 0, busy = document.getElementById('busy');
-              setInterval(function () { busy.textContent = 'Signing on ' + (++n); }, 100);
-            });
-            </script>
-            """
+                + """
+                <div id="busy"></div><script>
+                document.getElementById('f').addEventListener('submit', function () {
+                  var n = 0, busy = document.getElementById('busy');
+                  setInterval(function () { busy.textContent = 'Signing on ' + (++n); }, 100);
+                });
+                </script>
+                """
         let p = try await s.own.open(html: html, base: SignInFillTests.base)
         let started = ContinuousClock.now
         let r = await call(s, p, ["field": .string("e2"), "fill": .string("password"), "press": .string("e3")])

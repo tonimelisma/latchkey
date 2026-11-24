@@ -92,7 +92,8 @@ import Testing
         let r = await call(s, boxes, ["field": .string("e3"), "fill": .string("password"), "press": .string("e9")])
         #expect(r.isError && r.plainText.contains("isn't a password field"), "\(r.plainText)")
         let typed = try await run(
-            s, boxes, "Array.prototype.map.call(document.querySelectorAll('.pin'), function (b) { return b.value; })"
+            s, boxes,
+            "Array.prototype.map.call(document.querySelectorAll('.pin'), function (b) { return b.value; })"
                 + ".join('')")
         #expect(typed == "", "nothing typed into the boxes")
         let textMe = """
