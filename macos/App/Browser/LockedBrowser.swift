@@ -91,8 +91,25 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownl
     /// click's save can start just after the click returned, as a dialog can, FR-450).
     private let downloadWindow: Duration
     private var actedUntil: ContinuousClock.Instant?
-    /// The saves running now: where each goes, and when it started.
-    private var saving: [ObjectIdentifier: (download: WKDownload, file: URL?, started: ContinuousClock.Instant)] = [:]
+    /// When Claude's last action began: an answer waits only for saves started since (FR-477).
+    private var actionBegan = ContinuousClock.now
+    /// One save running: WebKit writes it to a staging file of Latchkey's own (a hidden name
+    /// nobody else uses), moved to a free name in Downloads once complete, so a failed or stopped
+    /// save never removes a file someone else put there (security review 2026-11-24).
+    struct Saving {
+        let download: WKDownload
+        var staging: URL?
+        var name = ""
+        let started: ContinuousClock.Instant
+    }
+    private var saving: [ObjectIdentifier: Saving] = [:]
+    /// Saves started in this action's window, and those refused past the most (FR-476).
+    private var savesInWindow = 0
+    private var savesRefused = 0
+    static let savesPerAction = 5
+    /// Set when the response check turned the current load into a save: WebKit then ends that
+    /// load with "frame load interrupted" (102), which is not a page that is a file (FR-452).
+    private var loadBecameSave = false
     /// What Claude is told of saves with the next answer (FR-477), at most 5 (as dialogs: a page
     /// could flood Claude).
     private var savedNotes: [String] = []
@@ -512,13 +529,10 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownl
         let waiting = waiters
         waiters = [:]
         for w in waiting.values { w(.failure(SafariBrowser.Failure.noWindow)) }
-        // A save running when the page closes stops; its part-file goes (FR-475).
+        // A save running when the page closes stops; its staging file goes (FR-475).
         let running = saving.values
         saving = [:]
-        for r in running {
-            r.download.cancel { _ in }
-            if let f = r.file { try? FileManager.default.removeItem(at: f) }
-        }
+        for r in running { Self.stop(r) }
         web?.stopLoading()
         web?.navigationDelegate = nil
         web?.uiDelegate = nil
@@ -545,13 +559,25 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownl
         MainActor.assumeIsolated { started(download) }
     }
 
+    /// FR-476: at most `savesPerAction` saves per action of Claude's (a page could start
+    /// hundreds); the rest are refused and counted for Claude.
+    private func takeSaveSlot() -> Bool {
+        guard savesInWindow < Self.savesPerAction else {
+            savesRefused += 1
+            return false
+        }
+        savesInWindow += 1
+        return true
+    }
+
     private func started(_ download: WKDownload) {
         download.delegate = self
-        saving[ObjectIdentifier(download)] = (download, nil, ContinuousClock.now)
+        saving[ObjectIdentifier(download)] = Saving(download: download, started: ContinuousClock.now)
         watchSize(download)
     }
 
-    /// The save goes into Downloads under the file's own name, never over another file (FR-438).
+    /// WebKit writes the save to a staging file of Latchkey's own in Downloads (a hidden name
+    /// with a fresh UUID, so nobody else's file); it gets its own name when complete.
     nonisolated func download(
         _ download: WKDownload, decideDestinationUsing response: URLResponse, suggestedFilename: String,
         completionHandler: @escaping @MainActor @Sendable (URL?) -> Void
@@ -565,7 +591,7 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownl
             if response.expectedContentLength > Int64(BrowserDownloads.directLimit) {
                 saving[id] = nil
                 saved(
-                    "The page offered \(name) (\(BrowserDownloads.size(Int(response.expectedContentLength)))) to save; Latchkey saves at most \(BrowserDownloads.size(BrowserDownloads.directLimit)), so nothing was saved."
+                    "The page offered \(Self.quoted(name)) (\(BrowserDownloads.size(Int(response.expectedContentLength)))) to save; Latchkey saves at most \(BrowserDownloads.size(BrowserDownloads.directLimit)), so nothing was saved."
                 )
                 return completionHandler(nil)
             }
@@ -573,66 +599,87 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownl
                 try FileManager.default.createDirectory(at: downloadsFolder, withIntermediateDirectories: true)
             } catch {
                 saving[id] = nil
-                saved("Latchkey couldn't save \(name): \(downloadsFolder.path) can't be written.")
+                saved("Latchkey couldn't save \(Self.quoted(name)): \(downloadsFolder.path) can't be written.")
                 return completionHandler(nil)
             }
-            let file = BrowserDownloads.free(name, in: downloadsFolder)
-            saving[id]?.file = file
-            completionHandler(file)
+            BrowserDownloads.sweepStaging(in: downloadsFolder, keeping: Set(saving.values.compactMap(\.staging)))
+            let staging = BrowserDownloads.stagingFile(in: downloadsFolder)
+            saving[id]?.staging = staging
+            saving[id]?.name = name
+            completionHandler(staging)
         }
     }
 
     nonisolated func downloadDidFinish(_ download: WKDownload) {
         MainActor.assumeIsolated {
-            guard let r = saving.removeValue(forKey: ObjectIdentifier(download)), let file = r.file else { return }
-            // Marked as downloaded from the web, as Safari marks its downloads (FR-438).
-            BrowserDownloads.quarantine(file, from: download.originalRequest?.url?.absoluteString ?? "")
-            let size = (try? FileManager.default.attributesOfItem(atPath: file.path)[.size] as? Int) ?? 0
-            saved(
-                "Saved \(file.lastPathComponent) (\(BrowserDownloads.size(size))), which the page offered to save, to \(file.path). Read it with files_read and that path; it is marked as downloaded from the web, as Safari marks downloads."
-            )
+            guard let r = saving.removeValue(forKey: ObjectIdentifier(download)), let staging = r.staging else {
+                return
+            }
+            let size = (try? FileManager.default.attributesOfItem(atPath: staging.path)[.size] as? Int) ?? 0
+            do {
+                // To a free name, never over another file (FR-438), marked as from the web.
+                let file = try BrowserDownloads.move(
+                    staging, name: r.name, from: download.originalRequest?.url?.absoluteString ?? "",
+                    in: downloadsFolder)
+                saved(
+                    "Saved \(Self.quoted(file.lastPathComponent)) (\(BrowserDownloads.size(size))), which the page offered to save, to \(file.path). Read it with files_read and that path; it is marked as downloaded from the web, as Safari marks downloads."
+                )
+            } catch {
+                try? FileManager.default.removeItem(at: staging)
+                saved("The page's file \(Self.quoted(r.name)) arrived but couldn't be put in \(downloadsFolder.path); nothing was saved.")
+            }
         }
     }
 
     nonisolated func download(_ download: WKDownload, didFailWithError error: any Error, resumeData: Data?) {
         MainActor.assumeIsolated {
             guard let r = saving.removeValue(forKey: ObjectIdentifier(download)) else { return }
-            if let f = r.file { try? FileManager.default.removeItem(at: f) }
+            if let f = r.staging { try? FileManager.default.removeItem(at: f) }
             saved(
-                "The page's file \(r.file.map { "(\($0.lastPathComponent)) " } ?? "")couldn't be saved: \(error.localizedDescription) Nothing was saved."
+                "The page's file \(r.name.isEmpty ? "" : Self.quoted(r.name) + " ")couldn't be saved (\(error.localizedDescription)). Nothing was saved."
             )
         }
     }
 
-    /// Stops a save that grows past the most Latchkey saves (a stream with no length given), and
-    /// one still running after 10 minutes (Constitution II: nothing runs without a deadline).
+    /// Stops a save and removes its staging file, also once WebKit has stopped writing it.
+    private static func stop(_ r: Saving) {
+        let staging = r.staging
+        r.download.cancel { _ in
+            if let staging { try? FileManager.default.removeItem(at: staging) }
+        }
+        if let staging { try? FileManager.default.removeItem(at: staging) }
+    }
+
+    /// Stops a save that grows past the most Latchkey saves (a stream with no length given), or
+    /// the saves running together past it, and one still running after 10 minutes
+    /// (Constitution II: nothing runs without a deadline).
     private func watchSize(_ download: WKDownload) {
         let id = ObjectIdentifier(download)
         Task { @MainActor [weak self] in
             while let self, let r = self.saving[id] {
-                let tooBig = r.download.progress.completedUnitCount > Int64(BrowserDownloads.directLimit)
+                let total = self.saving.values.reduce(Int64(0)) { $0 + $1.download.progress.completedUnitCount }
+                let tooBig = total > Int64(BrowserDownloads.directLimit)
                 let tooLong = ContinuousClock.now - r.started > .seconds(600)
                 if tooBig || tooLong {
                     self.saving[id] = nil
-                    r.download.cancel { _ in }
-                    if let f = r.file { try? FileManager.default.removeItem(at: f) }
+                    Self.stop(r)
                     self.saved(
-                        "The page's file\(r.file.map { " \($0.lastPathComponent)" } ?? "") was stopped: "
+                        "The page's file\(r.name.isEmpty ? "" : " " + Self.quoted(r.name)) was stopped: "
                             + (tooBig
-                                ? "it grew past \(BrowserDownloads.size(BrowserDownloads.directLimit)), the most Latchkey saves."
+                                ? "the page's saves grew past \(BrowserDownloads.size(BrowserDownloads.directLimit)), the most Latchkey saves."
                                 : "it was still arriving after 10 minutes.") + " Nothing was saved.")
                     return
                 }
-                try? await Task.sleep(for: .milliseconds(500))
+                try? await Task.sleep(for: .milliseconds(100))
             }
         }
     }
 
-    /// Waits, up to `atMost`, for the saves running now to end, so Claude's answer can say what
-    /// was saved (FR-477). Saves that start later are told with a later answer.
+    /// Waits, up to `atMost`, for the saves started during Claude's last action to end, so the
+    /// answer can say what was saved (FR-477); a save still running is told as such.
     func savesEnded(atMost: Duration = .seconds(20)) async {
         let deadline = ContinuousClock.now + atMost
-        while !saving.isEmpty, ContinuousClock.now < deadline {
+        while saving.values.contains(where: { $0.started >= actionBegan }), ContinuousClock.now < deadline {
             try? await Task.sleep(for: .milliseconds(100))
         }
     }
@@ -645,25 +692,49 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownl
         return d.trimmingCharacters(in: .whitespaces).lowercased().hasPrefix("attachment")
     }
 
-    /// An address for a note: a blob's or data address says only what it is (its text is the
-    /// page's, and can be long).
+    /// An address for a note: a blob's or data address says only what it is; a web address is
+    /// quoted and short (the website's text, not Latchkey's).
     nonisolated static func shown(_ url: URL?) -> String {
         guard let url else { return "no address" }
         switch url.scheme?.lowercased() {
         case "blob": return "a file the page made"
         case "data": return "a file in the page"
-        default: return String(url.absoluteString.prefix(200))
+        default: return "the address " + quoted(url.absoluteString)
         }
+    }
+
+    /// A name or address the website chose, in Latchkey's notes: quoted, one line, at most 80
+    /// characters (security review 2026-11-24: a file name could read as Latchkey talking).
+    nonisolated static func quoted(_ text: String) -> String {
+        let line = text.map { $0.isNewline || $0 == "«" || $0 == "»" ? " " : $0 }
+        let short = line.count > 80 ? String(line.prefix(79)) + "…" : String(line)
+        return "«" + short + "»"
     }
 
     private func saved(_ line: String) {
         if savedNotes.count < 5 { savedNotes.append(line) }
     }
 
-    /// The notes of saves since the last answer (FR-477), told once.
+    /// The notes of saves since the last answer (FR-477), told once: what was saved, what was
+    /// refused, and what is still arriving.
     func takeSaved() -> [String] {
-        defer { savedNotes = [] }
-        return savedNotes
+        defer {
+            savedNotes = []
+            savesRefused = 0
+        }
+        var out = savedNotes
+        if savesRefused > 0 {
+            out.append(
+                "The page tried to save \(savesRefused) more file\(savesRefused == 1 ? "" : "s") in one action of Claude's; Latchkey saves at most \(Self.savesPerAction) per action, so those weren't saved."
+            )
+        }
+        for r in saving.values {
+            let got = Int(r.download.progress.completedUnitCount)
+            out.append(
+                "Still saving\(r.name.isEmpty ? "" : " " + Self.quoted(r.name)) (\(BrowserDownloads.size(got)) so far); a later answer says when it is in Downloads."
+            )
+        }
+        return out
     }
 
     // MARK: navigation
@@ -681,10 +752,19 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownl
             // is saved, as Safari saves it, and the page stays; without this WebKit went to the
             // file's address, which ended Claude's script (problem report 2026-11-24).
             if navigationAction.shouldPerformDownload {
-                if mayDownload {
+                // Only the page's own frames, not another site's frame in it (security review).
+                let source = navigationAction.sourceFrame
+                let ownFrame =
+                    source.isMainFrame || source.securityOrigin.host.lowercased() == webView.url?.host()?.lowercased()
+                if !mayDownload || !ownFrame {
+                    saved(
+                        "The page tried to save a file (\(Self.shown(url))) "
+                            + (ownFrame ? "on its own, not during Claude's action" : "from a frame of another site")
+                            + ": nothing was saved, and the page stayed.")
+                    decisionHandler(.cancel)
+                } else if takeSaveSlot() {
                     decisionHandler(.download)
                 } else {
-                    saved("The page tried to save a file (\(Self.shown(url))) on its own, not during Claude's action: nothing was saved, and the page stayed.")
                     decisionHandler(.cancel)
                 }
                 return
@@ -715,7 +795,12 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownl
             if navigationResponse.isForMainFrame, mayDownload, type != "application/pdf",
                 !navigationResponse.canShowMIMEType || Self.isAttachment(navigationResponse.response)
             {
-                decisionHandler(.download)
+                if takeSaveSlot() {
+                    loadBecameSave = true
+                    decisionHandler(.download)
+                } else {
+                    decisionHandler(.cancel)
+                }
                 return
             }
             if navigationResponse.isForMainFrame, let url = navigationResponse.response.url,
@@ -751,6 +836,12 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownl
         // A file's load was stopped on purpose (FR-452), and a cancelled one (-999) is a page
         // replaced by the next one, or back served from memory: not failures.
         let e = error as NSError
+        // A load the response check turned into a save (FR-475) ends with 102: the page stayed.
+        if loadBecameSave, e.code == 102 {
+            loadBecameSave = false
+            done(true)
+            return
+        }
         // WebKit stops a load it won't show itself too (102, "Frame load interrupted"), at times
         // before the response check above has run (seen with the suites side by side): a file.
         if file == nil, e.code == 102, ["WebKitErrorDomain", WKError.errorDomain].contains(e.domain) {
@@ -889,6 +980,8 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownl
         acting = true
         dialogAnswer = answer
         presetUntil = nil
+        actionBegan = ContinuousClock.now
+        savesInWindow = 0
     }
 
     /// Claude's action ended: its answers in advance count for a moment more (FR-450).
@@ -961,8 +1054,9 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownl
         try check(lines.first ?? "", ref: ref)
         await settle(from: before)
         // A link a script clicks doesn't always navigate in a view of Latchkey's own (seen live):
-        // go to its address, as a click would.
-        if w.url?.absoluteString == before, lines.count > 1,
+        // go to its address, as a click would; never when the click started a save (FR-475:
+        // it would save the file again, security review 2026-11-24).
+        if w.url?.absoluteString == before, savesInWindow == 0, lines.count > 1,
             let data = lines[1].data(using: .utf8), let href = try? JSONDecoder().decode(String.self, from: data),
             let target = URL(string: href), ["http", "https"].contains(target.scheme?.lowercased() ?? ""),
             href != before

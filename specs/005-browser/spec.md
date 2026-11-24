@@ -356,21 +356,29 @@ phone, Claude can't check a reservation in the Owner's account or fill in a form
   `browser_look` (its behavior changed; open chats are restarted). (Toni, 2026-11-24: "all
   actions should default to the background browser actually, unless the user wants to see
   whatever's going on"; "A show in Safari option", "As today: saved password or Safari",
-  "Rename it".) Amends FR-455, FR-444.
+  "Rename it".) Showing also applies to a site Latchkey signs in to itself: the tab then has
+  Safari's own sign-in, as with sign_in_again (spec 013 FR-1374). Amends FR-455, FR-444, and spec
+  013 FR-1351 for a page Claude shows.
 - **FR-475** When a page in Latchkey's own browser offers a file to save during Claude's own
   action (a link marked to save, often a file the page made itself; or a file the server sends
   as an attachment, or one no page shows, except a PDF, FR-452), Latchkey shall save it into the
   Mac's Downloads folder as Safari does, under the file's own name and never over another file,
   marked as downloaded from the web, and the page shall stay where it was (problem report
   2026-11-24: the page went to the file's address, which ended Claude's script, and nothing was
-  saved; Toni: "Save it, like Safari"). A file over 500 MB, or still arriving after 10 minutes,
-  shall be stopped and nothing kept.
+  saved; Toni: "Save it, like Safari"). A file over 500 MB (or saves running together past it),
+  or still arriving after 10 minutes, shall be stopped and nothing kept; a file arriving is
+  written under a name of Latchkey's own and gets its name only once complete, so a stopped save
+  never removes anyone else's file. A click that started a save shall not also load the link
+  (it would save the file twice). A page that shows Claude's page in a Safari tab of Claude's
+  (FR-474) saves as Safari does.
 - **FR-476** A save the page starts on its own, more than 5 seconds after Claude's last action or
-  after Claude opened another page, shall save nothing, and Claude shall be told (a page must not
-  fill Downloads by itself).
+  after Claude opened another page, a save from a frame of another site, and any save past the
+  fifth in one action shall save nothing, and Claude shall be told (a page must not fill
+  Downloads by itself). The website's file names and addresses shall be quoted in what Claude is
+  told, marked as the website's (security review 2026-11-24).
 - **FR-477** Claude's next answer from that page shall say what was saved, with the file's path,
-  or why nothing was; an action's answer shall wait for the saves running when it ends, at most
-  20 seconds.
+  or why nothing was; an answer shall wait for the saves started during Claude's last action,
+  at most 20 seconds, and say which are still arriving.
 
 Amended by spec 013 FR-1350 to FR-1355 (Toni, 2026-11-21): for a site Latchkey holds a saved
 password for, while Sign-in is On, FR-441, FR-442 and FR-457 copy none of Safari's cookies (nor a
