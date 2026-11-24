@@ -24,6 +24,6 @@ run here; the Mac app's tests run on GitHub's macOS runner (`mac-build.yml`).
   FR-1403, FR-1415a
 - [x] T8 Docs: README, CLAUDE.md's session start, docs/cloud-sessions.md, STATUS, decisions,
   spec 001's withdrawn requirements, the agent protocol contract; regression cases
-- [toni] T9 Toni: the private key into his personal cloud environment (`LATCHKEY_REPORTS_KEY`),
-  the intake's token as a network secret for the intake's host, and the deploy prompt for
-  the hosted server's own agent
+- [toni] T9 Toni: the private key into his personal cloud environment (`LATCHKEY_REPORTS_KEY`).
+  Done 2026-11-24: the intake deployed by the hosted server's own agent, and its token saved as a
+  network secret for the intake's host (the intake answers `[]` from a cloud session)
