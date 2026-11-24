@@ -113,3 +113,22 @@ import Testing
         #expect(await f.holding("999999", site: "a.test", since: Self.now) == nil)
     }
 }
+
+/// TEMPORARY diagnostic for the macOS runner (removed before merge).
+@MainActor @Suite struct CodeFinderDiagnosticTests {
+    @Test func diagnosticTiming() async {
+        let calls = Locked<Int>(0)
+        let at = Date(timeIntervalSince1970: 1_800_000_000)
+        let f = CodeFinder()
+        f.textsOn = { true }
+        f.texts = { _ in
+            calls.mutate { $0 += 1 }
+            return [CodeFinder.Message(id: "t", text: "Your code is 222222", date: at)]
+        }
+        for i in 0..<3 {
+            let start = ContinuousClock.now
+            let r = await f.find(site: "a.test", email: false, since: at)
+            print("DIAG \(i) took \(ContinuousClock.now - start) result \(String(describing: r)) calls \(calls.value)")
+        }
+    }
+}

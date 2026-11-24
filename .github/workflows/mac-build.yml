@@ -67,5 +67,6 @@ jobs:
             echo "== $f"
             tail -n +2 "$f" | jq -r '.threads[]? | select(.triggered == true) | .frames[:25][] | "\(.imageIndex) \(.symbol // "?") \(.sourceFile // "")"' || head -80 "$f"
           done
+          grep -E "CodeFinder|DIAG" "$RUNNER_TEMP/test.log" | head -40 || true  # TEMPORARY diagnostic
           tail -40 "$RUNNER_TEMP/test.log"
           exit "$rc"
