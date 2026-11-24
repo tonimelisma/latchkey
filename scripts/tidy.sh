@@ -2,7 +2,8 @@
 # Removes what's left over after work is merged (Toni, 2026-10-23). Runs automatically after every
 # `git push` through the Claude Code hook in .claude/settings.json; safe to run by hand any time.
 #
-# - Local branches merged into origin/main (also by a pull request's rebase), except main, the current branch, and any branch
+# - Local branches merged into origin/main (also by a pull request's rebase or squash: finished,
+#   below), except main, the current branch, and any branch
 #   checked out in a worktree. Unmerged branches are never touched. Branches on GitHub are left
 #   alone: GitHub deletes a pull request's branch when it is merged (the repository's
 #   "Automatically delete head branches" setting, on since 2026-11-22), and the remote-tracking
@@ -19,7 +20,7 @@
 # Never fails the push: problems are reported and skipped. Tested by scripts/tests/tidy_test.sh.
 cd "$(dirname "$0")/.." || exit 0
 
-git fetch --quiet --prune origin 2>/dev/null || echo "tidy: couldn't reach origin; skipping remote cleanup"
+git fetch --quiet --prune origin '+refs/heads/*:refs/remotes/origin/*' '+refs/pull/*/head:refs/remotes/origin/pull/*' 2>/dev/null || echo "tidy: couldn't reach origin; skipping remote cleanup"
 here=$(git rev-parse --show-toplevel)
 main=$(git worktree list --porcelain | sed -n '1s/^worktree //p')
 
@@ -46,12 +47,23 @@ on_main() {
   _cherry=$(git cherry refs/remotes/origin/main "$1" 2>/dev/null) || return 1
   [ -n "$_cherry" ] && ! printf '%s\n' "$_cherry" | grep -q '^+'
 }
-# drop_branch <name>: deletes a local branch whose commits are all on origin/main. `git branch -d`
+# finished <branch>: the local branch's work is on main, or it went through a pull request that
+# is over: GitHub no longer has the branch (it deletes a merged one; the cleanup workflow a closed
+# one), and its commits are kept under the pull request (refs/pull/<n>/head, fetched as
+# origin/pull/<n>). A squash merge (Toni, 2026-11-24) puts other commits on main, so only this
+# tells it apart from unmerged work. A branch still on GitHub is never finished this way.
+finished() {
+  on_main "refs/heads/$1" && return 0
+  git rev-parse --quiet --verify "refs/remotes/origin/$1" >/dev/null && return 1
+  [ -n "$(git for-each-ref --count=1 --contains "refs/heads/$1" --format=x refs/remotes/origin/pull/ 2>/dev/null)" ]
+}
+# drop_branch <name>: deletes a local branch whose work is finished (on origin/main, or in a pull
+# request that is over). `git branch -d`
 # alone refuses a branch with no upstream while the main checkout is still behind origin/main
 # (it is fast-forwarded last), which left a helper's branch behind on 2026-10-25; the ancestor
 # check is what makes deleting the ref safe.
 drop_branch() {
-  on_main "refs/heads/$1" || return 1
+  finished "$1" || return 1
   git branch -q -d -- "$1" 2>/dev/null || git update-ref -d "refs/heads/$1"
 }
 git worktree list --porcelain | awk '
@@ -63,7 +75,7 @@ git worktree list --porcelain | awk '
   [ -d "$wt" ] || continue
   branch=$(git -C "$wt" symbolic-ref --quiet --short HEAD 2>/dev/null || echo "")
   [ -n "$branch" ] || continue
-  on_main "refs/heads/$branch" || continue
+  finished "$branch" || continue
   [ -z "$(git -C "$wt" status --porcelain 2>/dev/null)" ] || continue
   worked=no
   git reflog show --format=%gs "refs/heads/$branch" 2>/dev/null | grep -qv '^branch: Created' && worked=yes

@@ -25,7 +25,8 @@ Enforced by hooks in `.claude/settings.json` (`scripts/hooks.sh`):
   main.
 - After every push and at every session start, `scripts/tidy.sh` runs automatically (Claude Code
   hook in `.claude/settings.json`; not in a cloud session): local branches merged into main, also
-  by a pull request's rebase (never main, the current branch, or a branch checked out in a
+  by a pull request's rebase or squash (a branch gone from GitHub whose commits a pull request
+  keeps) (never main, the current branch, or a branch checked out in a
   worktree; GitHub deletes merged pull requests' branches itself), finished worktrees (as soon as merged),
   stale refs, every disk image except the newest release's (highest `mac-` tag), built apps
   under `macos/build/DerivedData/Build/Products` (in the main checkout and in removed worktrees),

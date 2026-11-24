@@ -92,6 +92,7 @@ script-tests:
 	cd .. && scripts/tests/auto_update_test.sh
 	cd .. && scripts/tests/state_check_test.sh
 	cd .. && scripts/tests/ci_tools_test.sh
+	cd .. && scripts/tests/branch_cleanup_test.sh
 
 # Every security check; the deploy script and CI run it.
 security: tidy-check vuln secrets semgrep shellcheck deps

@@ -23,7 +23,7 @@ git rev-parse --git-dir >/dev/null 2>&1 || exit 0
 tree=$(git rev-parse --show-toplevel)
 main_checkout=$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")
 
-git fetch --quiet --prune origin 2>/dev/null || echo "couldn't reach GitHub; the checks below may be out of date"
+git fetch --quiet --prune origin '+refs/heads/*:refs/remotes/origin/*' '+refs/pull/*/head:refs/remotes/origin/pull/*' 2>/dev/null || echo "couldn't reach GitHub; the checks below may be out of date"
 inuse=$(git worktree list --porcelain | sed -n 's|^branch refs/heads/||p')
 in_worktree() { printf '%s\n' "$inuse" | grep -qx "$1"; }
 ahead() { git rev-list --count "$2..$1" 2>/dev/null || echo 0; }
@@ -64,14 +64,24 @@ on_main() {
   _cherry=$(git cherry refs/remotes/origin/main "$1" 2>/dev/null) || return 1
   [ -n "$_cherry" ] && ! printf '%s\n' "$_cherry" | grep -q '^+'
 }
+# finished <branch>: the local branch's work is on main, or it went through a pull request that
+# is over: GitHub no longer has the branch (it deletes a merged one; the cleanup workflow a closed
+# one), and its commits are kept under the pull request (refs/pull/<n>/head, fetched as
+# origin/pull/<n>). A squash merge (Toni, 2026-11-24) puts other commits on main, so only this
+# tells it apart from unmerged work. A branch still on GitHub is never finished this way.
+finished() {
+  on_main "refs/heads/$1" && return 0
+  git rev-parse --quiet --verify "refs/remotes/origin/$1" >/dev/null && return 1
+  [ -n "$(git for-each-ref --count=1 --contains "refs/heads/$1" --format=x refs/remotes/origin/pull/ 2>/dev/null)" ]
+}
 # Branches nobody is working on that hold work main doesn't have.
 for b in $(git for-each-ref --format='%(refname:short)' --no-merged origin/main refs/heads/); do
   in_worktree "$b" && continue
-  on_main "refs/heads/$b" && continue
+  finished "$b" && continue
   echo "local branch $b: $(ahead "$b" origin/main) commits not on main, not checked out anywhere"
 done
 for b in $(git for-each-ref --format='%(refname:lstrip=3)' --no-merged origin/main refs/remotes/origin/); do
-  [ "$b" = HEAD ] && continue
+  case "$b" in HEAD | pull/*) continue ;; esac # pull/<n>: a pull request's commits, not a branch
   in_worktree "$b" && continue
   git rev-parse --quiet --verify "refs/heads/$b" >/dev/null && continue
   on_main "refs/remotes/origin/$b" && continue
@@ -97,7 +107,7 @@ git worktree list --porcelain | awk '
   case "$lock" in *"claude agent "*) ;; *) continue ;; esac
   b=$(git -C "$wt" symbolic-ref --quiet --short HEAD 2>/dev/null || echo "")
   [ -n "$b" ] || continue
-  on_main "refs/heads/$b" || continue
+  finished "$b" || continue
   [ -z "$(git -C "$wt" status --porcelain 2>/dev/null)" ] || continue
   git reflog show --format=%gs "refs/heads/$b" 2>/dev/null | grep -qv '^branch: Created' || continue
   if command -v lsof >/dev/null 2>&1 && lsof -a -u "$(id -u)" -d cwd -Fn 2>/dev/null | awk -v p="$wt" '

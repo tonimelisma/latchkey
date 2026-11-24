@@ -31,12 +31,15 @@ included, so it reaches the Mac; started with `claude --cloud` it has none. Ever
 applies, except:
 
 - No worktree: the VM's clone is the session's own. Skip `EnterWorktree`, `ExitWorktree` and
-  `link-local-files.sh`; commit on the session's branch, push it early and often (the VM is
-  reclaimed), and merge through its pull request (CLAUDE.md, "Git and worktrees"): the REST API
-  works (`gh api repos/tonimelisma/latchkey/pulls`, `…/pulls/<n>/merge` with
-  `merge_method=rebase`), GraphQL doesn't, so `gh pr create` fails. GitHub deletes the branch
-  after the merge. The proxy refuses tag pushes, release writes and branch deletions: those
-  happen in the workflows below.
+  `link-local-files.sh`. Git as in CLAUDE.md, "Git": one branch and one pull request per
+  session, pushed early (the VM is reclaimed), never replaced; main merged in, never rebased
+  onto; squash merges, by auto-merge once CI passes. Pull requests go through the REST API
+  (`gh api repos/tonimelisma/latchkey/pulls -f head=<branch> -f base=main -f title=… -f body=…`)
+  or the GitHub MCP tools (`create_pull_request`, `enable_pr_auto_merge` with method squash,
+  `update_pull_request_branch` to merge main in on GitHub); GraphQL through the session's proxy
+  doesn't work, so `gh pr …` fails. The proxy refuses tag pushes, release writes and branch
+  deletions: releases happen in the workflows below, and branches are deleted by GitHub (merged)
+  or `branch-cleanup.yml` (closed), never by a session or through Latchkey on the Mac.
 - Hooks (`scripts/hooks.sh`): session start runs `scripts/cloud-setup.sh` first (jq, lsof, the
   pinned ShellCheck, uv; Go modules, the pinned Go tools and Semgrep, and test builds warm in the
   background, logged to `~/.cache/latchkey-cloud-setup.log`, done when `…log.done` exists), skips
@@ -63,6 +66,7 @@ applies, except:
   | `relay-image.yml` | `relay/` | `relay-image` | `production` | checks, then the signed image; hosts that verify the signature pull it |
   | `linux-release.yml` | `linux/` | `linux-release` | `release` | tag `linux-<x.y.z>`, signed release; servers update within a day |
   | `mac-tag.yml` | `macos/` | `mac-tag` | `release` | tag `mac-<x.y.z>`; the Mac's updater installs it |
+  | `branch-cleanup.yml` | a pull request closes; daily | `branch-cleanup` | `branches` | deletes branches whose pull request is closed (`scripts/branch-cleanup.sh`) |
 
   Follow a run with `gh api repos/tonimelisma/latchkey/actions/runs?per_page=5` and its jobs'
   logs; the logs are public, so nothing the scripts print may be private (they hide the
