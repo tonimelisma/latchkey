@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import Testing
 
@@ -118,7 +119,8 @@ import Testing
         #expect(try await b.run("String(log.indexOf('focus:true') === 0)") == "true", "the click put the focus there")
         _ = try await b.run("log = []")
         _ = try await b.click("e2")
-        let clicked = try await b.run("log.join(' ')")
+        // The field that had the focus gets it back as the window comes to the front: left out.
+        let clicked = try await b.run("log.filter(function (x) { return !/^focus/.test(x); }).join(' ')")
         #expect(
             clicked
                 == "pointerdown:true:true mousedown:true:true pointerup:true:true mouseup:true:true click:true:true",
@@ -203,6 +205,38 @@ import Testing
         } catch {
             #expect("\(error)".contains("clipboard"))
         }
+    }
+
+    /// Security review 2026-11-25: a Command shortcut the page doesn't take could reach Latchkey's
+    /// own menu (Cmd+Q would quit it); a click on a list's label would open its menu; a real
+    /// click lets a page reach the clipboard. None of these happens.
+    @Test func shortcutsPickersAndTheClipboardStayOutOfReach() async throws {
+        let b = LockedBrowser(cookies: { [] })
+        defer { b.discard() }
+        let page = """
+            <label data-latchkey="e1" for="s">Size</label><select id="s"><option>S</option><option>M</option></select>
+            <button data-latchkey="e2" onclick="navigator.clipboard.writeText('taken').then(function () { document.title = 'copied'; }, function () { document.title = 'refused'; }); document.execCommand('copy');">Copy</button>
+            """
+        _ = try await b.open(html: page, base: Self.base)
+        for name in ["cmd+q", "cmd+,", "cmd+h", "cmd+w"] {
+            do {
+                _ = try await b.press([try PageScripts.Key(name)], ref: nil)
+                Issue.record("\(name) was pressed")
+            } catch {
+                #expect("\(error)".contains("Command shortcuts"), "\(name): \(error)")
+            }
+        }
+        do {
+            _ = try await b.click("e1")
+            Issue.record("the list's label was clicked")
+        } catch {
+            #expect("\(error)".contains("select"), "\(error)")
+        }
+        let clipboard = NSPasteboard.general.changeCount
+        _ = try await b.click("e2")
+        try await Task.sleep(for: .milliseconds(300))
+        #expect(try await b.run("document.title") == "refused")
+        #expect(NSPasteboard.general.changeCount == clipboard, "the owner's clipboard is as it was")
     }
 
     /// FR-487: in the owner's Safari tabs typing stays a script, in a keyboard's order now.

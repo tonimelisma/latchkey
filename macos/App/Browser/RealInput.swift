@@ -6,10 +6,12 @@ import WebKit
 /// on browsers ... no complex tricks with JavaScript"). AppKit's own mouse and key events, made
 /// here for the view's never-shown window and handed straight to the view, as WebKit's own tests
 /// do: WebKit turns them into the page's trusted events and does what the browser does for them.
-/// They never go through the window server, `NSApp.sendEvent` or a posted `CGEvent`, so no other
-/// view, window, app or event monitor sees them, and the Owner's pointer and keyboard are never
-/// touched (Constitution IV). Key characters are never logged (spec 013 FR-1377: a password
-/// goes this way).
+/// They never go through the window server or a posted `CGEvent`, so no other app sees them, and
+/// the Owner's pointer and keyboard are never touched (Constitution IV). A key the page doesn't
+/// take WebKit hands back to the app, as Safari's does, where a Command shortcut could reach
+/// Latchkey's own menu: so only harmless shortcuts are pressed (`allowedCommand`, security
+/// review 2026-11-25). Key characters are never logged (spec 013 FR-1377: a password goes this
+/// way).
 @MainActor
 enum RealInput {
     /// Latchkey's own script world for finding where to click and for counting the events the
@@ -17,7 +19,7 @@ enum RealInput {
     /// `.claude/rules/secrets-and-pages.md`).
     static let world = WKContentWorld.world(name: "latchkey-input")
     /// FR-485: the longest one step (a click, a key) waits for the page to take its events.
-    static let stepLimit: Duration = .seconds(2)
+    static let stepLimit: Duration = .seconds(3)
 
     /// Counts the trusted pointer-up, mouse-up, key-up and input events, in every frame; a frame of
     /// the page's own site counts into the top page's count too. Added before the page's own
@@ -26,7 +28,7 @@ enum RealInput {
     static let counter = """
         (function () {
           if (window.__lkInput) return;
-          var c = { up: 0, key: 0, input: 0, last: null };
+          var c = { up: 0, key: 0, input: 0, last: null, target: '' };
           try { Object.defineProperty(window, '__lkInput', { value: c }); } catch (x) { return; }
           var top = null;
           try { if (window.top !== window && window.top.__lkInput) top = window.top.__lkInput; } catch (x) { top = null; }
@@ -36,11 +38,55 @@ enum RealInput {
           window.addEventListener('keyup', add('key'), true);
           window.addEventListener('input', add('input'), true);
           window.addEventListener('keydown', function (ev) { if (ev.isTrusted) { c.last = ev; if (top) top.last = ev; } }, true);
+          // Where the last character went: the element itself, inside shadow roots too (FR-1377).
+          function went(ev) {
+            if (!ev.isTrusted) return;
+            var t = ev.composedPath ? ev.composedPath()[0] : ev.target;
+            var r = (t && t.getAttribute && t.getAttribute('data-latchkey')) || '-';
+            c.target = r; if (top) top.target = r;
+          }
+          window.addEventListener('keypress', went, true);
+          window.addEventListener('beforeinput', went, true);
         })();
         """
 
     static var userScript: WKUserScript {
         WKUserScript(source: counter, injectionTime: .atDocumentStart, forMainFrameOnly: false, in: world)
+    }
+
+    /// The Owner's clipboard stays out of reach (Constitution IV; security review 2026-11-25): a
+    /// real click or key lets a page copy, cut, or read the clipboard, and a read shows WebKit's
+    /// own Paste menu. In the page's world, before its scripts, in every frame: the clipboard API
+    /// refuses, and copy, cut, and paste commands do nothing. Not to make a page work (FR-488).
+    static let noClipboard = """
+        (function () {
+          try {
+            var c = navigator.clipboard;
+            if (c) ['read', 'readText', 'write', 'writeText'].forEach(function (k) {
+              try { Object.defineProperty(c, k, { value: function () { return Promise.reject(new DOMException('The clipboard is not available.', 'NotAllowedError')); } }); } catch (x) {}
+            });
+            var ex = Document.prototype.execCommand;
+            Object.defineProperty(Document.prototype, 'execCommand', { value: function (cmd) {
+              if (/^(copy|cut|paste)$/i.test(String(cmd))) return false;
+              return ex.apply(this, arguments);
+            }, writable: true, configurable: true });
+          } catch (x) {}
+        })();
+        """
+
+    static var clipboardScript: WKUserScript {
+        WKUserScript(source: noClipboard, injectionTime: .atDocumentStart, forMainFrameOnly: false, in: .page)
+    }
+
+    /// Command shortcuts pressed in a page (FR-481): select all, undo and redo, and Command with
+    /// an arrow or Backspace (moving and deleting in a field). Any other could reach Latchkey's
+    /// own menu when the page doesn't take it (Cmd+Q quits, Cmd+, opens Settings on the screen).
+    static func allowedCommand(_ k: PageScripts.Key) -> Bool {
+        guard k.meta else { return true }
+        let key = k.key.lowercased()
+        if key == "a" { return !k.shift && !k.alt && !k.ctrl }
+        if key == "z" { return !k.alt && !k.ctrl }
+        return ["arrowup", "arrowdown", "arrowleft", "arrowright", "backspace"].contains(key) && !k.ctrl
     }
 
     // MARK: where
@@ -78,6 +124,7 @@ enum RealInput {
           var tag = e.tagName.toLowerCase(), type = (e.getAttribute('type') || (tag === 'input' ? 'text' : '')).toLowerCase();
           var kind = tag + (tag === 'input' ? ':' + type : '');
           var out = { kind: kind };
+          if (tag === 'label' && e.control) { var ct = e.control; var ctt = (ct.getAttribute('type') || '').toLowerCase(); if ((ct.tagName === 'SELECT' && !ct.multiple && !(ct.size > 1)) || ctt === 'color' || ['date', 'datetime-local', 'month', 'week', 'time'].indexOf(ctt) >= 0) { out.refuse = 'picker'; return JSON.stringify(out); } }
           if (tag === 'select' && !e.multiple && !(e.size > 1)) { out.refuse = 'list'; return JSON.stringify(out); }
           if (tag === 'input' && type === 'color') { out.refuse = 'colour'; return JSON.stringify(out); }
           if (tag === 'input' && ['date', 'datetime-local', 'month', 'week', 'time'].indexOf(type) >= 0) { out.dateField = true; out.refuse = 'date'; }
@@ -130,7 +177,17 @@ enum RealInput {
           function within(n) { for (; n; n = n.parentNode || n.host) if (n === e) return true; return false; }
           var hit = hitAt(document, x, y);
           var label = e.labels && Array.prototype.some.call(e.labels, function (l) { return hit && l.contains(hit); });
+          function picker(n) {
+            for (; n && n.tagName; n = n.parentNode || n.host) {
+              var nt = (n.getAttribute('type') || '').toLowerCase();
+              if (n.tagName === 'SELECT' && !n.multiple && !(n.size > 1)) return true;
+              if (n.tagName === 'INPUT' && (nt === 'color' || ['date', 'datetime-local', 'month', 'week', 'time'].indexOf(nt) >= 0)) return true;
+              if (n.tagName === 'LABEL' && n.control && n.control !== e && picker(n.control)) return true;
+            }
+            return false;
+          }
           if (hit && !within(hit) && !label) {
+            if (picker(hit)) out.refuse = 'picker';
             var named = hit;
             while (named && !(named.getAttribute && named.getAttribute('data-latchkey'))) named = named.parentNode || named.host;
             var words = (hit.innerText || hit.textContent || hit.getAttribute('aria-label') || '').replace(/\\s+/g, ' ').trim().slice(0, 60);
@@ -157,6 +214,8 @@ enum RealInput {
           }
           if (!a || a === document.body || a === document.documentElement) return '';
           if (a.tagName === 'SELECT' && !a.multiple && !(a.size > 1)) return 'select';
+          var at = (a.getAttribute('type') || '').toLowerCase();
+          if (a.tagName === 'INPUT' && (at === 'color' || ['date', 'datetime-local', 'month', 'week', 'time'].indexOf(at) >= 0)) return 'select';
           return a.tagName.toLowerCase() + (a.getAttribute('data-latchkey') ? ' ' + a.getAttribute('data-latchkey') : '');
         })()
         """
@@ -327,11 +386,18 @@ enum RealInput {
     static func type(_ text: String, in view: WKWebView, check: (() async -> Bool)? = nil) async -> Int {
         var n = 0
         for ch in text {
+            if Task.isCancelled { return n }
             if let check, !(await check()) { return n }
             if let s = stroke(for: ch) { await press(s, in: view) } else { await insert(String(ch), in: view) }
             n += 1
         }
         return n
+    }
+
+    /// The reference of the element the last character went into ("-" for one without), as the
+    /// input world saw it (spec 013 FR-1377).
+    static func lastTarget(_ view: WKWebView) async -> String? {
+        await evaluate(view, "window.__lkInput ? String(__lkInput.target) : ''")
     }
 
     /// Whether the page took the last key (its keydown was cancelled), as the input world saw it.
@@ -350,7 +416,7 @@ enum RealInput {
 
     /// Runs `code` in the input world, at most `within` (Constitution II: a page held on a
     /// dialog never answers).
-    static func evaluate(_ view: WKWebView, _ code: String, within: Duration = .milliseconds(500)) async -> String? {
+    static func evaluate(_ view: WKWebView, _ code: String, within: Duration = .seconds(1)) async -> String? {
         await Deadline.first(within: within) { @MainActor @Sendable in
             await withCheckedContinuation { (c: CheckedContinuation<String?, Never>) in
                 view.evaluateJavaScript(code, in: nil, in: world) { result in
@@ -369,8 +435,11 @@ enum RealInput {
     static func wait(_ view: WKWebView, _ name: String, after before: Int) async {
         let end = ContinuousClock.now + stepLimit
         while ContinuousClock.now < end {
+            // A page that didn't answer in time (busy, or held on a dialog) is asked again until
+            // the limit: going on early would run the next step before this one was taken.
             let n = await count(view, name)
-            if n < 0 || n > before { return }
+            if n > before, before >= 0 { return }
+            if n >= 0, before < 0 { return }
             try? await Task.sleep(for: .milliseconds(10))
         }
     }

@@ -352,6 +352,9 @@ enum LoginsCapability {
             var `is`: String?
         }
         let typed: Step
+        // Whatever stopped the typing, what was typed is emptied (FR-1311, FR-1377; security
+        // review 2026-11-25: a page that changed between code boxes kept the digits typed).
+        func emptied() async { _ = try? await run(PageScripts.clearSignIn) }
         do {
             let detail: String
             switch target {
@@ -364,9 +367,13 @@ enum LoginsCapability {
             }
             typed = (try? JSONDecoder().decode(Step.self, from: Data(detail.utf8))) ?? Step(step: "unheld")
         } catch SafariBrowser.Failure.elementMissing {
+            await emptied()
             return .text(
                 "There's no \(field) on the page now (it may have changed). Read it again with browser_look.",
                 isError: true)
+        } catch {
+            await emptied()
+            throw error
         }
         func clear() async -> PageScripts.Page? { try? await run(PageScripts.clearSignIn).page }
         switch typed.step {

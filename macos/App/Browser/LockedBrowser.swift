@@ -305,6 +305,8 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownl
         if pageScripts { record.install(in: config) }  // the hidden world's recorder (spec 014 FR-1446)
         // FR-485: counts the trusted events the page took, in Latchkey's input world.
         config.userContentController.addUserScript(RealInput.userScript)
+        // The Owner's clipboard stays out of the page's reach (`RealInput.noClipboard`).
+        config.userContentController.addUserScript(RealInput.clipboardScript)
         let w = WKWebView(frame: NSRect(origin: .zero, size: size), configuration: config)
         w.navigationDelegate = self
         w.uiDelegate = self
@@ -1314,6 +1316,13 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownl
                     "\(name) isn't pressed: copy, cut and paste would use the owner's clipboard. Type the text with type instead."
                 )
             }
+            // Any other Command shortcut the page doesn't take could reach Latchkey's own menu
+            // (security review 2026-11-25: Cmd+Q would quit it).
+            guard RealInput.allowedCommand(k) else {
+                throw SafariBrowser.Failure.failed(
+                    "\(name) isn't pressed: of the Command shortcuts, only cmd+a, cmd+z, cmd+shift+z, and Command with an arrow or Backspace are."
+                )
+            }
             guard let s = RealInput.stroke(for: k) else {
                 throw SafariBrowser.Failure.failed("\(name) isn't a key of a keyboard Latchkey can press.")
             }
@@ -1330,7 +1339,7 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownl
                 let opensMenu = ["ArrowUp", "ArrowDown", " ", "Enter"].contains(k.key)
                 if opensMenu, await RealInput.evaluate(w, RealInput.focused) == "select" {
                     throw SafariBrowser.Failure.failed(
-                        "\(Self.keyName(k)) isn't pressed in a list: it would open the list's menu. Choose with select instead."
+                        "\(Self.keyName(k)) isn't pressed in a list or a colour or date field: it would open its menu or picker. Choose with select, or type the value with type."
                     )
                 }
                 await RealInput.press(s, in: w)
@@ -1397,14 +1406,17 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownl
             var ref: String?
         }
         func run(_ code: String) async throws -> Plan? {
-            let text = try SafariBrowser.detail(try await script(code, world: Self.signInWorld), ref: ref)
+            let text = try SafariBrowser.detail(try await bounded(code, world: Self.signInWorld), ref: ref)
             return try? JSONDecoder().decode(Plan.self, from: Data(text.utf8))
         }
         let unheld = #"{"step":"unheld"}"#
         let planText = try SafariBrowser.detail(
-            try await script(
+            try await bounded(
                 PageScripts.fillPlan(ref: ref, kind: kind, length: value.count, host: host), world: Self.signInWorld),
             ref: ref)
+        // The whole typing within 20 s, so the answer beats the tool's 30 s (Constitution II);
+        // past it nothing more is typed, and what was typed is emptied.
+        let until = ContinuousClock.now + .seconds(20)
         guard let plan = try? JSONDecoder().decode(Plan.self, from: Data(planText.utf8)) else { return unheld }
         guard plan.step == "plan", let fields = plan.fields, !fields.isEmpty else { return planText }
         let follow = plan.follow == true
@@ -1425,7 +1437,9 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownl
                 guard at.refuse == nil, at.hidden != true, let x = at.x, let y = at.y else { return false }
                 await RealInput.click(at: RealInput.windowPoint(x, y, in: w), in: w)
                 var current = f.ref
-                guard try await run(PageScripts.fillFocus(ref: current, host: host, follow: false))?.step == "same"
+                guard
+                    try await run(PageScripts.fillFocus(ref: current, kind: kind, host: host, follow: false))?.step
+                        == "same"
                 else { return false }
                 if at.filled == true, let back = RealInput.stroke(for: try PageScripts.Key("Backspace")) {
                     _ = NSApp.sendAction(#selector(NSText.selectAll(_:)), to: w, from: nil)
@@ -1434,17 +1448,25 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownl
                 for ch in part {
                     // The focus is checked before every character: a page that moved it elsewhere
                     // gets nothing more (FR-1377).
-                    let now = try await run(PageScripts.fillFocus(ref: current, host: host, follow: follow))
+                    if Task.isCancelled || ContinuousClock.now > until { return false }
+                    let now = try await run(
+                        PageScripts.fillFocus(ref: current, kind: kind, host: host, follow: follow))
                     if now?.step == "next", let next = now?.ref {
                         current = next
                     } else if now?.step != "same" {
                         return false
                     }
-                    if let k = RealInput.stroke(for: ch) {
+                    // A new line or a tab in a secret is text, never Enter or Tab (it would send
+                    // the form, or move the focus, before the press).
+                    if !"\n\r\t".contains(ch), let k = RealInput.stroke(for: ch) {
                         await RealInput.press(k, in: w)
                     } else {
                         await RealInput.insert(String(ch), in: w)
                     }
+                    // The character went into this field, as the input world saw it: else the
+                    // page moved the focus while the key was on its way, and nothing more goes
+                    // (security review 2026-11-25).
+                    if await RealInput.lastTarget(w) != current { return false }
                 }
             }
             return true
@@ -1455,12 +1477,13 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownl
         }
         guard typed else { return unheld }
         let refs = fields.map(\.ref)
-        let held = try await script(PageScripts.fillHeld(refs: refs, value: value, host: host), world: Self.signInWorld)
+        let held = try await bounded(
+            PageScripts.fillHeld(refs: refs, value: value, host: host), world: Self.signInWorld)
         let heldText = try SafariBrowser.detail(held, ref: ref)
         if heldText.contains("\"filled\"") || refs.count < 2 { return heldText }
         // Code boxes that didn't take the code key by key: pasted whole into the first.
         return try SafariBrowser.detail(
-            try await script(PageScripts.fillPaste(refs: refs, value: value, host: host), world: Self.signInWorld),
+            try await bounded(PageScripts.fillPaste(refs: refs, value: value, host: host), world: Self.signInWorld),
             ref: ref)
     }
 
@@ -1470,14 +1493,48 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownl
     /// window behind another app's again, whatever happened.
     private func active<T>(_ work: () async throws -> T) async rethrows -> T {
         let window = holderWindow as? HolderWindow
+        let clipboard = NSPasteboard.general.changeCount
+        // No sound from Claude's pages: a real click lets a page start playing (security review
+        // 2026-11-25; Constitution IV).
+        await web?.setAllMediaPlaybackSuspended(true)
         window?.active = true
-        defer { window?.active = false }
+        defer {
+            window?.active = false
+            if NSPasteboard.general.changeCount != clipboard {
+                inputNote(
+                    "The owner's clipboard changed while Latchkey acted in the page (the page may have copied something)."
+                )
+            }
+        }
         return try await work()
+    }
+
+    /// A script in one of Latchkey's own worlds, at most `within` (Constitution II): a page busy in
+    /// a loop never answers, and a real action must still end (and its window stop counting as
+    /// the front one, FR-483).
+    private func bounded(_ code: String, world: WKContentWorld, within: Duration = .seconds(5)) async throws
+        -> String
+    {
+        let r: Result<String, SafariBrowser.Failure>? = await Deadline.first(within: within) {
+            @MainActor @Sendable [weak self] in
+            guard let self else { return .failure(.noWindow) }
+            do { return .success(try await self.script(code, world: world)) } catch let f as SafariBrowser.Failure {
+                return .failure(f)
+            } catch { return .failure(.failed("\(error)")) }
+        }
+        switch r {
+        case .success(let text)?: return text
+        case .failure(let f)?: throw f
+        case nil:
+            throw SafariBrowser.Failure.failed(
+                "The page didn't answer within \(within.components.seconds) seconds (it may be busy); nothing more was done."
+            )
+        }
     }
 
     /// Where the element is, as the input world answers it (scrolled into view first).
     private func spot(_ ref: String) async throws -> RealInput.Spot {
-        let json = try await script(RealInput.spot(ref), world: RealInput.world)
+        let json = try await bounded(RealInput.spot(ref), world: RealInput.world)
         guard let s = try? JSONDecoder().decode(RealInput.Spot.self, from: Data(json.utf8)) else {
             throw SafariBrowser.Failure.failed("The page didn't answer as expected.")
         }
@@ -1508,6 +1565,10 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownl
             throw SafariBrowser.Failure.failed(
                 "\(ref) is a colour field: type the colour (like #336699) into it with type; a click would open the colour panel on the owner's screen."
             )
+        case "picker"?:
+            throw SafariBrowser.Failure.failed(
+                "A click on \(ref) would reach a list, colour or date field (it is that field's label, or such a field is drawn over it there), whose menu or picker needs the screen: choose with select, or type the value with type."
+            )
         case "date"?:
             throw SafariBrowser.Failure.failed(
                 "\(ref) is a date or time field: type the date into it with type (a click would open its calendar, which needs the screen)."
@@ -1529,7 +1590,7 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownl
         if at.field == true, at.refuse == nil {
             try await mouseClick(ref, w, spot: at)
         } else {
-            try check(try await script(RealInput.focus(ref), world: RealInput.world), ref: ref)
+            try check(try await bounded(RealInput.focus(ref), world: RealInput.world), ref: ref)
         }
     }
 

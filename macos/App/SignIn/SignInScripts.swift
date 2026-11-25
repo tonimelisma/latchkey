@@ -306,13 +306,17 @@ extension PageScripts {
     /// or, with `follow`, on a code field after it the page moved the focus to ("next" and its
     /// reference; it is kept to be emptied), or anywhere else ("other"); "wrongsite" when the page
     /// is no longer on the saved site.
-    static func fillFocus(ref: String, host: String, follow: Bool) -> String {
+    static func fillFocus(ref: String, kind: String, host: String, follow: Bool) -> String {
         // nosemgrep: latchkey-page-script-literal -- besides literal() and fillCommon, only a Bool.
         """
         (function (ref, follow) {
           \(fillCommon(host: host))
           var x = byRef(ref), f = focused();
           if (!x || !onSite(x) || !onSite(f)) return answer({ step: 'wrongsite' });
+          // Still of the kind it was checked for: a page that turns its password field into a
+          // text field gets nothing more (security review 2026-11-25).
+          var t = (x.getAttribute('type') || 'text').toLowerCase();
+          if (x.tagName !== 'INPUT' || !seen(x) || (kind === 'password' && t !== 'password') || (kind === 'code' && !codeField(x))) return answer({ step: 'other' });
           if (f === x) return answer({ step: 'same' });
           if (follow && f && f.tagName === 'INPUT' && seen(f) && codeField(f) && f.getRootNode() === x.getRootNode() && (x.compareDocumentPosition(f) & Node.DOCUMENT_POSITION_FOLLOWING)) {
             keep(f);
@@ -333,7 +337,10 @@ extension PageScripts {
             (function (refs, value) {
               \(fillCommon(host: host))
               var xs = refs.map(byRef);
-              if (xs.some(function (x) { return !x || !onSite(x); })) return answer({ step: 'unheld' });
+              // Gone: the page went on by itself once the last character was in (Uber's code
+              // boxes, 2026-11-22); every character went into its field (`RealInput.lastTarget`).
+              if (xs.some(function (x) { return !x; })) return answer({ step: 'filled', boxes: xs.length > 1 ? xs.length : 0 });
+              if (xs.some(function (x) { return !onSite(x); })) return answer({ step: 'unheld' });
               var held = xs.map(function (x) { return x.value; }).join('');
               if (same(held, value)) return answer({ step: 'filled', boxes: xs.length > 1 ? xs.length : 0 });
               if (xs.length === 1) {
