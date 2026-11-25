@@ -310,7 +310,7 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownl
             InputSignal.Handler(signal), contentWorld: RealInput.world, name: RealInput.handlerName)
         // The Owner's clipboard stays out of the page's reach (`RealInput.noClipboard`).
         config.userContentController.addUserScript(RealInput.clipboardScript)
-        let w = PageView(frame: NSRect(origin: .zero, size: size), configuration: config)
+        let w = WKWebView(frame: NSRect(origin: .zero, size: size), configuration: config)
         w.navigationDelegate = self
         w.uiDelegate = self
         // Sites see Safari, as they do in the Owner's Safari: some refuse an app's own web view
@@ -1617,7 +1617,7 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownl
             out.append("before: " + ((try? await self.run(log)) ?? "?"))
             await RealInput.move(to: p, in: w)
             try? await Task.sleep(for: .milliseconds(400))
-            out.append("RealInput.move (no input context): " + ((try? await self.run(log)) ?? "?"))
+            out.append("RealInput.move (tracking area): " + ((try? await self.run(log)) ?? "?"))
             await RealInput.click(at: p, in: w)
             try? await Task.sleep(for: .milliseconds(400))
             out.append("RealInput.click: " + ((try? await self.run(log)) ?? "?"))

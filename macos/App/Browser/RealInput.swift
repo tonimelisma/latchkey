@@ -307,9 +307,23 @@ enum RealInput {
     static func move(to p: NSPoint, in view: WKWebView) async {
         guard let window = view.window else { return }
         for q in [NSPoint(x: p.x - 12, y: p.y + 8), p] {
-            if let e = mouse(.mouseMoved, q, window, clicks: 0) { PageView.moving(view) { view.mouseMoved(with: e) } }
+            if let e = mouse(.mouseMoved, q, window, clicks: 0) { deliverMove(e, to: view) }
             try? await Task.sleep(for: .milliseconds(15))
         }
+    }
+
+    /// A pointer move goes where macOS sends one: to the owner of the view's tracking area for
+    /// pointer moves. A WKWebView takes moves only from there (a move handed to the view itself
+    /// is dropped, so as not to count it twice), which is why hover reached no page (WebKit's
+    /// WKMouseTrackingObserver; seen on GitHub's macOS 26 runner, 2026-11-25; spec 005 FR-482).
+    static func deliverMove(_ e: NSEvent, to view: WKWebView) {
+        let owners = view.trackingAreas.filter { $0.options.contains(.mouseMoved) }.compactMap { $0.owner as? NSObject }
+        let selector = #selector(NSResponder.mouseMoved(with:))
+        guard let owner = owners.first(where: { $0 !== view && $0.responds(to: selector) }) else {
+            view.mouseMoved(with: e)
+            return
+        }
+        _ = owner.perform(selector, with: e)
     }
 
     /// A click as a mouse makes it: the pointer moves there, presses, and lets go; then waits for
@@ -629,22 +643,4 @@ final class HolderWindow: NSWindow {
     override var isKeyWindow: Bool { active }
     override var canBecomeKey: Bool { false }
     override var canBecomeMain: Bool { false }
-}
-
-/// The view of a page of Latchkey's own browser. For a pointer move only, it shows no text input
-/// context: WebKit offers each mouse event to the view's input context first, and an app that
-/// isn't the active one had its pointer moves taken there and never handed to the page (GitHub's
-/// macOS 26 runner, 2026-11-25: hover reached no page, clicks did; spec 005 FR-482).
-final class PageView: WKWebView {
-    private var moving = false
-
-    override var inputContext: NSTextInputContext? { moving ? nil : super.inputContext }
-
-    /// Runs `send` (a pointer move handed to `view`) with no input context.
-    static func moving(_ view: WKWebView, _ send: () -> Void) {
-        guard let page = view as? PageView else { return send() }
-        page.moving = true
-        defer { page.moving = false }
-        send()
-    }
 }
