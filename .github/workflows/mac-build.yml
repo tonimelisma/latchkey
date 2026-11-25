@@ -82,3 +82,24 @@ jobs:
           done
           tail -40 "$RUNNER_TEMP/test.log"
           exit "$rc"
+      # The browser and sign-in tests again, on their own (2026-11-25): in the full suite, many
+      # pages at once load this runner so much that a page takes over 10 s to answer a script
+      # (on main too); alone, their failures are their own.
+      - name: Browser and sign-in tests on their own (reported)
+        if: always()
+        working-directory: macos
+        continue-on-error: true
+        run: |
+          rc=0
+          xcodebuild -project Latchkey.xcodeproj -scheme Latchkey -destination 'platform=macOS' \
+            -derivedDataPath "$RUNNER_TEMP/dd" CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM= \
+            -resultBundlePath "$RUNNER_TEMP/browser.xcresult" \
+            -only-testing:LatchkeyTests/SignInFillTests -only-testing:LatchkeyTests/RegressionLoginsBTests \
+            -only-testing:LatchkeyTests/RegressionLoginsCTests -only-testing:LatchkeyTests/RegressionRealInputTests \
+            -only-testing:LatchkeyTests/RegressionRichEditorCTests -only-testing:LatchkeyTests/RegressionHoverCTests \
+            -only-testing:LatchkeyTests/LockedBrowserTests \
+            -only-testing:LatchkeyTests/LockedBrowserActionTests -only-testing:LatchkeyTests/BrowserDialogTests \
+            test-without-building > "$RUNNER_TEMP/browser.log" 2>&1 || rc=$?
+          xcrun xcresulttool get test-results summary --path "$RUNNER_TEMP/browser.xcresult" \
+            | jq -r '"ALONE passed \(.passedTests) failed \(.failedTests)", (.testFailures[]? | "ALONE FAILURE \(.testIdentifierString): \(.failureText)")' | head -100 || true
+          exit "$rc"
