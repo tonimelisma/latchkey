@@ -99,7 +99,7 @@ func TestSharedReportsReachTheIntakeSealed(t *testing.T) {
 	assert.Equal(t, "Create filter ignored the click", r.Summary)
 	assert.Equal(t, "browser_act click e56: same page", r.Details)
 	assert.NotEmpty(t, r.Client)
-	assert.Equal(t, 2, r.Format)
+	assert.Equal(t, 3, r.Format)
 	assert.Contains(t, text(t, res), r.ID, "the report holds the id the tool gave Claude")
 	assert.True(t, strings.HasPrefix(r.ID, "fb_"), r.ID)
 	require.Len(t, r.Machines, 1, "none named: the online machine")
@@ -122,10 +122,11 @@ func TestSharedReportsReachTheIntakeSealed(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotContains(t, strings.ToLower(string(sealedJSON)), "macbook", "FR-1412: never a machine's name")
 
-	// Delivered: nothing left in the outbox.
-	due, err := e.store.DueReports(context.Background(), time.Now().Add(time.Hour), 10)
-	require.NoError(t, err)
-	assert.Empty(t, due)
+	// Delivered: nothing left in the outbox (removed right after the intake's answer).
+	require.Eventually(t, func() bool {
+		due, err := e.store.DueReports(context.Background(), time.Now().Add(time.Hour), 10)
+		return err == nil && len(due) == 0
+	}, 5*time.Second, 20*time.Millisecond)
 
 	// Missing summary: told, nothing sent.
 	res, err = cs.CallTool(ctx(t), &mcp.CallToolParams{Name: "feedback", Arguments: map[string]any{"summary": " ", "details": "x"}})

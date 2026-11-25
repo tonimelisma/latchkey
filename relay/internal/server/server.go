@@ -13,6 +13,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/tonimelisma/latchkey/relay/internal/reportlog"
+
 	"github.com/tonimelisma/latchkey/relay/agentproto"
 	"github.com/tonimelisma/latchkey/relay/internal/account"
 	"github.com/tonimelisma/latchkey/relay/internal/events"
@@ -133,6 +135,13 @@ func New(ctx context.Context, o Options) (*Relay, error) {
 		ms  *mcpserver.Server
 		acc *account.Service
 	)
+	if o.Logger == nil {
+		o.Logger = slog.Default()
+	}
+	// The relay's lines about each account, kept in memory for its problem reports (spec 014
+	// FR-1442); every line still goes to the relay's own log.
+	relayLog := reportlog.New(nil)
+	o.Logger = slog.New(relayLog.Wrap(o.Logger.Handler()))
 	rec := events.New(o.Store, o.Logger, nil)
 	traceEvents(o.Store, rec, o.Traces)
 	hc := o.Hub
@@ -156,7 +165,7 @@ func New(ctx context.Context, o Options) (*Relay, error) {
 		return removed
 	}
 	h := hub.New(o.Store, hc)
-	ms = mcpserver.New(o.Store, h, mcpserver.Options{Logger: o.Logger, Version: o.Version, Traces: o.Traces, Reports: o.Reports})
+	ms = mcpserver.New(o.Store, h, mcpserver.Options{Logger: o.Logger, Version: o.Version, Traces: o.Traces, Reports: o.Reports, RelayLog: relayLog, PublicURL: o.PublicURL})
 
 	auth := &authBridge{}
 	oc := oauth.Config{

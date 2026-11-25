@@ -27,3 +27,19 @@ run here; the Mac app's tests run on GitHub's macOS runner (`mac-build.yml`).
 - [toni] T9 Toni: the private key into his personal cloud environment (`LATCHKEY_REPORTS_KEY`).
   Done 2026-11-24: the intake deployed by the hosted server's own agent, and its token saved as a
   network secret for the intake's host (the intake answers `[]` from a cloud session)
+
+## Everything for that chat (2026-11-25; FR-1440 to FR-1456)
+
+- [x] T10 Relay: the trace line's session; the chat's calls (session, earlier sessions that used
+  its pages, a client's last 2 hours); the relay's log ring; asking the machines for their parts
+  with a 10 s deadline; blanking codes and secrets by place, labels for names; 5 MB with oldest
+  first left out; the small version for an older intake (tests with a real MCP client) —
+  FR-1440 to FR-1451
+- [x] T11 [P] Intake: 5 MB; bytes per sender per hour; bytes waiting in all — FR-1455, FR-1456
+- [x] T12 [P] `latchkey-reports`: summaries in list; `show` writes files — FR-1452
+- [x] T13 [P] Linux server: its part (log, calls), not while paused — FR-1444
+- [x] T14 Mac: the page record in a hidden world; page descriptions (own browser and Claude's
+  Safari tabs); the part; the feature in hello; the setting's words; tests on GitHub's runner —
+  FR-1444 to FR-1447, FR-1454
+- [x] T15 The feedback tool's description; README, STATUS, decisions, contracts — FR-1453
+- [toni] T16 Toni: a live report from his Mac (any chat that hits a problem, with sharing on)

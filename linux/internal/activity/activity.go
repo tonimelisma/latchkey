@@ -552,3 +552,33 @@ func FromLogStart(relay []RelayEntry, start time.Time, log []Entry) []RelayEntry
 	}
 	return out
 }
+
+// Between returns the entries from from to to that keep accepts, oldest first, reading only the
+// daily files of those days (spec 014 FR-1444: a problem report's part).
+func (f Files) Between(from, to time.Time, keep func(*Entry) bool) ([]Entry, error) {
+	days, _, err := f.days(from.UTC().Format(dayLayout), to.UTC().Format(dayLayout))
+	if err != nil {
+		return nil, err
+	}
+	var out []Entry
+	for _, d := range days {
+		err := scan(f.dayPath(d), func(b []byte, _ int64) {
+			h, ok := decodeHead(b)
+			if !ok || h.At.Before(from) || h.At.After(to) {
+				return
+			}
+			e, ok := decode(b)
+			if ok && keep(&e) {
+				out = append(out, e)
+			}
+		})
+		if err != nil {
+			return nil, err
+		}
+	}
+	sort.SliceStable(out, func(i, j int) bool { return out[i].At.Before(out[j].At) })
+	return out, nil
+}
+
+// Shown reports whether Claude may see the entry through latchkey_log (FR-1053).
+func (e Entry) Shown() bool { return e.shown("") }

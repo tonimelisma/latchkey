@@ -87,7 +87,9 @@ applies, except:
   is what it checks (`CodeFinder.readLimit`).
 - Problem reports (spec 014): `go run ./cmd/latchkey-reports list` in `relay/` lists the open
   reports at the intake (`latchkey-feedback.melisma.net`) and opens them;
-  `latchkey-reports delete <id>` deletes a dispositioned one. It needs the developer's private
+  `latchkey-reports show <id>` writes one report as files (each call, its pictures, each page's
+  source and record, the logs) into a new folder under `$TMPDIR`, never the repository, for
+  reading with the file tools; `latchkey-reports delete <id>` deletes a dispositioned one. It needs the developer's private
   key in `LATCHKEY_REPORTS_KEY` (a variable of Toni's personal cloud environment, set by Toni)
   and the intake's token, which the session's network proxy adds for that host once Toni saved it
   as a network secret (`request_credential`). Report contents stay in the session's output.

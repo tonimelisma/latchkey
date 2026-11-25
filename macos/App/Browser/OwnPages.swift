@@ -282,6 +282,41 @@ final class OwnPages {
     }
 
     /// Each open page: its name, title, and address, oldest first.
+    /// What Claude typed into password and code fields of the chat's pages in Latchkey's own
+    /// browser, for the relay to blank (spec 014 FR-1448); at once, apart from the pages.
+    func typedSecrets(_ names: [String]) async -> [String] {
+        var out: [String] = []
+        for raw in names {
+            switch pages[raw.trimmingCharacters(in: .whitespaces).lowercased()]?.kind {
+            case .own(let b)?: out += b.record.secrets
+            case .safari(let s)?: out += await s.typedForReport()
+            case nil: break
+            }
+        }
+        return out
+    }
+
+    /// The chat's pages as they are, for a problem report (spec 014 FR-1447): each one named that is
+    /// still open, at most 10; a name that isn't open any more is noted.
+    func describe(_ names: [String], displayAsleep: Bool) async -> (pages: [JSONValue], notes: [String]) {
+        var out: [JSONValue] = []
+        var notes: [String] = []
+        var seen = Set<String>()
+        for raw in names {
+            let n = raw.trimmingCharacters(in: .whitespaces).lowercased()
+            guard !n.isEmpty, seen.insert(n).inserted, out.count < 10 else { continue }
+            guard let e = pages[n] else {
+                notes.append("page \(n) isn't open any more")
+                continue
+            }
+            switch e.kind {
+            case .own(let b): out.append(await b.describe(name: n, macLocked: isLocked(), displayAsleep: displayAsleep))
+            case .safari(let s): out.append(await s.describeForReport(name: n))
+            }
+        }
+        return (out, notes)
+    }
+
     func list() -> [(name: String, title: String, address: String)] {
         order.compactMap { name in
             guard let e = pages[name] else { return nil }

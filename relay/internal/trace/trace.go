@@ -70,7 +70,10 @@ type Line struct {
 	CallID     string          `json:"-"`
 	Client     string          `json:"-"`
 	Outcome    string          `json:"outcome,omitempty"`
-	Account    string          `json:"account,omitempty"`
+	// Session is the connector session the call came in on (spec 014 FR-1441), "" when the
+	// client has none; lines from before 2026-11-25 have none.
+	Session string `json:"-"`
+	Account string `json:"account,omitempty"`
 }
 
 // wire is Line as written: machine, call_id, and client are null when empty.
@@ -88,6 +91,7 @@ type wire struct {
 	CallID     *string         `json:"call_id"`
 	Client     *string         `json:"client"`
 	Outcome    string          `json:"outcome,omitempty"`
+	Session    string          `json:"session,omitempty"`
 	Account    string          `json:"account,omitempty"`
 }
 
@@ -109,7 +113,7 @@ func (l Line) wire() wire {
 	return wire{
 		V: l.V, Source: l.Source, Machine: orNull(l.Machine), Time: l.Time, Kind: l.Kind, Tool: l.Tool,
 		Arguments: orEmpty(l.Arguments), Result: orEmpty(l.Result), IsError: l.IsError, DurationMS: l.DurationMS,
-		CallID: orNull(l.CallID), Client: orNull(l.Client), Outcome: l.Outcome, Account: l.Account,
+		CallID: orNull(l.CallID), Client: orNull(l.Client), Outcome: l.Outcome, Session: l.Session, Account: l.Account,
 	}
 }
 
@@ -117,7 +121,7 @@ func (w wire) line() Line {
 	return Line{
 		V: w.V, Source: w.Source, Machine: deref(w.Machine), Time: w.Time, Kind: w.Kind, Tool: w.Tool,
 		Arguments: w.Arguments, Result: w.Result, IsError: w.IsError, DurationMS: w.DurationMS,
-		CallID: deref(w.CallID), Client: deref(w.Client), Outcome: w.Outcome, Account: w.Account,
+		CallID: deref(w.CallID), Client: deref(w.Client), Outcome: w.Outcome, Session: w.Session, Account: w.Account,
 	}
 }
 

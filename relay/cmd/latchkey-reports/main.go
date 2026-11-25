@@ -1,7 +1,8 @@
 // latchkey-reports is the developer's command for problem reports (spec 014 FR-1423, FR-1430):
 //
 //	latchkey-reports keygen <private-key-file>  makes a key pair; prints the public key
-//	latchkey-reports list                       the waiting problem reports, opened
+//	latchkey-reports list                       the waiting problem reports, opened (summaries)
+//	latchkey-reports show <id>                  one report written as files in a new temporary folder
 //	latchkey-reports evals                        the test Mac results sent (spec 015 FR-1531)
 //	latchkey-reports delete <id>...             deletes dispositioned reports (nothing is kept)
 //
@@ -33,7 +34,7 @@ func main() {
 	}
 }
 
-const usage = "usage: latchkey-reports keygen <private-key-file> | list | evals | delete <id> [<id>]"
+const usage = "usage: latchkey-reports keygen <private-key-file> | list | show <id> | evals | delete <id> [<id>]"
 
 func run(args []string) error {
 	if len(args) == 0 {
@@ -55,6 +56,8 @@ func run(args []string) error {
 		return nil
 	case "list":
 		return list()
+	case "show":
+		return show(args[1:])
 	case "evals":
 		return evalsCmd(args[1:], time.Now(), os.Stdout)
 	case "delete":
@@ -79,7 +82,7 @@ func intakeURL() string {
 	return reports.DefaultIntakeURL
 }
 
-var client = &http.Client{Timeout: 30 * time.Second}
+var client = &http.Client{Timeout: 2 * time.Minute} // reports reach 5 MB
 
 func call(method, path string, out *[]byte) error {
 	req, err := http.NewRequestWithContext(context.Background(), method, intakeURL()+path, nil) //nolint:gosec // the developer's own intake
@@ -133,10 +136,10 @@ func keyText() (string, error) {
 
 // opened is one waiting report as the developer reads it.
 type opened struct {
-	ID      string          `json:"id"`
-	Arrived time.Time       `json:"arrived"`
-	Report  *reports.Report `json:"report,omitempty"`
-	Error   string          `json:"error,omitempty"`
+	ID      string    `json:"id"`
+	Arrived time.Time `json:"arrived"`
+	Report  any       `json:"report,omitempty"` // summarized: show writes the rest
+	Error   string    `json:"error,omitempty"`
 }
 
 // entry is one waiting entry, opened: a problem report or a part of a weekly result.
@@ -196,11 +199,12 @@ func list() error {
 			if err := json.Unmarshal(e.Plain, &r); err != nil {
 				o.Error = err.Error()
 			} else {
-				o.Report = &r
+				o.Report = summarized(r)
 			}
 		}
 		out = append(out, o)
 	}
+	fmt.Fprintln(os.Stderr, untrusted)
 	enc := json.NewEncoder(os.Stdout)
 	enc.SetIndent("", "  ")
 	return enc.Encode(out)

@@ -10,6 +10,7 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"reflect"
 	"slices"
 	"strings"
@@ -17,6 +18,10 @@ import (
 	"time"
 	"unicode"
 	"unicode/utf8"
+
+	"github.com/tonimelisma/latchkey/relay/internal/limit"
+
+	"github.com/tonimelisma/latchkey/relay/internal/reportlog"
 
 	"github.com/modelcontextprotocol/go-sdk/auth"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -40,6 +45,12 @@ type Options struct {
 	// Reports is where problem reports the Owner chose to share go (spec 014); with no
 	// developer key or intake, or with the operator's block, no feedback tool is offered.
 	Reports ReportsOptions
+	// RelayLog is the relay's recent lines per account, for problem reports (FR-1442); nil: none.
+	RelayLog *reportlog.Ring
+	// PartDeadline is how long a machine's part of a report is waited for; 0: DefaultPartDeadline.
+	PartDeadline time.Duration
+	// PublicURL is the relay's own address, replaced by a label in reports (FR-1449).
+	PublicURL *url.URL
 }
 
 // DefaultSessionTimeout is how long an unused session lives (FR-090).
@@ -214,6 +225,9 @@ type Server struct {
 
 	// reportsKick wakes the report sender after a report is filed (spec 014).
 	reportsKick chan struct{}
+	// reportRate bounds how many reports one account files an hour (security review 2026-11-25:
+	// each one reads a day of the trace and asks the machines).
+	reportRate *limit.Keyed
 }
 
 // userServer is one Owner's MCP server; its tool list is the union of that Owner's machines'
@@ -241,7 +255,7 @@ func New(st *store.Store, h *hub.Hub, opts Options) *Server {
 	}
 	s := &Server{
 		store: st, hub: h, opts: opts, users: map[string]*userServer{}, sdkLog: sdkLogger(opts.Logger),
-		reportsKick: make(chan struct{}, 1),
+		reportsKick: make(chan struct{}, 1), reportRate: limit.NewKeyed(MaxReportsPerHour, time.Hour/MaxReportsPerHour),
 	}
 	s.loadTools = s.ownerTools
 	sdkLog := s.sdkLog
@@ -584,6 +598,14 @@ func (s *Server) trace(userID string, start time.Time, callID, client, tool, mac
 	s.opts.Traces.Append(userID, start, trace.Line{
 		Machine: machine, Kind: trace.KindAction, Tool: tool, Arguments: trace.JSONOrString(args),
 		Result: content, IsError: result.IsError, DurationMS: s.opts.Now().Sub(start).Milliseconds(),
-		CallID: callID, Client: client, Outcome: outcome,
+		CallID: callID, Client: client, Outcome: outcome, Session: sessionOf(req),
 	})
+}
+
+// sessionOf is the connector session a call came in on (spec 014 FR-1441); "" without one.
+func sessionOf(req *mcp.CallToolRequest) string {
+	if req == nil || req.Session == nil {
+		return ""
+	}
+	return req.Session.ID()
 }

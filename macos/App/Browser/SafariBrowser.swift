@@ -163,6 +163,13 @@ actor SafariBrowser {
     /// The Owner's tab Claude works in (FR-425): its window, position, count, address, and a mark
     /// of Latchkey's own. Kept in memory only.
     private var picked: (window: String, tab: PickedTab)?
+    /// What Claude typed in this tab, in memory only, for the relay to blank in a problem report
+    /// (spec 014 FR-1448); gone with this page; 4 characters or more (shorter isn't a password or
+    /// a code, and blanking it everywhere would break the report).
+    private var typedSecrets: [String] = []
+
+    /// What Claude typed in this tab, for a problem report.
+    func typedForReport() -> [String] { typedSecrets }
     /// The address of a picked tab whose page Safari let no script mark (an empty tab, Safari's
     /// own pages), as it was when picked: such a tab is known by it instead (plan D8). Never
     /// updated, so a navigation can't move it.
@@ -341,6 +348,13 @@ actor SafariBrowser {
     {
         beginAction(mayNavigate: true)
         let before = try? await stamp()
+        // Kept to be blanked in a problem report (spec 014 FR-1448), whatever field it goes to: a
+        // check of the field would run through this tab's action script and its bookkeeping, so
+        // every typed text counts (fails closed; security review 2026-11-25).
+        if text.count >= 4, !typedSecrets.contains(text) {
+            typedSecrets.append(text)
+            if typedSecrets.count > 50 { typedSecrets.removeFirst(typedSecrets.count - 50) }
+        }
         try check(
             try await javaScript(PageScripts.type(ref, text: text, submit: submit), acting: true, answer: answer),
             ref: ref, option: text)
@@ -358,6 +372,42 @@ actor SafariBrowser {
             _ = try await settle(after: before, expectNavigation: true)
             return try await readPage(offset: 0)
         }
+    }
+
+    /// Claude's tab as it is, for a problem report (spec 014 FR-1447): read with one script that
+    /// changes nothing on the page and nothing the Owner sees (Constitution IV), no screenshot.
+    func describeForReport(name: String) async -> JSONValue {
+        var o: [String: JSONValue] = ["name": .string(name), "where": .string("safari")]
+        do {
+            let snap = try await javaScript(PageRecord.safariSnapshot)
+            guard case .object(var page)? = try? JSONDecoder().decode(JSONValue.self, from: Data(snap.utf8)) else {
+                o["note"] = .string("Claude's Safari tab answered something that isn't a page")
+                return .object(o)
+            }
+            var drawing: [String: JSONValue] = [:]
+            for k in ["visibility", "hidden", "focus", "window", "screen"] {
+                drawing[k] = page.removeValue(forKey: k)
+            }
+            o["drawing"] = .object(drawing)
+            o["title"] = page["title"]
+            if case .string(let a)? = page["address"] { o["address"] = .string(PageRecord.shownAddress(a)) }
+            if case .string(let src)? = page["source"] {
+                o["source"] = .string(String(src.prefix(PageRecord.maxSource)))
+                o["source_cut"] = .bool(src.count > PageRecord.maxSource)
+            }
+            if case .array(let rs)? = page["requests"] {
+                o["record"] = .array(
+                    rs.map { r in
+                        guard case .object(var e) = r else { return .null }
+                        e["kind"] = .string("request")
+                        if case .string(let a)? = e["address"] { e["address"] = .string(PageRecord.shownAddress(a)) }
+                        return .object(e)
+                    })
+            }
+        } catch {
+            o["note"] = .string("Claude's Safari tab couldn't be read: \(error)")
+        }
+        return .object(o)
     }
 
     func run(_ code: String, answer: DialogAnswer = DialogAnswer()) async throws -> String {
@@ -545,6 +595,8 @@ actor SafariBrowser {
 
     /// Forgets the picked tab (nothing is done to it).
     func forget() {
+        // typedSecrets stay: the chat's calls that typed them can still go into a report while
+        // this page lives (security review 2026-11-25).
         picked = nil
         claudesTab = false
         pickedUnmarked = nil

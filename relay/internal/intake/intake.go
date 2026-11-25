@@ -15,6 +15,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -32,6 +33,10 @@ type Options struct {
 	PerHour int
 	// MaxReports bounds how many reports wait at once, so the disk can't be filled.
 	MaxReports int
+	// BytesPerHour bounds what one sender address may deliver in an hour (FR-1456; default
+	// 50 MB), and MaxBytes what all waiting reports may hold together (default 5 GB).
+	BytesPerHour int64
+	MaxBytes     int64
 	// WorkBits is the proof of work's difficulty (reports.WorkBits by default).
 	WorkBits int
 	// TrustedProxies whose X-Forwarded-For names the sender (the reverse proxy in front).
@@ -40,12 +45,52 @@ type Options struct {
 	Now            func() time.Time
 }
 
+// MaxReading is how many report bodies the intake reads at once, and BodyLimit how long one may
+// take.
+const (
+	MaxReading = 8
+	BodyLimit  = 20 * time.Second
+)
+
 // Intake is the service.
 type Intake struct {
 	db    *sql.DB
 	opts  Options
 	token [32]byte
 	rate  *limit.Keyed
+	sent  byteCounts
+	// reading bounds how many bodies are read at once (MaxReading).
+	reading chan struct{}
+}
+
+// byteCounts counts the bytes each sender delivered in the current hour (FR-1456).
+type byteCounts struct {
+	mu   sync.Mutex
+	hour string
+	by   map[string]int64
+}
+
+// refund takes back bytes counted for a report that wasn't kept.
+func (b *byteCounts) refund(sender, hour string, n int64) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if b.hour == hour && b.by != nil {
+		b.by[sender] = max(0, b.by[sender]-n)
+	}
+}
+
+// add counts n bytes for the sender, unless that would take it over max; it says whether it did.
+func (b *byteCounts) add(sender, hour string, n, max int64) bool {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if b.hour != hour || b.by == nil {
+		b.hour, b.by = hour, map[string]int64{}
+	}
+	if b.by[sender]+n > max {
+		return false
+	}
+	b.by[sender] += n
+	return true
 }
 
 // Open opens (or makes) the intake's database at path.
@@ -58,6 +103,12 @@ func Open(path string, o Options) (*Intake, error) {
 	}
 	if o.MaxReports <= 0 {
 		o.MaxReports = 10_000
+	}
+	if o.BytesPerHour <= 0 {
+		o.BytesPerHour = 50 << 20
+	}
+	if o.MaxBytes <= 0 {
+		o.MaxBytes = 5 << 30
 	}
 	if o.WorkBits <= 0 {
 		o.WorkBits = reports.WorkBits
@@ -83,7 +134,8 @@ func Open(path string, o Options) (*Intake, error) {
 	}
 	return &Intake{
 		db: db, opts: o, token: sha256.Sum256([]byte(o.DeveloperToken)),
-		rate: limit.NewKeyed(o.PerHour, time.Hour/time.Duration(o.PerHour)),
+		rate:    limit.NewKeyed(o.PerHour, time.Hour/time.Duration(o.PerHour)),
+		reading: make(chan struct{}, MaxReading),
 	}, nil
 }
 
@@ -104,33 +156,59 @@ func (in *Intake) Handler() http.Handler {
 // take accepts a sealed report from anyone: report-shaped, within the size limit, with a proof
 // of work for this hour or the last, within the sender's limit (FR-1420, FR-1421).
 func (in *Intake) take(w http.ResponseWriter, r *http.Request) {
+	// What can be checked without the body comes first, so a sender over its limit or without a
+	// proof for this hour never gets a 5 MB body into memory (security review 2026-11-25).
+	if r.ContentLength > reports.MaxSealed {
+		http.Error(w, "too large", http.StatusRequestEntityTooLarge)
+		return
+	}
+	hour := r.Header.Get("Latchkey-Work-Hour")
+	now := in.opts.Now()
+	nonce, err := strconv.ParseUint(r.Header.Get("Latchkey-Work-Nonce"), 10, 64)
+	if err != nil || (hour != reports.Hour(now) && hour != reports.Hour(now.Add(-time.Hour))) {
+		http.Error(w, "no valid proof of work", http.StatusForbidden)
+		return
+	}
+	sender := in.opts.TrustedProxies.ClientIP(r)
+	if !in.rate.Allow(sender) {
+		http.Error(w, "too many reports from this address", http.StatusTooManyRequests)
+		return
+	}
+	select { // a few bodies at a time
+	case in.reading <- struct{}{}:
+		defer func() { <-in.reading }()
+	default:
+		http.Error(w, "busy; try later", http.StatusServiceUnavailable)
+		return
+	}
+	// A slot is held at most BodyLimit: 5 MB at 250 KB a second, so a slow sender can't keep the
+	// slots (security review 2026-11-25).
+	_ = http.NewResponseController(w).SetReadDeadline(time.Now().Add(BodyLimit)) // the real clock, not the proof's
 	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, reports.MaxSealed+1))
 	if err != nil || len(body) > reports.MaxSealed {
-		http.Error(w, "too large", http.StatusRequestEntityTooLarge)
+		http.Error(w, "too large or too slow", http.StatusRequestEntityTooLarge)
 		return
 	}
 	if !reports.Shaped(body) {
 		http.Error(w, "not a sealed report", http.StatusBadRequest)
 		return
 	}
-	hour := r.Header.Get("Latchkey-Work-Hour")
-	now := in.opts.Now()
-	nonce, err := strconv.ParseUint(r.Header.Get("Latchkey-Work-Nonce"), 10, 64)
-	if err != nil || (hour != reports.Hour(now) && hour != reports.Hour(now.Add(-time.Hour))) ||
-		!reports.Proven(body, hour, nonce, in.opts.WorkBits) {
+	if !reports.Proven(body, hour, nonce, in.opts.WorkBits) {
 		http.Error(w, "no valid proof of work", http.StatusForbidden)
 		return
 	}
-	if !in.rate.Allow(in.opts.TrustedProxies.ClientIP(r)) {
-		http.Error(w, "too many reports from this address", http.StatusTooManyRequests)
+	if !in.sent.add(sender, reports.Hour(now), int64(len(body)), in.opts.BytesPerHour) {
+		http.Error(w, "too many bytes from this address this hour", http.StatusTooManyRequests)
 		return
 	}
 	var waiting int
-	if err := in.db.QueryRowContext(r.Context(), `SELECT count(*) FROM reports`).Scan(&waiting); err != nil {
+	var held int64
+	if err := in.db.QueryRowContext(r.Context(), `SELECT count(*), coalesce(sum(length(sealed)), 0) FROM reports`).Scan(&waiting, &held); err != nil {
 		in.fail(w, err)
 		return
 	}
-	if waiting >= in.opts.MaxReports {
+	if waiting >= in.opts.MaxReports || held+int64(len(body)) > in.opts.MaxBytes {
+		in.sent.refund(sender, reports.Hour(now), int64(len(body)))
 		http.Error(w, "the intake is full; try later", http.StatusServiceUnavailable)
 		return
 	}

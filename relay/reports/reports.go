@@ -33,8 +33,12 @@ const Info = "latchkey-report-v1"
 // Magic starts every sealed report, so the intake can refuse anything else at once.
 const Magic = "LKR1"
 
-// MaxSealed is the largest sealed report the intake takes (FR-1420).
-const MaxSealed = 64 << 10
+// MaxSealed is the largest sealed report the intake takes (FR-1420, FR-1455).
+const MaxSealed = 5 << 20
+
+// OldMaxSealed is what intakes from before 2026-11-25 take; a report's small version fits it
+// (FR-1451).
+const OldMaxSealed = 64 << 10
 
 // WorkBits is how many leading zero bits the proof of work needs: about a second of one CPU
 // (research.md).
@@ -59,12 +63,50 @@ type Report struct {
 	// every machine online at the time (Toni, 2026-11-24). Never a machine's name (FR-1412).
 	Machines []Machine `json:"machines,omitempty"`
 	Reporter string    `json:"reporter,omitempty"`
+	// Format 3 (2026-11-25, FR-1440 to FR-1451): everything for the chat that filed it.
+	Chat     *Chat    `json:"chat,omitempty"`
+	Calls    []Call   `json:"calls,omitempty"`
+	RelayLog []string `json:"relay_log,omitempty"`
+	Parts    []Part   `json:"parts,omitempty"`
+	LeftOut  []string `json:"left_out,omitempty"`
+}
+
+// Chat says which calls a report holds (FR-1441).
+type Chat struct {
+	Sessions int       `json:"sessions"`
+	From     time.Time `json:"from"`
+	To       time.Time `json:"to"`
+	How      string    `json:"how,omitempty"` // "session" or "client and time"
+}
+
+// Call is one of the chat's calls as the relay traced it (FR-1440).
+type Call struct {
+	Time       string          `json:"time"`
+	Tool       string          `json:"tool"`
+	Machine    string          `json:"machine,omitempty"` // the machine's label, never its name
+	CallID     string          `json:"call_id,omitempty"`
+	Arguments  json.RawMessage `json:"arguments,omitempty"`
+	Result     json.RawMessage `json:"result,omitempty"`
+	IsError    bool            `json:"is_error,omitempty"`
+	DurationMS int64           `json:"duration_ms"`
+	Outcome    string          `json:"outcome,omitempty"`
+	LeftOut    string          `json:"left_out,omitempty"` // "size": the result was left out (FR-1450)
+}
+
+// Part is one machine's part of a report (FR-1443, FR-1444).
+type Part struct {
+	Machine  string          `json:"machine"` // label
+	Answered bool            `json:"answered"`
+	Note     string          `json:"note,omitempty"`
+	Part     json.RawMessage `json:"part,omitempty"`
 }
 
 // Machine is what a report says about one machine (FR-1412).
 type Machine struct {
 	// Named: Claude named it as involved; false for one listed because Claude named none.
-	Named   bool   `json:"named,omitempty"`
+	Named bool `json:"named,omitempty"`
+	// Label is how the rest of the report names it ("machine 1"; format 3).
+	Label   string `json:"label,omitempty"`
 	Kind    string `json:"kind,omitempty"` // "mac" or "linux"
 	Version string `json:"version,omitempty"`
 	System  string `json:"system,omitempty"`

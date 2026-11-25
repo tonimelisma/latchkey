@@ -129,7 +129,9 @@ struct Hello: Codable, Sendable {
     /// `audit`: answer `audit_request` with this Mac's audit (FR-634).
     /// Reports no longer come to the Mac (spec 014, replacing spec 001 FR-692, FR-693): the
     /// feedback feature isn't announced, so no relay sends them.
-    static let supportedFeatures = ["clients", "audit"]
+    /// `report_part`: answer the relay's `latchkey_report_part` call with this Mac's part of a
+    /// problem report (spec 014 FR-1443).
+    static let supportedFeatures = ["clients", "audit", ReportPart.feature]
 
     /// The hello this app sends: always with the features it supports, its kind, and its name.
     static func make(

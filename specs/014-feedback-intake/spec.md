@@ -1,6 +1,7 @@
 # Spec 014: Problem reports to Latchkey's developer — WHAT and WHY
 
-Status: Built (Toni, 2026-11-23: "finish all the work without stopping"); tasks `tasks.md`.
+Status: Built (Toni, 2026-11-23: "finish all the work without stopping"); amended 2026-11-25 (FR-1440 to
+FR-1456, everything for the chat); tasks `tasks.md`.
 Replaces spec 001 FR-691 to FR-693 (the relay keeping reports, delivering them to the Mac, the
 Mac's Feedback folder), now withdrawn.
 Research and the options weighed: `research.md`. How: `plan.md`.
@@ -109,7 +110,7 @@ Toni because he is a user too. Other users' reports never reach the developer.
   never repeat its contents.
 
 ### The intake (the developer's)
-- **FR-1420** The intake shall accept encrypted reports from anyone, at most 64 KB each, each
+- **FR-1420** *Amended 2026-11-25 (FR-1455):* the intake shall accept encrypted reports from anyone, at most 5 MB each (was 64 KB), each
   with a small proof of work, and refuse anything else.
 - **FR-1421** The intake shall limit how many reports one sending address may deliver per hour.
 - **FR-1422** The intake shall never hold the developer's private key; it stores each encrypted
@@ -140,11 +141,104 @@ Toni because he is a user too. Other users' reports never reach the developer.
   logs; a regression case describes the problem in the agent's own words (CLAUDE.md, "Every
   issue becomes a regression case").
 
+### Everything for that chat (Toni, 2026-11-25)
+Why: reports held only Claude's summary and the machines' versions (FR-1412), at most 64 KB. On
+2026-11-25 two reports said Target's checkout "did nothing" in Latchkey's own browser while the
+Mac was locked, and nobody could tell why: not the page, its requests, its errors, nor whether it
+was drawing. Toni: "improve the feedback so in the future it automatically logs everything".
+Choices (AskUserQuestion, 2026-11-25): "Everything for that chat"; "Same for everyone, said
+plainly"; "Always record, memory only"; "5 MB, screenshots included"; "Hidden world".
+
+- **FR-1440** A shared report shall hold, besides FR-1412, every tool call of the chat that filed
+  it, each with its full arguments and the whole answer as Claude got it (images included), its
+  time, duration, whether it failed, its call id, and which of the report's machines answered it
+  (report format 3).
+- **FR-1441** The chat shall be the connector session the `feedback` call came in on, together
+  with each earlier session of the account in the last 24 hours that used one of the same
+  Latchkey pages (a page's name is made for one chat; a chat idle for 30 minutes continues on a
+  new session). A client without sessions shall get its calls from the same Claude app in the
+  last 2 hours.
+- **FR-1442** A shared report shall hold the relay's own log lines about the account from the
+  first of those calls until the report, kept in memory only (the last 500 lines per account, for
+  at most 24 hours), never written to disk for this.
+- **FR-1443** For each machine the report involves (FR-1412) that is online and understands it,
+  the relay shall ask the machine for its part, and wait for it at most 10 seconds (Constitution
+  II). A machine that doesn't answer in time, can't be asked, or is offline shall be listed as
+  such, and the report shall be filed without its part.
+- **FR-1444** A machine's part shall hold: Latchkey's log on that machine for the time span
+  (only the lines Latchkey's log tool would show, FR-662), its own trace of the chat's calls (the
+  answer as it sent it, also when the relay had stopped waiting), and, on a Mac, a record of each
+  page of the chat's (FR-1446, FR-1447).
+- **FR-1445** The relay shall never offer the request for a machine's part as a tool to Claude,
+  and refuse a machine that offers a tool of its name; a machine shall answer it only when the
+  relay asks, and record that it did in its log, not as one of Claude's calls.
+- **FR-1446** Latchkey's own browser shall keep, for each open page, a running record in memory
+  only, never written to disk, dropped when the page closes, sent only inside a report: the last
+  300 events of page loads (address, method where known, status), requests (address, kind,
+  status where WebKit gives it, timing, size), uncaught errors, blocked content (security
+  policy), and changes of the page's visibility. (Failed promises are not told to a world other
+  than the page's own, so the record can't hold them; seen on GitHub's macOS runner, 2026-11-25.) It shall record from a script
+  world the page can't see or notice, never by changing the page's own functions (Toni:
+  "Hidden world"), so recording never changes how a site behaves.
+- **FR-1447** At the report, each page of the chat's shall be described as it is: its address
+  and title, its page source (the DOM, with every field's value and every hidden field's value
+  blanked), its record (FR-1446), the names of its site's cookies (never a value), whether it is
+  drawing (visibility state, focus, animation frames in half a second), its window and screen,
+  and whether the Mac is locked and its display asleep; and a screenshot of a page in Latchkey's
+  own browser. A page in the owner's Safari tabs shall be described only by reading it (address,
+  title, page source, visibility, its requests from the page's own timing list), never by
+  showing, moving, or changing anything the owner sees (Constitution IV), and without a
+  screenshot.
+- **FR-1448** Passwords and codes shall never be in a report: a code or password Claude passed
+  to a tool in that chat shall be blanked wherever it appears in the report; the trace's own
+  blanking (spec 013 FR-1372) holds; cookie values and field values are never collected. What
+  Claude types into a password or code field of a page in Latchkey's own browser is known to the
+  Mac and blanked (when the check gives no answer, the text counts as a secret); in Claude's
+  Safari tabs every text Claude types (4 characters or more) is blanked, since a check of the
+  field there would share the action's script and its bookkeeping (security review 2026-11-25);
+  saved passwords and codes typed by logins_fill never reach the relay.
+- **FR-1449** Each name of the account's machines, the account's email address, and the relay's
+  own address shall be replaced in the report by a label ("machine 1"; "the account's email";
+  "the relay"), so FR-1412's rule holds for the chat's calls too.
+- **FR-1450** A report shall be at most 5 MB sealed. When it would be larger, the oldest calls'
+  answers shall be left out first (each still listed with its tool, time, and that it was left
+  out), then the oldest log lines, then page sources cut; the newest screenshot of a page the
+  chat used stays as long as anything can.
+- **FR-1451** When an intake refuses a report as too large (an intake from before FR-1420 was
+  amended), the relay shall send instead the same report without FR-1440 to FR-1447's parts,
+  saying they were left out.
+- **FR-1452** The developer's command shall show a report's summary in its list, and with
+  `show <id>` write the whole report to a new folder under the system's temporary folder, never
+  inside a repository:
+  the report, each call, each image as a picture file, each page's source and record, and the
+  logs, as files the developer's agent can read.
+- **FR-1453** The `feedback` tool's description shall say that the report also carries the
+  chat's tool calls and answers, Latchkey's logs, and the pages the chat used, so Claude needn't
+  copy them into details; details remain what Claude saw, expected, and tried.
+- **FR-1454** Every account shall get the same reports (Toni: "Same for everyone, said
+  plainly"), and the explanation of FR-1402 shall say in plain words that reports include the
+  chat's tool calls with their answers, Latchkey's logs, and the pages the chat used, with
+  passwords, codes, and cookie values left out.
+
+Amended 2026-11-25: FR-1411 (the report's calls hold what the tools answered, which may include
+message or email text; FR-1448 and FR-1449 still hold), FR-1412 (FR-1440 to FR-1449 add to it),
+FR-1420 (5 MB, FR-1455), FR-1421 (FR-1456).
+
+- **FR-1455** The intake shall accept reports of at most 5 MB sealed.
+- **FR-1456** The intake shall also limit how many bytes one sending address may deliver per hour
+  (50 MB) and how many bytes all waiting reports may hold together (5 GB), answering "busy" over
+  either.
+
 ## Success criteria
 
 - **SC-1401** With sharing Off, no `feedback` tool and no line about it appears (test suite).
 - **SC-1402** A report filed with sharing on reaches the intake encrypted; the relay's database
   and the intake's hold no readable report at any time (test suite).
 - **SC-1403** The `feedback` tool's description names what must stay out of a report (test).
+- **SC-1405** A report filed through a real MCP client after browser and shell calls holds each
+  call's arguments and answer, the relay's log, and each machine's part; a code passed to a
+  tool is nowhere in it; a machine that doesn't answer in 10 s is listed as such (test suite).
+- **SC-1406** A page in Latchkey's own browser leaves no record on disk, and its record is gone
+  once it closes (test suite).
 - **SC-1404** The developer's agent lists, opens, and dispositions reports with no user's machine
   or relay involved.

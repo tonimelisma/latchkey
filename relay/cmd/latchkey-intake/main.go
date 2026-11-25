@@ -104,7 +104,7 @@ func run() error {
 	defer stop()
 	srv := &http.Server{
 		Addr: ":" + port(), Handler: in.Handler(),
-		ReadHeaderTimeout: 10 * time.Second, ReadTimeout: 30 * time.Second, WriteTimeout: 30 * time.Second,
+		ReadHeaderTimeout: 10 * time.Second, ReadTimeout: time.Minute, WriteTimeout: time.Minute, // 5 MB reports (FR-1455)
 		IdleTimeout: time.Minute, MaxHeaderBytes: 16 << 10,
 	}
 	errc := make(chan error, 1)

@@ -120,6 +120,7 @@ relay's line and the machine's line of one call carry the same id).
 | `call_id` | the relay's call id, or `null` |
 | `client` | the Claude app's name, or `null` |
 | `outcome` | relay only: `ok`, `error`, `timeout`, or `offline` |
+| `session` | relay only, left out when empty: the connector session the call came in on (2026-11-25, spec 014 FR-1441; lines before then have none) |
 | `account` | relay only: the account's email address at the time of export |
 
 The Mac's export has had `time` to `client` since 2026-10-27 (FR-615); `v`, `source`, and

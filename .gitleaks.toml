@@ -26,3 +26,7 @@ regexes = ['''taGyPBum8bkweq78chQL0mQhqfMc9jrnXd564\+e\+adE=''']
 [[allowlists]]
 description = "Spec 014: Latchkey's developer's PUBLIC key for problem reports (public by design; its private half is never in the repository)"
 paths = ['''^relay/reports/developer\.pub$''']
+
+[[allowlists]]
+description = "Spec 014 tests: a made-up cloud secret in a report's answer, to check it is blanked"
+regexes = ['''wJalrXUtnFEMIK7MDENGbPxRfiCY''']

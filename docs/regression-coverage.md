@@ -12,7 +12,7 @@ Status:
   locked screen, macOS's privacy system, another app's window, or Toni's devices, and is said why.
 - **manual**: nothing Latchkey decides can be tested without those.
 
-Surveyed 2026-11-24 (118 cases): 78 covered, 26 new, 12 partial, 2 manual. A new case gets its row here in the same commit as its
+Surveyed 2026-11-24 (118 cases): 78 covered, 26 new, 12 partial, 2 manual; since then one more partial (2026-11-25). A new case gets its row here in the same commit as its
 fix and test.
 
 Found while writing the tests and fixed in the same pull request: a deleted note read through
@@ -30,6 +30,7 @@ the folders and wasn't an error.
 
 | Case | Status | Test | Why |
 |---|---|---|---|
+| `report_holds_the_chats_pages` | partial | relay/internal/mcpserver/fullreport_test.go › TestReportCarriesEverythingForThatChat; macos/Tests/ReportPartTests.swift › thePageIsRecordedFromAWorldItCantSee, thePageIsDescribedWithItsFieldsBlanked | The relay, the Mac's record and description are tested; a real report from the installed app needs sharing on and the developer's key |
 | `browser_claudes_tab_sent_on` | covered | macos/Tests/BrowserTabTests.swift › OwnerTabNavigationTests.claudesOwnTabIsUsedAfterTheSiteSendsItOn; macos/Tests/BrowserOwnerTabTests.swift › BrowserOwnerTabTests.aClickThatSendsTheTabOffIsSaidToHaveRun; macos/Tests/SignInRoutingTests.swift › signingInAgainOnAnOwnSiteMovesThatPageIntoSafari | Tab sent on by the site is found again, a click that sends the tab off is "Done"; the third part (remembered Safari fallback) was withdrawn on 2026-11-22 (FR-1374, nothing remembered), which the routing test pins |
 | `browser_new_tab_sent_on` | covered | macos/Tests/BrowserTabTests.swift › OwnerTabNavigationTests.aNewTabTheSiteSendsOnAtOnceIsStillClaudes | eBay's redirect before the first look, with the stand-in Safari; a changed owner's tab still loses it |
 | `browser_own_window_size` | covered | macos/Tests/LockedBrowserTests.swift › thePageIsInABrowserSizedWindowThatNeverShows | Same expression as the case: outerWidth==innerWidth, outerHeight==innerHeight+90, screenY>=0 |
