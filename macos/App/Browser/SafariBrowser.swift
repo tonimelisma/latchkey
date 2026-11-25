@@ -164,7 +164,8 @@ actor SafariBrowser {
     /// of Latchkey's own. Kept in memory only.
     private var picked: (window: String, tab: PickedTab)?
     /// What Claude typed in this tab, in memory only, for the relay to blank in a problem report
-    /// (spec 014 FR-1448); forgotten with the tab.
+    /// (spec 014 FR-1448); gone with this page; 4 characters or more (shorter isn't a password or
+    /// a code, and blanking it everywhere would break the report).
     private var typedSecrets: [String] = []
 
     /// What Claude typed in this tab, for a problem report.
@@ -594,7 +595,8 @@ actor SafariBrowser {
 
     /// Forgets the picked tab (nothing is done to it).
     func forget() {
-        typedSecrets = []
+        // typedSecrets stay: the chat's calls that typed them can still go into a report while
+        // this page lives (security review 2026-11-25).
         picked = nil
         claudesTab = false
         pickedUnmarked = nil
