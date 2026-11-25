@@ -323,6 +323,24 @@ struct ConnectionPane: View {
     }
 }
 
+/// What the sharing setting says, in plain words (spec 014 FR-1402, FR-1454; Toni, 2026-11-25:
+/// "Same for everyone, said plainly").
+enum SharingText {
+    static let footer =
+        "When something Claude does with Latchkey doesn't work, Claude sends Latchkey's developer a report "
+        + "with that chat's Latchkey calls, logs, and web pages, so it gets fixed."
+    static let explanation =
+        "When something Claude does with Latchkey doesn't work, Claude sends Latchkey's developer a report so it "
+        + "gets fixed.\n\n"
+        + "A report holds what Claude wrote about the problem and everything from that chat: each of its "
+        + "Latchkey tool calls with the answer (which can include text from your messages, emails, files, and "
+        + "web pages), Latchkey's logs from that time, and the web pages the chat used, with their source and "
+        + "a screenshot.\n\n"
+        + "Passwords, codes, and cookie values are always left out, and your machine names and email address "
+        + "are replaced. Reports are encrypted so only the developer can read them.\n\n"
+        + "You can turn this off at any time."
+}
+
 struct GeneralPane: View {
     @Bindable var model: AppModel
     @State private var askingToShare = false
@@ -344,8 +362,7 @@ struct GeneralPane: View {
                 Text(
                     model.reportsBlocked
                         ? "This relay doesn't forward problem reports."
-                        : "When something Claude does with Latchkey doesn't work, Claude writes a short report for "
-                            + "Latchkey's developer, so it gets fixed."
+                        : SharingText.footer
                 )
                 .font(.footnote)
                 .foregroundStyle(.secondary)
@@ -367,13 +384,7 @@ struct GeneralPane: View {
             Button("Share Reports") { model.shareReports = true }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text(
-                "When something Claude does with Latchkey doesn't work, Claude writes a report of what it tried "
-                    + "and what went wrong, and sends it to Latchkey's developer so it gets fixed.\n\n"
-                    + "Claude is told to leave out your passwords, codes, account numbers, and the text of your "
-                    + "messages and emails. Reports are encrypted so only the developer can read them, and carry "
-                    + "no name, email address, or machine name.\n\nYou can turn this off at any time."
-            )
+            Text(SharingText.explanation)
         }
     }
 }

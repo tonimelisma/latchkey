@@ -360,6 +360,41 @@ actor SafariBrowser {
         }
     }
 
+    /// Claude's tab as it is, for a problem report (spec 014 FR-1447): read with one script that
+    /// changes nothing on the page and nothing the Owner sees (Constitution IV), no screenshot.
+    func describeForReport(name: String) async -> JSONValue {
+        var o: [String: JSONValue] = ["name": .string(name), "where": .string("safari")]
+        do {
+            let snap = try await javaScript(PageRecord.safariSnapshot)
+            guard case .object(var page)? = try? JSONDecoder().decode(JSONValue.self, from: Data(snap.utf8)) else {
+                o["note"] = .string("Claude's Safari tab answered something that isn't a page")
+                return .object(o)
+            }
+            var drawing: [String: JSONValue] = [:]
+            for k in ["visibility", "hidden", "focus", "window", "screen"] {
+                drawing[k] = page.removeValue(forKey: k)
+            }
+            o["drawing"] = .object(drawing)
+            for k in ["address", "title"] { o[k] = page[k] }
+            if case .string(let src)? = page["source"] {
+                o["source"] = .string(String(src.prefix(PageRecord.maxSource)))
+                o["source_cut"] = .bool(src.count > PageRecord.maxSource)
+            }
+            if case .array(let rs)? = page["requests"] {
+                o["record"] = .array(
+                    rs.map { r in
+                        guard case .object(var e) = r else { return .null }
+                        e["kind"] = .string("request")
+                        if case .string(let a)? = e["address"] { e["address"] = .string(PageRecord.shownAddress(a)) }
+                        return .object(e)
+                    })
+            }
+        } catch {
+            o["note"] = .string("Claude's Safari tab couldn't be read: \(error)")
+        }
+        return .object(o)
+    }
+
     func run(_ code: String, answer: DialogAnswer = DialogAnswer()) async throws -> String {
         beginAction()
         // Always as spliced code in an async function, never through the page's eval: a page's

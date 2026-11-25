@@ -26,6 +26,9 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownl
     /// crashed on macOS 26 when a browser was let go off the main thread (a failed page load in
     /// browser_open; seen in CI on GitHub's macOS 26 runner).
     private let leftovers = Leftovers()
+    /// The page's running record for problem reports, memory only, gone with the page (spec 014
+    /// FR-1446).
+    let record = PageRecord()
 
     private final class Leftovers: @unchecked Sendable {
         var web: WKWebView?
@@ -299,6 +302,7 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownl
         let config = WKWebViewConfiguration()
         config.websiteDataStore = store ?? .nonPersistent()  // memory only: nothing written to disk
         config.defaultWebpagePreferences.allowsContentJavaScript = pageScripts
+        if pageScripts { record.install(in: config) }  // the hidden world's recorder (spec 014 FR-1446)
         let w = WKWebView(frame: NSRect(origin: .zero, size: size), configuration: config)
         w.navigationDelegate = self
         w.uiDelegate = self
@@ -543,6 +547,99 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownl
         dialogs = []
         finished?.resume(returning: false)
         finished = nil
+        record.clear()  // nothing of the page stays (spec 014 FR-1446)
+    }
+
+    // MARK: problem reports (spec 014 FR-1447)
+
+    /// The page as it is, for a problem report: read in the hidden world, so the page can't see it
+    /// or answer for it; every field's value blanked; the record; the site's cookie names, never
+    /// a value; whether it draws; a screenshot. Each step has its own limit: a page that doesn't
+    /// answer leaves its part out, with a note.
+    func describe(name: String, macLocked: Bool, displayAsleep: Bool) async -> JSONValue {
+        var o: [String: JSONValue] = ["name": .string(name), "where": .string("own")]
+        var notes: [String] = []
+        guard let w = web else {
+            o["note"] = .string("the page has no view (closed or never loaded)")
+            return .object(o)
+        }
+        o["address"] = .string(w.url?.absoluteString ?? "")
+        o["title"] = .string(w.title ?? "")
+        if held != nil { notes.append("the page holds a dialog for Claude, so its scripts can't run") }
+        if held == nil, pageScripts {
+            let snap: String? = await Deadline.first(within: .seconds(3)) { @MainActor @Sendable [weak self] in
+                await self?.hidden(PageRecord.snapshot, async: false)
+            }
+            if let snap, case .object(let page)? = try? JSONDecoder().decode(JSONValue.self, from: Data(snap.utf8)) {
+                var drawing: [String: JSONValue] = [:]
+                for k in ["visibility", "hidden", "focus", "window", "screen"] { drawing[k] = page[k] }
+                o["drawing"] = .object(drawing)
+                if case .string(let src)? = page["source"] {
+                    o["source"] = .string(String(src.prefix(PageRecord.maxSource)))
+                    o["source_cut"] = .bool(src.count > PageRecord.maxSource)
+                }
+                if let t = page["title"] { o["title"] = t }
+            } else {
+                notes.append("the page's source couldn't be read within 3 seconds")
+            }
+            let frames: Int? = await Deadline.first(within: .seconds(2)) { @MainActor @Sendable [weak self] in
+                await self?.hidden(PageRecord.frames, async: true).flatMap { Int($0) }
+            }
+            if case .object(var d)? = o["drawing"] {
+                d["frames_half_second"] = frames.map { .number(Double($0)) } ?? .null
+                o["drawing"] = .object(d)
+            }
+        }
+        var d: [String: JSONValue] = [:]
+        if case .object(let drawn)? = o["drawing"] { d = drawn }
+        d["mac_locked"] = .bool(macLocked)
+        d["display_asleep"] = .bool(displayAsleep)
+        d["window_on_screen"] = .bool(false)  // Latchkey's own window never comes on screen (FR-467)
+        o["drawing"] = .object(d)
+        if let host = w.url?.host()?.lowercased() {
+            let all = await Self.holding(w.configuration.websiteDataStore.httpCookieStore) ?? []
+            let names = Set(all.filter { Self.covers($0.domain, host) }.map(\.name)).sorted()
+            o["cookies"] = .array(names.map { .string($0) })
+        }
+        o["record"] = .array(
+            record.events.map { e in
+                (try? JSONDecoder().decode(JSONValue.self, from: JSONEncoder().encode(e))) ?? .null
+            })
+        o["record_dropped"] = .number(Double(record.dropped))
+        if held == nil {
+            let shot: PreparedImage? = await Deadline.first(within: .seconds(4)) { @MainActor @Sendable [weak self] in
+                try? await self?.screenshot()
+            }
+            if let shot {
+                o["screenshot"] = .object([
+                    "mimeType": .string(shot.mimeType), "data": .string(shot.data.base64EncodedString()),
+                ])
+            } else {
+                notes.append("no screenshot within 4 seconds")
+            }
+        }
+        if !notes.isEmpty { o["notes"] = .array(notes.map { .string($0) }) }
+        return .object(o)
+    }
+
+    /// Runs a script of the report's in the hidden world (`PageRecord.world`) and gives its value
+    /// as text; nil when it failed. Not `evaluate`: nothing here waits on Claude's dialogs.
+    private func hidden(_ code: String, async: Bool) async -> String? {
+        guard let w = web else { return nil }
+        return await withCheckedContinuation { (c: CheckedContinuation<String?, Never>) in
+            let text: @MainActor @Sendable (Result<Any, any Error>) -> Void = { result in
+                switch result {
+                case .success(let v as String): c.resume(returning: v)
+                case .success(let v as NSNumber): c.resume(returning: v.stringValue)
+                default: c.resume(returning: nil)
+                }
+            }
+            if async {
+                w.callAsyncJavaScript(code, arguments: [:], in: nil, in: PageRecord.world) { text($0) }
+            } else {
+                w.evaluateJavaScript(code, in: nil, in: PageRecord.world) { text($0) }
+            }
+        }
     }
 
     // MARK: files the page saves (FR-475 to FR-477)
@@ -758,6 +855,7 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownl
         decisionHandler: @escaping @MainActor @Sendable (WKNavigationActionPolicy) -> Void
     ) {
         MainActor.assumeIsolated {
+            record.loading(navigationAction.request, mainFrame: navigationAction.targetFrame?.isMainFrame ?? true)
             let url = navigationAction.request.url
             // FR-475, FR-476: a link the page marks to save (`download`, often a blob of its own)
             // is saved, as Safari saves it, and the page stays; without this WebKit went to the
@@ -799,6 +897,7 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownl
         decisionHandler: @escaping @MainActor @Sendable (WKNavigationResponsePolicy) -> Void
     ) {
         MainActor.assumeIsolated {
+            record.answered(navigationResponse.response, mainFrame: navigationResponse.isForMainFrame)
             let type = navigationResponse.response.mimeType ?? ""
             // FR-475: during Claude's own action, a file the server sends to save (an attachment)
             // or that no page shows (an archive) is saved, as Safari saves it; a PDF stays a page

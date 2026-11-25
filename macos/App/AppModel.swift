@@ -1240,6 +1240,7 @@ final class AppModel {
                 error: true)
             return refused
         }
+        if call.tool == ReportPart.tool { return await reportPart(call) }
         let started = Date()
         busy += 1  // FR-132
         defer { busy -= 1 }
@@ -1276,6 +1277,26 @@ final class AppModel {
             let by = entry.client.map { " (\($0))" } ?? ""
             EventLog.shared.record(.leftovers, "Claude made \(made)\(by)", systemLog: false)
         }
+        return result
+    }
+
+    /// The relay asks for this Mac's part of a problem report (spec 014 FR-1443 to FR-1447): not
+    /// one of Claude's calls, so it isn't traced as one (FR-1445); it is recorded as an event.
+    private func reportPart(_ call: Call) async -> ToolResult {
+        let entries: ReportPart.Entries? = trace.map { t in
+            let reader = t.reader
+            return { from, to in
+                try reader.page(
+                    ActivityQuery(from: from, to: to), limit: 20_000, oldestFirst: true, countUnreadable: false
+                ).entries
+            }
+        }
+        let asleep = ReportPart.displayAsleep()
+        let result = await ReportPart.answer(call.arguments, entries: entries) { @Sendable names in
+            let found = await BrowserCapability.ownPages.describe(names, displayAsleep: asleep)
+            return ReportPart.Described(pages: found.pages, notes: found.notes)
+        }
+        event(.app, "Sent this Mac's part of a problem report to the relay", error: result.isError)
         return result
     }
 
