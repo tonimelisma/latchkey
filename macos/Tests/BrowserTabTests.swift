@@ -314,6 +314,14 @@ final class FakeSafariTabs: ScriptRunner, @unchecked Sendable {
 /// tab is never taken for it (security reviews 2026-10-29 to 2026-11-03). Tab 10.2 shows
 /// https://news.example.com/.
 @Suite struct OwnerTabNavigationTests {
+    /// Runs `work`; when the tab was lost, the failure says why (instrumentation, 2026-11-25).
+    func traced<T>(_ b: SafariBrowser, _ work: () async throws -> T) async throws -> T {
+        do { return try await work() } catch {
+            Issue.record("\(error): \(await b.lostBecause)")
+            throw error
+        }
+    }
+
     func picked(_ fake: FakeSafariTabs) async throws -> SafariBrowser {
         // 10 s: the allowance (the limit plus 1 s) must outlast a slow moment while every suite
         // runs side by side (3 s ran out at 4.05 s, 2026-11-15).
@@ -344,7 +352,7 @@ final class FakeSafariTabs: ScriptRunner, @unchecked Sendable {
         let fake = FakeSafariTabs()
         let b = try await picked(fake)
         fake.clickGoesTo = "https://news.example.com/cart"
-        _ = try await b.click("e1")
+        _ = try await traced(b) { try await b.click("e1") }
         fake.ownerCloses(tab: 2)
         fake.ownerOpens("https://owner.example.com/")
         await #expect(throws: SafariBrowser.Failure.tabGone) { try await b.read(offset: 0) }
@@ -410,7 +418,7 @@ final class FakeSafariTabs: ScriptRunner, @unchecked Sendable {
         let fake = FakeSafariTabs()
         let b = try await picked(fake)
         fake.clickGoesTo = "https://news.example.com/checkout"
-        let page = try await b.click("e1")
+        let page = try await traced(b) { try await b.click("e1") }
         #expect(page.url == "https://news.example.com/checkout")
         #expect(fake.windows[0].tabs[1].mark != nil, "marked again on the new page")
         #expect(try await b.read(offset: 0).url == "https://news.example.com/checkout")
@@ -423,7 +431,7 @@ final class FakeSafariTabs: ScriptRunner, @unchecked Sendable {
         let fake = FakeSafariTabs()
         let b = try await picked(fake)
         fake.buttonGoesTo = "https://news.example.com/done"
-        #expect(try await b.click("e1").url == "https://news.example.com/done")
+        #expect(try await traced(b) { try await b.click("e1") }.url == "https://news.example.com/done")
     }
 
     /// Back to the previous page: the entry's address comes from the back script itself.
@@ -431,7 +439,7 @@ final class FakeSafariTabs: ScriptRunner, @unchecked Sendable {
         let fake = FakeSafariTabs()
         let b = try await picked(fake)
         fake.backGoesTo = "https://news.example.com/before"
-        #expect(try await b.back().url == "https://news.example.com/before")
+        #expect(try await traced(b) { try await b.back() }.url == "https://news.example.com/before")
     }
 
     /// Security review 2026-11-01: a page whose click handler changes the link's address can't

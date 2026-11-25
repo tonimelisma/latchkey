@@ -294,7 +294,10 @@ import Testing
         #expect(r.finished)
         let lines = r.output.split(separator: "\n").map(String.init)
         #expect(lines.count >= 2, "\(r.output)")
-        #expect(lines.prefix(2).allSatisfy { $0.contains("/.latchkey/bin/") }, "Latchkey's own, first: \(r.output)")
+        // The two paths `command -v` prints; macOS may print its own log lines into the output
+        // first (GitHub's macOS 26 runner: "…Services: disconnect event invalidation…").
+        let paths = lines.filter { $0.hasPrefix("/") }
+        #expect(paths.prefix(2).allSatisfy { $0.contains("/.latchkey/bin/") }, "Latchkey's own, first: \(r.output)")
         #expect(r.output.contains("SWIFTC_DISABLE_SANDBOX = YES"))
         #expect(r.output.contains("ENABLE_USER_SCRIPT_SANDBOXING = NO"))
         #expect(r.output.contains("DISABLE_TASK_SANDBOXING = YES"), "Core ML model compiles run in a task sandbox")

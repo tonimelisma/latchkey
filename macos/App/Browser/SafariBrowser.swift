@@ -228,6 +228,9 @@ actor SafariBrowser {
     /// For tests: Claude's navigation as Latchkey has it.
     func navigationState() -> (since: Date, addresses: [String])? { navigation }
 
+    /// Why the last tab was lost (`locate`), for tests and problem reports; memory only.
+    private(set) var lostBecause = ""
+
     private func beginAction(mayNavigate: Bool = false) {
         lostPick = false
         navigatedThisAction = false
@@ -871,6 +874,14 @@ actor SafariBrowser {
                 [window, String(t.index), t.address, PageScripts.tabCheck(t.token), loading.joined(separator: "\n")]))
         guard let index = TabSurvey.pick(survey, remembered: t, navigating: !loading.isEmpty, claudes: claudesTab)
         else {
+            // Instrumentation (Toni, 2026-11-25): why the tab was lost, for tests and reports;
+            // addresses are the owner's tabs', kept in memory only, never in an answer.
+            lostBecause =
+                "remembered tab \(t.index) of \(t.count) at \(t.address); loading \(loading); claudes \(claudesTab); "
+                + "survey \(survey.count): "
+                + survey.rows.map {
+                    "[\($0.index) same=\($0.sameAddress) marked=\($0.marked) loading=\($0.loading) waiting=\($0.waiting) \($0.address)]"
+                }.joined(separator: " ")
             losePick()
             throw Failure.tabGone
         }
