@@ -109,9 +109,10 @@ world". The rest was decided here (low-level, CLAUDE.md "Toni decides"):
   Latchkey's own with a script message handler only that world has, and the navigation delegate
   for loads (chosen). What WebKit gives there: resource timing entries (address, kind, status
   where `responseStatus` is filled, timing, size), `error` (also failed loads, in the capture
-  phase), `unhandledrejection` (its reason may be the page's own value, unreadable from another
-  world), `securitypolicyviolation`, `visibilitychange`; not console lines, not the method of the
-  page's scripted requests.
+  phase), `securitypolicyviolation`, `visibilitychange`, each only when the browser made it
+  (`isTrusted`), at most 50 a second; not console lines, not the method of the page's scripted
+  requests, and not failed promises (`unhandledrejection` reaches only the page's own world:
+  the test on GitHub's macOS runner saw none, 2026-11-25).
 - **Addresses in records**: query values replaced by "…" and fragments and user names dropped,
   names kept (sign-in links, tokens and ids live there); the page's own address the same. The
   chat's calls keep what Claude itself sent and got.

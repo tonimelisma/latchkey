@@ -3,7 +3,7 @@ import WebKit
 
 /// A running record of one page in Latchkey's own browser, for problem reports (spec 014
 /// FR-1446; Toni, 2026-11-25: "Always record, memory only", "Hidden world"): the last `limit`
-/// page loads, requests, uncaught errors and failed promises, blocked content, and visibility
+/// page loads, requests, uncaught errors, blocked content, and visibility
 /// changes. In memory only, never written to disk, gone with its page, and sent only inside a
 /// report (`ReportPart`). It records from a content world of its own, which the page can't see or
 /// reach: no function of the page is replaced, so recording never changes how a site behaves.
@@ -15,7 +15,7 @@ final class PageRecord {
 
     struct Event: Codable, Sendable, Equatable {
         var time: String
-        var kind: String  // load, response, request, error, rejection, blocked, visibility
+        var kind: String  // load, response, request, error, blocked, visibility
         var address: String?
         var method: String?
         var status: Int?
@@ -152,13 +152,8 @@ final class PageRecord {
               post({kind: 'error', text: 'failed to load', type: cut(t.tagName || ''), address: cut(t.currentSrc || t.src || t.href || '')});
             }
           }, true);
-          addEventListener('unhandledrejection', (e) => {
-            if (!e.isTrusted) return;
-            // The reason is the page's own value, which another world may not be able to read.
-            let t = '';
-            try { const r = e.reason; t = r && r.stack ? r.stack : (r && r.message) || (r == null ? '' : r); } catch (_) {}
-            post({kind: 'rejection', text: cut(t || 'a promise failed (its reason is the page\\'s own)')});
-          });
+          // A failed promise isn't told to another world (seen on GitHub's macOS runner, 2026-11-25), so
+          // there is no listener for it here.
           document.addEventListener('securitypolicyviolation', (e) => {
             if (!e.isTrusted) return;
             post({kind: 'blocked', text: cut(e.violatedDirective), address: cut(e.blockedURI)});
@@ -181,7 +176,7 @@ final class PageRecord {
     /// One message from the recorder; anything not of its shape is dropped.
     func received(_ body: Any) {
         guard let o = body as? [String: Any], let kind = o["kind"] as? String,
-            ["request", "error", "rejection", "blocked", "visibility"].contains(kind)
+            ["request", "error", "blocked", "visibility"].contains(kind)
         else { return }
         func int(_ k: String) -> Int? {
             guard let n = o[k] as? NSNumber else { return nil }

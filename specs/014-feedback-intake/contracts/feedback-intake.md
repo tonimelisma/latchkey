@@ -101,7 +101,7 @@ The `result` has one text content whose text is the part's JSON, at most `max_by
     "cookies": ["name", …],
     "drawing": {"visibility": "visible", "hidden": false, "focus": false, "frames_half_second": 30,
                 "window": "1280x800", "screen": "1512x982", "mac_locked": true, "display_asleep": false},
-    "record": [{"time": "…", "kind": "load|request|error|rejection|blocked|visibility", "address": "…",
+    "record": [{"time": "…", "kind": "load|response|request|error|blocked|visibility", "address": "…",
                 "method": "GET", "status": 200, "type": "fetch", "ms": 120, "bytes": 5120, "text": "…"}],
     "record_dropped": 0,
     "screenshot": {"mimeType": "image/jpeg", "data": "<base64>"}

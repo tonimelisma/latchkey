@@ -110,7 +110,7 @@ address is that name.
   `PageRecord` (300 events, memory only) fed by its navigation delegate (method from the action,
   status from the response) and by a script in the content world `latchkey-record`
   (`WKUserScript`, document start, main frame), which posts PerformanceObserver resource entries,
-  `error`, `unhandledrejection`, `securitypolicyviolation` and `visibilitychange` through a
+  `error`, `securitypolicyviolation` and `visibilitychange` through a
   script message handler that exists only in that world. The snapshot runs in the same world:
   `outerHTML` of a clone whose `input`/`textarea`/`select` values and `value` attributes are
   blanked, visibility, focus, frames counted for 500 ms, sizes; cookie names from the page's

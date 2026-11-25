@@ -504,7 +504,7 @@ enum LogBeforeEvents {
     @Test func helloAnnouncesTheAuditFeature() {
         let hello = Hello.make(
             deviceID: "dev_1", signature: "sig", appVersion: "0.8.24", osVersion: "26.1", tools: [], state: .sample)
-        #expect(hello.features == ["clients", "audit"])
+        #expect(hello.features == ["clients", "audit", "report_part"])
     }
 
     @Test func anAuditAnswerDecodes() throws {

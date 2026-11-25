@@ -15,8 +15,9 @@ enum ReportPart {
 
     struct Args: Codable, Sendable {
         var report: String?
-        var since: Int64
-        var until: Int64
+        // Milliseconds; read as Double, so a time with a fraction is read too (a test found it).
+        var since: Double
+        var until: Double
         var callIDs: [String]?
         var pages: [String]?
         var maxBytes: Int?
@@ -81,8 +82,11 @@ enum ReportPart {
         guard let data = try? JSONEncoder().encode(arguments),
             let args = try? JSONDecoder().decode(Args.self, from: data)
         else { return .text("The request for this Mac's part couldn't be read.", isError: true) }
-        var to = Date(timeIntervalSince1970: Double(args.until) / 1000)
-        var from = Date(timeIntervalSince1970: Double(args.since) / 1000)
+        guard args.since.isFinite, args.until.isFinite else {
+            return .text("The request for this Mac's part has no usable times.", isError: true)
+        }
+        var to = Date(timeIntervalSince1970: args.until / 1000)
+        var from = Date(timeIntervalSince1970: args.since / 1000)
         if to < from || to.timeIntervalSince(from) > 48 * 3600 { from = to.addingTimeInterval(-48 * 3600) }
         to = to.addingTimeInterval(1)
         var part = Part()

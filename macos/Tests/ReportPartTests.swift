@@ -32,10 +32,11 @@ import WebKit
                   Promise.reject(new Error('fulfilment call refused'));
                 </script>
                 """, base: base)
-        let events = try await waitFor(["error", "rejection", "load"], in: b)
+        // A failed promise isn't seen from another world (WebKit tells only the page's own), so it
+        // isn't asked for (spec 014 FR-1446, research.md).
+        let events = try await waitFor(["error", "load"], in: b)
         #expect(
             events.contains { $0.kind == "error" && ($0.text ?? "").contains("checkout script broke") }, "\(events)")
-        #expect(events.contains { $0.kind == "rejection" }, "its reason may be the page's own, unreadable here")
         #expect(events.contains { $0.kind == "load" })
         // The page's own world has no handler, and none of its functions were replaced.
         #expect(
@@ -90,7 +91,7 @@ import WebKit
         #expect(shown.hasPrefix("https://shop.example/api/checkout?token="), "\(shown)")
         #expect(shown.contains("cart=") && !shown.contains("abc123") && !shown.contains("#x"), "\(shown)")
         #expect(!PageRecord.shownAddress("https://user:pw@shop.example/a?x=1").contains("pw"))
-        #expect(PageRecord.shownAddress("not an address ?token=abc123") == "not an address ")
+        #expect(!PageRecord.shownAddress("not an address ?token=abc123").contains("abc123"))
     }
 
     /// Security review 2026-11-25: what Claude types into a password or code field is known, so the

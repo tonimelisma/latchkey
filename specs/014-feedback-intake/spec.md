@@ -175,8 +175,9 @@ plainly"; "Always record, memory only"; "5 MB, screenshots included"; "Hidden wo
 - **FR-1446** Latchkey's own browser shall keep, for each open page, a running record in memory
   only, never written to disk, dropped when the page closes, sent only inside a report: the last
   300 events of page loads (address, method where known, status), requests (address, kind,
-  status where WebKit gives it, timing, size), uncaught errors and failed promises, blocked
-  content (security policy), and changes of the page's visibility. It shall record from a script
+  status where WebKit gives it, timing, size), uncaught errors, blocked content (security
+  policy), and changes of the page's visibility. (Failed promises are not told to a world other
+  than the page's own, so the record can't hold them; seen on GitHub's macOS runner, 2026-11-25.) It shall record from a script
   world the page can't see or notice, never by changing the page's own functions (Toni:
   "Hidden world"), so recording never changes how a site behaves.
 - **FR-1447** At the report, each page of the chat's shall be described as it is: its address
