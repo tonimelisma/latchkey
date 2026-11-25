@@ -19,7 +19,7 @@ enum RealInput {
     /// `.claude/rules/secrets-and-pages.md`).
     static let world = WKContentWorld.world(name: "latchkey-input")
     /// FR-485: the longest one step (a click, a key) waits for the page to take its events.
-    static let stepLimit: Duration = .seconds(5)
+    static let stepLimit: Duration = .seconds(10)
 
     /// Tells Latchkey, as each one comes, of the trusted pointer-up, mouse-up, key-up and input
     /// events, in every frame, through a message handler only this world has (`InputSignal`):
@@ -45,7 +45,7 @@ enum RealInput {
           function went(ev) {
             if (!ev.isTrusted) return;
             var t = ev.composedPath ? ev.composedPath()[0] : ev.target;
-            send({ k: 'target', t: String((t && t.getAttribute && t.getAttribute('data-latchkey')) || '-') });
+            send({ k: 'target', t: String((t && t.getAttribute && t.getAttribute('data-latchkey')) || '-'), y: String((t && t.getAttribute && t.getAttribute('type')) || '') });
           }
           window.addEventListener('keypress', went, true);
           window.addEventListener('beforeinput', went, true);
@@ -358,11 +358,14 @@ enum RealInput {
             charactersIgnoringModifiers: s.ignoringModifiers, isARepeat: false, keyCode: s.keyCode)
     }
 
-    /// Presses and releases one key, then waits for the page to take its release (FR-485).
-    /// With Command it goes as a key equivalent, as AppKit sends shortcuts.
-    static func press(_ s: Stroke, in view: WKWebView) async {
+    /// Presses and releases one key. With `wait`, then waits until the page has taken every key
+    /// sent so far (FR-485); without, the next key may follow at once: WebKit hands a page its
+    /// keys in the order they came, so only a step that isn't a key (text, a script, a click)
+    /// waits for them (`settle`). With Command it goes as a key equivalent, as AppKit sends
+    /// shortcuts.
+    static func press(_ s: Stroke, in view: WKWebView, wait: Bool = true) async {
         guard let window = view.window else { return }
-        let before = await count(view, "key")
+        signals[ObjectIdentifier(view)]?.sentKeys += 1
         if let down = key(.keyDown, s, window) {
             if s.flags.contains(.command) {
                 _ = view.performKeyEquivalent(with: down)
@@ -370,31 +373,45 @@ enum RealInput {
                 view.keyDown(with: down)
             }
         }
-        try? await Task.sleep(for: .milliseconds(25))
+        try? await Task.sleep(for: .milliseconds(15))
         if let up = key(.keyUp, s, window) { view.keyUp(with: up) }
-        await wait(view, "key", after: before)
+        if wait { await settle(view) }
+    }
+
+    /// Waits until the page has taken every key sent to it, at most `within`.
+    static func settle(_ view: WKWebView, within: Duration = stepLimit) async {
+        guard let signal = signals[ObjectIdentifier(view)] else { return }
+        let end = ContinuousClock.now + within
+        while ContinuousClock.now < end, signal.count("key") < signal.sentKeys {
+            try? await Task.sleep(for: .milliseconds(5))
+        }
     }
 
     /// Text no key of a US keyboard types (é, an emoji), as the Character Viewer gives it: input
-    /// without a key (FR-480).
+    /// without a key (FR-480). It doesn't wait in line with the keys, so the keys before it are
+    /// taken first ("Café" came out "Caéf" on a busy Mac, 2026-11-25).
     static func insert(_ text: String, in view: WKWebView) async {
+        await settle(view)
         let before = await count(view, "input")
         // The responder's insertText, which the view takes as an input method's text.
         view.insertText(text)
         await wait(view, "input", after: before)
     }
 
-    /// Types `text` into what has the focus, a key per character (FR-480). `check`: before each
-    /// character, whether typing may go on (spec 013 FR-1377: the focus is still on the checked
-    /// field); typing stops when it answers false. Answers how many characters were typed.
-    static func type(_ text: String, in view: WKWebView, check: (() async -> Bool)? = nil) async -> Int {
+    /// Types `text` into what has the focus, a key per character, one after the other (FR-480),
+    /// and waits until the page has taken them. Answers how many characters were typed.
+    static func type(_ text: String, in view: WKWebView) async -> Int {
         var n = 0
         for ch in text {
-            if Task.isCancelled { return n }
-            if let check, !(await check()) { return n }
-            if let s = stroke(for: ch) { await press(s, in: view) } else { await insert(String(ch), in: view) }
+            if Task.isCancelled { break }
+            if let s = stroke(for: ch) {
+                await press(s, in: view, wait: false)
+            } else {
+                await insert(String(ch), in: view)
+            }
             n += 1
         }
+        await settle(view)
         return n
     }
 
@@ -440,7 +457,7 @@ enum RealInput {
     /// Where the last character went: the element's reference ("-" for one without) and the
     /// host of the frame it is in, as the frame's own address says (WebKit's, not the page's
     /// word); nil before any (spec 013 FR-1377).
-    static func lastTarget(_ view: WKWebView) async -> (ref: String, host: String)? {
+    static func lastTarget(_ view: WKWebView) async -> (ref: String, host: String, type: String)? {
         signals[ObjectIdentifier(view)]?.target
     }
 
@@ -456,7 +473,9 @@ enum RealInput {
 @MainActor
 final class InputSignal {
     private var counts: [String: Int] = [:]
-    private(set) var target: (ref: String, host: String)?
+    private(set) var target: (ref: String, host: String, type: String)?
+    /// Keys sent to the page (`RealInput.press`), to wait until it took them all.
+    var sentKeys = 0
     private(set) var lastTaken = false
 
     func count(_ name: String) -> Int { counts[name] ?? 0 }
@@ -470,7 +489,9 @@ final class InputSignal {
             counts[k, default: 0] += 1
             lastTaken = (o["p"] as? Bool) == true
         case "target":
-            if let t = o["t"] as? String { target = (String(t.prefix(64)), host) }
+            if let t = o["t"] as? String {
+                target = (String(t.prefix(64)), host, String(((o["y"] as? String) ?? "").prefix(32)).lowercased())
+            }
         default:
             return
         }

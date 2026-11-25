@@ -545,8 +545,9 @@ keyboard (2026-11-25)".
 - **Waiting (FR-485).** A user script in the same world, in every frame, posts each trusted
   pointer-up, mouse-up, key-up and input event to a message handler only that world has
   (`InputSignal`), with the element each character went into and whether the page took the
-  key. After sending a step, Latchkey waits until the count moved, at most 5 s
-  (`RealInput.stepLimit`), looking only at what it was told: asking the page after every key
+  key. Keys go one after the other (WebKit keeps them in order); before a step that isn't a
+  key (text, a script, a click) and at the end, Latchkey waits until the page took every key
+  sent, at most 10 s (`RealInput.stepLimit`, `settle`), looking only at what it was told: asking the page after every key
   kept a busy Mac busier (GitHub's runner, 2026-11-25). A page that never gets the event (a
   disabled button takes none) costs that wait once and the answer goes on. Nothing is decided
   from the page's own scripts' output.

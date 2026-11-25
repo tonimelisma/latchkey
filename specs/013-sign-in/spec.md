@@ -167,7 +167,10 @@ interface another app can read (`research.md`), so the only way in is a copy the
   something, then one real key per character; the press is a real click (spec 005 FR-478).
   Before each character Latchkey checks that the focus is still on the field it checked (or, for
   a code, the page's next code box after it, FR-1372); when it isn't, nothing more is typed, what
-  was typed is emptied, and nothing is pressed. The key events go only to that page's view, never
+  was typed is emptied, and nothing is pressed. After each character, too, Latchkey checks from
+  what WebKit and its own script world tell it (never the page's word) that the character went
+  into that field, on the saved site, still of the checked kind (security review 2026-11-25: a
+  page can move the focus while a key is on its way). The key events go only to that page's view, never
   to the screen or another app, and their characters are never logged or kept. While a password
   field has the focus, macOS's secure keyboard entry is on, as in Safari, and goes off when the
   call ends (spec 005 FR-483). In the Owner's Safari tabs typing stays the page script, which

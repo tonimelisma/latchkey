@@ -1356,10 +1356,12 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownl
             }
         }
         await settle(from: before)
-        let focus = await RealInput.evaluate(w, RealInput.focused) ?? ""
+        let focus = await RealInput.evaluate(w, RealInput.focused, within: .seconds(10))
         let line =
             "pressed " + did.joined(separator: ", ")
-            + (focus.isEmpty ? "; nothing on the page has the focus" : "; the focus is on \(focus)")
+            + (focus == nil
+                ? "; the page didn't say in time where the focus is"
+                : focus == "" ? "; nothing on the page has the focus" : "; the focus is on \(focus ?? "")")
         let data = (try? JSONEncoder().encode([line])) ?? Data("[]".utf8)
         return (String(decoding: data, as: UTF8.self), try await page(offset: 0))
     }
@@ -1451,9 +1453,10 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownl
                     await RealInput.press(back, in: w)
                 }
                 for ch in part {
-                    // The focus is checked before every character: a page that moved it elsewhere
-                    // gets nothing more (FR-1377).
                     if Task.isCancelled || ContinuousClock.now > until { return false }
+                    // The focus is checked before every character: a page that moved it elsewhere
+                    // gets nothing more (FR-1377); a code may go on in the page's next code box,
+                    // checked to be one (FR-1372).
                     let now = try await run(
                         PageScripts.fillFocus(ref: current, kind: kind, host: host, follow: follow))
                     if now?.step == "next", let next = now?.ref {
@@ -1468,11 +1471,13 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownl
                     } else {
                         await RealInput.insert(String(ch), in: w)
                     }
-                    // The character went into this field, as the input world saw it: else the
-                    // page moved the focus while the key was on its way, and nothing more goes
-                    // (security review 2026-11-25).
+                    // And after it: the character went into this field, on the saved site, still
+                    // of the kind it was checked for, as WebKit and the input world told it; else
+                    // nothing more goes (the page moved the focus while the key was on its way;
+                    // security review 2026-11-25).
                     let went = await RealInput.lastTarget(w)
-                    if went?.ref != current || went?.host != host { return false }
+                    guard went?.ref == current, went?.host == host else { return false }
+                    if kind == "password", went?.type != "password" { return false }
                 }
             }
             return true
