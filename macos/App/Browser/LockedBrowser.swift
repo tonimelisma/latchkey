@@ -563,7 +563,7 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownl
             o["note"] = .string("the page has no view (closed or never loaded)")
             return .object(o)
         }
-        o["address"] = .string(w.url?.absoluteString ?? "")
+        o["address"] = .string(PageRecord.shownAddress(w.url?.absoluteString ?? ""))
         o["title"] = .string(w.title ?? "")
         if held != nil { notes.append("the page holds a dialog for Claude, so its scripts can't run") }
         if held == nil, pageScripts {

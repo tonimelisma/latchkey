@@ -2,7 +2,7 @@
 //
 //	latchkey-reports keygen <private-key-file>  makes a key pair; prints the public key
 //	latchkey-reports list                       the waiting problem reports, opened (summaries)
-//	latchkey-reports show <id> [-out <folder>]  one report written as files outside the repository
+//	latchkey-reports show <id>                  one report written as files in a new temporary folder
 //	latchkey-reports evals                        the test Mac results sent (spec 015 FR-1531)
 //	latchkey-reports delete <id>...             deletes dispositioned reports (nothing is kept)
 //
@@ -34,7 +34,7 @@ func main() {
 	}
 }
 
-const usage = "usage: latchkey-reports keygen <private-key-file> | list | show <id> [-out <folder>] | evals | delete <id> [<id>]"
+const usage = "usage: latchkey-reports keygen <private-key-file> | list | show <id> | evals | delete <id> [<id>]"
 
 func run(args []string) error {
 	if len(args) == 0 {

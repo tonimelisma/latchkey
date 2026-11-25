@@ -60,6 +60,13 @@ enum ReportPart {
     }
     typealias Pages = @Sendable (_ names: [String]) async -> Described
 
+    /// Only while the Owner shares problem reports, the relay doesn't block them, and Claude's
+    /// access isn't paused; the Mac checks its own setting, not only the relay's (security review
+    /// 2026-11-25).
+    static func refusal(sharing: Bool, blocked: Bool, paused: Bool) -> ToolResult? {
+        sharing && !blocked && !paused ? nil : .text("This Mac doesn't share problem reports now.", isError: true)
+    }
+
     static func answer(_ arguments: JSONValue, entries: Entries?, pages: Pages) async -> ToolResult {
         guard let data = try? JSONEncoder().encode(arguments),
             let args = try? JSONDecoder().decode(Args.self, from: data)

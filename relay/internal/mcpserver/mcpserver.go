@@ -8,7 +8,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"github.com/tonimelisma/latchkey/relay/internal/reportlog"
 	"log/slog"
 	"net/http"
 	"net/url"
@@ -19,6 +18,8 @@ import (
 	"time"
 	"unicode"
 	"unicode/utf8"
+
+	"github.com/tonimelisma/latchkey/relay/internal/reportlog"
 
 	"github.com/modelcontextprotocol/go-sdk/auth"
 	"github.com/modelcontextprotocol/go-sdk/mcp"

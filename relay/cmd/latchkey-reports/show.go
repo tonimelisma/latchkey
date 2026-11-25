@@ -50,16 +50,10 @@ func summarized(r reports.Report) any {
 }
 
 func show(args []string) error {
-	if len(args) < 1 {
-		return errors.New("usage: latchkey-reports show <id> [-out <folder>]")
+	if len(args) != 1 {
+		return errors.New("usage: latchkey-reports show <id>")
 	}
 	id := args[0]
-	out := filepath.Join(os.TempDir(), "latchkey-report-"+safeName(id))
-	if len(args) == 3 && args[1] == "-out" {
-		out = args[2]
-	} else if len(args) != 1 {
-		return errors.New("usage: latchkey-reports show <id> [-out <folder>]")
-	}
 	k, err := key()
 	if err != nil {
 		return err
@@ -69,6 +63,12 @@ func show(args []string) error {
 		return err
 	}
 	plain, err := reports.OpenRaw(k, sealed)
+	if err != nil {
+		return err
+	}
+	// A new folder of its own under the system's temporary folder ($TMPDIR, the session's
+	// scratch folder), never one the command is told: report contents never go into a repository.
+	out, err := os.MkdirTemp("", "latchkey-report-*")
 	if err != nil {
 		return err
 	}
@@ -118,15 +118,17 @@ func writeReport(plain []byte, dir string) error {
 	if err := json.Unmarshal(plain, &r); err != nil {
 		return err
 	}
-	if err := os.MkdirAll(dir, 0o700); err != nil {
+	// Every file goes through a root at the folder: no name a report holds can leave it.
+	root, err := os.OpenRoot(dir)
+	if err != nil {
 		return err
 	}
+	defer func() { _ = root.Close() }()
 	write := func(name string, b []byte) error {
-		p := filepath.Join(dir, name)
-		if err := os.MkdirAll(filepath.Dir(p), 0o700); err != nil {
+		if err := root.MkdirAll(filepath.Dir(name), 0o700); err != nil {
 			return err
 		}
-		return os.WriteFile(p, b, 0o600)
+		return root.WriteFile(name, b, 0o600)
 	}
 	pretty := func(v any) []byte {
 		b, _ := json.MarshalIndent(v, "", "  ")

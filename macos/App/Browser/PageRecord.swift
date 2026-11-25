@@ -97,10 +97,10 @@ final class PageRecord {
           } catch (_) {}
           addEventListener('error', (e) => {
             if (e instanceof ErrorEvent) {
-              post({kind: 'error', text: cut(e.message + (e.filename ? ' at ' + e.filename + ':' + e.lineno : ''))});
+              post({kind: 'error', text: cut(e.message), address: cut(e.filename), type: 'line ' + (e.lineno || 0)});
             } else if (e.target && e.target !== window) {
               const t = e.target;
-              post({kind: 'error', text: cut('failed to load ' + (t.tagName || '') + ' ' + (t.currentSrc || t.src || t.href || ''))});
+              post({kind: 'error', text: 'failed to load', type: cut(t.tagName || ''), address: cut(t.currentSrc || t.src || t.href || '')});
             }
           }, true);
           addEventListener('unhandledrejection', (e) => {
@@ -110,7 +110,7 @@ final class PageRecord {
             post({kind: 'rejection', text: cut(t || 'a promise failed (its reason is the page\\'s own)')});
           });
           document.addEventListener('securitypolicyviolation', (e) => {
-            post({kind: 'blocked', text: cut(e.violatedDirective + ' ' + e.blockedURI)});
+            post({kind: 'blocked', text: cut(e.violatedDirective), address: cut(e.blockedURI)});
           });
           document.addEventListener('visibilitychange', () => post({kind: 'visibility', text: document.visibilityState}));
         })();
@@ -199,8 +199,19 @@ final class PageRecord {
               if (!['submit', 'button', 'reset', 'image'].includes(t)) el.setAttribute('value', '');
             }
             for (const el of c.querySelectorAll('textarea')) el.textContent = '';
-            for (const el of c.querySelectorAll('[contenteditable]')) {
-              if (el.closest('form')) el.textContent = '';
+            for (const el of c.querySelectorAll('[contenteditable]')) el.textContent = '';
+            // Inline scripts and data blocks hold a page's state (tokens, the account's details): their
+            // bodies go, their addresses stay. Token-like attributes and meta values are blanked.
+            for (const el of c.querySelectorAll('script:not([src])')) el.textContent = '';
+            for (const el of c.querySelectorAll('meta[content]')) {
+              if (/csrf|token|nonce|session|key/i.test(el.getAttribute('name') || el.getAttribute('property') || '')) {
+                el.setAttribute('content', '');
+              }
+            }
+            for (const el of c.querySelectorAll('*')) {
+              for (const a of Array.from(el.attributes)) {
+                if (/csrf|token|nonce|secret|session/i.test(a.name)) el.setAttribute(a.name, '');
+              }
             }
             source = '<!doctype html>\\n' + c.outerHTML;
           }

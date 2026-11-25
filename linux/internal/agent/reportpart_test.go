@@ -22,13 +22,19 @@ func TestReportPartHoldsTheSpansLogAndTheChatsCalls(t *testing.T) {
 	start := time.Now().Add(-time.Minute)
 	log.Event("connection", "Connected to the relay")
 	log.Private("connection", false, "Connected to relay.example.net", "")
-	require.NoError(t, log.Add(activity.Entry{Kind: "call", CallID: "call_A", Tool: "shell_run",
-		Result: json.RawMessage(`[{"type":"text","text":"exit 0"}]`)}))
-	require.NoError(t, log.Add(activity.Entry{Kind: "call", CallID: "call_OTHER", Tool: "files_read",
-		Result: json.RawMessage(`[{"type":"text","text":"another chat"}]`)}))
+	require.NoError(t, log.Add(activity.Entry{
+		Kind: "call", CallID: "call_A", Tool: "shell_run",
+		Result: json.RawMessage(`[{"type":"text","text":"exit 0"}]`),
+	}))
+	require.NoError(t, log.Add(activity.Entry{
+		Kind: "call", CallID: "call_OTHER", Tool: "files_read",
+		Result: json.RawMessage(`[{"type":"text","text":"another chat"}]`),
+	}))
 	a := &Agent{Log: log}
-	args, _ := json.Marshal(agentproto.ReportPartArgs{Since: start.UnixMilli(), Until: time.Now().Add(time.Minute).UnixMilli(),
-		CallIDs: []string{"call_A"}, MaxBytes: 100_000})
+	args, _ := json.Marshal(agentproto.ReportPartArgs{
+		Since: start.UnixMilli(), Until: time.Now().Add(time.Minute).UnixMilli(),
+		CallIDs: []string{"call_A"}, MaxBytes: 100_000,
+	})
 	res := a.reportPart(args)
 	require.False(t, res.IsError, "%v", res.Content)
 	var part agentproto.ReportPart
@@ -42,8 +48,10 @@ func TestReportPartHoldsTheSpansLogAndTheChatsCalls(t *testing.T) {
 	assert.NotContains(t, text, "relay.example.net")
 	assert.NotContains(t, text, "another chat")
 
-	args, _ = json.Marshal(agentproto.ReportPartArgs{Since: start.UnixMilli(), Until: time.Now().Add(time.Minute).UnixMilli(),
-		CallIDs: []string{"call_A"}, MaxBytes: 150})
+	args, _ = json.Marshal(agentproto.ReportPartArgs{
+		Since: start.UnixMilli(), Until: time.Now().Add(time.Minute).UnixMilli(),
+		CallIDs: []string{"call_A"}, MaxBytes: 150,
+	})
 	res = a.reportPart(args)
 	require.False(t, res.IsError, "%v", res.Content)
 	assert.LessOrEqual(t, len(res.Content[0]["text"].(string)), 150, "made to fit")

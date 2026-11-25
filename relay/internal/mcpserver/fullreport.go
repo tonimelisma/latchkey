@@ -3,6 +3,7 @@ package mcpserver
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"regexp"
 	"slices"
@@ -237,7 +238,7 @@ func (s *Server) askParts(ctx context.Context, ms []machine, reportID string, c 
 			defer wg.Done()
 			res, err := s.hub.CallWithID(ctx, deviceID, agentproto.NewCallID(), "", agentproto.ReportPartTool, args, deadline, nil)
 			switch {
-			case err == hub.ErrTimeout:
+			case errors.Is(err, hub.ErrTimeout):
 				out[i].note = fmt.Sprintf("didn't answer within %d seconds", int(deadline.Seconds()))
 			case err != nil:
 				out[i].note = "couldn't be asked: " + err.Error()

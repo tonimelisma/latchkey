@@ -375,7 +375,8 @@ actor SafariBrowser {
                 drawing[k] = page.removeValue(forKey: k)
             }
             o["drawing"] = .object(drawing)
-            for k in ["address", "title"] { o[k] = page[k] }
+            o["title"] = page["title"]
+            if case .string(let a)? = page["address"] { o["address"] = .string(PageRecord.shownAddress(a)) }
             if case .string(let src)? = page["source"] {
                 o["source"] = .string(String(src.prefix(PageRecord.maxSource)))
                 o["source_cut"] = .bool(src.count > PageRecord.maxSource)

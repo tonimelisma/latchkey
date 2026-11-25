@@ -365,9 +365,16 @@ func (a *Agent) readLoop(ctx context.Context, c *conn, audits chan<- *agentproto
 func (a *Agent) call(ctx context.Context, c *conn, m *agentproto.Call) {
 	if m.Tool == agentproto.ReportPartTool {
 		// The relay asks for this server's part of a problem report (spec 014 FR-1445): not one
-		// of Claude's calls, so it is answered whatever is paused or turned on, and logged as an
-		// event, not as a call.
-		sent := a.reportPart(m.Arguments).Encode(m.ID)
+		// of Claude's calls, so it is logged as an event, not as a call. Not while the owner paused
+		// Claude's access (security review 2026-11-25).
+		a.mu.Lock()
+		paused := a.settings.Paused
+		a.mu.Unlock()
+		res := tools.Failf("The server's owner paused Claude's access, so it gives no part of a problem report now.")
+		if !paused {
+			res = a.reportPart(m.Arguments)
+		}
+		sent := res.Encode(m.ID)
 		if err := c.send(ctx, sent); err != nil {
 			a.Logger.Warn("report part not sent", "call", m.ID, "err", err)
 		}

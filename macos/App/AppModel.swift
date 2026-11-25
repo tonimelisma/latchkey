@@ -1283,6 +1283,13 @@ final class AppModel {
     /// The relay asks for this Mac's part of a problem report (spec 014 FR-1443 to FR-1447): not
     /// one of Claude's calls, so it isn't traced as one (FR-1445); it is recorded as an event.
     private func reportPart(_ call: Call) async -> ToolResult {
+        // Only while the Owner shares problem reports, the relay doesn't block them, and Claude's
+        // access isn't paused: the Mac checks its own setting, not only the relay's (security
+        // review 2026-11-25).
+        if let refused = ReportPart.refusal(sharing: shareReports, blocked: reportsBlocked, paused: paused) {
+            event(.app, "Refused the relay's request for a problem report's part: reports aren't shared now")
+            return refused
+        }
         let entries: ReportPart.Entries? = trace.map { t in
             let reader = t.reader
             return { from, to in

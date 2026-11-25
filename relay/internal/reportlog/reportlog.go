@@ -75,7 +75,8 @@ func (r *Ring) Forget(account string) {
 func (r *Ring) keep(account string, l Line) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	lines := append(r.accounts[account], l)
+	lines := r.accounts[account]
+	lines = append(lines, l)
 	cutoff := l.Time.Add(-MaxAge)
 	drop := 0
 	for drop < len(lines) && (len(lines)-drop > PerAccount || lines[drop].Time.Before(cutoff)) {

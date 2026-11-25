@@ -23,12 +23,14 @@ func TestShowWritesTheReportAsFiles(t *testing.T) {
 		Tool: "browser_look", Result: json.RawMessage(`[{"type":"text","text":"Cart"},{"type":"image","mimeType":"image/jpeg","data":"` + jpeg + `"}]`),
 	}}, RelayLog: []string{"t WARN x"}, Parts: []reports.Part{{Machine: "machine 1", Answered: true, Part: part}, {Machine: "machine 2", Note: "offline"}}}
 	plain, _ := json.Marshal(r)
-	dir := filepath.Join(t.TempDir(), "out")
+	dir := t.TempDir()
 	if err := writeReport(plain, dir); err != nil {
 		t.Fatal(err)
 	}
-	for _, f := range []string{"report.json", "summary.json", "calls/001-browser_look.json", "calls/001-browser_look-2.jpg",
-		"logs/relay.txt", "logs/machine-1.txt", "logs/machine-2.txt", "pages/machine-1-pk4m2.html", "pages/machine-1-pk4m2.jpg"} {
+	for _, f := range []string{
+		"report.json", "summary.json", "calls/001-browser_look.json", "calls/001-browser_look-2.jpg",
+		"logs/relay.txt", "logs/machine-1.txt", "logs/machine-2.txt", "pages/machine-1-pk4m2.html", "pages/machine-1-pk4m2.jpg",
+	} {
 		if _, err := os.Stat(filepath.Join(dir, f)); err != nil {
 			t.Errorf("%s: %v", f, err)
 		}
@@ -40,6 +42,9 @@ func TestShowWritesTheReportAsFiles(t *testing.T) {
 
 	repo := t.TempDir()
 	if err := os.Mkdir(filepath.Join(repo, ".git"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(filepath.Join(repo, "reports"), 0o700); err != nil {
 		t.Fatal(err)
 	}
 	if err := writeReport(plain, filepath.Join(repo, "reports")); err == nil {

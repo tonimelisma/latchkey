@@ -55,6 +55,8 @@ import WebKit
                 <form><input type="hidden" name="csrf" value="tok-12345-secret">
                 <input id="u" value="preset-value-9"><textarea id="t">draft text 77</textarea>
                 <button type="submit">Check out</button></form>
+                <meta name="csrf-token" content="meta-tok-66"><div contenteditable="true">note 31</div>
+                <script>window.__STATE = {token: 'inline-tok-55'}</script>
                 """, base: base)
         _ = try await b.run("document.getElementById('u').value = 'typed-4242'; 1")
         guard case .object(let page) = await b.describe(name: "pk4m2", macLocked: true, displayAsleep: false) else {
@@ -66,7 +68,10 @@ import WebKit
         #expect(page["where"] == .string("own"))
         #expect(page["address"] == .string("https://test.example/"))
         #expect(text.contains("Check out"), "the page's own words stay")
-        for secret in ["tok-12345-secret", "preset-value-9", "typed-4242", "draft text 77"] {
+        for secret in [
+            "tok-12345-secret", "preset-value-9", "typed-4242", "draft text 77", "meta-tok-66", "note 31",
+            "inline-tok-55",
+        ] {
             #expect(!text.contains(secret), "\(secret) is blanked")
         }
         guard case .object(let drawing)? = page["drawing"] else {
@@ -137,6 +142,14 @@ import WebKit
 
         let small = ReportPart.fit(part, maxBytes: 200)
         #expect(small != nil && small!.utf8.count <= 200)
+    }
+
+    /// Security review 2026-11-25: the Mac gives a part only while it shares reports itself.
+    @Test func noPartUnlessThisMacShares() {
+        #expect(ReportPart.refusal(sharing: true, blocked: false, paused: false) == nil)
+        #expect(ReportPart.refusal(sharing: false, blocked: false, paused: false)?.isError == true)
+        #expect(ReportPart.refusal(sharing: true, blocked: true, paused: false)?.isError == true)
+        #expect(ReportPart.refusal(sharing: true, blocked: false, paused: true)?.isError == true)
     }
 
     /// FR-1443: announced in hello, so only a relay that knows the request asks; the relay's name
