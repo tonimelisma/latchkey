@@ -416,7 +416,9 @@ the sign-in came back unchanged without a word.
   button or link Claude names, after moving the focus to it as Tab would; the browser does what
   the key does (Enter sends a form or presses a button, Tab moves the focus, arrows and Page Down
   scroll). Cmd+A selects all, as the Edit menu does, unless the page took the key; copy, cut and
-  paste are refused (they would use the Owner's clipboard). The answer says the keys pressed and
+  paste are refused (they would use the Owner's clipboard), and so is every Command shortcut but
+  Cmd+A, Cmd+Z, Cmd+Shift+Z and Command with an arrow or Backspace (one the page doesn't take
+  would reach Latchkey's own menu: Cmd+Q would quit it; security review 2026-11-25). The answer says the keys pressed and
   where the focus is after them.
 - **FR-482** Hovering (FR-434) in a page of Latchkey's own browser shall move that view's own
   pointer (not the Owner's) onto the element's middle, so the page's hover handlers and its CSS
@@ -446,6 +448,12 @@ the sign-in came back unchanged without a word.
   (real events there would reach a window the Owner may be using, Constitution IV), but typing
   shall give each character keydown, keypress, beforeinput, input and keyup in a keyboard's
   order (it gave input before keydown, and no keyup).
+- **FR-489** Because a real click or key lets a page do what only a person's gesture allows,
+  Latchkey's own browser shall keep the Owner's clipboard out of the page's reach (the page's
+  clipboard functions refuse; its copy, cut and paste commands do nothing), play no sound
+  (its media stays suspended), and refuse a click that would land on a list, colour or date
+  field or its label (FR-484); when the Owner's clipboard changed during an action all the
+  same, the answer says so (security review 2026-11-25; Constitution IV).
 - **FR-488** No action shall use code for one site, or reach into a page's framework (React's
   value tracker or its handlers): pages get what a person's mouse and keyboard give them (Toni,
   2026-11-25).

@@ -517,7 +517,7 @@ start (rejected: a fixed wait for something that may never come, against
 `.claude/rules/tool-design.md`); (c) a separate tool to list saves (rejected: one more step for
 Claude, and the answer has the path anyway).
 
-## D15. Real mouse and keyboard in Latchkey's own browser (FR-478 to FR-488, 2026-11-25)
+## D15. Real mouse and keyboard in Latchkey's own browser (FR-478 to FR-489, 2026-11-25)
 
 Serves FR-478 to FR-486 and spec 013 FR-1377; options and why in research.md, "Real mouse and
 keyboard (2026-11-25)".
@@ -566,6 +566,13 @@ keyboard (2026-11-25)".
   typing; `clearSignIn` empties what was typed. The fields typed are kept in the world's
   `__latchkeyFilled` as before. The paste fallback for code boxes stays a script (pasting for
   real would put the code on the Owner's clipboard). The press is `click` (D15 above).
+- **Gestures (FR-489, security review 2026-11-25).** A user script in the page's world, before
+  its own, in every frame, makes `navigator.clipboard` refuse and `execCommand` copy, cut and
+  paste do nothing (`RealInput.noClipboard`); `setAllMediaPlaybackSuspended(true)` before each
+  action; `NSPasteboard.general.changeCount` compared around it. `RealInput.allowedCommand`
+  lists the Command shortcuts pressed. Every script a real action waits on is bounded
+  (`LockedBrowser.bounded`, 5 s; logins_fill's typing 20 s in all), and each character is
+  checked afterwards to have gone into the field (`RealInput.lastTarget`).
 - **Clickable (FR-486).** `PageScripts.read` adds, after the controls, elements whose own
   computed cursor is `pointer` while their parent's isn't, or that have an `onclick` of their
   own, visible, not in or holding a listed control, at most 100 of them and at most 3,000
