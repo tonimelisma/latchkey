@@ -38,8 +38,6 @@ import Testing
         _ = try await b.hover("e2")
         let hovered = try await b.run(
             "JSON.stringify({ log: log, hover: document.querySelector('[data-latchkey=e2]').matches(':hover') })")
-        Issue.record("DIAG type: \(typed)")
-        Issue.record("DIAG fill: \(fill) \(filled)")
-        Issue.record("DIAG hover: \(hovered)")
+        Issue.record("DIAG fill: \(fill) \(filled) || hover: \(hovered) || type: \(typed.prefix(60))")
     }
 }
