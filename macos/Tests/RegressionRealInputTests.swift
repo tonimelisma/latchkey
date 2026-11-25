@@ -138,7 +138,8 @@ import Testing
             """
         _ = try await b.open(html: page, base: Self.base)
         _ = try await b.type("e1", text: "Café", submit: true)
-        #expect(try await b.run("document.title") == "sent Café", "what it held was replaced, Enter sent it")
+        let seen = try await b.run("document.title + ' | ' + document.getElementById('q').value")
+        #expect(seen.hasPrefix("sent Café |"), "what it held was replaced, Enter sent it: \(seen)")
     }
 
     /// FR-484: a list, a colour field and a date field aren't clicked (a menu would hold Latchkey
@@ -197,7 +198,8 @@ import Testing
                 "<input data-latchkey=\"e1\"><input data-latchkey=\"e2\"><script>window.ups = 0; addEventListener('keyup', function (e) { if (e.isTrusted) ups++; });</script>",
             base: Self.base)
         let done = try await b.press([try PageScripts.Key("Tab")], ref: "e1")
-        #expect(done.detail.contains("the focus is on input e2"), "\(done.detail)")
+        let now = try await b.run("(document.activeElement && document.activeElement.outerHTML) || 'none'")
+        #expect(done.detail.contains("the focus is on input e2"), "\(done.detail); active: \(now)")
         #expect(try await b.run("String(ups)") == "1")
         do {
             _ = try await b.press([try PageScripts.Key("cmd+v")], ref: nil)

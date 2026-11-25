@@ -1494,9 +1494,6 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownl
     private func active<T>(_ work: () async throws -> T) async rethrows -> T {
         let window = holderWindow as? HolderWindow
         let clipboard = NSPasteboard.general.changeCount
-        // No sound from Claude's pages: a real click lets a page start playing (security review
-        // 2026-11-25; Constitution IV).
-        await web?.setAllMediaPlaybackSuspended(true)
         window?.active = true
         defer {
             window?.active = false
@@ -1506,7 +1503,17 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownl
                 )
             }
         }
-        return try await work()
+        let result = try await work()
+        // No sound from Claude's pages: a real click lets a page start playing (security review
+        // 2026-11-25; Constitution IV). Paused, at most 1 s (suspending all media held the
+        // page's scripts up on GitHub's runner).
+        if let w = web {
+            _ = await Deadline.first(within: .seconds(1)) { @MainActor @Sendable in
+                await w.pauseAllMediaPlayback()
+                return true
+            }
+        }
+        return result
     }
 
     /// A script in one of Latchkey's own worlds, at most `within` (Constitution II): a page busy in

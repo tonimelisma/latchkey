@@ -309,7 +309,7 @@ extension PageScripts {
     static func fillFocus(ref: String, kind: String, host: String, follow: Bool) -> String {
         // nosemgrep: latchkey-page-script-literal -- besides literal() and fillCommon, only a Bool.
         """
-        (function (ref, follow) {
+        (function (ref, kind, follow) {
           \(fillCommon(host: host))
           var x = byRef(ref), f = focused();
           if (!x || !onSite(x) || !onSite(f)) return answer({ step: 'wrongsite' });
@@ -323,7 +323,7 @@ extension PageScripts {
             return answer({ step: 'next', ref: refOf(f) });
           }
           return answer({ step: 'other' });
-        })(\(literal(ref)), \(follow ? "true" : "false"))
+        })(\(literal(ref)), \(literal(kind)), \(follow ? "true" : "false"))
         """
     }
 
