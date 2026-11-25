@@ -356,7 +356,7 @@ extension PageScripts {
                   return answer({ step: 'filled', boxes: row.length });
                 }
               }
-              return answer({ step: 'unheld', why: 'the field' + (xs.length > 1 ? 's' : '') + ' held ' + held.length + ' characters, not ' + value.length });
+              return answer({ step: 'unheld', why: 'the field' + (xs.length > 1 ? 's' : '') + ' held something other than what was typed' });
             })(JSON.parse(\(literal(list))), \(literal(value)))
             """
     }
