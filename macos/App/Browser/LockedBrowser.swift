@@ -1429,6 +1429,11 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownl
         let follow = plan.follow == true
         let chars = Array(value)
         var covered: String?
+        // Why the typing stopped, said in the answer (Toni, 2026-11-25: "if you can't see the
+        // issue you're missing instrumentation"). Steps, references and hosts only, never a
+        // character typed.
+        var why = ""
+        var typedCount = 0
         let typed: Bool = try await active {
             var from = 0
             for f in fields {
@@ -1441,21 +1446,34 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownl
                     covered = c
                     return false
                 }
-                guard at.refuse == nil, at.hidden != true, let x = at.x, let y = at.y else { return false }
+                guard at.refuse == nil, at.hidden != true, let x = at.x, let y = at.y else {
+                    why =
+                        "\(f.ref) couldn't be clicked (\(at.refuse ?? (at.hidden == true ? "it doesn't show" : "no place")))"
+                    return false
+                }
                 await RealInput.click(at: RealInput.windowPoint(x, y, in: w), in: w)
                 var current = f.ref
-                guard try await self.bounded(RealInput.markField(current), world: RealInput.world) == "ok"
-                else { return false }
-                guard
-                    try await run(PageScripts.fillFocus(ref: current, kind: kind, host: host, follow: false))?.step
-                        == "same"
-                else { return false }
+                let mark = try await self.bounded(RealInput.markField(current), world: RealInput.world)
+                guard mark == "ok" else {
+                    let focus = await RealInput.evaluate(w, RealInput.focused) ?? "unknown"
+                    why =
+                        "after the click on \(current), its mark answered \(mark) (the focus is on \(focus.isEmpty ? "nothing" : focus))"
+                    return false
+                }
+                let first = try await run(PageScripts.fillFocus(ref: current, kind: kind, host: host, follow: false))
+                guard first?.step == "same" else {
+                    why = "after the click on \(current), the focus check answered \(first?.step ?? "nothing")"
+                    return false
+                }
                 if at.filled == true, let back = RealInput.stroke(for: try PageScripts.Key("Backspace")) {
                     _ = NSApp.sendAction(#selector(NSText.selectAll(_:)), to: w, from: nil)
                     await RealInput.press(back, in: w)
                 }
                 for ch in part {
-                    if Task.isCancelled || ContinuousClock.now > until { return false }
+                    if Task.isCancelled || ContinuousClock.now > until {
+                        why = "the typing's 20 s ran out after \(typedCount) of \(chars.count) characters"
+                        return false
+                    }
                     // The focus is checked before every character: a page that moved it elsewhere
                     // gets nothing more (FR-1377); a code may go on in the page's next code box,
                     // checked to be one (FR-1372).
@@ -1463,16 +1481,25 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownl
                         PageScripts.fillFocus(ref: current, kind: kind, host: host, follow: follow))
                     if now?.step == "next", let next = now?.ref {
                         current = next
-                        guard try await self.bounded(RealInput.markField(current), world: RealInput.world) == "ok"
-                        else { return false }
+                        let next = try await self.bounded(RealInput.markField(current), world: RealInput.world)
+                        guard next == "ok" else {
+                            why = "the page's next code box \(current) answered \(next) to its mark"
+                            return false
+                        }
                     } else if now?.step != "same" {
+                        why =
+                            "before character \(typedCount + 1) of \(chars.count), the focus check answered \(now?.step ?? "nothing")"
                         return false
                     }
                     // A new line or a tab in a secret is text, never Enter or Tab (it would send
                     // the form, or move the focus, before the press).
                     if !"\n\r\t".contains(ch), let k = RealInput.stroke(for: ch) {
                         // A key the page didn't take in time stops the typing.
-                        guard await RealInput.press(k, in: w) else { return false }
+                        guard await RealInput.press(k, in: w) else {
+                            why =
+                                "the page didn't take key \(typedCount + 1) of \(chars.count) within \(RealInput.stepLimit.components.seconds) s"
+                            return false
+                        }
                     } else {
                         await RealInput.insert(String(ch), in: w)
                     }
@@ -1481,8 +1508,17 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownl
                     // nothing more goes (the page moved the focus while the key was on its way;
                     // security review 2026-11-25).
                     let went = await RealInput.lastTarget(w)
-                    guard went?.ref == "field", went?.host == host else { return false }
-                    if kind == "password", went?.type != "password" { return false }
+                    guard went?.ref == "field", went?.host == host, kind != "password" || went?.type == "password"
+                    else {
+                        why =
+                            "character \(typedCount + 1) of \(chars.count) went "
+                            + (went.map {
+                                "into \($0.ref == "field" ? "the field" : "another element") on \($0.host.isEmpty ? "an unnamed frame" : $0.host) (type \($0.type.isEmpty ? "none" : $0.type))"
+                            }
+                                ?? "nowhere Latchkey was told of")
+                        return false
+                    }
+                    typedCount += 1
                 }
             }
             return true
@@ -1491,7 +1527,10 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownl
             let data = (try? JSONEncoder().encode(["step": "covered", "is": covered])) ?? Data(unheld.utf8)
             return String(decoding: data, as: UTF8.self)
         }
-        guard typed else { return unheld }
+        guard typed else {
+            let data = (try? JSONEncoder().encode(["step": "unheld", "why": why])) ?? Data(unheld.utf8)
+            return String(decoding: data, as: UTF8.self)
+        }
         let refs = fields.map(\.ref)
         let held = try await bounded(
             PageScripts.fillHeld(refs: refs, value: value, host: host), world: Self.signInWorld)

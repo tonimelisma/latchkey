@@ -350,6 +350,8 @@ enum LoginsCapability {
             var step: String
             var boxes: Int?
             var `is`: String?
+            /// Why Latchkey stopped typing (Latchkey's own browser): a step, never a character.
+            var why: String?
         }
         let typed: Step
         // Whatever stopped the typing, what was typed is emptied (FR-1311, FR-1377; security
@@ -400,7 +402,8 @@ enum LoginsCapability {
         default:
             let page = await clear() ?? here0.page
             return await answer(
-                "\(field) didn't hold what Latchkey typed (the page changed it), so nothing was pressed and the field was emptied.",
+                "\(field) didn't hold what Latchkey typed (the page changed it), so nothing was pressed and the field was emptied."
+                    + (typed.why.map { $0.isEmpty ? "" : " Latchkey stopped because \($0)." } ?? ""),
                 page, isError: true)
         }
         if let usedStep { store.usedCode(login, step: usedStep) }

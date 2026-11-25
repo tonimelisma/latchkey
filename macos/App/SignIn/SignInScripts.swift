@@ -336,16 +336,16 @@ extension PageScripts {
         return """
             (function (refs, value) {
               \(fillCommon(host: host))
-              if (!onSite(null)) return answer({ step: 'unheld' });
+              if (!onSite(null)) return answer({ step: 'unheld', why: 'the page was no longer on the saved site' });
               var xs = refs.map(byRef);
               // Gone: the page went on by itself once the last character was in (Uber's code
               // boxes, 2026-11-22): the fields typed into are no longer in the page at all (not
               // only unnamed), and every character went into its field (`RealInput.lastTarget`).
               if (xs.some(function (x) { return !x; })) {
                 var gone = filled.length > 0 && filled.every(function (n) { return !n.isConnected; });
-                return gone ? answer({ step: 'filled', boxes: xs.length > 1 ? xs.length : 0 }) : answer({ step: 'unheld' });
+                return gone ? answer({ step: 'filled', boxes: xs.length > 1 ? xs.length : 0 }) : answer({ step: 'unheld', why: 'a field typed into lost its reference but is still on the page' });
               }
-              if (xs.some(function (x) { return !onSite(x); })) return answer({ step: 'unheld' });
+              if (xs.some(function (x) { return !onSite(x); })) return answer({ step: 'unheld', why: 'a field is in a frame of another site' });
               var held = xs.map(function (x) { return x.value; }).join('');
               if (same(held, value)) return answer({ step: 'filled', boxes: xs.length > 1 ? xs.length : 0 });
               if (xs.length === 1) {
@@ -356,7 +356,7 @@ extension PageScripts {
                   return answer({ step: 'filled', boxes: row.length });
                 }
               }
-              return answer({ step: 'unheld' });
+              return answer({ step: 'unheld', why: 'the field' + (xs.length > 1 ? 's' : '') + ' held ' + held.length + ' characters, not ' + value.length });
             })(JSON.parse(\(literal(list))), \(literal(value)))
             """
     }
