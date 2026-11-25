@@ -1217,7 +1217,12 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownl
                     await RealInput.press(back, in: w)
                 }
             }
-            _ = await RealInput.type(text, in: w)
+            let typed = await RealInput.type(text, in: w)
+            // Never on out of order (a character after keys the page hadn't taken lands before
+            // them: "Céaf", GitHub's runner 2026-11-25), and never Enter on a half-typed text.
+            guard typed.taken else {
+                throw SafariBrowser.Failure.failed(Self.notTaken(typed.count, of: text.count, submit: submit))
+            }
             if submit, let enter = RealInput.stroke(for: try PageScripts.Key("Enter")) {
                 await RealInput.press(enter, in: w)
             }
@@ -1366,6 +1371,15 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownl
         return (String(decoding: data, as: UTF8.self), try await page(offset: 0))
     }
 
+    /// The page didn't take the typed keys in time (FR-485): what was typed, and that nothing
+    /// more was.
+    static func notTaken(_ typed: Int, of all: Int, submit: Bool) -> String {
+        "The page didn't take the keys in time (it may be busy, or the field didn't accept a character): "
+            + "\(typed) of \(all) characters were typed, and "
+            + (submit ? "nothing more was typed and Enter wasn't pressed." : "nothing more was typed.")
+            + " Read the page to see what the field holds before typing again."
+    }
+
     static func keyName(_ k: PageScripts.Key) -> String {
         (k.meta ? "cmd+" : "") + (k.ctrl ? "ctrl+" : "") + (k.alt ? "alt+" : "") + (k.shift ? "shift+" : "")
             + (k.key == " " ? "Space" : k.key)
@@ -1473,8 +1487,9 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownl
                     if !"\n\r\t".contains(ch), let k = RealInput.stroke(for: ch) {
                         // A key the page didn't take in time stops the typing.
                         guard await RealInput.press(k, in: w) else { return false }
-                    } else {
-                        await RealInput.insert(String(ch), in: w)
+                    } else if !(await RealInput.insert(String(ch), in: w)) {
+                        // Out of order otherwise ("Céaf"): the typing stops and is emptied.
+                        return false
                     }
                     // And after it: the character went into this field, on the saved site, still
                     // of the kind it was checked for, as WebKit and the input world told it; else
