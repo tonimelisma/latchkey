@@ -186,6 +186,8 @@ enum LocationCapability {
                 case .nothingNear(let what, let km, let around):
                     "Apple Maps found nothing for “\(what)” within \(km) km of \(around). Try other words (the local name, or what kind of place it is, like \"metro station\"), or leave out near."
                 case .noRoute(let why): "Apple Maps has no route for that: \(why)"
+                case .busy:
+                    "Apple Maps is limiting this Mac's searches for now (many in a short time), so nothing was searched: wait about a minute and try again."
                 case .failed(let why): "Apple Maps didn't answer: \(why)"
                 }
             return .text(text, isError: true)

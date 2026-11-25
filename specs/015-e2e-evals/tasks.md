@@ -49,7 +49,7 @@ weekly run, by the person running it.
 ## Milestone 5: results
 - T16 `e2e send` / `--send`: seal, split under 64 KB, prove, post (FR-1530); `reports.SealRaw`
   and `OpenRaw`. Test first.
-- T17 `latchkey-reports evals [--this-week] [-quiet]`: sent results by run, compared with the
+- T17 `latchkey-reports evals` (its `-this-week` reminder removed 2026-11-25, FR-1511 withdrawn): sent results by run, compared with the
   previous one; `list` shows problem reports only (FR-1531). Test first.
 - T18 The session-start step (CLAUDE.md) that tells Toni when no result was sent this week (FR-1511).
 

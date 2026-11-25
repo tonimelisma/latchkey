@@ -57,17 +57,6 @@ func TestJoinRuns(t *testing.T) {
 	}
 }
 
-func TestWeekStart(t *testing.T) {
-	sun := time.Date(2026, 11, 29, 23, 0, 0, 0, time.UTC) // a Sunday
-	if got := weekStart(sun); got.Weekday() != time.Monday || got.Day() != 23 {
-		t.Fatalf("%v", got)
-	}
-	mon := time.Date(2026, 11, 23, 0, 30, 0, 0, time.UTC)
-	if got := weekStart(mon); got.Day() != 23 {
-		t.Fatalf("%v", got)
-	}
-}
-
 // forged is a result someone without the developer's key sealed and posted.
 func forged(t *testing.T, id string, r evals.Result) entry {
 	t.Helper()
