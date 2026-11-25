@@ -429,16 +429,13 @@ enum RealInput {
     }
 
     /// Waits until the page has taken every key sent to it in this action, at most `within`;
-    /// answers whether it did.
+    /// answers whether it did. Woken by the page's own word (`InputSignal.until`), never by
+    /// looking again every few milliseconds: with dozens of pages in one program (GitHub's runner,
+    /// 2026-11-25) those looks took the main thread, so a key's release came 0.75 s late.
     @discardableResult
     static func settle(_ view: WKWebView, within: Duration = stepLimit) async -> Bool {
         guard let signal = signals[ObjectIdentifier(view)] else { return false }
-        let end = ContinuousClock.now + within
-        while signal.count("key") < signal.sentKeys {
-            if ContinuousClock.now >= end { return false }
-            try? await Task.sleep(for: .milliseconds(5))
-        }
-        return true
+        return await signal.until(within: within) { signal.count("key") >= signal.sentKeys }
     }
 
     /// A new action starts counting keys from what the page took so far: a key-up that never
@@ -448,31 +445,34 @@ enum RealInput {
 
     /// Text no key of a US keyboard types (é, an emoji), as the Character Viewer gives it: input
     /// without a key (FR-480). It doesn't wait in line with the keys, so the keys before it are
-    /// taken first ("Café" came out "Caéf" on a busy Mac, 2026-11-25).
-    static func insert(_ text: String, in view: WKWebView) async {
-        await settle(view)
+    /// taken first ("Café" came out "Caéf" on a busy Mac, 2026-11-25); when they aren't taken in
+    /// time, it isn't typed at all (it would land before them: "Céaf" on GitHub's runner,
+    /// 2026-11-25). Answers whether it was typed and the page took it.
+    @discardableResult
+    static func insert(_ text: String, in view: WKWebView, within: Duration = stepLimit) async -> Bool {
+        guard await settle(view, within: within) else { return false }
         signals[ObjectIdentifier(view)]?.clearTarget()
         let before = await count(view, "input")
         // The responder's insertText, which the view takes as an input method's text.
         view.insertText(text)
-        await wait(view, "input", after: before)
+        return await wait(view, "input", after: before)
     }
 
     /// Types `text` into what has the focus, a key per character, one after the other (FR-480),
-    /// and waits until the page has taken them. Answers how many characters were typed.
-    static func type(_ text: String, in view: WKWebView) async -> Int {
+    /// and waits until the page has taken them. Answers how many characters were typed and
+    /// whether the page took them all; typing stops at a character that can't follow in order.
+    static func type(_ text: String, in view: WKWebView) async -> (count: Int, taken: Bool) {
         var n = 0
         for ch in text {
-            if Task.isCancelled { break }
+            if Task.isCancelled { return (n, false) }
             if let s = stroke(for: ch) {
                 await press(s, in: view, wait: false)
-            } else {
-                await insert(String(ch), in: view)
+            } else if !(await insert(String(ch), in: view)) {
+                return (n, false)
             }
             n += 1
         }
-        await settle(view)
-        return n
+        return (n, await settle(view))
     }
 
     // MARK: waiting
@@ -504,14 +504,13 @@ enum RealInput {
     }
 
     /// Waits until the page has taken more of `name` than `before`, at most `stepLimit` (FR-485),
-    /// looking at what it told Latchkey (no script runs in the page). A page that never gets the
-    /// event (a disabled button takes none) costs that wait once.
-    static func wait(_ view: WKWebView, _ name: String, after before: Int) async {
-        guard let signal = signals[ObjectIdentifier(view)] else { return }
-        let end = ContinuousClock.now + stepLimit
-        while ContinuousClock.now < end, signal.count(name) <= before {
-            try? await Task.sleep(for: .milliseconds(5))
-        }
+    /// woken by what it told Latchkey (no script runs in the page, nothing looks again and
+    /// again). A page that never gets the event (a disabled button takes none) costs that wait
+    /// once. Answers whether it came.
+    @discardableResult
+    static func wait(_ view: WKWebView, _ name: String, after before: Int) async -> Bool {
+        guard let signal = signals[ObjectIdentifier(view)] else { return false }
+        return await signal.until(within: stepLimit) { signal.count(name) > before }
     }
 
     /// Where the last character went: the element's reference ("-" for one without) and the
@@ -543,6 +542,45 @@ final class InputSignal {
 
     func count(_ name: String) -> Int { counts[name] ?? 0 }
 
+    /// Those waiting for something the page tells (`until`): what each waits for, its answer,
+    /// and its timer, ended with it.
+    private var waiters: [Int: (met: () -> Bool, done: (Bool) -> Void, timer: Task<Void, Never>?)] = [:]
+    private var nextWaiter = 0
+
+    /// Answers true as soon as `met` holds, checked again only when the page tells Latchkey of
+    /// an event; false after `within` (Constitution II) or when the waiting task is cancelled.
+    /// Nothing runs while waiting: a busy main thread is left to the pages (spec 005 FR-485;
+    /// GitHub's runner, 2026-11-25).
+    func until(within: Duration, _ met: @escaping () -> Bool) async -> Bool {
+        if met() { return true }
+        let id = nextWaiter
+        nextWaiter += 1
+        return await withTaskCancellationHandler {
+            await withCheckedContinuation { (c: CheckedContinuation<Bool, Never>) in
+                // Holds this signal until the limit, so a waiter is always answered.
+                let timer = Task { @MainActor in
+                    try? await Task.sleep(for: within)
+                    self.finish(id, false)
+                }
+                waiters[id] = (met, { c.resume(returning: $0) }, timer)
+                if Task.isCancelled { finish(id, false) }
+            }
+        } onCancel: {
+            Task { @MainActor in self.finish(id, false) }
+        }
+    }
+
+    /// Wakes the waiters whose condition now holds.
+    func wake() {
+        for (id, w) in waiters where w.met() { finish(id, true) }
+    }
+
+    private func finish(_ id: Int, _ answer: Bool) {
+        guard let w = waiters.removeValue(forKey: id) else { return }
+        w.timer?.cancel()
+        w.done(answer)
+    }
+
     func received(_ body: Any, host: String) {
         guard let o = body as? [String: Any], let k = o["k"] as? String else { return }
         switch k {
@@ -558,6 +596,7 @@ final class InputSignal {
         default:
             return
         }
+        wake()
     }
 
     final class Handler: NSObject, WKScriptMessageHandler {

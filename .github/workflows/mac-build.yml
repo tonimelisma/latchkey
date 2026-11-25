@@ -65,15 +65,18 @@ jobs:
       # The whole unit test suite, reported, not a gate (2026-11-23): on this runner (macOS 26,
       # slower than the Mac) about 30 tests miss their timing limits or need the owner's Mac, on
       # main as on a branch, so compare a branch's failures with main's. Each failure is printed
-      # with why, and the test host's crash reports with their stacks.
+      # with why, and the test host's crash reports with their stacks. Without the tests that
+      # open web pages: they run one at a time in the next step.
       - name: Unit tests (reported)
         working-directory: macos
         continue-on-error: true
         run: |
           rc=0
+          skip=$(sed 's/^/-skip-testing:LatchkeyTests\//' scripts/page-suites.txt | tr '\n' ' ')
+          # shellcheck disable=SC2086
           xcodebuild -project Latchkey.xcodeproj -scheme Latchkey -destination 'platform=macOS' \
             -derivedDataPath "$RUNNER_TEMP/dd" CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM= \
-            -resultBundlePath "$RUNNER_TEMP/tests.xcresult" test-without-building > "$RUNNER_TEMP/test.log" 2>&1 || rc=$?
+            -resultBundlePath "$RUNNER_TEMP/tests.xcresult" $skip test-without-building > "$RUNNER_TEMP/test.log" 2>&1 || rc=$?
           xcrun xcresulttool get test-results summary --path "$RUNNER_TEMP/tests.xcresult" \
             | jq -r '.testFailures[]? | "FAILURE \(.testIdentifierString): \(.failureText)"' | head -300 || true
           find ~/Library/Logs/DiagnosticReports -name '*.ips' -mmin -60 2>/dev/null | head -3 | while read -r f; do
@@ -82,24 +85,23 @@ jobs:
           done
           tail -40 "$RUNNER_TEMP/test.log"
           exit "$rc"
-      # The browser and sign-in tests again, on their own (2026-11-25): in the full suite, many
-      # pages at once load this runner so much that a page takes over 10 s to answer a script
-      # (on main too); alone, their failures are their own.
-      - name: Browser and sign-in tests on their own (reported)
+      # The tests that open web pages, one at a time (Toni, 2026-11-25): run side by side, dozens
+      # of pages share the test program's one main thread, so a page's events come late and
+      # steps pass their limits on this runner (measured 2026-11-25: a click 2 s alone, 18 s
+      # among 70 pages). The suites are listed in macos/scripts/page-suites.txt.
+      - name: Tests with web pages, one at a time (reported)
         if: always()
         working-directory: macos
         continue-on-error: true
         run: |
           rc=0
+          only=$(sed 's/^/-only-testing:LatchkeyTests\//' scripts/page-suites.txt | tr '\n' ' ')
+          # shellcheck disable=SC2086
           xcodebuild -project Latchkey.xcodeproj -scheme Latchkey -destination 'platform=macOS' \
             -derivedDataPath "$RUNNER_TEMP/dd" CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM= \
-            -resultBundlePath "$RUNNER_TEMP/browser.xcresult" \
-            -only-testing:LatchkeyTests/SignInFillTests -only-testing:LatchkeyTests/RegressionLoginsBTests \
-            -only-testing:LatchkeyTests/RegressionLoginsCTests -only-testing:LatchkeyTests/RegressionRealInputTests \
-            -only-testing:LatchkeyTests/RegressionRichEditorCTests -only-testing:LatchkeyTests/RegressionHoverCTests \
-            -only-testing:LatchkeyTests/LockedBrowserTests \
-            -only-testing:LatchkeyTests/LockedBrowserActionTests -only-testing:LatchkeyTests/BrowserDialogTests \
-            test-without-building > "$RUNNER_TEMP/browser.log" 2>&1 || rc=$?
-          xcrun xcresulttool get test-results summary --path "$RUNNER_TEMP/browser.xcresult" \
-            | jq -r '"ALONE passed \(.passedTests) failed \(.failedTests)", (.testFailures[]? | "ALONE FAILURE \(.testIdentifierString): \(.failureText)")' | head -100 | cut -c1-3000 || true
+            -resultBundlePath "$RUNNER_TEMP/pages.xcresult" -parallel-testing-enabled NO $only \
+            test-without-building > "$RUNNER_TEMP/pages.log" 2>&1 || rc=$?
+          xcrun xcresulttool get test-results summary --path "$RUNNER_TEMP/pages.xcresult" \
+            | jq -r '"PAGES passed \(.passedTests) failed \(.failedTests)", (.testFailures[]? | "PAGES FAILURE \(.testIdentifierString): \(.failureText)")' | head -150 | cut -c1-3000 || true
+          tail -5 "$RUNNER_TEMP/pages.log"
           exit "$rc"

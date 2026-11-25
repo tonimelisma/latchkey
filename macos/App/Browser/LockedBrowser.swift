@@ -1217,7 +1217,12 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownl
                     await RealInput.press(back, in: w)
                 }
             }
-            _ = await RealInput.type(text, in: w)
+            let typed = await RealInput.type(text, in: w)
+            // Never on out of order (a character after keys the page hadn't taken lands before
+            // them: "Céaf", GitHub's runner 2026-11-25), and never Enter on a half-typed text.
+            guard typed.taken else {
+                throw SafariBrowser.Failure.failed(Self.notTaken(typed.count, of: text.count, submit: submit))
+            }
             if submit, let enter = RealInput.stroke(for: try PageScripts.Key("Enter")) {
                 await RealInput.press(enter, in: w)
             }
@@ -1364,6 +1369,15 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownl
                 : focus == "" ? "; nothing on the page has the focus" : "; the focus is on \(focus ?? "")")
         let data = (try? JSONEncoder().encode([line])) ?? Data("[]".utf8)
         return (String(decoding: data, as: UTF8.self), try await page(offset: 0))
+    }
+
+    /// The page didn't take the typed keys in time (FR-485): what was typed, and that nothing
+    /// more was.
+    static func notTaken(_ typed: Int, of all: Int, submit: Bool) -> String {
+        "The page didn't take the keys in time (it may be busy, or the field didn't accept a character): "
+            + "\(typed) of \(all) characters were typed, and "
+            + (submit ? "nothing more was typed and Enter wasn't pressed." : "nothing more was typed.")
+            + " Read the page to see what the field holds before typing again."
     }
 
     static func keyName(_ k: PageScripts.Key) -> String {
@@ -1525,8 +1539,10 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownl
                                 "the page didn't take a key within \(RealInput.stepLimit.components.seconds) s, \(when(typedCount))"
                             return false
                         }
-                    } else {
-                        await RealInput.insert(String(ch), in: w)
+                    } else if !(await RealInput.insert(String(ch), in: w)) {
+                        // Out of order otherwise ("Céaf"): the typing stops and is emptied.
+                        why = "the page didn't take the keys before a character typed as text, \(when(typedCount))"
+                        return false
                     }
                     // And after it: the character went into this field, on the saved site, still
                     // of the kind it was checked for, as WebKit and the input world told it; else
@@ -1567,6 +1583,70 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownl
         return try SafariBrowser.detail(
             try await bounded(PageScripts.fillPaste(refs: refs, value: value, host: host), world: Self.signInWorld),
             ref: ref)
+    }
+
+    /// Temporary instrumentation (Toni, 2026-11-25: "if you can't see the issue you're missing
+    /// instrumentation"): what a pointer move reaches on a Mac where hover does nothing (GitHub's
+    /// macOS 26 runner). Each way of moving the pointer, and the page's log after it.
+    func hoverDiagnostics(_ ref: String, log: String) async throws -> String {
+        guard let w = web else { throw SafariBrowser.Failure.noWindow }
+        var out: [String] = []
+        try await active {
+            let at = try await self.spot(ref)
+            guard let x = at.x, let y = at.y else { throw SafariBrowser.Failure.failed("no spot") }
+            let p = RealInput.windowPoint(x, y, in: w)
+            let win = w.window
+            out.append(
+                "state: flipped=\(w.isFlipped) bounds=\(w.bounds) visible=\(w.visibleRect) point=\(p) "
+                    + "window=\(win.map { "\($0.frame)" } ?? "none") screen=\(win?.screen.map { "\($0.frame)" } ?? "none") "
+                    + "key=\(win?.isKeyWindow == true) firstResponder=\(win?.firstResponder === w) appActive=\(NSApp.isActive) "
+                    + "acceptsMoved=\(win?.acceptsMouseMovedEvents == true) number=\(win?.windowNumber ?? -1)")
+            func step(_ name: String, _ send: () -> Void) async {
+                send()
+                try? await Task.sleep(for: .milliseconds(400))
+                let seen = (try? await self.run(log)) ?? "?"
+                out.append("\(name): \(seen)")
+            }
+            guard let win else { return }
+            func ev(_ t: NSEvent.EventType, _ q: NSPoint) -> NSEvent? {
+                NSEvent.mouseEvent(
+                    with: t, location: q, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
+                    windowNumber: win.windowNumber, context: nil, eventNumber: 0, clickCount: 0, pressure: 0)
+            }
+            await step("mouseMoved") {
+                if let e = ev(.mouseMoved, NSPoint(x: p.x - 10, y: p.y)) { w.mouseMoved(with: e) }
+                if let e = ev(.mouseMoved, p) { w.mouseMoved(with: e) }
+            }
+            await step("window.sendEvent mouseMoved") {
+                if let e = ev(.mouseMoved, NSPoint(x: p.x - 5, y: p.y)) { win.sendEvent(e) }
+                if let e = ev(.mouseMoved, p) { win.sendEvent(e) }
+            }
+            win.acceptsMouseMovedEvents = true
+            await step("acceptsMouseMovedEvents + mouseMoved") {
+                if let e = ev(.mouseMoved, NSPoint(x: p.x - 3, y: p.y)) { w.mouseMoved(with: e) }
+                if let e = ev(.mouseMoved, p) { w.mouseMoved(with: e) }
+            }
+            win.acceptsMouseMovedEvents = false
+            await step("mouseEntered") {
+                if let e = NSEvent.enterExitEvent(
+                    with: .mouseEntered, location: p, modifierFlags: [],
+                    timestamp: ProcessInfo.processInfo.systemUptime,
+                    windowNumber: win.windowNumber, context: nil, eventNumber: 0, trackingNumber: 0, userData: nil)
+                {
+                    w.mouseEntered(with: e)
+                }
+                if let e = ev(.mouseMoved, p) { w.mouseMoved(with: e) }
+            }
+            await step("cgEvent mouseMoved") {
+                if let c = CGEvent(
+                    mouseEventSource: nil, mouseType: .mouseMoved, mouseCursorPosition: p, mouseButton: .left),
+                    let e = NSEvent(cgEvent: c)
+                {
+                    w.mouseMoved(with: e)
+                }
+            }
+        }
+        return out.joined(separator: " || ")
     }
 
     // MARK: the real mouse and keyboard (FR-478 to FR-485)

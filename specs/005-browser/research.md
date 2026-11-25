@@ -559,6 +559,16 @@ the page for its counts every few milliseconds (first version: on GitHub's busy 
 question took seconds and the questions themselves added load, so typing stopped early); the
 message handler (chosen: nothing runs in the page, and the frame's host comes from WebKit).
 
+Latchkey's side of that wait (2026-11-25): it first looked at the counts every 5 ms. Measured on
+GitHub's macOS 26 runner the same day: alone, a page answers a script in 0 to 14 ms and "Café"
+types in order; among the ~70 pages of the browser and sign-in tests in one test program, a key's
+release reached the page 0.4 to 0.75 s after its press (sent 15 ms apart) and a click took 18 s,
+because every page shares the program's one main thread. Options: look less often (still work
+while nothing happens, and later answers); a continuation per wait, resumed by the message
+handler when its count is reached and by a timer at the limit (chosen: nothing runs while
+waiting); running the tests one at a time only (hides the cost for an app with several pages;
+chosen as well, for the runner, Toni 2026-11-25).
+
 Keys: US-layout virtual key codes (`kVK_ANSI_*`), characters as the keyboard gives them
 (`\r` for Enter, `\u{7F}` for Backspace, the function-key characters for arrows, Home, End,
 Page Up and Down, Delete), Shift for upper case and the shifted symbols. Input methods: an

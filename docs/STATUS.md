@@ -40,26 +40,21 @@ until one is chosen). Rows and how each is checked:
 | Safari tabs: typing in a keyboard's order; still script actions | VERIFIED in tests only | `safarisScriptTypingGivesAKeyboardsOrder` (a WebKit view, not real Safari) |
 | No Command shortcut, picker, clipboard or sound reaches the owner | VERIFIED in tests only | `shortcutsPickersAndTheClipboardStayOutOfReach` |
 
-Open (2026-11-25, merged on Toni's "Skip CI we'll fix it later"): Mac unit tests that fail on
-GitHub's macOS 26 runner on this branch and not on main, all passing on Toni's Mac (macOS 27,
-52cb920, run 2026-11-25 09:27 PST, unlocked): `SignInFillTests` (codes from Passwords, texts and
-email; a checked code; code boxes "1 of 4" and a row of six; a page that goes on by itself; a
-field that doesn't hold; shadow-root fields), `RegressionLoginsBTests.aFillAnswersInTime…`,
-`RegressionLoginsCTests` (hidden ad frame, Citi's mask, a password never into a code box),
-`RegressionHoverCTests.aHoverWhoseMenuDrawsLate…`, `BrowserDialogTests.aConfirmGetsCancel…`.
-Learned in three attempts: (1) the first waits went on before the page had taken a key
-("Café" came out "Caéf"; a click's release after the window stopped counting as front): fixed,
-keys are now waited for where order matters; (2) a 5 s, then 10 s, guard per page script: on the
-runner, with the suite's many pages at once, a script into a page takes 1 to 3 s and sometimes
-over 10 s (main's run has the same kind of timeouts); (3) the page now tells Latchkey of each key
-(no polling). What is left: logins_fill checks the focus with a script before every character
-(kept for the password rule), so on the runner 6 or more characters pass its 20 s limit and the
-typing stops and is emptied; run on their own there, 9 of 73 browser and sign-in tests still fail
-this way. And on the macOS 26 runner a pointer move reaches no page at all (hover: no events, no
-`:hover`), while clicks and keys do: an open bug in Latchkey, cause not found yet. A diagnostic
-run (2026-11-25 19:2x, 3f9352f) showed typing and logins_fill of a 4-digit code work there,
-trusted and in a keyboard's order. Next: make the per-character check cheaper or the limit
-scale with the length, and find why pointer moves don't arrive on macOS 26.
+Mac tests on GitHub's macOS 26 runner after real input (merged on Toni's "Skip CI we'll fix it
+later"): the cause, measured there 2026-11-25 (run 45694073481): every web page of the tests
+shares the test program's one main thread. Alone, a page answers a script in 0 to 14 ms and
+"Café" types in order; among the ~70 pages of the browser and sign-in tests, a key's release
+reached the page up to 0.75 s late and a click took 18 s, so steps passed their 10 s limits, and
+when the wait before an "é" ran out it was typed anyway ("Céaf"). Not macOS 26 or WebKit. Fixed
+(Toni: "App + tests"): Latchkey's waits are woken by the page's own word instead of looking every
+5 ms; typing stops and says so when the page hasn't taken the keys in time (FR-485a); on GitHub
+the tests that open web pages run one at a time (`macos/scripts/page-suites.txt`). Runner result
+(pull request #53, run 45707207366, 2026-11-25): tests with web pages 234 passed, 6 failed, all
+6 failing on main before too (~45 were failing); the rest of the suite 11 failed (main: 30
+before real input, 52 after), none from this change. Still open on that runner: hover (a pointer
+move reaches no page; cause not found), a code spread over 4 boxes, a list's options in the
+element list, a Safari token replaced by a page not logged, Enter after typing in
+`everyActionWorksInLatchkeysOwnBrowser`.
 
 Known limits: a frame a page's script makes without an address (about:blank, srcdoc) may not get
 Latchkey's clipboard block, so a copy from there during a real click is only noticed afterwards

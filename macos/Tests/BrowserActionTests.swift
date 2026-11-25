@@ -68,7 +68,10 @@ enum ActionPage {
     }
 
     func ref(_ r: PageScripts.Page, _ kind: String, _ label: String) throws -> String {
-        try #require(r.elements.first { $0.kind.hasPrefix(kind) && $0.label.contains(label) }?.ref, "\(kind) \(label)")
+        try #require(
+            r.elements.first { $0.kind.hasPrefix(kind) && $0.label.contains(label) }?.ref,
+            "\(kind) \(label) not in: \(r.elements.map { "[\($0.ref) \($0.kind): \($0.label)]" }.joined(separator: " "))"
+        )
     }
 
     /// The parts after "ok" and a tab.
@@ -453,11 +456,16 @@ enum ActionPage {
         defer { b.discard() }
         let r = try await b.open(html: ActionPage.html, base: base)
         func ref(_ kind: String, _ label: String) throws -> String {
-            try #require(r.elements.first { $0.kind.hasPrefix(kind) && $0.label.contains(label) }?.ref)
+            try #require(
+                r.elements.first { $0.kind.hasPrefix(kind) && $0.label.contains(label) }?.ref,
+                "\(kind) \(label) not in: \(r.elements.map { "[\($0.ref) \($0.kind): \($0.label)]" }.joined(separator: " "))"
+            )
         }
+        // Real keys (spec 005 FR-481): Enter in a form of several fields and no send button sends
+        // nothing in a browser (no implicit submission), as for a person; the keys reach the field.
         let typed = try await b.press(
             try ["h", "i", "Enter"].map(PageScripts.Key.init), ref: try ref("field:text", "Name"))
-        #expect(typed.page.title == "sent:hi")
+        #expect(try await b.run("document.getElementById('name').value") == "hi", "\(typed.detail)")
         let chose = try await b.choose(try ref("choice", "Small"), options: ["Medium"])
         #expect(chose.detail == "[\"Medium\"]")
         let hovered = try await b.hover(try ref("div", "Products"))
