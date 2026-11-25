@@ -204,6 +204,7 @@ func list() error {
 		}
 		out = append(out, o)
 	}
+	fmt.Fprintln(os.Stderr, untrusted)
 	enc := json.NewEncoder(os.Stdout)
 	enc.SetIndent("", "  ")
 	return enc.Encode(out)

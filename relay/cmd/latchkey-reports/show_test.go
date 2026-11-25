@@ -29,7 +29,7 @@ func TestShowWritesTheReportAsFiles(t *testing.T) {
 	}
 	for _, f := range []string{
 		"report.json", "summary.json", "calls/001-browser_look.json", "calls/001-browser_look-2.jpg",
-		"logs/relay.txt", "logs/machine-1.txt", "logs/machine-2.txt", "pages/machine-1-pk4m2.html", "pages/machine-1-pk4m2.jpg",
+		"logs/relay.txt", "logs/machine-1.txt", "logs/machine-2.txt", "pages/machine-1-pk4m2.html.txt", "README.txt", "pages/machine-1-pk4m2.jpg",
 	} {
 		if _, err := os.Stat(filepath.Join(dir, f)); err != nil {
 			t.Errorf("%s: %v", f, err)

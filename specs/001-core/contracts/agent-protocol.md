@@ -107,7 +107,11 @@ it.
 additions to this protocol that the app understands. The app sends `["clients"]` when it
 understands the `clients` and `revoke_client` messages below, and `"audit"` (2026-10-27) when it
 understands `audit_request` and `audit`, and `"feedback"` (2026-11-16) when it understands
-`feedback` and `feedback_saved`. Unknown strings are ignored, and
+`feedback` and `feedback_saved`, and `"report_part"` (2026-11-25, spec 014 FR-1443) when it
+answers the relay's `call` of the tool `latchkey_report_part` with its part of a problem report
+(arguments and answer: spec 014 contracts/feedback-intake.md). That tool is never in a machine's
+tool list: a `hello` or `tools` message offering it is a protocol violation (4005), like the
+relay's own tools. Unknown strings are ignored, and
 a missing `features` means none. The relay sends `clients` messages ONLY to an agent that listed
 `"clients"`: the app up to 0.8.9 treats an unknown message type as a protocol violation.
 
@@ -380,7 +384,7 @@ A Linux server's state adds `uptime_s` (seconds, optional) and sends the Mac-onl
 fixed values the relay ignores for it: `battery_percent` 0, `power_source` "unknown", `charging`
 and `low_power_mode` false, `time_remaining_min` and `lid_closed` null, `thermal_state` "nominal",
 `keep_awake` "on" (fixtures `valid/hello-linux.json`, `valid/state-linux.json`,
-`valid/welcome-name.json`). A Linux server announces only the `audit` feature; `clients` and
+`valid/welcome-name.json`). A Linux server announces the `audit` and `report_part` features; `clients` and
 `notice` go only to Macs, and a `revoke_client` from a machine that isn't a Mac closes it with 4005.
 Its `goodbye` reasons are `user_quit` (the service stopped), `system_shutdown`, and
 `user_disconnected` (uninstall).

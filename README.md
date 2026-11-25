@@ -177,11 +177,17 @@ apps. It works in the background instead.
   export them all in one shape, to run evals over everything that happened.
 - **Claude can report what didn't work, if you want.** Off unless you turn on "Share Problem
   Reports with Latchkey's Developer" in Latchkey's settings. Then, whenever something Claude did
-  through Latchkey didn't fully work, Claude writes a short report (told to leave out your
-  passwords, codes, account numbers, and message texts), and your relay sends it, encrypted so
-  only Latchkey's developer can read it, with no name, email address, or machine name. Nothing is
-  kept on your side, and you can turn it off at any time. Someone running their own relay can
-  block forwarding reports from it.
+  through Latchkey didn't fully work, Claude writes a report, and your relay sends it with
+  everything from that chat: each of its Latchkey calls with the answer (which can include text
+  from your messages, emails, files and web pages), Latchkey's logs from that time on the relay
+  and on the machines involved, and each web page the chat used (its address, its source with
+  every field's value blanked, its requests and errors, whether it was drawing, and a screenshot
+  of a page in Latchkey's own browser). Passwords, codes and cookie values are always left out,
+  and machine names, your email address and the relay's address are replaced. Latchkey's own
+  browser keeps that record of each page in memory only, from a hidden place the page can't see,
+  and drops it when the page closes. Reports are encrypted so only Latchkey's developer can read
+  them, up to 5 MB each. Nothing is kept on your side, and you can turn it off at any time.
+  Someone running their own relay can block forwarding reports from it.
 - **It never interrupts you.** What Claude does on your Mac happens in the background, except
   computer control, which you'll see.
 - **Nothing is left behind.** What Claude starts is cleaned up when it's done.

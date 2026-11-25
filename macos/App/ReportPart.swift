@@ -49,6 +49,16 @@ enum ReportPart {
         var calls: [CallCopy] = []
         var pages: [JSONValue] = []
         var notes: [String] = []
+        /// Names the relay replaces in the report and never sends (FR-1449).
+        var privateNames: [String] = []
+        enum CodingKeys: String, CodingKey {
+            case log, calls, pages, notes, privateNames = "private"
+        }
+    }
+
+    /// This Mac's host name, the Owner's login name and home folder (FR-1449).
+    static func privateNames() -> [String] {
+        [ProcessInfo.processInfo.hostName, NSUserName(), NSHomeDirectory()].filter { $0.count >= 3 }
     }
 
     /// The activity log's entries from one moment to another, oldest first.
@@ -76,10 +86,24 @@ enum ReportPart {
         if to < from || to.timeIntervalSince(from) > 48 * 3600 { from = to.addingTimeInterval(-48 * 3600) }
         to = to.addingTimeInterval(1)
         var part = Part()
+        part.privateNames = privateNames()
         if let entries {
+            // Off the shared pool, behind a limit (.claude/rules/macos.md: never block a thread in
+            // async code; security review 2026-11-25).
+            let span = (from, to)
+            let read: Result<[Activity], ReadFailure>? = await Deadline.first(within: .seconds(2)) {
+                await withCheckedContinuation { (c: CheckedContinuation<Result<[Activity], ReadFailure>?, Never>) in
+                    DispatchQueue.global(qos: .utility).async {
+                        do { c.resume(returning: .success(try entries(span.0, span.1))) } catch {
+                            c.resume(returning: .failure(ReadFailure(text: error.localizedDescription)))
+                        }
+                    }
+                }
+            }
             do {
+                guard let read else { throw ReadFailure(text: "it took longer than 2 seconds") }
                 let ids = Set(args.callIDs ?? [])
-                for a in try entries(from, to) {
+                for a in try read.get().sorted(by: { $0.at < $1.at }) {
                     let time = PageRecord.iso8601(a.at)
                     if a.kind == .event, a.inSystemLog == true {  // only what latchkey_log shows (FR-663)
                         part.log.append(
@@ -92,6 +116,8 @@ enum ReportPart {
                                 isError: a.isError ? true : nil, durationMS: a.durationMS))
                     }
                 }
+            } catch let f as ReadFailure {
+                part.notes.append("the activity log couldn't be read: \(f.text)")
             } catch {
                 part.notes.append("the activity log couldn't be read: \(error.localizedDescription)")
             }
@@ -147,6 +173,10 @@ enum ReportPart {
                 return nil
             }
         }
+    }
+
+    struct ReadFailure: Error, Sendable {
+        var text: String
     }
 
     /// Whether the main display is asleep, for the pages' drawing state.

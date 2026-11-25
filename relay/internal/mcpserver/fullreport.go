@@ -29,8 +29,6 @@ const DefaultPartDeadline = 10 * time.Second
 const (
 	// chatLookBack is how far back other sessions of the same chat are looked for (FR-1441).
 	chatLookBack = 24 * time.Hour
-	// clientLookBack is the span for a client without sessions (FR-1441).
-	clientLookBack = 2 * time.Hour
 	// sizeMargin leaves room for sealing (the KEM's encapsulation, the tag, the magic).
 	sizeMargin = 4 << 10
 )
@@ -41,8 +39,12 @@ var pageName = regexp.MustCompile(`^p[abcdefghjkmnpqrstuvwxyz23456789]{4}$`)
 // pageInAnswer finds the page names an answer gives ("page p4k2").
 var pageInAnswer = regexp.MustCompile(`\bpage (p[abcdefghjkmnpqrstuvwxyz23456789]{4})\b`)
 
-// codeLike is an argument that has the shape of a verification code: 4 to 8 digits (FR-1448).
-var codeLike = regexp.MustCompile(`^[0-9]{4,8}$`)
+// codeLike is typed text with the shape of a verification code: 4 to 8 digits (FR-1448); only
+// under typedKeys, so a year or a port given as an argument isn't taken for one.
+var (
+	codeLike  = regexp.MustCompile(`^[0-9]{4,8}$`)
+	typedKeys = map[string]bool{"text": true, "value": true, "keys": true}
+)
 
 // secretKeys are argument names whose value is a secret wherever they appear (FR-1448), and
 // secretParts are parts of a name that make it one (api_key, access_token, client_secret);
@@ -52,7 +54,24 @@ var (
 	secretParts = []string{"password", "passwd", "token", "secret", "apikey", "api_key", "authorization", "cookie", "credential", "private_key"}
 	// bearerLike finds a credential written into text (a header in a shell command).
 	bearerLike = regexp.MustCompile(`(?i)\b(bearer|basic|token)\s+[A-Za-z0-9._~+/=-]{16,}`)
+	// secretInText finds secrets in any text of the report, answers included (cat .env, a
+	// credentials file, a header in a command): the value after a secret's name, a credential
+	// after its scheme, cloud keys, and private key blocks (security review 2026-11-25).
+	secretInText = []*regexp.Regexp{
+		regexp.MustCompile(`(?i)((?:password|passwd|pwd|passphrase|token|secret|api[_-]?key|access[_-]?key|private[_-]?key|client[_-]?secret|authorization|cookie|session[_-]?id)["']?\s*[:=]\s*["']?)([^\s"'&,;<>]{4,})`),
+		regexp.MustCompile(`(?i)(\b(?:bearer|basic)\s+)([A-Za-z0-9._~+/=-]{12,})`),
+		regexp.MustCompile(`()\b((?:AKIA|ASIA)[0-9A-Z]{16}|gh[pousr]_[A-Za-z0-9]{30,}|xox[abpr]-[A-Za-z0-9-]{10,}|sk-[A-Za-z0-9_-]{20,})\b`),
+		regexp.MustCompile(`()(-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----)`),
+	}
 )
+
+// blankSecrets replaces the secrets secretInText finds in s, keeping the names before them.
+func blankSecrets(s string) string {
+	for _, re := range secretInText {
+		s = re.ReplaceAllString(s, "${1}(blanked)")
+	}
+	return s
+}
 
 func secretKey(k string) bool {
 	if secretKeys[k] {
@@ -76,96 +95,114 @@ type chat struct {
 	from, to time.Time
 }
 
-// chatOf reads the account's trace for the chat the request came in on (FR-1441).
-func (s *Server) chatOf(userID, session, client string, now time.Time) chat {
-	c := chat{from: now, to: now}
+// maxChatCalls bounds how many of the chat's calls a report holds (the newest).
+const maxChatCalls = 500
+
+// chatOf reads the account's trace for the chat the request came in on (FR-1441). The first
+// pass keeps no answers, only what joins sessions; the second reads the chat's lines in full, so
+// a report never holds the account's whole day in memory (security review 2026-11-25).
+func (s *Server) chatOf(userID, session string, now time.Time) chat {
+	c := chat{from: now, to: now, how: "session"}
 	if s.opts.Traces == nil {
 		return c
 	}
-	var all []trace.Line
+	if session == "" {
+		// A client without sessions: its calls can't be told from other chats', so none go in.
+		c.how = "none: this Claude app gives no session, so the chat's calls can't be told from other chats'"
+		return c
+	}
 	from := now.Add(-chatLookBack).UTC().Format(trace.DayFormat)
-	_, err := s.opts.Traces.Each(userID, from, now.UTC().Format(trace.DayFormat), func(l trace.Line) error {
-		all = append(all, l)
+	to := now.UTC().Format(trace.DayFormat)
+	at := func(l trace.Line) time.Time { t, _ := time.Parse(time.RFC3339Nano, l.Time); return t }
+	type head struct {
+		session string
+		page    string   // the page its arguments name
+		made    []string // the page names Latchkey's answer gives in its first line
+		at      time.Time
+	}
+	var heads []head
+	_, err := s.opts.Traces.Each(userID, from, to, func(l trace.Line) error {
+		if l.Kind == trace.KindAction && l.Session != "" {
+			heads = append(heads, head{session: l.Session, page: argPage(l.Arguments), made: answerPages(l.Result), at: at(l)})
+		}
 		return nil
 	})
 	if err != nil {
 		s.opts.Logger.Warn("report: the trace couldn't be read", "user", userID, "err", err)
 	}
-	at := func(l trace.Line) time.Time { t, _ := time.Parse(time.RFC3339Nano, l.Time); return t }
-	in := map[string]bool{}
+	in := map[string]bool{session: true}
 	pages := map[string]bool{}
-	notePages := func(l trace.Line) {
-		var args map[string]any
-		if json.Unmarshal(l.Arguments, &args) == nil {
-			if p, ok := args["page"].(string); ok && pageName.MatchString(strings.ToLower(strings.TrimSpace(p))) {
-				pages[strings.ToLower(strings.TrimSpace(p))] = true
-			}
-		}
-		for _, m := range pageInAnswer.FindAllStringSubmatch(string(l.Result), -1) {
-			pages[m[1]] = true
-		}
-	}
-	usesPage := func(l trace.Line) bool {
-		var args map[string]any
-		if json.Unmarshal(l.Arguments, &args) == nil {
-			if p, ok := args["page"].(string); ok && pages[strings.ToLower(strings.TrimSpace(p))] {
-				return true
-			}
-		}
-		return false
-	}
-	switch {
-	case session != "":
-		c.how = "session"
-		in[session] = true
-		// The chat's own session, then each earlier one that worked in one of its pages, until
-		// nothing more joins (a chat idle 30 minutes goes on in a new session).
-		for range 8 {
-			for _, l := range all {
-				if l.Kind == trace.KindAction && in[l.Session] {
-					notePages(l)
+	for range 8 { // the chat's own session, then each earlier one that worked in one of its pages
+		for _, h := range heads {
+			if in[h.session] {
+				if h.page != "" {
+					pages[h.page] = true
+				}
+				for _, p := range h.made {
+					pages[p] = true
 				}
 			}
-			grew := false
-			for _, l := range all {
-				if l.Kind == trace.KindAction && l.Session != "" && !in[l.Session] && usesPage(l) && now.Sub(at(l)) <= chatLookBack {
-					in[l.Session] = true
-					grew = true
-				}
-			}
-			if !grew {
-				break
+		}
+		grew := false
+		for _, h := range heads {
+			if !in[h.session] && h.page != "" && pages[h.page] && now.Sub(h.at) <= chatLookBack {
+				in[h.session], grew = true, true
 			}
 		}
-		for _, l := range all {
-			if l.Kind == trace.KindAction && in[l.Session] {
-				c.calls = append(c.calls, l)
-			}
-		}
-		c.sessions = len(in)
-	default:
-		c.how = "client and time"
-		for _, l := range all {
-			if l.Kind == trace.KindAction && l.Client == client && now.Sub(at(l)) <= clientLookBack {
-				c.calls = append(c.calls, l)
-				notePages(l)
-			}
+		if !grew {
+			break
 		}
 	}
+	_, _ = s.opts.Traces.Each(userID, from, to, func(l trace.Line) error {
+		if l.Kind == trace.KindAction && in[l.Session] {
+			c.calls = append(c.calls, l)
+			if len(c.calls) > maxChatCalls {
+				c.calls = c.calls[1:]
+			}
+		}
+		return nil
+	})
 	sort.SliceStable(c.calls, func(i, j int) bool { return at(c.calls[i]).Before(at(c.calls[j])) })
 	if len(c.calls) > 0 {
 		c.from = at(c.calls[0])
 	}
-	for _, l := range all {
+	_, _ = s.opts.Traces.Each(userID, c.from.UTC().Format(trace.DayFormat), to, func(l trace.Line) error {
 		if l.Kind == trace.KindEvent && !at(l).Before(c.from) {
 			c.events = append(c.events, l)
 		}
-	}
+		return nil
+	})
+	c.sessions = len(in)
 	for p := range pages {
 		c.pages = append(c.pages, p)
 	}
 	sort.Strings(c.pages)
 	return c
+}
+
+// argPage is the page a call's arguments name, "" for none.
+func argPage(raw json.RawMessage) string {
+	var args map[string]any
+	if json.Unmarshal(raw, &args) == nil {
+		if p, ok := args["page"].(string); ok {
+			p = strings.ToLower(strings.TrimSpace(p))
+			if pageName.MatchString(p) {
+				return p
+			}
+		}
+	}
+	return ""
+}
+
+// answerPages are the page names in the first line of an answer's first text, which Latchkey
+// writes ("Opened page pk4m2"); the rest is the page's, which could name any page.
+func answerPages(raw json.RawMessage) []string {
+	first, _, _ := strings.Cut(firstText(raw), "\n")
+	var out []string
+	for _, m := range pageInAnswer.FindAllStringSubmatch(first, -1) {
+		out = append(out, m[1])
+	}
+	return out
 }
 
 // involved are the machines a report is about (FR-1412): each one Claude named or that answered
@@ -276,10 +313,10 @@ func firstText(content json.RawMessage) string {
 
 // fullReport adds everything for the chat to r (format 3) and gives the plaintext of the report
 // and of its small version (FR-1440 to FR-1451).
-func (s *Server) fullReport(ctx context.Context, userID string, req *mcp.CallToolRequest, client string,
+func (s *Server) fullReport(ctx context.Context, userID string, req *mcp.CallToolRequest,
 	ms []machine, named []string, r reports.Report, now time.Time,
 ) (full, small []byte, err error) {
-	c := s.chatOf(userID, sessionOf(req), client, now)
+	c := s.chatOf(userID, sessionOf(req), now)
 	inv, wasNamed := involved(ms, named, c)
 	r.Format = 3
 	r.Machines = nil
@@ -320,38 +357,70 @@ func (s *Server) fullReport(ctx context.Context, userID string, req *mcp.CallToo
 		r.Parts = append(r.Parts, reports.Part{Machine: r.Machines[i].Label, Answered: p.answered, Note: p.note, Part: p.part})
 	}
 
-	var scrub []string // old, new pairs, applied to every string of the report
-	for _, v := range secretsIn(r.Calls) {
-		scrub = append(scrub, v, "(blanked)")
-	}
-	names := make([]string, 0, len(ms))
+	secrets := secretsIn(r.Calls)
+	names := map[string]string{}
 	for _, m := range ms {
-		if len(m.Device.Name) >= 3 {
-			names = append(names, m.Device.Name)
-		}
-	}
-	sort.Slice(names, func(i, j int) bool { return len(names[i]) > len(names[j]) }) // longest first
-	for _, n := range names {
-		scrub = append(scrub, n, label(n))
+		names[m.Device.Name] = label(m.Device.Name)
 	}
 	if u, err := s.store.User(ctx, userID); err == nil && u.Email != "" {
-		scrub = append(scrub, u.Email, "(the account's email)")
+		names[u.Email] = "(the account's email)"
 	}
 	if s.opts.PublicURL != nil && s.opts.PublicURL.Host != "" {
-		scrub = append(scrub, s.opts.PublicURL.Host, "(the relay)")
+		names[s.opts.PublicURL.Host] = "(the relay)"
 	}
+	// What a machine said must go (FR-1448, FR-1449): values typed into its pages' password and
+	// code fields, and its private names. Taken out of the part before anything is sealed.
+	for i := range r.Parts {
+		typed, private, cleaned := takePrivate(r.Parts[i].Part)
+		secrets = append(secrets, typed...)
+		for _, p := range private {
+			names[p] = "(private)"
+		}
+		r.Parts[i].Part = cleaned
+	}
+	sort.Slice(secrets, func(i, j int) bool { return len(secrets[i]) > len(secrets[j]) })
 
 	tree, err := toTree(r)
 	if err != nil {
 		return nil, nil, err
 	}
-	tree = scrubTree(tree, strings.NewReplacer(scrub...), "")
+	tree = scrubTree(tree, newScrubber(secrets, names))
 	full, err = fit(tree.(map[string]any), reports.MaxSealed-sizeMargin)
 	if err != nil {
 		return nil, nil, err
 	}
 	small, err = smallVersion(tree.(map[string]any))
 	return full, small, err
+}
+
+// takePrivate takes a part's "private" names and its pages' "secrets" out of it.
+func takePrivate(part json.RawMessage) (secrets, private []string, cleaned json.RawMessage) {
+	var p map[string]any
+	if len(part) == 0 || json.Unmarshal(part, &p) != nil {
+		return nil, nil, part
+	}
+	strs := func(v any) []string {
+		var out []string
+		for _, x := range asList(v) {
+			if s, ok := x.(string); ok && len(strings.TrimSpace(s)) >= 3 {
+				out = append(out, strings.TrimSpace(s))
+			}
+		}
+		return out
+	}
+	private = strs(p["private"])
+	delete(p, "private")
+	for _, pg := range asList(p["pages"]) {
+		if m, ok := pg.(map[string]any); ok {
+			secrets = append(secrets, strs(m["secrets"])...)
+			delete(m, "secrets")
+		}
+	}
+	b, err := json.Marshal(p)
+	if err != nil {
+		return secrets, private, nil
+	}
+	return secrets, private, b
 }
 
 // trimJSONString is an event line's result, a JSON string, as plain text.
@@ -388,7 +457,7 @@ func secretsIn(calls []reports.Call) []string {
 				}
 			}
 			t := strings.TrimSpace(x)
-			if len(t) >= 4 && (secretKey(key) || codeLike.MatchString(t)) && !seen[t] {
+			if len(t) >= 4 && (secretKey(key) || (typedKeys[key] && codeLike.MatchString(t))) && !seen[t] {
 				seen[t] = true
 				out = append(out, t)
 			}
@@ -414,33 +483,84 @@ func toTree(v any) (any, error) {
 	return t, err
 }
 
-// scrubTree replaces the secrets and names in every string of the report, except where a
-// replaced byte would break what isn't text and holds nothing Claude passed (security review
-// 2026-11-25: exemptions go by place, not by a key name an argument could also have): a
-// picture's data (an object of type image, or a page's screenshot), the report's own id and
-// time, and the time and call id the relay gave each call.
-func scrubTree(v any, r *strings.Replacer, key string) any { return scrubAt(v, r, key, "", nil) }
+// scrubber replaces what a report must not hold (FR-1448, FR-1449): exact secrets Claude passed
+// or a machine saw typed into a password or code field, secrets found in any text, and, ignoring
+// case, machine names, the account's email, the relay's address and the private names a machine
+// gave (its host and login name).
+type scrubber struct {
+	exact *strings.Replacer
+	names []*regexp.Regexp
+	label []string
+}
 
-func scrubAt(v any, r *strings.Replacer, key, where string, parent map[string]any) any {
+func newScrubber(secrets []string, names map[string]string) *scrubber {
+	var pairs []string
+	for _, v := range secrets {
+		pairs = append(pairs, v, "(blanked)")
+	}
+	keys := make([]string, 0, len(names))
+	for k := range names {
+		if len(k) >= 4 {
+			keys = append(keys, k)
+		}
+	}
+	sort.Slice(keys, func(i, j int) bool { return len(keys[i]) > len(keys[j]) }) // longest first
+	sc := &scrubber{exact: strings.NewReplacer(pairs...)}
+	for _, k := range keys {
+		// Whole words only where the name begins or ends with one ("root" not in "rootfs").
+		pat := regexp.QuoteMeta(k)
+		if wordChar(k[0]) {
+			pat = `\b` + pat
+		}
+		if wordChar(k[len(k)-1]) {
+			pat += `\b`
+		}
+		sc.names = append(sc.names, regexp.MustCompile(`(?i)`+pat))
+		sc.label = append(sc.label, names[k])
+	}
+	return sc
+}
+
+func wordChar(b byte) bool {
+	return b == '_' || (b >= '0' && b <= '9') || (b >= 'a' && b <= 'z') || (b >= 'A' && b <= 'Z')
+}
+
+func (sc *scrubber) text(s string) string {
+	s = blankSecrets(sc.exact.Replace(s))
+	for i, re := range sc.names {
+		s = re.ReplaceAllLiteralString(s, sc.label[i])
+	}
+	return s
+}
+
+// scrubTree scrubs every string of the report, except where a replaced byte would break what
+// isn't text and holds nothing Claude passed (security review 2026-11-25: exemptions go by
+// place, not by a key name an argument could also have): a picture's data in an answer or a
+// machine's part, the report's own id and time, and the time and call id the relay gave a call.
+func scrubTree(v any, sc *scrubber) any { return scrubAt(v, sc, "", "", nil) }
+
+func scrubAt(v any, sc *scrubber, key, where string, parent map[string]any) any {
 	switch x := v.(type) {
 	case map[string]any:
 		for k, vv := range x {
-			x[k] = scrubAt(vv, r, k, where+"/"+k, x)
+			x[k] = scrubAt(vv, sc, k, where+"/"+k, x)
 		}
 		return x
 	case []any:
 		for i, vv := range x {
-			x[i] = scrubAt(vv, r, key, where+"/[]", parent)
+			x[i] = scrubAt(vv, sc, key, where+"/[]", parent)
 		}
 		return x
 	case string:
-		image := key == "data" && parent != nil && (parent["type"] == "image" || strings.HasSuffix(where, "/screenshot/data"))
+		inContent := strings.HasPrefix(where, "/calls/[]/result/") || strings.HasPrefix(where, "/parts/[]/part/")
+		image := inContent && key == "data" && parent != nil &&
+			(parent["type"] == "image" || strings.HasSuffix(where, "/screenshot/data"))
 		switch {
 		case image, where == "/id", where == "/at", where == "/calls/[]/time", where == "/calls/[]/call_id",
 			where == "/chat/from", where == "/chat/to":
 			return x
 		}
-		return r.Replace(x)
+		return sc.text(x)
 	}
 	return v
 }
@@ -451,6 +571,30 @@ func scrubAt(v any, r *strings.Replacer, key, where string, parent map[string]an
 func fit(t map[string]any, limit int) ([]byte, error) {
 	base := asList(t["left_out"])
 	counts := map[string]int{}
+	// The oldest answers go in one pass, by their sizes, before the step by step below
+	// (security review 2026-11-25: marshalling 5 MB once per call left out costs too much).
+	if whole, err := json.Marshal(t); err == nil && len(whole) > limit {
+		over := len(whole) - limit
+		calls := asList(t["calls"])
+		keep := -1
+		for i := len(calls) - 1; i >= 0; i-- {
+			if m, ok := calls[i].(map[string]any); ok && hasImage(m["result"]) {
+				keep = i
+				break
+			}
+		}
+		for i, c := range calls {
+			m, ok := c.(map[string]any)
+			if over <= 0 || !ok || m["result"] == nil || i == keep {
+				continue
+			}
+			b, _ := json.Marshal(m["result"])
+			delete(m, "result")
+			m["left_out"] = "size"
+			over -= len(b)
+			counts["the answer of an older call"]++
+		}
+	}
 	for {
 		if len(counts) > 0 {
 			t["left_out"] = append(slices.Clone(base), summarize(counts)...)

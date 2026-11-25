@@ -86,12 +86,31 @@ import WebKit
 
     /// Request addresses keep their query's names, never its values.
     @Test func addressesLoseTheirQueryValues() {
-        #expect(
-            PageRecord.shownAddress("https://shop.example/api/checkout?token=abc123&cart=9#x")
-                == "https://shop.example/api/checkout?token=%E2%80%A6&cart=%E2%80%A6"
-                || PageRecord.shownAddress("https://shop.example/api/checkout?token=abc123&cart=9#x")
-                    == "https://shop.example/api/checkout?token=…&cart=…")
+        let shown = PageRecord.shownAddress("https://shop.example/api/checkout?token=abc123&cart=9#x")
+        #expect(shown.hasPrefix("https://shop.example/api/checkout?token="), "\(shown)")
+        #expect(shown.contains("cart=") && !shown.contains("abc123") && !shown.contains("#x"), "\(shown)")
         #expect(!PageRecord.shownAddress("https://user:pw@shop.example/a?x=1").contains("pw"))
+        #expect(PageRecord.shownAddress("not an address ?token=abc123") == "not an address ")
+    }
+
+    /// Security review 2026-11-25: what Claude types into a password or code field is known, so the
+    /// relay can blank it; the page's made-up events aren't recorded.
+    @Test func secretFieldsAreKnownAndMadeUpEventsIgnored() async throws {
+        let b = LockedBrowser()
+        defer { b.discard() }
+        _ = try await b.open(
+            html: """
+                <input type="password" data-latchkey="e1"><input autocomplete="one-time-code" data-latchkey="e2">
+                <input type="search" data-latchkey="e3">
+                """, base: base)
+        #expect(try await b.run(PageRecord.secretField("e1")) == "yes")
+        #expect(try await b.run(PageRecord.secretField("e2")) == "yes")
+        #expect(try await b.run(PageRecord.secretField("e3")) == "no")
+        #expect(try await b.run(PageRecord.secretField("e9\"]")) == "no", "a reference is passed as data")
+        _ = try await b.run(
+            "for (let i = 0; i < 5; i++) dispatchEvent(new ErrorEvent('error', {message: 'made up ' + i})); 1")
+        try await Task.sleep(for: .milliseconds(300))
+        #expect(!b.record.events.contains { ($0.text ?? "").contains("made up") })
     }
 
     /// The record keeps the newest events only.
@@ -139,6 +158,7 @@ import WebKit
         #expect(part.calls.map(\.callID) == ["call_A"])
         #expect(text.contains("clicked e5") && !text.contains("another chat") && !text.contains("relay.example.net"))
         #expect(part.pages.count == 1 && part.notes.contains("page gone1 isn't open any more"))
+        #expect(!part.privateNames.isEmpty, "the host and login names, for the relay to replace")
 
         let small = ReportPart.fit(part, maxBytes: 200)
         #expect(small != nil && small!.utf8.count <= 200)

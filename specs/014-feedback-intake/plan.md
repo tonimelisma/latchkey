@@ -131,9 +131,10 @@ address is that name.
 - **The developer** (FR-1452): `latchkey-reports list` prints each report's id, time, summary,
   client, machines and how many calls and pages it holds; `show <id> [-out dir]` writes
   `report.json`, `calls/NNN-tool.json`, images as `calls/NNN-k.png|jpg`, `pages/<n>.html`,
-  `pages/<n>-record.json`, `logs/*.txt`; the default folder is the session's scratch folder
-  (`$TMPDIR/latchkey-report-<id>`), never inside the repository (it refuses a folder inside a git
-  work tree).
+  `pages/<n>.json`, `logs/*.txt`, in a new folder under the system's temporary folder
+  (`$TMPDIR/latchkey-report-…`, the session's scratch folder), every file written through an
+  `os.Root` at it, so no name a report holds can leave it; it refuses a folder inside a git work
+  tree.
 - **Tests**: relay: a real MCP client files a report after browser-like and logins_fill calls
   against a stand-in machine; the opened report holds every call, the relay log, the part; the
   code is nowhere; a stand-in that never answers is listed after 10 s (short in the test); a

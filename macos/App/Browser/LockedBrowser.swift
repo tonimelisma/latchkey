@@ -606,6 +606,8 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownl
                 (try? JSONDecoder().decode(JSONValue.self, from: JSONEncoder().encode(e))) ?? .null
             })
         o["record_dropped"] = .number(Double(record.dropped))
+        // Only for the relay to blank; it takes them out before sealing (FR-1448).
+        if !record.secrets.isEmpty { o["secrets"] = .array(record.secrets.sorted().map { .string($0) }) }
         if held == nil {
             let shot: PreparedImage? = await Deadline.first(within: .seconds(4)) { @MainActor @Sendable [weak self] in
                 try? await self?.screenshot()
@@ -1183,6 +1185,9 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownl
         defer { end() }
         guard let w = web else { throw SafariBrowser.Failure.noWindow }
         let before = w.url?.absoluteString
+        // Typed into a password or code field: kept to be blanked in a problem report (spec 014
+        // FR-1448), asked in the hidden world before typing.
+        if await hidden(PageRecord.secretField(ref), async: false) == "yes" { record.typedSecret(text) }
         try check(
             (try await script(PageScripts.type(ref, text: text, submit: submit))).split(separator: "\n").first.map(
                 String.init) ?? "", ref: ref, option: text)

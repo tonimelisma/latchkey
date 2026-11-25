@@ -122,10 +122,11 @@ func TestSharedReportsReachTheIntakeSealed(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotContains(t, strings.ToLower(string(sealedJSON)), "macbook", "FR-1412: never a machine's name")
 
-	// Delivered: nothing left in the outbox.
-	due, err := e.store.DueReports(context.Background(), time.Now().Add(time.Hour), 10)
-	require.NoError(t, err)
-	assert.Empty(t, due)
+	// Delivered: nothing left in the outbox (removed right after the intake's answer).
+	require.Eventually(t, func() bool {
+		due, err := e.store.DueReports(context.Background(), time.Now().Add(time.Hour), 10)
+		return err == nil && len(due) == 0
+	}, 5*time.Second, 20*time.Millisecond)
 
 	// Missing summary: told, nothing sent.
 	res, err = cs.CallTool(ctx(t), &mcp.CallToolParams{Name: "feedback", Arguments: map[string]any{"summary": " ", "details": "x"}})

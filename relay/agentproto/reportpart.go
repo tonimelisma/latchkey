@@ -31,6 +31,9 @@ type ReportPart struct {
 	Calls []PartCall      `json:"calls,omitempty"`
 	Pages []PartPage      `json:"pages,omitempty"`
 	Notes []string        `json:"notes,omitempty"`
+	// Private are names the relay replaces wherever they appear in the report and never sends:
+	// the machine's host name, its login name, its home folder (FR-1449).
+	Private []string `json:"private,omitempty"`
 	Extra json.RawMessage `json:"extra,omitempty"`
 }
 

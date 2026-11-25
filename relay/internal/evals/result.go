@@ -162,7 +162,9 @@ func sealIn(pk hpke.PublicKey, signKey []byte, r Result, n int) ([][]byte, error
 			return nil, err
 		}
 		sealed, err := reports.SealRaw(pk, plain)
-		if err != nil {
+		// Parts stay at the 64 KB every intake takes, also one from before 5 MB reports
+		// (spec 014 FR-1451).
+		if err != nil || len(sealed) > reports.OldMaxSealed {
 			return nil, errTooLong
 		}
 		out = append(out, sealed)

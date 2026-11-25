@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/hpke"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -31,6 +32,9 @@ type ReportsOptions struct {
 	// WorkBits is the proof of work's difficulty; 0 uses reports.WorkBits.
 	WorkBits int
 }
+
+// MaxReportsPerHour is how many reports one account may file an hour.
+const MaxReportsPerHour = 20
 
 // MaxReportAge is how long a report waits for the intake before it is dropped (FR-1414).
 const MaxReportAge = 7 * 24 * time.Hour
@@ -126,6 +130,8 @@ func (s *Server) fileFeedback(userID string) mcp.ToolHandler {
 			result, outcome = errorResult("The owner doesn't share problem reports now, so nothing was sent."), store.OutcomeError
 		case summary == "":
 			result, outcome = errorResult("Give a summary: one line saying what went wrong."), store.OutcomeError
+		case !s.reportRate.Allow(userID):
+			result, outcome = errorResult(fmt.Sprintf("This account filed %d reports in the last hour; file this one later.", MaxReportsPerHour)), store.OutcomeError
 		default:
 			var named []string
 			if one := text("machine", agentproto.MaxFeedbackName); one != "" {
@@ -144,7 +150,7 @@ func (s *Server) fileFeedback(userID string) mcp.ToolHandler {
 			r.ID = id
 			// Everything for the chat (FR-1440 to FR-1451), and the small version for an older
 			// intake (FR-1451); both sealed, the relay keeps neither readable.
-			full, small, err := s.fullReport(ctx, userID, req, client, ms, named, r, start)
+			full, small, err := s.fullReport(ctx, userID, req, ms, named, r, start)
 			var sealed, sealedSmall []byte
 			if err == nil {
 				sealed, err = reports.SealRaw(s.opts.Reports.DeveloperKey, full)

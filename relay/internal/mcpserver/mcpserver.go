@@ -19,6 +19,8 @@ import (
 	"unicode"
 	"unicode/utf8"
 
+	"github.com/tonimelisma/latchkey/relay/internal/limit"
+
 	"github.com/tonimelisma/latchkey/relay/internal/reportlog"
 
 	"github.com/modelcontextprotocol/go-sdk/auth"
@@ -223,6 +225,9 @@ type Server struct {
 
 	// reportsKick wakes the report sender after a report is filed (spec 014).
 	reportsKick chan struct{}
+	// reportRate bounds how many reports one account files an hour (security review 2026-11-25:
+	// each one reads a day of the trace and asks the machines).
+	reportRate *limit.Keyed
 }
 
 // userServer is one Owner's MCP server; its tool list is the union of that Owner's machines'
@@ -250,7 +255,7 @@ func New(st *store.Store, h *hub.Hub, opts Options) *Server {
 	}
 	s := &Server{
 		store: st, hub: h, opts: opts, users: map[string]*userServer{}, sdkLog: sdkLogger(opts.Logger),
-		reportsKick: make(chan struct{}, 1),
+		reportsKick: make(chan struct{}, 1), reportRate: limit.NewKeyed(MaxReportsPerHour, time.Hour/MaxReportsPerHour),
 	}
 	s.loadTools = s.ownerTools
 	sdkLog := s.sdkLog

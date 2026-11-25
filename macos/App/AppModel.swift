@@ -1293,9 +1293,8 @@ final class AppModel {
         let entries: ReportPart.Entries? = trace.map { t in
             let reader = t.reader
             return { from, to in
-                try reader.page(
-                    ActivityQuery(from: from, to: to), limit: 20_000, oldestFirst: true, countUnreadable: false
-                ).entries
+                // The newest first, so a busy span keeps its latest entries.
+                try reader.page(ActivityQuery(from: from, to: to), limit: 5000, countUnreadable: false).entries
             }
         }
         let asleep = ReportPart.displayAsleep()

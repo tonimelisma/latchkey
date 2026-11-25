@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"errors"
 	"io/fs"
+	"os"
+	"os/user"
 	"slices"
 	"time"
 
@@ -29,6 +31,7 @@ func (a *Agent) reportPart(raw json.RawMessage) tools.Result {
 		from = to.Add(-48 * time.Hour)
 	}
 	var part agentproto.ReportPart
+	part.Private = privateNames()
 	if a.Log == nil {
 		part.Notes = append(part.Notes, "this server keeps no log")
 		return partResult(part, max)
@@ -53,6 +56,19 @@ func (a *Agent) reportPart(raw json.RawMessage) tools.Result {
 }
 
 const leftOutNote = "some of the oldest was left out (size)"
+
+// privateNames are this server's host name, login name and home folder, which the relay replaces
+// in the report (spec 014 FR-1449).
+func privateNames() []string {
+	var out []string
+	if h, err := os.Hostname(); err == nil && h != "" {
+		out = append(out, h)
+	}
+	if u, err := user.Current(); err == nil {
+		out = append(out, u.HomeDir, u.Username)
+	}
+	return out
+}
 
 // partResult is the part as the call's one text answer, made to fit max bytes: the oldest
 // calls' answers go first, then the oldest log lines.

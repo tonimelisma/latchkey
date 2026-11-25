@@ -43,31 +43,55 @@ func TestSecretsInFindsCodes(t *testing.T) {
 	got := secretsIn([]reports.Call{
 		{Arguments: json.RawMessage(`{"fill":"code","code":"ab12cd","page":"pk4m2"}`)},
 		{Arguments: json.RawMessage(`{"action":"type","text":"482913"}`)},
+		{Arguments: json.RawMessage(`{"port":"8080"}`)},
 		{Arguments: json.RawMessage(`{"command":"ls -la"}`)},
 	})
 	assert.ElementsMatch(t, []string{"ab12cd", "482913"}, got)
 }
 
 // Security review 2026-11-25: a secret under an argument named like a structural field is still
-// blanked; only a picture's data and the relay's own times and ids are left as they are.
+// blanked; only a picture's data and the relay's own times and ids are left as they are; secrets
+// in answers are found by their shape; names are replaced whatever their case.
 func TestScrubGoesByPlaceNotKeyName(t *testing.T) {
 	tree := map[string]any{"id": "fb_482913", "calls": []any{map[string]any{
 		"time": "2026-11-25T03:48:29.130Z", "call_id": "call_482913",
-		"arguments": map[string]any{"id": "482913", "to": "482913", "access_token": "abcdefghijklmnopqrstu"},
-		"result":    []any{map[string]any{"type": "image", "data": "AAA482913AAA"}, map[string]any{"type": "text", "text": "id 482913"}},
+		"arguments": map[string]any{
+			"id": "482913", "to": "482913", "access_token": "abcdefghijklmnopqrstu",
+			"type": "image", "data": "482913",
+		},
+		"result": []any{
+			map[string]any{"type": "image", "data": "AAA482913AAA"},
+			map[string]any{"type": "text", "text": "id 482913 on TONIS-MACBOOK, mail Toni@Example.com"},
+			map[string]any{"type": "text", "text": "AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMIK7MDENGbPxRfiCY\nAuthorization: Bearer abcdefghijklmnopqrstuvwxyz"},
+		},
 	}}}
-	secrets := secretsIn([]reports.Call{{Arguments: json.RawMessage(`{"id":"482913","access_token":"abcdefghijklmnopqrstu","command":"curl -H 'Authorization: Bearer abcdefghijklmnopqrstuvwxyz'"}`)}})
-	var pairs []string
-	for _, s := range secrets {
-		pairs = append(pairs, s, "(blanked)")
-	}
-	b, _ := json.Marshal(scrubTree(tree, strings.NewReplacer(pairs...), ""))
+	secrets := secretsIn([]reports.Call{{Arguments: json.RawMessage(`{"code":"482913","access_token":"abcdefghijklmnopqrstu","year":"2026"}`)}})
+	assert.NotContains(t, secrets, "2026", "a year given as an argument isn't a code")
+	sc := newScrubber(secrets, map[string]string{"tonis-macbook": "machine 1", "toni@example.com": "(the account's email)"})
+	b, _ := json.Marshal(scrubTree(tree, sc))
 	out := string(b)
 	assert.Contains(t, out, `"id":"(blanked)"`, "an argument named id")
 	assert.Contains(t, out, `"to":"(blanked)"`)
 	assert.Contains(t, out, `"access_token":"(blanked)"`)
-	assert.Contains(t, out, `"text":"id (blanked)"`)
-	assert.Contains(t, out, "AAA482913AAA", "a picture's bytes stay")
+	assert.Contains(t, out, `"data":"(blanked)"`, "an argument shaped like a picture isn't one")
+	assert.Contains(t, out, "id (blanked) on machine 1, mail (the account's email)")
+	assert.Contains(t, out, "AAA482913AAA", "a picture's bytes in an answer stay")
 	assert.Contains(t, out, `"call_id":"call_482913"`)
-	assert.Contains(t, secrets, "Bearer abcdefghijklmnopqrstuvwxyz", "a credential written into a command")
+	assert.NotContains(t, out, "wJalrXUtnFEMIK7MDENGbPxRfiCY", "a secret in an answer")
+	assert.NotContains(t, out, "abcdefghijklmnopqrstuvwxyz", "a credential in an answer")
+}
+
+func TestPrivateNamesAreWholeWords(t *testing.T) {
+	sc := newScrubber(nil, map[string]string{"root": "(private)", "/home/toni": "(private)"})
+	assert.Equal(t, "(private) mounted rootfs at (private)/data", sc.text("root mounted rootfs at /home/toni/data"))
+}
+
+// Security review 2026-11-25: what a machine saw typed into a password or code field, and its
+// private names, are used for blanking and never sent.
+func TestTakePrivate(t *testing.T) {
+	secrets, private, cleaned := takePrivate(json.RawMessage(`{"private":["tonis-mbp.local","toni"],"pages":[{"name":"pk4m2","secrets":["hunter2x"]}]}`))
+	assert.Equal(t, []string{"hunter2x"}, secrets)
+	assert.Equal(t, []string{"tonis-mbp.local", "toni"}, private)
+	assert.NotContains(t, string(cleaned), "hunter2x")
+	assert.NotContains(t, string(cleaned), "tonis-mbp")
 }

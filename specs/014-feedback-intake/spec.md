@@ -1,6 +1,7 @@
 # Spec 014: Problem reports to Latchkey's developer — WHAT and WHY
 
-Status: Built (Toni, 2026-11-23: "finish all the work without stopping"); tasks `tasks.md`.
+Status: Built (Toni, 2026-11-23: "finish all the work without stopping"); amended 2026-11-25 (FR-1440 to
+FR-1456, everything for the chat); tasks `tasks.md`.
 Replaces spec 001 FR-691 to FR-693 (the relay keeping reports, delivering them to the Mac, the
 Mac's Feedback folder), now withdrawn.
 Research and the options weighed: `research.md`. How: `plan.md`.
@@ -201,7 +202,8 @@ plainly"; "Always record, memory only"; "5 MB, screenshots included"; "Hidden wo
   amended), the relay shall send instead the same report without FR-1440 to FR-1447's parts,
   saying they were left out.
 - **FR-1452** The developer's command shall show a report's summary in its list, and with
-  `show <id>` write the whole report to a folder the developer names, outside the repository:
+  `show <id>` write the whole report to a new folder under the system's temporary folder, never
+  inside a repository:
   the report, each call, each image as a picture file, each page's source and record, and the
   logs, as files the developer's agent can read.
 - **FR-1453** The `feedback` tool's description shall say that the report also carries the

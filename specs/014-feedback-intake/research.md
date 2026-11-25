@@ -83,3 +83,48 @@ intake the relay's lint, security checks, tests, and signed images; the relay's 
 doesn't include the intake.
 
 - At disposition the report is deleted, nothing kept; git is the history (FR-1424).
+
+## Everything for that chat (2026-11-25)
+
+Toni's product choices (AskUserQuestion, 2026-11-25): "Everything for that chat"; "Same for
+everyone, said plainly"; "Always record, memory only"; "5 MB, screenshots included"; "Hidden
+world". The rest was decided here (low-level, CLAUDE.md "Toni decides"):
+
+- **Which calls are "that chat"**: (a) the relay's trace by connector session id, plus earlier
+  sessions that used one of its pages (chosen: Claude opens one session per conversation, and a
+  page name is made for one chat, so a chat idle 30 minutes that continues on a new session is
+  still joined; deterministic, no guessing); (b) everything from the same Claude app in a time
+  window (kept only for clients without sessions: it mixes chats); (c) ask Claude to list its
+  calls (rejected: what was missing was exactly what Claude didn't see).
+- **How the relay asks a machine**: (a) a new message type pair (rejected: an older app or relay
+  closes the connection on an unknown type, so both must be deployed in order and need
+  fallbacks); (b) an ordinary `call` of a tool no machine may list, announced by a hello feature
+  (chosen: deadlines, cancel, progress and the frame limit already work; only machines that
+  announce it are asked).
+- **The relay's log**: (a) read the relay's process log (rejected: it is stdout, mixed across
+  accounts, and kept by the host); (b) a ring per account in memory of lines tagged with the
+  account, plus the account's trace events (chosen; nothing new on disk).
+- **Recording in Latchkey's own browser**: (a) the page's own functions wrapped (console, fetch)
+  (rejected by Toni: a site can notice it, and it changes behaviour); (b) a WKContentWorld of
+  Latchkey's own with a script message handler only that world has, and the navigation delegate
+  for loads (chosen). What WebKit gives there: resource timing entries (address, kind, status
+  where `responseStatus` is filled, timing, size), `error` (also failed loads, in the capture
+  phase), `unhandledrejection` (its reason may be the page's own value, unreadable from another
+  world), `securitypolicyviolation`, `visibilitychange`; not console lines, not the method of the
+  page's scripted requests.
+- **Addresses in records**: query values replaced by "…" and fragments and user names dropped,
+  names kept (sign-in links, tokens and ids live there); the page's own address the same. The
+  chat's calls keep what Claude itself sent and got.
+- **Page source**: a clone of the DOM, read in the hidden world, with every field's value, every
+  textarea, every editable area, every inline script's body, token-like meta values and
+  token-like attributes blanked (security review 2026-11-25); button labels stay.
+- **Blanking in the relay**: the values Claude passed under a secret's name (code, password,
+  pin, any name with token, secret, password, cookie, credential, api key), any argument of 4 to
+  8 digits, and credentials written into text (`Bearer …`) are replaced everywhere in the
+  report, except where a byte replaced would break what isn't text (a picture's data, the relay's
+  own times and ids), decided by place in the report, not by key name (security review
+  2026-11-25).
+- **Older intakes**: an intake from before 2026-11-25 refuses over 64 KB with 413; the relay
+  keeps a small version sealed beside each report and sends it then, so no report is lost while
+  the intake's new image rolls out.
+- **Size**: oldest first, as Toni chose; the newest call with a picture stays the longest.

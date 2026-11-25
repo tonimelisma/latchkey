@@ -45,10 +45,46 @@ final class PageRecord {
         }
     }
 
+    /// Values Claude typed into this page's password and code fields: never sent, only given to
+    /// the relay so it blanks them wherever they appear in a report (FR-1448).
+    private(set) var secrets: Set<String> = []
+
+    func typedSecret(_ value: String) {
+        if !value.isEmpty, secrets.count < 50 { secrets.insert(value) }
+    }
+
     /// The page closed: nothing stays (FR-1446).
     func clear() {
         events = []
         dropped = 0
+        secrets = []
+    }
+
+    /// Asks whether the field Claude names is one for a secret (a password, a one-time code, a card
+    /// number or its security code), as the page listing decides (PageScripts.read); "yes" or
+    /// "no". The reference is passed as JSON.
+    nonisolated static func secretField(_ ref: String) -> String {
+        let quoted = (try? String(decoding: JSONEncoder().encode(ref), as: UTF8.self)) ?? "\"\""
+        return """
+            (() => {
+              const ref = \(quoted);
+              const find = (root) => {
+                const e = root.querySelector('[data-latchkey="' + CSS.escape(ref) + '"]');
+                if (e) return e;
+                for (const el of root.querySelectorAll('*')) {
+                  if (el.shadowRoot) { const f = find(el.shadowRoot); if (f) return f; }
+                }
+                return null;
+              };
+              const e = find(document);
+              if (!e) return 'no';
+              const t = (e.getAttribute('type') || '').toLowerCase();
+              const auto = e.getAttribute('autocomplete') || '';
+              return t === 'password' || e.type === 'password'
+                || /(^|\\s)(current-password|new-password|one-time-code|cc-number|cc-csc)(\\s|$)/i.test(auto)
+                ? 'yes' : 'no';
+            })()
+            """
     }
 
     func time() -> String { Self.iso.string(from: now()) }
@@ -65,7 +101,11 @@ final class PageRecord {
     /// A request's address with its query values left out (names kept), so sign-in links, tokens
     /// and ids in addresses don't go into a report; cut to `maxText` (plan.md D7, research.md).
     nonisolated static func shownAddress(_ address: String) -> String {
-        guard var c = URLComponents(string: address) else { return String(address.prefix(maxText)) }
+        guard var c = URLComponents(string: address) else {
+            // Not readable as an address: only what comes before its query or fragment.
+            let cut = address.firstIndex { $0 == "?" || $0 == "#" }.map { String(address[..<$0]) } ?? address
+            return String(cut.prefix(maxText))
+        }
         if let items = c.queryItems, !items.isEmpty {
             c.queryItems = items.map { URLQueryItem(name: $0.name, value: $0.value == nil ? nil : "…") }
         }
@@ -85,7 +125,15 @@ final class PageRecord {
     /// failed promises, blocked content, visibility. Nothing here touches the page's own objects.
     nonisolated static let recorder = """
         (() => {
-          const post = (e) => { try { window.webkit.messageHandlers.\(handlerName).postMessage(e); } catch (_) {} };
+          // At most 50 events a second, and only the browser's own events, not ones the page made up
+          // (dispatchEvent): a page can't flood the app or write the record (security review 2026-11-25).
+          let second = 0, sent = 0;
+          const post = (e) => {
+            const now = Math.floor(performance.now() / 1000);
+            if (now !== second) { second = now; sent = 0; }
+            if (++sent > 50) return;
+            try { window.webkit.messageHandlers.\(handlerName).postMessage(e); } catch (_) {}
+          };
           const cut = (s) => { s = String(s == null ? '' : s); return s.length > \(maxText) ? s.slice(0, \(maxText)) : s; };
           try {
             new PerformanceObserver((list) => {
@@ -96,6 +144,7 @@ final class PageRecord {
             }).observe({type: 'resource', buffered: true});
           } catch (_) {}
           addEventListener('error', (e) => {
+            if (!e.isTrusted) return;
             if (e instanceof ErrorEvent) {
               post({kind: 'error', text: cut(e.message), address: cut(e.filename), type: 'line ' + (e.lineno || 0)});
             } else if (e.target && e.target !== window) {
@@ -104,15 +153,19 @@ final class PageRecord {
             }
           }, true);
           addEventListener('unhandledrejection', (e) => {
+            if (!e.isTrusted) return;
             // The reason is the page's own value, which another world may not be able to read.
             let t = '';
             try { const r = e.reason; t = r && r.stack ? r.stack : (r && r.message) || (r == null ? '' : r); } catch (_) {}
             post({kind: 'rejection', text: cut(t || 'a promise failed (its reason is the page\\'s own)')});
           });
           document.addEventListener('securitypolicyviolation', (e) => {
+            if (!e.isTrusted) return;
             post({kind: 'blocked', text: cut(e.violatedDirective), address: cut(e.blockedURI)});
           });
-          document.addEventListener('visibilitychange', () => post({kind: 'visibility', text: document.visibilityState}));
+          document.addEventListener('visibilitychange', (e) => {
+            if (e.isTrusted) post({kind: 'visibility', text: document.visibilityState});
+          });
         })();
         """
 
@@ -120,7 +173,8 @@ final class PageRecord {
     func install(in config: WKWebViewConfiguration) {
         let content = config.userContentController
         content.addUserScript(
-            WKUserScript(source: Self.recorder, injectionTime: .atDocumentStart, forMainFrameOnly: true, in: Self.world))
+            WKUserScript(
+                source: Self.recorder, injectionTime: .atDocumentStart, forMainFrameOnly: true, in: Self.world))
         content.add(Handler(self), contentWorld: Self.world, name: Self.handlerName)
     }
 
@@ -189,37 +243,37 @@ final class PageRecord {
                 + "bytes: r.transferSize || 0})),"
             : ""
         return """
-        (() => {
-          let source = '';
-          const root = document.documentElement;
-          if (root) {
-            const c = root.cloneNode(true);
-            for (const el of c.querySelectorAll('input')) {
-              const t = (el.getAttribute('type') || '').toLowerCase();
-              if (!['submit', 'button', 'reset', 'image'].includes(t)) el.setAttribute('value', '');
-            }
-            for (const el of c.querySelectorAll('textarea')) el.textContent = '';
-            for (const el of c.querySelectorAll('[contenteditable]')) el.textContent = '';
-            // Inline scripts and data blocks hold a page's state (tokens, the account's details): their
-            // bodies go, their addresses stay. Token-like attributes and meta values are blanked.
-            for (const el of c.querySelectorAll('script:not([src])')) el.textContent = '';
-            for (const el of c.querySelectorAll('meta[content]')) {
-              if (/csrf|token|nonce|session|key/i.test(el.getAttribute('name') || el.getAttribute('property') || '')) {
-                el.setAttribute('content', '');
+            (() => {
+              let source = '';
+              const root = document.documentElement;
+              if (root) {
+                const c = root.cloneNode(true);
+                for (const el of c.querySelectorAll('input')) {
+                  const t = (el.getAttribute('type') || '').toLowerCase();
+                  if (!['submit', 'button', 'reset', 'image'].includes(t)) el.setAttribute('value', '');
+                }
+                for (const el of c.querySelectorAll('textarea')) el.textContent = '';
+                for (const el of c.querySelectorAll('[contenteditable]')) el.textContent = '';
+                // Inline scripts and data blocks hold a page's state (tokens, the account's details): their
+                // bodies go, their addresses stay. Token-like attributes and meta values are blanked.
+                for (const el of c.querySelectorAll('script:not([src])')) el.textContent = '';
+                for (const el of c.querySelectorAll('meta[content]')) {
+                  if (/csrf|token|nonce|session|key/i.test(el.getAttribute('name') || el.getAttribute('property') || '')) {
+                    el.setAttribute('content', '');
+                  }
+                }
+                for (const el of c.querySelectorAll('*')) {
+                  for (const a of Array.from(el.attributes)) {
+                    if (/csrf|token|nonce|secret|session/i.test(a.name)) el.setAttribute(a.name, '');
+                  }
+                }
+                source = '<!doctype html>\\n' + c.outerHTML;
               }
-            }
-            for (const el of c.querySelectorAll('*')) {
-              for (const a of Array.from(el.attributes)) {
-                if (/csrf|token|nonce|secret|session/i.test(a.name)) el.setAttribute(a.name, '');
-              }
-            }
-            source = '<!doctype html>\\n' + c.outerHTML;
-          }
-          return JSON.stringify({address: location.href, title: document.title, source: source, \(list)
-            visibility: document.visibilityState, hidden: document.hidden, focus: document.hasFocus(),
-            window: innerWidth + 'x' + innerHeight, screen: screen.width + 'x' + screen.height});
-        })()
-        """
+              return JSON.stringify({address: location.href, title: document.title, source: source, \(list)
+                visibility: document.visibilityState, hidden: document.hidden, focus: document.hasFocus(),
+                window: innerWidth + 'x' + innerHeight, screen: screen.width + 'x' + screen.height});
+            })()
+            """
     }
 
     /// Counts the animation frames the page draws in half a second (an async function body).
