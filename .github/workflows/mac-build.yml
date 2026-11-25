@@ -94,12 +94,12 @@ jobs:
           xcodebuild -project Latchkey.xcodeproj -scheme Latchkey -destination 'platform=macOS' \
             -derivedDataPath "$RUNNER_TEMP/dd" CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM= \
             -resultBundlePath "$RUNNER_TEMP/browser.xcresult" \
-            -only-testing:LatchkeyTests/SignInFillTests -only-testing:LatchkeyTests/RegressionLoginsBTests \
+            -only-testing:LatchkeyTests/DiagnosticRealInputTests -only-testing:LatchkeyTests/SignInFillTests -only-testing:LatchkeyTests/RegressionLoginsBTests \
             -only-testing:LatchkeyTests/RegressionLoginsCTests -only-testing:LatchkeyTests/RegressionRealInputTests \
             -only-testing:LatchkeyTests/RegressionRichEditorCTests -only-testing:LatchkeyTests/RegressionHoverCTests \
             -only-testing:LatchkeyTests/LockedBrowserTests \
             -only-testing:LatchkeyTests/LockedBrowserActionTests -only-testing:LatchkeyTests/BrowserDialogTests \
             test-without-building > "$RUNNER_TEMP/browser.log" 2>&1 || rc=$?
           xcrun xcresulttool get test-results summary --path "$RUNNER_TEMP/browser.xcresult" \
-            | jq -r '"ALONE passed \(.passedTests) failed \(.failedTests)", (.testFailures[]? | "ALONE FAILURE \(.testIdentifierString): \(.failureText)")' | head -100 || true
+            | jq -r '"ALONE passed \(.passedTests) failed \(.failedTests)", (.testFailures[]? | "ALONE FAILURE \(.testIdentifierString): \(.failureText)")' | head -100 | cut -c1-3000 || true
           exit "$rc"
