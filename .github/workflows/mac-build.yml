@@ -94,7 +94,7 @@ jobs:
           xcodebuild -project Latchkey.xcodeproj -scheme Latchkey -destination 'platform=macOS' \
             -derivedDataPath "$RUNNER_TEMP/dd" CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM= \
             -resultBundlePath "$RUNNER_TEMP/browser.xcresult" \
-            -only-testing:LatchkeyTests/DiagnosticRealInputTests -only-testing:LatchkeyTests/SignInFillTests -only-testing:LatchkeyTests/RegressionLoginsBTests \
+            -only-testing:LatchkeyTests/SignInFillTests -only-testing:LatchkeyTests/RegressionLoginsBTests \
             -only-testing:LatchkeyTests/RegressionLoginsCTests -only-testing:LatchkeyTests/RegressionRealInputTests \
             -only-testing:LatchkeyTests/RegressionRichEditorCTests -only-testing:LatchkeyTests/RegressionHoverCTests \
             -only-testing:LatchkeyTests/LockedBrowserTests \
