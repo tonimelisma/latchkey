@@ -542,12 +542,14 @@ keyboard (2026-11-25)".
   middle of its first box that shows, in the top page's coordinates (frames of the same site
   added in), and what `elementFromPoint` finds there: the element, something inside it, or
   another element (then named in the answer).
-- **Waiting (FR-485).** A user script in the same world, in every frame, counts the trusted
-  pointer-up, mouse-up and key-up events it sees (frames of the same site count into the top
-  page's count). After sending a step, Latchkey reads the count every 25 ms until it moved, at most
-  5 s (`RealInput.stepLimit`); a page that never gets the event (a disabled button takes none)
-  costs that wait once and the answer goes on. Nothing is decided from the page's own scripts'
-  output.
+- **Waiting (FR-485).** A user script in the same world, in every frame, posts each trusted
+  pointer-up, mouse-up, key-up and input event to a message handler only that world has
+  (`InputSignal`), with the element each character went into and whether the page took the
+  key. After sending a step, Latchkey waits until the count moved, at most 5 s
+  (`RealInput.stepLimit`), looking only at what it was told: asking the page after every key
+  kept a busy Mac busier (GitHub's runner, 2026-11-25). A page that never gets the event (a
+  disabled button takes none) costs that wait once and the answer goes on. Nothing is decided
+  from the page's own scripts' output.
 - **Typing (FR-480).** Click the field; Select All (`selectAll(_:)`, the Edit menu's action)
   when the field holds something; one key per character, waiting per key; submit is Enter.
 - **Keys (FR-481).** A field Claude names is clicked; a button or link gets the focus as Tab
@@ -572,7 +574,8 @@ keyboard (2026-11-25)".
   action; `NSPasteboard.general.changeCount` compared around it. `RealInput.allowedCommand`
   lists the Command shortcuts pressed. Every script a real action waits on is bounded
   (`LockedBrowser.bounded`, 10 s; logins_fill's typing 20 s in all), and each character is
-  checked afterwards to have gone into the field (`RealInput.lastTarget`).
+  checked afterwards to have gone into the field, in a frame of the saved site as WebKit names
+  the frame (`RealInput.lastTarget`).
 - **Clickable (FR-486).** `PageScripts.read` adds, after the controls, elements whose own
   computed cursor is `pointer` while their parent's isn't, or that have an `onclick` of their
   own, visible, not in or holding a listed control, at most 100 of them and at most 3,000

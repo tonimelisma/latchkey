@@ -305,6 +305,9 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownl
         if pageScripts { record.install(in: config) }  // the hidden world's recorder (spec 014 FR-1446)
         // FR-485: counts the trusted events the page took, in Latchkey's input world.
         config.userContentController.addUserScript(RealInput.userScript)
+        let signal = InputSignal()
+        config.userContentController.add(
+            InputSignal.Handler(signal), contentWorld: RealInput.world, name: RealInput.handlerName)
         // The Owner's clipboard stays out of the page's reach (`RealInput.noClipboard`).
         config.userContentController.addUserScript(RealInput.clipboardScript)
         let w = WKWebView(frame: NSRect(origin: .zero, size: size), configuration: config)
@@ -314,6 +317,7 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownl
         // (Google's sign-in, for one).
         w.customUserAgent = Self.safariUserAgent
         holderWindow = Self.holder(for: w)
+        RealInput.register(signal, for: w)
         web = w
         return w
     }
@@ -547,6 +551,7 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownl
         web?.stopLoading()
         web?.navigationDelegate = nil
         web?.uiDelegate = nil
+        if let w = web { RealInput.unregister(w) }
         web = nil
         holderWindow?.orderOut(nil)
         holderWindow?.contentView = nil
@@ -1466,7 +1471,8 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownl
                     // The character went into this field, as the input world saw it: else the
                     // page moved the focus while the key was on its way, and nothing more goes
                     // (security review 2026-11-25).
-                    if await RealInput.lastTarget(w) != current { return false }
+                    let went = await RealInput.lastTarget(w)
+                    if went?.ref != current || went?.host != host { return false }
                 }
             }
             return true

@@ -21,34 +21,38 @@ enum RealInput {
     /// FR-485: the longest one step (a click, a key) waits for the page to take its events.
     static let stepLimit: Duration = .seconds(5)
 
-    /// Counts the trusted pointer-up, mouse-up, key-up and input events, in every frame; a frame of
-    /// the page's own site counts into the top page's count too. Added before the page's own
-    /// scripts, on the window, while capturing, so the page can't stop it seeing them. The last
-    /// trusted keydown is kept, to read whether the page took it (`defaultPrevented`).
+    /// Tells Latchkey, as each one comes, of the trusted pointer-up, mouse-up, key-up and input
+    /// events, in every frame, through a message handler only this world has (`InputSignal`):
+    /// nothing asks the page (asking it after every key kept a busy Mac busier, GitHub's runner
+    /// 2026-11-25). Added before the page's own scripts, on the window, while capturing, so the
+    /// page can't stop it seeing them. With each key-up, whether the page took the key down
+    /// (`defaultPrevented`); with each keypress and beforeinput, the reference of the element the
+    /// character went into, inside shadow roots too (spec 013 FR-1377).
     static let counter = """
         (function () {
           if (window.__lkInput) return;
-          var c = { up: 0, key: 0, input: 0, last: null, target: '' };
-          try { Object.defineProperty(window, '__lkInput', { value: c }); } catch (x) { return; }
-          var top = null;
-          try { if (window.top !== window && window.top.__lkInput) top = window.top.__lkInput; } catch (x) { top = null; }
-          function add(name) { return function (ev) { if (!ev.isTrusted) return; c[name]++; if (top) top[name]++; }; }
-          window.addEventListener('pointerup', add('up'), true);
-          window.addEventListener('mouseup', add('up'), true);
-          window.addEventListener('keyup', add('key'), true);
-          window.addEventListener('input', add('input'), true);
-          window.addEventListener('keydown', function (ev) { if (ev.isTrusted) { c.last = ev; if (top) top.last = ev; } }, true);
-          // Where the last character went: the element itself, inside shadow roots too (FR-1377).
+          try { Object.defineProperty(window, '__lkInput', { value: true }); } catch (x) { return; }
+          var h = window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.latchkeyInput;
+          if (!h) return;
+          var last = null;
+          function send(m) { try { h.postMessage(m); } catch (x) {} }
+          function up(ev) { if (ev.isTrusted) send({ k: 'up' }); }
+          window.addEventListener('pointerup', up, true);
+          window.addEventListener('mouseup', up, true);
+          window.addEventListener('keydown', function (ev) { if (ev.isTrusted) last = ev; }, true);
+          window.addEventListener('keyup', function (ev) { if (ev.isTrusted) send({ k: 'key', p: !!(last && last.defaultPrevented) }); }, true);
+          window.addEventListener('input', function (ev) { if (ev.isTrusted) send({ k: 'input' }); }, true);
           function went(ev) {
             if (!ev.isTrusted) return;
             var t = ev.composedPath ? ev.composedPath()[0] : ev.target;
-            var r = (t && t.getAttribute && t.getAttribute('data-latchkey')) || '-';
-            c.target = r; if (top) top.target = r;
+            send({ k: 'target', t: String((t && t.getAttribute && t.getAttribute('data-latchkey')) || '-') });
           }
           window.addEventListener('keypress', went, true);
           window.addEventListener('beforeinput', went, true);
         })();
         """
+
+    static let handlerName = "latchkeyInput"
 
     static var userScript: WKUserScript {
         WKUserScript(source: counter, injectionTime: .atDocumentStart, forMainFrameOnly: false, in: world)
@@ -394,29 +398,21 @@ enum RealInput {
         return n
     }
 
-    /// The reference of the element the last character went into ("-" for one without), as the
-    /// input world saw it (spec 013 FR-1377).
-    static func lastTarget(_ view: WKWebView) async -> String? {
-        await evaluate(view, "window.__lkInput ? String(__lkInput.target) : ''")
-    }
-
-    /// Whether the page took the last key (its keydown was cancelled), as the input world saw it.
-    static func lastKeyTaken(_ view: WKWebView) async -> Bool {
-        await evaluate(view, "window.__lkInput && __lkInput.last ? String(__lkInput.last.defaultPrevented) : 'false'")
-            == "true"
-    }
-
     // MARK: waiting
 
-    /// One of the input world's counts ("up", "key", "input"), or -1 when the page didn't answer
-    /// in time (a page held on a dialog runs no script).
+    /// Each page's `InputSignal`, by its view (registered by `LockedBrowser`).
+    private static var signals: [ObjectIdentifier: InputSignal] = [:]
+    static func register(_ signal: InputSignal, for view: WKWebView) { signals[ObjectIdentifier(view)] = signal }
+    static func unregister(_ view: WKWebView) { signals[ObjectIdentifier(view)] = nil }
+
+    /// How many of `name` ("up", "key", "input") the page has taken so far.
     static func count(_ view: WKWebView, _ name: String) async -> Int {
-        Int(await evaluate(view, "window.__lkInput ? String(__lkInput.\(name)) : '-1'") ?? "-1") ?? -1
+        signals[ObjectIdentifier(view)]?.count(name) ?? 0
     }
 
     /// Runs `code` in the input world, at most `within` (Constitution II: a page held on a
     /// dialog never answers).
-    static func evaluate(_ view: WKWebView, _ code: String, within: Duration = .seconds(1)) async -> String? {
+    static func evaluate(_ view: WKWebView, _ code: String, within: Duration = .seconds(5)) async -> String? {
         await Deadline.first(within: within) { @MainActor @Sendable in
             await withCheckedContinuation { (c: CheckedContinuation<String?, Never>) in
                 view.evaluateJavaScript(code, in: nil, in: world) { result in
@@ -430,17 +426,64 @@ enum RealInput {
         }
     }
 
-    /// Waits until the count `name` is past `before`, at most `stepLimit` (FR-485). A page that
-    /// never gets the event (a disabled button takes none) costs that wait once.
+    /// Waits until the page has taken more of `name` than `before`, at most `stepLimit` (FR-485),
+    /// looking at what it told Latchkey (no script runs in the page). A page that never gets the
+    /// event (a disabled button takes none) costs that wait once.
     static func wait(_ view: WKWebView, _ name: String, after before: Int) async {
+        guard let signal = signals[ObjectIdentifier(view)] else { return }
         let end = ContinuousClock.now + stepLimit
-        while ContinuousClock.now < end {
-            // A page that didn't answer in time (busy, or held on a dialog) is asked again until
-            // the limit: going on early would run the next step before this one was taken.
-            let n = await count(view, name)
-            if n > before, before >= 0 { return }
-            if n >= 0, before < 0 { return }
-            try? await Task.sleep(for: .milliseconds(25))
+        while ContinuousClock.now < end, signal.count(name) <= before {
+            try? await Task.sleep(for: .milliseconds(5))
+        }
+    }
+
+    /// Where the last character went: the element's reference ("-" for one without) and the
+    /// host of the frame it is in, as the frame's own address says (WebKit's, not the page's
+    /// word); nil before any (spec 013 FR-1377).
+    static func lastTarget(_ view: WKWebView) async -> (ref: String, host: String)? {
+        signals[ObjectIdentifier(view)]?.target
+    }
+
+    /// Whether the page took the last key (its keydown was cancelled).
+    static func lastKeyTaken(_ view: WKWebView) async -> Bool {
+        signals[ObjectIdentifier(view)]?.lastTaken ?? false
+    }
+}
+
+/// What a page's input world told Latchkey (`RealInput.counter`): the trusted events taken, where
+/// the last character went, and whether the page took the last key. Only that world can post
+/// here (the handler is added to it alone), and anything not of the expected shape is dropped.
+@MainActor
+final class InputSignal {
+    private var counts: [String: Int] = [:]
+    private(set) var target: (ref: String, host: String)?
+    private(set) var lastTaken = false
+
+    func count(_ name: String) -> Int { counts[name] ?? 0 }
+
+    func received(_ body: Any, host: String) {
+        guard let o = body as? [String: Any], let k = o["k"] as? String else { return }
+        switch k {
+        case "up", "input":
+            counts[k, default: 0] += 1
+        case "key":
+            counts[k, default: 0] += 1
+            lastTaken = (o["p"] as? Bool) == true
+        case "target":
+            if let t = o["t"] as? String { target = (String(t.prefix(64)), host) }
+        default:
+            return
+        }
+    }
+
+    final class Handler: NSObject, WKScriptMessageHandler {
+        weak var signal: InputSignal?
+        init(_ signal: InputSignal) { self.signal = signal }
+
+        func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage) {
+            MainActor.assumeIsolated {
+                signal?.received(message.body, host: message.frameInfo.securityOrigin.host.lowercased())
+            }
         }
     }
 }
