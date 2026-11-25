@@ -128,9 +128,9 @@ world". The rest was decided here (low-level, CLAUDE.md "Toni decides"):
 - **Typed secrets**: in Latchkey's own browser, a read in the hidden world before typing
   (skipped while a dialog is held or a file is shown, 2 s at most) says whether the field is a
   password, one-time-code or card field; the value is kept in the page's record and sent as the
-  part's `secrets`, which the relay uses for blanking and removes before sealing. Not in Safari:
-  the read would run through the tab's action script and take the action's navigation note
-  (security review 2026-11-25); there, codes are caught by their shape.
+  part's `secrets`, which the relay uses for blanking and removes before sealing. In Safari no
+  read (it would run through the tab's action script and take the action's navigation note):
+  every text typed there is blanked instead, failing closed (security reviews 2026-11-25).
 - **Older intakes**: an intake from before 2026-11-25 refuses over 64 KB with 413; the relay
   keeps a small version sealed beside each report and sends it then, so no report is lost while
   the intake's new image rolls out.

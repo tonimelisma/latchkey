@@ -163,6 +163,12 @@ actor SafariBrowser {
     /// The Owner's tab Claude works in (FR-425): its window, position, count, address, and a mark
     /// of Latchkey's own. Kept in memory only.
     private var picked: (window: String, tab: PickedTab)?
+    /// What Claude typed in this tab, in memory only, for the relay to blank in a problem report
+    /// (spec 014 FR-1448); forgotten with the tab.
+    private var typedSecrets: [String] = []
+
+    /// What Claude typed in this tab, for a problem report.
+    func typedForReport() -> [String] { typedSecrets }
     /// The address of a picked tab whose page Safari let no script mark (an empty tab, Safari's
     /// own pages), as it was when picked: such a tab is known by it instead (plan D8). Never
     /// updated, so a navigation can't move it.
@@ -341,6 +347,13 @@ actor SafariBrowser {
     {
         beginAction(mayNavigate: true)
         let before = try? await stamp()
+        // Kept to be blanked in a problem report (spec 014 FR-1448), whatever field it goes to: a
+        // check of the field would run through this tab's action script and its bookkeeping, so
+        // every typed text counts (fails closed; security review 2026-11-25).
+        if text.count >= 4, !typedSecrets.contains(text) {
+            typedSecrets.append(text)
+            if typedSecrets.count > 50 { typedSecrets.removeFirst(typedSecrets.count - 50) }
+        }
         try check(
             try await javaScript(PageScripts.type(ref, text: text, submit: submit), acting: true, answer: answer),
             ref: ref, option: text)
@@ -581,6 +594,7 @@ actor SafariBrowser {
 
     /// Forgets the picked tab (nothing is done to it).
     func forget() {
+        typedSecrets = []
         picked = nil
         claudesTab = false
         pickedUnmarked = nil

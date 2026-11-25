@@ -1187,13 +1187,15 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownl
         // Typed into a password or code field: kept to be blanked in a problem report (spec 014
         // FR-1448), asked in the hidden world before typing.
         // Not while the page holds a dialog or is a file (the script would wait, and typing must
-        // fail at once as before), and at most 2 s; no answer counts as not a secret field
-        // (security review 2026-11-25).
+        // fail at once as before), and at most 2 s. Fails closed: anything but "no" keeps the
+        // text to blank (security review 2026-11-25).
         if held == nil, file == nil {
             let answer: String? = await Deadline.first(within: .seconds(2)) { @MainActor @Sendable [weak self] in
                 await self?.hidden(PageRecord.secretField(ref), async: false)
             }
-            if answer == "yes" { record.typedSecret(text) }
+            if answer != "no" { record.typedSecret(text) }
+        } else {
+            record.typedSecret(text)
         }
         try check(
             (try await script(PageScripts.type(ref, text: text, submit: submit))).split(separator: "\n").first.map(

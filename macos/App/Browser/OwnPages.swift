@@ -284,9 +284,16 @@ final class OwnPages {
     /// Each open page: its name, title, and address, oldest first.
     /// What Claude typed into password and code fields of the chat's pages in Latchkey's own
     /// browser, for the relay to blank (spec 014 FR-1448); at once, apart from the pages.
-    func typedSecrets(_ names: [String]) -> [String] {
-        names.compactMap { pages[$0.trimmingCharacters(in: .whitespaces).lowercased()]?.browser?.record.secrets }
-            .flatMap { $0 }
+    func typedSecrets(_ names: [String]) async -> [String] {
+        var out: [String] = []
+        for raw in names {
+            switch pages[raw.trimmingCharacters(in: .whitespaces).lowercased()]?.kind {
+            case .own(let b)?: out += b.record.secrets
+            case .safari(let s)?: out += await s.typedForReport()
+            case nil: break
+            }
+        }
+        return out
     }
 
     /// The chat's pages as they are, for a problem report (spec 014 FR-1447): each one named that is
