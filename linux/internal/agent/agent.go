@@ -244,7 +244,7 @@ func (a *Agent) session(ctx context.Context, s config.Settings, key *devicekey.K
 	if err := c.send(hsCtx, &agentproto.Hello{
 		DeviceID: s.DeviceID, Signature: sig, AppVersion: a.Version, OSVersion: osVersion(),
 		Kind: agentproto.KindLinux, Name: s.MachineName(), Tools: defs(toolset), State: state(),
-		Features: []string{agentproto.FeatureAudit},
+		Features: []string{agentproto.FeatureAudit, agentproto.FeatureReportPart},
 	}); err != nil {
 		return err
 	}
@@ -363,6 +363,17 @@ func (a *Agent) readLoop(ctx context.Context, c *conn, audits chan<- *agentproto
 
 // call runs one tool call and answers it.
 func (a *Agent) call(ctx context.Context, c *conn, m *agentproto.Call) {
+	if m.Tool == agentproto.ReportPartTool {
+		// The relay asks for this server's part of a problem report (spec 014 FR-1445): not one
+		// of Claude's calls, so it is answered whatever is paused or turned on, and logged as an
+		// event, not as a call.
+		sent := a.reportPart(m.Arguments).Encode(m.ID)
+		if err := c.send(ctx, sent); err != nil {
+			a.Logger.Warn("report part not sent", "call", m.ID, "err", err)
+		}
+		a.Log.Event("app", "Sent this server's part of a problem report to the relay")
+		return
+	}
 	start := time.Now()
 	deadline := time.Duration(m.DeadlineMS) * time.Millisecond
 	if deadline <= 0 {

@@ -55,7 +55,7 @@ func fullEnv(t *testing.T, partDeadline time.Duration, maxBody int) (*env, *fake
 	ring := reportlog.New(nil)
 	e := setupWith(t, mcpserver.Options{
 		Traces: ts, RelayLog: ring, PartDeadline: partDeadline,
-		Logger: slog.New(ring.Wrap(slog.DiscardHandler)),
+		Logger:  slog.New(ring.Wrap(slog.DiscardHandler)),
 		Reports: mcpserver.ReportsOptions{IntakeURL: srv.URL, DeveloperKey: pk, Client: srv.Client(), WorkBits: 4},
 	})
 	return e, intake, ring, priv

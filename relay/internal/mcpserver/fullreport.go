@@ -43,8 +43,27 @@ var pageInAnswer = regexp.MustCompile(`\bpage (p[abcdefghjkmnpqrstuvwxyz23456789
 // codeLike is an argument that has the shape of a verification code: 4 to 8 digits (FR-1448).
 var codeLike = regexp.MustCompile(`^[0-9]{4,8}$`)
 
-// secretKeys are argument names whose value is a secret wherever they appear (FR-1448).
-var secretKeys = map[string]bool{"code": true, "password": true, "passcode": true, "otp": true, "pin": true}
+// secretKeys are argument names whose value is a secret wherever they appear (FR-1448), and
+// secretParts are parts of a name that make it one (api_key, access_token, client_secret);
+// security review 2026-11-25.
+var (
+	secretKeys  = map[string]bool{"code": true, "password": true, "passcode": true, "otp": true, "pin": true, "passphrase": true}
+	secretParts = []string{"password", "passwd", "token", "secret", "apikey", "api_key", "authorization", "cookie", "credential", "private_key"}
+	// bearerLike finds a credential written into text (a header in a shell command).
+	bearerLike = regexp.MustCompile(`(?i)\b(bearer|basic|token)\s+[A-Za-z0-9._~+/=-]{16,}`)
+)
+
+func secretKey(k string) bool {
+	if secretKeys[k] {
+		return true
+	}
+	for _, p := range secretParts {
+		if strings.Contains(k, p) {
+			return true
+		}
+	}
+	return false
+}
 
 // chat is what the relay's trace holds of one chat.
 type chat struct {
@@ -359,9 +378,16 @@ func secretsIn(calls []reports.Call) []string {
 			for _, vv := range x {
 				walk(key, vv)
 			}
+		case bool, float64, nil:
 		case string:
+			for _, m := range bearerLike.FindAllString(x, -1) {
+				if !seen[m] {
+					seen[m] = true
+					out = append(out, m)
+				}
+			}
 			t := strings.TrimSpace(x)
-			if len(t) >= 4 && (secretKeys[key] || codeLike.MatchString(t)) && !seen[t] {
+			if len(t) >= 4 && (secretKey(key) || codeLike.MatchString(t)) && !seen[t] {
 				seen[t] = true
 				out = append(out, t)
 			}
@@ -387,24 +413,30 @@ func toTree(v any) (any, error) {
 	return t, err
 }
 
-// keptAsIs are fields whose strings are never changed by scrubbing: an image's data, times and
-// ids (a code's digits can be part of a time or an id; a replaced byte breaks an image).
-var keptAsIs = map[string]bool{"data": true, "time": true, "at": true, "call_id": true, "id": true, "report": true, "from": true, "to": true}
+// scrubTree replaces the secrets and names in every string of the report, except where a
+// replaced byte would break what isn't text and holds nothing Claude passed (security review
+// 2026-11-25: exemptions go by place, not by a key name an argument could also have): a
+// picture's data (an object of type image, or a page's screenshot), the report's own id and
+// time, and the time and call id the relay gave each call.
+func scrubTree(v any, r *strings.Replacer, key string) any { return scrubAt(v, r, key, "", nil) }
 
-func scrubTree(v any, r *strings.Replacer, key string) any {
+func scrubAt(v any, r *strings.Replacer, key, where string, parent map[string]any) any {
 	switch x := v.(type) {
 	case map[string]any:
 		for k, vv := range x {
-			x[k] = scrubTree(vv, r, k)
+			x[k] = scrubAt(vv, r, k, where+"/"+k, x)
 		}
 		return x
 	case []any:
 		for i, vv := range x {
-			x[i] = scrubTree(vv, r, key)
+			x[i] = scrubAt(vv, r, key, where+"/[]", parent)
 		}
 		return x
 	case string:
-		if keptAsIs[key] {
+		image := key == "data" && parent != nil && (parent["type"] == "image" || strings.HasSuffix(where, "/screenshot/data"))
+		switch {
+		case image, where == "/id", where == "/at", where == "/calls/[]/time", where == "/calls/[]/call_id",
+			where == "/chat/from", where == "/chat/to":
 			return x
 		}
 		return r.Replace(x)

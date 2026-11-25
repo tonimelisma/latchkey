@@ -47,3 +47,27 @@ func TestSecretsInFindsCodes(t *testing.T) {
 	})
 	assert.ElementsMatch(t, []string{"ab12cd", "482913"}, got)
 }
+
+// Security review 2026-11-25: a secret under an argument named like a structural field is still
+// blanked; only a picture's data and the relay's own times and ids are left as they are.
+func TestScrubGoesByPlaceNotKeyName(t *testing.T) {
+	tree := map[string]any{"id": "fb_482913", "calls": []any{map[string]any{
+		"time": "2026-11-25T03:48:29.130Z", "call_id": "call_482913",
+		"arguments": map[string]any{"id": "482913", "to": "482913", "access_token": "abcdefghijklmnopqrstu"},
+		"result":    []any{map[string]any{"type": "image", "data": "AAA482913AAA"}, map[string]any{"type": "text", "text": "id 482913"}},
+	}}}
+	secrets := secretsIn([]reports.Call{{Arguments: json.RawMessage(`{"id":"482913","access_token":"abcdefghijklmnopqrstu","command":"curl -H 'Authorization: Bearer abcdefghijklmnopqrstuvwxyz'"}`)}})
+	var pairs []string
+	for _, s := range secrets {
+		pairs = append(pairs, s, "(blanked)")
+	}
+	b, _ := json.Marshal(scrubTree(tree, strings.NewReplacer(pairs...), ""))
+	out := string(b)
+	assert.Contains(t, out, `"id":"(blanked)"`, "an argument named id")
+	assert.Contains(t, out, `"to":"(blanked)"`)
+	assert.Contains(t, out, `"access_token":"(blanked)"`)
+	assert.Contains(t, out, `"text":"id (blanked)"`)
+	assert.Contains(t, out, "AAA482913AAA", "a picture's bytes stay")
+	assert.Contains(t, out, `"call_id":"call_482913"`)
+	assert.Contains(t, secrets, "Bearer abcdefghijklmnopqrstuvwxyz", "a credential written into a command")
+}
