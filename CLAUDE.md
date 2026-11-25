@@ -239,6 +239,17 @@ how it is checked and what counts as working. Cases never write anything they do
 Cases that need real Claude or a Mac's apps become eval tasks in `relay/e2e/tasks/` (`covers`),
 run in the test Mac when someone starts it by hand (spec 015); none runs against Toni's real data.
 
+## There is no "bot check" (Toni, 2026-11-25)
+
+When a site works in Safari but not through Latchkey (a button does nothing, a page stays blank
+or loading, a sign-in comes back unchanged), that is a bug in Latchkey's implementation. It is
+never "the site's protection against bots", "a bot wall", "a robot check" or "a CAPTCHA", and
+never a reason to call something unfixable. Find what Latchkey does differently from Safari
+(the page's view, its cookies and storage, its window and screen, the events a click or key
+sends, timing) and fix it. Until the cause is found, it is an open bug in Latchkey: say so, with
+what was learned, in reports, acceptance rows, STATUS and tests. Never disposition a problem
+report or a row as a bot check, and never tell Toni one.
+
 ## Never disturb the user (Toni, 2026-11-07; Constitution IV)
 
 IMPORTANT: while the Mac is unlocked, someone may be using any app. Latchkey never brings a

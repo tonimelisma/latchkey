@@ -72,7 +72,7 @@ Eight reports, looked into 2026-11-25; none run live (Toni runs them).
 | Headless Chrome's print-to-PDF wrote nothing, exit 0 | Chrome makes its profile in macOS's per-user temporary folder, not `$TMPDIR`, which the fence doesn't let it write | shell_run's description says to give it `--user-data-dir` in the scratch folder; test and case | NOT VERIFIED |
 | Maps: "found nothing" for a Moscow address and a Hong Kong mall | Latchkey turned every MapKit error into "found nothing", also Apple Maps limiting a burst of searches | Only MapKit's "not found" says nothing was found; a limit says wait and try again; other errors say what happened; test and case | NOT VERIFIED |
 | Maps: a station 3.8 km off, another office for an address | Apple Maps' own data abroad | Can't be fixed in Latchkey | n/a |
-| Target's checkout does nothing in Latchkey's own browser, Mac locked (2 reports) | Target's protection against bots (a PerimeterX collector on the page) blocks checkout and fulfilment calls in that browser; Safari can't be used while locked | Not fixable in Latchkey without the Mac unlocked; told Toni | n/a |
+| Target's checkout does nothing in Latchkey's own browser, Mac locked (2 reports): Check out changes nothing, the checkout address shows an empty page, a product's pickup and delivery choices stay "loading" | Not found yet: an open bug in Latchkey (Toni, 2026-11-25: no "bot check"; it was wrongly closed as one). The cart, its greeting and removing items work; checkout and the fulfilment calls don't | Open: find what Latchkey's own browser does differently from Safari | NOT VERIFIED |
 | Procare opened signed out in Latchkey's own browser, Mac unlocked | Toni's rule since 2026-11-24 (pages open in the background browser; sign_in_again moves one into Safari); the answer's first line already says so | By design | n/a |
 
 ## Problem reports of 2026-11-24 (0.8.235, Mac unlocked)
@@ -83,7 +83,7 @@ regression case each; no live run (Toni runs them).
 | Report | Cause | Fix (spec) | Live |
 |---|---|---|---|
 | A file a page offered to save in Latchkey's own browser opened the file's address instead, ending Claude's script; nothing reached Downloads | Latchkey's own browser had no download handling, so WebKit went to the address | Saved into Downloads during Claude's action, as Safari does; a page can't save on its own (spec 005 FR-475 to FR-477) | NOT VERIFIED |
-| Procare's sign-in in Latchkey's own browser came back unchanged with no error; Safari signed in at once | Procare's hidden robot check turns away the background browser and says nothing; Latchkey can't tell why | logins_fill's description says a site may say nothing and that Claude judges from the page, then moves it to Safari (spec 013 FR-1373); pages also default to the background browser now, Safari only to watch, tool renamed `browser_look` (spec 005 FR-474; Toni) | NOT VERIFIED |
+| Procare's sign-in in Latchkey's own browser came back unchanged with no error; Safari signed in at once | Not found yet: an open bug in Latchkey (Toni, 2026-11-25: no "bot check"; it was wrongly put down to one). logins_fill's description now says the same page can come back without a word, and Claude moves the page into Safari | Open: find what Latchkey's own browser does differently from Safari | NOT VERIFIED |
 
 ## Feedback reports, 2026-11-17 to 2026-11-23 (sorted 2026-11-23)
 
