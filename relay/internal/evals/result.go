@@ -84,7 +84,7 @@ type CheckResult struct {
 
 // Unreachable is what the test Mac can't be (FR-1541).
 var Unreachable = []string{
-	"the owner's Mac locked", "the lid closed", "real iMessage and iCloud", "real websites and their bot checks",
+	"the owner's Mac locked", "the lid closed", "real iMessage and iCloud", "real websites",
 	"the owner's own accounts and data",
 }
 

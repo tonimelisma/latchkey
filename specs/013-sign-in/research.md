@@ -250,11 +250,11 @@ Toni: "It sounds like you've built [it] completely in the wrong way. It's just d
 Is it making guesses on whether a page was logged in or not? Shouldn't the code just provide
 what's happening in the browser and the agent makes the presumptions?" The one-call sign-in read
 each page with word and field patterns (a password page, a code step, "make sure it's you", a
-captcha, a passkey page), waited fixed times (3, 8, 40 s), decided "signed in", "refused",
+challenge frame, a passkey page), waited fixed times (3, 8, 40 s), decided "signed in", "refused",
 "check", pressed "Text me" itself, counted refusals, and switched a site to Safari's sign-in. Two
 days of live tests (Citi, Costco, eBay, Amazon, IKEA, United, GitHub) found most failures there:
-"Signed in" on Citi's code step, "refused" when Citi was slow and when Costco's bot check
-answered, a call past the relay's 60 s, a switch that dropped a half-done sign-in. Options:
+"Signed in" on Citi's code step, "refused" when Citi was slow and when Costco's sign-in
+ended in Latchkey's browser, a call past the relay's 60 s, a switch that dropped a half-done sign-in. Options:
 (a) fill-only: Latchkey types one saved value into the field Claude names and presses the button
 Claude names, nothing else; Claude reads the page (more calls, about 5 to 8 a sign-in; no
 guessing, no long calls). (b) one call that fills and presses the form's button but reports only

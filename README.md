@@ -54,9 +54,10 @@ Claude app (phone, web, desktop), can work with what's on your Mac:
   page, and never in your own Safari tabs. For a site it has your password for, Latchkey's own
   browser keeps its own sign-in instead of copying Safari's, locked or unlocked, so your Safari
   stays signed in; it keeps that sign-in on your Mac (in its Keychain, out of Claude's reach)
-  across restarts. Some sites' protection against bots turns away that hidden browser but lets
-  Safari through: while the Mac is unlocked, Claude can move such a page into a background
-  Safari tab of its own and sign in there; while it is locked, Claude tells you the site needs
+  across restarts. When a site's sign-in doesn't work in that hidden browser but would in
+  Safari, that is a bug in Latchkey: while the Mac is unlocked, Claude can move such a page into
+  a background Safari tab of its own and sign in there, and sends a problem report; while it is
+  locked, Claude tells you the site needs
   the Mac unlocked. A verification code from Passwords is typed by Latchkey; a code a site texts
   or emails you, Claude reads itself (from Messages, from its own email tool, or from Apple Mail
   with the Mail tools), waits for as long as it likes, types it with Latchkey, and then deletes

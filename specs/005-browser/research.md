@@ -442,13 +442,13 @@ same evening, through Latchkey's tools, token times and status codes only:
 - The stale copy was still accepted (profile 200). While loading, the page called only
   `gsp.target.com/gsp/oauth_validations/v3/token_validations`; no renewal was seen.
 - Not yet seen: whether a copy's renewal with an already-used refresh token is what ends Safari's
-  sign-in (refresh-token rotation with reuse detection would do that), or Target's bot protection
-  (PerimeterX `_px*` cookies, tied to the browser) ending a sign-in used from two browsers.
+  sign-in (refresh-token rotation with reuse detection would do that), or Target ending a
+  sign-in used from two browsers some other way (its `_px*` cookies are tied to the browser).
   Nothing recorded what Claude's pages did with cookies, hence FR-453 and FR-454.
 
 Choices for the log (decided by Claude, low-level):
 - **Which cookies are sign-in cookies**: (a) every cookie (Target alone changes analytics and
-  bot-protection cookies every few seconds: the log would fill); (b) names matching a list of
+  other non-sign-in cookies every few seconds: the log would fill); (b) names matching a list of
   words (session, sid, auth, login: matches analytics cookies like `kampyleUserSession`); (c)
   HttpOnly, which only a server can set and page scripts' cookies can't be, plus any name
   containing "token", for sites whose ID token scripts read. Chosen: (c).

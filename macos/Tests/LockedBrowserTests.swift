@@ -66,8 +66,8 @@ import WebKit
         #expect(agent.contains("Safari/605.1.15") && agent.contains("Version/"))
     }
 
-    /// Citi, 2026-11-22: the page reported a 0×0 window at no place on the screen, which sites'
-    /// protection against bots reads as a robot (Toni: "change the background tab to be more
+    /// Citi, 2026-11-22: the page reported a 0×0 window at no place on the screen, and Citi ended
+    /// the sign-in after its code, a Latchkey bug (Toni: "change the background tab to be more
     /// real"). Now it is told of a browser window as big as the page plus a toolbar, at the top
     /// left of the screen, and nothing comes on screen.
     @Test func thePageIsInABrowserSizedWindowThatNeverShows() async throws {
