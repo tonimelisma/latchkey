@@ -551,10 +551,13 @@ Scrolling into view stays `scrollIntoView` (what the browser does when the focus
 element); wheel events for it would add a smooth-scroll wait for nothing a page can tell apart.
 Scrolling itself (FR-435) is unchanged.
 
-Waiting for the page: a user script in `RealInput.world` counts trusted `pointerup`, `mouseup`
-and `keyup` events (capture, on the window, added before the page's own scripts), and frames of
-the same site add to the top page's count; Latchkey reads the count until it moves, at most 2 s
-a step. Fixed sleeps were rejected (slow, and still wrong on a busy page).
+Waiting for the page: a user script in `RealInput.world` sees trusted `pointerup`, `mouseup`,
+`keyup` and `input` events (capture, on the window, added before the page's own scripts) and
+posts each to a message handler added to that world only; Latchkey waits on those counts, at
+most 5 s a step. Options weighed: fixed sleeps (slow, and still wrong on a busy page); asking
+the page for its counts every few milliseconds (first version: on GitHub's busy runner each
+question took seconds and the questions themselves added load, so typing stopped early); the
+message handler (chosen: nothing runs in the page, and the frame's host comes from WebKit).
 
 Keys: US-layout virtual key codes (`kVK_ANSI_*`), characters as the keyboard gives them
 (`\r` for Enter, `\u{7F}` for Backspace, the function-key characters for arrows, Home, End,
