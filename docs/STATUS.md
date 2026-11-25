@@ -23,6 +23,26 @@ with the installed version; SCHEDULED waits for a state only Toni can produce.
 | Costco sign-in | NOT VERIFIED | refused in both browsers with no words; Toni to check the saved password |
 | eBay sign-in | NOT VERIFIED | eBay showed a check page in both browsers that Latchkey didn't get past: an open bug in Latchkey (cause not found yet) |
 
+### Real mouse and keyboard in Latchkey's own browser; what looks clickable (spec 005 FR-478 to FR-488, spec 013 FR-1377, 2026-11-25)
+
+Toni: "an approach that looks as much as humans look on browsers ... No complex tricks with
+JavaScript". Bug behind it: Procare's sign-in (STAFF / PARENT boxes not listed, LOGIN disabled
+until one is chosen). Rows and how each is checked:
+
+| Condition | Status | Evidence |
+|---|---|---|
+| Procare sign-in, Latchkey's own browser, Mac locked | NOT VERIFIED | needs a run on the installed version with Toni's go-ahead (his account) |
+| Procare sign-in, Latchkey's own browser, Mac unlocked | NOT VERIFIED | same |
+| The role boxes are listed as clickable, a click on PARENT enables LOGIN, logins_fill signs in (a served page like Procare's) | VERIFIED in tests only | `RegressionRealInputTests` fails on main (run on Toni's Mac 2026-11-25, main 5b5a1c0, Mac locked) and passes on the branch (GitHub's Mac runner, unlocked) |
+| Clicks and keys are trusted, in a mouse's and a keyboard's order, the page focused during the call only | VERIFIED in tests only | same suite on GitHub's Mac runner; while locked on the installed app: NOT VERIFIED |
+| Safari tabs: typing in a keyboard's order; still script actions | VERIFIED in tests only | `safarisScriptTypingGivesAKeyboardsOrder` (a WebKit view, not real Safari) |
+| No Command shortcut, picker, clipboard or sound reaches the owner | VERIFIED in tests only | `shortcutsPickersAndTheClipboardStayOutOfReach` |
+
+Known limits: a list's menu, a colour panel and a date calendar aren't opened (chosen or typed
+instead); an input method the owner has on (Japanese, Chinese) or a non-US keyboard layout's
+dead keys could change what the keys type in Latchkey's own browser (not seen; a bug to fix if
+it shows).
+
 ### Problem reports carry everything for the chat (spec 014 FR-1440 to FR-1456, 2026-11-25)
 
 Toni: "improve the feedback so in the future it automatically logs everything". Rows (his
