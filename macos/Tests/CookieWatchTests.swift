@@ -96,7 +96,10 @@ import Testing
         {
             try await Task.sleep(for: .milliseconds(50))
         }
-        #expect(told.lines.contains { $0.contains("replaced Safari's accessToken") }, "\(told.lines)")
+        let jarNow = (try? await pages.page(name).run("document.cookie.replace(/=[^;]*/g, '=…')")) ?? "?"
+        #expect(
+            told.lines.contains { $0.contains("replaced Safari's accessToken") },
+            "\(told.lines); the page's cookies (names): \(jarNow)")
         #expect(!told.lines.joined().contains("from-"))
     }
 

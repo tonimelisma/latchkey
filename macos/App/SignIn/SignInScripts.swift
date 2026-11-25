@@ -253,6 +253,10 @@ extension PageScripts {
           try { Object.defineProperty(window, '__latchkeyFilled', { value: filled, enumerable: false }); } catch (x) {}
         }
         function keep(x) { if (filled.indexOf(x) < 0) filled.push(x); }
+        // This fill's own token on each field it checked (third review 2026-11-25): the field the
+        // click focuses must be the one element that carries it, not one the page gave the same
+        // reference (pages also clone elements with their references).
+        function stamp(x) { if (fillToken) x.setAttribute('data-latchkey-fill', fillToken); }
         function answer(o) { return 'ok\\t' + JSON.stringify(o); }
         """
     }
@@ -262,10 +266,10 @@ extension PageScripts {
     /// fields: [{ ref, count }], follow }` (`follow`: a code typed into one field may go on in
     /// the page's next code box, FR-1372), or `wrongsite`, `notfield` as `fillField`. The fields
     /// are kept to be emptied after (FR-1311) before anything is typed.
-    static func fillPlan(ref: String, kind: String, length: Int, host: String) -> String {
+    static func fillPlan(ref: String, kind: String, length: Int, host: String, token: String = "") -> String {
         // nosemgrep: latchkey-page-script-literal -- besides literal(), find() and fillCommon, only an Int.
         """
-        (function (kind, n) {
+        (function (kind, n, fillToken) {
           \(fillCommon(host: host))
           if (!onSite(null)) return answer({ step: 'wrongsite' });
           \(find(ref))
@@ -278,7 +282,7 @@ extension PageScripts {
           if (kind === 'code' && ['text', 'number', 'tel', 'password'].indexOf(type) < 0) return no();
           if (kind === 'code' && !codeField(e)) return no(type + ' (not a code)');
           var one = [{ ref: refOf(e), count: n }];
-          if (kind !== 'code') { keep(e); return answer({ step: 'plan', fields: one, follow: false }); }
+          if (kind !== 'code') { keep(e); stamp(e); return answer({ step: 'plan', fields: one, follow: false }); }
           var inputs = __lkAll('input').filter(seen);
           var from = inputs.indexOf(e), boxes = [];
           var nth = function (x) { var m = /\\b(\\d+) of (\\d+)\\b/.exec(x.getAttribute('aria-label') || ''); return m ? [+m[1], +m[2]] : null; };
@@ -294,11 +298,11 @@ extension PageScripts {
             });
             if (alike.length === n && n >= 4 && n <= 8 && alike.every(codeField)) boxes = alike;
           }
-          if (!boxes.length) { keep(e); return answer({ step: 'plan', fields: one, follow: true }); }
+          if (!boxes.length) { keep(e); stamp(e); return answer({ step: 'plan', fields: one, follow: true }); }
           if (boxes.length < n) return no(boxes.length + ' boxes for a ' + n + '-character code');
-          boxes.forEach(keep);
+          boxes.forEach(function (b) { keep(b); stamp(b); });
           return answer({ step: 'plan', fields: boxes.map(function (b) { return { ref: refOf(b), count: 1 }; }), follow: false });
-        })(\(literal(kind)), \(length))
+        })(\(literal(kind)), \(length), \(literal(token)))
         """
     }
 
@@ -306,10 +310,10 @@ extension PageScripts {
     /// or, with `follow`, on a code field after it the page moved the focus to ("next" and its
     /// reference; it is kept to be emptied), or anywhere else ("other"); "wrongsite" when the page
     /// is no longer on the saved site.
-    static func fillFocus(ref: String, kind: String, host: String, follow: Bool) -> String {
+    static func fillFocus(ref: String, kind: String, host: String, follow: Bool, token: String = "") -> String {
         // nosemgrep: latchkey-page-script-literal -- besides literal() and fillCommon, only a Bool.
         """
-        (function (ref, kind, follow) {
+        (function (ref, kind, follow, fillToken) {
           \(fillCommon(host: host))
           var x = byRef(ref), f = focused();
           if (!x || !onSite(x) || !onSite(f)) return answer({ step: 'wrongsite' });
@@ -319,11 +323,11 @@ extension PageScripts {
           if (x.tagName !== 'INPUT' || !seen(x) || (kind === 'password' && t !== 'password') || (kind === 'code' && !codeField(x))) return answer({ step: 'other' });
           if (f === x) return answer({ step: 'same' });
           if (follow && f && f.tagName === 'INPUT' && seen(f) && codeField(f) && f.getRootNode() === x.getRootNode() && (x.compareDocumentPosition(f) & Node.DOCUMENT_POSITION_FOLLOWING)) {
-            keep(f);
+            keep(f); stamp(f);
             return answer({ step: 'next', ref: refOf(f) });
           }
           return answer({ step: 'other' });
-        })(\(literal(ref)), \(literal(kind)), \(follow ? "true" : "false"))
+        })(\(literal(ref)), \(literal(kind)), \(follow ? "true" : "false"), \(literal(token)))
         """
     }
 
@@ -335,6 +339,7 @@ extension PageScripts {
         // nosemgrep: latchkey-page-script-literal -- besides literal() and fillCommon, nothing.
         return """
             (function (refs, value) {
+              var fillToken = '';
               \(fillCommon(host: host))
               if (!onSite(null)) return answer({ step: 'unheld', why: 'the page was no longer on the saved site' });
               var xs = refs.map(byRef);
@@ -369,6 +374,7 @@ extension PageScripts {
         // nosemgrep: latchkey-page-script-literal -- besides literal() and fillCommon, nothing.
         return """
             (function (refs, value) {
+              var fillToken = '';
               \(fillCommon(host: host))
               var boxes = refs.map(byRef);
               if (boxes.some(function (x) { return !x || !onSite(x) || !codeField(x); })) return answer({ step: 'unheld' });

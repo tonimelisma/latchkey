@@ -61,21 +61,21 @@ enum RealInput {
     /// Marks the element `ref` names as the field the next characters must go into, in this
     /// world of the frame it is in (spec 013 FR-1377), only when it is the one element with that
     /// reference and has the focus; "ok", else "missing", "several" or "notfocused".
-    static func markField(_ ref: String) -> String {
+    static func markField(_ ref: String, token: String) -> String {
         // nosemgrep: latchkey-page-script-literal -- besides literal() and the fixed `deep`, nothing.
         """
-        (function (ref) {
+        (function (ref, token) {
           \(PageScripts.deep)
           // An earlier mark goes, in every frame this world reaches (third review 2026-11-25).
           (function clear(w) {
             try { w.__lkField = null; for (var i = 0; i < w.frames.length; i++) clear(w.frames[i]); } catch (x) {}
           })(window);
-          var sel = '[data-latchkey=' + JSON.stringify(ref) + ']';
-          // Exactly one: the page can copy a reference onto a decoy of its own, and then no
-          // node is marked and nothing is typed (third review 2026-11-25).
-          var all = __lkAll(sel);
+          // Exactly one element carries this fill's token, and it has the reference: a decoy the
+          // page gave the same reference (or the token) is never marked (third review 2026-11-25).
+          var all = __lkAll('[data-latchkey-fill=' + JSON.stringify(token) + ']');
           if (all.length !== 1) return all.length ? 'several' : 'missing';
           var e = all[0];
+          if (e.getAttribute('data-latchkey') !== ref) return 'missing';
           // And it is what the click put the focus on, as this world sees it.
           var a = document.activeElement;
           for (var k = 0; k < 20 && a; k++) {
@@ -92,7 +92,7 @@ enum RealInput {
           if (!w) return 'missing';
           w.__lkField = e;
           return 'ok';
-        })(\(PageScripts.literal(ref)))
+        })(\(PageScripts.literal(ref)), \(PageScripts.literal(token)))
         """
     }
 

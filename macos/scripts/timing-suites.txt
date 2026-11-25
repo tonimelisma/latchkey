@@ -5,6 +5,7 @@ FencedBuildTests
 LeftoversTests
 LevelChangeTests
 MenuTests
+MessagesStoreTests
 PasswordsExportCleanupTests
 ShellJobTests
 SingleCopyTests

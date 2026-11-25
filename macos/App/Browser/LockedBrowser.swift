@@ -1431,9 +1431,12 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownl
             return try? JSONDecoder().decode(Plan.self, from: Data(text.utf8))
         }
         let unheld = #"{"step":"unheld"}"#
+        // This fill's own token, stamped on the fields it checked (`markField`).
+        let token = UUID().uuidString.replacingOccurrences(of: "-", with: "").lowercased()
         let planText = try SafariBrowser.detail(
             try await bounded(
-                PageScripts.fillPlan(ref: ref, kind: kind, length: value.count, host: host), world: Self.signInWorld),
+                PageScripts.fillPlan(ref: ref, kind: kind, length: value.count, host: host, token: token),
+                world: Self.signInWorld),
             ref: ref)
         // The whole typing within 20 s, so the answer beats the tool's 30 s (Constitution II);
         // past it nothing more is typed, and what was typed is emptied.
@@ -1489,11 +1492,11 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownl
                 }
                 await RealInput.click(at: RealInput.windowPoint(x, y, in: w), in: w)
                 var current = f.ref
-                let mark = try await self.bounded(RealInput.markField(current), world: RealInput.world)
+                let mark = try await self.bounded(RealInput.markField(current, token: token), world: RealInput.world)
                 guard mark == "ok" else {
                     let said =
                         [
-                            "several": "another element has the same reference",
+                            "several": "another element carries this fill's mark",
                             "notfocused": "it doesn't have the focus",
                             "missing": "it is gone",
                         ][mark] ?? "it couldn't be marked"
@@ -1518,10 +1521,11 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownl
                     // gets nothing more (FR-1377); a code may go on in the page's next code box,
                     // checked to be one (FR-1372).
                     let now = try await run(
-                        PageScripts.fillFocus(ref: current, kind: kind, host: host, follow: follow))
+                        PageScripts.fillFocus(ref: current, kind: kind, host: host, follow: follow, token: token))
                     if now?.step == "next", let next = now?.ref {
                         current = next
-                        let nextMark = try await self.bounded(RealInput.markField(current), world: RealInput.world)
+                        let nextMark = try await self.bounded(
+                            RealInput.markField(current, token: token), world: RealInput.world)
                         guard nextMark == "ok" else {
                             why = "the page's next code box \(safe(current)) couldn't be marked"
                             return false
@@ -1638,6 +1642,22 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownl
             }
             try? await Task.sleep(for: .milliseconds(400))
             out.append("cgEvent mouseMoved: " + ((try? await self.run(log)) ?? "?"))
+            // The same window placed on the screen's area, still see-through and ignoring the
+            // real mouse: does a window on no screen get no pointer moves?
+            let was = win.frame
+            let screens = NSScreen.screens.map { "\($0.frame)" }.joined(separator: ",")
+            if let main = NSScreen.main ?? NSScreen.screens.first {
+                win.setFrameOrigin(NSPoint(x: main.visibleFrame.minX, y: main.visibleFrame.minY))
+                try? await Task.sleep(for: .milliseconds(300))
+                if let e = ev(.mouseMoved, NSPoint(x: p.x - 10, y: p.y)) { w.mouseMoved(with: e) }
+                if let e = ev(.mouseMoved, p) { w.mouseMoved(with: e) }
+                try? await Task.sleep(for: .milliseconds(400))
+                out.append(
+                    "on screen (\(win.frame), screen=\(win.screen.map { "\($0.frame)" } ?? "none")) mouseMoved: "
+                        + ((try? await self.run(log)) ?? "?"))
+                win.setFrame(was, display: false)
+            }
+            out.append("screens: \(screens)")
         }
         return out.joined(separator: " || ")
     }
