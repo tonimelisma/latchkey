@@ -86,7 +86,7 @@ built.
 - A second macOS user on Toni's Mac: rejected (Full Disk Access is system-wide, so tests could
   read Toni's data; fast user switching locks his session; Constitution IV).
 - Never testable outside Toni's real Mac: lid closed, Latchkey's behavior while his Mac is locked,
-  real iMessage, real sites' bot walls (FR-1541).
+  real iMessage, real sites (FR-1541).
 
 ## Decisions taken by Claude (low-level; CLAUDE.md "Toni decides")
 

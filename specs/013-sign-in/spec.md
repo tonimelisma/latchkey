@@ -138,7 +138,7 @@ interface another app can read (`research.md`), so the only way in is a copy the
   Latchkey shall fill them in and send the form; when the page asks for a verification code and the
   sign-in has one, Latchkey shall fill in the current code and send it.)
 - **FR-1323** (Withdrawn 2026-11-22: sign-in is Claude's now, with Latchkey typing only what Claude names (FR-1371); Toni: "Shouldn't the code just provide what's happening in the browser and the agent makes the presumptions?" Was: The answer shall say what happened in plain words: signed in, which step the page now
-  asks for (a code Latchkey doesn't hold, a new-device check, a captcha), or what the page said
+  asks for (a code Latchkey doesn't hold, a new-device check, a check box), or what the page said
   when it refused; it shall never contain the secret.)
 - **FR-1324** (Withdrawn 2026-11-22: no cap on fills (Toni: "No cap"); Claude reads whether the site took the password. Was: When a sign-in fails, Latchkey shall allow Claude one more try of it; after the second
   failure, Latchkey shall refuse that sign-in until the next import, saying why (Toni, 2026-11-20:
@@ -187,12 +187,13 @@ interface another app can read (`research.md`), so the only way in is a copy the
   into, or one that doesn't hold what was typed, is said so, and nothing is pressed. All of it
   only on the page's own site (FR-1321, FR-1328), in the page itself, never in a frame.
 - **FR-1373** The tool's description shall tell Claude to read the page after each fill and judge
-  for itself, and that some sites' protection against bots turns away Latchkey's own background
-  browser while letting Safari through: while the Mac is unlocked, browser_look sign_in_again
+  for itself, and that a sign-in that doesn't work in Latchkey's own background browser but would
+  in Safari is a bug in Latchkey, to be sent as a problem report with the feedback tool (Toni,
+  2026-11-25): while the Mac is unlocked, browser_look sign_in_again
   moves the page into a background Safari tab of Claude's, where Claude signs in again; while it
   is locked, Claude tells the owner the site needs the Mac unlocked (Toni, 2026-11-22: "ensure
-  the agent gets proper guidance"). It shall also say that such a site may say nothing at all:
-  the same sign-in page comes back with no error, often with a hidden "reCAPTCHA" badge, and
+  the agent gets proper guidance"). It shall also say that such a sign-in may end with no word:
+  the same sign-in page comes back with no error, and
   that Latchkey can't tell why, so Claude judges from the page (problem report 2026-11-24,
   Procare; Toni: "keep the rule, provide hints to claude").
 - **FR-1374** browser_look sign_in_again on a page of a site Latchkey signs in to itself (FR-1350)
@@ -272,8 +273,7 @@ once when unlocked" and "Any new code text".
   refused the password, and it counts as no refusal. The same holds when the site returns to its
   sign-in form after the code went (Citi in Latchkey's own browser, 2026-11-22).)
 - **FR-1369** (Withdrawn 2026-11-22: the guidance is in the tool's description (FR-1373); no answer judges what the site did. Was: When a site shows a check or ends the sign-in in Latchkey's own browser, the answer
-  shall tell Claude that some sites' protection against bots turns away that background browser
-  while letting Safari through, and what to do (Toni, 2026-11-22: "ensure the agent gets proper
+  shall tell Claude that the sign-in may work in Safari instead, and what to do (Toni, 2026-11-22: "ensure the agent gets proper
   guidance"): while the Mac is unlocked, call logins_sign_in again on the page, which has moved
   into a background Safari tab of Claude's (FR-1352) or moves there with browser_look
   sign_in_again; while it is locked, that Safari is used only while the Mac is unlocked, so Claude
@@ -360,10 +360,11 @@ we can't find it via Apple Mail either"; then "yes, script Mail for archiving an
 
 - A site that sends a code by text or email after the password: Claude reads it with Messages or
   its email tool (or Mail's tools) and passes it (FR-1375).
-- A site that asks for a new-device check, or a captcha: Claude sees it on the page; Latchkey
+- A site that asks for a new-device check, or a check box: Claude sees it on the page; Latchkey
   never answers it.
-- A site whose protection against bots turns Latchkey's own browser away: Claude moves the page
-  into Safari while unlocked, or tells the Owner the site needs the Mac unlocked (FR-1373).
+- A sign-in that doesn't work in Latchkey's own browser but would in Safari (a bug in Latchkey):
+  Claude moves the page into Safari while unlocked, or tells the Owner the site needs the Mac
+  unlocked, and sends a problem report (FR-1373).
 - A sign-in form inside a frame from another site: not filled (FR-1321).
 - A lookalike address (`amaz0n.com`): no match, nothing filled.
 - Several sign-ins for one site: Claude names the user name; without one, Latchkey asks Claude to

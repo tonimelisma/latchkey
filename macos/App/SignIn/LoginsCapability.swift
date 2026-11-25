@@ -108,13 +108,12 @@ enum LoginsCapability {
                     call again. (3) code with check_code true: Latchkey types your code only if a text or email \
                     for this site since the password holds it, then deletes or archives that message. user: which user name, when Latchkey holds several (logins_find lists \
                     them). Works in Latchkey's own browser and in Claude's Safari tabs, never in the owner's own \
-                    tabs. Some sites' protection against bots turns away Latchkey's own background browser but \
-                    lets Safari through (the site ends the sign-in, shows a check, or says nothing: the same \
-                    sign-in page comes back with no error, often with a hidden "reCAPTCHA" badge; Latchkey \
-                    can't tell why, so judge from the page): while \
+                    tabs. When a sign-in doesn't work in Latchkey's own browser but would in Safari (the site \
+                    ends the sign-in, the same sign-in page comes back with no error, or a button does nothing; \
+                    Latchkey can't tell why, so judge from the page), that is a bug in Latchkey: while \
                     the Mac is unlocked, move the page into a background Safari tab with browser_look \
                     sign_in_again and sign in there; while it is locked, tell the owner the site needs the Mac \
-                    unlocked.
+                    unlocked; either way, send a problem report with the feedback tool saying what happened (never a password or code in it).
                     """,
                 input: [
                     "page": .stringParam("Claude's page, by the name browser_look gave, like p4k2"),

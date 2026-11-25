@@ -21,7 +21,7 @@ with the installed version; SCHEDULED waits for a state only Toni can produce.
 | Texted code deleted after use | VERIFIED | 0.8.222, 12:52 2026-11-22, at unlock; gone from its conversation in chat.db |
 | Mail tools find and read, Mac locked | VERIFIED | 0.8.221, 12:09 2026-11-22, fresh session listed 30 and read the newest |
 | Costco sign-in | NOT VERIFIED | refused in both browsers with no words; Toni to check the saved password |
-| eBay sign-in | NOT VERIFIED | eBay's human check in both browsers; only Toni can answer it |
+| eBay sign-in | NOT VERIFIED | eBay showed a check page in both browsers that Latchkey didn't get past: an open bug in Latchkey (cause not found yet) |
 
 ### Codes experiment (0.8.223, 2026-11-22, fresh Claude Code sessions, Latchkey's own browser)
 
@@ -41,7 +41,7 @@ agent's words.
 | Best Buy (email) | locked/unlocked 14:45–15:42 | VERIFIED (40 calls) | VERIFIED | VERIFIED (0.8.224; the first try, on 0.8.223, was sent home by its "Please wait" check) |
 | Uber (text, 4 boxes) | locked 16:14–16:21 | VERIFIED (0.8.225) | VERIFIED (0.8.225) | NOT VERIFIED: after about 9 sign-ins Uber refused texts and offered only WhatsApp |
 | Etsy (email) | locked 16:50–16:55 | VERIFIED (0.8.226) | VERIFIED (0.8.226) | VERIFIED (0.8.226; a stale code refused first) |
-| Amazon | unlocked and locked | NOT VERIFIED: its "I am human" box (before the form, or after the code), never ticked | same | same |
+| Amazon | unlocked and locked | NOT VERIFIED: a check box before the form (or after the code) that Latchkey's browser didn't get past: an open bug in Latchkey (cause not found yet) | same | same |
 | Citi (bank, text) | locked 16:55–17:01 | VERIFIED (0.8.226) | VERIFIED (0.8.226) | VERIFIED (0.8.226) |
 | Chase (bank) | locked 17:01–17:10 | NOT VERIFIED: its code step was blank (the page counted as hidden); fixed in 0.8.228 (pages visible, unit-tested), not yet run live on Chase | same | same |
 | Bank of America (bank, text) | unlocked 18:59–19:06 | VERIFIED (0.8.226) | VERIFIED (0.8.226) | VERIFIED (0.8.226) |
@@ -54,7 +54,7 @@ it; deleted after that install); one Uber code went to WhatsApp (no delete there
 
 Comparison: all three ways are as reliable as each other once the page works; every failure was
 the page (shadow roots, code boxes, hidden menus, focus-moving widgets, hidden pages) or a site's
-bot wall. Way 2 uses the fewest calls (Citi 9 against 17 and 15) and Claude never sees the code;
+page Latchkey's browser didn't get past (an open bug in Latchkey, cause not found yet). Way 2 uses the fewest calls (Citi 9 against 17 and 15) and Claude never sees the code;
 way 3 refused a stale code twice (Etsy, Airbnb), costing a retry.
 
 Fixed during it (0.8.224 to 0.8.226): Etsy's fields in shadow roots, Uber's "1 of 4" boxes and
@@ -72,7 +72,7 @@ Eight reports, looked into 2026-11-25; none run live (Toni runs them).
 | Headless Chrome's print-to-PDF wrote nothing, exit 0 | Chrome makes its profile in macOS's per-user temporary folder, not `$TMPDIR`, which the fence doesn't let it write | shell_run's description says to give it `--user-data-dir` in the scratch folder; test and case | NOT VERIFIED |
 | Maps: "found nothing" for a Moscow address and a Hong Kong mall | Latchkey turned every MapKit error into "found nothing", also Apple Maps limiting a burst of searches | Only MapKit's "not found" says nothing was found; a limit says wait and try again; other errors say what happened; test and case | NOT VERIFIED |
 | Maps: a station 3.8 km off, another office for an address | Apple Maps' own data abroad | Can't be fixed in Latchkey | n/a |
-| Target's checkout does nothing in Latchkey's own browser, Mac locked (2 reports): Check out changes nothing, the checkout address shows an empty page, a product's pickup and delivery choices stay "loading" | Not found yet: an open bug in Latchkey (Toni, 2026-11-25: no "bot check"; it was wrongly closed as one). The cart, its greeting and removing items work; checkout and the fulfilment calls don't | Open: find what Latchkey's own browser does differently from Safari | NOT VERIFIED |
+| Target's checkout does nothing in Latchkey's own browser, Mac locked (2 reports): Check out changes nothing, the checkout address shows an empty page, a product's pickup and delivery choices stay "loading" | Not found yet: an open bug in Latchkey (Toni, 2026-11-25: no "bot check"; it was wrongly closed as one). The cart, its greeting and removing items work; checkout and the fulfilment calls don't. 2026-11-25 05:35 UTC, 0.8.240, Mac unlocked, Latchkey's own browser with its own sign-in: Check out opened Target's sign-in panel over the cart, the saved password was typed, checkout loaded and the order was placed (Toni asked for it). So while locked, the panel or the page's drawing didn't happen; lead: the page stops drawing while the screen sleeps | Open: reproduce while locked, find why the panel doesn't come | Unlocked checkout: VERIFIED 0.8.240 2026-11-25 05:35 UTC (order confirmation page seen) / Locked: NOT VERIFIED |
 | Procare opened signed out in Latchkey's own browser, Mac unlocked | Toni's rule since 2026-11-24 (pages open in the background browser; sign_in_again moves one into Safari); the answer's first line already says so | By design | n/a |
 
 ## Problem reports of 2026-11-24 (0.8.235, Mac unlocked)
@@ -89,7 +89,7 @@ regression case each; no live run (Toni runs them).
 
 All 172 reports were read in full and checked against the code. 123 were already fixed (76),
 expected (the screen asleep while locked, the relay's VM stopped, an install's restart, Safari's
-background tabs; 25), bot walls (9), saved passwords only Toni can fix (4), places not in Apple
+background tabs; 25), sites that didn't work in Latchkey's own browser (9; open bugs in Latchkey, cause not found yet, Toni 2026-11-25), saved passwords only Toni can fix (4), places not in Apple
 Maps (4), by design (3) or not explained (2). 49 had a cause still open; the fixes below are on main, with
 unit tests run on GitHub's Mac runner (`mac-build.yml`) and a regression case each. None has
 been run live: Toni asked (2026-11-23) for no Latchkey calls and no test sessions against his
@@ -111,7 +111,7 @@ real data.
 Not fixed: Airbnb's late Continue button (by design: Claude types the code with browser_act,
 Toni 2026-11-23); two hangs of several minutes with no answer (0H0161, 442MP3), which need the
 hosted relay's log, kept outside this repository; places not in Apple Maps; Amazon's, Target's and
-Uber's bot walls; Safari's throttling of background tabs.
+Uber's pages that didn't work in Latchkey's own browser (open bugs in Latchkey, cause not found yet); Safari's throttling of background tabs.
 
 Moving reports to `Feedback/Handled` can't be done by Claude through Latchkey: the shell's fence
 denies writes to Latchkey's own folder even when declared (FR-319), and a script opened in
@@ -242,7 +242,7 @@ Downloads; none was).
 Toni's export with 0.8.177 (2026-11-21 10:41): done in 10 s, 1,026 sign-ins (Passwords' other
 19 items have no web address), none with a verification code in Passwords. Live sign-in through
 the hosted relay: homerecording.com signed in, no password in any answer, but the tool said "a
-check" (a hidden reCAPTCHA frame from Google's ad script); 0.8.178 counts only a challenge the
+check" (a hidden frame from Google's ad script, wrongly counted as one); 0.8.178 counts only a challenge the
 page shows, and logins_find starts with totals and says how many have codes (a feedback report).
 Latchkey's own sign-ins (0.8.179; Toni: "can it not sync cookies … so it doesn't log my real
 browser out?"; spec 013 FR-1350 to FR-1355): for the 871 sites Latchkey has a password for, its
@@ -283,14 +283,14 @@ from error elements first and never from a link, and a tab of Claude's own stays
 every other tab in its window is as it was. Rerun with 0.8.187: the password went through;
 then Citi asked how to send the code (Text me / Call me), which Latchkey read as a refusal
 with Citi's scam banner as the reason; pressing Text me by script sent the page back to Citi's
-signed-out home (Citi's bot protection, not worked around). 0.8.188: after the password, a
+signed-out home (an open bug in Latchkey then, cause not found). 0.8.188: after the password, a
 "how to send the code" step is answered with its text option (FR-1368), a site that then ends
 the sign-in is a check, not a refusal, long notices and banners are never the site's words,
 and "Sign on" buttons count. Citi itself needs Toni to sign in once in Safari.
 Live Amazon test with codes (Toni: "do it", 2026-11-21 17:50, 0.8.190, Mac unlocked): sites that
 fell back under older sign-in rules (Amazon) got one more try of Latchkey's own sign-in; Amazon
-took the password and asked for no code this time, but showed its "I am human" checkbox, which
-Latchkey answered as signed in. 0.8.191 reads a page that asks to confirm being human as a
+took the password and asked for no code this time, but showed a check box page ("Check the box to continue"), which
+Latchkey answered as signed in. 0.8.191 reads a page that asks to tick such a box as a
 check. A code text or email is still not tried live: no site has sent one since.
 First live sign-in with a code (2026-11-21 18:26, 0.8.192): IKEA by its one-time-code way; a
 fresh Claude had no working email tool, passed no_email_access, and Latchkey read the code from
@@ -356,13 +356,13 @@ lost (and called the owner's), so it stayed open: a new tab now records the othe
 opens (spec 005 FR-461). Locked, Citi can't work yet: earlier, in Latchkey's own browser, Citi
 took the password and the texted code, then logged the session out, which was answered as a
 refused password. A probe showed that browser's pages saw a 0×0 window at no place on the
-screen, a sign of a robot; Toni: "change the background tab to be more real so this legitimate
+screen, a Latchkey bug (Safari's pages see a real window); Toni: "change the background tab to be more real so this legitimate
 use case can work. don't do anything malicious" and "ensure the agent gets proper guidance".
 Now its pages are told of a browser-sized window at the top left (FR-462; no stand-ins for
 Safari's own objects or Apple Pay), a sign-out after the code is a check, not a refusal
 (FR-1368), and every such answer tells Claude why and what to do, locked or unlocked (FR-1369).
-Costco: in Latchkey's own browser it answered with its error page after the password (its
-sign-in carries a bot-protection service's cookies), read as a refusal; the try in a Safari tab
+Costco: in Latchkey's own browser it answered with its error page after the password (an open bug in Latchkey,
+cause not found yet), read as a refusal; the try in a Safari tab
 then passed the relay's 60 s with the password still in the field. A sign-in call now starts no
 step after 40 s and clears what it filled (FR-1370). And a page script with `return` but no
 `await` failed in Safari tabs ("Return statements are only valid inside functions"); it runs
@@ -372,7 +372,7 @@ Live with 0.8.218 (2026-11-22, unlocked): pages in Latchkey's own browser see a 
 at 0,33, as Safari's do; Citi, given one more try there (sign-in rules 7), signed in in
 Latchkey's own browser with its texted code and the text deleted: the browser used while the Mac
 is locked, where Citi had logged the session out the day before. Not yet seen with the Mac
-actually locked. eBay showed its human check in both browsers; the answer gave the new guidance
+actually locked. eBay showed a check page in both browsers that Latchkey didn't get past (an open bug in Latchkey); the answer gave the new guidance
 and the move into Safari kept the tab. Costco refused the saved password in both browsers, with
 no words, and is blocked until the next export (the saved password may be out of date). A fresh
 Claude Code session saw the new logins_sign_in description, and a script with return gave

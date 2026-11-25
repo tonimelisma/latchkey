@@ -345,9 +345,9 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownl
     /// The window a page is told it is in, in the screen's coordinates (origin at the bottom
     /// left): a browser window at the top left of the main screen's free area, as big as the page
     /// plus a toolbar (Safari's is 90 points). WebKit asks the app for it, as it asks Safari; an
-    /// app that doesn't answer gets a 0×0 window at no place on the screen, which sites'
-    /// protection against bots reads as a robot (Citi turned the sign-in away after its code,
-    /// 2026-11-22; Toni: "change the background tab to be more real so this legitimate use case
+    /// app that doesn't answer gets a 0×0 window at no place on the screen. That 0×0 window made
+    /// Citi end the sign-in after its code (2026-11-22), a Latchkey bug fixed by answering the
+    /// window frame (Toni: "change the background tab to be more real so this legitimate use case
     /// can work"). Nothing comes on screen: there is no window.
     static func windowFrame(page: CGSize, screen: CGRect?) -> CGRect {
         let free = screen ?? CGRect(x: 0, y: 0, width: 1512, height: 949)

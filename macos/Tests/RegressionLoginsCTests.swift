@@ -110,10 +110,10 @@ import Testing
         #expect(pressed == "00", "Text me and Call me are Claude's to press")
     }
 
-    /// regressions.logins_hidden_captcha_not_a_check (homerecording.com, 2026-11-21, 0.8.177):
-    /// the signed-in page carried a hidden reCAPTCHA frame from its ads, and the answer said the
+    /// regressions.logins_hidden_ad_frame_not_a_check (homerecording.com, 2026-11-21, 0.8.177):
+    /// the signed-in page carried a hidden frame from its ad script, and the answer said the
     /// site showed a check. The answer is the page as it is, never a judgment of it.
-    @Test func aHiddenCaptchaFrameIsNoCheckInTheAnswer() async throws {
+    @Test func aHiddenAdFrameIsNoCheckInTheAnswer() async throws {
         let s = try setup()
         defer { s.own.closeAll() }
         let ads = """

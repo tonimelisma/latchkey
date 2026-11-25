@@ -78,7 +78,7 @@ Toni's conditions") says verifies nothing.
 
 ### US5 (P2): "Done means Toni's conditions" rows stay honest
 1. Given a row needs a state only Toni's real Mac has (locked, lid closed, real iMessage, a real
-   site's bot wall), then no test here marks it VERIFIED; the reports say which rows they can't
+   site), then no test here marks it VERIFIED; the reports say which rows they can't
    reach.
 
 ## Requirements
@@ -184,7 +184,7 @@ below means such a run.
 ## Out of scope
 
 - Runs against Toni's real Mac, his accounts, or real sites (Toni, 2026-11-23).
-- The lid closed, the real lock screen, real iMessage and iCloud, real bot walls: not
+- The lid closed, the real lock screen, real iMessage and iCloud, real sites: not
   reproducible outside Toni's Mac (`research.md`).
 - An LLM judge as the score (unreliable; `research.md`).
 - Nightly runs (Toni, 2026-11-24).

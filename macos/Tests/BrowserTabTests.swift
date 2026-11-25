@@ -514,19 +514,19 @@ final class FakeSafariTabs: ScriptRunner, @unchecked Sendable {
         await #expect(throws: SafariBrowser.Failure.tabGone) { _ = try await b.read(offset: 0) }
     }
 
-    /// eBay, 2026-11-22: Latchkey's own sign-in hit eBay's check, the page moved into a new Safari
-    /// tab of Claude's, and eBay sent that tab on (signin.ebay.com to www.ebay.com) before Latchkey
-    /// ever marked it: the tab was lost ("isn't where it was"). It is Claude's while every other
-    /// tab is as when it opened, and only then.
+    /// eBay, 2026-11-22: Latchkey's own sign-in didn't get past an eBay page (an open bug in
+    /// Latchkey), the page moved into a new Safari tab of Claude's, and eBay sent that tab on
+    /// (signin.ebay.com to www.ebay.com) before Latchkey ever marked it: the tab was lost ("isn't
+    /// where it was"). It is Claude's while every other tab is as when it opened, and only then.
     @Test func aNewTabTheSiteSendsOnAtOnceIsStillClaudes() async throws {
         let fake = FakeSafariTabs()
-        fake.newTabGoesTo = "https://www.ebay.com/splashui/captcha?ap=1"
+        fake.newTabGoesTo = "https://www.ebay.com/splashui/next?ap=1"
         let b = SafariBrowser(scripts: fake, settleLimit: .milliseconds(300))
         let page = try await b.openTab("https://signin.ebay.com/signin/")
-        #expect(page?.url == "https://www.ebay.com/splashui/captcha?ap=1")
+        #expect(page?.url == "https://www.ebay.com/splashui/next?ap=1")
         #expect(try await b.read(offset: 0).url == page?.url, "marked now: the next call works too")
         let other = FakeSafariTabs()
-        other.newTabGoesTo = "https://www.ebay.com/splashui/captcha?ap=1"
+        other.newTabGoesTo = "https://www.ebay.com/splashui/next?ap=1"
         let c = SafariBrowser(scripts: other, settleLimit: .milliseconds(300))
         _ = try await c.openTab("https://signin.ebay.com/signin/")
         let n = other.windows[0].tabs.count - 1
