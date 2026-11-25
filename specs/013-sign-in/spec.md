@@ -170,7 +170,9 @@ interface another app can read (`research.md`), so the only way in is a copy the
   was typed is emptied, and nothing is pressed. After each character, too, Latchkey checks from
   what WebKit and its own script world tell it (never the page's word) that the character went
   into that field, on the saved site, still of the checked kind (security review 2026-11-25: a
-  page can move the focus while a key is on its way). The key events go only to that page's view, never
+  page can move the focus while a key is on its way); the field is marked for that check only
+  when it is the one element with its reference and has the focus after the click (third review:
+  a page could copy the reference onto a decoy of its own). The key events go only to that page's view, never
   to the screen or another app, and their characters are never logged or kept. While a password
   field has the focus, macOS's secure keyboard entry is on, as in Safari, and goes off when the
   call ends (spec 005 FR-483). In the Owner's Safari tabs typing stays the page script, which

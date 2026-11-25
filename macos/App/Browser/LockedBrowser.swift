@@ -1510,7 +1510,12 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownl
     private func active<T>(_ work: () async throws -> T) async rethrows -> T {
         let window = holderWindow as? HolderWindow
         let clipboard = NSPasteboard.general.changeCount
-        if let w = web { RealInput.begin(w) }
+        if let w = web {
+            // Key-ups still on their way from an earlier action are taken first, so they don't
+            // count for this one (third review 2026-11-25).
+            await RealInput.settle(w, within: .seconds(1))
+            RealInput.begin(w)
+        }
         await pauseMedia()
         window?.active = true
         defer {

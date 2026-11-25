@@ -61,7 +61,9 @@ run (2026-11-25 19:2x, 3f9352f) showed typing and logins_fill of a 4-digit code 
 trusted and in a keyboard's order. Next: make the per-character check cheaper or the limit
 scale with the length, and find why pointer moves don't arrive on macOS 26.
 
-Known limits: a list's menu, a colour panel and a date calendar aren't opened (chosen or typed
+Known limits: a frame a page's script makes without an address (about:blank, srcdoc) may not get
+Latchkey's clipboard block, so a copy from there during a real click is only noticed afterwards
+(the answer says the owner's clipboard changed), not stopped (third review 2026-11-25). A list's menu, a colour panel and a date calendar aren't opened (chosen or typed
 instead); an input method the owner has on (Japanese, Chinese) or a non-US keyboard layout's
 dead keys could change what the keys type in Latchkey's own browser (not seen; a bug to fix if
 it shows).

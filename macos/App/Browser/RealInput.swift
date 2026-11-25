@@ -59,14 +59,35 @@ enum RealInput {
     static let handlerName = "latchkeyInput"
 
     /// Marks the element `ref` names as the field the next characters must go into, in this
-    /// world of the frame it is in (spec 013 FR-1377); "ok" or "missing".
+    /// world of the frame it is in (spec 013 FR-1377), only when it is the one element with that
+    /// reference and has the focus; "ok", else "missing", "several" or "notfocused".
     static func markField(_ ref: String) -> String {
         // nosemgrep: latchkey-page-script-literal -- besides literal() and the fixed `deep`, nothing.
         """
         (function (ref) {
           \(PageScripts.deep)
-          var e = __lkFind('[data-latchkey=' + JSON.stringify(ref) + ']');
-          if (!e) return 'missing';
+          // An earlier mark goes, in every frame this world reaches (third review 2026-11-25).
+          (function clear(w) {
+            try { w.__lkField = null; for (var i = 0; i < w.frames.length; i++) clear(w.frames[i]); } catch (x) {}
+          })(window);
+          var sel = '[data-latchkey=' + JSON.stringify(ref) + ']';
+          // Exactly one: the page can copy a reference onto a decoy of its own, and then no
+          // node is marked and nothing is typed (third review 2026-11-25).
+          var all = __lkAll(sel);
+          if (all.length !== 1) return all.length ? 'several' : 'missing';
+          var e = all[0];
+          // And it is what the click put the focus on, as this world sees it.
+          var a = document.activeElement;
+          for (var k = 0; k < 20 && a; k++) {
+            if (a.shadowRoot && a.shadowRoot.activeElement) { a = a.shadowRoot.activeElement; continue; }
+            if (a.tagName === 'IFRAME' || a.tagName === 'FRAME') {
+              var d = null;
+              try { d = a.contentDocument; } catch (z) { d = null; }
+              if (d && d.activeElement) { a = d.activeElement; continue; }
+            }
+            break;
+          }
+          if (a !== e) return 'notfocused';
           var w = e.ownerDocument && e.ownerDocument.defaultView;
           if (!w) return 'missing';
           w.__lkField = e;
