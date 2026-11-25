@@ -48,9 +48,13 @@ reached the page up to 0.75 s late and a click took 18 s, so steps passed their 
 when the wait before an "é" ran out it was typed anyway ("Céaf"). Not macOS 26 or WebKit. Fixed
 (Toni: "App + tests"): Latchkey's waits are woken by the page's own word instead of looking every
 5 ms; typing stops and says so when the page hasn't taken the keys in time (FR-485a); on GitHub
-the tests that open web pages run one at a time (`macos/scripts/page-suites.txt`). Runner result:
-PENDING. Still open: on the macOS 26 runner a pointer move reached no page (hover), cause not
-found; to be checked again with the tests run one at a time.
+the tests that open web pages run one at a time (`macos/scripts/page-suites.txt`). Runner result
+(pull request #53, run 45707207366, 2026-11-25): tests with web pages 234 passed, 6 failed, all
+6 failing on main before too (~45 were failing); the rest of the suite 11 failed (main: 30
+before real input, 52 after), none from this change. Still open on that runner: hover (a pointer
+move reaches no page; cause not found), a code spread over 4 boxes, a list's options in the
+element list, a Safari token replaced by a page not logged, Enter after typing in
+`everyActionWorksInLatchkeysOwnBrowser`.
 
 Known limits: a list's menu, a colour panel and a date calendar aren't opened (chosen or typed
 instead); an input method the owner has on (Japanese, Chinese) or a non-US keyboard layout's
