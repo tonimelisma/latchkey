@@ -1601,50 +1601,43 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownl
                     + "window=\(win.map { "\($0.frame)" } ?? "none") screen=\(win?.screen.map { "\($0.frame)" } ?? "none") "
                     + "key=\(win?.isKeyWindow == true) firstResponder=\(win?.firstResponder === w) appActive=\(NSApp.isActive) "
                     + "acceptsMoved=\(win?.acceptsMouseMovedEvents == true) number=\(win?.windowNumber ?? -1)")
-            func step(_ name: String, _ send: () -> Void) async {
-                send()
-                try? await Task.sleep(for: .milliseconds(400))
-                let seen = (try? await self.run(log)) ?? "?"
-                out.append("\(name): \(seen)")
-            }
             guard let win else { return }
             func ev(_ t: NSEvent.EventType, _ q: NSPoint) -> NSEvent? {
                 NSEvent.mouseEvent(
                     with: t, location: q, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
                     windowNumber: win.windowNumber, context: nil, eventNumber: 0, clickCount: 0, pressure: 0)
             }
-            await step("mouseMoved") {
-                if let e = ev(.mouseMoved, NSPoint(x: p.x - 10, y: p.y)) { w.mouseMoved(with: e) }
-                if let e = ev(.mouseMoved, p) { w.mouseMoved(with: e) }
-            }
-            await step("window.sendEvent mouseMoved") {
-                if let e = ev(.mouseMoved, NSPoint(x: p.x - 5, y: p.y)) { win.sendEvent(e) }
-                if let e = ev(.mouseMoved, p) { win.sendEvent(e) }
-            }
+            if let e = ev(.mouseMoved, NSPoint(x: p.x - 10, y: p.y)) { w.mouseMoved(with: e) }
+            if let e = ev(.mouseMoved, p) { w.mouseMoved(with: e) }
+            try? await Task.sleep(for: .milliseconds(400))
+            out.append("mouseMoved: " + ((try? await self.run(log)) ?? "?"))
+            if let e = ev(.mouseMoved, NSPoint(x: p.x - 5, y: p.y)) { win.sendEvent(e) }
+            if let e = ev(.mouseMoved, p) { win.sendEvent(e) }
+            try? await Task.sleep(for: .milliseconds(400))
+            out.append("window.sendEvent mouseMoved: " + ((try? await self.run(log)) ?? "?"))
             win.acceptsMouseMovedEvents = true
-            await step("acceptsMouseMovedEvents + mouseMoved") {
-                if let e = ev(.mouseMoved, NSPoint(x: p.x - 3, y: p.y)) { w.mouseMoved(with: e) }
-                if let e = ev(.mouseMoved, p) { w.mouseMoved(with: e) }
-            }
+            if let e = ev(.mouseMoved, NSPoint(x: p.x - 3, y: p.y)) { w.mouseMoved(with: e) }
+            if let e = ev(.mouseMoved, p) { w.mouseMoved(with: e) }
+            try? await Task.sleep(for: .milliseconds(400))
+            out.append("acceptsMouseMovedEvents + mouseMoved: " + ((try? await self.run(log)) ?? "?"))
             win.acceptsMouseMovedEvents = false
-            await step("mouseEntered") {
-                if let e = NSEvent.enterExitEvent(
-                    with: .mouseEntered, location: p, modifierFlags: [],
-                    timestamp: ProcessInfo.processInfo.systemUptime,
-                    windowNumber: win.windowNumber, context: nil, eventNumber: 0, trackingNumber: 0, userData: nil)
-                {
-                    w.mouseEntered(with: e)
-                }
-                if let e = ev(.mouseMoved, p) { w.mouseMoved(with: e) }
+            if let e = NSEvent.enterExitEvent(
+                with: .mouseEntered, location: p, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
+                windowNumber: win.windowNumber, context: nil, eventNumber: 0, trackingNumber: 0, userData: nil)
+            {
+                w.mouseEntered(with: e)
             }
-            await step("cgEvent mouseMoved") {
-                if let c = CGEvent(
-                    mouseEventSource: nil, mouseType: .mouseMoved, mouseCursorPosition: p, mouseButton: .left),
-                    let e = NSEvent(cgEvent: c)
-                {
-                    w.mouseMoved(with: e)
-                }
+            if let e = ev(.mouseMoved, p) { w.mouseMoved(with: e) }
+            try? await Task.sleep(for: .milliseconds(400))
+            out.append("mouseEntered: " + ((try? await self.run(log)) ?? "?"))
+            if let c = CGEvent(
+                mouseEventSource: nil, mouseType: .mouseMoved, mouseCursorPosition: p, mouseButton: .left),
+                let e = NSEvent(cgEvent: c)
+            {
+                w.mouseMoved(with: e)
             }
+            try? await Task.sleep(for: .milliseconds(400))
+            out.append("cgEvent mouseMoved: " + ((try? await self.run(log)) ?? "?"))
         }
         return out.joined(separator: " || ")
     }
