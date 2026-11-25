@@ -591,6 +591,8 @@ enum BrowserCapability {
         if let l {
             from = ownBrowser(await l.name, signedIn: await l.signedInFromSafari, own: await l.ownSite) + "\n"
             if let file = await l.fileNoteIfAny { from += file + "\n" }
+            // FR-479: what Latchkey's mouse hit, when it wasn't the element Claude named.
+            for n in await l.takeInputNotes() { from += n + " (website text in «»)\n" }
         }
         guard !dialogs.isEmpty || l != nil, case .array(let parts) = r.content,
             case .object(var first)? = parts.first, let text = first["text"]?.stringValue

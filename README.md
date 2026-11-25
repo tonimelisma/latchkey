@@ -36,6 +36,14 @@ Claude app (phone, web, desktop), can work with what's on your Mac:
   sign-in; you click the tab to watch). A file a page offers to save while Claude works in it
   (a "Download" button) goes to your Downloads folder, as in Safari; a page can't save one on
   its own. And Claude reads and acts in your own Safari tabs when you ask.
+  In its hidden browser, Claude's clicks, typing, keys and hover are a real mouse's and
+  keyboard's, the way a person uses a page, but only inside that hidden window: never your
+  screen, your pointer, or your other apps. Claude sees what a person would click, also boxes a
+  page doesn't mark as buttons (like a "Staff / Parent" choice), and which one is selected. It
+  doesn't open a list's menu, a colour panel, or a calendar there (it chooses or types the value
+  instead), and doesn't copy or paste (that would use your clipboard). In your own Safari tabs
+  its clicks and typing are a script's, which most pages take, so nothing reaches the window
+  you may be using.
   Claude's Safari tabs close when Claude is done with them, after 30 minutes unused, or when
   Latchkey quits; your own tabs stay. Claude keeps at most 10 pages open; when all 10 are open,
   the one unused longest makes way for a new one once nobody has used it for 5 minutes. Two
@@ -44,7 +52,8 @@ Claude app (phone, web, desktop), can work with what's on your Mac:
 - **Signing in:** Claude signs in on its own pages the way you would, reading each page and
   pressing its buttons itself; Latchkey only types your saved user name, password, or a
   verification code into the field Claude names, presses the button Claude names right after,
-  and empties what it typed. Claude never sees a password or a code from Passwords, only the
+  and empties what it typed. In its hidden browser it types key by key as a keyboard does, and
+  stops if the page moves the cursor out of that field. Claude never sees a password or a code from Passwords, only the
   list of sites and user names, and Latchkey never decides whether a sign-in worked: Claude reads the page.
   The passwords and codes come from Apple's Passwords. Latchkey keeps its copy only on your Mac;
   you hand it over with one Touch ID (Latchkey's menu → Export Passwords to Latchkey…), and a

@@ -303,6 +303,8 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownl
         config.websiteDataStore = store ?? .nonPersistent()  // memory only: nothing written to disk
         config.defaultWebpagePreferences.allowsContentJavaScript = pageScripts
         if pageScripts { record.install(in: config) }  // the hidden world's recorder (spec 014 FR-1446)
+        // FR-485: counts the trusted events the page took, in Latchkey's input world.
+        config.userContentController.addUserScript(RealInput.userScript)
         let w = WKWebView(frame: NSRect(origin: .zero, size: size), configuration: config)
         w.navigationDelegate = self
         w.uiDelegate = self
@@ -322,7 +324,7 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownl
     /// off-screen window would count as covered, so WebKit's check for that is off for this view
     /// (its own setting, as Safari has for its tabs; no public name). Spec 005 FR-467.
     static func holder(for view: WKWebView) -> NSWindow {
-        let window = NSWindow(
+        let window = HolderWindow(
             contentRect: NSRect(x: -30_000, y: -30_000, width: view.frame.width, height: view.frame.height),
             styleMask: [.borderless], backing: .buffered, defer: false)
         window.isReleasedWhenClosed = false
@@ -334,6 +336,9 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownl
         window.collectionBehavior = [.transient, .ignoresCycle, .fullScreenNone]
         window.level = NSWindow.Level(rawValue: NSWindow.Level.normal.rawValue - 1)
         window.contentView = view
+        // The view takes the keys of its window (FR-480); the window counts as key only while
+        // Claude acts (`HolderWindow.active`, FR-483), and never really becomes key.
+        window.makeFirstResponder(view)
         // Called directly: key-value coding has no such key and throws (2026-11-22, a hang in the
         // tests). Only the window ordered in with this off makes the page visible (tried: no
         // window, a window not ordered in, and the check left on all leave it hidden).
@@ -1160,20 +1165,9 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownl
         defer { end() }
         guard let w = web else { throw SafariBrowser.Failure.noWindow }
         let before = w.url?.absoluteString
-        let answer = try await script(PageScripts.click(ref))
-        let lines = answer.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
-        try check(lines.first ?? "", ref: ref)
+        // FR-478: a real mouse's click; the browser itself follows a link or sends a form.
+        try await active { _ = try await self.mouseClick(ref, w) }
         await settle(from: before)
-        // A link a script clicks doesn't always navigate in a view of Latchkey's own (seen live):
-        // go to its address, as a click would; never when the click started a save (FR-475:
-        // it would save the file again, security review 2026-11-24).
-        if w.url?.absoluteString == before, savesInWindow == 0, lines.count > 1,
-            let data = lines[1].data(using: .utf8), let href = try? JSONDecoder().decode(String.self, from: data),
-            let target = URL(string: href), ["http", "https"].contains(target.scheme?.lowercased() ?? ""),
-            href != before
-        {
-            try await navigate { $0.load(URLRequest(url: target)) }
-        }
         return try await page(offset: 0)
     }
 
@@ -1197,9 +1191,30 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownl
         } else {
             record.typedSecret(text)
         }
-        try check(
-            (try await script(PageScripts.type(ref, text: text, submit: submit))).split(separator: "\n").first.map(
-                String.init) ?? "", ref: ref, option: text)
+        let at = try await spot(ref)
+        if at.kind == "select" || at.refuse == "colour" || at.dateField == true {
+            // FR-484: a list takes the option as its menu's choice gives it, a colour or date
+            // field the value as its panel or calendar gives it (input, change).
+            try check(
+                (try await script(PageScripts.type(ref, text: text, submit: false))).split(separator: "\n").first.map(
+                    String.init) ?? "", ref: ref, option: text)
+            return try await page(offset: 0)
+        }
+        // FR-480: click the field, Select All when it holds something, then a key per character;
+        // submit presses Enter.
+        try await active {
+            try await self.focusField(ref, at, w)
+            if at.filled == true {
+                _ = NSApp.sendAction(#selector(NSText.selectAll(_:)), to: w, from: nil)
+                if text.isEmpty, let back = RealInput.stroke(for: try PageScripts.Key("Backspace")) {
+                    await RealInput.press(back, in: w)
+                }
+            }
+            _ = await RealInput.type(text, in: w)
+            if submit, let enter = RealInput.stroke(for: try PageScripts.Key("Enter")) {
+                await RealInput.press(enter, in: w)
+            }
+        }
         if submit { await settle(from: before) }
         return try await page(offset: 0)
     }
@@ -1280,14 +1295,251 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownl
         return (r.detail, r.page, web?.url?.absoluteString ?? "")
     }
 
+    /// FR-481: real keys, in the field Claude names (clicked) or a button or link it names (the
+    /// focus moved there as Tab would), else where the focus is. Answers the keys pressed (JSON)
+    /// and the page.
     func press(_ keys: [PageScripts.Key], ref: String?, answer: DialogAnswer = DialogAnswer()) async throws
         -> (detail: String, page: PageScripts.Page)
     {
-        try await act(PageScripts.keys(keys, ref: ref), ref: ref ?? "", mayNavigate: true, answer: answer)
+        begin(answer)
+        defer { end() }
+        guard let w = web else { throw SafariBrowser.Failure.noWindow }
+        let before = w.url?.absoluteString
+        var strokes: [(PageScripts.Key, RealInput.Stroke)] = []
+        for k in keys {
+            let name = Self.keyName(k)
+            // They would use the Owner's clipboard (Constitution IV).
+            if k.meta || k.ctrl, ["c", "x", "v"].contains(k.key.lowercased()) {
+                throw SafariBrowser.Failure.failed(
+                    "\(name) isn't pressed: copy, cut and paste would use the owner's clipboard. Type the text with type instead."
+                )
+            }
+            guard let s = RealInput.stroke(for: k) else {
+                throw SafariBrowser.Failure.failed("\(name) isn't a key of a keyboard Latchkey can press.")
+            }
+            strokes.append((k, s))
+        }
+        var did: [String] = []
+        try await active {
+            if let ref {
+                let at = try await self.spot(ref)
+                try await self.focusField(ref, at, w)
+            }
+            for (k, s) in strokes {
+                // FR-484: a one-line list's menu would hold Latchkey up until answered.
+                let opensMenu = ["ArrowUp", "ArrowDown", " ", "Enter"].contains(k.key)
+                if opensMenu, await RealInput.evaluate(w, RealInput.focused) == "select" {
+                    throw SafariBrowser.Failure.failed(
+                        "\(Self.keyName(k)) isn't pressed in a list: it would open the list's menu. Choose with select instead."
+                    )
+                }
+                await RealInput.press(s, in: w)
+                // Cmd+A selects all, as the Edit menu does, unless the page took the key.
+                if k.meta, k.key.lowercased() == "a", !(await RealInput.lastKeyTaken(w)) {
+                    _ = NSApp.sendAction(#selector(NSText.selectAll(_:)), to: w, from: nil)
+                }
+                did.append(Self.keyName(k))
+            }
+        }
+        await settle(from: before)
+        let focus = await RealInput.evaluate(w, RealInput.focused) ?? ""
+        let line =
+            "pressed " + did.joined(separator: ", ")
+            + (focus.isEmpty ? "; nothing on the page has the focus" : "; the focus is on \(focus)")
+        let data = (try? JSONEncoder().encode([line])) ?? Data("[]".utf8)
+        return (String(decoding: data, as: UTF8.self), try await page(offset: 0))
     }
 
+    static func keyName(_ k: PageScripts.Key) -> String {
+        (k.meta ? "cmd+" : "") + (k.ctrl ? "ctrl+" : "") + (k.alt ? "alt+" : "") + (k.shift ? "shift+" : "")
+            + (k.key == " " ? "Space" : k.key)
+    }
+
+    /// FR-482: the view's own pointer moves onto the element; answers how many more things show.
     func hover(_ ref: String) async throws -> (detail: String, page: PageScripts.Page) {
-        try await act(PageScripts.hover(ref), ref: ref, mayNavigate: false, answer: DialogAnswer())
+        begin(DialogAnswer())
+        defer { end() }
+        guard let w = web else { throw SafariBrowser.Failure.noWindow }
+        let shown =
+            "(function () { var n = 0; document.querySelectorAll('body *').forEach(function (x) { if (x.getClientRects().length) n++; }); return String(n); })()"
+        let before = Int(await RealInput.evaluate(w, shown) ?? "") ?? 0
+        try await active {
+            let at = try await self.spot(ref)
+            if at.hidden == true { throw SafariBrowser.Failure.failed(Self.notShown(ref, at)) }
+            guard let x = at.x, let y = at.y else {
+                throw SafariBrowser.Failure.failed("The page didn't answer as expected.")
+            }
+            await RealInput.move(to: RealInput.windowPoint(x, y, in: w), in: w)
+            try? await Task.sleep(for: .milliseconds(100))
+        }
+        let after = Int(await RealInput.evaluate(w, shown) ?? "") ?? 0
+        return (String(max(after - before, 0)), try await page(offset: 0))
+    }
+
+    /// Spec 013 FR-1377: logins_fill's typing, as a keyboard's. The sign-in world checks the
+    /// field as `fillField` does and names the fields to type into; each gets a real click, and
+    /// before every character the focus is checked to be still on it (or, for a code, on the
+    /// page's next code box after it), else typing stops. The secret goes only as key events to
+    /// this page's view, and is never logged. Answers what `fillField` answers (JSON), and
+    /// `{ step: "covered", is }` when something is drawn over the field.
+    func fillReal(ref: String, kind: String, value: String, host: String) async throws -> String {
+        begin(DialogAnswer())
+        defer { end() }
+        guard let w = web else { throw SafariBrowser.Failure.noWindow }
+        struct Plan: Decodable {
+            struct Field: Decodable {
+                var ref: String
+                var count: Int
+            }
+            var step: String
+            var fields: [Field]?
+            var follow: Bool?
+            var ref: String?
+        }
+        func run(_ code: String) async throws -> Plan? {
+            let text = try SafariBrowser.detail(try await script(code, world: Self.signInWorld), ref: ref)
+            return try? JSONDecoder().decode(Plan.self, from: Data(text.utf8))
+        }
+        let unheld = #"{"step":"unheld"}"#
+        let planText = try SafariBrowser.detail(
+            try await script(
+                PageScripts.fillPlan(ref: ref, kind: kind, length: value.count, host: host), world: Self.signInWorld),
+            ref: ref)
+        guard let plan = try? JSONDecoder().decode(Plan.self, from: Data(planText.utf8)) else { return unheld }
+        guard plan.step == "plan", let fields = plan.fields, !fields.isEmpty else { return planText }
+        let follow = plan.follow == true
+        let chars = Array(value)
+        var covered: String?
+        let typed: Bool = try await active {
+            var from = 0
+            for f in fields {
+                let part = chars[min(from, chars.count)..<min(from + f.count, chars.count)]
+                from += f.count
+                let at = try await self.spot(f.ref)
+                // Drawn over: the click would land on something else, which must never get a
+                // secret.
+                if let c = at.covered {
+                    covered = c
+                    return false
+                }
+                guard at.refuse == nil, at.hidden != true, let x = at.x, let y = at.y else { return false }
+                await RealInput.click(at: RealInput.windowPoint(x, y, in: w), in: w)
+                var current = f.ref
+                guard try await run(PageScripts.fillFocus(ref: current, host: host, follow: false))?.step == "same"
+                else { return false }
+                if at.filled == true, let back = RealInput.stroke(for: try PageScripts.Key("Backspace")) {
+                    _ = NSApp.sendAction(#selector(NSText.selectAll(_:)), to: w, from: nil)
+                    await RealInput.press(back, in: w)
+                }
+                for ch in part {
+                    // The focus is checked before every character: a page that moved it elsewhere
+                    // gets nothing more (FR-1377).
+                    let now = try await run(PageScripts.fillFocus(ref: current, host: host, follow: follow))
+                    if now?.step == "next", let next = now?.ref {
+                        current = next
+                    } else if now?.step != "same" {
+                        return false
+                    }
+                    if let k = RealInput.stroke(for: ch) {
+                        await RealInput.press(k, in: w)
+                    } else {
+                        await RealInput.insert(String(ch), in: w)
+                    }
+                }
+            }
+            return true
+        }
+        if let covered {
+            let data = (try? JSONEncoder().encode(["step": "covered", "is": covered])) ?? Data(unheld.utf8)
+            return String(decoding: data, as: UTF8.self)
+        }
+        guard typed else { return unheld }
+        let refs = fields.map(\.ref)
+        let held = try await script(PageScripts.fillHeld(refs: refs, value: value, host: host), world: Self.signInWorld)
+        let heldText = try SafariBrowser.detail(held, ref: ref)
+        if heldText.contains("\"filled\"") || refs.count < 2 { return heldText }
+        // Code boxes that didn't take the code key by key: pasted whole into the first.
+        return try SafariBrowser.detail(
+            try await script(PageScripts.fillPaste(refs: refs, value: value, host: host), world: Self.signInWorld),
+            ref: ref)
+    }
+
+    // MARK: the real mouse and keyboard (FR-478 to FR-485)
+
+    /// Runs `work` with the page counted as the focused front window (FR-483), and after it, as a
+    /// window behind another app's again, whatever happened.
+    private func active<T>(_ work: () async throws -> T) async rethrows -> T {
+        let window = holderWindow as? HolderWindow
+        window?.active = true
+        defer { window?.active = false }
+        return try await work()
+    }
+
+    /// Where the element is, as the input world answers it (scrolled into view first).
+    private func spot(_ ref: String) async throws -> RealInput.Spot {
+        let json = try await script(RealInput.spot(ref), world: RealInput.world)
+        guard let s = try? JSONDecoder().decode(RealInput.Spot.self, from: Data(json.utf8)) else {
+            throw SafariBrowser.Failure.failed("The page didn't answer as expected.")
+        }
+        if s.missing == true { throw SafariBrowser.Failure.elementMissing(ref) }
+        return s
+    }
+
+    static func notShown(_ ref: String, _ at: RealInput.Spot) -> String {
+        at.kind == "input:file"
+            ? "\(ref) is a file field the page doesn't show: give it files with upload."
+            : "\(ref) doesn't show on the page, so a mouse can't reach it: if it is in a closed menu, click the menu first (its name is in the page's list); else read the page again with browser_look."
+    }
+
+    /// FR-478, FR-479, FR-484: a real click on the element, after the checks; what was drawn over
+    /// it, if anything, goes into the answer.
+    @discardableResult
+    private func mouseClick(_ ref: String, _ w: WKWebView, spot given: RealInput.Spot? = nil) async throws
+        -> RealInput.Spot
+    {
+        let at: RealInput.Spot
+        if let given { at = given } else { at = try await spot(ref) }
+        switch at.refuse {
+        case "list"?:
+            throw SafariBrowser.Failure.failed(
+                "\(ref) is a list: choose its option with select (a click would open its menu, which needs the screen)."
+            )
+        case "colour"?:
+            throw SafariBrowser.Failure.failed(
+                "\(ref) is a colour field: type the colour (like #336699) into it with type; a click would open the colour panel on the owner's screen."
+            )
+        case "date"?:
+            throw SafariBrowser.Failure.failed(
+                "\(ref) is a date or time field: type the date into it with type (a click would open its calendar, which needs the screen)."
+            )
+        default: break
+        }
+        if at.hidden == true { throw SafariBrowser.Failure.failed(Self.notShown(ref, at)) }
+        guard let x = at.x, let y = at.y else {
+            throw SafariBrowser.Failure.failed("The page didn't answer as expected.")
+        }
+        if let c = at.covered { inputNote("The click on \(ref) landed on what is drawn over it there: \(c).") }
+        await RealInput.click(at: RealInput.windowPoint(x, y, in: w), in: w)
+        return at
+    }
+
+    /// The focus into a field as a person puts it there: a click; a date or time field (whose
+    /// calendar needs the screen) and a button or link get it as Tab gives it.
+    private func focusField(_ ref: String, _ at: RealInput.Spot, _ w: WKWebView) async throws {
+        if at.field == true, at.refuse == nil {
+            try await mouseClick(ref, w, spot: at)
+        } else {
+            try check(try await script(RealInput.focus(ref), world: RealInput.world), ref: ref)
+        }
+    }
+
+    /// What Latchkey's mouse did that Claude should know, told with the next answer (FR-479); at
+    /// most 5, as dialogs.
+    private var inputNotes: [String] = []
+    private func inputNote(_ s: String) { if inputNotes.count < 5 { inputNotes.append(s) } }
+    func takeInputNotes() -> [String] {
+        defer { inputNotes = [] }
+        return inputNotes
     }
 
     func scroll(_ ref: String?, direction: String, amount: Int?) async throws

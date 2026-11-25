@@ -232,7 +232,7 @@ enum PageScripts {
           var next = parseInt(root.getAttribute('data-latchkey-next') || '1', 10);
           // A link with no address is a button by script (Citi's Sign Off, 2026-11-22).
           var sel = 'a[href], a:not([href]), button, input:not([type=hidden]), textarea, select, summary, [role=button], [role=link], [role=tab], [role=menuitem], [role=checkbox], [role=option], [contenteditable=true], [role=combobox], [role=listbox], [role=menu], [role=radio], [role=switch], [aria-haspopup]';
-          var nodes = __lkAll(sel), out = [];
+          var nodes = __lkAll(sel), out = [], listedEls = [];
           // What an open menu or dialog shows goes first, so the 400-item cap never hides it
           // (Etsy's opened "You" menu with its Sign out, 2026-11-22).
           var opened = [];
@@ -326,6 +326,49 @@ enum PageScripts {
               if (over && over !== e && !e.contains(over) && !over.contains(e) && !(e.labels && Array.prototype.some.call(e.labels, function (l) { return l.contains(over); }))) item.label = (item.label ? item.label + ' ' : '') + '(under another element)';
             }
             out.push(item);
+            listedEls.push(e);
+          }
+          // FR-486: what a person sees as something to click, though the page doesn't mark it a
+          // control: drawn with the pointing-hand cursor where the element around it isn't, or
+          // with a click handler of its own (Procare's STAFF and PARENT, 2026-11-25). Not inside
+          // a listed control, holding none; at most 100, from at most 3,000 elements looked at.
+          if (document.body && typeof Set === 'function') {
+            var mark = new Set(listedEls), all = document.body.getElementsByTagName('*'), looked = 0, extra = 0;
+            var classState = /(^|[\\s_-])(selected|active|checked)($|[\\s_-])/i;
+            for (var q = 0; q < all.length && looked < 3000 && extra < 100 && out.length < 400; q++) {
+              var c = all[q];
+              if (mark.has(c)) continue;
+              looked++;
+              var handler = typeof c.onclick === 'function';
+              var cs = getComputedStyle(c);
+              var pointer = cs.cursor === 'pointer' && !(c.parentElement && getComputedStyle(c.parentElement).cursor === 'pointer');
+              if (!handler && !pointer) continue;
+              if (cs.display === 'none' || cs.visibility === 'hidden') continue;
+              var cr = c.getBoundingClientRect();
+              if (cr.width === 0 || cr.height === 0) continue;
+              var skip = false;
+              for (var up = c.parentElement; up && !skip; up = up.parentElement) if (mark.has(up)) skip = true;
+              for (var m = 0; m < listedEls.length && !skip; m++) if (c.contains(listedEls[m])) skip = true;
+              if (skip) continue;
+              var cref = c.getAttribute('data-latchkey');
+              if (!cref) { cref = 'e' + (next++); c.setAttribute('data-latchkey', cref); }
+              var words = (c.innerText || c.getAttribute('aria-label') || c.getAttribute('title') || '').replace(/\\s+/g, ' ').trim().slice(0, 100);
+              if (!words) { var img = c.querySelector('img[alt]'); if (img) words = img.getAttribute('alt').trim().slice(0, 100); }
+              var citem = { ref: cref, kind: 'clickable', label: words };
+              var cst = [];
+              [['pressed', 'pressed', 'not pressed'], ['checked', 'checked', 'not checked'], ['selected', 'selected', 'not selected'], ['expanded', 'expanded', 'collapsed']].forEach(function (a) {
+                var v = c.getAttribute('aria-' + a[0]);
+                if (v === 'true' || v === 'mixed') cst.push(a[1]); else if (v === 'false') cst.push(a[2]);
+              });
+              var cls = typeof c.className === 'string' ? c.className : (c.getAttribute('class') || '');
+              var said = classState.exec(cls);
+              if (said && cst.indexOf(said[2].toLowerCase()) < 0) cst.push(said[2].toLowerCase());
+              if (cst.length) citem.state = cst.join(', ');
+              out.push(citem);
+              listedEls.push(c);
+              mark.add(c);
+              extra++;
+            }
           }
           // Parts of the page that scroll on their own (FR-435), at most 20.
           var boxes = document.body ? document.body.querySelectorAll('div, section, main, aside, nav, ul, ol, article, pre, table, tbody, form') : [];
@@ -471,19 +514,58 @@ enum PageScripts {
             var o = Array.prototype.find.call(e.options, function (o) { return o.text.trim() === text || o.value === text; });
             if (!o) return 'nooption';
             e.value = o.value;
-          } else if (e.isContentEditable) {
-            // As typing would, through the editor (claude.ai's prompt box, 2026-11-23: text set
-            // directly was dropped by its editor, which then sent nothing).
-            var sel = window.getSelection(), range = document.createRange();
-            range.selectNodeContents(e);
-            sel.removeAllRanges();
-            sel.addRange(range);
-            if (!document.execCommand('insertText', false, text)) e.textContent = text;
+            e.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
           } else {
-            var proto = e.tagName === 'TEXTAREA' ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
-            Object.getOwnPropertyDescriptor(proto, 'value').set.call(e, text);
+            // FR-487: each character as a keyboard gives it: keydown, keypress, beforeinput, the
+            // character, input, keyup (it gave input before keydown, and no keyup).
+            function keyInit(ch) {
+              var up = ch.toUpperCase(), kc = /[a-z0-9]/i.test(ch) ? up.charCodeAt(0) : ch.charCodeAt(0);
+              var code = /[a-z]/i.test(ch) ? 'Key' + up : (/[0-9]/.test(ch) ? 'Digit' + ch : (ch === ' ' ? 'Space' : ''));
+              return { key: ch, code: code, keyCode: kc, which: kc, charCode: ch.charCodeAt(0), shiftKey: ch !== ch.toLowerCase(), bubbles: true, cancelable: true, composed: true };
+            }
+            var editor = e.isContentEditable;
+            var kindOf = (e.getAttribute('type') || '').toLowerCase();
+            if (e.tagName === 'INPUT' && ['date', 'datetime-local', 'month', 'week', 'time', 'color', 'range'].indexOf(kindOf) >= 0) {
+              // A value a keyboard doesn't type character by character: set whole, as its picker does.
+              Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(e, text);
+              e.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
+              text = '';
+            } else if (editor) {
+              // As typing would, through the editor (claude.ai's prompt box, 2026-11-23: text set
+              // directly was dropped by its editor, which then sent nothing).
+              var sel = window.getSelection(), range = document.createRange();
+              range.selectNodeContents(e);
+              sel.removeAllRanges();
+              sel.addRange(range);
+              if (text === '') document.execCommand('delete');
+            } else {
+              var proto = e.tagName === 'TEXTAREA' ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+              var setter = Object.getOwnPropertyDescriptor(proto, 'value').set;
+              if (e.value) {
+                setter.call(e, '');
+                e.dispatchEvent(new InputEvent('input', { bubbles: true, composed: true, inputType: 'deleteContentBackward' }));
+              }
+            }
+            for (var i = 0; i < text.length; i++) {
+              var ch = text.charAt(i), init = keyInit(ch);
+              var go = e.dispatchEvent(new KeyboardEvent('keydown', init));
+              go = e.dispatchEvent(new KeyboardEvent('keypress', init)) && go;
+              if (editor) {
+                // The editor sends its own beforeinput and input.
+                if (go && !document.execCommand('insertText', false, ch)) e.textContent += ch;
+              } else {
+                go = e.dispatchEvent(new InputEvent('beforeinput', { data: ch, inputType: 'insertText', bubbles: true, composed: true, cancelable: true })) && go;
+                if (go) {
+                  var was = String(e.value || ''), s0 = was.length, s1 = was.length;
+                  try { if (e.selectionStart !== null) { s0 = e.selectionStart; s1 = e.selectionEnd; } } catch (z) {}
+                  setter.call(e, was.slice(0, s0) + ch + was.slice(s1));
+                  try { e.setSelectionRange(s0 + 1, s0 + 1); } catch (z) {}
+                  e.dispatchEvent(new InputEvent('input', { data: ch, inputType: 'insertText', bubbles: true, composed: true }));
+                }
+              }
+              e.dispatchEvent(new KeyboardEvent('keyup', init));
+            }
           }
-          e.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
           e.dispatchEvent(new Event('change', { bubbles: true }));
           if (submit) {
             if (e.form) { if (e.form.requestSubmit) e.form.requestSubmit(); else e.form.submit(); }

@@ -353,8 +353,16 @@ enum LoginsCapability {
         }
         let typed: Step
         do {
-            let r = try await run(PageScripts.fillField(ref: field, kind: kind, value: value, host: fillHost))
-            typed = (try? JSONDecoder().decode(Step.self, from: Data(r.detail.utf8))) ?? Step(step: "unheld")
+            let detail: String
+            switch target {
+            case .own(let l):
+                // Spec 013 FR-1377: real keys in Latchkey's own browser.
+                detail = try await l.fillReal(ref: field, kind: kind, value: value, host: fillHost)
+            case .safari:
+                detail = try await run(PageScripts.fillField(ref: field, kind: kind, value: value, host: fillHost))
+                    .detail
+            }
+            typed = (try? JSONDecoder().decode(Step.self, from: Data(detail.utf8))) ?? Step(step: "unheld")
         } catch SafariBrowser.Failure.elementMissing {
             return .text(
                 "There's no \(field) on the page now (it may have changed). Read it again with browser_look.",
@@ -366,6 +374,11 @@ enum LoginsCapability {
         case "wrongsite":
             return .text(
                 "The page went to another site before Latchkey typed anything, so nothing was typed.", isError: true)
+        case "covered":
+            let page = await clear() ?? here0.page
+            return await answer(
+                "\(field) is under another element on the page (\(typed.is ?? "something else")), so a click on it wouldn't reach it: nothing was typed or pressed. Read the page and close what covers it first.",
+                page, isError: true)
         case "notfield":
             let what = typed.is ?? "another kind of"
             let wanted =

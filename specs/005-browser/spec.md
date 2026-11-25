@@ -451,7 +451,10 @@ the sign-in came back unchanged without a word.
   2026-11-25).
 
 Amends FR-402, FR-433, FR-434 and FR-440 for Latchkey's own browser, and the edge case of sites
-that ignore script-driven clicks.
+that ignore script-driven clicks; and FR-464 there: an element in a closed menu stays listed and
+marked, but a mouse can't reach what doesn't show, so a click on it says to open the menu first
+(the menu's button now gets a real click, which GitHub's "More options" didn't get from a
+script).
 
 Amended by spec 013 FR-1350 to FR-1355 (Toni, 2026-11-21): for a site Latchkey holds a saved
 password for, while Sign-in is On, FR-441, FR-442 and FR-457 copy none of Safari's cookies (nor a

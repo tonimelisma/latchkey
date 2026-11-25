@@ -68,7 +68,9 @@ extension BrowserCapability {
                         then tab), and Claude's own pages. With tab: reads that tab of the owner's, in the \
                         background (name it on each call that should use it). With back: goes back. With \
                         nothing else: reads the page. Answers with the page's text and the links, buttons, and \
-                        fields on it, each with a reference like e12 for browser_act. Long pages come in parts; \
+                        fields on it, and what a person would see as something to click (kind clickable, with \
+                        its state where it shows, like selected), each with a reference like e12 for \
+                        browser_act. Long pages come in parts; \
                         pass offset to read on. screenshot: shows the page as an image. sign_in_again: when a \
                         page of Claude's in Latchkey's own browser is signed out but needs the owner's sign-in: \
                         while the Mac is unlocked, moves it into a Safari tab of Claude's at the same address; \
@@ -166,12 +168,16 @@ extension BrowserCapability {
                         itself, e.g. a PDF: saved to the Mac's Downloads folder, and the answer names the path \
                         for files_read), script (code: JavaScript run in the page; its result is returned, or the error the page gave; await works, and it runs also where the page forbids eval), \
                         dialog (answers the dialog Claude's page waits on: confirm true for OK or false for \
-                        Cancel, prompt_text for a prompt), close (closes the page or the owner's tab). Clicks, keys, \
-                        and hover are a script's, not a real mouse's or keyboard's: a click presses down and up \
-                        at the element's centre, then clicks. Most pages take them. When the answer says the \
-                        page didn't change, try key Enter or Space in the element, or a script that sends the \
-                        events the page listens for; computer control is the last way, and only while the Mac \
-                        is unlocked. The page's own dialogs: an alert is dismissed and told; \
+                        Cancel, prompt_text for a prompt), close (closes the page or the owner's tab). In Claude's own \
+                        pages, click, type, key and hover are a real mouse's and keyboard's, inside Latchkey's \
+                        own hidden window (never the owner's screen or pointer): a click scrolls the element \
+                        into view and presses at its middle, landing on whatever is drawn there (the answer \
+                        says when that isn't the element); type clicks the field, selects what it holds, and \
+                        types key by key (submit presses Enter); a list is chosen with select, a colour or date \
+                        field filled with type. In the owner's Safari tabs they are a script's events: when \
+                        such an answer says the page didn't change, try key Enter or Space in the element, or \
+                        open the page as Claude's own; computer control is the last way, and only while the \
+                        Mac is unlocked. The page's own dialogs: an alert is dismissed and told; \
                         confirm and prompt_text answer a dialog the action brings up in advance (in Claude's \
                         page also one that comes up to 5 seconds later); otherwise, in Claude's page a confirm \
                         or prompt waits for Claude's answer (action dialog; Cancel after 5 minutes), and in the \
