@@ -611,8 +611,7 @@ after the app was quit.
    permissions).
    Left for Toni, together: (1) on his Mac, `macos/scripts/eval-image.sh` in Terminal from the
    repository (it asks for the `claude setup-token` token at a password prompt; approve
-   Latchkey's permissions and click Connect in the test Mac's window); (2) approve one Latchkey
-   call that adds `e2e-linux` and `e2e-mac` to `main`'s required checks; then weekly, when a
+   Latchkey's permissions and click Connect in the test Mac's window); then weekly, when a
    session says so, `macos/scripts/weekly-eval.sh --send`.
 2. Signed updates with Sparkle (Toni, 2026-11-23: "yes, implement sparkle"; spec 001 FR-072 to
    FR-072d, plan D9): built while Toni was away. The app's update gate (installs only while

@@ -56,7 +56,7 @@ weekly run, by the person running it.
 ## Milestone 6: docs and release
 - T19 `docs/commands.md`, `docs/cloud-sessions.md`, CLAUDE.md "Done means Toni's conditions"
   (FR-1541), STATUS, decisions, README (testing paragraph).
-- T20 CI green on the pull request; the two new checks named for Toni to make required.
+- T20 CI green on the pull request (the checks stay reported, not required: Toni, 2026-11-25).
 
 ## Status (2026-11-24)
 
@@ -67,5 +67,4 @@ snapshots taken from its artifact), `e2e-mac` (all four checks passed on macos-2
 browser tool's new name and the page and job names were read right; Mac snapshots taken from
 its artifact). Not run anywhere yet: the
 weekly run and the image script (they need an Apple silicon Mac with Tart; only a person at that
-Mac can approve the test Mac's permissions). T20: adding the two checks to `main`'s required
-checks is Toni's step.
+Mac can approve the test Mac's permissions). T20: done; the checks stay reported, not required (Toni, 2026-11-25).

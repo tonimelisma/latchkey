@@ -7,7 +7,7 @@ low-level choices Claude made: `research.md`. Formats: `contracts/task-format.md
 ## Shape
 
 ```
-Per pull request (GitHub, blocks merging)          Weekly (started by hand, any clone)
+Per pull request (GitHub, reported)                Weekly (started by hand, any clone)
   e2e.yml                                            macos/scripts/weekly-eval.sh
    ├─ pick: changed paths → capabilities              ├─ tart clone latchkey-eval → run copy
    ├─ e2e-linux (ubuntu): relay + Linux program        ├─ inside the copy:
@@ -56,10 +56,10 @@ them (research.md decision 6):
   offline answers at once (Constitution II). Everything else is listed as skipped with the
   reason (FR-1506): Notes, Calendar, Reminders, Contacts, Messages, Mail, WhatsApp, computer
   control, Passwords, location.
-Deadlines are generous (no tight timing on the slower runner), since every check blocks (Toni,
-"All block"); a check that turns flaky is fixed, never made optional. Adding `e2e-linux` and
-`e2e-mac` to the `main` ruleset's required checks is a settings change a cloud session can't
-make (GitHub refuses it through the proxy): one of Toni's steps, below.
+Deadlines are generous (no tight timing on the slower runner); a check that turns flaky is
+fixed, never ignored. The checks are reported on the pull request, not required for merging
+(Toni, 2026-11-25), so the `main` ruleset is unchanged; a session merges only when they passed,
+or says why not (FR-1540).
 
 ### D4. Tool snapshots (FR-1504)
 `relay/e2e/toolsnaps/<relay|mac|linux>/<tool>.json`: name, description, input schema, as a real
@@ -128,8 +128,8 @@ from `cases.json` that need Claude or the test Mac are written as tasks, with `c
 Scoring: end state first, then forbidden calls, unneeded calls reported; no judge.
 
 ### D9. Releases and Toni's conditions (FR-1540, FR-1541)
-No release workflow changes: required checks already make a merged commit "checked"
-(FR-1540). `docs/STATUS.md` gets a "Weekly run" line (date, release, passes, new failures).
+No release workflow changes: a merged commit is "checked" when its pull request's end-to-end
+checks passed (FR-1540). `docs/STATUS.md` gets a "Weekly run" line (date, release, passes, new failures).
 CLAUDE.md, "Done means Toni's conditions", gains one sentence: a weekly result is evidence only
 for a condition the test Mac really has (unlocked, Latchkey's own browser, a local page, test
 data), quoted with version and time; locked, lid closed, real iMessage, real sites and Toni's
@@ -152,9 +152,6 @@ accounts stay NOT VERIFIED until Toni runs them.
    downloads). When it asks, run `claude setup-token` and paste the token at its password
    prompt (never into a chat). When the test Mac's window opens, click Connect and approve
    Latchkey's permissions (about 10 minutes).
-2. Toni only: approve one Latchkey call that adds `e2e-linux` and `e2e-mac` to the required
-   checks of `main` (the way the ruleset was set on 2026-11-24; a cloud session's proxy refuses
-   settings writes).
 Then each week, when a session says so: `macos/scripts/weekly-eval.sh --send`.
 
 ## Consistency check (CLAUDE.md step 3a)
