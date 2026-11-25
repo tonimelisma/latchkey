@@ -72,10 +72,9 @@ enum RealInput {
           })(window);
           // Exactly one element carries this fill's token, and it has the reference: a decoy the
           // page gave the same reference (or the token) is never marked (third review 2026-11-25).
-          var all = __lkAll('[data-latchkey-fill=' + JSON.stringify(token) + ']');
+          var all = __lkAll('[data-latchkey-fill=' + JSON.stringify(token) + '][data-latchkey=' + JSON.stringify(ref) + ']');
           if (all.length !== 1) return all.length ? 'several' : 'missing';
           var e = all[0];
-          if (e.getAttribute('data-latchkey') !== ref) return 'missing';
           // And it is what the click put the focus on, as this world sees it.
           var a = document.activeElement;
           for (var k = 0; k < 20 && a; k++) {
@@ -308,7 +307,7 @@ enum RealInput {
     static func move(to p: NSPoint, in view: WKWebView) async {
         guard let window = view.window else { return }
         for q in [NSPoint(x: p.x - 12, y: p.y + 8), p] {
-            if let e = mouse(.mouseMoved, q, window, clicks: 0) { view.mouseMoved(with: e) }
+            if let e = mouse(.mouseMoved, q, window, clicks: 0) { PageView.moving(view) { view.mouseMoved(with: e) } }
             try? await Task.sleep(for: .milliseconds(15))
         }
     }
@@ -630,4 +629,22 @@ final class HolderWindow: NSWindow {
     override var isKeyWindow: Bool { active }
     override var canBecomeKey: Bool { false }
     override var canBecomeMain: Bool { false }
+}
+
+/// The view of a page of Latchkey's own browser. For a pointer move only, it shows no text input
+/// context: WebKit offers each mouse event to the view's input context first, and an app that
+/// isn't the active one had its pointer moves taken there and never handed to the page (GitHub's
+/// macOS 26 runner, 2026-11-25: hover reached no page, clicks did; spec 005 FR-482).
+final class PageView: WKWebView {
+    private var moving = false
+
+    override var inputContext: NSTextInputContext? { moving ? nil : super.inputContext }
+
+    /// Runs `send` (a pointer move handed to `view`) with no input context.
+    static func moving(_ view: WKWebView, _ send: () -> Void) {
+        guard let page = view as? PageView else { return send() }
+        page.moving = true
+        defer { page.moving = false }
+        send()
+    }
 }

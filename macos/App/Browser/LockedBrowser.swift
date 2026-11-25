@@ -310,7 +310,7 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownl
             InputSignal.Handler(signal), contentWorld: RealInput.world, name: RealInput.handlerName)
         // The Owner's clipboard stays out of the page's reach (`RealInput.noClipboard`).
         config.userContentController.addUserScript(RealInput.clipboardScript)
-        let w = WKWebView(frame: NSRect(origin: .zero, size: size), configuration: config)
+        let w = PageView(frame: NSRect(origin: .zero, size: size), configuration: config)
         w.navigationDelegate = self
         w.uiDelegate = self
         // Sites see Safari, as they do in the Owner's Safari: some refuse an app's own web view
@@ -1109,6 +1109,9 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownl
 
     /// Claude's action ended: its answers in advance count for a moment more (FR-450).
     private func end() {
+        // A page's own script can set a cookie WebKit doesn't announce (macOS 26, 2026-11-25):
+        // the store is looked at after each of Claude's actions too (FR-454).
+        watch?.check()
         acting = false
         presetUntil = dialogAnswer.given ? ContinuousClock.now + presetWindow : nil
         actedUntil = ContinuousClock.now + downloadWindow
@@ -1611,6 +1614,9 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownl
                     with: t, location: q, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
                     windowNumber: win.windowNumber, context: nil, eventNumber: 0, clickCount: 0, pressure: 0)
             }
+            await RealInput.move(to: p, in: w)
+            try? await Task.sleep(for: .milliseconds(400))
+            out.append("RealInput.move (no input context): " + ((try? await self.run(log)) ?? "?"))
             if let e = ev(.mouseMoved, NSPoint(x: p.x - 10, y: p.y)) { w.mouseMoved(with: e) }
             if let e = ev(.mouseMoved, p) { w.mouseMoved(with: e) }
             try? await Task.sleep(for: .milliseconds(400))
