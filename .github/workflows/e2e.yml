@@ -2,8 +2,8 @@
 # a real MCP client through a private relay started for the run, calling the real Linux program
 # (e2e-linux) and the Mac app's real tools (e2e-mac), each checked on the machine's own state,
 # and every tool compared with its snapshot in relay/e2e/toolsnaps. Both jobs always run, so they
-# can be required checks, and pass at once when nothing they cover changed. No Claude, no secrets,
-# nothing reaches anyone's own Mac. A snapshot that differs fails the job and is uploaded as an
+# show on every pull request (reported, not required: Toni, 2026-11-25), and pass at once when
+# nothing they cover changed. No Claude, no secrets, nothing reaches anyone's own Mac. A snapshot that differs fails the job and is uploaded as an
 # artifact (toolsnaps-<kind>) to commit in the same pull request.
 name: e2e
 on:

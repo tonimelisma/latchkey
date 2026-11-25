@@ -133,8 +133,8 @@ built.
 5. **The path-to-capability map.** One file, `relay/e2e/capabilities.json` (paths as globs, each
    capability's checks); shared paths select everything. Chosen over per-check annotations so
    one file says what runs.
-6. **How a required check works with path filters.** GitHub blocks a pull request whose
-   required check never runs, so each e2e job always runs, picks its work from the map, and
+6. **How a check works with path filters.** A check that never runs shows as missing (and
+   would block a pull request if it were ever made required), so each e2e job always runs, picks its work from the map, and
    passes at once when nothing is selected (FR-1502).
 7. **Fixture data.** Made by scripts in the test Mac image (Notes, Calendar, Reminders, Contacts,
    files, a test keychain of fake sign-ins for local pages), each tagged so a sweep removes any

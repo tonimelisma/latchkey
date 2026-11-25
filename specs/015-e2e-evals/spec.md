@@ -25,7 +25,9 @@ Toni's conditions") says verifies nothing.
   should be minimized, and batched together".
 - The harness extends the repository's own Go checks; no outside eval framework.
 - Claude-driven tasks only in the weekly run; per pull request, scripted checks only.
-- Every per-pull-request end-to-end check blocks merging ("All block").
+- The per-pull-request end-to-end checks are reported on the pull request, not required for
+  merging (Toni, 2026-11-25: "I don't want the checks required"; replaces "All block",
+  2026-11-24).
 - The weekly run is started by Toni by hand: "prompt to run it manually if not run that week".
 - Weekly results go, encrypted to the developer's key, to the developer's intake (spec 014).
 - The Mac tests run from the repository: anyone who clones it can run them from their own Mac
@@ -90,8 +92,9 @@ Toni's conditions") says verifies nothing.
   MCP client with a real OAuth token, through a private relay started for the run, calling the
   capability's tools on a real machine (the real Mac app on GitHub's macOS runner, the real
   Linux program in its container), and checking the outcome on that machine's state.
-- **FR-1502** Each end-to-end check shall be a required check on the pull request (Toni,
-  2026-11-24: "All block"); when no capability is affected it shall pass without running.
+- **FR-1502** Each end-to-end check shall report its result on the pull request without being
+  required for merging (Toni, 2026-11-25; was "All block", 2026-11-24); when no capability is
+  affected it shall pass without running.
 - **FR-1503** The per-pull-request checks shall not run Claude, shall use no Claude
   subscription, and shall never reach Toni's Mac, his accounts, or Latchkey on his Mac.
 - **FR-1504** The system shall keep in the repository a snapshot of every tool's name,
@@ -165,8 +168,9 @@ Toni's conditions") says verifies nothing.
   dispositioned them, as problem reports are (spec 014 FR-1424).
 
 ### Releases and Toni's conditions
-- **FR-1540** A release shall count as checked when its pull request's checks passed
-  (FR-1502); the next weekly run shall report the release it ran on; no release shall wait for
+- **FR-1540** A release shall count as checked when its pull request's end-to-end checks
+  passed (FR-1502); one merged with a failing check counts as not checked, and the session that
+  merged it says so; the next weekly run shall report the release it ran on; no release shall wait for
   a weekly run (Toni, 2026-11-24).
 - **FR-1541** A row of "Done means Toni's conditions" that needs Toni's real Mac (locked, lid
   closed, real iMessage, a real site, his own accounts) shall stay NOT VERIFIED whatever these
