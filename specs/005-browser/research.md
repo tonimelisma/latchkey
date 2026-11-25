@@ -516,3 +516,52 @@ but in Safari it uses the page's own eval, which a page can replace; (c) JavaScr
 `JSCheckScriptSyntax` in a context of Latchkey's own: invalid as a script, valid inside a
 function, means a function's body. Chosen: (c); no page takes part, nothing runs, and the script
 runs once (FR-463).
+
+## Real mouse and keyboard (2026-11-25)
+
+Why: Procare's role boxes (`div`s with React click handlers and the pointing-hand cursor) were
+never listed, and its disabled LOGIN took no click; Latchkey's typing gave `input` before
+`keydown` and no `keyup`, its clicks were `isTrusted: false`, and `document.hasFocus()` was
+false (reproduced live 2026-11-25 on 0.8.243). Toni chose real events in Latchkey's own browser.
+
+Ways to give a `WKWebView` real events, weighed:
+
+| Option | For | Against | Chosen |
+|---|---|---|---|
+| `NSEvent` made by Latchkey, handed to the view's `mouseDown:`/`keyDown:` | Public AppKit; what WebKit's own tests do (`TestWKWebView`); WebKit turns them into trusted DOM events with the browser's own default actions; nothing leaves the process | WebKit's queue of mouse events means a later script can run before an event is handled (needs a wait) | Yes |
+| `window.sendEvent` | Same events | Hit-testing through a window that ignores the mouse; local event monitors would see key characters | No |
+| `CGEvent.postToPid` to Latchkey | Real system events | Goes through the window server to the app's key window, which isn't ours; the Owner's other windows of Latchkey (Settings) could get them; monitors see them | No |
+| WebKit's testing calls (`_doAfterProcessingAllPendingMouseEvents:`) for the wait | Exact | Private, mouse only | No: counts in a world of Latchkey's own instead |
+
+Focus: WebKit counts a view focused when it is its window's first responder and the window says
+it is key (`isKeyWindow`, read when the window's key notifications come). A window class whose
+`isKeyWindow` is true does that without the window becoming key or the app activating
+(WebKit's `TestWKWebViewHostWindow` does the same). Kept on only during Claude's calls:
+WebKit turns on secure keyboard entry (`EnableSecureEventInput`, system-wide) while a password
+field has the focus in a key window, so a sign-in page that focuses its password field by itself
+would have kept it on for the Owner's whole Mac for up to 30 minutes.
+
+What a human can't do in a hidden window, and what Latchkey does instead: a list's menu (an
+`NSMenu` that tracks until answered, blocking Latchkey's main thread), a colour field's panel
+(on the Owner's screen), and a date field's picker (a window of its own) aren't opened; Claude
+uses select (the page's own change of choice) or types into a date field. Copy, cut and paste
+would use the Owner's clipboard: refused; the paste fallback for code boxes stays a script.
+
+Scrolling into view stays `scrollIntoView` (what the browser does when the focus moves to an
+element); wheel events for it would add a smooth-scroll wait for nothing a page can tell apart.
+Scrolling itself (FR-435) is unchanged.
+
+Waiting for the page: a user script in `RealInput.world` sees trusted `pointerup`, `mouseup`,
+`keyup` and `input` events (capture, on the window, added before the page's own scripts) and
+posts each to a message handler added to that world only; Latchkey waits on those counts, at
+most 5 s a step. Options weighed: fixed sleeps (slow, and still wrong on a busy page); asking
+the page for its counts every few milliseconds (first version: on GitHub's busy runner each
+question took seconds and the questions themselves added load, so typing stopped early); the
+message handler (chosen: nothing runs in the page, and the frame's host comes from WebKit).
+
+Keys: US-layout virtual key codes (`kVK_ANSI_*`), characters as the keyboard gives them
+(`\r` for Enter, `\u{7F}` for Backspace, the function-key characters for arrows, Home, End,
+Page Up and Down, Delete), Shift for upper case and the shifted symbols. Input methods: an
+input method the Owner has chosen (Japanese, Chinese) could take the keys; Latchkey's own
+pages are typed with a US keyboard's events and, when that shows as a problem, it is a bug to
+fix (not seen yet).

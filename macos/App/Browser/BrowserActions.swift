@@ -84,16 +84,20 @@ extension BrowserCapability {
                             l, { try await $0.press(keys, ref: ref, answer: a) },
                             { try await here(browser).press(keys, ref: ref, answer: a) })
                         let did = (try? JSONDecoder().decode([String].self, from: Data(done.detail.utf8))) ?? []
+                        let how =
+                            l == nil
+                            ? "Pressed (keys a script sends; a site that only takes a real keyboard won't notice them):\n"
+                            : "Pressed (real keys, in Latchkey's own hidden window):\n"
                         return await acted(
-                            "Pressed (keys a script sends; a site that only takes a real keyboard won't notice them):\n"
-                                + did.map { "- " + $0 }.joined(separator: "\n"), done.page, l, browser,
+                            how + did.map { "- " + $0 }.joined(separator: "\n"), done.page, l, browser,
                             activity: "Pressed \(keys.map(\.key).joined(separator: " ")) on \(host(done.page.url))")
                     }
                 }),
             ToolEntry(
                 tool: .make(
                     "browser_hover", title: "Hover",
-                    description: "Moves a pretend pointer onto an element, for menus that open on hover.",
+                    description:
+                        "Moves the pointer onto an element, for menus that open on hover (in Claude's own pages a real pointer of Latchkey's hidden window; in the owner's tabs a script's).",
                     input: ["ref": .stringParam("The element")], required: ["ref"], readOnly: false, destructive: true,
                     openWorld: true, deadlineMS: 30_000),
                 handler: { args in
@@ -108,7 +112,9 @@ extension BrowserCapability {
                         return await acted(
                             shown > 0
                                 ? "Hovered over \(ref); \(shown) more things on the page show now."
-                                : "Hovered over \(ref). The page as it is now is below; a menu may draw itself a moment later, or open only under a real pointer (clicking it often opens it).",
+                                : l == nil
+                                    ? "Hovered over \(ref). The page as it is now is below; a menu may draw itself a moment later, or open only under a real pointer (clicking it often opens it)."
+                                    : "Hovered over \(ref). The page as it is now is below; a menu may draw itself a moment later (clicking it often opens it).",
                             done.page, l, browser, activity: "Hovered over \(ref) on \(host(done.page.url))")
                     }
                 }),

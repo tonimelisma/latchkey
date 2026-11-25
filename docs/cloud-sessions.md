@@ -80,7 +80,11 @@ applies, except:
   written in public), what to check, and what to report back.
 - Mac app without the Mac: `mac-build.yml` lints and builds the app (gating) and runs the whole
   unit test suite (reported, not gating) on GitHub's macOS runner for every change to `macos/`
-  (2026-11-23). The runner is macOS 26 and slower: about 30 tests miss their timing limits there
+  (2026-11-23). A run takes about 9 minutes (5 of them the build) plus any wait
+  for a free Mac runner; since 2026-11-25 both Mac jobs keep Xcode's compilation cache between
+  runs (`actions/cache`, saved by every run, main's reused by pull requests), so a build compiles
+  only what changed (Toni: "isn't there a way to cut the 40 minutes to 5 minutes?"). Pushing
+  again cancels the run in progress: push a batch, then wait. The runner is macOS 26 and slower: about 30 tests miss their timing limits there
   on main too, so compare a branch's failed tests (printed with why, and any crash report) with
   main's. There, work behind a deadline can wait longer than the deadline just for a thread (a
   stand-in read 21 to 31 s late, 2026-11-24), so a test sets such a limit long unless the limit

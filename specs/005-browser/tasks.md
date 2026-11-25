@@ -31,3 +31,9 @@
   own browser and when Claude asks (2026-11-14). *FR-441, FR-442, D7.*
 - **T411** Test first (the tools' answers through Latchkey's own browser begin with the line;
   Safari's don't), then the line on every answer from that browser (2026-11-15). *FR-443, D7.*
+- **T412** Tests first (a served page like Procare's role choice gating a disabled sign-in
+  button; trusted events in a keyboard's and a mouse's order; `document.hasFocus()` during a
+  call and not after; a list, colour and date field refused; a covered element named), then
+  real mouse and keyboard events in Latchkey's own browser, logins_fill's typing through them,
+  the clickable listing in both browsers, and Safari's typing order (2026-11-25). *FR-478 to
+  FR-488, spec 013 FR-1377, D15.*

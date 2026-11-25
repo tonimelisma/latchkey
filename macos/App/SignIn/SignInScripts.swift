@@ -195,6 +195,200 @@ extension PageScripts {
         """
     }
 
+    // MARK: real keys in Latchkey's own browser (FR-1377)
+
+    /// What the scripts below share: the site check, the field kinds, code fields, the focus.
+    /// The same rules as `fillField` (FR-1372), apart so the typing itself is real keys.
+    private static func fillCommon(host: String) -> String {
+        // nosemgrep: latchkey-page-script-literal -- besides literal() and the fixed `deep`, nothing.
+        """
+        \(deep)
+        var host = \(literal(host));
+        function onSite(x) {
+          if (location.protocol !== 'https:' || location.hostname !== host) return false;
+          var fl = x && x.ownerDocument && x.ownerDocument.location;
+          return !x || !!(fl && fl.protocol === 'https:' && fl.hostname === host);
+        }
+        function seen(x) {
+          if (!x || x.disabled || x.readOnly) return false;
+          var st = getComputedStyle(x);
+          if (st.visibility === 'hidden' || st.display === 'none') return false;
+          return !!(x.offsetWidth || x.offsetHeight || x.getClientRects().length);
+        }
+        function codeField(x) {
+          var t = (x.getAttribute('type') || 'text').toLowerCase();
+          if (['text', 'number', 'tel', 'password'].indexOf(t) < 0) return false;
+          if (t === 'password' || x.maxLength === 1) return true;
+          var l = '';
+          try { if (x.labels && x.labels.length) l = x.labels[0].innerText || ''; } catch (y) {}
+          var words = [x.name, x.id, x.className, x.getAttribute('placeholder'), x.getAttribute('aria-label'), x.getAttribute('autocomplete'), x.getAttribute('inputmode'), l].join(' ');
+          return /(one-time-code|numeric|\\bcode|otp|one.?time|verif|passcode|\\bpin\\b|digit|2fa|mfa|two.?factor|token|security)/i.test(words);
+        }
+        function focused() {
+          var a = document.activeElement;
+          for (var k = 0; k < 20 && a; k++) {
+            if (a.shadowRoot && a.shadowRoot.activeElement) { a = a.shadowRoot.activeElement; continue; }
+            if (a.tagName === 'IFRAME' || a.tagName === 'FRAME') {
+              var d = null;
+              try { d = a.contentDocument; } catch (z) { d = null; }
+              if (d && d.activeElement) { a = d.activeElement; continue; }
+            }
+            break;
+          }
+          return a;
+        }
+        function same(a, b) {
+          var squash = function (t) { return String(t).replace(/[\\s.\\-()]/g, '').toLowerCase(); };
+          return squash(a) === squash(b);
+        }
+        function refOf(x) {
+          var r = x.getAttribute('data-latchkey');
+          if (!r) { r = 'lkf' + Math.random().toString(36).slice(2, 10); x.setAttribute('data-latchkey', r); }
+          return r;
+        }
+        function byRef(r) { return __lkFind('[data-latchkey=' + JSON.stringify(r) + ']'); }
+        var filled = window.__latchkeyFilled;
+        if (!filled) {
+          filled = [];
+          try { Object.defineProperty(window, '__latchkeyFilled', { value: filled, enumerable: false }); } catch (x) {}
+        }
+        function keep(x) { if (filled.indexOf(x) < 0) filled.push(x); }
+        function answer(o) { return 'ok\\t' + JSON.stringify(o); }
+        """
+    }
+
+    /// Checks the field as `fillField` does (the site, the kind, a code field) and answers the
+    /// fields to type into, in order, with how many characters each takes: `{ step: "plan",
+    /// fields: [{ ref, count }], follow }` (`follow`: a code typed into one field may go on in
+    /// the page's next code box, FR-1372), or `wrongsite`, `notfield` as `fillField`. The fields
+    /// are kept to be emptied after (FR-1311) before anything is typed.
+    static func fillPlan(ref: String, kind: String, length: Int, host: String) -> String {
+        // nosemgrep: latchkey-page-script-literal -- besides literal(), find() and fillCommon, only an Int.
+        """
+        (function (kind, n) {
+          \(fillCommon(host: host))
+          if (!onSite(null)) return answer({ step: 'wrongsite' });
+          \(find(ref))
+          if (!onSite(e)) return answer({ step: 'wrongsite' });
+          var type = e.tagName === 'INPUT' ? (e.getAttribute('type') || 'text').toLowerCase() : e.tagName.toLowerCase();
+          function no(is) { return answer({ step: 'notfield', is: is || (type + (e.maxLength === 1 ? ' box' : '')) }); }
+          if (e.tagName !== 'INPUT' || !seen(e)) return no();
+          if (kind === 'password' && (type !== 'password' || e.maxLength === 1)) return no();
+          if (kind === 'user' && ['text', 'email', 'tel'].indexOf(type) < 0) return no();
+          if (kind === 'code' && ['text', 'number', 'tel', 'password'].indexOf(type) < 0) return no();
+          if (kind === 'code' && !codeField(e)) return no(type + ' (not a code)');
+          var one = [{ ref: refOf(e), count: n }];
+          if (kind !== 'code') { keep(e); return answer({ step: 'plan', fields: one, follow: false }); }
+          var inputs = __lkAll('input').filter(seen);
+          var from = inputs.indexOf(e), boxes = [];
+          var nth = function (x) { var m = /\\b(\\d+) of (\\d+)\\b/.exec(x.getAttribute('aria-label') || ''); return m ? [+m[1], +m[2]] : null; };
+          var own = nth(e);
+          if (e.maxLength === 1) {
+            boxes = inputs.slice(from).filter(function (x) { return x.maxLength === 1 && codeField(x); }).slice(0, n);
+          } else if (own && own[0] === 1 && own[1] === n) {
+            boxes = inputs.slice(from, from + n).filter(function (x, i) { var m = nth(x); return m && m[0] === i + 1 && m[1] === own[1] && codeField(x); });
+            if (boxes.length !== n) boxes = [];
+          } else if (e.className) {
+            var alike = inputs.slice(from).filter(function (x) {
+              return x.className === e.className && x.parentElement && e.parentElement && x.parentElement.className === e.parentElement.className;
+            });
+            if (alike.length === n && n >= 4 && n <= 8 && alike.every(codeField)) boxes = alike;
+          }
+          if (!boxes.length) { keep(e); return answer({ step: 'plan', fields: one, follow: true }); }
+          if (boxes.length < n) return no(boxes.length + ' boxes for a ' + n + '-character code');
+          boxes.forEach(keep);
+          return answer({ step: 'plan', fields: boxes.map(function (b) { return { ref: refOf(b), count: 1 }; }), follow: false });
+        })(\(literal(kind)), \(length))
+        """
+    }
+
+    /// Before each character (FR-1377): whether the focus is on the field `ref` names ("same"),
+    /// or, with `follow`, on a code field after it the page moved the focus to ("next" and its
+    /// reference; it is kept to be emptied), or anywhere else ("other"); "wrongsite" when the page
+    /// is no longer on the saved site.
+    static func fillFocus(ref: String, kind: String, host: String, follow: Bool) -> String {
+        // nosemgrep: latchkey-page-script-literal -- besides literal() and fillCommon, only a Bool.
+        """
+        (function (ref, kind, follow) {
+          \(fillCommon(host: host))
+          var x = byRef(ref), f = focused();
+          if (!x || !onSite(x) || !onSite(f)) return answer({ step: 'wrongsite' });
+          // Still of the kind it was checked for: a page that turns its password field into a
+          // text field gets nothing more (security review 2026-11-25).
+          var t = (x.getAttribute('type') || 'text').toLowerCase();
+          if (x.tagName !== 'INPUT' || !seen(x) || (kind === 'password' && t !== 'password') || (kind === 'code' && !codeField(x))) return answer({ step: 'other' });
+          if (f === x) return answer({ step: 'same' });
+          if (follow && f && f.tagName === 'INPUT' && seen(f) && codeField(f) && f.getRootNode() === x.getRootNode() && (x.compareDocumentPosition(f) & Node.DOCUMENT_POSITION_FOLLOWING)) {
+            keep(f);
+            return answer({ step: 'next', ref: refOf(f) });
+          }
+          return answer({ step: 'other' });
+        })(\(literal(ref)), \(literal(kind)), \(follow ? "true" : "false"))
+        """
+    }
+
+    /// After the typing: whether the fields hold `value` (one field, or the boxes together);
+    /// when the page spread a code over the boxes after the field itself, those count too, as in
+    /// `fillField`. Answers `{ step: "filled", boxes }` or `{ step: "unheld" }`.
+    static func fillHeld(refs: [String], value: String, host: String) -> String {
+        let list = (try? JSONEncoder().encode(refs)).map { String(decoding: $0, as: UTF8.self) } ?? "[]"
+        // nosemgrep: latchkey-page-script-literal -- besides literal() and fillCommon, nothing.
+        return """
+            (function (refs, value) {
+              \(fillCommon(host: host))
+              if (!onSite(null)) return answer({ step: 'unheld' });
+              var xs = refs.map(byRef);
+              // Gone: the page went on by itself once the last character was in (Uber's code
+              // boxes, 2026-11-22): the fields typed into are no longer in the page at all (not
+              // only unnamed), and every character went into its field (`RealInput.lastTarget`).
+              if (xs.some(function (x) { return !x; })) {
+                var gone = filled.length > 0 && filled.every(function (n) { return !n.isConnected; });
+                return gone ? answer({ step: 'filled', boxes: xs.length > 1 ? xs.length : 0 }) : answer({ step: 'unheld' });
+              }
+              if (xs.some(function (x) { return !onSite(x); })) return answer({ step: 'unheld' });
+              var held = xs.map(function (x) { return x.value; }).join('');
+              if (same(held, value)) return answer({ step: 'filled', boxes: xs.length > 1 ? xs.length : 0 });
+              if (xs.length === 1) {
+                var inputs = __lkAll('input').filter(seen), from = inputs.indexOf(xs[0]);
+                var row = inputs.slice(from, from + value.length);
+                if (row.length > 1 && row.every(codeField) && same(row.map(function (b) { return b.value; }).join(''), value)) {
+                  row.forEach(keep);
+                  return answer({ step: 'filled', boxes: row.length });
+                }
+              }
+              return answer({ step: 'unheld' });
+            })(JSON.parse(\(literal(list))), \(literal(value)))
+            """
+    }
+
+    /// The whole code pasted into the first box, as password managers do, when the boxes didn't
+    /// hold it key by key: the page's paste event, then the value (a real paste would put the
+    /// code on the Owner's clipboard). Answers as `fillHeld`.
+    static func fillPaste(refs: [String], value: String, host: String) -> String {
+        let list = (try? JSONEncoder().encode(refs)).map { String(decoding: $0, as: UTF8.self) } ?? "[]"
+        // nosemgrep: latchkey-page-script-literal -- besides literal() and fillCommon, nothing.
+        return """
+            (function (refs, value) {
+              \(fillCommon(host: host))
+              var boxes = refs.map(byRef);
+              if (boxes.some(function (x) { return !x || !onSite(x) || !codeField(x); })) return answer({ step: 'unheld' });
+              var setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
+              boxes.forEach(function (b) { if (b.value) { b.focus(); setter.call(b, ''); b.dispatchEvent(new InputEvent('input', { bubbles: true, composed: true, inputType: 'deleteContentBackward' })); } });
+              var first = boxes[0];
+              first.focus();
+              var data = null;
+              try { data = new DataTransfer(); data.setData('text/plain', value); } catch (y) {}
+              if (first.dispatchEvent(new ClipboardEvent('paste', { clipboardData: data, bubbles: true, composed: true, cancelable: true }))) {
+                first.dispatchEvent(new InputEvent('beforeinput', { data: value, inputType: 'insertFromPaste', bubbles: true, composed: true, cancelable: true }));
+                setter.call(first, value);
+                first.dispatchEvent(new InputEvent('input', { data: value, inputType: 'insertFromPaste', bubbles: true, composed: true }));
+              }
+              var held = boxes.map(function (b) { return b.value; }).join('');
+              return same(held, value) ? answer({ step: 'filled', boxes: boxes.length }) : answer({ step: 'unheld' });
+            })(JSON.parse(\(literal(list))), \(literal(value)))
+            """
+    }
+
     /// Empties every password field on the page and every field Latchkey filled that is still
     /// there, so no script can read them afterwards (FR-1311). Answers `{ cleared }`.
     static let clearSignIn = """
