@@ -23,6 +23,22 @@ with the installed version; SCHEDULED waits for a state only Toni can produce.
 | Costco sign-in | NOT VERIFIED | refused in both browsers with no words; Toni to check the saved password |
 | eBay sign-in | NOT VERIFIED | eBay showed a check page in both browsers that Latchkey didn't get past: an open bug in Latchkey (cause not found yet) |
 
+### Problem reports carry everything for the chat (spec 014 FR-1440 to FR-1456, 2026-11-25)
+
+Toni: "improve the feedback so in the future it automatically logs everything". Rows (his
+words and the spec's success criteria) and how each was checked:
+
+| Condition | Status | Evidence |
+|---|---|---|
+| A report holds every tool call of that chat with full arguments and answers, passwords and codes blanked | VERIFIED in tests only | relay `TestReportCarriesEverythingForThatChat` (real MCP client, stand-in Mac), CI on pull request #49; a live report from Toni's Mac: NOT VERIFIED |
+| Latchkey's log for that time span (relay, Mac, Linux server) | VERIFIED in tests only | relay test above; Linux `TestReportPartHoldsTheSpansLogAndTheChatsCalls`; Mac `thePartHoldsTheLogTheCallsAndThePages` on GitHub's Mac runner; live: NOT VERIFIED |
+| Web pages: address, source, errors, requests, cookie names, drawing state, screenshot | VERIFIED in tests only (Mac unit tests, a page given as text, unlocked runner) | `ReportPartTests` on GitHub's Mac runner; while locked and on real sites (Target): NOT VERIFIED until Toni files a report |
+| Recording in memory only, gone when the page closes, from a world the page can't see | VERIFIED in tests only | `thePageIsRecordedFromAWorldItCantSee`; live: NOT VERIFIED |
+| Up to 5 MB with a screenshot, oldest first left out; an older 64 KB intake still gets a report | VERIFIED in tests only | `TestFitLeavesOutOldestFirstAndKeepsTheNewestPicture`, `TestOldIntakeGetsTheSmallVersion`, intake `TestBigReportsAndByteLimits` |
+| A machine that doesn't answer in time is listed and the report still goes | VERIFIED in tests only | `TestReportGoesWithoutALateMachinesPart` |
+| The sharing setting says plainly what a report holds | VERIFIED in tests only | `theSettingSaysWhatAReportHolds`; Toni reading it in Settings: NOT VERIFIED |
+| The developer's agent reads a report as files | VERIFIED in tests only | `TestShowWritesTheReportAsFiles` |
+
 ### Codes experiment (0.8.223, 2026-11-22, fresh Claude Code sessions, Latchkey's own browser)
 
 Way 1 = Claude reads the code and passes it; way 2 = `code_from` (Latchkey finds it, Claude never
@@ -584,6 +600,10 @@ after the app was quit.
      `linux`, `scripts` required; no force-push or deletion of `main`).
 00. The 2026-11-23 feedback fixes have regression cases but no live run (Toni, 2026-11-23: no
     test sessions against his real data; end-to-end testing is a backlog item).
+0. Problem reports carry everything for the chat (spec 014 FR-1440 to FR-1456, 2026-11-25):
+   built; released with the relay image and the next Mac tag. Left: a live report from Toni's
+   Mac (any chat that hits a problem, with sharing on), read with `latchkey-reports show`; until
+   the intake's host pulls the new intake image, relays send the report's small version (64 KB).
 0. Problem reports to the developer (spec 014, `specs/014-feedback-intake/`): built and merged
    2026-11-23 (relay, intake, the developer's command, the Mac app's setting). The intake runs
    since 2026-11-24 (deployed by the hosted server's own agent; the hosted relay is on the new
