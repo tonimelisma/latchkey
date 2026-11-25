@@ -500,7 +500,7 @@ func newScrubber(secrets []string, names map[string]string) *scrubber {
 	}
 	keys := make([]string, 0, len(names))
 	for k := range names {
-		if len(k) >= 4 {
+		if len(k) >= 3 { // as long as a part's private names can be (takePrivate); whole words below
 			keys = append(keys, k)
 		}
 	}

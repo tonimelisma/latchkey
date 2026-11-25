@@ -45,8 +45,12 @@ type Options struct {
 	Now            func() time.Time
 }
 
-// MaxReading is how many report bodies the intake reads at once.
-const MaxReading = 8
+// MaxReading is how many report bodies the intake reads at once, and BodyLimit how long one may
+// take.
+const (
+	MaxReading = 8
+	BodyLimit  = 20 * time.Second
+)
 
 // Intake is the service.
 type Intake struct {
@@ -177,9 +181,12 @@ func (in *Intake) take(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "busy; try later", http.StatusServiceUnavailable)
 		return
 	}
+	// A slot is held at most BodyLimit: 5 MB at 250 KB a second, so a slow sender can't keep the
+	// slots (security review 2026-11-25).
+	_ = http.NewResponseController(w).SetReadDeadline(time.Now().Add(BodyLimit)) // the real clock, not the proof's
 	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, reports.MaxSealed+1))
 	if err != nil || len(body) > reports.MaxSealed {
-		http.Error(w, "too large", http.StatusRequestEntityTooLarge)
+		http.Error(w, "too large or too slow", http.StatusRequestEntityTooLarge)
 		return
 	}
 	if !reports.Shaped(body) {

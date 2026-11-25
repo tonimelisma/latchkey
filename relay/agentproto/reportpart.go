@@ -27,14 +27,14 @@ type ReportPartArgs struct {
 
 // ReportPart is a machine's answer, carried as the text of the result's one text content.
 type ReportPart struct {
-	Log   []PartLogLine   `json:"log,omitempty"`
-	Calls []PartCall      `json:"calls,omitempty"`
-	Pages []PartPage      `json:"pages,omitempty"`
-	Notes []string        `json:"notes,omitempty"`
+	Log   []PartLogLine `json:"log,omitempty"`
+	Calls []PartCall    `json:"calls,omitempty"`
+	Pages []PartPage    `json:"pages,omitempty"`
+	Notes []string      `json:"notes,omitempty"`
 	// Private are names the relay replaces wherever they appear in the report and never sends:
 	// the machine's host name, its login name, its home folder (FR-1449).
-	Private []string `json:"private,omitempty"`
-	Extra json.RawMessage `json:"extra,omitempty"`
+	Private []string        `json:"private,omitempty"`
+	Extra   json.RawMessage `json:"extra,omitempty"`
 }
 
 // PartLogLine is one line of Latchkey's log on the machine.
