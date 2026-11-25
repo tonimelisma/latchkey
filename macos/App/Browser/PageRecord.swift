@@ -47,10 +47,13 @@ final class PageRecord {
 
     /// Values Claude typed into this page's password and code fields: never sent, only given to
     /// the relay so it blanks them wherever they appear in a report (FR-1448).
-    private(set) var secrets: Set<String> = []
+    private(set) var secrets: [String] = []
 
+    /// The newest 50 stay: a full list drops its oldest, so the latest password is always known.
     func typedSecret(_ value: String) {
-        if !value.isEmpty, secrets.count < 50 { secrets.insert(value) }
+        guard !value.isEmpty, !secrets.contains(value) else { return }
+        secrets.append(value)
+        if secrets.count > 50 { secrets.removeFirst(secrets.count - 50) }
     }
 
     /// The page closed: nothing stays (FR-1446).

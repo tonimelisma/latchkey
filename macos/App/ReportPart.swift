@@ -53,8 +53,11 @@ enum ReportPart {
         var notes: [String] = []
         /// Names the relay replaces in the report and never sends (FR-1449).
         var privateNames: [String] = []
+        /// Values Claude typed into password and code fields, for the relay to blank; never sent,
+        /// never left out for size (FR-1448).
+        var secrets: [String] = []
         enum CodingKeys: String, CodingKey {
-            case log, calls, pages, notes, privateNames = "private"
+            case log, calls, pages, notes, privateNames = "private", secrets
         }
     }
 
@@ -86,7 +89,8 @@ enum ReportPart {
 
     /// `readLimit`: how long the activity log may take (tests on a busy runner give more).
     static func answer(
-        _ arguments: JSONValue, entries: Entries?, readLimit: Duration = .seconds(3), pages: @escaping Pages
+        _ arguments: JSONValue, entries: Entries?, readLimit: Duration = .seconds(3), secrets: [String] = [],
+        pages: @escaping Pages
     ) async -> ToolResult {
         guard let data = try? JSONEncoder().encode(arguments),
             let args = try? JSONDecoder().decode(Args.self, from: data)
@@ -100,6 +104,7 @@ enum ReportPart {
         to = to.addingTimeInterval(1)
         var part = Part()
         part.privateNames = privateNames()
+        part.secrets = secrets
         if let entries {
             // Off the shared pool, behind a limit (.claude/rules/macos.md: never block a thread in
             // async code; security review 2026-11-25).

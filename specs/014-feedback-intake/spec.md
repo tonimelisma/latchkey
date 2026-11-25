@@ -191,7 +191,11 @@ plainly"; "Always record, memory only"; "5 MB, screenshots included"; "Hidden wo
   screenshot.
 - **FR-1448** Passwords and codes shall never be in a report: a code or password Claude passed
   to a tool in that chat shall be blanked wherever it appears in the report; the trace's own
-  blanking (spec 013 FR-1372) holds; cookie values and field values are never collected.
+  blanking (spec 013 FR-1372) holds; cookie values and field values are never collected. What
+  Claude types into a password or code field of a page in Latchkey's own browser is known to the
+  Mac and blanked; in Claude's Safari tabs a typed code is recognized only by its shape (4 to 8
+  digits), since a check there would share the action's script and its bookkeeping (security
+  review 2026-11-25); saved passwords and codes typed by logins_fill never reach the relay.
 - **FR-1449** Each name of the account's machines, the account's email address, and the relay's
   own address shall be replaced in the report by a label ("machine 1"; "the account's email";
   "the relay"), so FR-1412's rule holds for the chat's calls too.

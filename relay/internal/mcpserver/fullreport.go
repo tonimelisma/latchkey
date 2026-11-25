@@ -410,6 +410,8 @@ func takePrivate(part json.RawMessage) (secrets, private []string, cleaned json.
 	}
 	private = strs(p["private"])
 	delete(p, "private")
+	secrets = strs(p["secrets"])
+	delete(p, "secrets")
 	for _, pg := range asList(p["pages"]) {
 		if m, ok := pg.(map[string]any); ok {
 			secrets = append(secrets, strs(m["secrets"])...)

@@ -89,8 +89,9 @@ func TestPrivateNamesAreWholeWords(t *testing.T) {
 // Security review 2026-11-25: what a machine saw typed into a password or code field, and its
 // private names, are used for blanking and never sent.
 func TestTakePrivate(t *testing.T) {
-	secrets, private, cleaned := takePrivate(json.RawMessage(`{"private":["tonis-mbp.local","toni"],"pages":[{"name":"pk4m2","secrets":["hunter2x"]}]}`))
-	assert.Equal(t, []string{"hunter2x"}, secrets)
+	secrets, private, cleaned := takePrivate(json.RawMessage(`{"private":["tonis-mbp.local","toni"],"secrets":["typed-9x"],"pages":[{"name":"pk4m2","secrets":["hunter2x"]}]}`))
+	assert.Equal(t, []string{"typed-9x", "hunter2x"}, secrets)
+	assert.NotContains(t, string(cleaned), "typed-9x")
 	assert.Equal(t, []string{"tonis-mbp.local", "toni"}, private)
 	assert.NotContains(t, string(cleaned), "hunter2x")
 	assert.NotContains(t, string(cleaned), "tonis-mbp")

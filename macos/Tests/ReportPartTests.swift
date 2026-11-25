@@ -108,6 +108,9 @@ import WebKit
         #expect(try await b.run(PageRecord.secretField("e2")) == "yes")
         #expect(try await b.run(PageRecord.secretField("e3")) == "no")
         #expect(try await b.run(PageRecord.secretField("e9\"]")) == "no", "a reference is passed as data")
+        _ = try await b.type("e1", text: "pw-secret-77", submit: false)
+        _ = try await b.type("e3", text: "plain search", submit: false)
+        #expect(b.record.secrets == ["pw-secret-77"], "only what went into the password field")
         _ = try await b.run(
             "for (let i = 0; i < 5; i++) dispatchEvent(new ErrorEvent('error', {message: 'made up ' + i})); 1")
         try await Task.sleep(for: .milliseconds(300))
@@ -121,6 +124,8 @@ import WebKit
         #expect(r.events.count == PageRecord.limit)
         #expect(r.events.last?.text == "\(PageRecord.limit + 19)")
         #expect(r.dropped == 20)
+        for i in 0..<60 { r.typedSecret("secret-\(i)") }
+        #expect(r.secrets.count == 50 && r.secrets.last == "secret-59", "the newest are kept")
     }
 
     /// FR-1444: the part holds the span's public log lines (never a private one), this Mac's copy

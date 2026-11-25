@@ -607,8 +607,6 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownl
                 (try? JSONDecoder().decode(JSONValue.self, from: JSONEncoder().encode(e))) ?? .null
             })
         o["record_dropped"] = .number(Double(record.dropped))
-        // Only for the relay to blank; it takes them out before sealing (FR-1448).
-        if !record.secrets.isEmpty { o["secrets"] = .array(record.secrets.sorted().map { .string($0) }) }
         if held == nil {
             let shot: PreparedImage? = await Deadline.first(within: step) { @MainActor @Sendable [weak self] in
                 try? await self?.screenshot()
@@ -1188,7 +1186,15 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownl
         let before = w.url?.absoluteString
         // Typed into a password or code field: kept to be blanked in a problem report (spec 014
         // FR-1448), asked in the hidden world before typing.
-        if await hidden(PageRecord.secretField(ref), async: false) == "yes" { record.typedSecret(text) }
+        // Not while the page holds a dialog or is a file (the script would wait, and typing must
+        // fail at once as before), and at most 2 s; no answer counts as not a secret field
+        // (security review 2026-11-25).
+        if held == nil, file == nil {
+            let answer: String? = await Deadline.first(within: .seconds(2)) { @MainActor @Sendable [weak self] in
+                await self?.hidden(PageRecord.secretField(ref), async: false)
+            }
+            if answer == "yes" { record.typedSecret(text) }
+        }
         try check(
             (try await script(PageScripts.type(ref, text: text, submit: submit))).split(separator: "\n").first.map(
                 String.init) ?? "", ref: ref, option: text)

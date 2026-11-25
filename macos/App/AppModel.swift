@@ -1298,7 +1298,12 @@ final class AppModel {
             }
         }
         let asleep = ReportPart.displayAsleep()
-        let result = await ReportPart.answer(call.arguments, entries: entries) { @Sendable names in
+        var pageNames: [String] = []
+        if case .array(let listed)? = call.arguments["pages"] {
+            for case .string(let name) in listed { pageNames.append(name) }
+        }
+        let typed = BrowserCapability.ownPages.typedSecrets(pageNames)
+        let result = await ReportPart.answer(call.arguments, entries: entries, secrets: typed) { @Sendable names in
             let found = await BrowserCapability.ownPages.describe(names, displayAsleep: asleep)
             return ReportPart.Described(pages: found.pages, notes: found.notes)
         }
