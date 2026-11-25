@@ -1618,6 +1618,8 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownl
             await RealInput.move(to: p, in: w)
             try? await Task.sleep(for: .milliseconds(400))
             out.append("RealInput.move (tracking area): " + ((try? await self.run(log)) ?? "?"))
+            try? await Task.sleep(for: .seconds(1))
+            out.append("a second later: " + ((try? await self.run(log)) ?? "?"))
             await RealInput.click(at: p, in: w)
             try? await Task.sleep(for: .milliseconds(400))
             out.append("RealInput.click: " + ((try? await self.run(log)) ?? "?"))

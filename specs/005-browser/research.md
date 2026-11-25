@@ -575,3 +575,22 @@ Page Up and Down, Delete), Shift for upper case and the shifted symbols. Input m
 input method the Owner has chosen (Japanese, Chinese) could take the keys; Latchkey's own
 pages are typed with a US keyboard's events and, when that shows as a problem, it is a bug to
 fix (not seen yet).
+
+### What GitHub's macOS 26 runner showed (2026-11-25)
+
+Found with instrumentation in CI (Toni: "if you can't see the issue you're missing
+instrumentation"), each fixed in pull request #54:
+
+- Hover: a pointer move handed to the WKWebView reached no page, whatever else was tried (the
+  window's own sendEvent, accepting moves, an entered event, the window on the screen's area).
+  On the screen, a move arrived at the runner's real cursor: WebKit takes moves only from its
+  tracking area's owner. Latchkey now hands them there.
+- Lists (`select`) had no name: that WebKit gives a list no text of its own. The list's name now
+  comes from its options.
+- A cookie a page's script sets wasn't announced to Latchkey's cookie watcher: the store is now
+  looked at after each of Claude's actions too.
+- logins_fill's mark: test pages (and sites that clone elements) carry one reference on two
+  elements. The fields a fill checked now carry that fill's own token; a field moved to gets a
+  reference of its own when its reference isn't unique.
+- Enter in a form of several fields without a send button sends nothing in a browser (no
+  implicit submission); the keys test now checks the keys arrived, as a person's would.

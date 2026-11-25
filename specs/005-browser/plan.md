@@ -558,8 +558,11 @@ keyboard (2026-11-25)".
   says what has the focus: a one-line list there refuses arrows, space and Enter (FR-484).
   Cmd+A: the key events, then `selectAll(_:)` unless the page cancelled the keydown (the world's
   listener notes `defaultPrevented`). Cmd+C, X and V are refused.
-- **Hover (FR-482).** Scroll into view, then two pointer moves (just outside, then the middle);
-  the answer counts what became visible, as before.
+- **Hover (FR-482).** Scroll into view, then two pointer moves (just outside, then the middle),
+  each handed to the owner of the view's tracking area for pointer moves, as macOS hands it: a
+  WKWebView drops a move handed to the view itself (WebKit's `WKMouseTrackingObserver` takes
+  them, so as not to count one twice; found 2026-11-25 with the hover diagnostic on GitHub's
+  runner). The answer counts what became visible, as before.
 - **Sign-in (spec 013 FR-1377).** `LockedBrowser.fillReal` runs the sign-in checks of
   `fillField` unchanged (`SignInScripts.fillPlan`: the site, the field kind, the code boxes) in
   the sign-in world, which answers the fields to type into, in order. For each: a real click,

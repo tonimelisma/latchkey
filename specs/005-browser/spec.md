@@ -442,6 +442,9 @@ the sign-in came back unchanged without a word.
   shall type nothing more of the text (a character that no key types would otherwise land
   before them), press no Enter after it, and answer how many characters were typed and that
   nothing more was (Toni, 2026-11-25; "Café" came out "Céaf" on a busy Mac).
+- **FR-486a** A list (`select`) shall be listed with a name: its label, else its options' texts
+  (WebKit on macOS 26 gives a list no text of its own, so every list was listed unnamed;
+  2026-11-25).
 - **FR-486** The list of what is on a page (both browsers) shall also list what a person sees as
   something to click: a visible element drawn with the pointing-hand cursor where the element
   around it isn't, or with a click handler of its own (`onclick`), that isn't already listed, is

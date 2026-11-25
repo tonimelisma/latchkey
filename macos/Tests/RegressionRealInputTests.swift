@@ -277,6 +277,26 @@ import Testing
         #expect(try await b.run("document.getElementById('decoy').value + document.getElementById('pw').value") == "")
     }
 
+    /// FR-482 (GitHub's macOS 26 runner, 2026-11-25): hover moved a pointer no page saw, because a
+    /// WKWebView takes pointer moves only through its tracking area. A menu that only CSS `:hover`
+    /// opens shows after Latchkey's hover, as under a mouse, and the page gets trusted moves.
+    @Test func aRealHoverOpensAMenuOnlyCSSHoverShows() async throws {
+        let b = LockedBrowser(cookies: { [] })
+        defer { b.discard() }
+        let page = """
+            <style>#menu ul { display: none; } #menu:hover ul { display: block; }</style>
+            <div id="menu" data-latchkey="e1" style="width:200px;height:40px">Account
+              <ul><li><a href="#out">Sign out</a></li></ul></div>
+            <script>window.moves = 0; document.addEventListener('pointermove', function (e) { if (e.isTrusted) moves++; });</script>
+            """
+        _ = try await b.open(html: page, base: Self.base)
+        let done = try await b.hover("e1")
+        let state = try await b.run(
+            "JSON.stringify({ hover: document.getElementById('menu').matches(':hover'), moves: moves })")
+        #expect(done.page.elements.contains { $0.label == "Sign out" }, "the menu shows: \(state)")
+        #expect(state.contains("\"moves\":") && !state.contains("\"moves\":0"), "\(state)")
+    }
+
     /// FR-487: in the owner's Safari tabs typing stays a script, in a keyboard's order now.
     @Test func safarisScriptTypingGivesAKeyboardsOrder() async throws {
         let b = LockedBrowser(cookies: { [] })
