@@ -1444,6 +1444,8 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownl
                 guard at.refuse == nil, at.hidden != true, let x = at.x, let y = at.y else { return false }
                 await RealInput.click(at: RealInput.windowPoint(x, y, in: w), in: w)
                 var current = f.ref
+                guard try await self.bounded(RealInput.markField(current), world: RealInput.world) == "ok"
+                else { return false }
                 guard
                     try await run(PageScripts.fillFocus(ref: current, kind: kind, host: host, follow: false))?.step
                         == "same"
@@ -1461,13 +1463,16 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownl
                         PageScripts.fillFocus(ref: current, kind: kind, host: host, follow: follow))
                     if now?.step == "next", let next = now?.ref {
                         current = next
+                        guard try await self.bounded(RealInput.markField(current), world: RealInput.world) == "ok"
+                        else { return false }
                     } else if now?.step != "same" {
                         return false
                     }
                     // A new line or a tab in a secret is text, never Enter or Tab (it would send
                     // the form, or move the focus, before the press).
                     if !"\n\r\t".contains(ch), let k = RealInput.stroke(for: ch) {
-                        await RealInput.press(k, in: w)
+                        // A key the page didn't take in time stops the typing.
+                        guard await RealInput.press(k, in: w) else { return false }
                     } else {
                         await RealInput.insert(String(ch), in: w)
                     }
@@ -1476,7 +1481,7 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownl
                     // nothing more goes (the page moved the focus while the key was on its way;
                     // security review 2026-11-25).
                     let went = await RealInput.lastTarget(w)
-                    guard went?.ref == current, went?.host == host else { return false }
+                    guard went?.ref == "field", went?.host == host else { return false }
                     if kind == "password", went?.type != "password" { return false }
                 }
             }
@@ -1505,6 +1510,8 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownl
     private func active<T>(_ work: () async throws -> T) async rethrows -> T {
         let window = holderWindow as? HolderWindow
         let clipboard = NSPasteboard.general.changeCount
+        if let w = web { RealInput.begin(w) }
+        await pauseMedia()
         window?.active = true
         defer {
             window?.active = false
@@ -1514,17 +1521,23 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownl
                 )
             }
         }
-        let result = try await work()
-        // No sound from Claude's pages: a real click lets a page start playing (security review
-        // 2026-11-25; Constitution IV). Paused, at most 1 s (suspending all media held the
-        // page's scripts up on GitHub's runner).
-        if let w = web {
-            _ = await Deadline.first(within: .seconds(1)) { @MainActor @Sendable in
-                await w.pauseAllMediaPlayback()
-                return true
-            }
+        defer {
+            // No sound from Claude's pages: a real click lets a page start playing (security
+            // review 2026-11-25; Constitution IV). Paused before and after every action, also one
+            // that failed.
+            Task { @MainActor [weak self] in await self?.pauseMedia() }
         }
-        return result
+        return try await work()
+    }
+
+    /// Pauses the page's media, at most 1 s (suspending all media held the page's scripts up
+    /// on GitHub's runner).
+    private func pauseMedia() async {
+        guard let w = web else { return }
+        _ = await Deadline.first(within: .seconds(1)) { @MainActor @Sendable in
+            await w.pauseAllMediaPlayback()
+            return true
+        }
     }
 
     /// A script in one of Latchkey's own worlds, at most `within` (Constitution II): a page busy in

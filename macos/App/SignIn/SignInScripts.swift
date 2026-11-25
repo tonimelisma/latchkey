@@ -336,10 +336,15 @@ extension PageScripts {
         return """
             (function (refs, value) {
               \(fillCommon(host: host))
+              if (!onSite(null)) return answer({ step: 'unheld' });
               var xs = refs.map(byRef);
               // Gone: the page went on by itself once the last character was in (Uber's code
-              // boxes, 2026-11-22); every character went into its field (`RealInput.lastTarget`).
-              if (xs.some(function (x) { return !x; })) return answer({ step: 'filled', boxes: xs.length > 1 ? xs.length : 0 });
+              // boxes, 2026-11-22): the fields typed into are no longer in the page at all (not
+              // only unnamed), and every character went into its field (`RealInput.lastTarget`).
+              if (xs.some(function (x) { return !x; })) {
+                var gone = filled.length > 0 && filled.every(function (n) { return !n.isConnected; });
+                return gone ? answer({ step: 'filled', boxes: xs.length > 1 ? xs.length : 0 }) : answer({ step: 'unheld' });
+              }
               if (xs.some(function (x) { return !onSite(x); })) return answer({ step: 'unheld' });
               var held = xs.map(function (x) { return x.value; }).join('');
               if (same(held, value)) return answer({ step: 'filled', boxes: xs.length > 1 ? xs.length : 0 });

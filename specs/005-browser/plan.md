@@ -576,7 +576,9 @@ keyboard (2026-11-25)".
   lists the Command shortcuts pressed. Every script a real action waits on is bounded
   (`LockedBrowser.bounded`, 10 s; logins_fill's typing 20 s in all), and each character is
   checked afterwards to have gone into the field, in a frame of the saved site as WebKit names
-  the frame (`RealInput.lastTarget`).
+  the frame (`RealInput.lastTarget`): the very node, marked in Latchkey's input world
+  (`markField`), told afresh for each key (a key without word stops the typing), and key counts
+  start again with each action (second security review 2026-11-25).
 - **Clickable (FR-486).** `PageScripts.read` adds, after the controls, elements whose own
   computed cursor is `pointer` while their parent's isn't, or that have an `onclick` of their
   own, visible, not in or holding a listed control, at most 100 of them and at most 3,000
