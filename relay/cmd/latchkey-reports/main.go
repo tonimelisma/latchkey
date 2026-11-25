@@ -2,7 +2,7 @@
 //
 //	latchkey-reports keygen <private-key-file>  makes a key pair; prints the public key
 //	latchkey-reports list                       the waiting problem reports, opened
-//	latchkey-reports evals [-this-week [-quiet]]  the weekly eval results sent (spec 015 FR-1531)
+//	latchkey-reports evals                        the test Mac results sent (spec 015 FR-1531)
 //	latchkey-reports delete <id>...             deletes dispositioned reports (nothing is kept)
 //
 // It reads the intake's address from LATCHKEY_INTAKE_URL (default Latchkey's), the developer's
@@ -33,7 +33,7 @@ func main() {
 	}
 }
 
-const usage = "usage: latchkey-reports keygen <private-key-file> | list | evals [-this-week [-quiet]] | delete <id> [<id>]"
+const usage = "usage: latchkey-reports keygen <private-key-file> | list | evals | delete <id> [<id>]"
 
 func run(args []string) error {
 	if len(args) == 0 {

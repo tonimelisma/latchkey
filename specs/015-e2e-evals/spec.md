@@ -107,11 +107,15 @@ Toni's conditions") says verifies nothing.
 - **FR-1506** A check that can't run on a runner (a permission GitHub's runner can't grant, a
   screen state it has no) shall be listed as skipped with the reason, never counted as passed.
 
-### Weekly run (the test Mac on Toni's Mac)
+### The test Mac run (by hand only; no longer weekly)
+
+Amended 2026-11-25 (Toni: "Drop it, keep per-PR checks"): there is no weekly run and no reminder.
+The test Mac's scripts stay in the repository; whoever wants a run starts it by hand. "Weekly run"
+below means such a run.
 - **FR-1510** The weekly run shall be started by hand with a single command from a clone of the
   repository, on any Apple silicon Mac (Toni, 2026-11-24: anyone with the repository can run
   it). It shall ask nothing further and need no Latchkey approval.
-- **FR-1511** When a cloud session starts and no weekly result has arrived in the current week
+- **FR-1511** (Withdrawn 2026-11-25: no reminder; Toni, "Drop it, keep per-PR checks". Was:) When a cloud session starts and no weekly result has arrived in the current week
   (Monday to Sunday, Toni's time zone), the session shall tell Toni in one line that the weekly
   run is due and the single command that starts it (with the option that sends the results to
   the intake).
@@ -170,8 +174,8 @@ Toni's conditions") says verifies nothing.
 ### Releases and Toni's conditions
 - **FR-1540** A release shall count as checked when its pull request's end-to-end checks
   passed (FR-1502); one merged with a failing check counts as not checked, and the session that
-  merged it says so; the next weekly run shall report the release it ran on; no release shall wait for
-  a weekly run (Toni, 2026-11-24).
+  merged it says so; a test Mac run, when someone starts one, shall report the release it ran on; no
+  release shall wait for one (Toni, 2026-11-24; amended 2026-11-25: no weekly run).
 - **FR-1541** A row of "Done means Toni's conditions" that needs Toni's real Mac (locked, lid
   closed, real iMessage, a real site, his own accounts) shall stay NOT VERIFIED whatever these
   tests show; a weekly result may be quoted as evidence only for a row whose condition the test

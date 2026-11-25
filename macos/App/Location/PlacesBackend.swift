@@ -63,6 +63,9 @@ enum PlacesFailure: Error, Equatable {
     /// With near: nothing within `nearbyMetres` of it (the query, the km, the place named).
     case nothingNear(String, Int, String)
     case noRoute(String)
+    /// Apple Maps limits a Mac's searches for a while after many in a short time: nothing was
+    /// searched (problem reports 2026-11-24/25, a run geotagging photo after photo).
+    case busy
     case failed(String)
 }
 
@@ -129,7 +132,7 @@ final class AppleMapsBackend: PlacesBackend, @unchecked Sendable {
             throw PlacesFailure.nothingFound(address)
         }
         do { return try await request.mapItems.map(Self.place) } catch {
-            throw PlacesFailure.nothingFound(address)
+            throw Self.failure(error, for: address)
         }
     }
 
@@ -142,8 +145,23 @@ final class AppleMapsBackend: PlacesBackend, @unchecked Sendable {
                 latitudinalMeters: 20_000, longitudinalMeters: 20_000)
         }
         do { return try await MKLocalSearch(request: request).start().mapItems.prefix(limit).map(Self.place) } catch {
-            throw PlacesFailure.nothingFound(query)
+            throw Self.failure(error, for: query)
         }
+    }
+
+    /// What MapKit's error means for Claude: only its own "not found" says nothing was found; a
+    /// limit on the Mac's searches, a server's failure or no network say so, so Claude never
+    /// takes "not searched" for "not there" (problem reports 2026-11-24/25).
+    static func failure(_ error: any Error, for what: String) -> PlacesFailure {
+        let e = error as NSError
+        if e.domain == MKErrorDomain {
+            switch MKError.Code(rawValue: UInt(e.code)) {
+            case .placemarkNotFound?, .directionsNotFound?: return .nothingFound(what)
+            case .loadingThrottled?: return .busy
+            default: break
+            }
+        }
+        return .failed(e.localizedDescription)
     }
 
     func route(from: Coordinate, to: Coordinate, mode: String, departAt: Date?, arriveBy: Date?) async throws -> Route {

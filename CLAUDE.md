@@ -23,8 +23,8 @@ So, for every request:
   quoted with version, time, and the result seen (the page, the database), not Claude's words.
   Unit tests, a run in another screen state, or reasoning from code verify nothing. Claude
   starts no test sessions of its own against Toni's real data (Toni, 2026-11-23). End-to-end
-  tests and evals (spec 015) run on GitHub's runners and in a throwaway test Mac: a weekly
-  result is evidence only for a condition the test Mac really has (unlocked, Latchkey's own
+  tests and evals (spec 015) run on GitHub's runners, and in a throwaway test Mac only when
+  someone starts one by hand (no weekly run, Toni 2026-11-25): such a result is evidence only for a condition the test Mac really has (unlocked, Latchkey's own
   browser, a served page, test data), quoted with its run, version and time; the locked Mac, the
   lid closed, real iMessage, real sites and Toni's own accounts stay NOT VERIFIED until he runs
   them.
@@ -223,10 +223,10 @@ a few words: look into them in this session, start a separate session for them
 fixed in that session where it can be, with its regression case, otherwise reported to Toni with
 what was learned. Report contents never go into the repository, a pull request, or a CI log. A
 report is dispositioned once its fix is on main or Toni has heard why not; then delete it with
-`latchkey-reports delete <id>` (nothing is kept: git is the history). Also run
-`go run ./cmd/latchkey-reports evals -this-week -quiet`: when it prints the weekly-run line, tell
-Toni that line; when sent weekly results are waiting (`latchkey-reports evals`), each new
-failure is an issue found, and the run's entries are deleted once dispositioned (spec 015).
+`latchkey-reports delete <id>` (nothing is kept: git is the history). When test Mac results
+someone sent are waiting (`latchkey-reports evals`), each new failure is an issue found, and the
+run's entries are deleted once dispositioned (spec 015). There is no weekly run and no reminder
+for one (Toni, 2026-11-25).
 
 Every issue found in Latchkey (by Toni, an agent's feedback report, a review, or a test, also
 one caught before merge) gets, in the same commit as its fix, an automated regression test that
@@ -237,7 +237,7 @@ the installed app, it gets a case in a regressions group of `macos/scripts/state
 commit as its fix: the id names it, `case` says what went wrong and when, `steps` say
 how it is checked and what counts as working. Cases never write anything they don't remove.
 Cases that need real Claude or a Mac's apps become eval tasks in `relay/e2e/tasks/` (`covers`),
-run weekly in the test Mac (spec 015); none runs against Toni's real data.
+run in the test Mac when someone starts it by hand (spec 015); none runs against Toni's real data.
 
 ## Never disturb the user (Toni, 2026-11-07; Constitution IV)
 
@@ -285,8 +285,8 @@ All commands, with details: `docs/commands.md`. The ones used every day:
   update themselves (`make install` installs CI's newest tag by hand).
 - Linux program (`linux/`): `make test`, `make lint`; releases by `linux-release.yml`.
 - End to end (spec 015): per pull request `e2e.yml` (`e2e-linux`, `e2e-mac`; tool snapshots in
-  `relay/e2e/toolsnaps`); weekly, on a Mac with Tart, `macos/scripts/weekly-eval.sh [--send]`
-  (once before: `eval-image.sh`). Screen states (`macos/scripts/state-check/`): not run.
+  `relay/e2e/toolsnaps`); by hand only, on a Mac with Tart, `macos/scripts/weekly-eval.sh
+  [--send]` (once before: `eval-image.sh`). Screen states (`macos/scripts/state-check/`): not run.
 
 <!-- Maintainers: keep this file under ~200 lines (Anthropic's guidance for CLAUDE.md). Status and
 decisions live in docs/, topic knowledge in .claude/rules/, procedures in docs/. A rule that must

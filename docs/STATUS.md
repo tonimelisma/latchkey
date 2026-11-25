@@ -62,6 +62,19 @@ widgets that move the focus, GitHub's real "More options" list, a toggle's state
 returns). Two Uber code texts couldn't be deleted (the window didn't show them); the next
 failure says why.
 
+## Problem reports of 2026-11-24/25 (0.8.238 to 0.8.240)
+
+Eight reports, looked into 2026-11-25; none run live (Toni runs them).
+
+| Report | Cause | Disposition | Live |
+|---|---|---|---|
+| `browser_read` answered "unknown tool" | A chat started before the rename to `browser_look` (accepted: open chats restart) | By design | n/a |
+| Headless Chrome's print-to-PDF wrote nothing, exit 0 | Chrome makes its profile in macOS's per-user temporary folder, not `$TMPDIR`, which the fence doesn't let it write | shell_run's description says to give it `--user-data-dir` in the scratch folder; test and case | NOT VERIFIED |
+| Maps: "found nothing" for a Moscow address and a Hong Kong mall | Latchkey turned every MapKit error into "found nothing", also Apple Maps limiting a burst of searches | Only MapKit's "not found" says nothing was found; a limit says wait and try again; other errors say what happened; test and case | NOT VERIFIED |
+| Maps: a station 3.8 km off, another office for an address | Apple Maps' own data abroad | Can't be fixed in Latchkey | n/a |
+| Target's checkout does nothing in Latchkey's own browser, Mac locked (2 reports) | Target's protection against bots (a PerimeterX collector on the page) blocks checkout and fulfilment calls in that browser; Safari can't be used while locked | Not fixable in Latchkey without the Mac unlocked; told Toni | n/a |
+| Procare opened signed out in Latchkey's own browser, Mac unlocked | Toni's rule since 2026-11-24 (pages open in the background browser; sign_in_again moves one into Safari); the answer's first line already says so | By design | n/a |
+
 ## Problem reports of 2026-11-24 (0.8.235, Mac unlocked)
 
 Two reports from Toni's own chats; fixed on main with unit tests (GitHub's Mac runner) and a
@@ -594,7 +607,8 @@ after the app was quit.
    changed files select with a real MCP client through a private relay, on GitHub's Linux runner
    (the relay's own tools; the real Linux program) and Mac runner (the app's real files, shell
    and own-browser tools, served by the Swift host test `E2EHostTests`), and compares every tool
-   with its snapshot (`relay/e2e/toolsnaps`). Weekly, from any clone on an Apple silicon Mac with
+   with its snapshot (`relay/e2e/toolsnaps`). By hand only (no weekly run and no reminder, Toni
+   2026-11-25: "Drop it, keep per-PR checks"), from any clone on an Apple silicon Mac with
    Tart: `macos/scripts/eval-image.sh` once, then `weekly-eval.sh [--send]`: real Claude Code
    (Sonnet, the subscription token) does 20 tasks (4 held out, 3 with planted instructions) 3
    times each in a throwaway test Mac, scored on the end state. Results stay in the clone, or go
@@ -609,10 +623,8 @@ after the app was quit.
    them, and passed once they were committed); weekly run and image script NOT VERIFIED (never
    run: they need an Apple silicon Mac with Tart, and a person to approve the test Mac's
    permissions).
-   Left for Toni, together: (1) on his Mac, `macos/scripts/eval-image.sh` in Terminal from the
-   repository (it asks for the `claude setup-token` token at a password prompt; approve
-   Latchkey's permissions and click Connect in the test Mac's window); then weekly, when a
-   session says so, `macos/scripts/weekly-eval.sh --send`.
+   Nothing left for Toni: the test Mac run stays in the repository for whoever wants it
+   (`macos/scripts/eval-image.sh` once, then `weekly-eval.sh [--send]`).
 2. Signed updates with Sparkle (Toni, 2026-11-23: "yes, implement sparkle"; spec 001 FR-072 to
    FR-072d, plan D9): built while Toni was away. The app's update gate (installs only while
    idle), the build number, the update feed (`macos/scripts/appcast.sh`), and the CI release job

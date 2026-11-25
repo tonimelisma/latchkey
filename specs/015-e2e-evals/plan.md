@@ -110,12 +110,9 @@ Every run writes `e2e-results/<run>.json` in the clone (FR-1530, FR-1530a): a de
 in that clone reads it directly. With `--send`, the same result is sealed and sent as
 `contracts/eval-result.md` says, through the intake's existing endpoint (no intake change).
 `latchkey-reports` gains `evals` (list sent results, joined by run, compared with the previous
-run: new failures, fixed, flaky) and `list` keeps showing only problem reports. At session start
-(CLAUDE.md, beside the problem reports, which need the same key; as a hook it would add a network
-call to every session start) a session runs `latchkey-reports evals -this-week -quiet`; with none
-it prints: "The weekly test run hasn't run this week: on your Mac, run
-macos/scripts/weekly-eval.sh --send in Terminal from the repository (about an hour; nothing to
-approve)."
+run: new failures, fixed, flaky) and `list` keeps showing only problem reports. The weekly reminder
+(`evals -this-week -quiet`) was removed on 2026-11-25 with FR-1511 (Toni: "Drop it, keep per-PR
+checks"): there is no weekly run; a session reads sent results with `evals` when there are any.
 The session tells Toni that line. Each new failure becomes an issue found (FR-1532); sent results
 are deleted once dispositioned (FR-1533).
 

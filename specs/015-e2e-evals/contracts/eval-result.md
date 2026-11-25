@@ -44,6 +44,5 @@ Sealed payload (JSON; `reports.SealRaw`, the same sealing as a problem report):
 - The developer's command lists entries by kind: `latchkey-reports list` shows problem reports;
   `latchkey-reports evals` shows weekly results, joined by `run`, with the previous run's
   comparison (FR-1531), and the intake ids of each run's parts; `latchkey-reports delete <id>`
-  removes each part (FR-1533). `evals -this-week -quiet` prints only the reminder line, when no
-  run started this week (Monday to Sunday) arrived (FR-1511).
+  removes each part (FR-1533). (The `-this-week` reminder went with FR-1511, 2026-11-25.)
 - The field names as built: `relay/internal/evals/result.go` (`Result`, `TaskResult`, `Try`).
