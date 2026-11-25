@@ -477,7 +477,7 @@ func ValidateTools(tools []*mcp.Tool) error {
 		switch {
 		case t == nil || !toolName.MatchString(t.Name):
 			return fmt.Errorf("%w: invalid tool name", ErrProtocolViolation)
-		case t.Name == RelayToolLaptopStatus || t.Name == RelayToolMachines || t.Name == RelayToolFeedback:
+		case t.Name == RelayToolLaptopStatus || t.Name == RelayToolMachines || t.Name == RelayToolFeedback || t.Name == ReportPartTool:
 			return fmt.Errorf("%w: tool name %q is reserved by the relay", ErrProtocolViolation, t.Name)
 		case seen[t.Name]:
 			return fmt.Errorf("%w: duplicate tool %q", ErrProtocolViolation, t.Name)

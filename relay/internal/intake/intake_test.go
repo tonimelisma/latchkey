@@ -148,3 +148,53 @@ func TestATooShortTokenIsRefused(t *testing.T) {
 	_, err := intake.Open(filepath.Join(t.TempDir(), "i.db"), intake.Options{DeveloperToken: "short"})
 	assert.Error(t, err)
 }
+
+// FR-1455, FR-1456: a 4 MB report is taken; one sender's bytes per hour and all waiting
+// reports' bytes are bounded.
+func TestBigReportsAndByteLimits(t *testing.T) {
+	now := time.Date(2026, 11, 25, 5, 45, 0, 0, time.UTC)
+	in, err := intake.Open(filepath.Join(t.TempDir(), "intake.db"), intake.Options{
+		DeveloperToken: token, PerHour: 100, WorkBits: 4, Now: func() time.Time { return now },
+		BytesPerHour: 9 << 20, MaxBytes: 100 << 20,
+	})
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = in.Close() })
+	srv := httptest.NewServer(in.Handler())
+	t.Cleanup(srv.Close)
+	pub, _, err := reports.GenerateKey()
+	require.NoError(t, err)
+	pk, err := reports.PublicKey(pub)
+	require.NoError(t, err)
+	big, err := reports.SealRaw(pk, bytes.Repeat([]byte("a"), 4<<20))
+	require.NoError(t, err)
+	hour := reports.Hour(now)
+	nonce := reports.Prove(big, hour, 4)
+	assert.Equal(t, http.StatusAccepted, post(t, srv.URL, big, hour, nonce).StatusCode, "4 MB: taken")
+	assert.Equal(t, http.StatusAccepted, post(t, srv.URL, big, hour, nonce).StatusCode, "8 MB this hour: taken")
+	assert.Equal(t, http.StatusTooManyRequests, post(t, srv.URL, big, hour, nonce).StatusCode, "12 MB: over 9 MB an hour")
+
+	tooBig := append([]byte(reports.Magic), bytes.Repeat([]byte{1}, reports.MaxSealed)...)
+	assert.Equal(t, http.StatusRequestEntityTooLarge, post(t, srv.URL, tooBig, hour, 0).StatusCode, "over 5 MB")
+}
+
+func TestAllWaitingBytesAreBounded(t *testing.T) {
+	now := time.Date(2026, 11, 25, 5, 45, 0, 0, time.UTC)
+	in, err := intake.Open(filepath.Join(t.TempDir(), "intake.db"), intake.Options{
+		DeveloperToken: token, PerHour: 100, WorkBits: 4, Now: func() time.Time { return now },
+		MaxBytes: 3 << 20,
+	})
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = in.Close() })
+	srv := httptest.NewServer(in.Handler())
+	t.Cleanup(srv.Close)
+	pub, _, err := reports.GenerateKey()
+	require.NoError(t, err)
+	pk, err := reports.PublicKey(pub)
+	require.NoError(t, err)
+	body, err := reports.SealRaw(pk, bytes.Repeat([]byte("a"), 2<<20))
+	require.NoError(t, err)
+	hour := reports.Hour(now)
+	nonce := reports.Prove(body, hour, 4)
+	assert.Equal(t, http.StatusAccepted, post(t, srv.URL, body, hour, nonce).StatusCode)
+	assert.Equal(t, http.StatusServiceUnavailable, post(t, srv.URL, body, hour, nonce).StatusCode, "4 MB waiting would be over 3 MB")
+}

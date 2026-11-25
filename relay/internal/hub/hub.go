@@ -148,6 +148,13 @@ func (h *Hub) Online(deviceID string) bool {
 	return ok
 }
 
+// AnswersReportPart says whether the machine is online and announced that it answers the
+// relay's request for its part of a problem report (spec 014 FR-1443).
+func (h *Hub) AnswersReportPart(deviceID string) bool {
+	c := h.conn(deviceID)
+	return c != nil && c.reportPart
+}
+
 func (h *Hub) conn(deviceID string) *conn {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -400,6 +407,7 @@ func (h *Hub) start(ctx context.Context, c *conn, hello *agentproto.Hello) bool 
 	c.setTools(hello.Tools)
 	c.clientsFeature = hello.Has(agentproto.FeatureClients) && c.device.Kind == store.KindMac // only a Mac lists and removes apps (spec 010)
 	c.auditFeature = hello.Has(agentproto.FeatureAudit)
+	c.reportPart = hello.Has(agentproto.FeatureReportPart)
 	c.keepAwake = hello.State.KeepAwake
 
 	err = write(ctx, c.ws, welcome)
@@ -520,6 +528,7 @@ type conn struct {
 	done   chan struct{}
 
 	auditFeature bool // the agent announced audit_request and audit (FR-634)
+	reportPart   bool // the agent answers the report part tool (spec 014 FR-1443)
 
 	frames *rate.Limiter // frames the Mac may send (FR-091)
 

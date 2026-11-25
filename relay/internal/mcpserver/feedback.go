@@ -48,8 +48,11 @@ var feedbackTool = &mcp.Tool{
 		"the owner chose to share these. File one, before you answer the user, whenever a Latchkey tool gave an error, " +
 		"a page or app didn't respond, an answer was wrong, unclear, or missing something, you needed a workaround or " +
 		"several tries, or you gave up; one report per problem, even when you found a way around it. " +
-		"summary: one line saying what went wrong. details: what you were doing, each tool you called with its arguments " +
-		"and what it answered (the relevant parts), what you expected, and what you tried next. machines: every machine " +
+		"The report carries this chat's Latchkey tool calls with their arguments and answers, Latchkey's logs on the relay " +
+		"and the machines involved, and the pages the chat used (each page's address, source, requests, errors, and whether " +
+		"it was drawing), with passwords, codes, and cookie values left out; so don't copy them into details. " +
+		"summary: one line saying what went wrong. details: what you were doing, what you saw, what you expected, and what " +
+		"you tried next, in your own words. machines: every machine " +
 		"the problem involved, by name as the machines tool lists them; name each one whenever a machine was involved " +
 		"(the report then carries its Latchkey and system versions and screen state, never its name). The report leaves the owner's hands: never put in it passwords, verification codes, full " +
 		"account or card numbers, the text of messages or emails, or anything else private the problem doesn't need; " +
@@ -59,7 +62,7 @@ var feedbackTool = &mcp.Tool{
 		"type": "object",
 		"properties": map[string]any{
 			"summary": map[string]any{"type": "string", "description": "One line: what went wrong"},
-			"details": map[string]any{"type": "string", "description": "What you did, each tool call with its arguments and answer, what you expected, what you tried next; nothing private"},
+			"details": map[string]any{"type": "string", "description": "What you did and saw, what you expected, what you tried next; the calls themselves come with the report; nothing private"},
 			"machines": map[string]any{
 				"type": "array", "items": map[string]any{"type": "string"},
 				"description": "Every machine the problem involved, by name as the machines tool lists them; empty only when none was",
@@ -139,9 +142,18 @@ func (s *Server) fileFeedback(userID string) mcp.ToolHandler {
 				text("details", agentproto.MaxFeedbackDetails), truncate(client, agentproto.MaxFeedbackName), start)
 			id := agentproto.NewFeedbackID()
 			r.ID = id
-			sealed, err := reports.Seal(s.opts.Reports.DeveloperKey, r)
+			// Everything for the chat (FR-1440 to FR-1451), and the small version for an older
+			// intake (FR-1451); both sealed, the relay keeps neither readable.
+			full, small, err := s.fullReport(ctx, userID, req, client, ms, named, r, start)
+			var sealed, sealedSmall []byte
 			if err == nil {
-				err = s.store.AddReport(ctx, store.OutboxReport{ID: id, UserID: userID, Created: start.UTC(), Sealed: sealed})
+				sealed, err = reports.SealRaw(s.opts.Reports.DeveloperKey, full)
+			}
+			if err == nil {
+				sealedSmall, err = reports.SealRaw(s.opts.Reports.DeveloperKey, small)
+			}
+			if err == nil {
+				err = s.store.AddReport(ctx, store.OutboxReport{ID: id, UserID: userID, Created: start.UTC(), Sealed: sealed, Small: sealedSmall})
 			}
 			if err != nil {
 				s.opts.Logger.Error("queue report", "user", userID, "err", err)
@@ -240,7 +252,7 @@ func (s *Server) sendDueReports(ctx context.Context) {
 	}
 	client := r.Client
 	if client == nil {
-		client = &http.Client{Timeout: 30 * time.Second}
+		client = &http.Client{Timeout: 2 * time.Minute} // reports reach 5 MB (FR-1450)
 	}
 	work := r.WorkBits
 	if work == 0 {
@@ -288,7 +300,16 @@ func (s *Server) sendDueReports(ctx context.Context) {
 		switch status {
 		case http.StatusAccepted, http.StatusOK:
 			_ = s.store.ReportDone(ctx, rep.ID)
-		case http.StatusBadRequest, http.StatusRequestEntityTooLarge:
+		case http.StatusRequestEntityTooLarge:
+			// An intake from before 5 MB reports (FR-1451): its small version goes instead, once.
+			if small, err := s.store.ReportUseSmall(ctx, rep.ID); err == nil && small {
+				s.opts.Logger.Warn("the intake takes only small reports: sending the report without the chat's calls, logs and pages", "report", rep.ID)
+				s.kickReports()
+				continue
+			}
+			_ = s.store.ReportDone(ctx, rep.ID)
+			s.opts.Logger.Error("report refused by the intake", "report", rep.ID, "status", status)
+		case http.StatusBadRequest:
 			_ = s.store.ReportDone(ctx, rep.ID) // never accepted, however often sent
 			s.opts.Logger.Error("report refused by the intake", "report", rep.ID, "status", status)
 		default: // unreachable, busy, over the limit, or an old proof: later

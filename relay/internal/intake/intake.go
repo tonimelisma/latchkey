@@ -15,6 +15,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -32,6 +33,10 @@ type Options struct {
 	PerHour int
 	// MaxReports bounds how many reports wait at once, so the disk can't be filled.
 	MaxReports int
+	// BytesPerHour bounds what one sender address may deliver in an hour (FR-1456; default
+	// 50 MB), and MaxBytes what all waiting reports may hold together (default 5 GB).
+	BytesPerHour int64
+	MaxBytes     int64
 	// WorkBits is the proof of work's difficulty (reports.WorkBits by default).
 	WorkBits int
 	// TrustedProxies whose X-Forwarded-For names the sender (the reverse proxy in front).
@@ -46,6 +51,28 @@ type Intake struct {
 	opts  Options
 	token [32]byte
 	rate  *limit.Keyed
+	sent  byteCounts
+}
+
+// byteCounts counts the bytes each sender delivered in the current hour (FR-1456).
+type byteCounts struct {
+	mu   sync.Mutex
+	hour string
+	by   map[string]int64
+}
+
+// add counts n bytes for the sender, unless that would take it over max; it says whether it did.
+func (b *byteCounts) add(sender, hour string, n, max int64) bool {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if b.hour != hour || b.by == nil {
+		b.hour, b.by = hour, map[string]int64{}
+	}
+	if b.by[sender]+n > max {
+		return false
+	}
+	b.by[sender] += n
+	return true
 }
 
 // Open opens (or makes) the intake's database at path.
@@ -58,6 +85,12 @@ func Open(path string, o Options) (*Intake, error) {
 	}
 	if o.MaxReports <= 0 {
 		o.MaxReports = 10_000
+	}
+	if o.BytesPerHour <= 0 {
+		o.BytesPerHour = 50 << 20
+	}
+	if o.MaxBytes <= 0 {
+		o.MaxBytes = 5 << 30
 	}
 	if o.WorkBits <= 0 {
 		o.WorkBits = reports.WorkBits
@@ -121,16 +154,22 @@ func (in *Intake) take(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "no valid proof of work", http.StatusForbidden)
 		return
 	}
-	if !in.rate.Allow(in.opts.TrustedProxies.ClientIP(r)) {
+	sender := in.opts.TrustedProxies.ClientIP(r)
+	if !in.rate.Allow(sender) {
 		http.Error(w, "too many reports from this address", http.StatusTooManyRequests)
 		return
 	}
+	if !in.sent.add(sender, reports.Hour(now), int64(len(body)), in.opts.BytesPerHour) {
+		http.Error(w, "too many bytes from this address this hour", http.StatusTooManyRequests)
+		return
+	}
 	var waiting int
-	if err := in.db.QueryRowContext(r.Context(), `SELECT count(*) FROM reports`).Scan(&waiting); err != nil {
+	var held int64
+	if err := in.db.QueryRowContext(r.Context(), `SELECT count(*), coalesce(sum(length(sealed)), 0) FROM reports`).Scan(&waiting, &held); err != nil {
 		in.fail(w, err)
 		return
 	}
-	if waiting >= in.opts.MaxReports {
+	if waiting >= in.opts.MaxReports || held+int64(len(body)) > in.opts.MaxBytes {
 		http.Error(w, "the intake is full; try later", http.StatusServiceUnavailable)
 		return
 	}
