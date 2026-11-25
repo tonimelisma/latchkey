@@ -77,7 +77,7 @@ enum ReportPart {
         sharing && !blocked && !paused ? nil : .text("This Mac doesn't share problem reports now.", isError: true)
     }
 
-    static func answer(_ arguments: JSONValue, entries: Entries?, pages: Pages) async -> ToolResult {
+    static func answer(_ arguments: JSONValue, entries: Entries?, pages: @escaping Pages) async -> ToolResult {
         guard let data = try? JSONEncoder().encode(arguments),
             let args = try? JSONDecoder().decode(Args.self, from: data)
         else { return .text("The request for this Mac's part couldn't be read.", isError: true) }
