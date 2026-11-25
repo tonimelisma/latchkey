@@ -1614,9 +1614,13 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownl
                     with: t, location: q, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
                     windowNumber: win.windowNumber, context: nil, eventNumber: 0, clickCount: 0, pressure: 0)
             }
+            out.append("before: " + ((try? await self.run(log)) ?? "?"))
             await RealInput.move(to: p, in: w)
             try? await Task.sleep(for: .milliseconds(400))
             out.append("RealInput.move (no input context): " + ((try? await self.run(log)) ?? "?"))
+            await RealInput.click(at: p, in: w)
+            try? await Task.sleep(for: .milliseconds(400))
+            out.append("RealInput.click: " + ((try? await self.run(log)) ?? "?"))
             if let e = ev(.mouseMoved, NSPoint(x: p.x - 10, y: p.y)) { w.mouseMoved(with: e) }
             if let e = ev(.mouseMoved, p) { w.mouseMoved(with: e) }
             try? await Task.sleep(for: .milliseconds(400))

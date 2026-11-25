@@ -15,14 +15,14 @@ import Testing
             <div id="d" data-latchkey="e1" style="width:200px;height:80px;background:#eee">Account</div>
             <script>
             window.log = [];
-            ['pointerover', 'pointerenter', 'mouseover', 'mouseenter', 'pointermove', 'mousemove'].forEach(function (k) {
-              document.getElementById('d').addEventListener(k, function (ev) { log.push(k + ':' + ev.isTrusted); });
+            ['pointerover', 'pointerenter', 'mouseover', 'mouseenter', 'pointermove', 'mousemove', 'mousedown', 'mouseup'].forEach(function (k) {
+              document.addEventListener(k, function (ev) { log.push(k + ':' + ev.isTrusted + '@' + Math.round(ev.clientX) + ',' + Math.round(ev.clientY) + ':' + (ev.target.id || ev.target.tagName)); }, true);
             });
             </script>
             """
         _ = try await b.open(html: page, base: URL(string: "https://a.test/")!)
         let log =
-            "(function () { var d = document.getElementById('d'); var r = JSON.stringify({ hover: d.matches(':hover'), log: log.slice(-6) }); log = []; return r; })()"
+            "(function () { var d = document.getElementById('d'); var r = JSON.stringify({ hover: d.matches(':hover'), focus: document.hasFocus(), vis: document.visibilityState, log: log.slice(-8) }); log = []; return r; })()"
         let said = try await b.hoverDiagnostics("e1", log: log)
         Issue.record("DIAG hover: \(said)")
     }

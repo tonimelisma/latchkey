@@ -105,5 +105,8 @@ jobs:
             test-without-building > "$RUNNER_TEMP/pages.log" 2>&1 || rc=$?
           xcrun xcresulttool get test-results summary --path "$RUNNER_TEMP/pages.xcresult" \
             | jq -r '"PAGES passed \(.passedTests) failed \(.failedTests)", (.testFailures[]? | "PAGES FAILURE \(.testIdentifierString): \(.failureText)")' | head -150 | cut -c1-3000 || true
+          # Where the time goes (instrumentation, 2026-11-25): the slowest 25 tests.
+          xcrun xcresulttool get test-results tests --path "$RUNNER_TEMP/pages.xcresult" \
+            | jq -r '[.. | objects | select(.nodeType? == "Test Case") | {n: .name, d: (.durationInSeconds // 0)}] | sort_by(-.d) | .[:25][] | "SLOW \(.d | floor)s \(.n)"' || true
           tail -5 "$RUNNER_TEMP/pages.log"
           exit "$rc"

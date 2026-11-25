@@ -241,9 +241,14 @@ extension PageScripts {
           var squash = function (t) { return String(t).replace(/[\\s.\\-()]/g, '').toLowerCase(); };
           return squash(a) === squash(b);
         }
+        // A reference of the element's own: one another element shares (a page's clone, or one
+        // made before Latchkey named it) is replaced, so the fill's mark finds this one alone.
         function refOf(x) {
           var r = x.getAttribute('data-latchkey');
-          if (!r) { r = 'lkf' + Math.random().toString(36).slice(2, 10); x.setAttribute('data-latchkey', r); }
+          if (!r || __lkAll('[data-latchkey=' + JSON.stringify(r) + ']').length > 1) {
+            r = 'lkf' + Math.random().toString(36).slice(2, 10);
+            x.setAttribute('data-latchkey', r);
+          }
           return r;
         }
         function byRef(r) { return __lkFind('[data-latchkey=' + JSON.stringify(r) + ']'); }
