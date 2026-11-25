@@ -31,7 +31,7 @@ until one is chosen). Rows and how each is checked:
 
 | Condition | Status | Evidence |
 |---|---|---|
-| Procare sign-in, Latchkey's own browser, Mac locked | NOT VERIFIED | Toni's go-ahead 2026-11-25; to run on the installed version |
+| Procare sign-in, Latchkey's own browser, Mac locked | VERIFIED | 0.8.244, 13:3x PST 2026-11-25, Mac locked, cloud session with Toni's go-ahead: STAFF and PARENT listed as clickable, a click on PARENT showed it selected, logins_fill typed the user name (16 characters held) and the password and pressed LOGIN: Procare's dashboard (schools.procareconnect.com/dashboard, the daily activity list) |
 | Procare sign-in, Latchkey's own browser, Mac unlocked | NOT VERIFIED | same |
 | The role boxes are listed as clickable, a click on PARENT enables LOGIN, logins_fill signs in (a served page like Procare's) | VERIFIED in tests only | `RegressionRealInputTests` fails on main (run on Toni's Mac 2026-11-25, main 5b5a1c0, Mac locked) and passes on the branch (GitHub's Mac runner, unlocked) |
 | Clicks and keys are trusted, in a mouse's and a keyboard's order, the page focused during the call only | VERIFIED in tests only | same suite on GitHub's Mac runner and Toni's Mac; while locked on the installed app: NOT VERIFIED |
