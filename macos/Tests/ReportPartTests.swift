@@ -59,7 +59,8 @@ import WebKit
                 <script>window.__STATE = {token: 'inline-tok-55'}</script>
                 """, base: base)
         _ = try await b.run("document.getElementById('u').value = 'typed-4242'; 1")
-        guard case .object(let page) = await b.describe(name: "pk4m2", macLocked: true, displayAsleep: false) else {
+        let described = await b.describe(name: "pk4m2", macLocked: true, displayAsleep: false, step: .seconds(30))
+        guard case .object(let page) = described else {
             Issue.record("not an object")
             return
         }
@@ -160,8 +161,10 @@ import WebKit
         #expect(part.pages.count == 1 && part.notes.contains("page gone1 isn't open any more"))
         #expect(!part.privateNames.isEmpty, "the host and login names, for the relay to replace")
 
-        let small = ReportPart.fit(part, maxBytes: 200)
-        #expect(small != nil && small!.utf8.count <= 200)
+        let limit = text.utf8.count - 20  // something must go: the call's copy first
+        let small = ReportPart.fit(part, maxBytes: limit)
+        #expect(small != nil && small!.utf8.count <= limit && !(small ?? "").contains("clicked e5"))
+        #expect((small ?? "").contains("left out"))
     }
 
     /// Security review 2026-11-25: the Mac gives a part only while it shares reports itself.

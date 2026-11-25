@@ -556,7 +556,8 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownl
     /// or answer for it; every field's value blanked; the record; the site's cookie names, never
     /// a value; whether it draws; a screenshot. Each step has its own limit: a page that doesn't
     /// answer leaves its part out, with a note.
-    func describe(name: String, macLocked: Bool, displayAsleep: Bool) async -> JSONValue {
+    /// `step`: the limit of each read (tests on a busy runner give more).
+    func describe(name: String, macLocked: Bool, displayAsleep: Bool, step: Duration = .seconds(3)) async -> JSONValue {
         var o: [String: JSONValue] = ["name": .string(name), "where": .string("own")]
         var notes: [String] = []
         guard let w = web else {
@@ -567,7 +568,7 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownl
         o["title"] = .string(w.title ?? "")
         if held != nil { notes.append("the page holds a dialog for Claude, so its scripts can't run") }
         if held == nil, pageScripts {
-            let snap: String? = await Deadline.first(within: .seconds(3)) { @MainActor @Sendable [weak self] in
+            let snap: String? = await Deadline.first(within: step) { @MainActor @Sendable [weak self] in
                 await self?.hidden(PageRecord.snapshot, async: false)
             }
             if let snap, case .object(let page)? = try? JSONDecoder().decode(JSONValue.self, from: Data(snap.utf8)) {
@@ -580,9 +581,9 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownl
                 }
                 if let t = page["title"] { o["title"] = t }
             } else {
-                notes.append("the page's source couldn't be read within 3 seconds")
+                notes.append("the page's source couldn't be read within \(step)")
             }
-            let frames: Int? = await Deadline.first(within: .seconds(2)) { @MainActor @Sendable [weak self] in
+            let frames: Int? = await Deadline.first(within: step) { @MainActor @Sendable [weak self] in
                 await self?.hidden(PageRecord.frames, async: true).flatMap { Int($0) }
             }
             if case .object(var d)? = o["drawing"] {
@@ -609,7 +610,7 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownl
         // Only for the relay to blank; it takes them out before sealing (FR-1448).
         if !record.secrets.isEmpty { o["secrets"] = .array(record.secrets.sorted().map { .string($0) }) }
         if held == nil {
-            let shot: PreparedImage? = await Deadline.first(within: .seconds(4)) { @MainActor @Sendable [weak self] in
+            let shot: PreparedImage? = await Deadline.first(within: step) { @MainActor @Sendable [weak self] in
                 try? await self?.screenshot()
             }
             if let shot {
@@ -617,7 +618,7 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownl
                     "mimeType": .string(shot.mimeType), "data": .string(shot.data.base64EncodedString()),
                 ])
             } else {
-                notes.append("no screenshot within 4 seconds")
+                notes.append("no screenshot within \(step)")
             }
         }
         if !notes.isEmpty { o["notes"] = .array(notes.map { .string($0) }) }
