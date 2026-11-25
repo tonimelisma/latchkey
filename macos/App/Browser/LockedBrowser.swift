@@ -1519,7 +1519,8 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownl
     /// A script in one of Latchkey's own worlds, at most `within` (Constitution II): a page busy in
     /// a loop never answers, and a real action must still end (and its window stop counting as
     /// the front one, FR-483).
-    private func bounded(_ code: String, world: WKContentWorld, within: Duration = .seconds(5)) async throws
+    /// 10 s, not less: a busy Mac (GitHub's runner, many pages at once) took over 5 s to answer.
+    private func bounded(_ code: String, world: WKContentWorld, within: Duration = .seconds(10)) async throws
         -> String
     {
         let r: Result<String, SafariBrowser.Failure>? = await Deadline.first(within: within) {

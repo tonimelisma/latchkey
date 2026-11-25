@@ -437,7 +437,7 @@ the sign-in came back unchanged without a word.
   (FR-436) stays the page's own change of choice (with input and change events), as choosing from
   its menu gives. A file field still takes files with attach (FR-437).
 - **FR-485** Each step of a real action (a click, a key) shall wait until the page has taken its
-  events, at most 2 seconds a step (Constitution II), and then, as before, for a page it opens.
+  events, at most 5 seconds a step (Constitution II), and then, as before, for a page it opens.
 - **FR-486** The list of what is on a page (both browsers) shall also list what a person sees as
   something to click: a visible element drawn with the pointing-hand cursor where the element
   around it isn't, or with a click handler of its own (`onclick`), that isn't already listed, is

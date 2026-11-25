@@ -19,7 +19,7 @@ enum RealInput {
     /// `.claude/rules/secrets-and-pages.md`).
     static let world = WKContentWorld.world(name: "latchkey-input")
     /// FR-485: the longest one step (a click, a key) waits for the page to take its events.
-    static let stepLimit: Duration = .seconds(3)
+    static let stepLimit: Duration = .seconds(5)
 
     /// Counts the trusted pointer-up, mouse-up, key-up and input events, in every frame; a frame of
     /// the page's own site counts into the top page's count too. Added before the page's own
@@ -440,7 +440,7 @@ enum RealInput {
             let n = await count(view, name)
             if n > before, before >= 0 { return }
             if n >= 0, before < 0 { return }
-            try? await Task.sleep(for: .milliseconds(10))
+            try? await Task.sleep(for: .milliseconds(25))
         }
     }
 }
