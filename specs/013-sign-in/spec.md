@@ -162,6 +162,17 @@ interface another app can read (`research.md`), so the only way in is a copy the
   again and shall be deleted (a text) or archived (an email) at once, or at the next unlock while
   locked, only while Messages or Mail is Read & write. Neither reads anything while Messages
   (texts) or Mail (email) is Off.
+- **FR-1377** In a page of Latchkey's own browser, logins_fill shall type as a keyboard does (spec
+  005 FR-480): a real click on the field Claude names, Select All and Backspace when it holds
+  something, then one real key per character; the press is a real click (spec 005 FR-478).
+  Before each character Latchkey checks that the focus is still on the field it checked (or, for
+  a code, the page's next code box after it, FR-1372); when it isn't, nothing more is typed, what
+  was typed is emptied, and nothing is pressed. The key events go only to that page's view, never
+  to the screen or another app, and their characters are never logged or kept. While a password
+  field has the focus, macOS's secure keyboard entry is on, as in Safari, and goes off when the
+  call ends (spec 005 FR-483). In the Owner's Safari tabs typing stays the page script, which
+  already gives a keyboard's order. (Toni, 2026-11-25, "Real mouse/keyboard events"; Procare,
+  2026-11-25.)
 - **FR-1371** Signing in shall be Claude's: Claude reads the page and decides what it shows (a
   sign-in form, a code step, a check, signed in, refused) and which buttons to press, with the
   browser tools; Latchkey only types a saved value into the field Claude names (Toni,

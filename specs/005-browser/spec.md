@@ -380,6 +380,79 @@ phone, Claude can't check a reservation in the Owner's account or fill in a form
   or why nothing was; an answer shall wait for the saves started during Claude's last action,
   at most 20 seconds, and say which are still arriving.
 
+### Real mouse and keyboard in Latchkey's own browser (Toni, 2026-11-25)
+
+Toni: "Can we aim for an approach that looks as much as humans look on browsers, so that it
+would actually work since the sites are meant for humans? No complex tricks with JavaScript or
+something that actual humans wouldn't do. That would be more brittle." Choices (2026-11-25):
+"Real mouse/keyboard events" in Latchkey's own browser; "List what looks clickable"; "Only
+Latchkey's own browser" (the Owner's Safari tabs keep script actions); no page-specific tricks
+and nothing reaching into a page's framework. The bug behind it: Procare's sign-in
+(schools.procareconnect.com, problem reports 2026-11-24 and 2026-11-25) asks "STAFF / PARENT"
+with two clickable boxes Latchkey didn't list, and keeps LOGIN disabled until one is chosen, so
+the sign-in came back unchanged without a word.
+
+- **FR-478** While Claude clicks in a page of Latchkey's own browser (FR-474), the click shall
+  reach the page as a real mouse's does: the element is first scrolled into view (as the browser
+  scrolls to an element it moves the focus to), then the view's pointer moves to the middle of
+  the part of it that shows, presses, and releases there, so the page gets the browser's own
+  trusted events in a mouse's order (pointer and mouse move, over, enter, down, the focus, up,
+  click) and the browser does what a click does there (follows a link, sends a form, ticks a
+  box, focuses a field). The events go only to that page's view, inside Latchkey's own window
+  that is never shown; never to the screen, the Owner's pointer, or another app (Constitution
+  IV). Replaces the page script's click there.
+- **FR-479** When another element is drawn over the element Claude names at that point, the
+  click shall land on what is on top, as a mouse's would, and the answer shall say what it hit
+  (its reference, kind and text).
+- **FR-480** Typing into a page of Latchkey's own browser shall reach the page as a keyboard
+  does: Latchkey clicks the field (FR-478), selects what it holds, as Select All does, when it
+  holds something, then presses one key per character, so the page gets keydown, keypress,
+  beforeinput, input and keyup for each, trusted, and the browser itself puts the character in.
+  A character no key of a US keyboard types (é, an emoji) arrives as text from the Character
+  Viewer does (beforeinput and input, without a key). A new line is Enter, a tab Tab; submit
+  presses Enter. A list (`select`) takes the option as before (FR-484).
+- **FR-481** Pressing keys (FR-433) in a page of Latchkey's own browser shall send real key
+  events to the element with the focus, after a click on the field Claude names, or, for a
+  button or link Claude names, after moving the focus to it as Tab would; the browser does what
+  the key does (Enter sends a form or presses a button, Tab moves the focus, arrows and Page Down
+  scroll). Cmd+A selects all, as the Edit menu does, unless the page took the key; copy, cut and
+  paste are refused (they would use the Owner's clipboard). The answer says the keys pressed and
+  where the focus is after them.
+- **FR-482** Hovering (FR-434) in a page of Latchkey's own browser shall move that view's own
+  pointer (not the Owner's) onto the element's middle, so the page's hover handlers and its CSS
+  `:hover` styles apply as under a mouse.
+- **FR-483** While Claude acts in a page of Latchkey's own browser (from the start of a call to
+  its answer), the page shall count as the focused front window (`document.hasFocus()` true;
+  focus and blur as in a front Safari window); between Claude's calls it shall count as a window
+  behind another app's, as a Safari window does then. Why not always: a password field focused
+  in a window that counts as the front one turns on macOS's secure keyboard entry for the whole
+  Mac, which would get in the Owner's way for as long as the page sat there (Constitution IV).
+- **FR-484** A click on a list (`select` showing one line), a colour field, or a date or time
+  field in Latchkey's own browser shall not be sent as a mouse click (its menu would hold
+  Latchkey up until answered, and a colour panel would open on the Owner's screen): Claude is
+  told to use select, or type for a date or time field; keys that open a list's menu (arrows,
+  space, Enter while such a list has the focus) are refused the same way. Choosing in such a list
+  (FR-436) stays the page's own change of choice (with input and change events), as choosing from
+  its menu gives. A file field still takes files with attach (FR-437).
+- **FR-485** Each step of a real action (a click, a key) shall wait until the page has taken its
+  events, at most 2 seconds a step (Constitution II), and then, as before, for a page it opens.
+- **FR-486** The list of what is on a page (both browsers) shall also list what a person sees as
+  something to click: a visible element drawn with the pointing-hand cursor where the element
+  around it isn't, or with a click handler of its own (`onclick`), that isn't already listed, is
+  not inside a listed control and holds none, as kind "clickable" with its visible text, and
+  its state where it shows: the page's declared states (FR-465) and "selected", "active" or
+  "checked" when its class names say so (Procare's STAFF and PARENT, 2026-11-25).
+- **FR-487** In the Owner's Safari tabs (FR-424 to FR-431), actions shall stay page scripts
+  (real events there would reach a window the Owner may be using, Constitution IV), but typing
+  shall give each character keydown, keypress, beforeinput, input and keyup in a keyboard's
+  order (it gave input before keydown, and no keyup).
+- **FR-488** No action shall use code for one site, or reach into a page's framework (React's
+  value tracker or its handlers): pages get what a person's mouse and keyboard give them (Toni,
+  2026-11-25).
+
+Amends FR-402, FR-433, FR-434 and FR-440 for Latchkey's own browser, and the edge case of sites
+that ignore script-driven clicks.
+
 Amended by spec 013 FR-1350 to FR-1355 (Toni, 2026-11-21): for a site Latchkey holds a saved
 password for, while Sign-in is On, FR-441, FR-442 and FR-457 copy none of Safari's cookies (nor a
 wider domain's that would reach it), FR-455 and FR-459 keep the page in Latchkey's own browser,
@@ -418,11 +491,11 @@ sign-in as these rules say only where its own can't finish.
 - The Owner's front window is a private window: Claude's tab opens there, without the Owner's
   logins (Safari's scripting can't tell private windows apart).
 - Pages that keep loading or change constantly; very long pages; pages in frames.
-- Sites that ignore script-driven clicks (rare): Claude is told nothing changed and can use
-  computer control when the screen is on. The same holds for keys and hover (FR-433, FR-434):
-  they reach the page as a script's events, so a page that checks for a real keyboard or mouse,
-  or a menu styled to open only under a real pointer (CSS `:hover`), doesn't react; the answer
-  says so.
+- Sites that ignore script-driven clicks: in Latchkey's own browser clicks, keys and hover are a
+  real mouse's and keyboard's (FR-478 to FR-482). In the Owner's Safari tabs they stay a
+  script's events, so a page that checks for a real keyboard or mouse, or a menu styled to open
+  only under a real pointer (CSS `:hover`), doesn't react there; the answer says so, and Claude
+  can open the page in its own browser or use computer control when the screen is on.
 - A file to save that another site serves and the page may not fetch: Latchkey fetches it
   itself with Safari's cookies (FR-438). A file bigger than 50 MB through the page, or 500 MB
   directly, is refused.
