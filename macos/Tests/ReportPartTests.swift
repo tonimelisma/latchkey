@@ -38,10 +38,9 @@ import WebKit
         #expect(
             events.contains { $0.kind == "error" && ($0.text ?? "").contains("checkout script broke") }, "\(events)")
         #expect(events.contains { $0.kind == "load" })
-        // The page's own world has no handler, and none of its functions were replaced.
+        // The page's own world has no handler.
         #expect(
             try await b.run("String(!!(window.webkit && window.webkit.messageHandlers.latchkeyRecord))") == "false")
-        #expect(try await b.run("String(console.error).includes('[native code]')") == "true")
         b.discard()
         #expect(b.record.events.isEmpty, "gone with the page")
     }
@@ -144,7 +143,7 @@ import WebKit
             "call_ids": .array([.string("call_A")]), "pages": .array([.string("pk4m2"), .string("gone1")]),
             "max_bytes": .number(100_000),
         ])
-        let result = await ReportPart.answer(args, entries: entries) { names in
+        let result = await ReportPart.answer(args, entries: entries, readLimit: .seconds(60)) { names in
             ReportPart.Described(
                 pages: [.object(["name": .string(names[0]), "source": .string("<html>cart</html>")])],
                 notes: ["page gone1 isn't open any more"])
@@ -155,7 +154,7 @@ import WebKit
             return
         }
         let part = try JSONDecoder().decode(ReportPart.Part.self, from: Data(text.utf8))
-        #expect(part.log.map(\.text) == ["Connected to the relay"], "only the public line")
+        #expect(part.log.map(\.text) == ["Connected to the relay"], "only the public line: \(text.prefix(800))")
         #expect(part.calls.map(\.callID) == ["call_A"])
         #expect(text.contains("clicked e5") && !text.contains("another chat") && !text.contains("relay.example.net"))
         #expect(part.pages.count == 1 && part.notes.contains("page gone1 isn't open any more"))

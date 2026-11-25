@@ -1,5 +1,6 @@
 import CoreGraphics
 import Foundation
+import SystemConfiguration
 
 /// This Mac's part of a problem report (spec 014 FR-1443 to FR-1447): the relay asks for it with
 /// a call of a tool no machine lists (`tool`), only while the Owner shares problem reports; the
@@ -57,9 +58,14 @@ enum ReportPart {
         }
     }
 
-    /// This Mac's host name, the Owner's login name and home folder (FR-1449).
+    /// This Mac's names (its computer name and local host name), the Owner's login name and home
+    /// folder (FR-1449). From the system's settings, not `ProcessInfo.hostName`, which may wait on
+    /// a network lookup.
     static func privateNames() -> [String] {
-        [ProcessInfo.processInfo.hostName, NSUserName(), NSHomeDirectory()].filter { $0.count >= 3 }
+        let computer = SCDynamicStoreCopyComputerName(nil, nil) as String?
+        let local = SCDynamicStoreCopyLocalHostName(nil) as String?
+        return [computer, local, local.map { $0 + ".local" }, NSUserName(), NSHomeDirectory()]
+            .compactMap { $0 }.filter { $0.count >= 3 }
     }
 
     /// The activity log's entries from one moment to another, oldest first.
@@ -78,7 +84,10 @@ enum ReportPart {
         sharing && !blocked && !paused ? nil : .text("This Mac doesn't share problem reports now.", isError: true)
     }
 
-    static func answer(_ arguments: JSONValue, entries: Entries?, pages: @escaping Pages) async -> ToolResult {
+    /// `readLimit`: how long the activity log may take (tests on a busy runner give more).
+    static func answer(
+        _ arguments: JSONValue, entries: Entries?, readLimit: Duration = .seconds(3), pages: @escaping Pages
+    ) async -> ToolResult {
         guard let data = try? JSONEncoder().encode(arguments),
             let args = try? JSONDecoder().decode(Args.self, from: data)
         else { return .text("The request for this Mac's part couldn't be read.", isError: true) }
@@ -95,7 +104,7 @@ enum ReportPart {
             // Off the shared pool, behind a limit (.claude/rules/macos.md: never block a thread in
             // async code; security review 2026-11-25).
             let span = (from, to)
-            let read: Result<[Activity], ReadFailure>? = await Deadline.first(within: .seconds(2)) {
+            let read: Result<[Activity], ReadFailure>? = await Deadline.first(within: readLimit) {
                 await withCheckedContinuation { (c: CheckedContinuation<Result<[Activity], ReadFailure>?, Never>) in
                     DispatchQueue.global(qos: .utility).async {
                         do { c.resume(returning: .success(try entries(span.0, span.1))) } catch {
@@ -105,7 +114,7 @@ enum ReportPart {
                 }
             }
             do {
-                guard let read else { throw ReadFailure(text: "it took longer than 2 seconds") }
+                guard let read else { throw ReadFailure(text: "it took longer than \(readLimit)") }
                 let ids = Set(args.callIDs ?? [])
                 for a in try read.get().sorted(by: { $0.at < $1.at }) {
                     let time = PageRecord.iso8601(a.at)
