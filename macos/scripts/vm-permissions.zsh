@@ -19,21 +19,33 @@ home=$(dscl . -read "/Users/$user" NFSHomeDirectory | awk '{print $2}')
 system_db="/Library/Application Support/com.apple.TCC/TCC.db"
 user_db="$home/Library/Application Support/com.apple.TCC/TCC.db"
 id=$(defaults read "$app/Contents/Info" CFBundleIdentifier)
-req=$(codesign -dr - "$app" 2>/dev/null | sed -n 's/^designated => //p')
-[ -n "$req" ] || { echo "no designated requirement for $app" >&2; exit 1; }
-t=$(mktemp -d)
-print -r -- "$req" | csreq -r- -b "$t/req.bin"
-csreq=$(xxd -p "$t/req.bin" | tr -d '\n')
-rm -rf "$t"
-agent=$(ps axo comm= | grep -m1 '/tart-guest-agent$' || true)
 
-# row DB SERVICE CLIENT CLIENT_TYPE CSREQ_HEX TARGET: allowed (2), set by the system (4).
+# reqhex PATH: the code's designated requirement, compiled, as hex (what macOS stores in a row:
+# a row without it was asked about again, the first image run, 2026-11-26).
+reqhex() {
+	local r t
+	r=$(codesign -dr - "$1" 2>/dev/null | sed -n 's/^designated => //p')
+	[ -n "$r" ] || { echo "no designated requirement for $1" >&2; return 1; }
+	t=$(mktemp)
+	print -r -- "$r" | csreq -r- -b "$t"
+	xxd -p "$t" | tr -d '\n'
+	rm -f "$t"
+}
+csreq=$(reqhex "$app")
+# macOS files a program by its real path, not a symlink's (Homebrew's /opt/homebrew/bin link:
+# the first image run asked about the agent although a row for the link existed).
+agent=$(ps axo comm= | grep -m1 '/tart-guest-agent$' || true)
+[ -z "$agent" ] || agent=${agent:A}
+
+# row DB SERVICE CLIENT CLIENT_TYPE CSREQ_HEX [TARGET TARGET_CSREQ_HEX]: allowed (2), set by the
+# system (4).
 row() {
-	local db=$1 service=$2 client=$3 type=$4 req=$5 target=${6:-UNUSED} blob=NULL
+	local db=$1 service=$2 client=$3 type=$4 req=$5 target=${6:-UNUSED} treq=${7:-} blob=NULL tblob=NULL
 	[ -n "$req" ] && blob="X'$req'"
+	[ -n "$treq" ] && tblob="X'$treq'"
 	sqlite3 "$db" "INSERT OR REPLACE INTO access
-		(service, client, client_type, auth_value, auth_reason, auth_version, csreq, indirect_object_identifier_type, indirect_object_identifier, flags)
-		VALUES ('$service', '$client', $type, 2, 4, 1, $blob, 0, '$target', 0);"
+		(service, client, client_type, auth_value, auth_reason, auth_version, csreq, indirect_object_identifier_type, indirect_object_identifier, indirect_object_code_identity, flags)
+		VALUES ('$service', '$client', $type, 2, 4, 1, $blob, 0, '$target', $tblob, 0);"
 }
 for s in kTCCServiceSystemPolicyAllFiles kTCCServiceAccessibility kTCCServiceScreenCapture kTCCServicePostEvent kTCCServiceListenEvent; do
 	row "$system_db" "$s" "$id" 0 "$csreq"
@@ -41,13 +53,24 @@ done
 for s in kTCCServiceAddressBook kTCCServiceCalendar kTCCServiceReminders kTCCServiceSystemPolicyDownloadsFolder kTCCServiceSystemPolicyDocumentsFolder kTCCServiceSystemPolicyDesktopFolder; do
 	row "$user_db" "$s" "$id" 0 "$csreq"
 done
-targets=(com.apple.Notes com.apple.MobileSMS com.apple.mail com.apple.Safari com.apple.systemevents com.apple.finder com.apple.iCal com.apple.reminders com.apple.AddressBook)
-for target in $targets; do
-	row "$user_db" kTCCServiceAppleEvents "$id" 0 "$csreq" "$target"
-	row "$system_db" kTCCServiceAppleEvents "$id" 0 "$csreq" "$target"
-	for c in /usr/bin/osascript $agent; do
-		row "$user_db" kTCCServiceAppleEvents "$c" 1 "" "$target"
-		row "$system_db" kTCCServiceAppleEvents "$c" 1 "" "$target"
+typeset -A targets=(
+	com.apple.Notes /System/Applications/Notes.app
+	com.apple.MobileSMS /System/Applications/Messages.app
+	com.apple.mail /System/Applications/Mail.app
+	com.apple.Safari /Applications/Safari.app
+	com.apple.systemevents "/System/Library/CoreServices/System Events.app"
+	com.apple.finder /System/Library/CoreServices/Finder.app
+	com.apple.iCal /System/Applications/Calendar.app
+	com.apple.reminders /System/Applications/Reminders.app
+	com.apple.AddressBook /System/Applications/Contacts.app
+)
+clients=(/usr/bin/osascript)
+[ -z "$agent" ] || clients+=("$agent")
+for target tpath in "${(@kv)targets}"; do
+	treq=$(reqhex "$tpath") || continue
+	row "$user_db" kTCCServiceAppleEvents "$id" 0 "$csreq" "$target" "$treq"
+	for c in $clients; do
+		row "$user_db" kTCCServiceAppleEvents "$c" 1 "$(reqhex "$c")" "$target" "$treq"
 	done
 done
 chown "$user" "$user_db"
@@ -74,4 +97,4 @@ chown -R "$user" "$home/Library/Containers/com.apple.Safari" 2>/dev/null || true
 killall -u "$user" cfprefsd 2>/dev/null || true
 
 killall tccd 2>/dev/null || true
-echo "granted $id (requirement: $req)"
+echo "granted $id and the test data's AppleScript (osascript${agent:+, $agent})"

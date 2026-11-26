@@ -89,7 +89,7 @@ if [ -f "$STATE" ] && [ "$(cat "$STATE")" = "$VM" ] && image_exists "$VM"; then
 	fi
 else
 	say "copying the test Mac ($EVAL_IMAGE → $VM) and starting it without a window"
-	if image_exists "$VM"; then "$TART" delete "$VM"; fi
+	if image_exists "$VM"; then vm_remove "$VM"; fi
 	"$TART" clone "$EVAL_IMAGE" "$VM"
 	printf '%s\n' "$VM" >"$STATE"
 	start_copy

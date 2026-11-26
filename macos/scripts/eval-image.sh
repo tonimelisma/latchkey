@@ -37,7 +37,7 @@ BUILD=$EVAL_IMAGE-build
 WORK=$(mktemp -d)
 trap 'rm -rf "$WORK"' EXIT
 
-if image_exists "$BUILD"; then "$TART" delete "$BUILD"; fi
+if image_exists "$BUILD"; then vm_remove "$BUILD"; fi
 say "copying the base image $EVAL_BASE (the first time downloads about 27 GB)"
 "$TART" clone "$EVAL_BASE" "$BUILD"
 "$TART" set "$BUILD" --cpu 4 --memory 8192 >/dev/null 2>&1 || true
@@ -90,6 +90,6 @@ say "checking the permissions (the sandbox's own check)"
 until_ready "the permissions" "cd $VM_DIR && ./e2e-bin sandbox -checks tools -out /tmp/check.json"
 vm "$BUILD" "rm -rf $VM_DIR /tmp/check.json"
 "$TART" stop "$BUILD"
-if image_exists "$EVAL_IMAGE"; then "$TART" delete "$EVAL_IMAGE"; fi
+if image_exists "$EVAL_IMAGE"; then vm_remove "$EVAL_IMAGE"; fi
 "$TART" rename "$BUILD" "$EVAL_IMAGE"
 say "the test Mac image $EVAL_IMAGE is ready: make -C macos sandbox (after each Mac build), make -C macos evals"

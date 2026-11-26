@@ -147,6 +147,7 @@ end tell
 return "no"`
 	var last string
 	if waitFor(60*time.Second, func() bool {
+		_, _ = osaOut(allowLatchkeyQuestion)
 		out, err := osaOut(script)
 		last = out
 		if err != nil {
@@ -154,10 +155,35 @@ return "no"`
 		}
 		return ctx.Err() != nil || out == "clicked"
 	}) && ctx.Err() == nil {
+		// macOS's local network question for Latchkey comes at its start or its first
+		// connection; it has no row in the permission databases (vm-permissions.zsh).
+		waitFor(15*time.Second, func() bool {
+			out, _ := osaOut(allowLatchkeyQuestion)
+			return out == "clicked"
+		})
 		return nil
 	}
 	return fmt.Errorf("latchkey's Connect question never showed in 60 s (%s)", last)
 }
+
+// allowLatchkeyQuestion answers Allow to a macOS question about Latchkey (the local network
+// one), in the test Mac only; a question about any other program is left alone.
+const allowLatchkeyQuestion = `tell application "System Events"
+if not (exists process "UserNotificationCenter") then return "no"
+tell process "UserNotificationCenter"
+repeat with w in windows
+set said to ""
+repeat with t in (static texts of w)
+set said to said & (value of t as text) & " "
+end repeat
+if said contains "Latchkey" and said contains "local network" and (exists button "Allow" of w) then
+click button "Allow" of w
+return "clicked"
+end if
+end repeat
+end tell
+end tell
+return "no"`
 
 func startStateRelay(ctx context.Context, dir string) (*e2erelay.Private, error) {
 	return startStateRelayAt(ctx, dir, relayListen)

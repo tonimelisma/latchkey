@@ -70,6 +70,13 @@ claude_token() {
 	printf '%s\n' "$token"
 }
 
+# vm_remove NAME: stops a copy if it runs, then deletes it (Tart refuses to delete a running one:
+# a run stopped half-way left one running, 2026-11-26).
+vm_remove() {
+	"$TART" stop "$1" >/dev/null 2>&1 || true
+	"$TART" delete "$1"
+}
+
 # image_exists NAME
 image_exists() { "$TART" list --quiet 2>/dev/null | grep -qx "$1"; }
 
