@@ -203,10 +203,11 @@ jobs:
           exit "$rc"
 
   # The required check: passes when macos/ didn't change, or when every build-and-test job
-  # passed; fails on any failed, cancelled or missing job.
+  # passed; fails on any failed, cancelled or missing job. Not run when the whole run was
+  # cancelled (a newer push replaced it; that push's run reports instead).
   mac:
     needs: [changes, build]
-    if: always()
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:
