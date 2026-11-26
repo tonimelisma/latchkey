@@ -190,6 +190,13 @@ actor ShellJobs {
     /// `/usr/bin/open` brings it to the front when the Owner wants to see it.
     static let openInBackground = "open() { /usr/bin/open -g \"$@\"; }\n"
 
+    /// The files in a job's scratch folder (beside the fence's build tools) that carry its
+    /// command and its fence (`run`).
+    static let commandFileName = ".latchkey/command"
+    static let fenceFileName = ".latchkey/fence.sb"
+    /// What zsh runs: the command file's text, whole, as `zsh -c` would run it.
+    static let runCommandFile = "eval \"$(<\"$LATCHKEY_SCRATCH/\(commandFileName)\")\""
+
     func run(
         _ command: String, folder: String?, wait: Duration, writes: [String] = [], why: String? = nil,
         keepMinutes: Int = 0, uses: Set<Fence.Use> = []
@@ -225,12 +232,22 @@ actor ShellJobs {
         let fence = Fence.profile(
             scratch: scratch, folder: URL(filePath: dir), declared: declared, home: setup.home, own: setup.own,
             uses: uses, mark: mark, systemTemp: setup.systemTemp, testLauncher: testLauncher)
+        // The command and the fence go to the shell in files of the job's own, never as
+        // arguments: Foundation's Process hands arguments over decomposed ("é" became "e" and
+        // U+0301: 2026-11-26), so a command's text, and a folder's name in the fence, would not
+        // be what was given. A file keeps the bytes.
+        let commandFile = scratch.appending(path: Self.commandFileName)
+        let fenceFile = scratch.appending(path: Self.fenceFileName)
+        try Data((Fence.Builds.path + (uses.contains(.open) ? Self.openInBackground : "") + command).utf8)
+            .write(to: commandFile)
+        try Data(fence.utf8).write(to: fenceFile)
         let p = Process()
         p.executableURL = URL(filePath: "/usr/bin/script")
-        // "--": a command starting with "-" is the command, not more options for zsh.
+        // The shell runs the file's text as `-c` would run it (eval of the whole text). "--": a
+        // command starting with "-" is the command, not more options for zsh.
         p.arguments = [
-            "-q", "/dev/null", "/usr/bin/sandbox-exec", "-p", fence, "/bin/zsh", "-l", "-c", "--",
-            Fence.Builds.path + (uses.contains(.open) ? Self.openInBackground : "") + command,
+            "-q", "/dev/null", "/usr/bin/sandbox-exec", "-f", fenceFile.path, "/bin/zsh", "-l", "-c", "--",
+            Self.runCommandFile,
         ]
         p.currentDirectoryURL = URL(filePath: dir)
         var env = ProcessInfo.processInfo.environment

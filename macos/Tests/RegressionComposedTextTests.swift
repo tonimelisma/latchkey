@@ -37,4 +37,27 @@ import Testing
         let want = Self.composed.unicodeScalars.map { String($0.value) }.joined(separator: ",")
         #expect(got.trimmingCharacters(in: .whitespacesAndNewlines) == want)
     }
+
+    /// The shell runs the command's own text: what it prints is what was written.
+    @Test func aShellCommandsTextIsAsGiven() async throws {
+        let jobs = ShellJobs()
+        let r = try await jobs.run("printf '%s' '\(Self.composed)'", folder: nil, wait: .seconds(20))
+        #expect(r.exitCode == 0, "\(r.output)")
+        #expect(
+            Array(r.output.trimmingCharacters(in: .whitespacesAndNewlines).unicodeScalars)
+                == Array(Self.composed.unicodeScalars),
+            "\(r.output.unicodeScalars.map { String($0.value, radix: 16) })")
+    }
+
+    /// A folder with accents in its name is the command's own: it writes there, and sees the
+    /// name as it is.
+    @Test func aCommandWritesInAFolderWithAccents() async throws {
+        let dir = FileManager.default.temporaryDirectory.appending(path: "Työ é \(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let jobs = ShellJobs()
+        let r = try await jobs.run("echo hi > made.txt && pwd", folder: dir.path, wait: .seconds(20))
+        #expect(r.exitCode == 0, "\(r.output)")
+        #expect(FileManager.default.fileExists(atPath: dir.appending(path: "made.txt").path), "\(r.output)")
+    }
 }
