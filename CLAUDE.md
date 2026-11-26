@@ -24,9 +24,15 @@ Which one a session is depends on where it runs; everything else here applies to
   uses Latchkey to reach Toni's MacBook while developing (builds, tests, the updater,
   screenshots), except a live check Toni asks for in that session.
 - **Local session** (Claude Code Toni started on his Mac; its own worktree): builds and tests
-  natively, reads the running Latchkey's log and tool list directly, and after building the Mac
-  app runs the sandbox-Mac tests (spec 016) before calling the change done. Never `make -C
-  macos install` while Toni may be using Latchkey (it quits it).
+  natively (`make test`, `make lint` in `macos/`), and after building the Mac app runs `make -C
+  macos sandbox` (spec 016) before calling the change done. It reads the running Latchkey
+  directly: its version (`defaults read /Applications/Latchkey.app/Contents/Info
+  CFBundleShortVersionString`), macOS's log (`log show --last 1h --info --predicate 'subsystem
+  == "net.melisma.latchkey"'`; notice lines last only hours), crash reports
+  (`~/Library/Logs/DiagnosticReports/Latchkey*`); its tool list and activity log through the
+  Latchkey connector (`machines`, `latchkey_log`; each call counts as use and delays an update's
+  install by 10 minutes). Never `make -C macos install` while Toni may be using Latchkey (it
+  quits it).
 
 ## Done means Toni's conditions
 

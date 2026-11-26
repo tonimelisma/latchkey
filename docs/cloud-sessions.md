@@ -55,7 +55,7 @@ applies, except:
   | `ci.yml` | every push | | | relay tests, lint, security; Linux tests, lint; script tests; actionlint |
   | `relay-image.yml` | `relay/` | `relay-image` | `production` | checks, then the signed image; hosts that verify the signature pull it |
   | `linux-release.yml` | `linux/` | `linux-release` | `release` | tag `linux-<x.y.z>`, signed release; servers update within a day |
-  | `mac-tag.yml` | `macos/` | `mac-tag` | `release` | tag `mac-<x.y.z>`; the Mac's updater installs it |
+  | `mac-tag.yml` | `macos/` | `mac-tag` | `release` | tag `mac-<x.y.z>`, signed release and update feed; installed Macs update themselves |
   | `branch-cleanup.yml` | a pull request closes; daily | `branch-cleanup` | `branches` | deletes branches whose pull request is closed (`scripts/branch-cleanup.sh`) |
 
   Follow a run with `gh api repos/tonimelisma/latchkey/actions/runs?per_page=5` and its jobs'
