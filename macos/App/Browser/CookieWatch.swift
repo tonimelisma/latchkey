@@ -150,5 +150,8 @@ final class CookieWatch: NSObject, WKHTTPCookieStoreObserver {
         }
     }
 
+    /// A look now, as after a change WebKit announced (spec 005 FR-454).
+    func check() { look() }
+
     func stop() { store.remove(self) }
 }

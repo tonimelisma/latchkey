@@ -292,6 +292,9 @@ enum PageScripts {
             }
             var kind = tag === 'a' ? 'link' : tag === 'input' ? ((type === 'submit' || type === 'button') ? 'button' : 'field:' + type) : tag === 'textarea' ? 'field:text' : tag === 'select' ? 'choice' : (e.getAttribute('role') || tag);
             if (!label && tag === 'input' && (type === 'submit' || type === 'button')) label = e.value || '';
+            // A list's options, as its menu shows them: WebKit on macOS 26 gives a list no text
+            // of its own (GitHub's runner 2026-11-25: every list listed without a name).
+            if (!label && tag === 'select') label = Array.prototype.map.call(e.options, function (o) { return (o.text || '').trim(); }).join(' ').replace(/\\s+/g, ' ').slice(0, 100);
             var item = { ref: ref, kind: kind, label: label };
             if (tag === 'a' && e.hasAttribute('href')) item.href = e.href;
             if (type === 'checkbox' || type === 'radio') item.checked = e.checked;

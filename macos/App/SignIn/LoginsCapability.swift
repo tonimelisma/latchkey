@@ -19,6 +19,60 @@ enum LoginsCapability {
     static let unreadable =
         "Latchkey can't read its sign-ins right now (the Mac may not have been unlocked since it started). Try again later."
 
+    /// What a fill's answer may say a field is: only the shapes Latchkey's scripts make ("email",
+    /// "text box", "number (not a code)", "4 boxes for a 6-character code"; for a covered
+    /// field, a reference and a tag), else nil, so a page can't put its own words into Latchkey's
+    /// answer (security review 2026-11-26).
+    /// A fill script's answer: `{ step, boxes, is, why }`.
+    struct Step: Decodable {
+        var step: String
+        var boxes: Int?
+        var `is`: String?
+        /// Why Latchkey stopped typing (Latchkey's own browser): a step, never a character.
+        var why: String?
+    }
+
+    /// A fill script's answer as Latchkey may repeat it. In Safari the answer comes from the
+    /// page's own world, whose `JSON.stringify` a page can replace: only Latchkey's own browser
+    /// (its isolated world and Swift) says why, and what a field is is said only in Latchkey's own
+    /// shapes (security review 2026-11-26: page text in the trusted answer).
+    static func heard(_ detail: String, fromSafari: Bool) -> Step {
+        var got = (try? JSONDecoder().decode(Step.self, from: Data(detail.utf8))) ?? Step(step: "unheld")
+        if fromSafari { got.why = nil }
+        got.is = got.is.flatMap { saidKind($0, step: got.step) }
+        return got
+    }
+
+    static func saidKind(_ s: String, step: String) -> String? {
+        if step == "covered" {
+            // A reference of Latchkey's (e12) and a standard tag; the words drawn over it («…»)
+            // are page text, left out.
+            let parts = (s.split(separator: "«", maxSplits: 1).first ?? "").split(separator: " ").map(String.init)
+            let ref = parts.count == 2 && parts[0].range(of: #"^e[0-9]{1,5}$"#, options: .regularExpression) != nil
+            guard parts.count == 1 || ref, let tag = parts.last, tags.contains(tag) else { return nil }
+            return parts.joined(separator: " ")
+        }
+        if s.range(of: #"^[0-9]{1,3} boxes for a [0-9]{1,3}-character code$"#, options: .regularExpression) != nil {
+            return s
+        }
+        var base = s
+        for end in [" box", " (not a code)"] where base.hasSuffix(end) { base.removeLast(end.count) }
+        return kinds.contains(base) ? s : nil
+    }
+
+    /// What a field can be, as the fill scripts say it: an input's type or a tag's name.
+    static let kinds: Set<String> = [
+        "text", "email", "tel", "number", "password", "search", "url", "date", "datetime-local", "month",
+        "week", "time", "color", "checkbox", "radio", "file", "hidden", "range", "submit", "button", "reset",
+        "image", "textarea", "select", "div", "span", "label",
+    ]
+    /// Standard tags an element drawn over a field can be.
+    static let tags: Set<String> = [
+        "div", "span", "section", "header", "footer", "nav", "main", "aside", "article", "form", "label",
+        "button", "a", "p", "img", "svg", "iframe", "dialog", "input", "textarea", "select", "ul", "li",
+        "table", "td", "h1", "h2", "h3", "canvas", "video", "body", "html",
+    ]
+
     static func find(store: SignInStore) -> ToolEntry {
         ToolEntry(
             tool: .make(
@@ -346,11 +400,6 @@ enum LoginsCapability {
             }
         }
         // Type, then press, then empty what was typed (FR-1311), whatever happened in between.
-        struct Step: Decodable {
-            var step: String
-            var boxes: Int?
-            var `is`: String?
-        }
         let typed: Step
         // Whatever stopped the typing, what was typed is emptied (FR-1311, FR-1377; security
         // review 2026-11-25: a page that changed between code boxes kept the digits typed).
@@ -365,7 +414,9 @@ enum LoginsCapability {
                 detail = try await run(PageScripts.fillField(ref: field, kind: kind, value: value, host: fillHost))
                     .detail
             }
-            typed = (try? JSONDecoder().decode(Step.self, from: Data(detail.utf8))) ?? Step(step: "unheld")
+            var safari = false
+            if case .safari = target { safari = true }
+            typed = Self.heard(detail, fromSafari: safari)
         } catch SafariBrowser.Failure.elementMissing {
             await emptied()
             return .text(
@@ -400,7 +451,8 @@ enum LoginsCapability {
         default:
             let page = await clear() ?? here0.page
             return await answer(
-                "\(field) didn't hold what Latchkey typed (the page changed it), so nothing was pressed and the field was emptied.",
+                "\(field) didn't hold what Latchkey typed (the page changed it), so nothing was pressed and the field was emptied."
+                    + (typed.why.map { $0.isEmpty ? "" : " Latchkey stopped because \($0)." } ?? ""),
                 page, isError: true)
         }
         if let usedStep { store.usedCode(login, step: usedStep) }

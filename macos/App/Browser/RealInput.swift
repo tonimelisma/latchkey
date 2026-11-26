@@ -59,19 +59,39 @@ enum RealInput {
     static let handlerName = "latchkeyInput"
 
     /// Marks the element `ref` names as the field the next characters must go into, in this
-    /// world of the frame it is in (spec 013 FR-1377); "ok" or "missing".
-    static func markField(_ ref: String) -> String {
+    /// world of the frame it is in (spec 013 FR-1377), only when it is the one element with that
+    /// reference and has the focus; "ok", else "missing", "several" or "notfocused".
+    static func markField(_ ref: String, token: String) -> String {
         // nosemgrep: latchkey-page-script-literal -- besides literal() and the fixed `deep`, nothing.
         """
-        (function (ref) {
+        (function (ref, token) {
           \(PageScripts.deep)
-          var e = __lkFind('[data-latchkey=' + JSON.stringify(ref) + ']');
-          if (!e) return 'missing';
+          // An earlier mark goes, in every frame this world reaches (third review 2026-11-25).
+          (function clear(w) {
+            try { w.__lkField = null; for (var i = 0; i < w.frames.length; i++) clear(w.frames[i]); } catch (x) {}
+          })(window);
+          // Exactly one element carries this fill's token, and it has the reference: a decoy the
+          // page gave the same reference (or the token) is never marked (third review 2026-11-25).
+          var all = __lkAll('[data-latchkey-fill=' + JSON.stringify(token) + '][data-latchkey=' + JSON.stringify(ref) + ']');
+          if (all.length !== 1) return all.length ? 'several' : 'missing';
+          var e = all[0];
+          // And it is what the click put the focus on, as this world sees it.
+          var a = document.activeElement;
+          for (var k = 0; k < 20 && a; k++) {
+            if (a.shadowRoot && a.shadowRoot.activeElement) { a = a.shadowRoot.activeElement; continue; }
+            if (a.tagName === 'IFRAME' || a.tagName === 'FRAME') {
+              var d = null;
+              try { d = a.contentDocument; } catch (z) { d = null; }
+              if (d && d.activeElement) { a = d.activeElement; continue; }
+            }
+            break;
+          }
+          if (a !== e) return 'notfocused';
           var w = e.ownerDocument && e.ownerDocument.defaultView;
           if (!w) return 'missing';
           w.__lkField = e;
           return 'ok';
-        })(\(PageScripts.literal(ref)))
+        })(\(PageScripts.literal(ref)), \(PageScripts.literal(token)))
         """
     }
 
@@ -287,9 +307,23 @@ enum RealInput {
     static func move(to p: NSPoint, in view: WKWebView) async {
         guard let window = view.window else { return }
         for q in [NSPoint(x: p.x - 12, y: p.y + 8), p] {
-            if let e = mouse(.mouseMoved, q, window, clicks: 0) { view.mouseMoved(with: e) }
+            if let e = mouse(.mouseMoved, q, window, clicks: 0) { deliverMove(e, to: view) }
             try? await Task.sleep(for: .milliseconds(15))
         }
+    }
+
+    /// A pointer move goes where macOS sends one: to the owner of the view's tracking area for
+    /// pointer moves. A WKWebView takes moves only from there (a move handed to the view itself
+    /// is dropped, so as not to count it twice), which is why hover reached no page (WebKit's
+    /// WKMouseTrackingObserver; seen on GitHub's macOS 26 runner, 2026-11-25; spec 005 FR-482).
+    static func deliverMove(_ e: NSEvent, to view: WKWebView) {
+        let owners = view.trackingAreas.filter { $0.options.contains(.mouseMoved) }.compactMap { $0.owner as? NSObject }
+        let selector = #selector(NSResponder.mouseMoved(with:))
+        guard let owner = owners.first(where: { $0 !== view && $0.responds(to: selector) }) else {
+            view.mouseMoved(with: e)
+            return
+        }
+        _ = owner.perform(selector, with: e)
     }
 
     /// A click as a mouse makes it: the pointer moves there, presses, and lets go; then waits for

@@ -66,13 +66,13 @@ jobs:
       # slower than the Mac) about 30 tests miss their timing limits or need the owner's Mac, on
       # main as on a branch, so compare a branch's failures with main's. Each failure is printed
       # with why, and the test host's crash reports with their stacks. Without the tests that
-      # open web pages: they run one at a time in the next step.
+      # open web pages or measure time limits: they run one at a time in the next step.
       - name: Unit tests (reported)
         working-directory: macos
         continue-on-error: true
         run: |
           rc=0
-          skip=$(sed 's/^/-skip-testing:LatchkeyTests\//' scripts/page-suites.txt | tr '\n' ' ')
+          skip=$(cat scripts/page-suites.txt scripts/timing-suites.txt | sed 's/^/-skip-testing:LatchkeyTests\//' | tr '\n' ' ')
           # shellcheck disable=SC2086
           xcodebuild -project Latchkey.xcodeproj -scheme Latchkey -destination 'platform=macOS' \
             -derivedDataPath "$RUNNER_TEMP/dd" CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM= \
@@ -88,14 +88,16 @@ jobs:
       # The tests that open web pages, one at a time (Toni, 2026-11-25): run side by side, dozens
       # of pages share the test program's one main thread, so a page's events come late and
       # steps pass their limits on this runner (measured 2026-11-25: a click 2 s alone, 18 s
-      # among 70 pages). The suites are listed in macos/scripts/page-suites.txt.
-      - name: Tests with web pages, one at a time (reported)
+      # among 70 pages). The suites are listed in macos/scripts/page-suites.txt. With them, the
+      # tests of time limits (macos/scripts/timing-suites.txt): side by side with the rest, a
+      # 2.8 s limit measured 13.6 s (2026-11-25); alone, a limit measures Latchkey's code.
+      - name: Tests with web pages or time limits, one at a time (reported)
         if: always()
         working-directory: macos
         continue-on-error: true
         run: |
           rc=0
-          only=$(sed 's/^/-only-testing:LatchkeyTests\//' scripts/page-suites.txt | tr '\n' ' ')
+          only=$(cat scripts/page-suites.txt scripts/timing-suites.txt | sed 's/^/-only-testing:LatchkeyTests\//' | tr '\n' ' ')
           # shellcheck disable=SC2086
           xcodebuild -project Latchkey.xcodeproj -scheme Latchkey -destination 'platform=macOS' \
             -derivedDataPath "$RUNNER_TEMP/dd" CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM= \
@@ -103,5 +105,8 @@ jobs:
             test-without-building > "$RUNNER_TEMP/pages.log" 2>&1 || rc=$?
           xcrun xcresulttool get test-results summary --path "$RUNNER_TEMP/pages.xcresult" \
             | jq -r '"PAGES passed \(.passedTests) failed \(.failedTests)", (.testFailures[]? | "PAGES FAILURE \(.testIdentifierString): \(.failureText)")' | head -150 | cut -c1-3000 || true
+          # Where the time goes (instrumentation, 2026-11-25): the slowest 25 tests.
+          xcrun xcresulttool get test-results tests --path "$RUNNER_TEMP/pages.xcresult" \
+            | jq -r '[.. | objects | select(.nodeType? == "Test Case") | {n: .name, d: (.durationInSeconds // 0)}] | sort_by(-.d) | .[:25][] | "SLOW \(.d | floor)s \(.n)"' || true
           tail -5 "$RUNNER_TEMP/pages.log"
           exit "$rc"
