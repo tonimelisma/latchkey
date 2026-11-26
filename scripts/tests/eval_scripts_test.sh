@@ -49,11 +49,21 @@ has "eval-image takes no options" "$(run "$image" --force)" "takes none"
 has "not a Mac: says so" "$(FAKE_UNAME_S=Linux run "$weekly")" "runs on a Mac"
 has "an Intel Mac: says Apple silicon" "$(FAKE_UNAME_M=x86_64 run "$weekly")" "Apple silicon"
 has "no image yet: says to run eval-image.sh" "$(run "$weekly")" "run macos/scripts/eval-image.sh once first"
-has "no token: says where it comes from" "$(FAKE_IMAGES=latchkey-eval run "$weekly")" "no Claude token"
+has "no token, no terminal: says to run evals.sh in Terminal once" "$(FAKE_IMAGES=latchkey-eval run "$weekly" </dev/null)" "run macos/scripts/evals.sh once in Terminal"
+# Regression (first local run, 2026-11-26): eval-image.sh asked for the Claude token and then
+# for Enter, so it couldn't run to the end unattended, and the sandbox waited on a token only the
+# evals use. It now checks the permissions again until they are approved.
+if grep -qE '(^|[^a-z_])read -r' "$image"; then bad "eval-image.sh never waits for a key press"; else ok "eval-image.sh never waits for a key press"; fi
+if grep -v '^#' "$image" | grep -q 'TOKEN_SERVICE\|claude_token'; then bad "eval-image.sh needs no Claude token"; else ok "eval-image.sh needs no Claude token"; fi
+grep -q 'until_ready "the permissions" .*e2e-bin sandbox -checks tools' "$image" && ok "eval-image.sh checks the permissions until they are approved" || bad "permission check loop"
 # The local build needs Xcode; --release doesn't.
 noxcode=$work/noxcode
 mkdir -p "$noxcode"
 for f in "$bin"/*; do case "$(basename "$f")" in xcodebuild | xcodegen) ;; *) cp "$f" "$noxcode/" ;; esac; done
+# Like the stub /usr/bin/xcodebuild of a Mac without Xcode, which is on PATH there too: it
+# fails when run (2026-11-26: on a Mac these tests found the real Xcode through /usr/bin).
+printf '#!/bin/sh\nexit 1\n' >"$noxcode/xcodebuild"
+chmod +x "$noxcode/xcodebuild"
 has "the local build without Xcode: says so" "$(PATH="$noxcode:/usr/bin:/bin" "$weekly" 2>&1)" "Xcode isn't installed"
 has "--release needs no Xcode" "$(PATH="$noxcode:/usr/bin:/bin" "$weekly" --release 2>&1)" "run macos/scripts/eval-image.sh once first"
 has "eval-image needs Xcode (it builds the sandbox-signed app)" "$(PATH="$noxcode:/usr/bin:/bin" "$image" 2>&1)" "Xcode isn't installed"

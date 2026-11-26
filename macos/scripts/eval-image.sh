@@ -7,9 +7,10 @@
 #
 # It makes a virtual Mac from a clean base image (none of this Mac's data goes in), installs
 # Chrome, Claude Code and the newest Latchkey release in it, a private relay's test certificate,
-# and the test data's apps' first runs; asks for the Claude token (from `claude setup-token`) at a
-# password prompt and keeps it in this Mac's login keychain; then opens the test Mac's window
-# once so the person running it clicks Connect and approves Latchkey's permissions. The image is
+# and the test data's apps' first runs; then opens the test Mac's window once so the person
+# running it clicks Connect and approves Latchkey's permissions, and checks again every 20 s
+# until all are approved (no key press; the evals ask for their Claude token themselves,
+# claude_token in eval-lib.sh). The image is
 # kept as $LATCHKEY_EVAL_IMAGE (latchkey-eval); each sandbox or eval run uses a copy of it. Run it
 # again after a new macOS or when a run says a permission is missing.
 #
@@ -24,7 +25,7 @@ set -eu
 
 case "${1:-}" in
 -h | --help)
-	sed -n '2,21p' "$0"
+	sed -n '2,22p' "$0"
 	exit 0
 	;;
 "") ;;
@@ -64,21 +65,6 @@ vm_home=$(vm "$BUILD" 'printf %s "$HOME"')
 vm_sudo "$BUILD" "security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain '$vm_home/latchkey-eval-state/ca.pem'"
 vm_sudo "$BUILD" "grep -q relay.latchkey.test /etc/hosts || echo '127.0.0.1 relay.latchkey.test' >> /etc/hosts"
 
-if security find-generic-password -s "$TOKEN_SERVICE" >/dev/null 2>&1; then
-	say "the Claude token is already in this Mac's login keychain"
-else
-	echo
-	echo "The weekly run uses your Claude subscription. In another Terminal window run:"
-	echo "    claude setup-token"
-	echo "and paste the token it prints here (it isn't shown, and goes only into this Mac's login keychain)."
-	printf 'Token: '
-	read -rs token
-	echo
-	[ -n "$token" ] || die "no token given."
-	security add-generic-password -U -a "$USER" -s "$TOKEN_SERVICE" -w "$token"
-	unset token
-fi
-
 say "installing the sandbox-signed build ($SANDBOX_LABEL) over the release"
 install_latchkey_build "$BUILD" "$SANDBOX_APP"
 say "restarting the test Mac with its window, for the steps only a person can do"
@@ -96,19 +82,26 @@ In the test Mac's window (not your own Mac):
 EOF
 say "pairing the test Mac's Latchkey with its private relay"
 vm "$BUILD" "cd $VM_DIR && ./e2e-bin prepare"
+# Each step below waits on a click in the test Mac's window, so each is tried again until it
+# works, for up to WAIT_ROUNDS rounds 20 s apart (nothing waits for a key press here: the script
+# runs to the end on its own once the clicks are made; 2026-11-26).
+WAIT_ROUNDS=${LATCHKEY_EVAL_IMAGE_WAIT_ROUNDS:-90}
+until_ready() { # until_ready WHAT COMMAND: COMMAND inside the test Mac until it succeeds
+	local what=$1 i=0
+	shift
+	until vm "$BUILD" "$*"; do
+		i=$((i + 1))
+		[ "$i" -lt "$WAIT_ROUNDS" ] || die "$what still not ready after $((WAIT_ROUNDS * 20 / 60)) minutes; fix it in the test Mac's window and run eval-image.sh again."
+		say "$what: not yet (above); trying again in 20 s"
+		sleep 20
+	done
+}
 say "making each kind of test data once (answer the questions in the test Mac's window)"
-vm "$BUILD" "cd $VM_DIR && ./e2e-bin fixture 'fixture notes shopping' 'sweep notes' 'fixture calendar empty' 'sweep calendar' 'fixture reminders empty' 'sweep reminders' 'fixture contacts jordan' 'sweep contacts' 'fixture files todo' 'sweep files'"
-printf '\nWhen every permission is approved in the test Mac, press Enter here. '
-read -r _
+until_ready "the test data" "cd $VM_DIR && ./e2e-bin fixture 'fixture notes shopping' 'sweep notes' 'fixture calendar empty' 'sweep calendar' 'fixture reminders empty' 'sweep reminders' 'fixture contacts jordan' 'sweep contacts' 'fixture files todo' 'sweep files'"
 
-say "checking the permissions"
-token=$(security find-generic-password -s "$TOKEN_SERVICE" -w)
-if ! printf '%s\n' "$token" | "$TART" exec -i "$BUILD" /bin/zsh -lc "read -r CLAUDE_CODE_OAUTH_TOKEN; export CLAUDE_CODE_OAUTH_TOKEN; cd $VM_DIR && ./e2e-bin evals -only none -out /tmp/check.json"; then
-	unset token
-	die "the test Mac isn't ready (above); fix it in its window and run eval-image.sh again."
-fi
-unset token
-vm "$BUILD" "rm -rf $VM_DIR"
+say "checking the permissions until every one is approved (the sandbox's own check)"
+until_ready "the permissions" "cd $VM_DIR && ./e2e-bin sandbox -checks tools -out /tmp/check.json"
+vm "$BUILD" "rm -rf $VM_DIR /tmp/check.json"
 "$TART" stop "$BUILD"
 if image_exists "$EVAL_IMAGE"; then "$TART" delete "$EVAL_IMAGE"; fi
 "$TART" rename "$BUILD" "$EVAL_IMAGE"

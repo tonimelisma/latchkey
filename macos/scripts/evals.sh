@@ -33,8 +33,7 @@ done
 need_tools
 [ "$RELEASE" = 1 ] || need_build_tools
 image_exists "$EVAL_IMAGE" || die "no test Mac image $EVAL_IMAGE yet: run macos/scripts/eval-image.sh once first."
-token=$(security find-generic-password -s "$TOKEN_SERVICE" -w 2>/dev/null) ||
-	die "no Claude token in the login keychain: run macos/scripts/eval-image.sh (it asks for one)."
+token=$(claude_token)
 
 RESULTS=$REPO_ROOT/e2e-results
 mkdir -p "$RESULTS"
