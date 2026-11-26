@@ -632,6 +632,11 @@ hosted relay (email via Resend); real Claude called
 `battery_status` and `laptop_status` through the connector, and got the immediate offline answer
 after the app was quit.
 
+## Problem reports asked about
+
+Ids of problem reports Toni has been asked about once (CLAUDE.md, start of every session); ids
+only, never contents. None yet.
+
 ## Next steps
 
 0000. Test strategy and two ways to work (spec 016, `specs/016-test-strategy/`, 2026-11-26):

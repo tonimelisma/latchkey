@@ -7,8 +7,8 @@
 # Usage: scripts/loose-ends.sh [working-tree]   (default: the current directory)
 #
 # For the given working tree: uncommitted changes, commits not pushed, work not merged into main.
-# For the whole repository: stashes, branches (local or on GitHub, Dependabot's included) not
-# merged into main and not checked out in any worktree, branches with unpushed commits, worktrees
+# For the whole repository: stashes, branches (local, or on GitHub with no commit for 3 days,
+# Dependabot's included) not merged into main and not checked out in any worktree, branches with unpushed commits, worktrees
 # with uncommitted changes nobody has touched for a day, and the main checkout off main or dirty.
 tree=${1:-.}
 # Only inside this repository (its main checkout or a worktree under .claude/worktrees): git run
@@ -74,6 +74,12 @@ finished() {
   git rev-parse --quiet --verify "refs/remotes/origin/$1" >/dev/null && return 1
   [ -n "$(git for-each-ref --count=1 --contains "refs/heads/$1" --format=x refs/remotes/origin/pull/ 2>/dev/null)" ]
 }
+# live <ref>: a commit on it in the last 3 days: another session's work in progress, which is
+# never a leftover (Toni, 2026-11-26: several cloud sessions run at once). Committer time.
+live() {
+  _t=$(git log -1 --format=%ct "$1" 2>/dev/null) || return 1
+  [ -n "$_t" ] && [ $(($(date +%s) - _t)) -lt 259200 ]
+}
 # Branches nobody is working on that hold work main doesn't have.
 for b in $(git for-each-ref --format='%(refname:short)' --no-merged origin/main refs/heads/); do
   in_worktree "$b" && continue
@@ -85,7 +91,8 @@ for b in $(git for-each-ref --format='%(refname:lstrip=3)' --no-merged origin/ma
   in_worktree "$b" && continue
   git rev-parse --quiet --verify "refs/heads/$b" >/dev/null && continue
   on_main "refs/remotes/origin/$b" && continue
-  echo "GitHub branch $b: $(ahead "origin/$b" origin/main) commits not on main"
+  live "refs/remotes/origin/$b" && continue
+  echo "GitHub branch $b: $(ahead "origin/$b" origin/main) commits not on main, nothing pushed for 3 days"
 done
 for b in $(git for-each-ref --format='%(refname:short)' refs/heads/); do
   [ "$b" = "$branch" ] && continue

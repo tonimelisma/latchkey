@@ -8,9 +8,10 @@ Apple silicon, current + previous macOS. Owner: Toni Melisma (`tonimelisma`).
 At the start of every session:
 1. Read `docs/STATUS.md` (current phase, next steps, open questions), then the spec folder you
    work in.
-2. List open problem reports: `go run ./cmd/latchkey-reports list` in `relay/` (spec 014). If
-   there are any, ask Toni (AskUserQuestion, each report's summary in a few words): look into
-   them here, in a separate session (`create_session`), or later.
+2. List open problem reports: `go run ./cmd/latchkey-reports list` in `relay/` (spec 014). Ask
+   Toni once per report (AskUserQuestion, its summary in a few words): look into it here, in a
+   separate session (`create_session`), or later; add its id to "Problem reports asked about" in
+   `docs/STATUS.md`. Reports already asked about get one line, no question.
 
 Why each rule exists, with Toni's words and dates: `docs/decisions.md`.
 
@@ -28,6 +29,9 @@ Which one a session is depends on where it runs; everything else here applies to
   macos install` while Toni may be using Latchkey (it quits it).
 
 ## Done means Toni's conditions
+
+For any request about whether Latchkey works somewhere (a capability, a site or app, a screen
+state); docs and process work just say what changed and what was checked.
 
 - Before starting, write Toni's exact conditions as rows, in his words, plus the spec's success
   criteria: screen state (unlocked / locked / lid closed), browser (Safari tab / Latchkey's own),
@@ -54,8 +58,6 @@ Which one a session is depends on where it runs; everything else here applies to
 - No manual work for Toni: Claude runs every test and check itself, scripted. Ask only for what
   only Toni can do (his accounts, devices, approvals), keep it minimal, and say so up front.
 - Complete solutions, not partial matches. Say plainly when something falls short.
-- When it is clear what Toni wants, do it: never ask whether, how, or which piece first, and
-  never end a turn with a go-ahead question.
 - Never end a turn while an item Toni asked for can still move forward without him. When one is
   blocked, go on to the next; prepare each blocked step as a single action for him and list
   those steps together at the end.
@@ -64,7 +66,9 @@ Which one a session is depends on where it runs; everything else here applies to
 
 ## Toni decides
 
-Toni makes every product and engineering choice. Claude proposes; Toni picks.
+Toni makes every product and engineering choice. Claude proposes; Toni picks. Ask only for a
+real choice he hasn't made yet; never ask for a go-ahead, or how or in which order to do what
+is already chosen, and never end a turn with a go-ahead question.
 
 - Wording and visual design users see: Claude drafts it against Apple's Human Interface
   Guidelines and usability guidance, and never asks.
@@ -151,8 +155,9 @@ No work is ever lost, and Toni never hears about leftovers. At the end of every 
 
 - Finished work is merged into `main`; unfinished work is committed and pushed to its branch
   (WIP commits are fine) and the reply says in a line what is still open.
-- Leftovers from earlier sessions (unmerged branches, abandoned worktrees, Dependabot updates)
-  are tested and merged if they work, otherwise reported to Toni with what they contain.
+- Leftovers (branches nobody has pushed to for 3 days, abandoned worktrees, Dependabot updates)
+  are tested and merged if they work, otherwise reported to Toni with what they contain. Another
+  session's live branch is never touched.
 - Temporary files (scratch scripts, database copies, old app copies, servers' `/tmp` files) are
   deleted when their task is done; scratchpad folders end empty.
 - Never commit a working relay's address or the Apple team ID: only placeholders such as
