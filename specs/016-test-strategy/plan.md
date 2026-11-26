@@ -26,8 +26,8 @@ Toni asks ──── Toni's Mac ──────────── 5 Toni's 
 - Go: deadline tests use `testing/synctest` (Go 1.25+, the module is on 1.27) instead of
   sleeps.
 - `mac-build.yml`: `continue-on-error` comes off the test steps once main is green three runs in
-  a row; then the four test jobs become required checks in the ruleset `main` (a setting only
-  Toni can change: one `gh` command from a local session, prepared for him).
+  a row; then the four test jobs become required checks in the ruleset `main` (a repository
+  setting only Toni can change: one click in GitHub's settings, named exactly for him).
 - Options weighed: (a) longer limits on CI only (hides real regressions, still flaky); (b)
   quarantine the ~30 (leaves deadlines untested); (c) fake clocks (deterministic, fast). Chose (c).
 
@@ -51,8 +51,11 @@ Toni asks ──── Toni's Mac ──────────── 5 Toni's 
 ### D3. The sandbox Mac (FR-1605, FR-1606, FR-1607, FR-1610)
 
 - `make sandbox` in `macos/` (a local session; any Apple silicon Mac with Tart):
-  1. builds the Release app from the working tree, signed with the developer's Apple
-     Development certificate (`Local.xcconfig`), so its signature matches the image's grants;
+  1. builds the Release app from the working tree, signed with the sandbox's own self-signed
+     signing identity, so every build keeps the image's permission grants. The script creates
+     that identity on the Mac that runs it, the first time, in that user's login keychain under
+     a sandbox-only name. Nothing personal: no `Local.xcconfig`, no Apple team or developer
+     certificate, no secret, so any Apple silicon Mac with Tart runs it from any clone;
   2. starts a copy of the `latchkey-eval` image without a window (`tart run --no-graphics`), or
      reuses the one this session started (kept up until the session ends or `make sandbox-stop`);
   3. installs the build in the copy, replacing the last one (`eval-lib.sh`'s `install_latchkey`
@@ -65,6 +68,17 @@ Toni asks ──── Toni's Mac ──────────── 5 Toni's 
      with the snapshots; writes `e2e-results/sandbox-<build>-<time>.json`.
   First run under 5 minutes (build ~1.5, start ~1, checks ~2); later runs reuse the copy: under
   2 minutes.
+- Signing options weighed (permissions are filed under the bundle ID and the code's designated
+  requirement): (a) ad hoc (`CODE_SIGN_IDENTITY=-`): a new requirement every build, the grants
+  lost each time; (b) the owner's Apple Development certificate from `Local.xcconfig`: stable,
+  but ties a test layer to one person's Mac, files and Apple account (in the first draft of this
+  plan; Toni, 2026-11-26: "completely against everything we've discussed"); (c) a self-signed
+  identity made for the sandbox: stable requirement (identifier plus the certificate's hash), no
+  personal values. Chose (c). The image's grants are made once for that identity
+  (`eval-image.sh` installs a sandbox-signed build before the person approves); evals of the
+  newest release (`--release`, signed by CI) need that build's grants too, approved in the same
+  sitting. To check on the first run: the keep-awake helper (`SMAppService`) with a self-signed
+  signature; if macOS refuses it, the sandbox runs with keep-awake off and says so.
 - Never touches the host's Latchkey, data or screen: the copy has no shared folders, no window,
   its own relay; nothing of the Mac goes in (Constitution IV, FR-1606).
 - The same command from GitHub's Mac runner is not possible (no nested virtualization there);

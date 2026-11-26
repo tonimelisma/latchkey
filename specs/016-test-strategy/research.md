@@ -97,9 +97,12 @@ Hazards found:
 - Debug builds carry the debugging entitlement (`project.yml:32-35`): another program running as
   Toni could attach to a dev copy that holds Full Disk Access or Accessibility.
 
-Permissions are kept per bundle ID and signature: with Toni's Apple Development certificate
-(stable designated requirement), rebuilds keep the grants; ad-hoc signing (`CODE_SIGN_IDENTITY=-`,
-used by `e2e mac`) loses them on every build (macOS knowledge, not verified here).
+Permissions are kept per bundle ID and designated requirement: any stable signing certificate
+keeps the grants across rebuilds (a self-signed one made for the sandbox does, which is the
+common way to keep Accessibility grants for self-built tools); ad-hoc signing
+(`CODE_SIGN_IDENTITY=-`, used by `e2e mac`) loses them on every build (macOS knowledge, not
+verified on Latchkey). The sandbox uses its own self-signed identity, never the owner's
+certificate (plan D3).
 
 | Option | Real permissions and apps | Toni's data safe | Disturbs Toni | Speed | Once for Toni |
 |---|---|---|---|---|---|
