@@ -1,8 +1,8 @@
 // Command e2e is spec 015's end-to-end tests and evals:
 //
 //	e2e pick -base <ref>        which checks the changed files select (FR-1500), for e2e.yml
-//	e2e relay [-update-snapshots]  the relay's own tools through a private relay (FR-1501, FR-1504)
-//	e2e mac -checks a,b [-update-snapshots]  the Mac app's real tools on this Mac (GitHub's runner)
+//	e2e relay                  the relay's own tools through a private relay (FR-1501)
+//	e2e mac -checks a,b         the Mac app's real tools on this Mac (GitHub's runner)
 //	e2e evals                   inside the test Mac copy: checks and Claude tasks (FR-1515, FR-1516)
 //	e2e sandbox [-checks a,b]   inside the sandbox Mac copy: every capability against the real
 //	                            Mac apps, and the connection checks (spec 016 FR-1605, D3)

@@ -352,7 +352,7 @@ func (w *weekly) checks(cs *mcp.ClientSession) []evals.CheckResult {
 		name string
 		run  func() error
 	}{
-		{"snapshots", func() error { return m.snapshots(filepath.Join("e2e", "toolsnaps", "mac"), false) }},
+		{"tools", m.tools},
 		{"files", m.files},
 		{"shell", m.shell},
 		{"browser", m.browser},

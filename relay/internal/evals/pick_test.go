@@ -27,8 +27,8 @@ func TestGlob(t *testing.T) {
 		{"macos/App/*", "macos/App/AppModel.swift", true},
 		{"macos/App/*", "macos/App/Files/FilesTools.swift", false},
 		{"relay/**", "relay/go.mod", true},
-		{"relay/e2e/toolsnaps/mac/files_*", "relay/e2e/toolsnaps/mac/files_read.json", true},
-		{"relay/e2e/toolsnaps/mac/files_*", "relay/e2e/toolsnaps/mac/shell_run.json", false},
+		{"macos/App/Files/*", "macos/App/Files/FilesTools.swift", true},
+		{"macos/App/Files/*", "macos/App/Shell/ShellTools.swift", false},
 		{"a/**/b.go", "a/b.go", true},
 		{"a/**/b.go", "a/x/y/b.go", true},
 	} {
@@ -57,7 +57,7 @@ func TestSelect(t *testing.T) {
 
 	notes := m.Select([]string{"macos/App/Notes/NotesTools.swift"})
 	if notes.Skipped["notes"] == "" || !slices.Equal(notes.Checks["mac"], []string{"core"}) {
-		t.Fatalf("notes change: skipped with a reason, core still runs for the snapshots: %+v", notes)
+		t.Fatalf("notes change: skipped with a reason, core still runs for the tool list: %+v", notes)
 	}
 
 	core := m.Select([]string{"macos/App/AppModel.swift"})
@@ -68,11 +68,6 @@ func TestSelect(t *testing.T) {
 	shared := m.Select([]string{"relay/internal/mcpserver/mcpserver.go"})
 	if !shared.Has("linux") || !shared.Has("mac") || len(shared.Capabilities) != len(m.Capabilities) {
 		t.Fatalf("shared path selects all: %+v", shared)
-	}
-
-	snap := m.Select([]string{"relay/e2e/toolsnaps/mac/shell_run.json"})
-	if !slices.Contains(snap.Checks["mac"], "shell") {
-		t.Fatalf("a changed snapshot selects its capability: %+v", snap)
 	}
 
 	linux := m.Select([]string{"linux/internal/shell/shell.go"})

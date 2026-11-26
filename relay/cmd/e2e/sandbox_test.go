@@ -101,7 +101,7 @@ func TestIDOn(t *testing.T) {
 }
 
 // The checks inside the test Mac look for the name prepare paired it under; they looked for
-// "E2E Mac" (the GitHub runner's name), so the evals' snapshot check could never pass.
+// "E2E Mac" (the GitHub runner's name), so the evals' tool check could never pass.
 func TestTestMacChecksLookForTheImagesMachineName(t *testing.T) {
 	if m := vmMacCheck(context.Background(), nil); m.machine != testMacName || testMacName == e2eMacName {
 		t.Fatalf("vmMacCheck machine %q, want %q (not %q)", m.machine, testMacName, e2eMacName)

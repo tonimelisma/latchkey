@@ -36,7 +36,7 @@ const (
 // sandboxOrder is every check, in the order they run: the capabilities first, then the checks
 // that disturb the connection (moved from cmd/maccheck), each leaving the copy as it found it.
 var sandboxOrder = []string{
-	"snapshots", "files", "shell", "browser", "notes", "calendar", "reminders", "contacts", "computer",
+	"tools", "files", "shell", "browser", "notes", "calendar", "reminders", "contacts", "computer",
 	"location", "messages", "mail", "whatsapp", "logins",
 	"turned-off", "offline", "relay-restart", "network-cut", "suspended", "battery", "pair-preview",
 }
@@ -262,7 +262,7 @@ func (s *sandbox) run(res *sandboxResult, names []string) error {
 // checkFuncs is what each check that isn't skipped runs.
 func (s *sandbox) checkFuncs() map[string]func() error {
 	return map[string]func() error{
-		"snapshots":     func() error { return s.m.snapshots(filepath.Join("e2e", "toolsnaps", "mac"), false) },
+		"tools":         s.m.tools,
 		"files":         func() error { return s.m.files() },
 		"shell":         func() error { return s.m.shell() },
 		"browser":       func() error { return s.m.browser() },

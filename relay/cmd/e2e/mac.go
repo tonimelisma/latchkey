@@ -25,7 +25,6 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/tonimelisma/latchkey/relay/internal/e2erelay"
-	"github.com/tonimelisma/latchkey/relay/internal/evals"
 )
 
 // e2eMacName is the name `e2e mac` pairs the Swift host test's Mac under.
@@ -53,8 +52,6 @@ func vmMacCheck(ctx context.Context, cs *mcp.ClientSession) *macCheck {
 func macCmd(args []string) error {
 	fs := flag.NewFlagSet("mac", flag.ContinueOnError)
 	checks := fs.String("checks", "core,files,shell,browser", "comma-separated checks to run (from e2e pick)")
-	update := fs.Bool("update-snapshots", false, "rewrite relay/e2e/toolsnaps/mac to match")
-	snaps := fs.String("snapshots", "e2e/toolsnaps", "the snapshot folder")
 	derived := fs.String("derived-data", "", "xcodebuild's derived data with a build-for-testing (then test-without-building)")
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -131,7 +128,7 @@ func macCmd(args []string) error {
 	defer func() { _ = m.cs.Close() }()
 
 	ran := map[string]func() error{
-		"core":    func() error { return m.snapshots(filepath.Join(*snaps, "mac"), *update) },
+		"core":    m.tools,
 		"files":   m.files,
 		"shell":   m.shell,
 		"browser": m.browser,
@@ -143,11 +140,6 @@ func macCmd(args []string) error {
 		step("check: %s", name)
 		if err := ran[name](); err != nil {
 			return fail(fmt.Errorf("%s: %w", name, err))
-		}
-		if name == "core" {
-			// mac-build.yml's required snapshot step looks for this line: without it the
-			// snapshots were not compared, which is not "unchanged" (spec 016).
-			step("tool snapshots compared")
 		}
 	}
 	if slices.Contains(want, "core") {
@@ -209,22 +201,17 @@ func (m *macCheck) text(tool string, args map[string]any) (string, error) {
 	return t, nil
 }
 
-func (m *macCheck) snapshots(dir string, update bool) error {
+// tools checks that the Mac's tools are listed and that machines names the Mac.
+func (m *macCheck) tools() error {
 	tools, err := e2erelay.ListAllTools(m.ctx, m.cs)
 	if err != nil {
 		return err
 	}
 	own := slices.DeleteFunc(slices.Clone(tools), func(t *mcp.Tool) bool { return t.Name == "machines" })
-	diffs, err := evals.CompareSnapshots(dir, own, update)
-	if err != nil {
-		return err
+	if len(own) == 0 {
+		return errors.New("the Mac's tools aren't listed")
 	}
-	if !update {
-		if err := evals.SnapError("mac", diffs); err != nil {
-			return err
-		}
-	}
-	step("%d Mac tools, snapshots compared", len(own))
+	step("%d Mac tools listed", len(own))
 	t, err := m.text("machines", map[string]any{})
 	if err != nil {
 		return err

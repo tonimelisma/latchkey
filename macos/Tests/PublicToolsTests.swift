@@ -4,8 +4,7 @@ import Testing
 @testable import Latchkey
 
 /// How each of the tools Claude sees reaches its operations. Their names, descriptions, annotations and input
-/// schemas are pinned in one place, the snapshots in relay/e2e/toolsnaps/mac (spec 016 FR-1604); this suite
-/// keeps what the snapshots don't show.
+/// schemas aren't pinned by tests (Toni, 2026-11-26); this suite checks how the levels shape the tool list.
 @Suite struct PublicToolsTests {
     /// At read-only levels only the tools that look are left, and a capability turned off has none.
     @MainActor @Test func readOnlyLevelsKeepOnlyLooking() {

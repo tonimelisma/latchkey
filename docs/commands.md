@@ -19,15 +19,12 @@ Relay (run in `relay/`):
 End to end and evals (spec 015; `relay/cmd/e2e`, run in `relay/`):
 - `go run ./cmd/e2e pick -base <ref>` (or `-files a,b`): which checks the changed files select,
   from `e2e/capabilities.json`; `e2e.yml` runs it on every pull request
-- `go run ./cmd/e2e relay [-update-snapshots]`: the relay's own tools through a private relay and
-  a pretend Mac (headless Chrome), compared with `e2e/toolsnaps/relay`
-- `go run ./cmd/linuxcheck -toolsnaps e2e/toolsnaps/linux [-update-snapshots]`: the Linux check,
-  with the Linux tools' snapshots (Docker must run)
-- `go run ./cmd/e2e mac -checks core,files,shell,browser [-update-snapshots]`: the Mac app's real
+- `go run ./cmd/e2e relay`: the relay's own tools through a private relay and a pretend Mac
+  (headless Chrome)
+- `go run ./cmd/linuxcheck`: the Linux check (Docker must run)
+- `go run ./cmd/e2e mac -checks core,files,shell,browser`: the Mac app's real
   tools (the Swift host test `E2EHostTests`) through a private relay; meant for GitHub's
   throwaway Mac runner (it uses that Mac's home folder, shell and Downloads)
-- A snapshot that differs fails `e2e.yml`; the job's artifact `toolsnaps-<kind>` holds the new
-  files to commit in the same pull request
 - Sandbox Mac (spec 016; a local session on an Apple silicon Mac with Tart, Xcode and Go, from
   any clone): `make -C macos sandbox` builds the working tree signed with the sandbox's own
   identity "Latchkey Sandbox" (never `Local.xcconfig` or a developer certificate), installs it in
