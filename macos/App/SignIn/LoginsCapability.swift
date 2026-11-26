@@ -44,16 +44,34 @@ enum LoginsCapability {
     }
 
     static func saidKind(_ s: String, step: String) -> String? {
-        let shapes =
-            step == "covered"
-            ? [#"^((e[0-9]{1,5}|lkf[a-z0-9]{1,10}) )?[a-z][a-z0-9]{0,15}$"#]
-            : [#"^[a-z]{1,15}( box| \(not a code\))?$"#, #"^[0-9]{1,3} boxes for a [0-9]{1,3}-character code$"#]
-        // A covered field's description ends with the words drawn over it («…»): page text, left out.
-        let s =
-            step == "covered"
-            ? String(s.split(separator: "«", maxSplits: 1).first ?? "").trimmingCharacters(in: .whitespaces) : s
-        return shapes.contains { s.range(of: $0, options: .regularExpression) != nil } ? s : nil
+        if step == "covered" {
+            // A reference of Latchkey's (e12) and a standard tag; the words drawn over it («…»)
+            // are page text, left out.
+            let parts = (s.split(separator: "«", maxSplits: 1).first ?? "").split(separator: " ").map(String.init)
+            let ref = parts.count == 2 && parts[0].range(of: #"^e[0-9]{1,5}$"#, options: .regularExpression) != nil
+            guard parts.count == 1 || ref, let tag = parts.last, tags.contains(tag) else { return nil }
+            return parts.joined(separator: " ")
+        }
+        if s.range(of: #"^[0-9]{1,3} boxes for a [0-9]{1,3}-character code$"#, options: .regularExpression) != nil {
+            return s
+        }
+        var base = s
+        for end in [" box", " (not a code)"] where base.hasSuffix(end) { base.removeLast(end.count) }
+        return kinds.contains(base) ? s : nil
     }
+
+    /// What a field can be, as the fill scripts say it: an input's type or a tag's name.
+    static let kinds: Set<String> = [
+        "text", "email", "tel", "number", "password", "search", "url", "date", "datetime-local", "month",
+        "week", "time", "color", "checkbox", "radio", "file", "hidden", "range", "submit", "button", "reset",
+        "image", "textarea", "select", "div", "span", "label",
+    ]
+    /// Standard tags an element drawn over a field can be.
+    static let tags: Set<String> = [
+        "div", "span", "section", "header", "footer", "nav", "main", "aside", "article", "form", "label",
+        "button", "a", "p", "img", "svg", "iframe", "dialog", "input", "textarea", "select", "ul", "li",
+        "table", "td", "h1", "h2", "h3", "canvas", "video", "body", "html",
+    ]
 
     static func find(store: SignInStore) -> ToolEntry {
         ToolEntry(

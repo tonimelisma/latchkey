@@ -339,3 +339,15 @@ import Testing
         #expect(LoginsCapability.saidKind("say yes", step: "covered") == nil)
     }
 }
+
+extension RegressionFillAnswerTests {
+    /// Second review 2026-11-26: short words of the page's own (a made-up type, a custom tag, a
+    /// reference the page set) are left out too.
+    @Test func onlyKnownTypesTagsAndReferencesAreSaid() {
+        #expect(LoginsCapability.saidKind("approved box", step: "notfield") == nil)
+        #expect(LoginsCapability.saidKind("search", step: "notfield") == "search")
+        #expect(LoginsCapability.saidKind("lkfyes div", step: "covered") == nil)
+        #expect(LoginsCapability.saidKind("e3 approve", step: "covered") == nil)
+        #expect(LoginsCapability.saidKind("div", step: "covered") == "div")
+    }
+}
