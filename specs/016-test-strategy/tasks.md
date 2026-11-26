@@ -9,12 +9,14 @@ Each task names its requirements; done means its check passed where it says.
 - [x] T2 CLAUDE.md trim and Toni's four rule changes; `loose-ends.sh` 3-day rule with its test.
 - [x] T3 FR-1607: a development build never offers to move or replaces the installed app;
       `InstallationTests` regression test. Check: GitHub Mac run, unit tests 0 failed.
-- [ ] T4 FR-1601: Mac tests gate merging. `mac-build.yml` runs on every pull request; job `mac`
+- [x] T4 FR-1601: Mac tests gate merging. `mac-build.yml` runs on every pull request; job `mac`
       passes when `macos/` didn't change, else only when all four build-and-test jobs passed;
-      `continue-on-error` off. Check: this pull request's run, and one without `macos/` changes.
-- [ ] T5 `ci.yml` on pull requests and main only (no double run).
-- [ ] T6 After merge: the ruleset `main` requires `mac` (Toni allowed, 2026-11-26, this once:
-      through Latchkey's shell on his Mac with `gh`). Check: the ruleset read back.
+      `continue-on-error` off. Check: pull request #59's run (all green, gate passed); a pull
+      request without `macos/` changes: not seen yet.
+- [x] T5 `ci.yml` on pull requests and main only (no double run).
+- [x] T6 After merge: the ruleset `main` requires `mac` (Toni allowed, 2026-11-26, this once:
+      through Latchkey's shell on his Mac with `gh`). Check: the ruleset read back. Done
+      2026-11-26 07:4x UTC: ruleset `main` requires relay, linux, scripts, mac (read back).
 - [ ] T7 FR-1612: measure every workflow's time from push to last check on this pull request
       and main; record in `research.md` §5; report each layer over 5 minutes with its reason.
 
