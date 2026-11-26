@@ -154,7 +154,11 @@ enum LogBeforeFiles {
         try handle.write(contentsOf: Data("{\"v\":2,\"what\":\"a later format\"}\n".utf8))
         try handle.close()
         #expect(try trace.page(limit: 10).unreadable == 1, "the grown day is counted again")
-        #expect(try trace.page(limit: 10).unreadable == 1, "and kept")
+        // A day that didn't grow isn't read again: with its file unreadable for a moment (same
+        // size), the count is what it was (reading it would find no lines and count 0).
+        try FileManager.default.setAttributes([.posixPermissions: 0o000], ofItemAtPath: old.path)
+        defer { try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: old.path) }
+        #expect(try trace.page(limit: 10).unreadable == 1, "kept, not read again")
     }
 
     /// FR-681: a line cut short (a crash mid-write) and a line of a later format are skipped and
