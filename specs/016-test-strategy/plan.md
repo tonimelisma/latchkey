@@ -75,8 +75,8 @@ Toni asks ──── Toni's Mac ──────────── 5 Toni's 
   Debug product "Latchkey Dev.app" (the test host's `TEST_HOST`, `make run`, `e2e mac` and the
   CI paths all name `Latchkey.app`; wide change for the same effect); (b) the identity checks
   (two small guards, no path changes). Chose (b). Test: `InstallationTests`
-  `aDevelopmentBuildNeverOffersToMoveOrReplacesTheInstalledApp` (fails on main: the dev host
-  offered to move from Downloads).
+  `aDevelopmentBuildNeverOffersToMoveOrReplacesTheInstalledApp` (on main the old `needsMove`
+  answers yes for a Debug build in Downloads, and the replace guard doesn't exist).
 - Options weighed for where (research §3): a separate macOS user (takes the screen for
   unlocked runs), a dev copy in Toni's account (his real data), Tart (isolated). Toni chose Tart.
 
