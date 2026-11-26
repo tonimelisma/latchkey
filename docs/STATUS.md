@@ -651,10 +651,19 @@ only, never contents.
       `docs/screen-states.md` "Toni's conditions"); deadline tests on fake clocks (Swift
       `ManualClock`, relay synctest); tool text pinned only in the snapshots; `make sandbox`,
       `make evals` and the start hook's local line (sandbox_test.sh 49/49).
-      NOT VERIFIED until a local session on a Mac runs it: the sandbox Mac (`make -C macos
-      sandbox`; once: `macos/scripts/eval-image.sh`, Toni approves the image's permissions),
-      then porting the rest of `relay/e2e/sandbox-checks.md` there (spec 016 T16).
-      CI time (FR-1612): `specs/016-test-strategy/research.md` §5.
+      T16 done 2026-11-26 in a local session on Toni's Mac (pull request #64): the test Mac image
+      is made with no person and no window (`eval-image.sh`, 4.4 min after the one-time 27 GB
+      download), and `make -C macos sandbox` runs 27 checks against the real Mac apps in it;
+      the rest of `relay/e2e/sandbox-checks.md` is ported except the checks its "Status" lists
+      as not written. Every check that can run passes there except two Latchkey bugs it found,
+      waiting on Toni's choice: a contact card with a note can't be changed (macOS needs Apple's
+      Contacts notes entitlement) and a Mac without a battery is said to have 100%. Fixed with
+      tests: the relay refused MCP calls through a proxy on the same machine; a tab of Claude's
+      was called the owner's; a trace delete raced a writer (CI). Results, times (the full
+      sandbox run takes about 7 minutes, over FR-1612's 5) and every issue:
+      `specs/016-test-strategy/research.md` §5 and §7. Evals: not run yet (the Claude token,
+      Toni's step). Evidence only for an unlocked virtual Mac with test data; the locked Mac,
+      the lid closed and Toni's accounts stay NOT VERIFIED.
 
 000. Cloud-first git (Toni, 2026-11-24; CLAUDE.md, "Git"): one branch and pull request per
      session, never replaced; squash merges by auto-merge; `branch-cleanup.yml` deletes closed
@@ -1589,6 +1598,13 @@ suites (704 tests each, before and after), and its checks print what they saw.
 
 1. Answer the macOS alert about Latchkey accessing the screen (Allow) whenever it shows (none
    showing and none in macOS's log on 2026-10-29).
+2. The evals' Claude token (spec 016 T16, 2026-11-26): `claude setup-token` in Terminal, then
+   `security add-generic-password -U -a "$USER" -s latchkey-eval-claude-token -w` and paste it;
+   then a session runs `make -C macos evals`.
+3. Choices from the sandbox's first runs (2026-11-26; `specs/016-test-strategy/research.md` §7):
+   how Latchkey changes a contact card that has a note (macOS refuses without Apple's Contacts
+   notes entitlement); how the relay–Mac state message says a Mac has no battery; whether the
+   sandbox runs a quick subset after each build (its full run takes about 7 minutes).
 
 The other live checks that need Toni (the Allow page from claude.ai, removing an app's access,
 Shell switched off mid-command, a page with a filled password field, a suspended account) are

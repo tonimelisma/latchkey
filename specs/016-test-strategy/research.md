@@ -207,7 +207,8 @@ Low-level choices made while writing `macos/scripts/sandbox.sh` and `cmd/e2e san
 - **Turning a capability off in the installed app.** No control file there (the Swift host test
   had one): Latchkey is quit, `capabilityLevels` gets `files = off` with `defaults`, and it
   starts again; the settings are exported first and imported after (also at the next start, if a
-  run stopped half-way).
+  run stopped half-way). Changed on the first runs (§7): only `capabilityLevels` is kept and
+  put back, deleted when it wasn't there (an import adds keys but never removes one).
 - **Moved from maccheck, changed.** Reconnect after the network returns: no network change
   reaches the copy, so SC-05's 10 s can't apply; the check allows 90 s and prints the time.
   Suspension lifted: the app retries every 5 minutes, or on a wake or network change; the check
@@ -216,12 +217,10 @@ Low-level choices made while writing `macos/scripts/sandbox.sh` and `cmd/e2e san
 - **Signatures in one image.** macOS files permissions and the login keychain's pairing item
   under the app's signature, one signature per bundle identifier. So the image is approved and
   paired with the sandbox-signed build; `evals.sh --release` (CI's signature) may find the
-  permissions missing or the pairing unreadable. To be checked on the first Mac run.
+  permissions missing or the pairing unreadable. Still not checked (no eval run yet: §7).
 
-Not yet ported from `relay/e2e/sandbox-checks.md`: the Safari checks, the per-capability
-state-check groups beyond one round trip each (notes, calendar, reminders, contacts, files,
-shell, browser), maps, sweep, front-app-unchanged, no-permission-prompts, and the regression
-cases listed there.
+Ported on the first local runs (§7): every check `relay/e2e/sandbox-checks.md`, "Status",
+lists as written.
 
 ### After spec 016's CI changes (pull request #60, 2026-11-26)
 
@@ -243,3 +242,91 @@ the gate). What is left over 5 minutes, and why:
   5:22 in the next).
 - **The pages tests are the bulk** (about 10 minutes of test time across the jobs): faster
   only by making those tests faster, or by more jobs side by side.
+
+## 7. The sandbox's first local runs (T16, 2026-11-26, a local session on Toni's Mac)
+
+Apple silicon (8 cores, 16 GB), macOS 27.0.1, Xcode 27.2, Go 1.27.1, Tart 2.42.0 (now from the
+Homebrew tap `openai/tools`); base image `ghcr.io/cirruslabs/macos-tahoe-base` (macOS 26.6.2,
+27 GB compressed, 33 GB on disk; System Integrity Protection off, Spotlight indexing off).
+
+### The local half of FR-1612 (measured)
+
+| What | Time | Notes |
+|---|---|---|
+| `make -C macos test` natively | 168 s cold, 62 s warm | the cold run: 951 tests, 949 passed, 1 failed (a 5 s wall-clock limit took 5.25 s on the busy Mac; now half the 20 s load limit), 1 skipped; the warm run, after the fix: none failed |
+| The sandbox build alone, cold (`sandbox_build`) | 203 s | the Release app and the re-signing |
+| `eval-image.sh`, first time | ~35 min download + the rest | the 27 GB base image; once per Mac |
+| `eval-image.sh` again (base image already pulled) | 263 s | unattended, no window, exit 0 |
+| `make -C macos sandbox`, first run (a new copy of the image) | 7 min 21 s | build 12 s, start 48 s, install 17 s, checks 364 s (run 4) |
+| `make -C macos sandbox`, reused copy | 5 min 50 s | build 7 s, start 1 s, install 6 s, checks 336 s (run 7: 20 passed, 2 failed, the two bugs below, 6 skipped) |
+| `make -C macos sandbox ARGS="--checks computer,reminders"` | 41 s | build 12 s, start 1 s, install 6 s, checks 22 s |
+
+Over 5 minutes, and why: the first sandbox run takes about 7.4 minutes and a reused one about
+5.8, against the plan's under 5 and under 2 (`make -C macos test` natively, 2.8 minutes cold and 1 warm, is
+within). The build, the copy's start and
+the install are well within (12 s, 48 s, 17 s); the checks are the rest, now that every capability
+runs its whole former use-case group (spec 016 T16): Safari's about 2 minutes (pages loaded and
+read in a real Safari, each action waiting for the page), Latchkey's own browser 1.3 minutes,
+the network cut 27 s (the relay's offline detection), and the restarts of the connection checks.
+Faster only by running checks side by side (they share one screen, Safari and the apps, so
+the front-app and Safari checks would interfere) or by a quick subset after each build with the
+full set before merging: Toni's choice.
+
+### What the runs found in Latchkey
+
+Each with its row in `docs/regression-coverage.md`, "Found by the sandbox Mac":
+
+1. The relay refused every MCP call that came through a proxy on the same machine: the MCP SDK's
+   DNS rebinding guard allowed only loopback Host names. Fixed: the relay's own public host is
+   allowed too (`host_test.go`).
+2. A tab of Claude's own lost after an action was called "the owner's Safari tab". Fixed
+   (`BrowserOwnerTabTests`).
+3. A card with a note can't be changed: Cocoa error 134092, because macOS lets only apps with
+   Apple's Contacts notes entitlement change such a card (Apple Developer Forums thread 847426,
+   FB23452026). Not fixed: Toni's decision (sandbox check `contacts-card-with-note`).
+4. A Mac without a battery is said to have "100% battery": the state message can't say there is
+   none. Not fixed: a protocol change, Toni's decision (sandbox check `battery`).
+5. Found by CI on this pull request: a trace writer kept adding day files to an account being
+   deleted by another process. Fixed (`TestADeletedAccountsFolderGetsNoNewDayFile`).
+
+Seen once, cause not found: in run 5 `computer_act` key F12 didn't answer within 90 s; by hand,
+with the screen sampler running, and on a fresh install it answered in under 5 s each time (run 6
+and 7). An open bug until its cause is found; the harness now opens a new MCP session after such
+a call, so one stuck call no longer fails the checks after it.
+
+### What the runs found in the sandbox's own scripts and checks
+
+Each fixed with a test (`scripts/tests/sandbox_test.sh`, `eval_scripts_test.sh`, the Go tests in
+`relay/cmd/e2e` and `relay/internal/e2e`) or, where only the test Mac shows it, seen working in
+the next run:
+
+- Signing imported the sandbox identity into the login keychain and trusted it there (a
+  password dialog on the owner's screen): it now lives in a keychain of its own, untrusted,
+  and codesign signs by its hash; Xcode signs ad hoc first.
+- "Is Xcode installed" looked for `/usr/bin/xcodebuild`, which every Mac has; Tart's install hint
+  named a tap Tart left.
+- `eval-image.sh` asked for the Claude token (only the evals use it) and waited for Enter; it
+  opened the test Mac's window with about twenty approvals for a person (Toni, 2026-11-26: "you
+  can literally do all of those for me"). Now no window and no person: `vm-permissions.zsh`
+  writes the permissions into the test Mac's databases (the base image has System Integrity
+  Protection off, which it checks), with each program's real path and signature requirement
+  (rows without them were asked about again), the test data's sender's Calendar, Reminders and
+  Contacts access, and screen recording's second question; the script answers Latchkey's own
+  Connect question; no release is installed first (its keychain items asked again).
+- Opening Latchkey right after a start failed with -1712 (retried); a copy still running wasn't
+  deleted (stopped first); Spotlight was off (on; `files_find`'s search uses it).
+- Chrome 158 refused the stored passkey (cdproto always sends a new field); the relay refused a
+  copy's second sign-in as a cloned passkey (counters start from the time); the checks looked
+  for the pairing code's label instead of the Mac's own name.
+- A new build couldn't read the copy's keychain items (no Apple team: the keychain knows a build
+  by its code hash): the pairing is allowed for each new build, and the activity log starts
+  fresh with it.
+- Check bugs: a job's output comes with the input's answer; a moved event has a new id; written
+  checklists read as ☐/☑; a script's number read from the page's name; od's spacing; Notes'
+  folder clean-up; the levels setting put back; a sign-in again after a suspension; the screen
+  sampler's numbers; Reminders' own view lags (and lags longer when asked every 200 ms);
+  Safari's pages had to be https (Latchkey follows its tab across pages only there).
+- Keep-awake in the copy: the self-signed helper is refused ("Couldn't register the helper";
+  macOS asks an administrator about background activity). Expected (plan D3): the helper
+  accepts only an app of an Apple team. Keep-awake stays off there; `keep-awake-real` isn't
+  written.

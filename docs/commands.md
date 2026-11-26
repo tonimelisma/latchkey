@@ -34,7 +34,10 @@ End to end and evals (spec 015; `relay/cmd/e2e`, run in `relay/`):
   installs it in a Tart copy of the image `latchkey-eval` and checks every capability with test
   data (`ARGS="--checks files,notes"` for some); the copy is kept for the next run until
   `make -C macos sandbox-stop`. Results in `e2e-results/` (ignored by git). Evidence only for an
-  unlocked virtual Mac with test data. About 40 GB of free disk for the image.
+  unlocked virtual Mac with test data. About 40 GB of free disk for the image. To look into a
+  check by hand, inside the copy (`tart exec <copy> /bin/zsh -lc '…'`):
+  `cd ~/latchkey-eval-run && ./e2e-bin sandbox -call 'tool {"arg": 1} ;; !sleep {"s": 2} ;; !osa {"script": "…"}'`
+  calls tools through the copy's relay and prints the answers.
 - Evals (spec 015/016): `make -C macos evals` (the local build in the sandbox), `ARGS=--release`
   (the newest release; its signature needs its own permission grants in the image), `ARGS=--send`
   (also sealed to the developer's intake). Real Claude Code does about 20 tasks 3 times each. The
