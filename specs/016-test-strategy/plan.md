@@ -50,7 +50,7 @@ Toni asks ──── Toni's Mac ──────────── 5 Toni's 
   a merge, and `workflow_run` can't be tried before it is on main, so a mistake would stop
   releases.
 - The Mac app's end-to-end check runs in `mac-build.yml`'s job 3 on that job's build (was a
-  fifth macOS job with its own build); `shard-suites.py` gives job 3's programs ~110 s less.
+  fifth macOS job with its own build); job 3 picks its checks itself, and `shard-suites.py` gives job 3's programs ~105 s less and job 0's ~140 s (its unit tests; measured 2026-11-26).
   Its checks stay reported; the snapshot comparison is required, and fails also when the
   comparison never ran (Toni, 2026-11-26: "snapshot diff blocks", since FR-1604 left the
   snapshots the one place a description is pinned).
