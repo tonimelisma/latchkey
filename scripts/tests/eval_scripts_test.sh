@@ -50,6 +50,12 @@ has "not a Mac: says so" "$(FAKE_UNAME_S=Linux run "$weekly")" "runs on a Mac"
 has "an Intel Mac: says Apple silicon" "$(FAKE_UNAME_M=x86_64 run "$weekly")" "Apple silicon"
 has "no image yet: says to run eval-image.sh" "$(run "$weekly")" "run macos/scripts/eval-image.sh once first"
 has "no token, no terminal: says to run evals.sh in Terminal once" "$(FAKE_IMAGES=latchkey-eval run "$weekly" </dev/null)" "run macos/scripts/evals.sh once in Terminal"
+# Regression (the first eval run, 2026-11-26): a 30-character piece of a token, with a space, was
+# used, and all 60 tries ended "401 Invalid bearer token". A token that isn't whole is refused
+# before anything is copied or started. (Made-up values, never a real token's.)
+: >"$TART_LOG"
+has "a piece of a token is refused, with how to fix it" "$(FAKE_IMAGES=latchkey-eval FAKE_TOKEN='made-up-tail-of-a-token-xyz ' run "$weekly" --release </dev/null)" "isn't one"
+if grep -qE '^(clone|run)' "$TART_LOG"; then bad "nothing copied or started with a bad token"; else ok "nothing copied or started with a bad token"; fi
 # Regression (first local run, 2026-11-26): eval-image.sh asked for the Claude token and then
 # for Enter, so it couldn't run to the end unattended, and the sandbox waited on a token only the
 # evals use. It now checks the permissions again until they are approved.

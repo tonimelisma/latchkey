@@ -1598,9 +1598,12 @@ suites (704 tests each, before and after), and its checks print what they saw.
 
 1. Answer the macOS alert about Latchkey accessing the screen (Allow) whenever it shows (none
    showing and none in macOS's log on 2026-10-29).
-2. The evals' Claude token (spec 016 T16, 2026-11-26): `claude setup-token` in Terminal, then
-   `security add-generic-password -U -a "$USER" -s latchkey-eval-claude-token -w` and paste it;
-   then a session runs `make -C macos evals`.
+2. The evals' Claude token (spec 016 T16, 2026-11-26): `claude setup-token` in the Terminal app
+   (not a Claude Code session's `!` shell, which masks most of it: the first eval run got a
+   30-character piece and every try ended "401 Invalid bearer token"), then
+   `security add-generic-password -U -a "$USER" -s latchkey-eval-claude-token -w` and paste the
+   whole token; then a session runs `make -C macos evals` (it now refuses a token that isn't
+   whole).
 3. Choices from the sandbox's first runs (2026-11-26; `specs/016-test-strategy/research.md` §7):
    how Latchkey changes a contact card that has a note (macOS refuses without Apple's Contacts
    notes entitlement); how the relay–Mac state message says a Mac has no battery; whether the

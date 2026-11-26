@@ -44,6 +44,17 @@ need_tools() {
 	command -v go >/dev/null 2>&1 || die "Go isn't installed: brew install go"
 }
 
+# token_shape_ok TOKEN: whether TOKEN looks like a whole subscription token. The first eval run
+# (2026-11-26) used a 30-character piece of one, with a space, and all 60 tries ended in "401
+# Invalid bearer token" before Claude did anything.
+token_shape_ok() {
+	case "$1" in
+	*[[:space:]]*) return 1 ;;
+	sk-ant-oat*) [ "${#1}" -ge 60 ] ;;
+	*) return 1 ;;
+	esac
+}
+
 # claude_token prints the Claude subscription token kept in the login keychain for the evals.
 # The first time, in Terminal, it asks for it (from `claude setup-token`) at a password prompt and
 # keeps it there; without a terminal it stops and says so. Only the evals use it: the image and
@@ -52,6 +63,8 @@ need_tools() {
 claude_token() {
 	local token
 	if token=$(security find-generic-password -s "$TOKEN_SERVICE" -w 2>/dev/null) && [ -n "$token" ]; then
+		token_shape_ok "$token" ||
+			die "the Claude token kept in the login keychain isn't one (a token from claude setup-token starts sk-ant-oat and has no spaces): delete it with security delete-generic-password -s $TOKEN_SERVICE and run evals.sh again in Terminal."
 		printf '%s\n' "$token"
 		return 0
 	fi
@@ -66,6 +79,7 @@ claude_token() {
 	read -rs token
 	echo >&2
 	[ -n "$token" ] || die "no token given."
+	token_shape_ok "$token" || die "that isn't a whole token (it starts sk-ant-oat, has no spaces, and is about 100 characters): copy it again from claude setup-token, run in Terminal."
 	security add-generic-password -U -a "$USER" -s "$TOKEN_SERVICE" -w "$token" || die "couldn't keep the token in the login keychain."
 	printf '%s\n' "$token"
 }
