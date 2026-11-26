@@ -26,7 +26,10 @@ run here; the Mac app's tests run on GitHub's macOS runner (`mac-build.yml`).
   spec 001's withdrawn requirements, the agent protocol contract; regression cases
 - [toni] T9 Toni: the private key into his personal cloud environment (`LATCHKEY_REPORTS_KEY`).
   Done 2026-11-24: the intake deployed by the hosted server's own agent, and its token saved as a
-  network secret for the intake's host (the intake answers `[]` from a cloud session)
+  network secret for the intake's host (the intake answers `[]` from a cloud session). That
+  secret was gone by 2026-11-26 (in none of Toni's cloud environments); Toni saved it again on
+  the `latchkey` environment that day, which also allows the host, and `latchkey-reports list`
+  answered from a cloud session. The token's source is the intake's own `DEVELOPER_TOKEN`.
 
 ## Everything for that chat (2026-11-25; FR-1440 to FR-1456)
 
