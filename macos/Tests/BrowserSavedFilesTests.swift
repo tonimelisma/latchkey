@@ -46,7 +46,9 @@ import WebKit
         defer { b.discard() }
         _ = try await b.open(html: "<p>Homes</p>", base: base)
         #expect(try await b.run(Self.makeAndClick) == "clicked")
-        let told = try await notes(b) { $0.contains("homes.json") }
+        // Until "Saved": under load the first note can be "Still saving «homes.json»" (CI,
+        // 2026-11-26), which names the file too.
+        let told = try await notes(b) { $0.contains("Saved") && $0.contains("homes.json") }
         let file = dir.appending(path: "homes.json")
         #expect(told.contains { $0.contains("Saved") && $0.contains(file.path) }, "\(told)")
         #expect(try String(contentsOf: file, encoding: .utf8) == #"{"homes": 3}"#)
@@ -66,7 +68,7 @@ import WebKit
         defer { b.discard() }
         _ = try await b.open(html: "<p>Homes</p>", base: base)
         _ = try await b.run(Self.makeAndClick)
-        let told = try await notes(b) { $0.contains("homes 2.json") }
+        let told = try await notes(b) { $0.contains("Saved") && $0.contains("homes 2.json") }
         #expect(told.contains { $0.contains("homes 2.json") }, "\(told)")
         #expect(try String(contentsOf: dir.appending(path: "homes.json"), encoding: .utf8) == "old")
     }
@@ -122,7 +124,7 @@ import WebKit
             html: #"<a download="note.txt" href="data:text/plain,hi">Save the note</a>"#, base: base)
         let link = try #require(page.elements.first { $0.label.contains("Save the note") }, "\(page.elements)")
         _ = try await b.click(link.ref)
-        let told = try await notes(b) { $0.contains("note.txt") }
+        let told = try await notes(b) { $0.contains("Saved") && $0.contains("note.txt") }
         #expect(told.contains { $0.contains("Saved") && $0.contains("note.txt") }, "\(told)")
         try await Task.sleep(for: .milliseconds(500))
         let files = try FileManager.default.contentsOfDirectory(atPath: dir.path)
@@ -230,7 +232,7 @@ import WebKit
         let page = try await b.open(html: #"<a href="/export">Export</a>"#, base: served(server))
         let link = try #require(page.elements.first { $0.label.contains("Export") }, "\(page.elements)")
         _ = try await b.click(link.ref)
-        let told = try await notes(b) { $0.contains("report.csv") }
+        let told = try await notes(b) { $0.contains("Saved") && $0.contains("report.csv") }
         #expect(told.contains { $0.contains("Saved") && $0.contains("report.csv") }, "\(told)")
         #expect(try String(contentsOf: dir.appending(path: "report.csv"), encoding: .utf8) == "a,b\n1,2\n")
         #expect(server.requests == 1)
