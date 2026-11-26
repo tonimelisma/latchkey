@@ -16,12 +16,13 @@ concurrency:
   group: mac-build-${{ github.ref }}
   cancel-in-progress: true
 jobs:
-  # Five jobs side by side (Toni, 2026-11-26: "split the slow step into parallel jobs, get it
-  # to 5 minutes"; GitHub runs at most 5 macOS jobs at once on this plan). Each builds (with
-  # Xcode's compilation cache and the Swift packages kept between runs), then runs its part:
-  # job 0 lints and runs the update and unit tests; all five share the tests with web pages or
-  # time limits, which run one at a time within a job, split by measured time
-  # (macos/scripts/shard-suites.py, macos/scripts/suite-seconds.txt).
+  # Four jobs side by side (Toni, 2026-11-26: "split the slow step into parallel jobs, get it
+  # to 5 minutes"; GitHub runs at most 5 macOS jobs at once on this plan, and e2e-mac takes the
+  # fifth). Each builds (with Xcode's compilation cache and the Swift packages kept between
+  # runs), then runs its part: job 0 lints and runs the update and unit tests; all four share
+  # the tests with web pages or time limits, in two test programs per job, each running its
+  # tests one at a time, split by measured time (macos/scripts/shard-suites.py,
+  # macos/scripts/suite-seconds.txt).
   build:
     name: build and test (${{ matrix.shard }})
     runs-on: macos-26
@@ -29,7 +30,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shard: [0, 1, 2, 3, 4]
+        shard: [0, 1, 2, 3]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -125,30 +126,39 @@ jobs:
           done
           tail -40 "$RUNNER_TEMP/test.log"
           exit "$rc"
-      # The tests that open web pages, one at a time within a job (Toni, 2026-11-25): run side
-      # by side in one test program, dozens of pages share its one main thread, so a page's
+      # The tests that open web pages, one at a time within a test program (Toni, 2026-11-25):
+      # run side by side in one program, dozens of pages share its one main thread, so a page's
       # events come late and steps pass their limits (measured 2026-11-25: a click 2 s alone,
-      # 18 s among 70 pages). With them, the tests of time limits: side by side with the rest, a
-      # 2.8 s limit measured 13.6 s (2026-11-25). Job 0's share is smaller by its unit tests.
-      - name: Tests with web pages or time limits, one at a time (reported)
+      # 18 s among 70 pages). With them, the tests of time limits: side by side with the rest,
+      # a 2.8 s limit measured 13.6 s (2026-11-25). Two programs per job, each with its own main
+      # thread (the runner has three cores); job 0's are shorter by its unit tests.
+      - name: Tests with web pages or time limits, one at a time per program (reported)
         if: always()
         working-directory: macos
         continue-on-error: true
         run: |
+          run=$(ls "$RUNNER_TEMP"/dd/Build/Products/*.xctestrun | head -1)
+          for lane in 0 1; do
+            group=$(( ${{ matrix.shard }} * 2 + lane ))
+            only=$(python3 scripts/shard-suites.py 8 "$group" 110 2 | sed 's/^/-only-testing:LatchkeyTests\//' | tr '\n' ' ')
+            echo "program $lane: $only"
+            # shellcheck disable=SC2086
+            ( rc=0; xcodebuild test-without-building -xctestrun "$run" -destination 'platform=macOS' \
+                -derivedDataPath "$RUNNER_TEMP/dd-$lane" -resultBundlePath "$RUNNER_TEMP/pages-$lane.xcresult" \
+                -parallel-testing-enabled NO $only > "$RUNNER_TEMP/pages-$lane.log" 2>&1 || rc=$?
+              echo "$rc" > "$RUNNER_TEMP/rc-$lane" ) &
+          done
+          wait
           rc=0
-          only=$(python3 scripts/shard-suites.py 5 ${{ matrix.shard }} 80 | sed 's/^/-only-testing:LatchkeyTests\//' | tr '\n' ' ')
-          echo "$only"
-          # shellcheck disable=SC2086
-          xcodebuild -project Latchkey.xcodeproj -scheme Latchkey -destination 'platform=macOS' \
-            -derivedDataPath "$RUNNER_TEMP/dd" CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM= \
-            -resultBundlePath "$RUNNER_TEMP/pages.xcresult" -parallel-testing-enabled NO $only \
-            test-without-building > "$RUNNER_TEMP/pages.log" 2>&1 || rc=$?
-          xcrun xcresulttool get test-results summary --path "$RUNNER_TEMP/pages.xcresult" \
-            | jq -r '"PAGES passed \(.passedTests) failed \(.failedTests)", (.testFailures[]? | "PAGES FAILURE \(.testIdentifierString): \(.failureText)")' | head -150 | cut -c1-3000 || true
-          # Where the time goes (instrumentation): each suite's seconds, for suite-seconds.txt,
-          # and the slowest 10 tests.
-          xcrun xcresulttool get test-results tests --path "$RUNNER_TEMP/pages.xcresult" > "$RUNNER_TEMP/pages-tests.json" || true
-          jq -r '.. | objects | select(.nodeType? == "Test Suite") | "SUITE \([.. | objects | select(.nodeType? == "Test Case") | .durationInSeconds // 0] | add // 0 | ceil) \(.name)"' "$RUNNER_TEMP/pages-tests.json" || true
-          jq -r '[.. | objects | select(.nodeType? == "Test Case") | {n: .name, d: (.durationInSeconds // 0)}] | sort_by(-.d) | .[:10][] | "SLOW \(.d | floor)s \(.n)"' "$RUNNER_TEMP/pages-tests.json" || true
-          tail -5 "$RUNNER_TEMP/pages.log"
+          for lane in 0 1; do
+            [ "$(cat "$RUNNER_TEMP/rc-$lane")" = 0 ] || rc=1
+            xcrun xcresulttool get test-results summary --path "$RUNNER_TEMP/pages-$lane.xcresult" \
+              | jq -r '"PAGES passed \(.passedTests) failed \(.failedTests)", (.testFailures[]? | "PAGES FAILURE \(.testIdentifierString): \(.failureText)")' | head -150 | cut -c1-3000 || true
+            # Where the time goes (instrumentation): each suite's seconds, for suite-seconds.txt,
+            # and the slowest 10 tests.
+            xcrun xcresulttool get test-results tests --path "$RUNNER_TEMP/pages-$lane.xcresult" > "$RUNNER_TEMP/pages-tests.json" || true
+            jq -r '.. | objects | select(.nodeType? == "Test Suite") | "SUITE \([.. | objects | select(.nodeType? == "Test Case") | .durationInSeconds // 0] | add // 0 | ceil) \(.name)"' "$RUNNER_TEMP/pages-tests.json" || true
+            jq -r '[.. | objects | select(.nodeType? == "Test Case") | {n: .name, d: (.durationInSeconds // 0)}] | sort_by(-.d) | .[:5][] | "SLOW \(.d | floor)s \(.n)"' "$RUNNER_TEMP/pages-tests.json" || true
+            tail -3 "$RUNNER_TEMP/pages-$lane.log"
+          done
           exit "$rc"

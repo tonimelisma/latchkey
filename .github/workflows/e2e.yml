@@ -83,7 +83,9 @@ jobs:
 
   e2e-mac:
     needs: pick
-    runs-on: macos-26
+    # A Mac only when there is something to check: GitHub runs five macOS jobs at once on this
+    # plan, and mac-build.yml's jobs use four (2026-11-26).
+    runs-on: ${{ needs.pick.outputs.mac == 'true' && 'macos-26' || 'ubuntu-latest' }}
     timeout-minutes: 60
     defaults:
       run:
