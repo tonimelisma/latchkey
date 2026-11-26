@@ -644,10 +644,10 @@ only, never contents. None yet.
       spec with Toni's choices (Tart sandbox Mac with the local build, Mac tests gate once on
       fake clocks, hand-run kits retired, CLAUDE.md trimmed), and `plan.md` for his review
       before tasks. Done: CLAUDE.md "Two ways to work" and the trim (306 to ~200 lines, every
-      rule kept); cloud sessions no longer build or test through Latchkey. Next after review:
-      the dev-build bug (a development build started outside Xcode's build folders offers to
-      move itself and would replace `/Applications/Latchkey.app`, FR-1607) with its regression
-      test, then the CI triggers, fake clocks, one harness; the sandbox Mac needs a local
+      rule kept); cloud sessions no longer build or test through Latchkey. Fixed (pull request #59): a
+      development build started outside Xcode's build folders offered to move itself and would
+      have replaced `/Applications/Latchkey.app` (FR-1607), with its regression test. Next after
+      review: the CI triggers, fake clocks, one harness; the sandbox Mac needs a local
       session.
 
 000. Cloud-first git (Toni, 2026-11-24; CLAUDE.md, "Git"): one branch and pull request per

@@ -65,9 +65,9 @@ if you're local and thus have access to the mac."
   touch the installed Latchkey, and never take the screen, pointer or keyboard while he may be
   using the Mac (Constitution IV). It runs in a Tart virtual Mac with the local build installed
   (Toni, 2026-11-26).
-- **FR-1607** A development build shall be named differently from the installed app
-  ("Latchkey Dev.app"), shall never offer to move itself into Applications, and shall never
-  replace `/Applications/Latchkey.app` (bug found 2026-11-26, `research.md` §3).
+- **FR-1607** A development build shall never offer to move itself into Applications, and a
+  move shall never replace an app with another bundle identifier (the installed
+  `/Applications/Latchkey.app` included) (bug found 2026-11-26, `research.md` §3).
 - **FR-1608** Evals shall run in the sandbox Mac against the local build or the newest release,
   be scored on the end state, and be reported as pass rates; they never block a merge.
 - **FR-1609** A fixed bug's regression test shall live in the lowest layer that reproduces it

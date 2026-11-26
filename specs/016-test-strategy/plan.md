@@ -69,11 +69,14 @@ Toni asks ──── Toni's Mac ──────────── 5 Toni's 
   its own relay; nothing of the Mac goes in (Constitution IV, FR-1606).
 - The same command from GitHub's Mac runner is not possible (no nested virtualization there);
   `e2e mac` stays the per-PR Mac check.
-- FR-1607, first, with its regression test: the Debug product is named "Latchkey Dev.app"
-  (`PRODUCT_NAME` per configuration), `AppLocation.needsMove` returns false for any build whose
-  bundle ID isn't the release one, and `offerMove` refuses to replace an app with a different
-  bundle ID. Test: `AppLocationTests` fails on main (a dev bundle outside DerivedData asks to
-  move) and passes with the fix.
+- FR-1607, first, with its regression test (done 2026-11-26): `AppLocation.needsMove` is false
+  for any identity but the release one, and `offerMove` refuses to replace what is at the
+  destination unless it is the same bundle ID (`mayReplace`). Options weighed: (a) rename the
+  Debug product "Latchkey Dev.app" (the test host's `TEST_HOST`, `make run`, `e2e mac` and the
+  CI paths all name `Latchkey.app`; wide change for the same effect); (b) the identity checks
+  (two small guards, no path changes). Chose (b). Test: `InstallationTests`
+  `aDevelopmentBuildNeverOffersToMoveOrReplacesTheInstalledApp` (fails on main: the dev host
+  offered to move from Downloads).
 - Options weighed for where (research §3): a separate macOS user (takes the screen for
   unlocked runs), a dev copy in Toni's account (his real data), Tart (isolated). Toni chose Tart.
 

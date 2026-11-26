@@ -6,11 +6,44 @@ import Testing
 
 @Suite struct InstallationTests {
     @Test func offersToMoveOnlyOutsideApplications() {
-        #expect(!AppLocation.needsMove(URL(fileURLWithPath: "/Applications/Latchkey.app")))
-        #expect(!AppLocation.needsMove(URL(fileURLWithPath: "/Users/t/Applications/Latchkey.app")))
-        #expect(AppLocation.needsMove(URL(fileURLWithPath: "/Users/t/Downloads/Latchkey.app")))
-        #expect(AppLocation.needsMove(URL(fileURLWithPath: "/Volumes/Latchkey/Latchkey.app")), "the disk image")
-        #expect(!AppLocation.needsMove(URL(fileURLWithPath: "/x/build/DerivedData/Build/Products/Debug/Latchkey.app")))
+        let release = AppIdentity.release
+        #expect(!AppLocation.needsMove(URL(fileURLWithPath: "/Applications/Latchkey.app"), identity: release))
+        #expect(!AppLocation.needsMove(URL(fileURLWithPath: "/Users/t/Applications/Latchkey.app"), identity: release))
+        #expect(AppLocation.needsMove(URL(fileURLWithPath: "/Users/t/Downloads/Latchkey.app"), identity: release))
+        #expect(
+            AppLocation.needsMove(URL(fileURLWithPath: "/Volumes/Latchkey/Latchkey.app"), identity: release),
+            "the disk image")
+        #expect(
+            !AppLocation.needsMove(
+                URL(fileURLWithPath: "/x/build/DerivedData/Build/Products/Debug/Latchkey.app"), identity: release))
+    }
+
+    /// Regression (2026-11-26, spec 016 FR-1607): a development build ("Latchkey Dev", also named
+    /// Latchkey.app) started from Downloads or a scratch folder offered to move itself into
+    /// Applications, and accepting removed the installed /Applications/Latchkey.app.
+    @Test func aDevelopmentBuildNeverOffersToMoveOrReplacesTheInstalledApp() throws {
+        // This test host is a development build: the default identity is its own.
+        #expect(!AppLocation.needsMove(URL(fileURLWithPath: "/Users/t/Downloads/Latchkey.app")))
+        #expect(!AppLocation.needsMove(URL(fileURLWithPath: "/tmp/scratch/Latchkey.app")))
+        #expect(
+            !AppLocation.needsMove(URL(fileURLWithPath: "/Users/t/Downloads/Latchkey.app"), identity: .development))
+
+        let own = AppIdentity.release.bundleID
+        #expect(AppLocation.mayReplace(existing: nil, own: own), "nothing there")
+        #expect(AppLocation.mayReplace(existing: .some(own), own: own), "an older copy of the same app")
+        #expect(!AppLocation.mayReplace(existing: .some(AppIdentity.development.bundleID), own: own))
+        #expect(!AppLocation.mayReplace(existing: .some(own), own: AppIdentity.development.bundleID))
+        #expect(!AppLocation.mayReplace(existing: .some(nil), own: own), "a folder without a bundle ID")
+
+        let base = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: base) }
+        let app = base.appending(path: "Latchkey.app")
+        #expect(AppLocation.bundleID(at: app) == nil)
+        try FileManager.default.createDirectory(at: app.appending(path: "Contents"), withIntermediateDirectories: true)
+        #expect(AppLocation.bundleID(at: app) == .some(nil))
+        let plist: NSDictionary = ["CFBundleIdentifier": own]
+        try plist.write(to: app.appending(path: "Contents/Info.plist"))
+        #expect(AppLocation.bundleID(at: app) == .some(own))
     }
 
     @Test func recognizesTheTrash() {
