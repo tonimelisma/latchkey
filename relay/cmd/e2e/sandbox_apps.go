@@ -360,12 +360,20 @@ end run`, tag); err != nil || left != "false" {
 	return nil
 }
 
-// reminderIs waits up to 10 s for Reminders to show the reminder with Latchkey's id as completed
-// (or not): Reminders' own id is "x-apple-reminder://" and the same identifier.
+// reminderIs waits up to 30 s for Reminders to show the reminder with Latchkey's id as completed
+// (or not): Reminders' own id is "x-apple-reminder://" and the same identifier. Reminders' own
+// view lags Latchkey's change: still completed at once after an uncomplete, open 5 s later
+// (the fourth sandbox run, by hand), and over 10 s in that run's check.
 func reminderIs(id string, completed bool) error {
 	var got string
 	var err error
-	if waitFor(10*time.Second, func() bool {
+	start := time.Now()
+	defer func() {
+		if took := time.Since(start); took > 2*time.Second {
+			step("Reminders showed the change after %s", took.Round(100*time.Millisecond))
+		}
+	}()
+	if waitFor(30*time.Second, func() bool {
 		got, err = osaOut(`on run argv
 tell application "Reminders" to return (completed of (first reminder whose id is ("x-apple-reminder://" & (item 1 of argv)))) as text
 end run`, id)
