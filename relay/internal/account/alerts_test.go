@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/stretchr/testify/assert"
@@ -250,7 +251,12 @@ func TestSecurityEmailsNeverHoldUpOrFailTheChange(t *testing.T) {
 
 func (e *env) ownerID() string {
 	e.t.Helper()
-	u, err := e.store.UserByEmail(context.Background(), owner)
+	return e.userID(owner)
+}
+
+func (e *env) userID(email string) string {
+	e.t.Helper()
+	u, err := e.store.UserByEmail(context.Background(), email)
 	require.NoError(e.t, err)
 	return u.ID
 }
@@ -343,12 +349,17 @@ func TestReservedEmailsHaveARelayWideCeiling(t *testing.T) {
 }
 
 // 4 of the 16 sending slots are kept for reserve-covered emails: other accounts' ordinary ones
-// can't hold them all while the mail server is slow (FR-699a).
+// can't hold them all while the mail server is slow (FR-699a). On synctest's fake clock: the
+// waits pass in no real time.
 func TestSlotsAreKeptForReserveCoveredEmails(t *testing.T) {
+	synctest.Test(t, slotsAreKeptForReserveCoveredEmails)
+}
+
+func slotsAreKeptForReserveCoveredEmails(t *testing.T) {
 	out := &logBuffer{}
-	e := setupWith(t, func(c *account.Config) { c.Logger = slog.New(slog.NewTextHandler(out, nil)) })
+	e := setupOffline(t, func(c *account.Config) { c.Logger = slog.New(slog.NewTextHandler(out, nil)) })
 	account.SetAlertTimes(t, 300*time.Millisecond, 5*time.Second)
-	e.browser().signUp()
+	e.accounts("owner", 1) // owner0@example.com: the account the attackers aren't
 	attackers := e.accounts("attacker", 3)
 	e.spendReserves(attackers)
 
@@ -361,14 +372,15 @@ func TestSlotsAreKeptForReserveCoveredEmails(t *testing.T) {
 			e.svc.ClientAuthorized(ctx, id, "Claude (claude.ai)", "claude.ai")
 		}
 	}
-	e.svc.ClientAuthorized(ctx, e.ownerID(), "Intruder (evil.example)", "evil.example")
+	ownerID := e.userID("owner0@example.com")
+	e.svc.ClientAuthorized(ctx, ownerID, "Intruder (evil.example)", "evil.example")
 	time.Sleep(600 * time.Millisecond) // past the wait: whatever had no slot gave up
 	release()
 	e.svc.WaitForMail()
 	assert.Contains(t, out.String(), "security email not sent: no sending slot in time", "the ordinary ones beyond 12 waited in vain")
 	var toOwner []account.Message
 	for _, m := range e.mail.Sent()[before:] {
-		if m.To == owner {
+		if m.To == "owner0@example.com" {
 			toOwner = append(toOwner, m)
 		}
 	}
@@ -378,9 +390,13 @@ func TestSlotsAreKeptForReserveCoveredEmails(t *testing.T) {
 }
 
 // Waiting for a slot and sending have deadlines of their own: an email that waited still gets its
-// whole send time once it holds a slot (FR-699a).
+// whole send time once it holds a slot (FR-699a). On synctest's fake clock.
 func TestTheSendDeadlineStartsOnceASlotIsHeld(t *testing.T) {
-	e := setup(t)
+	synctest.Test(t, theSendDeadlineStartsOnceASlotIsHeld)
+}
+
+func theSendDeadlineStartsOnceASlotIsHeld(t *testing.T) {
+	e := setupOffline(t, func(*account.Config) {})
 	account.SetAlertTimes(t, 2*time.Second, time.Second)
 	attackers := e.accounts("user", 2)
 	e.spendReserves(attackers)

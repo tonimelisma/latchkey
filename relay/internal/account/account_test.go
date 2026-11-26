@@ -89,6 +89,19 @@ func setup(t *testing.T, allowed ...string) *env {
 // setupWith is setup with any other settings of the account service.
 func setupWith(t *testing.T, tweak func(*account.Config)) *env {
 	t.Helper()
+	return newEnv(t, tweak, true)
+}
+
+// setupOffline is setupWith without the HTTP server, for a test run in a synctest bubble on its
+// fake clock (spec 016 FR-1602): a real listener would never let the bubble's time move. Only the
+// service's methods can be called; the browser can't reach it.
+func setupOffline(t *testing.T, tweak func(*account.Config)) *env {
+	t.Helper()
+	return newEnv(t, tweak, false)
+}
+
+func newEnv(t *testing.T, tweak func(*account.Config), serve bool) *env {
+	t.Helper()
 	ctx := context.Background()
 	st, err := store.Open(ctx, filepath.Join(t.TempDir(), "relay.db"))
 	require.NoError(t, err)
@@ -99,12 +112,15 @@ func setupWith(t *testing.T, tweak func(*account.Config)) *env {
 	mux := http.NewServeMux()
 	// The relay's guard puts the client's address on every request (FR-082); here the client is
 	// this machine.
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		mux.ServeHTTP(w, r.WithContext(limit.WithAddress(r.Context(), limit.TrustedProxies(nil).ClientAddress(r))))
-	}))
-	t.Cleanup(srv.Close)
-	_, port, _ := net.SplitHostPort(strings.TrimPrefix(srv.URL, "http://"))
-	e.base = "http://localhost:" + port // WebAuthn needs a domain, not an IP
+	e.base = "http://localhost:1" // nothing listens: setupOffline
+	if serve {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			mux.ServeHTTP(w, r.WithContext(limit.WithAddress(r.Context(), limit.TrustedProxies(nil).ClientAddress(r))))
+		}))
+		t.Cleanup(srv.Close)
+		_, port, _ := net.SplitHostPort(strings.TrimPrefix(srv.URL, "http://"))
+		e.base = "http://localhost:" + port // WebAuthn needs a domain, not an IP
+	}
 	public, _ := url.Parse(e.base)
 
 	var svc *account.Service

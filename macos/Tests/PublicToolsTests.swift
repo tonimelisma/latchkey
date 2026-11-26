@@ -3,35 +3,20 @@ import Testing
 
 @testable import Latchkey
 
-/// The 27 tools Claude sees (15 consolidated 2026-10-23, 8 added by spec 007, 2 by spec 012, 2 by spec 013; Mail, WhatsApp sending, and Messages' window actions withdrawn 2026-11-07) and how each reaches its operations.
+/// How each of the tools Claude sees reaches its operations. Their names, descriptions, annotations and input
+/// schemas are pinned in one place, the snapshots in relay/e2e/toolsnaps/mac (spec 016 FR-1604); this suite
+/// keeps what the snapshots don't show.
 @Suite struct PublicToolsTests {
-    static let read = [
-        "notes_find", "notes_read", "messages_find", "messages_read", "files_find", "files_read", "shell_check",
-        "browser_look", "computer_look", "calendar_find", "reminders_find", "contacts_find", "location_read",
-        "maps_find", "whatsapp_find", "whatsapp_read", "logins_find", "mail_find", "mail_read",
-    ]
-    static let write = [
-        "notes_change", "messages_send", "files_change", "shell_run", "browser_act", "computer_act",
-        "calendar_change", "reminders_change", "contacts_change", "logins_fill", "messages_delete", "mail_archive",
-    ]
-
-    @MainActor @Test func thirtyOneToolsAtFullLevel() {
-        let registry = CapabilityRegistry(
-            capabilities: AppModel.makeCapabilities(), levels: CapabilityRegistry.defaultLevels)
-        let names = registry.tools.map(\.name)
-        #expect(names.count == 31)
-        #expect(Set(names) == Set(Self.read + Self.write))
-        for t in registry.tools {
-            #expect(t.annotations?.readOnlyHint == Self.read.contains(t.name), "\(t.name)")
-            #expect(t.name.count <= 64)
-        }
-    }
-
+    /// At read-only levels only the tools that look are left, and a capability turned off has none.
     @MainActor @Test func readOnlyLevelsKeepOnlyLooking() {
+        let full = CapabilityRegistry(
+            capabilities: AppModel.makeCapabilities(), levels: CapabilityRegistry.defaultLevels)
+        let looking = Set(full.tools.filter { $0.annotations?.readOnlyHint == true }.map(\.name))
+        #expect(looking.contains("shell_check"))
         var levels = CapabilityRegistry.defaultLevels.mapValues { _ in AccessLevel.readOnly }
         levels[CapabilityRegistry.shell] = .off
         let registry = CapabilityRegistry(capabilities: AppModel.makeCapabilities(), levels: levels)
-        #expect(Set(registry.tools.map(\.name)) == Set(Self.read).subtracting(["shell_check"]))
+        #expect(Set(registry.tools.map(\.name)) == looking.subtracting(["shell_check"]))
     }
 
     @Test func notesFindListsFoldersWhenAskedForNothing() async throws {

@@ -71,16 +71,6 @@ import Testing
         #expect(shown.content.jsonText.contains("nobody can watch"), "\(shown.content.jsonText)")
     }
 
-    /// The description says pages open in the background and when to show one in Safari.
-    @Test func theDescriptionSaysWhenToShowAPageInSafari() {
-        let all = BrowserCapability.readTools(
-            browser: SafariBrowser(scripts: FakeSafariTabs()), own: OwnPages(cookies: { [] }))
-        let read = all.first { $0.tool.name == "browser_look" }
-        let d = read?.tool.description ?? ""
-        #expect(d.contains("in the background") && d.contains("show_in_safari") && d.contains("asks to see"))
-        #expect(!d.contains("a site the owner is signed in to in Safari opens in a background Safari tab"))
-    }
-
     /// The case of the report: a signed-in site, unlocked, without show_in_safari, never reaches
     /// Safari (the open is refused in a test without network only after the choice is made).
     @Test func aSignedInSiteIsNotMovedToSafariOnItsOwn() async throws {

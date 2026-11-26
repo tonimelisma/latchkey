@@ -683,19 +683,6 @@ final class Reports: @unchecked Sendable {
         #expect(r.content.jsonText.contains("\\n[Shell: job1 running"), "on a line of its own")
         #expect(r.content.jsonText.contains("hi"))
     }
-
-    @Test func shellRunDescribesTheFence() throws {
-        let run = try #require(ShellCapability.tools(jobs: ShellJobs()).first { $0.tool.name == "shell_run" })
-        let text = run.tool.description ?? ""
-        #expect(text.contains("LATCHKEY_SCRATCH"))
-        #expect(text.contains("keep_minutes"))
-        let props = run.tool.inputSchema["properties"]
-        #expect(props?["writes"] != nil)
-        #expect(props?["keep_minutes"] != nil)
-        #expect(props?["why"] != nil)
-        #expect(props?["uses"]?["items"]?["enum"] == .array([.string("open")]))
-        #expect(text.contains("uses"))
-    }
 }
 
 @Suite struct PermanentWatchTests {

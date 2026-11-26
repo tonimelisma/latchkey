@@ -612,10 +612,6 @@ final class DownloadSafari: ScriptRunner, @unchecked Sendable {
     @Test func browserActTakesTheNewActions() async throws {
         let t = tools(FakeSafariTabs())
         let act = try #require(t["browser_act"])
-        let schema = act.tool.inputSchema.jsonText
-        for a in ["select", "key", "hover", "scroll", "upload", "download", "dialog"] {
-            #expect(schema.contains(a), "\(a)")
-        }
         let tab: JSONValue = .string("10.2")
         let calls: [[String: JSONValue]] = [
             ["action": .string("key"), "keys": .string("Tab Enter"), "tab": tab],
