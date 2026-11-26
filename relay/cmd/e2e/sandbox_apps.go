@@ -138,11 +138,18 @@ end run`, tag)
 		return err
 	}
 	// delete a note, then the folders (their notes go to Recently Deleted)
-	if _, err := s.ask("notes_change", map[string]any{"action": "delete", "id": list}); err != nil {
+	// Notes may take the note off its list before it saves the delete, and Latchkey says so ("check
+	// with notes_find in a minute", case notes_delete_saved): then the check looks for up to a
+	// minute, as Claude is told to.
+	res, err := s.m.call("notes_change", map[string]any{"action": "delete", "id": list})
+	if err != nil {
 		return err
 	}
-	if err := s.holds("notes", "missing", tag+" list"); err != nil {
-		return err
+	if said := e2erelay.TextOf(res); res.IsError && !strings.Contains(said, "hasn't saved that yet") {
+		return fmt.Errorf("notes_change delete: %s", said)
+	}
+	if !waitFor(60*time.Second, func() bool { return s.fx.checkWordsOK("notes", "missing", tag+" list") }) {
+		return s.holds("notes", "missing", tag+" list")
 	}
 	for _, f := range []string{folder, tag + " new folder"} {
 		if _, err := s.ask("notes_change", map[string]any{"action": "delete_folder", "folder": f}); err != nil {
@@ -274,19 +281,23 @@ end run`, tag)
 	if stamps == "" {
 		return fmt.Errorf("reminders_find gave Buy stamps no id: %q", short(t))
 	}
+	rent := idOn(t, "Pay rent")
 	if _, err := s.ask("reminders_change", map[string]any{"action": "complete", "id": stamps}); err != nil {
 		return err
 	}
-	if err := s.holds("reminders", "completed", "Buy stamps"); err != nil {
+	// Read by the reminder's own id: a name can match a reminder an earlier, stopped run left
+	// (the third sandbox run read "Buy stamps" as still completed after uncomplete; by hand, in
+	// the same order and speed, Reminders showed it open at once).
+	if err := reminderIs(stamps, true); err != nil {
 		return err
 	}
-	if err := s.holds("reminders", "not-completed", "Pay rent"); err != nil {
+	if err := reminderIs(rent, false); err != nil {
 		return err
 	}
 	if _, err := s.ask("reminders_change", map[string]any{"action": "uncomplete", "id": stamps}); err != nil {
 		return err
 	}
-	if err := s.holds("reminders", "not-completed", "Buy stamps"); err != nil {
+	if err := reminderIs(stamps, false); err != nil {
 		return fmt.Errorf("after uncomplete: %w", err)
 	}
 	if _, err := s.ask("reminders_change", map[string]any{"action": "create_list", "title": tag}); err != nil {
@@ -347,6 +358,25 @@ end run`, tag); err != nil || left != "false" {
 	}
 	step("reminders: completed and reopened, a new list, a reminder due in 3 days, updated, completed list, deleted, the list deleted with its count, as Reminders shows")
 	return nil
+}
+
+// reminderIs waits up to 10 s for Reminders to show the reminder with Latchkey's id as completed
+// (or not): Reminders' own id is "x-apple-reminder://" and the same identifier.
+func reminderIs(id string, completed bool) error {
+	var got string
+	var err error
+	if waitFor(10*time.Second, func() bool {
+		got, err = osaOut(`on run argv
+tell application "Reminders" to return (completed of (first reminder whose id is ("x-apple-reminder://" & (item 1 of argv)))) as text
+end run`, id)
+		return err == nil && got == strconv.FormatBool(completed)
+	}) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("reading the reminder %s in Reminders: %w", id, err)
+	}
+	return fmt.Errorf("in Reminders the reminder %s has completed=%s, want %t", id, got, completed)
 }
 
 func (s *sandbox) contacts() error {

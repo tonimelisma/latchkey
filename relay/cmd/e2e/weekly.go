@@ -71,7 +71,9 @@ func prepareCmd(args []string) error {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return err
 	}
-	if _, err := os.Stat(filepath.Join(dir, "relay.pem")); err != nil {
+	_, noRelay := os.Stat(filepath.Join(dir, "relay.pem"))
+	_, noPages := os.Stat(filepath.Join(dir, "pages.pem"))
+	if noRelay != nil || noPages != nil {
 		step("making the test authority and the relay's certificate")
 		if err := makeCerts(dir); err != nil {
 			return err
@@ -198,8 +200,15 @@ func startStateRelayAt(ctx context.Context, dir, listen string) (*e2erelay.Priva
 	})
 }
 
-// makeCerts makes a test authority (ca.pem; the image script trusts it in the test Mac) and the
-// relay's certificate for relayHost.
+// pageSites are the two sites the sandbox's Safari checks serve their pages from, over https
+// (Latchkey follows its own Safari tab across pages only on https sites of one registrable
+// domain: the third sandbox run's pages on http://127.0.0.1 lost the tab after a form). Two
+// registrable domains, so a link between them goes to another site. The test Mac's /etc/hosts
+// sends both to itself (eval-image.sh).
+var pageSites = []string{"site-one.test", "site-two.test"}
+
+// makeCerts makes a test authority (ca.pem; the image script trusts it in the test Mac) that can
+// sign only for relayHost and pageSites, and with it the relay's certificate and the pages'.
 func makeCerts(dir string) error {
 	caKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
@@ -210,7 +219,7 @@ func makeCerts(dir string) error {
 		SerialNumber: big.NewInt(1), Subject: pkix.Name{CommonName: "Latchkey eval test authority (test Mac only)"},
 		NotBefore: now.Add(-time.Hour), NotAfter: now.AddDate(5, 0, 0), IsCA: true, BasicConstraintsValid: true,
 		KeyUsage: x509.KeyUsageCertSign | x509.KeyUsageCRLSign, MaxPathLenZero: true,
-		PermittedDNSDomainsCritical: true, PermittedDNSDomains: []string{relayHost},
+		PermittedDNSDomainsCritical: true, PermittedDNSDomains: append([]string{relayHost}, pageSites...),
 	}
 	caDER, err := x509.CreateCertificate(rand.Reader, ca, ca, &caKey.PublicKey, caKey)
 	if err != nil {
@@ -220,28 +229,32 @@ func makeCerts(dir string) error {
 	if err != nil {
 		return err
 	}
-	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	if err != nil {
-		return err
+	files := map[string]*pem.Block{"ca.pem": {Type: "CERTIFICATE", Bytes: caDER}}
+	for i, c := range []struct {
+		name  string
+		hosts []string
+	}{{"relay", []string{relayHost}}, {"pages", pageSites}} {
+		key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+		if err != nil {
+			return err
+		}
+		leaf := &x509.Certificate{
+			SerialNumber: big.NewInt(int64(2 + i)), Subject: pkix.Name{CommonName: c.hosts[0]}, DNSNames: c.hosts,
+			NotBefore: now.Add(-time.Hour), NotAfter: now.AddDate(1, 0, 0).Add(-24 * time.Hour), // under 398 days
+			KeyUsage: x509.KeyUsageDigitalSignature, ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+		}
+		leafDER, err := x509.CreateCertificate(rand.Reader, leaf, caCert, &key.PublicKey, caKey)
+		if err != nil {
+			return err
+		}
+		keyDER, err := x509.MarshalECPrivateKey(key)
+		if err != nil {
+			return err
+		}
+		files[c.name+".pem"] = &pem.Block{Type: "CERTIFICATE", Bytes: leafDER}
+		files[c.name+"-key.pem"] = &pem.Block{Type: "EC PRIVATE KEY", Bytes: keyDER}
 	}
-	leaf := &x509.Certificate{
-		SerialNumber: big.NewInt(2), Subject: pkix.Name{CommonName: relayHost}, DNSNames: []string{relayHost},
-		NotBefore: now.Add(-time.Hour), NotAfter: now.AddDate(1, 0, 0).Add(-24 * time.Hour), // under 398 days
-		KeyUsage: x509.KeyUsageDigitalSignature, ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
-	}
-	leafDER, err := x509.CreateCertificate(rand.Reader, leaf, caCert, &key.PublicKey, caKey)
-	if err != nil {
-		return err
-	}
-	keyDER, err := x509.MarshalECPrivateKey(key)
-	if err != nil {
-		return err
-	}
-	for name, block := range map[string]*pem.Block{
-		"ca.pem":        {Type: "CERTIFICATE", Bytes: caDER},
-		"relay.pem":     {Type: "CERTIFICATE", Bytes: leafDER},
-		"relay-key.pem": {Type: "EC PRIVATE KEY", Bytes: keyDER},
-	} {
+	for name, block := range files {
 		if err := os.WriteFile(filepath.Join(dir, name), pem.EncodeToMemory(block), 0o600); err != nil {
 			return err
 		}

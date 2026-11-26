@@ -2,9 +2,14 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
+	"encoding/pem"
 	"errors"
 	"io"
 	"net"
+	"os"
+	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
@@ -118,6 +123,55 @@ func TestTestMacChecksLookForThePairedMachinesName(t *testing.T) {
 	const name = "Managed’s Virtual Machine"
 	if m := vmMacCheck(ctx, nil, name); m.machine != name {
 		t.Fatalf("vmMacCheck looks for %q, want %q", m.machine, name)
+	}
+}
+
+// Regression (the third sandbox run, 2026-11-26): a script's number was read as the first digit
+// in the answer, the 5 of the page's name "pj5sp".
+func TestAScriptsNumberIsReadByItsLabel(t *testing.T) {
+	answer := `From Latchkey's own browser: Claude's page "pj5sp" ... Result: Y=512 · 100% battery`
+	if got := scriptY(answer); got != 512 {
+		t.Fatalf("read %d, want 512", got)
+	}
+	if got := scriptY(`page "pj5sp", no label`); got != -1 {
+		t.Fatalf("without the label: %d, want -1", got)
+	}
+}
+
+// The Safari checks' pages are https on two sites (the third sandbox run: http pages lost
+// Claude's tab after a form), signed by the test Mac's authority, which may sign nothing else.
+func TestTheTestMacsCertificatesCoverTheRelayAndTheTwoPageSites(t *testing.T) {
+	dir := t.TempDir()
+	if err := makeCerts(dir); err != nil {
+		t.Fatal(err)
+	}
+	read := func(name string) *x509.Certificate {
+		b, err := os.ReadFile(filepath.Join(dir, name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		blk, _ := pem.Decode(b)
+		c, err := x509.ParseCertificate(blk.Bytes)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return c
+	}
+	ca := read("ca.pem")
+	roots := x509.NewCertPool()
+	roots.AddCert(ca)
+	for name, hosts := range map[string][]string{"relay.pem": {relayHost}, "pages.pem": pageSites} {
+		for _, h := range hosts {
+			if _, err := read(name).Verify(x509.VerifyOptions{DNSName: h, Roots: roots}); err != nil {
+				t.Errorf("%s for %s: %v", name, h, err)
+			}
+		}
+	}
+	if got := ca.PermittedDNSDomains; !slices.Equal(got, append([]string{relayHost}, pageSites...)) || !ca.PermittedDNSDomainsCritical {
+		t.Errorf("the authority may sign for %v (critical %v)", got, ca.PermittedDNSDomainsCritical)
+	}
+	if _, err := tls.LoadX509KeyPair(filepath.Join(dir, "pages.pem"), filepath.Join(dir, "pages-key.pem")); err != nil {
+		t.Errorf("the pages' key pair: %v", err)
 	}
 }
 

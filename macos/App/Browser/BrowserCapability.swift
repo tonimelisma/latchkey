@@ -656,7 +656,9 @@ enum BrowserCapability {
         case .moved:
             "Safari's tabs changed while Latchkey was using the owner's tab. Try again."
         case .goneAfterAction:
-            "Done: the action ran in the owner's Safari tab, and the tab then went to a page Latchkey can't surely tell apart from another tab, so it stopped working in it. To see the page, list the tabs with browser_look and tabs, and pick it again."
+            // Whose tab it was: a tab of Claude's own was called the owner's (the sandbox's
+            // third run, 2026-11-26).
+            "Done: the action ran in \(Asked.safariName.map { "Claude's Safari tab \"\($0)\"" } ?? "the owner's Safari tab"), and the tab then went to a page Latchkey can't surely tell apart from another tab, so it stopped working in it. To see the page, list the tabs with browser_look and tabs, and pick it again."
         case .tabGone:
             "The Safari tab Claude was working in isn't where it was (it was closed, or the tabs in its window changed), so nothing was done to any tab. List the tabs with browser_look and tabs, and pick it again."
         case .javaScriptOff:

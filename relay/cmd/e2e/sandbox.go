@@ -281,20 +281,30 @@ func (s *sandbox) run(res *sandboxResult, names []string) error {
 // callOne starts as a run does (the relay, its proxy, the sign-in) and calls one tool: "name
 // {json arguments}"; it prints the answer as Claude gets it.
 func (s *sandbox) callOne(line string) error {
-	name, raw, _ := strings.Cut(strings.TrimSpace(line), " ")
-	args := map[string]any{}
-	if strings.TrimSpace(raw) != "" {
-		if err := json.Unmarshal([]byte(raw), &args); err != nil {
-			return fmt.Errorf("the arguments aren't a JSON object: %w", err)
+	type call struct {
+		name string
+		args map[string]any
+	}
+	var calls []call
+	for part := range strings.SplitSeq(line, " ;; ") { // several calls, one after another
+		name, raw, _ := strings.Cut(strings.TrimSpace(part), " ")
+		args := map[string]any{}
+		if strings.TrimSpace(raw) != "" {
+			if err := json.Unmarshal([]byte(raw), &args); err != nil {
+				return fmt.Errorf("the arguments of %s aren't a JSON object: %w", name, err)
+			}
 		}
+		calls = append(calls, call{name, args})
 	}
 	var res sandboxResult
 	s.only = func() error {
-		r, err := s.m.call(name, args)
-		if err != nil {
-			return err
+		for _, c := range calls {
+			r, err := s.m.call(c.name, c.args)
+			if err != nil {
+				return err
+			}
+			fmt.Printf("--- %s isError: %v\n%s\n", c.name, r.IsError, e2erelay.TextOf(r))
 		}
-		fmt.Printf("isError: %v\n%s\n", r.IsError, e2erelay.TextOf(r))
 		return nil
 	}
 	return s.run(&res, nil)

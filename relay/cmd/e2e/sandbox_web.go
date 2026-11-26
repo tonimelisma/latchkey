@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"net"
@@ -30,10 +31,13 @@ type webPages struct {
 	srv  *http.Server
 	mu   sync.Mutex
 	got  []string
+	// https on pageSites when the test Mac has their certificate (makeCerts); else http on
+	// 127.0.0.1 and localhost.
+	scheme, one, two string
 }
 
-func (p *webPages) site() string  { return "http://127.0.0.1:" + strconv.Itoa(p.port) }
-func (p *webPages) other() string { return "http://localhost:" + strconv.Itoa(p.port) }
+func (p *webPages) site() string  { return p.scheme + "://" + p.one + ":" + strconv.Itoa(p.port) }
+func (p *webPages) other() string { return p.scheme + "://" + p.two + ":" + strconv.Itoa(p.port) }
 
 func (p *webPages) saw(uri string) bool {
 	p.mu.Lock()
@@ -71,7 +75,13 @@ func startWebPages(ctx context.Context, marker string) (*webPages, error) {
 	if err != nil {
 		return nil, err
 	}
-	p := &webPages{port: l.Addr().(*net.TCPAddr).Port}
+	p := &webPages{port: l.Addr().(*net.TCPAddr).Port, scheme: "http", one: "127.0.0.1", two: "localhost"}
+	if dir, err := stateDir(); err == nil {
+		if cert, err := tls.LoadX509KeyPair(filepath.Join(dir, "pages.pem"), filepath.Join(dir, "pages-key.pem")); err == nil {
+			l = tls.NewListener(l, &tls.Config{Certificates: []tls.Certificate{cert}, MinVersion: tls.VersionTLS12})
+			p.scheme, p.one, p.two = "https", pageSites[0], pageSites[1]
+		}
+	}
 	page := func(body string) http.HandlerFunc {
 		return func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -193,14 +203,14 @@ func (s *sandbox) pageActions(where map[string]any, home string, p *webPages) er
 	if _, err := s.act(where, map[string]any{"action": "scroll", "direction": "down", "amount": 500}); err != nil {
 		return err
 	}
-	if v, err := s.script(where, "String(Math.round(window.scrollY))"); err != nil || atoi(strings.TrimSpace(firstNumber(v))) < 400 {
+	if v, err := s.script(where, "'Y=' + Math.round(window.scrollY)"); err != nil || scriptY(v) < 400 {
 		return fmt.Errorf("after scrolling down 500 the page is at %q (%w)", v, err)
 	}
 	if box != "" {
 		if _, err := s.act(where, map[string]any{"action": "scroll", "ref": box, "direction": "bottom"}); err != nil {
 			return err
 		}
-		if v, err := s.script(where, "String(document.getElementById('box').scrollTop)"); err != nil || atoi(firstNumber(v)) < 500 {
+		if v, err := s.script(where, "'Y=' + document.getElementById('box').scrollTop"); err != nil || scriptY(v) < 500 {
 			return fmt.Errorf("the box scrolled to its bottom is at %q (%w)", v, err)
 		}
 	}
@@ -240,9 +250,18 @@ func (s *sandbox) script(where map[string]any, code string) (string, error) {
 	return s.act(where, map[string]any{"action": "script", "code": code})
 }
 
-var numberRE = regexp.MustCompile(`-?\d+`)
+// scriptY reads the number a script answered as "Y=123" (-1 when it isn't there): the answer
+// also carries the page's name and the Mac's state line, whose digits the first sandbox runs took
+// for the result.
+var scriptYRE = regexp.MustCompile(`\bY=(-?\d+)`)
 
-func firstNumber(s string) string { return numberRE.FindString(s) }
+func scriptY(answer string) int {
+	g := scriptYRE.FindStringSubmatch(answer)
+	if g == nil {
+		return -1
+	}
+	return atoi(strings.TrimPrefix(g[1], "-")) * map[bool]int{true: -1, false: 1}[strings.HasPrefix(g[1], "-")]
+}
 
 // browserFull: Latchkey's own browser (former state-check browser.*), on served pages.
 func (s *sandbox) browserFull() error {

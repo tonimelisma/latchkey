@@ -139,6 +139,12 @@ func need(args []string, n int) error {
 }
 
 // checkWords returns "" when the state holds, else what is wrong; err when it couldn't look.
+// checkWordsOK says whether the end state holds now (no error, nothing wrong).
+func (f *fixtures) checkWordsOK(area, verb string, a ...string) bool {
+	why, err := f.checkWords(area, verb, a)
+	return err == nil && why == ""
+}
+
 func (f *fixtures) checkWords(area, verb string, a []string) (string, error) {
 	file := func(rel string) string { return filepath.Join(f.root(), filepath.FromSlash(rel)) }
 	switch area + " " + verb {
