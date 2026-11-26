@@ -54,7 +54,10 @@ after each action), logins_fill's mark on pages that carry one reference twice (
 fill's own), and tests that had assumed script behaviour (Enter in a form without a send button,
 macOS's log lines in xcodebuild's output). Mac run 45725364764 (2026-11-26 00:16 UTC): unit tests
 0 failed; tests with web pages or time limits 349 passed, 1 failed (the temporary diagnostic,
-removed in the next commit).
+removed in the next commit). Then (Toni, 2026-11-26: "split the slow step into parallel jobs,
+get it to 5 minutes"), pull request #55: four jobs side by side, two test programs each, the
+Swift packages cached (`docs/cloud-sessions.md`): run 45738349356 took 4:26 (was 17 minutes),
+unit tests 601 passed, short time limits alone 43 passed, the rest 306 passed, none failed.
 
 Known limits: a frame a page's script makes without an address (about:blank, srcdoc) may not get
 Latchkey's clipboard block, so a copy from there during a real click is only noticed afterwards

@@ -1,0 +1,8 @@
+ActivityLogScaleTests
+CloudFileTests
+DeadlineTests
+LevelChangeTests
+MenuTests
+MessagesStoreTests
+PasswordsExportCleanupTests
+SingleCopyTests
