@@ -377,7 +377,15 @@ func newestPDF(dir string, since time.Time) string {
 // invisible for a while: .claude/rules/macos.md).
 func safariWindows() (int, error) {
 	out, err := osaOut(`tell application "System Events" to if not (exists process "Safari") then return "0"
-tell application "Safari" to return (count of (every window whose visible is true and (count of tabs) > 0)) as text`)
+set n to 0
+tell application "Safari"
+repeat with w in windows
+try
+if visible of w and (count of tabs of w) > 0 then set n to n + 1
+end try
+end repeat
+end tell
+return n as text`)
 	if err != nil {
 		return 0, err
 	}

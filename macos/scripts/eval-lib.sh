@@ -163,6 +163,19 @@ vm_open_latchkey() {
 	done
 }
 
+# latchkey_accounts: from `security dump-keychain` on stdin, the account of each item whose
+# service is net.melisma.latchkey, one per line. An item's lines come in any order (the account
+# before the service, in the first sandbox run, 2026-11-26: none was found and the new build was
+# asked for the keychain's password).
+latchkey_accounts() {
+	awk '
+	function flush() { if (svc == "net.melisma.latchkey" && acct != "") print acct; svc = ""; acct = "" }
+	/^keychain:/ { flush() }
+	/"svce"<blob>="/ { s = $0; sub(/.*"svce"<blob>="/, "", s); sub(/"$/, "", s); svc = s }
+	/"acct"<blob>="/ { a = $0; sub(/.*"acct"<blob>="/, "", a); sub(/"$/, "", a); acct = a }
+	END { flush() }'
+}
+
 # vm_keychain_allow VMNAME: lets the installed build read Latchkey's items in the test Mac's
 # login keychain (its pairing, its activity log key). A build signed without an Apple team is
 # known to the keychain by its code hash, which every build changes, so without this each new
@@ -171,9 +184,13 @@ vm_keychain_allow() {
 	local name=$1 cd accounts a
 	cd=$(vm "$name" 'codesign -dvvv /Applications/Latchkey.app 2>&1 | sed -n "s/^CDHash=//p"')
 	[ -n "$cd" ] || die "couldn't read the installed build's code hash in the test Mac."
-	accounts=$(vm "$name" 'security dump-keychain ~/Library/Keychains/login.keychain-db 2>/dev/null |
-		awk "/\"svce\"<blob>=\"net.melisma.latchkey\"/ {s=1} /^keychain:/ {s=0; if (a!=\"\") print a; a=\"\"} s && /\"acct\"<blob>=/ {sub(/.*=\"/, \"\"); sub(/\"$/, \"\"); a=\$0} END {if (s && a!=\"\") print a}"' 2>/dev/null) || true
+	accounts=$(vm "$name" 'security dump-keychain ~/Library/Keychains/login.keychain-db 2>/dev/null' | latchkey_accounts) || true
+	# The activity log's items: a new build without an Apple team is asked for the keychain
+	# password for them even when allowed like the pairing (the sandbox's second run). The copy
+	# starts a fresh activity log with each new build instead; the pairing is kept.
+	vm "$name" 'for a in activity-log-key activity-log-latest; do security delete-generic-password -s net.melisma.latchkey -a "$a" >/dev/null 2>&1; done; true'
 	for a in $accounts; do
+		case "$a" in activity-log-key | activity-log-latest) continue ;; esac
 		printf '%s\n' "$VM_PASSWORD" | "$TART" exec -i "$name" /bin/zsh -c "read -r pw; security set-generic-password-partition-list -S 'apple-tool:,apple:,cdhash:$cd' -s net.melisma.latchkey -a '$a' -k \"\$pw\" ~/Library/Keychains/login.keychain-db >/dev/null" ||
 			die "couldn't let the new build read its keychain item $a in the test Mac."
 	done

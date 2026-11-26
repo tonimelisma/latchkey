@@ -36,7 +36,8 @@ const (
 // sandboxOrder is every check, in the order they run: the capabilities first, then the checks
 // that disturb the connection (moved from cmd/maccheck), each leaving the copy as it found it.
 var sandboxOrder = []string{
-	"tools", "files", "shell", "browser", "safari", "notes", "calendar", "reminders", "contacts", "computer",
+	"tools", "files", "shell", "browser", "safari", "notes", "calendar", "reminders", "contacts",
+	"contacts-card-with-note", "computer",
 	"maps", "location", "messages", "mail", "whatsapp", "logins",
 	"front-app-unchanged", "no-permission-prompts", "sweep",
 	"turned-off", "offline", "relay-restart", "network-cut", "suspended", "battery", "pair-preview",
@@ -143,8 +144,12 @@ func sandboxCmd(args []string) error {
 	out := fs.String("out", "sandbox.json", "where to write the result")
 	build := fs.String("build", "", "what was built (the commit), for the result")
 	list := fs.String("checks", "all", "comma-separated checks to run: "+strings.Join(sandboxOrder, ","))
+	call := fs.String("call", "", `instead of the checks, call one tool and print its answer: 'tool {"arg": 1}' (looking into a check by hand)`)
 	if err := fs.Parse(args); err != nil {
 		return err
+	}
+	if *call != "" {
+		return (&sandbox{}).callOne(*call)
 	}
 	names, err := selectChecks(*list)
 	if err != nil {
@@ -190,6 +195,8 @@ type sandbox struct {
 	watch *screenWatch
 	// watchErr: why the screen sampler isn't running (the two screen checks fail with it).
 	watchErr error
+	// only, set by -call, runs instead of the checks.
+	only func() error
 }
 
 func (s *sandbox) run(res *sandboxResult, names []string) error {
@@ -239,6 +246,9 @@ func (s *sandbox) run(res *sandboxResult, names []string) error {
 	if s.fx, err = newFixtures(nil); err != nil {
 		return err
 	}
+	if s.only != nil {
+		return s.only()
+	}
 	if res.MissingPermissions = probePermissions(s.ctx, s.cs); len(res.MissingPermissions) > 0 {
 		return fmt.Errorf("the sandbox image is missing permissions: %s (run eval-image.sh again)", strings.Join(res.MissingPermissions, ", "))
 	}
@@ -268,29 +278,52 @@ func (s *sandbox) run(res *sandboxResult, names []string) error {
 	return nil
 }
 
+// callOne starts as a run does (the relay, its proxy, the sign-in) and calls one tool: "name
+// {json arguments}"; it prints the answer as Claude gets it.
+func (s *sandbox) callOne(line string) error {
+	name, raw, _ := strings.Cut(strings.TrimSpace(line), " ")
+	args := map[string]any{}
+	if strings.TrimSpace(raw) != "" {
+		if err := json.Unmarshal([]byte(raw), &args); err != nil {
+			return fmt.Errorf("the arguments aren't a JSON object: %w", err)
+		}
+	}
+	var res sandboxResult
+	s.only = func() error {
+		r, err := s.m.call(name, args)
+		if err != nil {
+			return err
+		}
+		fmt.Printf("isError: %v\n%s\n", r.IsError, e2erelay.TextOf(r))
+		return nil
+	}
+	return s.run(&res, nil)
+}
+
 // checkFuncs is what each check that isn't skipped runs.
 func (s *sandbox) checkFuncs() map[string]func() error {
 	return map[string]func() error{
-		"tools":                 s.m.tools,
-		"files":                 s.filesFull,
-		"shell":                 s.shellFull,
-		"browser":               s.browserFull,
-		"safari":                s.safari,
-		"maps":                  s.maps,
-		"notes":                 s.notes,
-		"calendar":              s.calendar,
-		"reminders":             s.reminders,
-		"contacts":              s.contacts,
-		"computer":              s.computer,
-		"front-app-unchanged":   func() error { return s.screenVerdict(false) },
-		"no-permission-prompts": func() error { return s.screenVerdict(true) },
-		"sweep":                 s.sweep,
-		"turned-off":            s.turnedOff,
-		"offline":               s.offline,
-		"relay-restart":         s.relayRestart,
-		"network-cut":           s.networkCut,
-		"suspended":             s.suspended,
-		"battery":               s.battery,
+		"tools":                   s.m.tools,
+		"files":                   s.filesFull,
+		"shell":                   s.shellFull,
+		"browser":                 s.browserFull,
+		"safari":                  s.safari,
+		"maps":                    s.maps,
+		"notes":                   s.notes,
+		"calendar":                s.calendar,
+		"reminders":               s.reminders,
+		"contacts":                s.contacts,
+		"contacts-card-with-note": s.contactsCardWithNote,
+		"computer":                s.computer,
+		"front-app-unchanged":     func() error { return s.screenVerdict(false) },
+		"no-permission-prompts":   func() error { return s.screenVerdict(true) },
+		"sweep":                   s.sweep,
+		"turned-off":              s.turnedOff,
+		"offline":                 s.offline,
+		"relay-restart":           s.relayRestart,
+		"network-cut":             s.networkCut,
+		"suspended":               s.suspended,
+		"battery":                 s.battery,
 	}
 }
 
@@ -341,8 +374,15 @@ func (s *sandbox) fixture(lines ...string) error {
 }
 
 // holds checks an end state with the fixture's own reading of the app (not Latchkey's).
+// The app's own view can lag Latchkey's change by a moment (Reminders showed an uncompleted
+// reminder as completed for under 2 s, the first sandbox run), so it is read again for up to 10 s.
 func (s *sandbox) holds(area, verb string, args ...string) error {
-	why, err := s.fx.checkWords(area, verb, args)
+	var why string
+	var err error
+	waitFor(10*time.Second, func() bool {
+		why, err = s.fx.checkWords(area, verb, args)
+		return err == nil && why == ""
+	})
 	if err != nil {
 		return fmt.Errorf("check %s %s %v: %w", area, verb, args, err)
 	}
@@ -391,20 +431,43 @@ func (s *sandbox) screenVerdict(prompts bool) error {
 
 // The connection checks, moved from cmd/maccheck (plan D2, D3).
 
-func (s *sandbox) levelsBackup() string { return filepath.Join(s.dir, "prefs-before-turned-off.plist") }
+func (s *sandbox) levelsBackup() string { return filepath.Join(s.dir, "levels-before-turned-off.xml") }
 
-// restoreLevels puts back the settings a turned-off check saved, if they are still there.
+// levelsAbsent is the backup's content when Latchkey had no capabilityLevels setting (every
+// capability at its default).
+const levelsAbsent = "absent\n"
+
+// saveLevels keeps Latchkey's capabilityLevels setting as it is (or that it isn't there).
+func (s *sandbox) saveLevels() error {
+	export := filepath.Join(s.dir, "prefs-export.plist")
+	defer func() { _ = os.Remove(export) }()
+	if err := runQuiet("/usr/bin/defaults", "export", sandboxAppID, export); err != nil {
+		return err
+	}
+	if runQuiet("/usr/bin/plutil", "-extract", "capabilityLevels", "xml1", "-o", s.levelsBackup(), export) != nil {
+		return os.WriteFile(s.levelsBackup(), []byte(levelsAbsent), 0o600)
+	}
+	return nil
+}
+
+// restoreLevels puts back the setting saveLevels kept, if a backup is still there: the setting
+// is removed when there was none. (The first sandbox run imported the whole settings back, which
+// adds keys but never removes one, so Files stayed off when the setting hadn't existed.)
 func (s *sandbox) restoreLevels() error {
 	backup := s.levelsBackup()
-	if _, err := os.Stat(backup); err != nil {
+	saved, err := os.ReadFile(backup) //nolint:gosec // our own state folder
+	if err != nil {
 		return nil //nolint:nilerr // nothing saved: nothing to put back
 	}
-	step("putting back the settings an earlier run saved")
+	step("putting back the capability levels saved before")
 	if err := quitApp(); err != nil {
 		return err
 	}
-	if err := runQuiet("/usr/bin/defaults", "import", sandboxAppID, backup); err != nil {
-		return err
+	_ = runQuiet("/usr/bin/defaults", "delete", sandboxAppID, "capabilityLevels") // absent already is fine
+	if string(saved) != levelsAbsent {
+		if err := runQuiet("/usr/bin/defaults", "write", sandboxAppID, "capabilityLevels", string(saved)); err != nil {
+			return err
+		}
 	}
 	if err := os.Remove(backup); err != nil {
 		return err
@@ -424,7 +487,7 @@ func (s *sandbox) turnedOff() error {
 			return err == nil && slices.Contains(names, "shell_run") && slices.Contains(names, "files_read") == want
 		}
 	}
-	if err := runQuiet("/usr/bin/defaults", "export", sandboxAppID, s.levelsBackup()); err != nil {
+	if err := s.saveLevels(); err != nil {
 		return err
 	}
 	if err := quitApp(); err != nil {
@@ -572,7 +635,12 @@ func (s *sandbox) suspended() error {
 		return fmt.Errorf("after the suspension was lifted and Latchkey started again: %w", err)
 	}
 	step("suspended: disconnected and kept its pairing; lifted: connected again %s after a restart", back.Round(100*time.Millisecond))
-	return nil
+	// The suspension also ended Claude's sign-in (the next check got Unauthorized, the first
+	// sandbox run): Claude signs in again, as a person would after the account came back.
+	if s.token, err = s.b.Token(s.ctx, relayURL); err != nil {
+		return fmt.Errorf("signing in again after the suspension was lifted: %w", err)
+	}
+	return s.connect()
 }
 
 // battery: the state line every answer carries ("· N% battery") reads the real power source:

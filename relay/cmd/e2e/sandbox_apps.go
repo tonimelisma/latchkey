@@ -42,10 +42,13 @@ func (s *sandbox) notes() error {
 	tag := s.tag()
 	defer func() {
 		_ = s.fx.do("sweep notes")
+		// The first match each time: deleting inside "repeat with f in (every folder …)" left a
+		// folder behind (the first sandbox run).
 		_ = osa(`on run argv
 tell application "Notes"
-repeat with f in (every folder whose name starts with (item 1 of argv))
-delete f
+repeat 20 times
+if not (exists (first folder whose name starts with (item 1 of argv))) then exit repeat
+delete (first folder whose name starts with (item 1 of argv))
 end repeat
 end tell
 end run`, tag)
@@ -131,7 +134,7 @@ end run`, tag)
 	if list == "" {
 		return fmt.Errorf("the checklist got no id: %q", short(t))
 	}
-	if _, err := s.ask("notes_read", map[string]any{"id": list}, "- [ ] eggs", "- [x] milk"); err != nil {
+	if _, err := s.ask("notes_read", map[string]any{"id": list}, "☐ eggs", "☑ milk"); err != nil {
 		return err
 	}
 	// delete a note, then the folders (their notes go to Recently Deleted)
@@ -196,8 +199,14 @@ func (s *sandbox) calendar() error {
 	if _, err := s.ask("calendar_find", map[string]any{"id": id}, tag); err != nil {
 		return fmt.Errorf("reading the event: %w", err)
 	}
-	if _, err := s.ask("calendar_change", map[string]any{"action": "update", "id": id, "start": day(1) + "T04:00"}); err != nil {
+	moved, err := s.ask("calendar_change", map[string]any{"action": "update", "id": id, "start": day(1) + "T04:00"})
+	if err != nil {
 		return err
+	}
+	// An event's id carries its start, so a move gives it a new one, which the answer names (the
+	// old one is refused with "find it again"): the next calls use it, as Claude would.
+	if id = idOn(moved, tag); id == "" {
+		return fmt.Errorf("the move's answer gives no id: %q", short(moved))
 	}
 	if err := s.holds("calendar", "event-at", tag, "tomorrow", "04:00"); err != nil {
 		return fmt.Errorf("after the move: %w", err)
@@ -205,8 +214,12 @@ func (s *sandbox) calendar() error {
 	if mins, err := s.eventMinutes(tag); err != nil || mins != 15 {
 		return fmt.Errorf("after the move the event lasts %d minutes, want the 15 it had: %w", mins, err)
 	}
-	if _, err := s.ask("calendar_change", map[string]any{"action": "update", "id": id, "repeat": "daily", "repeat_count": 3}); err != nil {
+	repeated, err := s.ask("calendar_change", map[string]any{"action": "update", "id": id, "repeat": "daily", "repeat_count": 3})
+	if err != nil {
 		return err
+	}
+	if next := idOn(repeated, tag); next != "" {
+		id = next
 	}
 	if _, err := s.ask("calendar_find", map[string]any{"id": id}, "repeat"); err != nil {
 		return fmt.Errorf("the repeat isn't said: %w", err)
@@ -435,6 +448,48 @@ end run`, family, tag); err != nil || left != "0" {
 	return nil
 }
 
+// contactsCardWithNote: a card that has a note can be changed (found in the sandbox's first run,
+// 2026-11-26: every update of such a card fails with Cocoa error 134092, because macOS lets only
+// apps with Apple's Contacts notes entitlement change a card with a note; cards without one
+// change fine). Fails until Latchkey can change such cards.
+func (s *sandbox) contactsCardWithNote() error {
+	family := "Notecard" + s.m.marker
+	if err := osa(`on run argv
+tell application "Contacts"
+make new person with properties {first name:"Latchkey", last name:(item 1 of argv), organization:(item 2 of argv), note:"a note the owner wrote"}
+save
+end tell
+end run`, family, evalName); err != nil {
+		return err
+	}
+	defer func() {
+		_ = osa(`on run argv
+tell application "Contacts"
+delete (every person whose last name is (item 1 of argv))
+save
+end tell
+end run`, family)
+	}()
+	var t string
+	if !waitFor(20*time.Second, func() bool {
+		var err error
+		t, err = s.m.text("contacts_find", map[string]any{"query": family})
+		return err == nil && idOn(t, family) != ""
+	}) {
+		return fmt.Errorf("contacts_find never listed the card with a note: %q", short(t))
+	}
+	if _, err := s.ask("contacts_change", map[string]any{"action": "update", "id": idOn(t, family), "job_title": "Tester"}); err != nil {
+		return fmt.Errorf("a card with a note: %w", err)
+	}
+	if got, err := osaOut(`on run argv
+tell application "Contacts" to return job title of (first person whose last name is (item 1 of argv))
+end run`, family); err != nil || got != "Tester" {
+		return fmt.Errorf("after the update, Contacts has the job title %q: %w", got, err)
+	}
+	step("contacts: a card with a note was changed, as Contacts shows")
+	return nil
+}
+
 // filesFull: the files group (former state-check files.*), every change seen on disk.
 func (s *sandbox) filesFull() error {
 	if err := s.m.files(); err != nil {
@@ -551,14 +606,18 @@ func (s *sandbox) shellFull() error {
 	if g == nil {
 		return fmt.Errorf("a command waiting for input didn't become a job: %q", short(t))
 	}
-	if _, err := s.ask("shell_run", map[string]any{"job": g[1], "input": "abc"}); err != nil {
+	sent, err := s.ask("shell_run", map[string]any{"job": g[1], "input": "abc"})
+	if err != nil {
 		return err
 	}
-	if !waitFor(20*time.Second, func() bool {
-		t, err := s.m.text("shell_check", map[string]any{"job": g[1], "wait": 5})
-		return err == nil && strings.Contains(t, "got-abc")
+	// The output can come with the input's own answer (then shell_check has nothing new).
+	last := sent
+	if !strings.Contains(sent, "got-abc") && !waitFor(20*time.Second, func() bool {
+		var err error
+		last, err = s.m.text("shell_check", map[string]any{"job": g[1], "wait": 5})
+		return err == nil && strings.Contains(last, "got-abc")
 	}) {
-		return errors.New("the job never showed got-abc after its input")
+		return fmt.Errorf("the job never showed got-abc after its input (run: %q; input: %q; last check: %q)", short(t), short(sent), short(last))
 	}
 	// stop
 	t, err = s.ask("shell_run", map[string]any{"command": "sleep 300", "wait": 2})
@@ -621,7 +680,7 @@ if exists list e then set found to found & "a Reminders list " & e & "; "
 if exists list t then set found to found & "a Reminders list " & t & "; "
 end tell
 tell application "Contacts"
-if (count of (every person whose note is e)) > 0 then set found to found & "a card with the note " & e & "; "
+if (count of (every person whose organization is e)) > 0 then set found to found & "a card of the company " & e & "; "
 if (count of (every group whose name starts with t)) > 0 then set found to found & "a group " & t & "; "
 end tell
 return found

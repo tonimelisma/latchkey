@@ -64,7 +64,26 @@ exec)
 	case "$*" in
 	*"e2e-bin sandbox"*) echo "PASS files (1.0 s)"; exit "${FAKE_CHECKS_EXIT:-0}" ;;
 	*"codesign -dvvv"*) echo abcdef0123456789 ;;
-	*"dump-keychain"*) echo pairing; echo activity-log-key ;;
+	*"dump-keychain"*) cat <<'K'
+keychain: "/Users/admin/Library/Keychains/login.keychain-db"
+class: "genp"
+attributes:
+    0x00000007 <blob>="net.melisma.latchkey"
+    "acct"<blob>="pairing"
+    "svce"<blob>="net.melisma.latchkey"
+keychain: "/Users/admin/Library/Keychains/login.keychain-db"
+class: "genp"
+attributes:
+    "acct"<blob>="someone"
+    "svce"<blob>="com.example.other"
+keychain: "/Users/admin/Library/Keychains/login.keychain-db"
+class: "genp"
+attributes:
+    0x00000007 <blob>="net.melisma.latchkey"
+    "acct"<blob>="activity-log-key"
+    "svce"<blob>="net.melisma.latchkey"
+K
+		;;
 	*"set-generic-password-partition-list"*) echo "$*" >>"$W/partition.log" ;;
 	*"cat "*sandbox.json*) printf '%s\n' "${FAKE_RESULT-{\"kind\":\"sandbox\"}}" ;;
 	esac
@@ -215,8 +234,13 @@ has "a line per check is printed" "$out" "PASS files"
 # Regression (first local run, 2026-11-26): a build without an Apple team is known to the
 # keychain by its code hash, so each new build was asked for the test Mac's keychain password.
 grep -q "cdhash:abcdef0123456789' -s net.melisma.latchkey -a 'pairing'" "$work/partition.log" 2>/dev/null &&
-	grep -q -- "-a 'activity-log-key'" "$work/partition.log" &&
-	ok "each new build may read Latchkey's keychain items in the copy" || bad "keychain partition list ($(cat "$work/partition.log" 2>/dev/null))"
+	ok "each new build may read the pairing in the copy's keychain" || bad "keychain partition list ($(cat "$work/partition.log" 2>/dev/null))"
+# Regression (the sandbox's second run): the activity log's items asked for the password anyway;
+# they are deleted for each new build (a fresh log), never allowed.
+if grep -q "activity-log" "$work/partition.log" 2>/dev/null; then bad "the activity log's items aren't allowed"; else ok "the activity log's items aren't allowed"; fi
+grep -q 'delete-generic-password -s net.melisma.latchkey -a "$a"' "$work/tart.log" && grep -q 'for a in activity-log-key activity-log-latest' "$work/tart.log" &&
+	ok "the activity log's items are deleted for a new build, the pairing kept" || bad "activity log items deleted"
+if grep -q "someone" "$work/partition.log" 2>/dev/null; then bad "another app's keychain item is left alone"; else ok "another app's keychain item is left alone"; fi
 has "each phase's time is printed" "$out" "time: build [0-9]* s, start [0-9]* s, install [0-9]* s, checks [0-9]* s"
 res=$(ls "$repo"/e2e-results/sandbox-*.json 2>/dev/null | head -1)
 [ -n "$res" ] && grep -q '"kind":"sandbox"' "$res" && ok "the result is saved in e2e-results/" || bad "result saved ($res)"

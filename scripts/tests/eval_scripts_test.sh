@@ -65,6 +65,7 @@ g=$(grep -n '^vm_grant_permissions' "$image" | cut -d: -f1)
 o=$(grep -n '^vm_open_latchkey' "$image" | cut -d: -f1)
 [ -n "$g" ] && [ -n "$o" ] && [ "$g" -lt "$o" ] && grep -q 'install_latchkey_build "$BUILD" "$SANDBOX_APP" no-open' "$image" &&
 	ok "the permissions are granted before Latchkey first starts" || bad "grant before the first start (grant line $g, open line $o)"
+grep -q 'mdutil -i on' "$image" && ok "eval-image.sh turns Spotlight on (files_find searches with it)" || bad "Spotlight on"
 grep -q 'prepare -confirm' "$image" && ok "the pairing's Connect is answered inside the test Mac" || bad "prepare -confirm"
 grep -q 'csrutil status' "$root/macos/scripts/vm-permissions.zsh" && ok "the grant script refuses a Mac with System Integrity Protection on" || bad "SIP guard"
 # The local build needs Xcode; --release doesn't.

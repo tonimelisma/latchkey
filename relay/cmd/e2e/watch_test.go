@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 )
@@ -8,7 +9,7 @@ import (
 var testDisplay = []screenWindow{{X: 0, Y: 0, W: 1024, H: 768}}
 
 func screen(front string, pid int, wins ...screenWindow) screenState {
-	return screenState{Front: front, FrontID: pid, MouseX: 100, MouseY: 200, Clip: 7, Windows: wins}
+	return screenState{Front: front, FrontID: jsNumber(pid), MouseX: 100, MouseY: 200, Clip: 7, Windows: wins}
 }
 
 func TestScreenChangesSeesWhatAPersonWould(t *testing.T) {
@@ -57,6 +58,19 @@ func TestScreenChangesPromptsAlwaysCount(t *testing.T) {
 	}
 	if len(p) != 1 || !strings.Contains(p[0], "UserNotificationCenter") {
 		t.Errorf("the question: %v", p)
+	}
+}
+
+// Regression (the first sandbox run, 2026-11-26): the sampler printed the clipboard's count as a
+// string, and every sample was dropped as unreadable ("gave no sample in 10 s").
+func TestASampleAsTheTestMacPrintsItIsRead(t *testing.T) {
+	line := `{"front":"SecurityAgent","pid":965,"mx":10,"my":758,"clip":"1","windows":[{"owner":"SecurityAgent","pid":965,"id":51,"layer":1000,"x":295,"y":155,"w":434,"h":182}]}`
+	var s screenState
+	if err := json.Unmarshal([]byte(line), &s); err != nil {
+		t.Fatalf("the test Mac's sample isn't read: %v", err)
+	}
+	if s.Clip != 1 || s.FrontID != 965 || s.Front != "SecurityAgent" || len(s.Windows) != 1 || s.Windows[0].Layer != 1000 {
+		t.Fatalf("read as %+v", s)
 	}
 }
 

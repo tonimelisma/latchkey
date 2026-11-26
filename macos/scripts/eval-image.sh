@@ -62,6 +62,9 @@ vm "$BUILD" "$VM_DIR/e2e-bin prepare -certs" >/dev/null
 vm_home=$(vm "$BUILD" 'printf %s "$HOME"')
 vm_sudo "$BUILD" "security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain '$vm_home/latchkey-eval-state/ca.pem'"
 vm_sudo "$BUILD" "grep -q relay.latchkey.test /etc/hosts || echo '127.0.0.1 relay.latchkey.test' >> /etc/hosts"
+# Spotlight, which files_find searches with: the base image has indexing off (the sandbox's
+# first run, 2026-11-26: the search never found a file).
+vm_sudo "$BUILD" "mdutil -i on / /System/Volumes/Data >/dev/null"
 
 say "installing the sandbox-signed build ($SANDBOX_LABEL) and granting its permissions before it first starts"
 install_latchkey_build "$BUILD" "$SANDBOX_APP" no-open

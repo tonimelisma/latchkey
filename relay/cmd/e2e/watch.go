@@ -8,6 +8,7 @@ import (
 	"math"
 	"os/exec"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -23,11 +24,29 @@ import (
 // screenState is one sample.
 type screenState struct {
 	Front   string         `json:"front"`
-	FrontID int            `json:"pid"`
+	FrontID jsNumber       `json:"pid"`
 	MouseX  float64        `json:"mx"`
 	MouseY  float64        `json:"my"`
-	Clip    int            `json:"clip"`
+	Clip    jsNumber       `json:"clip"`
 	Windows []screenWindow `json:"windows"`
+}
+
+// jsNumber is a whole number JavaScript for Automation may print as a string ("clip":"1": a
+// bridged NSInteger, the first sandbox run, where every sample was dropped as unreadable).
+type jsNumber int
+
+func (n *jsNumber) UnmarshalJSON(b []byte) error {
+	s := strings.Trim(string(b), `"`)
+	if s == "" || s == "null" {
+		*n = 0
+		return nil
+	}
+	v, err := strconv.ParseFloat(s, 64)
+	if err != nil {
+		return err
+	}
+	*n = jsNumber(v)
+	return nil
 }
 
 type screenWindow struct {
@@ -108,7 +127,7 @@ function run() {
     var m = $.NSEvent.mouseLocation;
     var list = ObjC.deepUnwrap(ObjC.castRefToObject($.CGWindowListCopyWindowInfo($.kCGWindowListOptionOnScreenOnly | $.kCGWindowListExcludeDesktopElements, $.kCGNullWindowID))) || [];
     var wins = list.map(function (w) { var b = w.kCGWindowBounds || {}; return {owner: w.kCGWindowOwnerName || "", pid: w.kCGWindowOwnerPID || 0, id: w.kCGWindowNumber || 0, layer: w.kCGWindowLayer || 0, x: b.X || 0, y: b.Y || 0, w: b.Width || 0, h: b.Height || 0}; });
-    out({front: fr ? fr.localizedName.js : "", pid: fr ? fr.processIdentifier : 0, mx: m.x, my: m.y, clip: $.NSPasteboard.generalPasteboard.changeCount, windows: wins});
+    out({front: fr ? fr.localizedName.js : "", pid: fr ? Number(fr.processIdentifier) : 0, mx: Number(m.x), my: Number(m.y), clip: Number($.NSPasteboard.generalPasteboard.changeCount), windows: wins});
     delay(0.3);
   }
 }`
