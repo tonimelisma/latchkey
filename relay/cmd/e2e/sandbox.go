@@ -125,6 +125,14 @@ func summaryLine(c sandboxCheck) string {
 // idRE finds an id in a tool's answer: "(id x-coredata://…/p12; …)", "id: …", "id ABC".
 var idRE = regexp.MustCompile(`\bid:? ([^\s;)]+)`)
 
+// sessionClosed says whether err means the MCP session itself is gone (a timed-out call can
+// close it), not that one call failed.
+func sessionClosed(err error) bool {
+	m := err.Error()
+	return errors.Is(err, context.DeadlineExceeded) || strings.Contains(m, "client is closing") ||
+		strings.Contains(m, "connection closed")
+}
+
 // refRE finds an element's reference in a look's answer, like e12.
 var refRE = regexp.MustCompile(`\be\d+\b`)
 
@@ -270,6 +278,14 @@ func (s *sandbox) run(res *sandboxResult, names []string) error {
 			start := time.Now()
 			if err := checks[n](); err != nil {
 				c.Result, c.Why = "failed", err.Error()
+				// A call that ran out of time can close the MCP session; then every later check
+				// failed with "client is closing" (the fifth sandbox run). The next check gets a
+				// new session, as a client would open one.
+				if sessionClosed(err) {
+					if cerr := s.connect(); cerr != nil {
+						step("couldn't open a new MCP session: %v", cerr)
+					}
+				}
 			} else {
 				c.Result = "passed"
 			}

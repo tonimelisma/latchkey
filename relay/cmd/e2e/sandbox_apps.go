@@ -373,13 +373,20 @@ func reminderIs(id string, completed bool) error {
 			step("Reminders showed the change after %s", took.Round(100*time.Millisecond))
 		}
 	}()
-	if waitFor(30*time.Second, func() bool {
+	// Every 2 s, not waitFor's 200 ms: asked that often, Reminders kept showing the old state for
+	// over 30 s (the fifth sandbox run), while asked every few seconds it showed the change in 5.
+	deadline := time.Now().Add(30 * time.Second)
+	for {
 		got, err = osaOut(`on run argv
 tell application "Reminders" to return (completed of (first reminder whose id is ("x-apple-reminder://" & (item 1 of argv)))) as text
 end run`, id)
-		return err == nil && got == strconv.FormatBool(completed)
-	}) {
-		return nil
+		if err == nil && got == strconv.FormatBool(completed) {
+			return nil
+		}
+		if time.Now().After(deadline) {
+			break
+		}
+		time.Sleep(2 * time.Second)
 	}
 	if err != nil {
 		return fmt.Errorf("reading the reminder %s in Reminders: %w", id, err)

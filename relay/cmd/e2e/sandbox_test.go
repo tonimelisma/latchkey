@@ -6,6 +6,7 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"errors"
+	"fmt"
 	"io"
 	"net"
 	"os"
@@ -172,6 +173,22 @@ func TestTheTestMacsCertificatesCoverTheRelayAndTheTwoPageSites(t *testing.T) {
 	}
 	if _, err := tls.LoadX509KeyPair(filepath.Join(dir, "pages.pem"), filepath.Join(dir, "pages-key.pem")); err != nil {
 		t.Errorf("the pages' key pair: %v", err)
+	}
+}
+
+// Regression (the fifth sandbox run, 2026-11-26): a call that ran out of time closed the MCP
+// session and every later check failed with it; such errors open a new session.
+func TestASessionThatClosedIsToldFromAFailedCheck(t *testing.T) {
+	for _, closed := range []error{
+		errors.New(`connection closed: calling "tools/call": client is closing: standalone SSE stream: exceeded 0 retries`),
+		fmt.Errorf("computer_act: %w", context.DeadlineExceeded),
+	} {
+		if !sessionClosed(closed) {
+			t.Errorf("%v: want a new session", closed)
+		}
+	}
+	if sessionClosed(errors.New("files_read still listed after Files was turned off")) {
+		t.Error("a check's own failure isn't a closed session")
 	}
 }
 
