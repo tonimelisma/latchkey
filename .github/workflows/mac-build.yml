@@ -136,7 +136,7 @@ jobs:
           rc=0
           only=$(python3 scripts/shard-suites.py quiet | sed 's/^/-only-testing:LatchkeyTests\//' | tr '\n' ' ')
           # shellcheck disable=SC2086
-          xcodebuild test-without-building -xctestrun "$(ls "$RUNNER_TEMP"/dd/Build/Products/*.xctestrun | head -1)" \
+          xcodebuild test-without-building -xctestrun "$(find "$RUNNER_TEMP/dd/Build/Products" -maxdepth 1 -name '*.xctestrun' | head -1)" \
             -destination 'platform=macOS' -derivedDataPath "$RUNNER_TEMP/dd-quiet" \
             -resultBundlePath "$RUNNER_TEMP/quiet.xcresult" -parallel-testing-enabled NO $only \
             > "$RUNNER_TEMP/quiet.log" 2>&1 || rc=$?
@@ -155,7 +155,7 @@ jobs:
         working-directory: macos
         continue-on-error: true
         run: |
-          run=$(ls "$RUNNER_TEMP"/dd/Build/Products/*.xctestrun | head -1)
+          run=$(find "$RUNNER_TEMP/dd/Build/Products" -maxdepth 1 -name '*.xctestrun' | head -1)
           for lane in 0 1; do
             group=$(( ${{ matrix.shard }} * 2 + lane ))
             only=$(python3 scripts/shard-suites.py 8 "$group" 105 2 | sed 's/^/-only-testing:LatchkeyTests\//' | tr '\n' ' ')

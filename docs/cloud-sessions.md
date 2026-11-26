@@ -80,10 +80,16 @@ applies, except:
   written in public), what to check, and what to report back.
 - Mac app without the Mac: `mac-build.yml` lints and builds the app (gating) and runs the whole
   unit test suite (reported, not gating) on GitHub's macOS runner for every change to `macos/`
-  (2026-11-23). A run takes about 9 minutes (5 of them the build) plus any wait
-  for a free Mac runner; since 2026-11-25 both Mac jobs keep Xcode's compilation cache between
-  runs (`actions/cache`, saved by every run, main's reused by pull requests), so a build compiles
-  only what changed (Toni: "isn't there a way to cut the 40 minutes to 5 minutes?"). Pushing
+  (2026-11-23). Since 2026-11-26 a run is four jobs side by side, about 4.5 minutes (Toni:
+  "split the slow step into parallel jobs, get it to 5 minutes"; GitHub runs at most five
+  macOS jobs at once on this plan, e2e-mac takes the fifth and runs on Linux when it has
+  nothing to check). Each job builds (about 1.5 minutes: Xcode's compilation cache and the
+  Swift packages are kept between runs, saved by job 0) and runs its share. Job 0 lints, runs the update and unit tests, then
+  the tests of short time limits alone (`macos/scripts/quiet-suites.txt`). All four run the
+  tests with web pages or time limits in two test programs each, each program one test at a
+  time, split by measured time (`macos/scripts/shard-suites.py` reads
+  `macos/scripts/suite-seconds.txt`; each run prints fresh `SUITE` seconds to copy there when
+  the split drifts; a new suite counts 20 s). Pushing
   again cancels the run in progress: push a batch, then wait. The runner is macOS 26 and slower: about 30 tests miss their timing limits there
   on main too, so compare a branch's failed tests (printed with why, and any crash report) with
   main's. There, work behind a deadline can wait longer than the deadline just for a thread (a
