@@ -390,6 +390,9 @@ struct TraceDay: Sendable {
 /// (the app's `TraceStore`).
 struct TraceFiles: Sendable {
     let folder: URL
+    /// Each day's count of lines that can't be read with a key, by the size of its entries file
+    /// (`unreadable`). Shared by the copies of this folder's value.
+    private let counted = Counted()
 
     static let entriesSuffix = ".entries"
     static let contentSuffix = ".content"
@@ -453,6 +456,43 @@ struct TraceFiles: Sendable {
                     mac: l.mac.isEmpty ? nil : Data(base64Encoded: l.mac), day: day, off: l.off, len: l.len))
         }
         return out
+    }
+
+    /// How many entries of the whole log can't be read with `keyID` (another key's, or a line
+    /// this app can't read). A day is counted again only when its entries file grew: files are
+    /// only ever appended to, so a file of the same size holds the same lines. The first page of
+    /// the Activity window read every day's file for this, so it took longer the longer the log
+    /// (0.5 s for 30,000 entries on GitHub's runner, 2026-11-26; FR-614).
+    func unreadable(keyID: String) -> Int {
+        var total = 0
+        for day in days() {
+            let size = (try? FileManager.default.attributesOfItem(atPath: entriesURL(day).path)[.size] as? Int) ?? -1
+            if let n = counted.count(day: day, size: size, keyID: keyID) {
+                total += n
+                continue
+            }
+            let d = rows(day)
+            let n = d.rows.filter { $0.keyID != keyID }.count + d.skipped
+            counted.keep(day: day, size: size, keyID: keyID, n)
+            total += n
+        }
+        return total
+    }
+
+    private final class Counted: @unchecked Sendable {
+        private let lock = NSLock()
+        private var counts: [String: (size: Int, keyID: String, n: Int)] = [:]
+
+        func count(day: String, size: Int, keyID: String) -> Int? {
+            lock.withLock {
+                guard let c = counts[day], c.size == size, c.keyID == keyID, size >= 0 else { return nil }
+                return c.n
+            }
+        }
+
+        func keep(day: String, size: Int, keyID: String, _ n: Int) {
+            lock.withLock { counts[day] = (size, keyID, n) }
+        }
     }
 
     /// Every row of every day, and how many lines couldn't be read.
@@ -662,8 +702,7 @@ struct ActivityReader: Sendable {
         var page = ActivityPage()
         let kid = keyID
         if cursor == nil && countUnreadable {
-            let all = files.allRows()
-            page.unreadable = all.rows.filter { $0.keyID != kid }.count + all.skipped
+            page.unreadable = files.unreadable(keyID: kid)
         }
         let from = query.from ?? .distantPast
         let to = query.to ?? .distantFuture
