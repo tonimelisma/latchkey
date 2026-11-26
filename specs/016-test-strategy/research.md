@@ -160,3 +160,26 @@ Today: 306 lines, 3,400 words, plus 265 lines of `.claude/rules/`. Found:
 - https://modelcontextprotocol.io/docs/tools/inspector; https://github.com/modelcontextprotocol/conformance
 - https://arxiv.org/abs/2406.13352 (AgentDojo)
 - https://microsoft.github.io/code-with-engineering-playbook/automated-testing/synthetic-monitoring-tests/
+
+## 5. CI time, push to last check (measured 2026-11-26, FR-1612)
+
+From the workflow runs' created time to the last check's end, per commit (`gh api
+repos/tonimelisma/latchkey/actions/runs?head_sha=…`):
+
+| Commit (pull request head) | macos/ changed | Push → all done | Longest workflow | Why |
+|---|---|---|---|---|
+| 580388a | yes | 4 m 45 s | e2e 4 m 45 s, mac build 4 m 31 s | nothing else running |
+| 83b746a | yes | 8 m 13 s | e2e 8 m 13 s | e2e-mac waited for a free macOS runner |
+| 00f21a0 | yes | 14 m 28 s | mac build 14 m 28 s | runners busy with another run |
+| 3e99547 | yes | 16 m 37 s | mac build (one job) | before the four-job split |
+| c513a21 | no | 2 m 53 s | relay 2 m 35 s | no Mac work |
+
+Per job: each Mac build-and-test job 3 m 56 s to 6 m 30 s (build ~1.5 min of it), e2e-mac
+3 m 3 s to 4 m 8 s after `pick` (47 s), relay tests 2 m 5 s to 2 m 57 s, linux 33 to 52 s,
+scripts 41 to 65 s. Every pull request push ran `ci.yml` twice (push and pull request) until
+this spec.
+
+The limit: GitHub's plan runs at most five macOS jobs at once for the account. A Mac change
+takes all five (four build-and-test jobs and e2e-mac), so a second push, another session's pull
+request, or main's run after a merge waits for a runner: that wait, not the tests, is what
+passes 5 minutes.
