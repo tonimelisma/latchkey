@@ -35,26 +35,26 @@ until one is chosen). Rows and how each is checked:
 | Procare sign-in, Latchkey's own browser, Mac unlocked | NOT VERIFIED | same |
 | The role boxes are listed as clickable, a click on PARENT enables LOGIN, logins_fill signs in (a served page like Procare's) | VERIFIED in tests only | `RegressionRealInputTests` fails on main (run on Toni's Mac 2026-11-25, main 5b5a1c0, Mac locked) and passes on the branch (GitHub's Mac runner, unlocked) |
 | Clicks and keys are trusted, in a mouse's and a keyboard's order, the page focused during the call only | VERIFIED in tests only | same suite on GitHub's Mac runner and Toni's Mac; while locked on the installed app: NOT VERIFIED |
-| Hover with the view's own pointer | NOT VERIFIED | fails on GitHub's macOS 26 runner (no pointer events reach the page); open bug |
-| logins_fill of codes and longer names on a busy Mac | NOT VERIFIED | passes on Toni's Mac; on the loaded runner the per-character check passes the 20 s limit |
+| Hover with the view's own pointer | VERIFIED in tests only | `aRealHoverOpensAMenuOnlyCSSHoverShows` and the hover tests on GitHub's macOS 26 runner (run 45725364764); on the installed app: NOT VERIFIED |
+| logins_fill of codes and longer names | VERIFIED in tests only | the sign-in suites on GitHub's runner, one at a time (run 45725364764) and on Toni's Mac; live: NOT VERIFIED |
 | Safari tabs: typing in a keyboard's order; still script actions | VERIFIED in tests only | `safarisScriptTypingGivesAKeyboardsOrder` (a WebKit view, not real Safari) |
 | No Command shortcut, picker, clipboard or sound reaches the owner | VERIFIED in tests only | `shortcutsPickersAndTheClipboardStayOutOfReach` |
 
 Mac tests on GitHub's macOS 26 runner after real input (merged on Toni's "Skip CI we'll fix it
-later"): the cause, measured there 2026-11-25 (run 45694073481): every web page of the tests
-shares the test program's one main thread. Alone, a page answers a script in 0 to 14 ms and
-"Café" types in order; among the ~70 pages of the browser and sign-in tests, a key's release
-reached the page up to 0.75 s late and a click took 18 s, so steps passed their 10 s limits, and
-when the wait before an "é" ran out it was typed anyway ("Céaf"). Not macOS 26 or WebKit. Fixed
-(Toni: "App + tests"): Latchkey's waits are woken by the page's own word instead of looking every
-5 ms; typing stops and says so when the page hasn't taken the keys in time (FR-485a); on GitHub
-the tests that open web pages run one at a time (`macos/scripts/page-suites.txt`). Runner result
-(pull request #53, run 45707207366, 2026-11-25): tests with web pages 234 passed, 6 failed, all
-6 failing on main before too (~45 were failing); the rest of the suite 11 failed (main: 30
-before real input, 52 after), none from this change. Still open on that runner: hover (a pointer
-move reaches no page; cause not found), a code spread over 4 boxes, a list's options in the
-element list, a Safari token replaced by a page not logged, Enter after typing in
-`everyActionWorksInLatchkeysOwnBrowser`.
+later"), then fixed in CI (Toni, 2026-11-25: "Fix it in ci. If you can't see the issue you're
+missing instrumentation"; goal "fix ci until all green"). The cause of most, measured there
+(run 45694073481): every web page of the tests shares the test program's one main thread, so
+among ~70 pages a key's release came up to 0.75 s late and a click 18 s; tests with web pages
+run one at a time since pull request #53 (`macos/scripts/page-suites.txt`), and tests of time
+limits too since #54 (`macos/scripts/timing-suites.txt`: side by side a 2.8 s limit measured
+13.6 s). Found with instrumentation in CI and fixed in #54: hover (a WKWebView takes pointer
+moves only through its tracking area: Latchkey now hands them there), lists without a name on
+macOS 26 (named by their options, FR-486a), a page script's cookie not announced (looked for
+after each action), logins_fill's mark on pages that carry one reference twice (a token of the
+fill's own), and tests that had assumed script behaviour (Enter in a form without a send button,
+macOS's log lines in xcodebuild's output). Mac run 45725364764 (2026-11-26 00:16 UTC): unit tests
+0 failed; tests with web pages or time limits 349 passed, 1 failed (the temporary diagnostic,
+removed in the next commit).
 
 Known limits: a frame a page's script makes without an address (about:blank, srcdoc) may not get
 Latchkey's clipboard block, so a copy from there during a real click is only noticed afterwards
