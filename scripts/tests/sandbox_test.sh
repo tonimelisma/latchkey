@@ -63,6 +63,9 @@ exec)
 	[ "$stdin" = 0 ] || cat >/dev/null # like tart: stdin only with -i
 	case "$*" in
 	*"e2e-bin sandbox"*) echo "PASS files (1.0 s)"; exit "${FAKE_CHECKS_EXIT:-0}" ;;
+	*"codesign -dvvv"*) echo abcdef0123456789 ;;
+	*"dump-keychain"*) echo pairing; echo activity-log-key ;;
+	*"set-generic-password-partition-list"*) echo "$*" >>"$W/partition.log" ;;
 	*"cat "*sandbox.json*) printf '%s\n' "${FAKE_RESULT-{\"kind\":\"sandbox\"}}" ;;
 	esac
 	exit 0 ;;
@@ -209,6 +212,11 @@ grep -q "^clone latchkey-eval $vmname$" "$work/tart.log" && ok "the image is cop
 grep -q "^run --no-graphics $vmname$" "$work/tart.log" && ok "the copy starts without a window" || bad "run --no-graphics"
 grep -q "e2e-bin sandbox -build '[0-9a-f]\{7\}' -checks 'all'" "$work/tart.log" && ok "the checks run with the commit as the build" || bad "e2e sandbox call ($(grep e2e-bin "$work/tart.log"))"
 has "a line per check is printed" "$out" "PASS files"
+# Regression (first local run, 2026-11-26): a build without an Apple team is known to the
+# keychain by its code hash, so each new build was asked for the test Mac's keychain password.
+grep -q "cdhash:abcdef0123456789' -s net.melisma.latchkey -a 'pairing'" "$work/partition.log" 2>/dev/null &&
+	grep -q -- "-a 'activity-log-key'" "$work/partition.log" &&
+	ok "each new build may read Latchkey's keychain items in the copy" || bad "keychain partition list ($(cat "$work/partition.log" 2>/dev/null))"
 has "each phase's time is printed" "$out" "time: build [0-9]* s, start [0-9]* s, install [0-9]* s, checks [0-9]* s"
 res=$(ls "$repo"/e2e-results/sandbox-*.json 2>/dev/null | head -1)
 [ -n "$res" ] && grep -q '"kind":"sandbox"' "$res" && ok "the result is saved in e2e-results/" || bad "result saved ($res)"

@@ -111,6 +111,17 @@ push_run() {
 	(cd "$REPO_ROOT/relay" && tar -cf - e2e/tasks) | "$TART" exec -i "$name" /bin/zsh -c "cd $VM_DIR && tar -xf -"
 }
 
+# vm_grant_permissions VMNAME: the installed build's macOS permissions, written inside the test
+# Mac by vm-permissions.zsh (no person approves anything; the base image has System Integrity
+# Protection off, which that script checks first).
+vm_grant_permissions() {
+	local name=$1 user
+	user=$(vm "$name" 'id -un')
+	"$TART" exec -i "$name" /bin/zsh -c 'cat > /tmp/latchkey-vm-permissions.zsh' <"$REPO_ROOT/macos/scripts/vm-permissions.zsh"
+	vm_sudo "$name" "zsh /tmp/latchkey-vm-permissions.zsh '$user'; s=\$?; rm -f /tmp/latchkey-vm-permissions.zsh; exit \$s" ||
+		die "couldn't grant Latchkey's permissions in the test Mac (above)."
+}
+
 # install_latchkey VMNAME: the newest signed release from GitHub into the test Mac. The same
 # signature every time, so the image's permissions and pairing hold (research.md).
 install_latchkey() {
@@ -123,14 +134,42 @@ hdiutil detach -quiet "$mnt"; rm -rf "$t"; open -a /Applications/Latchkey.app'
 
 # install_latchkey_build VMNAME APP: a local build (sandbox_build) into the test Mac, replacing
 # the one there, copied in through `tart exec` like push_run.
-install_latchkey_build() {
+install_latchkey_build() { # VMNAME APP [no-open]
 	local name=$1 app=$2
 	[ "$(basename "$app")" = Latchkey.app ] || die "not a Latchkey.app: $app"
 	vm "$name" 'osascript -e "tell application id \"net.melisma.latchkey\" to quit" >/dev/null 2>&1 || true
 i=0; while pgrep -x Latchkey >/dev/null 2>&1 && [ $i -lt 30 ]; do sleep 0.5; i=$((i+1)); done
 pkill -x Latchkey >/dev/null 2>&1 || true; rm -rf /Applications/Latchkey.app'
 	(cd "$(dirname "$app")" && tar -cf - Latchkey.app) | "$TART" exec -i "$name" /bin/zsh -c 'cd /Applications && tar -xf -'
-	vm "$name" 'open -a /Applications/Latchkey.app'
+	vm_keychain_allow "$name"
+	[ "${3:-}" = no-open ] || vm_open_latchkey "$name"
+}
+
+# vm_open_latchkey VMNAME: starts Latchkey in the test Mac, trying again while its desktop is
+# still starting (open fails with -1712 then: the first run, 2026-11-26).
+vm_open_latchkey() {
+	local i=0
+	until vm "$1" 'open -a /Applications/Latchkey.app' 2>/dev/null; do
+		i=$((i + 1))
+		[ "$i" -lt 30 ] || die "Latchkey didn't start in the test Mac $1 (open failed for a minute)."
+		sleep 2
+	done
+}
+
+# vm_keychain_allow VMNAME: lets the installed build read Latchkey's items in the test Mac's
+# login keychain (its pairing, its activity log key). A build signed without an Apple team is
+# known to the keychain by its code hash, which every build changes, so without this each new
+# sandbox build would be asked for the keychain's password. Uses the test Mac's own password.
+vm_keychain_allow() {
+	local name=$1 cd accounts a
+	cd=$(vm "$name" 'codesign -dvvv /Applications/Latchkey.app 2>&1 | sed -n "s/^CDHash=//p"')
+	[ -n "$cd" ] || die "couldn't read the installed build's code hash in the test Mac."
+	accounts=$(vm "$name" 'security dump-keychain ~/Library/Keychains/login.keychain-db 2>/dev/null |
+		awk "/\"svce\"<blob>=\"net.melisma.latchkey\"/ {s=1} /^keychain:/ {s=0; if (a!=\"\") print a; a=\"\"} s && /\"acct\"<blob>=/ {sub(/.*=\"/, \"\"); sub(/\"$/, \"\"); a=\$0} END {if (s && a!=\"\") print a}"' 2>/dev/null) || true
+	for a in $accounts; do
+		printf '%s\n' "$VM_PASSWORD" | "$TART" exec -i "$name" /bin/zsh -c "read -r pw; security set-generic-password-partition-list -S 'apple-tool:,apple:,cdhash:$cd' -s net.melisma.latchkey -a '$a' -k \"\$pw\" ~/Library/Keychains/login.keychain-db >/dev/null" ||
+			die "couldn't let the new build read its keychain item $a in the test Mac."
+	done
 }
 
 SANDBOX_IDENTITY="Latchkey Sandbox"

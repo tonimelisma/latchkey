@@ -55,7 +55,18 @@ has "no token, no terminal: says to run evals.sh in Terminal once" "$(FAKE_IMAGE
 # evals use. It now checks the permissions again until they are approved.
 if grep -qE '(^|[^a-z_])read -r' "$image"; then bad "eval-image.sh never waits for a key press"; else ok "eval-image.sh never waits for a key press"; fi
 if grep -v '^#' "$image" | grep -q 'TOKEN_SERVICE\|claude_token'; then bad "eval-image.sh needs no Claude token"; else ok "eval-image.sh needs no Claude token"; fi
-grep -q 'until_ready "the permissions" .*e2e-bin sandbox -checks tools' "$image" && ok "eval-image.sh checks the permissions until they are approved" || bad "permission check loop"
+grep -q 'until_ready "the permissions" .*e2e-bin sandbox -checks tools' "$image" && ok "eval-image.sh checks the permissions" || bad "permission check loop"
+# Regression (first local run, 2026-11-26): the test Mac's window opened on the owner's screen
+# with about twenty approvals for a person, and the release installed first left keychain items
+# the sandbox build was then asked about.
+if grep -v '^#' "$image" | grep -E '"\$TART" run ' | grep -qv -- '--no-graphics'; then bad "the test Mac never gets a window"; else ok "the test Mac never gets a window"; fi
+if grep -v '^#' "$image" | grep -qE '^\s*install_latchkey "'; then bad "eval-image.sh installs no release"; else ok "eval-image.sh installs no release"; fi
+g=$(grep -n '^vm_grant_permissions' "$image" | cut -d: -f1)
+o=$(grep -n '^vm_open_latchkey' "$image" | cut -d: -f1)
+[ -n "$g" ] && [ -n "$o" ] && [ "$g" -lt "$o" ] && grep -q 'install_latchkey_build "$BUILD" "$SANDBOX_APP" no-open' "$image" &&
+	ok "the permissions are granted before Latchkey first starts" || bad "grant before the first start (grant line $g, open line $o)"
+grep -q 'prepare -confirm' "$image" && ok "the pairing's Connect is answered inside the test Mac" || bad "prepare -confirm"
+grep -q 'csrutil status' "$root/macos/scripts/vm-permissions.zsh" && ok "the grant script refuses a Mac with System Integrity Protection on" || bad "SIP guard"
 # The local build needs Xcode; --release doesn't.
 noxcode=$work/noxcode
 mkdir -p "$noxcode"

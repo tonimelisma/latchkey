@@ -60,6 +60,7 @@ func stateDir() (string, error) {
 func prepareCmd(args []string) error {
 	fs := flag.NewFlagSet("prepare", flag.ContinueOnError)
 	certsOnly := fs.Bool("certs", false, "only make the test authority and the relay's certificate")
+	confirm := fs.Bool("confirm", false, "answer Latchkey's Connect question here (the test Mac, with nobody at it)")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -111,12 +112,51 @@ func prepareCmd(args []string) error {
 	if err := exec.CommandContext(ctx, "/usr/bin/open", link).Run(); err != nil { //nolint:gosec // our own link
 		return fmt.Errorf("open the pairing link: %w", err)
 	}
-	fmt.Println("In the test Mac's window: click Connect in Latchkey's question.")
-	if err := relay.WaitOnline(ctx, ownerEmail, 20*time.Minute); err != nil {
+	within := 20 * time.Minute
+	if *confirm {
+		within = 2 * time.Minute
+		step("answering Latchkey's Connect question")
+		if err := clickConnect(ctx); err != nil {
+			return err
+		}
+	} else {
+		fmt.Println("In the test Mac's window: click Connect in Latchkey's question.")
+	}
+	if err := relay.WaitOnline(ctx, ownerEmail, within); err != nil {
 		return err
 	}
 	fmt.Println("PASS: the test Mac's Latchkey is paired with its private relay")
 	return nil
+}
+
+// clickConnect presses Connect in Latchkey's pairing question (an alert of Latchkey's own),
+// through System Events, once it shows (up to 60 s). Only in the test Mac, whose osascript the
+// base image allows to use Accessibility.
+func clickConnect(ctx context.Context) error {
+	const script = `tell application "System Events"
+if not (exists process "Latchkey") then return "no"
+tell process "Latchkey"
+repeat with w in windows
+if exists (button "Connect" of w) then
+click button "Connect" of w
+return "clicked"
+end if
+end repeat
+end tell
+end tell
+return "no"`
+	var last string
+	if waitFor(60*time.Second, func() bool {
+		out, err := osaOut(script)
+		last = out
+		if err != nil {
+			last = err.Error()
+		}
+		return ctx.Err() != nil || out == "clicked"
+	}) && ctx.Err() == nil {
+		return nil
+	}
+	return fmt.Errorf("latchkey's Connect question never showed in 60 s (%s)", last)
 }
 
 func startStateRelay(ctx context.Context, dir string) (*e2erelay.Private, error) {
