@@ -96,11 +96,8 @@ applies, except:
   as a network secret (`request_credential`). Report contents stay in the session's output.
 - End to end and evals (spec 015): `e2e.yml`'s `e2e-linux` and `mac-build.yml`'s job 3 run the
   checks the changed files select (`relay/e2e/capabilities.json`) with a real MCP client through
-  a private relay, and compare every tool with `relay/e2e/toolsnaps`; the checks are reported,
-  and for the Mac app a changed snapshot fails the required check `mac` (Toni, 2026-11-26). A
-  snapshot that differs fails the job: when the change is meant, download the job's artifact
-  `toolsnaps-<kind>` (`gh api repos/tonimelisma/latchkey/actions/runs/<id>/artifacts`) and commit
-  its files in the same pull request. Docker Hub refuses this VM's pulls (rate limit), so the
+  a private relay; the checks are reported, not required. Tool descriptions aren't compared
+  with saved copies (the snapshots were removed, Toni 2026-11-26). Docker Hub refuses this VM's pulls (rate limit), so the
   Linux check runs on GitHub, not here. Eval results a local session sent (`make -C macos
   evals ARGS=--send`; there is no weekly run or reminder, Toni 2026-11-25) are read with `go run
   ./cmd/latchkey-reports evals`.

@@ -97,7 +97,8 @@ Toni's conditions") says verifies nothing.
   affected it shall pass without running.
 - **FR-1503** The per-pull-request checks shall not run Claude, shall use no Claude
   subscription, and shall never reach Toni's Mac, his accounts, or Latchkey on his Mac.
-- **FR-1504** The system shall keep in the repository a snapshot of every tool's name,
+- **FR-1504** (withdrawn 2026-11-26, Toni: "That's a stupid check. Remove it"; no tool
+  snapshots are kept or compared) The system shall keep in the repository a snapshot of every tool's name,
   description and input schema as Claude sees it, per machine kind; when the tools differ from
   the snapshot, the check shall fail naming each tool that changed, until the snapshot is
   updated in the same pull request. A changed snapshot shall select that tool's capability

@@ -6,7 +6,7 @@ Status: for Toni's review (2026-11-26) before `tasks.md`. What and why: `spec.md
 ## Shape
 
 ```
-every change ─ cloud / local / CI ──── 1 Fast: Go + Swift unit, fake clocks, golden messages, snapshots   (gates)
+every change ─ cloud / local / CI ──── 1 Fast: Go + Swift unit, fake clocks, golden messages              (gates)
 every PR ───── GitHub Linux + Mac ──── 2 Integration: one harness (relay/internal/e2e), real MCP client   (gates)
 Mac build ──── local session ───────── 3 Sandbox Mac: Tart copy of latchkey-eval, the local build installed,
                                           every capability against the real apps with test data
@@ -39,9 +39,10 @@ Toni asks ──── Toni's Mac ──────────── 5 Toni's 
   `cmd/maccheck` + `LiveRelayTests` (battery vs pmset, a tool off, a silent network cut,
   reconnect: move to the sandbox Mac checks, D3), `cmd/guidecheck` (the relay-setup guide: an
   eval task with its own fixture). `make claude-check`, `make mac-check` go with them.
-- One place per behavior: tool names, descriptions and schemas only in `relay/e2e/toolsnaps`;
-  `PublicToolsTests` keeps only what snapshots don't show (a tool off is absent), and the
-  regression tests that pin description sentences are replaced by their snapshot. "A capability
+- One place per behavior: tests that only restated tool names, descriptions and schemas are
+  removed, and since 2026-11-26 the tool snapshots too (Toni: "That's a stupid check. Remove
+  it"), so no test pins a description; `PublicToolsTests` keeps the levels' effect on the tool
+  list. "A capability
   turned off disappears" stays in the integration layer (`e2e relay`, `e2e mac`, linuxcheck) and
   the unit test of the gate.
 - `ci.yml` runs on `pull_request` and on `push` to `main` only (today every push to a pull
@@ -51,9 +52,9 @@ Toni asks ──── Toni's Mac ──────────── 5 Toni's 
   releases.
 - The Mac app's end-to-end check runs in `mac-build.yml`'s job 3 on that job's build (was a
   fifth macOS job with its own build); job 3 picks its checks itself, and `shard-suites.py` gives job 3's programs ~105 s less and job 0's ~140 s (its unit tests; measured 2026-11-26).
-  Its checks stay reported; the snapshot comparison is required, and fails also when the
-  comparison never ran (Toni, 2026-11-26: "snapshot diff blocks", since FR-1604 left the
-  snapshots the one place a description is pinned).
+  Its checks stay reported. (Its tool-snapshot comparison, briefly required on 2026-11-26, was
+  removed with the snapshots the same day: Toni, "That's a stupid check. Remove it". No test
+  pins a tool's description.)
 - On main, `mac-build.yml` skips the tests when the merged tree is the one a pull request's
   `mac` job passed (an artifact `mac-tested-<tree>`, 7 days); it still builds in job 0 to save
   the compilation cache (Toni, 2026-11-26: "Skip if identical").
@@ -76,8 +77,7 @@ Toni asks ──── Toni's Mac ──────────── 5 Toni's 
   5. runs `cmd/e2e sandbox`: the real MCP client through the private relay inside the copy (the
      one the image is paired with, so nothing pairs again; a proxy in front of it makes the
      network cut possible; research §6), against
-     the installed app, every capability's checks plus the moved `maccheck` checks, compared
-     with the snapshots; writes `e2e-results/sandbox-<build>-<time>.json`.
+     the installed app, every capability's checks plus the moved `maccheck` checks; writes `e2e-results/sandbox-<build>-<time>.json`.
   First run under 5 minutes (build ~1.5, start ~1, checks ~2); later runs reuse the copy: under
   2 minutes.
 - Signing options weighed (permissions are filed under the bundle ID and the code's designated
@@ -153,7 +153,7 @@ Steps 1–4 run in cloud sessions; 5–6 need a local session.
   on Toni's Mac unasked. Pass.
 - V (self-hostable), VI (store the minimum), IX (open source): results stay in the clone; no
   private values in results or logs. Pass.
-- VII (test-first on the contracts): golden messages and snapshots stay in the gating layers.
+- VII (test-first on the contracts): the golden protocol messages stay in the gating layers.
   Pass.
 - VIII (simplicity): seven harnesses to one, five hand kits retired, one place per behavior.
   Pass.

@@ -20,14 +20,13 @@ count() { grep -c -- "$2" "$1" 2>/dev/null || true; }
 # A clone of its own: the scripts, a macos/ with a Local.xcconfig holding private values, and
 # the relay files push_run sends.
 repo=$work/repo
-mkdir -p "$repo/macos/scripts" "$repo/macos/Config" "$repo/macos/App" "$repo/relay/e2e/tasks/files" "$repo/relay/e2e/toolsnaps/mac"
+mkdir -p "$repo/macos/scripts" "$repo/macos/Config" "$repo/macos/App" "$repo/relay/e2e/tasks/files"
 cp "$root/macos/scripts/sandbox.sh" "$root/macos/scripts/eval-lib.sh" "$repo/macos/scripts/"
 cp "$root/.gitignore" "$repo/.gitignore"
 echo 'name: Latchkey' >"$repo/macos/project.yml"
 echo '#include? "Local.xcconfig"' >"$repo/macos/Config/Base.xcconfig"
 echo 'let x = 1' >"$repo/macos/App/A.swift"
 echo '{}' >"$repo/relay/e2e/tasks/files/t.json"
-echo '{}' >"$repo/relay/e2e/toolsnaps/mac/files_read.json"
 git -C "$repo" init -q
 git -C "$repo" add -A
 git -C "$repo" -c user.name=t -c user.email=t@example.com commit -qm init

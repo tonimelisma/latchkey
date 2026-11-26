@@ -77,12 +77,12 @@ wait_vm() {
 	done
 }
 
-# push_run VMNAME E2E: the e2e program, the tasks and the tool snapshots into the test Mac.
+# push_run VMNAME E2E: the e2e program and the tasks into the test Mac.
 push_run() {
 	local name=$1 bin=$2
 	vm "$name" "rm -rf $VM_DIR && mkdir -p $VM_DIR/e2e"
 	"$TART" exec -i "$name" /bin/zsh -c "cat > $VM_DIR/e2e-bin && chmod 700 $VM_DIR/e2e-bin" <"$bin"
-	(cd "$REPO_ROOT/relay" && tar -cf - e2e/tasks e2e/toolsnaps) | "$TART" exec -i "$name" /bin/zsh -c "cd $VM_DIR && tar -xf -"
+	(cd "$REPO_ROOT/relay" && tar -cf - e2e/tasks) | "$TART" exec -i "$name" /bin/zsh -c "cd $VM_DIR && tar -xf -"
 }
 
 # install_latchkey VMNAME: the newest signed release from GitHub into the test Mac. The same

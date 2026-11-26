@@ -56,8 +56,9 @@ if you're local and thus have access to the mac."
 - **FR-1603** One end-to-end harness (`relay/cmd/e2e`) shall build the private relay, sign-up
   and pairing used by every end-to-end check; the other harnesses are folded into it or removed
   (`research.md` §1, finding 4).
-- **FR-1604** Each behavior shall be pinned in one layer: the tool list and descriptions in
-  the snapshots only; a capability turned off in the integration layer only.
+- **FR-1604** Each behavior shall be pinned in one layer: a capability turned off in the
+  integration layer only. Tool descriptions are not pinned by any test (2026-11-26: the
+  snapshots were removed, Toni: "That's a stupid check. Remove it").
 - **FR-1605** When a local session has built the Mac app, it shall run the sandbox Mac layer on
   that build before calling the change done, and quote the result with the build, the time and
   what was seen.

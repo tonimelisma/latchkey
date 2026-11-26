@@ -16,7 +16,6 @@ import (
 	"github.com/tonimelisma/latchkey/relay/agentproto"
 	"github.com/tonimelisma/latchkey/relay/internal/e2e"
 	"github.com/tonimelisma/latchkey/relay/internal/e2erelay"
-	"github.com/tonimelisma/latchkey/relay/internal/evals"
 	"github.com/tonimelisma/latchkey/relay/internal/testagent"
 )
 
@@ -78,13 +77,11 @@ func toolNames(tools []*mcp.Tool) []string {
 	return n
 }
 
-// relayCmd checks the relay's own surface end to end (FR-1501): the relay's tools against their
-// snapshots, machines, a tool call reaching the machine, a capability turned off disappearing
+// relayCmd checks the relay's own surface end to end (FR-1501): the relay's tools listed,
+// machines, a tool call reaching the machine, a capability turned off disappearing
 // (Constitution III), and the offline answer arriving at once (Constitution II).
 func relayCmd(args []string) error {
 	fs := flag.NewFlagSet("relay", flag.ContinueOnError)
-	update := fs.Bool("update-snapshots", false, "rewrite relay/e2e/toolsnaps/relay to match")
-	snaps := fs.String("snapshots", "e2e/toolsnaps", "the snapshot folder")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -127,16 +124,7 @@ func relayCmd(args []string) error {
 		return fmt.Errorf("the pretend Mac's tool isn't listed: %v", toolNames(tools))
 	}
 	own := slices.DeleteFunc(slices.Clone(tools), func(t *mcp.Tool) bool { return t.Name == "battery_status" })
-	diffs, err := evals.CompareSnapshots(filepath.Join(*snaps, "relay"), own, *update)
-	if err != nil {
-		return err
-	}
-	if !*update {
-		if err := evals.SnapError("relay", diffs); err != nil {
-			return err
-		}
-	}
-	step("the relay's own tools match their snapshots: %s", strings.Join(toolNames(own), ", "))
+	step("the relay's own tools: %s", strings.Join(toolNames(own), ", "))
 
 	res, err := cs.CallTool(ctx, &mcp.CallToolParams{Name: "machines", Arguments: map[string]any{}})
 	if err != nil {

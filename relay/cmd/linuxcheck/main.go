@@ -36,7 +36,6 @@ import (
 	"github.com/tonimelisma/latchkey/relay/agentproto"
 	"github.com/tonimelisma/latchkey/relay/internal/account"
 	"github.com/tonimelisma/latchkey/relay/internal/e2e"
-	"github.com/tonimelisma/latchkey/relay/internal/evals"
 	"github.com/tonimelisma/latchkey/relay/internal/oauth"
 	"github.com/tonimelisma/latchkey/relay/internal/server"
 	"github.com/tonimelisma/latchkey/relay/internal/store"
@@ -48,10 +47,8 @@ func main() {
 	claude := flag.Bool("claude", false, "also ask real Claude Code to use the server")
 	model := flag.String("model", "haiku", "Claude model for -claude")
 	keep := flag.Bool("keep", false, "leave the container running afterwards, for a look")
-	snaps := flag.String("toolsnaps", "", "compare the Linux server's tools with the snapshots in this folder (spec 015 FR-1504)")
-	update := flag.Bool("update-snapshots", false, "with -toolsnaps: rewrite the snapshots to match")
 	flag.Parse()
-	c := &check{claude: *claude, model: *model, keep: *keep, snaps: *snaps, update: *update}
+	c := &check{claude: *claude, model: *model, keep: *keep}
 	err := c.run()
 	c.cleanup()
 	if err != nil {
@@ -63,8 +60,6 @@ func main() {
 
 type check struct {
 	claude, keep bool
-	snaps        string
-	update       bool
 	model        string
 	ctx          context.Context
 	dir          string
@@ -307,11 +302,6 @@ func (c *check) run() error {
 	c.cs = cs
 	c.defer_(func() { _ = cs.Close() })
 
-	if c.snaps != "" {
-		if err := c.checkSnapshots(ctx, macConn, mac.Tools); err != nil {
-			return err
-		}
-	}
 	if err := c.checkTools(); err != nil {
 		return err
 	}
@@ -473,57 +463,6 @@ func (c *check) checkTools() error {
 		return fmt.Errorf("unnamed shell_run with two machines: %w %q", err, text)
 	}
 	return nil
-}
-
-// checkSnapshots compares the Linux server's tools, as Claude sees them with no Mac tools beside
-// them, with their snapshots (spec 015 FR-1504): the pretend Mac offers nothing for a moment.
-func (c *check) checkSnapshots(ctx context.Context, macConn *testagent.Conn, macTools []*mcp.Tool) error {
-	step("comparing the Linux server's tools with their snapshots")
-	if err := macConn.Send(ctx, &agentproto.ToolsUpdate{Tools: nil}); err != nil {
-		return err
-	}
-	var linux []*mcp.Tool
-	deadline := time.Now().Add(15 * time.Second)
-	for {
-		tools, err := c.tools()
-		if err != nil {
-			return err
-		}
-		if tools["battery_status"] == nil && tools["shell_run"] != nil && !strings.Contains(tools["shell_run"].Description, "On a Mac") {
-			for name, t := range tools {
-				if name != "machines" { // the relay's own, snapshotted by e2e relay
-					linux = append(linux, t)
-				}
-			}
-			break
-		}
-		if time.Now().After(deadline) {
-			return errors.New("the pretend Mac's tools never left the list")
-		}
-		time.Sleep(200 * time.Millisecond)
-	}
-	diffs, err := evals.CompareSnapshots(c.snaps, linux, c.update)
-	if err != nil {
-		return err
-	}
-	if !c.update {
-		if err := evals.SnapError("linux", diffs); err != nil {
-			return err
-		}
-	}
-	if err := macConn.Send(ctx, &agentproto.ToolsUpdate{Tools: macTools}); err != nil {
-		return err
-	}
-	for deadline := time.Now().Add(15 * time.Second); ; {
-		tools, err := c.tools()
-		if err == nil && tools["battery_status"] != nil {
-			return nil
-		}
-		if time.Now().After(deadline) {
-			return errors.New("the pretend Mac's tools never came back")
-		}
-		time.Sleep(200 * time.Millisecond)
-	}
 }
 
 func indent(s string) string { return "    " + strings.ReplaceAll(s, "\n", "\n    ") }

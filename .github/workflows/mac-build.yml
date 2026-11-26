@@ -4,8 +4,7 @@
 # required check. It runs on every pull request and passes at once when nothing in macos/ or
 # this file changed (a required check that never runs would hold every other pull request).
 # Job 3 also runs the end-to-end check of the Mac app's real tools (spec 015), reusing its
-# build: its checks are reported, and only "what Claude sees of each tool is unchanged" (the
-# snapshots) is required (Toni, 2026-11-26). On main, code that its pull request already
+# build; its checks are reported, not required (Toni, 2026-11-25). On main, code that its pull request already
 # tested exactly (the same tree) is only built, for the build cache (Toni, 2026-11-26: "Skip if
 # identical"), so the Mac machines stay free for the next pull request (GitHub runs five
 # macOS jobs at once on this plan). Signed ad hoc. No secrets, read-only token.
@@ -235,7 +234,7 @@ jobs:
 
       # The end-to-end check of the Mac app's real tools (spec 015): a real MCP client through a
       # private relay, the app's tools served by the Swift host test E2EHostTests from this
-      # job's build. Its checks are reported; the snapshot step after it is required.
+      # job's build. Its checks are reported, not required (Toni, 2026-11-25).
       - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         if: always() && matrix.shard == 3 && env.TEST == 'true'
         with:
@@ -256,26 +255,7 @@ jobs:
           CHECKS: ${{ steps.pick.outputs.mac_checks }}
         run: |
           set -o pipefail
-          go run ./cmd/e2e mac -checks "$CHECKS" -derived-data "$RUNNER_TEMP/dd" -update-snapshots 2>&1 | tee "$RUNNER_TEMP/e2e.log"
-      - name: What Claude sees of each tool is unchanged (required)
-        if: always() && matrix.shard == 3 && steps.pick.outputs.mac == 'true'
-        working-directory: relay
-        run: |
-          if ! grep -q "tool snapshots compared" "$RUNNER_TEMP/e2e.log" 2>/dev/null; then
-            echo "::error::The tool snapshots were not compared: the end-to-end run stopped before them (its log is in the step above)."
-            exit 1
-          fi
-          git add -N e2e/toolsnaps
-          if ! git diff --exit-code --stat -- e2e/toolsnaps; then
-            git diff -- e2e/toolsnaps | head -200
-            echo "::error::What Claude sees of a tool changed. If it is meant, commit the snapshots from the artifact toolsnaps-mac in this pull request."
-            exit 1
-          fi
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        if: failure() && matrix.shard == 3 && steps.pick.outputs.mac == 'true'
-        with:
-          name: toolsnaps-mac
-          path: relay/e2e/toolsnaps
+          go run ./cmd/e2e mac -checks "$CHECKS" -derived-data "$RUNNER_TEMP/dd"
 
   # The required check: passes when macos/ didn't change, or when every build-and-test job
   # passed; fails on any failed, cancelled or missing job. Not run when the whole run was

@@ -3,8 +3,8 @@ import Testing
 
 @testable import Latchkey
 
-/// Notes' refusals for notes it can't change safely. Which Messages tools exist, and their input schemas, are
-/// pinned in the snapshots in relay/e2e/toolsnaps/mac (spec 016 FR-1604).
+/// Notes' refusals for notes it can't change safely. Tool descriptions and input schemas aren't pinned by
+/// tests (Toni, 2026-11-26).
 @Suite struct ContainmentTests {
     func notes() throws -> (FakeScripts, [String: ToolEntry]) {
         let store = try NotesStore(url: NotesFixture.make())

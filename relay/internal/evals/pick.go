@@ -1,5 +1,5 @@
 // Package evals is spec 015's end-to-end tests and evals: which checks a pull request's changed
-// files select (FR-1500), tool snapshots (FR-1504), eval tasks and their scoring (FR-1520 to
+// files select (FR-1500), eval tasks and their scoring (FR-1520 to
 // FR-1526), Claude Code's stream as an eval reads it, and the weekly result (FR-1530).
 package evals
 
@@ -110,8 +110,8 @@ func (m *Map) Select(changed []string) Selection {
 		}
 		sel.Checks[c.Runner] = append(sel.Checks[c.Runner], c.Checks...)
 	}
-	// Any Mac capability brings the Mac's shared checks (pairing, a capability turned off, the
-	// offline answer, the snapshots).
+	// Any Mac capability brings the Mac's shared checks (pairing, the tools listed, a
+	// capability turned off, the offline answer).
 	if len(sel.Checks["mac"]) > 0 || anySkippedMac(m, sel) {
 		sel.Checks["mac"] = append(sel.Checks["mac"], m.Capabilities["mac"].Checks...)
 	}
@@ -124,7 +124,7 @@ func (m *Map) Select(changed []string) Selection {
 }
 
 // anySkippedMac: a change to a Mac capability with no runner checks still changes the Mac's
-// tool list, which the core check snapshots.
+// tool list, which the core check lists.
 func anySkippedMac(m *Map, sel Selection) bool {
 	for name := range sel.Skipped {
 		if m.Capabilities[name].Runner == "mac" {
