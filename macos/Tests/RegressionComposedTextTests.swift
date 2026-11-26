@@ -60,4 +60,15 @@ import Testing
         #expect(r.exitCode == 0, "\(r.output)")
         #expect(FileManager.default.fileExists(atPath: dir.appending(path: "made.txt").path), "\(r.output)")
     }
+
+    /// Security review 2026-11-26: a program started from a dispatch thread still ends at its
+    /// deadline by the SIGTERM it is sent (it starts with no signal blocked), and the answer
+    /// comes in time.
+    @Test func aProgramPastItsDeadlineIsEndedBySIGTERM() async throws {
+        let start = ContinuousClock.now
+        let r = try await ProcessCommands.launch("/bin/sleep", ["60"], timeout: .seconds(1))
+        #expect(r.timedOut)
+        #expect(r.status == SIGTERM, "ended by signal \(r.status)")
+        #expect(ContinuousClock.now - start < .seconds(15))
+    }
 }

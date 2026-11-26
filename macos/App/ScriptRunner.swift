@@ -161,7 +161,7 @@ struct ProcessCommands: CommandRunner {
         func started(_ p: pid_t) {
             lock.withLock {
                 pid = p
-                if cancelled { kill(p, SIGTERM) }
+                if cancelled { Darwin.kill(p, SIGTERM) }
             }
         }
 
@@ -171,7 +171,14 @@ struct ProcessCommands: CommandRunner {
         /// Ends the program (SIGTERM, as Process.terminate) unless it already ended.
         func terminate() {
             lock.withLock {
-                if let pid, !ended { kill(pid, SIGTERM) }
+                if let pid, !ended { Darwin.kill(pid, SIGTERM) }
+            }
+        }
+
+        /// Ends the program for certain (SIGKILL), unless it already ended.
+        func kill() {
+            lock.withLock {
+                if let pid, !ended { Darwin.kill(pid, SIGKILL) }
             }
         }
 
@@ -196,6 +203,9 @@ struct ProcessCommands: CommandRunner {
                 let timer = DispatchWorkItem {
                     timedOut.set()
                     running.terminate()
+                    // A program that ignores SIGTERM (or a child of it holding the output open)
+                    // still ends (Constitution II).
+                    DispatchQueue.global().asyncAfter(deadline: .now() + 3) { running.kill() }
                 }
                 let c = timeout.components
                 DispatchQueue.global().asyncAfter(
@@ -209,8 +219,7 @@ struct ProcessCommands: CommandRunner {
                 }
                 let outData = started.output.readDataToEndOfFile()
                 group.wait()
-                let status = Spawn.wait(started.pid)
-                running.exited()
+                let status = Spawn.wait(started.pid) { running.exited() }
                 timer.cancel()
                 cont.resume(
                     returning: ProcessResult(
@@ -305,12 +314,26 @@ enum Spawn {
         var attributes: posix_spawnattr_t?
         posix_spawnattr_init(&attributes)
         defer { posix_spawnattr_destroy(&attributes) }
-        // Only the three descriptors above reach the program (Process does the same).
-        posix_spawnattr_setflags(&attributes, Int16(POSIX_SPAWN_CLOEXEC_DEFAULT))
+        // Only the three descriptors above reach the program, and it starts with no signal
+        // blocked or ignored, as Process starts one: a dispatch thread's blocked signals would
+        // otherwise pass on, and the deadline's SIGTERM would not end it (security review
+        // 2026-11-26).
+        var noSignals = sigset_t()
+        sigemptyset(&noSignals)
+        var allSignals = sigset_t()
+        sigfillset(&allSignals)
+        posix_spawnattr_setsigmask(&attributes, &noSignals)
+        posix_spawnattr_setsigdefault(&attributes, &allSignals)
+        posix_spawnattr_setflags(
+            &attributes, Int16(POSIX_SPAWN_CLOEXEC_DEFAULT | POSIX_SPAWN_SETSIGMASK | POSIX_SPAWN_SETSIGDEF))
         let argv: [UnsafeMutablePointer<CChar>?] = ([executable] + args).map { strdup($0) } + [nil]
         defer { for a in argv { free(a) } }
+        // Latchkey's own environment, as Process passes it.
+        let envp: [UnsafeMutablePointer<CChar>?] =
+            ProcessInfo.processInfo.environment.map { strdup("\($0.key)=\($0.value)") } + [nil]
+        defer { for e in envp { free(e) } }
         var pid: pid_t = 0
-        let code = posix_spawn(&pid, executable, &actions, &attributes, argv, _NSGetEnviron().pointee)
+        let code = posix_spawn(&pid, executable, &actions, &attributes, argv, envp)
         close(out[1])
         close(err[1])
         guard code == 0 else {
@@ -324,8 +347,12 @@ enum Spawn {
     }
 
     /// Waits for the program to end and reaps it; answers its exit status, or the signal that
-    /// ended it (as Process's terminationStatus).
-    static func wait(_ pid: pid_t) -> Int32 {
+    /// ended it (as Process's terminationStatus). `ended` runs once it has ended but before it is
+    /// reaped, while its number still can't be another program's (security review 2026-11-26).
+    static func wait(_ pid: pid_t, ended: () -> Void = {}) -> Int32 {
+        var info = siginfo_t()
+        while waitid(P_PID, id_t(pid), &info, WEXITED | WNOWAIT) == -1, errno == EINTR {}
+        ended()
         var status: Int32 = 0
         while waitpid(pid, &status, 0) == -1, errno == EINTR {}
         let signal = status & 0x7f
