@@ -68,12 +68,13 @@ applies, except:
   through Latchkey's shell (Toni, 2026-11-23). A session that needs something there writes a self-contained prompt for Toni to
   give that agent: the goal, the current state, the rules (no interruption, nothing secret
   written in public), what to check, and what to report back.
-- Mac app without the Mac: `mac-build.yml` lints and builds the app (gating) and runs the whole
-  unit test suite (reported, not gating) on GitHub's macOS runner for every change to `macos/`
-  (2026-11-23). Since 2026-11-26 a run is four jobs side by side, about 4.5 minutes (Toni:
-  "split the slow step into parallel jobs, get it to 5 minutes"; GitHub runs at most five
-  macOS jobs at once on this plan, e2e-mac takes the fifth and runs on Linux when it has
-  nothing to check). Each job builds (about 1.5 minutes: Xcode's compilation cache and the
+- Mac app without the Mac: `mac-build.yml` lints, builds and tests the app on GitHub's macOS
+  runner for every change to `macos/`; its job `mac` is a required check (spec 016, 2026-11-26:
+  it passes at once when `macos/` didn't change). A run is four jobs side by side, about 4.5
+  minutes (Toni: "split the slow step into parallel jobs, get it to 5 minutes"; GitHub runs at
+  most five macOS jobs at once on this plan). Job 3 also runs the Mac app's end-to-end check
+  on its build (below). On main, code its pull request already tested exactly (the same tree)
+  is only built, for the cache. Each job builds (about 1.5 minutes: Xcode's compilation cache and the
   Swift packages are kept between runs, saved by job 0) and runs its share. Job 0 lints, runs the update and unit tests, then
   the tests of short time limits alone (`macos/scripts/quiet-suites.txt`). All four run the
   tests with web pages or time limits in two test programs each, each program one test at a
@@ -93,9 +94,10 @@ applies, except:
   key in `LATCHKEY_REPORTS_KEY` (a variable of Toni's personal cloud environment, set by Toni)
   and the intake's token, which the session's network proxy adds for that host once Toni saved it
   as a network secret (`request_credential`). Report contents stay in the session's output.
-- End to end and evals (spec 015): every pull request runs `e2e.yml`. Its `e2e-linux` and
-  `e2e-mac` jobs run the checks the changed files select (`relay/e2e/capabilities.json`) with a
-  real MCP client through a private relay, and compare every tool with `relay/e2e/toolsnaps`. A
+- End to end and evals (spec 015): `e2e.yml`'s `e2e-linux` and `mac-build.yml`'s job 3 run the
+  checks the changed files select (`relay/e2e/capabilities.json`) with a real MCP client through
+  a private relay, and compare every tool with `relay/e2e/toolsnaps`; the checks are reported,
+  and for the Mac app a changed snapshot fails the required check `mac` (Toni, 2026-11-26). A
   snapshot that differs fails the job: when the change is meant, download the job's artifact
   `toolsnaps-<kind>` (`gh api repos/tonimelisma/latchkey/actions/runs/<id>/artifacts`) and commit
   its files in the same pull request. Docker Hub refuses this VM's pulls (rate limit), so the

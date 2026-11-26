@@ -45,8 +45,18 @@ Toni asks ──── Toni's Mac ──────────── 5 Toni's 
   turned off disappears" stays in the integration layer (`e2e relay`, `e2e mac`, linuxcheck) and
   the unit test of the gate.
 - `ci.yml` runs on `pull_request` and on `push` to `main` only (today every push to a pull
-  request runs it twice); `relay-image.yml` and `linux-release.yml` wait for `ci.yml`'s result on
-  that commit (`workflow_run`) instead of testing again.
+  request runs it twice). Withdrawn 2026-11-26: having `relay-image.yml` and `linux-release.yml`
+  wait for `ci.yml` (`workflow_run`) instead of testing again; it only saves Linux minutes after
+  a merge, and `workflow_run` can't be tried before it is on main, so a mistake would stop
+  releases.
+- The Mac app's end-to-end check runs in `mac-build.yml`'s job 3 on that job's build (was a
+  fifth macOS job with its own build); `shard-suites.py` gives job 3's programs ~110 s less.
+  Its checks stay reported; the snapshot comparison is required, and fails also when the
+  comparison never ran (Toni, 2026-11-26: "snapshot diff blocks", since FR-1604 left the
+  snapshots the one place a description is pinned).
+- On main, `mac-build.yml` skips the tests when the merged tree is the one a pull request's
+  `mac` job passed (an artifact `mac-tested-<tree>`, 7 days); it still builds in job 0 to save
+  the compilation cache (Toni, 2026-11-26: "Skip if identical").
 
 ### D3. The sandbox Mac (FR-1605, FR-1606, FR-1607, FR-1610)
 

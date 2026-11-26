@@ -144,6 +144,11 @@ func macCmd(args []string) error {
 		if err := ran[name](); err != nil {
 			return fail(fmt.Errorf("%s: %w", name, err))
 		}
+		if name == "core" {
+			// mac-build.yml's required snapshot step looks for this line: without it the
+			// snapshots were not compared, which is not "unchanged" (spec 016).
+			step("tool snapshots compared")
+		}
 	}
 	if slices.Contains(want, "core") {
 		if err := m.turnedOff(); err != nil {
