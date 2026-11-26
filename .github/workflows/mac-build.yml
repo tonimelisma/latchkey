@@ -1,14 +1,14 @@
-# Builds the Mac app on macOS for every change to macos/ (pull requests and main), so Swift that
-# was written in a cloud session (no Swift there) is compiled before it merges, and runs the
-# update tests (spec 001 FR-072 to FR-072d). Signed ad hoc, as the Mac's own test runs are; the
-# full test suite still runs on the Mac (docs/cloud-sessions.md). No secrets, read-only token.
+# Builds, lints and tests the Mac app on macOS for every change to macos/ (pull requests and
+# main), so Swift written in a cloud session (no Swift there) is compiled and tested before it
+# merges. The tests gate merging (Toni, 2026-11-26; spec 016 FR-1601): the job "mac" is the
+# required check. It runs on every pull request and passes at once when nothing in macos/ or
+# this file changed (a required check that never runs would hold every other pull request).
+# Signed ad hoc. No secrets, read-only token.
 name: mac build
 on:
   push:
     branches: [main]
-    paths: ["macos/**", ".github/workflows/mac-build.yml"]
   pull_request:
-    paths: ["macos/**", ".github/workflows/mac-build.yml"]
   workflow_dispatch:
 permissions:
   contents: read
@@ -16,6 +16,29 @@ concurrency:
   group: mac-build-${{ github.ref }}
   cancel-in-progress: true
 jobs:
+  changes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      mac: ${{ steps.diff.outputs.mac }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # the diff against the pull request's base, or the pushed range
+          persist-credentials: false
+      - id: diff
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          if [ "$EVENT" = workflow_dispatch ] || ! git cat-file -e "$BASE^{commit}" 2>/dev/null; then
+            echo "mac=true" >>"$GITHUB_OUTPUT"; exit 0
+          fi
+          if git diff --name-only "$BASE...HEAD" | grep -qE '^(macos/|\.github/workflows/mac-build\.yml$)'; then
+            echo "mac=true" >>"$GITHUB_OUTPUT"
+          else
+            echo "mac=false" >>"$GITHUB_OUTPUT"
+          fi
   # Four jobs side by side (Toni, 2026-11-26: "split the slow step into parallel jobs, get it
   # to 5 minutes"; GitHub runs at most 5 macOS jobs at once on this plan, and e2e-mac takes the
   # fifth). Each builds (with Xcode's compilation cache and the Swift packages kept between
@@ -25,6 +48,8 @@ jobs:
   # macos/scripts/suite-seconds.txt).
   build:
     name: build and test (${{ matrix.shard }})
+    needs: changes
+    if: needs.changes.outputs.mac == 'true'
     runs-on: macos-26
     timeout-minutes: 30
     strategy:
@@ -103,14 +128,12 @@ jobs:
             -derivedDataPath "$RUNNER_TEMP/dd" CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM= \
             -only-testing:LatchkeyTests/UpdateGateTests -only-testing:LatchkeyTests/ReleaseCheckTests \
             test-without-building -quiet
-      # The whole unit test suite, reported, not a gate (2026-11-23): compare a branch's failures
-      # with main's. Each failure is printed with why, and the test host's crash reports with
-      # their stacks. Without the tests that open web pages or measure time limits: they run one
-      # at a time in the next step.
-      - name: Unit tests (reported)
+      # The whole unit test suite. Each failure is printed with why, and the test host's crash
+      # reports with their stacks. Without the tests that open web pages or measure time limits:
+      # they run one at a time in the next step.
+      - name: Unit tests
         if: matrix.shard == 0
         working-directory: macos
-        continue-on-error: true
         run: |
           rc=0
           skip=$(cat scripts/page-suites.txt scripts/timing-suites.txt | sed 's/^/-skip-testing:LatchkeyTests\//' | tr '\n' ' ')
@@ -128,10 +151,9 @@ jobs:
           exit "$rc"
       # Tests of short time limits, alone on the runner (job 0, after the unit tests): beside
       # another test program a 0.5 s limit measured 0.514 s (2026-11-26).
-      - name: Tests of short time limits, alone (reported)
+      - name: Tests of short time limits, alone
         if: always() && matrix.shard == 0
         working-directory: macos
-        continue-on-error: true
         run: |
           rc=0
           only=$(python3 scripts/shard-suites.py quiet | sed 's/^/-only-testing:LatchkeyTests\//' | tr '\n' ' ')
@@ -150,10 +172,9 @@ jobs:
       # 18 s among 70 pages). With them, the tests of time limits: side by side with the rest,
       # a 2.8 s limit measured 13.6 s (2026-11-25). Two programs per job, each with its own main
       # thread (the runner has three cores); job 0's are shorter by its unit tests.
-      - name: Tests with web pages or time limits, one at a time per program (reported)
+      - name: Tests with web pages or time limits, one at a time per program
         if: always()
         working-directory: macos
-        continue-on-error: true
         run: |
           run=$(find "$RUNNER_TEMP/dd/Build/Products" -maxdepth 1 -name '*.xctestrun' | head -1)
           for lane in 0 1; do
@@ -180,3 +201,21 @@ jobs:
             tail -3 "$RUNNER_TEMP/pages-$lane.log"
           done
           exit "$rc"
+
+  # The required check: passes when macos/ didn't change, or when every build-and-test job
+  # passed; fails on any failed, cancelled or missing job.
+  mac:
+    needs: [changes, build]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - env:
+          CHANGES: ${{ needs.changes.result }}
+          MAC: ${{ needs.changes.outputs.mac }}
+          BUILD: ${{ needs.build.result }}
+        run: |
+          echo "changes: $CHANGES, macos/ changed: $MAC, build and test: $BUILD"
+          [ "$CHANGES" = success ] || exit 1
+          [ "$MAC" = true ] || exit 0
+          [ "$BUILD" = success ]

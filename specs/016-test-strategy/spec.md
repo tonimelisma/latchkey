@@ -80,9 +80,14 @@ if you're local and thus have access to the mac."
   VERIFIED until it was seen in that condition on his Mac (CLAUDE.md, "Done means Toni's
   conditions"); sandbox results are evidence only for the conditions the sandbox really has.
 
+- **FR-1612** All testing of a commit, local and CI together, shall finish within 5 minutes of
+  the moment the developer's work is ready (the push, or the local run's start); where a layer
+  can't, the reason is measured and reported to Toni (Toni, 2026-11-26: "each commit wraps up in
+  5 minutes of testing from the moment dev works ... local and CI together, everything").
+
 ## Success criteria
 
-- A pull request's checks finish in under 10 minutes and are all green on main.
+- A pull request's checks finish within 5 minutes of the push (FR-1612) and are green on main.
 - Every capability is exercised against the real Mac app it uses, with test data, at least in
   the sandbox Mac, with no stand-in left unchecked by a real layer.
 - A local session that builds the Mac app ends with a quoted sandbox run of that build.
