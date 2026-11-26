@@ -18,8 +18,10 @@ Each task names its requirements; done means its check passed where it says.
 - [x] T6 After merge: the ruleset `main` requires `mac` (Toni allowed, 2026-11-26, this once:
       through Latchkey's shell on his Mac with `gh`). Check: the ruleset read back. Done
       2026-11-26 07:4x UTC: ruleset `main` requires relay, linux, scripts, mac (read back).
-- [ ] T7 FR-1612: measure every workflow's time from push to last check on this pull request
+- [x] T7 FR-1612: measure every workflow's time from push to last check on this pull request
       and main; record in `research.md` §5; report each layer over 5 minutes with its reason.
+      Done: a non-Mac change ~3 min; a Mac change ~5 m 25 s without waiting for a machine
+      (research §5, with what is left over 5 minutes and why).
 
 ## Pull request 2 (cloud; the sandbox's first run needs a local session)
 
@@ -47,7 +49,7 @@ Each task names its requirements; done means its check passed where it says.
       clock threaded through app code: CloudFile, LevelChange, SingleCopy, PasswordsExportCleanup,
       ActivityLogScale; real processes stay on real time (FencedBuild, ShellJob, Leftovers).
 - [x] T14 The start hook tells a local session to run `make sandbox` after building the Mac app.
-- [ ] T15 FR-1612 again on pull request 2; STATUS, decisions, README where they change.
+- [x] T15 FR-1612 again on pull request 2; STATUS, decisions, README where they change.
 - [ ] T16 (local session) First `make -C macos sandbox` on a Mac with Tart: `eval-image.sh` once
       (Toni approves the image's permissions once), then the run; fix what it finds. Then port
       the rest of `relay/e2e/sandbox-checks.md` into `e2e sandbox` (Safari tabs, the fuller

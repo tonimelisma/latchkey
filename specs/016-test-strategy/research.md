@@ -222,3 +222,24 @@ Not yet ported from `relay/e2e/sandbox-checks.md`: the Safari checks, the per-ca
 state-check groups beyond one round trip each (notes, calendar, reminders, contacts, files,
 shell, browser), maps, sweep, front-app-unchanged, no-permission-prompts, and the regression
 cases listed there.
+
+### After spec 016's CI changes (pull request #60, 2026-11-26)
+
+| Commit | Push → all done | Mac jobs (start → end) | Wait for a Mac machine | Notes |
+|---|---|---|---|---|
+| 6c46064 | `mac` passed 15 s after the push | none started | none | no `macos/` change: the gate's skip path |
+| 139a3d3 | 7 m 22 s | 3:56 to 4:35 each; job 1 queued 2 m 40 s | runners held by the run that push cancelled | the changes job took 52 s (Go for the pick) |
+| ce45efa | 8 m 16 s | job 1 4:13, job 3 5:08 (end-to-end inside), job 2 5:22, job 0 3:45 | job 0 queued 4 m 17 s, with nothing else of this repository running | the changes job 5 s; ci 2 m 47 s; e2e-linux 2 m 31 s |
+
+Without the wait, ce45efa comes to about 5 m 25 s (the slowest job plus the changes job and
+the gate). What is left over 5 minutes, and why:
+
+- **Another job held two of the account's five macOS machines** (GitHub's limit is per
+  account, across all its repositories): nothing in this repository can prevent that wait.
+- **Each Mac job builds the app itself** (1:06 to 1:50 with the compilation cache): four jobs,
+  four builds. Sharing one build between jobs means uploading and downloading the build
+  products (several hundred MB), which costs about what it saves.
+- **GitHub's macOS runners vary** by about a minute for the same work (job 2: 4:20 in one run,
+  5:22 in the next).
+- **The pages tests are the bulk** (about 10 minutes of test time across the jobs): faster
+  only by making those tests faster, or by more jobs side by side.
