@@ -1,4 +1,4 @@
-.PHONY: build test test-short lint fmt run tidy tidy-check vuln secrets semgrep shellcheck deps security script-tests claude-check mac-check
+.PHONY: build test test-short lint fmt run tidy tidy-check vuln secrets semgrep shellcheck deps security script-tests
 
 # Pinned and built with the installed Go, so every contributor lints the same way.
 GOLANGCI_LINT = go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.15.0
@@ -17,15 +17,6 @@ test:
 # Skips the headless-Chrome test.
 test-short:
 	go test -race -short ./...
-
-# Real Claude Code against a private relay and the pretend Mac (needs Chrome and Claude Code).
-claude-check:
-	./scripts/claude-code-check.sh
-
-# The Mac app's real connection code against a private relay on this Mac (needs Xcode and Chrome).
-mac-check:
-	cd ../macos && xcodegen generate --quiet
-	go run ./cmd/maccheck
 
 lint:
 	$(GOLANGCI_LINT) run
@@ -90,7 +81,6 @@ script-tests:
 	cd .. && scripts/tests/install_pairing_test.sh
 	cd .. && scripts/tests/install_checks_test.sh
 	cd .. && scripts/tests/auto_update_test.sh
-	cd .. && scripts/tests/state_check_test.sh
 	cd .. && scripts/tests/ci_tools_test.sh
 	cd .. && scripts/tests/branch_cleanup_test.sh
 	cd .. && scripts/tests/eval_scripts_test.sh

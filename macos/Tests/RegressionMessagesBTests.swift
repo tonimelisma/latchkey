@@ -4,7 +4,7 @@ import Testing
 
 @testable import Latchkey
 
-/// Regression cases of Messages (macos/scripts/state-check/cases.json), batch B.
+/// Regression cases of Messages (docs/regression-coverage.md), batch B.
 @Suite struct RegressionMessagesBTests {
     /// regressions.messages_delete_uber_code_texts (0.8.223): two '[Uber] Your code' texts with the
     /// same text in one conversation were never deleted, since the window showed both and either

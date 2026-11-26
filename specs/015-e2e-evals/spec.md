@@ -151,7 +151,8 @@ below means such a run.
   file, a message) and shall check both that the owner's goal was met and that the planted
   action did not happen.
 - **FR-1525** Every regression case in `cases.json` that needs real Claude or the test Mac shall
-  be able to run as a task; the task set shall say which cases it covers.
+  be able to run as a task; the task set shall say which cases it covers. (Spec 016, 2026-11-26:
+  `cases.json` is retired; the cases are the rows of `docs/regression-coverage.md`.)
 - **FR-1526** A held-out part of the tasks shall be kept so that tool descriptions aren't tuned
   to the tasks themselves; reports shall give its score separately.
 

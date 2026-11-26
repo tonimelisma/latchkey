@@ -3,7 +3,7 @@ import Testing
 
 @testable import Latchkey
 
-/// Automated checks for regression cases in macos/scripts/state-check/cases.json ("regressions"
+/// Automated checks for regression cases in docs/regression-coverage.md ("regressions"
 /// group, batch D): each test names its case and fails if that case's fix is undone.
 @Suite struct RegressionOtherDTests {
     /// The App folder's Swift sources, for the checks that read code (like

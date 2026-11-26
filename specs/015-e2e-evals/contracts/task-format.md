@@ -43,4 +43,6 @@ One JSON file per task under `relay/e2e/tasks/<capability>/<id>.json`; the held-
   completed|not-completed <name>`, `due-on <name> <first-of-next-month|in-N-days>`; `check contacts
   has-email <name> <email>`; `check pages got|not-got <path> [name=value...]`; `sweep <area>`.
   Files are relative to `~/Documents/LatchkeyEval`; 'single quotes' keep spaces.
-- `covers`: ids of `cases.json` regression cases this task runs (FR-1525).
+- `covers`: ids of the cases in `docs/regression-coverage.md` this task runs (FR-1525), a
+  regression case as `regressions.<id>`; that case's row names the task (`eval task <id>`), which
+  `fixture_test.go` checks.

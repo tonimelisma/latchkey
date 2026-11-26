@@ -6,7 +6,7 @@ import WebKit
 @testable import Latchkey
 
 /// GitHub's macOS 26 runner, 2026-11-25, after real input (#51; seen in a test program, not on
-/// the installed app, so no state-check case): with dozens of pages in one program, Latchkey
+/// the installed app, so no sandbox check): with dozens of pages in one program, Latchkey
 /// looked at each page's event counts every 5 ms, which took the main thread, so a key's release
 /// reached a page up to 0.75 s late and steps ran past their limits; and when the wait for the
 /// keys before an "é" ran out, the é was typed anyway and landed before them ("Café" came out

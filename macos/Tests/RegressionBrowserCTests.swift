@@ -7,7 +7,7 @@ import WebKit
 @testable import Latchkey
 
 /// Regression cases of the group regressions-browser (second half), each tested where
-/// Latchkey's own code decides it (`macos/scripts/state-check/cases.json`). Real WebKit views
+/// Latchkey's own code decides it (`docs/regression-coverage.md`). Real WebKit views
 /// with pages given as text or served from this Mac (127.0.0.1); the stand-in Safari for the
 /// owner's tabs. No site on the network is reached.
 

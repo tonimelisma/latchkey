@@ -102,7 +102,7 @@ paths:
   and the helper's version after every install (FR-622) and fails when one is wrong.
 - Never pause, disconnect, or turn down capabilities on the installed app for a check: Toni's own
   Claude sessions use it (a live Pause test stalled one of his sessions mid-order, 2026-10-26).
-  Test those in unit tests or with `make mac-check`. No `claude -p` live checks (2026-11-23).
+  Test those in unit tests, `e2e mac`, or the sandbox Mac. No `claude -p` live checks (2026-11-23).
 - Settings… sets the activation policy to `.regular` and activates before `openSettings()`, the
   usual advice for menu-bar-only apps (otherwise the window may not open or opens behind).
 
@@ -149,8 +149,8 @@ paths:
 - Never send Apple Events to Safari from the test host (or a Debug build) to try something: it
   is its own app to macOS, its first event opens an Automation prompt, and while that prompt
   waits (behind a locked screen, for ever) Safari answers no window or tab scripting from any
-  program, the installed Latchkey included (2026-10-29). Real-Safari checks run from a
-  terminal: `macos/scripts/safari-check.sh`.
+  program, the installed Latchkey included (2026-10-29). Real-Safari checks run in the sandbox
+  Mac (`relay/e2e/sandbox-checks.md`), never against the owner's Safari.
 
 - Nothing but the hello goes on the socket before the welcome: `task` in `RelayConnection`
   is the welcomed connection only. A state update sent while signing in got every start

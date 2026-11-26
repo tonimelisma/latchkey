@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"os"
 	"path/filepath"
 	"slices"
@@ -13,7 +12,7 @@ import (
 )
 
 // Every fixture line in the repository's tasks names a set or check this program knows, and every
-// case a task covers exists in cases.json (FR-1525).
+// case a task covers has its row in docs/regression-coverage.md naming that task (FR-1525).
 func TestTaskLinesAreKnown(t *testing.T) {
 	tasks, err := evals.LoadTasks(filepath.Join("..", "..", "e2e", "tasks"))
 	if err != nil {
@@ -29,7 +28,7 @@ func TestTaskLinesAreKnown(t *testing.T) {
 		"files": keys(fileSets), "notes": {"shopping", "recipe-injected"}, "calendar": {"team-sync", "empty"},
 		"reminders": {"chores", "empty"}, "contacts": {"jordan"}, "pages": {"rsvp", "bank", "orders", "news"},
 	}
-	cases := caseIDs(t)
+	rows := coverageRows(t)
 	for _, tk := range tasks {
 		lines := append(append(append([]string{}, tk.Setup...), tk.Check...), tk.Cleanup...)
 		if tk.Injected != nil {
@@ -56,8 +55,12 @@ func TestTaskLinesAreKnown(t *testing.T) {
 			}
 		}
 		for _, c := range tk.Covers {
-			if !cases[c] {
-				t.Errorf("%s covers %s, which isn't in cases.json", tk.ID, c)
+			row, ok := rows[strings.TrimPrefix(c, "regressions.")]
+			switch {
+			case !ok:
+				t.Errorf("%s covers %s, which has no row in docs/regression-coverage.md", tk.ID, c)
+			case !strings.Contains(row, "eval task `"+tk.ID+"`"):
+				t.Errorf("%s covers %s, whose row in docs/regression-coverage.md doesn't name the task", tk.ID, c)
 			}
 		}
 	}
@@ -71,27 +74,25 @@ func keys[V any](m map[string]V) []string {
 	return out
 }
 
-func caseIDs(t *testing.T) map[string]bool {
+// coverageRows returns each case's table row in docs/regression-coverage.md, by the case's id.
+func coverageRows(t *testing.T) map[string]string {
 	t.Helper()
-	data, err := os.ReadFile(filepath.Join("..", "..", "..", "macos", "scripts", "state-check", "cases.json"))
+	data, err := os.ReadFile(filepath.Join("..", "..", "..", "docs", "regression-coverage.md"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	var doc struct {
-		Groups []struct {
-			Cases []struct {
-				ID string `json:"id"`
-			} `json:"cases"`
-		} `json:"groups"`
-	}
-	if err := json.Unmarshal(data, &doc); err != nil {
-		t.Fatal(err)
-	}
-	out := map[string]bool{}
-	for _, g := range doc.Groups {
-		for _, c := range g.Cases {
-			out[c.ID] = true
+	out := map[string]string{}
+	for line := range strings.Lines(string(data)) {
+		rest, ok := strings.CutPrefix(line, "| `")
+		if !ok {
+			continue
 		}
+		if id, _, ok := strings.Cut(rest, "` |"); ok {
+			out[id] = line
+		}
+	}
+	if len(out) == 0 {
+		t.Fatal("no case rows in docs/regression-coverage.md")
 	}
 	return out
 }

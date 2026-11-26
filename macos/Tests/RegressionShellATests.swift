@@ -3,7 +3,7 @@ import Testing
 
 @testable import Latchkey
 
-/// Shell regression cases (macos/scripts/state-check/cases.json, "regressions-shell"), checked
+/// Shell regression cases (docs/regression-coverage.md, "regressions-shell"), checked
 /// through the tools Claude calls, with a Shell of the test's own (its own home and scratch).
 @Suite(.serialized) struct RegressionShellATests {
     let jobs = ShellJobs(setup: .testing())

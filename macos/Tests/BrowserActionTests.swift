@@ -7,7 +7,7 @@ import WebKit
 /// Spec 005 FR-433 to FR-439 (2026-11-05, Toni: "all the safari stuff"): keys, hover,
 /// scrolling, lists, files into and out of the page, and the copy a picture is drawn from. The
 /// page scripts run in a real WebKit view (the engine Safari uses); the tools run against the
-/// stand-in Safari; real Safari is checked by `scripts/safari-check.sh`.
+/// stand-in Safari; real Safari is checked in the sandbox Mac (relay/e2e/sandbox-checks.md).
 enum ActionPage {
     static let html = """
         <html><head><title>Actions</title>

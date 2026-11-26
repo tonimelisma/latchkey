@@ -54,7 +54,7 @@ rules:
       private, and link-local addresses (publicOnlyDialer); the default client reaches anything
       (threat model, invariant 8).
     paths:
-      exclude: ["*_test.go", "**/cmd/localcheck/**", "**/cmd/maccheck/**", "**/internal/e2e/**", "**/internal/e2erelay/**", "**/cmd/e2e/**", "**/internal/testagent/**"]
+      exclude: ["*_test.go", "**/internal/e2e/**", "**/internal/e2erelay/**", "**/cmd/e2e/**", "**/internal/testagent/**"]
     pattern-either:
       - pattern: http.Get(...)
       - pattern: http.Post(...)

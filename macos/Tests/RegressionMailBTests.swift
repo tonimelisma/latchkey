@@ -3,7 +3,7 @@ import Testing
 
 @testable import Latchkey
 
-/// Regression cases of Mail (macos/scripts/state-check/cases.json), batch B.
+/// Regression cases of Mail (docs/regression-coverage.md), batch B.
 @MainActor @Suite struct RegressionMailBTests {
     /// `count` emails of the last hours, newest first, as Mail's index gives them.
     nonisolated static func emails(_ count: Int) -> [MailCodes.Email] {

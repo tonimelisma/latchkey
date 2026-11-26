@@ -227,8 +227,8 @@ Serves FR-040, FR-014, FR-180 to FR-185.
     - a value that isn't a list of host names fails `loadConfig`, so the relay doesn't start
       (FR-185).
     The zero value of the setting inside the code is the default list, so a caller that forgets
-    it gets "Claude only", never "anyone". Tests and the local checks (`internal/e2e`,
-    `cmd/localcheck`, `cmd/maccheck`), which register a throwaway client, set `*`.
+    it gets "Claude only", never "anyone". Tests and the end-to-end checks (`internal/e2e`,
+    `cmd/e2e`, `cmd/linuxcheck`), which register a throwaway client, set `*`.
 - Metadata: advertise `client_id_metadata_document_supported: true`,
   `token_endpoint_auth_methods_supported` including `none`, `code_challenge_methods_supported:
   ["S256"]`, `offline_access` in `scopes_supported`.
@@ -897,8 +897,9 @@ Serves FR-195 to FR-199; Constitution II, V.
   reconnects by itself when the suspension ends."), keeps the pairing, and waits 5 minutes
   instead of stopping; the wait ends early on wake or a network change, as its normal reconnect
   wait does. `ReconnectPolicy.next(afterClose:reason:attempt:)` is that decision as a pure
-  function (what to show, when to retry). `make mac-check` suspends the account under the real
-  connection code, checks what it shows, and lifts the suspension.
+  function (what to show, when to retry). `make mac-check` suspended the account under the real
+  connection code, checked what it showed, and lifted the suspension; removed 2026-11-26 (spec
+  016 D2), it is the sandbox Mac's `suspended-account` check (`relay/e2e/sandbox-checks.md`).
 - The operator log is purged after a year by the daily job.
 - The commands open the database exactly as the server does, key file included (D10, FR-186):
   `DATA_DIR` and `KEY_FILE` from the container's environment. With the key file missing or

@@ -28,7 +28,8 @@ Subcommands: `pick` (paths to capabilities), `checks` (the deterministic end-to-
 (set up, check and clean test data on macOS). It reuses what the existing checks have: the
 private relay start-up and headless-Chrome sign-up (`relay/internal/e2e`), the Go MCP client,
 Claude Code non-interactive (`relay/internal/e2e/claude.go`, extended to read stream-json). The
-existing `localcheck`, `linuxcheck`, `maccheck` stay as they are; their shared start-up moves
+existing `localcheck`, `linuxcheck`, `maccheck` stay as they are (until spec 016 D2 removed
+`localcheck` and `maccheck`, 2026-11-26); their shared start-up moves
 into `relay/internal/e2e` where it isn't already (Constitution VIII: one new program, no
 second harness).
 
@@ -121,7 +122,8 @@ About 20 tasks in `relay/e2e/tasks/` (format: `contracts/task-format.md`), sprea
 capabilities the test Mac has: files, shell, Latchkey's own browser on local pages (sign-in,
 download), Notes, Calendar, Reminders, Contacts, computer control on a test app; 3 or 4 with
 planted instructions (a note, a page, a file) (FR-1524); 4 held out (FR-1526). Regression cases
-from `cases.json` that need Claude or the test Mac are written as tasks, with `covers` (FR-1525).
+from `cases.json` that need Claude or the test Mac are written as tasks, with `covers` (FR-1525;
+since spec 016 retired `cases.json`, the cases are the rows of `docs/regression-coverage.md`).
 Scoring: end state first, then forbidden calls, unneeded calls reported; no judge.
 
 ### D9. Releases and Toni's conditions (FR-1540, FR-1541)

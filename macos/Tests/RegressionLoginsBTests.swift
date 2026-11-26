@@ -3,7 +3,7 @@ import Testing
 
 @testable import Latchkey
 
-/// Regression cases of sign-in (macos/scripts/state-check/cases.json), batch B. Real WebKit pages
+/// Regression cases of sign-in (docs/regression-coverage.md), batch B. Real WebKit pages
 /// given as text at an https address, as in SignInFillTests; the Mac's lock is a stand-in.
 @MainActor @Suite struct RegressionLoginsBTests {
     struct Setup {
