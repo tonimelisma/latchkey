@@ -410,14 +410,31 @@ final class Reports: @unchecked Sendable {
         #expect(d.left?.contains("permanent change") == true, "\(d.left ?? "nil")")
     }
 
+    /// Waits up to a minute for a job to end, gathering its output and what it showed: on a busy
+    /// runner a command can outlast its own wait, and its files were looked for while `git init`
+    /// still ran (GitHub run 45783237698, 2026-11-26).
+    private func ended(_ first: ShellJobs.Snapshot) async throws -> ShellJobs.Snapshot {
+        var all = first
+        for _ in 0..<6 where !all.finished {
+            let next = try await jobs.check(first.job, wait: .seconds(10))
+            all.output += next.output
+            all.refusedWrite = all.refusedWrite || next.refusedWrite
+            all.finished = next.finished
+            all.exitCode = next.exitCode
+        }
+        return all
+    }
+
     @Test func newProjectsGetGitsSampleHooks() async throws {
         let projects = home.appending(path: "Downloads")
         try FileManager.default.createDirectory(at: projects, withIntermediateDirectories: true)
         let elsewhere = home.appending(path: "Documents/q/.git")
         try FileManager.default.createDirectory(at: elsewhere, withIntermediateDirectories: true)
-        let r = try await jobs.run(
-            "git init -q p && ls p/.git/hooks | grep -c sample; mv p/.git/hooks/pre-commit.sample p/.git/hooks/pre-commit; mkdir ../Documents/q/.git/hooks",
-            folder: projects.path, wait: .seconds(10))
+        let r = try await ended(
+            jobs.run(
+                "git init -q p && ls p/.git/hooks | grep -c sample; mv p/.git/hooks/pre-commit.sample p/.git/hooks/pre-commit; mkdir ../Documents/q/.git/hooks",
+                folder: projects.path, wait: .seconds(10)))
+        #expect(r.finished, "the command didn't end within a minute: \(r.output)")
         #expect(r.refusedWrite, "a sample renamed into a hook is refused: \(r.output)")
         let hooks = projects.appending(path: "p/.git/hooks")
         #expect(FileManager.default.fileExists(atPath: hooks.appending(path: "pre-commit.sample").path), "\(r.output)")
@@ -425,8 +442,10 @@ final class Reports: @unchecked Sendable {
         #expect(
             !FileManager.default.fileExists(atPath: elsewhere.appending(path: "hooks").path),
             "outside the allowed folders, no hooks folder either")
-        let gone = try await jobs.run(
-            "rm p/.git/hooks/pre-commit.sample && rm -rf p && echo gone", folder: projects.path, wait: .seconds(10))
+        let gone = try await ended(
+            jobs.run(
+                "rm p/.git/hooks/pre-commit.sample && rm -rf p && echo gone", folder: projects.path,
+                wait: .seconds(10)))
         #expect(gone.output.contains("gone"), "a new project can be deleted again: \(gone.output)")
     }
 
