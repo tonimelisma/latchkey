@@ -3,6 +3,11 @@
 of about equal time, for mac-build.yml's side-by-side jobs (Toni, 2026-11-26: "split the slow
 step into parallel jobs, get it to 5 minutes").
 
+Usage: shard-suites.py quiet
+Prints the suites of quiet-suites.txt: tests of short time limits that job 0 runs alone, with
+nothing else on the runner (2026-11-26: a 0.5 s limit measured 0.514 s beside another test
+program). The groups below leave them out.
+
 Usage: shard-suites.py <groups> <group index> [<seconds already in each of the first groups>
 [<how many groups have them>]]
 Prints the suites for that group, one per line. A group is one test program of one job (each
@@ -20,13 +25,17 @@ import sys
 split = {"SignInFillTests": "SignInFillTests.swift"}
 
 here = pathlib.Path(__file__).parent
+quiet = [l.strip() for l in (here / "quiet-suites.txt").read_text().split("\n") if l.strip()]
+if sys.argv[1] == "quiet":
+    print("\n".join(quiet))
+    sys.exit(0)
 jobs, index = int(sys.argv[1]), int(sys.argv[2])
 head = float(sys.argv[3]) if len(sys.argv) > 3 else 0.0
 headed = int(sys.argv[4]) if len(sys.argv) > 4 else 1
 suites = []
 for name in ("page-suites.txt", "timing-suites.txt"):
     for line in (here / name).read_text().split("\n"):
-        if line.strip() and line.strip() not in suites:
+        if line.strip() and line.strip() not in suites and line.strip() not in quiet:
             suites.append(line.strip())
 seconds = {}
 known = here / "suite-seconds.txt"
