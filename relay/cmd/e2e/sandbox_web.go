@@ -499,8 +499,12 @@ end run`, p.site(), p.other())
 	if v, err := s.script(claude, "'é'.length + ' ' + 'é'.charCodeAt(0)"); err != nil || !strings.Contains(v, "1 233") {
 		return fmt.Errorf("a script's é in Safari: %q (%w), want 1 233", v, err)
 	}
-	if _, err := s.ask("shell_run", map[string]any{"command": "printf '%s' 'é' | od -An -tx1"}, "c3 a9"); err != nil {
+	// od spaces its columns as it likes ("c3  a9", the fourth sandbox run): the bytes are what
+	// count, and the decomposed form (e and U+0301, "65 cc 81") must not be there.
+	if t, err := s.ask("shell_run", map[string]any{"command": "printf '%s' 'é' | od -An -tx1"}); err != nil {
 		return fmt.Errorf("the shell's é: %w", err)
+	} else if !composedRE.MatchString(t) || strings.Contains(t, "cc 81") {
+		return fmt.Errorf("the shell's é isn't c3 a9: %q", short(t))
 	}
 	// a long page comes in parts, and offset reads on
 	t, err = s.look(claude, map[string]any{"url": p.site() + "/long"})
@@ -547,6 +551,8 @@ end run`, p.site(), p.other())
 	step("safari: the owner's tab listed, read, clicked, back, closed; Claude's tab kept through same- and cross-site clicks, every action, composed é, a long page in parts; nothing left")
 	return nil
 }
+
+var composedRE = regexp.MustCompile(`\bc3\s+a9\b`)
 
 // offsetRE finds where an answer says to read on ("offset 12000").
 var offsetRE = regexp.MustCompile(`offset[ :=]+(\d+)`)

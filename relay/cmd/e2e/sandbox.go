@@ -125,6 +125,9 @@ func summaryLine(c sandboxCheck) string {
 // idRE finds an id in a tool's answer: "(id x-coredata://…/p12; …)", "id: …", "id ABC".
 var idRE = regexp.MustCompile(`\bid:? ([^\s;)]+)`)
 
+// refRE finds an element's reference in a look's answer, like e12.
+var refRE = regexp.MustCompile(`\be\d+\b`)
+
 // idOn returns the id on the first line of an answer that names label.
 func idOn(answer, label string) string {
 	for line := range strings.SplitSeq(answer, "\n") {
@@ -299,6 +302,16 @@ func (s *sandbox) callOne(line string) error {
 	var res sandboxResult
 	s.only = func() error {
 		for _, c := range calls {
+			// "!sleep 2" pauses; "!osa <AppleScript>" runs a script (reading an app between calls).
+			switch c.name {
+			case "!sleep":
+				time.Sleep(time.Duration(atoi(fmt.Sprint(c.args["s"]))) * time.Second)
+				continue
+			case "!osa":
+				out, err := osaOut(fmt.Sprint(c.args["script"]))
+				fmt.Printf("--- osa: %s %v\n", out, err)
+				continue
+			}
 			r, err := s.m.call(c.name, c.args)
 			if err != nil {
 				return err
@@ -417,7 +430,24 @@ func (s *sandbox) computer() error {
 	if res.IsError || !slices.ContainsFunc(res.Content, func(c mcp.Content) bool { _, ok := c.(*mcp.ImageContent); return ok }) {
 		return fmt.Errorf("computer_look gave no screenshot: %q", short(e2erelay.TextOf(res)))
 	}
-	step("computer: listed the apps and took a screenshot (of the copy's own screen)")
+	// The front window's buttons and text, and a key that does nothing in most apps (the former
+	// cases computer.ui and computer.key: "do not click, move, type, or open apps").
+	// A Finder window to read, opened in the background (the copy's front is Finder's empty
+	// desktop: "nothing Latchkey can read", the fourth sandbox run), read through app.
+	if err := osa(`tell application "Finder" to make new Finder window to (path to documents folder)`); err != nil {
+		return err
+	}
+	defer func() { _ = osa(`tell application "Finder" to close every Finder window`) }()
+	if t, err = s.m.text("computer_look", map[string]any{"show": "ui", "app": "Finder"}); err != nil {
+		return err
+	}
+	if !refRE.MatchString(t) {
+		return fmt.Errorf("computer_look ui of Finder's window names no element to act on: %q", short(t))
+	}
+	if _, err := s.m.text("computer_act", map[string]any{"action": "key", "keys": "f12"}); err != nil {
+		return err
+	}
+	step("computer: listed the apps, took a screenshot, read the front window, pressed F12 (in the copy)")
 	return nil
 }
 

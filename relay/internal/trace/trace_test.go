@@ -459,6 +459,24 @@ func BenchmarkAppendScreenshot(b *testing.B) {
 	}
 }
 
+// FR-687, regression (CI on pull request #64, 2026-11-26: the test below failed in round 28 under
+// the race detector, "directory not empty" after the delete's 5 s): a deleted account whose folder
+// is still there gets no new day file, so a writer can't keep the delete from finishing.
+func TestADeletedAccountsFolderGetsNoNewDayFile(t *testing.T) {
+	var gone sync.Map
+	s, dir := open(t, func(o *Options) {
+		o.AccountExists = func(id string) bool { _, deleted := gone.Load(id); return !deleted }
+	})
+	s.Append("usr_d", t0, call("first", `{}`))
+	before, err := os.ReadDir(filepath.Join(dir, "usr_d"))
+	require.NoError(t, err)
+	gone.Store("usr_d", true) // deleted in the database; its folder isn't removed yet
+	s.Append("usr_d", t0.AddDate(0, 0, -3), call("late", `{}`))
+	after, err := os.ReadDir(filepath.Join(dir, "usr_d"))
+	require.NoError(t, err)
+	assert.Len(t, after, len(before), "no new day file for a deleted account")
+}
+
 // FR-687, regression (2026-11-24, TestOperatorDeleteRemovesTracesWhileTheRelayRuns failed once
 // on CI with "directory not empty"): the operator's delete runs in another process with its own
 // Store, so the per-account lock doesn't keep the relay's writer out. A writer that saw the
