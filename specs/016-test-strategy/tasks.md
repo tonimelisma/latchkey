@@ -32,13 +32,13 @@ Each task names its requirements; done means its check passed where it says.
 - [x] T10 [P] FR-1604: one place per behavior. Tool names, descriptions and schemas only in
       `relay/e2e/toolsnaps`: trim `PublicToolsTests` to what snapshots don't show; replace tests
       that pin description sentences by their snapshot.
-- [ ] T11 FR-1605, FR-1606, FR-1610, D3: `make sandbox` (`macos/scripts/sandbox.sh`): build
+- [x] T11 FR-1605, FR-1606, FR-1610, D3: `make sandbox` (`macos/scripts/sandbox.sh`): build
       Release signed with the sandbox's own self-signed identity, start or reuse a Tart copy of
       `latchkey-eval`, install the build, seed test data, run `cmd/e2e sandbox` (every
       capability, the moved `maccheck` checks), results in `e2e-results/`. `make sandbox-stop`.
-      Check: script tests in CI (argument refusals, nothing personal read); a real run NOT
-      VERIFIED until a local session runs it.
-- [ ] T12 FR-1608, D4: `make evals` on the sandbox (local build or `--release`), was
+      Check: script tests in CI (argument refusals, nothing personal read): `sandbox_test.sh`
+      49/49; a real run NOT VERIFIED until a local session runs it.
+- [x] T12 FR-1608, D4: `make evals` on the sandbox (local build or `--release`), was
       `weekly-eval.sh`.
 - [x] T13 [P] FR-1602: deadline tests on fake clocks (Swift `Clock` injected; Go
       `testing/synctest`); `timing-suites.txt` and `quiet-suites.txt` shrink as suites move.
@@ -46,5 +46,9 @@ Each task names its requirements; done means its check passed where it says.
       both lists; the relay's alert-slot tests in synctest (1.6 s to 0.3 s). Left, each needing a
       clock threaded through app code: CloudFile, LevelChange, SingleCopy, PasswordsExportCleanup,
       ActivityLogScale; real processes stay on real time (FencedBuild, ShellJob, Leftovers).
-- [ ] T14 The start hook tells a local session to run `make sandbox` after building the Mac app.
+- [x] T14 The start hook tells a local session to run `make sandbox` after building the Mac app.
 - [ ] T15 FR-1612 again on pull request 2; STATUS, decisions, README where they change.
+- [ ] T16 (local session) First `make -C macos sandbox` on a Mac with Tart: `eval-image.sh` once
+      (Toni approves the image's permissions once), then the run; fix what it finds. Then port
+      the rest of `relay/e2e/sandbox-checks.md` into `e2e sandbox` (Safari tabs, the fuller
+      per-app groups, maps, front app unchanged, no permission prompts), each seen working there.

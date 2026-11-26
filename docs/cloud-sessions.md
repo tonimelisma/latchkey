@@ -99,8 +99,8 @@ applies, except:
   snapshot that differs fails the job: when the change is meant, download the job's artifact
   `toolsnaps-<kind>` (`gh api repos/tonimelisma/latchkey/actions/runs/<id>/artifacts`) and commit
   its files in the same pull request. Docker Hub refuses this VM's pulls (rate limit), so the
-  Linux check runs on GitHub, not here. Test Mac results someone sent (`weekly-eval.sh --send`,
-  started by hand; there is no weekly run or reminder, Toni 2026-11-25) are read with `go run
+  Linux check runs on GitHub, not here. Eval results a local session sent (`make -C macos
+  evals ARGS=--send`; there is no weekly run or reminder, Toni 2026-11-25) are read with `go run
   ./cmd/latchkey-reports evals`.
 - No Mac (Toni, 2026-11-26; CLAUDE.md, "Two ways to work"): a cloud session never uses
   Latchkey to reach Toni's MacBook while developing: no builds, tests or lint through

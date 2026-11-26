@@ -28,11 +28,19 @@ End to end and evals (spec 015; `relay/cmd/e2e`, run in `relay/`):
   throwaway Mac runner (it uses that Mac's home folder, shell and Downloads)
 - A snapshot that differs fails `e2e.yml`; the job's artifact `toolsnaps-<kind>` holds the new
   files to commit in the same pull request
-- Weekly, on an Apple silicon Mac with Tart and Go, from any clone: `macos/scripts/eval-image.sh`
-  once (the test Mac image; a person approves its permissions), then
-  `macos/scripts/weekly-eval.sh` (results in `e2e-results/`, ignored by git) or `--send` (also
-  sealed to the developer's intake). Nothing to approve per run.
-- `go run ./cmd/latchkey-reports evals [-this-week [-quiet]]`: the sent weekly results, joined by
+- Sandbox Mac (spec 016; a local session on an Apple silicon Mac with Tart, Xcode and Go, from
+  any clone): `make -C macos sandbox` builds the working tree signed with the sandbox's own
+  identity "Latchkey Sandbox" (never `Local.xcconfig` or a developer certificate), installs it in
+  a Tart copy of the image `latchkey-eval` and checks every capability with test data
+  (`ARGS="--checks files,notes"` for some); the copy is kept for the next run until
+  `make -C macos sandbox-stop`. Results in `e2e-results/` (ignored by git). Evidence only for an
+  unlocked virtual Mac with test data.
+- Evals (spec 015/016): `make -C macos evals` (the local build in the sandbox), `ARGS=--release`
+  (the newest release; its signature needs its own permission grants in the image), `ARGS=--send`
+  (also sealed to the developer's intake). Real Claude Code does about 20 tasks 3 times each.
+- Once per Mac: `macos/scripts/eval-image.sh` (the test Mac image; a person approves its
+  permissions once, for the sandbox-signed build).
+- `go run ./cmd/latchkey-reports evals [-this-week [-quiet]]`: the sent eval results, joined by
   run and compared with the one before (new failures, fixed, flaky)
 
 Hosted relay: new versions ship by themselves after a merge (`relay-image.yml` publishes the

@@ -63,7 +63,9 @@ Toni asks ──── Toni's Mac ──────────── 5 Toni's 
   4. seeds test data (`cmd/e2e fixture`: a test folder, notes, events, reminders, contacts, a
      served sign-in page; Messages and Mail from a test account where the image has one, else
      skipped with the reason);
-  5. runs `cmd/e2e sandbox`: the real MCP client through a private relay on the host, against
+  5. runs `cmd/e2e sandbox`: the real MCP client through the private relay inside the copy (the
+     one the image is paired with, so nothing pairs again; a proxy in front of it makes the
+     network cut possible; research §6), against
      the installed app, every capability's checks plus the moved `maccheck` checks, compared
      with the snapshots; writes `e2e-results/sandbox-<build>-<time>.json`.
   First run under 5 minutes (build ~1.5, start ~1, checks ~2); later runs reuse the copy: under
@@ -80,7 +82,9 @@ Toni asks ──── Toni's Mac ──────────── 5 Toni's 
   sitting. To check on the first run: the keep-awake helper (`SMAppService`) with a self-signed
   signature; if macOS refuses it, the sandbox runs with keep-awake off and says so.
 - Never touches the host's Latchkey, data or screen: the copy has no shared folders, no window,
-  its own relay; nothing of the Mac goes in (Constitution IV, FR-1606).
+  its own relay; nothing of the Mac goes in (Constitution IV, FR-1606). The build has the
+  release bundle ID (so the image's grants apply) and is removed from Launch Services and
+  Spotlight on the host; it is never started there.
 - The same command from GitHub's Mac runner is not possible (no nested virtualization there);
   `e2e mac` stays the per-PR Mac check.
 - FR-1607, first, with its regression test (done 2026-11-26): `AppLocation.needsMove` is false
