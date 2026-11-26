@@ -19,6 +19,42 @@ enum LoginsCapability {
     static let unreadable =
         "Latchkey can't read its sign-ins right now (the Mac may not have been unlocked since it started). Try again later."
 
+    /// What a fill's answer may say a field is: only the shapes Latchkey's scripts make ("email",
+    /// "text box", "number (not a code)", "4 boxes for a 6-character code"; for a covered
+    /// field, a reference and a tag), else nil, so a page can't put its own words into Latchkey's
+    /// answer (security review 2026-11-26).
+    /// A fill script's answer: `{ step, boxes, is, why }`.
+    struct Step: Decodable {
+        var step: String
+        var boxes: Int?
+        var `is`: String?
+        /// Why Latchkey stopped typing (Latchkey's own browser): a step, never a character.
+        var why: String?
+    }
+
+    /// A fill script's answer as Latchkey may repeat it. In Safari the answer comes from the
+    /// page's own world, whose `JSON.stringify` a page can replace: only Latchkey's own browser
+    /// (its isolated world and Swift) says why, and what a field is is said only in Latchkey's own
+    /// shapes (security review 2026-11-26: page text in the trusted answer).
+    static func heard(_ detail: String, fromSafari: Bool) -> Step {
+        var got = (try? JSONDecoder().decode(Step.self, from: Data(detail.utf8))) ?? Step(step: "unheld")
+        if fromSafari { got.why = nil }
+        got.is = got.is.flatMap { saidKind($0, step: got.step) }
+        return got
+    }
+
+    static func saidKind(_ s: String, step: String) -> String? {
+        let shapes =
+            step == "covered"
+            ? [#"^((e[0-9]{1,5}|lkf[a-z0-9]{1,10}) )?[a-z][a-z0-9]{0,15}$"#]
+            : [#"^[a-z]{1,15}( box| \(not a code\))?$"#, #"^[0-9]{1,3} boxes for a [0-9]{1,3}-character code$"#]
+        // A covered field's description ends with the words drawn over it («…»): page text, left out.
+        let s =
+            step == "covered"
+            ? String(s.split(separator: "«", maxSplits: 1).first ?? "").trimmingCharacters(in: .whitespaces) : s
+        return shapes.contains { s.range(of: $0, options: .regularExpression) != nil } ? s : nil
+    }
+
     static func find(store: SignInStore) -> ToolEntry {
         ToolEntry(
             tool: .make(
@@ -346,13 +382,6 @@ enum LoginsCapability {
             }
         }
         // Type, then press, then empty what was typed (FR-1311), whatever happened in between.
-        struct Step: Decodable {
-            var step: String
-            var boxes: Int?
-            var `is`: String?
-            /// Why Latchkey stopped typing (Latchkey's own browser): a step, never a character.
-            var why: String?
-        }
         let typed: Step
         // Whatever stopped the typing, what was typed is emptied (FR-1311, FR-1377; security
         // review 2026-11-25: a page that changed between code boxes kept the digits typed).
@@ -367,7 +396,9 @@ enum LoginsCapability {
                 detail = try await run(PageScripts.fillField(ref: field, kind: kind, value: value, host: fillHost))
                     .detail
             }
-            typed = (try? JSONDecoder().decode(Step.self, from: Data(detail.utf8))) ?? Step(step: "unheld")
+            var safari = false
+            if case .safari = target { safari = true }
+            typed = Self.heard(detail, fromSafari: safari)
         } catch SafariBrowser.Failure.elementMissing {
             await emptied()
             return .text(

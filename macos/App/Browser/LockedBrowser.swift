@@ -1462,12 +1462,11 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownl
             if f.isEmpty { return "nothing" }
             let parts = f.split(separator: " ").map(String.init)
             let tag = parts.first ?? ""
-            guard tag.range(of: #"^[a-z][a-z0-9-]{0,15}$"#, options: .regularExpression) != nil else {
+            // No hyphen: a custom element's name is the page's own word (review 2026-11-26).
+            guard tag.range(of: #"^[a-z][a-z0-9]{0,15}$"#, options: .regularExpression) != nil else {
                 return "another element"
             }
-            if parts.count > 1,
-                parts[1].range(of: #"^(e[0-9]{1,5}|lkf[a-z0-9]{1,10})$"#, options: .regularExpression) != nil
-            {
+            if parts.count > 1, parts[1].range(of: #"^e[0-9]{1,5}$"#, options: .regularExpression) != nil {
                 return "\(tag) \(parts[1])"
             }
             return tag
