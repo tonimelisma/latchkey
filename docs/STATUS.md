@@ -635,7 +635,9 @@ after the app was quit.
 ## Problem reports asked about
 
 Ids of problem reports Toni has been asked about once (CLAUDE.md, start of every session); ids
-only, never contents. None yet.
+only, never contents.
+
+- `rep_274857e92fd4415fad0fb6c2d2e953e9` (asked 2026-11-26: later)
 
 ## Next steps
 
