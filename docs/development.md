@@ -12,7 +12,7 @@ How the product works: [how-it-works.md](how-it-works.md).
 
 | Part | Where | Commands |
 |---|---|---|
-| Relay (Go) | `relay/` | `make test`, `make lint`, `make run`, `make claude-check`, `make mac-check` |
+| Relay (Go) | `relay/` | `make test`, `make lint`, `make run`, `make security`, `make script-tests` |
 | Linux server program (Go) | `linux/` | `make test`, `make lint`, `make test-linux` (every test on Debian with systemd in Docker), `make check` (end to end: relay, pretend Mac, the program installed in a container, a real MCP client); releases by `.github/workflows/linux-release.yml` |
 | Mac app and helper (Swift) | `macos/` | `make test`, `make lint`, `make run`, `make dmg`, `make install` (CI's newest release tag: build, install into Applications, start, and fail if the update lost the pairing; the Mac's updater runs it for each new tag), `scripts/readme-shots.sh` (redraws the app's pictures in docs/images) |
 | End-to-end tests and evals (spec 015) | `relay/cmd/e2e`, `relay/e2e/`, `.github/workflows/e2e.yml` | every pull request: the changed capabilities checked with a real MCP client through a private relay on GitHub's Linux and Mac runners, and every tool compared with its snapshot (`relay/e2e/toolsnaps`); weekly, from any clone on an Apple silicon Mac with Tart: `macos/scripts/eval-image.sh` once, then `macos/scripts/weekly-eval.sh`, where real Claude Code does about 20 tasks 3 times each in a throwaway test Mac (results in `e2e-results/`) |

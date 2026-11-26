@@ -22,10 +22,10 @@ Each task names its requirements; done means its check passed where it says.
 
 ## Pull request 2 (cloud; the sandbox's first run needs a local session)
 
-- [ ] T8 [P] FR-1603: one harness. Remove `cmd/localcheck`, `cmd/maccheck` + `LiveRelayTests`,
+- [x] T8 [P] FR-1603: one harness. Remove `cmd/localcheck`, `cmd/maccheck` + `LiveRelayTests`,
       `cmd/guidecheck`, `make claude-check`, `make mac-check`; their checks move to the sandbox
       (T11) and an eval task (the relay-setup guide). Docs and script tests follow.
-- [ ] T9 [P] FR-1609, D5: retire `macos/scripts/state-check/` and `safari-check*`; map their
+- [x] T9 [P] FR-1609, D5: retire `macos/scripts/state-check/` and `safari-check*`; map their
       cases in `docs/regression-coverage.md` (sandbox check, eval task, or Toni's checklist in
       `docs/screen-states.md`); CLAUDE.md, commands, development docs follow.
 - [ ] T10 [P] FR-1604: one place per behavior. Tool names, descriptions and schemas only in
