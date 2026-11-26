@@ -563,10 +563,50 @@ func (b *Browser) AddPasskeys(data []byte, email string) error {
 	ctx, cancel := context.WithTimeout(b.ctx, 10*time.Second)
 	defer cancel()
 	for _, c := range creds {
-		if _, err := chromedp.Call(ctx, webauthn.AddCredential, webauthn.AddCredentialParams{AuthenticatorID: b.authenticator, Credential: c}); err != nil {
+		cred, err := credentialToAdd(withGrowingCount(c, time.Now()))
+		if err != nil {
+			return err
+		}
+		if _, err := chromedp.Call(ctx, addCredential, addCredentialParams{AuthenticatorID: b.authenticator, Credential: cred}); err != nil {
 			return err
 		}
 	}
 	b.email = email
 	return nil
+}
+
+// addCredential is WebAuthn.addCredential with the credential as plain JSON: cdproto always sends
+// generateCmtgKeyOnNextOperation, and Chrome 158 refuses a credential that names it, even as
+// false, unless the authenticator supports the CMTG extension ("CMTG is not supported by this
+// authenticator", the sandbox's first run, 2026-11-26).
+var addCredential = cdp.Command[addCredentialParams, cdp.Empty]{Method: webauthn.CommandAddCredential}
+
+type addCredentialParams struct {
+	AuthenticatorID webauthn.AuthenticatorID `json:"authenticatorId"`
+	Credential      map[string]any           `json:"credential"`
+}
+
+// withGrowingCount sets c's signature counter to at least now in seconds. Every copy of the test
+// Mac starts from the image's stored passkey, and the relay refuses a counter that doesn't grow
+// (a cloned passkey, it thinks): the time always grows, run after run (the sandbox's first runs,
+// 2026-11-26: a copy's second sign-in was refused).
+func withGrowingCount(c *webauthn.Credential, now time.Time) *webauthn.Credential {
+	c.SignCount = max(c.SignCount, float64(now.Unix()))
+	return c
+}
+
+// credentialToAdd is c as JSON, without the CMTG field when it is false.
+func credentialToAdd(c *webauthn.Credential) (map[string]any, error) {
+	b, err := json.Marshal(c) //nolint:gosec // a test account's passkey, going only to this browser's virtual authenticator
+	if err != nil {
+		return nil, err
+	}
+	var m map[string]any
+	if err := json.Unmarshal(b, &m); err != nil {
+		return nil, err
+	}
+	if v, ok := m["generateCmtgKeyOnNextOperation"].(bool); ok && !v {
+		delete(m, "generateCmtgKeyOnNextOperation")
+	}
+	return m, nil
 }

@@ -412,7 +412,8 @@ func probePermissions(parent context.Context, cs *mcp.ClientSession) []string {
 
 // checks runs the scripted checks against the installed build (FR-1516), each reported.
 func (w *weekly) checks(cs *mcp.ClientSession) []evals.CheckResult {
-	m := vmMacCheck(w.ctx, cs)
+	name, _ := pairedName(w.ctx, w.relay) // an empty name fails the tools check, which says so
+	m := vmMacCheck(w.ctx, cs, name)
 	var out []evals.CheckResult
 	for _, c := range []struct {
 		name string

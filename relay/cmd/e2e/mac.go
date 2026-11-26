@@ -49,10 +49,25 @@ type macCheck struct {
 	mayMoveFront bool
 }
 
-// vmMacCheck is the checks' runner inside the test Mac, whose Latchkey prepare paired as
-// testMacName.
-func vmMacCheck(ctx context.Context, cs *mcp.ClientSession) *macCheck {
-	return &macCheck{ctx: ctx, cs: cs, marker: randomWord(), machine: testMacName}
+// vmMacCheck is the checks' runner inside the test Mac; name is the name the relay has for its
+// Latchkey (pairedName).
+func vmMacCheck(ctx context.Context, cs *mcp.ClientSession, name string) *macCheck {
+	return &macCheck{ctx: ctx, cs: cs, marker: randomWord(), machine: name}
+}
+
+// pairedName is the name the relay has for the account's newest machine: the name the Mac gave
+// itself when it paired (the test Mac's computer name), not the label prepare's pairing code
+// carried ("Test Mac"), which the sandbox's first run expected and never found.
+func pairedName(ctx context.Context, p *e2erelay.Private) (string, error) {
+	id, err := p.NewestDevice(ctx, ownerEmail)
+	if err != nil {
+		return "", err
+	}
+	d, err := p.DB.Device(ctx, id)
+	if err != nil {
+		return "", err
+	}
+	return d.Name, nil
 }
 
 func macCmd(args []string) error {

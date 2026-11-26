@@ -66,6 +66,14 @@ typeset -A targets=(
 )
 clients=(/usr/bin/osascript)
 [ -z "$agent" ] || clients+=("$agent")
+# The test data's AppleScript adds to Calendar, Reminders and Contacts: macOS asks for the
+# sender's own access to them too ("tart-guest-agent would like to add to your Calendar", the
+# third image run).
+for c in $clients; do
+	for s in kTCCServiceCalendar kTCCServiceReminders kTCCServiceAddressBook; do
+		row "$user_db" "$s" "$c" 1 "$(reqhex "$c")"
+	done
+done
 for target tpath in "${(@kv)targets}"; do
 	treq=$(reqhex "$tpath") || continue
 	row "$user_db" kTCCServiceAppleEvents "$id" 0 "$csreq" "$target" "$treq"

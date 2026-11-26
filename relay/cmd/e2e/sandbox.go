@@ -305,7 +305,11 @@ func (s *sandbox) connect() error {
 	}
 	s.cs = cs
 	if s.m == nil {
-		s.m = vmMacCheck(s.ctx, cs)
+		name, err := pairedName(s.ctx, s.relay)
+		if err != nil {
+			return fmt.Errorf("the paired machine's name: %w", err)
+		}
+		s.m = vmMacCheck(s.ctx, cs, name)
 	}
 	s.m.cs = cs
 	return nil

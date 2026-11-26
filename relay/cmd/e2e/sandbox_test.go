@@ -10,6 +10,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/tonimelisma/latchkey/relay/internal/e2erelay"
 )
 
 func TestSelectChecks(t *testing.T) {
@@ -100,11 +102,22 @@ func TestIDOn(t *testing.T) {
 	}
 }
 
-// The checks inside the test Mac look for the name prepare paired it under; they looked for
-// "E2E Mac" (the GitHub runner's name), so the evals' tool check could never pass.
-func TestTestMacChecksLookForTheImagesMachineName(t *testing.T) {
-	if m := vmMacCheck(context.Background(), nil); m.machine != testMacName || testMacName == e2eMacName {
-		t.Fatalf("vmMacCheck machine %q, want %q (not %q)", m.machine, testMacName, e2eMacName)
+// The checks inside the test Mac look for the name the relay has for its Latchkey: they looked for
+// "E2E Mac" (the GitHub runner's), then "Test Mac" (the pairing code's label), while the Mac
+// pairs under its own computer name (the sandbox's first run, 2026-11-26).
+func TestTestMacChecksLookForThePairedMachinesName(t *testing.T) {
+	ctx := context.Background()
+	p, err := e2erelay.StartPrivate(ctx, e2erelay.PrivateOptions{DBPath: t.TempDir() + "/relay.db"})
+	if err != nil {
+		t.Skipf("no private relay here: %v", err)
+	}
+	defer p.Close()
+	if _, err := pairedName(ctx, p); err == nil {
+		t.Fatal("no machine is paired: want an error")
+	}
+	const name = "Managed’s Virtual Machine"
+	if m := vmMacCheck(ctx, nil, name); m.machine != name {
+		t.Fatalf("vmMacCheck looks for %q, want %q", m.machine, name)
 	}
 }
 
