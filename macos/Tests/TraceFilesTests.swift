@@ -134,6 +134,29 @@ enum LogBeforeFiles {
         #expect(try trace.reader.check(expected: trace.expected) == LogCheck())
     }
 
+    /// FR-614 (GitHub's runner, 2026-11-26): the count of unreadable entries is kept per day and
+    /// counted again only for a day whose file grew; a line that can't be read, added to a day
+    /// already counted, is in the next count.
+    @MainActor @Test func theUnreadableCountFollowsADayThatGrew() throws {
+        let dir = try TraceTests.scratch()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let keys = MemoryTraceKey()
+        let latest = MemoryLatestEntry()
+        let now = Date()
+        let trace = try TraceStore(directory: dir, keys: keys, latest: latest)
+        try trace.record(Self.call(1, at: now.addingTimeInterval(-3 * 86_400)))
+        try trace.record(Self.call(2, at: now))
+        #expect(try trace.page(limit: 10).unreadable == 0)
+        let old = Self.folder(dir).appending(
+            path: TraceFiles.day(now.addingTimeInterval(-3 * 86_400)) + TraceFiles.entriesSuffix)
+        let handle = try FileHandle(forWritingTo: old)
+        _ = try handle.seekToEnd()
+        try handle.write(contentsOf: Data("{\"v\":2,\"what\":\"a later format\"}\n".utf8))
+        try handle.close()
+        #expect(try trace.page(limit: 10).unreadable == 1, "the grown day is counted again")
+        #expect(try trace.page(limit: 10).unreadable == 1, "and kept")
+    }
+
     /// FR-681: a line cut short (a crash mid-write) and a line of a later format are skipped and
     /// counted, never changed, and the next entry starts on a line of its own.
     @MainActor @Test func linesThatCannotBeReadAreSkippedAndKept() throws {
