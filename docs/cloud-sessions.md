@@ -1,7 +1,8 @@
 # Cloud sessions (claude.ai/code; 2026-11-21, cloud-first since 2026-11-23)
 
-All development happens in cloud sessions (Toni, 2026-11-23). The Mac is used only for what
-physically needs macOS: building and testing the Mac app, and the Mac's own checks. Whatever a
+Development happens mostly in cloud sessions (Toni, 2026-11-23). What needs a real Mac happens
+in a local session, Claude Code that Toni started on his Mac (CLAUDE.md, "Two ways to work";
+Toni, 2026-11-26); a cloud session builds and tests the Mac app only on GitHub's Mac runner. Whatever a
 cloud session's GitHub proxy refuses (tag pushes, releases, branch deletion, deploys) runs in
 GitHub Actions, started by a merge to main or by repository_dispatch.
 
@@ -27,7 +28,8 @@ Everything in CLAUDE.md applies, except:
 A cloud session (`CLAUDE_CODE_REMOTE=true`) is a fresh Ubuntu 24.04 VM, run as root, with one
 clone of this repository: no Swift, Xcode, or macOS, and no `.env`, `CLAUDE.local.md`, or
 `Local.xcconfig`. Started from claude.ai/code or the phone it has Toni's connectors, Latchkey
-included, so it reaches the Mac; started with `claude --cloud` it has none. Everything above
+included (used to reach the Mac only for a live check Toni asks for); started with
+`claude --cloud` it has none. Everything above
 applies, except:
 
 - No worktree: the VM's clone is the session's own. Skip `EnterWorktree`, `ExitWorktree` and
@@ -112,42 +114,12 @@ applies, except:
   Linux check runs on GitHub, not here. Test Mac results someone sent (`weekly-eval.sh --send`,
   started by hand; there is no weekly run or reminder, Toni 2026-11-25) are read with `go run
   ./cmd/latchkey-reports evals`.
-- Mac app: build and test on the Mac through Latchkey's `shell_run` (Toni's MacBook in
-  `machines`), from the pushed branch in the command's scratch folder (deleted or moved to the
-  Trash when it ends), with `uses: ["open"]` (the tests run in an app; spec 004 FR-335):
-  `set -o pipefail; cd "$LATCHKEY_SCRATCH" && git clone -q --depth 1 --branch <branch>
-  https://github.com/tonimelisma/latchkey.git lk && cd lk/macos && xcodegen generate --quiet &&
-  xcodebuild -project Latchkey.xcodeproj -scheme Latchkey -destination 'platform=macOS'
-  -derivedDataPath "$LATCHKEY_SCRATCH/dd" test -quiet 2>&1 | tail -40; rm -rf "$LATCHKEY_SCRATCH/lk"
-  "$LATCHKEY_SCRATCH/dd"` (the clone and build go, so nothing fills the Trash), then `shell_check` the
-  job until it ends (`build` instead of `test` to only build). A pass prints `** TEST BUILD
-  SUCCEEDED **` (the build, fenced) and `** TEST EXECUTE SUCCEEDED **` (the tests, outside the
-  fence), not `** TEST SUCCEEDED **`; a scratch folder over 100 MB is deleted at the end, so keep
-  a log you need in Downloads and delete it after. Lint the same way with
-  `swift format lint --strict -r App Shared Helper Tests` in `macos/`. This tests the app
-  signed ad hoc (no `Local.xcconfig` there); the Mac's updater makes the signed build when it
-  installs.
-  Never run `make -C macos install` through Latchkey: it quits Latchkey, which stops the command
-  mid-install (spec 004 FR-309). The Mac's updater installs instead (below).
-- The Mac's updater, until Sparkle updates the installed app (CLAUDE.md, "Every finished batch
-  ships"; spec 001 FR-072) (`macos/scripts/auto-update.sh`; launchd agent `net.melisma.latchkey.updater`,
-  set up by `macos/scripts/updater-setup.sh`): every 15 minutes it installs the newest
-  `mac-<x.y.z>` tag on main when that isn't the installed version, from its own clone in
-  `~/Library/Caches/net.melisma.latchkey.updater`, signed with the main checkout's
-  Local.xcconfig, after Latchkey has been idle for 10 minutes. launchd, not Latchkey, is its
-  parent, so the install quitting Latchkey doesn't stop it. Through Latchkey's `shell_run`
-  (Shell can't run launchctl, but it can write a declared file):
-  - start it now: `mkdir -p ~/Library/Caches/net.melisma.latchkey.updater/requests && touch
-    ~/Library/Caches/net.melisma.latchkey.updater/requests/now`, with `writes` declaring that
-    folder ("start Latchkey's updater"); `install-now` instead of `now` skips the idle wait, only
-    when Toni says so;
-  - see what it did: `sh ~/Library/Caches/net.melisma.latchkey.updater/auto-update.sh status`
-    (installed version, newest release, last failure, the log's end; the whole log is
-    `~/Library/Logs/Latchkey Updater.log`).
-  Every Latchkey call counts as use, so after a request don't call Latchkey for about 12 minutes
-  (the idle wait), then read the status once. A run that finds Latchkey busy for 30 minutes
-  tries again 15 minutes later; a failed install, after 6 hours or on the next request.
-- Screenshots of the Mac app: `computer_look`, only while the Mac is unlocked, and never acting
-  in the user's windows (above).
-- No live checks: Claude starts no test sessions against Toni's real data (Toni, 2026-11-23).
-  How to test end to end, and how to run evals, is a backlog item (`docs/STATUS.md`).
+- No Mac (Toni, 2026-11-26; CLAUDE.md, "Two ways to work"): a cloud session never uses
+  Latchkey to reach Toni's MacBook while developing: no builds, tests or lint through
+  `shell_run`, no requests to the Mac's updater, no `computer_look` screenshots. The Mac app is
+  built, linted and tested by `mac-build.yml` and `e2e.yml` on GitHub's Mac runner; what needs
+  a real Mac waits for a local session (spec 016). The one exception is a live check Toni asks
+  for in this session; it never quits or installs Latchkey (spec 004 FR-309).
+- No live checks: Claude starts no test sessions against Toni's real data (Toni, 2026-11-23),
+  except one Toni asks for in this session. The test strategy, with a sandbox Mac for real-Mac
+  checks, is spec 016 (draft).

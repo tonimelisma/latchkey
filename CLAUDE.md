@@ -118,7 +118,7 @@ IMPORTANT: Toni makes every product and engineering choice. Claude proposes; Ton
 
 ## Git (cloud-first; Toni, 2026-11-24)
 
-Development happens in cloud sessions, each its own VM and checkout ("Cloud sessions"). GitHub's
+Development happens in cloud sessions, each its own VM and checkout ("Two ways to work"). GitHub's
 `main` is protected by a ruleset (changes only through a pull request whose CI checks passed; no
 force-push or deletion of `main`), so the rules below are habits, and GitHub enforces the rest.
 
@@ -261,13 +261,22 @@ with a guard. Exceptions Toni chose: computer control, acting in the user's own 
 shell's `open`. Unreliable routes (WhatsApp Web) are left out. Removed for this on 2026-11-07:
 Mail, WhatsApp sending, Notes' window editing, Messages' window actions, Reminders' window setters.
 
-## Cloud sessions (claude.ai/code; 2026-11-21)
+## Two ways to work (Toni, 2026-11-26; spec 016)
 
-Development happens in cloud sessions (Toni, 2026-11-23); the Mac only builds and tests what
-needs macOS. A cloud session (`CLAUDE_CODE_REMOTE=true`, a fresh Ubuntu VM run as root, no Swift
-or macOS) follows `docs/cloud-sessions.md` (the session-start hook says so): no worktree;
-releases through GitHub Actions; Mac builds and tests through
-Latchkey's `shell_run`; the Mac installs releases itself.
+Which one a session is depends on where it runs; everything else in this file applies to both.
+
+- **Cloud session** (the main way; `CLAUDE_CODE_REMOTE=true`, a fresh Ubuntu VM run as root, no
+  Swift or macOS): follows `docs/cloud-sessions.md` (the session-start hook says so). It has no
+  Mac: the Mac app is built and tested only by GitHub's Mac runner (`mac-build.yml`, `e2e.yml`).
+  It never uses Latchkey to reach Toni's MacBook while developing (no building, testing,
+  updater requests or screenshots through it); the one exception is a live check Toni asks for
+  in that session.
+- **Local session** (Claude Code that Toni started on his Mac): works in its own worktree
+  (`docs/git-worktrees.md`) and has the Mac: it builds and runs the Mac tests natively, reads the
+  running Latchkey's log and tool list directly, and after building the Mac app runs the tests
+  that need a real Mac before calling the change done. Same git, review and release rules as a
+  cloud session. Never `make -C macos install` while Toni may be using Latchkey (it quits it);
+  the installed app updates itself.
 
 ## Owner setup (only Toni can do these; once)
 
