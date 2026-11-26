@@ -1,4 +1,4 @@
-.PHONY: project build test lint fmt run dmg install clean
+.PHONY: project build test lint fmt run dmg install clean sandbox sandbox-stop evals
 
 XCODEBUILD = xcodebuild -project Latchkey.xcodeproj -scheme Latchkey -destination 'platform=macOS' -derivedDataPath build/DerivedData
 
@@ -32,6 +32,21 @@ dmg: project
 # install.sh refuses a commit without it. Afterwards it sets up the updater (updater-setup.sh).
 install: project
 	./scripts/install.sh
+
+# The sandbox Mac (spec 016 plan D3): the working tree's Release build, signed with the sandbox's
+# own identity, installed in a Tart copy of the eval image and checked against the real Mac apps
+# with test data (macos/scripts/sandbox.sh). The copy stays up for the next run until
+# sandbox-stop. ARGS="--checks files,notes" runs some checks only.
+sandbox:
+	./scripts/sandbox.sh $(ARGS)
+
+sandbox-stop:
+	./scripts/sandbox.sh --stop
+
+# Real Claude doing the eval tasks in a fresh copy (spec 016 plan D4): the working tree's build,
+# or ARGS=--release for the newest release; ARGS=--send also sends the result.
+evals:
+	./scripts/evals.sh $(ARGS)
 
 clean:
 	rm -rf build Latchkey.xcodeproj

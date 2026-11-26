@@ -28,6 +28,9 @@ import (
 	"github.com/tonimelisma/latchkey/relay/internal/evals"
 )
 
+// e2eMacName is the name `e2e mac` pairs the Swift host test's Mac under.
+const e2eMacName = "E2E Mac"
+
 // macCheck is the Mac app's real capabilities on this Mac, served by the Swift host test
 // (macos/Tests/E2EHostTests.swift), driven through a private relay with a real MCP client
 // (spec 015 FR-1501). Meant for GitHub's throwaway Mac runner: it uses this Mac's real home
@@ -37,6 +40,14 @@ type macCheck struct {
 	cs      *mcp.ClientSession
 	control string
 	marker  string
+	// machine is the name the Mac was paired under, which the machines tool must list.
+	machine string
+}
+
+// vmMacCheck is the checks' runner inside the test Mac, whose Latchkey prepare paired as
+// testMacName.
+func vmMacCheck(ctx context.Context, cs *mcp.ClientSession) *macCheck {
+	return &macCheck{ctx: ctx, cs: cs, marker: randomWord(), machine: testMacName}
 }
 
 func macCmd(args []string) error {
@@ -57,7 +68,7 @@ func macCmd(args []string) error {
 		return err
 	}
 	defer o.close()
-	code, err := o.browser.PairCode(o.relay.Base, "E2E Mac")
+	code, err := o.browser.PairCode(o.relay.Base, e2eMacName)
 	if err != nil {
 		return err
 	}
@@ -99,7 +110,7 @@ func macCmd(args []string) error {
 	}
 	testDone := make(chan error, 1)
 	go func() { testDone <- test.Wait() }()
-	m := &macCheck{ctx: ctx, control: control, marker: randomWord()}
+	m := &macCheck{ctx: ctx, control: control, marker: randomWord(), machine: e2eMacName}
 	fail := func(err error) error {
 		m.send("done")
 		select {
@@ -213,8 +224,8 @@ func (m *macCheck) snapshots(dir string, update bool) error {
 	if err != nil {
 		return err
 	}
-	if !strings.Contains(t, "E2E Mac") {
-		return fmt.Errorf("machines doesn't list the Mac: %q", t)
+	if m.machine == "" || !strings.Contains(t, m.machine) {
+		return fmt.Errorf("machines doesn't list the Mac %q: %q", m.machine, t)
 	}
 	return nil
 }

@@ -39,6 +39,9 @@ const (
 	relayURL    = "https://" + relayHost + ":8443"
 	ownerEmail  = "owner@latchkey.test"
 	pagesListen = "127.0.0.1:8471"
+	// testMacName is the name prepare pairs the image's Latchkey under; the machines tool lists
+	// it, and the checks look for it (vmMacCheck).
+	testMacName = "Test Mac"
 )
 
 // stateDir holds what the image keeps between copies: the relay's database, its certificate and
@@ -100,7 +103,7 @@ func prepareCmd(args []string) error {
 	if err := os.WriteFile(filepath.Join(dir, "passkey.json"), keys, 0o600); err != nil {
 		return err
 	}
-	code, err := b.PairCode(relayURL, "Test Mac")
+	code, err := b.PairCode(relayURL, testMacName)
 	if err != nil {
 		return err
 	}
@@ -117,8 +120,14 @@ func prepareCmd(args []string) error {
 }
 
 func startStateRelay(ctx context.Context, dir string) (*e2erelay.Private, error) {
+	return startStateRelayAt(ctx, dir, relayListen)
+}
+
+// startStateRelayAt starts the image's relay listening on listen; its public address stays
+// relayURL (the sandbox puts a proxy that can cut the network on relayListen, sandbox.go).
+func startStateRelayAt(ctx context.Context, dir, listen string) (*e2erelay.Private, error) {
 	return e2erelay.StartPrivate(ctx, e2erelay.PrivateOptions{
-		DBPath: filepath.Join(dir, "relay.db"), Listen: relayListen, PublicURL: relayURL,
+		DBPath: filepath.Join(dir, "relay.db"), Listen: listen, PublicURL: relayURL,
 		CertFile: filepath.Join(dir, "relay.pem"), KeyFile: filepath.Join(dir, "relay-key.pem"),
 	})
 }
@@ -174,11 +183,11 @@ func makeCerts(dir string) error {
 	return nil // the authority's key is thrown away: it can sign nothing else
 }
 
-// weeklyCmd runs inside a fresh copy of the test Mac (FR-1512 to FR-1516): the stored relay, a
+// evalsCmd runs inside a fresh copy of the test Mac (FR-1512 to FR-1516): the stored relay, a
 // fresh sign-in with the stored passkey, every scripted check, then each task 3 times with real
 // Claude Code, starting no new task after the cap; the result goes to -out.
-func weeklyCmd(args []string) error {
-	fs := flag.NewFlagSet("weekly", flag.ContinueOnError)
+func evalsCmd(args []string) error {
+	fs := flag.NewFlagSet("evals", flag.ContinueOnError)
 	out := fs.String("out", "result.json", "where to write the result")
 	tasksDir := fs.String("tasks", "e2e/tasks", "the task folder")
 	tries := fs.Int("tries", 3, "tries per task")
@@ -222,7 +231,7 @@ func weeklyCmd(args []string) error {
 		return errors.Join(err, werr)
 	}
 	s := res.Summarize()
-	fmt.Printf("weekly run %s: %d tasks, %d passed every try, %d flaky, held out %d/%d, %d checks failed, %d not run\n",
+	fmt.Printf("eval run %s: %d tasks, %d passed every try, %d flaky, held out %d/%d, %d checks failed, %d not run\n",
 		res.Run, s.Tasks, s.PassAll, s.Flaky, s.HeldOutPassAll, s.HeldOut, s.ChecksFailed, len(res.NotRun))
 	return err
 }
@@ -284,7 +293,7 @@ func (w *weekly) run(res *evals.Result, tasks []evals.Task, limit time.Duration)
 	}
 	defer func() { _ = cs.Close() }()
 
-	if res.MissingPermissions = w.permissions(cs); len(res.MissingPermissions) > 0 {
+	if res.MissingPermissions = probePermissions(w.ctx, cs); len(res.MissingPermissions) > 0 {
 		return fmt.Errorf("the test Mac image is missing permissions: %s (run eval-image.sh again)", strings.Join(res.MissingPermissions, ", "))
 	}
 	res.SetupOK = true
@@ -302,9 +311,10 @@ func (w *weekly) run(res *evals.Result, tasks []evals.Task, limit time.Duration)
 	return nil
 }
 
-// permissions asks each capability that needs a permission for something harmless; an answer
-// that says macOS refused is a missing permission (FR-1513).
-func (w *weekly) permissions(cs *mcp.ClientSession) []string {
+// probePermissions asks each capability that needs a permission for something harmless; an
+// answer that says macOS refused is a missing permission (FR-1513). The evals and the sandbox
+// both start with it.
+func probePermissions(parent context.Context, cs *mcp.ClientSession) []string {
 	probes := []struct {
 		name, tool string
 		args       map[string]any
@@ -318,7 +328,7 @@ func (w *weekly) permissions(cs *mcp.ClientSession) []string {
 	}
 	var missing []string
 	for _, p := range probes {
-		ctx, cancel := context.WithTimeout(w.ctx, 60*time.Second)
+		ctx, cancel := context.WithTimeout(parent, 60*time.Second)
 		r, err := cs.CallTool(ctx, &mcp.CallToolParams{Name: p.tool, Arguments: p.args})
 		cancel()
 		if err != nil {
@@ -334,9 +344,9 @@ func (w *weekly) permissions(cs *mcp.ClientSession) []string {
 	return missing
 }
 
-// checks runs the scripted checks against the installed release (FR-1516), each reported.
+// checks runs the scripted checks against the installed build (FR-1516), each reported.
 func (w *weekly) checks(cs *mcp.ClientSession) []evals.CheckResult {
-	m := &macCheck{ctx: w.ctx, cs: cs, marker: randomWord()}
+	m := vmMacCheck(w.ctx, cs)
 	var out []evals.CheckResult
 	for _, c := range []struct {
 		name string

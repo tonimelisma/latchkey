@@ -84,6 +84,7 @@ script-tests:
 	cd .. && scripts/tests/ci_tools_test.sh
 	cd .. && scripts/tests/branch_cleanup_test.sh
 	cd .. && scripts/tests/eval_scripts_test.sh
+	cd .. && scripts/tests/sandbox_test.sh
 
 # Every security check; the deploy script and CI run it.
 security: tidy-check vuln secrets semgrep shellcheck deps

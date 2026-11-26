@@ -18,8 +18,8 @@ import (
 	"github.com/tonimelisma/latchkey/relay/reports"
 )
 
-// sendCmd seals a weekly result to the developer's key and sends it to the developer's intake
-// (FR-1530), only when the person running the tests asked (weekly-eval.sh --send). The key and
+// sendCmd seals an eval result to the developer's key and sends it to the developer's intake
+// (FR-1530), only when the person running the tests asked (evals.sh --send). The key and
 // intake are Latchkey's developer's unless LATCHKEY_DEVELOPER_KEY and LATCHKEY_INTAKE_URL name a
 // fork's. Each part is signed with a key derived from the developer's private key
 // (LATCHKEY_REPORTS_KEY, LATCHKEY_REPORTS_KEY_FILE, or ~/.config/latchkey-reports/developer.key),
@@ -37,7 +37,7 @@ func sendCmd(args []string) error {
 		return err
 	}
 	if r.Kind != "eval" {
-		return errors.New("not a weekly result")
+		return errors.New("not an eval result")
 	}
 	key := reports.DefaultDeveloperKey()
 	if k := strings.TrimSpace(os.Getenv("LATCHKEY_DEVELOPER_KEY")); k != "" {

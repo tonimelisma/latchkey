@@ -183,3 +183,42 @@ The limit: GitHub's plan runs at most five macOS jobs at once for the account. A
 takes all five (four build-and-test jobs and e2e-mac), so a second push, another session's pull
 request, or main's run after a merge waits for a runner: that wait, not the tests, is what
 passes 5 minutes.
+
+## 6. The sandbox's implementation choices (T11, T12; 2026-11-26)
+
+Low-level choices made while writing `macos/scripts/sandbox.sh` and `cmd/e2e sandbox`
+(CLAUDE.md: decided, recorded here). None is verified on a Mac yet.
+
+- **Where the relay runs.** (a) On the host, the copy dialing out to it: the image would have to
+  be paired again with a host address, and the host would serve the copy. (b) Inside the copy,
+  the relay the image was paired with (`prepare`, as the evals do). Chose (b): no new pairing,
+  nothing of the host in the loop. The relay listens on 8444 behind a proxy on 8443, the address
+  Latchkey dials, so a check can cut the network silently (maccheck's proxy, which now also
+  passes a close on, so a relay restart is seen at once).
+- **What the build copies.** (a) Build in `macos/` (Xcode reads `Config/Local.xcconfig` through
+  `#include?`, bringing the owner's team and relay); (b) a copy of `macos/` without git-ignored
+  files (`git ls-files -co --exclude-standard`). Chose (b), with a guard that stops if the copy
+  holds a `Local.xcconfig`. Also passed: `SPARKLE_PUBLIC_ED_KEY=` (no update key, so the copy
+  never replaces the build with a release) and `LATCHKEY_DEFAULT_RELAY_HOST=`.
+- **The Release identifier on the host.** The build is `net.melisma.latchkey`, like the
+  installed app: it is taken out of Launch Services (`lsregister -u`) after each build and its
+  folder carries `.metadata_never_index`, so nothing on the host opens it in place of the
+  installed Latchkey. Never launched on the host.
+- **Turning a capability off in the installed app.** No control file there (the Swift host test
+  had one): Latchkey is quit, `capabilityLevels` gets `files = off` with `defaults`, and it
+  starts again; the settings are exported first and imported after (also at the next start, if a
+  run stopped half-way).
+- **Moved from maccheck, changed.** Reconnect after the network returns: no network change
+  reaches the copy, so SC-05's 10 s can't apply; the check allows 90 s and prints the time.
+  Suspension lifted: the app retries every 5 minutes, or on a wake or network change; the check
+  restarts Latchkey instead of waiting (the pairing kept is what it shows). Battery: compared
+  with `pmset` from the state line; in a VM, no made-up percent.
+- **Signatures in one image.** macOS files permissions and the login keychain's pairing item
+  under the app's signature, one signature per bundle identifier. So the image is approved and
+  paired with the sandbox-signed build; `evals.sh --release` (CI's signature) may find the
+  permissions missing or the pairing unreadable. To be checked on the first Mac run.
+
+Not yet ported from `relay/e2e/sandbox-checks.md`: the Safari checks, the per-capability
+state-check groups beyond one round trip each (notes, calendar, reminders, contacts, files,
+shell, browser), maps, sweep, front-app-unchanged, no-permission-prompts, and the regression
+cases listed there.

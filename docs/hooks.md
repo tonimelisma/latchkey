@@ -7,7 +7,8 @@ Enforced by hooks in `.claude/settings.json` (`scripts/hooks.sh`):
 - `scripts/loose-ends.sh` lists anything not safely on main: this worktree's uncommitted,
   unpushed, or unmerged work; stashes; branches (local, or on GitHub with no commit for 3 days) not on main and not checked out
   anywhere; unpushed branches; worktrees with uncommitted work untouched for a day; the main
-  checkout off `main` or dirty. It runs when a session starts (Claude is told). It no longer runs
+  checkout off `main` or dirty. It runs when a session starts (Claude is told; a local session
+  is also told to run `make -C macos sandbox` after building the Mac app, spec 016). It no longer runs
   when a turn ends: it sent Claude back again and again while Toni was stopping it (Toni removed
   that hook, 2026-11-04).
 - `scripts/keep-going.sh` runs when a turn ends (Toni, 2026-11-07: "add it, if you promise stop
