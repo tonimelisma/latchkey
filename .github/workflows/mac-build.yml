@@ -16,9 +16,20 @@ concurrency:
   group: mac-build-${{ github.ref }}
   cancel-in-progress: true
 jobs:
+  # Five jobs side by side (Toni, 2026-11-26: "split the slow step into parallel jobs, get it
+  # to 5 minutes"; GitHub runs at most 5 macOS jobs at once on this plan). Each builds (with
+  # Xcode's compilation cache and the Swift packages kept between runs), then runs its part:
+  # job 0 lints and runs the update and unit tests; all five share the tests with web pages or
+  # time limits, which run one at a time within a job, split by measured time
+  # (macos/scripts/shard-suites.py, macos/scripts/suite-seconds.txt).
   build:
+    name: build and test (${{ matrix.shard }})
     runs-on: macos-26
-    timeout-minutes: 45
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2, 3, 4]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -30,11 +41,12 @@ jobs:
           unzip -q "$RUNNER_TEMP/xcodegen.zip" -d "$RUNNER_TEMP/xcodegen"
           echo "$RUNNER_TEMP/xcodegen/xcodegen/bin" >>"$GITHUB_PATH"
       - name: Lint (swift format, as make lint)
+        if: matrix.shard == 0
         working-directory: macos
         run: swift format lint --strict -r App Shared Helper Tests
       # Xcode's compilation cache (Xcode 26), kept between runs: runs on main save it, pull
       # requests start from main's (and their own last run's), so a build compiles only what
-      # changed instead of everything (about 5 minutes; Toni, 2026-11-25: "cut the 40 minutes").
+      # changed instead of everything (Toni, 2026-11-25: "cut the 40 minutes").
       - name: Compilation cache
         uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
         with:
@@ -43,6 +55,13 @@ jobs:
           restore-keys: |
             mac-xcache-${{ hashFiles('macos/project.yml') }}-
             mac-xcache-
+      # The Swift packages (Sparkle and the rest), pinned in project.yml: fetched once, not
+      # every run (about 90 s of each build before, 2026-11-26).
+      - name: Swift packages cache
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
+        with:
+          path: ${{ runner.temp }}/spm
+          key: mac-spm-${{ hashFiles('macos/project.yml') }}
       - name: Build for testing (signed ad hoc)
         working-directory: macos
         run: |
@@ -50,11 +69,13 @@ jobs:
           xcodebuild -version
           xcodegen generate --quiet
           xcodebuild -project Latchkey.xcodeproj -scheme Latchkey -destination 'platform=macOS' \
-            -derivedDataPath "$RUNNER_TEMP/dd" CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM= \
+            -derivedDataPath "$RUNNER_TEMP/dd" -clonedSourcePackagesDirPath "$RUNNER_TEMP/spm" \
+            CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM= \
             COMPILATION_CACHE_ENABLE_CACHING=YES COMPILATION_CACHE_CAS_PATH="$RUNNER_TEMP/xcache" \
             build-for-testing -quiet
           du -sh "$RUNNER_TEMP/xcache" 2>/dev/null || true
       - name: Update tests
+        if: matrix.shard == 0
         working-directory: macos
         run: |
           set -o pipefail
@@ -62,12 +83,12 @@ jobs:
             -derivedDataPath "$RUNNER_TEMP/dd" CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM= \
             -only-testing:LatchkeyTests/UpdateGateTests -only-testing:LatchkeyTests/ReleaseCheckTests \
             test-without-building -quiet
-      # The whole unit test suite, reported, not a gate (2026-11-23): on this runner (macOS 26,
-      # slower than the Mac) about 30 tests miss their timing limits or need the owner's Mac, on
-      # main as on a branch, so compare a branch's failures with main's. Each failure is printed
-      # with why, and the test host's crash reports with their stacks. Without the tests that
-      # open web pages or measure time limits: they run one at a time in the next step.
+      # The whole unit test suite, reported, not a gate (2026-11-23): compare a branch's failures
+      # with main's. Each failure is printed with why, and the test host's crash reports with
+      # their stacks. Without the tests that open web pages or measure time limits: they run one
+      # at a time in the next step.
       - name: Unit tests (reported)
+        if: matrix.shard == 0
         working-directory: macos
         continue-on-error: true
         run: |
@@ -78,26 +99,26 @@ jobs:
             -derivedDataPath "$RUNNER_TEMP/dd" CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM= \
             -resultBundlePath "$RUNNER_TEMP/tests.xcresult" $skip test-without-building > "$RUNNER_TEMP/test.log" 2>&1 || rc=$?
           xcrun xcresulttool get test-results summary --path "$RUNNER_TEMP/tests.xcresult" \
-            | jq -r '.testFailures[]? | "FAILURE \(.testIdentifierString): \(.failureText)"' | head -300 || true
+            | jq -r '"UNIT passed \(.passedTests) failed \(.failedTests)", (.testFailures[]? | "FAILURE \(.testIdentifierString): \(.failureText)")' | head -300 || true
           find ~/Library/Logs/DiagnosticReports -name '*.ips' -mmin -60 2>/dev/null | head -3 | while read -r f; do
             echo "== $f"
             tail -n +2 "$f" | jq -r '.threads[]? | select(.triggered == true) | .frames[:25][] | "\(.imageIndex) \(.symbol // "?") \(.sourceFile // "")"' || head -80 "$f"
           done
           tail -40 "$RUNNER_TEMP/test.log"
           exit "$rc"
-      # The tests that open web pages, one at a time (Toni, 2026-11-25): run side by side, dozens
-      # of pages share the test program's one main thread, so a page's events come late and
-      # steps pass their limits on this runner (measured 2026-11-25: a click 2 s alone, 18 s
-      # among 70 pages). The suites are listed in macos/scripts/page-suites.txt. With them, the
-      # tests of time limits (macos/scripts/timing-suites.txt): side by side with the rest, a
-      # 2.8 s limit measured 13.6 s (2026-11-25); alone, a limit measures Latchkey's code.
+      # The tests that open web pages, one at a time within a job (Toni, 2026-11-25): run side
+      # by side in one test program, dozens of pages share its one main thread, so a page's
+      # events come late and steps pass their limits (measured 2026-11-25: a click 2 s alone,
+      # 18 s among 70 pages). With them, the tests of time limits: side by side with the rest, a
+      # 2.8 s limit measured 13.6 s (2026-11-25). Job 0's share is smaller by its unit tests.
       - name: Tests with web pages or time limits, one at a time (reported)
         if: always()
         working-directory: macos
         continue-on-error: true
         run: |
           rc=0
-          only=$(cat scripts/page-suites.txt scripts/timing-suites.txt | sed 's/^/-only-testing:LatchkeyTests\//' | tr '\n' ' ')
+          only=$(python3 scripts/shard-suites.py 5 ${{ matrix.shard }} 90 | sed 's/^/-only-testing:LatchkeyTests\//' | tr '\n' ' ')
+          echo "$only"
           # shellcheck disable=SC2086
           xcodebuild -project Latchkey.xcodeproj -scheme Latchkey -destination 'platform=macOS' \
             -derivedDataPath "$RUNNER_TEMP/dd" CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM= \
@@ -105,8 +126,10 @@ jobs:
             test-without-building > "$RUNNER_TEMP/pages.log" 2>&1 || rc=$?
           xcrun xcresulttool get test-results summary --path "$RUNNER_TEMP/pages.xcresult" \
             | jq -r '"PAGES passed \(.passedTests) failed \(.failedTests)", (.testFailures[]? | "PAGES FAILURE \(.testIdentifierString): \(.failureText)")' | head -150 | cut -c1-3000 || true
-          # Where the time goes (instrumentation, 2026-11-25): the slowest 25 tests.
-          xcrun xcresulttool get test-results tests --path "$RUNNER_TEMP/pages.xcresult" \
-            | jq -r '[.. | objects | select(.nodeType? == "Test Case") | {n: .name, d: (.durationInSeconds // 0)}] | sort_by(-.d) | .[:25][] | "SLOW \(.d | floor)s \(.n)"' || true
+          # Where the time goes (instrumentation): each suite's seconds, for suite-seconds.txt,
+          # and the slowest 10 tests.
+          xcrun xcresulttool get test-results tests --path "$RUNNER_TEMP/pages.xcresult" > "$RUNNER_TEMP/pages-tests.json" || true
+          jq -r '.. | objects | select(.nodeType? == "Test Suite") | "SUITE \([.. | objects | select(.nodeType? == "Test Case") | .durationInSeconds // 0] | add // 0 | ceil) \(.name)"' "$RUNNER_TEMP/pages-tests.json" || true
+          jq -r '[.. | objects | select(.nodeType? == "Test Case") | {n: .name, d: (.durationInSeconds // 0)}] | sort_by(-.d) | .[:10][] | "SLOW \(.d | floor)s \(.n)"' "$RUNNER_TEMP/pages-tests.json" || true
           tail -5 "$RUNNER_TEMP/pages.log"
           exit "$rc"
