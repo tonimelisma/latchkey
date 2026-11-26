@@ -7,20 +7,8 @@ cloud session's GitHub proxy refuses (tag pushes, releases, branch deletion, dep
 GitHub Actions, started by a merge to main or by repository_dispatch.
 
 Moved from CLAUDE.md on 2026-11-22 (it keeps a pointer); the session-start hook tells a cloud
-session to follow this file. Toni's standing rules for all his projects, from his personal instructions, which don't reach
-cloud sessions (a local session has them already):
-
-- When it is already clear what Toni wants, do it. Never ask whether to do it, how to do it, or
-  which piece to do first, and never end a turn with a go-ahead question or "Yes, do it" button
-  (Toni, 2026-11-05: "never ask me about whether or how to implement when it's already clear what
-  I want!"). Ask only for what only Toni can do (his accounts, devices, approvals) or a real
-  product choice he hasn't made yet.
-- Never end a turn while any item Toni asked for can still move forward without him. When one
-  item is blocked (the Mac locked, something only he can do), go on to the next unblocked one;
-  stop only when every item is done or truly blocked, and list just the Toni-only steps at the
-  end (Toni, 2026-11-07: "You promised not to stop before everything is done!! Several times").
-- Live tests may write to Toni's real apps; every test removes what it made in its own teardown,
-  even when it fails, and confirms the removal. Never leave test data behind.
+session to follow this file. Toni's standing rules from his personal instructions, which don't
+reach cloud sessions, are in CLAUDE.md, "Working with Toni" (since 2026-11-26).
 
 Everything in CLAUDE.md applies, except:
 
@@ -74,7 +62,7 @@ applies, except:
   logs; the logs are public, so nothing the scripts print may be private (they hide the
   values they read with `::add-mask::`, and the secrets are hidden by GitHub). No workflow and no
   identity ever reaches an installed Linux server: it only pulls signed Linux releases.
-  Secrets are the owner's (CLAUDE.md, "Owner setup"); a session never handles a secret's value.
+  Secrets are the owner's (`docs/development.md`, "Owner setup"); a session never handles a secret's value.
 - The hosted relay's server (it also runs the feedback intake; run outside this repository):
   anything that happens there is done by that server's own agent, never by a session here or
   through Latchkey's shell (Toni, 2026-11-23). A session that needs something there writes a self-contained prompt for Toni to

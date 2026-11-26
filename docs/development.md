@@ -62,3 +62,17 @@ SECURITY.md                     How to report vulnerabilities.
 
 Personal deployment details (the hosted relay's address, server, signing team) live only in
 gitignored files: `.env`, `macos/Config/Local.xcconfig`, and `CLAUDE.local.md`.
+
+## Owner setup (only Toni does these; once; done 2026-11-23)
+
+Moved from CLAUDE.md on 2026-11-26.
+
+- Repository secrets: `SERVER_SIGNING_KEY` (environment `release`). For Mac releases, also in
+  `release`: `MAC_CERTIFICATE_P12` (the "Apple Development" certificate with its key, exported
+  from Keychain Access, base64), `MAC_CERTIFICATE_PASSWORD`, `MAC_DEVELOPMENT_TEAM`, and
+  `SPARKLE_PRIVATE_KEY` (Sparkle's `generate_keys -x`), whose public key goes into
+  `SPARKLE_PUBLIC_ED_KEY` in `macos/Config/Base.xcconfig` (public; committed).
+- ghcr.io package `latchkey-relay`: Package settings → Manage Actions access → this repository
+  with Write (so the image workflow can publish it).
+- Optional: required reviewers on the environments `release`, `production`; a tag
+  ruleset so only GitHub Actions creates `mac-*` and `linux-*` tags.

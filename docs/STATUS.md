@@ -635,13 +635,15 @@ after the app was quit.
 ## Next steps
 
 0000. Test strategy and two ways to work (spec 016, `specs/016-test-strategy/`, 2026-11-26):
-      research, the inventory of every test, a sandboxed copy's options and the CLAUDE.md audit
-      in `research.md`; the proposed layers in `spec.md` (draft). Decided: two ways to work,
-      cloud first, no Latchkey to the Mac while developing except a live check Toni asks for
-      (CLAUDE.md, "Two ways to work"). Waiting on Toni: where the sandbox Mac runs, which tests
-      gate merging, what is retired, the CLAUDE.md cuts. Bug found: a development build started
-      outside Xcode's build folders offers to move itself and would replace
-      `/Applications/Latchkey.app` (FR-1607), to fix with its regression test.
+      research (inventory of every test, sources, sandboxed-copy options, CLAUDE.md audit),
+      spec with Toni's choices (Tart sandbox Mac with the local build, Mac tests gate once on
+      fake clocks, hand-run kits retired, CLAUDE.md trimmed), and `plan.md` for his review
+      before tasks. Done: CLAUDE.md "Two ways to work" and the trim (306 to ~200 lines, every
+      rule kept); cloud sessions no longer build or test through Latchkey. Next after review:
+      the dev-build bug (a development build started outside Xcode's build folders offers to
+      move itself and would replace `/Applications/Latchkey.app`, FR-1607) with its regression
+      test, then the CI triggers, fake clocks, one harness; the sandbox Mac needs a local
+      session.
 
 000. Cloud-first git (Toni, 2026-11-24; CLAUDE.md, "Git"): one branch and pull request per
      session, never replaced; squash merges by auto-merge; `branch-cleanup.yml` deletes closed

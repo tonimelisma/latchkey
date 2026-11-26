@@ -1,7 +1,7 @@
 # Spec 016: Test strategy and two ways to work — WHAT and WHY
 
-Status: draft for Toni's review (2026-11-26). Research, the inventory and sources: `research.md`.
-No plan or tasks until Toni has answered the open questions below.
+Status: choices made by Toni 2026-11-26 (below); plan in `plan.md`, for his review before
+tasks. Research, the inventory and sources: `research.md`.
 
 ## Problem
 
@@ -27,6 +27,15 @@ if you're local and thus have access to the mac."
   in that session ("Allowed when I ask"). A local session is Claude Code started on the Mac, and
   runs on the Mac whatever the change needs.
 - Both ways are described in CLAUDE.md itself ("All in CLAUDE.md").
+- The sandbox Mac is a Tart virtual Mac running the local build ("Virtual Mac (Tart)").
+- The Mac app's tests block merging, once the tests that measure real time use fake clocks
+  ("Yes, block merges").
+- The hand-run kits that don't run (screen-state cases on his Mac, `claude-check`, `mac-check`,
+  `guidecheck`, `safari-check`) are retired and what they cover folded into the sandbox Mac and
+  the eval tasks; a fixed bug's test goes in the lowest layer that reproduces it ("Retire and
+  fold in").
+- CLAUDE.md trimmed under ~200 lines with every rule kept, and rule changes proposed to Toni one
+  by one ("Trim and rethink rules").
 
 ## Proposed layers (each fake checked by a real layer above it)
 
@@ -54,18 +63,17 @@ if you're local and thus have access to the mac."
   what was seen.
 - **FR-1606** The sandbox Mac shall never read or change Toni's real data or accounts, never
   touch the installed Latchkey, and never take the screen, pointer or keyboard while he may be
-  using the Mac (Constitution IV). [NEEDS CLARIFICATION: where it runs: a Tart virtual Mac, a
-  separate macOS user account, or both (`research.md` §3)]
+  using the Mac (Constitution IV). It runs in a Tart virtual Mac with the local build installed
+  (Toni, 2026-11-26).
 - **FR-1607** A development build shall be named differently from the installed app
   ("Latchkey Dev.app"), shall never offer to move itself into Applications, and shall never
   replace `/Applications/Latchkey.app` (bug found 2026-11-26, `research.md` §3).
 - **FR-1608** Evals shall run in the sandbox Mac against the local build or the newest release,
   be scored on the end state, and be reported as pass rates; they never block a merge.
 - **FR-1609** A fixed bug's regression test shall live in the lowest layer that reproduces it
-  (fast, integration, or sandbox Mac), and run automatically in that layer. [NEEDS
-  CLARIFICATION: whether `macos/scripts/state-check/` (237 cases, not run since 2026-11-23) is
-  folded into the sandbox Mac and eval tasks and removed, with CLAUDE.md's "add a cases.json
-  case" rule replaced by FR-1609]
+  (fast, integration, or sandbox Mac), and run automatically in that layer. The screen-state
+  kit (`macos/scripts/state-check/`) and the other hand-run kits are retired; their cases move
+  into the sandbox Mac checks and the eval tasks (Toni, 2026-11-26).
 - **FR-1610** The same command shall run a layer in a cloud session, a local session, and CI
   (`make test`, `make e2e`, `make sandbox`).
 - **FR-1611** A row in Toni's conditions (locked, lid closed, his accounts) shall stay NOT
