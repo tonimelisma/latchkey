@@ -16,7 +16,7 @@
 #   hooks.sh after-bash     After a shell command: runs scripts/tidy.sh after every `git push`.
 #
 # In a Claude Code cloud session (CLAUDE_CODE_REMOTE=true: a fresh Ubuntu VM with one clone of
-# the repository; CLAUDE.md, "Cloud sessions"):
+# the repository; CLAUDE.md, "Two ways to work"):
 #   session-start  first runs scripts/cloud-setup.sh (it installs jq, so it comes before the jq
 #                  check), skips tidy.sh, and still reports loose ends.
 #   guard          unchanged: the same refusals, and the private-values check before a push
@@ -55,7 +55,7 @@ session-start)
   [ -n "$ends" ] && ends="Loose ends in this repository (CLAUDE.md, \"Nothing left behind\"). Resolve them before or alongside the user's request, without being asked:
 $ends"
   if cloud; then
-    ends="This is a Claude Code cloud session: follow CLAUDE.md, \"Cloud sessions\", and docs/cloud-sessions.md.${setup:+
+    ends="This is a Claude Code cloud session: follow CLAUDE.md, \"Two ways to work\", and docs/cloud-sessions.md.${setup:+
 $setup}${ends:+
 $ends}"
   fi

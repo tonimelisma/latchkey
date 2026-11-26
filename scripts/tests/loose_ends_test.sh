@@ -111,5 +111,22 @@ g -C "$main" worktree remove "$main/.claude/worktrees/agent-done"
 check
 lacks "once removed it is no longer reported" "agent-done"
 
+# Another session's branch on GitHub (no local copy): live while it has a commit in the last 3
+# days, a leftover after that (Toni, 2026-11-26).
+g clone -q "$work/origin.git" "$work/other" 2>/dev/null
+g -C "$work/other" checkout -q -b other-live
+echo live >"$work/other/live.txt"
+g -C "$work/other" add live.txt
+g -C "$work/other" commit -q -m "live work"
+g -C "$work/other" push -q origin other-live
+g -C "$work/other" checkout -q -b other-stale main
+echo stale >"$work/other/stale.txt"
+g -C "$work/other" add stale.txt
+GIT_COMMITTER_DATE="$(($(date +%s) - 345600)) +0000" g -C "$work/other" commit -q -m "stale work"
+g -C "$work/other" push -q origin other-stale
+check
+lacks "another session's branch with a recent commit is not a loose end" "GitHub branch other-live"
+has "one with nothing pushed for 3 days is" "GitHub branch other-stale"
+
 [ "$fails" = 0 ] && echo "all passed" || echo "$fails failed"
 [ "$fails" = 0 ]

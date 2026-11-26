@@ -1,10 +1,13 @@
-# Every push and pull request: the relay's tests, lint, and security checks (known vulnerabilities,
+# Every pull request and every push to main: the relay's tests, lint, and security checks (known vulnerabilities,
 # committed secrets, untidy modules); the Linux program's tests and lint; the deploy and repository
 # scripts' tests; and the workflows themselves (actionlint). Actions are pinned to commit SHAs;
 # Dependabot updates them.
 name: ci
 on:
+  # Pull requests, and main after a merge (spec 016: a push to a pull request's branch ran this
+  # twice, once for the push and once for the pull request).
   push:
+    branches: [main]
   pull_request:
   schedule:
     - cron: "17 6 * * *" # daily, so a newly published vulnerability fails CI without a push

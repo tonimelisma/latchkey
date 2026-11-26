@@ -20,7 +20,7 @@
 # Network: everything here comes from hosts the "Limited" network allows by default. Some checks
 # in `make security` fetch at run time from hosts it doesn't: semgrep.dev (Semgrep's rules),
 # vuln.go.dev (govulncheck) and api.osv.dev (osv-scanner, sparkle-advisories.sh); they need those
-# added to the cloud environment's allowed domains (CLAUDE.md, "Cloud sessions").
+# added to the cloud environment's allowed domains (CLAUDE.md, "Two ways to work").
 # Prints one line saying what it did. Tested in `docker run ubuntu:24.04` (CLAUDE.md).
 set -u
 [ "${CLAUDE_CODE_REMOTE:-}" = true ] || [ "${LATCHKEY_CLOUD_SETUP_FORCE:-}" = 1 ] || exit 0

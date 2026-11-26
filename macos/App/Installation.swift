@@ -4,9 +4,12 @@ import ServiceManagement
 
 /// Where the app runs from, and moving it into Applications on first launch (FR-078).
 enum AppLocation {
-    /// True when the app should offer to move itself: not in an Applications folder, and not a
-    /// development build run from Xcode's build folder.
-    static func needsMove(_ bundle: URL) -> Bool {
+    /// True when the app should offer to move itself: the installed app's identity, not in an
+    /// Applications folder, and not run from Xcode's build folder. A development build never
+    /// offers: both are named Latchkey.app, so moving one would replace the installed app
+    /// (found 2026-11-26, spec 016 FR-1607).
+    static func needsMove(_ bundle: URL, identity: AppIdentity = .current) -> Bool {
+        guard identity == .release else { return false }
         let path = bundle.standardizedFileURL.path
         if path.hasPrefix("/Applications/") || path.contains("/Applications/") { return false }
         if path.contains("/DerivedData/") || path.contains("/Build/Products/") { return false }
@@ -29,6 +32,12 @@ enum AppLocation {
         let source = Bundle.main.bundleURL
         let dest = URL(fileURLWithPath: "/Applications").appending(path: source.lastPathComponent)
         let fm = FileManager.default
+        guard mayReplace(existing: bundleID(at: dest), own: AppIdentity.current.bundleID) else {
+            let fail = NSAlert()
+            fail.messageText = "Another app is already at \(dest.path). Latchkey left it in place."
+            fail.runModal()
+            return false
+        }
         quitOtherCopies()
         do {
             // Removed rather than trashed, so a running older copy never mistakes it for an uninstall.
@@ -55,6 +64,23 @@ enum AppLocation {
 }
 
 extension AppLocation {
+    /// Whether a move may replace what is at the destination: nothing there, or an older copy of
+    /// this same app. Never another app, nor another build of Latchkey (Debug vs installed).
+    static func mayReplace(existing: String??, own: String) -> Bool {
+        switch existing {
+        case .none: return true  // nothing there
+        case .some(let id): return id == own  // nil inside: a folder without a bundle ID
+        }
+    }
+
+    /// The bundle ID of the app at url, read from the file (Bundle(url:) caches by path):
+    /// nil when nothing is there, .some(nil) when something without a bundle ID is.
+    static func bundleID(at url: URL) -> String?? {
+        guard FileManager.default.fileExists(atPath: url.path) else { return nil }
+        let info = NSDictionary(contentsOf: url.appending(path: "Contents/Info.plist"))
+        return .some(info?["CFBundleIdentifier"] as? String)
+    }
+
     /// Quits other running copies of Latchkey (an older version being replaced), waiting up to 5 s.
     @MainActor
     static func quitOtherCopies() {

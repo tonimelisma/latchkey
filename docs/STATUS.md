@@ -632,7 +632,23 @@ hosted relay (email via Resend); real Claude called
 `battery_status` and `laptop_status` through the connector, and got the immediate offline answer
 after the app was quit.
 
+## Problem reports asked about
+
+Ids of problem reports Toni has been asked about once (CLAUDE.md, start of every session); ids
+only, never contents. None yet.
+
 ## Next steps
+
+0000. Test strategy and two ways to work (spec 016, `specs/016-test-strategy/`, 2026-11-26):
+      research (inventory of every test, sources, sandboxed-copy options, CLAUDE.md audit),
+      spec with Toni's choices (Tart sandbox Mac with the local build, Mac tests gate once on
+      fake clocks, hand-run kits retired, CLAUDE.md trimmed), and `plan.md` for his review
+      before tasks. Done: CLAUDE.md "Two ways to work" and the trim (306 to ~200 lines, every
+      rule kept); cloud sessions no longer build or test through Latchkey. Fixed (pull request #59): a
+      development build started outside Xcode's build folders offered to move itself and would
+      have replaced `/Applications/Latchkey.app` (FR-1607), with its regression test. Next after
+      review: the CI triggers, fake clocks, one harness; the sandbox Mac needs a local
+      session.
 
 000. Cloud-first git (Toni, 2026-11-24; CLAUDE.md, "Git"): one branch and pull request per
      session, never replaced; squash merges by auto-merge; `branch-cleanup.yml` deletes closed

@@ -43,7 +43,7 @@ hook session-start '' true
 check "in the cloud, session start sets up, skips tidy, reports loose ends" '[ "$ran" = "cloud-setup loose-ends " ]'
 # shellcheck disable=SC2034 # read by the checks, through eval
 ctx=$(printf '%s' "$out" | jq -r .hookSpecificOutput.additionalContext)
-check "in the cloud, Claude hears it is a cloud session" 'printf "%s" "$ctx" | grep -q "Cloud sessions"'
+check "in the cloud, Claude hears it is a cloud session" 'printf "%s" "$ctx" | grep -q "Two ways to work"'
 check "in the cloud, Claude hears what setup did" 'printf "%s" "$ctx" | grep -q "installed jq"'
 check "in the cloud, Claude hears the loose ends" 'printf "%s" "$ctx" | grep -q "loose end: 1"'
 hook session-start '' false
