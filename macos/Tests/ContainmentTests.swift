@@ -3,9 +3,8 @@ import Testing
 
 @testable import Latchkey
 
-/// Notes' refusals for notes it can't change safely, and Messages' window actions back on
-/// (switched off 2026-11-05 after live checks found them broken; on again 2026-11-07 once each
-/// passed on the real Mac).
+/// Notes' refusals for notes it can't change safely. Which Messages tools exist, and their input schemas, are
+/// pinned in the snapshots in relay/e2e/toolsnaps/mac (spec 016 FR-1604).
 @Suite struct ContainmentTests {
     func notes() throws -> (FakeScripts, [String: ToolEntry]) {
         let store = try NotesStore(url: NotesFixture.make())
@@ -49,22 +48,5 @@ import Testing
             .object(["id": .string("N-IDEAS"), "mode": .string("append"), "text": .string("Plant tulips")]))
         #expect(!r.isError, "\(r.content.jsonText)")
         #expect(fake.calls.count == 1)
-    }
-
-    /// Only plain sending, and deleting one message (spec 002 FR-180, Toni 2026-11-22): the other
-    /// window actions were withdrawn (Toni, 2026-11-07).
-    @Test func messagesOffersOnlyPlainSendingAndDeleting() async throws {
-        let db = try MessagesFixture.make()
-        let store = try MessagesStore(url: db, contacts: MessagesFixture.FakeContacts())
-        let fake = FakeScripts()
-        let tools = MessagesCapability.writeTools(
-            store: { store }, contacts: MessagesFixture.FakeContacts(), scripts: fake,
-            staging: FileManager.default.temporaryDirectory.appending(path: "staging-\(UUID().uuidString)"))
-        #expect(tools.map(\.tool.name) == ["messages_send", "messages_delete"])
-        let send = try #require(tools.first)
-        for key in ["people", "name", "reply_to"] {
-            #expect(!send.tool.inputSchema.jsonText.contains("\"\(key)\""), "\(key)")
-        }
-        #expect(fake.calls.isEmpty, "nothing reached Messages")
     }
 }

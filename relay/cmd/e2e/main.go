@@ -3,10 +3,12 @@
 //	e2e pick -base <ref>        which checks the changed files select (FR-1500), for e2e.yml
 //	e2e relay [-update-snapshots]  the relay's own tools through a private relay (FR-1501, FR-1504)
 //	e2e mac -checks a,b [-update-snapshots]  the Mac app's real tools on this Mac (GitHub's runner)
-//	e2e weekly                  inside the test Mac copy: checks and Claude tasks (FR-1515, FR-1516)
+//	e2e evals                   inside the test Mac copy: checks and Claude tasks (FR-1515, FR-1516)
+//	e2e sandbox [-checks a,b]   inside the sandbox Mac copy: every capability against the real
+//	                            Mac apps, and the connection checks (spec 016 FR-1605, D3)
 //	e2e prepare                 inside the test Mac image, once: the relay's account and pairing
 //	e2e fixture <command>       set up, check and clean test data on the test Mac (FR-1520)
-//	e2e send <result.json>      seal a weekly result to the developer's key and send it (FR-1530)
+//	e2e send <result.json>      seal an eval result to the developer's key and send it (FR-1530)
 //
 // Run from relay/. Nothing here reaches anyone's real data: every relay is private to the run.
 package main
@@ -16,7 +18,7 @@ import (
 	"os"
 )
 
-const usage = `usage: e2e pick|relay|mac|weekly|prepare|fixture|send ... (see the package comment)`
+const usage = `usage: e2e pick|relay|mac|evals|sandbox|prepare|fixture|send ... (see the package comment)`
 
 func main() {
 	if len(os.Args) < 2 {
@@ -32,8 +34,10 @@ func main() {
 		err = relayCmd(args)
 	case "mac":
 		err = macCmd(args)
-	case "weekly":
-		err = weeklyCmd(args)
+	case "evals":
+		err = evalsCmd(args)
+	case "sandbox":
+		err = sandboxCmd(args)
 	case "prepare":
 		err = prepareCmd(args)
 	case "fixture":

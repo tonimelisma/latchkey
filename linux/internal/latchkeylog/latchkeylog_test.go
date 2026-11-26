@@ -16,7 +16,6 @@ import (
 	"github.com/tonimelisma/latchkey/linux/internal/activity"
 	"github.com/tonimelisma/latchkey/linux/internal/latchkeylog"
 	"github.com/tonimelisma/latchkey/linux/internal/tools"
-	"github.com/tonimelisma/latchkey/relay/agentproto"
 )
 
 var zone = time.FixedZone("Test/Zone", -8*3600)
@@ -35,22 +34,6 @@ func setup(t *testing.T) (*activity.Log, activity.Files) {
 	log, err := activity.Open(files)
 	require.NoError(t, err)
 	return log, files
-}
-
-func TestDefinition(t *testing.T) {
-	log, files := setup(t)
-	d := latchkeylog.New(log, files, "0.1.1", zone).Def
-	assert.Equal(t, "latchkey_log", d.Name)
-	assert.True(t, d.Annotations.ReadOnlyHint)
-	assert.InDelta(t, 10000, d.Meta[agentproto.DeadlineMetaKey], 0, "deadline 10 s")
-	schema, _ := d.InputSchema.(map[string]any)
-	props, _ := schema["properties"].(map[string]any)
-	lines, _ := props["lines"].(map[string]any)
-	category, _ := props["category"].(map[string]any)
-	assert.Equal(t, "integer", lines["type"])
-	assert.Equal(t, []any{"app", "connection", "pairing", "settings", "pause", "update", "audit"}, category["enum"])
-	assert.Nil(t, schema["required"], "both arguments are optional")
-	assert.Contains(t, d.Description, "no tool calls, commands, file names, or the relay's address")
 }
 
 func TestAnswer(t *testing.T) {

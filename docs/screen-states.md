@@ -13,6 +13,47 @@ Notes' window editing, Messages' window actions, Reminders' window setters. What
 `open`. The README's "What works when" is the current summary; the rest of this page is the
 record of what was tried.
 
+## Toni's conditions: the checklist
+
+What no automated layer can show: the Mac locked, the lid closed, Toni's own accounts, real
+sites (spec 016 FR-1611). Each row stays NOT VERIFIED until Toni runs it on his Mac with the
+installed version; the result is quoted with the version, the time and what was seen. The
+cases named are the rows of `docs/regression-coverage.md` marked "Toni's conditions"; what the
+sandbox Mac covers unlocked is in `relay/e2e/sandbox-checks.md`.
+
+Screen states (every capability; the last results are in `docs/use-cases.md`):
+- Locked, screen on: files, shell, Notes, Messages, calendar, reminders, contacts, location,
+  maps, and Claude's pages in Latchkey's own browser with Safari's cookies.
+- Lid closed while still unlocked (the first minutes): the same.
+- Lid closed and locked: the same.
+- Unlocked while Toni works: nothing comes to the front, the pointer, keyboard and clipboard
+  stay his (computer control, his Safari tabs and the shell's `open` excepted).
+
+Signing in and real sites:
+- Locked, a fresh sign-in in Latchkey's own browser: Citi's slow sign-on
+  (`logins_locked_citi_slow`), Amazon (`browser_locked_sign_in_fresh`), Target
+  (`browser_locked_sign_in_guidance`).
+- Unlocked, a signed-in site opens in a Safari tab of Claude's with no cookies copied: Target
+  (`browser_signed_in_site_no_cookie_copy`).
+- The sites' own pages: Target's search results (`browser_hidden_page_search_results`),
+  Costco's orders and sign-in (`browser_costco_orders_not_stuck`, `logins_out_of_time`),
+  LinkedIn's cancel link (`browser_linkedin_cancel_sign_in_click`), Procare's role choice
+  (`browser_procare_role_choice`), a slow real site (`browser_slow_site_no_lost_page`), going
+  back while locked or with the lid closed (`browser_back_no_cancel_error`).
+- A site Latchkey holds a password for keeps Latchkey's own session (`logins.own_session_kept`).
+- A code a site texted is used and the text deleted (`logins.texted_code_deleted`).
+- The Passwords export reaches its save panel (`passwords_export_reaches_save_panel`).
+
+Toni's accounts:
+- Real iMessage: conversations, search, read (`messages.*`).
+- WhatsApp signed in: chats, search, read (`whatsapp.*`).
+- Calendar invitations: his answer shown, inviting the calendar's own address refused
+  (`calendar.invitation_read`, `calendar.invite_own`).
+- iCloud Contacts: a card taken out of a group stays out (`contacts_group_removal_sticks`).
+- A cloud-only file is downloaded and read (`files_cloud_only_read`).
+- A note deleted is saved by Notes at once, locked too (`notes_delete_saved`).
+- Where the Mac is (`location.read`).
+
 ## Tested with the lid closed and the Mac locked (app 0.8.78/0.8.79, 2026-11-02)
 
 | Group | Works | Notes |
@@ -54,7 +95,7 @@ record of what was tried.
 
 ## Three groups: what gets in the Owner's way (app 0.8.99, 2026-11-02)
 
-Measured by `state-check.sh run` with `focus-watch.swift` (app in front, window on top, new
+Measured by the screen-state kit (retired 2026-11-26) with its focus watcher (app in front, window on top, new
 windows, pointer, clipboard), one group at a time, plus direct live checks. Unlocked run on
 0.8.95: 107 of 108 use cases worked; the forward that failed was fixed in 0.8.99 (checked live).
 

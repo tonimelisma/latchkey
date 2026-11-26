@@ -4,7 +4,7 @@ import Testing
 
 @testable import Latchkey
 
-/// Computer control regression cases (macos/scripts/state-check/cases.json,
+/// Computer control regression cases (docs/regression-coverage.md,
 /// "regressions-computer"), on a stand-in app.
 @Suite struct RegressionComputerATests {
     /// What the stand-in app was asked to do.

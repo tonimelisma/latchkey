@@ -28,9 +28,11 @@ final class CodeFinder {
     var mail: Recent = { since in CodeFinder.fromMail(since) }
     var startMail: () async -> Void = { await MailCodes.start() }
     /// How long a read of Messages' database or Mail's files may take, its wait for a thread
-    /// included (Constitution II). Tests set it long: on a busy runner a read waited 21 to 31 s
-    /// for a thread (mac build, 2026-11-24).
+    /// included (Constitution II). On a busy runner a read waited 21 to 31 s for a thread (mac
+    /// build, 2026-11-24), so tests never measure it in real time.
     var readLimit: Duration = .seconds(10)
+    /// The clock `readLimit` is measured on; tests move one by hand (spec 016 FR-1602).
+    var clock: any Clock<Duration> = ContinuousClock()
     private var used: Set<String> = []
     /// When Latchkey last typed a password on each site: codes are looked for since then.
     private var passwords: [String: Date] = [:]
@@ -106,7 +108,7 @@ final class CodeFinder {
         let from = since.addingTimeInterval(-5)  // clocks and saving
         // Database and file reads block: on a GCD queue, never Swift's shared pool
         // (.claude/rules/macos.md), within the read limit (Constitution II).
-        return await Deadline.first(within: readLimit) {
+        return await Deadline.first(within: readLimit, clock: clock) {
             await withCheckedContinuation { done in
                 DispatchQueue.global(qos: .userInitiated).async { done.resume(returning: source(from)) }
             }

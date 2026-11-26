@@ -6,7 +6,6 @@ Relay (run in `relay/`):
 - `make test`: all tests, with the race detector (includes a headless-Chrome test; skipped if
   Chrome is missing)
 - `make test-short`: the same without the browser test
-- `make claude-check`: real Claude Code against a private relay and the pretend Mac
 - `make lint`: golangci-lint (pinned in the Makefile) with gofumpt; must report 0 issues
 - `make fmt`: format
 - `make run`: run locally with development defaults (data in `relay/.data/`)
@@ -14,8 +13,8 @@ Relay (run in `relay/`):
   values, Semgrep, ShellCheck, tidy modules); the deploy runs it first
 - `make script-tests`: tests of the repository scripts (no server, no network)
 
-- `make mac-check`: the Mac app's real connection code against a private relay (battery vs
-  pmset, tool off, silent network cut, reconnect)
+- The Mac app's connection checks (battery vs pmset, tool off, silent network cut, reconnect)
+  are sandbox Mac checks (spec 016): `relay/e2e/sandbox-checks.md`
 
 End to end and evals (spec 015; `relay/cmd/e2e`, run in `relay/`):
 - `go run ./cmd/e2e pick -base <ref>` (or `-files a,b`): which checks the changed files select,
@@ -29,11 +28,19 @@ End to end and evals (spec 015; `relay/cmd/e2e`, run in `relay/`):
   throwaway Mac runner (it uses that Mac's home folder, shell and Downloads)
 - A snapshot that differs fails `e2e.yml`; the job's artifact `toolsnaps-<kind>` holds the new
   files to commit in the same pull request
-- Weekly, on an Apple silicon Mac with Tart and Go, from any clone: `macos/scripts/eval-image.sh`
-  once (the test Mac image; a person approves its permissions), then
-  `macos/scripts/weekly-eval.sh` (results in `e2e-results/`, ignored by git) or `--send` (also
-  sealed to the developer's intake). Nothing to approve per run.
-- `go run ./cmd/latchkey-reports evals [-this-week [-quiet]]`: the sent weekly results, joined by
+- Sandbox Mac (spec 016; a local session on an Apple silicon Mac with Tart, Xcode and Go, from
+  any clone): `make -C macos sandbox` builds the working tree signed with the sandbox's own
+  identity "Latchkey Sandbox" (never `Local.xcconfig` or a developer certificate), installs it in
+  a Tart copy of the image `latchkey-eval` and checks every capability with test data
+  (`ARGS="--checks files,notes"` for some); the copy is kept for the next run until
+  `make -C macos sandbox-stop`. Results in `e2e-results/` (ignored by git). Evidence only for an
+  unlocked virtual Mac with test data.
+- Evals (spec 015/016): `make -C macos evals` (the local build in the sandbox), `ARGS=--release`
+  (the newest release; its signature needs its own permission grants in the image), `ARGS=--send`
+  (also sealed to the developer's intake). Real Claude Code does about 20 tasks 3 times each.
+- Once per Mac: `macos/scripts/eval-image.sh` (the test Mac image; a person approves its
+  permissions once, for the sandbox-signed build).
+- `go run ./cmd/latchkey-reports evals [-this-week [-quiet]]`: the sent eval results, joined by
   run and compared with the one before (new failures, fixed, flaky)
 
 Hosted relay: new versions ship by themselves after a merge (`relay-image.yml` publishes the
@@ -64,12 +71,6 @@ Linux server program (run in `linux/`, its own Go module; spec 010):
 - `make release`: build, sign (`SERVER_SIGNING_KEY` in `.env`), tag the commit (must be origin/main)
   `linux-<next number>` and publish it there (every increment ships)
 
-Screen states (`macos/scripts/state-check/`; not run: no test sessions against Toni's real data,
-2026-11-23; their cases that need Claude or the apps run as spec 015's eval tasks): `state-check.sh run|wait|report <folder outside the
-repo>` tries every use case in `cases.json` through the hosted relay with real Claude Code, in
-the screen state the Mac is in (unlocked, locked, lid closed; Toni dropped display asleep but unlocked, 2026-11-04); `report` writes
-`docs/use-cases.md`. Each run also logs what took focus, raised a window, moved the pointer, or
-used the clipboard (`<state>/focus.log`; `LATCHKEY_CHECK_PARALLEL=1` runs one group at a time so
-each line belongs to one group). Needs `LATCHKEY_CHECK_TO` (Toni's own address, from `CLAUDE.local.md`).
-Claude Code here runs on Toni's Claude subscription; the dollar cost it prints is only what the
-same use would cost paid per use.
+Screen states: the hand-run kit (`state-check`) was retired 2026-11-26 (spec 016). What covers
+each case: `docs/regression-coverage.md`; what only Toni can run (locked, lid closed, his
+accounts): `docs/screen-states.md`, "Toni's conditions".

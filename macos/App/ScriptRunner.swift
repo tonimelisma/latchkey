@@ -71,12 +71,20 @@ struct OSAScriptRunner: ScriptRunner {
 /// or nil once `limit` passes. After that the work is cancelled and its late answer dropped.
 enum Deadline {
     static func first<T: Sendable>(within limit: Duration, _ work: @escaping @Sendable () async -> T?) async -> T? {
+        await first(within: limit, clock: ContinuousClock(), work)
+    }
+
+    /// The same, with the limit measured on `clock`: tests pass one they move by hand, so no test
+    /// waits out a limit or measures one in real time (spec 016 FR-1602).
+    static func first<T: Sendable>(
+        within limit: Duration, clock: any Clock<Duration>, _ work: @escaping @Sendable () async -> T?
+    ) async -> T? {
         let once = Once<T>()
         return await withCheckedContinuation { (done: CheckedContinuation<T?, Never>) in
             once.set(done)
             let worker = Task { once.finish(await work()) }
             Task {
-                try? await Task.sleep(for: limit)
+                try? await clock.sleep(for: limit)
                 once.finish(nil)
                 worker.cancel()
             }

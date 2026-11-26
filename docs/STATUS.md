@@ -639,16 +639,20 @@ only, never contents. None yet.
 
 ## Next steps
 
-0000. Test strategy and two ways to work (spec 016, `specs/016-test-strategy/`, 2026-11-26):
-      research (inventory of every test, sources, sandboxed-copy options, CLAUDE.md audit),
-      spec with Toni's choices (Tart sandbox Mac with the local build, Mac tests gate once on
-      fake clocks, hand-run kits retired, CLAUDE.md trimmed), and `plan.md` for his review
-      before tasks. Done: CLAUDE.md "Two ways to work" and the trim (306 to ~200 lines, every
-      rule kept); cloud sessions no longer build or test through Latchkey. Fixed (pull request #59): a
-      development build started outside Xcode's build folders offered to move itself and would
-      have replaced `/Applications/Latchkey.app` (FR-1607), with its regression test. Next after
-      review: the CI triggers, fake clocks, one harness; the sandbox Mac needs a local
-      session.
+0000. Test strategy and two ways to work (spec 016, `specs/016-test-strategy/`, 2026-11-26).
+      Done (pull requests #59, #60): two ways to work in CLAUDE.md, the trim and Toni's rule
+      changes; the dev-build bug (FR-1607) with its test; the Mac tests gate merging (required
+      check `mac`, ruleset read back: relay, linux, scripts, mac); a changed tool snapshot blocks
+      merging, the Mac end-to-end check runs in the Mac jobs' build; main skips tests on a tree
+      its pull request passed; one harness (localcheck, maccheck, guidecheck gone); the
+      screen-state and Safari kits retired, every case mapped (`docs/regression-coverage.md`,
+      `docs/screen-states.md` "Toni's conditions"); deadline tests on fake clocks (Swift
+      `ManualClock`, relay synctest); tool text pinned only in the snapshots; `make sandbox`,
+      `make evals` and the start hook's local line (sandbox_test.sh 49/49).
+      NOT VERIFIED until a local session on a Mac runs it: the sandbox Mac (`make -C macos
+      sandbox`; once: `macos/scripts/eval-image.sh`, Toni approves the image's permissions),
+      then porting the rest of `relay/e2e/sandbox-checks.md` there (spec 016 T16).
+      CI time (FR-1612): `specs/016-test-strategy/research.md` §5.
 
 000. Cloud-first git (Toni, 2026-11-24; CLAUDE.md, "Git"): one branch and pull request per
      session, never replaced; squash merges by auto-merge; `branch-cleanup.yml` deletes closed

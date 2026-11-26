@@ -640,7 +640,8 @@ with the path in the answer, and a site's error or a too-big file saves nothing.
 never over another file, the quarantine mark, attachments, and the script file have their own
 tests.
 
-What only real Safari can show is checked by `macos/scripts/safari-check.sh`: Latchkey's own
+What only real Safari can show was checked by `macos/scripts/safari-check.sh` (retired
+2026-11-26, spec 016 D5; its checks move to the sandbox Mac, `relay/e2e/sandbox-checks.md`): Latchkey's own
 `SafariBrowser` against real Safari, in a window the check opens and closes, never touching
 the Owner's: a same-site click keeps the tab and the new page reads (and back, and a second
 click), a cross-site click keeps it (since 2026-11-01), a script's navigation loses it as

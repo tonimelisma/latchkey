@@ -39,6 +39,14 @@ hook session-start ''
 check "on the Mac, session start tidies and reports loose ends" '[ "$ran" = "tidy loose-ends " ]'
 check "on the Mac, the loose ends reach Claude" 'printf "%s" "$out" | jq -r .hookSpecificOutput.additionalContext | grep -q "loose end: 1"'
 check "on the Mac, no word of a cloud session" '! printf "%s" "$out" | grep -q "cloud"'
+check "on the Mac, Claude hears to run the sandbox after a Mac build (spec 016)" \
+  'printf "%s" "$out" | jq -r .hookSpecificOutput.additionalContext | grep -qF "Local session: after building the Mac app, run \`make -C macos sandbox\` (spec 016) before calling the change done."'
+printf '#!/bin/sh\necho loose-ends >>"%s/ran"\n' "$work" >"$s/loose-ends.sh.quiet"
+mv "$s/loose-ends.sh" "$s/loose-ends.sh.noisy" && mv "$s/loose-ends.sh.quiet" "$s/loose-ends.sh" && chmod +x "$s/loose-ends.sh"
+hook session-start ''
+check "on the Mac with no loose ends, the sandbox line still reaches Claude" \
+  'printf "%s" "$out" | jq -r .hookSpecificOutput.additionalContext | grep -q "make -C macos sandbox"'
+mv "$s/loose-ends.sh.noisy" "$s/loose-ends.sh"
 hook session-start '' true
 check "in the cloud, session start sets up, skips tidy, reports loose ends" '[ "$ran" = "cloud-setup loose-ends " ]'
 # shellcheck disable=SC2034 # read by the checks, through eval
@@ -46,6 +54,7 @@ ctx=$(printf '%s' "$out" | jq -r .hookSpecificOutput.additionalContext)
 check "in the cloud, Claude hears it is a cloud session" 'printf "%s" "$ctx" | grep -q "Two ways to work"'
 check "in the cloud, Claude hears what setup did" 'printf "%s" "$ctx" | grep -q "installed jq"'
 check "in the cloud, Claude hears the loose ends" 'printf "%s" "$ctx" | grep -q "loose end: 1"'
+check "in the cloud, no sandbox line (there is no Mac)" '! printf "%s" "$ctx" | grep -q "make -C macos sandbox"'
 hook session-start '' false
 check "CLAUDE_CODE_REMOTE other than true counts as the Mac" '[ "$ran" = "tidy loose-ends " ]'
 

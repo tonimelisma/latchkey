@@ -204,20 +204,6 @@ import Testing
         #expect(try await run(s, p, "document.querySelector('[name=pw]').value") == "")
     }
 
-    /// FR-1373: Claude is told to judge the page itself, and what to do when a sign-in fails in
-    /// Latchkey's own browser.
-    @Test func theDescriptionGuidesClaude() throws {
-        let s = try setup()
-        let d = s.tool.tool.description ?? ""
-        #expect(d.contains("read the page") && d.contains("a bug in Latchkey") && d.contains("sign_in_again"))
-        #expect(d.contains("locked"))
-        // Problem report 2026-11-24 (Procare): a sign-in that fails in Latchkey's browser without a
-        // word brings the same sign-in page back; Latchkey can't tell why, so Claude judges.
-        #expect(d.contains("the same sign-in page comes back with no error") && d.contains("judge from the page"))
-        let on = CapabilityRegistry(capabilities: AppModel.makeCapabilities(), levels: CapabilityRegistry.defaultLevels)
-        #expect(on.tools.contains { $0.name == "logins_fill" } && !on.tools.contains { $0.name == "logins_sign_in" })
-    }
-
     // MARK: codes (Toni, 2026-11-22: "The agent reads the messages, archives them etc")
 
     @Test func aCodeClaudeReadGoesAcrossTheBoxesAndClaudeIsToldToCleanUp() async throws {

@@ -65,21 +65,6 @@ import Testing
         #expect(try await run(s, p, "String(window.seen || 0)") == "3", "pressed every time, never blocked")
     }
 
-    /// regressions.logins_texted_code_live (2026-11-21/22): Claude reads texted and emailed codes
-    /// itself and cleans up; the tools for it exist, and logins_fill's description says so.
-    @Test func claudeIsToldToReadACodeItselfAndHasTheToolsToCleanUp() throws {
-        let s = try setup()
-        defer { s.own.closeAll() }
-        let d = s.tool.tool.description ?? ""
-        #expect(d.contains("read it yourself and pass it as code"), "\(d)")
-        #expect(d.contains("messages_read") && d.contains("messages_delete"))
-        #expect(d.contains("mail_find") && d.contains("mail_read") && d.contains("mail_archive"))
-        let on = CapabilityRegistry(capabilities: AppModel.makeCapabilities(), levels: CapabilityRegistry.defaultLevels)
-        for name in ["messages_delete", "mail_find", "mail_read", "mail_archive", "logins_fill"] {
-            #expect(on.tools.contains { $0.name == name }, "\(name)")
-        }
-    }
-
     /// regressions.logins_code_delivery_step (Citi, 2026-11-21, 0.8.187 and 0.8.205): the
     /// password went into Citi's first one-character code box (its six PIN boxes are password
     /// fields), and the tool pressed on by itself. A password goes only into a password field

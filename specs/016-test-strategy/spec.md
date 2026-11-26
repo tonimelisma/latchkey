@@ -84,6 +84,8 @@ if you're local and thus have access to the mac."
   the moment the developer's work is ready (the push, or the local run's start); where a layer
   can't, the reason is measured and reported to Toni (Toni, 2026-11-26: "each commit wraps up in
   5 minutes of testing from the moment dev works ... local and CI together, everything").
+  Measured and reported 2026-11-26 (research §5): a Mac change ~5.5 min when a macOS machine is
+  free; Toni kept four Mac jobs ("Keep 4 jobs, ~5.5 min") over five jobs or paid runners.
 
 ## Success criteria
 

@@ -1,6 +1,7 @@
 #!/bin/bash
-# Prepares the test Mac for the weekly eval run, once (spec 015 FR-1512, FR-1513, plan D6). Run it
-# in Terminal from a clone, on an Apple silicon Mac with Tart and Go:
+# Prepares the test Mac for the sandbox and the evals, once (spec 015 FR-1512, FR-1513, plan D6;
+# spec 016 plan D3). Run it in Terminal from a clone, on an Apple silicon Mac with Tart, Go,
+# Xcode and XcodeGen:
 #
 #   macos/scripts/eval-image.sh
 #
@@ -9,20 +10,28 @@
 # and the test data's apps' first runs; asks for the Claude token (from `claude setup-token`) at a
 # password prompt and keeps it in this Mac's login keychain; then opens the test Mac's window
 # once so the person running it clicks Connect and approves Latchkey's permissions. The image is
-# kept as $LATCHKEY_EVAL_IMAGE (latchkey-eval); each weekly run uses a fresh copy of it. Run it
-# again after a new macOS or when the weekly run says a permission is missing.
+# kept as $LATCHKEY_EVAL_IMAGE (latchkey-eval); each sandbox or eval run uses a copy of it. Run it
+# again after a new macOS or when a run says a permission is missing.
+#
+# The permissions are approved for a build signed with the sandbox's own identity (sandbox.sh,
+# eval-lib.sh's sandbox_build), installed over the release just before the window opens: macOS
+# files each permission, and Latchkey's pairing in the keychain, under the app's signature, and
+# every sandbox build (make sandbox, make evals) carries that same signature, so the grants and
+# the pairing hold for each new build. evals.sh --release installs the CI-signed release instead,
+# whose signature differs: whether macOS keeps its grants too is checked on its first run.
 set -eu
 . "$(dirname "$0")/eval-lib.sh"
 
 case "${1:-}" in
 -h | --help)
-	sed -n '2,13p' "$0"
+	sed -n '2,21p' "$0"
 	exit 0
 	;;
 "") ;;
 *) die "unknown option $1 (eval-image.sh takes none)" ;;
 esac
 need_tools
+need_build_tools
 BUILD=$EVAL_IMAGE-build
 WORK=$(mktemp -d)
 trap 'rm -rf "$WORK"' EXIT
@@ -43,6 +52,9 @@ vm "$BUILD" 'curl -fsSL https://claude.ai/install.sh | bash && grep -q .local/bi
 
 say "installing the newest Latchkey release"
 install_latchkey "$BUILD"
+say "building Latchkey from this clone, signed with the sandbox's identity (the permissions are approved for it)"
+sandbox_identity
+sandbox_build
 
 say "the private relay's test certificate and name (only the test Mac trusts and resolves them)"
 build_e2e "$WORK/e2e"
@@ -67,6 +79,8 @@ else
 	unset token
 fi
 
+say "installing the sandbox-signed build ($SANDBOX_LABEL) over the release"
+install_latchkey_build "$BUILD" "$SANDBOX_APP"
 say "restarting the test Mac with its window, for the steps only a person can do"
 "$TART" stop "$BUILD" >/dev/null 2>&1 || true
 "$TART" run "$BUILD" >"$WORK/run.log" 2>&1 &
@@ -89,7 +103,7 @@ read -r _
 
 say "checking the permissions"
 token=$(security find-generic-password -s "$TOKEN_SERVICE" -w)
-if ! printf '%s\n' "$token" | "$TART" exec -i "$BUILD" /bin/zsh -lc "read -r CLAUDE_CODE_OAUTH_TOKEN; export CLAUDE_CODE_OAUTH_TOKEN; cd $VM_DIR && ./e2e-bin weekly -only none -out /tmp/check.json"; then
+if ! printf '%s\n' "$token" | "$TART" exec -i "$BUILD" /bin/zsh -lc "read -r CLAUDE_CODE_OAUTH_TOKEN; export CLAUDE_CODE_OAUTH_TOKEN; cd $VM_DIR && ./e2e-bin evals -only none -out /tmp/check.json"; then
 	unset token
 	die "the test Mac isn't ready (above); fix it in its window and run eval-image.sh again."
 fi
@@ -98,4 +112,4 @@ vm "$BUILD" "rm -rf $VM_DIR"
 "$TART" stop "$BUILD"
 if image_exists "$EVAL_IMAGE"; then "$TART" delete "$EVAL_IMAGE"; fi
 "$TART" rename "$BUILD" "$EVAL_IMAGE"
-say "the test Mac image $EVAL_IMAGE is ready. Each week: macos/scripts/weekly-eval.sh"
+say "the test Mac image $EVAL_IMAGE is ready: make -C macos sandbox (after each Mac build), make -C macos evals"

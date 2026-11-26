@@ -7,23 +7,55 @@ import Testing
 /// the Automation check kept a locked tab list past the relay's 30 s).
 struct DeadlineTests {
     @Test func aQuickAnswerComesBack() async {
-        let answer = await Deadline.first(within: .seconds(5)) { () async -> Int? in 7 }
+        // A clock that never moves: only the answer can end it.
+        let answer = await Deadline.first(within: .seconds(5), clock: ManualClock()) { () async -> Int? in 7 }
         #expect(answer == 7)
     }
 
+    /// On a clock the test moves (spec 016 FR-1602): nothing ends before the limit, the limit ends
+    /// it whatever the work does, and the work's late answer is dropped.
     @Test func workThatNeverAnswersEndsAtTheLimit() async {
-        let clock = ContinuousClock()
-        let start = clock.now
-        // Like the Automation check: a GCD call behind a continuation that ignores cancellation.
-        let answer = await Deadline.first(within: .milliseconds(300)) { () async -> Int? in
-            await withCheckedContinuation { done in
-                DispatchQueue.global().asyncAfter(deadline: .now() + 3) { done.resume(returning: 1) }
-            }
+        let clock = ManualClock()
+        // Like the Automation check: a call behind a continuation that ignores cancellation, held
+        // until the test lets it answer.
+        let held = HeldAnswer()
+        let answer = Task {
+            await Deadline.first(within: .milliseconds(300), clock: clock) { () async -> Int? in await held.answer() }
         }
-        #expect(answer == nil)
-        // Well before the work's 3 s, with room for a loaded machine (the full suite side by
-        // side took 2.2 s on 2026-11-22).
-        #expect(clock.now - start < .milliseconds(2_800))
+        #expect(await clock.waitForSleepers(1), "the limit's sleep started")
+        clock.advance(by: .milliseconds(299))
+        #expect(clock.sleeping == 1, "not before the limit")
+        clock.advance(by: .milliseconds(1))
+        #expect(await answer.value == nil)
+        held.release()
+    }
+}
+
+/// Work that answers 1 only once the test releases it, whatever cancellation says.
+private final class HeldAnswer: @unchecked Sendable {
+    private let lock = NSLock()
+    private var waiting: CheckedContinuation<Int?, Never>?
+    private var released = false
+
+    func answer() async -> Int? {
+        await withCheckedContinuation { (c: CheckedContinuation<Int?, Never>) in
+            let now: Bool = self.lock.withLock {
+                if self.released { return true }
+                self.waiting = c
+                return false
+            }
+            if now { c.resume(returning: 1) }
+        }
+    }
+
+    func release() {
+        let c: CheckedContinuation<Int?, Never>? = lock.withLock {
+            self.released = true
+            let parked = self.waiting
+            self.waiting = nil
+            return parked
+        }
+        c?.resume(returning: 1)
     }
 }
 

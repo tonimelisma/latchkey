@@ -3,7 +3,7 @@ import Testing
 
 @testable import Latchkey
 
-/// Regression cases of the browser (macos/scripts/state-check/cases.json, regressions-browser),
+/// Regression cases of the browser (docs/regression-coverage.md, regressions-browser),
 /// batch B. Real WebKit pages given as text, and the stand-in Safari of BrowserTabTests.
 @MainActor @Suite struct RegressionBrowserBTests {
     func tools(_ fake: FakeSafariTabs, own: OwnPages) -> [String: ToolEntry] {

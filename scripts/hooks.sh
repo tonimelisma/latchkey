@@ -3,7 +3,8 @@
 # stdin. Toni, 2026-10-24: all work integrated into main and pushed, no work ever lost, never a
 # cleanup he has to ask for.
 #
-#   hooks.sh session-start  Runs scripts/tidy.sh, then tells Claude about any loose ends.
+#   hooks.sh session-start  Runs scripts/tidy.sh, then tells Claude about any loose ends, and
+#                           (local sessions) to run the sandbox Mac after a Mac build (spec 016).
 #   hooks.sh stop           Before Claude ends a turn: if loose ends remain, sends it back once
 #                           to resolve them. Not wired since 2026-11-04 (Toni removed the hook).
 #                           The Stop hook since 2026-11-07 is scripts/keep-going.sh (keeps
@@ -57,6 +58,10 @@ $ends"
   if cloud; then
     ends="This is a Claude Code cloud session: follow CLAUDE.md, \"Two ways to work\", and docs/cloud-sessions.md.${setup:+
 $setup}${ends:+
+$ends}"
+  else
+    # Spec 016 FR-1605: a local session has the Mac, so it checks what it built there.
+    ends="Local session: after building the Mac app, run \`make -C macos sandbox\` (spec 016) before calling the change done.${ends:+
 $ends}"
   fi
   [ -n "$ends" ] || exit 0

@@ -183,3 +183,63 @@ The limit: GitHub's plan runs at most five macOS jobs at once for the account. A
 takes all five (four build-and-test jobs and e2e-mac), so a second push, another session's pull
 request, or main's run after a merge waits for a runner: that wait, not the tests, is what
 passes 5 minutes.
+
+## 6. The sandbox's implementation choices (T11, T12; 2026-11-26)
+
+Low-level choices made while writing `macos/scripts/sandbox.sh` and `cmd/e2e sandbox`
+(CLAUDE.md: decided, recorded here). None is verified on a Mac yet.
+
+- **Where the relay runs.** (a) On the host, the copy dialing out to it: the image would have to
+  be paired again with a host address, and the host would serve the copy. (b) Inside the copy,
+  the relay the image was paired with (`prepare`, as the evals do). Chose (b): no new pairing,
+  nothing of the host in the loop. The relay listens on 8444 behind a proxy on 8443, the address
+  Latchkey dials, so a check can cut the network silently (maccheck's proxy, which now also
+  passes a close on, so a relay restart is seen at once).
+- **What the build copies.** (a) Build in `macos/` (Xcode reads `Config/Local.xcconfig` through
+  `#include?`, bringing the owner's team and relay); (b) a copy of `macos/` without git-ignored
+  files (`git ls-files -co --exclude-standard`). Chose (b), with a guard that stops if the copy
+  holds a `Local.xcconfig`. Also passed: `SPARKLE_PUBLIC_ED_KEY=` (no update key, so the copy
+  never replaces the build with a release) and `LATCHKEY_DEFAULT_RELAY_HOST=`.
+- **The Release identifier on the host.** The build is `net.melisma.latchkey`, like the
+  installed app: it is taken out of Launch Services (`lsregister -u`) after each build and its
+  folder carries `.metadata_never_index`, so nothing on the host opens it in place of the
+  installed Latchkey. Never launched on the host.
+- **Turning a capability off in the installed app.** No control file there (the Swift host test
+  had one): Latchkey is quit, `capabilityLevels` gets `files = off` with `defaults`, and it
+  starts again; the settings are exported first and imported after (also at the next start, if a
+  run stopped half-way).
+- **Moved from maccheck, changed.** Reconnect after the network returns: no network change
+  reaches the copy, so SC-05's 10 s can't apply; the check allows 90 s and prints the time.
+  Suspension lifted: the app retries every 5 minutes, or on a wake or network change; the check
+  restarts Latchkey instead of waiting (the pairing kept is what it shows). Battery: compared
+  with `pmset` from the state line; in a VM, no made-up percent.
+- **Signatures in one image.** macOS files permissions and the login keychain's pairing item
+  under the app's signature, one signature per bundle identifier. So the image is approved and
+  paired with the sandbox-signed build; `evals.sh --release` (CI's signature) may find the
+  permissions missing or the pairing unreadable. To be checked on the first Mac run.
+
+Not yet ported from `relay/e2e/sandbox-checks.md`: the Safari checks, the per-capability
+state-check groups beyond one round trip each (notes, calendar, reminders, contacts, files,
+shell, browser), maps, sweep, front-app-unchanged, no-permission-prompts, and the regression
+cases listed there.
+
+### After spec 016's CI changes (pull request #60, 2026-11-26)
+
+| Commit | Push → all done | Mac jobs (start → end) | Wait for a Mac machine | Notes |
+|---|---|---|---|---|
+| 6c46064 | `mac` passed 15 s after the push | none started | none | no `macos/` change: the gate's skip path |
+| 139a3d3 | 7 m 22 s | 3:56 to 4:35 each; job 1 queued 2 m 40 s | runners held by the run that push cancelled | the changes job took 52 s (Go for the pick) |
+| ce45efa | 8 m 16 s | job 1 4:13, job 3 5:08 (end-to-end inside), job 2 5:22, job 0 3:45 | job 0 queued 4 m 17 s, with nothing else of this repository running | the changes job 5 s; ci 2 m 47 s; e2e-linux 2 m 31 s |
+
+Without the wait, ce45efa comes to about 5 m 25 s (the slowest job plus the changes job and
+the gate). What is left over 5 minutes, and why:
+
+- **Another job held two of the account's five macOS machines** (GitHub's limit is per
+  account, across all its repositories): nothing in this repository can prevent that wait.
+- **Each Mac job builds the app itself** (1:06 to 1:50 with the compilation cache): four jobs,
+  four builds. Sharing one build between jobs means uploading and downloading the build
+  products (several hundred MB), which costs about what it saves.
+- **GitHub's macOS runners vary** by about a minute for the same work (job 2: 4:20 in one run,
+  5:22 in the next).
+- **The pages tests are the bulk** (about 10 minutes of test time across the jobs): faster
+  only by making those tests faster, or by more jobs side by side.

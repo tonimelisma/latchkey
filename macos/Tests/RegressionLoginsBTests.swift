@@ -3,7 +3,7 @@ import Testing
 
 @testable import Latchkey
 
-/// Regression cases of sign-in (macos/scripts/state-check/cases.json), batch B. Real WebKit pages
+/// Regression cases of sign-in (docs/regression-coverage.md), batch B. Real WebKit pages
 /// given as text at an https address, as in SignInFillTests; the Mac's lock is a stand-in.
 @MainActor @Suite struct RegressionLoginsBTests {
     struct Setup {
@@ -22,20 +22,6 @@ import Testing
         var a = args
         a["page"] = .string(page)
         return await s.tool.handler(.object(a))
-    }
-
-    /// regressions.browser_locked_sign_in_guidance (Target, 2026-11-22) and
-    /// regressions.logins_failed_sign_in_guidance: logins_fill's description says what to do when
-    /// a sign-in fails in Latchkey's own browser (a bug in Latchkey), both ways.
-    @Test func theDescriptionSaysWhatToDoWhenASiteFailsInLatchkeysBrowser() throws {
-        let d = try setup(locked: false).tool.tool.description ?? ""
-        #expect(d.contains("doesn't work in Latchkey's own browser but would in Safari"), "\(d)")
-        #expect(d.contains("that is a bug in Latchkey"), "\(d)")
-        #expect(d.contains("send a problem report with the feedback tool"), "\(d)")
-        #expect(d.contains("while the Mac is unlocked, move the page into a background Safari tab"), "\(d)")
-        #expect(d.contains("Safari tab with browser_look sign_in_again and sign in there"), "\(d)")
-        #expect(d.contains("while it is locked, tell the owner the site needs the Mac unlocked"), "\(d)")
-        #expect(d.contains("so judge from the page"), "Claude reads the page, the tool doesn't")
     }
 
     /// regressions.logins_out_of_time (Costco, 0.8.216): the old sign-in ran past the relay's 60 s

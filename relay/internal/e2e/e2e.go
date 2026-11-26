@@ -1,6 +1,6 @@
 // Package e2e drives a real relay the way an Owner and Claude would: headless Chrome with a
 // virtual passkey for the web pages, the OAuth flow for a client, and pairing for a Mac. It is
-// used by the end-to-end test and by the local Claude Code check (scripts/claude-code-check.sh).
+// used by the end-to-end test in internal/server, cmd/e2e and cmd/linuxcheck.
 package e2e
 
 import (
@@ -169,10 +169,6 @@ func (b *Browser) Claim(base, email, setupCode string) error {
 	_, err := b.waitURL(base + "/account")
 	return err
 }
-
-// SetEmail sets the account's address for steps that don't take it, such as RecoverWithCode in a
-// fresh browser.
-func (b *Browser) SetEmail(email string) { b.email = email }
 
 // RecoverWithCode makes a new passkey on "Lost your passkey?" with a recovery code given by the
 // relay's operator (spec 009 FR-914): the code step must ask for that code, not an email.

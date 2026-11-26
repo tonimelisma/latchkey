@@ -45,8 +45,18 @@ Toni asks ──── Toni's Mac ──────────── 5 Toni's 
   turned off disappears" stays in the integration layer (`e2e relay`, `e2e mac`, linuxcheck) and
   the unit test of the gate.
 - `ci.yml` runs on `pull_request` and on `push` to `main` only (today every push to a pull
-  request runs it twice); `relay-image.yml` and `linux-release.yml` wait for `ci.yml`'s result on
-  that commit (`workflow_run`) instead of testing again.
+  request runs it twice). Withdrawn 2026-11-26: having `relay-image.yml` and `linux-release.yml`
+  wait for `ci.yml` (`workflow_run`) instead of testing again; it only saves Linux minutes after
+  a merge, and `workflow_run` can't be tried before it is on main, so a mistake would stop
+  releases.
+- The Mac app's end-to-end check runs in `mac-build.yml`'s job 3 on that job's build (was a
+  fifth macOS job with its own build); job 3 picks its checks itself, and `shard-suites.py` gives job 3's programs ~105 s less and job 0's ~140 s (its unit tests; measured 2026-11-26).
+  Its checks stay reported; the snapshot comparison is required, and fails also when the
+  comparison never ran (Toni, 2026-11-26: "snapshot diff blocks", since FR-1604 left the
+  snapshots the one place a description is pinned).
+- On main, `mac-build.yml` skips the tests when the merged tree is the one a pull request's
+  `mac` job passed (an artifact `mac-tested-<tree>`, 7 days); it still builds in job 0 to save
+  the compilation cache (Toni, 2026-11-26: "Skip if identical").
 
 ### D3. The sandbox Mac (FR-1605, FR-1606, FR-1607, FR-1610)
 
@@ -63,7 +73,9 @@ Toni asks ──── Toni's Mac ──────────── 5 Toni's 
   4. seeds test data (`cmd/e2e fixture`: a test folder, notes, events, reminders, contacts, a
      served sign-in page; Messages and Mail from a test account where the image has one, else
      skipped with the reason);
-  5. runs `cmd/e2e sandbox`: the real MCP client through a private relay on the host, against
+  5. runs `cmd/e2e sandbox`: the real MCP client through the private relay inside the copy (the
+     one the image is paired with, so nothing pairs again; a proxy in front of it makes the
+     network cut possible; research §6), against
      the installed app, every capability's checks plus the moved `maccheck` checks, compared
      with the snapshots; writes `e2e-results/sandbox-<build>-<time>.json`.
   First run under 5 minutes (build ~1.5, start ~1, checks ~2); later runs reuse the copy: under
@@ -80,7 +92,9 @@ Toni asks ──── Toni's Mac ──────────── 5 Toni's 
   sitting. To check on the first run: the keep-awake helper (`SMAppService`) with a self-signed
   signature; if macOS refuses it, the sandbox runs with keep-awake off and says so.
 - Never touches the host's Latchkey, data or screen: the copy has no shared folders, no window,
-  its own relay; nothing of the Mac goes in (Constitution IV, FR-1606).
+  its own relay; nothing of the Mac goes in (Constitution IV, FR-1606). The build has the
+  release bundle ID (so the image's grants apply) and is removed from Launch Services and
+  Spotlight on the host; it is never started there.
 - The same command from GitHub's Mac runner is not possible (no nested virtualization there);
   `e2e mac` stays the per-PR Mac check.
 - FR-1607, first, with its regression test (done 2026-11-26): `AppLocation.needsMove` is false

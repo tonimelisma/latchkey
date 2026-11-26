@@ -15,11 +15,17 @@ final class HeldLog: ActivityLogSource, @unchecked Sendable {
 
     func release(_ count: Int) { for _ in 0..<count { gate.signal() } }
 
-    /// Holds the read the way a read of a large log takes time. Had it run on the main thread,
-    /// the test (on the main thread too) could never let it go: it gives up after 10 s.
+    /// Holds the read the way a read of a large log takes time. On the main thread the test (on
+    /// the main thread too) could never let it go, so there it records the thread and returns,
+    /// and the test fails on the record. Off it, it waits for the test; the long limit only keeps
+    /// a broken run from hanging. (Until 2026-11-26 a 10 s limit stood for "it ran on the main
+    /// thread", and a busy test run that kept the main thread from the test for 10 s failed it:
+    /// GitHub run 45783237698, with ~600 tests side by side.)
     private func hold(_ name: String) {
-        lock.withLock { ranOnMain[name] = Thread.isMainThread }
-        if gate.wait(timeout: .now() + 10) == .timedOut { lock.withLock { waitedTooLong = true } }
+        let onMain = Thread.isMainThread
+        lock.withLock { ranOnMain[name] = onMain }
+        guard !onMain else { return }
+        if gate.wait(timeout: .now() + 60) == .timedOut { lock.withLock { waitedTooLong = true } }
     }
 
     func windowPage(_ query: ActivityQuery, after cursor: ActivityCursor?, limit: Int) throws -> ActivityPage {
