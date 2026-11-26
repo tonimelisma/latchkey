@@ -119,7 +119,7 @@ end run`, tag)
 	if err != nil {
 		return err
 	}
-	if low := strings.ToLower(t); !strings.Contains(low, "folder") || !(strings.Contains(low, "made") || strings.Contains(low, "created") || strings.Contains(low, "new")) {
+	if low := strings.ToLower(t); !strings.Contains(low, "folder") || !strings.Contains(low, "made") && !strings.Contains(low, "created") && !strings.Contains(low, "new") {
 		return fmt.Errorf("a note in a new folder: the answer doesn't say the folder was made: %q", short(t))
 	}
 	// a checklist reads back as - [ ] and - [x]
@@ -148,7 +148,7 @@ end run`, tag)
 		if left, err := osaOut(`on run argv
 tell application "Notes" to return (exists folder (item 1 of argv)) as text
 end run`, f); err != nil || left != "false" {
-			return fmt.Errorf("the folder %s is still there after delete_folder (%s, %v)", f, left, err)
+			return fmt.Errorf("the folder %s is still there after delete_folder (%s): %w", f, left, err)
 		}
 	}
 	step("notes: listed, searched, read; created, appended, edited, replaced, renamed, moved, a new folder, a checklist read back, deleted note and folders, as Notes shows")
@@ -203,7 +203,7 @@ func (s *sandbox) calendar() error {
 		return fmt.Errorf("after the move: %w", err)
 	}
 	if mins, err := s.eventMinutes(tag); err != nil || mins != 15 {
-		return fmt.Errorf("after the move the event lasts %d minutes (%v), want the 15 it had", mins, err)
+		return fmt.Errorf("after the move the event lasts %d minutes, want the 15 it had: %w", mins, err)
 	}
 	if _, err := s.ask("calendar_change", map[string]any{"action": "update", "id": id, "repeat": "daily", "repeat_count": 3}); err != nil {
 		return err
@@ -291,7 +291,7 @@ set d to due date of r
 return ((d - (current date)) div days) as text
 end tell
 end run`, tag, item); err != nil || (due != "2" && due != "3") {
-		return fmt.Errorf("the new reminder isn't due in 3 days as Reminders has it (%q, %v)", due, err)
+		return fmt.Errorf("the new reminder isn't due in 3 days as Reminders has it (%q): %w", due, err)
 	}
 	t, err = s.ask("reminders_find", map[string]any{"list": tag}, item)
 	if err != nil {
@@ -310,7 +310,7 @@ set r to first reminder of list (item 1 of argv) whose name is (item 2 of argv)
 return ((priority of r) as text) & "|" & (body of r)
 end tell
 end run`, tag, item); err != nil || !strings.HasPrefix(got, "1|changed") {
-		return fmt.Errorf("after update, Reminders has priority|notes %q (%v), want 1 (high)|changed", got, err)
+		return fmt.Errorf("after update, Reminders has priority|notes %q (%w), want 1 (high)|changed", got, err)
 	}
 	if _, err := s.ask("reminders_change", map[string]any{"action": "complete", "id": id}); err != nil {
 		return err
@@ -330,7 +330,7 @@ end run`, tag, item); err != nil || !strings.HasPrefix(got, "1|changed") {
 	if left, err := osaOut(`on run argv
 tell application "Reminders" to return (exists list (item 1 of argv)) as text
 end run`, tag); err != nil || left != "false" {
-		return fmt.Errorf("the list is still there after delete_list (%s, %v)", left, err)
+		return fmt.Errorf("the list is still there after delete_list (%s, %w)", left, err)
 	}
 	step("reminders: completed and reopened, a new list, a reminder due in 3 days, updated, completed list, deleted, the list deleted with its count, as Reminders shows")
 	return nil
@@ -375,8 +375,10 @@ end run`, family, tag)
 	if err := s.holds("contacts", "has-email", "Jordan Evaltest", email); err != nil {
 		return err
 	}
-	t, err = s.ask("contacts_change", map[string]any{"action": "create", "given_name": "Latchkey", "family_name": family,
-		"phones": []any{map[string]any{"label": "mobile", "value": "+15550100"}}})
+	t, err = s.ask("contacts_change", map[string]any{
+		"action": "create", "given_name": "Latchkey", "family_name": family,
+		"phones": []any{map[string]any{"label": "mobile", "value": "+15550100"}},
+	})
 	if err != nil {
 		return err
 	}
@@ -397,7 +399,7 @@ end run`, family, tag)
 	if org, err := osaOut(`on run argv
 tell application "Contacts" to return organization of (first person whose last name is (item 1 of argv))
 end run`, family); err != nil || org != "Check Co" {
-		return fmt.Errorf("after update, Contacts has the company %q (%v)", org, err)
+		return fmt.Errorf("after update, Contacts has the company %q (%w)", org, err)
 	}
 	group := tag
 	steps := []map[string]any{
@@ -412,7 +414,7 @@ end run`, family); err != nil || org != "Check Co" {
 	if n, err := osaOut(`on run argv
 tell application "Contacts" to return (count of people of group (item 1 of argv)) as text
 end run`, group); err != nil || n != "1" {
-		return fmt.Errorf("after add_to_group the group holds %q cards (%v)", n, err)
+		return fmt.Errorf("after add_to_group the group holds %q cards (%w)", n, err)
 	}
 	for _, a := range []map[string]any{
 		{"action": "remove_from_group", "group": group, "id": card},
@@ -427,7 +429,7 @@ end run`, group); err != nil || n != "1" {
 	if left, err := osaOut(`on run argv
 tell application "Contacts" to return ((count of (every person whose last name is (item 1 of argv))) + (count of (every group whose name starts with (item 2 of argv)))) as text
 end run`, family, tag); err != nil || left != "0" {
-		return fmt.Errorf("after the deletes, Contacts still has %q of the check's cards and groups (%v)", left, err)
+		return fmt.Errorf("after the deletes, Contacts still has %q of the check's cards and groups (%w)", left, err)
 	}
 	step("contacts: overview, search, read; email changed; a card made, changed, put in a group and out, the group renamed and deleted, the card deleted, as Contacts shows")
 	return nil
@@ -452,7 +454,7 @@ func (s *sandbox) filesFull() error {
 		return err
 	}
 	if fi, err := os.Stat(dir); err != nil || !fi.IsDir() {
-		return fmt.Errorf("create_folder made no folder: %v", err)
+		return fmt.Errorf("create_folder made no folder: %w", err)
 	}
 	a := tilde + "/a.txt"
 	for _, c := range []map[string]any{
@@ -480,7 +482,7 @@ func (s *sandbox) filesFull() error {
 		return err
 	}
 	if b, err := os.ReadFile(filepath.Join(dir, "c.txt")); err != nil || string(b) != "one\nthree" { //nolint:gosec // our folder
-		return fmt.Errorf("after copy and move, c.txt holds %q (%v)", b, err)
+		return fmt.Errorf("after copy and move, c.txt holds %q (%w)", b, err)
 	}
 	if _, err := os.Stat(filepath.Join(dir, "b.txt")); !os.IsNotExist(err) {
 		return errors.New("b.txt is still there after the move")
@@ -596,6 +598,55 @@ func (s *sandbox) shellFull() error {
 		return err
 	}
 	step("shell: a job's input, a stopped job, the job list, a declared write, the local network, the internet, open -g")
+	return nil
+}
+
+// sweep: after the checks, nothing they made is left (former state-check sweep.*): no test data
+// in Notes, Calendar, Reminders, Contacts, Downloads, and no page of Claude's still open.
+func (s *sandbox) sweep() error {
+	tag := s.tag()
+	left, err := osaOut(`on run argv
+set e to item 1 of argv
+set t to item 2 of argv
+set found to ""
+tell application "Notes"
+if exists folder e then set found to found & "a Notes folder " & e & "; "
+if (count of (every folder whose name starts with t)) > 0 then set found to found & "a Notes folder " & t & "; "
+end tell
+tell application "Calendar"
+if exists calendar e then set found to found & "a calendar " & e & "; "
+end tell
+tell application "Reminders"
+if exists list e then set found to found & "a Reminders list " & e & "; "
+if exists list t then set found to found & "a Reminders list " & t & "; "
+end tell
+tell application "Contacts"
+if (count of (every person whose note is e)) > 0 then set found to found & "a card with the note " & e & "; "
+if (count of (every group whose name starts with t)) > 0 then set found to found & "a group " & t & "; "
+end tell
+return found
+end run`, evalName, tag)
+	if err != nil {
+		return err
+	}
+	home, _ := os.UserHomeDir()
+	entries, _ := os.ReadDir(filepath.Join(home, "Downloads"))
+	for _, e := range entries {
+		if strings.Contains(e.Name(), s.m.marker) || strings.HasPrefix(e.Name(), "latchkey-check") {
+			left += "Downloads/" + e.Name() + "; "
+		}
+	}
+	t, err := s.m.text("browser_look", map[string]any{"tabs": true})
+	if err != nil {
+		return err
+	}
+	if g := pageRE.FindAllString(t, -1); len(g) > 0 {
+		left += "Claude's pages " + strings.Join(g, ", ") + "; "
+	}
+	if left != "" {
+		return errors.New("left behind: " + strings.TrimSuffix(left, "; "))
+	}
+	step("sweep: nothing the checks made is left in Notes, Calendar, Reminders, Contacts, Downloads or Claude's pages")
 	return nil
 }
 

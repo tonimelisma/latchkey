@@ -145,7 +145,7 @@ func (s *sandbox) pageActions(where map[string]any, home string, p *webPages) er
 	if err != nil {
 		return err
 	}
-	name, search, size, menu, box, file := refFor(t, "Your name"), refFor(t, "Search words"), refFor(t, "Size"), refFor(t, "Products menu"), refFor(t, "Latchkey box"), refFor(t, "Attach")
+	name, search, size, menu, file := refFor(t, "Your name"), refFor(t, "Search words"), refFor(t, "Size"), refFor(t, "Products menu"), refFor(t, "Attach")
 	if name == "" || search == "" || size == "" || menu == "" || file == "" {
 		return fmt.Errorf("the actions page lacks a reference (name %q search %q size %q menu %q file %q): %q", name, search, size, menu, file, short(t))
 	}
@@ -163,7 +163,8 @@ func (s *sandbox) pageActions(where map[string]any, home string, p *webPages) er
 	if err != nil {
 		return err
 	}
-	name, size, menu, box, file = refFor(t, "Your name"), refFor(t, "Size"), refFor(t, "Products menu"), refFor(t, "Latchkey box"), refFor(t, "Attach")
+	name, size, menu, file = refFor(t, "Your name"), refFor(t, "Size"), refFor(t, "Products menu"), refFor(t, "Attach")
+	box := refFor(t, "Latchkey box")
 	if _, err := s.act(where, map[string]any{"action": "type", "ref": name, "text": "hi"}); err != nil {
 		return err
 	}
@@ -171,20 +172,20 @@ func (s *sandbox) pageActions(where map[string]any, home string, p *webPages) er
 		return err
 	}
 	if v, err := s.script(where, "document.title"); err != nil || !strings.Contains(v, "sent:hi") {
-		return fmt.Errorf("Enter in the name field didn't send the form: title %q (%v)", v, err)
+		return fmt.Errorf("pressing Enter in the name field didn't send the form: title %q (%w)", v, err)
 	}
 	if _, err := s.act(where, map[string]any{"action": "key", "keys": []any{"Escape"}}); err != nil {
 		return err
 	}
 	if v, err := s.script(where, "String(!document.getElementById('panel'))"); err != nil || !strings.Contains(v, "true") {
-		return fmt.Errorf("Escape didn't reach the page (the panel is still there: %q, %v)", v, err)
+		return fmt.Errorf("the Escape key didn't reach the page (the panel is still there: %q, %w)", v, err)
 	}
 	// select, hover, scroll
 	if _, err := s.act(where, map[string]any{"action": "select", "ref": size, "options": []any{"Large"}}); err != nil {
 		return err
 	}
 	if v, err := s.script(where, "document.getElementById('size').value"); err != nil || !strings.Contains(v, "l") {
-		return fmt.Errorf("select Large: the list holds %q (%v)", v, err)
+		return fmt.Errorf("select Large: the list holds %q (%w)", v, err)
 	}
 	if _, err := s.act(where, map[string]any{"action": "hover", "ref": menu}, "Hidden product"); err != nil {
 		return fmt.Errorf("hover didn't show the menu: %w", err)
@@ -193,14 +194,14 @@ func (s *sandbox) pageActions(where map[string]any, home string, p *webPages) er
 		return err
 	}
 	if v, err := s.script(where, "String(Math.round(window.scrollY))"); err != nil || atoi(strings.TrimSpace(firstNumber(v))) < 400 {
-		return fmt.Errorf("after scrolling down 500 the page is at %q (%v)", v, err)
+		return fmt.Errorf("after scrolling down 500 the page is at %q (%w)", v, err)
 	}
 	if box != "" {
 		if _, err := s.act(where, map[string]any{"action": "scroll", "ref": box, "direction": "bottom"}); err != nil {
 			return err
 		}
 		if v, err := s.script(where, "String(document.getElementById('box').scrollTop)"); err != nil || atoi(firstNumber(v)) < 500 {
-			return fmt.Errorf("the box scrolled to its bottom is at %q (%v)", v, err)
+			return fmt.Errorf("the box scrolled to its bottom is at %q (%w)", v, err)
 		}
 	}
 	if _, err := s.act(where, map[string]any{"action": "scroll", "direction": "top"}); err != nil {
@@ -216,7 +217,7 @@ func (s *sandbox) pageActions(where map[string]any, home string, p *webPages) er
 		return err
 	}
 	if v, err := s.script(where, "document.getElementById('filelog').textContent"); err != nil || !strings.Contains(v, filepath.Base(up)) {
-		return fmt.Errorf("the page didn't get the uploaded file: %q (%v)", v, err)
+		return fmt.Errorf("the page didn't get the uploaded file: %q (%w)", v, err)
 	}
 	since := time.Now().Add(-time.Second)
 	t, err = s.act(where, map[string]any{"action": "download", "ref": refFor(t, "Save the statement")})
@@ -277,7 +278,7 @@ func (s *sandbox) browserFull() error {
 		return fmt.Errorf("back: %w", err)
 	}
 	if v, err := s.script(where, "document.title"); err != nil || !strings.Contains(v, "Latchkey check actions") {
-		return fmt.Errorf("a script's result: %q (%v)", v, err)
+		return fmt.Errorf("a script's result: %q (%w)", v, err)
 	}
 	if err := s.pageActions(where, home, p); err != nil {
 		return err
@@ -338,7 +339,7 @@ func (s *sandbox) browserFull() error {
 	}
 	res, err := s.m.call("browser_look", map[string]any{"page": pg, "screenshot": true})
 	if err != nil || res.IsError || !slices.ContainsFunc(res.Content, func(c mcp.Content) bool { _, ok := c.(*mcp.ImageContent); return ok }) {
-		return fmt.Errorf("a screenshot of the page: %v %q", err, short(e2erelay.TextOf(res)))
+		return fmt.Errorf("a screenshot of the page: %w %q", err, short(e2erelay.TextOf(res)))
 	}
 	for _, x := range opened {
 		if _, err := s.act(map[string]any{"page": x}, map[string]any{"action": "close"}); err != nil {
@@ -469,7 +470,7 @@ end run`, p.site(), p.other())
 	}
 	// text arrives composed: é is one character, U+00E9, in the page and in the shell
 	if v, err := s.script(claude, "'é'.length + ' ' + 'é'.charCodeAt(0)"); err != nil || !strings.Contains(v, "1 233") {
-		return fmt.Errorf("a script's é in Safari: %q (%v), want 1 233", v, err)
+		return fmt.Errorf("a script's é in Safari: %q (%w), want 1 233", v, err)
 	}
 	if _, err := s.ask("shell_run", map[string]any{"command": "printf '%s' 'é' | od -An -tx1"}, "c3 a9"); err != nil {
 		return fmt.Errorf("the shell's é: %w", err)
@@ -497,7 +498,7 @@ end run`, p.site(), p.other())
 		return fmt.Errorf("a cross-site click in Claude's Safari tab: %w", err)
 	}
 	if _, err := s.look(claude, nil, "Other site marker"); err != nil {
-		return fmt.Errorf("Claude's tab after the cross-site click: %w", err)
+		return fmt.Errorf("reading the tab of Claude's after the cross-site click: %w", err)
 	}
 	// closed: Claude's tab and the owner's tab; nothing of the check's left
 	if _, err := s.act(claude, map[string]any{"action": "close"}); err != nil {
@@ -514,7 +515,7 @@ end run`, p.site(), p.other())
 	}
 	if !waitFor(10*time.Second, func() bool { n, err := safariWindows(); return err == nil && n <= before }) {
 		n, _ := safariWindows()
-		return fmt.Errorf("Safari has %d windows after the check, %d before", n, before)
+		return fmt.Errorf("after the check Safari has %d windows, %d before", n, before)
 	}
 	step("safari: the owner's tab listed, read, clicked, back, closed; Claude's tab kept through same- and cross-site clicks, every action, composed é, a long page in parts; nothing left")
 	return nil

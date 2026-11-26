@@ -38,7 +38,7 @@ const (
 var sandboxOrder = []string{
 	"tools", "files", "shell", "browser", "safari", "notes", "calendar", "reminders", "contacts", "computer",
 	"maps", "location", "messages", "mail", "whatsapp", "logins",
-	"front-app-unchanged", "no-permission-prompts",
+	"front-app-unchanged", "no-permission-prompts", "sweep",
 	"turned-off", "offline", "relay-restart", "network-cut", "suspended", "battery", "pair-preview",
 }
 
@@ -284,6 +284,7 @@ func (s *sandbox) checkFuncs() map[string]func() error {
 		"computer":              s.computer,
 		"front-app-unchanged":   func() error { return s.screenVerdict(false) },
 		"no-permission-prompts": func() error { return s.screenVerdict(true) },
+		"sweep":                 s.sweep,
 		"turned-off":            s.turnedOff,
 		"offline":               s.offline,
 		"relay-restart":         s.relayRestart,

@@ -26,17 +26,23 @@ End to end and evals (spec 015; `relay/cmd/e2e`, run in `relay/`):
   tools (the Swift host test `E2EHostTests`) through a private relay; meant for GitHub's
   throwaway Mac runner (it uses that Mac's home folder, shell and Downloads)
 - Sandbox Mac (spec 016; a local session on an Apple silicon Mac with Tart, Xcode and Go, from
-  any clone): `make -C macos sandbox` builds the working tree signed with the sandbox's own
-  identity "Latchkey Sandbox" (never `Local.xcconfig` or a developer certificate), installs it in
-  a Tart copy of the image `latchkey-eval` and checks every capability with test data
-  (`ARGS="--checks files,notes"` for some); the copy is kept for the next run until
+  any clone; Tart: `brew install openai/tools/tart`, after `brew trust --formula
+  openai/tools/tart openai/tools/softnet`): `make -C macos sandbox` builds the working tree,
+  signs it with the sandbox's own identity "Latchkey Sandbox" (a self-signed certificate in a
+  keychain of its own, `~/Library/Keychains/latchkey-sandbox.keychain-db`; never the login
+  keychain, `Local.xcconfig` or a developer certificate, and nothing is trusted, so no dialog),
+  installs it in a Tart copy of the image `latchkey-eval` and checks every capability with test
+  data (`ARGS="--checks files,notes"` for some); the copy is kept for the next run until
   `make -C macos sandbox-stop`. Results in `e2e-results/` (ignored by git). Evidence only for an
-  unlocked virtual Mac with test data.
+  unlocked virtual Mac with test data. About 40 GB of free disk for the image.
 - Evals (spec 015/016): `make -C macos evals` (the local build in the sandbox), `ARGS=--release`
   (the newest release; its signature needs its own permission grants in the image), `ARGS=--send`
-  (also sealed to the developer's intake). Real Claude Code does about 20 tasks 3 times each.
-- Once per Mac: `macos/scripts/eval-image.sh` (the test Mac image; a person approves its
-  permissions once, for the sandbox-signed build).
+  (also sealed to the developer's intake). Real Claude Code does about 20 tasks 3 times each. The
+  first run, in Terminal, asks for the Claude token from `claude setup-token` (kept in the login
+  keychain).
+- Once per Mac: `macos/scripts/eval-image.sh` (the test Mac image, about 1 hour the first time:
+  a 27 GB download). It runs to the end by itself once a person has approved, in the test Mac's
+  window, what Latchkey's setup asks for (it checks again every 20 s, up to 30 minutes).
 - `go run ./cmd/latchkey-reports evals [-this-week [-quiet]]`: the sent eval results, joined by
   run and compared with the one before (new failures, fixed, flaky)
 
