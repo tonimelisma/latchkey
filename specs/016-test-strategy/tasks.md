@@ -12,7 +12,8 @@ Each task names its requirements; done means its check passed where it says.
 - [x] T4 FR-1601: Mac tests gate merging. `mac-build.yml` runs on every pull request; job `mac`
       passes when `macos/` didn't change, else only when all four build-and-test jobs passed;
       `continue-on-error` off. Check: pull request #59's run (all green, gate passed); a pull
-      request without `macos/` changes: not seen yet.
+      request without `macos/` changes: pull request #60's first commit (6c46064), `mac` passed
+      15 s after the push with no Mac job started.
 - [x] T5 `ci.yml` on pull requests and main only (no double run).
 - [x] T6 After merge: the ruleset `main` requires `mac` (Toni allowed, 2026-11-26, this once:
       through Latchkey's shell on his Mac with `gh`). Check: the ruleset read back. Done
@@ -28,7 +29,7 @@ Each task names its requirements; done means its check passed where it says.
 - [x] T9 [P] FR-1609, D5: retire `macos/scripts/state-check/` and `safari-check*`; map their
       cases in `docs/regression-coverage.md` (sandbox check, eval task, or Toni's checklist in
       `docs/screen-states.md`); CLAUDE.md, commands, development docs follow.
-- [ ] T10 [P] FR-1604: one place per behavior. Tool names, descriptions and schemas only in
+- [x] T10 [P] FR-1604: one place per behavior. Tool names, descriptions and schemas only in
       `relay/e2e/toolsnaps`: trim `PublicToolsTests` to what snapshots don't show; replace tests
       that pin description sentences by their snapshot.
 - [ ] T11 FR-1605, FR-1606, FR-1610, D3: `make sandbox` (`macos/scripts/sandbox.sh`): build
@@ -39,7 +40,11 @@ Each task names its requirements; done means its check passed where it says.
       VERIFIED until a local session runs it.
 - [ ] T12 FR-1608, D4: `make evals` on the sandbox (local build or `--release`), was
       `weekly-eval.sh`.
-- [ ] T13 [P] FR-1602: deadline tests on fake clocks (Swift `Clock` injected; Go
+- [x] T13 [P] FR-1602: deadline tests on fake clocks (Swift `Clock` injected; Go
       `testing/synctest`); `timing-suites.txt` and `quiet-suites.txt` shrink as suites move.
+      Done for `Deadline.first` and `CodeFinder` (Swift `ManualClock`), `DeadlineTests` out of
+      both lists; the relay's alert-slot tests in synctest (1.6 s to 0.3 s). Left, each needing a
+      clock threaded through app code: CloudFile, LevelChange, SingleCopy, PasswordsExportCleanup,
+      ActivityLogScale; real processes stay on real time (FencedBuild, ShellJob, Leftovers).
 - [ ] T14 The start hook tells a local session to run `make sandbox` after building the Mac app.
 - [ ] T15 FR-1612 again on pull request 2; STATUS, decisions, README where they change.
