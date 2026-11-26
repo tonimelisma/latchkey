@@ -41,6 +41,12 @@ type macCheck struct {
 	marker  string
 	// machine is the name the Mac was paired under, which the machines tool must list.
 	machine string
+	// watch, in the sandbox copy: every call is compared with the screen just before it
+	// (watch.go); check names the check making the calls, and mayMoveFront is set while a call
+	// may change what is in front (computer control, the shell's open).
+	watch        *screenWatch
+	check        string
+	mayMoveFront bool
 }
 
 // vmMacCheck is the checks' runner inside the test Mac, whose Latchkey prepare paired as
@@ -185,7 +191,17 @@ func (m *macCheck) send(cmd string) {
 func (m *macCheck) call(tool string, args map[string]any) (*mcp.CallToolResult, error) {
 	ctx, cancel := context.WithTimeout(m.ctx, 90*time.Second)
 	defer cancel()
-	return m.cs.CallTool(ctx, &mcp.CallToolParams{Name: tool, Arguments: args})
+	if m.watch == nil {
+		return m.cs.CallTool(ctx, &mcp.CallToolParams{Name: tool, Arguments: args})
+	}
+	var (
+		res *mcp.CallToolResult
+		err error
+	)
+	m.watch.during(m.check+" "+tool, m.mayMoveFront, func() {
+		res, err = m.cs.CallTool(ctx, &mcp.CallToolParams{Name: tool, Arguments: args})
+	})
+	return res, err
 }
 
 // text calls a tool and returns its text, failing on a tool error.

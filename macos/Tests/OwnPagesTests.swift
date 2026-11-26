@@ -134,7 +134,9 @@ import Testing
         let address = "http://127.0.0.1:\(server.port)/report.pdf"
         let started = ContinuousClock.now
         let page = try await b.open(address)
-        #expect(ContinuousClock.now - started < .seconds(5), "not left to the load limit")
+        // Half the load limit: a file waited for takes all of it (20 s). 5 s was too tight on a
+        // busy Mac with the page tests side by side (5.25 s in `make test`, 2026-11-26).
+        #expect(ContinuousClock.now - started < LockedBrowser.loadLimit / 2, "not left to the load limit")
         #expect(page.url == address && page.text.isEmpty)
         #expect(b.fileNoteIfAny?.contains("browser_act action download") == true)
         #expect(b.address == address, "what download saves")

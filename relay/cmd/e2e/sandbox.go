@@ -36,8 +36,9 @@ const (
 // sandboxOrder is every check, in the order they run: the capabilities first, then the checks
 // that disturb the connection (moved from cmd/maccheck), each leaving the copy as it found it.
 var sandboxOrder = []string{
-	"tools", "files", "shell", "browser", "notes", "calendar", "reminders", "contacts", "computer",
-	"location", "messages", "mail", "whatsapp", "logins",
+	"tools", "files", "shell", "browser", "safari", "notes", "calendar", "reminders", "contacts", "computer",
+	"maps", "location", "messages", "mail", "whatsapp", "logins",
+	"front-app-unchanged", "no-permission-prompts",
 	"turned-off", "offline", "relay-restart", "network-cut", "suspended", "battery", "pair-preview",
 }
 
@@ -186,6 +187,9 @@ type sandbox struct {
 	cs    *mcp.ClientSession
 	m     *macCheck
 	fx    *fixtures
+	watch *screenWatch
+	// watchErr: why the screen sampler isn't running (the two screen checks fail with it).
+	watchErr error
 }
 
 func (s *sandbox) run(res *sandboxResult, names []string) error {
@@ -238,6 +242,10 @@ func (s *sandbox) run(res *sandboxResult, names []string) error {
 	if res.MissingPermissions = probePermissions(s.ctx, s.cs); len(res.MissingPermissions) > 0 {
 		return fmt.Errorf("the sandbox image is missing permissions: %s (run eval-image.sh again)", strings.Join(res.MissingPermissions, ", "))
 	}
+	if s.watch, s.watchErr = startScreenWatch(s.ctx); s.watchErr == nil {
+		defer s.watch.stop()
+		s.m.watch = s.watch
+	}
 	checks := s.checkFuncs()
 	for _, n := range names {
 		c := sandboxCheck{Name: n}
@@ -245,6 +253,7 @@ func (s *sandbox) run(res *sandboxResult, names []string) error {
 			c.Result, c.Why = "skipped", why
 		} else {
 			step("check: %s", n)
+			s.m.check, s.m.mayMoveFront = n, n == "computer"
 			start := time.Now()
 			if err := checks[n](); err != nil {
 				c.Result, c.Why = "failed", err.Error()
@@ -262,21 +271,25 @@ func (s *sandbox) run(res *sandboxResult, names []string) error {
 // checkFuncs is what each check that isn't skipped runs.
 func (s *sandbox) checkFuncs() map[string]func() error {
 	return map[string]func() error{
-		"tools":         s.m.tools,
-		"files":         func() error { return s.m.files() },
-		"shell":         func() error { return s.m.shell() },
-		"browser":       func() error { return s.m.browser() },
-		"notes":         s.notes,
-		"calendar":      s.calendar,
-		"reminders":     s.reminders,
-		"contacts":      s.contacts,
-		"computer":      s.computer,
-		"turned-off":    s.turnedOff,
-		"offline":       s.offline,
-		"relay-restart": s.relayRestart,
-		"network-cut":   s.networkCut,
-		"suspended":     s.suspended,
-		"battery":       s.battery,
+		"tools":                 s.m.tools,
+		"files":                 s.filesFull,
+		"shell":                 s.shellFull,
+		"browser":               s.browserFull,
+		"safari":                s.safari,
+		"maps":                  s.maps,
+		"notes":                 s.notes,
+		"calendar":              s.calendar,
+		"reminders":             s.reminders,
+		"contacts":              s.contacts,
+		"computer":              s.computer,
+		"front-app-unchanged":   func() error { return s.screenVerdict(false) },
+		"no-permission-prompts": func() error { return s.screenVerdict(true) },
+		"turned-off":            s.turnedOff,
+		"offline":               s.offline,
+		"relay-restart":         s.relayRestart,
+		"network-cut":           s.networkCut,
+		"suspended":             s.suspended,
+		"battery":               s.battery,
 	}
 }
 
@@ -334,138 +347,6 @@ func (s *sandbox) holds(area, verb string, args ...string) error {
 	return nil
 }
 
-func (s *sandbox) notes() error {
-	if err := s.fixture("sweep notes", "fixture notes shopping"); err != nil {
-		return err
-	}
-	defer func() { _ = s.fx.do("sweep notes") }()
-	t, err := s.m.text("notes_find", map[string]any{"query": "Shopping list", "folder": evalName})
-	if err != nil {
-		return err
-	}
-	id := idOn(t, "Shopping list")
-	if id == "" {
-		return fmt.Errorf("notes_find didn't list the shopping list with its id: %q", short(t))
-	}
-	if t, err = s.m.text("notes_read", map[string]any{"id": id}); err != nil {
-		return err
-	}
-	if !strings.Contains(t, "eggs") {
-		return fmt.Errorf("notes_read of the shopping list: %q", short(t))
-	}
-	added := "sandbox " + s.m.marker
-	if _, err := s.m.text("notes_change", map[string]any{"action": "append", "id": id, "text": added}); err != nil {
-		return err
-	}
-	if err := s.holds("notes", "body-contains", "Shopping list", added); err != nil {
-		return err
-	}
-	title := "Sandbox " + s.m.marker
-	t, err = s.m.text("notes_change", map[string]any{"action": "create", "folder": evalName, "title": title, "text": "made by the sandbox check"})
-	if err != nil {
-		return err
-	}
-	if err := s.holds("notes", "exists", title); err != nil {
-		return err
-	}
-	if id = idOn(t, title); id == "" {
-		return fmt.Errorf("notes_change create gave no id: %q", short(t))
-	}
-	if _, err := s.m.text("notes_change", map[string]any{"action": "delete", "id": id}); err != nil {
-		return err
-	}
-	if err := s.holds("notes", "missing", title); err != nil {
-		return err
-	}
-	step("notes: found, read, appended to, created and deleted, as Notes shows")
-	return nil
-}
-
-func (s *sandbox) calendar() error {
-	if err := s.fixture("sweep calendar", "fixture calendar team-sync"); err != nil {
-		return err
-	}
-	defer func() { _ = s.fx.do("sweep calendar") }()
-	today := time.Now()
-	day := func(n int) string { return today.AddDate(0, 0, n).Format("2006-01-02") }
-	t, err := s.m.text("calendar_find", map[string]any{"calendar": evalName, "query": "Team sync", "from": day(0), "to": day(3)})
-	if err != nil {
-		return err
-	}
-	if !strings.Contains(t, "Team sync") {
-		return fmt.Errorf("calendar_find didn't list tomorrow's Team sync: %q", short(t))
-	}
-	title := "Sandbox " + s.m.marker
-	if _, err := s.m.text("calendar_change", map[string]any{
-		"action": "create", "calendar": evalName, "title": title, "start": day(1) + "T14:00", "end": day(1) + "T14:30",
-	}); err != nil {
-		return err
-	}
-	if err := s.holds("calendar", "event-at", title, "tomorrow", "14:00"); err != nil {
-		return err
-	}
-	step("calendar: found an event and created one, as Calendar shows")
-	return nil
-}
-
-func (s *sandbox) reminders() error {
-	if err := s.fixture("sweep reminders", "fixture reminders chores"); err != nil {
-		return err
-	}
-	defer func() { _ = s.fx.do("sweep reminders") }()
-	t, err := s.m.text("reminders_find", map[string]any{"list": evalName})
-	if err != nil {
-		return err
-	}
-	id := idOn(t, "Buy stamps")
-	if id == "" {
-		return fmt.Errorf("reminders_find didn't list Buy stamps with its id: %q", short(t))
-	}
-	if _, err := s.m.text("reminders_change", map[string]any{"action": "complete", "id": id}); err != nil {
-		return err
-	}
-	if err := s.holds("reminders", "completed", "Buy stamps"); err != nil {
-		return err
-	}
-	if err := s.holds("reminders", "not-completed", "Pay rent"); err != nil {
-		return err
-	}
-	title := "Sandbox " + s.m.marker
-	due := time.Now().AddDate(0, 0, 3).Format("2006-01-02")
-	if _, err := s.m.text("reminders_change", map[string]any{"action": "create", "list": evalName, "title": title, "due": due}); err != nil {
-		return err
-	}
-	if err := s.holds("reminders", "due-on", title, "in-3-days"); err != nil {
-		return err
-	}
-	step("reminders: completed one, left the other, created one due in 3 days, as Reminders shows")
-	return nil
-}
-
-func (s *sandbox) contacts() error {
-	if err := s.fixture("sweep contacts", "fixture contacts jordan"); err != nil {
-		return err
-	}
-	defer func() { _ = s.fx.do("sweep contacts") }()
-	t, err := s.m.text("contacts_find", map[string]any{"query": "Evaltest"})
-	if err != nil {
-		return err
-	}
-	id := idOn(t, "Jordan")
-	if id == "" {
-		return fmt.Errorf("contacts_find didn't list Jordan Evaltest with an id: %q", short(t))
-	}
-	email := "jordan." + s.m.marker + "@example.com"
-	if _, err := s.m.text("contacts_change", map[string]any{"action": "update", "id": id, "emails": []any{email}}); err != nil {
-		return err
-	}
-	if err := s.holds("contacts", "has-email", "Jordan Evaltest", email); err != nil {
-		return err
-	}
-	step("contacts: found a card and changed its email, as Contacts shows")
-	return nil
-}
-
 func (s *sandbox) computer() error {
 	t, err := s.m.text("computer_look", map[string]any{"show": "apps"})
 	if err != nil {
@@ -482,6 +363,24 @@ func (s *sandbox) computer() error {
 		return fmt.Errorf("computer_look gave no screenshot: %q", short(e2erelay.TextOf(res)))
 	}
 	step("computer: listed the apps and took a screenshot (of the copy's own screen)")
+	return nil
+}
+
+// screenVerdict reports what the screen sampler saw during the checks before it: changes a
+// person would notice, or (prompts) macOS permission questions.
+func (s *sandbox) screenVerdict(prompts bool) error {
+	if s.watch == nil {
+		return fmt.Errorf("no screen sampler: %w", s.watchErr)
+	}
+	changes, asked, samples := s.watch.findings()
+	what, found := "while Latchkey answered, a person at the Mac would have seen", changes
+	if prompts {
+		what, found = "macOS asked for a permission", asked
+	}
+	if why := watchVerdict(what, found, samples); why != "" {
+		return errors.New(why)
+	}
+	step("%d screen samples during the checks: nothing a person would notice", samples)
 	return nil
 }
 
