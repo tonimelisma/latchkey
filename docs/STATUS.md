@@ -671,8 +671,12 @@ only, never contents.
       `sandbox-checks.md` listed as not written is written and passes, except
       `messages-identical-texts` (no iMessage account in the image) and `keep-awake-real` (the
       self-signed helper; what it would take: `sandbox-checks.md`, "Status"), both skipped with
-      the reason. They found two Safari bugs, fixed with tests: a lost Safari tab of Claude's stayed
-      listed as Claude's page; a tab busy right after the pick was said to be gone. Seen flaky
+      the reason. They found three Safari bugs, fixed with tests: a lost Safari tab of Claude's
+      stayed listed as Claude's page; a tab busy right after the pick was said to be gone; a tab
+      busy at the pick took the answer past the relay's 30 s. The image now starts each app once
+      (first-start questions). Open: `setup-names-what-is-off` passes on the old image but not on
+      the new one (macOS keeps Mail's control allowed after the check turns it off; two fixes
+      tried, stopped). Last full run, fresh copy: 28 passed, 2 failed, 6 skipped. Seen flaky
       under load, not from this work: `TraceFilesTests.copiesTheDatabaseOnceAndLeavesItUntouched`
       ("the database's files are exactly as they were"), 2 of 3 full runs, passes alone.
       Evidence only for an unlocked virtual Mac with test data; the locked Mac, the lid closed and

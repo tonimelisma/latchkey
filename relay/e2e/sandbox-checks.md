@@ -22,7 +22,7 @@ with the reason.
 | `safari-script-navigation`, `safari-busy-tab` | the same (2026-11-27; each found a Latchkey bug, fixed: a lost Safari tab of Claude's stayed listed as Claude's page; a tab busy right after the pick was called gone) |
 | `computer-sidebar-row`, `computer-window-buttons` | the same (the selection read with System Events, which the image lets the test Mac's osascript use) |
 | `headless-chrome-profile` | the same (Chrome is in the image) |
-| `setup-names-what-is-off` | the same: Mail's control turned off in the copy's permission database, setup's Ask Now pressed with Return, the log line and setup's note read |
+| `setup-names-what-is-off` | the same: Mail's control turned off in the copy's permission database, setup's Ask Now pressed with Return, the log line and setup's note read. Passed on the image of 2026-11-26; fails on the image that starts each app once (macOS still answers Mail's control allowed): open, `specs/016-test-strategy/research.md` §7 |
 | `report-from-installed-app` | the same: the relay restarted with a throwaway intake and developer key in the copy, sharing turned on, a password typed into a served page, the report opened with that key |
 | `keep-awake-real` | the same where the build's keep-awake helper runs; skipped in the sandbox (below) |
 

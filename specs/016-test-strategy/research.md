@@ -346,7 +346,21 @@ the next run:
 - They found two Latchkey bugs, fixed with tests (`docs/regression-coverage.md`, "Found by the
   sandbox Mac"): a lost Safari tab of Claude's stayed listed as Claude's page; a tab busy right
   after the pick was called gone. The busy tab's answer now comes in about 27 s, within the
-  relay's 30 s but close to it: the pick and the look each give Safari 10 s (FR-432).
+  relay's 30 s but close to it: the pick and the look each give Safari 10 s (FR-432). On a
+  fresh copy it went past 30 s; the pick now says a tab is busy at once (11 s since).
+- The full run on a fresh copy of the image (build 5c122e5, after the image started each app
+  once): 28 passed, 2 failed, 6 skipped, 10 min 46 s (start 41 s, checks 584 s). Failed:
+  `computer-sidebar-row` (the press said "couldn't be pressed" twice; passes on every later
+  run of that copy: only Finder's first window in a never-used Mac) and
+  `setup-names-what-is-off` (below).
+- Before the image started each app once, a fresh copy's first run counted macOS's first-start
+  questions of Apple's apps ("'Mail' Notifications…") as Latchkey's prompts and timed out on
+  Contacts' first start; with the warm-up both pass.
+- `setup-names-what-is-off` passed twice on the earlier image, and fails on the new one: with
+  Mail's control turned off in the copy's permission database, macOS still tells Latchkey it is
+  allowed, so Ask Now has nothing to name. Tried, without change: quitting Mail first;
+  restarting macOS's permission daemon (a plain `killall tccd` is ignored on macOS 26,
+  `killall -9` restarts it). Stopped there after two fixes (CLAUDE.md); open.
 - Seen, not changed (Toni's call): a press on a Finder sidebar row selects it, as decided
   (2026-11-23), but Finder opens a folder only on a click, so the window keeps showing the old
   folder. Accessibility's "AXOpen" on the row's cell opens it (tried in the test Mac).

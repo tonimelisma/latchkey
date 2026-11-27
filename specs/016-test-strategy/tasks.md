@@ -71,5 +71,7 @@ Each task names its requirements; done means its check passed where it says.
       computer-window-buttons, messages-identical-texts, report-from-installed-app,
       headless-chrome-profile, keep-awake-real; each seen passing in the sandbox, or why not.
       Done: all pass but `messages-identical-texts` and `keep-awake-real`, skipped with the
-      reason; two Safari bugs found and fixed with tests.
+      reason; three Safari bugs found and fixed with tests. Open: `setup-names-what-is-off`
+      passed on the image of 2026-11-26, fails on the image that starts each app once
+      (`research.md` §7).
 - [ ] T20 (local session) `make -C macos evals` once with the Claude token, pass rates reported.

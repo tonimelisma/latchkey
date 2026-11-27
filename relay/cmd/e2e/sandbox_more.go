@@ -323,7 +323,7 @@ func (s *sandbox) setupNamesWhatIsOff() error {
 		if err := runQuiet("/usr/bin/sudo", "-n", "/usr/bin/sqlite3", db, q); err != nil {
 			return fmt.Errorf("changing Latchkey's control of Mail in the permission database: %w", err)
 		}
-		_ = runQuiet("/usr/bin/sudo", "-n", "/usr/bin/killall", "tccd")
+		_ = runQuiet("/usr/bin/sudo", "-n", "/usr/bin/killall", "-9", "tccd") // a plain TERM is ignored (macOS 26)
 		return nil
 	}
 	if err := quitApp(); err != nil {
@@ -336,6 +336,15 @@ func (s *sandbox) setupNamesWhatIsOff() error {
 		_ = openApp()
 		_, _ = s.waitOnline()
 	}()
+	// Mail quit first: with Mail running, macOS kept answering "allowed" after the database
+	// changed (the image starts Mail once, 2026-11-27); a fresh question reads the change.
+	_ = osa(`tell application "Mail" to quit`)
+	if !waitFor(15*time.Second, func() bool {
+		out, err := osaOut(`return application id "com.apple.mail" is running`)
+		return err == nil && out == "false"
+	}) {
+		return errors.New("the check couldn't quit Mail before turning its control off")
+	}
 	if err := mailControl(false); err != nil {
 		return err
 	}
