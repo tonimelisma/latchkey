@@ -1,8 +1,12 @@
 # Publishes the Linux program (spec 010 plan D12) after every change to linux/ reaches main, or
 # when a session asks with repository_dispatch "linux-release" (a cloud session's proxy refuses tag
 # pushes and release writes, so they happen here). The release job tags the commit
-# linux-<x.y.z> (scripts/release-tag.sh), builds both architectures, signs them with the
-# repository secret SERVER_SIGNING_KEY, and publishes them with SHA256SUMS and install.sh.
+# linux-<x.y.z> (scripts/release-tag.sh), builds both architectures, signs them with
+# SERVER_SIGNING_KEY, and publishes them with SHA256SUMS and install.sh. The key lives in Azure Key
+# Vault kv-melisma-release (secret latchkey-server-signing-key), managed from the private
+# repository tonimelisma/secrets; the release job's first step fetches it with the job's GitHub
+# identity token (no stored credential; the Entra app gh-latchkey-release trusts only this
+# repository's environment "release").
 # Installed servers find it themselves within a day and check each download's
 # signature against the key built into the program; no workflow ever reaches a server.
 # The release job runs in the environment "release", where the owner can require an approval.
@@ -45,7 +49,36 @@ jobs:
     environment: release
     permissions:
       contents: write # the tag and the release
+      id-token: write # the identity token Azure trusts, to read the signing key from Key Vault
     steps:
+      - name: Fetch release secrets from Azure Key Vault
+        env:
+          AZURE_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+          AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+          AZURE_KEY_VAULT: ${{ vars.AZURE_KEY_VAULT }}
+          # ENV_NAME=vault-secret-name, one per line
+          SECRET_MAP: |
+            SERVER_SIGNING_KEY=latchkey-server-signing-key
+        run: |
+          set -euo pipefail
+          j() { python3 -c 'import json,sys; print(json.load(sys.stdin)[sys.argv[1]])' "$1"; }
+          oidc=$(curl -sSf -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=api://AzureADTokenExchange" | j value)
+          echo "::add-mask::$oidc"
+          tok=$(curl -sSf "https://login.microsoftonline.com/$AZURE_TENANT_ID/oauth2/v2.0/token" \
+            -d client_id="$AZURE_CLIENT_ID" -d grant_type=client_credentials \
+            --data-urlencode scope=https://vault.azure.net/.default \
+            --data-urlencode client_assertion_type=urn:ietf:params:oauth:client-assertion-type:jwt-bearer \
+            --data-urlencode client_assertion="$oidc" | j access_token)
+          echo "::add-mask::$tok"
+          while IFS='=' read -r name secret; do
+            [ -n "$name" ] || continue
+            v=$(curl -sSf -H "Authorization: Bearer $tok" \
+              "https://$AZURE_KEY_VAULT.vault.azure.net/secrets/$secret?api-version=7.4" | j value)
+            echo "::add-mask::$v"
+            d="EOF_$(openssl rand -hex 8)"
+            printf '%s<<%s\n%s\n%s\n' "$name" "$d" "$v" "$d" >> "$GITHUB_ENV"
+          done <<< "$SECRET_MAP"
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0 # release-tag.sh reads the tags and main's history
@@ -55,7 +88,7 @@ jobs:
           cache-dependency-path: linux/go.sum
       - name: Tag, build, sign, publish
         env:
-          SERVER_SIGNING_KEY: ${{ secrets.SERVER_SIGNING_KEY }}
+          SERVER_SIGNING_KEY: ${{ env.SERVER_SIGNING_KEY }}
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG_ON_MAIN: "1"
         run: sh linux/scripts/release.sh

@@ -691,8 +691,9 @@ only, never contents.
 
 0. Cloud-first setup: done 2026-11-23 except the updater on the Mac (`macos/scripts/updater-setup.sh`)
    and `LATCHKEY_CHECK_TO` in the cloud environment. The package `latchkey-relay` gives this
-   repository's Actions Write access and `SERVER_SIGNING_KEY` is in the environment `release`
-   (both set through Latchkey on the Mac). First good runs: `relay image` published `:latest`
+   repository's Actions Write access and `SERVER_SIGNING_KEY` was put in the environment `release`
+   (both set through Latchkey on the Mac; since 2026-11-26 the release secrets are in Azure Key
+   Vault `kv-melisma-release` instead, `docs/development.md`, "Owner setup"). First good runs: `relay image` published `:latest`
    sha256:35885c897c3383754d4fe8639b32ea365c33b265d3745095044f7705de4423b3, and `cosign verify`
    (identity relay-image.yml on refs/heads/main) passes; `linux release` made `linux-0.1.7`;
    `mac tag` made `mac-0.8.230`.
@@ -728,7 +729,7 @@ only, never contents.
    (`mac-tag.yml`, job `release` on macOS) are in; `mac-build.yml` compiles each macOS change.
    Set up 2026-11-23 (through Latchkey on the Mac, no value through a session): the update key
    (made with Sparkle 2.10.0's `generate_keys`, private half in the login keychain and the secret
-   `SPARKLE_PRIVATE_KEY`, public half in `macos/Config/Base.xcconfig`), the valid "Apple
+   `SPARKLE_PRIVATE_KEY`, since 2026-11-26 in Azure Key Vault `kv-melisma-release`, public half in `macos/Config/Base.xcconfig`), the valid "Apple
    Development" identity (SHA-1 EC6E5A8C…; a revoked one with the same name was left out) in
    `MAC_CERTIFICATE_P12`/`MAC_CERTIFICATE_PASSWORD`, `MAC_DEVELOPMENT_TEAM`; the environments
    `release` and `production` deploy from `main` only (security review). Open: the first signed
@@ -797,8 +798,8 @@ the Mac only builds and tests the Mac app): in progress on branch `claude/latchk
 So far: CI also runs the Linux program's tests and lint, the script tests, and actionlint on
 the workflows (`install-lib.sh`'s idle check read GNU stat wrongly on Linux, so two script tests
 had failed there); `tidy.sh` no longer deletes branches on GitHub (GitHub deletes a merged pull
-request's branch itself). Releases are made on GitHub: `linux-release.yml` tags, signs (repository
-secret `SERVER_SIGNING_KEY`) and publishes the Linux program whenever linux/ changes on main;
+request's branch itself). Releases are made on GitHub: `linux-release.yml` tags, signs (`SERVER_SIGNING_KEY`,
+since 2026-11-26 from Azure Key Vault `kv-melisma-release`) and publishes the Linux program whenever linux/ changes on main;
 `mac-tag.yml` gives each Mac app change on main its `mac-<x.y.z>` tag; both run in the
 environment `release` and also start on repository_dispatch (`linux-release`, `mac-tag`).
 `release-tag.sh` takes `RELEASE_TAG_ON_MAIN=1` there (a commit on main the tip has moved past;

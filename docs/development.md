@@ -67,11 +67,19 @@ gitignored files: `.env`, `macos/Config/Local.xcconfig`, and `CLAUDE.local.md`.
 
 Moved from CLAUDE.md on 2026-11-26.
 
-- Repository secrets: `SERVER_SIGNING_KEY` (environment `release`). For Mac releases, also in
-  `release`: `MAC_CERTIFICATE_P12` (the "Apple Development" certificate with its key, exported
-  from Keychain Access, base64), `MAC_CERTIFICATE_PASSWORD`, `MAC_DEVELOPMENT_TEAM`, and
-  `SPARKLE_PRIVATE_KEY` (Sparkle's `generate_keys -x`), whose public key goes into
-  `SPARKLE_PUBLIC_ED_KEY` in `macos/Config/Base.xcconfig` (public; committed).
+- Release secrets (since 2026-11-26): in Azure Key Vault `kv-melisma-release`, managed from the
+  private repository `tonimelisma/secrets`, not in GitHub. The release jobs of
+  `linux-release.yml` and `mac-tag.yml` fetch them in their first step with the job's GitHub
+  identity token (OIDC; no stored credential). The environment `release` holds only the
+  variables `AZURE_CLIENT_ID` (Entra app `gh-latchkey-release`, trusted only for
+  `repo:tonimelisma/latchkey:environment:release`), `AZURE_TENANT_ID` and `AZURE_KEY_VAULT`.
+  Environment name = vault secret: `SERVER_SIGNING_KEY` = `latchkey-server-signing-key`;
+  `MAC_CERTIFICATE_P12` = `apple-development-p12-base64` (the "Apple Development" certificate
+  with its key, exported from Keychain Access, base64), `MAC_CERTIFICATE_PASSWORD` =
+  `apple-development-p12-password`, `MAC_DEVELOPMENT_TEAM` = `apple-development-team`,
+  `SPARKLE_PRIVATE_KEY` = `latchkey-sparkle-private-key` (Sparkle's `generate_keys -x`), whose
+  public key goes into `SPARKLE_PUBLIC_ED_KEY` in `macos/Config/Base.xcconfig` (public;
+  committed). A local `make release` in `linux/` still reads `SERVER_SIGNING_KEY` from `.env`.
 - ghcr.io package `latchkey-relay`: Package settings → Manage Actions access → this repository
   with Write (so the image workflow can publish it).
 - Optional: required reviewers on the environments `release`, `production`; a tag

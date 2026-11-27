@@ -2,8 +2,9 @@
 # Builds, signs, and publishes the server program as GitHub release linux-<x.y.z> (spec 010
 # plan D12): latchkey-linux-amd64 and -arm64, each with its .sig, and SHA256SUMS for install.sh.
 # Run by .github/workflows/linux-release.yml after every change to linux/ reaches main (or when a
-# session asks for it with repository_dispatch "linux-release"): there SERVER_SIGNING_KEY is the
-# repository secret, GH_TOKEN the workflow's token, and RELEASE_TAG_ON_MAIN=1 lets it release a
+# session asks for it with repository_dispatch "linux-release"): there SERVER_SIGNING_KEY comes from
+# Azure Key Vault kv-melisma-release (managed from the private repository tonimelisma/secrets),
+# fetched by the workflow's first step, GH_TOKEN is the workflow's token, and RELEASE_TAG_ON_MAIN=1 lets it release a
 # commit main has meanwhile moved past (scripts/release-tag.sh). Elsewhere it reads the key from
 # the gitignored ../.env. Publishes only a clean checkout of a commit on main, so every release is
 # code that's on main. Nothing newer to release (a newer commit already has a number): exit 0.

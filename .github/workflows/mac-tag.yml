@@ -5,14 +5,18 @@
 # environment "release", where the owner can require an approval. Also on repository_dispatch
 # "mac-tag", and by hand with a version to build an existing tag again (workflow_dispatch).
 #
-# The release job needs the owner's one-time setup (CLAUDE.md, "Owner setup"); until then it
-# says what is missing and builds nothing:
+# The release job's secrets live in Azure Key Vault kv-melisma-release, managed from the private
+# repository tonimelisma/secrets; its first step fetches them with the job's GitHub identity token
+# (no stored credential: the environment "release" holds only the variables AZURE_CLIENT_ID,
+# AZURE_TENANT_ID, AZURE_KEY_VAULT, and the Entra app gh-latchkey-release trusts only this
+# repository's environment "release"). A secret missing from the vault fails that step; one that
+# comes back empty makes the job say what is missing and build nothing:
 #   MAC_CERTIFICATE_P12        the "Apple Development" certificate and its key, exported from
-#                              Keychain Access as .p12, base64
-#   MAC_CERTIFICATE_PASSWORD   that export's password
-#   MAC_DEVELOPMENT_TEAM       the team ID (kept out of the repository)
-#   SPARKLE_PRIVATE_KEY        Sparkle's EdDSA private key (generate_keys -x); its public key is
-#                              SPARKLE_PUBLIC_ED_KEY in macos/Config/Base.xcconfig
+#                              Keychain Access as .p12, base64 (vault: apple-development-p12-base64)
+#   MAC_CERTIFICATE_PASSWORD   that export's password (apple-development-p12-password)
+#   MAC_DEVELOPMENT_TEAM       the team ID, kept out of the repository (apple-development-team)
+#   SPARKLE_PRIVATE_KEY        Sparkle's EdDSA private key (generate_keys -x; latchkey-sparkle-private-key);
+#                              its public key is SPARKLE_PUBLIC_ED_KEY in macos/Config/Base.xcconfig
 # The same certificate the Mac signs with keeps the installed app's permissions and pairing.
 name: mac tag
 on:
@@ -77,16 +81,48 @@ jobs:
     environment: release
     permissions:
       contents: write # the release and its assets
+      id-token: write # the identity token Azure trusts, to read the secrets from Key Vault
     env:
       VERSION: ${{ needs.tag.outputs.version }}
     steps:
+      - name: Fetch release secrets from Azure Key Vault
+        env:
+          AZURE_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+          AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+          AZURE_KEY_VAULT: ${{ vars.AZURE_KEY_VAULT }}
+          # ENV_NAME=vault-secret-name, one per line
+          SECRET_MAP: |
+            MAC_CERTIFICATE_P12=apple-development-p12-base64
+            MAC_CERTIFICATE_PASSWORD=apple-development-p12-password
+            MAC_DEVELOPMENT_TEAM=apple-development-team
+            SPARKLE_PRIVATE_KEY=latchkey-sparkle-private-key
+        run: |
+          set -euo pipefail
+          j() { python3 -c 'import json,sys; print(json.load(sys.stdin)[sys.argv[1]])' "$1"; }
+          oidc=$(curl -sSf -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=api://AzureADTokenExchange" | j value)
+          echo "::add-mask::$oidc"
+          tok=$(curl -sSf "https://login.microsoftonline.com/$AZURE_TENANT_ID/oauth2/v2.0/token" \
+            -d client_id="$AZURE_CLIENT_ID" -d grant_type=client_credentials \
+            --data-urlencode scope=https://vault.azure.net/.default \
+            --data-urlencode client_assertion_type=urn:ietf:params:oauth:client-assertion-type:jwt-bearer \
+            --data-urlencode client_assertion="$oidc" | j access_token)
+          echo "::add-mask::$tok"
+          while IFS='=' read -r name secret; do
+            [ -n "$name" ] || continue
+            v=$(curl -sSf -H "Authorization: Bearer $tok" \
+              "https://$AZURE_KEY_VAULT.vault.azure.net/secrets/$secret?api-version=7.4" | j value)
+            echo "::add-mask::$v"
+            d="EOF_$(openssl rand -hex 8)"
+            printf '%s<<%s\n%s\n%s\n' "$name" "$d" "$v" "$d" >> "$GITHUB_ENV"
+          done <<< "$SECRET_MAP"
       - name: Is the release build set up?
         id: ready
         env:
-          P12: ${{ secrets.MAC_CERTIFICATE_P12 }}
-          P12_PASSWORD: ${{ secrets.MAC_CERTIFICATE_PASSWORD }}
-          TEAM: ${{ secrets.MAC_DEVELOPMENT_TEAM }}
-          SPARKLE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+          P12: ${{ env.MAC_CERTIFICATE_P12 }}
+          P12_PASSWORD: ${{ env.MAC_CERTIFICATE_PASSWORD }}
+          TEAM: ${{ env.MAC_DEVELOPMENT_TEAM }}
+          SPARKLE_KEY: ${{ env.SPARKLE_PRIVATE_KEY }}
         run: |
           missing=""
           [ -n "$P12" ] || missing="$missing MAC_CERTIFICATE_P12"
@@ -94,7 +130,7 @@ jobs:
           [ -n "$TEAM" ] || missing="$missing MAC_DEVELOPMENT_TEAM"
           [ -n "$SPARKLE_KEY" ] || missing="$missing SPARKLE_PRIVATE_KEY"
           if [ -n "$missing" ]; then
-            echo "::warning::The Mac release build isn't set up yet; missing secrets:$missing (CLAUDE.md, Owner setup). Nothing was built."
+            echo "::warning::The Mac release build isn't set up yet; missing secrets:$missing (Azure Key Vault kv-melisma-release, managed from tonimelisma/secrets). Nothing was built."
             echo "Mac release build not set up; missing:$missing" >>"$GITHUB_STEP_SUMMARY"
             echo "ready=false" >>"$GITHUB_OUTPUT"
           else
@@ -124,9 +160,9 @@ jobs:
         id: keychain
         if: steps.ready.outputs.ready == 'true'
         env:
-          P12: ${{ secrets.MAC_CERTIFICATE_P12 }}
-          P12_PASSWORD: ${{ secrets.MAC_CERTIFICATE_PASSWORD }}
-          TEAM: ${{ secrets.MAC_DEVELOPMENT_TEAM }}
+          P12: ${{ env.MAC_CERTIFICATE_P12 }}
+          P12_PASSWORD: ${{ env.MAC_CERTIFICATE_PASSWORD }}
+          TEAM: ${{ env.MAC_DEVELOPMENT_TEAM }}
         run: |
           kc="$RUNNER_TEMP/release.keychain-db"
           pw=$(uuidgen)
@@ -154,7 +190,7 @@ jobs:
         if: steps.ready.outputs.ready == 'true'
         working-directory: macos
         env:
-          SPARKLE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+          SPARKLE_KEY: ${{ env.SPARKLE_PRIVATE_KEY }}
         run: |
           zip="$RUNNER_TEMP/Latchkey-$VERSION.zip"
           ditto -c -k --keepParent build/DerivedData/Build/Products/Release/Latchkey.app "$zip"
