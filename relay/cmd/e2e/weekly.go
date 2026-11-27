@@ -492,7 +492,7 @@ func (w *weekly) task(t evals.Task) evals.TaskResult {
 // claude runs real Claude Code once on the task: only Latchkey's tools, no built-in ones, an
 // empty configuration of its own, the subscription token from the environment (research.md).
 func (w *weekly) claude(t evals.Task) (evals.Transcript, error) {
-	token, err := w.b.Token(w.ctx, relayURL) // a fresh client token per try
+	token, err := w.b.Token(w.ctx, relayURL) // a fresh token per try, one client per run (e2e.Browser)
 	if err != nil {
 		return evals.Transcript{}, fmt.Errorf("client token: %w", err)
 	}

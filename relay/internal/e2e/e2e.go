@@ -56,6 +56,11 @@ type Browser struct {
 	cancel        func()
 	email         string // the account SignUp created
 	authenticator webauthn.AuthenticatorID
+	// clients is the OAuth client registered at each relay, reused for every later token: the
+	// relay registers 10 clients at once and then one a minute per address, and the evals took a
+	// token for each of their 60 tries (the first local eval run, 2026-11-27: every try after
+	// the twelfth failed with "registration failed").
+	clients map[string]string
 }
 
 // NewBrowser starts Chrome.
@@ -458,22 +463,9 @@ func (b *Browser) Token(ctx context.Context, base string) (string, error) {
 	}
 	defer cb.Close()
 	redirect := cb.URL
-	reg, _ := json.Marshal(map[string]any{"client_name": "Claude Code (local check)", "redirect_uris": []string{redirect}, "token_endpoint_auth_method": "none"})
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, base+"/register", strings.NewReader(string(reg)))
+	clientID, err := b.clientFor(ctx, base, redirect)
 	if err != nil {
 		return "", err
-	}
-	req.Header.Set("Content-Type", "application/json")
-	resp, err := noRedirect.Do(req)
-	if err != nil {
-		return "", err
-	}
-	var client map[string]any
-	_ = json.NewDecoder(resp.Body).Decode(&client)
-	_ = resp.Body.Close()
-	clientID, _ := client["client_id"].(string)
-	if clientID == "" {
-		return "", fmt.Errorf("registration failed: %v", client)
 	}
 
 	verifierBytes := make([]byte, 32)
@@ -497,12 +489,12 @@ func (b *Browser) Token(ctx context.Context, base string) (string, error) {
 		"grant_type": {"authorization_code"}, "code": {code}, "redirect_uri": {redirect},
 		"client_id": {clientID}, "code_verifier": {verifier},
 	}
-	req, err = http.NewRequestWithContext(ctx, http.MethodPost, base+"/token", strings.NewReader(form.Encode()))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, base+"/token", strings.NewReader(form.Encode()))
 	if err != nil {
 		return "", err
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	resp, err = noRedirect.Do(req)
+	resp, err := noRedirect.Do(req)
 	if err != nil {
 		return "", err
 	}
@@ -514,6 +506,36 @@ func (b *Browser) Token(ctx context.Context, base string) (string, error) {
 		return "", fmt.Errorf("token exchange failed: %v", tok)
 	}
 	return access, nil
+}
+
+// clientFor is the client registered at base, registered with redirect the first time; a
+// loopback redirect on another port is accepted for it later, as for Claude Code.
+func (b *Browser) clientFor(ctx context.Context, base, redirect string) (string, error) {
+	if id := b.clients[base]; id != "" {
+		return id, nil
+	}
+	reg, _ := json.Marshal(map[string]any{"client_name": "Claude Code (local check)", "redirect_uris": []string{redirect}, "token_endpoint_auth_method": "none"})
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, base+"/register", strings.NewReader(string(reg)))
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := noRedirect.Do(req)
+	if err != nil {
+		return "", err
+	}
+	var client map[string]any
+	_ = json.NewDecoder(resp.Body).Decode(&client)
+	_ = resp.Body.Close()
+	clientID, _ := client["client_id"].(string)
+	if clientID == "" {
+		return "", fmt.Errorf("registration failed (HTTP %d): %v", resp.StatusCode, client)
+	}
+	if b.clients == nil {
+		b.clients = map[string]string{}
+	}
+	b.clients[base] = clientID
+	return clientID, nil
 }
 
 // Callback is a loopback redirect target, as Claude Code runs during sign-in.
