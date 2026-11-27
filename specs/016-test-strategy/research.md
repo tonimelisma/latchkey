@@ -283,7 +283,11 @@ Each with its row in `docs/regression-coverage.md`, "Found by the sandbox Mac":
    (`BrowserOwnerTabTests`).
 3. A card with a note can't be changed: Cocoa error 134092, because macOS lets only apps with
    Apple's Contacts notes entitlement change such a card (Apple Developer Forums thread 847426,
-   FB23452026). Not fixed: Toni's decision (sandbox check `contacts-card-with-note`).
+   FB23452026). Fixed 2026-11-27 (Toni: "Via Contacts' scripting"; spec 007 FR-722a): such a
+   card is changed and deleted through the Contacts app's scripting, Contacts started hidden and
+   quit again; the check passes. On the way, one run left a Contacts running that Latchkey had
+   started (the check had just quit Contacts, and an Apple Event starts an app shown): the
+   scripts now refuse to start Contacts, and Latchkey waits for its hidden launch.
 4. A Mac without a battery is said to have "100% battery": the state message can't say there is
    none. Not fixed: a protocol change, Toni's decision (sandbox check `battery`).
 5. Found by CI on this pull request: a trace writer kept adding day files to an account being

@@ -24,6 +24,9 @@ final class FakeContacts: ContactsBackend, @unchecked Sendable {
     var onGroups: [() -> Void] = []
     var onAll: [() -> Void] = []
     var afterDelete: (() -> Void)?
+    /// Cards with a note: the Contacts framework refuses to save them (Cocoa error 134092 for apps
+    /// without Apple's notes entitlement, the sandbox Mac 2026-11-26).
+    var withNote: Set<String> = []
 
     /// iCloud giving a card or group a new id.
     func changeID(_ old: String, to new: String) {
@@ -58,6 +61,7 @@ final class FakeContacts: ContactsBackend, @unchecked Sendable {
     }
     func update(id: String, _ draft: ContactDraft) throws -> ContactCard {
         lastDraft = draft
+        if withNote.contains(id) { throw ContactsFailure.hasNote }
         var c = try card(id: id)
         if let p = draft.phones { c.phones = p }
         if let e = draft.emails { c.emails = e }
@@ -66,6 +70,7 @@ final class FakeContacts: ContactsBackend, @unchecked Sendable {
     }
     func delete(id: String) throws {
         guard cards.contains(where: { $0.id == id }) else { throw ContactsFailure.notFound(id) }
+        if withNote.contains(id) { throw ContactsFailure.hasNote }
         cards.removeAll { $0.id == id }
         afterDelete?()
     }
@@ -106,6 +111,38 @@ final class FakeContacts: ContactsBackend, @unchecked Sendable {
     }
 }
 
+/// The Contacts app, scripted: records each script and its arguments, and answers as told. Never
+/// the owner's Contacts.
+final class FakeContactsApp: ScriptRunner, @unchecked Sendable {
+    private let lock = NSLock()
+    private var _runs: [(script: String, args: [String])] = []
+    private var _opened = 0
+    private var _quit = 0
+    var answer: () throws -> String = { "ok" }
+    /// What the app's change does to the cards, as the framework then reads them.
+    var onRun: (String, [String]) -> Void = { _, _ in }
+
+    var runs: [(script: String, args: [String])] { lock.withLock { _runs } }
+    var opened: Int { lock.withLock { _opened } }
+    var quit: Int { lock.withLock { _quit } }
+
+    func run(_ script: String, _ args: [String]) async throws -> String {
+        lock.withLock { _runs.append((script, args)) }
+        onRun(script, args)
+        return try answer()
+    }
+
+    var app: ContactsApp {
+        ContactsApp(
+            runner: self,
+            openHidden: { [self] in
+                lock.withLock { _opened += 1 }
+                return true
+            },
+            quitUnlessInFront: { [self] in lock.withLock { _quit += 1 } })
+    }
+}
+
 func resultText(_ r: ToolResult) -> String {
     guard case .array(let items) = r.content else { return "" }
     return items.compactMap { $0["text"]?.stringValue }.joined(separator: "\n")
@@ -114,11 +151,12 @@ func resultText(_ r: ToolResult) -> String {
 @Suite struct ContactsToolTests {
     let fake = FakeContacts()
     let memory = ContactsMemory(settle: .zero)
+    let contactsApp = FakeContactsApp()
 
     func tool(_ name: String) throws -> ToolEntry {
         try #require(
             (ContactsCapability.readTools(backend: fake, memory: memory)
-                + ContactsCapability.writeTools(backend: fake, memory: memory))
+                + ContactsCapability.writeTools(backend: fake, memory: memory, app: contactsApp.app))
                 .first { $0.tool.name == name })
     }
 
@@ -233,6 +271,97 @@ func resultText(_ r: ToolResult) -> String {
         #expect(unknown.isError)
     }
 
+    /// A card with a note (the framework refuses it, Cocoa error 134092) is changed through the
+    /// Contacts app's scripting, opened hidden and quit after (Toni, 2026-11-27: "Via Contacts'
+    /// scripting"; the sandbox check contacts-card-with-note).
+    @Test func aCardWithANoteIsChangedThroughTheContactsApp() async throws {
+        fake.withNote = ["P2"]
+        contactsApp.onRun = { [fake] script, args in
+            if script == ContactsApp.Script.update, args.first == "P2" { fake.cards[1].jobTitle = "Tester" }
+        }
+        let r = try await tool("contacts_change").handler(
+            .object(["action": .string("update"), "id": .string("P2"), "job_title": .string("Tester")]))
+        #expect(!r.isError, "\(resultText(r))")
+        #expect(resultText(r).contains("Changed Sarah Jones") && resultText(r).contains("Tester"))
+        #expect(contactsApp.runs.map(\.script) == [ContactsApp.Script.update])
+        #expect(contactsApp.runs.first?.args == ["P2", "job title", "Tester"])
+        #expect(contactsApp.opened == 1 && contactsApp.quit == 1, "Contacts opened hidden and quit again")
+
+        let gone = try await tool("contacts_change").handler(
+            .object(["action": .string("delete"), "id": .string("P2")]))
+        #expect(!gone.isError, "\(resultText(gone))")
+        #expect(contactsApp.runs.last?.script == ContactsApp.Script.delete && contactsApp.runs.last?.args == ["P2"])
+        #expect(contactsApp.opened == 2 && contactsApp.quit == 2)
+    }
+
+    /// A card without a note never goes near the Contacts app.
+    @Test func aCardWithoutANoteStaysWithTheFramework() async throws {
+        let r = try await tool("contacts_change").handler(
+            .object(["action": .string("update"), "id": .string("P2"), "job_title": .string("Tester")]))
+        #expect(!r.isError)
+        #expect(contactsApp.runs.isEmpty && contactsApp.opened == 0)
+    }
+
+    /// Without Control Contacts, the answer names the permission and where to allow it; the app
+    /// opened for the change is quit again.
+    @Test func aCardWithANoteWithoutControlSaysWhatToAllow() async throws {
+        fake.withNote = ["P2"]
+        contactsApp.answer = { throw ScriptError.notAllowed }
+        let r = try await tool("contacts_change").handler(
+            .object(["action": .string("update"), "id": .string("P2"), "job_title": .string("Tester")]))
+        #expect(r.isError && resultText(r).contains("Control Contacts"), "\(resultText(r))")
+        #expect(contactsApp.quit == 1)
+    }
+
+    /// The scripts never start Contacts themselves (an Apple Event starts it shown, with its window):
+    /// when Contacts isn't running (it was still quitting when Latchkey looked, the sandbox Mac
+    /// 2026-11-27) the change fails, and the Contacts Latchkey opened is quit.
+    @Test func theScriptsNeverStartContactsThemselves() async throws {
+        for script in [ContactsApp.Script.update, ContactsApp.Script.delete] {
+            #expect(
+                script.split(separator: "\n").dropFirst().first
+                    == #"if application id "com.apple.AddressBook" is not running then return "Contacts isn't running""#
+            )
+        }
+        fake.withNote = ["P2"]
+        contactsApp.answer = { ContactsApp.Script.notRunning }
+        let r = try await tool("contacts_change").handler(
+            .object(["action": .string("update"), "id": .string("P2"), "job_title": .string("Tester")]))
+        #expect(r.isError && resultText(r).contains("Contacts isn't running"), "\(resultText(r))")
+        #expect(contactsApp.quit == 1)
+    }
+
+    /// Every field the draft sets reaches the script, lists whole, labels as Apple stores them.
+    @Test func theContactsAppGetsEveryField() {
+        let d = ContactDraft(
+            givenName: "A", familyName: "", jobTitle: "J",
+            phones: [Labeled(label: "mobile", value: "555 1")], emails: [],
+            addresses: [
+                PostalAddress(
+                    label: "home", street: "1 Main", city: "Town", state: "CA", postalCode: "9", country: "US")
+            ],
+            birthday: "--02-29", urls: [Labeled(label: "", value: "https://x.example")])
+        #expect(
+            ContactsApp.updateArguments(id: "P1", d) == [
+                "P1", "first name", "A", "last name", "", "job title", "J",
+                "phones", "1", CNLabelPhoneNumberMobile, "555 1", "emails", "0",
+                "urls", "1", CNLabelOther, "https://x.example",
+                "addresses", "1", CNLabelHome, "1 Main", "Town", "CA", "9", "US",
+                "birthday", "", "2", "29",
+            ])
+        #expect(
+            ContactsApp.updateArguments(id: "P1", ContactDraft(birthday: "1990-05-04")) == [
+                "P1", "birthday", "1990", "5", "4",
+            ])
+        #expect(ContactsApp.updateArguments(id: "P1", ContactDraft(birthday: "")) == ["P1", "birthday", "clear"])
+    }
+
+    @Test func theNoteRefusalIsRecognized() {
+        #expect(CNContactsBackend.refusedForNote(NSError(domain: NSCocoaErrorDomain, code: 134092)))
+        #expect(!CNContactsBackend.refusedForNote(NSError(domain: NSCocoaErrorDomain, code: 134091)))
+        #expect(!CNContactsBackend.refusedForNote(NSError(domain: CNErrorDomain, code: 134092)))
+    }
+
     @Test func birthdaysWithAndWithoutYear() {
         #expect(ContactsCapability.birthday("1990-05-17")?.year == 1990)
         #expect(ContactsCapability.birthday("--02-29")?.year == nil)
@@ -279,7 +408,7 @@ func resultText(_ r: ToolResult) -> String {
     func call(_ name: String, _ args: [String: JSONValue]) async throws -> ToolResult {
         let tools =
             ContactsCapability.readTools(backend: fake, memory: memory)
-            + ContactsCapability.writeTools(backend: fake, memory: memory)
+            + ContactsCapability.writeTools(backend: fake, memory: memory, app: FakeContactsApp().app)
         return try await #require(tools.first { $0.tool.name == name }).handler(.object(args))
     }
 

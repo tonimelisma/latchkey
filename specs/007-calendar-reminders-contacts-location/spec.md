@@ -135,6 +135,12 @@ accounts, and in Apple Maps.
   birthday and other dates, web addresses, related names, groups), and see its photo.
 - **FR-722** While Read & write, Claude shall be able to create a card, change its fields, and
   delete it.
+- **FR-722a** When a card has a note (which macOS lets only apps with Apple's Contacts notes
+  entitlement save through the Contacts framework: Cocoa error 134092), the change or delete shall
+  go through the Contacts app's own scripting, in the background: Contacts started hidden, never
+  in front, no Contacts window shown, the note kept, and Contacts quit again when Latchkey
+  started it, unless the Owner brought it to the front meanwhile (Toni, 2026-11-27: "Via
+  Contacts' scripting"; Constitution IV). Setup asks once to let Latchkey control Contacts.
 - **FR-723** While Read & write, Claude shall be able to create a contact group, rename it,
   delete it (its cards stay in Contacts), and add cards to it or remove them from it (Toni,
   2026-10-28).

@@ -659,7 +659,8 @@ only, never contents.
       Toni chose (2026-11-27): a Mac without a battery says "no battery" (fixed, spec 001
       FR-065a; the sandbox's `battery` check not yet seen passing), and a contact card with a
       note (macOS needs Apple's Contacts notes entitlement) is changed through the Contacts app's
-      scripting in the background, no window: next, in a local session with the sandbox. The
+      scripting in the background, no window (done 2026-11-27, spec 007 FR-722a, T17: the
+      sandbox's `contacts-card-with-note` passes; setup now also asks to control Contacts). The
       full sandbox run after every Mac build stays (about 7 minutes; Toni: "Always the full run"). Fixed with
       tests: the relay refused MCP calls through a proxy on the same machine; a tab of Claude's
       was called the owner's; a trace delete raced a writer (CI). Results, times (the full

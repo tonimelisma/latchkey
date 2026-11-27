@@ -60,3 +60,14 @@ Each task names its requirements; done means its check passed where it says.
       Toni's decision (`contacts-card-with-note`, `battery`); results, times and every issue
       found in `research.md` §5 and §7. Still to write: the checks `sandbox-checks.md`, "Status",
       lists as not written yet.
+- [x] T17 (local session, 2026-11-27) A contact card with a note changed through the Contacts
+      app's scripting (Toni: "Via Contacts' scripting"; spec 007 FR-722a): Contacts started
+      hidden and quit again, no window; unit tests in `ContactsPlacesTests`; the sandbox check
+      `contacts-card-with-note` passes, with `front-app-unchanged` and `no-permission-prompts`.
+- [ ] T18 (local session) The full `make -C macos sandbox` on main with "no battery" (pull
+      request #66): every check's result, `battery` passing.
+- [ ] T19 (local session) The checks `sandbox-checks.md`, "Status", lists as not written:
+      safari-script-navigation, safari-busy-tab, setup-names-what-is-off, computer-sidebar-row,
+      computer-window-buttons, messages-identical-texts, report-from-installed-app,
+      headless-chrome-profile, keep-awake-real; each seen passing in the sandbox, or why not.
+- [ ] T20 (local session) `make -C macos evals` once with the Claude token, pass rates reported.

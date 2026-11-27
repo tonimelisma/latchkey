@@ -13,7 +13,7 @@ run in the sandbox Mac (`make -C macos sandbox`; results in `e2e-results/`):
 | `browser` | `browser` (Latchkey's own browser, https pages on two sites) |
 | `safari` | `safari-claudes-tab`, `safari-cross-site`, `safari-owner-tab`, `safari-actions` (keys, select, hover, scroll, upload, download), `safari-long-page`, `safari-leaves-nothing`, `composed-text` (Safari's half) |
 | `notes`, `calendar`, `reminders`, `contacts`, `computer`, `maps` | the per-app groups of the same names |
-| `contacts-card-with-note` | new: a card with a note can be changed (fails: macOS needs Apple's Contacts notes entitlement; Toni chose, 2026-11-27, to change such cards through the Contacts app's scripting in the background, no window; for a local session) |
+| `contacts-card-with-note` | new: a card with a note is changed and deleted through the Contacts app's scripting, the note kept, Contacts quit again (spec 007 FR-722a; macOS lets only apps with Apple's Contacts notes entitlement save such a card through the framework; Toni, 2026-11-27: "Via Contacts' scripting"). Passes since 2026-11-27 |
 | `front-app-unchanged`, `no-permission-prompts` | the same, sampled during every Latchkey call |
 | `sweep` | `sweep` |
 | `turned-off`, `offline`, `relay-restart`, `network-cut`, `suspended`, `battery` | `tool-off-disappears`, the offline answer, `silent-network-cut`, `reconnect`, `suspended-account` with `unsuspended-reconnects`, `battery-vs-pmset` (failed: a Mac without a battery was said to have 100%; fixed 2026-11-27, spec 001 FR-065a, not yet seen passing in the sandbox) |

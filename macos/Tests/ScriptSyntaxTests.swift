@@ -21,6 +21,7 @@ import Testing
         ("safari all tabs", SafariBrowser.Script.allTabs), ("safari tab pick", SafariBrowser.Script.tabPick),
         ("mail archive an email", MailCodes.Script.archive),
         ("mail content of an email", MailCodes.Script.content),
+        ("contacts update a card", ContactsApp.Script.update), ("contacts delete a card", ContactsApp.Script.delete),
     ]
 
     @Test(arguments: scripts.map(\.0))

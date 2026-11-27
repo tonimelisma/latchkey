@@ -256,6 +256,7 @@ struct PermissionsPane: View {
         case "messages": control(Permissions.messagesApp)
         case "safari": control(Permissions.safariApp)
         case "mail": control(Permissions.mailApp)
+        case "contactsApp": control(Permissions.contactsApp)
         case "contacts":
             if model.contactsStatus == .notDetermined {
                 Button("Ask…") { Task { await model.allowContacts() } }
@@ -690,6 +691,7 @@ struct SetupView: View {
             control(Permissions.messagesApp, "Messages"),
             control(Permissions.safariApp, "Safari"),
             control(Permissions.mailApp, "Mail"),
+            control(Permissions.contactsApp, "Contacts"),
         ]
     }
 

@@ -30,7 +30,10 @@ enum Permissions {
     /// Every app Latchkey scripts, asked for in setup whatever the levels (Toni, 2026-10-31).
     /// Mail: only to mark a sign-in code email read and archive it after use (spec 013 FR-1366).
     static let mailApp = "com.apple.mail"
-    static let scriptedApps = [notesApp, messagesApp, safariApp, mailApp]
+    /// Contacts: only to change a card with a note, which macOS lets the Contacts framework save
+    /// only for apps with Apple's notes entitlement (Toni, 2026-11-27: "Via Contacts' scripting").
+    static let contactsApp = "com.apple.AddressBook"
+    static let scriptedApps = [notesApp, messagesApp, safariApp, mailApp, contactsApp]
 
     enum Automation: Sendable, Equatable { case allowed, denied, notAsked }
 
@@ -145,6 +148,7 @@ struct ApprovalFacts {
     var messages: Permissions.Automation
     var safari: Permissions.Automation
     var mail: Permissions.Automation = .allowed
+    var contactsApp: Permissions.Automation = .allowed
     var contacts: CNAuthorizationStatus
     var calendars = false
     var reminders = false
@@ -205,6 +209,10 @@ struct Approval: Identifiable, Equatable {
                 id: "contacts", title: "Contacts",
                 purpose: "To look up, add, and change contacts, and show names in messages.",
                 state: state(f.contacts == .authorized)),
+            Approval(
+                id: "contactsApp", title: "Control Contacts",
+                purpose: "To change contacts that have a note, through the Contacts app in the background.",
+                state: state(f.contactsApp == .allowed)),
             Approval(
                 id: "calendars", title: "Calendars", purpose: "To see your events and add or change them.",
                 state: state(f.calendars)),

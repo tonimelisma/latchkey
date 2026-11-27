@@ -80,6 +80,12 @@ enum ContactsFailure: Error, Equatable {
     case notFound(String)
     case noSuchGroup(String, available: [String])
     case failed(String)
+    /// macOS refused to save the card through the Contacts framework because it has a note
+    /// (Cocoa error 134092: only apps with Apple's Contacts notes entitlement may); the change
+    /// goes through the Contacts app instead (`ContactsApp`).
+    case hasNote
+    /// macOS hasn't allowed Latchkey to control the Contacts app, which a card with a note needs.
+    case noAppControl
 }
 
 protocol ContactsBackend: Sendable {
@@ -317,7 +323,17 @@ final class CNContactsBackend: ContactsBackend, @unchecked Sendable {
 
     private func execute(_ save: CNSaveRequest) throws {
         // Messages' names reload on the store's change notification (ContactBook, plan D3).
-        do { try store.execute(save) } catch { throw ContactsFailure.failed(error.localizedDescription) }
+        do { try store.execute(save) } catch {
+            throw Self.refusedForNote(error)
+                ? ContactsFailure.hasNote : ContactsFailure.failed(error.localizedDescription)
+        }
+    }
+
+    /// The Contacts framework's refusal of a card with a note (seen in the sandbox Mac,
+    /// 2026-11-26): Cocoa error 134092, for apps without Apple's Contacts notes entitlement.
+    static func refusedForNote(_ error: Error) -> Bool {
+        let e = error as NSError
+        return e.domain == NSCocoaErrorDomain && e.code == 134092
     }
 
     // MARK: conversion
