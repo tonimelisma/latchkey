@@ -37,7 +37,21 @@ applies, except:
   (nothing to tidy: GitHub deletes merged branches). The work list for `keep-going.sh` is `~/.claude/worklists/<session id>.md` in the VM.
 - Pushes are checked the same way as on the Mac: `private-values-check.sh` refuses a working
   relay's address or a signing team anywhere a push would publish, and needs no private values.
-  Never put a secret (`.env`'s keys and tokens) in the environment: everyone using it can read it.
+  Never put a secret (`.env`'s keys and tokens) in the environment: everyone using it can read it
+  (its one variable, below, is the exception the owner chose).
+- The environment (since 2026-11-26): cloud sessions run in one claude.ai environment shared
+  by Toni's projects, not one per project. Its only variable is `MELISMA_SECRETS_CLIENT_SECRET`,
+  the client secret of the Entra app `cloud-sessions-reader` (client ID
+  `5154d2ee-bdf5-49cf-8643-8918b3e8c32c`, tenant `bd0d0de6-1ba6-42c2-84c6-8e447f1ef6ea`), which
+  reads all of Key Vault `kv-melisma-dev` and only `latchkey-reports-private-key` in
+  `kv-melisma-release` (managed from the private repository `tonimelisma/secrets`). Every other
+  secret a session needs is fetched from there at session start by `scripts/cloud-secrets.sh`
+  (run by `cloud-setup.sh`) and handed to later commands through `CLAUDE_ENV_FILE`; the hook's
+  line says what it fetched, or each secret it couldn't with the HTTP status, never a value. No
+  network secrets and no `request_credential`. Network: "Limited" plus `login.microsoftonline.com`,
+  `kv-melisma-dev.vault.azure.net`, `kv-melisma-release.vault.azure.net`,
+  `latchkey-feedback.melisma.net` (the problem-report intake), and `semgrep.dev`, `vuln.go.dev`
+  and `api.osv.dev` (`make security`, below).
 - Relay and Linux program: `make test`, `make lint` and `make script-tests` in `relay/` and
   `linux/` run here. `make security` also fetches from `semgrep.dev`, `vuln.go.dev` and
   `api.osv.dev`, which the default "Limited" network blocks; they work once those are in the
@@ -93,9 +107,11 @@ applies, except:
   `latchkey-reports show <id>` writes one report as files (each call, its pictures, each page's
   source and record, the logs) into a new folder under `$TMPDIR`, never the repository, for
   reading with the file tools; `latchkey-reports delete <id>` deletes a dispositioned one. It needs the developer's private
-  key in `LATCHKEY_REPORTS_KEY` (a variable of Toni's personal cloud environment, set by Toni)
-  and the intake's token, which the session's network proxy adds for that host once Toni saved it
-  as a network secret (`request_credential`). Report contents stay in the session's output.
+  key in `LATCHKEY_REPORTS_KEY` and the intake's token in `LATCHKEY_INTAKE_TOKEN`, both fetched
+  from Key Vault at session start (`kv-melisma-release/latchkey-reports-private-key`, stored as
+  the key file `~/.config/latchkey-reports/developer.key` holds it, and
+  `kv-melisma-dev/latchkey-intake-developer-token`; the environment, above). Report contents stay
+  in the session's output.
 - End to end and evals (spec 015): `e2e.yml`'s `e2e-linux` and `mac-build.yml`'s job 3 run the
   checks the changed files select (`relay/e2e/capabilities.json`) with a real MCP client through
   a private relay; the checks are reported, not required. Tool descriptions aren't compared

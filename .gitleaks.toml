@@ -32,5 +32,5 @@ description = "Spec 014 tests: a made-up cloud secret in a report's answer, to c
 regexes = ['''wJalrXUtnFEMIK7MDENGbPxRfiCY''']
 
 [[allowlists]]
-description = "A made-up test value (base64 of \"secret-key\") in an early commit of scripts/tests/cloud_secrets_test.sh, on the branch of pull request #69 (2026-11-27); not a key"
-regexes = ['''^c2VjcmV0LWtleQ==$''']
+description = "Cloud secrets test: a made-up key (base64 of \"secret-key\") in that test's first commit, made at run time since"
+regexes = ['''c2VjcmV0LWtleQ==''']
