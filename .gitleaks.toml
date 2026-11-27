@@ -30,3 +30,7 @@ paths = ['''^relay/reports/developer\.pub$''']
 [[allowlists]]
 description = "Spec 014 tests: a made-up cloud secret in a report's answer, to check it is blanked"
 regexes = ['''wJalrXUtnFEMIK7MDENGbPxRfiCY''']
+
+[[allowlists]]
+description = "A made-up test value (base64 of \"secret-key\") in an early commit of scripts/tests/cloud_secrets_test.sh, on the branch of pull request #69 (2026-11-27); not a key"
+regexes = ['''^c2VjcmV0LWtleQ==$''']
