@@ -40,12 +40,14 @@ End to end and evals (spec 015; `relay/cmd/e2e`, run in `relay/`):
   calls tools through the copy's relay and prints the answers.
 - Evals (spec 015/016): `make -C macos evals` (the local build in the sandbox), `ARGS=--release`
   (the newest release; its signature needs its own permission grants in the image), `ARGS=--send`
-  (also sealed to the developer's intake). Real Claude Code does about 20 tasks 3 times each. The
-  first run, in Terminal, asks for the Claude token from `claude setup-token` (kept in the login
-  keychain).
+  (also sealed to the developer's intake). Real Claude Code does about 20 tasks 3 times each. It reads
+  the Claude token from the login keychain item `latchkey-eval-claude-token` and refuses one
+  that isn't whole. To make it, run `claude setup-token` in a wide pseudo-terminal (`script -q -t
+  0 FILE zsh -c 'stty cols 2000; claude setup-token'`; a narrow one wraps the token), have the
+  owner click Authorize, and pipe the token from FILE into `security -i` (never printed).
 - Once per Mac: `macos/scripts/eval-image.sh` (the test Mac image, about 1 hour the first time:
-  a 27 GB download). It runs to the end by itself once a person has approved, in the test Mac's
-  window, what Latchkey's setup asks for (it checks again every 20 s, up to 30 minutes).
+  a 27 GB download). It runs to the end by itself with no window: it writes Latchkey's
+  permissions into the test Mac's privacy databases and answers Connect inside it.
 - `go run ./cmd/latchkey-reports evals [-this-week [-quiet]]`: the sent eval results, joined by
   run and compared with the one before (new failures, fixed, flaky)
 
