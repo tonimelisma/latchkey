@@ -66,4 +66,29 @@ import Testing
         #expect(!own.listing().contains(name), "no longer listed")
         #expect(fake.ownerTabs.map(\.url) == ["https://mail.example.com/", "https://news.example.com/"])
     }
+
+    /// safari_lost_tab_still_listed (sandbox check safari-script-navigation, 2026-11-27): a Safari
+    /// tab of Claude's that Latchkey lost (a script sent it to another site; here its tab was
+    /// closed) answered "That page isn't open", yet the tab list kept naming it Claude's page with
+    /// its old address. A call that loses the tab now forgets the page.
+    @Test func aSafariPageWhoseTabWasLostLeavesTheList() async throws {
+        let fake = FakeSafariTabs()
+        let own = OwnPages(
+            cookies: { [SignInRoutingTests.cookie(".shop.example", "session", httpOnly: true, days: 30)] },
+            isLocked: { false })
+        defer { own.closeAll() }
+        let t = tools(fake, own: own)
+        let opened = await t["browser_look"]!.handler(
+            .object(["url": .string("https://www.shop.example/cart"), "show_in_safari": .bool(true)]))
+        let name = try #require(SignInRoutingTests.pageName(opened.content.jsonText), "\(opened.content.jsonText)")
+        #expect(own.listing().contains(name))
+
+        fake.ownerCloses(tab: 3)  // the tab is gone from where Latchkey left it
+        let read = await t["browser_look"]!.handler(.object(["page": .string(name)]))
+        #expect(read.isError, "\(read.plainText)")
+        #expect(read.plainText.contains("may still be open in Safari"), "Claude is told: \(read.plainText)")
+        #expect(!own.listing().contains(name), "a lost page isn't listed as Claude's: \(own.listing())")
+        let tabs = await t["browser_look"]!.handler(.object(["tabs": .bool(true)]))
+        #expect(!tabs.plainText.contains("\"\(name)\""), "\(tabs.plainText)")
+    }
 }

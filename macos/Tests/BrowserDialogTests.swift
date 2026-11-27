@@ -112,6 +112,36 @@ import WebKit
         #expect(fake.windows[0].tabs[1].url == "https://news.example.com/")
     }
 
+    /// safari_busy_right_after_pick (sandbox check safari-busy-tab, 2026-11-27): an owner's tab
+    /// whose page turned busy right after Claude picked it (the mark taken, then no script
+    /// answered) was said to be gone ("isn't where it was"), as the window's tabs had never been
+    /// noted with the mark seen. The pick notes them, so the tab is said busy and left alone.
+    @Test func aTabBusyRightAfterThePickIsSaidBusyNotGone() async throws {
+        let fake = FakeSafariTabs()
+        let b = try await picked(fake)
+        fake.windows[0].tabs[1].waiting = true
+        await #expect(throws: SafariBrowser.Failure.dialogWaiting) { _ = try await b.read(offset: 0) }
+        #expect(await b.working() == "10.2", "still the picked tab")
+        // A tab opened meanwhile changes the window: then the busy tab isn't surely the one.
+        let other = FakeSafariTabs()
+        let c = try await picked(other)
+        other.windows[0].tabs[1].waiting = true
+        other.windows[0].tabs.append(.init(url: "https://new.example/", title: "New", owner: "owner"))
+        await #expect(throws: SafariBrowser.Failure.tabGone) { _ = try await c.read(offset: 0) }
+    }
+
+    /// safari_busy_tab_past_the_deadline (sandbox check safari-busy-tab, 2026-11-27): a tab already
+    /// busy when Claude picks it cost 10 s at the pick and 10 s more at the look, past the relay's
+    /// 30 s on a busy Mac. The pick says so at once, with no second wait, and leaves it picked.
+    @Test func aTabBusyAtThePickIsSaidBusyAtOnce() async throws {
+        let fake = FakeSafariTabs()
+        fake.windows[0].tabs[1].waiting = true
+        let b = SafariBrowser(scripts: fake, settleLimit: .seconds(3))
+        await #expect(throws: SafariBrowser.Failure.dialogWaiting) { try await b.pick("10.2") }
+        #expect(fake.scripts.filter { $0 == SafariBrowser.Script.tabSurvey }.isEmpty, "no second wait")
+        #expect(await b.working() == "10.2")
+    }
+
     @Test func whatTheDialogsSaidComesWithTheAnswer() async throws {
         let fake = FakeSafariTabs()
         let b = try await picked(fake)

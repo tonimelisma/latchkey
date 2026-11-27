@@ -60,3 +60,21 @@ Each task names its requirements; done means its check passed where it says.
       Toni's decision (`contacts-card-with-note`, `battery`); results, times and every issue
       found in `research.md` §5 and §7. Still to write: the checks `sandbox-checks.md`, "Status",
       lists as not written yet.
+- [x] T17 (local session, 2026-11-27) A contact card with a note changed through the Contacts
+      app's scripting (Toni: "Via Contacts' scripting"; spec 007 FR-722a): Contacts started
+      hidden and quit again, no window; unit tests in `ContactsPlacesTests`; the sandbox check
+      `contacts-card-with-note` passes, with `front-app-unchanged` and `no-permission-prompts`.
+- [x] T18 (local session, 2026-11-27) The full `make -C macos sandbox` on main with "no battery"
+      (pull request #66): 21 passed, 0 failed, 6 skipped; `battery` passes (`research.md` §7).
+- [x] T19 (local session, 2026-11-27) The checks `sandbox-checks.md`, "Status", lists as not written:
+      safari-script-navigation, safari-busy-tab, setup-names-what-is-off, computer-sidebar-row,
+      computer-window-buttons, messages-identical-texts, report-from-installed-app,
+      headless-chrome-profile, keep-awake-real; each seen passing in the sandbox, or why not.
+      Done: all pass but `messages-identical-texts` and `keep-awake-real`, skipped with the
+      reason; three Safari bugs found and fixed with tests. Open: `setup-names-what-is-off`
+      passed on the image of 2026-11-26, fails on the image that starts each app once
+      (`research.md` §7).
+- [x] T20 (local session, 2026-11-27) `make -C macos evals` once with the Claude token, pass
+      rates reported: 20 of 20 tasks passed every try (60 of 60), held out 4 of 4, the 3 with
+      planted instructions 3 of 3 each, the 4 scripted checks passed (`research.md` §7). Two
+      earlier runs found a harness bug (fixed with a test) and once a Mac that went offline.

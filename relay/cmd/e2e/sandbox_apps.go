@@ -493,18 +493,23 @@ end run`, family, tag); err != nil || left != "0" {
 	return nil
 }
 
-// contactsCardWithNote: a card that has a note can be changed (found in the sandbox's first run,
-// 2026-11-26: every update of such a card fails with Cocoa error 134092, because macOS lets only
-// apps with Apple's Contacts notes entitlement change a card with a note; cards without one
-// change fine). Fails until Latchkey can change such cards.
+// contactsCardWithNote: a card that has a note can be changed and deleted (found in the
+// sandbox's first run, 2026-11-26: every save of such a card through the Contacts framework fails
+// with Cocoa error 134092, because macOS lets only apps with Apple's Contacts notes entitlement
+// change a card with a note). Since Toni's choice (2026-11-27, "Via Contacts' scripting"),
+// Latchkey changes such a card through the Contacts app's scripting, with Contacts opened hidden
+// and quit again: the note stays, every field is as Contacts shows it, and Contacts isn't left
+// running. That no window appeared is front-app-unchanged's, which samples the screen meanwhile.
 func (s *sandbox) contactsCardWithNote() error {
 	family := "Notecard" + s.m.marker
+	const note = "a note the owner wrote"
 	if err := osa(`on run argv
 tell application "Contacts"
-make new person with properties {first name:"Latchkey", last name:(item 1 of argv), organization:(item 2 of argv), note:"a note the owner wrote"}
+make new person with properties {first name:"Latchkey", last name:(item 1 of argv), organization:(item 2 of argv), note:(item 3 of argv)}
 save
+quit
 end tell
-end run`, family, evalName); err != nil {
+end run`, family, evalName, note); err != nil {
 		return err
 	}
 	defer func() {
@@ -512,9 +517,14 @@ end run`, family, evalName); err != nil {
 tell application "Contacts"
 delete (every person whose last name is (item 1 of argv))
 save
+quit
 end tell
 end run`, family)
 	}()
+	// Contacts quit (above): Latchkey opens it hidden itself, and must quit it again.
+	if !waitFor(10*time.Second, func() bool { return !contactsRunning() }) {
+		return errors.New("the check couldn't quit Contacts before Latchkey's change")
+	}
 	var t string
 	if !waitFor(20*time.Second, func() bool {
 		var err error
@@ -523,16 +533,49 @@ end run`, family)
 	}) {
 		return fmt.Errorf("contacts_find never listed the card with a note: %q", short(t))
 	}
-	if _, err := s.ask("contacts_change", map[string]any{"action": "update", "id": idOn(t, family), "job_title": "Tester"}); err != nil {
+	id := idOn(t, family)
+	if _, err := s.ask("contacts_change", map[string]any{
+		"action": "update", "id": id, "job_title": "Tester", "birthday": "--02-29",
+		"phones": []any{map[string]any{"label": "mobile", "value": "555 0100"}},
+	}); err != nil {
 		return fmt.Errorf("a card with a note: %w", err)
 	}
-	if got, err := osaOut(`on run argv
-tell application "Contacts" to return job title of (first person whose last name is (item 1 of argv))
-end run`, family); err != nil || got != "Tester" {
-		return fmt.Errorf("after the update, Contacts has the job title %q: %w", got, err)
+	if !waitFor(10*time.Second, func() bool { return !contactsRunning() }) {
+		how, _ := osaOut(`tell application "System Events" to tell process "Contacts" to return "visible " & (visible as text) & ", windows " & ((count of windows) as text) & ", front " & (frontmost as text)`)
+		return fmt.Errorf("contacts is still running after Latchkey's change (%s): Latchkey opened it and didn't quit it", how)
 	}
-	step("contacts: a card with a note was changed, as Contacts shows")
+	got, err := osaOut(`on run argv
+tell application "Contacts"
+set p to first person whose last name is (item 1 of argv)
+set b to birth date of p
+set answer to (job title of p) & "|" & (value of first phone of p) & "|" & (label of first phone of p) & "|" & ((month of b as integer) as text) & "-" & ((day of b) as text) & "|" & (note of p)
+quit
+return answer
+end tell
+end run`, family)
+	if want := "Tester|555 0100|_$!<Mobile>!$_|2-29|" + note; err != nil || got != want {
+		return fmt.Errorf("after the update, Contacts shows %q, not %q (%w)", got, want, err)
+	}
+	if r, err := s.m.text("contacts_find", map[string]any{"id": id}); err != nil ||
+		!strings.Contains(r, "Phone (mobile): 555 0100") || !strings.Contains(r, "Birthday: --02-29") {
+		return fmt.Errorf("contacts_find reads the changed card as %q (%w)", short(r), err)
+	}
+	if _, err := s.ask("contacts_change", map[string]any{"action": "delete", "id": id}); err != nil {
+		return fmt.Errorf("deleting a card with a note: %w", err)
+	}
+	if n, err := osaOut(`on run argv
+tell application "Contacts" to return (count of (every person whose last name is (item 1 of argv))) as text
+end run`, family); err != nil || n != "0" {
+		return fmt.Errorf("after the delete, Contacts has %q such cards (%w)", n, err)
+	}
+	step("contacts: a card with a note was changed (job title, phone, birthday; the note kept) and deleted through the Contacts app, as Contacts shows, and Contacts was quit again")
 	return nil
+}
+
+// contactsRunning says whether the Contacts app is running (asking doesn't start it).
+func contactsRunning() bool {
+	out, err := osaOut(`return application id "com.apple.AddressBook" is running`)
+	return err != nil || out == "true"
 }
 
 // filesFull: the files group (former state-check files.*), every change seen on disk.

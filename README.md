@@ -25,7 +25,9 @@ Claude app (phone, web, desktop), can work with what's on your Mac:
 - **Calendar and Reminders:** see, add, change, and delete events and reminders; answer and send
   invitations.
 - **Contacts, location, and maps:** look people up, add or change contacts, find places and
-  directions. When Claude says where to look, it gets only places within 50 km of there.
+  directions. A card with a note is changed through the Contacts app, started hidden in the
+  background and quit again (macOS lets only Apple's apps change such a card directly), so
+  setup asks once to let Latchkey control Contacts. When Claude says where to look, it gets only places within 50 km of there.
 - **Files:** find, read (including PDFs and pictures), write, move, and trash files.
 - **Command line:** run commands, as you, never as administrator, including builds with
   Xcode's and Swift's tools, and an app's tests when Claude says it will open apps (the tests

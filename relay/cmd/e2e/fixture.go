@@ -22,8 +22,8 @@ import (
 
 // The test data (spec 015 FR-1520, research.md decision 7): everything lives under names a sweep
 // can find (the folder, note folder, calendar and reminders list "LatchkeyEval", contacts whose
-// company is "LatchkeyEval": a card with a note can't be changed by Latchkey, see the sandbox check
-// contacts-card-with-note), on the test Mac only. Apple's apps are reached with osascript and
+// company is "LatchkeyEval", made without a note: Latchkey changes a card with one through the
+// Contacts app instead, which the sandbox check contacts-card-with-note covers), on the test Mac only. Apple's apps are reached with osascript and
 // arguments passed as argv, never spliced into a script.
 const evalName = "LatchkeyEval"
 

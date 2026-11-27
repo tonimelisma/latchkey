@@ -7,7 +7,7 @@ enum ContactsCapability {
             id: CapabilityRegistry.contacts, title: "Contacts",
             summary: "Look up, add, change, and delete contacts and groups",
             readTools: readTools(backend: CNContactsBackend.shared, memory: .shared),
-            writeTools: writeTools(backend: CNContactsBackend.shared, memory: .shared))
+            writeTools: writeTools(backend: CNContactsBackend.shared, memory: .shared, app: .live))
     }
 
     static let noAccess = """
@@ -45,7 +45,10 @@ enum ContactsCapability {
         "remove_from_group",
     ]
 
-    static func writeTools(backend: any ContactsBackend, memory: ContactsMemory) -> [ToolEntry] {
+    /// `app` changes the cards the Contacts framework may not save (those with a note).
+    static func writeTools(backend: any ContactsBackend, memory: ContactsMemory, app: ContactsApp)
+        -> [ToolEntry]
+    {
         let labeled: (String) -> JSONValue = { what in
             .object([
                 "type": .string("array"),
@@ -105,7 +108,7 @@ enum ContactsCapability {
                             "description": .string("For add_to_group and remove_from_group: several cards' ids"),
                         ]),
                     ], required: ["action"], readOnly: false, destructive: true, deadlineMS: 15_000),
-                handler: { args in await run { try await change(args, backend, memory) } })
+                handler: { args in await run { try await change(args, backend, memory, app) } })
         ]
     }
 
@@ -221,24 +224,24 @@ enum ContactsCapability {
 
     // MARK: change
 
-    static func change(_ args: JSONValue, _ backend: any ContactsBackend, _ memory: ContactsMemory) async throws
-        -> ToolResult
-    {
+    static func change(
+        _ args: JSONValue, _ backend: any ContactsBackend, _ memory: ContactsMemory, _ app: ContactsApp
+    ) async throws -> ToolResult {
         guard backend.allowed() else { throw ContactsFailure.noAccess }
         // iCloud's copies of things deleted earlier that came back after that answer (FR-727).
         let leftovers = memory.isEmpty ? [] : try memory.sweepLeftovers(in: backend)
         // Those deletions are Claude's changes too: in the activity and its notification even
         // when the requested change then fails (security review, 2026-10-29).
         var r: ToolResult
-        do { r = try await changeOne(args, backend, memory) } catch { r = await run { throw error } }
+        do { r = try await changeOne(args, backend, memory, app) } catch { r = await run { throw error } }
         for line in leftovers { r.appendText(line) }
         if !leftovers.isEmpty { r.alsoDone = "Claude deleted iCloud's leftover copies of what it deleted earlier" }
         return r
     }
 
-    private static func changeOne(_ args: JSONValue, _ backend: any ContactsBackend, _ memory: ContactsMemory)
-        async throws -> ToolResult
-    {
+    private static func changeOne(
+        _ args: JSONValue, _ backend: any ContactsBackend, _ memory: ContactsMemory, _ app: ContactsApp
+    ) async throws -> ToolResult {
         let action = args["action"]?.stringValue
         func id() throws -> String {
             guard let id = args["id"]?.stringValue, !id.isEmpty else {
@@ -268,7 +271,12 @@ enum ContactsCapability {
             let (old, moved) = try card(try id(), backend, memory)
             let key = memory.cardRecord(for: old)
             let before = key == nil ? [] : try backend.all()
-            let c = try backend.update(id: old.id, d)
+            let c: ContactCard
+            do { c = try backend.update(id: old.id, d) } catch ContactsFailure.hasNote {
+                // The framework may not save a card with a note: the Contacts app does (ContactsApp).
+                try await app.update(id: old.id, d)
+                c = try backend.card(id: old.id)
+            }
             if let key { memory.changed(key, to: c, before: before) }
             var r = ToolResult.text(with(moved, "Changed \(c.name):\n\(describe(c))"))
             r.activity = "Claude changed the contact \(c.name)"
@@ -276,7 +284,7 @@ enum ContactsCapability {
         case "delete":
             let (old, moved) = try card(try id(), backend, memory)
             let key = memory.cardRecord(for: old)
-            try backend.delete(id: old.id)
+            do { try backend.delete(id: old.id) } catch ContactsFailure.hasNote { try await app.delete(id: old.id) }
             var text = with(moved, "Deleted \(old.name) from Contacts.")
             var activity = "Claude deleted the contact \(old.name)"
             var copies: [String] = []
@@ -485,6 +493,15 @@ enum ContactsCapability {
                     start
                         + (available.isEmpty ? "" : " Groups: \(available.joined(separator: ", "))."), isError: true)
             case .failed(let why): return .text("Contacts didn't accept the change: \(why)", isError: true)
+            case .hasNote:
+                return .text(
+                    "macOS lets Latchkey change this card only through the Contacts app (it has a note), "
+                        + "and that didn't run.", isError: true)
+            case .noAppControl:
+                return .text(
+                    "This card has a note, so Latchkey changes it through the Contacts app, and macOS hasn't "
+                        + "allowed that. The Mac's owner can allow Control Contacts in Latchkey's Settings → "
+                        + "Permissions.", isError: true)
             }
         } catch {
             return .text("Latchkey couldn't do that: \(error.localizedDescription)", isError: true)

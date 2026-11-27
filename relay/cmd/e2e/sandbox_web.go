@@ -94,6 +94,14 @@ func startWebPages(ctx context.Context, marker string) (*webPages, error) {
 	mux.HandleFunc("/other", page(`<!doctype html><title>Other</title><h1>Other site marker `+marker+`</h1><a href="/next">Onwards</a>`))
 	mux.HandleFunc("/owner", page(`<!doctype html><title>Owner page</title><h1>Owner page marker `+marker+`</h1><a href="/next">Owner link</a>`))
 	mux.HandleFunc("/search", page(`<!doctype html><title>Results</title><p>Results</p>`))
+	// A page that keeps its script busy (safari-busy-tab): 20 s spins with a moment between, so a
+	// script of Latchkey's waits; it says when it started with a request for /busy-started.
+	mux.HandleFunc("/busy", page(`<!doctype html><title>Busy page</title><h1>Busy page marker `+marker+`</h1>
+<script>function spin(){var t=Date.now(); while(Date.now()-t<20000){} setTimeout(spin,20)}
+setTimeout(function(){fetch('/busy-started').finally(function(){setTimeout(spin,200)})},1500)</script>`))
+	mux.HandleFunc("/busy-started", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) })
+	mux.HandleFunc("/signin", page(`<!doctype html><title>Sign in</title><h1>Sign-in page marker `+marker+`</h1>
+<form onsubmit="return false"><input type="email" aria-label="Email"><input type="password" aria-label="Password"></form>`))
 	mux.HandleFunc("/long", page(`<!doctype html><title>Long</title><p>`+strings.Repeat("Long page words. ", 12000)+`</p><p>Last words `+marker+`</p>`))
 	mux.HandleFunc("/statement.txt", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "text/plain")

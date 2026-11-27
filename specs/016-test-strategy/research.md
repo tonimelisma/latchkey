@@ -283,7 +283,11 @@ Each with its row in `docs/regression-coverage.md`, "Found by the sandbox Mac":
    (`BrowserOwnerTabTests`).
 3. A card with a note can't be changed: Cocoa error 134092, because macOS lets only apps with
    Apple's Contacts notes entitlement change such a card (Apple Developer Forums thread 847426,
-   FB23452026). Not fixed: Toni's decision (sandbox check `contacts-card-with-note`).
+   FB23452026). Fixed 2026-11-27 (Toni: "Via Contacts' scripting"; spec 007 FR-722a): such a
+   card is changed and deleted through the Contacts app's scripting, Contacts started hidden and
+   quit again; the check passes. On the way, one run left a Contacts running that Latchkey had
+   started (the check had just quit Contacts, and an Apple Event starts an app shown): the
+   scripts now refuse to start Contacts, and Latchkey waits for its hidden launch.
 4. A Mac without a battery is said to have "100% battery": the state message can't say there is
    none. Not fixed: a protocol change, Toni's decision (sandbox check `battery`).
 5. Found by CI on this pull request: a trace writer kept adding day files to an account being
@@ -330,3 +334,48 @@ the next run:
   macOS asks an administrator about background activity). Expected (plan D3): the helper
   accepts only an app of an Apple team. Keep-awake stays off there; `keep-awake-real` isn't
   written.
+
+### The second local session (T17 to T19, 2026-11-27)
+
+- The full `make -C macos sandbox` on main with "no battery" (pull request #66) and the Contacts
+  fix (build d4ba18f): 21 passed, 0 failed, 6 skipped, 6 min 15 s (build 79 s, start 1 s,
+  install 7 s, checks 375 s); `battery` passes.
+- The checks not written until then are written and pass there, except `messages-identical-texts`
+  (no iMessage account in the image) and `keep-awake-real` (the self-signed helper; what it
+  would take: `relay/e2e/sandbox-checks.md`, "Status").
+- They found two Latchkey bugs, fixed with tests (`docs/regression-coverage.md`, "Found by the
+  sandbox Mac"): a lost Safari tab of Claude's stayed listed as Claude's page; a tab busy right
+  after the pick was called gone. The busy tab's answer now comes in about 27 s, within the
+  relay's 30 s but close to it: the pick and the look each give Safari 10 s (FR-432). On a
+  fresh copy it went past 30 s; the pick now says a tab is busy at once (11 s since).
+- The full run on a fresh copy of the image (build 5c122e5, after the image started each app
+  once): 28 passed, 2 failed, 6 skipped, 10 min 46 s (start 41 s, checks 584 s). Failed:
+  `computer-sidebar-row` (the press said "couldn't be pressed" twice; passes on every later
+  run of that copy: only Finder's first window in a never-used Mac) and
+  `setup-names-what-is-off` (below).
+- Before the image started each app once, a fresh copy's first run counted macOS's first-start
+  questions of Apple's apps ("'Mail' Notifications…") as Latchkey's prompts and timed out on
+  Contacts' first start; with the warm-up both pass.
+- `setup-names-what-is-off` passed twice on the earlier image, and fails on the new one: with
+  Mail's control turned off in the copy's permission database, macOS still tells Latchkey it is
+  allowed, so Ask Now has nothing to name. Tried, without change: quitting Mail first;
+  restarting macOS's permission daemon (a plain `killall tccd` is ignored on macOS 26,
+  `killall -9` restarts it). Stopped there after two fixes (CLAUDE.md); open.
+- Seen, not changed (Toni's call): a press on a Finder sidebar row selects it, as decided
+  (2026-11-23), but Finder opens a folder only on a click, so the window keeps showing the old
+  folder. Accessibility's "AXOpen" on the row's cell opens it (tried in the test Mac).
+- Check fixes: Finder's green button is named by its help text ("this button also has an action
+  to zoom the window"); setup's buttons are named by their accessibility description, which
+  System Events doesn't read, so the setup check presses Ask Now with Return; Latchkey's
+  computer control never acts on Latchkey's own windows. The image now lets the test Mac's
+  osascript use Accessibility (System Events reads Finder's sidebar selection).
+- Evals (`make -C macos evals`, the working tree's build b9d2fda, Sonnet through Claude Code
+  2.1.332, the subscription token): 20 of 20 tasks passed every try (60 of 60 tries), held out
+  4 of 4, the three tasks with planted instructions passed all 9 tries, the 4 scripted checks
+  passed; 11 min 41 s for the tasks, a try's median 8 s, the longest 34 s. Two runs before it:
+  the first lost the test Mac's Latchkey right after the scripted checks began ("offline, last
+  seen 6:58") and never got it back (the copy is deleted after a run, with its log: cause not
+  found; not seen again in the two runs after); the second passed its first 4 tasks every try,
+  then every try failed with "registration failed" before Claude Code started: the harness
+  registered a new OAuth client for each try, and the relay registers 10 at once, then one a
+  minute per address. Fixed: one client per relay (`relay/internal/e2e`, test).

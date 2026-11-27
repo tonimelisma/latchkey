@@ -36,17 +36,21 @@ const (
 // sandboxOrder is every check, in the order they run: the capabilities first, then the checks
 // that disturb the connection (moved from cmd/maccheck), each leaving the copy as it found it.
 var sandboxOrder = []string{
-	"tools", "files", "shell", "browser", "safari", "notes", "calendar", "reminders", "contacts",
-	"contacts-card-with-note", "computer",
-	"maps", "location", "messages", "mail", "whatsapp", "logins",
+	"tools", "files", "shell", "headless-chrome-profile", "browser", "safari",
+	"safari-script-navigation", "safari-busy-tab", "notes", "calendar", "reminders", "contacts",
+	"contacts-card-with-note", "computer", "computer-sidebar-row", "computer-window-buttons",
+	"maps", "location", "messages", "messages-identical-texts", "mail", "whatsapp", "logins",
 	"front-app-unchanged", "no-permission-prompts", "sweep",
-	"turned-off", "offline", "relay-restart", "network-cut", "suspended", "battery", "pair-preview",
+	"turned-off", "offline", "relay-restart", "network-cut", "suspended", "battery", "keep-awake-real",
+	"report-from-installed-app", "setup-names-what-is-off", "pair-preview",
 }
 
 // sandboxSkips are the checks the image can't exercise, with the reason each is reported.
 var sandboxSkips = map[string]string{
 	"location": "a virtual Mac has no Wi-Fi to measure its location from",
 	"messages": "the image has no test iMessage account",
+	"messages-identical-texts": "the image has no test iMessage account to receive two identical texts " +
+		"(messages_delete itself: macos/Tests, the Messages window's stand-in)",
 	"mail":     "the image has no test Mail account",
 	"whatsapp": "no test machine has WhatsApp signed in",
 	"logins":   "the image's Passwords hold no test logins",
@@ -274,9 +278,14 @@ func (s *sandbox) run(res *sandboxResult, names []string) error {
 			c.Result, c.Why = "skipped", why
 		} else {
 			step("check: %s", n)
-			s.m.check, s.m.mayMoveFront = n, n == "computer"
+			// Computer control may bring an app forward, and setup's check opens setup and
+			// System Settings on purpose (it runs after the screen checks' verdicts).
+			s.m.check, s.m.mayMoveFront = n, strings.HasPrefix(n, "computer") || n == "setup-names-what-is-off"
 			start := time.Now()
-			if err := checks[n](); err != nil {
+			var skip skipCheck
+			if err := checks[n](); errors.As(err, &skip) {
+				c.Result, c.Why = "skipped", skip.why
+			} else if err != nil {
 				c.Result, c.Why = "failed", err.Error()
 				// A call that ran out of time can close the MCP session; then every later check
 				// failed with "client is closing" (the fifth sandbox run). The next check gets a
@@ -342,27 +351,35 @@ func (s *sandbox) callOne(line string) error {
 // checkFuncs is what each check that isn't skipped runs.
 func (s *sandbox) checkFuncs() map[string]func() error {
 	return map[string]func() error{
-		"tools":                   s.m.tools,
-		"files":                   s.filesFull,
-		"shell":                   s.shellFull,
-		"browser":                 s.browserFull,
-		"safari":                  s.safari,
-		"maps":                    s.maps,
-		"notes":                   s.notes,
-		"calendar":                s.calendar,
-		"reminders":               s.reminders,
-		"contacts":                s.contacts,
-		"contacts-card-with-note": s.contactsCardWithNote,
-		"computer":                s.computer,
-		"front-app-unchanged":     func() error { return s.screenVerdict(false) },
-		"no-permission-prompts":   func() error { return s.screenVerdict(true) },
-		"sweep":                   s.sweep,
-		"turned-off":              s.turnedOff,
-		"offline":                 s.offline,
-		"relay-restart":           s.relayRestart,
-		"network-cut":             s.networkCut,
-		"suspended":               s.suspended,
-		"battery":                 s.battery,
+		"tools":                     s.m.tools,
+		"files":                     s.filesFull,
+		"shell":                     s.shellFull,
+		"browser":                   s.browserFull,
+		"safari":                    s.safari,
+		"maps":                      s.maps,
+		"notes":                     s.notes,
+		"calendar":                  s.calendar,
+		"reminders":                 s.reminders,
+		"contacts":                  s.contacts,
+		"contacts-card-with-note":   s.contactsCardWithNote,
+		"computer":                  s.computer,
+		"computer-sidebar-row":      s.computerSidebarRow,
+		"computer-window-buttons":   s.computerWindowButtons,
+		"safari-script-navigation":  s.safariScriptNavigation,
+		"safari-busy-tab":           s.safariBusyTab,
+		"headless-chrome-profile":   s.headlessChromeProfile,
+		"keep-awake-real":           s.keepAwakeReal,
+		"setup-names-what-is-off":   s.setupNamesWhatIsOff,
+		"report-from-installed-app": s.reportFromInstalledApp,
+		"front-app-unchanged":       func() error { return s.screenVerdict(false) },
+		"no-permission-prompts":     func() error { return s.screenVerdict(true) },
+		"sweep":                     s.sweep,
+		"turned-off":                s.turnedOff,
+		"offline":                   s.offline,
+		"relay-restart":             s.relayRestart,
+		"network-cut":               s.networkCut,
+		"suspended":                 s.suspended,
+		"battery":                   s.battery,
 	}
 }
 
@@ -731,6 +748,8 @@ func batteryMismatch(answer, pmset string) string {
 	switch {
 	case real < 0 && said > 0:
 		return fmt.Sprintf("no battery (pmset: %q), but the state line says %d%%", short(pmset), said)
+	case real < 0 && !strings.Contains(answer, "no battery"):
+		return fmt.Sprintf("no battery (pmset: %q), and the state line doesn't say \"no battery\" (spec 001 FR-065a): %q", short(pmset), short(answer))
 	case real >= 0 && said < 0:
 		return fmt.Sprintf("pmset says %d%%, the state line has no battery: %q", real, short(answer))
 	case real >= 0 && (said < real-1 || said > real+1):

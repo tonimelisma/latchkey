@@ -889,6 +889,7 @@ final class AppModel {
         case Permissions.messagesApp: "Messages"
         case Permissions.safariApp: "Safari"
         case Permissions.mailApp: "Mail"
+        case Permissions.contactsApp: "Contacts"
         default: bundleID
         }
     }
@@ -1050,7 +1051,7 @@ final class AppModel {
                 helper: helperStatus == .enabled, fullDiskAccess: fullDiskAccess,
                 notes: control(of: Permissions.notesApp), messages: control(of: Permissions.messagesApp),
                 safari: control(of: Permissions.safariApp), mail: control(of: Permissions.mailApp),
-                contacts: contactsStatus,
+                contactsApp: control(of: Permissions.contactsApp), contacts: contactsStatus,
                 calendars: calendarStatus == .fullAccess, reminders: remindersStatus == .fullAccess,
                 location: locationAccess,
                 safariJavaScript: safariJavaScript, screenRecording: screenRecording, accessibility: accessibility,

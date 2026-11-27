@@ -163,12 +163,14 @@ final class FakeSafariTabs: ScriptRunner, @unchecked Sendable {
                 else {
                     throw ScriptError.failed("execution error: LATCHKEY_NO_TAB (-2700)")
                 }
-                if let token = Self.token(in: args[2]), !windows[w].tabs[i].scriptless {
+                if let token = Self.token(in: args[2]), !windows[w].tabs[i].scriptless, !windows[w].tabs[i].waiting {
                     windows[w].tabs[i].mark = token
                 }
                 windows[w].tabs[i].picks += 1
-                let marked = windows[w].tabs[i].mark == nil ? "no" : "yes"
-                return "\(windows[w].tabs.count)\t\(marked)\t\(windows[w].tabs[i].url)"
+                let marked =
+                    windows[w].tabs[i].waiting ? "waiting" : windows[w].tabs[i].mark == nil ? "no" : "yes"
+                return "\(windows[w].tabs.count)\t\(marked)\t\(windows[w].tabs[i].url)\n"
+                    + windows[w].tabs.map(\.url).joined(separator: "\n")
             case SafariBrowser.Script.tabSurvey:
                 let w = try window(args[0])
                 let idx = Int(args[1])!

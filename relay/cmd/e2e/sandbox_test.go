@@ -206,8 +206,10 @@ func TestBatteryMismatch(t *testing.T) {
 		{line(65), laptop, true},
 		{line(70), laptop, false},
 		{"hi\nTest Mac (Mac): online", laptop, false},
-		{line(0), vm, true},
-		{"hi\nTest Mac (Mac): online", vm, true},
+		{"hi\nTest Mac (Mac): online · no battery · keep-awake on", vm, true},
+		// Without a battery the line says so (spec 001 FR-065a): neither 0% nor silence.
+		{line(0), vm, false},
+		{"hi\nTest Mac (Mac): online", vm, false},
 		{line(82), vm, false}, // a made-up percent
 	} {
 		if got := batteryMismatch(c.answer, c.pmset); (got == "") != c.ok {

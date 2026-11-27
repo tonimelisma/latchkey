@@ -234,11 +234,35 @@ final class OwnPages {
         }
     }
 
+    /// What Claude typed into password and code fields of pages that are gone (closed, or a
+    /// Safari tab Latchkey lost), by page name, the newest 20: in memory only, never sent, so a
+    /// problem report from the chat that typed them still blanks them in its calls (spec 014
+    /// FR-1448; security review 2026-11-27: forgetting a page dropped them).
+    private var goneSecrets: [String: [String]] = [:]
+    private var goneSafari: [String: SafariBrowser] = [:]
+    private var goneOrder: [String] = []
+
+    private func keepSecrets(_ name: String, _ e: Entry) {
+        switch e.kind {
+        case .own(let b) where !b.record.secrets.isEmpty: goneSecrets[name] = b.record.secrets
+        case .safari(let s): goneSafari[name] = s
+        default: return
+        }
+        goneOrder.removeAll { $0 == name }
+        goneOrder.append(name)
+        while goneOrder.count > 20 {
+            let old = goneOrder.removeFirst()
+            goneSecrets[old] = nil
+            goneSafari[old] = nil
+        }
+    }
+
     /// Closes a page with its cookies; false when there is none by that name.
     @discardableResult
     func close(_ name: String) -> Bool {
         guard let e = pages.removeValue(forKey: name) else { return false }
         order.removeAll { $0 == name }
+        keepSecrets(name, e)
         switch e.kind {
         case .own(let b): b.discard()
         case .safari(let s): Task { _ = try? await s.closeWorking() }  // Claude's own tab only
@@ -248,8 +272,17 @@ final class OwnPages {
 
     /// Forgets a Safari page whose tab was closed already.
     func forget(_ name: String) {
-        pages[name] = nil
+        if let e = pages.removeValue(forKey: name) { keepSecrets(name, e) }
         order.removeAll { $0 == name }
+    }
+
+    /// Forgets the Safari page `name` if its driver is still `driver` (a page by that name opened
+    /// again since is left alone); true when it did.
+    @discardableResult
+    func forgetLost(_ name: String, driver: SafariBrowser) -> Bool {
+        guard case .safari(let s)? = pages[name]?.kind, s === driver else { return false }
+        forget(name)
+        return true
     }
 
     /// Closes every Safari tab of Claude's, before Latchkey quits: the pages are kept in memory
@@ -290,7 +323,10 @@ final class OwnPages {
             switch pages[raw.trimmingCharacters(in: .whitespaces).lowercased()]?.kind {
             case .own(let b)?: out += b.record.secrets
             case .safari(let s)?: out += await s.typedForReport()
-            case nil: break
+            case nil:
+                let n = raw.trimmingCharacters(in: .whitespaces).lowercased()
+                out += goneSecrets[n] ?? []
+                if let s = goneSafari[n] { out += await s.typedForReport() }
             }
         }
         return out

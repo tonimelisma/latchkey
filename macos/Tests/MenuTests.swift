@@ -82,11 +82,13 @@ import Testing
     @Test func approvalsList() {
         var facts = ApprovalFacts(
             helper: false, fullDiskAccess: false, notes: .notAsked, messages: .denied, safari: .notAsked,
-            mail: .notAsked, contacts: .notDetermined, safariJavaScript: nil, screenRecording: false,
+            mail: .notAsked, contactsApp: .notAsked, contacts: .notDetermined, safariJavaScript: nil,
+            screenRecording: false,
             accessibility: false)
         let all = Approval.list(facts)
         let ids = [
-            "helper", "disk", "notifications", "notes", "messages", "mail", "contacts", "calendars", "reminders",
+            "helper", "disk", "notifications", "notes", "messages", "mail", "contacts", "contactsApp", "calendars",
+            "reminders",
             "location", "localNetwork", "safari", "safariJS", "screen", "screenAccess", "accessibility",
         ]
         #expect(all.map(\.id) == ids)

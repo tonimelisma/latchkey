@@ -73,6 +73,10 @@ for c in $clients; do
 	for s in kTCCServiceCalendar kTCCServiceReminders kTCCServiceAddressBook; do
 		row "$user_db" "$s" "$c" 1 "$(reqhex "$c")"
 	done
+	# The sandbox's checks read what macOS's Accessibility sees (which Finder sidebar row is
+	# selected, computer-sidebar-row, 2026-11-27): System Events answers that only to a program
+	# allowed Accessibility. In the test Mac only.
+	row "$system_db" kTCCServiceAccessibility "$c" 1 "$(reqhex "$c")"
 done
 for target tpath in "${(@kv)targets}"; do
 	treq=$(reqhex "$tpath") || continue

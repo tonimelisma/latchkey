@@ -1,9 +1,11 @@
 # Sandbox Mac checks to write
 
-## Status (2026-11-26, spec 016 T16, the first local runs)
+## Status (2026-11-27, spec 016 T16 to T19)
 
-Written in `relay/cmd/e2e` (`sandbox.go`, `sandbox_apps.go`, `sandbox_web.go`, `watch.go`) and
-run in the sandbox Mac (`make -C macos sandbox`; results in `e2e-results/`):
+Every check below is written, in `relay/cmd/e2e` (`sandbox.go`, `sandbox_apps.go`,
+`sandbox_web.go`, `sandbox_more.go`, `watch.go`), and runs in the sandbox Mac (`make -C macos
+sandbox`; results in `e2e-results/`). A check that can't run in the copy reports itself skipped
+with the reason.
 
 | Check in `e2e sandbox` | Covers (tables below) |
 |---|---|
@@ -13,17 +15,27 @@ run in the sandbox Mac (`make -C macos sandbox`; results in `e2e-results/`):
 | `browser` | `browser` (Latchkey's own browser, https pages on two sites) |
 | `safari` | `safari-claudes-tab`, `safari-cross-site`, `safari-owner-tab`, `safari-actions` (keys, select, hover, scroll, upload, download), `safari-long-page`, `safari-leaves-nothing`, `composed-text` (Safari's half) |
 | `notes`, `calendar`, `reminders`, `contacts`, `computer`, `maps` | the per-app groups of the same names |
-| `contacts-card-with-note` | new: a card with a note can be changed (fails: macOS needs Apple's Contacts notes entitlement; Toni chose, 2026-11-27, to change such cards through the Contacts app's scripting in the background, no window; for a local session) |
+| `contacts-card-with-note` | new: a card with a note is changed and deleted through the Contacts app's scripting, the note kept, Contacts quit again (spec 007 FR-722a; macOS lets only apps with Apple's Contacts notes entitlement save such a card through the framework; Toni, 2026-11-27: "Via Contacts' scripting"). Passes since 2026-11-27 |
 | `front-app-unchanged`, `no-permission-prompts` | the same, sampled during every Latchkey call |
 | `sweep` | `sweep` |
-| `turned-off`, `offline`, `relay-restart`, `network-cut`, `suspended`, `battery` | `tool-off-disappears`, the offline answer, `silent-network-cut`, `reconnect`, `suspended-account` with `unsuspended-reconnects`, `battery-vs-pmset` (failed: a Mac without a battery was said to have 100%; fixed 2026-11-27, spec 001 FR-065a, not yet seen passing in the sandbox) |
+| `turned-off`, `offline`, `relay-restart`, `network-cut`, `suspended`, `battery` | `tool-off-disappears`, the offline answer, `silent-network-cut`, `reconnect`, `suspended-account` with `unsuspended-reconnects`, `battery-vs-pmset` (a Mac without a battery was said to have 100%; fixed 2026-11-27, spec 001 FR-065a; the check now wants "no battery" there, and passes) |
+| `safari-script-navigation`, `safari-busy-tab` | the same (2026-11-27; each found a Latchkey bug, fixed: a lost Safari tab of Claude's stayed listed as Claude's page; a tab busy right after the pick was called gone) |
+| `computer-sidebar-row`, `computer-window-buttons` | the same (the selection read with System Events, which the image lets the test Mac's osascript use) |
+| `headless-chrome-profile` | the same (Chrome is in the image) |
+| `setup-names-what-is-off` | the same: Mail's control turned off in the copy's permission database, setup's Ask Now pressed with Return, the log line and setup's note read. Passed on the image of 2026-11-26; fails on the image that starts each app once (macOS still answers Mail's control allowed): open, `specs/016-test-strategy/research.md` §7 |
+| `report-from-installed-app` | the same: the relay restarted with a throwaway intake and developer key in the copy, sharing turned on, a password typed into a served page, the report opened with that key |
+| `keep-awake-real` | the same where the build's keep-awake helper runs; skipped in the sandbox (below) |
 
-Skipped with the reason in each run: `location` (no Wi-Fi in a virtual Mac), `messages`, `mail`,
-`whatsapp` (no test accounts in the image), `logins` (no test logins in its Passwords),
-`pair-preview` (the image is paired once). Not written yet: `safari-script-navigation`,
-`safari-busy-tab`, `setup-names-what-is-off`, `computer-sidebar-row`, `computer-window-buttons`,
-`messages-identical-texts`, `report-from-installed-app`, `keep-awake-real` (a self-signed build's
-helper is refused: no Apple team), `headless-chrome-profile`.
+Skipped with the reason in each run: `location` (no Wi-Fi in a virtual Mac), `messages`,
+`messages-identical-texts`, `mail`, `whatsapp` (no test accounts in the image), `logins` (no
+test logins in its Passwords), `pair-preview` (the image is paired once), `keep-awake-real`:
+the sandbox build is signed with a self-made identity, no Apple team, and the keep-awake helper
+(an `SMAppService` daemon that checks its caller's team) is refused by macOS ("keep-awake off (not
+approved in System Settings)"). It would take a build signed by an Apple team in the image: CI's
+Apple Development identity (its certificate and key in the sandbox's own keychain, which puts the
+team ID on the owner's Mac's disk, so Toni's choice), or the paid Developer Program's Developer
+ID; then approving the helper in the copy's background items database, as the image script does
+for the other permissions.
 
 What the retired hand-run kits checked, written down when they were removed (spec 016 D2 and
 D5, 2026-11-26), for `cmd/e2e sandbox` to port (spec 016 T11, plan D3). Each check runs in the

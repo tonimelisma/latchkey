@@ -18,9 +18,11 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/tonimelisma/latchkey/relay/internal/account"
+	"github.com/tonimelisma/latchkey/relay/internal/mcpserver"
 	"github.com/tonimelisma/latchkey/relay/internal/oauth"
 	"github.com/tonimelisma/latchkey/relay/internal/server"
 	"github.com/tonimelisma/latchkey/relay/internal/store"
+	"github.com/tonimelisma/latchkey/relay/internal/trace"
 )
 
 // Private is a relay started for one check (spec 015): its own database, mail kept in memory,
@@ -42,6 +44,10 @@ type PrivateOptions struct {
 	PublicURL string
 	// CertFile and KeyFile serve TLS (the test Mac's relay, spec 015 research.md decision 4a).
 	CertFile, KeyFile string
+	// Reports and Traces: where shared problem reports go and the traces they are made from
+	// (the sandbox's report-from-installed-app); zero values: none.
+	Reports mcpserver.ReportsOptions
+	Traces  *trace.Store
 }
 
 // StartPrivate starts a relay for a check; Close stops it.
@@ -74,6 +80,7 @@ func StartPrivate(ctx context.Context, o PrivateOptions) (*Private, error) {
 		PublicURL: public, Store: db, Mailer: mail,
 		AllowedClients: oauth.AnyClientHost(), // the check registers its own throwaway client
 		Logger:         slog.New(slog.NewTextHandler(io.Discard, nil)),
+		Reports:        o.Reports, Traces: o.Traces,
 	})
 	if err != nil {
 		_ = l.Close()
