@@ -679,6 +679,10 @@ only, never contents.
       tried, stopped). Last full run, fresh copy: 28 passed, 2 failed, 6 skipped. Seen flaky
       under load, not from this work: `TraceFilesTests.copiesTheDatabaseOnceAndLeavesItUntouched`
       ("the database's files are exactly as they were"), 2 of 3 full runs, passes alone.
+      T20 done 2026-11-27: the evals' first real run, 20 of 20 tasks passed every try (60 of 60),
+      held out 4 of 4, the planted-instruction tasks 9 of 9 tries, after a harness fix (one OAuth
+      client per relay). One earlier run lost the test Mac's Latchkey mid-run (cause not found,
+      not seen again).
       Evidence only for an unlocked virtual Mac with test data; the locked Mac, the lid closed and
       Toni's accounts stay NOT VERIFIED.
 
@@ -731,9 +735,9 @@ only, never contents.
    page, clicked, sent a form and saved a download; Files turned off left Claude's list and came
    back; the offline answer in 29 ms; all 32 Mac tools compared with their snapshots); a changed
    snapshot fails the job VERIFIED (the first runs failed on the missing snapshots, uploaded
-   them, and passed once they were committed); weekly run and image script NOT VERIFIED (never
-   run: they need an Apple silicon Mac with Tart, and a person to approve the test Mac's
-   permissions).
+   them, and passed once they were committed); image script and eval run VERIFIED for an
+   unlocked test Mac (2026-11-26 and 2026-11-27, local sessions on Toni's Mac: the image made
+   with no person; the evals 20 of 20 tasks every try, spec 016 research §7).
    Nothing left for Toni: the test Mac run stays in the repository for whoever wants it
    (`macos/scripts/eval-image.sh` once, then `weekly-eval.sh [--send]`).
 2. Signed updates with Sparkle (Toni, 2026-11-23: "yes, implement sparkle"; spec 001 FR-072 to

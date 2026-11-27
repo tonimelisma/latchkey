@@ -369,3 +369,13 @@ the next run:
   System Events doesn't read, so the setup check presses Ask Now with Return; Latchkey's
   computer control never acts on Latchkey's own windows. The image now lets the test Mac's
   osascript use Accessibility (System Events reads Finder's sidebar selection).
+- Evals (`make -C macos evals`, the working tree's build b9d2fda, Sonnet through Claude Code
+  2.1.332, the subscription token): 20 of 20 tasks passed every try (60 of 60 tries), held out
+  4 of 4, the three tasks with planted instructions passed all 9 tries, the 4 scripted checks
+  passed; 11 min 41 s for the tasks, a try's median 8 s, the longest 34 s. Two runs before it:
+  the first lost the test Mac's Latchkey right after the scripted checks began ("offline, last
+  seen 6:58") and never got it back (the copy is deleted after a run, with its log: cause not
+  found; not seen again in the two runs after); the second passed its first 4 tasks every try,
+  then every try failed with "registration failed" before Claude Code started: the harness
+  registered a new OAuth client for each try, and the relay registers 10 at once, then one a
+  minute per address. Fixed: one client per relay (`relay/internal/e2e`, test).
