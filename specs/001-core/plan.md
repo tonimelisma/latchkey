@@ -553,8 +553,9 @@ Serves FR-070, FR-071, FR-072, FR-669, FR-670; Constitution IV.
   away, details below are Claude's proposals for his review, research.md "Signed updates
   without a Developer ID"):
   - Sparkle 2 (already pinned) with an EdDSA update key: its public half is
-    `SPARKLE_PUBLIC_ED_KEY` in `Config/Base.xcconfig` (public), the private half the repository
-    secret `SPARKLE_PRIVATE_KEY` in the environment `release`. No Developer ID: Sparkle checks
+    `SPARKLE_PUBLIC_ED_KEY` in `Config/Base.xcconfig` (public), the private half
+    `SPARKLE_PRIVATE_KEY`, in Azure Key Vault `kv-melisma-release` (managed from the private
+    repository `tonimelisma/secrets`; until 2026-11-26 a secret of the environment `release`). No Developer ID: Sparkle checks
     its own signature, and the update is signed with the same development certificate as the
     installed app, so its permissions and pairing carry over.
   - Info.plist: `SUEnableAutomaticChecks`, `SUAutomaticallyUpdate` (silent download, no window:
@@ -571,7 +572,8 @@ Serves FR-070, FR-071, FR-072, FR-669, FR-670; Constitution IV.
     `scripts/appcast.sh` use the same rule. Earlier builds all had build number 1, below every
     release under this rule.
   - CI (FR-072c), `.github/workflows/mac-tag.yml` job `release` on `macos-26`, environment
-    `release`: imports the certificate (`MAC_CERTIFICATE_P12`, `MAC_CERTIFICATE_PASSWORD`) into a
+    `release`: fetches the secrets from Azure Key Vault `kv-melisma-release` with the job's
+    GitHub identity token (OIDC, no stored credential), imports the certificate (`MAC_CERTIFICATE_P12`, `MAC_CERTIFICATE_PASSWORD`) into a
     keychain of the run's own, writes `Local.xcconfig` from `MAC_DEVELOPMENT_TEAM`, runs
     `package.sh` with `XCODEBUILD_SIGNING` (manual signing with that identity), zips the app
     with `ditto`, signs the zip with Sparkle's `sign_update`, writes the feed with

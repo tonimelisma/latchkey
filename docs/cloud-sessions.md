@@ -63,6 +63,8 @@ applies, except:
   values they read with `::add-mask::`, and the secrets are hidden by GitHub). No workflow and no
   identity ever reaches an installed Linux server: it only pulls signed Linux releases.
   Secrets are the owner's (`docs/development.md`, "Owner setup"); a session never handles a secret's value.
+  The release jobs read theirs from Azure Key Vault `kv-melisma-release` (managed from the
+  private repository `tonimelisma/secrets`) with the job's identity token, and mask each value.
 - The hosted relay's server (it also runs the feedback intake; run outside this repository):
   anything that happens there is done by that server's own agent, never by a session here or
   through Latchkey's shell (Toni, 2026-11-23). A session that needs something there writes a self-contained prompt for Toni to

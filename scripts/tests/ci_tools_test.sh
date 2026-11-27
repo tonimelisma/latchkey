@@ -55,4 +55,16 @@ for f in "$root"/.github/workflows/*.yml; do
   fi
 done
 
+# The release jobs read their secrets from Azure Key Vault (keyless, the job's identity token;
+# docs/development.md, "Owner setup"), never from GitHub secrets (2026-11-26).
+for f in linux-release.yml mac-tag.yml; do
+  if grep -qE 'secrets\.' "$root/.github/workflows/$f"; then
+    bad "$f reads a GitHub secret; release secrets come from Azure Key Vault"
+  elif grep -q 'name: Fetch release secrets from Azure Key Vault' "$root/.github/workflows/$f"; then
+    ok "$f fetches its secrets from Azure Key Vault"
+  else
+    bad "$f has no step that fetches its secrets from Azure Key Vault"
+  fi
+done
+
 [ "$fails" -eq 0 ] || { printf '%s failed\n' "$fails"; exit 1; }
