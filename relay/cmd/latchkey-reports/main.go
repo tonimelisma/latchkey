@@ -8,8 +8,10 @@
 //
 // It reads the intake's address from LATCHKEY_INTAKE_URL (default Latchkey's), the developer's
 // token from LATCHKEY_INTAKE_TOKEN, and the private key (base64, as keygen writes the file) from
-// LATCHKEY_REPORTS_KEY or the file named by LATCHKEY_REPORTS_KEY_FILE. A cloud session gets both
-// variables from Azure Key Vault at session start (scripts/cloud-secrets.sh). Report contents go only to this command's output.
+// LATCHKEY_REPORTS_KEY or the file named by LATCHKEY_REPORTS_KEY_FILE. When they aren't set it
+// reads them from Azure Key Vault itself (internal/keyvault: the cloud session's client secret, or
+// `az login` on the Mac): kv-melisma-dev/latchkey-intake-developer-token and
+// kv-melisma-release/latchkey-reports-private-key. Report contents go only to this command's output.
 package main
 
 import (
@@ -24,6 +26,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/tonimelisma/latchkey/relay/internal/keyvault"
 	"github.com/tonimelisma/latchkey/relay/reports"
 )
 
@@ -89,9 +92,11 @@ func call(method, path string, out *[]byte) error {
 	if err != nil {
 		return err
 	}
-	if t := strings.TrimSpace(os.Getenv("LATCHKEY_INTAKE_TOKEN")); t != "" {
-		req.Header.Set("Authorization", "Bearer "+t)
+	t, err := keyvault.Get(req.Context(), "LATCHKEY_INTAKE_TOKEN", "kv-melisma-dev", "latchkey-intake-developer-token")
+	if err != nil {
+		return err
 	}
+	req.Header.Set("Authorization", "Bearer "+strings.TrimSpace(t))
 	resp, err := client.Do(req) //nolint:gosec // the developer's own intake
 	if err != nil {
 		return err
@@ -129,7 +134,10 @@ func keyText() (string, error) {
 		k = string(b)
 	}
 	if strings.TrimSpace(k) == "" {
-		return "", errors.New("set LATCHKEY_REPORTS_KEY (or LATCHKEY_REPORTS_KEY_FILE) to the developer's private key")
+		var err error
+		if k, err = keyvault.Get(context.Background(), "LATCHKEY_REPORTS_KEY", "kv-melisma-release", "latchkey-reports-private-key"); err != nil {
+			return "", err
+		}
 	}
 	return strings.TrimSpace(k), nil
 }

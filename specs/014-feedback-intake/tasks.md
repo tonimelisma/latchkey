@@ -32,6 +32,8 @@ run here; the Mac app's tests run on GitHub's macOS runner (`mac-build.yml`).
   answered from a cloud session. The token's source is the intake's own `DEVELOPER_TOKEN`.
   Replaced 2026-11-26: both now come from Azure Key Vault at session start
   (`scripts/cloud-secrets.sh`), and the `latchkey` environment's variable and network secret go.
+  Since 2026-11-27 `latchkey-reports` reads them from the vault itself when it runs (no
+  session-start fetch; `relay/internal/keyvault`).
 
 ## Everything for that chat (2026-11-25; FR-1440 to FR-1456)
 

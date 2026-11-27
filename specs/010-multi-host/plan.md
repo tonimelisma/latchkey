@@ -217,8 +217,8 @@ would need a second connection, which would replace the service's.) No notificat
 - **Releases**: GitHub releases tagged `server-vX.Y.Z` with `latchkey-linux-amd64`,
   `latchkey-linux-arm64`, each with `.sig` (base64 Ed25519, Toni, 2026-10-31, over
   `latchkey-linux-<arch> <version> <sha256>`: the version and architecture are signed too, so an
-  older program can't be relabelled as newer, FR-1029) and `SHA256SUMS`. The private key lives in the gitignored `.env`
-  (`SERVER_SIGNING_KEY`, base64 seed); the public key is in `linux/internal/update/key.go`.
+  older program can't be relabelled as newer, FR-1029) and `SHA256SUMS`. The private key lives in Azure Key Vault
+  (`kv-melisma-release/latchkey-server-signing-key`, base64 seed; `SERVER_SIGNING_KEY`); the public key is in `linux/internal/update/key.go`.
   `linux/scripts/release.sh` builds, signs, and publishes. A fork sets its own key and
   `update_repo` in settings.
 - **Install line** (contracts/server-program.md): `curl -fsSL https://raw.githubusercontent.com/

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"crypto/hpke"
 	"errors"
 	"fmt"
@@ -53,6 +54,26 @@ type config struct {
 // minSetupCode is the shortest setup code accepted, letters and digits counted without dashes
 // and spaces: a short one could be guessed within the relay's limits.
 const minSetupCode = 12
+
+// withVaultSMTPPassword is getenv, but when SMTP_USER is set and SMTP_PASSWORD isn't, the
+// password is read once from Azure Key Vault (kv-melisma-hosts/resend-api-key, the hosted relay's
+// email key; internal/keyvault says who signs in, LATCHKEY_KEYVAULT_AUTH=gce on its Google VM). A
+// relay that sets SMTP_PASSWORD, or has no SMTP_USER, never asks the vault.
+func withVaultSMTPPassword(ctx context.Context, getenv func(string) string, get func(ctx context.Context, env, vault, secret string) (string, error)) (func(string) string, error) {
+	if getenv("SMTP_USER") == "" || getenv("SMTP_PASSWORD") != "" {
+		return getenv, nil
+	}
+	password, err := get(ctx, "SMTP_PASSWORD", "kv-melisma-hosts", "resend-api-key")
+	if err != nil {
+		return nil, err
+	}
+	return func(k string) string {
+		if k == "SMTP_PASSWORD" {
+			return password
+		}
+		return getenv(k)
+	}, nil
+}
 
 func loadConfig(getenv func(string) string) (config, error) {
 	c := config{

@@ -31,7 +31,7 @@ build:
 	    -o build/latchkey-linux-$$arch ./cmd/latchkey; \
 	done
 
-## release: build, sign, and publish linux-<next number> on GitHub (needs SERVER_SIGNING_KEY in ../.env)
+## release: build, sign, and publish linux-<next number> on GitHub (SERVER_SIGNING_KEY, or az login: read from Key Vault)
 release:
 	sh scripts/release.sh
 

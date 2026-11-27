@@ -1,6 +1,10 @@
 package main
 
 import (
+	"context"
+	"errors"
+	"fmt"
+	"maps"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -130,5 +134,43 @@ func TestLoadConfigAllowsLoopbackHTTP(t *testing.T) {
 	for _, u := range []string{"http://localhost:8080", "http://127.0.0.1:8080"} {
 		_, err := loadConfig(env(map[string]string{"PUBLIC_URL": u}))
 		require.NoError(t, err, u)
+	}
+}
+
+func TestSMTPPasswordFromTheVault(t *testing.T) {
+	asked := 0
+	vault := func(_ context.Context, env, vault, secret string) (string, error) {
+		asked++
+		if env != "SMTP_PASSWORD" || vault != "kv-melisma-hosts" || secret != "resend-api-key" {
+			return "", fmt.Errorf("asked for %s %s/%s", env, vault, secret)
+		}
+		return "from-vault", nil
+	}
+	base := map[string]string{
+		"PUBLIC_URL": "https://relay.example.com", "DATA_DIR": "/data", "SMTP_HOST": "smtp.example.com",
+		"SMTP_PORT": "465", "SMTP_FROM": "Relay <r@example.com>", "SMTP_USER": "u",
+	}
+	getenv, err := withVaultSMTPPassword(context.Background(), env(base), vault)
+	if err != nil {
+		t.Fatal(err)
+	}
+	c, err := loadConfig(getenv)
+	if err != nil || c.SMTPPassword != "from-vault" || c.SMTPUser != "u" || asked != 1 {
+		t.Fatalf("password %q, asked %d, %v", c.SMTPPassword, asked, err)
+	}
+
+	// Set, or no user: the vault isn't asked.
+	for _, extra := range []map[string]string{{"SMTP_PASSWORD": "p"}, {"SMTP_USER": ""}} {
+		m := maps.Clone(base)
+		maps.Copy(m, extra)
+		if _, err := withVaultSMTPPassword(context.Background(), env(m), vault); err != nil || asked != 1 {
+			t.Fatalf("%v: asked %d, %v", extra, asked, err)
+		}
+	}
+
+	// The vault's error stops the relay.
+	failing := func(context.Context, string, string, string) (string, error) { return "", errors.New("no vault") }
+	if _, err := withVaultSMTPPassword(context.Background(), env(base), failing); err == nil {
+		t.Fatal("started without the password")
 	}
 }

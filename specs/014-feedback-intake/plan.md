@@ -66,9 +66,10 @@ address is that name.
 
 - The token and the private key (since 2026-11-26; before, a network secret and a variable of
   Toni's personal cloud environment): in Azure Key Vault (`kv-melisma-dev/latchkey-intake-developer-token`,
-  `kv-melisma-release/latchkey-reports-private-key`), fetched at a cloud session's start into
-  `LATCHKEY_INTAKE_TOKEN` and `LATCHKEY_REPORTS_KEY` by `scripts/cloud-secrets.sh`
-  (`docs/cloud-sessions.md`, "The environment"). `latchkey-reports list` (`relay/cmd/latchkey-reports`)
+  `kv-melisma-release/latchkey-reports-private-key`), which `latchkey-reports` reads itself when
+  `LATCHKEY_INTAKE_TOKEN` and `LATCHKEY_REPORTS_KEY` aren't set (since 2026-11-27, replacing the
+  session-start fetch of 2026-11-26): with the cloud session's `MELISMA_SECRETS_CLIENT_SECRET`, or
+  `az login` on the Mac (`relay/internal/keyvault`; `docs/cloud-sessions.md`, "The environment"). `latchkey-reports list` (`relay/cmd/latchkey-reports`)
   fetches the open reports and prints them opened, only inside the session; `latchkey-reports
   delete <id>` deletes a dispositioned one.
 - `docs/cloud-sessions.md` and CLAUDE.md's session start change from "list the Mac's Feedback

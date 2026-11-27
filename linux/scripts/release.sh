@@ -5,15 +5,17 @@
 # session asks for it with repository_dispatch "linux-release"): there SERVER_SIGNING_KEY comes from
 # Azure Key Vault kv-melisma-release (managed from the private repository tonimelisma/secrets),
 # fetched by the workflow's first step, GH_TOKEN is the workflow's token, and RELEASE_TAG_ON_MAIN=1 lets it release a
-# commit main has meanwhile moved past (scripts/release-tag.sh). Elsewhere it reads the key from
-# the gitignored ../.env. Publishes only a clean checkout of a commit on main, so every release is
+# commit main has meanwhile moved past (scripts/release-tag.sh). Elsewhere (the owner's Mac) it
+# reads the key from the vault itself with the Azure CLI's sign-in (`az login`). Publishes only a clean checkout of a commit on main, so every release is
 # code that's on main. Nothing newer to release (a newer commit already has a number): exit 0.
 set -eu
 cd "$(dirname "$0")/.."
 
-# shellcheck source=/dev/null
-[ -n "${SERVER_SIGNING_KEY:-}" ] || [ ! -f ../.env ] || . ../.env
-[ -n "${SERVER_SIGNING_KEY:-}" ] || { echo "release: SERVER_SIGNING_KEY is neither set nor in ../.env" >&2; exit 1; }
+if [ -z "${SERVER_SIGNING_KEY:-}" ]; then
+  SERVER_SIGNING_KEY=$(az keyvault secret show --vault-name kv-melisma-release -n latchkey-server-signing-key --query value -o tsv) ||
+    { echo "release: SERVER_SIGNING_KEY isn't set and couldn't be read from Key Vault kv-melisma-release (az login?)" >&2; exit 1; }
+fi
+[ -n "$SERVER_SIGNING_KEY" ] || { echo "release: SERVER_SIGNING_KEY is empty" >&2; exit 1; }
 # Only the signing step gets the key; nothing else this script runs inherits it.
 signing_key=$SERVER_SIGNING_KEY
 unset SERVER_SIGNING_KEY

@@ -61,7 +61,8 @@ SECURITY.md                     How to report vulnerabilities.
 ```
 
 Personal deployment details (the hosted relay's address, server, signing team) live only in
-gitignored files: `.env`, `macos/Config/Local.xcconfig`, and `CLAUDE.local.md`.
+gitignored files: `.env`, `macos/Config/Local.xcconfig`, and `CLAUDE.local.md`. Latchkey's tools and
+relay read no secret from `.env`: keys and tokens are in Azure Key Vault (below).
 
 ## Owner setup (only Toni does these; once; done 2026-11-23)
 
@@ -79,10 +80,24 @@ Moved from CLAUDE.md on 2026-11-26.
   `apple-development-p12-password`, `MAC_DEVELOPMENT_TEAM` = `apple-development-team`,
   `SPARKLE_PRIVATE_KEY` = `latchkey-sparkle-private-key` (Sparkle's `generate_keys -x`), whose
   public key goes into `SPARKLE_PUBLIC_ED_KEY` in `macos/Config/Base.xcconfig` (public;
-  committed). A local `make release` in `linux/` still reads `SERVER_SIGNING_KEY` from `.env`.
-- Cloud sessions' secrets (since 2026-11-26): the shared claude.ai environment holds only
-  `MELISMA_SECRETS_CLIENT_SECRET` (Entra app `cloud-sessions-reader`); the session-start hook
-  fetches the rest from Key Vault (`docs/cloud-sessions.md`, "The environment").
+  committed).
+- Every other consumer reads its secrets from Key Vault itself when it runs (since 2026-11-27;
+  no `.env`, no rendered files): an environment variable of the same name wins when set.
+  - The Mac: `az login` once (tenant `bd0d0de6-1ba6-42c2-84c6-8e447f1ef6ea`). A local `make
+    release` in `linux/` reads `SERVER_SIGNING_KEY` with `az keyvault secret show` from
+    `kv-melisma-release/latchkey-server-signing-key`; `latchkey-reports` reads
+    `LATCHKEY_REPORTS_KEY` (`kv-melisma-release/latchkey-reports-private-key`) and
+    `LATCHKEY_INTAKE_TOKEN` (`kv-melisma-dev/latchkey-intake-developer-token`) through the Azure
+    CLI's sign-in (`relay/internal/keyvault`).
+  - Cloud sessions: the shared claude.ai environment holds only `MELISMA_SECRETS_CLIENT_SECRET`
+    (Entra app `cloud-sessions-reader`), with which `latchkey-reports` signs in
+    (`docs/cloud-sessions.md`, "The environment").
+  - The hosted relay: with `SMTP_USER` set and no `SMTP_PASSWORD`, it reads the email key
+    (`kv-melisma-hosts/resend-api-key`) at startup; on its Google VM `LATCHKEY_KEYVAULT_AUTH=gce`
+    makes it sign in as the Entra app `host-pilvi` with the VM's Google identity token (no
+    stored credential). The server's setup (its `relay.env`, and `configure`, which reads
+    `CLOUDFLARE_API_TOKEN` from `kv-melisma-hosts/cloudflare-api-token` with `az` on the Mac)
+    lives in the private repository that runs that server.
 - ghcr.io package `latchkey-relay`: Package settings → Manage Actions access → this repository
   with Write (so the image workflow can publish it).
 - Optional: required reviewers on the environments `release`, `production`; a tag

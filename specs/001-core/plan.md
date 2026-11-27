@@ -679,7 +679,8 @@ Serves FR-080, FR-186 to FR-189, Constitution V, VI, VIII.
 - Container: distroless image, one volume at `/data`, published to
   `ghcr.io/tonimelisma/latchkey-relay`.
 - Config (environment): `PUBLIC_URL`, `DATA_DIR`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`,
-  `SMTP_PASSWORD`, `SMTP_FROM`, `ACME_EMAIL` (optional), `PORT` (optional, default 8080),
+  `SMTP_PASSWORD` (when unset with `SMTP_USER` set, read from Azure Key Vault
+  `kv-melisma-hosts/resend-api-key` at startup: the hosted relay, 2026-11-27), `SMTP_FROM`, `ACME_EMAIL` (optional), `PORT` (optional, default 8080),
   `ALLOWED_EMAILS` (optional, comma-separated; empty means open sign-up, FR-046),
   `ALLOWED_CLIENT_HOSTS` (optional, default `claude.ai`; D4), `KEY_FILE` (optional, default
   `DATA_DIR/relay.key`; below),

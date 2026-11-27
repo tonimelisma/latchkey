@@ -6,7 +6,7 @@ import (
 )
 
 // publicKey checks every server release (Toni, 2026-10-31: Latchkey's own Ed25519 key). Its
-// private half is in the maintainer's gitignored .env (SERVER_SIGNING_KEY) and macOS keychain. A
+// private half is in Azure Key Vault (kv-melisma-release/latchkey-server-signing-key) and the maintainer's macOS keychain. A
 // fork that publishes its own releases puts its own public key here and its repository in
 // update_repo.
 const publicKey = "qJGRlZxRgdjYHQ3q7ZmE2mWxJChr50XfGzwEGiWOHP8="

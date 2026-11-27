@@ -20,6 +20,7 @@ import (
 	"golang.org/x/crypto/acme/autocert"
 
 	"github.com/tonimelisma/latchkey/relay/internal/account"
+	"github.com/tonimelisma/latchkey/relay/internal/keyvault"
 	"github.com/tonimelisma/latchkey/relay/internal/mcpserver"
 	"github.com/tonimelisma/latchkey/relay/internal/server"
 	"github.com/tonimelisma/latchkey/relay/internal/store"
@@ -49,7 +50,11 @@ func main() {
 }
 
 func run(ctx context.Context) error {
-	cfg, err := loadConfig(os.Getenv)
+	getenv, err := withVaultSMTPPassword(ctx, os.Getenv, keyvault.Get)
+	if err != nil {
+		return err
+	}
+	cfg, err := loadConfig(getenv)
 	if err != nil {
 		return err
 	}
