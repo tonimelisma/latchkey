@@ -668,6 +668,10 @@ actor SafariBrowser {
         picked = (id, tab)
         claudesTab = false
         pickedUnmarked = f[1] == "yes" ? nil : String(f[2])
+        // The tab's page answered no script for 10 s: said at once (FR-432), not after another
+        // 10 s at the next look, which took the answer past the relay's 30 s (sandbox check
+        // safari-busy-tab, 2026-11-27). The tab stays picked, untouched, for the next call.
+        if f[1] == "waiting" { throw Failure.dialogWaiting }
     }
 
     /// Opens `url` in a new tab of Claude's at the end of the Owner's front Safari window, behind
@@ -1469,6 +1473,8 @@ actor SafariBrowser {
             with timeout of 10 seconds
             if (do JavaScript (item 3 of argv) in t) is "yes" then set isMarked to "yes"
             end timeout
+            on error number errNum
+            if errNum is -1712 then set isMarked to "waiting"
             end try
             set theURL to ""
             try

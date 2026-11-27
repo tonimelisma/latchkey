@@ -93,6 +93,14 @@ until_ready() { # until_ready WHAT COMMAND: COMMAND inside the test Mac until it
 say "making each kind of test data once"
 until_ready "the test data" "cd $VM_DIR && ./e2e-bin fixture 'fixture notes shopping' 'sweep notes' 'fixture calendar empty' 'sweep calendar' 'fixture reminders empty' 'sweep reminders' 'fixture contacts jordan' 'sweep contacts' 'fixture files todo' 'sweep files'"
 
+# An app's first start on a Mac asks things of its own ("'Mail' Notifications…") and sets itself up
+# slowly: in a fresh sandbox copy that happened during the checks, which counted the questions as
+# Latchkey's and timed out on Contacts (2026-11-27). Each app Latchkey drives starts once here,
+# hidden, and quits; nothing of it shows on this Mac.
+say "starting each app Latchkey drives once, hidden, so their first starts happen now"
+vm "$BUILD" 'for a in Mail Messages Notes Contacts Calendar Reminders Safari Maps Finder; do open -g -j -a "$a" || true; done; sleep 30
+for a in Mail Messages Notes Contacts Calendar Reminders Maps; do osascript -e "tell application \"$a\" to quit" >/dev/null 2>&1 || true; done'
+
 say "checking the permissions (the sandbox's own check)"
 until_ready "the permissions" "cd $VM_DIR && ./e2e-bin sandbox -checks tools -out /tmp/check.json"
 vm "$BUILD" "rm -rf $VM_DIR /tmp/check.json"

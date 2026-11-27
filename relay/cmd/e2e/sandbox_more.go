@@ -221,6 +221,16 @@ end tell`)
 	}
 	ref := refFor(t, "Downloads")
 	r, err := s.ask("computer_act", map[string]any{"action": "press", "app": "Finder", "ref": ref}, "Pressed")
+	if err != nil && strings.Contains(err.Error(), "look again") {
+		// Finder's window had just opened in a fresh copy (2026-11-27): the answer says to look
+		// again, and Claude would; so does the check, once.
+		time.Sleep(2 * time.Second)
+		if t, err = s.m.text("computer_look", map[string]any{"show": "ui", "app": "Finder", "match": "Downloads"}); err != nil {
+			return err
+		}
+		ref = refFor(t, "Downloads")
+		r, err = s.ask("computer_act", map[string]any{"action": "press", "app": "Finder", "ref": ref}, "Pressed")
+	}
 	if err != nil {
 		return err
 	}

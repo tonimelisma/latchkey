@@ -130,6 +130,18 @@ import WebKit
         await #expect(throws: SafariBrowser.Failure.tabGone) { _ = try await c.read(offset: 0) }
     }
 
+    /// safari_busy_tab_past_the_deadline (sandbox check safari-busy-tab, 2026-11-27): a tab already
+    /// busy when Claude picks it cost 10 s at the pick and 10 s more at the look, past the relay's
+    /// 30 s on a busy Mac. The pick says so at once, with no second wait, and leaves it picked.
+    @Test func aTabBusyAtThePickIsSaidBusyAtOnce() async throws {
+        let fake = FakeSafariTabs()
+        fake.windows[0].tabs[1].waiting = true
+        let b = SafariBrowser(scripts: fake, settleLimit: .seconds(3))
+        await #expect(throws: SafariBrowser.Failure.dialogWaiting) { try await b.pick("10.2") }
+        #expect(fake.scripts.filter { $0 == SafariBrowser.Script.tabSurvey }.isEmpty, "no second wait")
+        #expect(await b.working() == "10.2")
+    }
+
     @Test func whatTheDialogsSaidComesWithTheAnswer() async throws {
         let fake = FakeSafariTabs()
         let b = try await picked(fake)

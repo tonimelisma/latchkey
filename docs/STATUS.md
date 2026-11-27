@@ -657,7 +657,7 @@ only, never contents.
       the rest of `relay/e2e/sandbox-checks.md` is ported except the checks its "Status" lists
       as not written. Every check that can run passes there except two Latchkey bugs it found.
       Toni chose (2026-11-27): a Mac without a battery says "no battery" (fixed, spec 001
-      FR-065a; the sandbox's `battery` check not yet seen passing), and a contact card with a
+      FR-065a; the sandbox's `battery` check passes since 2026-11-27), and a contact card with a
       note (macOS needs Apple's Contacts notes entitlement) is changed through the Contacts app's
       scripting in the background, no window (done 2026-11-27, spec 007 FR-722a, T17: the
       sandbox's `contacts-card-with-note` passes; setup now also asks to control Contacts). The
@@ -665,9 +665,18 @@ only, never contents.
       tests: the relay refused MCP calls through a proxy on the same machine; a tab of Claude's
       was called the owner's; a trace delete raced a writer (CI). Results, times (the full
       sandbox run takes about 7 minutes, over FR-1612's 5) and every issue:
-      `specs/016-test-strategy/research.md` §5 and §7. Evals: not run yet (the Claude token,
-      Toni's step). Evidence only for an unlocked virtual Mac with test data; the locked Mac,
-      the lid closed and Toni's accounts stay NOT VERIFIED.
+      `specs/016-test-strategy/research.md` §5 and §7.
+      T17 to T19 done 2026-11-27 (a local session; pull request #67): the full sandbox run on
+      main with "no battery" passed (21 passed, 0 failed, 6 skipped); every check
+      `sandbox-checks.md` listed as not written is written and passes, except
+      `messages-identical-texts` (no iMessage account in the image) and `keep-awake-real` (the
+      self-signed helper; what it would take: `sandbox-checks.md`, "Status"), both skipped with
+      the reason. They found two Safari bugs, fixed with tests: a lost Safari tab of Claude's stayed
+      listed as Claude's page; a tab busy right after the pick was said to be gone. Seen flaky
+      under load, not from this work: `TraceFilesTests.copiesTheDatabaseOnceAndLeavesItUntouched`
+      ("the database's files are exactly as they were"), 2 of 3 full runs, passes alone.
+      Evidence only for an unlocked virtual Mac with test data; the locked Mac, the lid closed and
+      Toni's accounts stay NOT VERIFIED.
 
 000. Cloud-first git (Toni, 2026-11-24; CLAUDE.md, "Git"): one branch and pull request per
      session, never replaced; squash merges by auto-merge; `branch-cleanup.yml` deletes closed
@@ -1602,17 +1611,14 @@ suites (704 tests each, before and after), and its checks print what they saw.
 
 1. Answer the macOS alert about Latchkey accessing the screen (Allow) whenever it shows (none
    showing and none in macOS's log on 2026-10-29).
-2. The evals' Claude token (spec 016 T16, 2026-11-26): one click, Authorize, on Claude's sign-in
-   page while at the Mac. A session starts `claude setup-token` itself in a wide pseudo-terminal
-   (so the token isn't wrapped across lines) and stores the token in the keychain item
-   `latchkey-eval-claude-token` without printing it, then runs `make -C macos evals` (which
-   refuses a token that isn't whole). The first try pasted a 30-character piece from a Claude Code
-   `!` shell (every try ended "401 Invalid bearer token"); two sign-ins started on 2026-11-26
-   timed out while the Mac was locked.
-3. Choices from the sandbox's first runs (2026-11-26; `specs/016-test-strategy/research.md` §7):
-   how Latchkey changes a contact card that has a note (macOS refuses without Apple's Contacts
-   notes entitlement); how the relay–Mac state message says a Mac has no battery; whether the
-   sandbox runs a quick subset after each build (its full run takes about 7 minutes).
+2. Whether a computer-control press on a Finder sidebar row should also open it (2026-11-27,
+   sandbox): it selects the row, as decided 2026-11-23, but Finder opens a folder only on a
+   click, so the window keeps the old folder; Accessibility's "AXOpen" on the row's cell opens it
+   (`specs/016-test-strategy/research.md` §7, second local session).
+
+Done 2026-11-27: the evals' Claude token is in the keychain item `latchkey-eval-claude-token`
+(a session ran `claude setup-token` in a wide pseudo-terminal; 108 characters, never printed);
+the sandbox's three choices are answered (`docs/decisions.md`, 2026-11-27).
 
 The other live checks that need Toni (the Allow page from claude.ai, removing an app's access,
 Shell switched off mid-command, a page with a filled password field, a suspended account) are
