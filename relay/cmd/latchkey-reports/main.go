@@ -7,9 +7,9 @@
 //	latchkey-reports delete <id>...             deletes dispositioned reports (nothing is kept)
 //
 // It reads the intake's address from LATCHKEY_INTAKE_URL (default Latchkey's), the developer's
-// token from LATCHKEY_INTAKE_TOKEN (left out where a network proxy adds it, as in a cloud
-// session), and the private key (base64) from LATCHKEY_REPORTS_KEY or the file named by
-// LATCHKEY_REPORTS_KEY_FILE. Report contents go only to this command's output.
+// token from LATCHKEY_INTAKE_TOKEN, and the private key (base64, as keygen writes the file) from
+// LATCHKEY_REPORTS_KEY or the file named by LATCHKEY_REPORTS_KEY_FILE. A cloud session gets both
+// variables from Azure Key Vault at session start (scripts/cloud-secrets.sh). Report contents go only to this command's output.
 package main
 
 import (

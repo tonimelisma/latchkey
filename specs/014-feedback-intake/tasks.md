@@ -30,6 +30,8 @@ run here; the Mac app's tests run on GitHub's macOS runner (`mac-build.yml`).
   secret was gone by 2026-11-26 (in none of Toni's cloud environments); Toni saved it again on
   the `latchkey` environment that day, which also allows the host, and `latchkey-reports list`
   answered from a cloud session. The token's source is the intake's own `DEVELOPER_TOKEN`.
+  Replaced 2026-11-26: both now come from Azure Key Vault at session start
+  (`scripts/cloud-secrets.sh`), and the `latchkey` environment's variable and network secret go.
 
 ## Everything for that chat (2026-11-25; FR-1440 to FR-1456)
 

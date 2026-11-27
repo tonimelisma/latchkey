@@ -64,10 +64,11 @@ address is that name.
 
 ## D5. The developer's agent (FR-1430, FR-1431)
 
-- The token: given to the cloud environment with `request_credential` for the intake's host, so
-  the session's network proxy adds it and the agent never sees it.
-- The private key: `LATCHKEY_REPORTS_KEY`, a variable of Toni's personal cloud environment (Toni
-  sets it; it is written nowhere else). `latchkey-reports list` (`relay/cmd/latchkey-reports`)
+- The token and the private key (since 2026-11-26; before, a network secret and a variable of
+  Toni's personal cloud environment): in Azure Key Vault (`kv-melisma-dev/latchkey-intake-developer-token`,
+  `kv-melisma-release/latchkey-reports-private-key`), fetched at a cloud session's start into
+  `LATCHKEY_INTAKE_TOKEN` and `LATCHKEY_REPORTS_KEY` by `scripts/cloud-secrets.sh`
+  (`docs/cloud-sessions.md`, "The environment"). `latchkey-reports list` (`relay/cmd/latchkey-reports`)
   fetches the open reports and prints them opened, only inside the session; `latchkey-reports
   delete <id>` deletes a dispositioned one.
 - `docs/cloud-sessions.md` and CLAUDE.md's session start change from "list the Mac's Feedback
