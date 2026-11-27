@@ -71,6 +71,7 @@ struct AgentState: Codable, Equatable, Sendable {
         try c.encode(keepAwake, forKey: .keepAwake)
         try c.encodeIfPresent(uptimeS, forKey: .uptimeS)  // left out when nil
         try c.encodeIfPresent(screenLocked, forKey: .screenLocked)
+        try c.encodeIfPresent(hasBattery, forKey: .hasBattery)  // FR-065a: only "false" is ever sent
         try c.encodeIfPresent(shareReports, forKey: .shareReports)
         try c.encode(observedAt, forKey: .observedAt)
     }
