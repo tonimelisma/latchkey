@@ -71,8 +71,8 @@ Claude (web, Desktop, phone)  ──HTTPS──▶  Latchkey relay  ◀──out
   is turned off later, a notification says which one; click it to turn it back on.
 - **You can pause Claude in one click:** Pause Claude's Access in the menu stops everything that
   is running and answers every request with "paused" until you resume, even across restarts.
-- **Every answer carries the Mac's state** (battery, power, keep-awake), so Claude can warn you
-  before the Mac sleeps.
+- **Every answer carries the Mac's state** (battery, or "no battery" on a Mac without one, power,
+  keep-awake), so Claude can warn you before the Mac sleeps.
 - **Keep-awake:** while connected, the app keeps the Mac awake, lid closed included, and lets it
   sleep when the battery reaches 15% or it gets too hot.
 - **What is kept:** a full trace of every call (what Claude asked, everything it got back,

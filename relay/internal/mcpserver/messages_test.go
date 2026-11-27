@@ -85,6 +85,12 @@ func TestOfflineText(t *testing.T) {
 			"Toni's MacBook Pro is offline. It was last seen at 2:02 PM (3 hours ago) with 50% battery.",
 		},
 		{
+			// FR-065a (found by the sandbox Mac, 2026-11-26): a Mac without a battery was "100% battery".
+			"reason unknown, no battery",
+			machine{Device: m, LastSeen: threeHoursAgo, State: withoutBattery(lastState(100, "ac"))},
+			"Toni's MacBook Pro is offline. It was last seen at 2:02 PM (3 hours ago).",
+		},
+		{
 			"unrecognized reason",
 			machine{Device: m, LastSeen: threeHoursAgo, OfflineReason: "future_reason", State: lastState(62, "ups")},
 			"Toni's MacBook Pro is offline. It was last seen at 2:02 PM (3 hours ago) with 62% battery, on UPS power.",
@@ -176,6 +182,9 @@ func TestStatusLine(t *testing.T) {
 	assert.Equal(t, n+" (Mac): online · 90% battery, plugged in · keep-awake off (not approved in System Settings)", statusLine(n, store.KindMac, s))
 
 	assert.Equal(t, n+" (Mac): online", statusLine(n, store.KindMac, nil))
+	// FR-065a: a Mac without a battery (a desktop or a virtual Mac) says so, never a made-up 100%.
+	s = withoutBattery(&agentproto.State{BatteryPercent: 100, PowerSource: "ac", KeepAwake: "on"})
+	assert.Equal(t, n+" (Mac): online · no battery · keep-awake on", statusLine(n, store.KindMac, s))
 
 	// FR-671: locked or unlocked, when the Mac says which.
 	s = lastState(64, "battery")
@@ -262,4 +271,11 @@ func TestStatusLineStartsOnItsOwnLine(t *testing.T) {
 			assert.Equal(t, line, strings.TrimLeft(last.Text, "\n"), "the last block is the state line")
 		})
 	}
+}
+
+// withoutBattery marks a state as a Mac's that has no battery (FR-065a).
+func withoutBattery(s *agentproto.State) *agentproto.State {
+	no := false
+	s.HasBattery = &no
+	return s
 }

@@ -121,6 +121,9 @@ type State struct {
 	UptimeS *int64 `json:"uptime_s,omitempty"`
 	// ScreenLocked is whether a Mac's screen is locked (FR-671); left out when not known.
 	ScreenLocked *bool `json:"screen_locked,omitempty"`
+	// HasBattery is false for a Mac with no battery (a desktop or a virtual Mac), whose
+	// BatteryPercent means nothing then (FR-065a); left out by a Mac that has one, and by older apps.
+	HasBattery *bool `json:"has_battery,omitempty"`
 	// ShareReports is the Owner's choice to send problem reports to Latchkey's developer (spec
 	// 014 FR-1400, FR-1403); left out by an app that doesn't offer it.
 	ShareReports *bool     `json:"share_reports,omitempty"`

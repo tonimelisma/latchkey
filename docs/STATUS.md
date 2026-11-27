@@ -655,9 +655,12 @@ only, never contents.
       is made with no person and no window (`eval-image.sh`, 4.4 min after the one-time 27 GB
       download), and `make -C macos sandbox` runs 27 checks against the real Mac apps in it;
       the rest of `relay/e2e/sandbox-checks.md` is ported except the checks its "Status" lists
-      as not written. Every check that can run passes there except two Latchkey bugs it found,
-      waiting on Toni's choice: a contact card with a note can't be changed (macOS needs Apple's
-      Contacts notes entitlement) and a Mac without a battery is said to have 100%. Fixed with
+      as not written. Every check that can run passes there except two Latchkey bugs it found.
+      Toni chose (2026-11-27): a Mac without a battery says "no battery" (fixed, spec 001
+      FR-065a; the sandbox's `battery` check not yet seen passing), and a contact card with a
+      note (macOS needs Apple's Contacts notes entitlement) is changed through the Contacts app's
+      scripting in the background, no window: next, in a local session with the sandbox. The
+      full sandbox run after every Mac build stays (about 7 minutes; Toni: "Always the full run"). Fixed with
       tests: the relay refused MCP calls through a proxy on the same machine; a tab of Claude's
       was called the owner's; a trace delete raced a writer (CI). Results, times (the full
       sandbox run takes about 7 minutes, over FR-1612's 5) and every issue:
