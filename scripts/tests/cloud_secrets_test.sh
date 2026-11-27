@@ -13,8 +13,9 @@ ok() { printf 'ok   %s\n' "$1"; }
 bad() { printf 'FAIL %s\n' "$1"; fails=$((fails + 1)); }
 check() { if eval "$2"; then ok "$1"; else bad "$1"; fi; }
 
-# Values with what a shell would trip on: quotes, $, backslash, spaces.
-KEY="c2VjcmV0LWtleQ=="
+# Made-up values (made at run time, so a secret scanner doesn't take them for keys), the token
+# with what a shell would trip on: quotes, $, backslash, spaces.
+KEY=$(printf 'made-up developer key' | base64)
 TOKEN="tok 'quoted' \$HOME \\back \"dq\""
 CLIENT_SECRET="cs~secret.value"
 VAULT_TOKEN="vault-access-token-xyz"
