@@ -334,3 +334,24 @@ the next run:
   macOS asks an administrator about background activity). Expected (plan D3): the helper
   accepts only an app of an Apple team. Keep-awake stays off there; `keep-awake-real` isn't
   written.
+
+### The second local session (T17 to T19, 2026-11-27)
+
+- The full `make -C macos sandbox` on main with "no battery" (pull request #66) and the Contacts
+  fix (build d4ba18f): 21 passed, 0 failed, 6 skipped, 6 min 15 s (build 79 s, start 1 s,
+  install 7 s, checks 375 s); `battery` passes.
+- The checks not written until then are written and pass there, except `messages-identical-texts`
+  (no iMessage account in the image) and `keep-awake-real` (the self-signed helper; what it
+  would take: `relay/e2e/sandbox-checks.md`, "Status").
+- They found two Latchkey bugs, fixed with tests (`docs/regression-coverage.md`, "Found by the
+  sandbox Mac"): a lost Safari tab of Claude's stayed listed as Claude's page; a tab busy right
+  after the pick was called gone. The busy tab's answer now comes in about 27 s, within the
+  relay's 30 s but close to it: the pick and the look each give Safari 10 s (FR-432).
+- Seen, not changed (Toni's call): a press on a Finder sidebar row selects it, as decided
+  (2026-11-23), but Finder opens a folder only on a click, so the window keeps showing the old
+  folder. Accessibility's "AXOpen" on the row's cell opens it (tried in the test Mac).
+- Check fixes: Finder's green button is named by its help text ("this button also has an action
+  to zoom the window"); setup's buttons are named by their accessibility description, which
+  System Events doesn't read, so the setup check presses Ask Now with Return; Latchkey's
+  computer control never acts on Latchkey's own windows. The image now lets the test Mac's
+  osascript use Accessibility (System Events reads Finder's sidebar selection).

@@ -651,8 +651,12 @@ actor SafariBrowser {
         // them. A page that turns busy right after (no script of Latchkey's answers it, so the
         // mark can't be read) is then still found at its place while the window is unchanged,
         // and said busy, not gone (FR-432; sandbox check safari-busy-tab, 2026-11-27).
+        // Only when the lines line up: one per tab, and the picked tab's is the address above
+        // (security review 2026-11-27).
         let addresses = lines.map { $0.trimmingCharacters(in: .whitespaces) }
-        if f[1] == "yes", addresses.count == count {
+        if f[1] == "yes", addresses.count == count, (1...count).contains(number),
+            addresses[number - 1] == f[2].trimmingCharacters(in: .whitespaces)
+        {
             tab.fingerprint =
                 TabSurvey(
                     count: count,
@@ -1468,7 +1472,7 @@ actor SafariBrowser {
             end try
             set theURL to ""
             try
-            set theURL to (URL of t) as text
+            set theURL to my clean(URL of t)
             end try
             set out to (n as text) & (character id 9) & isMarked & (character id 9) & theURL
             repeat with i from 1 to n

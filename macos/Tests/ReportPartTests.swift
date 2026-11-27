@@ -117,6 +117,21 @@ import WebKit
         #expect(!b.record.events.contains { ($0.text ?? "").contains("made up") })
     }
 
+    /// security review 2026-11-27 (FR-1448): what Claude typed into a password field stays known
+    /// for blanking after the page is gone (closed, or a Safari tab Latchkey lost and forgot), so a
+    /// report from the chat that typed it still blanks it in the calls.
+    @MainActor @Test func aClosedPagesTypedPasswordIsStillBlanked() async throws {
+        let own = OwnPages(cookies: { [] }, isLocked: { false })
+        defer { own.closeAll() }
+        let name = try await own.open(
+            html: #"<input type="password" data-latchkey="e1">"#, base: URL(string: "https://test.example/")!)
+        _ = try await own.page(name).type("e1", text: "pw-gone-4242", submit: false)
+        #expect(await own.typedSecrets([name]) == ["pw-gone-4242"])
+        own.close(name)
+        #expect(await own.typedSecrets([name]) == ["pw-gone-4242"], "kept for blanking after the close")
+        #expect(own.listing() == "Claude has no page of its own open.")
+    }
+
     /// The record keeps the newest events only.
     @Test func theRecordIsBounded() {
         let r = PageRecord()

@@ -27,12 +27,20 @@ extension BrowserCapability {
                 await Asked.$safari.withValue(safari?.browser) {
                     await Asked.$safariName.withValue(safari?.name) {
                         guard let tab else {
-                            let r = await body()
+                            var r = await body()
                             // A Safari tab of Claude's that its driver lost in this call (a script
                             // sent it to another site, its tab was closed): the page is forgotten,
                             // or the tab list named it Claude's for ever with its old address
-                            // (sandbox check safari-script-navigation, 2026-11-27).
-                            if let safari, await safari.browser.working() == nil { await own.forget(safari.name) }
+                            // (sandbox check safari-script-navigation, 2026-11-27). Its tab may
+                            // still be open, now among the owner's tabs: Claude is told, as
+                            // browser_close tells it (security review 2026-11-27).
+                            if let safari, await safari.browser.working() == nil,
+                                await own.forgetLost(safari.name, driver: safari.browser)
+                            {
+                                r.appendText(
+                                    "Latchkey lost this Safari tab of Claude's, so it forgot page \"\(safari.name)\". The tab may still be open in Safari: list the tabs with browser_look and tabs, where it is now among the owner's tabs, and close it by its reference if it is."
+                                )
+                            }
                             return r
                         }
                         // The pick and the action are one turn: another chat's pick can't come

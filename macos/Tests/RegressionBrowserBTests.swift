@@ -86,6 +86,7 @@ import Testing
         fake.ownerCloses(tab: 3)  // the tab is gone from where Latchkey left it
         let read = await t["browser_look"]!.handler(.object(["page": .string(name)]))
         #expect(read.isError, "\(read.plainText)")
+        #expect(read.plainText.contains("may still be open in Safari"), "Claude is told: \(read.plainText)")
         #expect(!own.listing().contains(name), "a lost page isn't listed as Claude's: \(own.listing())")
         let tabs = await t["browser_look"]!.handler(.object(["tabs": .bool(true)]))
         #expect(!tabs.plainText.contains("\"\(name)\""), "\(tabs.plainText)")
