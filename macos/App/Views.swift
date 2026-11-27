@@ -691,7 +691,7 @@ struct SetupView: View {
             control(Permissions.messagesApp, "Messages"),
             control(Permissions.safariApp, "Safari"),
             control(Permissions.mailApp, "Mail"),
-            control(Permissions.contactsApp, "Contacts"),
+            control(Permissions.contactsApp, "Contacts app"),
         ]
     }
 

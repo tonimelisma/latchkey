@@ -639,13 +639,29 @@ actor SafariBrowser {
             throw Failure.failed(
                 "Safari has no tab \(id).\(number) now. List the tabs again with browser_look and tabs.")
         }
-        let f = out.trimmingCharacters(in: .newlines).split(
+        var lines = out.split(separator: "\n", omittingEmptySubsequences: false)
+        let f = (lines.isEmpty ? "" : lines.removeFirst()).trimmingCharacters(in: .newlines).split(
             separator: "\t", maxSplits: 2, omittingEmptySubsequences: false)
         guard f.count == 3, let count = Int(f[0]) else {
             throw Failure.failed("Safari reported a problem: it didn't describe tab \(id).\(number).")
         }
         forget()
-        picked = (id, PickedTab(index: number, count: count, address: String(f[2]), token: token))
+        var tab = PickedTab(index: number, count: count, address: String(f[2]), token: token)
+        // The mark took: the window's tabs as they are now, as a look that sees the mark notes
+        // them. A page that turns busy right after (no script of Latchkey's answers it, so the
+        // mark can't be read) is then still found at its place while the window is unchanged,
+        // and said busy, not gone (FR-432; sandbox check safari-busy-tab, 2026-11-27).
+        let addresses = lines.map { $0.trimmingCharacters(in: .whitespaces) }
+        if f[1] == "yes", addresses.count == count {
+            tab.fingerprint =
+                TabSurvey(
+                    count: count,
+                    rows: addresses.enumerated().map {
+                        TabSurvey.Row(index: $0.offset + 1, sameAddress: false, marked: false, address: $0.element)
+                    }
+                ).fingerprint
+        }
+        picked = (id, tab)
         claudesTab = false
         pickedUnmarked = f[1] == "yes" ? nil : String(f[2])
     }
@@ -1423,7 +1439,18 @@ actor SafariBrowser {
         /// argv: window id, tab number, Claude's mark script (ending with the yes/no check). Puts
         /// the mark on that tab's page (where Safari lets a script in) without bringing anything
         /// forward, and answers "count<TAB>yes or no (marked)<TAB>address".
+        /// Answers the tab count, whether the mark took, and the tab's address on one line, then
+        /// every tab's address in the window, one per line (cleaned as the survey cleans them).
         static let tabPick = """
+            on clean(s)
+            set s to s as text
+            set AppleScript's text item delimiters to {tab, return, linefeed}
+            set parts to text items of s
+            set AppleScript's text item delimiters to " "
+            set s to parts as text
+            set AppleScript's text item delimiters to ""
+            return s
+            end clean
             on run argv
             set winID to (item 1 of argv) as integer
             set idx to (item 2 of argv) as integer
@@ -1443,7 +1470,15 @@ actor SafariBrowser {
             try
             set theURL to (URL of t) as text
             end try
-            return (n as text) & (character id 9) & isMarked & (character id 9) & theURL
+            set out to (n as text) & (character id 9) & isMarked & (character id 9) & theURL
+            repeat with i from 1 to n
+            set theAddress to ""
+            try
+            set theAddress to my clean(URL of tab i of w)
+            end try
+            set out to out & linefeed & theAddress
+            end repeat
+            return out
             end tell
             end run
             """

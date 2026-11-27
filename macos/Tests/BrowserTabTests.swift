@@ -168,7 +168,8 @@ final class FakeSafariTabs: ScriptRunner, @unchecked Sendable {
                 }
                 windows[w].tabs[i].picks += 1
                 let marked = windows[w].tabs[i].mark == nil ? "no" : "yes"
-                return "\(windows[w].tabs.count)\t\(marked)\t\(windows[w].tabs[i].url)"
+                return "\(windows[w].tabs.count)\t\(marked)\t\(windows[w].tabs[i].url)\n"
+                    + windows[w].tabs.map(\.url).joined(separator: "\n")
             case SafariBrowser.Script.tabSurvey:
                 let w = try window(args[0])
                 let idx = Int(args[1])!

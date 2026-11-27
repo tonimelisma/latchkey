@@ -26,7 +26,15 @@ extension BrowserCapability {
             await Asked.$tab.withValue(tab != nil) {
                 await Asked.$safari.withValue(safari?.browser) {
                     await Asked.$safariName.withValue(safari?.name) {
-                        guard let tab else { return await body() }
+                        guard let tab else {
+                            let r = await body()
+                            // A Safari tab of Claude's that its driver lost in this call (a script
+                            // sent it to another site, its tab was closed): the page is forgotten,
+                            // or the tab list named it Claude's for ever with its old address
+                            // (sandbox check safari-script-navigation, 2026-11-27).
+                            if let safari, await safari.browser.working() == nil { await own.forget(safari.name) }
+                            return r
+                        }
                         // The pick and the action are one turn: another chat's pick can't come
                         // in between (a click meant for one tab landed in another chat's tab,
                         // 2026-11-19). Waited for at most 5 s, so the action still ends well
