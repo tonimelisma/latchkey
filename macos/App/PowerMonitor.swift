@@ -18,7 +18,7 @@ struct PowerSnapshot: Equatable, Sendable {
         AgentState(
             batteryPercent: batteryPercent, powerSource: powerSource, charging: charging,
             timeRemainingMin: timeRemainingMin, thermalState: thermal, lowPowerMode: lowPowerMode,
-            lidClosed: lidClosed, timeZone: timeZone, keepAwake: keepAwake,
+            lidClosed: lidClosed, timeZone: timeZone, keepAwake: keepAwake, hasBattery: hasBattery ? nil : false,
             observedAt: Date(timeIntervalSince1970: date.timeIntervalSince1970.rounded(.down)))
     }
 }

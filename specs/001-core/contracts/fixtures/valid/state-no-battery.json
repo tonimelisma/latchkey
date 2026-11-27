@@ -1,0 +1,16 @@
+{
+  "type": "state",
+  "state": {
+    "battery_percent": 100,
+    "power_source": "ac",
+    "charging": false,
+    "time_remaining_min": null,
+    "thermal_state": "nominal",
+    "low_power_mode": false,
+    "lid_closed": null,
+    "time_zone": "Europe/Helsinki",
+    "keep_awake": "on",
+    "has_battery": false,
+    "observed_at": "2026-11-27T09:00:00Z"
+  }
+}

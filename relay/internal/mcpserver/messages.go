@@ -109,12 +109,18 @@ func offlineText(m machine, now time.Time) string {
 	if m.State == nil {
 		return fmt.Sprintf("%s It was last seen %s.", head, at)
 	}
+	if noBattery(m.State) { // FR-065a: no made-up percent
+		return fmt.Sprintf("%s It was last seen %s.", head, at)
+	}
 	text := fmt.Sprintf("%s It was last seen %s with %d%% battery", head, at, m.State.BatteryPercent)
 	if p := powerPhrase(m.State); p != "" {
 		text += ", " + p
 	}
 	return text + "."
 }
+
+// noBattery is true when the Mac said it has no battery (FR-065a).
+func noBattery(s *agentproto.State) bool { return s.HasBattery != nil && !*s.HasBattery }
 
 func powerPhrase(s *agentproto.State) string {
 	switch {
@@ -143,9 +149,14 @@ func statusLine(name, kind string, s *agentproto.State) string {
 		}
 		return head
 	}
-	line := fmt.Sprintf("%s · %d%% battery", head, s.BatteryPercent)
-	if p := powerPhrase(s); p != "" {
-		line += ", " + p
+	var line string
+	if noBattery(s) { // FR-065a: a desktop or a virtual Mac, never a made-up 100%
+		line = head + " · no battery"
+	} else {
+		line = fmt.Sprintf("%s · %d%% battery", head, s.BatteryPercent)
+		if p := powerPhrase(s); p != "" {
+			line += ", " + p
+		}
 	}
 	line += " · " + keepAwakePhrase(s.KeepAwake)
 	if s.ScreenLocked != nil { // FR-671

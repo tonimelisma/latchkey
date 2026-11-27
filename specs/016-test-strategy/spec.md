@@ -87,6 +87,8 @@ if you're local and thus have access to the mac."
   5 minutes of testing from the moment dev works ... local and CI together, everything").
   Measured and reported 2026-11-26 (research §5): a Mac change ~5.5 min when a macOS machine is
   free; Toni kept four Mac jobs ("Keep 4 jobs, ~5.5 min") over five jobs or paid runners.
+  The sandbox's full run takes about 7 minutes (research §7); Toni chose the full run after every
+  Mac build over a quick subset ("Always the full run", 2026-11-27).
 
 ## Success criteria
 

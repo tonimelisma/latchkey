@@ -41,6 +41,9 @@ struct AgentState: Codable, Equatable, Sendable {
     var uptimeS: Int64? = nil
     /// Whether the Mac's screen is locked (spec 001 FR-671); left out when not known.
     var screenLocked: Bool? = nil
+    /// False on a Mac with no battery (a desktop or a virtual Mac), whose battery level means
+    /// nothing then; left out on a Mac that has one (spec 001 FR-065a).
+    var hasBattery: Bool? = nil
     /// The Owner's choice to share problem reports with Latchkey's developer (spec 014 FR-1400,
     /// FR-1403).
     var shareReports: Bool? = nil
@@ -51,6 +54,7 @@ struct AgentState: Codable, Equatable, Sendable {
         case timeRemainingMin = "time_remaining_min", thermalState = "thermal_state"
         case lowPowerMode = "low_power_mode", lidClosed = "lid_closed", timeZone = "time_zone"
         case keepAwake = "keep_awake", uptimeS = "uptime_s", screenLocked = "screen_locked"
+        case hasBattery = "has_battery"
         case shareReports = "share_reports", observedAt = "observed_at"
     }
 
@@ -67,6 +71,7 @@ struct AgentState: Codable, Equatable, Sendable {
         try c.encode(keepAwake, forKey: .keepAwake)
         try c.encodeIfPresent(uptimeS, forKey: .uptimeS)  // left out when nil
         try c.encodeIfPresent(screenLocked, forKey: .screenLocked)
+        try c.encodeIfPresent(hasBattery, forKey: .hasBattery)  // FR-065a: only "false" is ever sent
         try c.encodeIfPresent(shareReports, forKey: .shareReports)
         try c.encode(observedAt, forKey: .observedAt)
     }

@@ -371,6 +371,9 @@ to Unicode letter case (" 2", " 3", … appended), and `welcome` carries the nam
 ```
 
 A Mac's state adds `screen_locked` (true or false, optional: left out when not known; FR-671).
+A Mac with no battery (a desktop or a virtual Mac) adds `has_battery: false`, and its
+`battery_percent` means nothing then; a Mac with a battery leaves it out (FR-065a; fixture
+`valid/state-no-battery.json`).
 A Mac's state also adds `share_reports` (true or false, optional): the Owner's choice to share
 problem reports with Latchkey's developer (spec 014 FR-1400, FR-1403); the relay offers the
 `feedback` tool only while a machine of the account sends true. The welcome adds
