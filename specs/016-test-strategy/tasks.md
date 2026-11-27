@@ -50,7 +50,13 @@ Each task names its requirements; done means its check passed where it says.
       ActivityLogScale; real processes stay on real time (FencedBuild, ShellJob, Leftovers).
 - [x] T14 The start hook tells a local session to run `make sandbox` after building the Mac app.
 - [x] T15 FR-1612 again on pull request 2; STATUS, decisions, README where they change.
-- [ ] T16 (local session) First `make -C macos sandbox` on a Mac with Tart: `eval-image.sh` once
-      (Toni approves the image's permissions once), then the run; fix what it finds. Then port
-      the rest of `relay/e2e/sandbox-checks.md` into `e2e sandbox` (Safari tabs, the fuller
-      per-app groups, maps, front app unchanged, no permission prompts), each seen working there.
+- [x] T16 (local session, 2026-11-26) First `make -C macos sandbox` on a Mac with Tart:
+      `eval-image.sh` once, then the run; fix what it finds. Then port the rest of
+      `relay/e2e/sandbox-checks.md` into `e2e sandbox` (Safari tabs, the fuller per-app groups,
+      maps, front app unchanged, no permission prompts), each seen working there. Done on pull
+      request #64: the image is made with no person and no window (the permissions written in
+      the test Mac, `vm-permissions.zsh`; Toni, 2026-11-26: "you can literally do all of those");
+      every check ported is seen passing there except the two Latchkey bugs it found that wait on
+      Toni's decision (`contacts-card-with-note`, `battery`); results, times and every issue
+      found in `research.md` §5 and §7. Still to write: the checks `sandbox-checks.md`, "Status",
+      lists as not written yet.

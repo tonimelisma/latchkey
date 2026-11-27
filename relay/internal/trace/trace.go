@@ -356,7 +356,14 @@ func (s *Store) append(accountID string, at time.Time, l Line) error {
 	} else if err != nil {
 		return err
 	}
-	if err := s.write(filepath.Join(dir, day+suffix), out.Bytes()); err != nil {
+	path := filepath.Join(dir, day+suffix)
+	// A new day file only for an account that is still there: another process's delete may be
+	// emptying the folder, and a writer that kept adding files kept it from finishing (CI,
+	// 2026-11-26, "directory not empty" after the delete's 5 s).
+	if _, err := os.Stat(path); !created && errors.Is(err, fs.ErrNotExist) && !s.exists(accountID) {
+		return nil
+	}
+	if err := s.write(path, out.Bytes()); err != nil {
 		return err
 	}
 	if created && !s.exists(accountID) { // deleted by another process in the meantime

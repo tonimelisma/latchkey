@@ -1,30 +1,31 @@
 #!/bin/bash
 # Prepares the test Mac for the sandbox and the evals, once (spec 015 FR-1512, FR-1513, plan D6;
-# spec 016 plan D3). Run it in Terminal from a clone, on an Apple silicon Mac with Tart, Go,
-# Xcode and XcodeGen:
+# spec 016 plan D3). Run it from a clone, on an Apple silicon Mac with Tart, Go, Xcode and
+# XcodeGen (about 40 GB free; the first time downloads a 27 GB base image):
 #
 #   macos/scripts/eval-image.sh
 #
-# It makes a virtual Mac from a clean base image (none of this Mac's data goes in), installs
-# Chrome, Claude Code and the newest Latchkey release in it, a private relay's test certificate,
-# and the test data's apps' first runs; asks for the Claude token (from `claude setup-token`) at a
-# password prompt and keeps it in this Mac's login keychain; then opens the test Mac's window
-# once so the person running it clicks Connect and approves Latchkey's permissions. The image is
-# kept as $LATCHKEY_EVAL_IMAGE (latchkey-eval); each sandbox or eval run uses a copy of it. Run it
-# again after a new macOS or when a run says a permission is missing.
+# It makes a virtual Mac from a clean base image (none of this Mac's data goes in) and never
+# shows it: no window, nothing on this Mac's screen, nobody approves anything. Inside it: Chrome
+# and Claude Code, Latchkey built from this clone and signed with the sandbox's own identity
+# (sandbox.sh), its macOS permissions written into the test Mac's permission databases
+# (vm-permissions.zsh; the base image has System Integrity Protection off, as Tart's images do),
+# a private relay with its test certificate, Latchkey paired with that relay (the script answers
+# Latchkey's Connect question inside the test Mac), and each kind of test data made once. The
+# image is kept as $LATCHKEY_EVAL_IMAGE (latchkey-eval); each sandbox or eval run uses a copy of
+# it. Run it again after a new macOS or when a run says a permission is missing.
 #
-# The permissions are approved for a build signed with the sandbox's own identity (sandbox.sh,
-# eval-lib.sh's sandbox_build), installed over the release just before the window opens: macOS
-# files each permission, and Latchkey's pairing in the keychain, under the app's signature, and
-# every sandbox build (make sandbox, make evals) carries that same signature, so the grants and
-# the pairing hold for each new build. evals.sh --release installs the CI-signed release instead,
-# whose signature differs: whether macOS keeps its grants too is checked on its first run.
+# Every sandbox build carries the same signature, so the permissions hold for each new build;
+# install_latchkey_build also lets each new build read the pairing in the keychain. evals.sh
+# --release installs the CI-signed release instead, whose signature differs: its permissions
+# aren't in the image. (2026-11-26, the first run: the release installed first left keychain
+# items the sandbox build then asked about, and about twenty approvals waited on a person.)
 set -eu
 . "$(dirname "$0")/eval-lib.sh"
 
 case "${1:-}" in
 -h | --help)
-	sed -n '2,21p' "$0"
+	sed -n '2,22p' "$0"
 	exit 0
 	;;
 "") ;;
@@ -36,8 +37,8 @@ BUILD=$EVAL_IMAGE-build
 WORK=$(mktemp -d)
 trap 'rm -rf "$WORK"' EXIT
 
-if image_exists "$BUILD"; then "$TART" delete "$BUILD"; fi
-say "copying the base image $EVAL_BASE (the first time downloads about 25 GB)"
+if image_exists "$BUILD"; then vm_remove "$BUILD"; fi
+say "copying the base image $EVAL_BASE (the first time downloads about 27 GB)"
 "$TART" clone "$EVAL_BASE" "$BUILD"
 "$TART" set "$BUILD" --cpu 4 --memory 8192 >/dev/null 2>&1 || true
 say "starting it without a window"
@@ -50,9 +51,7 @@ mnt=$(hdiutil attach -nobrowse -readonly "$t/chrome.dmg" | awk -F"\t" "/Volumes/
 rm -rf "/Applications/Google Chrome.app"; cp -R "$mnt/Google Chrome.app" /Applications/; hdiutil detach -quiet "$mnt"; rm -rf "$t"'
 vm "$BUILD" 'curl -fsSL https://claude.ai/install.sh | bash && grep -q .local/bin ~/.zprofile 2>/dev/null || echo "export PATH=\$HOME/.local/bin:\$PATH" >> ~/.zprofile'
 
-say "installing the newest Latchkey release"
-install_latchkey "$BUILD"
-say "building Latchkey from this clone, signed with the sandbox's identity (the permissions are approved for it)"
+say "building Latchkey from this clone, signed with the sandbox's identity"
 sandbox_identity
 sandbox_build
 
@@ -62,54 +61,42 @@ push_run "$BUILD" "$WORK/e2e"
 vm "$BUILD" "$VM_DIR/e2e-bin prepare -certs" >/dev/null
 vm_home=$(vm "$BUILD" 'printf %s "$HOME"')
 vm_sudo "$BUILD" "security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain '$vm_home/latchkey-eval-state/ca.pem'"
-vm_sudo "$BUILD" "grep -q relay.latchkey.test /etc/hosts || echo '127.0.0.1 relay.latchkey.test' >> /etc/hosts"
+# The relay's name, and the two sites the Safari checks serve their pages from (pageSites in
+# relay/cmd/e2e/weekly.go): https, as real sites are (the third sandbox run, 2026-11-26).
+for h in relay.latchkey.test site-one.test site-two.test; do
+	vm_sudo "$BUILD" "grep -q ' $h\$' /etc/hosts || echo '127.0.0.1 $h' >> /etc/hosts"
+done
+# Spotlight, which files_find searches with: the base image has indexing off (the sandbox's
+# first run, 2026-11-26: the search never found a file).
+vm_sudo "$BUILD" "mdutil -i on / /System/Volumes/Data >/dev/null"
 
-if security find-generic-password -s "$TOKEN_SERVICE" >/dev/null 2>&1; then
-	say "the Claude token is already in this Mac's login keychain"
-else
-	echo
-	echo "The weekly run uses your Claude subscription. In another Terminal window run:"
-	echo "    claude setup-token"
-	echo "and paste the token it prints here (it isn't shown, and goes only into this Mac's login keychain)."
-	printf 'Token: '
-	read -rs token
-	echo
-	[ -n "$token" ] || die "no token given."
-	security add-generic-password -U -a "$USER" -s "$TOKEN_SERVICE" -w "$token"
-	unset token
-fi
+say "installing the sandbox-signed build ($SANDBOX_LABEL) and granting its permissions before it first starts"
+install_latchkey_build "$BUILD" "$SANDBOX_APP" no-open
+vm_grant_permissions "$BUILD"
+vm_open_latchkey "$BUILD"
 
-say "installing the sandbox-signed build ($SANDBOX_LABEL) over the release"
-install_latchkey_build "$BUILD" "$SANDBOX_APP"
-say "restarting the test Mac with its window, for the steps only a person can do"
-"$TART" stop "$BUILD" >/dev/null 2>&1 || true
-"$TART" run "$BUILD" >"$WORK/run.log" 2>&1 &
-wait_vm "$BUILD"
-vm "$BUILD" 'open -a /Applications/Latchkey.app'
-cat <<'EOF'
+say "pairing the test Mac's Latchkey with its private relay (Connect is answered inside the test Mac)"
+vm "$BUILD" "cd $VM_DIR && ./e2e-bin prepare -confirm"
+# The apps the test data lives in start for the first time here, and macOS may take a moment
+# with each: tried again up to WAIT_ROUNDS times, 20 s apart.
+WAIT_ROUNDS=${LATCHKEY_EVAL_IMAGE_WAIT_ROUNDS:-9}
+until_ready() { # until_ready WHAT COMMAND: COMMAND inside the test Mac until it succeeds
+	local what=$1 i=0
+	shift
+	until vm "$BUILD" "$*"; do
+		i=$((i + 1))
+		[ "$i" -lt "$WAIT_ROUNDS" ] || die "$what still not ready after $((WAIT_ROUNDS * 20 / 60)) minutes (above)."
+		say "$what: not yet (above); trying again in 20 s"
+		sleep 20
+	done
+}
+say "making each kind of test data once"
+until_ready "the test data" "cd $VM_DIR && ./e2e-bin fixture 'fixture notes shopping' 'sweep notes' 'fixture calendar empty' 'sweep calendar' 'fixture reminders empty' 'sweep reminders' 'fixture contacts jordan' 'sweep contacts' 'fixture files todo' 'sweep files'"
 
-In the test Mac's window (not your own Mac):
-  1. Latchkey opens its setup. Approve every permission it asks for: Full Disk Access,
-     Automation, Accessibility, Screen Recording, Calendar, Reminders, Contacts, Location.
-  2. Click Connect when Latchkey asks to connect to relay.latchkey.test (next step).
-  3. Click OK on every "would like to control" question that appears while the test data is made.
-EOF
-say "pairing the test Mac's Latchkey with its private relay"
-vm "$BUILD" "cd $VM_DIR && ./e2e-bin prepare"
-say "making each kind of test data once (answer the questions in the test Mac's window)"
-vm "$BUILD" "cd $VM_DIR && ./e2e-bin fixture 'fixture notes shopping' 'sweep notes' 'fixture calendar empty' 'sweep calendar' 'fixture reminders empty' 'sweep reminders' 'fixture contacts jordan' 'sweep contacts' 'fixture files todo' 'sweep files'"
-printf '\nWhen every permission is approved in the test Mac, press Enter here. '
-read -r _
-
-say "checking the permissions"
-token=$(security find-generic-password -s "$TOKEN_SERVICE" -w)
-if ! printf '%s\n' "$token" | "$TART" exec -i "$BUILD" /bin/zsh -lc "read -r CLAUDE_CODE_OAUTH_TOKEN; export CLAUDE_CODE_OAUTH_TOKEN; cd $VM_DIR && ./e2e-bin evals -only none -out /tmp/check.json"; then
-	unset token
-	die "the test Mac isn't ready (above); fix it in its window and run eval-image.sh again."
-fi
-unset token
-vm "$BUILD" "rm -rf $VM_DIR"
+say "checking the permissions (the sandbox's own check)"
+until_ready "the permissions" "cd $VM_DIR && ./e2e-bin sandbox -checks tools -out /tmp/check.json"
+vm "$BUILD" "rm -rf $VM_DIR /tmp/check.json"
 "$TART" stop "$BUILD"
-if image_exists "$EVAL_IMAGE"; then "$TART" delete "$EVAL_IMAGE"; fi
+if image_exists "$EVAL_IMAGE"; then vm_remove "$EVAL_IMAGE"; fi
 "$TART" rename "$BUILD" "$EVAL_IMAGE"
 say "the test Mac image $EVAL_IMAGE is ready: make -C macos sandbox (after each Mac build), make -C macos evals"

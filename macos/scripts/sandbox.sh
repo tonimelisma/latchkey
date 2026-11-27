@@ -7,8 +7,8 @@
 #   make -C macos sandbox-stop   (macos/scripts/sandbox.sh --stop): stops and deletes the copy
 #
 # It builds the Release app from the working tree, signed with the sandbox's own self-signed
-# identity (made once in the login keychain; never Local.xcconfig, an Apple team or a developer
-# certificate), starts a copy of the image without a window (or reuses the one this checkout
+# identity (made once in a keychain of its own, never the login keychain; never Local.xcconfig, an
+# Apple team or a developer certificate), starts a copy of the image without a window (or reuses the one this checkout
 # started), installs the build in it, and runs `e2e sandbox` there: every capability the image
 # can exercise, with its test data, through the copy's private relay and a real MCP client, and
 # the connection checks. Nothing appears on this Mac's screen, and nothing of this Mac goes in.
@@ -89,7 +89,7 @@ if [ -f "$STATE" ] && [ "$(cat "$STATE")" = "$VM" ] && image_exists "$VM"; then
 	fi
 else
 	say "copying the test Mac ($EVAL_IMAGE → $VM) and starting it without a window"
-	if image_exists "$VM"; then "$TART" delete "$VM"; fi
+	if image_exists "$VM"; then vm_remove "$VM"; fi
 	"$TART" clone "$EVAL_IMAGE" "$VM"
 	printf '%s\n' "$VM" >"$STATE"
 	start_copy

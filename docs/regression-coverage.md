@@ -10,7 +10,8 @@ Covered by:
 - **test**: an automated test that fails if the fix is undone and runs in CI (Mac tests in
   `mac-build.yml`, relay and Linux tests in `ci.yml`, the `e2e mac` checks in `e2e.yml`).
 - **sandbox check `name`**: a check of the sandbox Mac, for what only the installed app with
-  the real Mac apps shows (`relay/e2e/sandbox-checks.md`; to be written, spec 016 T11).
+  the real Mac apps shows (`make -C macos sandbox`, `relay/cmd/e2e/sandbox*.go`). Which are
+  written and which are still to write: `relay/e2e/sandbox-checks.md`, "Status".
 - **eval task `id`**: a task in `relay/e2e/tasks/` whose `covers` names the case (real Claude
   in the sandbox Mac; `TestTaskLinesAreKnown` checks each such case's row here names its task).
 - **Toni's conditions**: needs the Mac locked, the lid closed, Toni's own accounts, or a real
@@ -90,7 +91,7 @@ notes_find with only a bad limit listed the folders and wasn't an error.
 | `logins_texted_code_live` | none | none: it is the tool's description, which no test pins (Toni, 2026-11-26) | The tools present and the description wording the case checks; the older live failures (boxes, focus, Backspace) are in SignInFillTests |
 | `logins_checkbox_page_not_signed_in` | test | macos/Tests/SignInFillTests.swift › typesTheUserNameThenThePasswordAndPressesTheButtonClaudeNamed | logins_sign_in is gone (no logins_sign_in tool), and a fill's answer is the page and never 'Signed in' |
 | `logins_code_delivery_step` | test | macos/Tests/RegressionLoginsCTests.swift › RegressionLoginsCTests.aPasswordNeverGoesIntoACodeBoxAndTextMeIsNeverPressed; macos/Tests/SignInFillTests.swift › aCodeClaudeReadGoesAcrossTheBoxesAndClaudeIsToldToCleanUp | A password into Citi's one-character password box is refused and nothing typed; Text me / Call me are never pressed; the six boxes in one fill was already tested |
-| `browser_claudes_safari_tab_after_redirect` | test + sandbox check `safari-claudes-tab` | macos/Tests/BrowserTabTests.swift › OwnerTabNavigationTests.claudesOwnTabIsUsedAfterTheSiteSendsItOn, claudesOwnTabSurvivesARedirect | A tab of Claude's redirected after the load limit is found and read again twice; the no-extra-tab part needs the owner's Safari |
+| `browser_claudes_safari_tab_after_redirect` | test + sandbox check `safari` | macos/Tests/BrowserTabTests.swift › OwnerTabNavigationTests.claudesOwnTabIsUsedAfterTheSiteSendsItOn, claudesOwnTabSurvivesARedirect | A tab of Claude's redirected after the load limit is found and read again twice; the no-extra-tab part needs the owner's Safari |
 | `logins_hidden_ad_frame_not_a_check` | test | macos/Tests/RegressionLoginsCTests.swift › RegressionLoginsCTests.aHiddenAdFrameIsNoCheckInTheAnswer | The signed-in page with a hidden frame from its ad script answers with the page, no error and no 'check' claim |
 | `logins_code_finder_busy_runner` | test | macos/Tests/CodeFinderTests.swift (the three code lookup tests) | a test-only issue (#42): the tests themselves run on every mac build and fail again if their read limit is short |
 | `logins_find_says_codes` | test | macos/Tests/SignInToolsTests.swift › SignInToolsTests.findListsSitesAndUserNamesNeverSecrets | Totals and 'none has a verification code', also with no sign-ins |
@@ -103,7 +104,7 @@ notes_find with only a bad limit listed the folders and wasn't an error.
 | `browser_frames_and_hrefless_links` | test | macos/Tests/BrowserActionTests.swift › PageActionScriptTests.hreflessLinksAndSameSiteFramesAreListed, anOpenMenusItemsComeFirst | Same-site frame fields, href-less Sign Off, an open menu's items first; Chase's real page is the site's |
 | `browser_type_submit_rich_editor` | test | macos/Tests/RegressionBrowserCTests.swift › RegressionRichEditorCTests.typingWithSubmitIntoARichEditorSendsTheText | A contenteditable editor that keeps its own copy from typing's input events sends 'Helsinki' on submit (Wikipedia's form field case is in PageScriptTests.clicksTypesChoosesAndSubmits) |
 | `browser_hover_says_what_it_did` | test | macos/Tests/RegressionBrowserCTests.swift › RegressionHoverCTests.aHoverWhoseMenuDrawsLateDoesntSayNothingShows | A menu drawn 300 ms after hover: the answer lists its items and never says 'nothing new shows' |
-| `browser_safari_text_composed` | test + sandbox check `composed-text` | macos/Tests/RegressionComposedTextTests.swift › aProgramGetsItsArgumentsAsGiven, anAppleScriptGetsTheTextAsGiven, aShellCommandsTextIsAsGiven, aCommandWritesInAFolderWithAccents | Added with the fix (#56): every program Latchkey starts gets its text as given, not decomposed; a real Safari tab of Claude's is the sandbox check's |
+| `browser_safari_text_composed` | test + sandbox check `safari` | macos/Tests/RegressionComposedTextTests.swift › aProgramGetsItsArgumentsAsGiven, anAppleScriptGetsTheTextAsGiven, aShellCommandsTextIsAsGiven, aCommandWritesInAFolderWithAccents | Added with the fix (#56): every program Latchkey starts gets its text as given, not decomposed; a real Safari tab of Claude's is the sandbox check's |
 | `browser_procare_role_choice` | test + Toni's conditions | macos/Tests/RegressionRealInputTests.swift › theRoleChoiceIsListedClickedForRealAndTheSignInGoesThrough (and the rest of the suite) | Added with the fix (#51): boxes that look clickable are listed, and Latchkey's own browser clicks and types as a real mouse and keyboard; Procare's own page is a real site |
 
 ## Regressions: shell (`regressions-shell`)
@@ -247,7 +248,7 @@ them. Every use case while locked or with the lid closed is Toni's conditions
 | `browser.download` | Save a linked file to Downloads | test (`e2e mac` browser) + sandbox check `browser` + eval task `browser.download-statement` |
 | `browser.download_pdf` | Save the PDF a tab shows | sandbox check `browser` |
 | `browser.dialog` | Answer a page's confirm dialog | sandbox check `browser` |
-| `browser.tabs` | List tabs | sandbox check `browser` + sandbox check `safari-owner-tab` |
+| `browser.tabs` | List tabs | sandbox check `browser` + sandbox check `safari` |
 | `browser.screenshot` | Screenshot of the page | sandbox check `browser` |
 | `browser.close` | Close Claude's pages | sandbox check `browser` |
 | **Sign-in** | | |
@@ -312,3 +313,17 @@ them. Every use case while locked or with the lid closed is Toni's conditions
 | `sweep.reminders` | No test reminders or lists left | sandbox check `sweep` |
 | `sweep.files` | No test files left | sandbox check `sweep` |
 | `sweep.browser` | Claude's own Safari page closed | sandbox check `sweep` |
+
+## Found by the sandbox Mac (2026-11-26, its first runs)
+
+Issues in Latchkey that only the installed app against real Mac apps showed (spec 016 T16).
+Issues in the sandbox's own scripts and checks are listed in `specs/016-test-strategy/research.md`
+§7.
+
+| Case | Covered by | Test | Why |
+|---|---|---|---|
+| `mcp_behind_a_local_proxy` | test + sandbox check `tools` | relay/internal/mcpserver/host_test.go › TestLoopbackRequestsMayNameTheRelaysOwnHost | The MCP SDK's DNS rebinding guard refused every call that reached the relay through a proxy on the same machine (the sandbox's; a relay outside Docker behind Caddy); the relay's own public host is allowed now, any other host still refused |
+| `safari_claudes_tab_not_called_owners` | test + sandbox check `safari` | macos/Tests/BrowserOwnerTabTests.swift › aTabOfClaudesThatWentOffIsNotCalledTheOwners | A tab of Claude's own lost after an action was reported as "the owner's Safari tab" |
+| `traces_delete_races_a_writer` | test | relay/internal/trace/trace_test.go › TestADeletedAccountsFolderGetsNoNewDayFile, TestDeleteSucceedsWhileAnotherProcessWritesTheAccount | Found by CI on this work's pull request: a writer kept adding day files to a deleted account's folder while another process deleted it |
+| `contacts_card_with_note_unchangeable` | sandbox check `contacts-card-with-note` (fails until fixed) | none yet: the fix is Toni's decision | Every update of a card that has a note fails with Cocoa error 134092: macOS lets only apps with Apple's Contacts notes entitlement change such a card (Apple Developer Forums, FB23452026); cards without a note change fine |
+| `battery_on_a_mac_without_one` | sandbox check `battery` (fails until fixed) | none yet: the fix changes the relay–Mac state message, Toni's decision | Every answer's state line says "100% battery" on a Mac without a battery (the virtual Mac; a Mac mini, an iMac): the state message has no way to say there is none |

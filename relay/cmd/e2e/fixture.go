@@ -22,7 +22,8 @@ import (
 
 // The test data (spec 015 FR-1520, research.md decision 7): everything lives under names a sweep
 // can find (the folder, note folder, calendar and reminders list "LatchkeyEval", contacts whose
-// note is "LatchkeyEval"), on the test Mac only. Apple's apps are reached with osascript and
+// company is "LatchkeyEval": a card with a note can't be changed by Latchkey, see the sandbox check
+// contacts-card-with-note), on the test Mac only. Apple's apps are reached with osascript and
 // arguments passed as argv, never spliced into a script.
 const evalName = "LatchkeyEval"
 
@@ -97,7 +98,7 @@ end run`, evalName)
 	case "sweep contacts":
 		return osa(`on run argv
 tell application "Contacts"
-delete (every person whose note is (item 1 of argv))
+delete (every person whose organization is (item 1 of argv))
 save
 end tell
 end run`, evalName)
@@ -138,6 +139,12 @@ func need(args []string, n int) error {
 }
 
 // checkWords returns "" when the state holds, else what is wrong; err when it couldn't look.
+// checkWordsOK says whether the end state holds now (no error, nothing wrong).
+func (f *fixtures) checkWordsOK(area, verb string, a ...string) bool {
+	why, err := f.checkWords(area, verb, a)
+	return err == nil && why == ""
+}
+
 func (f *fixtures) checkWords(area, verb string, a []string) (string, error) {
 	file := func(rel string) string { return filepath.Join(f.root(), filepath.FromSlash(rel)) }
 	switch area + " " + verb {
@@ -602,7 +609,7 @@ func (f *fixtures) contacts(args []string) error {
 	}
 	return osa(`on run argv
 tell application "Contacts"
-make new person with properties {first name:"Jordan", last name:"Evaltest", note:(item 1 of argv)}
+make new person with properties {first name:"Jordan", last name:"Evaltest", organization:(item 1 of argv)}
 save
 end tell
 end run`, evalName)

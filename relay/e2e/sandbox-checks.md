@@ -1,5 +1,30 @@
 # Sandbox Mac checks to write
 
+## Status (2026-11-26, spec 016 T16, the first local runs)
+
+Written in `relay/cmd/e2e` (`sandbox.go`, `sandbox_apps.go`, `sandbox_web.go`, `watch.go`) and
+run in the sandbox Mac (`make -C macos sandbox`; results in `e2e-results/`):
+
+| Check in `e2e sandbox` | Covers (tables below) |
+|---|---|
+| `tools` | the Mac's tools listed, machines names the Mac |
+| `files` | `files` (and the former `e2e mac` files steps) |
+| `shell` | `shell`, and the shell half of `composed-text` |
+| `browser` | `browser` (Latchkey's own browser, https pages on two sites) |
+| `safari` | `safari-claudes-tab`, `safari-cross-site`, `safari-owner-tab`, `safari-actions` (keys, select, hover, scroll, upload, download), `safari-long-page`, `safari-leaves-nothing`, `composed-text` (Safari's half) |
+| `notes`, `calendar`, `reminders`, `contacts`, `computer`, `maps` | the per-app groups of the same names |
+| `contacts-card-with-note` | new: a card with a note can be changed (fails: macOS needs Apple's Contacts notes entitlement; Toni's decision) |
+| `front-app-unchanged`, `no-permission-prompts` | the same, sampled during every Latchkey call |
+| `sweep` | `sweep` |
+| `turned-off`, `offline`, `relay-restart`, `network-cut`, `suspended`, `battery` | `tool-off-disappears`, the offline answer, `silent-network-cut`, `reconnect`, `suspended-account` with `unsuspended-reconnects`, `battery-vs-pmset` (fails: a Mac without a battery is said to have 100%; Toni's decision) |
+
+Skipped with the reason in each run: `location` (no Wi-Fi in a virtual Mac), `messages`, `mail`,
+`whatsapp` (no test accounts in the image), `logins` (no test logins in its Passwords),
+`pair-preview` (the image is paired once). Not written yet: `safari-script-navigation`,
+`safari-busy-tab`, `setup-names-what-is-off`, `computer-sidebar-row`, `computer-window-buttons`,
+`messages-identical-texts`, `report-from-installed-app`, `keep-awake-real` (a self-signed build's
+helper is refused: no Apple team), `headless-chrome-profile`.
+
 What the retired hand-run kits checked, written down when they were removed (spec 016 D2 and
 D5, 2026-11-26), for `cmd/e2e sandbox` to port (spec 016 T11, plan D3). Each check runs in the
 Tart copy against the installed build, with test data, through a private relay on the host.

@@ -8,7 +8,9 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
 	"net/url"
 	"reflect"
@@ -261,11 +263,43 @@ func New(st *store.Store, h *hub.Hub, opts Options) *Server {
 	sdkLog := s.sdkLog
 	// An idle session is closed by the SDK (its next request gets 404 and the client starts a new
 	// one, as the MCP transport specifies); without this, sessions lived until restart.
+	// The SDK's own DNS rebinding guard is replaced by hostAllowed, which also accepts the relay's
+	// own public host on a loopback connection (a proxy on the same machine).
 	s.stateful = mcp.NewStreamableHTTPHandler(s.serverFor, &mcp.StreamableHTTPOptions{
-		Logger: sdkLog, SessionTimeout: opts.SessionTimeout,
+		Logger: sdkLog, SessionTimeout: opts.SessionTimeout, DisableLocalhostProtection: true,
 	})
-	s.stateless = mcp.NewStreamableHTTPHandler(s.serverFor, &mcp.StreamableHTTPOptions{Logger: sdkLog, Stateless: true})
+	s.stateless = mcp.NewStreamableHTTPHandler(s.serverFor, &mcp.StreamableHTTPOptions{
+		Logger: sdkLog, Stateless: true, DisableLocalhostProtection: true,
+	})
 	return s
+}
+
+// hostAllowed is the DNS rebinding guard (MCP security best practices, "local MCP server
+// compromise"): a request that arrives on a loopback address must name a loopback host or the
+// relay's own public host. The SDK's guard allowed only loopback hosts, so a relay behind a proxy
+// on the same machine refused every MCP call (the sandbox's first run, 2026-11-26).
+func (s *Server) hostAllowed(r *http.Request) bool {
+	local, ok := r.Context().Value(http.LocalAddrContextKey).(net.Addr)
+	if !ok || local == nil || !isLoopback(local.String()) || isLoopback(r.Host) {
+		return true
+	}
+	return s.opts.PublicURL != nil && strings.EqualFold(hostOnly(r.Host), s.opts.PublicURL.Hostname())
+}
+
+func hostOnly(hostport string) string {
+	if h, _, err := net.SplitHostPort(hostport); err == nil {
+		return h
+	}
+	return strings.Trim(hostport, "[]")
+}
+
+func isLoopback(hostport string) bool {
+	h := hostOnly(hostport)
+	if strings.EqualFold(h, "localhost") {
+		return true
+	}
+	ip := net.ParseIP(h)
+	return ip != nil && ip.IsLoopback()
 }
 
 // firstStatelessVersion is the first protocol version without sessions. The SDK serves it only
@@ -274,6 +308,10 @@ func New(st *store.Store, h *hub.Hub, opts Options) *Server {
 const firstStatelessVersion = "2026-07-28"
 
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if !s.hostAllowed(r) {
+		http.Error(w, fmt.Sprintf("Forbidden: invalid Host header %q", r.Host), http.StatusForbidden)
+		return
+	}
 	if v := r.Header.Get("MCP-Protocol-Version"); v >= firstStatelessVersion {
 		s.stateless.ServeHTTP(w, r)
 		return

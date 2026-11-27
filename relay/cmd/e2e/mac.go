@@ -41,12 +41,33 @@ type macCheck struct {
 	marker  string
 	// machine is the name the Mac was paired under, which the machines tool must list.
 	machine string
+	// watch, in the sandbox copy: every call is compared with the screen just before it
+	// (watch.go); check names the check making the calls, and mayMoveFront is set while a call
+	// may change what is in front (computer control, the shell's open).
+	watch        *screenWatch
+	check        string
+	mayMoveFront bool
 }
 
-// vmMacCheck is the checks' runner inside the test Mac, whose Latchkey prepare paired as
-// testMacName.
-func vmMacCheck(ctx context.Context, cs *mcp.ClientSession) *macCheck {
-	return &macCheck{ctx: ctx, cs: cs, marker: randomWord(), machine: testMacName}
+// vmMacCheck is the checks' runner inside the test Mac; name is the name the relay has for its
+// Latchkey (pairedName).
+func vmMacCheck(ctx context.Context, cs *mcp.ClientSession, name string) *macCheck {
+	return &macCheck{ctx: ctx, cs: cs, marker: randomWord(), machine: name}
+}
+
+// pairedName is the name the relay has for the account's newest machine: the name the Mac gave
+// itself when it paired (the test Mac's computer name), not the label prepare's pairing code
+// carried ("Test Mac"), which the sandbox's first run expected and never found.
+func pairedName(ctx context.Context, p *e2erelay.Private) (string, error) {
+	id, err := p.NewestDevice(ctx, ownerEmail)
+	if err != nil {
+		return "", err
+	}
+	d, err := p.DB.Device(ctx, id)
+	if err != nil {
+		return "", err
+	}
+	return d.Name, nil
 }
 
 func macCmd(args []string) error {
@@ -185,7 +206,17 @@ func (m *macCheck) send(cmd string) {
 func (m *macCheck) call(tool string, args map[string]any) (*mcp.CallToolResult, error) {
 	ctx, cancel := context.WithTimeout(m.ctx, 90*time.Second)
 	defer cancel()
-	return m.cs.CallTool(ctx, &mcp.CallToolParams{Name: tool, Arguments: args})
+	if m.watch == nil {
+		return m.cs.CallTool(ctx, &mcp.CallToolParams{Name: tool, Arguments: args})
+	}
+	var (
+		res *mcp.CallToolResult
+		err error
+	)
+	m.watch.during(m.check+" "+tool, m.mayMoveFront, func() {
+		res, err = m.cs.CallTool(ctx, &mcp.CallToolParams{Name: tool, Arguments: args})
+	})
+	return res, err
 }
 
 // text calls a tool and returns its text, failing on a tool error.

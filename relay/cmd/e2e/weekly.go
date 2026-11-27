@@ -60,6 +60,7 @@ func stateDir() (string, error) {
 func prepareCmd(args []string) error {
 	fs := flag.NewFlagSet("prepare", flag.ContinueOnError)
 	certsOnly := fs.Bool("certs", false, "only make the test authority and the relay's certificate")
+	confirm := fs.Bool("confirm", false, "answer Latchkey's Connect question here (the test Mac, with nobody at it)")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -70,7 +71,9 @@ func prepareCmd(args []string) error {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return err
 	}
-	if _, err := os.Stat(filepath.Join(dir, "relay.pem")); err != nil {
+	_, noRelay := os.Stat(filepath.Join(dir, "relay.pem"))
+	_, noPages := os.Stat(filepath.Join(dir, "pages.pem"))
+	if noRelay != nil || noPages != nil {
 		step("making the test authority and the relay's certificate")
 		if err := makeCerts(dir); err != nil {
 			return err
@@ -111,13 +114,78 @@ func prepareCmd(args []string) error {
 	if err := exec.CommandContext(ctx, "/usr/bin/open", link).Run(); err != nil { //nolint:gosec // our own link
 		return fmt.Errorf("open the pairing link: %w", err)
 	}
-	fmt.Println("In the test Mac's window: click Connect in Latchkey's question.")
-	if err := relay.WaitOnline(ctx, ownerEmail, 20*time.Minute); err != nil {
+	within := 20 * time.Minute
+	if *confirm {
+		within = 2 * time.Minute
+		step("answering Latchkey's Connect question")
+		if err := clickConnect(ctx); err != nil {
+			return err
+		}
+	} else {
+		fmt.Println("In the test Mac's window: click Connect in Latchkey's question.")
+	}
+	if err := relay.WaitOnline(ctx, ownerEmail, within); err != nil {
 		return err
 	}
 	fmt.Println("PASS: the test Mac's Latchkey is paired with its private relay")
 	return nil
 }
+
+// clickConnect presses Connect in Latchkey's pairing question (an alert of Latchkey's own),
+// through System Events, once it shows (up to 60 s). Only in the test Mac, whose osascript the
+// base image allows to use Accessibility.
+func clickConnect(ctx context.Context) error {
+	const script = `tell application "System Events"
+if not (exists process "Latchkey") then return "no"
+tell process "Latchkey"
+repeat with w in windows
+if exists (button "Connect" of w) then
+click button "Connect" of w
+return "clicked"
+end if
+end repeat
+end tell
+end tell
+return "no"`
+	var last string
+	if waitFor(60*time.Second, func() bool {
+		_, _ = osaOut(allowLatchkeyQuestion)
+		out, err := osaOut(script)
+		last = out
+		if err != nil {
+			last = err.Error()
+		}
+		return ctx.Err() != nil || out == "clicked"
+	}) && ctx.Err() == nil {
+		// macOS's local network question for Latchkey comes at its start or its first
+		// connection; it has no row in the permission databases (vm-permissions.zsh).
+		waitFor(15*time.Second, func() bool {
+			out, _ := osaOut(allowLatchkeyQuestion)
+			return out == "clicked"
+		})
+		return nil
+	}
+	return fmt.Errorf("latchkey's Connect question never showed in 60 s (%s)", last)
+}
+
+// allowLatchkeyQuestion answers Allow to a macOS question about Latchkey (the local network
+// one), in the test Mac only; a question about any other program is left alone.
+const allowLatchkeyQuestion = `tell application "System Events"
+if not (exists process "UserNotificationCenter") then return "no"
+tell process "UserNotificationCenter"
+repeat with w in windows
+set said to ""
+repeat with t in (static texts of w)
+set said to said & (value of t as text) & " "
+end repeat
+if said contains "Latchkey" and said contains "local network" and (exists button "Allow" of w) then
+click button "Allow" of w
+return "clicked"
+end if
+end repeat
+end tell
+end tell
+return "no"`
 
 func startStateRelay(ctx context.Context, dir string) (*e2erelay.Private, error) {
 	return startStateRelayAt(ctx, dir, relayListen)
@@ -132,8 +200,15 @@ func startStateRelayAt(ctx context.Context, dir, listen string) (*e2erelay.Priva
 	})
 }
 
-// makeCerts makes a test authority (ca.pem; the image script trusts it in the test Mac) and the
-// relay's certificate for relayHost.
+// pageSites are the two sites the sandbox's Safari checks serve their pages from, over https
+// (Latchkey follows its own Safari tab across pages only on https sites of one registrable
+// domain: the third sandbox run's pages on http://127.0.0.1 lost the tab after a form). Two
+// registrable domains, so a link between them goes to another site. The test Mac's /etc/hosts
+// sends both to itself (eval-image.sh).
+var pageSites = []string{"site-one.test", "site-two.test"}
+
+// makeCerts makes a test authority (ca.pem; the image script trusts it in the test Mac) that can
+// sign only for relayHost and pageSites, and with it the relay's certificate and the pages'.
 func makeCerts(dir string) error {
 	caKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
@@ -144,7 +219,7 @@ func makeCerts(dir string) error {
 		SerialNumber: big.NewInt(1), Subject: pkix.Name{CommonName: "Latchkey eval test authority (test Mac only)"},
 		NotBefore: now.Add(-time.Hour), NotAfter: now.AddDate(5, 0, 0), IsCA: true, BasicConstraintsValid: true,
 		KeyUsage: x509.KeyUsageCertSign | x509.KeyUsageCRLSign, MaxPathLenZero: true,
-		PermittedDNSDomainsCritical: true, PermittedDNSDomains: []string{relayHost},
+		PermittedDNSDomainsCritical: true, PermittedDNSDomains: append([]string{relayHost}, pageSites...),
 	}
 	caDER, err := x509.CreateCertificate(rand.Reader, ca, ca, &caKey.PublicKey, caKey)
 	if err != nil {
@@ -154,28 +229,32 @@ func makeCerts(dir string) error {
 	if err != nil {
 		return err
 	}
-	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	if err != nil {
-		return err
+	files := map[string]*pem.Block{"ca.pem": {Type: "CERTIFICATE", Bytes: caDER}}
+	for i, c := range []struct {
+		name  string
+		hosts []string
+	}{{"relay", []string{relayHost}}, {"pages", pageSites}} {
+		key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+		if err != nil {
+			return err
+		}
+		leaf := &x509.Certificate{
+			SerialNumber: big.NewInt(int64(2 + i)), Subject: pkix.Name{CommonName: c.hosts[0]}, DNSNames: c.hosts,
+			NotBefore: now.Add(-time.Hour), NotAfter: now.AddDate(1, 0, 0).Add(-24 * time.Hour), // under 398 days
+			KeyUsage: x509.KeyUsageDigitalSignature, ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+		}
+		leafDER, err := x509.CreateCertificate(rand.Reader, leaf, caCert, &key.PublicKey, caKey)
+		if err != nil {
+			return err
+		}
+		keyDER, err := x509.MarshalECPrivateKey(key)
+		if err != nil {
+			return err
+		}
+		files[c.name+".pem"] = &pem.Block{Type: "CERTIFICATE", Bytes: leafDER}
+		files[c.name+"-key.pem"] = &pem.Block{Type: "EC PRIVATE KEY", Bytes: keyDER}
 	}
-	leaf := &x509.Certificate{
-		SerialNumber: big.NewInt(2), Subject: pkix.Name{CommonName: relayHost}, DNSNames: []string{relayHost},
-		NotBefore: now.Add(-time.Hour), NotAfter: now.AddDate(1, 0, 0).Add(-24 * time.Hour), // under 398 days
-		KeyUsage: x509.KeyUsageDigitalSignature, ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
-	}
-	leafDER, err := x509.CreateCertificate(rand.Reader, leaf, caCert, &key.PublicKey, caKey)
-	if err != nil {
-		return err
-	}
-	keyDER, err := x509.MarshalECPrivateKey(key)
-	if err != nil {
-		return err
-	}
-	for name, block := range map[string]*pem.Block{
-		"ca.pem":        {Type: "CERTIFICATE", Bytes: caDER},
-		"relay.pem":     {Type: "CERTIFICATE", Bytes: leafDER},
-		"relay-key.pem": {Type: "EC PRIVATE KEY", Bytes: keyDER},
-	} {
+	for name, block := range files {
 		if err := os.WriteFile(filepath.Join(dir, name), pem.EncodeToMemory(block), 0o600); err != nil {
 			return err
 		}
@@ -346,7 +425,8 @@ func probePermissions(parent context.Context, cs *mcp.ClientSession) []string {
 
 // checks runs the scripted checks against the installed build (FR-1516), each reported.
 func (w *weekly) checks(cs *mcp.ClientSession) []evals.CheckResult {
-	m := vmMacCheck(w.ctx, cs)
+	name, _ := pairedName(w.ctx, w.relay) // an empty name fails the tools check, which says so
+	m := vmMacCheck(w.ctx, cs, name)
 	var out []evals.CheckResult
 	for _, c := range []struct {
 		name string

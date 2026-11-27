@@ -36,8 +36,10 @@ const (
 // sandboxOrder is every check, in the order they run: the capabilities first, then the checks
 // that disturb the connection (moved from cmd/maccheck), each leaving the copy as it found it.
 var sandboxOrder = []string{
-	"tools", "files", "shell", "browser", "notes", "calendar", "reminders", "contacts", "computer",
-	"location", "messages", "mail", "whatsapp", "logins",
+	"tools", "files", "shell", "browser", "safari", "notes", "calendar", "reminders", "contacts",
+	"contacts-card-with-note", "computer",
+	"maps", "location", "messages", "mail", "whatsapp", "logins",
+	"front-app-unchanged", "no-permission-prompts", "sweep",
 	"turned-off", "offline", "relay-restart", "network-cut", "suspended", "battery", "pair-preview",
 }
 
@@ -123,6 +125,17 @@ func summaryLine(c sandboxCheck) string {
 // idRE finds an id in a tool's answer: "(id x-coredata://…/p12; …)", "id: …", "id ABC".
 var idRE = regexp.MustCompile(`\bid:? ([^\s;)]+)`)
 
+// sessionClosed says whether err means the MCP session itself is gone (a timed-out call can
+// close it), not that one call failed.
+func sessionClosed(err error) bool {
+	m := err.Error()
+	return errors.Is(err, context.DeadlineExceeded) || strings.Contains(m, "client is closing") ||
+		strings.Contains(m, "connection closed")
+}
+
+// refRE finds an element's reference in a look's answer, like e12.
+var refRE = regexp.MustCompile(`\be\d+\b`)
+
 // idOn returns the id on the first line of an answer that names label.
 func idOn(answer, label string) string {
 	for line := range strings.SplitSeq(answer, "\n") {
@@ -142,8 +155,12 @@ func sandboxCmd(args []string) error {
 	out := fs.String("out", "sandbox.json", "where to write the result")
 	build := fs.String("build", "", "what was built (the commit), for the result")
 	list := fs.String("checks", "all", "comma-separated checks to run: "+strings.Join(sandboxOrder, ","))
+	call := fs.String("call", "", `instead of the checks, call one tool and print its answer: 'tool {"arg": 1}' (looking into a check by hand)`)
 	if err := fs.Parse(args); err != nil {
 		return err
+	}
+	if *call != "" {
+		return (&sandbox{}).callOne(*call)
 	}
 	names, err := selectChecks(*list)
 	if err != nil {
@@ -186,6 +203,11 @@ type sandbox struct {
 	cs    *mcp.ClientSession
 	m     *macCheck
 	fx    *fixtures
+	watch *screenWatch
+	// watchErr: why the screen sampler isn't running (the two screen checks fail with it).
+	watchErr error
+	// only, set by -call, runs instead of the checks.
+	only func() error
 }
 
 func (s *sandbox) run(res *sandboxResult, names []string) error {
@@ -235,8 +257,15 @@ func (s *sandbox) run(res *sandboxResult, names []string) error {
 	if s.fx, err = newFixtures(nil); err != nil {
 		return err
 	}
+	if s.only != nil {
+		return s.only()
+	}
 	if res.MissingPermissions = probePermissions(s.ctx, s.cs); len(res.MissingPermissions) > 0 {
 		return fmt.Errorf("the sandbox image is missing permissions: %s (run eval-image.sh again)", strings.Join(res.MissingPermissions, ", "))
+	}
+	if s.watch, s.watchErr = startScreenWatch(s.ctx); s.watchErr == nil {
+		defer s.watch.stop()
+		s.m.watch = s.watch
 	}
 	checks := s.checkFuncs()
 	for _, n := range names {
@@ -245,9 +274,18 @@ func (s *sandbox) run(res *sandboxResult, names []string) error {
 			c.Result, c.Why = "skipped", why
 		} else {
 			step("check: %s", n)
+			s.m.check, s.m.mayMoveFront = n, n == "computer"
 			start := time.Now()
 			if err := checks[n](); err != nil {
 				c.Result, c.Why = "failed", err.Error()
+				// A call that ran out of time can close the MCP session; then every later check
+				// failed with "client is closing" (the fifth sandbox run). The next check gets a
+				// new session, as a client would open one.
+				if sessionClosed(err) {
+					if cerr := s.connect(); cerr != nil {
+						step("couldn't open a new MCP session: %v", cerr)
+					}
+				}
 			} else {
 				c.Result = "passed"
 			}
@@ -259,24 +297,72 @@ func (s *sandbox) run(res *sandboxResult, names []string) error {
 	return nil
 }
 
+// callOne starts as a run does (the relay, its proxy, the sign-in) and calls one tool: "name
+// {json arguments}"; it prints the answer as Claude gets it.
+func (s *sandbox) callOne(line string) error {
+	type call struct {
+		name string
+		args map[string]any
+	}
+	var calls []call
+	for part := range strings.SplitSeq(line, " ;; ") { // several calls, one after another
+		name, raw, _ := strings.Cut(strings.TrimSpace(part), " ")
+		args := map[string]any{}
+		if strings.TrimSpace(raw) != "" {
+			if err := json.Unmarshal([]byte(raw), &args); err != nil {
+				return fmt.Errorf("the arguments of %s aren't a JSON object: %w", name, err)
+			}
+		}
+		calls = append(calls, call{name, args})
+	}
+	var res sandboxResult
+	s.only = func() error {
+		for _, c := range calls {
+			// "!sleep 2" pauses; "!osa <AppleScript>" runs a script (reading an app between calls).
+			switch c.name {
+			case "!sleep":
+				time.Sleep(time.Duration(atoi(fmt.Sprint(c.args["s"]))) * time.Second)
+				continue
+			case "!osa":
+				out, err := osaOut(fmt.Sprint(c.args["script"]))
+				fmt.Printf("--- osa: %s %v\n", out, err)
+				continue
+			}
+			r, err := s.m.call(c.name, c.args)
+			if err != nil {
+				return err
+			}
+			fmt.Printf("--- %s isError: %v\n%s\n", c.name, r.IsError, e2erelay.TextOf(r))
+		}
+		return nil
+	}
+	return s.run(&res, nil)
+}
+
 // checkFuncs is what each check that isn't skipped runs.
 func (s *sandbox) checkFuncs() map[string]func() error {
 	return map[string]func() error{
-		"tools":         s.m.tools,
-		"files":         func() error { return s.m.files() },
-		"shell":         func() error { return s.m.shell() },
-		"browser":       func() error { return s.m.browser() },
-		"notes":         s.notes,
-		"calendar":      s.calendar,
-		"reminders":     s.reminders,
-		"contacts":      s.contacts,
-		"computer":      s.computer,
-		"turned-off":    s.turnedOff,
-		"offline":       s.offline,
-		"relay-restart": s.relayRestart,
-		"network-cut":   s.networkCut,
-		"suspended":     s.suspended,
-		"battery":       s.battery,
+		"tools":                   s.m.tools,
+		"files":                   s.filesFull,
+		"shell":                   s.shellFull,
+		"browser":                 s.browserFull,
+		"safari":                  s.safari,
+		"maps":                    s.maps,
+		"notes":                   s.notes,
+		"calendar":                s.calendar,
+		"reminders":               s.reminders,
+		"contacts":                s.contacts,
+		"contacts-card-with-note": s.contactsCardWithNote,
+		"computer":                s.computer,
+		"front-app-unchanged":     func() error { return s.screenVerdict(false) },
+		"no-permission-prompts":   func() error { return s.screenVerdict(true) },
+		"sweep":                   s.sweep,
+		"turned-off":              s.turnedOff,
+		"offline":                 s.offline,
+		"relay-restart":           s.relayRestart,
+		"network-cut":             s.networkCut,
+		"suspended":               s.suspended,
+		"battery":                 s.battery,
 	}
 }
 
@@ -291,7 +377,11 @@ func (s *sandbox) connect() error {
 	}
 	s.cs = cs
 	if s.m == nil {
-		s.m = vmMacCheck(s.ctx, cs)
+		name, err := pairedName(s.ctx, s.relay)
+		if err != nil {
+			return fmt.Errorf("the paired machine's name: %w", err)
+		}
+		s.m = vmMacCheck(s.ctx, cs, name)
 	}
 	s.m.cs = cs
 	return nil
@@ -323,146 +413,21 @@ func (s *sandbox) fixture(lines ...string) error {
 }
 
 // holds checks an end state with the fixture's own reading of the app (not Latchkey's).
+// The app's own view can lag Latchkey's change by a moment (Reminders showed an uncompleted
+// reminder as completed for under 2 s, the first sandbox run), so it is read again for up to 10 s.
 func (s *sandbox) holds(area, verb string, args ...string) error {
-	why, err := s.fx.checkWords(area, verb, args)
+	var why string
+	var err error
+	waitFor(10*time.Second, func() bool {
+		why, err = s.fx.checkWords(area, verb, args)
+		return err == nil && why == ""
+	})
 	if err != nil {
 		return fmt.Errorf("check %s %s %v: %w", area, verb, args, err)
 	}
 	if why != "" {
 		return errors.New(why)
 	}
-	return nil
-}
-
-func (s *sandbox) notes() error {
-	if err := s.fixture("sweep notes", "fixture notes shopping"); err != nil {
-		return err
-	}
-	defer func() { _ = s.fx.do("sweep notes") }()
-	t, err := s.m.text("notes_find", map[string]any{"query": "Shopping list", "folder": evalName})
-	if err != nil {
-		return err
-	}
-	id := idOn(t, "Shopping list")
-	if id == "" {
-		return fmt.Errorf("notes_find didn't list the shopping list with its id: %q", short(t))
-	}
-	if t, err = s.m.text("notes_read", map[string]any{"id": id}); err != nil {
-		return err
-	}
-	if !strings.Contains(t, "eggs") {
-		return fmt.Errorf("notes_read of the shopping list: %q", short(t))
-	}
-	added := "sandbox " + s.m.marker
-	if _, err := s.m.text("notes_change", map[string]any{"action": "append", "id": id, "text": added}); err != nil {
-		return err
-	}
-	if err := s.holds("notes", "body-contains", "Shopping list", added); err != nil {
-		return err
-	}
-	title := "Sandbox " + s.m.marker
-	t, err = s.m.text("notes_change", map[string]any{"action": "create", "folder": evalName, "title": title, "text": "made by the sandbox check"})
-	if err != nil {
-		return err
-	}
-	if err := s.holds("notes", "exists", title); err != nil {
-		return err
-	}
-	if id = idOn(t, title); id == "" {
-		return fmt.Errorf("notes_change create gave no id: %q", short(t))
-	}
-	if _, err := s.m.text("notes_change", map[string]any{"action": "delete", "id": id}); err != nil {
-		return err
-	}
-	if err := s.holds("notes", "missing", title); err != nil {
-		return err
-	}
-	step("notes: found, read, appended to, created and deleted, as Notes shows")
-	return nil
-}
-
-func (s *sandbox) calendar() error {
-	if err := s.fixture("sweep calendar", "fixture calendar team-sync"); err != nil {
-		return err
-	}
-	defer func() { _ = s.fx.do("sweep calendar") }()
-	today := time.Now()
-	day := func(n int) string { return today.AddDate(0, 0, n).Format("2006-01-02") }
-	t, err := s.m.text("calendar_find", map[string]any{"calendar": evalName, "query": "Team sync", "from": day(0), "to": day(3)})
-	if err != nil {
-		return err
-	}
-	if !strings.Contains(t, "Team sync") {
-		return fmt.Errorf("calendar_find didn't list tomorrow's Team sync: %q", short(t))
-	}
-	title := "Sandbox " + s.m.marker
-	if _, err := s.m.text("calendar_change", map[string]any{
-		"action": "create", "calendar": evalName, "title": title, "start": day(1) + "T14:00", "end": day(1) + "T14:30",
-	}); err != nil {
-		return err
-	}
-	if err := s.holds("calendar", "event-at", title, "tomorrow", "14:00"); err != nil {
-		return err
-	}
-	step("calendar: found an event and created one, as Calendar shows")
-	return nil
-}
-
-func (s *sandbox) reminders() error {
-	if err := s.fixture("sweep reminders", "fixture reminders chores"); err != nil {
-		return err
-	}
-	defer func() { _ = s.fx.do("sweep reminders") }()
-	t, err := s.m.text("reminders_find", map[string]any{"list": evalName})
-	if err != nil {
-		return err
-	}
-	id := idOn(t, "Buy stamps")
-	if id == "" {
-		return fmt.Errorf("reminders_find didn't list Buy stamps with its id: %q", short(t))
-	}
-	if _, err := s.m.text("reminders_change", map[string]any{"action": "complete", "id": id}); err != nil {
-		return err
-	}
-	if err := s.holds("reminders", "completed", "Buy stamps"); err != nil {
-		return err
-	}
-	if err := s.holds("reminders", "not-completed", "Pay rent"); err != nil {
-		return err
-	}
-	title := "Sandbox " + s.m.marker
-	due := time.Now().AddDate(0, 0, 3).Format("2006-01-02")
-	if _, err := s.m.text("reminders_change", map[string]any{"action": "create", "list": evalName, "title": title, "due": due}); err != nil {
-		return err
-	}
-	if err := s.holds("reminders", "due-on", title, "in-3-days"); err != nil {
-		return err
-	}
-	step("reminders: completed one, left the other, created one due in 3 days, as Reminders shows")
-	return nil
-}
-
-func (s *sandbox) contacts() error {
-	if err := s.fixture("sweep contacts", "fixture contacts jordan"); err != nil {
-		return err
-	}
-	defer func() { _ = s.fx.do("sweep contacts") }()
-	t, err := s.m.text("contacts_find", map[string]any{"query": "Evaltest"})
-	if err != nil {
-		return err
-	}
-	id := idOn(t, "Jordan")
-	if id == "" {
-		return fmt.Errorf("contacts_find didn't list Jordan Evaltest with an id: %q", short(t))
-	}
-	email := "jordan." + s.m.marker + "@example.com"
-	if _, err := s.m.text("contacts_change", map[string]any{"action": "update", "id": id, "emails": []any{email}}); err != nil {
-		return err
-	}
-	if err := s.holds("contacts", "has-email", "Jordan Evaltest", email); err != nil {
-		return err
-	}
-	step("contacts: found a card and changed its email, as Contacts shows")
 	return nil
 }
 
@@ -481,26 +446,84 @@ func (s *sandbox) computer() error {
 	if res.IsError || !slices.ContainsFunc(res.Content, func(c mcp.Content) bool { _, ok := c.(*mcp.ImageContent); return ok }) {
 		return fmt.Errorf("computer_look gave no screenshot: %q", short(e2erelay.TextOf(res)))
 	}
-	step("computer: listed the apps and took a screenshot (of the copy's own screen)")
+	// The front window's buttons and text, and a key that does nothing in most apps (the former
+	// cases computer.ui and computer.key: "do not click, move, type, or open apps").
+	// A Finder window to read, opened in the background (the copy's front is Finder's empty
+	// desktop: "nothing Latchkey can read", the fourth sandbox run), read through app.
+	if err := osa(`tell application "Finder" to make new Finder window to (path to documents folder)`); err != nil {
+		return err
+	}
+	defer func() { _ = osa(`tell application "Finder" to close every Finder window`) }()
+	if t, err = s.m.text("computer_look", map[string]any{"show": "ui", "app": "Finder"}); err != nil {
+		return err
+	}
+	if !refRE.MatchString(t) {
+		return fmt.Errorf("computer_look ui of Finder's window names no element to act on: %q", short(t))
+	}
+	if _, err := s.m.text("computer_act", map[string]any{"action": "key", "keys": "f12"}); err != nil {
+		return err
+	}
+	step("computer: listed the apps, took a screenshot, read the front window, pressed F12 (in the copy)")
+	return nil
+}
+
+// screenVerdict reports what the screen sampler saw during the checks before it: changes a
+// person would notice, or (prompts) macOS permission questions.
+func (s *sandbox) screenVerdict(prompts bool) error {
+	if s.watch == nil {
+		return fmt.Errorf("no screen sampler: %w", s.watchErr)
+	}
+	changes, asked, samples := s.watch.findings()
+	what, found := "while Latchkey answered, a person at the Mac would have seen", changes
+	if prompts {
+		what, found = "macOS asked for a permission", asked
+	}
+	if why := watchVerdict(what, found, samples); why != "" {
+		return errors.New(why)
+	}
+	step("%d screen samples during the checks: nothing a person would notice", samples)
 	return nil
 }
 
 // The connection checks, moved from cmd/maccheck (plan D2, D3).
 
-func (s *sandbox) levelsBackup() string { return filepath.Join(s.dir, "prefs-before-turned-off.plist") }
+func (s *sandbox) levelsBackup() string { return filepath.Join(s.dir, "levels-before-turned-off.xml") }
 
-// restoreLevels puts back the settings a turned-off check saved, if they are still there.
+// levelsAbsent is the backup's content when Latchkey had no capabilityLevels setting (every
+// capability at its default).
+const levelsAbsent = "absent\n"
+
+// saveLevels keeps Latchkey's capabilityLevels setting as it is (or that it isn't there).
+func (s *sandbox) saveLevels() error {
+	export := filepath.Join(s.dir, "prefs-export.plist")
+	defer func() { _ = os.Remove(export) }()
+	if err := runQuiet("/usr/bin/defaults", "export", sandboxAppID, export); err != nil {
+		return err
+	}
+	if runQuiet("/usr/bin/plutil", "-extract", "capabilityLevels", "xml1", "-o", s.levelsBackup(), export) != nil {
+		return os.WriteFile(s.levelsBackup(), []byte(levelsAbsent), 0o600)
+	}
+	return nil
+}
+
+// restoreLevels puts back the setting saveLevels kept, if a backup is still there: the setting
+// is removed when there was none. (The first sandbox run imported the whole settings back, which
+// adds keys but never removes one, so Files stayed off when the setting hadn't existed.)
 func (s *sandbox) restoreLevels() error {
 	backup := s.levelsBackup()
-	if _, err := os.Stat(backup); err != nil {
+	saved, err := os.ReadFile(backup) //nolint:gosec // our own state folder
+	if err != nil {
 		return nil //nolint:nilerr // nothing saved: nothing to put back
 	}
-	step("putting back the settings an earlier run saved")
+	step("putting back the capability levels saved before")
 	if err := quitApp(); err != nil {
 		return err
 	}
-	if err := runQuiet("/usr/bin/defaults", "import", sandboxAppID, backup); err != nil {
-		return err
+	_ = runQuiet("/usr/bin/defaults", "delete", sandboxAppID, "capabilityLevels") // absent already is fine
+	if string(saved) != levelsAbsent {
+		if err := runQuiet("/usr/bin/defaults", "write", sandboxAppID, "capabilityLevels", string(saved)); err != nil {
+			return err
+		}
 	}
 	if err := os.Remove(backup); err != nil {
 		return err
@@ -520,7 +543,7 @@ func (s *sandbox) turnedOff() error {
 			return err == nil && slices.Contains(names, "shell_run") && slices.Contains(names, "files_read") == want
 		}
 	}
-	if err := runQuiet("/usr/bin/defaults", "export", sandboxAppID, s.levelsBackup()); err != nil {
+	if err := s.saveLevels(); err != nil {
 		return err
 	}
 	if err := quitApp(); err != nil {
@@ -668,7 +691,12 @@ func (s *sandbox) suspended() error {
 		return fmt.Errorf("after the suspension was lifted and Latchkey started again: %w", err)
 	}
 	step("suspended: disconnected and kept its pairing; lifted: connected again %s after a restart", back.Round(100*time.Millisecond))
-	return nil
+	// The suspension also ended Claude's sign-in (the next check got Unauthorized, the first
+	// sandbox run): Claude signs in again, as a person would after the account came back.
+	if s.token, err = s.b.Token(s.ctx, relayURL); err != nil {
+		return fmt.Errorf("signing in again after the suspension was lifted: %w", err)
+	}
+	return s.connect()
 }
 
 // battery: the state line every answer carries ("· N% battery") reads the real power source:

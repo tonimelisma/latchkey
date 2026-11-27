@@ -143,6 +143,19 @@ import Testing
         #expect(BrowserCapability.explain(.goneAfterAction).hasPrefix("Done"))
     }
 
+    /// The sandbox's third run, 2026-11-26: a form sent in a Safari tab of Claude's own was
+    /// reported as run "in the owner's Safari tab"; the answer names whose tab it was.
+    @Test func aTabOfClaudesThatWentOffIsNotCalledTheOwners() async {
+        let owners = BrowserCapability.explain(.goneAfterAction)
+        #expect(owners.contains("the owner's Safari tab"))
+        let claudes = BrowserCapability.Asked.$safariName.withValue("pk3wz") {
+            BrowserCapability.explain(.goneAfterAction)
+        }
+        #expect(claudes.hasPrefix("Done"))
+        #expect(!claudes.contains("owner's"), "\(claudes)")
+        #expect(claudes.contains("Claude's Safari tab \"pk3wz\""), "\(claudes)")
+    }
+
     /// FR-428: Claude closes the Owner's tab it works in; the other tab stays.
     @Test func closesTheOwnersTabItWorksIn() async throws {
         let fake = FakeSafariTabs()

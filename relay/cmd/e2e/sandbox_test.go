@@ -2,14 +2,22 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
+	"encoding/pem"
 	"errors"
+	"fmt"
 	"io"
 	"net"
+	"os"
+	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/tonimelisma/latchkey/relay/internal/e2erelay"
 )
 
 func TestSelectChecks(t *testing.T) {
@@ -100,11 +108,87 @@ func TestIDOn(t *testing.T) {
 	}
 }
 
-// The checks inside the test Mac look for the name prepare paired it under; they looked for
-// "E2E Mac" (the GitHub runner's name), so the evals' tool check could never pass.
-func TestTestMacChecksLookForTheImagesMachineName(t *testing.T) {
-	if m := vmMacCheck(context.Background(), nil); m.machine != testMacName || testMacName == e2eMacName {
-		t.Fatalf("vmMacCheck machine %q, want %q (not %q)", m.machine, testMacName, e2eMacName)
+// The checks inside the test Mac look for the name the relay has for its Latchkey: they looked for
+// "E2E Mac" (the GitHub runner's), then "Test Mac" (the pairing code's label), while the Mac
+// pairs under its own computer name (the sandbox's first run, 2026-11-26).
+func TestTestMacChecksLookForThePairedMachinesName(t *testing.T) {
+	ctx := context.Background()
+	p, err := e2erelay.StartPrivate(ctx, e2erelay.PrivateOptions{DBPath: t.TempDir() + "/relay.db"})
+	if err != nil {
+		t.Skipf("no private relay here: %v", err)
+	}
+	defer p.Close()
+	if _, err := pairedName(ctx, p); err == nil {
+		t.Fatal("no machine is paired: want an error")
+	}
+	const name = "Managed’s Virtual Machine"
+	if m := vmMacCheck(ctx, nil, name); m.machine != name {
+		t.Fatalf("vmMacCheck looks for %q, want %q", m.machine, name)
+	}
+}
+
+// Regression (the third sandbox run, 2026-11-26): a script's number was read as the first digit
+// in the answer, the 5 of the page's name "pj5sp".
+func TestAScriptsNumberIsReadByItsLabel(t *testing.T) {
+	answer := `From Latchkey's own browser: Claude's page "pj5sp" ... Result: Y=512 · 100% battery`
+	if got := scriptY(answer); got != 512 {
+		t.Fatalf("read %d, want 512", got)
+	}
+	if got := scriptY(`page "pj5sp", no label`); got != -1 {
+		t.Fatalf("without the label: %d, want -1", got)
+	}
+}
+
+// The Safari checks' pages are https on two sites (the third sandbox run: http pages lost
+// Claude's tab after a form), signed by the test Mac's authority, which may sign nothing else.
+func TestTheTestMacsCertificatesCoverTheRelayAndTheTwoPageSites(t *testing.T) {
+	dir := t.TempDir()
+	if err := makeCerts(dir); err != nil {
+		t.Fatal(err)
+	}
+	read := func(name string) *x509.Certificate {
+		b, err := os.ReadFile(filepath.Join(dir, name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		blk, _ := pem.Decode(b)
+		c, err := x509.ParseCertificate(blk.Bytes)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return c
+	}
+	ca := read("ca.pem")
+	roots := x509.NewCertPool()
+	roots.AddCert(ca)
+	for name, hosts := range map[string][]string{"relay.pem": {relayHost}, "pages.pem": pageSites} {
+		for _, h := range hosts {
+			if _, err := read(name).Verify(x509.VerifyOptions{DNSName: h, Roots: roots}); err != nil {
+				t.Errorf("%s for %s: %v", name, h, err)
+			}
+		}
+	}
+	if got := ca.PermittedDNSDomains; !slices.Equal(got, append([]string{relayHost}, pageSites...)) || !ca.PermittedDNSDomainsCritical {
+		t.Errorf("the authority may sign for %v (critical %v)", got, ca.PermittedDNSDomainsCritical)
+	}
+	if _, err := tls.LoadX509KeyPair(filepath.Join(dir, "pages.pem"), filepath.Join(dir, "pages-key.pem")); err != nil {
+		t.Errorf("the pages' key pair: %v", err)
+	}
+}
+
+// Regression (the fifth sandbox run, 2026-11-26): a call that ran out of time closed the MCP
+// session and every later check failed with it; such errors open a new session.
+func TestASessionThatClosedIsToldFromAFailedCheck(t *testing.T) {
+	for _, closed := range []error{
+		errors.New(`connection closed: calling "tools/call": client is closing: standalone SSE stream: exceeded 0 retries`),
+		fmt.Errorf("computer_act: %w", context.DeadlineExceeded),
+	} {
+		if !sessionClosed(closed) {
+			t.Errorf("%v: want a new session", closed)
+		}
+	}
+	if sessionClosed(errors.New("files_read still listed after Files was turned off")) {
+		t.Error("a check's own failure isn't a closed session")
 	}
 }
 

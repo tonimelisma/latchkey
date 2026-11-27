@@ -49,11 +49,40 @@ has "eval-image takes no options" "$(run "$image" --force)" "takes none"
 has "not a Mac: says so" "$(FAKE_UNAME_S=Linux run "$weekly")" "runs on a Mac"
 has "an Intel Mac: says Apple silicon" "$(FAKE_UNAME_M=x86_64 run "$weekly")" "Apple silicon"
 has "no image yet: says to run eval-image.sh" "$(run "$weekly")" "run macos/scripts/eval-image.sh once first"
-has "no token: says where it comes from" "$(FAKE_IMAGES=latchkey-eval run "$weekly")" "no Claude token"
+has "no token, no terminal: says to run evals.sh in Terminal once" "$(FAKE_IMAGES=latchkey-eval run "$weekly" </dev/null)" "run macos/scripts/evals.sh once in Terminal"
+# Regression (the first eval run, 2026-11-26): a 30-character piece of a token, with a space, was
+# used, and all 60 tries ended "401 Invalid bearer token". A token that isn't whole is refused
+# before anything is copied or started. (Made-up values, never a real token's.)
+: >"$TART_LOG"
+has "a piece of a token is refused, with how to fix it" "$(FAKE_IMAGES=latchkey-eval FAKE_TOKEN='made-up-tail-of-a-token-xyz ' run "$weekly" --release </dev/null)" "isn't one"
+if grep -qE '^(clone|run)' "$TART_LOG"; then bad "nothing copied or started with a bad token"; else ok "nothing copied or started with a bad token"; fi
+# Regression (first local run, 2026-11-26): eval-image.sh asked for the Claude token and then
+# for Enter, so it couldn't run to the end unattended, and the sandbox waited on a token only the
+# evals use. It now checks the permissions again until they are approved.
+if grep -qE '(^|[^a-z_])read -r' "$image"; then bad "eval-image.sh never waits for a key press"; else ok "eval-image.sh never waits for a key press"; fi
+if grep -v '^#' "$image" | grep -q 'TOKEN_SERVICE\|claude_token'; then bad "eval-image.sh needs no Claude token"; else ok "eval-image.sh needs no Claude token"; fi
+grep -q 'until_ready "the permissions" .*e2e-bin sandbox -checks tools' "$image" && ok "eval-image.sh checks the permissions" || bad "permission check loop"
+# Regression (first local run, 2026-11-26): the test Mac's window opened on the owner's screen
+# with about twenty approvals for a person, and the release installed first left keychain items
+# the sandbox build was then asked about.
+if grep -v '^#' "$image" | grep -E '"\$TART" run ' | grep -qv -- '--no-graphics'; then bad "the test Mac never gets a window"; else ok "the test Mac never gets a window"; fi
+if grep -v '^#' "$image" | grep -qE '^\s*install_latchkey "'; then bad "eval-image.sh installs no release"; else ok "eval-image.sh installs no release"; fi
+g=$(grep -n '^vm_grant_permissions' "$image" | cut -d: -f1)
+o=$(grep -n '^vm_open_latchkey' "$image" | cut -d: -f1)
+[ -n "$g" ] && [ -n "$o" ] && [ "$g" -lt "$o" ] && grep -q 'install_latchkey_build "$BUILD" "$SANDBOX_APP" no-open' "$image" &&
+	ok "the permissions are granted before Latchkey first starts" || bad "grant before the first start (grant line $g, open line $o)"
+grep -q 'for h in relay.latchkey.test site-one.test site-two.test' "$image" && ok "the test Mac resolves the relay and the two page sites" || bad "hosts for the page sites"
+grep -q 'mdutil -i on' "$image" && ok "eval-image.sh turns Spotlight on (files_find searches with it)" || bad "Spotlight on"
+grep -q 'prepare -confirm' "$image" && ok "the pairing's Connect is answered inside the test Mac" || bad "prepare -confirm"
+grep -q 'csrutil status' "$root/macos/scripts/vm-permissions.zsh" && ok "the grant script refuses a Mac with System Integrity Protection on" || bad "SIP guard"
 # The local build needs Xcode; --release doesn't.
 noxcode=$work/noxcode
 mkdir -p "$noxcode"
 for f in "$bin"/*; do case "$(basename "$f")" in xcodebuild | xcodegen) ;; *) cp "$f" "$noxcode/" ;; esac; done
+# Like the stub /usr/bin/xcodebuild of a Mac without Xcode, which is on PATH there too: it
+# fails when run (2026-11-26: on a Mac these tests found the real Xcode through /usr/bin).
+printf '#!/bin/sh\nexit 1\n' >"$noxcode/xcodebuild"
+chmod +x "$noxcode/xcodebuild"
 has "the local build without Xcode: says so" "$(PATH="$noxcode:/usr/bin:/bin" "$weekly" 2>&1)" "Xcode isn't installed"
 has "--release needs no Xcode" "$(PATH="$noxcode:/usr/bin:/bin" "$weekly" --release 2>&1)" "run macos/scripts/eval-image.sh once first"
 has "eval-image needs Xcode (it builds the sandbox-signed app)" "$(PATH="$noxcode:/usr/bin:/bin" "$image" 2>&1)" "Xcode isn't installed"
