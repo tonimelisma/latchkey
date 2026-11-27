@@ -80,6 +80,9 @@ Moved from CLAUDE.md on 2026-11-26.
   `SPARKLE_PRIVATE_KEY` = `latchkey-sparkle-private-key` (Sparkle's `generate_keys -x`), whose
   public key goes into `SPARKLE_PUBLIC_ED_KEY` in `macos/Config/Base.xcconfig` (public;
   committed). A local `make release` in `linux/` still reads `SERVER_SIGNING_KEY` from `.env`.
+- Cloud sessions' secrets (since 2026-11-26): the shared claude.ai environment holds only
+  `MELISMA_SECRETS_CLIENT_SECRET` (Entra app `cloud-sessions-reader`); the session-start hook
+  fetches the rest from Key Vault (`docs/cloud-sessions.md`, "The environment").
 - ghcr.io package `latchkey-relay`: Package settings → Manage Actions access → this repository
   with Write (so the image workflow can publish it).
 - Optional: required reviewers on the environments `release`, `production`; a tag

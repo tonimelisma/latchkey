@@ -12,6 +12,8 @@
 #   - ShellCheck v0.11.0, the version `make shellcheck` pins, from its GitHub release, checked
 #     against the SHA-256 below (the Makefile uses it instead of the Docker image when present)
 #   - uv when missing (`make semgrep` runs the pinned Semgrep with uvx)
+#   - the session's secrets from Azure Key Vault, when the environment has
+#     MELISMA_SECRETS_CLIENT_SECRET (scripts/cloud-secrets.sh; docs/cloud-sessions.md)
 # In the background, logged to $LOG (it carries on after the hook returns; nothing waits on it):
 #   Go modules of relay/ and linux/, the pinned Go tools the Makefiles `go run` (golangci-lint,
 #   govulncheck, gitleaks, osv-scanner), the pinned Semgrep, and the test binaries, all into the
@@ -50,6 +52,11 @@ if [ -n "$need" ]; then
     fail "couldn't install$need from Ubuntu"
   note "installed$need"
 fi
+
+# Secrets from Azure Key Vault into CLAUDE_ENV_FILE (needs curl and jq, just installed; does
+# nothing without MELISMA_SECRETS_CLIENT_SECRET). Its one line goes to Claude after this one.
+secrets=$("$repo/scripts/cloud-secrets.sh" 2>&1)
+[ -z "$secrets" ] || trap 'echo "$secrets"' EXIT
 
 # Go: the relay's toolchain (go.mod's toolchain line) first on the PATH. go.mod alone makes a
 # `go build` switch to it, but `go run tool@version` (the Makefiles' linters and scanners) builds

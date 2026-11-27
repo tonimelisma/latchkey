@@ -73,6 +73,7 @@ script-tests:
 	cd .. && scripts/tests/private_values_test.sh
 	cd .. && scripts/tests/hooks_guard_test.sh
 	cd .. && scripts/tests/hooks_cloud_test.sh
+	cd .. && scripts/tests/cloud_secrets_test.sh
 	cd .. && scripts/tests/tidy_test.sh
 	cd .. && scripts/tests/release_tag_test.sh
 	cd .. && scripts/tests/appcast_test.sh

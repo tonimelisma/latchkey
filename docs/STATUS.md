@@ -684,9 +684,9 @@ only, never contents.
 0. Problem reports to the developer (spec 014, `specs/014-feedback-intake/`): built and merged
    2026-11-23 (relay, intake, the developer's command, the Mac app's setting). The intake runs
    since 2026-11-24 (deployed by the hosted server's own agent; the hosted relay is on the new
-   image), and its token is a network secret of the cloud environment. Left for Toni: the private
-   key into his personal cloud environment (`LATCHKEY_REPORTS_KEY`, from
-   `~/.config/latchkey-reports/developer.key` on his Mac), then turning sharing on in Latchkey's
+   image), and since 2026-11-26 a cloud session fetches its token and the private key from Azure Key
+   Vault at session start (`scripts/cloud-secrets.sh`; `latchkey-reports list` answered with
+   them on the Mac that day). Left for Toni: turning sharing on in Latchkey's
    settings once 0.8.234 is installed. Nothing verified end to end yet.
 
 0. Cloud-first setup: done 2026-11-23 except the updater on the Mac (`macos/scripts/updater-setup.sh`)
