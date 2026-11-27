@@ -76,7 +76,7 @@ Linux server program (run in `linux/`, its own Go module; spec 010):
 - `make test-linux`: every test on Debian with systemd in Docker (Docker must run)
 - `make check`: end to end: private relay, pretend Mac, the program installed by install.sh in a
   Debian container, a real MCP client (`-claude` in `relay/cmd/linuxcheck` adds Claude Code)
-- `make release`: build, sign (`SERVER_SIGNING_KEY` in `.env`), tag the commit (must be origin/main)
+- `make release`: build, sign (`SERVER_SIGNING_KEY`, or read from Key Vault with `az login`), tag the commit (must be origin/main)
   `linux-<next number>` and publish it there (every increment ships)
 
 Screen states: the hand-run kit (`state-check`) was retired 2026-11-26 (spec 016). What covers

@@ -32,5 +32,5 @@ description = "Spec 014 tests: a made-up cloud secret in a report's answer, to c
 regexes = ['''wJalrXUtnFEMIK7MDENGbPxRfiCY''']
 
 [[allowlists]]
-description = "Cloud secrets test: a made-up key (base64 of \"secret-key\") in that test's first commit, made at run time since"
+description = "Cloud secrets test: a made-up key (base64 of \"secret-key\") in the history of that test (since deleted)"
 regexes = ['''c2VjcmV0LWtleQ==''']

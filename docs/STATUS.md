@@ -641,6 +641,13 @@ only, never contents.
 
 ## Next steps
 
+000. Secrets read from Key Vault at run time (2026-11-27, `docs/decisions.md`): `latchkey-reports`,
+     the relay's `SMTP_PASSWORD` and the Mac's `make release` in `linux/` read them themselves.
+     Left for the hosted server (its private repository, after the relay image with this change
+     is published): `LATCHKEY_KEYVAULT_AUTH=gce` in its `relay.env` and no `SMTP_PASSWORD`; the
+     relay container must reach the VM's metadata server for its identity token (today the
+     server blocks containers from it); its `configure` reads `CLOUDFLARE_API_TOKEN` with `az`.
+
 0000. Test strategy and two ways to work (spec 016, `specs/016-test-strategy/`, 2026-11-26).
       Done (pull requests #59, #60): two ways to work in CLAUDE.md, the trim and Toni's rule
       changes; the dev-build bug (FR-1607) with its test; the Mac tests gate merging (required
@@ -702,9 +709,10 @@ only, never contents.
 0. Problem reports to the developer (spec 014, `specs/014-feedback-intake/`): built and merged
    2026-11-23 (relay, intake, the developer's command, the Mac app's setting). The intake runs
    since 2026-11-24 (deployed by the hosted server's own agent; the hosted relay is on the new
-   image), and since 2026-11-26 a cloud session fetches its token and the private key from Azure Key
-   Vault at session start (`scripts/cloud-secrets.sh`; `latchkey-reports list` answered with
-   them on the Mac that day). Left for Toni: turning sharing on in Latchkey's
+   image), and since 2026-11-27 `latchkey-reports` reads its token and the private key from Azure
+   Key Vault itself when they aren't set (`relay/internal/keyvault`; `list` answered on the Mac
+   through `az login`, and with only `MELISMA_SECRETS_CLIENT_SECRET` and no `az`, as a cloud
+   session does, on 2026-11-27). Left for Toni: turning sharing on in Latchkey's
    settings once 0.8.234 is installed. Nothing verified end to end yet.
 
 0. Cloud-first setup: done 2026-11-23 except the updater on the Mac (`macos/scripts/updater-setup.sh`)

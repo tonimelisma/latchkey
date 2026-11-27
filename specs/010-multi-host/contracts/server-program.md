@@ -160,7 +160,8 @@ GitHub release `linux-<x.y.z>` (the commit's tag, given by `scripts/release-tag.
 `latchkey-linux-arm64`, each `.sig`, `SHA256SUMS`, and `install.sh`. A `.sig` is base64 Ed25519
 over the text `latchkey-linux-<arch> <version> <sha256 hex>\n` (the version and architecture are
 signed, so an older program can't be relabelled as newer; security review, 2026-10-31). The key:
-`SERVER_SIGNING_KEY` (base64 seed) in the gitignored `.env`, a copy in the maintainer's login
+`SERVER_SIGNING_KEY` (base64 seed) in Azure Key Vault `kv-melisma-release/latchkey-server-signing-key`
+(read by the release workflow, or by `release.sh` with `az login` on the Mac), a copy in the maintainer's login
 keychain ("Latchkey server release signing key"); the public key in
 `linux/internal/update/key.go`. `linux/scripts/release.sh` publishes only a clean checkout at
 `origin/main`.

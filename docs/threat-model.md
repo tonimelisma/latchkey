@@ -15,7 +15,8 @@ specs; best-practice review and gaps in `docs/best-practices.md`.
    It passes through the relay in plaintext (the relay stores none of it).
 3. **Accounts and credentials:** passkeys, web sessions, sign-in and recovery codes, OAuth access
    and refresh tokens, client registrations, the Mac's Secure Enclave device key, the relay's
-   HMAC token secret, SMTP and DNS API keys in `.env`.
+   HMAC token secret, the SMTP and DNS API keys (in Azure Key Vault, read by the relay and the
+   tools when they start; `docs/development.md`, "Owner setup").
 4. **Availability:** the Mac staying awake and reachable; the relay answering at once when it
    isn't (Constitution II: never wait on the Mac without a deadline).
 
