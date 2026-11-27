@@ -89,13 +89,15 @@ struct ContactsApp: Sendable {
         /// Never starts Contacts itself: Apple Events start an app shown, with its window
         /// (Constitution IV), so `openHidden` starts it first and the script stops if it isn't
         /// running (a Contacts still quitting when Latchkey looked, the sandbox Mac 2026-11-27).
+        /// Written out in the scripts too: their text is fixed, never interpolated (Semgrep,
+        /// threat model invariant 11); a test checks both say the same.
         static let notRunning = "Contacts isn't running"
 
         /// An empty text clears the field (missing value), as an empty text does in the framework.
         /// A birthday without a year is saved in 1604, the year Contacts itself uses for one.
         static let update = """
             on run argv
-            if application id "com.apple.AddressBook" is not running then return "\(notRunning)"
+            if application id "com.apple.AddressBook" is not running then return "Contacts isn't running"
             set personID to item 1 of argv
             set argCount to count of argv
             tell application "Contacts"
@@ -186,7 +188,7 @@ struct ContactsApp: Sendable {
 
         static let delete = """
             on run argv
-            if application id "com.apple.AddressBook" is not running then return "\(notRunning)"
+            if application id "com.apple.AddressBook" is not running then return "Contacts isn't running"
             tell application "Contacts"
             delete person id (item 1 of argv)
             save
