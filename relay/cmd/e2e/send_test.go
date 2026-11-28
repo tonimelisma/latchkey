@@ -25,8 +25,8 @@ func vault(t *testing.T, answer string, err error) *[]string {
 	t.Helper()
 	var asked []string
 	old := vaultGet
-	vaultGet = func(_ context.Context, env, vault, secret string) (string, error) {
-		asked = append(asked, env+" "+vault+"/"+secret)
+	vaultGet = func(_ context.Context, env, vaultEnv, secret string) (string, error) {
+		asked = append(asked, env+" "+vaultEnv+"/"+secret)
 		return answer, err
 	}
 	t.Cleanup(func() { vaultGet = old })
@@ -54,7 +54,7 @@ func TestDeveloperPrivateReadsTheVaultNotTheOldKeyFile(t *testing.T) {
 	if err != nil || got != fromVault {
 		t.Fatalf("developerPrivate = %q, %v; want the vault's key", got, err)
 	}
-	if want := []string{"LATCHKEY_REPORTS_KEY kv-melisma-release/latchkey-reports-private-key"}; strings.Join(*asked, ",") != want[0] {
+	if want := []string{"LATCHKEY_REPORTS_KEY LATCHKEY_KEYVAULT_RELEASE/latchkey-reports-private-key"}; strings.Join(*asked, ",") != want[0] {
 		t.Fatalf("vault asked %q, want %q", *asked, want)
 	}
 }
@@ -86,13 +86,13 @@ func TestDeveloperPrivateErrors(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	t.Setenv("LATCHKEY_REPORTS_KEY", "")
 	t.Setenv("LATCHKEY_REPORTS_KEY_FILE", "")
-	vault(t, "", errors.New("Key Vault secret kv-melisma-release/latchkey-reports-private-key couldn't be read"))
+	vault(t, "", errors.New("the vault couldn't be read"))
 	if _, err := developerPrivate(); err == nil || !strings.Contains(err.Error(), "--send is for the developer's own runs") ||
-		!strings.Contains(err.Error(), "kv-melisma-release/latchkey-reports-private-key") {
+		!strings.Contains(err.Error(), "the vault couldn't be read") {
 		t.Fatalf("vault unreadable: %v", err)
 	}
 	vault(t, "not a key", nil)
-	if _, err := developerPrivate(); err == nil || !strings.Contains(err.Error(), "kv-melisma-release/latchkey-reports-private-key") {
+	if _, err := developerPrivate(); err == nil || !strings.Contains(err.Error(), "latchkey-reports-private-key in the Key Vault LATCHKEY_KEYVAULT_RELEASE names") {
 		t.Fatalf("not a key: %v", err)
 	}
 }

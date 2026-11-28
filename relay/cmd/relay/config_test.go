@@ -139,10 +139,10 @@ func TestLoadConfigAllowsLoopbackHTTP(t *testing.T) {
 
 func TestSMTPPasswordFromTheVault(t *testing.T) {
 	asked := 0
-	vault := func(_ context.Context, env, vault, secret string) (string, error) {
+	vault := func(_ context.Context, env, vaultEnv, secret string) (string, error) {
 		asked++
-		if env != "SMTP_PASSWORD" || vault != "kv-melisma-hosts" || secret != "resend-api-key" {
-			return "", fmt.Errorf("asked for %s %s/%s", env, vault, secret)
+		if env != "SMTP_PASSWORD" || vaultEnv != "LATCHKEY_KEYVAULT_HOSTS" || secret != "resend-api-key" {
+			return "", fmt.Errorf("asked for %s %s/%s", env, vaultEnv, secret)
 		}
 		return "from-vault", nil
 	}

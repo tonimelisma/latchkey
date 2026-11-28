@@ -58,14 +58,29 @@ private repositories that manage them, not here.
   `latchkey-sparkle-private-key` (Sparkle's `generate_keys -x`), whose public key goes into
   `SPARKLE_PUBLIC_ED_KEY` in `macos/Config/Base.xcconfig` (public; committed).
 - Every other consumer reads its secrets from Key Vault itself when it runs; an environment
-  variable of the same name wins when set (`relay/internal/keyvault`). On a Mac that is the
-  Azure CLI's sign-in (`az login`): a local `make release` in `linux/` reads
-  `SERVER_SIGNING_KEY`, and `latchkey-reports` and the eval sender (`evals --send`) read
-  `LATCHKEY_REPORTS_KEY` and `LATCHKEY_INTAKE_TOKEN`. Cloud sessions sign in with the one client
-  secret their environment holds (`docs/cloud-sessions.md`). The hosted relay, with `SMTP_USER`
-  set and no `SMTP_PASSWORD`, reads its email key at startup, signing in with its VM's identity
-  (`LATCHKEY_KEYVAULT_AUTH=gce`); its server's setup lives in the repository that runs that
-  server.
+  variable of the same name wins when set (`relay/internal/keyvault`). The code holds no tenant,
+  app or vault: the environment names them, and a missing one stops the tool with an error that
+  names the variable (never a value).
+
+  | Variable | Used by | What it is |
+  |---|---|---|
+  | `AZURE_TENANT_ID` | every sign-in | the Entra tenant |
+  | `AZURE_CLIENT_ID` | the client secret and the VM's identity (not `az login`) | the Entra app that signs in |
+  | `MELISMA_SECRETS_CLIENT_SECRET` | cloud sessions | that app's client secret; when set, it is the sign-in |
+  | `LATCHKEY_KEYVAULT_AUTH=gce` | a relay on a Google VM | sign in as `AZURE_CLIENT_ID` with the VM's identity token |
+  | `LATCHKEY_KEYVAULT_HOSTS` | the relay | the vault with `resend-api-key` (its `SMTP_PASSWORD`) |
+  | `LATCHKEY_KEYVAULT_DEV` | `latchkey-reports` | the vault with `latchkey-intake-developer-token` |
+  | `LATCHKEY_KEYVAULT_RELEASE` | `latchkey-reports`, `evals --send` | the vault with `latchkey-reports-private-key` |
+
+  With neither the client secret nor `gce`, the sign-in is the Azure CLI's (`az login`). On a
+  Mac, export `AZURE_TENANT_ID`, `LATCHKEY_KEYVAULT_DEV` and `LATCHKEY_KEYVAULT_RELEASE` in the
+  shell's profile (for example `~/.zshenv`) before running `latchkey-reports` or
+  `make -C macos evals ARGS=--send`; a local `make release` in `linux/` reads
+  `SERVER_SIGNING_KEY` from the vault `AZURE_KEY_VAULT` names. Cloud sessions sign in with the
+  client secret their environment holds (`docs/cloud-sessions.md`). The hosted relay, with
+  `SMTP_USER` set and no `SMTP_PASSWORD`, reads its email key at startup, signing in with its
+  VM's identity; its `relay.env` (`AZURE_TENANT_ID`, `AZURE_CLIENT_ID`, `LATCHKEY_KEYVAULT_HOSTS`,
+  `LATCHKEY_KEYVAULT_AUTH=gce`) lives in the repository that runs that server.
 - ghcr.io packages `latchkey-relay` and `latchkey-intake`: Package settings → Manage Actions
   access → this repository with Write (so the image workflow can publish them).
 - Optional: required reviewers on the environments `release` and `production`; a tag ruleset so

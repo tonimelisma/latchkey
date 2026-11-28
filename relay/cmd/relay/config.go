@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/tonimelisma/latchkey/relay/internal/account"
+	"github.com/tonimelisma/latchkey/relay/internal/keyvault"
 	"github.com/tonimelisma/latchkey/relay/internal/limit"
 	"github.com/tonimelisma/latchkey/relay/internal/oauth"
 	"github.com/tonimelisma/latchkey/relay/internal/store"
@@ -56,14 +57,15 @@ type config struct {
 const minSetupCode = 12
 
 // withVaultSMTPPassword is getenv, but when SMTP_USER is set and SMTP_PASSWORD isn't, the
-// password is read once from Azure Key Vault (kv-melisma-hosts/resend-api-key, the hosted relay's
-// email key; internal/keyvault says who signs in, LATCHKEY_KEYVAULT_AUTH=gce on its Google VM). A
-// relay that sets SMTP_PASSWORD, or has no SMTP_USER, never asks the vault.
-func withVaultSMTPPassword(ctx context.Context, getenv func(string) string, get func(ctx context.Context, env, vault, secret string) (string, error)) (func(string) string, error) {
+// password is read once from Azure Key Vault: secret resend-api-key, the hosted relay's email key,
+// in the vault LATCHKEY_KEYVAULT_HOSTS names (internal/keyvault says who signs in and which
+// variables that needs; LATCHKEY_KEYVAULT_AUTH=gce on a Google VM). A relay that sets
+// SMTP_PASSWORD, or has no SMTP_USER, never asks the vault.
+func withVaultSMTPPassword(ctx context.Context, getenv func(string) string, get func(ctx context.Context, env, vaultEnv, secret string) (string, error)) (func(string) string, error) {
 	if getenv("SMTP_USER") == "" || getenv("SMTP_PASSWORD") != "" {
 		return getenv, nil
 	}
-	password, err := get(ctx, "SMTP_PASSWORD", "kv-melisma-hosts", "resend-api-key")
+	password, err := get(ctx, "SMTP_PASSWORD", keyvault.HostsVault, "resend-api-key")
 	if err != nil {
 		return nil, err
 	}
