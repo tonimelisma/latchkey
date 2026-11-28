@@ -1,6 +1,7 @@
-# Publishes the Linux program (spec 010 plan D12) after every change to linux/ reaches main, or
-# when a session asks with repository_dispatch "linux-release" (a cloud session's proxy refuses tag
-# pushes and release writes, so they happen here). The release job tags the commit
+# Publishes the Linux program (spec 010 plan D12) after CI passes on main for a commit that changed
+# linux/ since the last linux-<x.y.z> tag, or when a session asks with repository_dispatch
+# "linux-release" (a cloud session's proxy refuses tag pushes and release writes, so they happen
+# here). CI on main already ran the program's lint and tests on that commit. The release job tags the commit
 # linux-<x.y.z> (scripts/release-tag.sh), builds both architectures, signs them with
 # SERVER_SIGNING_KEY, and publishes them with SHA256SUMS and install.sh. The key lives in the release Azure
 # Key Vault (secret latchkey-server-signing-key); the release job's first step fetches it with the
@@ -11,9 +12,9 @@
 # The release job runs in the environment "release", where the maintainer can require an approval.
 name: linux release
 on:
-  push:
-    branches: [main]
-    paths: ["linux/**"]
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
   repository_dispatch:
     types: [linux-release]
   workflow_dispatch:
@@ -23,26 +24,40 @@ concurrency:
   group: release-linux
   cancel-in-progress: false
 jobs:
-  checks:
+  # Which commit, and whether linux/ changed since the last linux-<x.y.z> tag on its history.
+  changes:
+    if: >-
+      github.event_name != 'workflow_run' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'push' &&
+       github.event.workflow_run.head_branch == 'main' &&
+       github.event.workflow_run.head_repository.full_name == github.repository)
     runs-on: ubuntu-latest
-    timeout-minutes: 20
-    defaults:
-      run:
-        working-directory: linux
+    timeout-minutes: 5
+    outputs:
+      sha: ${{ steps.pick.outputs.sha }}
+      release: ${{ steps.pick.outputs.release }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }} # the commit CI tested
+          fetch-depth: 0 # the tags and the diff since the last one
           persist-credentials: false
-      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
-        with:
-          go-version-file: linux/go.mod
-          cache-dependency-path: linux/go.sum
-      - name: Lint
-        run: make lint
-      - name: Test
-        run: make test
+      - id: pick
+        env:
+          EVENT: ${{ github.event_name }}
+        run: |
+          sha=$(git rev-parse HEAD)
+          release=true
+          last=$(git tag --merged HEAD --list 'linux-[0-9]*' --sort=-v:refname | head -1)
+          if [ "$EVENT" = workflow_run ] && [ -n "$last" ] && git diff --quiet "$last" HEAD -- linux/; then
+            release=false
+            echo "linux/ unchanged since $last; nothing to release" | tee -a "$GITHUB_STEP_SUMMARY"
+          fi
+          printf 'sha=%s\nrelease=%s\n' "$sha" "$release" | tee -a "$GITHUB_OUTPUT"
   release:
-    needs: checks
+    needs: changes
+    if: needs.changes.outputs.release == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     environment: release
@@ -80,6 +95,7 @@ jobs:
           done <<< "$SECRET_MAP"
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ needs.changes.outputs.sha }}
           fetch-depth: 0 # release-tag.sh reads the tags and main's history
       - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         with:

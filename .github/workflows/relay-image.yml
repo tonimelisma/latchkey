@@ -1,17 +1,20 @@
 # Publishes the relay image to ghcr.io/tonimelisma/latchkey-relay (and the developer's intake for
-# problem reports, ghcr.io/tonimelisma/latchkey-intake, spec 014) whenever relay/ changes on main
-# (or on repository_dispatch "relay-image"), tagged with the commit and "latest", and signs it with
-# cosign, keyless: the signature names this workflow on main (GitHub's identity token, Sigstore's
-# certificate and transparency log). That is the production deploy: a host that verifies the
+# problem reports, ghcr.io/tonimelisma/latchkey-intake, spec 014) after CI passes on main for a
+# commit that changed relay/ since the last published image (or on repository_dispatch
+# "relay-image", or by hand), tagged with the commit and "latest", and signs it with cosign,
+# keyless: the signature names this workflow file on refs/heads/main (GitHub's identity token,
+# Sigstore's certificate and transparency log), so this file's name and the branch never change
+# (hosts verify exactly that identity). That is the production deploy: a host that verifies the
 # signature switches to the new image by itself, and self-hosted relays that follow "latest" update
-# too (spec 009 FR-911). Nothing is published unless the security checks, lint and the full test suite
-# pass; multi-arch (x86 and ARM servers), with an SBOM and build provenance. The publishing job
-# runs in the environment "production", where the owner can require an approval.
+# too (spec 009 FR-911). Nothing is published unless CI (security checks, lint, the full test
+# suite) passed on that commit; multi-arch (x86 and ARM servers), with an SBOM and build
+# provenance. The publishing job runs in the environment "production", where the maintainer can
+# require an approval.
 name: relay image
 on:
-  push:
-    branches: [main]
-    paths: ["relay/**"]
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
   repository_dispatch:
     types: [relay-image]
   workflow_dispatch:
@@ -21,30 +24,56 @@ concurrency:
   group: relay-image
   cancel-in-progress: false
 jobs:
-  checks:
+  # Which commit, and whether relay/ changed since the last image this workflow published (a run
+  # whose image job succeeded). CI on main ran the security checks, lint and tests on that commit.
+  changes:
+    if: >-
+      github.event_name != 'workflow_run' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'push' &&
+       github.event.workflow_run.head_branch == 'main' &&
+       github.event.workflow_run.head_repository.full_name == github.repository)
     runs-on: ubuntu-latest
-    timeout-minutes: 30
-    defaults:
-      run:
-        working-directory: relay
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: read # the last run that published an image
+    outputs:
+      sha: ${{ steps.pick.outputs.sha }}
+      publish: ${{ steps.pick.outputs.publish }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          fetch-depth: 0 # the secret scan reads the whole history
+          fetch-depth: 0 # the diff since the last published commit
           persist-credentials: false
-      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
-        with:
-          go-version-file: relay/go.mod
-          cache-dependency-path: relay/go.sum
-      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
-      - name: Security checks
-        run: make security
-      - name: Lint
-        run: make lint
-      - name: Test
-        run: make test
+      - id: pick
+        env:
+          EVENT: ${{ github.event_name }}
+          RUN_SHA: ${{ github.event.workflow_run.head_sha }}
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          sha=${RUN_SHA:-$(git rev-parse HEAD)}
+          git merge-base --is-ancestor "$sha" origin/main || { echo "::error::$sha isn't on main"; exit 1; }
+          publish=true
+          if [ "$EVENT" = workflow_run ]; then
+            last=""
+            for id in $(gh api "repos/$REPO/actions/workflows/relay-image.yml/runs?status=success&per_page=30" --jq '.workflow_runs[].id'); do
+              if [ "$(gh api "repos/$REPO/actions/runs/$id/jobs" --jq '[.jobs[] | select(.name == "image" and .conclusion == "success")] | length')" -gt 0 ]; then
+                last=$(gh api "repos/$REPO/actions/runs/$id" --jq .head_sha)
+                break
+              fi
+            done
+            if [ -n "$last" ] && git merge-base --is-ancestor "$last" "$sha" 2>/dev/null &&
+              git diff --quiet "$last" "$sha" -- relay/ .github/workflows/relay-image.yml; then
+              publish=false
+              echo "relay/ unchanged since the last published image (${last::12}); nothing to publish" | tee -a "$GITHUB_STEP_SUMMARY"
+            fi
+          fi
+          printf 'sha=%s\npublish=%s\n' "$sha" "$publish" | tee -a "$GITHUB_OUTPUT"
   image:
-    needs: checks
+    needs: changes
+    if: needs.changes.outputs.publish == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     environment: production
@@ -55,10 +84,13 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ needs.changes.outputs.sha }}
           persist-credentials: false
       - name: Version
         id: version
-        run: echo "short=${GITHUB_SHA::12}" >>"$GITHUB_OUTPUT"
+        env:
+          SHA: ${{ needs.changes.outputs.sha }}
+        run: echo "short=${SHA::12}" >>"$GITHUB_OUTPUT"
       - uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
       - uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
@@ -77,10 +109,10 @@ jobs:
           build-args: VERSION=${{ steps.version.outputs.short }}
           # The commit the image was built from, for a host's updater to name it by.
           labels: |
-            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.revision=${{ needs.changes.outputs.sha }}
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
           tags: |
-            ghcr.io/tonimelisma/latchkey-relay:${{ github.sha }}
+            ghcr.io/tonimelisma/latchkey-relay:${{ needs.changes.outputs.sha }}
             ghcr.io/tonimelisma/latchkey-relay:latest
       - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
         with:
@@ -99,7 +131,7 @@ jobs:
             --certificate-identity "https://github.com/${{ github.repository }}/.github/workflows/relay-image.yml@refs/heads/main" \
             --certificate-oidc-issuer https://token.actions.githubusercontent.com \
             "ghcr.io/tonimelisma/latchkey-relay@$DIGEST" >/dev/null
-          echo "Published and signed ghcr.io/tonimelisma/latchkey-relay@$DIGEST (${GITHUB_SHA::12}); hosts that verify the signature switch to it." >>"$GITHUB_STEP_SUMMARY"
+          echo "Published and signed ghcr.io/tonimelisma/latchkey-relay@$DIGEST (${{ steps.version.outputs.short }}); hosts that verify the signature switch to it." >>"$GITHUB_STEP_SUMMARY"
       # The developer's intake for problem reports (spec 014), from the same module and checks.
       - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         id: intake
@@ -112,10 +144,10 @@ jobs:
           sbom: true
           build-args: VERSION=${{ steps.version.outputs.short }}
           labels: |
-            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.revision=${{ needs.changes.outputs.sha }}
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
           tags: |
-            ghcr.io/tonimelisma/latchkey-intake:${{ github.sha }}
+            ghcr.io/tonimelisma/latchkey-intake:${{ needs.changes.outputs.sha }}
             ghcr.io/tonimelisma/latchkey-intake:latest
       - name: Sign the intake image (keyless) and check it
         env:
@@ -127,4 +159,4 @@ jobs:
             --certificate-identity "https://github.com/${{ github.repository }}/.github/workflows/relay-image.yml@refs/heads/main" \
             --certificate-oidc-issuer https://token.actions.githubusercontent.com \
             "ghcr.io/tonimelisma/latchkey-intake@$DIGEST" >/dev/null
-          echo "Published and signed ghcr.io/tonimelisma/latchkey-intake@$DIGEST (${GITHUB_SHA::12})." >>"$GITHUB_STEP_SUMMARY"
+          echo "Published and signed ghcr.io/tonimelisma/latchkey-intake@$DIGEST (${{ steps.version.outputs.short }})." >>"$GITHUB_STEP_SUMMARY"

@@ -45,11 +45,11 @@ person running the session asks for); started with `claude --cloud` it has none.
   sensitive to a busy 4-CPU VM. On Linux, `make lint` also checks the Linux-only files the Mac
   never sees (`*_linux.go`).
 - Releases run in GitHub Actions (CLAUDE.md, "Git, CI and PRs"; actions pinned by SHA, checked
-  by `scripts/tests/ci_tools_test.sh`). Started by a merge
-  to main when their folder changed, or from here with repository_dispatch, which the proxy
+  by `scripts/tests/ci_tools_test.sh`). Started when CI passes on main for a commit that changed
+  their folder since their last release, or from here with repository_dispatch, which the proxy
   allows (`gh api repos/tonimelisma/latchkey/dispatches -f event_type=<type>`):
 
-  | Workflow | On merge when | Dispatch type | Environment | What it does |
+  | Workflow | After CI on main, when changed | Dispatch type | Environment | What it does |
   |---|---|---|---|---|
   | `ci.yml` | every push, pull request, daily | | | relay, Linux, scripts, process checks, the Mac app (when `macos/` changed); `CI gate` |
   | `relay-image.yml` | `relay/` | `relay-image` | `production` | checks, then the signed image; hosts that verify the signature pull it |
