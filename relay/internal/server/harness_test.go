@@ -42,6 +42,7 @@ type harness struct {
 	mail   *account.MemoryMailer
 	traces *trace.Store
 	free   atomic.Uint64 // the free disk space the traces see
+	srv    *httptest.Server
 }
 
 func newHarness(t *testing.T, tweak func(*Options)) *harness {
@@ -75,6 +76,7 @@ func newHarness(t *testing.T, tweak func(*Options)) *harness {
 	require.NoError(t, err)
 	srv.Config.Handler = h.relay.Handler
 	srv.Start()
+	h.srv = srv
 	t.Cleanup(func() { h.relay.Hub.Close(); srv.Close(); h.relay.DrainMail(context.Background()) })
 	return h
 }

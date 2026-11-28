@@ -128,6 +128,35 @@ import Testing
         #expect(try await b.run("String(document.hasFocus())") == "false", "behind other windows between calls")
     }
 
+    /// regressions-browser.browser_focus_lead (problem report 2026-11-27, 0.8.252, Mac locked): a
+    /// sign-in page's Authorize button answered every real click with "Too soon. Wait, then press
+    /// again." The page was focused only from the start of Claude's call, a few tens of
+    /// milliseconds before the press; a person's window has been focused far longer. A guard
+    /// like that refuses a click unless the page has had the focus for a while (500 ms here).
+    /// FR-483a: the page counts as focused at least 1 s before Claude's first event of a call.
+    static let focusGuard = """
+        <title>Authorize</title>
+        <button id="b" data-latchkey="e1" style="width:120px;height:40px">Authorize</button>
+        <script>
+        window.focusedAt = document.hasFocus() ? performance.now() : -1;
+        window.addEventListener('focus', function () { focusedAt = performance.now(); });
+        window.addEventListener('blur', function () { focusedAt = -1; });
+        document.getElementById('b').addEventListener('click', function () {
+          var held = focusedAt < 0 ? -1 : performance.now() - focusedAt;
+          document.title = (document.hasFocus() && held >= 500) ? 'Authorized' : 'Too soon ' + Math.round(held);
+        });
+        </script>
+        """
+
+    @Test func aClickComesAfterThePageHasHadTheFocusForAWhile() async throws {
+        let b = LockedBrowser(cookies: { [] })
+        defer { b.discard() }
+        _ = try await b.open(html: Self.focusGuard, base: Self.base)
+        _ = try await b.click("e1")
+        #expect(try await b.run("document.title") == "Authorized")
+        #expect(try await b.run("String(document.hasFocus())") == "false", "behind other windows between calls")
+    }
+
     /// FR-480: a character no US key types arrives as text; Enter submits.
     @Test func aCharacterNoKeyTypesArrivesAsTextAndSubmitPressesEnter() async throws {
         let b = LockedBrowser(cookies: { [] })

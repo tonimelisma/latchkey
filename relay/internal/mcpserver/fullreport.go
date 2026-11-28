@@ -101,19 +101,17 @@ const maxChatCalls = 500
 // chatOf reads the account's trace for the chat the request came in on (FR-1441). The first
 // pass keeps no answers, only what joins sessions; the second reads the chat's lines in full, so
 // a report never holds the account's whole day in memory (security review 2026-11-25).
-func (s *Server) chatOf(userID, session string, now time.Time) chat {
+func (s *Server) chatOf(userID, session, client string, now time.Time) chat {
 	c := chat{from: now, to: now, how: "session"}
 	if s.opts.Traces == nil {
 		return c
 	}
+	at := func(l trace.Line) time.Time { t, _ := time.Parse(time.RFC3339Nano, l.Time); return t }
 	if session == "" {
-		// A client without sessions: its calls can't be told from other chats', so none go in.
-		c.how = "none: this Claude app gives no session, so the chat's calls can't be told from other chats'"
-		return c
+		return s.appCalls(userID, client, now, at)
 	}
 	from := now.Add(-chatLookBack).UTC().Format(trace.DayFormat)
 	to := now.UTC().Format(trace.DayFormat)
-	at := func(l trace.Line) time.Time { t, _ := time.Parse(time.RFC3339Nano, l.Time); return t }
 	type head struct {
 		session string
 		page    string   // the page its arguments name
@@ -162,22 +160,76 @@ func (s *Server) chatOf(userID, session string, now time.Time) chat {
 		}
 		return nil
 	})
+	c.sessions = len(in)
+	s.finishChat(&c, userID, pages, now, at)
+	return c
+}
+
+// appLookBack is how far back a client without sessions has its calls taken (FR-1441).
+const appLookBack = 2 * time.Hour
+
+// minSpan is the least time before the report that its logs cover, so a report whose chat made
+// few calls still shows what led up to it: the relay restarting, a Mac reconnecting (problem
+// reports of 2026-11-26/27 came with under a minute of log).
+const minSpan = 15 * time.Minute
+
+// appCalls is the chat of a client without sessions (the protocol of 2026-07-28, which claude.ai
+// and Claude Code use): the calls of the same Claude app, also without a session, in the last
+// appLookBack, and the pages they used (FR-1441). Other chats of that app may be among them,
+// which the report says.
+func (s *Server) appCalls(userID, client string, now time.Time, at func(trace.Line) time.Time) chat {
+	name := client
+	if name == "" {
+		name = "a Claude app that gives no name"
+	}
+	c := chat{from: now, to: now, how: fmt.Sprintf("app: this Claude app (%s) gives no session, so these are its calls of the last %d hours; other chats of the same app may be among them", name, int(appLookBack.Hours()))}
+	since := now.Add(-appLookBack)
+	pages := map[string]bool{}
+	_, err := s.opts.Traces.Each(userID, since.UTC().Format(trace.DayFormat), now.UTC().Format(trace.DayFormat), func(l trace.Line) error {
+		if l.Kind != trace.KindAction || l.Session != "" || l.Client != client || at(l).Before(since) {
+			return nil
+		}
+		c.calls = append(c.calls, l)
+		if len(c.calls) > maxChatCalls {
+			c.calls = c.calls[1:]
+		}
+		return nil
+	})
+	if err != nil {
+		s.opts.Logger.Warn("report: the trace couldn't be read", "user", userID, "err", err)
+	}
+	for _, l := range c.calls {
+		if p := argPage(l.Arguments); p != "" {
+			pages[p] = true
+		}
+		for _, p := range answerPages(l.Result) {
+			pages[p] = true
+		}
+	}
+	s.finishChat(&c, userID, pages, now, at)
+	return c
+}
+
+// finishChat orders the chat's calls, sets the span its logs cover (from its first call, and at
+// least minSpan before the report), and adds the trace's events of that span and the pages.
+func (s *Server) finishChat(c *chat, userID string, pages map[string]bool, now time.Time, at func(trace.Line) time.Time) {
 	sort.SliceStable(c.calls, func(i, j int) bool { return at(c.calls[i]).Before(at(c.calls[j])) })
 	if len(c.calls) > 0 {
 		c.from = at(c.calls[0])
 	}
-	_, _ = s.opts.Traces.Each(userID, c.from.UTC().Format(trace.DayFormat), to, func(l trace.Line) error {
+	if earliest := now.Add(-minSpan); c.from.After(earliest) {
+		c.from = earliest
+	}
+	_, _ = s.opts.Traces.Each(userID, c.from.UTC().Format(trace.DayFormat), now.UTC().Format(trace.DayFormat), func(l trace.Line) error {
 		if l.Kind == trace.KindEvent && !at(l).Before(c.from) {
 			c.events = append(c.events, l)
 		}
 		return nil
 	})
-	c.sessions = len(in)
 	for p := range pages {
 		c.pages = append(c.pages, p)
 	}
 	sort.Strings(c.pages)
-	return c
 }
 
 // argPage is the page a call's arguments name, "" for none.
@@ -316,7 +368,7 @@ func firstText(content json.RawMessage) string {
 func (s *Server) fullReport(ctx context.Context, userID string, req *mcp.CallToolRequest,
 	ms []machine, named []string, r reports.Report, now time.Time,
 ) (full, small []byte, err error) {
-	c := s.chatOf(userID, sessionOf(req), now)
+	c := s.chatOf(userID, sessionOf(req), surface(req), now)
 	inv, wasNamed := involved(ms, named, c)
 	r.Format = 3
 	r.Machines = nil

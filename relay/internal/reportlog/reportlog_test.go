@@ -47,3 +47,31 @@ func TestRingIsBounded(t *testing.T) {
 		t.Fatal("lines older than a day are forgotten")
 	}
 }
+
+// FR-1442a (problem report of 2026-11-27: calls failed while the relay restarted, and the report
+// couldn't show it): a relay-wide line is in every account's lines, in time order, without its
+// marker; a line without the marker or account stays out.
+func TestRelayWideLinesAreInEveryAccountsLines(t *testing.T) {
+	now := time.Date(2026, 11, 27, 22, 51, 0, 0, time.UTC)
+	r := New(func() time.Time { return now })
+	log := slog.New(r.Wrap(slog.DiscardHandler))
+	log.Info("call", "user", "u1")
+	now = now.Add(time.Second)
+	log.Info("relay shutting down", RelayWide, true)
+	log.Info("relay listening", "public_url", "https://relay.example.com")
+	now = now.Add(time.Second)
+	log.Info("relay started", "version", "abc", RelayWide, true, "public_url", "https://relay.example.com")
+	for _, account := range []string{"u1", "u2"} {
+		var texts []string
+		for _, l := range r.Lines(account, time.Time{}) {
+			texts = append(texts, l.Text)
+		}
+		got := strings.Join(texts, "|")
+		if !strings.Contains(got, "INFO relay shutting down|INFO relay started version=abc") {
+			t.Fatalf("%s: the relay's stop and start, in order: %q", account, got)
+		}
+		if strings.Contains(got, RelayWide) || strings.Contains(got, "relay.example.com") {
+			t.Fatalf("%s: no marker, no unmarked relay line: %q", account, got)
+		}
+	}
+}

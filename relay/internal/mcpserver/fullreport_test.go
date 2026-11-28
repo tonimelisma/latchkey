@@ -105,12 +105,13 @@ func sharingMac(t *testing.T, e *env, wait time.Duration, part string) {
 	e.connectMac()
 }
 
-func openOne(t *testing.T, intake *fakeIntake, n int, priv string) map[string]any {
+// openOne opens the one report the intake got.
+func openOne(t *testing.T, intake *fakeIntake, priv string) map[string]any {
 	t.Helper()
-	require.Eventually(t, func() bool { return len(intake.received()) == n }, 15*time.Second, 20*time.Millisecond)
+	require.Eventually(t, func() bool { return len(intake.received()) == 1 }, 15*time.Second, 20*time.Millisecond)
 	k, err := reports.PrivateKey(priv)
 	require.NoError(t, err)
-	plain, err := reports.OpenRaw(k, intake.received()[n-1])
+	plain, err := reports.OpenRaw(k, intake.received()[0])
 	require.NoError(t, err)
 	var r map[string]any
 	require.NoError(t, json.Unmarshal(plain, &r))
@@ -142,7 +143,7 @@ func TestReportCarriesEverythingForThatChat(t *testing.T) {
 	require.NoError(t, err)
 	require.False(t, res.IsError, text(t, res))
 
-	r := openOne(t, intake, 1, priv)
+	r := openOne(t, intake, priv)
 	all, _ := json.Marshal(r)
 	assert.EqualValues(t, 3, r["format"])
 	calls := r["calls"].([]any)
@@ -185,7 +186,7 @@ func TestReportGoesWithoutALateMachinesPart(t *testing.T) {
 	require.NoError(t, err)
 	require.False(t, res.IsError, text(t, res))
 	assert.Less(t, time.Since(start), 5*time.Second, "the answer waits only the part's deadline")
-	r := openOne(t, intake, 1, priv)
+	r := openOne(t, intake, priv)
 	p := r["parts"].([]any)[0].(map[string]any)
 	assert.Equal(t, false, p["answered"])
 	assert.Contains(t, p["note"], "didn't answer within")
@@ -208,7 +209,7 @@ func TestOldIntakeGetsTheSmallVersion(t *testing.T) {
 	}
 	_, err := cs.CallTool(ctx(t), &mcp.CallToolParams{Name: "feedback", Arguments: map[string]any{"summary": "big", "details": "y"}})
 	require.NoError(t, err)
-	r := openOne(t, intake, 1, priv)
+	r := openOne(t, intake, priv)
 	assert.Equal(t, "big", r["summary"])
 	assert.Nil(t, r["calls"])
 	assert.Contains(t, strings.Join(func() []string {
@@ -218,4 +219,58 @@ func TestOldIntakeGetsTheSmallVersion(t *testing.T) {
 		}
 		return out
 	}(), " "), "only small reports")
+}
+
+// namedClient is a client of the given protocol version that calls itself name (the Claude app).
+func (e *env) namedClient(version, name string) *mcp.ClientSession {
+	e.t.Helper()
+	c := mcp.NewClient(&mcp.Implementation{Name: name, Version: "1"}, nil)
+	cs, err := c.Connect(ctx(e.t), &mcp.StreamableClientTransport{
+		Endpoint:   e.srv.URL + "/mcp",
+		HTTPClient: &http.Client{Transport: bearer{"token-" + e.user.ID}},
+		MaxRetries: -1,
+	}, &mcp.ClientSessionOptions{ProtocolVersion: version})
+	require.NoError(e.t, err)
+	e.t.Cleanup(func() { _ = cs.Close() })
+	return cs
+}
+
+// Problem reports of 2026-11-26/27: claude.ai and Claude Code both use the protocol without
+// sessions, and every report came with no calls, no pages and under a minute of log. FR-1441: a
+// client without sessions gets its calls from the same Claude app in the last 2 hours (not
+// another app's); the Mac is asked for those calls and their pages; the relay's own starts and
+// stops are in the relay's log (FR-1442a).
+func TestReportWithoutASessionCarriesTheAppsCalls(t *testing.T) {
+	e, intake, ring, priv := fullEnv(t, 5*time.Second, 0)
+	go e.ms.SendReports(ctx(t))
+	sharingMac(t, e, 0, partAnswer)
+	app := e.namedClient(stateless, "Anthropic/ClaudeAI")
+	other := e.namedClient(stateless, "another-app")
+	call := func(cs *mcp.ClientSession, name string, args map[string]any) {
+		res, err := cs.CallTool(ctx(t), &mcp.CallToolParams{Name: name, Arguments: args})
+		require.NoError(t, err)
+		require.False(t, res.IsError)
+	}
+	call(app, "browser_look", map[string]any{"url": "https://shop.example/cart"})
+	call(other, "battery_status", map[string]any{})
+	call(app, "logins_fill", map[string]any{"page": "pk4m2", "field": "e7", "fill": "code", "code": "482913", "press": "e9"})
+	slog.New(ring.Wrap(slog.DiscardHandler)).Info("shutting down", reportlog.RelayWide, true)
+
+	res, err := app.CallTool(ctx(t), &mcp.CallToolParams{Name: "feedback", Arguments: map[string]any{
+		"summary": "The page came up signed out", "details": "opened the dashboard, saw the sign-in form",
+	}})
+	require.NoError(t, err)
+	require.False(t, res.IsError, text(t, res))
+
+	r := openOne(t, intake, priv)
+	all, _ := json.Marshal(r)
+	calls, _ := r["calls"].([]any)
+	require.Len(t, calls, 2, "the app's two calls, not the other app's: %s", all)
+	assert.Equal(t, "browser_look", calls[0].(map[string]any)["tool"])
+	assert.NotContains(t, string(all), "battery_status", "another Claude app's call")
+	assert.NotContains(t, string(all), "482913", "FR-1448: the code is blanked everywhere")
+	ch := r["chat"].(map[string]any)
+	assert.Contains(t, ch["how"], "Anthropic/ClaudeAI", "says whose calls they are")
+	assert.Contains(t, string(all), "shutting down", "FR-1442a: the relay's own starts and stops")
+	assert.Contains(t, string(all), "api/checkout", "the Mac was asked for the page the calls used")
 }

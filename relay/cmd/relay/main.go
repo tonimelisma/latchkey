@@ -5,7 +5,6 @@ package main
 import (
 	"context"
 	"crypto/tls"
-	"errors"
 	"fmt"
 	"log/slog"
 	"net"
@@ -22,6 +21,7 @@ import (
 	"github.com/tonimelisma/latchkey/relay/internal/account"
 	"github.com/tonimelisma/latchkey/relay/internal/keyvault"
 	"github.com/tonimelisma/latchkey/relay/internal/mcpserver"
+	"github.com/tonimelisma/latchkey/relay/internal/reportlog"
 	"github.com/tonimelisma/latchkey/relay/internal/server"
 	"github.com/tonimelisma/latchkey/relay/internal/store"
 	"github.com/tonimelisma/latchkey/relay/internal/trace"
@@ -125,6 +125,8 @@ func run(ctx context.Context) error {
 	}
 	errc := make(chan error, 1)
 	go func() {
+		// The relay's start, for every account's problem reports: its version only (FR-1442a).
+		r.Logger.Info("relay started", "version", version, reportlog.RelayWide, true)
 		logger.Info("relay listening", "port", cfg.Port, "public_url", cfg.PublicURL.String(), "tls", cfg.ACMEEmail != "", "trusted_proxies", cfg.TrustedProxies.Strings(), "allowed_client_hosts", cfg.AllowedClientHosts.Strings(), "version", version)
 		if srv.TLSConfig != nil {
 			errc <- srv.ServeTLS(ln, "", "")
@@ -140,15 +142,18 @@ func run(ctx context.Context) error {
 		return err
 	case <-ctx.Done():
 	}
-	logger.Info("shutting down")
+	r.Logger.Info("relay shutting down", reportlog.RelayWide, true) // in every account's report (FR-1442a)
 	_ = notifySystemd(os.Getenv, "STOPPING=1")
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	// Within the 10 s a container manager gives before it kills: the running calls first
+	// (FR-095a), then a security email of the last moments.
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
 	defer cancel()
-	r.Hub.Close()
-	if err := srv.Shutdown(shutdownCtx); err != nil && !errors.Is(err, http.ErrServerClosed) {
+	if err := r.Shutdown(shutdownCtx, srv); err != nil {
 		return err
 	}
-	r.DrainMail(shutdownCtx) // a security email of the last moments still goes out
+	mailCtx, cancelMail := context.WithTimeout(context.Background(), 1500*time.Millisecond)
+	defer cancelMail()
+	r.DrainMail(mailCtx)
 	return nil
 }
 

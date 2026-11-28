@@ -429,6 +429,13 @@ the sign-in came back unchanged without a word.
   behind another app's, as a Safari window does then. Why not always: a password field focused
   in a window that counts as the front one turns on macOS's secure keyboard entry for the whole
   Mac, which would get in the Owner's way for as long as the page sat there (Constitution IV).
+- **FR-483a** The page shall count as focused at least 1 second before Claude's first event of a
+  call reaches it, as a person's window has been in front for a while when they click. Why: with
+  the Mac locked, a sign-in page's Authorize button answered every real click with "Too soon.
+  Wait, then press again.", since the page had been focused only a few tens of milliseconds
+  (problem report 2026-11-27, 0.8.252; `aClickComesAfterThePageHasHadTheFocusForAWhile`). 1 second
+  is Firefox's own guard against clicks on a window that just came forward. Each acting call
+  takes up to that much longer; the window still never becomes key for macOS.
 - **FR-484** A click on a list (`select` showing one line), a colour field, or a date or time
   field in Latchkey's own browser shall not be sent as a mouse click (its menu would hold
   Latchkey up until answered, and a colour panel would open on the Owner's screen): Claude is

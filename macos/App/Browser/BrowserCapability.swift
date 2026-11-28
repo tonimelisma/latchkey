@@ -625,7 +625,7 @@ enum BrowserCapability {
     static func ownBrowser(_ name: String, signedIn: Bool = true, own: String? = nil) -> String {
         let how =
             if let own {
-                "with Latchkey's own sign-in for \(own), not a copy of Safari's, so the owner's Safari stays signed in (if the page asks to sign in, type the saved sign-in with logins_fill)"
+                "with Latchkey's own sign-in for \(own), not a copy of Safari's, so the owner's Safari stays signed in (if the page asks to sign in, type the saved sign-in with logins_fill; or, while the Mac is unlocked, browser_look sign_in_again moves the page into a Safari tab of Claude's, with the owner's own Safari sign-in)"
             } else if signedIn {
                 "signed in with a copy of Safari's sign-ins (the Mac is locked; a site may sign the owner out in Safari when this copy renews its sign-in)"
             } else {

@@ -69,4 +69,7 @@ Toni, 2026-11-22: "Fill-only tool". Latchkey types; Claude reads the page and de
 - The first line of every answer from Latchkey's own browser on such a site (FR-1355): "…
   Claude's page "<name>", with Latchkey's own sign-in for <site>, not a copy of Safari's, so the
   owner's Safari stays signed in (if the page asks to sign in, type the saved sign-in with
-  logins_fill)."
+  logins_fill; or, while the Mac is unlocked, browser_look sign_in_again moves the page into a
+  Safari tab of Claude's, with the owner's own Safari sign-in)." (The way into Safari added after
+  the problem report of 2026-11-26: Procare opened signed out and the answer named only
+  logins_fill.)
