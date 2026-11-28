@@ -23,8 +23,9 @@ import (
 // intake are Latchkey's developer's unless LATCHKEY_DEVELOPER_KEY and LATCHKEY_INTAKE_URL name a
 // fork's. Each part is signed with a key derived from the developer's private key
 // (LATCHKEY_REPORTS_KEY, the file LATCHKEY_REPORTS_KEY_FILE names, otherwise Key Vault secret
-// kv-melisma-release/latchkey-reports-private-key, read as latchkey-reports reads it), so only the
-// developer's own runs count (anyone can post to the intake).
+// latchkey-reports-private-key in the vault LATCHKEY_KEYVAULT_RELEASE names, read as
+// latchkey-reports reads it), so only the developer's own runs count (anyone can post to the
+// intake).
 func sendCmd(args []string) error {
 	if len(args) != 1 {
 		return errors.New("usage: e2e send <result.json>")
@@ -101,7 +102,7 @@ func developerPrivate() (string, error) {
 		return "", fmt.Errorf("--send is for the developer's own runs: it signs with the developer's private key, which can't be read (%w); without --send the result stays in this clone", err)
 	}
 	if _, err := reports.PrivateKey(k); err != nil {
-		return "", fmt.Errorf("the developer's private key (LATCHKEY_REPORTS_KEY, LATCHKEY_REPORTS_KEY_FILE or Key Vault kv-melisma-release/latchkey-reports-private-key): %w", err)
+		return "", fmt.Errorf("the developer's private key (LATCHKEY_REPORTS_KEY, LATCHKEY_REPORTS_KEY_FILE or latchkey-reports-private-key in the Key Vault LATCHKEY_KEYVAULT_RELEASE names): %w", err)
 	}
 	return k, nil
 }

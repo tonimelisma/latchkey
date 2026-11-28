@@ -10,8 +10,9 @@
 // token from LATCHKEY_INTAKE_TOKEN, and the private key (base64, as keygen writes the file) from
 // LATCHKEY_REPORTS_KEY or the file named by LATCHKEY_REPORTS_KEY_FILE. When they aren't set it
 // reads them from Azure Key Vault itself (internal/keyvault: the cloud session's client secret, or
-// `az login` on the Mac): kv-melisma-dev/latchkey-intake-developer-token and
-// kv-melisma-release/latchkey-reports-private-key. Report contents go only to this command's output.
+// `az login` on the Mac): latchkey-intake-developer-token in the vault LATCHKEY_KEYVAULT_DEV
+// names and latchkey-reports-private-key in the one LATCHKEY_KEYVAULT_RELEASE names, signing in
+// to the tenant AZURE_TENANT_ID. Report contents go only to this command's output.
 package main
 
 import (
@@ -92,7 +93,7 @@ func call(method, path string, out *[]byte) error {
 	if err != nil {
 		return err
 	}
-	t, err := keyvault.Get(req.Context(), "LATCHKEY_INTAKE_TOKEN", "kv-melisma-dev", "latchkey-intake-developer-token")
+	t, err := keyvault.Get(req.Context(), "LATCHKEY_INTAKE_TOKEN", keyvault.DevVault, "latchkey-intake-developer-token")
 	if err != nil {
 		return err
 	}

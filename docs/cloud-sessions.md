@@ -28,12 +28,15 @@ person running the session asks for); started with `claude --cloud` it has none.
   or token) in the environment: everyone using it can read it (its one variable, below, is the
   exception).
 - The environment: cloud sessions run in one claude.ai environment shared by several projects.
-  Its only variable is `MELISMA_SECRETS_CLIENT_SECRET`, the client secret of an Entra app that
-  may read the development vault and the one release secret `latchkey-reports-private-key`
-  (the vault and identity details live in the private repository that manages them). Every
-  other secret a tool needs it reads from the vault itself when it runs (nothing written to
-  disk): `relay/internal/keyvault` signs in as that app when the variable is set, and says in
-  its error which secret it couldn't read and why, never a value. No network secrets and no
+  Its one secret is `MELISMA_SECRETS_CLIENT_SECRET`, the client secret of an Entra app that may
+  read the development vault and the one release secret `latchkey-reports-private-key`. Beside
+  it, not secret: `AZURE_TENANT_ID` (the tenant), `AZURE_CLIENT_ID` (that app),
+  `LATCHKEY_KEYVAULT_DEV` and `LATCHKEY_KEYVAULT_RELEASE` (the two vaults' names); their values
+  live in the private repository that manages them, never here. Every other secret a tool needs
+  it reads from the vault itself when it runs (nothing written to disk):
+  `relay/internal/keyvault` signs in as that app when the secret is set, has no built-in tenant,
+  app or vault, and says in its error which variable is missing, or which secret it couldn't
+  read and why, never a value. No network secrets and no
   `request_credential`. Network: "Limited" plus `login.microsoftonline.com`, the two vaults'
   hosts, the problem-report intake, and `semgrep.dev`, `vuln.go.dev` and `api.osv.dev`
   (`make security`, below).
