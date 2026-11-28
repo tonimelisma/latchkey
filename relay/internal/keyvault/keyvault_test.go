@@ -2,8 +2,11 @@ package keyvault
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -133,5 +136,53 @@ func TestGetErrorNamesWhatAndHow(t *testing.T) {
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("error %q doesn't say %q", err, want)
 		}
+	}
+}
+
+func TestReportsKey(t *testing.T) {
+	var asked []string
+	var vaultErr error
+	get := func(_ context.Context, env, vault, secret string) (string, error) {
+		asked = append(asked, env+" "+vault+"/"+secret)
+		if vaultErr != nil {
+			return "", vaultErr
+		}
+		return " from-vault\n", nil
+	}
+	f := filepath.Join(t.TempDir(), "named.key")
+	if err := os.WriteFile(f, []byte("from-file\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for name, tc := range map[string]struct{ key, file, want string }{
+		"variable wins":             {"from-env", f, "from-env"},
+		"the named file":            {"", f, "from-file"},
+		"neither: the vault":        {"", "", "from-vault"},
+		"blank variable: the vault": {"  ", "", "from-vault"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			asked = nil
+			t.Setenv("LATCHKEY_REPORTS_KEY", tc.key)
+			t.Setenv("LATCHKEY_REPORTS_KEY_FILE", tc.file)
+			got, err := ReportsKey(context.Background(), get)
+			if err != nil || got != tc.want {
+				t.Fatalf("ReportsKey = %q, %v; want %q", got, err, tc.want)
+			}
+			if tc.want == "from-vault" && (len(asked) != 1 || asked[0] != "LATCHKEY_REPORTS_KEY kv-melisma-release/latchkey-reports-private-key") {
+				t.Fatalf("vault asked %q", asked)
+			}
+			if tc.want != "from-vault" && len(asked) != 0 {
+				t.Fatalf("vault asked %q", asked)
+			}
+		})
+	}
+	t.Setenv("LATCHKEY_REPORTS_KEY", "")
+	t.Setenv("LATCHKEY_REPORTS_KEY_FILE", filepath.Join(t.TempDir(), "missing.key"))
+	if _, err := ReportsKey(context.Background(), get); err == nil || !strings.Contains(err.Error(), "missing.key") {
+		t.Fatalf("a named file that is missing: %v", err)
+	}
+	t.Setenv("LATCHKEY_REPORTS_KEY_FILE", "")
+	vaultErr = errors.New("vault unreachable")
+	if _, err := ReportsKey(context.Background(), get); !errors.Is(err, vaultErr) {
+		t.Fatalf("the vault's error: %v", err)
 	}
 }

@@ -35,8 +35,10 @@ Sealed payload (JSON; `reports.SealRaw`, the same sealing as a problem report):
   Anyone can seal to the public key and post to the intake, so the developer's command ignores a
   run whose parts don't verify, whose parts don't agree (numbering 1 to `parts` once each, the
   same run, start and version), or that starts in the future (security review, 2026-11-24). So
-  `--send` needs the developer's private key on the Mac that runs the tests
-  (`~/.config/latchkey-reports/developer.key`, or `LATCHKEY_REPORTS_KEY[_FILE]`).
+  `--send` needs the developer's private key, read as `latchkey-reports` reads it
+  (`LATCHKEY_REPORTS_KEY`, the file `LATCHKEY_REPORTS_KEY_FILE` names, otherwise Key Vault
+  `kv-melisma-release/latchkey-reports-private-key` with `az login`; no key file on disk,
+  2026-11-27).
 - A failed try also holds its tool calls with arguments and answers, cut to fit; never any
   data of Toni's (the copy holds none).
 - `setup_ok: false` with `missing_permissions` when the image lost a permission (FR-1513); then
