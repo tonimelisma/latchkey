@@ -43,7 +43,7 @@ jobs:
           go-version-file: relay/go.mod
           cache-dependency-path: relay/go.sum
       # `make semgrep` runs the pinned Semgrep through uvx, which ubuntu-latest doesn't ship.
-      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+      - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
       - name: Security checks
         run: make security
       - name: Build
@@ -193,7 +193,7 @@ jobs:
       # costs each job ~10 s at its end and only one save can win).
       - name: Compilation cache
         if: matrix.shard == 0
-        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ runner.temp }}/xcache
           key: mac-xcache-${{ hashFiles('macos/project.yml') }}-${{ github.sha }}
@@ -202,7 +202,7 @@ jobs:
             mac-xcache-
       - name: Compilation cache (taken only)
         if: matrix.shard != 0
-        uses: actions/cache/restore@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ runner.temp }}/xcache
           key: mac-xcache-${{ hashFiles('macos/project.yml') }}-${{ github.sha }}
@@ -213,13 +213,13 @@ jobs:
       # every run (about 90 s of each build before, 2026-11-26).
       - name: Swift packages cache
         if: matrix.shard == 0
-        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ runner.temp }}/spm
           key: mac-spm-${{ hashFiles('macos/project.yml') }}
       - name: Swift packages cache (taken only)
         if: matrix.shard != 0
-        uses: actions/cache/restore@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ runner.temp }}/spm
           key: mac-spm-${{ hashFiles('macos/project.yml') }}
@@ -369,7 +369,7 @@ jobs:
         env:
           TREE: ${{ needs.mac-changes.outputs.tree }}
         run: echo "$TREE" >"$RUNNER_TEMP/tested"
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: github.event_name == 'pull_request' && needs.mac-changes.outputs.mac == 'true' && needs.mac-changes.outputs.test == 'true'
         with:
           name: mac-tested-${{ needs.mac-changes.outputs.tree }}
