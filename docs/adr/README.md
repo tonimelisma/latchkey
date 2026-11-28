@@ -186,3 +186,4 @@ or withdrawn ADR stays, with its status saying so. New decisions get the next nu
 | [0177](0177-evals-in-the-same-sandbox.md) | plan 016 D4 | Evals in the same sandbox (FR-1608) |
 | [0178](0178-retire-the-hand-run-kits.md) | plan 016 D5 | Retire the hand-run kits (FR-1609) |
 | [0179](0179-two-ways-to-work.md) | plan 016 D6 | Two ways to work (spec: the maintainer's choices) |
+| [0180](0180-releases-run-after-ci-passes-on-main.md) | (new) | Releases run after CI passes on main |

@@ -201,13 +201,15 @@ of merged PRs. That information belongs in the PR and its comments.
   app's build, lint and tests on four macOS runners side by side, only when `macos/` or the
   workflow changed (on main, a tree its PR already tested is only built, for the cache).
   `e2e.yml`'s end-to-end checks are reported, not required.
-- Releases: every change to `macos/` on main gets the tag `mac-<x.y.z>` (`mac-tag.yml`: built,
-  signed, published with Sparkle's feed; installed Macs update after 10 minutes without a tool
-  call); every change to `linux/` gets `linux-<x.y.z>` (`linux-release.yml`: both architectures,
-  Ed25519-signed, with `SHA256SUMS`; servers update within a day); every change to `relay/`
-  publishes `ghcr.io/tonimelisma/latchkey-relay` and the intake image, signed with cosign keyless
-  by `relay-image.yml` on `refs/heads/main` (hosts verify that identity, so the file name and
-  branch never change). The version is the highest tag's patch + 1 (`scripts/release-tag.sh`);
+- Releases run after CI passes on main (`workflow_run` of `CI`, push events only;
+  [ADR 0180](docs/adr/0180-releases-run-after-ci-passes-on-main.md)), each for the commit CI
+  tested and only when its folder changed since its last release: `macos/` gets the tag
+  `mac-<x.y.z>` (`mac-tag.yml`: built, signed, published with Sparkle's feed; installed Macs
+  update after 10 minutes without a tool call); `linux/` gets `linux-<x.y.z>`
+  (`linux-release.yml`: both architectures, Ed25519-signed, with `SHA256SUMS`; servers update
+  within a day); `relay/` publishes `ghcr.io/tonimelisma/latchkey-relay` and the intake image,
+  signed with cosign keyless by `relay-image.yml` on `refs/heads/main` (hosts verify that
+  identity, so the file name and branch never change). The version is the highest tag's patch + 1 (`scripts/release-tag.sh`);
   `NEXT_VERSION=x.y.z` starts a new series. A tagged commit keeps its number.
 
 ## Privacy review

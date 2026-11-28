@@ -1,5 +1,6 @@
-# Gives every change to the Mac app on main its release number, the tag mac-<x.y.z>
-# (scripts/release-tag.sh), pushed with the workflow's own token (a cloud session's proxy refuses
+# After CI passes on main for a commit that changed macos/ since the last mac-<x.y.z> tag, gives
+# it its release number, the tag mac-<x.y.z> (scripts/release-tag.sh; CI already built and tested
+# the app on that commit), pushed with the workflow's own token (a cloud session's proxy refuses
 # tag pushes); then builds that release on macOS, signs it, and publishes it with Sparkle's update
 # feed (spec 001 FR-072 to FR-072d), so every installed copy updates itself. Both jobs run in the
 # environment "release", where the maintainer can require an approval. Also on repository_dispatch
@@ -19,9 +20,9 @@
 # The same certificate the Mac signs with keeps the installed app's permissions and pairing.
 name: mac tag
 on:
-  push:
-    branches: [main]
-    paths: ["macos/**"]
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
   repository_dispatch:
     types: [mac-tag]
   workflow_dispatch:
@@ -35,7 +36,40 @@ concurrency:
   group: release-mac
   cancel-in-progress: false
 jobs:
+  # Which commit, and whether macos/ changed since the last mac-<x.y.z> tag on its history.
+  changes:
+    if: >-
+      github.event_name != 'workflow_run' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'push' &&
+       github.event.workflow_run.head_branch == 'main' &&
+       github.event.workflow_run.head_repository.full_name == github.repository)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      sha: ${{ steps.pick.outputs.sha }}
+      release: ${{ steps.pick.outputs.release }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }} # the commit CI tested
+          fetch-depth: 0 # the tags and the diff since the last one
+          persist-credentials: false
+      - id: pick
+        env:
+          EVENT: ${{ github.event_name }}
+        run: |
+          sha=$(git rev-parse HEAD)
+          release=true
+          last=$(git tag --merged HEAD --list 'mac-[0-9]*' --sort=-v:refname | head -1)
+          if [ "$EVENT" = workflow_run ] && [ -n "$last" ] && git diff --quiet "$last" HEAD -- macos/; then
+            release=false
+            echo "macos/ unchanged since $last; nothing to release" | tee -a "$GITHUB_STEP_SUMMARY"
+          fi
+          printf 'sha=%s\nrelease=%s\n' "$sha" "$release" | tee -a "$GITHUB_OUTPUT"
   tag:
+    needs: changes
+    if: needs.changes.outputs.release == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     environment: release
@@ -46,6 +80,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ needs.changes.outputs.sha }}
           fetch-depth: 0 # release-tag.sh reads the tags and main's history
       - name: Tag this commit mac-<next number>
         id: tag
