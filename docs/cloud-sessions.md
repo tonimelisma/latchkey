@@ -108,8 +108,8 @@ applies, except:
   source and record, the logs) into a new folder under `$TMPDIR`, never the repository, for
   reading with the file tools; `latchkey-reports delete <id>` deletes a dispositioned one. It needs the developer's private
   key in `LATCHKEY_REPORTS_KEY` and the intake's token in `LATCHKEY_INTAKE_TOKEN`; when they aren't
-  set (the usual case) it reads both from Key Vault itself (`kv-melisma-release/latchkey-reports-private-key`, stored as
-  the key file `~/.config/latchkey-reports/developer.key` holds it, and
+  set (the usual case) it reads both from Key Vault itself (`kv-melisma-release/latchkey-reports-private-key`, base64 as
+  `latchkey-reports keygen` writes it, and
   `kv-melisma-dev/latchkey-intake-developer-token`; the environment, above). Report contents stay
   in the session's output.
 - End to end and evals (spec 015): `e2e.yml`'s `e2e-linux` and `mac-build.yml`'s job 3 run the
@@ -118,7 +118,8 @@ applies, except:
   with saved copies (the snapshots were removed, Toni 2026-11-26). Docker Hub refuses this VM's pulls (rate limit), so the
   Linux check runs on GitHub, not here. Eval results a local session sent (`make -C macos
   evals ARGS=--send`; there is no weekly run or reminder, Toni 2026-11-25) are read with `go run
-  ./cmd/latchkey-reports evals`.
+  ./cmd/latchkey-reports evals`. `--send` signs with the developer's private key, which the
+  sender reads exactly as `latchkey-reports` does (`keyvault.ReportsKey`; no key file on disk).
 - No Mac (Toni, 2026-11-26; CLAUDE.md, "Two ways to work"): a cloud session never uses
   Latchkey to reach Toni's MacBook while developing: no builds, tests or lint through
   `shell_run`, no requests to the Mac's updater, no `computer_look` screenshots. The Mac app is

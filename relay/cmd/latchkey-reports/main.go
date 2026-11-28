@@ -125,21 +125,7 @@ func key() (hpke.PrivateKey, error) {
 
 // keyText is the developer's private key as text (base64).
 func keyText() (string, error) {
-	k := os.Getenv("LATCHKEY_REPORTS_KEY")
-	if f := os.Getenv("LATCHKEY_REPORTS_KEY_FILE"); k == "" && f != "" {
-		b, err := os.ReadFile(f) //nolint:gosec // the developer names the file
-		if err != nil {
-			return "", err
-		}
-		k = string(b)
-	}
-	if strings.TrimSpace(k) == "" {
-		var err error
-		if k, err = keyvault.Get(context.Background(), "LATCHKEY_REPORTS_KEY", "kv-melisma-release", "latchkey-reports-private-key"); err != nil {
-			return "", err
-		}
-	}
-	return strings.TrimSpace(k), nil
+	return keyvault.ReportsKey(context.Background(), keyvault.Get)
 }
 
 // opened is one waiting report as the developer reads it.

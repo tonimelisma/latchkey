@@ -9,12 +9,12 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/tonimelisma/latchkey/relay/internal/evals"
+	"github.com/tonimelisma/latchkey/relay/internal/keyvault"
 	"github.com/tonimelisma/latchkey/relay/reports"
 )
 
@@ -22,8 +22,9 @@ import (
 // (FR-1530), only when the person running the tests asked (evals.sh --send). The key and
 // intake are Latchkey's developer's unless LATCHKEY_DEVELOPER_KEY and LATCHKEY_INTAKE_URL name a
 // fork's. Each part is signed with a key derived from the developer's private key
-// (LATCHKEY_REPORTS_KEY, LATCHKEY_REPORTS_KEY_FILE, or ~/.config/latchkey-reports/developer.key),
-// so only the developer's own runs count (anyone can post to the intake).
+// (LATCHKEY_REPORTS_KEY, the file LATCHKEY_REPORTS_KEY_FILE names, otherwise Key Vault secret
+// kv-melisma-release/latchkey-reports-private-key, read as latchkey-reports reads it), so only the
+// developer's own runs count (anyone can post to the intake).
 func sendCmd(args []string) error {
 	if len(args) != 1 {
 		return errors.New("usage: e2e send <result.json>")
@@ -89,25 +90,18 @@ func sendCmd(args []string) error {
 	return nil
 }
 
-// developerPrivate is the developer's private key text, which only the developer holds.
+// vaultGet reads a secret from Key Vault; a variable so tests never reach Azure.
+var vaultGet = keyvault.Get
+
+// developerPrivate is the developer's private key text, which only the developer holds: the
+// same lookup as latchkey-reports (keyvault.ReportsKey), never a key file nobody named.
 func developerPrivate() (string, error) {
-	if k := strings.TrimSpace(os.Getenv("LATCHKEY_REPORTS_KEY")); k != "" {
-		return k, nil
-	}
-	f := os.Getenv("LATCHKEY_REPORTS_KEY_FILE")
-	if f == "" {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return "", err
-		}
-		f = filepath.Join(home, ".config", "latchkey-reports", "developer.key")
-	}
-	b, err := os.ReadFile(f) //nolint:gosec // the developer's own key file
+	k, err := keyvault.ReportsKey(context.Background(), vaultGet)
 	if err != nil {
-		return "", fmt.Errorf("--send is for the developer's own runs: it signs with the developer's private key, and %s can't be read (%w); without --send the result stays in this clone", f, err)
+		return "", fmt.Errorf("--send is for the developer's own runs: it signs with the developer's private key, which can't be read (%w); without --send the result stays in this clone", err)
 	}
-	if _, err := reports.PrivateKey(string(b)); err != nil {
-		return "", fmt.Errorf("%s: %w", f, err)
+	if _, err := reports.PrivateKey(k); err != nil {
+		return "", fmt.Errorf("the developer's private key (LATCHKEY_REPORTS_KEY, LATCHKEY_REPORTS_KEY_FILE or Key Vault kv-melisma-release/latchkey-reports-private-key): %w", err)
 	}
-	return strings.TrimSpace(string(b)), nil
+	return k, nil
 }

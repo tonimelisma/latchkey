@@ -148,3 +148,26 @@ func fetch(ctx context.Context, getenv func(string) string, vault, secret string
 	}
 	return *resp.Value, nil
 }
+
+// ReportsKey is the developer's private problem-report key as text (base64, as `latchkey-reports
+// keygen` writes it), for latchkey-reports and the e2e eval sender: LATCHKEY_REPORTS_KEY when it
+// is set, otherwise the file LATCHKEY_REPORTS_KEY_FILE names (an explicit override), otherwise
+// Key Vault secret kv-melisma-release/latchkey-reports-private-key through get (Get; a stand-in in
+// tests). No file is read that nobody named (docs/decisions.md, 2026-11-27).
+func ReportsKey(ctx context.Context, get func(ctx context.Context, env, vault, secret string) (string, error)) (string, error) {
+	k := os.Getenv("LATCHKEY_REPORTS_KEY")
+	if f := os.Getenv("LATCHKEY_REPORTS_KEY_FILE"); k == "" && f != "" {
+		b, err := os.ReadFile(f) //nolint:gosec // the developer names the file
+		if err != nil {
+			return "", err
+		}
+		k = string(b)
+	}
+	if strings.TrimSpace(k) == "" {
+		var err error
+		if k, err = get(ctx, "LATCHKEY_REPORTS_KEY", "kv-melisma-release", "latchkey-reports-private-key"); err != nil {
+			return "", err
+		}
+	}
+	return strings.TrimSpace(k), nil
+}

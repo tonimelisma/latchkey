@@ -88,7 +88,8 @@ Moved from CLAUDE.md on 2026-11-26.
     `kv-melisma-release/latchkey-server-signing-key`; `latchkey-reports` reads
     `LATCHKEY_REPORTS_KEY` (`kv-melisma-release/latchkey-reports-private-key`) and
     `LATCHKEY_INTAKE_TOKEN` (`kv-melisma-dev/latchkey-intake-developer-token`) through the Azure
-    CLI's sign-in (`relay/internal/keyvault`).
+    CLI's sign-in (`relay/internal/keyvault`), and the e2e eval sender (`evals --send`) the same
+    private key the same way.
   - Cloud sessions: the shared claude.ai environment holds only `MELISMA_SECRETS_CLIENT_SECRET`
     (Entra app `cloud-sessions-reader`), with which `latchkey-reports` signs in
     (`docs/cloud-sessions.md`, "The environment").
