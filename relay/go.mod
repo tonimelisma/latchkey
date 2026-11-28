@@ -8,7 +8,7 @@ require (
 	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.24.0
 	github.com/Azure/azure-sdk-for-go/sdk/azidentity v1.15.0
 	github.com/Azure/azure-sdk-for-go/sdk/security/keyvault/azsecrets v1.5.1
-	github.com/chromedp/cdproto v0.160.4
+	github.com/chromedp/cdproto v0.160.9
 	github.com/chromedp/chromedp v0.24.0
 	github.com/coder/websocket v1.8.15
 	github.com/fxamacker/cbor/v2 v2.10.0
@@ -19,11 +19,11 @@ require (
 	github.com/pressly/goose/v3 v3.30.1
 	github.com/stretchr/testify v1.12.1
 	github.com/wneessen/go-mail v0.8.2
-	github.com/zitadel/oidc/v3 v3.52.0
+	github.com/zitadel/oidc/v3 v3.53.0
 	golang.org/x/crypto v0.59.0
 	golang.org/x/net v0.63.0
 	golang.org/x/time v0.16.0
-	modernc.org/sqlite v1.62.0
+	modernc.org/sqlite v1.63.0
 )
 
 require (
