@@ -741,7 +741,8 @@ final class FakePlaces: PlacesBackend, @unchecked Sendable {
     /// left out, and nothing nearby is said as such ("BARC" near Ubud gave Basra, Iraq).
     @Test func withNearOnlyNearbyPlaces() async throws {
         let near = resultText(
-            try await tool("maps_find").handler(.object(["query": .string("coffee"), "near": .string("37.33,-122.03")])))
+            try await tool("maps_find").handler(
+                .object(["query": .string("coffee"), "near": .string("37.33,-122.03")])))
         #expect(near.contains("Philz Coffee"), "1 km away: kept")
         let far = try await tool("maps_find").handler(
             .object(["query": .string("coffee"), "near": .string("-8.65,115.2")]))

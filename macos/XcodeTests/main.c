@@ -100,5 +100,5 @@ int main(int argc, char **argv) {
     return 1;
 }
 
-# The requirements this file's tests cite (docs/requirements/; script/process-check).
-# Validates: FR-335
+// The requirements this file's tests cite (docs/requirements/; script/process-check).
+// Validates: FR-335
