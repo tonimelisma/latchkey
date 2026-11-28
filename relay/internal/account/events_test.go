@@ -153,3 +153,6 @@ func TestPairingEventsAreRecorded(t *testing.T) {
 	assert.True(t, e.has(u.ID, events.MacUnpaired, "on the account page"))
 	assert.Contains(t, out.String(), `msg="Machine unpaired"`)
 }
+
+// The requirements this file's tests cite (docs/requirements/; script/process-check).
+// Validates: FR-631, FR-636

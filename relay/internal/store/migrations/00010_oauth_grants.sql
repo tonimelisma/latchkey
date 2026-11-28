@@ -1,4 +1,4 @@
--- One row per approval on the Allow page (FR-190 to FR-192, Toni 2026-10-25): the grant's public
+-- One row per approval on the Allow page (FR-190 to FR-192, decided 2026-10-25): the grant's public
 -- ID, what the consent page showed, and when it was approved and last used. request_id is
 -- fosite's request ID, shared by the grant's rows in oauth_requests.
 

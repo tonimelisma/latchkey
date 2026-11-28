@@ -3,7 +3,7 @@ import Testing
 
 @testable import Latchkey
 
-/// Spec 013 FR-1376 (Toni, 2026-11-22: "test all approaches for robustness on a wide variety of
+/// Spec 013 FR-1376 (decided 2026-11-22: "test all approaches for robustness on a wide variety of
 /// web sites"): finding a site's code in the owner's texts and email, for Latchkey's two ways of
 /// the codes experiment.
 @MainActor @Suite struct CodeFinderTests {
@@ -41,7 +41,7 @@ import Testing
     }
 
     /// A bound text counts only for its own site; an email only when it names the site; a plain
-    /// text from anyone (Toni, 2026-11-21: "Any new code text").
+    /// text from anyone (decided 2026-11-21: "Any new code text").
     /// Security review 2026-11-22: the site's name as a whole word only.
     @Test func anEmailNamesTheSiteAsAWholeWord() {
         #expect(MailCodes.names("online.citi.com", in: "Citi: your code is 123456"))
@@ -157,3 +157,6 @@ import Testing
         gate.signal()
     }
 }
+
+// The requirements this file's tests cite (docs/requirements/; script/process-check).
+// Validates: FR-1376, FR-1602

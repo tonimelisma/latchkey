@@ -45,12 +45,12 @@ paths:
   marking all vanished).
 - AppleScript variables must not be app terms (`kind` in Messages, `before`/`after` everywhere);
   `osacompile` doesn't catch app terms. Prefix variables (`targetKind`, `theText`).
-- Debug and test builds are their own app to macOS (Toni, 2026-10-25): bundle ID
+- Debug and test builds are their own app to macOS (decided 2026-10-25): bundle ID
   `net.melisma.latchkey.dev`, helper `net.melisma.latchkey.dev.helper`, link scheme
   `latchkey-dev`, data folder `Application Support/Latchkey Dev`, shown as "Latchkey Dev". So a
   test copy has its own user defaults, Keychain items, privacy permissions, and helper, and
   doesn't claim `latchkey://`. Why: while both were `net.melisma.latchkey`, an uninstall test
-  erased Toni's pairing twice (2026-10-22), and a leftover Debug build, which carries the
+  erased the installed app's pairing, and a leftover Debug build, which carries the
   debugging entitlement, could borrow the installed app's permissions. The names live in
   `Shared/AppIdentity.swift` and, per configuration, in `project.yml` (`LATCHKEY_APP_ID`,
   `LATCHKEY_URL_SCHEME`, `LATCHKEY_DISPLAY_NAME`); never write the identifier as a string
@@ -77,14 +77,13 @@ paths:
 - Moving stored data to a new place must be all or nothing: delete the old copy only after the
   new one is written and read back, and never count a move done when the old data exists but
   couldn't be read. 0.8.4 read the old pairing key with a stricter, prompt-less Keychain query,
-  got nothing, marked the move done, and deleted the old settings: Toni had to pair again
-  (2026-10-24). Read old items the way the old version read them, or, when old data can be
+  got nothing, marked the move done, and deleted the old settings, so the Mac had to pair again. Read old items the way the old version read them, or, when old data can be
   forged by other programs (user defaults), don't move it at all.
 - "Couldn't read it" is not "isn't there" (2026-10-25): never write a Keychain item because a read
   returned nothing. `Keychain.lookup` tells no item from an unreadable one; only "no item" may
   lead to a write (the activity-log key was replaced that way on 2026-10-24). And don't test
   unreadable items against the real Keychain: an item with an access list that trusts no program
-  makes macOS show a password prompt on Toni's screen and hangs the test run.
+  makes macOS show a password prompt on the screen and hangs the test run.
 
 - Text that arrives from the network (client names, hosts) goes into SwiftUI with
   `Text(verbatim:)`, never a string literal with interpolation (those are parsed as Markdown).
@@ -100,8 +99,8 @@ paths:
   done, missing, or not known yet (`SetupStep`); only "missing" opens setup, and a paired Mac
   waits for the unknowns to settle (FR-621). `install.sh` now checks the window count, keep-awake,
   and the helper's version after every install (FR-622) and fails when one is wrong.
-- Never pause, disconnect, or turn down capabilities on the installed app for a check: Toni's own
-  Claude sessions use it (a live Pause test stalled one of his sessions mid-order, 2026-10-26).
+- Never pause, disconnect, or turn down capabilities on the installed app for a check: its user's own
+  Claude sessions use it (a live Pause test once stalled such a session mid-task).
   Test those in unit tests, `e2e mac`, or the sandbox Mac. No `claude -p` live checks (2026-11-23).
 - Settings… sets the activation policy to `.regular` and activates before `openSettings()`, the
   usual advice for menu-bar-only apps (otherwise the window may not open or opens behind).
@@ -122,10 +121,10 @@ paths:
   seconds passes through `Changes` first, or the log fills with repeats. A line with the
   relay's address takes `systemLog: false` and its own private `Logger` line.
 - A relay closes the connection with 4005 on any message type it doesn't know. No backwards
-  compatibility (Toni, 2026-10-27, one user): deploy the relay before installing an app that
+  compatibility (decided 2026-10-27, one user): deploy the relay before installing an app that
   sends a new message type, and the app needs no fallback for older relays. Tool names are a
   different matter: open chats keep the tool list they started with, so a renamed tool breaks
-  them (Toni accepts that, 2026-11-22; `.claude/rules/tool-design.md`).
+  them (accepted 2026-11-22; `.claude/rules/tool-design.md`).
 
 - Never block a thread in async code (`Process.waitUntilExit`, a semaphore, `DispatchGroup.wait`):
   Swift runs async code on a small shared pool, and one blocked thread stalls every task

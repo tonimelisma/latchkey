@@ -162,3 +162,6 @@ func TestFilesFixtures(t *testing.T) {
 		t.Error("sweep left the downloaded test file")
 	}
 }
+
+// The requirements this file's tests cite (docs/requirements/; script/process-check).
+// Validates: FR-1525

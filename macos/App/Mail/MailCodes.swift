@@ -1,7 +1,7 @@
 import AppKit
 import Foundation
 
-/// Apple Mail on this Mac, for Claude's Mail tools (spec 008 FR-850 to FR-853; Toni, 2026-11-22:
+/// Apple Mail on this Mac, for Claude's Mail tools (spec 008 FR-850 to FR-853; decided 2026-11-22:
 /// "Claude reads Apple Mail", for when Claude has no email tool of its own): Mail's own index and
 /// email files are read, never its window; Mail is started hidden when it isn't running, so new
 /// mail arrives; an email is marked read and archived through Mail's scripting while unlocked.

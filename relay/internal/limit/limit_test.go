@@ -123,3 +123,6 @@ func TestParseTrustedProxies(t *testing.T) {
 		assert.Error(t, err, bad)
 	}
 }
+
+// The requirements this file's tests cite (docs/requirements/; script/process-check).
+// Validates: FR-699

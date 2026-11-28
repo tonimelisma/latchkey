@@ -1,12 +1,12 @@
 #!/bin/sh
 # Sets up a Claude Code cloud session (claude.ai/code: an Ubuntu 24.04 VM, run as root) for the
 # relay's and the Linux program's checks: `make test`, `make lint`, `make security` and
-# `make script-tests` in relay/ and linux/. Run by `scripts/hooks.sh session-start` only when
-# CLAUDE_CODE_REMOTE=true; does nothing elsewhere (the Mac has its own tools from Homebrew).
+# `make script-tests` in relay/ and linux/. Run by the SessionStart hook (.claude/settings.json); acts
+# only when CLAUDE_CODE_REMOTE=true; does nothing elsewhere (the Mac has its own tools from Homebrew).
 #
 # In the foreground, quick (well inside the 600 s a SessionStart hook may take):
-#   - jq, lsof, xz, curl and gcc from Ubuntu when missing (the hooks need jq; the tidy and
-#     loose-ends tests need lsof; `go test -race` needs a C compiler)
+#   - jq, lsof, xz, curl and gcc from Ubuntu when missing (the scripts and CI steps use jq
+#     and lsof; `go test -race` needs a C compiler)
 #   - Go from Ubuntu when there is none (the cloud image has one; go.mod's toolchain line then
 #     fetches the pinned Go through proxy.golang.org)
 #   - ShellCheck v0.11.0, the version `make shellcheck` pins, from its GitHub release, checked
@@ -20,7 +20,7 @@
 # Network: everything here comes from hosts the "Limited" network allows by default. Some checks
 # in `make security` fetch at run time from hosts it doesn't: semgrep.dev (Semgrep's rules),
 # vuln.go.dev (govulncheck) and api.osv.dev (osv-scanner, sparkle-advisories.sh); they need those
-# added to the cloud environment's allowed domains (CLAUDE.md, "Two ways to work").
+# added to the cloud environment's allowed domains (docs/cloud-sessions.md).
 # Prints one line saying what it did. Tested in `docker run ubuntu:24.04` (CLAUDE.md).
 set -u
 [ "${CLAUDE_CODE_REMOTE:-}" = true ] || [ "${LATCHKEY_CLOUD_SETUP_FORCE:-}" = 1 ] || exit 0

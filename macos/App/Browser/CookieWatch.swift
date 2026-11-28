@@ -2,7 +2,7 @@ import Foundation
 import WebKit
 
 /// What Claude's pages in Latchkey's own browser did with sign-ins, for Latchkey's log (spec 005
-/// FR-453, FR-454; Toni, 2026-11-15: Target signed Safari out after Claude's page used a copy of
+/// FR-453, FR-454; decided 2026-11-15: Target signed Safari out after Claude's page used a copy of
 /// its cookies, and nothing recorded what that page did). Each copy of Safari's cookies is one
 /// line: the site, how many were set, the sign-in cookies among them, and how long before Safari
 /// had last written its cookie file (a copy is only as new as that file). Each time a site

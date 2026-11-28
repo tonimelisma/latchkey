@@ -1,0 +1,6 @@
+{
+  "type": "feedback",
+  "reports": [
+    {"id": "fb_7Q2MXK4RZB3N8P5TVWYC6DHJ9F", "at": "2026-11-16T21:30:00Z", "client": "Claude Code", "machine": "Sam's MacBook", "summary": "Gmail's Create filter ignored three clicks while the Mac was locked", "details": "browser_act click e56 (Create filter): the same page came back each time."}
+  ]
+}

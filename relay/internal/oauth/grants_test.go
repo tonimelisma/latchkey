@@ -247,3 +247,6 @@ func TestGrantWithoutAStoredLabelIsNamedFromItsClient(t *testing.T) {
 	assert.Equal(t, "claude.ai", got[0].Host)
 	assert.Equal(t, "claude.ai", got[0].Redirect)
 }
+
+// The requirements this file's tests cite (docs/requirements/; script/process-check).
+// Validates: FR-190, FR-191, FR-192

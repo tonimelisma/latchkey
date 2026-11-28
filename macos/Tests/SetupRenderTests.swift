@@ -40,3 +40,6 @@ import Testing
         #expect(bitmap.pixelsWide > 0)
     }
 }
+
+// The requirements this file's tests cite (docs/requirements/; script/process-check).
+// Validates: FR-606

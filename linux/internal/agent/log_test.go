@@ -48,7 +48,7 @@ func TestDescribeKeepsPrivateDetailsOut(t *testing.T) {
 type oddError struct{}
 
 func (oddError) Error() string {
-	return "dial homeserver-db: open config/secret.txt as toni: token=sk-abc123 at https://relay.example.net"
+	return "dial homeserver-db: open config/secret.txt as sam: token=sk-abc123 at https://relay.example.net"
 }
 
 // An unrecognized error yields only a fixed phrase naming its type, never its message
@@ -57,7 +57,7 @@ func TestUnrecognizedErrorsNameOnlyTheirType(t *testing.T) {
 	err := fmt.Errorf("failed to WebSocket dial: %w", oddError{})
 	assert.Equal(t, "an unexpected error (agent.oddError)", describe(err))
 	assert.Equal(t, "an unexpected error (agent.oddError)", DescribeUpdate(err))
-	plain := errors.New(`Get "https://relay.example.net/agent/v1": proxy 192.168.1.9:3128; open ./settings.json as toni: token=abc`)
+	plain := errors.New(`Get "https://relay.example.net/agent/v1": proxy 192.168.1.9:3128; open ./settings.json as sam: token=abc`)
 	assert.Equal(t, "an unexpected error (*errors.errorString)", describe(plain))
 	assert.Equal(t, "an unexpected error (*errors.errorString)", DescribeUpdate(fmt.Errorf("couldn't keep the current version: %w", plain)))
 }
@@ -66,14 +66,14 @@ func TestDescribeUpdate(t *testing.T) {
 	assert.Equal(t, "GitHub didn't answer in time", DescribeUpdate(fmt.Errorf("get: %w", context.DeadlineExceeded)))
 	assert.Equal(t, "GitHub's name couldn't be looked up", DescribeUpdate(&net.OpError{Op: "dial", Err: &net.DNSError{Name: "api.github.com"}}))
 	assert.Equal(t, "the network can't reach GitHub", DescribeUpdate(fmt.Errorf("dial: %w", syscall.ENETUNREACH)))
-	assert.Equal(t, "permission denied", DescribeUpdate(&os.PathError{Op: "open", Path: "/home/toni/.local/lib/latchkey/latchkey.previous", Err: os.ErrPermission}))
+	assert.Equal(t, "permission denied", DescribeUpdate(&os.PathError{Op: "open", Path: "/home/sam/.local/lib/latchkey/latchkey.previous", Err: os.ErrPermission}))
 	assert.Equal(t, "the disk is full", DescribeUpdate(&os.PathError{Op: "write", Path: "/x", Err: syscall.ENOSPC}))
 }
 
 func TestNotConnectingNamesTheStep(t *testing.T) {
 	assert.Equal(t, "Not connecting: this server isn't paired yet (latchkey install pairs it)", notConnecting(stepSettings, ErrNotPaired))
-	assert.Equal(t, "Not connecting: the settings couldn't be read", notConnecting(stepSettings, errors.New("open /home/toni/.config/latchkey/settings.json: denied")))
-	assert.Equal(t, "Not connecting: the device key couldn't be read", notConnecting(stepKey, errors.New("open /home/toni/.local/share/latchkey/device.key: no such file")))
+	assert.Equal(t, "Not connecting: the settings couldn't be read", notConnecting(stepSettings, errors.New("open /home/sam/.config/latchkey/settings.json: denied")))
+	assert.Equal(t, "Not connecting: the device key couldn't be read", notConnecting(stepKey, errors.New("open /home/sam/.local/share/latchkey/device.key: no such file")))
 }
 
 // latchkey_log is offered whatever Shell and Files are (FR-1052).
@@ -112,3 +112,6 @@ func TestACallIsLoggedWhole(t *testing.T) {
 	assert.True(t, e.IsError)
 	assert.Equal(t, int64(1500), e.DurationMS)
 }
+
+// The requirements this file's tests cite (docs/requirements/; script/process-check).
+// Validates: FR-1052, FR-1053, FR-1056, FR-1057

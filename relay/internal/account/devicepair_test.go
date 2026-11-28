@@ -133,7 +133,7 @@ func TestAccountPageRemovesOneMachine(t *testing.T) {
 	b.signUp()
 	ctx := context.Background()
 	u, _ := e.store.UserByEmail(ctx, "owner@example.com")
-	mac, err := e.store.CreateDevice(ctx, store.NewDevice{UserID: u.ID, Name: "Toni's MacBook", PublicKey: []byte("k")}, e.clock.now())
+	mac, err := e.store.CreateDevice(ctx, store.NewDevice{UserID: u.ID, Name: "Sam's MacBook", PublicKey: []byte("k")}, e.clock.now())
 	require.NoError(t, err)
 	server, err := e.store.CreateDevice(ctx, store.NewDevice{UserID: u.ID, Name: "homeserver", Kind: store.KindLinux, PublicKey: []byte("k")}, e.clock.now())
 	require.NoError(t, err)
@@ -143,7 +143,7 @@ func TestAccountPageRemovesOneMachine(t *testing.T) {
 	require.NoError(t, err)
 
 	page := b.get("/account")
-	assert.Contains(t, page.body, "Toni&#39;s MacBook")
+	assert.Contains(t, page.body, "Sam&#39;s MacBook")
 	assert.Contains(t, page.body, "homeserver")
 	assert.Contains(t, page.body, "Linux server")
 	assert.NotContains(t, page.body, "Theirs")
@@ -164,3 +164,6 @@ func TestAccountPageRemovesOneMachine(t *testing.T) {
 	r = b.form("/account/machines/remove", url.Values{"csrf": {"forged"}, "id": {mac.ID}})
 	assert.Equal(t, http.StatusForbidden, r.status)
 }
+
+// The requirements this file's tests cite (docs/requirements/; script/process-check).
+// Validates: FR-656, FR-1011, FR-1022

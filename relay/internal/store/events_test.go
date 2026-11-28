@@ -133,3 +133,6 @@ func TestAuditForDevice(t *testing.T) {
 	assert.Len(t, all, 4)
 	assert.Nil(t, next)
 }
+
+// The requirements this file's tests cite (docs/requirements/; script/process-check).
+// Validates: FR-630, FR-634

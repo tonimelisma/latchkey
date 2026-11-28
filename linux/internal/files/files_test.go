@@ -285,3 +285,6 @@ func TestOwnFilesAreNotChanged(t *testing.T) {
 	assert.True(t, isErr)
 	assert.Contains(t, text, "Latchkey's own files")
 }
+
+// The requirements this file's tests cite (docs/requirements/; script/process-check).
+// Validates: FR-1042, FR-1043

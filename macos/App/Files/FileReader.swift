@@ -13,7 +13,7 @@ enum FileReader {
         case notReadable(String)
     }
 
-    /// FR-207: at most this many characters per answer.
+    /// FR-217: at most this many characters per answer.
     static let pageSize = ResultLimit.characters
     static let maxBytes = 100_000_000
 

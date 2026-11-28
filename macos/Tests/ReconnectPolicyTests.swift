@@ -62,7 +62,7 @@ import Testing
             ReconnectPolicy(jitter: { 1.2 }).next(afterClose: 4001, reason: "account suspended", attempt: 3)
                 == suspended)
 
-        // FR-206 (Toni, 2026-10-31): never stop trying while paired.
+        // FR-206 (decided 2026-10-31): never stop trying while paired.
         #expect(
             policy.next(afterClose: 4001, reason: "authentication failed", attempt: 0)
                 == Next(show: .signInAgain, retryAfter: 300), "tries again every 5 minutes")
@@ -92,3 +92,6 @@ import Testing
         #expect(ConnectionStatus.waiting(until: now.addingTimeInterval(4)).title(now: now) == "Reconnecting in 4 s")
     }
 }
+
+// The requirements this file's tests cite (docs/requirements/; script/process-check).
+// Validates: FR-204, FR-206

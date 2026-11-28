@@ -157,7 +157,7 @@ never waits for one); whatever a command leaves running is stopped when it finis
 Deleting a file on a server deletes it for good. As on a Mac, Claude can always read
 Latchkey's own recent log on the server (connections, settings, pause, updates), never what it
 did there, file names, or the relay's address. Details:
-[specs/010-multi-host/contracts/server-program.md](../specs/010-multi-host/contracts/server-program.md).
+[docs/design/contracts/server-program.md](../docs/design/contracts/server-program.md).
 
 ## Run your own relay
 

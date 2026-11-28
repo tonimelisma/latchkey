@@ -157,3 +157,6 @@ import Testing
             "tamper check: \(checkAtFifth) s at 6,000 entries, \(checkAtAll) s at 30,000")
     }
 }
+
+// The requirements this file's tests cite (docs/requirements/; script/process-check).
+// Validates: FR-614, FR-616

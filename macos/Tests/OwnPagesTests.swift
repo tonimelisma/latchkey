@@ -4,7 +4,7 @@ import Testing
 
 @testable import Latchkey
 
-/// Spec 005 FR-448 to FR-450 (Toni, 2026-11-15: "why can't the browser show the pop-up to claude
+/// Spec 005 FR-448 to FR-450 (decided 2026-11-15: "why can't the browser show the pop-up to claude
 /// and let it answer?"): in Latchkey's own browser a confirm or prompt Claude didn't answer in
 /// advance waits for Claude's answer. Real WebKit views, pages given as text (no network).
 @MainActor @Suite struct HeldDialogTests {
@@ -69,7 +69,7 @@ import Testing
         _ = try await b.run("setTimeout(function () { document.title = 'named:' + prompt('Your name?') }, 50); 1")
         #expect(await heldSoon(b))
         #expect(b.held?.kind == "prompt")
-        #expect(try await b.answerDialog(ok: true, text: "Toni").title == "named:Toni")
+        #expect(try await b.answerDialog(ok: true, text: "Sam").title == "named:Sam")
     }
 
     /// FR-450: an OK given with the action also answers a dialog that comes a moment later.
@@ -156,7 +156,7 @@ import Testing
     }
 }
 
-/// Spec 005 FR-445, FR-446 (Toni, 2026-11-15: "Page names"): each page Claude opens has a name,
+/// Spec 005 FR-445, FR-446 (decided 2026-11-15: "Page names"): each page Claude opens has a name,
 /// and pages of different chats stay apart.
 @MainActor @Suite struct OwnPagesTests {
     let base = URL(string: "https://shop.example/")!
@@ -204,7 +204,7 @@ import Testing
         #expect(p.list().count == 2)
     }
 
-    /// FR-446a (Toni, 2026-11-23: "Close the oldest idle"): with the limit reached, the page
+    /// FR-446a (decided 2026-11-23: "Close the oldest idle"): with the limit reached, the page
     /// unused longest gives way once no one has used it for 5 minutes; a page in use never does.
     @Test func theOldestIdlePageGivesWayWhenAllAreOpen() async throws {
         let p = pages(limit: 2)
@@ -417,3 +417,7 @@ final class OneFileServer: @unchecked Sendable {
 
     func stop() { listener.cancel() }
 }
+
+// The requirements this file's tests cite (docs/requirements/; script/process-check).
+// Validates: FR-443, FR-445, FR-446, FR-446a, FR-447, FR-448, FR-449, FR-450, FR-451, FR-452
+// Validates: FR-471

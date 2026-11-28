@@ -496,7 +496,7 @@ end run`, family, tag); err != nil || left != "0" {
 // contactsCardWithNote: a card that has a note can be changed and deleted (found in the
 // sandbox's first run, 2026-11-26: every save of such a card through the Contacts framework fails
 // with Cocoa error 134092, because macOS lets only apps with Apple's Contacts notes entitlement
-// change a card with a note). Since Toni's choice (2026-11-27, "Via Contacts' scripting"),
+// change a card with a note). Since the maintainer's choice (2026-11-27, "Via Contacts' scripting"),
 // Latchkey changes such a card through the Contacts app's scripting, with Contacts opened hidden
 // and quit again: the note stays, every field is as Contacts shows it, and Contacts isn't left
 // running. That no window appeared is front-app-unchanged's, which samples the screen meanwhile.
@@ -807,7 +807,7 @@ func (s *sandbox) maps() error {
 		want []string
 	}{
 		{"places", map[string]any{"query": "coffee", "near": "37.7793,-122.4193", "limit": 3}, nil},
-		{"directions", map[string]any{"from": "Walnut Creek, CA", "to": "San Francisco International Airport"}, []string{"min"}},
+		{"directions", map[string]any{"from": "Palo Alto, CA", "to": "San Francisco International Airport"}, []string{"min"}},
 		{"transit", map[string]any{"from": "Union Square, San Francisco", "to": "San Francisco City Hall", "mode": "transit"}, nil},
 		{"an address", map[string]any{"address": "1 Infinite Loop, Cupertino"}, []string{"Cupertino"}},
 		{"a position", map[string]any{"address": "37.3318,-122.0312"}, []string{"Cupertino"}},

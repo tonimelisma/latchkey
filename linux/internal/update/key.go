@@ -5,8 +5,8 @@ import (
 	"encoding/base64"
 )
 
-// publicKey checks every server release (Toni, 2026-10-31: Latchkey's own Ed25519 key). Its
-// private half is in Azure Key Vault (kv-melisma-release/latchkey-server-signing-key) and the maintainer's macOS keychain. A
+// publicKey checks every server release (decided 2026-10-31: Latchkey's own Ed25519 key). Its
+// private half is the release Key Vault's latchkey-server-signing-key. A
 // fork that publishes its own releases puts its own public key here and its repository in
 // update_repo.
 const publicKey = "qJGRlZxRgdjYHQ3q7ZmE2mWxJChr50XfGzwEGiWOHP8="

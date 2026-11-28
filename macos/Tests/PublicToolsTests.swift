@@ -4,7 +4,7 @@ import Testing
 @testable import Latchkey
 
 /// How each of the tools Claude sees reaches its operations. Their names, descriptions, annotations and input
-/// schemas aren't pinned by tests (Toni, 2026-11-26); this suite checks how the levels shape the tool list.
+/// schemas aren't pinned by tests (decided 2026-11-26); this suite checks how the levels shape the tool list.
 @Suite struct PublicToolsTests {
     /// At read-only levels only the tools that look are left, and a capability turned off has none.
     @MainActor @Test func readOnlyLevelsKeepOnlyLooking() {
@@ -80,9 +80,9 @@ import Testing
             .object(["command": .string("printf 'Name? '; read -r n; echo \"got $n\""), "wait": .number(1)]))
         let job = try #require(started.content.jsonText.range(of: #"job\d+"#, options: .regularExpression)).lowerBound
         let id = String(started.content.jsonText[job...].prefix { $0.isLetter || $0.isNumber })
-        let typed = await tools["shell_run"]!.handler(.object(["job": .string(id), "input": .string("Toni")]))
+        let typed = await tools["shell_run"]!.handler(.object(["job": .string(id), "input": .string("Sam")]))
         let checked = await tools["shell_check"]!.handler(.object(["job": .string(id), "wait": .number(5)]))
-        #expect((typed.content.jsonText + checked.content.jsonText).contains("got Toni"))
+        #expect((typed.content.jsonText + checked.content.jsonText).contains("got Sam"))
         let list = await tools["shell_check"]!.handler(.object([:]))
         #expect(list.content.jsonText.contains(id))
     }

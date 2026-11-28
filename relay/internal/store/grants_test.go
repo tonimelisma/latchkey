@@ -157,3 +157,6 @@ func TestTouchGrantAndCleanup(t *testing.T) {
 	assert.Regexp(t, `^[A-Za-z0-9_-]{1,64}$`, g.ID)
 	assert.NotContains(t, g.ID, "req-a")
 }
+
+// The requirements this file's tests cite (docs/requirements/; script/process-check).
+// Validates: FR-190, FR-191

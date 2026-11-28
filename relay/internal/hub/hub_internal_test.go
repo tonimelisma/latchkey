@@ -53,3 +53,6 @@ func TestRevokedDuringHandshakeIsClosed(t *testing.T) {
 	require.Eventually(t, func() bool { return !h.Online(d.ID) }, 5*time.Second, 10*time.Millisecond,
 		"a revoked Mac is not left registered")
 }
+
+// The requirements this file's tests cite (docs/requirements/; script/process-check).
+// Validates: FR-052a

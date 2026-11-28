@@ -141,3 +141,6 @@ func TestZoneName(t *testing.T) {
 	assert.Equal(t, "Etc/UTC", latchkeylog.ZoneName(time.Local, "", "/usr/share/zoneinfo/Etc/UTC"), "then /etc/localtime's target")
 	assert.NotEmpty(t, latchkeylog.ZoneName(time.Local, "", ""), "else the abbreviation")
 }
+
+// The requirements this file's tests cite (docs/requirements/; script/process-check).
+// Validates: FR-1053, FR-1058

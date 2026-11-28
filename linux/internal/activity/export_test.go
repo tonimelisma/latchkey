@@ -124,3 +124,6 @@ func TestExportFromAndTo(t *testing.T) {
 	_, _, err = f.Export(&out, "x", "2026-11-16", "2026-11-15")
 	require.Error(t, err, "from after to")
 }
+
+// The requirements this file's tests cite (docs/requirements/; script/process-check).
+// Validates: FR-686, FR-1059

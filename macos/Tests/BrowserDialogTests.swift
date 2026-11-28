@@ -4,7 +4,7 @@ import WebKit
 
 @testable import Latchkey
 
-/// Spec 005 FR-432 (Toni, 2026-11-03: "Answer them, Claude can say OK"): a page's own dialogs
+/// Spec 005 FR-432 (decided 2026-11-03: "Answer them, Claude can say OK"): a page's own dialogs
 /// never make Claude wait. Latchkey's answers go into the page before each script; a page that
 /// already waits on a dialog is told within 2 s, and can be loaded over or closed.
 @Suite(.serialized) struct BrowserDialogTests {
@@ -57,8 +57,8 @@ import WebKit
         let page = TestPage()
         try await page.load(Self.html)
         _ = try await page.run(
-            PageScripts.dialogAnswers(DialogAnswer(text: "Toni")) + "document.getElementById('name').click(); 1")
-        #expect(try await page.run("document.title") == "named:Toni")
+            PageScripts.dialogAnswers(DialogAnswer(text: "Sam")) + "document.getElementById('name').click(); 1")
+        #expect(try await page.run("document.title") == "named:Sam")
         _ = try await page.run(PageScripts.dialogAnswers(DialogAnswer()) + "document.getElementById('name').click(); 1")
         #expect(try await page.run("document.title") == "named:null")
         _ = try await page.run(PageScripts.dialogAnswers(DialogAnswer()) + "document.getElementById('hi').click(); 1")
@@ -161,7 +161,10 @@ import WebKit
 
     @Test func browserActTakesConfirmAndPromptText() throws {
         #expect(try BrowserCapability.answer(.object(["confirm": .bool(true)])) == DialogAnswer(confirm: true))
-        #expect(try BrowserCapability.answer(.object(["prompt_text": .string("Toni")])) == DialogAnswer(text: "Toni"))
+        #expect(try BrowserCapability.answer(.object(["prompt_text": .string("Sam")])) == DialogAnswer(text: "Sam"))
         #expect(throws: ArgumentError.self) { try BrowserCapability.answer(.object(["confirm": .string("yes")])) }
     }
 }
+
+// The requirements this file's tests cite (docs/requirements/; script/process-check).
+// Validates: FR-432

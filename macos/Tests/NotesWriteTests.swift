@@ -318,3 +318,6 @@ final class FakeScripts: ScriptRunner, @unchecked Sendable {
         await #expect(throws: ScriptError.timedOut) { try await runner.run("delay 5", []) }
     }
 }
+
+// The requirements this file's tests cite (docs/requirements/; script/process-check).
+// Validates: FR-106, FR-152, FR-154

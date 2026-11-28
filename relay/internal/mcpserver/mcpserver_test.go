@@ -90,7 +90,7 @@ func (e *env) pair() {
 	e.agent = testagent.New("ws"+strings.TrimPrefix(e.srv.URL, "http")+"/agent/v1", "")
 	var err error
 	e.device, err = e.store.CreateDevice(context.Background(),
-		store.NewDevice{UserID: e.user.ID, Name: "Toni's MacBook Pro", PublicKey: e.agent.PublicKeyDER()}, time.Now())
+		store.NewDevice{UserID: e.user.ID, Name: "Sam's MacBook Pro", PublicKey: e.agent.PublicKeyDER()}, time.Now())
 	require.NoError(e.t, err)
 	e.agent.DeviceID = e.device.ID
 }
@@ -217,7 +217,7 @@ func TestOnline(t *testing.T) {
 			last, ok := res.Content[1].(*mcp.TextContent)
 			require.True(t, ok)
 			// FR-200: the Mac's text has no line break at its end, so the line brings its own.
-			assert.Equal(t, "\nToni's MacBook Pro (Mac): online · 82% battery, on battery power · keep-awake on", last.Text)
+			assert.Equal(t, "\nSam's MacBook Pro (Mac): online · 82% battery, on battery power · keep-awake on", last.Text)
 		})
 	}
 }
@@ -260,7 +260,7 @@ func TestOffline(t *testing.T) {
 			res := call(t, cs, "battery_status")
 			assert.Less(t, time.Since(start), time.Second, "SC-03")
 			assert.True(t, res.IsError)
-			assert.Regexp(t, `^Toni's MacBook Pro is offline\. It went to sleep for low battery at 14%, at \d{1,2}:\d\d [AP]M \(just now\)\.$`, text(t, res))
+			assert.Regexp(t, `^Sam's MacBook Pro is offline\. It went to sleep for low battery at 14%, at \d{1,2}:\d\d [AP]M \(just now\)\.$`, text(t, res))
 		})
 	}
 }
@@ -289,7 +289,7 @@ func TestDeadline(t *testing.T) {
 	res := call(t, cs, "slow")
 	assert.Less(t, time.Since(start), 2*time.Second)
 	assert.True(t, res.IsError)
-	assert.Equal(t, "Toni's MacBook Pro didn't answer within 0.3 seconds. It may be busy or losing its connection.", text(t, res))
+	assert.Equal(t, "Sam's MacBook Pro didn't answer within 0.3 seconds. It may be busy or losing its connection.", text(t, res))
 	select {
 	case m := <-c.Cancels:
 		assert.Equal(t, agentproto.CancelDeadline, m.Reason)
@@ -310,7 +310,7 @@ func TestRevokedDuringCall(t *testing.T) {
 	cs := e.client(stateful, nil)
 	res := call(t, cs, "battery_status")
 	assert.True(t, res.IsError)
-	assert.Equal(t, "Toni's MacBook Pro was disconnected from this account while the request was running.", text(t, res))
+	assert.Equal(t, "Sam's MacBook Pro was disconnected from this account while the request was running.", text(t, res))
 	require.Eventually(t, func() bool {
 		return len(toolNames(t, cs)) == 0
 	}, 5*time.Second, 20*time.Millisecond, "a revoked Mac's tools disappear")
@@ -532,3 +532,6 @@ func TestForgetGrantClosesOnlyThatGrantsSessions(t *testing.T) {
 	e.ms.ForgetGrant("usr_unknown", "grt_b")
 	assert.Equal(t, http.StatusOK, e.rawPost(b, pingBody).StatusCode)
 }
+
+// The requirements this file's tests cite (docs/requirements/; script/process-check).
+// Validates: FR-013, FR-022a, FR-061, FR-062, FR-065, FR-090, FR-191, FR-200, SC-03, SC-08

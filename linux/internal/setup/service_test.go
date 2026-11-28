@@ -26,3 +26,6 @@ func TestUninstallRemovesTheActivityLog(t *testing.T) {
 	_, err := os.Stat(p.Data)
 	assert.ErrorIs(t, err, os.ErrNotExist)
 }
+
+// The requirements this file's tests cite (docs/requirements/; script/process-check).
+// Validates: FR-1027

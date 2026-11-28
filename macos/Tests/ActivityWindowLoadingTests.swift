@@ -113,3 +113,6 @@ final class HeldLog: ActivityLogSource, @unchecked Sendable {
         #expect(try trace.recent(limit: 10).map(\.durationMS) == [0])
     }
 }
+
+// The requirements this file's tests cite (docs/requirements/; script/process-check).
+// Validates: FR-203, FR-616

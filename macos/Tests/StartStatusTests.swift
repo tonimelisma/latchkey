@@ -30,3 +30,6 @@ import Testing
         }
     }
 }
+
+// The requirements this file's tests cite (docs/requirements/; script/process-check).
+// Validates: FR-205

@@ -1,7 +1,7 @@
 import Foundation
 
 /// A capability's internal operations, by name. Claude sees a few consolidated tools (15 in all,
-/// Toni 2026-10-23); each hands a request to the operation it asks for.
+/// decided 2026-10-23); each hands a request to the operation it asks for.
 struct Operations: Sendable {
     private let entries: [String: ToolEntry]
 

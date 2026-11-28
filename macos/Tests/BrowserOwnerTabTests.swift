@@ -3,7 +3,7 @@ import Testing
 
 @testable import Latchkey
 
-/// Spec 005 FR-424 to FR-431 (Toni, 2026-11-03: "Claude needs to be able to access my tabs and
+/// Spec 005 FR-424 to FR-431 (decided 2026-11-03: "Claude needs to be able to access my tabs and
 /// windows just like its own"): the browser tools reach every Safari tab and window, in the
 /// background; Claude's own pages are Latchkey's own browser's (FR-444).
 @Suite struct BrowserOwnerTabTests {
@@ -380,3 +380,7 @@ struct StalledSafari: ScriptRunner {
 struct SilentSafari: ScriptRunner {
     func run(_ script: String, _ args: [String]) async throws -> String { throw ScriptError.timedOut }
 }
+
+// The requirements this file's tests cite (docs/requirements/; script/process-check).
+// Validates: FR-423, FR-424, FR-425, FR-427, FR-428, FR-429, FR-430, FR-431, FR-442, FR-443
+// Validates: FR-444, FR-447, FR-460, FR-470

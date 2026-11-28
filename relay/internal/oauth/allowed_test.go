@@ -179,3 +179,6 @@ func TestParseAllowedHosts(t *testing.T) {
 		assert.Error(t, err, "%q", bad)
 	}
 }
+
+// The requirements this file's tests cite (docs/requirements/; script/process-check).
+// Validates: FR-180, FR-181, FR-182, FR-183, FR-184

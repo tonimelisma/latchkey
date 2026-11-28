@@ -310,3 +310,6 @@ import Testing
         #expect(failed.result == "Couldn’t remove “Claude”. The relay didn’t answer. Try again.")
     }
 }
+
+// The requirements this file's tests cite (docs/requirements/; script/process-check).
+// Validates: FR-190, FR-191, FR-192

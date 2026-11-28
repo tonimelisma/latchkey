@@ -322,3 +322,6 @@ import Testing
         #expect(r.plainText.contains("has more than Latchkey reads in one look"), "\(r.plainText)")
     }
 }
+
+// The requirements this file's tests cite (docs/requirements/; script/process-check).
+// Validates: FR-511, FR-514

@@ -1,4 +1,4 @@
--- Tools for the person running the relay (FR-195 to FR-199, Toni 2026-10-25): suspended
+-- Tools for the person running the relay (FR-195 to FR-199, decided 2026-10-25): suspended
 -- accounts, blocked addresses, and a log of the operator's commands, which the running relay
 -- also reads to close the connections of an account that was just suspended or deleted.
 

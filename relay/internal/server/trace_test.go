@@ -176,3 +176,6 @@ func TestTraceOptions(t *testing.T) {
 	assert.Equal(t, os.FileMode(0o700), info.Mode().Perm())
 	assert.True(t, strings.HasSuffix(h.traces.Dir(), "/traces"))
 }
+
+// The requirements this file's tests cite (docs/requirements/; script/process-check).
+// Validates: FR-683, FR-684, FR-685, FR-686, FR-687

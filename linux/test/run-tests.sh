@@ -1,6 +1,6 @@
 #!/bin/sh
 # Runs the Linux program's tests on a real Linux with systemd (make test-linux): the unit tests as
-# root, then as the owner (toni) inside a systemd service with its own delegated control group,
+# root, then as the owner (sam) inside a systemd service with its own delegated control group,
 # as the real service runs, and the sudo-prompt test as a user whose sudo asks for a password.
 # Removes its container afterwards.
 set -eu
@@ -28,10 +28,10 @@ as_user() { # user, then the command
     -E HOME="/home/$u" -E GOCACHE="/home/$u/.cache/go-build" -E GOMODCACHE="/home/$u/go/pkg/mod" \
     -E GOFLAGS=-mod=mod -E PATH=/usr/local/go/bin:/usr/bin:/bin -E LATCHKEY_TEST_CGROUP=1 "$@"
 }
-docker exec "$name" sh -c 'for u in toni pw; do rm -rf /home/$u/src; cp -r /src /home/$u/src; chown -R $u:$u /home/$u/src; done'
+docker exec "$name" sh -c 'for u in sam pw; do rm -rf /home/$u/src; cp -r /src /home/$u/src; chown -R $u:$u /home/$u/src; done'
 
-echo "• unit tests as toni, in a service with its own control group"
-as_user toni /bin/sh -c 'cd ~/src/linux && go test -count=1 ./...'
+echo "• unit tests as sam, in a service with its own control group"
+as_user sam /bin/sh -c 'cd ~/src/linux && go test -count=1 ./...'
 echo "• the sudo prompt test as a user whose sudo asks for a password"
 docker exec "$name" systemd-run --quiet --wait --pipe --collect --uid=pw -p Delegate=yes \
   -E HOME=/home/pw -E GOCACHE=/home/pw/.cache/go-build -E GOMODCACHE=/home/pw/go/pkg/mod -E GOFLAGS=-mod=mod \

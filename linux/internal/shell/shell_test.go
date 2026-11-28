@@ -155,3 +155,6 @@ func TestSudoAnswersAtOnce(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, string(wrapper), "-n \"$@\"")
 }
+
+// The requirements this file's tests cite (docs/requirements/; script/process-check).
+// Validates: FR-1031

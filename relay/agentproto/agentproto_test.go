@@ -24,7 +24,7 @@ import (
 	"github.com/tonimelisma/latchkey/relay/agentproto"
 )
 
-const fixtureDir = "../../specs/001-core/contracts/fixtures"
+const fixtureDir = "../../docs/design/contracts/fixtures"
 
 func fixtures(t *testing.T, kind string) map[string][]byte {
 	t.Helper()
@@ -321,3 +321,6 @@ func TestDecodeHelloAuth(t *testing.T) {
 		require.ErrorIs(t, err, agentproto.ErrProtocolViolation, name)
 	}
 }
+
+// The requirements this file's tests cite (docs/requirements/; script/process-check).
+// Validates: FR-091

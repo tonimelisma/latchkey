@@ -203,3 +203,6 @@ func TestRevokeClientCountsAgainstTheFrameAllowance(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, agentproto.CloseProtocolViolation, code)
 }
+
+// The requirements this file's tests cite (docs/requirements/; script/process-check).
+// Validates: FR-091, FR-190, FR-191

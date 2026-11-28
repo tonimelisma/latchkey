@@ -2,7 +2,7 @@ import AppKit
 import ApplicationServices
 import ScreenCaptureKit
 
-/// Computer control of one named app without the front or the pointer (spec 006 FR-510, Toni
+/// Computer control of one named app without the front or the pointer (spec 006 FR-510, decided
 /// 2026-11-02: "Background first"): its front window's buttons and fields through Accessibility,
 /// pressed there; keys sent to that app alone (`CGEvent.postToPid`); a picture of just that
 /// window, which ScreenCaptureKit takes even while other windows cover it. Checked live
@@ -72,7 +72,7 @@ struct AppControl: Sendable {
         press: { e in
             guard let el = e.element else { return false }
             // A row of a list or sidebar, or a cell or text in one, is selected as a click would
-            // (Toni, 2026-11-23: "press selects the row"): SwiftUI's sidebar rows take no press,
+            // (decided 2026-11-23: "press selects the row"): SwiftUI's sidebar rows take no press,
             // and pressing their text did nothing (Otos, 2026-11-20). No pointer moves.
             // Only for a row, a cell, or text: a button or checkbox in a row is pressed (review).
             if AppWindowReader.selectsRow(role: e.role), let row = AppWindowReader.row(around: el),
@@ -261,7 +261,7 @@ enum AppWindowReader {
     }
 
     /// Whether a press on an element of this role selects the row it is in, as a click would
-    /// (Toni, 2026-11-23: "press selects the row"; SwiftUI's sidebar rows take no press). Only a
+    /// (decided 2026-11-23: "press selects the row"; SwiftUI's sidebar rows take no press). Only a
     /// row, a cell, or text: a button or checkbox in a row is pressed (review).
     static func selectsRow(role: String) -> Bool { ["AXRow", "AXCell", "AXStaticText"].contains(role) }
 

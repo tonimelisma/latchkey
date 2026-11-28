@@ -198,7 +198,7 @@ actor RelayConnection {
     }
 
     /// The connection ended: no page can come. Only relays that answer `audit_request` are
-    /// supported (Toni, 2026-10-27: no backwards compatibility).
+    /// supported (decided 2026-10-27: no backwards compatibility).
     private func endAudits(closeCode: Int) {
         let waiting = auditWaiters
         auditWaiters = [:]

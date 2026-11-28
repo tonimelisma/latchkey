@@ -762,3 +762,6 @@ func TestCancelledRequestsKeepTheMacConnected(t *testing.T) {
 	require.NoError(t, err, "the same connection still answers")
 	assert.Len(t, c.Notices, 40, "every notice was delivered")
 }
+
+// The requirements this file's tests cite (docs/requirements/; script/process-check).
+// Validates: FR-091, FR-092

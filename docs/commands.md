@@ -1,6 +1,6 @@
 # Commands
 
-Moved from CLAUDE.md on 2026-11-22 (it keeps the essentials).
+The commands beyond CLAUDE.md's "Commands".
 
 Relay (run in `relay/`):
 - `make test`: all tests, with the race detector (includes a headless-Chrome test; skipped if
@@ -8,9 +8,9 @@ Relay (run in `relay/`):
 - `make test-short`: the same without the browser test
 - `make lint`: golangci-lint (pinned in the Makefile) with gofumpt; must report 0 issues
 - `make fmt`: format
-- `make run`: run locally with development defaults (data in `relay/.data/`)
-- `make security`: every security check (known vulnerabilities, committed secrets and private
-  values, Semgrep, ShellCheck, tidy modules); the deploy runs it first
+- `make run`: run locally with development defaults (data in relay/.data/, ignored by git)
+- `make security`: every security check (known vulnerabilities, committed secrets, Semgrep,
+  ShellCheck, tidy modules)
 - `make script-tests`: tests of the repository scripts (no server, no network)
 
 - The Mac app's connection checks (battery vs pmset, tool off, silent network cut, reconnect)
@@ -67,7 +67,8 @@ Mac app (run in `macos/`; `project.yml` is the source, the `.xcodeproj` is gener
 - `make dmg`: the installable disk image, `build/Latchkey-<version>.dmg`, for a commit that
   already has its release tag (CI's `mac-tag.yml` gives one)
 - `make install`: CI's newest release tag, built, installed into /Applications and started; the
-  Mac's updater (`scripts/auto-update.sh`, a launchd agent set up by `scripts/updater-setup.sh`)
+  Mac's updater (`macos/scripts/auto-update.sh`, a launchd agent set up by
+  `macos/scripts/updater-setup.sh`)
   runs it by itself for every new tag
 - Signing: copy `Config/Local.xcconfig.example` to `Config/Local.xcconfig` and set your team ID
 
@@ -80,5 +81,5 @@ Linux server program (run in `linux/`, its own Go module; spec 010):
   `linux-<next number>` and publish it there (every increment ships)
 
 Screen states: the hand-run kit (`state-check`) was retired 2026-11-26 (spec 016). What covers
-each case: `docs/regression-coverage.md`; what only Toni can run (locked, lid closed, his
-accounts): `docs/screen-states.md`, "Toni's conditions".
+each case: `docs/regression-coverage.md`; what only a person at a real Mac can run (locked, lid
+closed, real accounts): `docs/screen-states.md`, "the requester's conditions".

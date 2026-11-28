@@ -139,3 +139,6 @@ func TestNoEmailServerNeedsASetupCode(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "SETUP_CODE")
 }
+
+// The requirements this file's tests cite (docs/requirements/; script/process-check).
+// Validates: FR-907, FR-908

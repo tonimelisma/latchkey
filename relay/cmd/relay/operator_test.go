@@ -140,3 +140,6 @@ func TestOperatorCommandBesideARelayWithSealedKeys(t *testing.T) {
 	require.NoError(t, err, "the relay's keys still open with its key file")
 	require.NoError(t, again.Close())
 }
+
+// The requirements this file's tests cite (docs/requirements/; script/process-check).
+// Validates: FR-186, FR-195, FR-685, FR-687

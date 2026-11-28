@@ -2,7 +2,7 @@ import Foundation
 import WebKit
 
 /// A running record of one page in Latchkey's own browser, for problem reports (spec 014
-/// FR-1446; Toni, 2026-11-25: "Always record, memory only", "Hidden world"): the last `limit`
+/// FR-1446; decided 2026-11-25: "Always record, memory only", "Hidden world"): the last `limit`
 /// page loads, requests, uncaught errors, blocked content, and visibility
 /// changes. In memory only, never written to disk, gone with its page, and sent only inside a
 /// report (`ReportPart`). It records from a content world of its own, which the page can't see or

@@ -100,3 +100,6 @@ func TestFailedAuthenticationIsNotCalledASuspension(t *testing.T) {
 	assert.Equal(t, agentproto.CloseAuthFailed, testagent.CloseCode(err))
 	assert.Equal(t, "authentication failed", testagent.CloseReason(err))
 }
+
+// The requirements this file's tests cite (docs/requirements/; script/process-check).
+// Validates: FR-196, FR-204

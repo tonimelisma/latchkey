@@ -61,13 +61,13 @@ func TestScrubGoesByPlaceNotKeyName(t *testing.T) {
 		},
 		"result": []any{
 			map[string]any{"type": "image", "data": "AAA482913AAA"},
-			map[string]any{"type": "text", "text": "id 482913 on TONIS-MACBOOK, mail Toni@Example.com"},
+			map[string]any{"type": "text", "text": "id 482913 on SAMS-MACBOOK, mail Sam@Example.com"},
 			map[string]any{"type": "text", "text": "AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMIK7MDENGbPxRfiCY\nAuthorization: Bearer abcdefghijklmnopqrstuvwxyz"},
 		},
 	}}}
 	secrets := secretsIn([]reports.Call{{Arguments: json.RawMessage(`{"code":"482913","access_token":"abcdefghijklmnopqrstu","year":"2026"}`)}})
 	assert.NotContains(t, secrets, "2026", "a year given as an argument isn't a code")
-	sc := newScrubber(secrets, map[string]string{"tonis-macbook": "machine 1", "toni@example.com": "(the account's email)"})
+	sc := newScrubber(secrets, map[string]string{"sams-macbook": "machine 1", "sam@example.com": "(the account's email)"})
 	b, _ := json.Marshal(scrubTree(tree, sc))
 	out := string(b)
 	assert.Contains(t, out, `"id":"(blanked)"`, "an argument named id")
@@ -82,17 +82,20 @@ func TestScrubGoesByPlaceNotKeyName(t *testing.T) {
 }
 
 func TestPrivateNamesAreWholeWords(t *testing.T) {
-	sc := newScrubber(nil, map[string]string{"root": "(private)", "/home/toni": "(private)"})
-	assert.Equal(t, "(private) mounted rootfs at (private)/data", sc.text("root mounted rootfs at /home/toni/data"))
+	sc := newScrubber(nil, map[string]string{"root": "(private)", "/home/sam": "(private)"})
+	assert.Equal(t, "(private) mounted rootfs at (private)/data", sc.text("root mounted rootfs at /home/sam/data"))
 }
 
 // Security review 2026-11-25: what a machine saw typed into a password or code field, and its
 // private names, are used for blanking and never sent.
 func TestTakePrivate(t *testing.T) {
-	secrets, private, cleaned := takePrivate(json.RawMessage(`{"private":["tonis-mbp.local","toni"],"secrets":["typed-9x"],"pages":[{"name":"pk4m2","secrets":["hunter2x"]}]}`))
+	secrets, private, cleaned := takePrivate(json.RawMessage(`{"private":["sams-mbp.local","sam"],"secrets":["typed-9x"],"pages":[{"name":"pk4m2","secrets":["hunter2x"]}]}`))
 	assert.Equal(t, []string{"typed-9x", "hunter2x"}, secrets)
 	assert.NotContains(t, string(cleaned), "typed-9x")
-	assert.Equal(t, []string{"tonis-mbp.local", "toni"}, private)
+	assert.Equal(t, []string{"sams-mbp.local", "sam"}, private)
 	assert.NotContains(t, string(cleaned), "hunter2x")
-	assert.NotContains(t, string(cleaned), "tonis-mbp")
+	assert.NotContains(t, string(cleaned), "sams-mbp")
 }
+
+// The requirements this file's tests cite (docs/requirements/; script/process-check).
+// Validates: FR-1448, FR-1450

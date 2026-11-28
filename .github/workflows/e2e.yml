@@ -1,8 +1,8 @@
 # End-to-end checks of the capabilities a pull request changes (spec 015 FR-1500 to FR-1506):
 # a real MCP client through a private relay started for the run, calling the real Linux program
 # (e2e-linux), checked on the machine's own state. The Mac app's end-to-end check runs in
-# mac-build.yml's job 3, reusing its build (spec 016). e2e-linux always runs, so it shows on
-# every pull request (reported, not required: Toni, 2026-11-25), and passes at once when nothing
+# ci.yml's Mac build job 3, reusing its build (spec 016). e2e-linux always runs, so it shows on
+# every pull request (reported, not required: decided 2026-11-25), and passes at once when nothing
 # it covers changed. No Claude, no secrets, nothing reaches anyone's own Mac.
 name: e2e
 on:

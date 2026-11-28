@@ -1,11 +1,26 @@
-# Weekly update proposals for the relay's Go modules, its base images (pinned by digest), and the
-# workflows' actions (pinned by commit SHA). Security updates open right away regardless.
+# Weekly update proposals, one grouped pull request per ecosystem: the relay's and the Linux
+# program's Go modules, the relay's base images (pinned by digest), and the workflows' actions
+# (pinned by commit SHA with a `# vX.Y.Z` comment, which Dependabot keeps up to date). Security
+# updates open right away regardless.
 version: 2
 updates:
   - package-ecosystem: gomod
     directory: /relay
     schedule:
       interval: weekly
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: chore
+    groups:
+      go-modules:
+        patterns: ["*"]
+  - package-ecosystem: gomod
+    directory: /linux
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: chore
     groups:
       go-modules:
         patterns: ["*"]
@@ -13,10 +28,19 @@ updates:
     directory: /relay
     schedule:
       interval: weekly
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: chore
+    groups:
+      docker:
+        patterns: ["*"]
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: weekly
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: chore
     groups:
       actions:
         patterns: ["*"]

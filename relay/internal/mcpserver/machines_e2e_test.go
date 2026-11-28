@@ -102,29 +102,29 @@ func TestTwoMachinesBehindOneConnector(t *testing.T) {
 
 	// Claude finds out what's there.
 	_, text := callWith(t, cs, "machines", map[string]any{})
-	assert.Contains(t, text, "- Toni's MacBook Pro · Mac (Latchkey 0.1.0-test, macOS 26.1) · online")
+	assert.Contains(t, text, "- Sam's MacBook Pro · Mac (Latchkey 0.1.0-test, macOS 26.1) · online")
 	assert.Contains(t, text, "- homeserver · Linux server (Latchkey 0.1.0-test, Ubuntu 24.04.1 LTS) · online · up 3 days · offers: shell_run")
 
 	// Two machines offer shell_run: no guess.
 	res, text := callWith(t, cs, "shell_run", map[string]any{"command": "df -h"})
 	assert.True(t, res.IsError)
-	assert.Equal(t, "Several machines offer shell_run: Toni's MacBook Pro (Mac, online), homeserver (Linux, online). Name one with machine.", text)
+	assert.Equal(t, "Several machines offer shell_run: Sam's MacBook Pro (Mac, online), homeserver (Linux, online). Name one with machine.", text)
 
 	// Named: it runs there, without the machine argument, and says where it ran.
 	res, text = callWith(t, cs, "shell_run", map[string]any{"command": "df -h", "machine": "homeserver"})
 	assert.False(t, res.IsError)
-	assert.Equal(t, `the server ran shell_run with {"command":"df -h"}`+"\nhomeserver (Linux): online · up 3 days\nOther machines: Toni's MacBook Pro (Mac, online)", text)
+	assert.Equal(t, `the server ran shell_run with {"command":"df -h"}`+"\nhomeserver (Linux): online · up 3 days\nOther machines: Sam's MacBook Pro (Mac, online)", text)
 
 	// Only the Mac offers battery_status: no name needed.
 	_, text = callWith(t, cs, "battery_status", map[string]any{})
 	assert.True(t, strings.HasPrefix(text, "the Mac ran battery_status"), text)
-	assert.Contains(t, text, "\nToni's MacBook Pro (Mac): online · ")
+	assert.Contains(t, text, "\nSam's MacBook Pro (Mac): online · ")
 	assert.Contains(t, text, "\nOther machines: homeserver (Linux, online)")
 
 	// A machine without the tool: as if it didn't exist there.
 	res, text = callWith(t, cs, "battery_status", map[string]any{"machine": "homeserver"})
 	assert.True(t, res.IsError)
-	assert.Equal(t, "homeserver doesn't offer battery_status. It's offered by: Toni's MacBook Pro (Mac, online).", text)
+	assert.Equal(t, "homeserver doesn't offer battery_status. It's offered by: Sam's MacBook Pro (Mac, online).", text)
 
 	// The server goes offline: named, it answers at once; unnamed, the Mac (the only one online) runs it.
 	require.NoError(t, serverConn.Close())
@@ -134,14 +134,14 @@ func TestTwoMachinesBehindOneConnector(t *testing.T) {
 	assert.Less(t, time.Since(start), time.Second, "offline is answered at once (SC-1002)")
 	assert.True(t, res.IsError)
 	assert.True(t, strings.HasPrefix(text, "homeserver is offline."), text)
-	assert.Contains(t, text, "Other machines: Toni's MacBook Pro (Mac, online)")
+	assert.Contains(t, text, "Other machines: Sam's MacBook Pro (Mac, online)")
 	_, text = callWith(t, cs, "shell_run", map[string]any{"command": "uptime"})
 	assert.True(t, strings.HasPrefix(text, "the Mac ran shell_run"), text)
 
 	// Unknown name.
 	res, text = callWith(t, cs, "shell_run", map[string]any{"command": "uptime", "machine": "pi"})
 	assert.True(t, res.IsError)
-	assert.True(t, strings.HasPrefix(text, `No machine is called "pi". Your machines: Toni's MacBook Pro (Mac, online), homeserver (Linux, offline`), text)
+	assert.True(t, strings.HasPrefix(text, `No machine is called "pi". Your machines: Sam's MacBook Pro (Mac, online), homeserver (Linux, offline`), text)
 }
 
 // The machine's own name for itself, sent in hello, is kept unique and returned in welcome (spec
@@ -150,13 +150,13 @@ func TestMachineNameAndKindFromHello(t *testing.T) {
 	e := setup(t)
 	e.pair()
 	server, d := e.pairLinux("homeserver")
-	server.Name = "toni's macbook pro" // taken, whatever the case
+	server.Name = "sam's macbook pro" // taken, whatever the case
 	c := dialAgent(t, e, server)
 	require.NotNil(t, c.Welcome)
-	assert.Equal(t, "toni's macbook pro 2", c.Welcome.Name)
+	assert.Equal(t, "sam's macbook pro 2", c.Welcome.Name)
 	got, err := e.store.Device(context.Background(), d.ID)
 	require.NoError(t, err)
-	assert.Equal(t, "toni's macbook pro 2", got.Name)
+	assert.Equal(t, "sam's macbook pro 2", got.Name)
 	require.NoError(t, c.Close())
 	require.Eventually(t, func() bool { return !e.hub.Online(d.ID) }, 5*time.Second, 10*time.Millisecond)
 
@@ -179,3 +179,6 @@ func TestMachineNameAndKindFromHello(t *testing.T) {
 	}
 	assert.False(t, e.hub.Online(e.device.ID))
 }
+
+// The requirements this file's tests cite (docs/requirements/; script/process-check).
+// Validates: FR-1002, SC-1001, SC-1002, SC-1004

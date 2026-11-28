@@ -134,12 +134,12 @@ final class Reports: @unchecked Sendable {
         #expect(script.refusedHandoff, "\(script.output)")
         #expect(!script.output.contains("42"))
         #expect(!script.refusedWrite, "not a write: \(script.output)")
-        // Toni, 2026-10-29: scripting apps never from Shell, declared or not (a script must run
+        // decided 2026-10-29: scripting apps never from Shell, declared or not (a script must run
         // outside the fence to reach an app, and could then run anything).
         let declared = try await jobs.run(
             "osascript -e 'return 41 + 1'", folder: nil, wait: .seconds(15), uses: [.open])
         #expect(!declared.output.contains("42"), "\(declared.output)")
-        // Toni, 2026-11-02: open goes behind the Owner's app unless /usr/bin/open is asked for.
+        // decided 2026-11-02: open goes behind the Owner's app unless /usr/bin/open is asked for.
         let opener = try await jobs.run("whence -f open", folder: nil, wait: .seconds(15), uses: [.open])
         #expect(opener.output.contains("/usr/bin/open -g"), "\(opener.output)")
         let plain = try await jobs.run("whence -f open", folder: nil, wait: .seconds(15))
@@ -303,7 +303,7 @@ final class Reports: @unchecked Sendable {
         #expect(r.left?.contains("moved its scratch folder to the Trash") == true)
     }
 
-    /// Toni, 2026-11-21: build folders moved to the Trash filled the disk; a big scratch folder is
+    /// decided 2026-11-21: build folders moved to the Trash filled the disk; a big scratch folder is
     /// deleted outright, a small one still goes to the Trash.
     @Test func aBigScratchFolderIsDeletedNotTrashed() throws {
         let root = FileManager.default.temporaryDirectory.appending(path: "scratch-\(UUID().uuidString)")
@@ -725,3 +725,6 @@ final class Reports: @unchecked Sendable {
         _ = watch
     }
 }
+
+// The requirements this file's tests cite (docs/requirements/; script/process-check).
+// Validates: FR-313, FR-324, FR-325, FR-326, FR-327, FR-328, FR-329, FR-330, FR-332

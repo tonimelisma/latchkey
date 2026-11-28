@@ -1,5 +1,5 @@
 -- Each time a Claude client is given access, so the Owner's Mac can say so once (best-practices
--- review, Toni 2026-10-23). Kept 30 days, like the audit log.
+-- review, decided 2026-10-23). Kept 30 days, like the audit log.
 
 -- +goose Up
 CREATE TABLE client_authorizations (

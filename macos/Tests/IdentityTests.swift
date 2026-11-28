@@ -3,7 +3,7 @@ import Testing
 
 @testable import Latchkey
 
-/// Debug and test builds are their own app, apart from the installed one (Toni, 2026-10-25).
+/// Debug and test builds are their own app, apart from the installed one (decided 2026-10-25).
 @Suite struct IdentityTests {
     static let macos = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
 

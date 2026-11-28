@@ -66,3 +66,6 @@ import Testing
         #expect(KeepAwakePolicy.sleepReason(.offUser) == .systemSleep)
     }
 }
+
+// The requirements this file's tests cite (docs/requirements/; script/process-check).
+// Validates: FR-032, FR-033, FR-034

@@ -39,7 +39,7 @@ import Testing
         return try all.filter { !$0.hasDirectoryPath }.map { try Data(contentsOf: $0) }
     }
 
-    /// FR-026 (Toni, 2026-10-26): nothing is deleted by age, however old.
+    /// FR-026 (decided 2026-10-26): nothing is deleted by age, however old.
     @MainActor @Test func keepsEveryEntryWhateverItsAge() throws {
         let dir = try Self.scratch()
         defer { try? FileManager.default.removeItem(at: dir) }
@@ -197,3 +197,6 @@ import Testing
         #expect(raw(try keys.loadOrCreate()) != a, "a deleted key is gone")
     }
 }
+
+// The requirements this file's tests cite (docs/requirements/; script/process-check).
+// Validates: FR-026, FR-026a, FR-203

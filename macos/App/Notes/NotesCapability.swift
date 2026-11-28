@@ -534,7 +534,7 @@ enum NotesCapability {
     }
 
     /// Checklist items written into a note stay ☐ and ☑ characters: Notes makes real ones only in
-    /// its window, which Latchkey doesn't use (Toni, 2026-11-07; FR-158).
+    /// its window, which Latchkey doesn't use (decided 2026-11-07; FR-158).
     static let checklistBoxes =
         " Its checklist items are ☐ and ☑ characters: Notes makes real checklists only in its own window, which Latchkey doesn't use."
 

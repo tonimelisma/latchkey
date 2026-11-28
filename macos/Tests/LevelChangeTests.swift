@@ -4,7 +4,7 @@ import Testing
 @testable import Latchkey
 
 /// Turning a capability off or down stops its running work at once (spec 001 FR-066, spec 004
-/// FR-310; Toni, 2026-10-25).
+/// FR-310; decided 2026-10-25).
 @Suite(.serialized) struct LevelChangeTests {
     /// The answers the relay would get, by call id.
     typealias Answers = Locked<[String: ToolResult]>
@@ -206,3 +206,6 @@ import Testing
         _ = try await jobs.stop(snapshot.job)
     }
 }
+
+// The requirements this file's tests cite (docs/requirements/; script/process-check).
+// Validates: FR-066, FR-310

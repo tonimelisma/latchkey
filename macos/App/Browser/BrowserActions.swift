@@ -1,6 +1,6 @@
 import Foundation
 
-/// The browser actions added on 2026-11-04 (spec 005 FR-433 to FR-438, Toni: "all the safari
+/// The browser actions added on 2026-11-04 (spec 005 FR-433 to FR-438, decided: "all the safari
 /// stuff"): keys, hover, scrolling, choosing from lists, attaching files, and saving files. Each
 /// runs in the page Claude works in, through the same tab checks as a click, so it works in a
 /// background tab, and in Latchkey's own browser while the Mac is locked.

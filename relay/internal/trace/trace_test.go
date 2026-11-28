@@ -77,7 +77,7 @@ func open(t *testing.T, tweak func(*Options)) (*Store, string) {
 
 func call(tool string, args string) Line {
 	return Line{
-		Machine: "Toni's Mac", Kind: KindAction, Tool: tool, Arguments: JSONOrString([]byte(args)),
+		Machine: "Sam's Mac", Kind: KindAction, Tool: tool, Arguments: JSONOrString([]byte(args)),
 		Result: json.RawMessage(`[{"type":"text","text":"ok <&>  "}]`), DurationMS: 12,
 		CallID: "call_1", Client: "claude-ai", Outcome: "ok",
 	}
@@ -99,7 +99,7 @@ func all(t *testing.T, s *Store, account, from, to string) ([]Line, int) {
 // source "relay" and no account (contracts/trace-files.md).
 func TestLineFormatAndEncryption(t *testing.T) {
 	s, dir := open(t, nil)
-	s.Append("usr_a", t0, call("shell_run", `{"command":"ls <x>","machine":"Toni's Mac"}`))
+	s.Append("usr_a", t0, call("shell_run", `{"command":"ls <x>","machine":"Sam's Mac"}`))
 
 	path := filepath.Join(dir, "usr_a", "2026-11-15.trace")
 	data, err := os.ReadFile(path)
@@ -120,8 +120,8 @@ func TestLineFormatAndEncryption(t *testing.T) {
 	require.NoError(t, err)
 	plain, err := gcm.Open(nil, sealed[:12], sealed[12:], []byte("usr_a/2026-11-15"))
 	require.NoError(t, err, "the account and day are the authenticated data")
-	assert.JSONEq(t, `{"v":1,"source":"relay","machine":"Toni's Mac","time":"2026-11-15T23:59:59.123Z",
-		"kind":"action","tool":"shell_run","arguments":{"command":"ls <x>","machine":"Toni's Mac"},
+	assert.JSONEq(t, `{"v":1,"source":"relay","machine":"Sam's Mac","time":"2026-11-15T23:59:59.123Z",
+		"kind":"action","tool":"shell_run","arguments":{"command":"ls <x>","machine":"Sam's Mac"},
 		"result":[{"type":"text","text":"ok <&>  "}],"isError":false,"durationMS":12,
 		"call_id":"call_1","client":"claude-ai","outcome":"ok"}`, string(plain))
 	assert.Contains(t, string(plain), `"ls <x>"`, "no HTML escaping: the arguments as Claude sent them")
@@ -300,7 +300,7 @@ func TestExport(t *testing.T) {
 	assert.Zero(t, skipped)
 	lines := strings.Split(strings.TrimSuffix(out.String(), "\n"), "\n")
 	require.Len(t, lines, 2)
-	assert.JSONEq(t, `{"v":1,"source":"relay","machine":"Toni's Mac","time":"2026-11-15T23:59:59.123Z",
+	assert.JSONEq(t, `{"v":1,"source":"relay","machine":"Sam's Mac","time":"2026-11-15T23:59:59.123Z",
 		"kind":"action","tool":"shell_run","arguments":{"command":"echo <hi>"},
 		"result":[{"type":"text","text":"ok <&>  "}],"isError":false,"durationMS":12,
 		"call_id":"call_1","client":"claude-ai","outcome":"ok","account":"owner@example.com"}`, lines[0])
@@ -520,3 +520,6 @@ func TestDeleteSucceedsWhileAnotherProcessWritesTheAccount(t *testing.T) {
 		assert.NoDirExists(t, filepath.Join(dir, id), "round %d", round)
 	}
 }
+
+// The requirements this file's tests cite (docs/requirements/; script/process-check).
+// Validates: FR-684, FR-687

@@ -27,7 +27,7 @@ enum Fence {
     /// declared domain's file, which the fence scopes (Latchkey's own settings never; FR-329).
     static let settingsService = ["com.apple.cfprefsd.daemon", "com.apple.cfprefsd.agent"]
     /// Always refused, so a script fails at once, not after a wait: scripting other apps is never
-    /// done from Shell (Toni, 2026-10-29), since a script must run outside the fence to reach an
+    /// done from Shell (decided 2026-10-29), since a script must run outside the fence to reach an
     /// app and could then run anything.
     static let scriptRunner = "/usr/bin/osascript"
 

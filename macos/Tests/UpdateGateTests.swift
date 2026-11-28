@@ -77,3 +77,6 @@ struct UpdateGateTests {
         #expect(UpdateGate.buildNumber("0.8") == nil)
     }
 }
+
+// The requirements this file's tests cite (docs/requirements/; script/process-check).
+// Validates: FR-072b, FR-667

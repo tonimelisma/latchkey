@@ -1,4 +1,4 @@
-// Latchkey's test launcher (spec 004 FR-335; Toni, 2026-11-21: "Test step outside fence").
+// Latchkey's test launcher (spec 004 FR-335; decided 2026-11-21: "Test step outside fence").
 //
 // A Shell command runs inside Latchkey's fence (macOS's sandbox). When xcodebuild runs an app's
 // tests, LaunchServices opens the test app, and an app opened for a sandboxed program gets none
@@ -99,3 +99,6 @@ int main(int argc, char **argv) {
     if (WIFSIGNALED(status)) return 128 + WTERMSIG(status);
     return 1;
 }
+
+# The requirements this file's tests cite (docs/requirements/; script/process-check).
+# Validates: FR-335

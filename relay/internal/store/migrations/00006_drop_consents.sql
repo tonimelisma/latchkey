@@ -1,4 +1,4 @@
--- Consent is asked every time (FR-049a, Toni 2026-10-25): approvals are no longer remembered, so
+-- Consent is asked every time (FR-049a, decided 2026-10-25): approvals are no longer remembered, so
 -- the table that remembered them goes. The account page lists clients by their live tokens.
 
 -- +goose Up

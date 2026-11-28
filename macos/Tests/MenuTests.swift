@@ -5,7 +5,7 @@ import Testing
 @testable import Latchkey
 
 /// The menu bar icon, the activity lines, and Pause (spec 001 FR-600 to FR-604, spec 002 FR-131;
-/// Toni, 2026-10-26).
+/// decided 2026-10-26).
 @Suite(.serialized) struct MenuTests {
     static func icon(
         _ status: ConnectionStatus, paused: Bool = false, setup: Bool = false, busy: Bool = false
@@ -78,7 +78,7 @@ import Testing
     }
 
     /// Every approval is listed and every one not allowed is missing, whatever the levels: all are
-    /// asked for at first run, so none is asked during use (FR-606, FR-623, Toni 2026-10-31).
+    /// asked for at first run, so none is asked during use (FR-606, FR-623, decided 2026-10-31).
     @Test func approvalsList() {
         var facts = ApprovalFacts(
             helper: false, fullDiskAccess: false, notes: .notAsked, messages: .denied, safari: .notAsked,
@@ -169,3 +169,6 @@ import Testing
         #expect(Pause.isPaused(defaults) == false)
     }
 }
+
+// The requirements this file's tests cite (docs/requirements/; script/process-check).
+// Validates: FR-131, FR-600, FR-602, FR-603, FR-604, FR-606, FR-623

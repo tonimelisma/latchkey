@@ -3,7 +3,7 @@ import Testing
 
 @testable import Latchkey
 
-/// Spec 005 FR-455 to FR-459 (Toni, 2026-11-15: "when computer is unlocked, if it's a site that
+/// Spec 005 FR-455 to FR-459 (decided 2026-11-15: "when computer is unlocked, if it's a site that
 /// would require my sign-in, use my real browser. otherwise use your own"; and while locked, copy
 /// the sign-ins, a sign-out being a side effect). Target rotates its refresh token when a copy
 /// uses it, which signed Safari out (Latchkey's log, 19:23:58 that evening).
@@ -47,7 +47,7 @@ import Testing
         return seen
     }
 
-    /// FR-455 (amended 2026-11-24, Toni: "all actions should default to the background browser
+    /// FR-455 (amended 2026-11-24: "all actions should default to the background browser
     /// actually, unless the user wants to see whatever's going on"): while unlocked, a site the
     /// owner is signed in to in Safari opens in Latchkey's own browser unless Claude asks to show
     /// it; while locked, show_in_safari opens nothing in Safari and says why.
@@ -154,7 +154,7 @@ import Testing
         #expect(own.safariPage(name) != nil, "the same name, now in Safari")
     }
 
-    /// Spec 013 FR-1374 (Toni, 2026-11-22: Claude decides, "Decide fresh each time"): a page of a
+    /// Spec 013 FR-1374 (decided 2026-11-22: Claude decides, "Decide fresh each time"): a page of a
     /// site Latchkey signs in to itself moves into Safari when Claude asks, while unlocked; the
     /// next page of that site opens in Latchkey's own browser again.
     @Test func signingInAgainOnAnOwnSiteMovesThatPageIntoSafari() async throws {
@@ -175,3 +175,6 @@ import Testing
         #expect(fake.windows[0].tabs.count == 3, "nothing remembered: the next page starts in Latchkey's own")
     }
 }
+
+// The requirements this file's tests cite (docs/requirements/; script/process-check).
+// Validates: FR-441, FR-455, FR-456, FR-458, FR-459, FR-1374

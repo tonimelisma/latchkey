@@ -198,7 +198,7 @@ Then open the relay's page and say:
 - If a step fails because the free server isn't available in that zone, try us-central1-b or
   us-west1-a (and the address in the same region), and say so.
 
-The start-up script (`latchkey-start.sh`), with `<name>`, `<email>`, and `<code>` filled in:
+The start-up script (latchkey-start.sh, written on the server), with `<name>`, `<email>`, and `<code>` filled in:
 
 ```sh
 #!/bin/sh

@@ -380,3 +380,6 @@ extension RegressionFillAnswerTests {
         #expect(LoginsCapability.saidKind("div", step: "covered") == "div")
     }
 }
+
+// The requirements this file's tests cite (docs/requirements/; script/process-check).
+// Validates: FR-478, FR-479, FR-480, FR-481, FR-482, FR-483, FR-483a, FR-484, FR-487, FR-1377

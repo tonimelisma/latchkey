@@ -24,7 +24,7 @@ type weeklyRun struct {
 }
 
 func evalsCmd(args []string, now time.Time, w io.Writer) error {
-	// No -this-week reminder: there is no weekly run (Toni, 2026-11-25; spec 015 FR-1511 withdrawn).
+	// No -this-week reminder: there is no weekly run (decided 2026-11-25; spec 015 FR-1511 withdrawn).
 	fs := flag.NewFlagSet("evals", flag.ContinueOnError)
 	if err := fs.Parse(args); err != nil {
 		return err

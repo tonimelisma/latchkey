@@ -33,7 +33,7 @@ func newUser(t *testing.T, s *store.Store) store.User {
 func newDevice(t *testing.T, s *store.Store, userID string) store.Device {
 	t.Helper()
 	d, err := s.CreateDevice(context.Background(), store.NewDevice{
-		UserID: userID, Name: "Toni's MacBook", PublicKey: []byte("pkix-der"),
+		UserID: userID, Name: "Sam's MacBook", PublicKey: []byte("pkix-der"),
 	}, t0)
 	require.NoError(t, err)
 	return d
@@ -307,3 +307,6 @@ func TestAuditLog(t *testing.T) {
 	assert.Equal(t, store.OutcomeOffline, entries[0].Outcome)
 	assert.Equal(t, old.Duration, entries[1].Duration)
 }
+
+// The requirements this file's tests cite (docs/requirements/; script/process-check).
+// Validates: FR-1001, FR-1002

@@ -176,3 +176,6 @@ func TestOldMacAppIsNeverSentTheList(t *testing.T) {
 	}
 	assert.True(t, h.relay.Hub.Online(a.DeviceID))
 }
+
+// The requirements this file's tests cite (docs/requirements/; script/process-check).
+// Validates: FR-190, FR-191

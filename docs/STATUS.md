@@ -1,18 +1,20 @@
-# Status
+# Status record
 
-Last updated: 2026-11-24. What changed when is in git (`git log`); this line is only a date, so
-parallel sessions don't collide on it (Toni, 2026-11-24).
+The record of what was built, found and checked, kept as it was written up to the docs
+migration (2026-11-27). Open work lives in GitHub issues; current behavior in
+[the requirements](index.md). Sections below that read "next steps" or "open" are that day's
+view, not a plan.
 
-Xcode signing ready (2026-10-20): Toni's Xcode account has a valid "Apple Development" certificate
+Xcode signing ready (2026-10-20): the maintainer's Xcode account has a valid "Apple Development" certificate
 (certificate expires 2027-07-22). Keep the team ID out of committed project files
-(open source); put it in a gitignored `macos/Local.xcconfig` as `DEVELOPMENT_TEAM`.
+(open source); put it in a gitignored macos/Local.xcconfig as `DEVELOPMENT_TEAM`.
 
-## Open acceptance (CLAUDE.md, "Done means Toni's conditions")
+## Open acceptance (CLAUDE.md, "Done means the requester's conditions")
 
-Each row is a condition Toni asked about. VERIFIED only by a live run in that exact condition
-with the installed version; SCHEDULED waits for a state only Toni can produce.
+Each row is a condition the maintainer asked about. VERIFIED only by a live run in that exact condition
+with the installed version; SCHEDULED waits for a state only the maintainer can produce.
 
-| Condition (Toni's words) | Status | Evidence |
+| Condition (the maintainer's words) | Status | Evidence |
 |---|---|---|
 | Citi, fresh sign-in, Mac unlocked, background | VERIFIED | 0.8.218, 10:17 2026-11-22, Latchkey's own browser, dashboard shown (old one-call tool) |
 | Citi, fresh sign-in, Mac locked, background | VERIFIED | 0.8.226, 16:55–17:01 2026-11-22, Mac locked since 15:22, Latchkey's own browser, fresh Claude Code sessions: all three ways of typing the texted code reached the Citibank Account Dashboard |
@@ -20,28 +22,28 @@ with the installed version; SCHEDULED waits for a state only Toni can produce.
 | GitHub, fresh sign-in, Mac locked, with logins_fill and a texted code | VERIFIED | 0.8.221, 12:09 2026-11-22, fresh Claude Code session, dashboard shown |
 | Texted code deleted after use | VERIFIED | 0.8.222, 12:52 2026-11-22, at unlock; gone from its conversation in chat.db |
 | Mail tools find and read, Mac locked | VERIFIED | 0.8.221, 12:09 2026-11-22, fresh session listed 30 and read the newest |
-| Costco sign-in | NOT VERIFIED | refused in both browsers with no words; Toni to check the saved password |
+| Costco sign-in | NOT VERIFIED | refused in both browsers with no words; the maintainer to check the saved password |
 | eBay sign-in | NOT VERIFIED | eBay showed a check page in both browsers that Latchkey didn't get past: an open bug in Latchkey (cause not found yet) |
 
 ### Real mouse and keyboard in Latchkey's own browser; what looks clickable (spec 005 FR-478 to FR-488, spec 013 FR-1377, 2026-11-25)
 
-Toni: "an approach that looks as much as humans look on browsers ... No complex tricks with
+decided: "an approach that looks as much as humans look on browsers ... No complex tricks with
 JavaScript". Bug behind it: Procare's sign-in (STAFF / PARENT boxes not listed, LOGIN disabled
 until one is chosen). Rows and how each is checked:
 
 | Condition | Status | Evidence |
 |---|---|---|
-| Procare sign-in, Latchkey's own browser, Mac locked | VERIFIED | 0.8.244, 13:3x PST 2026-11-25, Mac locked, cloud session with Toni's go-ahead: STAFF and PARENT listed as clickable, a click on PARENT showed it selected, logins_fill typed the user name (16 characters held) and the password and pressed LOGIN: Procare's dashboard (schools.procareconnect.com/dashboard, the daily activity list) |
-| Procare sign-in, Latchkey's own browser, Mac unlocked | VERIFIED | 0.8.246, 18:10 PST 2026-11-25 (02:10 UTC 2026-11-26), Mac unlocked, cloud session at Toni's request ("test the unlocked stuff too"): STAFF (e7) and PARENT (e8) listed as clickable, a click on PARENT showed it "(selected)", logins_fill typed the user name, then the password and pressed LOGIN: Procare's dashboard (schools.procareconnect.com/dashboard, Ilpo's daily activity); again on 0.8.247, 03:5x UTC 2026-11-26, Mac unlocked, at Toni's request ("Mac is unlocked, run procare"): same steps, the dashboard with the daily activity list |
-| The role boxes are listed as clickable, a click on PARENT enables LOGIN, logins_fill signs in (a served page like Procare's) | VERIFIED in tests only | `RegressionRealInputTests` fails on main (run on Toni's Mac 2026-11-25, main 5b5a1c0, Mac locked) and passes on the branch (GitHub's Mac runner, unlocked) |
-| Clicks and keys are trusted, in a mouse's and a keyboard's order, the page focused during the call only | VERIFIED in tests only | same suite on GitHub's Mac runner and Toni's Mac; while locked on the installed app: NOT VERIFIED |
+| Procare sign-in, Latchkey's own browser, Mac locked | VERIFIED | 0.8.244, 13:3x PST 2026-11-25, Mac locked, cloud session with the maintainer's go-ahead: STAFF and PARENT listed as clickable, a click on PARENT showed it selected, logins_fill typed the user name (16 characters held) and the password and pressed LOGIN: Procare's dashboard (schools.procareconnect.com/dashboard, the daily activity list) |
+| Procare sign-in, Latchkey's own browser, Mac unlocked | VERIFIED | 0.8.246, 18:10 PST 2026-11-25 (02:10 UTC 2026-11-26), Mac unlocked, cloud session at the maintainer's request ("test the unlocked stuff too"): STAFF (e7) and PARENT (e8) listed as clickable, a click on PARENT showed it "(selected)", logins_fill typed the user name, then the password and pressed LOGIN: Procare's dashboard (schools.procareconnect.com/dashboard, Ilpo's daily activity); again on 0.8.247, 03:5x UTC 2026-11-26, Mac unlocked, at the maintainer's request ("Mac is unlocked, run procare"): same steps, the dashboard with the daily activity list |
+| The role boxes are listed as clickable, a click on PARENT enables LOGIN, logins_fill signs in (a served page like Procare's) | VERIFIED in tests only | `RegressionRealInputTests` fails on main (run on the maintainer's Mac 2026-11-25, main 5b5a1c0, Mac locked) and passes on the branch (GitHub's Mac runner, unlocked) |
+| Clicks and keys are trusted, in a mouse's and a keyboard's order, the page focused during the call only | VERIFIED in tests only | same suite on GitHub's Mac runner and the maintainer's Mac; while locked on the installed app: NOT VERIFIED |
 | Hover with the view's own pointer, Mac unlocked | VERIFIED | 0.8.246, 02:12 UTC 2026-11-26, Mac unlocked: w3schools.com/css/css_dropdowns.asp, hover on the live "Dropdown Menu" (e206): "4 more things on the page show now", Link 1–3 (e312–e314) listed, which only CSS :hover shows; Mac locked: NOT VERIFIED |
-| logins_fill of codes and longer names | VERIFIED in tests only | the sign-in suites on GitHub's runner (run 45725364764) and on Toni's Mac; live: a user name and password on Procare, unlocked, VERIFIED (row above); a code: NOT VERIFIED |
+| logins_fill of codes and longer names | VERIFIED in tests only | the sign-in suites on GitHub's runner (run 45725364764) and on the maintainer's Mac; live: a user name and password on Procare, unlocked, VERIFIED (row above); a code: NOT VERIFIED |
 | Safari tabs: typing in a keyboard's order; still script actions | VERIFIED (order) | 0.8.246, 02:13 UTC 2026-11-26, Mac unlocked, a Safari tab of Claude's on the W3C key event viewer, type "hé": per character keydown, keypress, beforeinput, input, keyup. Found there: the "é" arrived as "e" and U+0301, and a script's "é" was two characters (Latchkey's own browser: U+00E9): every program Latchkey starts got its text decomposed. Fixed in pull request #56 (posix_spawn; the shell's command and fence through files), `RegressionComposedTextTests` fails without it (run 45741333079) and passes with it (run 45744897430); on the installed app after the release: NOT VERIFIED |
 | No Command shortcut, picker, clipboard or sound reaches the owner | VERIFIED in tests only | `shortcutsPickersAndTheClipboardStayOutOfReach` |
 
-Mac tests on GitHub's macOS 26 runner after real input (merged on Toni's "Skip CI we'll fix it
-later"), then fixed in CI (Toni, 2026-11-25: "Fix it in ci. If you can't see the issue you're
+Mac tests on GitHub's macOS 26 runner after real input (merged on the maintainer's "Skip CI we'll fix it
+later"), then fixed in CI (decided 2026-11-25: "Fix it in ci. If you can't see the issue you're
 missing instrumentation"; goal "fix ci until all green"). The cause of most, measured there
 (run 45694073481): every web page of the tests shares the test program's one main thread, so
 among ~70 pages a key's release came up to 0.75 s late and a click 18 s; tests with web pages
@@ -54,7 +56,7 @@ after each action), logins_fill's mark on pages that carry one reference twice (
 fill's own), and tests that had assumed script behaviour (Enter in a form without a send button,
 macOS's log lines in xcodebuild's output). Mac run 45725364764 (2026-11-26 00:16 UTC): unit tests
 0 failed; tests with web pages or time limits 349 passed, 1 failed (the temporary diagnostic,
-removed in the next commit). Then (Toni, 2026-11-26: "split the slow step into parallel jobs,
+removed in the next commit). Then (decided 2026-11-26: "split the slow step into parallel jobs,
 get it to 5 minutes"), pull request #55: four jobs side by side, two test programs each, the
 Swift packages cached (`docs/cloud-sessions.md`): run 45738349356 took 4:26 (was 17 minutes),
 unit tests 601 passed, short time limits alone 43 passed, the rest 306 passed, none failed.
@@ -68,18 +70,18 @@ it shows).
 
 ### Problem reports carry everything for the chat (spec 014 FR-1440 to FR-1456, 2026-11-25)
 
-Toni: "improve the feedback so in the future it automatically logs everything". Rows (his
+decided: "improve the feedback so in the future it automatically logs everything". Rows (his
 words and the spec's success criteria) and how each was checked:
 
 | Condition | Status | Evidence |
 |---|---|---|
-| A report holds every tool call of that chat with full arguments and answers, passwords and codes blanked | VERIFIED in tests only | relay `TestReportCarriesEverythingForThatChat` (real MCP client, stand-in Mac), CI on pull request #49; a live report from Toni's Mac: NOT VERIFIED |
+| A report holds every tool call of that chat with full arguments and answers, passwords and codes blanked | VERIFIED in tests only | relay `TestReportCarriesEverythingForThatChat` (real MCP client, stand-in Mac), CI on pull request #49; a live report from the maintainer's Mac: NOT VERIFIED |
 | Latchkey's log for that time span (relay, Mac, Linux server) | VERIFIED in tests only | relay test above; Linux `TestReportPartHoldsTheSpansLogAndTheChatsCalls`; Mac `thePartHoldsTheLogTheCallsAndThePages` on GitHub's Mac runner; live: NOT VERIFIED |
-| Web pages: address, source, errors, requests, cookie names, drawing state, screenshot | VERIFIED in tests only (Mac unit tests, a page given as text, unlocked runner) | `ReportPartTests` on GitHub's Mac runner; while locked and on real sites (Target): NOT VERIFIED until Toni files a report |
+| Web pages: address, source, errors, requests, cookie names, drawing state, screenshot | VERIFIED in tests only (Mac unit tests, a page given as text, unlocked runner) | `ReportPartTests` on GitHub's Mac runner; while locked and on real sites (Target): NOT VERIFIED until the maintainer files a report |
 | Recording in memory only, gone when the page closes, from a world the page can't see | VERIFIED in tests only | `thePageIsRecordedFromAWorldItCantSee`; live: NOT VERIFIED |
 | Up to 5 MB with a screenshot, oldest first left out; an older 64 KB intake still gets a report | VERIFIED in tests only | `TestFitLeavesOutOldestFirstAndKeepsTheNewestPicture`, `TestOldIntakeGetsTheSmallVersion`, intake `TestBigReportsAndByteLimits` |
 | A machine that doesn't answer in time is listed and the report still goes | VERIFIED in tests only | `TestReportGoesWithoutALateMachinesPart` |
-| The sharing setting says plainly what a report holds | VERIFIED in tests only | `theSettingSaysWhatAReportHolds`; Toni reading it in Settings: NOT VERIFIED |
+| The sharing setting says plainly what a report holds | VERIFIED in tests only | `theSettingSaysWhatAReportHolds`; the maintainer reading it in Settings: NOT VERIFIED |
 | The developer's agent reads a report as files | VERIFIED in tests only | `TestShowWritesTheReportAsFiles` |
 
 ### Codes experiment (0.8.223, 2026-11-22, fresh Claude Code sessions, Latchkey's own browser)
@@ -105,7 +107,7 @@ agent's words.
 | Chase (bank) | locked 17:01–17:10 | NOT VERIFIED: its code step was blank (the page counted as hidden); fixed in 0.8.228 (pages visible, unit-tested), not yet run live on Chase | same | same |
 | Bank of America (bank, text) | unlocked 18:59–19:06 | VERIFIED (0.8.226) | VERIFIED (0.8.226) | VERIFIED (0.8.226) |
 
-Not yet run: Capital One, Amex, US Bank, Discover, Fidelity, Schwab (Toni, 2026-11-22: "wrap up
+Not yet run: Capital One, Amex, US Bank, Discover, Fidelity, Schwab (decided 2026-11-22: "wrap up
 the work. what doesn't work, doesn't work"). Leftovers: two identical Uber code texts and two
 Bank of America code texts couldn't be deleted by 0.8.226 (fixed in 0.8.228 and the release after
 it; deleted after that install); one Uber code went to WhatsApp (no delete there).
@@ -123,23 +125,23 @@ failure says why.
 
 ## Problem reports of 2026-11-26/27 (0.8.249 to 0.8.256), looked into 2026-11-27
 
-Three reports (Toni, 2026-11-27: "fix feedbacks and improve instrumentation for feedback"). All
+Three reports (decided 2026-11-27: "fix feedbacks and improve instrumentation for feedback"). All
 three came with no calls, no pages and under a minute of log: the reports themselves were the
 first bug. Fixed on the branch `fix-problem-reports` with tests; none run live.
 
 | Report | Cause | Fix (spec) | Live |
 |---|---|---|---|
-| Every report: no calls, no pages | claude.ai and Claude Code use the MCP protocol without sessions (2026-07-28); the relay put no calls in a report without a session, though FR-1441 says to take the same Claude app's calls of the last 2 hours | Built as FR-1441 says; logs cover at least the 15 minutes before the report; the relay's start and shutdown lines are in every report (FR-1442a) | NOT VERIFIED (the next report Toni's chats file shows it) |
+| Every report: no calls, no pages | claude.ai and Claude Code use the MCP protocol without sessions (2026-07-28); the relay put no calls in a report without a session, though FR-1441 says to take the same Claude app's calls of the last 2 hours | Built as FR-1441 says; logs cover at least the 15 minutes before the report; the relay's start and shutdown lines are in every report (FR-1442a) | NOT VERIFIED (the next report the maintainer's chats file shows it) |
 | Bad Gateway, then "lost its connection", while the Mac was online (Claude Code, 2026-11-27 22:51 UTC) | The hosted relay restarted twice while new settings were applied on the server (its own repository, 14:48–14:57 PST); a restart dropped the Macs before it stopped taking requests, and the proxy answered "Bad Gateway" until the next relay listened | The relay lets running calls finish before it disconnects the Macs (spec 001 FR-014a). The proxy holding requests during a restart is the hosted server's change (its own repository) | NOT VERIFIED |
-| claude.ai's Authorize button: "Too soon. Wait, then press again." to every click, Mac locked | The page had been focused only tens of milliseconds when the click came; a person's window has been in front far longer | The page counts as focused at least 1 s before Claude's first event of a call (spec 005 FR-483a) | Locked, that page: NOT VERIFIED (Toni's conditions, `browser_focus_lead`) |
+| claude.ai's Authorize button: "Too soon. Wait, then press again." to every click, Mac locked | The page had been focused only tens of milliseconds when the click came; a person's window has been in front far longer | The page counts as focused at least 1 s before Claude's first event of a call (spec 005 FR-483a) | Locked, that page: NOT VERIFIED (the requester's conditions, `browser_focus_lead`) |
 | Procare opened signed out in Latchkey's own browser, Mac unlocked | By design while unlocked (no copy of Safari's sign-ins; Procare is a site Latchkey signs in to itself), but the first answer named only logins_fill | The first answer also names sign_in_again into Safari while unlocked (spec 013 FR-1355) | NOT VERIFIED |
 
 Also in the Bad Gateway report, not a bug: `/usr/bin/log` can't run inside the shell's fence, so
-another app's unified log can't be read through Latchkey (a product choice for Toni).
+another app's unified log can't be read through Latchkey (a product choice for the maintainer).
 
 ## Problem reports of 2026-11-24/25 (0.8.238 to 0.8.240)
 
-Eight reports, looked into 2026-11-25; none run live (Toni runs them).
+Eight reports, looked into 2026-11-25; none run live (the maintainer runs them).
 
 | Report | Cause | Disposition | Live |
 |---|---|---|---|
@@ -147,27 +149,27 @@ Eight reports, looked into 2026-11-25; none run live (Toni runs them).
 | Headless Chrome's print-to-PDF wrote nothing, exit 0 | Chrome makes its profile in macOS's per-user temporary folder, not `$TMPDIR`, which the fence doesn't let it write | shell_run's description says to give it `--user-data-dir` in the scratch folder; test and case | NOT VERIFIED |
 | Maps: "found nothing" for a Moscow address and a Hong Kong mall | Latchkey turned every MapKit error into "found nothing", also Apple Maps limiting a burst of searches | Only MapKit's "not found" says nothing was found; a limit says wait and try again; other errors say what happened; test and case | NOT VERIFIED |
 | Maps: a station 3.8 km off, another office for an address | Apple Maps' own data abroad | Can't be fixed in Latchkey | n/a |
-| Target's checkout does nothing in Latchkey's own browser, Mac locked (2 reports): Check out changes nothing, the checkout address shows an empty page, a product's pickup and delivery choices stay "loading" | Not found yet: an open bug in Latchkey (Toni, 2026-11-25: no "bot check"; it was wrongly closed as one). The cart, its greeting and removing items work; checkout and the fulfilment calls don't. 2026-11-25 05:35 UTC, 0.8.240, Mac unlocked, Latchkey's own browser with its own sign-in: Check out opened Target's sign-in panel over the cart, the saved password was typed, checkout loaded and the order was placed (Toni asked for it). So while locked, the panel or the page's drawing didn't happen; lead: the page stops drawing while the screen sleeps | Locked checkout works on 0.8.243 (2026-11-25 15:57 UTC, Mac locked, Latchkey's own browser with its own sign-in: Check out opened Target's sign-in panel, the saved password was typed, checkout loaded, order placed; Toni asked for it). Why the 2026-11-24 runs on 0.8.240 saw nothing change is not found; if it comes back, the problem report now carries the page's network, console and drawing record | Unlocked: VERIFIED 0.8.240 2026-11-25 05:35 UTC / Locked: VERIFIED 0.8.243 2026-11-25 15:57 UTC (order confirmation page seen) |
-| Procare opened signed out in Latchkey's own browser, Mac unlocked | Toni's rule since 2026-11-24 (pages open in the background browser; sign_in_again moves one into Safari); the answer's first line already says so | By design | n/a |
+| Target's checkout does nothing in Latchkey's own browser, Mac locked (2 reports): Check out changes nothing, the checkout address shows an empty page, a product's pickup and delivery choices stay "loading" | Not found yet: an open bug in Latchkey (decided 2026-11-25: no "bot check"; it was wrongly closed as one). The cart, its greeting and removing items work; checkout and the fulfilment calls don't. 2026-11-25 05:35 UTC, 0.8.240, Mac unlocked, Latchkey's own browser with its own sign-in: Check out opened Target's sign-in panel over the cart, the saved password was typed, checkout loaded and the order was placed (the maintainer asked for it). So while locked, the panel or the page's drawing didn't happen; lead: the page stops drawing while the screen sleeps | Locked checkout works on 0.8.243 (2026-11-25 15:57 UTC, Mac locked, Latchkey's own browser with its own sign-in: Check out opened Target's sign-in panel, the saved password was typed, checkout loaded, order placed; the maintainer asked for it). Why the 2026-11-24 runs on 0.8.240 saw nothing change is not found; if it comes back, the problem report now carries the page's network, console and drawing record | Unlocked: VERIFIED 0.8.240 2026-11-25 05:35 UTC / Locked: VERIFIED 0.8.243 2026-11-25 15:57 UTC (order confirmation page seen) |
+| Procare opened signed out in Latchkey's own browser, Mac unlocked | The maintainer's rule since 2026-11-24 (pages open in the background browser; sign_in_again moves one into Safari); the answer's first line already says so | By design | n/a |
 
 ## Problem reports of 2026-11-24 (0.8.235, Mac unlocked)
 
-Two reports from Toni's own chats; fixed on main with unit tests (GitHub's Mac runner) and a
-regression case each; no live run (Toni runs them).
+Two reports from the maintainer's own chats; fixed on main with unit tests (GitHub's Mac runner) and a
+regression case each; no live run (the maintainer runs them).
 
 | Report | Cause | Fix (spec) | Live |
 |---|---|---|---|
 | A file a page offered to save in Latchkey's own browser opened the file's address instead, ending Claude's script; nothing reached Downloads | Latchkey's own browser had no download handling, so WebKit went to the address | Saved into Downloads during Claude's action, as Safari does; a page can't save on its own (spec 005 FR-475 to FR-477) | NOT VERIFIED |
-| Procare's sign-in in Latchkey's own browser came back unchanged with no error; Safari signed in at once | Not found yet: an open bug in Latchkey (Toni, 2026-11-25: no "bot check"; it was wrongly put down to one). logins_fill's description now says the same page can come back without a word, and Claude moves the page into Safari | Fixed: the STAFF/PARENT boxes weren't listed and LOGIN stayed disabled until a role was chosen; real clicks and keys and the clickable listing (#51) | VERIFIED 0.8.244 locked, 0.8.246 and 0.8.247 unlocked (rows above) |
+| Procare's sign-in in Latchkey's own browser came back unchanged with no error; Safari signed in at once | Not found yet: an open bug in Latchkey (decided 2026-11-25: no "bot check"; it was wrongly put down to one). logins_fill's description now says the same page can come back without a word, and Claude moves the page into Safari | Fixed: the STAFF/PARENT boxes weren't listed and LOGIN stayed disabled until a role was chosen; real clicks and keys and the clickable listing (#51) | VERIFIED 0.8.244 locked, 0.8.246 and 0.8.247 unlocked (rows above) |
 
 ## Feedback reports, 2026-11-17 to 2026-11-23 (sorted 2026-11-23)
 
 All 172 reports were read in full and checked against the code. 123 were already fixed (76),
 expected (the screen asleep while locked, the relay's VM stopped, an install's restart, Safari's
-background tabs; 25), sites that didn't work in Latchkey's own browser (9; open bugs in Latchkey, cause not found yet, Toni 2026-11-25), saved passwords only Toni can fix (4), places not in Apple
+background tabs; 25), sites that didn't work in Latchkey's own browser (9; open bugs in Latchkey, cause not found yet, decided 2026-11-25), saved passwords only the maintainer can fix (4), places not in Apple
 Maps (4), by design (3) or not explained (2). 49 had a cause still open; the fixes below are on main, with
-unit tests run on GitHub's Mac runner (`mac-build.yml`) and a regression case each. None has
-been run live: Toni asked (2026-11-23) for no Latchkey calls and no test sessions against his
+unit tests run on GitHub's Mac runner (mac-build.yml) and a regression case each. None has
+been run live: the maintainer asked (2026-11-23) for no Latchkey calls and no test sessions against his
 real data.
 
 | Open cause | Reports | Fix (spec) | Live |
@@ -184,27 +186,27 @@ real data.
 | Sidebar rows not selectable; window buttons unnamed | 5 | spec 006 FR-515, FR-516 | NOT VERIFIED |
 
 Not fixed: Airbnb's late Continue button (by design: Claude types the code with browser_act,
-Toni 2026-11-23); two hangs of several minutes with no answer (0H0161, 442MP3), which need the
+decided 2026-11-23); two hangs of several minutes with no answer (0H0161, 442MP3), which need the
 hosted relay's log, kept outside this repository; places not in Apple Maps; Amazon's, Target's and
 Uber's pages that didn't work in Latchkey's own browser (open bugs in Latchkey, cause not found yet); Safari's throttling of background tabs.
 
 Moving reports to `Feedback/Handled` can't be done by Claude through Latchkey: the shell's fence
 denies writes to Latchkey's own folder even when declared (FR-319), and a script opened in
 Terminal from the shell is refused by macOS ("Sandbox is not allowed to open documents in
-Terminal"). Toni ran the move script himself on 2026-11-23: all 172 reports are in `Handled`.
-The feedback design is being reworked so that Claude can mark reports handled (Toni, 2026-11-23:
+Terminal"). The maintainer ran the move script himself on 2026-11-23: all 172 reports are in `Handled`.
+The feedback design is being reworked so that Claude can mark reports handled (decided 2026-11-23:
 email is not a serious channel; who owns each step: the user's chat, the relay, the Mac, the
 developer's agent).
 
 ## Current phase
 
-The hosted relay's server moved out of this repository (Toni, 2026-11-23): its deployment
+The hosted relay's server moved out of this repository (decided 2026-11-23): its deployment
 scripts, the infra workflow and the server's description now live in a private repository.
 Latchkey keeps the app, its release pipeline (`relay-image.yml` publishes and signs the relay
 image; hosts that verify the signature pull it) and generic self-hosting docs, with a locked-down
 Docker Compose and Caddy example in docs/self-hosting.md.
 
-Fill-only sign-in (Toni, 2026-11-22: "Shouldn't the code just provide what's happening in the
+Fill-only sign-in (decided 2026-11-22: "Shouldn't the code just provide what's happening in the
 browser and the agent makes the presumptions?"; then "Fill-only tool", "No cap", "Decide fresh
 each time", "Shouldnt tve agent do that too?", "Right after typing it"; spec 013 FR-1371 to
 FR-1374): logins_sign_in, which ran a whole sign-in and guessed what each page meant, is replaced
@@ -216,19 +218,19 @@ list, no waiting for codes (a code text is looked for since the last password ty
 in 10 minutes; none: said at once), and a code's text or email is cleaned up right after it is
 typed. Removed: SignInFlow (the guessing), the fallback list in OwnSessions, the delivery and
 waiting parts of TextedCodes, the refusal count in SignInStore.
-Codes are Claude's too (Toni, 2026-11-22: "The agent reads the messages, archives them etc, sets
+Codes are Claude's too (decided 2026-11-22: "The agent reads the messages, archives them etc, sets
 a wait period they like etc"; then "Give Claude a delete", "Claude reads Apple Mail"): Latchkey no
 longer reads Messages or Mail for codes. logins_fill types a code Claude passes, or the one from
 Passwords. Claude reads a texted code with messages_find and messages_read and deletes the text
-with the new messages_delete (spec 002 FR-180, through Messages' window in the background, at the
+with the new messages_delete (spec 002 FR-162, through Messages' window in the background, at the
 next unlock while locked); an emailed one with its own email tool, else the new Mail capability
 (mail_find, mail_read, mail_archive; spec 008 FR-850 to FR-853, back in part, read and archive
 only). TextedCodes became PendingCleanup (deletes and archives now, or at the next unlock).
-My 11:01 install of the fill-only version restarted Latchkey during Toni's Target order chat and
+My 11:01 install of the fill-only version restarted Latchkey during the maintainer's Target order chat and
 renamed its sign-in tool, so that chat lost its page and tool. Since the research on tool design
-and agent process (Toni's decisions, 2026-11-22): `install.sh` waits until no call runs and none
+and agent process (the maintainer's decisions, 2026-11-22): `install.sh` waits until no call runs and none
 has for 10 minutes (from the app's running-calls folder, spec 001 FR-667), gives up after 30;
-CLAUDE.md has "Done means Toni's conditions" (VERIFIED / NOT VERIFIED / SCHEDULED rows, the
+CLAUDE.md has "Done means the requester's conditions" (VERIFIED / NOT VERIFIED / SCHEDULED rows, the
 "Open acceptance" table above), batch installs, a security review before commit for sign-in,
 browser, Messages, Mail; Constitution X "a tool reports; Claude judges"; `.claude/rules/`
 tool-design.md, secrets-and-pages.md, relay.md; the end-of-turn hook sends back once a "works"
@@ -250,7 +252,7 @@ first green-security run then failed `TestCalls` ("mac offline"): hub tests call
 after dialing, before the hub held the connection; the tests' `dial` now waits until the hub
 holds it, so every hub test starts online.
 
-Xcode tests in Shell (Toni, 2026-11-21: "Test step outside fence"; spec 004 FR-335): no app's
+Xcode tests in Shell (decided 2026-11-21: "Test step outside fence"; spec 004 FR-335): no app's
 unit tests could run through `shell_run`. macOS opens an app for a sandboxed program without
 the program's environment, so the test app Xcode opens never got its test settings and
 xcodebuild gave up after about six minutes ("The test runner hung before establishing
@@ -259,17 +261,17 @@ runs the test step through `LatchkeyXcodeTests`, a small program in Latchkey's a
 fence starts outside and that runs only `xcodebuild test-without-building`; without `open`,
 tests are refused at once. Regression case `regressions.shell_xcode_tests_in_fence`.
 
-Development in Claude Code cloud sessions (Toni, 2026-11-21; CLAUDE.md "Cloud sessions"): the
+Development in Claude Code cloud sessions (decided 2026-11-21; CLAUDE.md "Cloud sessions"): the
 hooks know a cloud session (`CLAUDE_CODE_REMOTE=true`). Session start runs
 `scripts/cloud-setup.sh` (jq, lsof, the pinned ShellCheck, uv, and Go modules, tools and test
-builds warmed in the background), skips `tidy.sh`, and still reports loose ends; no `tidy.sh`
+builds warmed in the background), skips tidy.sh, and still reports loose ends; no tidy.sh
 after a push; the guard is unchanged, and the private-values check needs no private values (since
 2026-11-23: it refuses any relay address or signing team that isn't a placeholder). Relay
 and Linux work runs in the VM; the Mac app builds and tests on the Mac through Latchkey's
 `shell_run` from a clone in the command's scratch folder; deploys, Linux releases, installs and
 live checks stay in a local session. Checked in `docker run ubuntu:24.04`: the real session-start
 hook on a bare image, then `make test`, `make lint`, `make security` and `make script-tests`
-(`scripts/tests/hooks_cloud_test.sh` covers the hooks in both places), on 4 CPUs like the
+(scripts/tests/hooks_cloud_test.sh covers the hooks in both places), on 4 CPUs like the
 cloud VM. Found on the way: the pinned linters built with an older Go refuse the relay's 1.27
 (the setup puts the relay's toolchain first); `make -C linux lint` on Linux checks the Linux-only
 files the Mac never lints, and found 8 issues (fixed: tighter cgroup modes, a bounded `pgrep`);
@@ -279,7 +281,7 @@ environment "Default" has the six `LATCHKEY_PRIVATE_…` variables (added throug
 browser, 2026-11-21) and Full network access, so the three domains `make security` needs are
 reachable.
 
-Builds in Shell (Toni, 2026-11-21: "fix and test"; a feedback report): no Xcode project could
+Builds in Shell (decided 2026-11-21: "fix and test"; a feedback report): no Xcode project could
 build through `shell_run`, locked or unlocked, since SwiftPM, Xcode, and the Swift compiler start
 sandboxes of their own and macOS refuses one inside Latchkey's fence. Each command now gets
 `xcodebuild` and `swift` that turn those off, first on its PATH (so `make` and scripts use them
@@ -287,7 +289,7 @@ too), and Xcode's matching settings in `XCODE_XCCONFIG_FILE`; the fence still ap
 tells a program starting its own sandbox apart from a refused write. Tests build a SwiftUI
 package with `swift build` and `xcodebuild` inside the fence; a regression case builds this app.
 
-Security emails (Toni, 2026-11-21; spec 001 FR-696 to FR-699, plan D5): the relay emails the
+Security emails (decided 2026-11-21; spec 001 FR-696 to FR-699, plan D5): the relay emails the
 Owner whenever a machine is paired, an app is allowed on the consent page (not on a refresh), or
 the account is recovered, with the time in UTC, the request's IP address, and links to the
 account page and recovery. Sent in the background after the change, never holding it up; at
@@ -305,21 +307,21 @@ reviews of the build added: the Public Suffix List (no subdomain fills under sha
 page's site from the browser's own address with fills in a script world of Latchkey's own, the
 save panel cancelled on anything unexpected, and Claude's command line and Files can't read the
 import folder. Passkeys need the paid Apple Developer Program.
-The first real export (Toni, 2026-11-21 09:41, 0.8.175) was very slow and stopped at the save
+The first real export (decided 2026-11-21 09:41, 0.8.175) was very slow and stopped at the save
 panel's Go to Folder, telling it only in Settings: each look walked Passwords' whole window
 (1,045 passwords, 85 s a look), and keys sent to Passwords alone never reach the save panel (its
 own process). 0.8.176 looks only in dialogs (0.07 s), posts the two key presses as the keyboard
 does while Passwords is in front, shows each step in the menu and Settings, and sends a
 notification when it stops (the import already sends one when it's done). 0.8.177: after a stop,
 Latchkey checks the save panel closed and, for 10 minutes, wipes a file of the export's name
-saved anywhere a panel may put it (FR-1307; Toni asked whether a stale file is left in
+saved anywhere a panel may put it (FR-1307; the maintainer asked whether a stale file is left in
 Downloads; none was).
-Toni's export with 0.8.177 (2026-11-21 10:41): done in 10 s, 1,026 sign-ins (Passwords' other
+The maintainer's export with 0.8.177 (2026-11-21 10:41): done in 10 s, 1,026 sign-ins (Passwords' other
 19 items have no web address), none with a verification code in Passwords. Live sign-in through
 the hosted relay: homerecording.com signed in, no password in any answer, but the tool said "a
 check" (a hidden frame from Google's ad script, wrongly counted as one); 0.8.178 counts only a challenge the
 page shows, and logins_find starts with totals and says how many have codes (a feedback report).
-Latchkey's own sign-ins (0.8.179; Toni: "can it not sync cookies … so it doesn't log my real
+Latchkey's own sign-ins (0.8.179; decided: "can it not sync cookies … so it doesn't log my real
 browser out?"; spec 013 FR-1350 to FR-1355): for the 871 sites Latchkey has a password for, its
 own browser copies none of Safari's cookies, locked or unlocked, and stays its own browser
 while unlocked; Claude signs in with logins_sign_in, and the session is kept in a Keychain item
@@ -333,19 +335,19 @@ sign-in saved for na.account.amazon.com still held back Safari's amazon.com cook
 falls back every sign-in under the same registered name, drops what Latchkey's own try left,
 and opens the page again instead of reloading a code step; 0.8.183 also applies that to a
 fallback recorded earlier. Rechecked live (0.8.183, locked): Amazon's order history opened
-signed in with Safari's sign-in. That check texted Toni two Amazon codes Latchkey couldn't use
-(the second from reloading the code step, fixed in 0.8.182). Texted codes (0.8.184; Toni:
+signed in with Safari's sign-in. That check texted the maintainer two Amazon codes Latchkey couldn't use
+(the second from reloading the code step, fixed in 0.8.182). Texted codes (0.8.184; the maintainer:
 "Ensure you can use OTP. Mark them read and archive/delete after use"; spec 013 FR-1360 to
 FR-1363): Latchkey takes a code a site texts from Messages, fills it, and deletes the text in
 Messages' window, at once while unlocked, else at the next unlock. Not yet tried live: the
 delete in Messages' window (the Mac was locked); the case `logins.texted_code_deleted` checks
-the log after the next code used. Emailed codes (0.8.186; Toni: "Email and SMS both", Claude's
+the log after the next code used. Emailed codes (0.8.186; decided: "Email and SMS both", Claude's
 own email tool first; spec 013 FR-1364 to FR-1367): after 20 s with no text, Claude is asked
 whether it can read the owner's email and passes the code; only without an email tool does
 Latchkey read Apple Mail's files (Mail's previews come hours late, so the email files are
 decoded), starting Mail hidden. The code email is then marked read and archived through Mail's
 scripting while unlocked. Not yet tried live: reading a real code email and the archive script.
-Citi (Toni, 2026-11-21, 0.8.185): signing in failed and the page got lost. Found on Citi's own
+Citi (decided 2026-11-21, 0.8.185): signing in failed and the page got lost. Found on Citi's own
 login page: its user ID field has an input mask that keeps only what comes with real key
 presses ("dummyuser" became "uu" when set in one go), so the form went with a bad user ID;
 Latchkey quoted the page's "Skip to Content" link (a live region) as Citi's error; two such
@@ -361,8 +363,8 @@ with Citi's scam banner as the reason; pressing Text me by script sent the page 
 signed-out home (an open bug in Latchkey then, cause not found). 0.8.188: after the password, a
 "how to send the code" step is answered with its text option (FR-1368), a site that then ends
 the sign-in is a check, not a refusal, long notices and banners are never the site's words,
-and "Sign on" buttons count. Citi itself needs Toni to sign in once in Safari.
-Live Amazon test with codes (Toni: "do it", 2026-11-21 17:50, 0.8.190, Mac unlocked): sites that
+and "Sign on" buttons count. Citi itself needs the maintainer to sign in once in Safari.
+Live Amazon test with codes (decided: "do it", 2026-11-21 17:50, 0.8.190, Mac unlocked): sites that
 fell back under older sign-in rules (Amazon) got one more try of Latchkey's own sign-in; Amazon
 took the password and asked for no code this time, but showed a check box page ("Check the box to continue"), which
 Latchkey answered as signed in. 0.8.191 reads a page that asks to tick such a box as a
@@ -375,7 +377,7 @@ permissions Latchkey asks for (setup and Settings → Permissions). Before that:
 login is saved at access.bannerlife.com but signs in at login.bannerlife.com, so 0.8.192 fills
 any page of the same registered site, as Passwords does (Banner then refused the saved
 password); Amazon took the password without a code.
-First live sign-in with a TEXTED code (Toni: "keep doing it until you're successful",
+First live sign-in with a TEXTED code (decided: "keep doing it until you're successful",
 2026-11-21 19:42 and 19:44, 0.8.198): GitHub (tonimelisma) after the password showed a passkey
 page; Latchkey picked its SMS option, pressed Send SMS, took GitHub's text from Messages, filled
 it, signed in, and deleted the text (in Messages' Recently Deleted, checked in chat.db). What it
@@ -385,29 +387,29 @@ fallback), an empty box's delete acted as Backspace, a masked user name read as 
 (which also wrongly switched United to Safari), a text sent before the code page was ignored,
 GitHub's passkey page read as "signed in". Amazon, United, and GitHub each skipped the code
 once they trusted Latchkey's browser. The "Signed in" answer now says how the code came.
-Setup's Ask Now did nothing for Mail (Toni, 2026-11-21): macOS had Latchkey's control of Mail
+Setup's Ask Now did nothing for Mail (decided 2026-11-21): macOS had Latchkey's control of Mail
 turned off from earlier and never asks again. 0.8.200 says so under the button and opens
 System Settings → Automation; the text macOS shows with its question names Mail and why; and
 per Apple's guidelines (Privacy: a button before macOS's question isn't titled "Allow") the
 Permissions buttons say "Ask…" or "Open Settings…".
 Emailed codes (0.8.201): IKEA's plain text glues the code to the next word ("code.123456Please"),
-so only the HTML part shows it apart; both parts are read now. Scratch folders (0.8.201; Toni:
+so only the HTML part shows it apart; both parts are read now. Scratch folders (0.8.201; the maintainer:
 "Delete big ones outright"): the Mac's disk filled (Trash 9.8 GB, 63 scratch folders of other
 Claude sessions' Xcode builds); a scratch folder of 100 MB or more is now deleted, not trashed.
 Emailed code end to end (0.8.205, 2026-11-21 21:54): a fresh Claude signed in to IKEA with the
 code from Apple Mail, and Latchkey marked that email read and archived it (checked in Mail's
-index). Citi again (Toni: "you log in to citi!", 22:15): answered "Signed in" while Citi still
+index). Citi again (decided: "you log in to citi!", 22:15): answered "Signed in" while Citi still
 drew its "Let’s make sure it's you" page, then found no form on that page, then took Citi's six
 one-character code boxes (password fields) for the password. Now a one-character password field
 is a code box, that page counts as a second step (Text me is pressed), and a page that shows
 nothing right after the password is looked at again for up to 3 s (0.8.212). Then Citi was
 signed in in Safari by hand (Latchkey's log shows no code used), and every statement Citi lists
-was already in OneDrive. Tabs (Toni: "you've left all the browser tabs open"): Claude's pages
+was already in OneDrive. Tabs (decided: "you've left all the browser tabs open"): Claude's pages
 are kept in memory only and every install restarts Latchkey, so their Safari tabs outlived
 them; now Latchkey closes Claude's Safari tabs when it quits (spec 005 FR-460), a page whose
 tab is gone is forgotten when closed, and a code asked for moments ago is said so instead of
 "a check".
-Citi by Latchkey alone (Toni: "log in to citi yourself now", unlocked): the sign-in worked (no
+Citi by Latchkey alone (decided: "log in to citi yourself now", unlocked): the sign-in worked (no
 code asked) but answered "Safari's tabs changed": Citi sent Claude's tab on to online.citi.com,
 and the check inside Safari just before each script accepted only a marked tab or an address
 Latchkey loaded. Now it also takes the address Latchkey's own survey just found the tab at.
@@ -420,7 +422,7 @@ closing the page closed its tab. Last gap: Citi had fallen back to Safari's sign
 pages opened in Latchkey's own browser with no sign-in, because Safari's Citi cookies end with
 the session and didn't read as signed in; a site that fell back now opens in Safari while
 unlocked (FR-1352).
-Sign-in across sites, live (Toni, 2026-11-22: "Are you sure you are able to log in there now,
+Sign-in across sites, live (decided 2026-11-22: "Are you sure you are able to log in there now,
 both when the computer is locked and when it is unlocked?", then "is logging in to several other
 sites working?", 0.8.216, unlocked): Citi opened straight in a Safari tab of Claude's and signed
 in in one call (texted code, text deleted); GitHub and Amazon were still signed in with
@@ -431,7 +433,7 @@ lost (and called the owner's), so it stayed open: a new tab now records the othe
 opens (spec 005 FR-461). Locked, Citi can't work yet: earlier, in Latchkey's own browser, Citi
 took the password and the texted code, then logged the session out, which was answered as a
 refused password. A probe showed that browser's pages saw a 0×0 window at no place on the
-screen, a Latchkey bug (Safari's pages see a real window); Toni: "change the background tab to be more real so this legitimate
+screen, a Latchkey bug (Safari's pages see a real window); decided: "change the background tab to be more real so this legitimate
 use case can work. don't do anything malicious" and "ensure the agent gets proper guidance".
 Now its pages are told of a browser-sized window at the top left (FR-462; no stand-ins for
 Safari's own objects or Apple Pay), a sign-out after the code is a check, not a refusal
@@ -452,7 +454,7 @@ and the move into Safari kept the tab. Costco refused the saved password in both
 no words, and is blocked until the next export (the saved password may be out of date). A fresh
 Claude Code session saw the new logins_sign_in description, and a script with return gave
 {"twice":4} in a Safari tab.
-Citi with the Mac locked (Toni: "Mac is locked now, check Citi", 0.8.218): Latchkey's own Citi
+Citi with the Mac locked (decided: "Mac is locked now, check Citi", 0.8.218): Latchkey's own Citi
 sign-in from earlier was still alive (the dashboard opened). After signing that session out, a
 fresh sign-in answered "refused": Citi's page was still signing in when the call's 40 s ran out,
 and running out of time counted as a refusal and switched Citi to Safari's cookies. Timers and
@@ -467,17 +469,17 @@ regressions.logins_locked_citi_slow); if it ends the same way, look at what Citi
 Text me while locked.
 Live check (0.8.175, Mac locked, 2026-11-21 00:54): groups logins, browser, files, shell: 51 of 51
 worked. A fresh Claude signed in to the-internet.herokuapp.com as tomsmith with the fixture's test
-sign-in (`logins-fixture.sh`); none of its 10 tool results held the password except the test
+sign-in (logins-fixture.sh); none of its 10 tool results held the password except the test
 site's own page text, which prints it; the fixture was removed and logins_find then said
 Latchkey holds none.
 
-Claude's feedback reports (Toni, 2026-11-16; spec 001 FR-690 to FR-695): the relay offers its own
+Claude's feedback reports (decided 2026-11-16; spec 001 FR-690 to FR-695): the relay offers its own
 `feedback` tool, and its instructions ask Claude to file a report whenever anything done with
 Latchkey didn't fully work. Reports are kept sealed on the relay and copied to the Mac as text
 files in `~/Library/Application Support/Latchkey/Feedback`; no notification. To investigate,
 read that folder, fix each issue, and add a regression case for it (CLAUDE.md).
 
-Regression cases from every issue found so far (2026-11-16: commits, Toni's reports, and Claude
+Regression cases from every issue found so far (2026-11-16: commits, the maintainer's reports, and Claude
 Code transcripts): 61 cases in the regressions groups. Six past issues can't be checked through
 the tools and stay covered elsewhere: a note with a checklist refused unchanged (Latchkey can't
 make a checklist note to test with); the setup window at start and the pairing after a restart
@@ -496,7 +498,7 @@ First live run of the regressions groups (2026-11-16, unlocked): 46 of 62 worked
 while locked. Fixed from it: page scripts with await, the page's own error words, and scripts
 where the page forbids eval (Safari tabs); a link whose handler cancels the click is no longer
 followed; the shell points to latchkey_log when macOS refuses its system log; five cases that
-checked wrongly were rewritten (a Python crash showed a Problem Report window on Toni's screen;
+checked wrongly were rewritten (a Python crash showed a Problem Report window on the maintainer's screen;
 `pgrep -f` matched the checking agent itself). Then fixed too: computer control types one
 character per key (Calculator got "1" for "12"), a press tells text that changed (a display),
 and targeting Latchkey is refused as such; Contacts' remove from group tries again when its
@@ -526,26 +528,26 @@ back a membership iCloud dropped when it took a new card and group over (spec 00
 
 Pages are read once they stop changing (a second with nothing added or removed, at most three),
 so the first read of Gmail shows the mailbox, not "Loading...". Every issue found now becomes a
-case in the "regressions" group of the screen-state checks (Toni, 2026-11-16; CLAUDE.md).
+case in the "regressions" group of the screen-state checks (decided 2026-11-16; CLAUDE.md).
 
-Safari signed out of Target (Toni, 2026-11-15, three times that evening), found and fixed:
+Safari signed out of Target (decided 2026-11-15, three times that evening), found and fixed:
 Target rotates its refresh token, and Claude's page in Latchkey's own browser redeemed Safari's
-copy (Latchkey's log, 19:23:58), which ended Safari's sign-in. Now (Toni's rule; spec 005 FR-455
+copy (Latchkey's log, 19:23:58), which ended Safari's sign-in. Now (the maintainer's rule; spec 005 FR-455
 to FR-459): while the Mac is unlocked, a site the owner is signed in to opens in a background
 Safari tab of Claude's with his real sign-in, other sites in Latchkey's own browser with no
 copied cookies; while locked, Latchkey's own browser copies Safari's cookies as before, and a
 sign-out is an accepted side effect; the copies are dropped at unlock. Also found: pages of
 Latchkey's own browser count as hidden to WebKit, so Target's search showed no results there;
-signed-in shopping now runs in Safari, where it works (public APIs only, Toni).
+signed-in shopping now runs in Safari, where it works (public APIs only, the maintainer).
 
-Full traces everywhere, for evals (Toni, 2026-11-15: "I want to be able to do evals on everything
+Full traces everywhere, for evals (decided 2026-11-15: "I want to be able to do evals on everything
 that happened anywhere"; spec 001 FR-680 to FR-689, spec 010 FR-1057 to FR-1059,
-`specs/001-core/contracts/trace-files.md`, constitution VI amended). The Mac, each Linux server,
+`docs/design/contracts/trace-files.md`, constitution VI amended). The Mac, each Linux server,
 and every relay now keep every call's arguments and whole result (screenshots included) and their
 events in files of one day each, only ever appended to: no age limit, and no update or migration
 rewrites them. The Mac's log moved out of its database into the files (encrypted as before, the
 tamper chain unchanged); the first start copies the database in unchanged and leaves it on disk
-as it was (measured on a copy of Toni's log: 22,569 entries, 190 MB, 2.2 s). A Linux server's
+as it was (measured on a copy of the maintainer's log: 22,569 entries, 190 MB, 2.2 s). A Linux server's
 files are plain, readable only by the Owner, nothing cut any more; the old `activity.jsonl` is
 still read. The relay's are encrypted with a key from its key file, in a folder per account,
 removed with the account; below 2 GiB free it stops writing them and never deletes old ones.
@@ -554,7 +556,7 @@ activity export` on a server, `relay trace export <email>` for the operator, and
 activity on the account page. Found on the way: the Linux end-to-end check had been failing on
 main since the machine list began naming Latchkey's version; fixed.
 
-Dead code removed (Toni, 2026-11-15: "remove all dead code"): Safari's tab and window of Claude's
+Dead code removed (decided 2026-11-15: "remove all dead code"): Safari's tab and window of Claude's
 own (its memory file, the Settings value, idle closing, the scripts only it used), a Mail script
 named in CLAUDE.md that no longer existed, the Messages helpers of the window actions removed on
 2026-11-07, WhatsApp sending's helpers, the client list's old menu view, and other unused
@@ -565,7 +567,7 @@ written but never called; it now runs. And the full browser live check (24 of 25
 PDF's address timed out in Latchkey's own browser: a page that is a file is now answered at
 once, and saved with download (spec 005 FR-452).
 
-Then (Toni's report, 2026-11-15): pages of Claude's timed out because each new one copied all
+Then (the maintainer's report, 2026-11-15): pages of Claude's timed out because each new one copied all
 3,500 Safari cookies (measured: over 100 s); now the pages share one store and take a site's
 cookies when they go there (spec 005 FR-441 as amended). And a busy Bank of America tab was
 told as "waiting on a dialog" (an idle Safari took 12 s to answer its first script, measured):
@@ -574,7 +576,7 @@ to try again, and how computer control can answer a real dialog (FR-432 as amend
 the Mac is locked, each Safari script now has 12 s, so Claude is told within the relay's 30 s
 that the tabs need the Mac unlocked (FR-430 as amended).
 
-Pages that never freeze, one set per chat (Toni, 2026-11-15; spec 005 FR-444 to FR-451, plan
+Pages that never freeze, one set per chat (decided 2026-11-15; spec 005 FR-444 to FR-451, plan
 D11): on Target a "Remove item?" dialog froze Claude's background Safari tab (Latchkey can't read
 or answer a background tab's dialog without bringing it forward), and two other chats loaded
 their pages over the cart in Claude's one tab. Now Claude's own pages always open in Latchkey's
@@ -586,17 +588,17 @@ waits and is shown to Claude, which answers it with `browser_act` action `dialog
 5 minutes. An OK given with an action also answers a dialog up to 5 s later. The Settings choice
 of a Safari tab or window is gone.
 
-Sign-ins while locked (Toni, 2026-11-14; spec 005 FR-441, FR-442, plan D7): Latchkey's own
+Sign-ins while locked (decided 2026-11-14; spec 005 FR-441, FR-442, plan D7): Latchkey's own
 browser copied Safari's cookies once, when it started; on 2026-11-14 Amazon answered Claude
 signed out there while Safari was still signed in. It now takes Safari's cookies again before
 every page Claude opens (Safari's copy wins; cookies only that browser holds stay), and Claude
 can ask for it with `browser_read sign_in_again`, which also loads the page again. Since
-2026-11-15 (Toni: "do the undecided bits"; spec 005 FR-443, spec 001 FR-671, FR-672): every
+2026-11-15 (decided: "do the undecided bits"; spec 005 FR-443, spec 001 FR-671, FR-672): every
 answer from that browser begins by saying it is Latchkey's own browser, not Safari; the Mac's
 state line ends "locked" or "unlocked" (the Mac tells the relay at once on a change; new
 optional `screen_locked` in its state); and each lock and unlock is an event in Latchkey's log.
 
-Public download (Toni, 2026-11-09; spec 001 FR-669, FR-670): every `make -C macos install` now
+Public download (decided 2026-11-09; spec 001 FR-669, FR-670): every `make -C macos install` now
 also publishes its disk image as GitHub release `mac-<x.y.z>` (asset `Latchkey.dmg`; the README
 links releases/latest/download/Latchkey.dmg). Signed for development, not notarized: a
 downloaded copy opens after Privacy & Security → Open Anyway, once per version. The image
@@ -606,11 +608,11 @@ when a newer one is out. Only the newest three Mac releases are kept, so the Lin
 release lookup keeps finding its own. Messenger was looked at again and left out (no Mac app
 since 2025-12-15; the web page only).
 
-Never disturb the user (Toni, 2026-11-07; Constitution IV, CLAUDE.md): while the Mac is
+Never disturb the user (decided 2026-11-07; Constitution IV, CLAUDE.md): while the Mac is
 unlocked, Latchkey brings nothing to the front, drives no app the user may be using, and sends
 no pointer or keys into their apps; exceptions are computer control, acting in the user's own
 Safari tabs, and the shell's `open`. Removed for it, in one change (25 tools from a Mac now, was
-33): all of Mail (spec 008 withdrawn; Toni: better done through mail providers' APIs), WhatsApp
+33): all of Mail (spec 008 withdrawn; decided: better done through mail providers' APIs), WhatsApp
 sending and WhatsApp Web (spec 012: reading from WhatsApp for Mac's database only), Notes' window
 editing (spec 002 FR-155 to FR-159: notes with checklists, links, or images are refused again),
 Messages' window actions (FR-172 to FR-179: `messages_send` to a person or conversation only),
@@ -622,11 +624,11 @@ their test messages. Same day, the switched-off code went too: Notes' window edi
 row planner); WhatsApp is Off or On in Settings (nothing to write); the README pictures were
 redrawn (`macos/scripts/readme-shots.sh`), and `docs/use-cases.md` and `docs/screen-states.md`
 say what was removed. WhatsApp sending through a background Safari tab was considered again and
-left out (Toni: hit or miss while locked is not good enough). For Toni: the old "Latchkey check"
+left out (decided: hit or miss while locked is not good enough). For decided: the old "Latchkey check"
 test messages in his self-conversations (Latchkey can't delete them any more), one WhatsApp test
 message in his own chat, and, optionally, Latchkey's unused Mail permission in System Settings.
 
-Spec 001 is built. Everything that doesn't need Toni is done and verified on this Mac
+Spec 001 is built. Everything that doesn't need the maintainer is done and verified on this Mac
 (2026-10-20):
 
 - Relay: all tests pass (`make test`, including a headless-Chrome sign-up → OAuth → pairing →
@@ -639,24 +641,24 @@ Spec 001 is built. Everything that doesn't need Toni is done and verified on thi
 Notes:
 - The OAuth server code was written before its contract tests (Constitution VII asks for tests
   first). The tests were then written against the contract and run.
-- No keep-awake test runs (Toni, 2026-10-20). The helper runs once Toni approves it during setup.
+- No keep-awake test runs (decided 2026-10-20). The helper runs once the maintainer approves it during setup.
 
 ## Done (2026-10-22)
 
-The first version works end to end: Latchkey 0.1.2 installed on Toni's Mac and paired with the
+The first version works end to end: Latchkey 0.1.2 installed on the maintainer's Mac and paired with the
 hosted relay (email via Resend); real Claude called
 `battery_status` and `laptop_status` through the connector, and got the immediate offline answer
 after the app was quit.
 
 ## Problem reports asked about
 
-Ids of problem reports Toni has been asked about once (CLAUDE.md, start of every session); ids
+Ids of problem reports the maintainer has been asked about once (CLAUDE.md, start of every session); ids
 only, never contents.
 
-- `rep_274857e92fd4415fad0fb6c2d2e953e9` (asked 2026-11-26: later; fixed 2026-11-27 at Toni's
+- `rep_274857e92fd4415fad0fb6c2d2e953e9` (asked 2026-11-26: later; fixed 2026-11-27 at the maintainer's
   "fix feedbacks")
-- `rep_04182a285e3247409460428d863690e8` (2026-11-27: fixed at Toni's "fix feedbacks")
-- `rep_577c075caf764a48b885c31931d2bb9a` (2026-11-27: fixed at Toni's "fix feedbacks")
+- `rep_04182a285e3247409460428d863690e8` (2026-11-27: fixed at the maintainer's "fix feedbacks")
+- `rep_577c075caf764a48b885c31931d2bb9a` (2026-11-27: fixed at the maintainer's "fix feedbacks")
 
 ## Next steps
 
@@ -667,31 +669,31 @@ only, never contents.
      relay container must reach the VM's metadata server for its identity token (today the
      server blocks containers from it); its `configure` reads `CLOUDFLARE_API_TOKEN` with `az`.
 
-0000. Test strategy and two ways to work (spec 016, `specs/016-test-strategy/`, 2026-11-26).
-      Done (pull requests #59, #60): two ways to work in CLAUDE.md, the trim and Toni's rule
+0000. Test strategy and two ways to work (spec 016, `docs/requirements/test-strategy.md`, 2026-11-26).
+      Done (pull requests #59, #60): two ways to work in CLAUDE.md, the trim and the maintainer's rule
       changes; the dev-build bug (FR-1607) with its test; the Mac tests gate merging (required
       check `mac`, ruleset read back: relay, linux, scripts, mac); a changed tool snapshot blocks
       merging, the Mac end-to-end check runs in the Mac jobs' build; main skips tests on a tree
       its pull request passed; one harness (localcheck, maccheck, guidecheck gone); the
       screen-state and Safari kits retired, every case mapped (`docs/regression-coverage.md`,
-      `docs/screen-states.md` "Toni's conditions"); deadline tests on fake clocks (Swift
+      `docs/screen-states.md` "the requester's conditions"); deadline tests on fake clocks (Swift
       `ManualClock`, relay synctest); tool text pinned only in the snapshots; `make sandbox`,
       `make evals` and the start hook's local line (sandbox_test.sh 49/49).
-      T16 done 2026-11-26 in a local session on Toni's Mac (pull request #64): the test Mac image
+      T16 done 2026-11-26 in a local session on the maintainer's Mac (pull request #64): the test Mac image
       is made with no person and no window (`eval-image.sh`, 4.4 min after the one-time 27 GB
       download), and `make -C macos sandbox` runs 27 checks against the real Mac apps in it;
       the rest of `relay/e2e/sandbox-checks.md` is ported except the checks its "Status" lists
       as not written. Every check that can run passes there except two Latchkey bugs it found.
-      Toni chose (2026-11-27): a Mac without a battery says "no battery" (fixed, spec 001
+      The maintainer chose (2026-11-27): a Mac without a battery says "no battery" (fixed, spec 001
       FR-065a; the sandbox's `battery` check passes since 2026-11-27), and a contact card with a
       note (macOS needs Apple's Contacts notes entitlement) is changed through the Contacts app's
       scripting in the background, no window (done 2026-11-27, spec 007 FR-722a, T17: the
       sandbox's `contacts-card-with-note` passes; setup now also asks to control Contacts). The
-      full sandbox run after every Mac build stays (about 7 minutes; Toni: "Always the full run"). Fixed with
+      full sandbox run after every Mac build stays (about 7 minutes; decided: "Always the full run"). Fixed with
       tests: the relay refused MCP calls through a proxy on the same machine; a tab of Claude's
       was called the owner's; a trace delete raced a writer (CI). Results, times (the full
       sandbox run takes about 7 minutes, over FR-1612's 5) and every issue:
-      `specs/016-test-strategy/research.md` §5 and §7.
+      `docs/research/2026-11-25-test-strategy.md` §5 and §7.
       T17 to T19 done 2026-11-27 (a local session; pull request #67): the full sandbox run on
       main with "no battery" passed (21 passed, 0 failed, 6 skipped); every check
       `sandbox-checks.md` listed as not written is written and passes, except
@@ -710,47 +712,47 @@ only, never contents.
       client per relay). One earlier run lost the test Mac's Latchkey mid-run (cause not found,
       not seen again).
       Evidence only for an unlocked virtual Mac with test data; the locked Mac, the lid closed and
-      Toni's accounts stay NOT VERIFIED.
+      the maintainer's accounts stay NOT VERIFIED.
 
-000. Cloud-first git (Toni, 2026-11-24; CLAUDE.md, "Git"): one branch and pull request per
+000. Cloud-first git (decided 2026-11-24; CLAUDE.md, "Git"): one branch and pull request per
      session, never replaced; squash merges by auto-merge; `branch-cleanup.yml` deletes closed
-     pull requests' branches; `tidy.sh` and `loose-ends.sh` know squash merges. GitHub's settings
-     set 2026-11-24 (through `gh` on Toni's Mac, at his word; a cloud session's proxy refuses
+     pull requests' branches; tidy.sh and loose-ends.sh know squash merges. GitHub's settings
+     set 2026-11-24 (through `gh` on the maintainer's Mac, at his word; a cloud session's proxy refuses
      settings writes): squash the only merge method, auto-merge and "Update branch" on, merged
      branches deleted; ruleset `main` active (pull requests only, squash; checks `relay`,
      `linux`, `scripts` required; no force-push or deletion of `main`).
-00. The 2026-11-23 feedback fixes have regression cases but no live run (Toni, 2026-11-23: no
+00. The 2026-11-23 feedback fixes have regression cases but no live run (decided 2026-11-23: no
     test sessions against his real data; end-to-end testing is a backlog item).
 0. Problem reports carry everything for the chat (spec 014 FR-1440 to FR-1456, 2026-11-25):
-   built; released with the relay image and the next Mac tag. Left: a live report from Toni's
+   built; released with the relay image and the next Mac tag. Left: a live report from the maintainer's
    Mac (any chat that hits a problem, with sharing on), read with `latchkey-reports show`; until
    the intake's host pulls the new intake image, relays send the report's small version (64 KB).
-0. Problem reports to the developer (spec 014, `specs/014-feedback-intake/`): built and merged
+0. Problem reports to the developer (spec 014, `docs/requirements/feedback-intake.md`): built and merged
    2026-11-23 (relay, intake, the developer's command, the Mac app's setting). The intake runs
    since 2026-11-24 (deployed by the hosted server's own agent; the hosted relay is on the new
    image), and since 2026-11-27 `latchkey-reports` reads its token and the private key from Azure
    Key Vault itself when they aren't set (`relay/internal/keyvault`; `list` answered on the Mac
    through `az login`, and with only `MELISMA_SECRETS_CLIENT_SECRET` and no `az`, as a cloud
-   session does, on 2026-11-27). Left for Toni: turning sharing on in Latchkey's
+   session does, on 2026-11-27). Left for decided: turning sharing on in Latchkey's
    settings once 0.8.234 is installed. Nothing verified end to end yet.
 
 0. Cloud-first setup: done 2026-11-23 except the updater on the Mac (`macos/scripts/updater-setup.sh`)
    and `LATCHKEY_CHECK_TO` in the cloud environment. The package `latchkey-relay` gives this
    repository's Actions Write access and `SERVER_SIGNING_KEY` was put in the environment `release`
    (both set through Latchkey on the Mac; since 2026-11-26 the release secrets are in Azure Key
-   Vault `kv-melisma-release` instead, `docs/development.md`, "Owner setup"). First good runs: `relay image` published `:latest`
+   Vault the release vault instead, `docs/development.md`, "Owner setup"). First good runs: `relay image` published `:latest`
    sha256:35885c897c3383754d4fe8639b32ea365c33b265d3745095044f7705de4423b3, and `cosign verify`
    (identity relay-image.yml on refs/heads/main) passes; `linux release` made `linux-0.1.7`;
    `mac tag` made `mac-0.8.230`.
 1. Codes experiment: done and reported (table under "Open acceptance"). Open: Chase live on 0.8.228
-   or later; the other banks (Capital One, Amex, US Bank, Discover, Fidelity, Schwab); Toni to
+   or later; the other banks (Capital One, Amex, US Bank, Discover, Fidelity, Schwab); the maintainer to
    choose which way to keep (or all three).
-3. End-to-end testing and evals (spec 015, `specs/015-e2e-evals/`): approved and built
-   2026-11-24 (Toni: "build it fully"). Per pull request, `e2e.yml` checks the capabilities the
+3. End-to-end testing and evals (spec 015, `docs/requirements/e2e-evals.md`): approved and built
+   2026-11-24 (decided: "build it fully"). Per pull request, `e2e.yml` checks the capabilities the
    changed files select with a real MCP client through a private relay, on GitHub's Linux runner
    (the relay's own tools; the real Linux program) and Mac runner (the app's real files, shell
    and own-browser tools, served by the Swift host test `E2EHostTests`), and compares every tool
-   with its snapshot (`relay/e2e/toolsnaps`). By hand only (no weekly run and no reminder, Toni
+   with its snapshot (relay/e2e/toolsnaps). By hand only (no weekly run and no reminder, decided
    2026-11-25: "Drop it, keep per-PR checks"), from any clone on an Apple silicon Mac with
    Tart: `macos/scripts/eval-image.sh` once, then `weekly-eval.sh [--send]`: real Claude Code
    (Sonnet, the subscription token) does 20 tasks (4 held out, 3 with planted instructions) 3
@@ -764,51 +766,51 @@ only, never contents.
    back; the offline answer in 29 ms; all 32 Mac tools compared with their snapshots); a changed
    snapshot fails the job VERIFIED (the first runs failed on the missing snapshots, uploaded
    them, and passed once they were committed); image script and eval run VERIFIED for an
-   unlocked test Mac (2026-11-26 and 2026-11-27, local sessions on Toni's Mac: the image made
+   unlocked test Mac (2026-11-26 and 2026-11-27, local sessions on the maintainer's Mac: the image made
    with no person; the evals 20 of 20 tasks every try, spec 016 research §7).
-   Nothing left for Toni: the test Mac run stays in the repository for whoever wants it
+   Nothing left for decided: the test Mac run stays in the repository for whoever wants it
    (`macos/scripts/eval-image.sh` once, then `weekly-eval.sh [--send]`).
-2. Signed updates with Sparkle (Toni, 2026-11-23: "yes, implement sparkle"; spec 001 FR-072 to
-   FR-072d, plan D9): built while Toni was away. The app's update gate (installs only while
+2. Signed updates with Sparkle (decided 2026-11-23: "yes, implement sparkle"; spec 001 FR-072 to
+   FR-072d, plan D9): built while the maintainer was away. The app's update gate (installs only while
    idle), the build number, the update feed (`macos/scripts/appcast.sh`), and the CI release job
-   (`mac-tag.yml`, job `release` on macOS) are in; `mac-build.yml` compiles each macOS change.
+   (`mac-tag.yml`, job `release` on macOS) are in; mac-build.yml compiles each macOS change.
    Set up 2026-11-23 (through Latchkey on the Mac, no value through a session): the update key
    (made with Sparkle 2.10.0's `generate_keys`, private half in the login keychain and the secret
-   `SPARKLE_PRIVATE_KEY`, since 2026-11-26 in Azure Key Vault `kv-melisma-release`, public half in `macos/Config/Base.xcconfig`), the valid "Apple
+   `SPARKLE_PRIVATE_KEY`, since 2026-11-26 in the release Key Vault, public half in `macos/Config/Base.xcconfig`), the valid "Apple
    Development" identity (SHA-1 EC6E5A8C…; a revoked one with the same name was left out) in
    `MAC_CERTIFICATE_P12`/`MAC_CERTIFICATE_PASSWORD`, `MAC_DEVELOPMENT_TEAM`; the environments
    `release` and `production` deploy from `main` only (security review). Open: the first signed
    release installed on the Mac once (it ran 0.8.226; the Mac's updater was never set up), then
-   the next release arriving by itself. To confirm with Toni: building in CI. Hourly checks confirmed (2026-11-23); switch to daily
+   the next release arriving by itself. To confirm with decided: building in CI. Hourly checks confirmed (2026-11-23); switch to daily
    (`SUScheduledCheckInterval` 86400) before Latchkey is announced to other people.
    Afterwards: remove the Mac's updater scripts (`macos/scripts/auto-update.sh`,
    `updater-setup.sh`), and say in README.md that Latchkey updates itself.
 
-0. Sign-in's first real export (spec 013 T11, Toni's step): Latchkey's menu → Export Passwords
+0. Sign-in's first real export (spec 013 T11, the maintainer's step): Latchkey's menu → Export Passwords
    to Latchkey…, one Touch ID. The first try (0.8.175) stopped at the save panel; 0.8.176 fixes
    it (above), tried on TextEdit's save panel, not yet on Passwords'.
    Afterwards: check the log shows the file taken in and deleted, and run the `logins` group
    (its test sign-in step skips once the owner's copies are in). Passkeys wait for the paid
    Apple Developer Program (spec 013 FR-1330).
 1. While locked, Target's search stays empty in Latchkey's own browser (its pages count as
-   hidden to WebKit, and only an undocumented setting changes that, which Toni declined); Claude
+   hidden to WebKit, and only an undocumented setting changes that, which the maintainer declined); Claude
    can still open products and the cart there.
 2. Changing notes with checklists, links, or images: the iCloud.com route was probed on
    2026-11-07 and stopped (spec 002 research, "Notes with checklists through iCloud.com"): the
    approval and the drawing in a hidden view work, but iCloud.com's editor takes no input
-   Latchkey can give it without WebKit's private interfaces. Such notes stay read-only (Toni,
+   Latchkey can give it without WebKit's private interfaces. Such notes stay read-only (decided
    2026-11-07, final: "Read only"). WhatsApp stays read-only from WhatsApp for Mac's database, even when
-   out of date (Toni, 2026-11-07: "better than nothing").
+   out of date (decided 2026-11-07: "better than nothing").
 3. Answering a calendar invitation, live: the code is in (spec 007 FR-705); the test invitation of
    2026-11-07 hadn't reached the Exchange calendar before the event was deleted.
-4. Facebook Messenger is left out for good (Toni, 2026-11-09): Meta ended the Mac app on
+4. Facebook Messenger is left out for good (decided 2026-11-09): Meta ended the Mac app on
    2025-12-15 and has no API for personal accounts, so only the hit-or-miss web page is left.
 5. A downloaded copy on another Mac: the public download was checked on this Mac only (it opens
    after Open Anyway); the first person on another Mac confirms Open Anyway and setup there.
-6. Notarized download (Apple Developer Program, $99 a year): later, Toni's call. Self-updating no
+6. Notarized download (Apple Developer Program, $99 a year): later, the maintainer's call. Self-updating no
    longer needs it (item 2 above).
 
-For Toni (only he can): delete the ~96 old "Latchkey check" test messages in his two
+For the maintainer (only he can): delete the ~96 old "Latchkey check" test messages in his two
 conversations with himself and the WhatsApp test message in his own chat; optionally switch off
 Latchkey's unused Mail permission (System Settings → Privacy & Security → Automation → Latchkey).
 
@@ -828,23 +830,23 @@ error; notes_find with only a bad limit listed the folders and wasn't an error.
 Cloud-first, review fixes (2026-11-23, a second cloud session given the same task, whose own
 implementation was superseded by the one merged below and ported onto it): the infra workflow's
 `configure` failed on every run, since google-github-actions/auth writes its credentials file into
-the checkout and `deploy.sh` refuses untracked files (`.gitignore` now has `gha-creds-*.json`);
+the checkout and deploy.sh refuses untracked files (`.gitignore` now has `gha-creds-*.json`);
 Google accepts GitHub's token only for push, schedule and dispatch runs (a `pull_request_target`
 or `workflow_run` run on main can carry a fork's code); hackernews-admin's IAP tunnel reaches only
 this VM's SSH (a condition on its internal address; an earlier wider grant is replaced); a rerun of
-`gcp-wif-setup.sh` rewrites the provider only when it differs (each write emails Toni). The Linux
+gcp-wif-setup.sh rewrites the provider only when it differs (each write emails the maintainer). The Linux
 program, on a host with the older, mixed cgroup layout, took `/sys/fs/cgroup` (a plain memory file
 system there) for its control groups and every command failed to start ("bad file descriptor",
 found in this cloud VM): it now requires a cgroup v2 file system and otherwise runs without groups,
 saying so. Tests: `deploy/tests/lib_test.sh`, `linux/internal/shell` (both pass in the VM).
 
-Cloud-first (Toni, 2026-11-23: everything happens in cloud sessions except what needs macOS;
+Cloud-first (decided 2026-11-23: everything happens in cloud sessions except what needs macOS;
 the Mac only builds and tests the Mac app): in progress on branch `claude/latchkey-cloud-first-0xfzcv`.
 So far: CI also runs the Linux program's tests and lint, the script tests, and actionlint on
 the workflows (`install-lib.sh`'s idle check read GNU stat wrongly on Linux, so two script tests
-had failed there); `tidy.sh` no longer deletes branches on GitHub (GitHub deletes a merged pull
+had failed there); tidy.sh no longer deletes branches on GitHub (GitHub deletes a merged pull
 request's branch itself). Releases are made on GitHub: `linux-release.yml` tags, signs (`SERVER_SIGNING_KEY`,
-since 2026-11-26 from Azure Key Vault `kv-melisma-release`) and publishes the Linux program whenever linux/ changes on main;
+since 2026-11-26 from the release Key Vault) and publishes the Linux program whenever linux/ changes on main;
 `mac-tag.yml` gives each Mac app change on main its `mac-<x.y.z>` tag; both run in the
 environment `release` and also start on repository_dispatch (`linux-release`, `mac-tag`).
 `release-tag.sh` takes `RELEASE_TAG_ON_MAIN=1` there (a commit on main the tip has moved past;
@@ -859,11 +861,11 @@ previous version when Docker's health check or https://<host>/healthz fails with
 applies configuration (relay.env, compose file, Caddy block, DNS, email domain) and restarts the
 running version, under the updater's lock; image building, the upload over SSH and the
 key-file database copy (long done) are gone. Tested by `deploy/tests/update_apps_test.sh`.
-Infrastructure changes run in `infra.yml` (repository_dispatch `infra` with task `configure` or
+Infrastructure changes run in infra.yml (repository_dispatch `infra` with task `configure` or
 `harden`; environment `infra`), signed in to Google Cloud as `latchkey-infra` through Workload
 Identity Federation; `deploy/gcp-wif-setup.sh` (the owner, once, in Cloud Shell) makes the pool,
 GitHub's provider (this repository and hackernews, on main), `latchkey-infra` and
-`hackernews-admin`. `harden.sh` accepts the owner or exactly `latchkey-infra`; the IAP alert
+`hackernews-admin`. harden.sh accepts the owner or exactly `latchkey-infra`; the IAP alert
 leaves out the owner and both identities, and the sentinel counts their sessions as the owner's
 (OS Login names `sa_<id>`, uids looked up on the server). `ci_tools_test.sh` checks that every
 action is pinned and every releasing, deploying or infrastructure job is in its environment.
@@ -881,19 +883,19 @@ tag that is the newest release (it no longer tags from the Mac). Tested by
 Live checks from the cloud: a fresh cloud session from claude.ai runs the cases with its own
 Latchkey tools (`state-check.sh prompt`, `record`, `merge`; screen state and the focus watcher
 through `shell_run`; docs/cloud-sessions.md, "Live checks"). Merging goes through pull requests
-(rebase), which GitHub deletes after the merge; `tidy.sh` and `loose-ends.sh` recognise rebased
+(rebase), which GitHub deletes after the merge; tidy.sh and loose-ends.sh recognise rebased
 work (`git cherry`). CLAUDE.md and docs/cloud-sessions.md now describe this process, with the
 "Owner setup" list.
 
-The relay's server, locked down and watched (Toni, 2026-11-21: "a high risk target"; docs/threat-model.md
+The relay's server, locked down and watched (decided 2026-11-21: "a high risk target"; docs/threat-model.md
 "The relay's server", plan D29): `deploy/harden.sh` closes SSH to all but Google's IAP tunnel
 with OS Login, gives the VM its own least-privilege account, Secure Boot and automatic updates
 with a nightly reboot when needed, removes unneeded packages and services, puts hackernews (which
 shares the server) in a container without root on its own network, and its deploys become pulls
-by the server; the sentinel and cloud alerts email Toni on anything that shouldn't happen.
+by the server; the sentinel and cloud alerts email the maintainer on anything that shouldn't happen.
 Done live 2026-11-21 (three runs, the last one quiet): only 80 and 443 open (22 to IAP only),
-Secure Boot on, kernel 7.0 with all 65 pending updates, the VM on `relay-vm` (the default account
-lost Editor), 44 locked audit rules, the sentinel's heartbeats in Cloud Logging, five alerts
+Secure Boot on, kernel 7.0 with all 65 pending updates, the VM on its own service account (the
+default account lost Editor), 44 locked audit rules, the sentinel's heartbeats in Cloud Logging, five alerts
 and an uptime check, one test alert sent; the relay shares `latchkey-front` with Caddy only;
 hackernews runs as uid 1000 without capabilities, its GitHub deploy job and SSH secrets removed
 (hackernews 9be196f, which also made its image run as non-root); Caddy moved to the newest 2.x
@@ -901,7 +903,7 @@ by the weekly check. The relay emails the owner on a paired machine, an allowed 
 recovery (spec 001 FR-696 to FR-699a), deployed as 50e1d08. Fixed on the way, each found by the
 live runs or the automated security review: the SSH settings' undo ran out during the updates
 (now applied last and checked), the Caddy check lacked a scratch /data, reruns wrote unchanged
-cloud settings and the SSH permission check counted as a cloud change (each would email Toni),
+cloud settings and the SSH permission check counted as a cloud change (each would email the maintainer),
 the sentinel trusted process names and a host-wide "dpkg is running" flag, and the hub's Close
 returned before a closed connection's last trace line (the long-flaky "traces: directory not
 empty" tests). Live check after: a fresh Claude Code session saw both machines and used a tool.
@@ -909,10 +911,10 @@ All alerts reached the alert address (11 on the first day, from the runs themsel
 false alarm, hackernews's own health check (wget) seen as a foreign program, fixed the same day.
 hackernews's nightly backup was in the locked account's crontab, which lost docker: it now runs
 from /etc/cron.d as root, and a run as cron does it wrote today's copy to its bucket through
-`relay-vm`. Its deploys were checked end to end: back on the previous image, the timer found
+the VM's own account. Its deploys were checked end to end: back on the previous image, the timer found
 CI's newest (9be196f), switched to it and logged it healthy.
 
-Hands-on check of every tool (2026-11-07, Toni: "manual testing, since it looks like the automated
+Hands-on check of every tool (2026-11-07: "manual testing, since it looks like the automated
 testing isn't picking up issues"), through the hosted relay on the installed app, unlocked and
 then locked, with the screen recorded before and after each round (front app, pointer, every
 window and its title): nothing on screen changed in any round. The code audit found nothing
@@ -928,33 +930,33 @@ open the screen tools said the lid was closed; closing the page while locked nam
 of Latchkey's own browser. Not tried: sending in Messages (its test message couldn't be deleted)
 and computer control (the exception, it uses the real pointer).
 
-Facebook Messenger (Toni, 2026-11-04; set aside 2026-11-05 "for another day"): not started, no
-spec yet. Toni's choices so far: read and send; through facebook.com/messages in Safari (check
+Facebook Messenger (decided 2026-11-04; set aside 2026-11-05 "for another day"): not started, no
+spec yet. The maintainer's choices so far: read and send; through facebook.com/messages in Safari (check
 first that all chats show there, Meta recommends Chrome or Edge for encrypted chats); sending
-through Messenger's own functions in the page; the first live send to Jonna Melisma, one message,
-match confirmed with Toni first. Research so far: messenger.com closed in April 2026 and redirects
+through Messenger's own functions in the page; the first live send to a person the maintainer named, one message,
+match confirmed with the maintainer first. Research so far: messenger.com closed in April 2026 and redirects
 to facebook.com/messages; the Messenger Mac app was switched off in December 2025; chats are
 end-to-end encrypted and the web restores history with a PIN; Meta flags automation (Beeper users
-logged out with "automated process detected"), and the account at stake is Toni's whole
-Facebook. Next: Toni opens facebook.com/messages in Safari; Claude reads the page (no clicks or
-typing), then writes spec 013 for Toni's review before any code.
+logged out with "automated process detected"), and the account at stake is the maintainer's whole
+Facebook. Next: the maintainer opens facebook.com/messages in Safari; Claude reads the page (no clicks or
+typing), then writes spec 013 for the maintainer's review before any code.
 
 Notes checklist editing works again (2026-11-06): proven on the real Mac with the five checklist
-cases through `macos/scripts/notes-check.sh` (create, append, edit, tick, untick, delete); Notes
+cases through macos/scripts/notes-check.sh (create, append, edit, tick, untick, delete); Notes
 comes forward for about a second per change.
 
 Messages' window actions work again (2026-11-07): a new group, a like given and taken back, an
 inline reply, an edit, an unsend, deleting a message, naming the group, and deleting whole
-conversations all pass on the real Mac (macOS 27) through `macos/scripts/messages-check.sh`, in
-conversations of Toni with himself, each checked in Messages' database and swept (a search finds
+conversations all pass on the real Mac (macOS 27) through macos/scripts/messages-check.sh, in
+conversations of the maintainer with himself, each checked in Messages' database and swept (a search finds
 none left). The causes: on macOS 27 a message's text is in its input label, the tapback picker
 drops a press made while it slides in, and the edit box is a different field. Naming a group
 needs Messages in front for about a second (its name box takes text only then), guarded like
 Notes (only after a pause in the Owner's input, stopped by it, the front given back; shared code
-in `macos/App/Foreground.swift`). Next on the work list: prove Safari, Reminders, Calendar,
+in macos/App/Foreground.swift). Next on the work list: prove Safari, Reminders, Calendar,
 and WhatsApp groups (Mail while locked is proven, 2026-11-07); then Notes while locked.
 
-Switched off on 2026-11-05 until they work on Toni's Mac (live checks found them broken):
+Switched off on 2026-11-05 until they work on the maintainer's Mac (live checks found them broken):
 Notes' window editing (checklist notes got mangled; such notes are refused again, checklist items
 stay ☐/☑, no ticking) and Messages' window actions (`messages_change`, new groups, inline replies;
 tapbacks didn't land, edits failed, the window jammed). The work list, in order: fix Notes
@@ -963,9 +965,9 @@ Owner (done 2026-11-05: deleted messages leave once WhatsApp for Mac catches up;
 was WhatsApp storing some messages twice, which Latchkey read twice, now read once); prove Safari uploads/downloads/pictures, Reminders' window steps, Calendar through the app,
 WhatsApp groups, Mail while locked; Notes while locked (through iCloud.com; Shortcuts dropped
 2026-11-07). Each is done only once it works on the real Mac, every live test cleans up after itself,
-and nothing runs in the background (Toni, 2026-11-05).
+and nothing runs in the background (decided 2026-11-05).
 
-Notes with checklists, links, or images can be changed now (2026-11-04, Toni: "editing notes
+Notes with checklists, links, or images can be changed now (2026-11-04: "editing notes
 with checklists is not supported? … feels frustrating"): until now Latchkey refused every such
 note, which is most real notes. Such changes go through Notes' own window in the background
 (spec 002 plan D3a, FR-155 to FR-159): text in place, real checklists for `- [ ]`/`- [x]`, and
@@ -977,13 +979,13 @@ only once Notes saved it (0.8.123): with the Mac locked Notes hadn't saved one t
 deletion ("Latchkey check 1104-2355 locked list"); check it's gone after the next unlock. Same day: `notes_find` finds notes whose folder
 was deleted under them (twelve old test notes were invisible to Claude); the screen-state check
 sweeps every "Latchkey check" item on exit, even when stopped, and fails when any is left; the
-end-of-turn hook was removed (Toni).
+end-of-turn hook was removed (maintainer's decision).
 
-Six gaps closed together (2026-11-05, Toni: "add everything missing"), each built by a helper,
+Six gaps closed together (2026-11-05: "add everything missing"), each built by a helper,
 merged and tested together (33 tools now):
 - Calendar: answer invitations, invite and remove people, change others' events (spec 007
   FR-704 to FR-708, plan D7), through EventKit calls Apple doesn't document: an exception to
-  Constitution IV approved by Toni 2026-11-05, recorded in the constitution. Works in every
+  Constitution IV approved 2026-11-05, recorded in the constitution. Works in every
   screen state; checked live unlocked (nothing sent to anyone).
 - Safari: key presses, hover, scroll, dropdowns, file upload, download, and a picture of the
   page when the screen can't be captured (spec 005 FR-433 to FR-440). Checked in real Safari
@@ -998,8 +1000,8 @@ merged and tested together (33 tools now):
   after the indent; fixed by letting Reminders' saved data decide. Sections can only be checked
   in a list that already has one (Latchkey can't make sections).
 - Mail: send, reply, forward, and draft without Mail's window, through a temporary signature
-  (spec 008 FR-841 to FR-845); the forward that added Toni to To is fixed. Checked unlocked;
-  sending while locked works too (2026-11-07, 0.8.142: a test email to Toni sent with the Mac
+  (spec 008 FR-841 to FR-845); the forward that added the maintainer to To is fixed. Checked unlocked;
+  sending while locked works too (2026-11-07, 0.8.142: a test email to the maintainer sent with the Mac
   locked reached Sent and the Inbox, then was deleted).
 - Messages: new groups, tapbacks, inline replies, edit, unsend, delete a message or
   conversation; reading shows tapbacks, replies, edits (spec 002 FR-170 to FR-178). Through
@@ -1010,23 +1012,23 @@ merged and tested together (33 tools now):
   groups and people without a known number not yet.
 
 Next: changing notes with checklists, links, or images, in any screen state, through iCloud.com
-in Latchkey's own browser (in the background, so it disturbs no one). Shortcuts is dropped (Toni, 2026-11-07: "this approach is broken, remove it"): Latchkey
+in Latchkey's own browser (in the background, so it disturbs no one). Shortcuts is dropped (decided 2026-11-07: "this approach is broken, remove it"): Latchkey
 could add a signed shortcut by itself in the background, and its Notes action made the note, but
 running it put up "Allow … to output 1 note?" on the Owner's screen, and deleting a shortcut
 needs Shortcuts' window in front. Don't propose Shortcuts again.
 
-Releases are tags on commits (2026-11-04, Toni): parallel sessions bumped the version file to the
+Releases are tags on commits (2026-11-04): parallel sessions bumped the version file to the
 same number, and a rebase drops the second, identical bump without a conflict, so two different
 builds could both be 0.8.112. Now `make -C macos install` and `make -C linux release` tag the
 commit (which must be origin/main) with the highest `mac-` / `linux-` tag + 1 and push the tag;
 GitHub refuses a taken name and the next number is tried; a commit already tagged keeps its number.
 No version lives in files any more. Tested in `scripts/tests/release_tag_test.sh` (two sessions
 racing for one number). The installed 0.8.112 was tagged by hand as the starting point, so the
-first install with tags is 0.8.113. Tags are named for their program (Toni): `mac-0.8.113`,
+first install with tags is 0.8.113. Tags are named for their program (maintainer's decision): `mac-0.8.113`,
 `linux-0.1.5`; the first Mac tags were renamed from `v…`. Linux 0.1.4 is the bridge: published
 as `server-v0.1.4` (the only name 0.1.3 looks for) with an updater that reads both names, and
 tagged `linux-0.1.4` too so the count goes on; from 0.1.5 Linux releases are `linux-…`. Check
-that purkki reports 0.1.4 within a day (Claude's machine list shows its version).
+that the home server reports 0.1.4 within a day (Claude's machine list shows its version).
 
 Reading cloud-only files fixed in Mac 0.8.112 (2026-11-04, bug report: Claude couldn't read a
 green card photo in OneDrive): `files_read` asked macOS to download such files with the iCloud
@@ -1044,7 +1046,7 @@ by the relay and shown on the account page. Its deploy found that the code scann
 WhatsApp's queries and the Safari dialog note since they were written (fixed SQL pieces and text for
 Claude, no hole); they carry reviewed markers now (Mac 0.8.110, no behavior change).
 
-Follow-up of 2026-11-04 (Toni: "fix everything, properly"), in Mac 0.8.109 and Linux 0.1.1:
+Follow-up of 2026-11-04 (decided: "fix everything, properly"), in Mac 0.8.109 and Linux 0.1.1:
 a page's own dialogs never make Claude wait (spec 005 FR-432): reproduced in real Safari, a
 dialog waiting in a tab blocks every script, its text, and its source until the 25 s limit
 (the likely cause of the locked-Mac stalls); now Latchkey's answers go into the page with each
@@ -1070,7 +1072,7 @@ option); an app's window lists each element once (table cells were listed two or
 drops repeated labels, 300 at a time with `after`, `within`, `match` from the same look, and says
 when it was cut (spec 006 FR-511 to FR-514). The two checkboxes checked after one press stay
 unexplained: a background press changed nothing else on the test page; answers now name such
-changes. Toni chose to let Claude reach his own Safari tabs like its own (spec 005, in progress
+changes. The maintainer chose to let Claude reach his own Safari tabs like its own (spec 005, in progress
 in 0.8.106, below) and to add `latchkey_log` (below). Checked live through the hosted relay: the
 window list (each table cell once, labels deduped), `match`, zsh here-documents and `=(…)`,
 `latchkey_log`, and in 0.8.104 the focus check refusing every typing (an app behind others names
@@ -1081,16 +1083,16 @@ typed and read back, typing into a page's text refused with where the focus is, 
 changing nothing else, and keys without a reference saying where they went. 0.8.107 and 0.8.108 look again
 when a first look finds only the title bar (an app that had not built its tree yet); a cold FormLab's first look listed its whole page live on 0.8.108.
 
-WhatsApp (spec 012) rebuilt 2026-11-04 without a device of Latchkey's own (Toni). The first
+WhatsApp (spec 012) rebuilt 2026-11-04 without a device of Latchkey's own (maintainer's decision). The first
 design (0.8.101 to 0.8.114) linked Latchkey as its own WhatsApp device: it sent text, a photo and
 a file live, then its first history sync paused, it dropped after two app installs, and WhatsApp
-logged out every linked device of Toni's account (his phone stayed logged in), most likely
+logged out every linked device of the maintainer's account (his phone stayed logged in), most likely
 because of two days of link codes and test devices on his number (research.md). Now three
 tools: `whatsapp_find` and `whatsapp_read` read WhatsApp for Mac's database while that app runs,
 else the Owner's WhatsApp Web tab in Safari, else the database marked out of date;
 `whatsapp_send` sends only through WhatsApp Web in Safari (people and groups, text, photos,
 files; never selecting, reloading, or closing the tab), opening it in a background tab when none
-is open (Toni: WhatsApp for Mac's window, a fallback for a few hours, worked only unlocked and was
+is open (decided: WhatsApp for Mac's window, a fallback for a few hours, worked only unlocked and was
 removed). The old device's stored data is deleted
 at the first start. Checked live through the hosted relay on 2026-11-04 (0.8.116, 0.8.117): a
 send through the Safari tab (read within seconds), reading by number (WhatsApp for Mac now files
@@ -1107,7 +1109,7 @@ instead of as missing, so `call_KBYG…` stops failing installs, without writing
 the log for it. No relay change. Unit tests pass (8 new); whether the old quit falls in the
 call's window is first seen at the next install.
 
-Latchkey's log for Claude (Toni, 2026-11-03; spec 001 FR-662 to FR-665, plan D26): a new
+Latchkey's log for Claude (decided 2026-11-03; spec 001 FR-662 to FR-665, plan D26): a new
 read-only tool, `latchkey_log`, gives Claude the Mac app's own recent log lines (default 200, up
 to 1000, optionally one kind such as connection or permissions), so Claude can find out why
 something in Latchkey isn't working. Only the app's events that macOS's log has in public; never
@@ -1116,7 +1118,7 @@ Lines come from the activity log, so they survive restarts, but only events reco
 version on (older ones can't be told apart). Installed in 0.8.104 and checked live.
 The relay needs no change. Linux servers offer it too (below).
 
-Latchkey's log on Linux servers (Toni, 2026-11-03, "fix everything, properly"; spec 010 FR-1052
+Latchkey's log on Linux servers (decided 2026-11-03, "fix everything, properly"; spec 010 FR-1052
 to FR-1056, plan D15): servers now offer `latchkey_log` with the Mac's arguments and answer,
 always, refused while paused. Lines come from the server's own activity log, where each event
 now carries a kind and the words Claude may see (the systemd journal was weighed and rejected:
@@ -1125,9 +1127,9 @@ research.md). Kept from Claude: the relay's address ("Connected as …"), call I
 (described by kind, else only the error's type, never its message; security review); new events say why a server
 disconnects or won't connect, pause and resume, and failed update checks. Tests, lint, the
 Debian container tests, and the end-to-end check (a real MCP client reading the server's log)
-pass. Not yet shipped: bump `linux/VERSION`, release, and a live call on a paired server.
+pass. Not yet shipped: bump linux/VERSION, release, and a live call on a paired server.
 
-Browser reaches the Owner's tabs (Toni, 2026-11-03: "Claude needs to be able to access my tabs
+Browser reaches the Owner's tabs (decided 2026-11-03: "Claude needs to be able to access my tabs
 and windows just like its own"; spec 005 FR-424 to FR-431, plan D8): `browser_read tabs` lists
 every tab of every Safari window (title, address, window, which is in front, Claude's own),
 each named like `4213.2`; `browser_read tab` (or `browser_act tab`) makes Claude work in that tab,
@@ -1135,12 +1137,12 @@ in the background, for reading, back, pictures, clicks, typing, scripts, and clo
 same checks and click rules as its own tab, until it opens a url (always in its own tab) or
 picks another. While locked, Claude's own page stays in Latchkey's own browser and the Owner's
 tabs are tried through Safari. Unit tests and the real Safari check pass (the check also read
-one of Toni's tabs, reading only); installed in 0.8.106 and checked through the hosted relay
-while locked: listed Toni's three tabs and read one, nothing brought forward.
+one of the maintainer's tabs, reading only); installed in 0.8.106 and checked through the hosted relay
+while locked: listed the maintainer's three tabs and read one, nothing brought forward.
 
-Releases, terms and privacy, and the directory listing are much later (Toni, 2026-10-22).
+Releases, terms and privacy, and the directory listing are much later (decided 2026-10-22).
 
-Add Latchkey to Claude (Toni, 2026-11-01; spec 001 FR-627, FR-628, FR-659, FR-660, spec 009
+Add Latchkey to Claude (decided 2026-11-01; spec 001 FR-627, FR-628, FR-659, FR-660, spec 009
 FR-915, plan D25): an Add to Claude button opens Claude's add-connector dialog with Latchkey and
 the relay's address filled in (claude.ai's documented install link; the Owner still clicks Add,
 Add, Connect, signs in, and clicks Allow), next to written steps and the way by hand. It is the
@@ -1156,25 +1158,25 @@ in: the README starts with the app and Claude Code (no relay first), the guide q
 for `open`, copies the address for the person, names the real menu items, and checks the step's
 checkmark, and the app and page number the steps and say what each Add and passkey is.
 Google's free trial: Google stops what was made during a trial at day 90 unless the account
-was upgraded (Google's docs); the guide tells the Owner so, without making them upgrade (Toni).
+was upgraded (Google's docs); the guide tells the Owner so, without making them upgrade (maintainer's decision).
 Fixed 2026-11-07: relay `hub` TestToolsAreStoredOnlyWhenTheyChange was flaky because it counted
 "tools changed" notices as soon as the Mac showed online, a moment before the connect's own
 notice; it now counts from after that notice (proven by delaying the notice: the old test then
 fails every time, the new one passes).
 
 The Latchkey plugin (spec 011) was built and shipped on 2026-11-01, then withdrawn the same day
-(Toni): it didn't help anyone get started and made no difference once Latchkey was connected.
+(maintainer's decision): it didn't help anyone get started and made no difference once Latchkey was connected.
 The plugin and its catalog are deleted; the relay guide is back at docs/setup-with-claude.md.
-Toni removed the plugin and the `tonimelisma/latchkey` marketplace from his Claude account.
+The maintainer removed the plugin and the `tonimelisma/latchkey` marketplace from his Claude account.
 
-Every use case in every screen state (Toni, 2026-11-01: "half of Latchkey doesn't work with the
-lid closed"). `macos/scripts/state-check/` lists 98 use cases (`cases.json`) and tries them all
+Every use case in every screen state (decided 2026-11-01: "half of Latchkey doesn't work with the
+lid closed"). macos/scripts/state-check/ lists 98 use cases (`cases.json`) and tries them all
 through the hosted relay with real Claude Code in the state the Mac is in; results go to
 `docs/use-cases.md`. First runs, lid open and lid closed, found: Messages couldn't send to any
 existing conversation (the database now files them as `any;-;…`, which Messages' scripting
 doesn't know; fixed in 0.8.64, checked live); Mail refused to write with the display off
 although its window works with the lid closed while unlocked (checked live with
-`macos/scripts/mail-check.sh`: sent, with a file, and a draft; since 0.8.65 only the lock stops
+macos/scripts/mail-check.sh: sent, with a file, and a draft; since 0.8.65 only the lock stops
 it, with a plain answer); Mail refused a recipient shown by the account's full name (fixed in
 0.8.64); a Safari click to another site lost Claude's tab (since 0.8.66 the clicked link's
 address counts on any site when the page didn't change it in the click; checked with the
@@ -1193,7 +1195,7 @@ times out while the Mac is locked says so (checked live). 0.8.70: Mail answers a
 identical copy in another mailbox (2% of a month's mail was blocked). 0.8.71: a PDF without text
 is shown as a page picture (checked live). 0.8.72: Claude can close its own Safari page
 (spec 005 FR-419).
-2026-11-02 (Toni: "we're not circumventing security"): the closed-lid hold is gone (0.8.73) and a
+2026-11-02 (decided: "we're not circumventing security"): the closed-lid hold is gone (0.8.73) and a
 sleeping display is no longer woken; Latchkey never holds off the idle lock (spec 001 FR-661).
 Instead, while locked: the browser tools use Latchkey's own WebKit browser with a memory-only,
 SameSite=Lax copy of Safari's cookies (0.8.75 to 0.8.78; checked live locked: open, read, link
@@ -1211,18 +1213,18 @@ reopened at 19:33. Since 0.8.82 (spec 008 FR-838) a try that sent nothing keeps 
 queued (again in five minutes and at the next unlock, three tries), and the notification is
 plain sentences; 0.8.83 (security review): a failure after Send was pressed says Mail may have
 sent it and is never tried again. `state-check.sh run` now records what took focus, raised a window, moved the
-pointer, or used the clipboard (`focus-watch.swift`, `focus.log` per state, each group's times).
+pointer, or used the clipboard (focus-watch.swift, `focus.log` per state, each group's times).
 Unlocked run on 0.8.83 (2026-11-02 19:49, one group at a time): 101 of 103 work; a forward to
 the Owner's own address was refused because Mail took over 4 s to name the accounts and the
 list from Mail's files has no full names (fixed in 0.8.84: sending asks Mail with its usual
 wait, and when Mail doesn't answer the last list it gave is used); calendar repeat again
 inconclusive: the repeat is set (read back live), but the change answer didn't say so; since 0.8.85 creating and changing an event say how it repeats. Only Mail put windows on top and used the clipboard; Safari (tab mode, Safari
-behind) didn't come forward. The three groups (gets in the way, background, works locked) and the experiments for moving the first into the second are in `docs/screen-states.md`; `docs/use-cases.md` now has the unlocked run on 0.8.83 and the lid-closed-locked run on 0.8.78 (the older lid-closed column, app 0.8.62, wasn't kept). Test leftovers (2026-11-02, Toni: "this is production data"): ten Notes folders, a contact card
+behind) didn't come forward. The three groups (gets in the way, background, works locked) and the experiments for moving the first into the second are in `docs/screen-states.md`; `docs/use-cases.md` now has the unlocked run on 0.8.83 and the lid-closed-locked run on 0.8.78 (the older lid-closed column, app 0.8.62, wasn't kept). Test leftovers (2026-11-02: "this is production data"): ten Notes folders, a contact card
 and group, and test emails had piled up; all removed and checked in each app's own data. Notes
 doesn't save the deletion of a folder that still holds notes (it comes back after Notes
 restarts); since 0.8.89 Latchkey deletes the notes first and says "deleted" only once Notes'
 database agrees, and every `state-check.sh run` ends with a "Nothing left behind" group that
-finds and removes anything with the run's tag. Toni chose (2026-11-02) to move all four "gets in the way" items to the background: shell open behind (0.8.86), Safari pictures only while hidden (0.8.90, spec 005 FR-423), Mail without coming forward at all (0.8.96, spec 008 FR-840: the message made, given files, sent, or saved by Mail's scripting, its text typed with Mail behind; 0.8.91 had short moments in front), computer control per app (0.8.93, spec 006 FR-510: computer_look and computer_act take app; press, type, and key go to that app alone, its window pictured while covered).
+finds and removes anything with the run's tag. The maintainer chose (2026-11-02) to move all four "gets in the way" items to the background: shell open behind (0.8.86), Safari pictures only while hidden (0.8.90, spec 005 FR-423), Mail without coming forward at all (0.8.96, spec 008 FR-840: the message made, given files, sent, or saved by Mail's scripting, its text typed with Mail behind; 0.8.91 had short moments in front), computer control per app (0.8.93, spec 006 FR-510: computer_look and computer_act take app; press, type, and key go to that app alone, its window pictured while covered).
 Mail's alert "could not be moved to the mailbox <the Owner's account> … Invalid base64 string for MIME
 content" (after `mail-check.sh send` with a file at 22:12 PT on 2026-11-01, lid closed) came from
 Mail saving its own sent copy to Exchange after the message was delivered; Latchkey never writes
@@ -1236,7 +1238,7 @@ default button (like this one; 0.8.88 after a security review) is pressed, Claud
 with its buttons, for someone at the Mac. Not seen live yet (needs Mail to show such an alert).
 2026-11-03: a send started seconds before the Mac locked froze Mail (its compose engine waits
 for a window it can't draw behind the lock) until Mail was restarted; since 0.8.100 the lock is
-checked again right before making, sending, or saving the message. `screen-state.swift` now calls
+checked again right before making, sending, or saving the message. screen-state.swift now calls
 a locked Mac with its display asleep "locked", not "screen asleep". Locked run on 0.8.100 (lid open, display asleep, 2026-11-03): all 89 cases outside Mail and computer control work, and the closing sweep found nothing left behind.
 A reply or forward with files still brings Mail forward for the paste (under a second): tried
 2026-11-03, attaching by Mail's scripting erases a reply's quoted original, so it stays a paste.
@@ -1244,21 +1246,21 @@ Lid closed and still unlocked (2026-11-03 21:08, app 0.8.103): 107 of 108 work, 
 refused plainly (an attachment Mail hadn't downloaded); Mail never came forward; the sweep left
 four test emails unread in Deleted Items, so it now marks every one read too.
 The display asleep on an unlocked Mac is no longer a state of its own: it lasts only the minutes
-before the screen lock and never came up in a day of waiting (Toni dropped it, 2026-11-04), so
+before the screen lock and never came up in a day of waiting (the maintainer dropped it, 2026-11-04), so
 the table is complete with four states. A click to another site in real Safari keeps
 Claude's tab, and back returns (checked live through Latchkey on 0.8.100, 2026-11-03;
-`safari-check.sh` itself would ask the Owner to let the terminal control Safari). The full suite's web-page and shell timing tests fail while
+safari-check.sh itself would ask the Owner to let the terminal control Safari). The full suite's web-page and shell timing tests fail while
 the Mac is under heavy load and pass run alone.
 
-README rewritten as a short product page (Toni, 2026-11-01): the promise, a drawing of a phone
+README rewritten as a short product page (decided 2026-11-01): the promise, a drawing of a phone
 chat (docs/images/phone-chat.svg), five steps (get a relay, sign up, macOS's permissions, add
 to Claude, ask), what you can ask, how you stay in charge, links.
 The details moved to docs/how-it-works.md and docs/development.md. Until the first release it asks
 people to watch the repository for releases; the journey it describes (download, Touch ID
-account, add to Claude) needs the notarized download. Nobody else signs up on Toni's relay
-(Toni, 2026-11-01): everyone sets up their own with Claude Code.
+account, add to Claude) needs the notarized download. Nobody else signs up on the maintainer's relay
+(decided 2026-11-01): everyone sets up their own with Claude Code.
 
-Several machines and Linux servers (spec 010; Toni asked on 2026-10-31 for plan and build in one
+Several machines and Linux servers (spec 010; the maintainer asked on 2026-10-31 for plan and build in one
 go). Built 2026-11-01: one account pairs any number of Macs and headless Linux servers behind the
 one connector; a tool both kinds offer is one tool with "On a Mac" / "On a Linux server" parts
 and a `machine` argument; the relay's `machines` tool lists the machines; every answer names the
@@ -1278,19 +1280,19 @@ the code; rerun after a restart). Shipping: see the next item.
 Spec 010 shipped 2026-11-01: relay deployed (d242688); `server-v0.1.0` published on GitHub
 (Intel and Arm, signed); app 0.8.61 installed (paired, keep-awake on, helper running, all 689
 calls match the relay's audit). Live check through the hosted relay with a fresh Claude Code
-session: `machines` lists Toni's Mac, and `shell_run` without a machine name ran on it and ended
-with the Mac's state line. On Toni's Google VM (Ubuntu 24.04, Intel) the install line from GitHub
+session: `machines` lists the maintainer's Mac, and `shell_run` without a machine name ran on it and ended
+with the Mac's state line. On the maintainer's Google VM (Ubuntu 24.04, Intel) the install line from GitHub
 downloaded the release, checked it, and showed a pairing code; it was not approved and the
 unfinished install was removed (nothing is left on the VM; it can be paired the same way any
 time).
 
-Toni's home server purkki (Ubuntu 26.10, Intel, passwordless sudo) paired 2026-11-01 with the
+A Linux home server paired 2026-11-01 with the
 install line and the code typed on `/link`; its service runs. Live check through the hosted relay
-with a fresh Claude Code session: `machines` lists the Mac and purkki, both online; on purkki
+with a fresh Claude Code session: `machines` lists the Mac and the server, both online; on the server
 `uname`, `uptime`, and `sudo -n whoami` (root) ran, and nothing was left running; a command without
 a machine name was refused with both machines listed.
 
-Relay web pages redone 2026-11-01 (spec 001 FR-650 to FR-658), after Toni found the account page's
+Relay web pages redone 2026-11-01 (spec 001 FR-650 to FR-658), after the maintainer found the account page's
 top cut off and the code field misdrawn: pages center with auto margins and can always be scrolled
 to the top; the account page has Machines, Add a machine (the Linux install line and the connector
 address with copy buttons), Claude, Recent activity (last 10), and Account; the activity page lists
@@ -1298,32 +1300,32 @@ tool calls and the Owner's account events together, 50 at a time; connecting a m
 account page with the machine named and marked; times in the viewer's time zone. The browser test
 checks every page at 320, 375, and 1280 px. Then two visual reviews (Claude's and an independent reviewer's, from screenshots of every page) led to contrast fixes, distinct success/warning/error messages, confirmations before removing, Cancel on approval pages, day headings in the activity, and honest status for a just-connected machine (research.md). There is no Mac app download yet, so Add a machine
 links to the README's Get started.
-Open (later, for Toni): service, container, package, process, and network tools for servers
+Open (later, for the maintainer): service, container, package, process, and network tools for servers
 (left out of this spec); a direct machine-to-machine file copy; distributions whose sudo uses
 pam_systemd are unverified for stopping sudo's leftovers.
 
-Easy relay setup (Toni, 2026-10-31; to become its own spec, 009): a person with no technical
+Easy relay setup (decided 2026-10-31; to become its own spec, 009): a person with no technical
 background but a Claude subscription gets their own relay. Decided: Claude Code sets it up and
 guides them, on free hosting where possible (Google Cloud, AWS, or similar); a personal relay
 needs no email server (the first sign-up enters a setup code; email stays optional for shared
 relays); relay images on ghcr.io; Apple's Developer Program (signed, notarized app that updates
 itself) later. Research so far (one-click hosts compared: Railway, Render, Fly.io; passkeys work
 on platform addresses on the Public Suffix List; moving to a custom domain later invalidates
-passkeys) and the free-cloud research are in specs/009-easy-relay-setup/research.md. Toni added: one path
+passkeys) and the free-cloud research are in docs/research/2026-10-31-easy-relay-setup.md. The maintainer added: one path
 that works end to end with minimal hassle for non-technical people, and everything customizable
 for technical ones (own VPS, domain, Railway, email server); Podman runs and updates the relay
 on a server. Spec 009 and the guide Claude Code follows (docs/setup-with-claude.md) are drafted
-for Toni's review. Default host: Google Cloud's free server (Toni, 2026-10-31). Lost passkeys are
-replaced through Claude Code with a one-time recovery code (Toni). The repository is public
+for the maintainer's review. Default host: Google Cloud's free server (decided 2026-10-31). Lost passkeys are
+replaced through Claude Code with a one-time recovery code (maintainer's decision). The repository is public
 (2026-10-31). Plan and tasks written
-(specs/009-easy-relay-setup/plan.md, tasks.md). Built (0.8.60, 2026-10-31): the relay's setup
+(docs/design/easy-relay-setup.md, tasks.md). Built (0.8.60, 2026-10-31): the relay's setup
 code (no email server needed), the operator's recovery-code command, the ready signal for
 Podman's update rollback, a database copy before migrations, the deploy publishing images for
 Intel and Arm servers, the self-hosting docs, and the app's "Copy Request" for Claude Code in
 setup; the session cookie was already host-bound. Tested: unit tests, and real Chrome claiming a
-relay with its setup code and recovering with the operator's code. Toni granted image publishing
+relay with its setup code and recovering with the operator's code. The maintainer granted image publishing
 and made the image public (2026-10-31); the relay is deployed and `ghcr.io/tonimelisma/latchkey-relay`
-has `latest` for Intel and Arm. The guide ran for real (T9, `relay/cmd/guidecheck`) in a throwaway
+has `latest` for Intel and Arm. The guide ran for real (T9, relay/cmd/guidecheck) in a throwaway
 Google Cloud project: the relay answered with a Let's Encrypt certificate for its sslip.io name
 about 3 minutes after the server was created; claimed with its setup code in headless Chrome, a
 pretend Mac paired, Claude Code read the battery through it; sign-up then closed; the guide's
@@ -1332,24 +1334,24 @@ one by itself. The project and its budget alert were deleted. Found and fixed in
 Compute Engine needs a minute after it is turned on, the first start takes about 3 minutes, and
 `gcloud compute ssh` needs `--quiet`. Still to check on a fresh Google account: whether the free
 server's address costs nothing, and whether the trial must be upgraded. The test's nine image
-versions (tag `guidetest`) were deleted with Toni's OK (the GitHub CLI now also has
+versions (tag `guidetest`) were deleted with the maintainer's OK (the GitHub CLI now also has
 `delete:packages`); the registry holds only real releases. Open: checking on a fresh Google
 account that the free server's address costs nothing and whether the trial must be upgraded.
 
-Nothing left behind (Toni, 2026-10-27; app 0.8.32): after headless Chrome ran two days and
+Nothing left behind (decided 2026-10-27; app 0.8.32): after headless Chrome ran two days and
 `/tmp` filled with a session's downloads, a Shell command's leftovers are stopped when it
 finishes (its terminal session, its family followed every half second, and programs using its
 scratch folder) unless Claude asks to keep them (`keep_minutes`, renewed by checking, 24 hours
 at most); each command has a scratch folder (`TMPDIR`) moved to the Trash afterwards; writes
 outside scratch, the command's folder, Downloads, package caches, and declared `writes` fail
 (macOS's sandbox), shell startup files, launch agents, login items, `~/.ssh`, and git hooks only when declared; what
-is left goes to Claude in the answer and to the Activity window's Left Behind view; Toni is
+is left goes to Claude in the answer and to the Activity window's Left Behind view; the maintainer is
 notified only of undeclared changes to launch agents, login items, or startup files and of
 processes that won't stop. Also: Notes deletes folders; Messages copies go once sent; Claude's
 Safari window closes after 30 minutes unused; things made through the tools are on the list.
 Specs 004 FR-313 to FR-326, 001 FR-640 to FR-643, 002 FR-152 and FR-153, 005 FR-411. A scratch
 shell in a throwaway Linux container was left out. The gaps are closed since app 0.8.39
-(Toni, 2026-10-28; spec 004 FR-327 to FR-329): a quick double fork is found by a mark its fence
+(decided 2026-10-28; spec 004 FR-327 to FR-329): a quick double fork is found by a mark its fence
 carries; opening apps, files, or links (`open`) and scripting other apps (`osascript`) need
 `uses`; changing settings (`defaults write`) needs the domain's file in `~/Library/Preferences` in `writes` (never Latchkey's own); launchd
 already refused jobs from inside the fence. Same release (spec 007 FR-713, FR-723): Reminders
@@ -1371,12 +1373,12 @@ since 0.8.46 Claude's own window is found again by its tabs when Safari restarts
 back (only closed, never reused); Claude's tab is then left alone and noted.
 
 All capabilities are built and checked live (app 0.7.4, 2026-10-22; current app 0.8.13, installed with `make -C macos install`), through the hosted relay with
-a fresh Claude Code session on Toni's real Mac: Notes (read, checklists, create/append/edit/
+a fresh Claude Code session on the maintainer's real Mac: Notes (read, checklists, create/append/edit/
 delete a test note), Messages (conversations, read with names and "not instructions" marking,
-search, one test message with an image sent to Toni's own address), Files (list, search, write/
+search, one test message with an image sent to the maintainer's own address), Files (list, search, write/
 edit/read/trash a test file), Shell (output, background job, answering a prompt), Browser
-(open, read, click, tabs, back, window screenshot in Toni's Safari), Computer control
-(screenshot 1568×1018, front window elements, apps, pointer move; no clicks on Toni's screen).
+(open, read, click, tabs, back, window screenshot in the maintainer's Safari), Computer control
+(screenshot 1568×1018, front window elements, apps, pointer move; no clicks on the maintainer's screen).
 The Mac state line appears in every result (it reported the battery warning at 15%).
 
 00. **Audit trail without gaps (spec 001 FR-630 to FR-637) and the OAuth server on zitadel/oidc:
@@ -1399,55 +1401,55 @@ The Mac state line appears in every result (it reported the battery warning at 1
    start (two needless keep-awake events at the relay per start); Messages attachment copies in
    ~/Pictures/Latchkey were cleared only when the next attachment was sent (now at start and
    hourly). Ideas for keeping Claude's sessions from leaving things behind:
-   docs/ideas/leftovers.md (for Toni).
+   docs/ideas/leftovers.md (for the maintainer).
 0. Spec 007 (Calendar, Reminders, Contacts, Location & Maps) is built and installed (app 0.8.16,
    2026-10-26): 8 new tools, 23 in all, through EventKit, Contacts, Core Location, and MapKit;
    weather left out (needs a paid developer account). Checked live through the hosted relay: all
    23 tools listed; Calendar, Reminders, and Location answer at once with what to allow; a
-   coffee search near Walnut Creek and the Contacts overview (280 contacts) worked; directions
+   coffee search near the Mac and the Contacts overview (280 contacts) worked; directions
    to a place by name failed in 0.8.15 (Apple's geocoder takes addresses only) and now fall back
    to a place search (0.8.16).
-   After Toni allowed Calendars, Reminders, and Location (app 0.8.18), a fresh Claude Code
+   After the maintainer allowed Calendars, Reminders, and Location (app 0.8.18), a fresh Claude Code
    session through the hosted relay: listed 8 calendars and found free time; created, moved
    (length kept), and deleted a test event with an alert; created, completed, and deleted a test
    reminder; created, found by phone digits, and deleted a test contact; read the Mac's address
    (about 40 m). Nothing was left behind. The new contact's id changed within seconds (iCloud
    sync, apparently), so the first delete answered "search again" and the second worked.
-   Open for Toni's review: deleting reminder lists and changing contact groups are not offered
+   Open for the maintainer's review: deleting reminder lists and changing contact groups are not offered
    (research.md). Keep-awake was off: the helper started 2026-10-25 kept running across later
    installs, re-read its own replaced file for the signature check (UNIX error 2), and refused
    every app connection. Fixed in 0.8.19 (read once at start; ends itself when replaced; the app
-   retries); Toni restarted the old helper (launchctl kickstart, 2026-10-27); SleepDisabled is 1 again. Since 0.8.20 (FR-620) the keep-awake decision, the helper, the connection, sleep and wake, and permissions are in macOS's log (plan D16). The
+   retries); the maintainer restarted the old helper (launchctl kickstart, 2026-10-27); SleepDisabled is 1 again. Since 0.8.20 (FR-620) the keep-awake decision, the helper, the connection, sleep and wake, and permissions are in macOS's log (plan D16). The
    state line's "not approved in System Settings" also covers a helper that doesn't answer; Calendars'
-   Allow… showed nothing in 0.8.16 (Toni then allowed both in System Settings; since 0.8.17 the
+   Allow… showed nothing in 0.8.16 (the maintainer then allowed both in System Settings; since 0.8.17 the
    button logs macOS's answer and opens System Settings when no question appears).
    The activity log kept forever (item 12) is on main and installed with app 0.8.18.
-1. Toni reviews specs 003–006 (built without review stops, at Toni's request).
+1. The maintainer reviews specs 003–006 (built without review stops, at the maintainer's request).
 2. When the repository goes public: turn on GitHub private vulnerability reporting
    (`gh api -X PUT repos/<owner>/latchkey/private-vulnerability-reporting`), which SECURITY.md
    points to. GitHub offers it only for public repositories.
 3. ~~Dependency scanning~~: done 2026-10-23 with the rest of the hardening (abuse limits,
    headers, container, `make security` gating deploys, CI, Dependabot, pinning; see
    docs/best-practices.md §4 and §7). Watch the first CI run and Dependabot's first proposals.
-4. ~~End-to-end encryption between Claude and the Mac~~: closed 2026-10-29 (Toni): not
+4. ~~End-to-end encryption between Claude and the Mac~~: closed 2026-10-29: not
    possible, since Claude's custom connectors send plain bearer-token requests with no inner
    layer to encrypt or sign (research in docs/best-practices.md §4). Not pursued.
 5. ~~Whole-repository security scan~~: done 2026-10-24. Threat model (docs/threat-model.md),
    then Anthropic's Claude Security scan twice at high effort: 57 findings (none critical or
    high) that merge into about 25 issues, each fixed with a failing test first (app 0.8.6).
    Semgrep (with Latchkey's own rules), ShellCheck, OSV-Scanner, and a Sparkle advisory check
-   now gate every deploy. Choices Toni made are in docs/decisions.md (2026-10-24).
-   Toni decided (2026-10-24): `golang.org/x/net` stays a direct relay dependency; the pairing
+   now gate every deploy. Choices the maintainer made are in docs/decisions.md (2026-10-24).
+   The maintainer decided (2026-10-24): `golang.org/x/net` stays a direct relay dependency; the pairing
    and the activity log's key move to the app-only keychain together with notarized releases
    (until then another program gets a macOS prompt, not a hard refusal).
-   Live check passed 2026-10-24 after Toni paired again: a fresh Claude Code session through the
+   Live check passed 2026-10-24 after the maintainer paired again: a fresh Claude Code session through the
    hosted relay saw all 15 tools and the Mac state line, Browser refused `javascript:` and
    `file:` with the http/https message, and Files listed the home folder. On the Mac, the old
    activity log file is gone and the new one is updated and holds no readable text.
 6. ~~Second security review~~: done 2026-10-25. Six reviewers, one per trust boundary, checked
    against the MCP security pages, RFC 9700 and OWASP's MCP Top 10: nothing critical or high
    open, no path between accounts. About 40 medium and low issues fixed test-first in the relay,
-   the app and the deploy scripts (docs/decisions.md, 2026-10-25). Toni decided: the Allow page
+   the app and the deploy scripts (docs/decisions.md, 2026-10-25). The maintainer decided: the Allow page
    every time; turning a capability down stops its running work; emailed codes and the daily
    lock stay as they are (accepted risks in docs/threat-model.md).
    The install then showed a bug from 0.8.4: the app's Keychain read always failed, so any
@@ -1457,7 +1459,7 @@ The Mac state line appears in every result (it reported the battery warning at 1
    15 tools, ran a shell command, was refused a change to Latchkey's own settings file, wrote,
    read and trashed a test file; keep-awake stayed on. DNS shows the reject mail policy and the
    two certificate authorities.
-   Not checked live (need Toni at the Mac or a fresh sign-in): the Allow page and the issuer
+   Not checked live (need the maintainer at the Mac or a fresh sign-in): the Allow page and the issuer
    parameter with claude.ai (passed with real Claude Code against a private relay), Shell
    switched off while a command runs, a page with a filled password field.
    Decided and done 2026-10-25: a nightly copy of the server's disk, kept 14 days
@@ -1478,7 +1480,7 @@ The Mac state line appears in every result (it reported the battery warning at 1
    Not checked live: removing an app from the menu or the page (it would cut the working
    connection), suspending an account (needs a throwaway account with a passkey), the Allow
    page from claude.ai. All three are covered by tests against a real relay.
-   Open for Toni: have the terms and privacy policy read by a lawyer before sign-up opens to
+   Open for decided: have the terms and privacy policy read by a lawyer before sign-up opens to
    the public; keep a copy of the server's key file somewhere apart from the server; the
    choices listed as Claude's in docs/decisions.md (operator record kept a year, liability
    wording); nightly disk copies from before 2026-10-25 still hold the old keys unencrypted
@@ -1515,16 +1517,16 @@ The Mac state line appears in every result (it reported the battery warning at 1
    by age; the Activity window shows the log's size, warns when entries were removed, changed,
    or cut off the end (a keyed checksum chain plus a Keychain record of the newest entry), loads
    a page at a time, searches by text, tool, and dates, and exports JSON Lines. Not yet checked
-   on Toni's installed app (the upgrade of his existing entries is covered by a test).
+   on the maintainer's installed app (the upgrade of his existing entries is covered by a test).
 2. Known limit: macOS shows its own "allow Latchkey to access the screen directly" alert from
-   time to time for screen capture; it needs Toni at the Mac (computer control only).
+   time to time for screen capture; it needs the maintainer at the Mac (computer control only).
 
-Browser (Toni, 2026-10-29; spec 005 FR-412 to FR-418; app 0.8.44): Claude's pages open in a
-background tab at the end of Toni's front Safari window; Settings → What Claude Can Do →
+Browser (decided 2026-10-29; spec 005 FR-412 to FR-418; app 0.8.44): Claude's pages open in a
+background tab at the end of the maintainer's front Safari window; Settings → What Claude Can Do →
 Browser → "Claude Opens Pages In" switches to a window of its own. A screenshot brings
-Claude's tab forward and Toni's back; idle close closes the tab. Claude's tab is known by a
+Claude's tab forward and the maintainer's back; idle close closes the tab. Claude's tab is known by a
 hidden mark on its page and checked again inside every script that acts on it, so a tab of
-Toni's is never read, loaded, closed, or brought forward (security review). A tab Latchkey
+the maintainer's is never read, loaded, closed, or brought forward (security review). A tab Latchkey
 can't be sure of is left open and named in Left Behind.
 Since 0.8.45 a page's own note of where it is going counts only for its own site and can't keep
 the loading allowance open (security review): a click to another site loses Claude's tab, which
@@ -1535,40 +1537,40 @@ background ("Checking…" until done); a start no longer reads the whole log on 
 Two once-flaky tests made steady (best of three timings; counted waits instead of sleeping).
 Contacts (spec 007 FR-724 to FR-727; app 0.8.44): cards and groups Latchkey made are found
 again when iCloud gives them a new id, and iCloud's copy is deleted with them within 10
-minutes; Toni's own look-alikes are never matched; every such deletion is notified.
-Tests (Toni, 2026-10-29; app 0.8.45): a full `make test` takes about 32 s with the build,
+minutes; the maintainer's own look-alikes are never matched; every such deletion is notified.
+Tests (decided 2026-10-29; app 0.8.45): a full `make test` takes about 32 s with the build,
 down from about 2.5 min, and the random hang is gone. The suites now run side by side; the hang
 was the Shell self-check blocking a shared thread while waiting for its test program to end
 (also a possible stall at the app's start); stopping a command right after starting it took
 3 s because Ctrl-C was sent before its shell existed (now waits for the shell); the large-log
 test uses 30,000 entries; waits on processes, output, and file events look again for up to 5 s
 instead of a fixed time.
-Since 0.8.45 Shell never scripts other apps (Toni, 2026-10-29): `osascript` is always refused,
+Since 0.8.45 Shell never scripts other apps (decided 2026-10-29): `osascript` is always refused,
 since a script reaching an app must run outside the fence and could run anything.
 Declared app scripts (`uses: ["app_scripts"]`) never reached an app from 0.8.39 to 0.8.43:
 apps refuse Apple events from any sandboxed program; since 0.8.44 `osascript` runs outside the
 fence when declared (found by the Mail research).
-Shell self-check (Toni, 2026-10-29; app 0.8.43; spec 004 FR-330): at start, Latchkey checks
+Shell self-check (decided 2026-10-29; app 0.8.43; spec 004 FR-330): at start, Latchkey checks
 that the fence still refuses a write and that a program in a fence is found by its mark; when
-a macOS update breaks either, commands still run, every Shell answer says so, and Toni gets
-one notification. Specs 003 to 006 reviewed and approved by Toni (2026-10-29); spec 005 gets
-Claude's tab in Toni's own Safari window as the default (in progress).
+a macOS update breaks either, commands still run, every Shell answer says so, and the maintainer gets
+one notification. Specs 003 to 006 reviewed and approved 2026-10-29; spec 005 gets
+Claude's tab in the maintainer's own Safari window as the default (in progress).
 
 Browser in the real Safari (app 0.8.48, 2026-10-30): a same-site click, typing, or back keeps
 Claude's tab (the page's note is read in the script's own run; the clicked link's and back's
 address count; a short wait for late notes); long pages come in parts within Claude's result
 size, the answer naming the offset to read on from; page positions are bounded and the tab's
 token is spliced as a JSON literal (security review). Checked in the real Safari with
-`macos/scripts/safari-check.sh` (a window of its own; all checks pass). A script that sends
+macos/scripts/safari-check.sh (a window of its own; all checks pass). A script that sends
 the page elsewhere, or a click to another site, still loses the tab by design.
 Relay: dependency updates (chromedp/cdproto, x/net, modernc sqlite) and a test of the
 fosite carry-over that froze a time the MCP SDK checks against the real clock.
-Mail (spec 008, approved by Toni; app 0.8.49): `mail_find`, `mail_read`, `mail_change`,
+Mail (spec 008, approved by the maintainer; app 0.8.49): `mail_find`, `mail_read`, `mail_change`,
 `mail_send`, 27 tools in all. Finding and reading come from Mail's own database (read-only)
 and message files (MimeFoundation), so they work with the screen off; reading never marks a
 message read unless Claude asks. Organising goes through Mail's scripting; delete moves to the
 account's Trash. Sending and drafts are written in Mail's own compose window through
-Accessibility (Toni, 2026-10-30: Mail's scripting makes the text arrive indented as a quote in
+Accessibility (decided 2026-10-30: Mail's scripting makes the text arrive indented as a quote in
 other mail apps, checked live), and are refused while the screen is off or locked. Security
 review: a copied Message-ID is refused and the window compared with the original before typing,
 recipients must be exactly as asked, the clipboard is only lent (marked, given back), and
@@ -1580,11 +1582,11 @@ message whose text ended in raw HTML table markup: since 0.8.50 a plain part tha
 HTML is converted, and HTML comments (Outlook's conditional ones) are dropped first. Since 0.8.51
 both in time that grows only with the message (security review).
 
-Live check of sending, 2026-10-31: one test message to Toni's own address went out through
+Live check of sending, 2026-10-31: one test message to the maintainer's own address went out through
 Mail's compose window and was in Sent; its raw copy is plain text (7bit, Mail's own headers),
 the two body lines exactly as asked, with no "> " quoting, indentation, or extra content.
 
-Every permission at first run (0.8.52, Toni 2026-10-31, spec 001 FR-623): every approval any
+Every permission at first run (0.8.52, decided 2026-10-31, spec 001 FR-623): every approval any
 capability can use is asked for at first run, whatever the levels, so macOS never asks during
 use. Right after pairing Latchkey asks each macOS question in turn. Since 0.8.53 the setup
 window has four steps instead of seventeen (connect, macOS's questions, System Settings,
@@ -1592,14 +1594,14 @@ Safari), and System Settings opens page after page as each switch is turned on.
 Three approvals were added: Notifications (asked during use until now), Local Network (asked
 when a command reached a device at home), and macOS's direct screen access question (asked at
 the first screenshot). Accessibility is now asked for whatever computer control is set to,
-since sending mail needs it. Checked live 2026-10-31 after Toni's Allow All: a screenshot,
+since sending mail needs it. Checked live 2026-10-31 after the maintainer's Allow All: a screenshot,
 location, a command reaching the home router, calendars, reminders, contacts, notes, mail,
 messages, and a Safari page all worked through the hosted relay, with no macOS question on the
 screen and the setup window closed.
 
 macOS's monthly screen question (0.8.54, spec 001 FR-624): macOS 27 still asks about once a
 month whether Latchkey may keep seeing the screen, at its first screenshot after a date macOS
-keeps (on Toni's Mac: last asked Oct 23, next Nov 22). Once that date has passed and Toni is
+keeps (on the maintainer's Mac: last asked Oct 23, next Nov 22). Once that date has passed and the maintainer is
 using the Mac, Latchkey takes one throwaway screenshot, so the question comes while he is
 there. It can't come earlier than macOS's date; Apple's screen-sharing permission (asked for
 by application) would remove it, and is not applied for.
@@ -1616,11 +1618,11 @@ check); the screenshot couldn't be tried (lid closed), nor the monthly screen qu
 Nov 22). Since 0.8.56 an app that isn't open is opened hidden to be checked first, and a Shell
 command that can't reach a device nearby says when Local Network isn't allowed.
 
-A lost permission is told (0.8.57, Toni 2026-10-31, spec 001 FR-626): the app looks every
+A lost permission is told (0.8.57, decided 2026-10-31, spec 001 FR-626): the app looks every
 minute, and after any failed call, at every permission and setting setup asks for. One that was
 on and is now off brings one notification ("Full Disk Access is off"), once per loss; a click
 opens setup, and the menu bar icon shows its mark until it's back. Not seen live: that needs a
-permission turned off in System Settings, which only Toni does. The screenshot was checked live
+permission turned off in System Settings, which only the maintainer does. The screenshot was checked live
 the same day through the hosted relay (lid open): a clear image of the whole screen.
 
 Offline after a second copy (0.8.58, 2026-10-31, spec 001 FR-206, FR-207): another Claude
@@ -1643,24 +1645,24 @@ program a fixed half second to start, and failed once while the whole suite ran.
 until the program says it has left its session; then passed 40 runs under CPU load and 11 full
 suites (704 tests each, before and after), and its checks print what they saw.
 
-## Waiting on Toni
+## Waiting on the maintainer
 
 1. Answer the macOS alert about Latchkey accessing the screen (Allow) whenever it shows (none
    showing and none in macOS's log on 2026-10-29).
 2. Whether a computer-control press on a Finder sidebar row should also open it (2026-11-27,
    sandbox): it selects the row, as decided 2026-11-23, but Finder opens a folder only on a
    click, so the window keeps the old folder; Accessibility's "AXOpen" on the row's cell opens it
-   (`specs/016-test-strategy/research.md` §7, second local session).
+   (`docs/research/2026-11-25-test-strategy.md` §7, second local session).
 
 Done 2026-11-27: the evals' Claude token is in the keychain item `latchkey-eval-claude-token`
 (a session ran `claude setup-token` in a wide pseudo-terminal; 108 characters, never printed);
 the sandbox's three choices are answered (`docs/decisions.md`, 2026-11-27).
 
-The other live checks that need Toni (the Allow page from claude.ai, removing an app's access,
+The other live checks that need the maintainer (the Allow page from claude.ai, removing an app's access,
 Shell switched off mid-command, a page with a filled password field, a suspended account) are
-left to the tests against a real relay and real commands (Toni, 2026-10-29).
+left to the tests against a real relay and real commands (decided 2026-10-29).
 
-## Milestones (from `specs/001-core/plan.md`)
+## Milestones (from `docs/design/core.md`)
 
 | # | Milestone | State |
 |---|---|---|
@@ -1674,7 +1676,7 @@ left to the tests against a real relay and real commands (Toni, 2026-10-29).
 
 - Lid-closed keep-awake relies on `pmset disablesleep`, which Apple does not document; reports
   conflict on Apple silicon charger changes. Mitigation: re-apply and read back on every power
-  change and wake (plan D7). No spike or hardware test runs (Toni, 2026-10-20).
+  change and wake (plan D7). No spike or hardware test runs (decided 2026-10-20).
 
 ## Open questions
 

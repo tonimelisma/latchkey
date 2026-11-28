@@ -24,7 +24,7 @@ func main() {
 	}
 	seed, err := base64.StdEncoding.DecodeString(os.Getenv("SERVER_SIGNING_KEY"))
 	if err != nil || len(seed) != ed25519.SeedSize {
-		fail("SERVER_SIGNING_KEY must be the base64 Ed25519 seed (Key Vault kv-melisma-release/latchkey-server-signing-key)")
+		fail("SERVER_SIGNING_KEY must be the base64 Ed25519 seed (the release Key Vault's latchkey-server-signing-key)")
 	}
 	key := ed25519.NewKeyFromSeed(seed)
 	if !bytes.Equal(key.Public().(ed25519.PublicKey), update.PublicKey()) {

@@ -1,6 +1,6 @@
 #!/bin/sh
 # Prints this commit's release number and makes sure GitHub has its tag, <prefix><x.y.z>. Releases
-# are tags on commits, so git settles which session gets which number (Toni, 2026-11-04: two
+# are tags on commits, so git settles which session gets which number (decided 2026-11-04: two
 # sessions bumping the version file both made 0.8.112, and a rebase drops the second, identical bump
 # without a conflict).
 # Usage: scripts/release-tag.sh <prefix>   (mac- for the Mac app, linux- for the Linux program)

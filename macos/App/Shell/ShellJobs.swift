@@ -186,7 +186,7 @@ actor ShellJobs {
     }
 
     /// `open` in a command opens apps, files, and links behind the app the Owner is using
-    /// (`open -g`), so Claude's work doesn't take the front (Toni, 2026-11-02: "Background");
+    /// (`open -g`), so Claude's work doesn't take the front (decided 2026-11-02: "Background");
     /// `/usr/bin/open` brings it to the front when the Owner wants to see it.
     static let openInBackground = "open() { /usr/bin/open -g \"$@\"; }\n"
 
@@ -494,7 +494,7 @@ actor ShellJobs {
             }
     }
 
-    /// A scratch folder this big is deleted outright, not moved to the Trash (Toni, 2026-11-21:
+    /// A scratch folder this big is deleted outright, not moved to the Trash (decided 2026-11-21:
     /// build folders in the Trash filled the Mac's disk, 9.8 GB).
     static let trashLimit: Int64 = 100 * 1024 * 1024
 

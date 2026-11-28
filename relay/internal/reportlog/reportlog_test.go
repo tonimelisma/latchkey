@@ -75,3 +75,6 @@ func TestRelayWideLinesAreInEveryAccountsLines(t *testing.T) {
 		}
 	}
 }
+
+// The requirements this file's tests cite (docs/requirements/; script/process-check).
+// Validates: FR-1442a

@@ -61,3 +61,6 @@ struct E2EHostTests {
         Issue.record("the orchestrator never finished")
     }
 }
+
+// The requirements this file's tests cite (docs/requirements/; script/process-check).
+// Validates: FR-1501

@@ -1,5 +1,5 @@
 // Package store is the relay's SQLite database. Everything it holds is listed in
-// specs/001-core/data-model.md (Constitution VI).
+// docs/design/data-model.md (Constitution VI).
 package store
 
 import (

@@ -25,7 +25,7 @@ enum LocationCapability {
 
     static let modes = ["driving", "walking", "transit"]
     static let maxPlaces = 25
-    /// How far from near a place may be (Toni, 2026-11-23).
+    /// How far from near a place may be (decided 2026-11-23).
     static let nearbyMetres: Double = 50_000
 
     static func tools(backend: any PlacesBackend, zone: @escaping CalendarCapability.Zone) -> [ToolEntry] {
@@ -107,7 +107,7 @@ enum LocationCapability {
             let limit = min(try args.integer("limit", in: 1...Int.max) ?? 10, maxPlaces)
             let named = args["near"]?.stringValue.map { !$0.isEmpty } ?? false
             var places = try await backend.search(query, near: center, limit: named ? maxPlaces : limit)
-            // With near, only places in that area (Toni, 2026-11-23: "Only nearby, else none"):
+            // With near, only places in that area (decided 2026-11-23: "Only nearby, else none"):
             // Apple Maps answered "BARC" near Ubud with Basra, Iraq, 8,385 km away.
             if named, let center {
                 places = Array(places.filter { center.distance(to: $0.coordinate) <= nearbyMetres }.prefix(limit))

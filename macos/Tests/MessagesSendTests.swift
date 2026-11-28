@@ -165,3 +165,6 @@ import Testing
         #expect(!FileManager.default.fileExists(atPath: old.path), "removed at start, no send needed")
     }
 }
+
+// The requirements this file's tests cite (docs/requirements/; script/process-check).
+// Validates: FR-153, FR-171

@@ -231,3 +231,6 @@ func TestSealPartsAndCompare(t *testing.T) {
 		t.Fatalf("%+v", c)
 	}
 }
+
+// The requirements this file's tests cite (docs/requirements/; script/process-check).
+// Validates: FR-1515, FR-1521, FR-1523, FR-1524, FR-1526

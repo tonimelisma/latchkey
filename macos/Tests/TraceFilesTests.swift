@@ -57,7 +57,7 @@ enum LogBeforeFiles {
     }
 }
 
-/// Full traces in daily files (Toni, 2026-11-15; FR-680 to FR-682, FR-689,
+/// Full traces in daily files (decided 2026-11-15; FR-680 to FR-682, FR-689,
 /// contracts/trace-files.md).
 @Suite struct TraceFilesTests {
     static func call(_ n: Int, at: Date, result: String? = nil) -> Activity {
@@ -321,3 +321,6 @@ enum LogBeforeFiles {
         #expect(trace.diskBytes > 4_000_000, "FR-689: the files are counted")
     }
 }
+
+// The requirements this file's tests cite (docs/requirements/; script/process-check).
+// Validates: FR-077, FR-614, FR-680, FR-681, FR-682, FR-689

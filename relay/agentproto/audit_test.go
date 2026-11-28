@@ -62,3 +62,6 @@ func TestAuditMessages(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, agentproto.MaxAuditEntries, msg.(*agentproto.AuditRequest).PageSize())
 }
+
+// The requirements this file's tests cite (docs/requirements/; script/process-check).
+// Validates: FR-632

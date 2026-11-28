@@ -56,7 +56,7 @@ final class MemoryVault: PairingVault, @unchecked Sendable {
 
     /// Versions up to 0.8.3 kept the relay and device ID in user defaults, which any program
     /// running as the Owner can change. Such a pairing is never used (it moved nowhere: the only
-    /// one, Toni's, was lost to 0.8.4's move and paired again), and its leftovers are removed.
+    /// one, the maintainer's, was lost to 0.8.4's move and paired again), and its leftovers are removed.
     @Test func anOldStylePairingIsNeverUsed() throws {
         let v = oldPairing()
         #expect(DeviceIdentity.load(vault: v, makeKey: key) == nil)

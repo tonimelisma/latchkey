@@ -3,7 +3,7 @@ import Testing
 
 @testable import Latchkey
 
-/// Spec 013 FR-1371 to FR-1374 (Toni, 2026-11-22: "Fill-only tool"): Latchkey types a saved user
+/// Spec 013 FR-1371 to FR-1374 (decided 2026-11-22: "Fill-only tool"): Latchkey types a saved user
 /// name, password, or code into the field Claude names, presses the button Claude names, empties
 /// what it typed, and answers with the page as it is. Claude judges the page. Real WebKit pages,
 /// given as text at an https address; fields carry fixed references (`data-latchkey`), as the
@@ -204,7 +204,7 @@ import Testing
         #expect(try await run(s, p, "document.querySelector('[name=pw]').value") == "")
     }
 
-    // MARK: codes (Toni, 2026-11-22: "The agent reads the messages, archives them etc")
+    // MARK: codes (decided 2026-11-22: "The agent reads the messages, archives them etc")
 
     @Test func aCodeClaudeReadGoesAcrossTheBoxesAndClaudeIsToldToCleanUp() async throws {
         let s = try setup()
@@ -548,3 +548,6 @@ import Testing
         #expect(r.plainText.contains("logins_fill") || !r.plainText.contains("logins_sign_in"))
     }
 }
+
+// The requirements this file's tests cite (docs/requirements/; script/process-check).
+// Validates: FR-1311, FR-1328, FR-1371, FR-1374, FR-1376

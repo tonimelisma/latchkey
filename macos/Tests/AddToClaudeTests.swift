@@ -47,3 +47,6 @@ struct AddToClaudeTests {
         #expect(board.string(forType: .string) == "https://relay.example.com/mcp")
     }
 }
+
+// The requirements this file's tests cite (docs/requirements/; script/process-check).
+// Validates: FR-627, FR-628

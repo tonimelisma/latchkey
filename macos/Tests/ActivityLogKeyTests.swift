@@ -133,3 +133,6 @@ final class StandInKeyItem: TraceKeyItem, TraceKeyStore, @unchecked Sendable {
         #expect(DeviceIdentity.missing(vault: MemoryVault()) == "missing pairing record")
     }
 }
+
+// The requirements this file's tests cite (docs/requirements/; script/process-check).
+// Validates: FR-201

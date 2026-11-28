@@ -168,7 +168,7 @@ final class FakeRemindersApp: RemindersExtrasSource, @unchecked Sendable {
         #expect(t.contains("unknown (Latchkey needs Full Disk Access"))
     }
 
-    /// Flags, tags, subtasks, and sections are shown but not changed (Toni, 2026-11-07: setting
+    /// Flags, tags, subtasks, and sections are shown but not changed (decided 2026-11-07: setting
     /// them drove the Reminders app's window, which the Owner may be using).
     @Test func flagsTagsSubtasksAndSectionsAreRefused() async throws {
         for (key, value) in [

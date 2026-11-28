@@ -42,7 +42,7 @@ import Testing
     }
 
     @Test func everythingStartsFullyOn() {
-        // Spec 002 FR-121, specs 003–006 (Toni, 2026-10-22).
+        // Spec 002 FR-121, specs 003–006 (decided 2026-10-22).
         #expect(Set(CapabilityRegistry.defaultLevels.keys) == Set(CapabilityRegistry.all))
         #expect(CapabilityRegistry.defaultLevels.values.allSatisfy { $0 == .readWrite })
     }
@@ -54,3 +54,6 @@ import Testing
         #expect(ActivityFormat.clip(String(repeating: "x", count: 200)).count == 80)
     }
 }
+
+// The requirements this file's tests cite (docs/requirements/; script/process-check).
+// Validates: FR-121

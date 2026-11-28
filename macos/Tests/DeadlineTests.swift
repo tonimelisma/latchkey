@@ -81,3 +81,6 @@ struct TakingTurnsTests {
         #expect(await gate.enter(within: .milliseconds(100)), "the one that gave up holds nothing")
     }
 }
+
+// The requirements this file's tests cite (docs/requirements/; script/process-check).
+// Validates: FR-1602

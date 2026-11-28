@@ -1,6 +1,6 @@
 import Foundation
 
-// Messages of the agent protocol, v1 (specs/001-core/contracts/agent-protocol.md).
+// Messages of the agent protocol, v1 (docs/design/contracts/agent-protocol.md).
 
 enum ProtocolError: Error, Equatable {
     case violation(String)  // the relay closes with 4005 for these

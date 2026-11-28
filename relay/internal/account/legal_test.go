@@ -30,7 +30,7 @@ func legalPage(t *testing.T, path string) string {
 }
 
 // storedData is what the privacy policy must say about each table the relay keeps: one phrase
-// per table of specs/001-core/data-model.md. A new table needs a line here and words in
+// per table of docs/design/data-model.md. A new table needs a line here and words in
 // templates/privacy.html, or this test fails (FR-194).
 var storedData = map[string]string{
 	"users":                 "Your email address",
@@ -59,7 +59,7 @@ func TestPrivacyPolicyNamesEveryStoredTable(t *testing.T) {
 	policy := legalPage(t, "/privacy")
 
 	// Every table in the data model has a phrase, and the policy says it.
-	doc, err := os.ReadFile("../../../specs/001-core/data-model.md")
+	doc, err := os.ReadFile("../../../docs/design/data-model.md")
 	require.NoError(t, err)
 	var documented []string
 	for _, m := range entityRE.FindAllStringSubmatch(string(doc), -1) {
@@ -191,3 +191,6 @@ func TestOperatorSettingsAreChecked(t *testing.T) {
 	assert.False(t, ok[0].Published())
 	assert.False(t, ok[3].Published())
 }
+
+// The requirements this file's tests cite (docs/requirements/; script/process-check).
+// Validates: FR-194, FR-630, FR-685, FR-688

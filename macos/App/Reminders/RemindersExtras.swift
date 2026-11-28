@@ -2,7 +2,7 @@ import Foundation
 
 /// The changes EventKit can't make: flag, tags, parent, section (spec 007 FR-715 to FR-719).
 /// Reads flags, tags, subtasks, and sections from Reminders' database (spec 007 plan D7). They
-/// aren't changed: that needed the Reminders app's window, withdrawn on 2026-11-07 (Toni: Latchkey
+/// aren't changed: that needed the Reminders app's window, withdrawn on 2026-11-07 (decided: Latchkey
 /// never drives an app the user may be using).
 struct RemindersExtras: Sendable {
     var source: any RemindersExtrasSource

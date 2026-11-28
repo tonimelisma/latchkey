@@ -1098,3 +1098,6 @@ func TestCIMDErrorHintIsFixed(t *testing.T) {
 	hint := e.oauth.ClientLookupHint(ctxT(t), gone.URL+"/client.json")
 	assert.Equal(t, "The client metadata document could not be fetched or is not valid.", hint)
 }
+
+// The requirements this file's tests cite (docs/requirements/; script/process-check).
+// Validates: FR-049a, FR-095, FR-096, FR-097, FR-098, FR-697, SC-07

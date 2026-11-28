@@ -27,11 +27,11 @@ enum Permissions {
     static let notesApp = "com.apple.Notes"
     static let messagesApp = "com.apple.MobileSMS"
     static let safariApp = "com.apple.Safari"
-    /// Every app Latchkey scripts, asked for in setup whatever the levels (Toni, 2026-10-31).
+    /// Every app Latchkey scripts, asked for in setup whatever the levels (decided 2026-10-31).
     /// Mail: only to mark a sign-in code email read and archive it after use (spec 013 FR-1366).
     static let mailApp = "com.apple.mail"
     /// Contacts: only to change a card with a note, which macOS lets the Contacts framework save
-    /// only for apps with Apple's notes entitlement (Toni, 2026-11-27: "Via Contacts' scripting").
+    /// only for apps with Apple's notes entitlement (decided 2026-11-27: "Via Contacts' scripting").
     static let contactsApp = "com.apple.AddressBook"
     static let scriptedApps = [notesApp, messagesApp, safariApp, mailApp, contactsApp]
 
@@ -168,7 +168,7 @@ enum NotificationAccess: Sendable, Equatable { case allowed, denied, notAsked, u
 
 /// One macOS approval Latchkey uses, in the Settings window's Permissions tab (FR-606). Every
 /// one is asked for at first run, whatever each capability's level, so no macOS question waits
-/// on an unattended Mac later (FR-623, Toni 2026-10-31).
+/// on an unattended Mac later (FR-623, decided 2026-10-31).
 struct Approval: Identifiable, Equatable {
     enum State: Equatable {
         case allowed

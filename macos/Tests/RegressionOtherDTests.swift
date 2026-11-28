@@ -188,7 +188,7 @@ import Testing
     /// 2026-11-02 to 2026-11-07: Notes, Mail, and Messages windows came forward while the Owner
     /// worked; since 2026-11-07 nothing comes to the front while unlocked (Constitution IV). The
     /// scripts background capabilities send never bring their app forward, type, or use the
-    /// clipboard. (Safari's tab scripts and computer control are Toni's exceptions.)
+    /// clipboard. (Safari's tab scripts and computer control are the maintainer's exceptions.)
     static let backgroundScripts: [(String, String)] = [
         ("notes create", NotesCapability.Script.create), ("notes append", NotesCapability.Script.append),
         ("notes set body", NotesCapability.Script.setBody), ("notes get body", NotesCapability.Script.getBody),

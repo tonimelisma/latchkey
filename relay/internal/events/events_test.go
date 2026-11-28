@@ -93,3 +93,6 @@ func TestTraceEventKinds(t *testing.T) {
 	assert.Equal(t, "traces_paused", events.TracesPaused)
 	assert.Equal(t, "traces_resumed", events.TracesResumed)
 }
+
+// The requirements this file's tests cite (docs/requirements/; script/process-check).
+// Validates: FR-683

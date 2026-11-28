@@ -1,7 +1,7 @@
 import Foundation
 
 /// The names macOS knows a build of Latchkey by. The installed app is a Release build; Debug and
-/// test builds are a different app in macOS's eyes (Toni, 2026-10-25), so a test copy never shares
+/// test builds are a different app in macOS's eyes (decided 2026-10-25), so a test copy never shares
 /// the installed app's settings, Keychain items, privacy permissions, helper, or link handling.
 /// (While both were one identity, a test erased the Owner's pairing twice, and a leftover Debug
 /// build, which carries the debugging entitlement, could borrow the installed app's permissions.)

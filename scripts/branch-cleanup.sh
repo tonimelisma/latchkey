@@ -1,5 +1,5 @@
 #!/bin/sh
-# Deletes GitHub branches whose pull request is over (Toni, 2026-11-24): a cloud session can't
+# Deletes GitHub branches whose pull request is over (decided 2026-11-24): a cloud session can't
 # delete branches (its git proxy refuses), so a branch whose pull request was closed without a
 # merge stayed behind. GitHub deletes a merged pull request's branch itself ("Automatically delete
 # head branches"); this does the rest. Nothing is lost: GitHub keeps every pull request's commits

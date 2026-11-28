@@ -69,3 +69,6 @@ import Testing
         #expect(store.mayUseCode(Self.a, step: 101))
     }
 }
+
+// The requirements this file's tests cite (docs/requirements/; script/process-check).
+// Validates: FR-1303, FR-1305, FR-1310

@@ -43,7 +43,7 @@ import Testing
         #expect(!ok.plainText.contains("Nothing on the page changed"), "\(ok.plainText)")
     }
 
-    /// regressions.browser_tabs_left_open (Toni, 2026-11-21: "you've left all the browser tabs
+    /// regressions.browser_tabs_left_open (decided 2026-11-21: "you've left all the browser tabs
     /// open"): a page whose Safari tab is gone couldn't be closed and stayed listed for ever. Now
     /// closing it says so, and the page is forgotten. (Closing Claude's tabs at quit:
     /// BrowserOwnerTabTests.claudesSafariTabsCloseAtQuit.)

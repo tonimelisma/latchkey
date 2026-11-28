@@ -1,0 +1,16 @@
+#!/bin/sh
+# Everything CI checks that runs on Linux (or a Mac with Go), in one command: the relay's security
+# checks, build, lint and tests; the Linux program's lint and tests; the repository scripts'
+# tests; the workflows (actionlint); and the requirement/doc traceability check. Run before every
+# push. On a Mac with Xcode, `VERIFY_MAC=1 script/verify` also lints and tests the Mac app (CI
+# does that on GitHub's macOS runner when macos/ changed).
+set -eu
+cd "$(dirname "$0")/.."
+script/process-check
+make -C relay security build lint test
+make -C linux lint test
+make -C relay script-tests
+go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.8
+if [ "${VERIFY_MAC:-}" = 1 ]; then
+  make -C macos lint test
+fi

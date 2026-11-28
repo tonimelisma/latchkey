@@ -1,7 +1,7 @@
 import Foundation
 import WebKit
 
-/// Claude's pages in Latchkey's own browser, by name (spec 005 FR-444 to FR-446, FR-451; Toni,
+/// Claude's pages in Latchkey's own browser, by name (spec 005 FR-444 to FR-446, FR-451; decided
 /// 2026-11-15: "Page names"). Claude's apps send every chat's calls over one connection, so
 /// Latchkey can't tell chats apart: each page Claude opens without naming one is a new page with
 /// a short random name, and Claude passes that name to keep working in it. Kept in memory only
@@ -85,7 +85,7 @@ final class OwnPages {
     }
 
     /// How long a page must go unused before a new page may take its place when `limit` are
-    /// open (Toni, 2026-11-23: "Close the oldest idle"; FR-446a). Pages of finished chats filled
+    /// open (decided 2026-11-23: "Close the oldest idle"; FR-446a). Pages of finished chats filled
     /// the limit eleven times on 2026-11-22, and chats then closed each other's pages.
     static let idleBeforeReplaced: TimeInterval = 300
 
@@ -121,7 +121,7 @@ final class OwnPages {
                 changed: { sessions?.keep($0, copied: LockedBrowser.copied(in: cookieStore)) })
         }
         // FR-456: Safari's cookies only while the Mac is locked (a copy that renews a rotating
-        // sign-in signs Safari out; Toni accepts that while locked).
+        // sign-in signs Safari out; the maintainer accepts that while locked).
         let b = LockedBrowser(
             cookies: cookies, store: store, watch: watch, fileAge: fileAge,
             mayCopy: { [weak self] in
@@ -287,7 +287,7 @@ final class OwnPages {
 
     /// Closes every Safari tab of Claude's, before Latchkey quits: the pages are kept in memory
     /// only, so a tab left open would outlive its page with nothing to close it (every install
-    /// restarts Latchkey; Toni, 2026-11-21: "you've left all the browser tabs open").
+    /// restarts Latchkey; decided 2026-11-21: "you've left all the browser tabs open").
     func closeSafariTabs() async {
         let tabs = order.compactMap { n -> SafariBrowser? in
             if case .safari(let s)? = pages[n]?.kind { s } else { nil }

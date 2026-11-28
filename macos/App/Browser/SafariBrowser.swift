@@ -898,7 +898,7 @@ actor SafariBrowser {
                 [window, String(t.index), t.address, PageScripts.tabCheck(t.token), loading.joined(separator: "\n")]))
         guard let index = TabSurvey.pick(survey, remembered: t, navigating: !loading.isEmpty, claudes: claudesTab)
         else {
-            // Instrumentation (Toni, 2026-11-25): why the tab was lost, for tests and reports;
+            // Instrumentation (decided 2026-11-25): why the tab was lost, for tests and reports;
             // addresses are the owner's tabs', kept in memory only, never in an answer.
             lostBecause =
                 "remembered tab \(t.index) of \(t.count) at \(t.address); loading \(loading); claudes \(claudesTab); "

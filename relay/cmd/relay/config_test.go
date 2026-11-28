@@ -57,10 +57,10 @@ func TestLoadConfig(t *testing.T) {
 	assert.Equal(t, "a@example.com", c.ACMEEmail)
 	assert.Equal(t, 8080, c.Port, "default port")
 
-	c, err = loadConfig(env(map[string]string{"PORT": "9000", "ALLOWED_EMAILS": " toni@example.com, ,b@example.com"}))
+	c, err = loadConfig(env(map[string]string{"PORT": "9000", "ALLOWED_EMAILS": " sam@example.com, ,b@example.com"}))
 	require.NoError(t, err)
 	assert.Equal(t, 9000, c.Port)
-	assert.Equal(t, []string{"toni@example.com", "b@example.com"}, c.AllowedEmails)
+	assert.Equal(t, []string{"sam@example.com", "b@example.com"}, c.AllowedEmails)
 	assert.Empty(t, c.TrustedProxies, "loopback only by default")
 	assert.Equal(t, []string{"claude.ai"}, c.AllowedClientHosts.Strings(), "Claude's apps only by default")
 	assert.Equal(t, "/data/relay.key", c.KeyFile, "next to the database by default")
@@ -174,3 +174,6 @@ func TestSMTPPasswordFromTheVault(t *testing.T) {
 		t.Fatal("started without the password")
 	}
 }
+
+// The requirements this file's tests cite (docs/requirements/; script/process-check).
+// Validates: FR-193, FR-907, FR-908

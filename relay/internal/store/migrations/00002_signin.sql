@@ -1,4 +1,4 @@
--- Sign-in, OAuth, and pairing (specs/001-core/data-model.md). Secrets are stored as SHA-256 hashes.
+-- Sign-in, OAuth, and pairing (docs/design/data-model.md). Secrets are stored as SHA-256 hashes.
 
 -- +goose Up
 CREATE TABLE passkeys (

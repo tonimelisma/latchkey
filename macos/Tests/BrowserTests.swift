@@ -11,7 +11,7 @@ final class TestPage {
 
     static let html = """
         <html><head><title>Shop</title></head><body>
-        <h1>Welcome back, Toni</h1>
+        <h1>Welcome back, Sam</h1>
         <p>Your next delivery is on Friday.</p>
         <a href="https://example.com/orders">Orders</a>
         <a href="#" style="display:none">Hidden link</a>
@@ -121,7 +121,7 @@ final class PageLoad: NSObject, WKNavigationDelegate {
         try await page.load(
             """
             <html><body><form>
-            <input id="u" name="user" value="toni">
+            <input id="u" name="user" value="sam">
             <input id="p" type="password" name="pw" value="hunter2secret">
             <input id="p2" type="PASSWORD" name="pw2" value="UPPERsecret">
             <input id="shown" type="text" name="shown" autocomplete="current-password" value="shownsecret">
@@ -141,7 +141,7 @@ final class PageLoad: NSObject, WKNavigationDelegate {
             #expect(!json.contains(secret), "\(secret) was returned")
         }
         let r = try PageScripts.decode(json)
-        #expect(r.elements.first { $0.label == "user" }?.value == "toni", "ordinary fields keep their value")
+        #expect(r.elements.first { $0.label == "user" }?.value == "sam", "ordinary fields keep their value")
         let password = try #require(r.elements.first { $0.label == "pw" })
         #expect(password.kind == "field:password")
         #expect(password.value == "(hidden)", "filled in, but not shown")
@@ -316,3 +316,6 @@ final class PageLoad: NSObject, WKNavigationDelegate {
                 == "https://user@en.wikipedia.org/wiki/A")
     }
 }
+
+// The requirements this file's tests cite (docs/requirements/; script/process-check).
+// Validates: FR-405, FR-406, FR-409, FR-410

@@ -42,3 +42,6 @@ func TestCodePresentedTwiceEndsTheGrantWhenTheSecondReadItFirst(t *testing.T) {
 	_, err = e.oauth.ReadCode(ctx, code)
 	require.ErrorIs(t, err, oidc.ErrInvalidGrant(), "and the code stays used")
 }
+
+// The requirements this file's tests cite (docs/requirements/; script/process-check).
+// Validates: FR-096

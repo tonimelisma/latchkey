@@ -1,4 +1,4 @@
--- The audit trail without gaps (FR-630 to FR-636, Toni 2026-10-27): every tool call's id, unique
+-- The audit trail without gaps (FR-630 to FR-636, decided 2026-10-27): every tool call's id, unique
 -- for all time, so the Mac's log and the relay's audit can be compared; and the relay's record of
 -- events (connections, sign-ins, approvals, pairings, refused requests). Both are kept until the
 -- account is deleted; nothing is deleted by age.

@@ -45,7 +45,7 @@ Only the latest release of the Mac app and the latest commit of the relay get se
 
 ## How Latchkey protects you
 
-The design and its reasons are in `docs/best-practices.md` and `specs/`. In short:
+The design and its reasons are in `docs/best-practices.md` and `docs/design/`. In short:
 
 - The Mac connects out to the relay; nothing listens on the Mac.
 - Each capability is Off, Read only, or Read & write on the Mac itself; a capability that's off

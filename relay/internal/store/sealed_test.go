@@ -344,3 +344,6 @@ func TestDeriveKeyFromTheKeyFile(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotEqual(t, k, other)
 }
+
+// The requirements this file's tests cite (docs/requirements/; script/process-check).
+// Validates: FR-186, FR-187, FR-188, FR-189, FR-683

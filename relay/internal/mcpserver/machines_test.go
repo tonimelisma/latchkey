@@ -63,7 +63,7 @@ func TestMergedToolsOneKind(t *testing.T) {
 	assert.Nil(t, mergedTools(nil, true), "nothing paired: no tools at all, not even machines")
 }
 
-// Toni, 2026-10-31: one tool, with a part per kind of machine and the options only one kind has
+// decided 2026-10-31: one tool, with a part per kind of machine and the options only one kind has
 // marked as such (plan D2).
 func TestMergedToolsPerKindNotes(t *testing.T) {
 	macShell := shellTool("Runs a command in zsh, never as administrator.", map[string]any{
@@ -111,7 +111,7 @@ func TestMergedToolsPerKindNotes(t *testing.T) {
 
 	fp := props(t, files)
 	assert.Equal(t, []any{"write", "trash", "delete"}, fp["action"].(map[string]any)["enum"], "enum values united")
-	// Toni, 2026-11-24: latchkey_log offered "settings" to a Mac, which refused it; values only
+	// decided 2026-11-24: latchkey_log offered "settings" to a Mac, which refused it; values only
 	// some kinds take are named in the option's description.
 	assert.Equal(t, "(trash: Mac only; delete: Linux servers only)", fp["action"].(map[string]any)["description"],
 		"values one kind lacks are marked")
@@ -137,7 +137,7 @@ func TestTakeMachine(t *testing.T) {
 func TestChooseMachine(t *testing.T) {
 	shell := &mcp.Tool{Name: "shell_run"}
 	notes := &mcp.Tool{Name: "notes_find"}
-	theMac := machine{Device: mac("Toni's MacBook Pro"), Online: true, Tools: []*mcp.Tool{shell, notes}}
+	theMac := machine{Device: mac("Sam's MacBook Pro"), Online: true, Tools: []*mcp.Tool{shell, notes}}
 	server := machine{Device: linux("homeserver"), Online: true, Tools: []*mcp.Tool{shell}}
 	offServer := server
 	offServer.Online, offServer.LastSeen = false, now.Add(-2*time.Hour)
@@ -155,25 +155,25 @@ func TestChooseMachine(t *testing.T) {
 
 	// Not named: the only machine that offers it, online or not (its offline answer comes at once).
 	got, _ = pick([]machine{theMac, server}, "notes_find", "")
-	assert.Equal(t, "Toni's MacBook Pro", got)
+	assert.Equal(t, "Sam's MacBook Pro", got)
 	got, _ = pick([]machine{offServer}, "shell_run", "")
 	assert.Equal(t, "homeserver", got)
 
 	// Not named, several offer it, one online: that one.
 	got, _ = pick([]machine{theMac, offServer}, "shell_run", "")
-	assert.Equal(t, "Toni's MacBook Pro", got)
+	assert.Equal(t, "Sam's MacBook Pro", got)
 
 	// Not named, several online: no guess.
 	_, refusal = pick([]machine{theMac, server}, "shell_run", "")
-	assert.Equal(t, "Several machines offer shell_run: Toni's MacBook Pro (Mac, online), homeserver (Linux, online). Name one with machine.", refusal)
+	assert.Equal(t, "Several machines offer shell_run: Sam's MacBook Pro (Mac, online), homeserver (Linux, online). Name one with machine.", refusal)
 
 	// Unknown name.
 	_, refusal = pick([]machine{theMac, offServer}, "shell_run", "pi")
-	assert.Equal(t, `No machine is called "pi". Your machines: Toni's MacBook Pro (Mac, online), homeserver (Linux, offline, last seen 2 hours ago).`, refusal)
+	assert.Equal(t, `No machine is called "pi". Your machines: Sam's MacBook Pro (Mac, online), homeserver (Linux, offline, last seen 2 hours ago).`, refusal)
 
 	// A machine that doesn't offer the tool: as if it didn't exist there (Constitution III).
 	_, refusal = pick([]machine{theMac, server}, "notes_find", "homeserver")
-	assert.Equal(t, "homeserver doesn't offer notes_find. It's offered by: Toni's MacBook Pro (Mac, online).", refusal)
+	assert.Equal(t, "homeserver doesn't offer notes_find. It's offered by: Sam's MacBook Pro (Mac, online).", refusal)
 	_, refusal = pick([]machine{bare}, "shell_run", "nas")
 	assert.Equal(t, "No machine offers shell_run.", refusal)
 	_, refusal = pick([]machine{bare}, "shell_run", "")
@@ -183,7 +183,7 @@ func TestChooseMachine(t *testing.T) {
 func TestMachinesResult(t *testing.T) {
 	up := int64(3 * 24 * 3600)
 	ms := []machine{
-		{Device: mac("Toni's MacBook Pro"), Online: true, State: lastState(64, "battery"), Tools: []*mcp.Tool{{Name: "shell_run"}, {Name: "notes_find"}}},
+		{Device: mac("Sam's MacBook Pro"), Online: true, State: lastState(64, "battery"), Tools: []*mcp.Tool{{Name: "shell_run"}, {Name: "notes_find"}}},
 		{Device: linux("homeserver"), Online: true, State: &agentproto.State{UptimeS: &up}, Tools: []*mcp.Tool{{Name: "shell_run"}}},
 		{Device: linux("nas"), LastSeen: now.Add(-time.Hour)},
 	}
@@ -194,7 +194,7 @@ func TestMachinesResult(t *testing.T) {
 	res := machinesResult(ms, now)
 	text := res.Content[0].(*mcp.TextContent).Text
 	assert.Equal(t, "Your machines (3):\n"+
-		"- Toni's MacBook Pro · Mac (Latchkey 0.8.109, macOS 26.1) · online · 64% battery, on battery power · keep-awake on · offers: shell_run, notes_find\n"+
+		"- Sam's MacBook Pro · Mac (Latchkey 0.8.109, macOS 26.1) · online · 64% battery, on battery power · keep-awake on · offers: shell_run, notes_find\n"+
 		"- homeserver · Linux server (Latchkey 0.1.2, Ubuntu 24.04.1 LTS) · online · up 3 days · offers: shell_run\n"+
 		"- nas · Linux server · offline, last seen 1 hour ago · offers no tools (all turned off on it)\n"+
 		"Pass a machine's name as machine when more than one offers a tool.", text)
