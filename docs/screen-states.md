@@ -39,7 +39,8 @@ Signing in and real sites:
   Costco's orders and sign-in (`browser_costco_orders_not_stuck`, `logins_out_of_time`),
   LinkedIn's cancel link (`browser_linkedin_cancel_sign_in_click`), Procare's role choice
   (`browser_procare_role_choice`), a slow real site (`browser_slow_site_no_lost_page`), going
-  back while locked or with the lid closed (`browser_back_no_cancel_error`).
+  back while locked or with the lid closed (`browser_back_no_cancel_error`), a sign-in page's
+  Authorize button that refused clicks as "too soon" while locked (`browser_focus_lead`).
 - A site Latchkey holds a password for keeps Latchkey's own session (`logins.own_session_kept`).
 - A code a site texted is used and the text deleted (`logins.texted_code_deleted`).
 - The Passwords export reaches its save panel (`passwords_export_reaches_save_panel`).

@@ -135,3 +135,21 @@ world". The rest was decided here (low-level, CLAUDE.md "Toni decides"):
   keeps a small version sealed beside each report and sends it then, so no report is lost while
   the intake's new image rolls out.
 - **Size**: oldest first, as Toni chose; the newest call with a picture stays the longest.
+
+## Reports without a session (2026-11-27)
+
+The three reports of 2026-11-26/27 carried no calls, no pages and under a minute of log: claude.ai
+and Claude Code now use the MCP protocol without sessions (2026-07-28), and the relay took no calls
+for a report without one, though FR-1441 named a fallback. Details decided here (low-level):
+
+- **Which calls**: the account's trace lines of the last 2 hours with no session and the same
+  client name as the `feedback` call. Options weighed: the OAuth grant (the trace doesn't record
+  it, and one app's chats share a grant anyway), every call of the account (mixes Claude Code
+  with claude.ai), the time span only (as wrong as the client name, and less precise). The
+  report's `chat.how` says other chats of the same app may be among them.
+- **Span**: from the chat's first call, and at least 15 minutes before the report (FR-1442a), so a
+  report about a restart or a reconnect shows it even when the chat made few calls. Longer spans
+  only fill the 5 MB with other chats' lines; the fit drops the oldest first anyway.
+- **Relay-wide lines**: marked at the call site (`reportlog.RelayWide`); the ring keeps only the
+  message and a `version` attribute of such a line, so a later caller can't put an account, a
+  machine or an address into every account's report.

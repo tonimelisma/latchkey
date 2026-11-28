@@ -157,10 +157,20 @@ plainly"; "Always record, memory only"; "5 MB, screenshots included"; "Hidden wo
   with each earlier session of the account in the last 24 hours that used one of the same
   Latchkey pages (a page's name is made for one chat; a chat idle for 30 minutes continues on a
   new session). A client without sessions shall get its calls from the same Claude app in the
-  last 2 hours.
+  last 2 hours (those calls also without a session), and the report shall say that other chats
+  of that app may be among them. *Fixed 2026-11-27:* this fallback wasn't built, and since
+  claude.ai and Claude Code both use the protocol without sessions (2026-07-28), the three
+  reports of 2026-11-26/27 came with no calls, no pages, and under a minute of log
+  (`TestReportWithoutASessionCarriesTheAppsCalls`).
 - **FR-1442** A shared report shall hold the relay's own log lines about the account from the
   first of those calls until the report, kept in memory only (the last 500 lines per account, for
   at most 24 hours), never written to disk for this.
+- **FR-1442a** The time span a report's logs cover (FR-1442, FR-1444) shall start at the chat's
+  first call, and at least 15 minutes before the report. The relay's log lines about itself (its
+  start with its version, its shutdown; never an account, a machine, or an address) shall be in
+  every account's report for that span, so a call that failed while the relay restarted can be
+  told from one Latchkey lost (problem report 2026-11-27: "Bad Gateway" during a restart, which
+  the report couldn't show).
 - **FR-1443** For each machine the report involves (FR-1412) that is online and understands it,
   the relay shall ask the machine for its part, and wait for it at most 10 seconds (Constitution
   II). A machine that doesn't answer in time, can't be asked, or is offline shall be listed as

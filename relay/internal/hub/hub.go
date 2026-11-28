@@ -199,6 +199,31 @@ func (h *Hub) SendNotice(ctx context.Context, deviceID string, n *agentproto.Not
 	return c.send(ctx, n)
 }
 
+// WaitIdle returns once no device has a call running, or when ctx ends (a restart, spec 001
+// FR-095a: the running calls are answered before the devices are disconnected).
+func (h *Hub) WaitIdle(ctx context.Context) {
+	tick := time.NewTicker(20 * time.Millisecond)
+	defer tick.Stop()
+	for {
+		busy := false
+		h.mu.Lock()
+		for _, c := range h.conns {
+			c.mu.Lock()
+			busy = busy || len(c.pending) > 0
+			c.mu.Unlock()
+		}
+		h.mu.Unlock()
+		if !busy {
+			return
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-tick.C:
+		}
+	}
+}
+
 // Close disconnects every device (normal closure, so they reconnect) and marks them offline.
 func (h *Hub) Close() {
 	h.mu.Lock()

@@ -1593,19 +1593,34 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownl
 
     // MARK: the real mouse and keyboard (FR-478 to FR-485)
 
+    /// How long the page counts as focused before Claude's first event of a call (FR-483a): as
+    /// long as Firefox's guard against clicks on a window that just came forward.
+    static let focusLead: Duration = .seconds(1)
+
     /// Runs `work` with the page counted as the focused front window (FR-483), and after it, as a
     /// window behind another app's again, whatever happened.
     private func active<T>(_ work: () async throws -> T) async rethrows -> T {
         let window = holderWindow as? HolderWindow
         let clipboard = NSPasteboard.general.changeCount
+        // Focused first, and for at least focusLead before Claude's first event (FR-483a): a
+        // person's window has been in front for a while when they click, and a sign-in page
+        // refused a click that came a few tens of milliseconds after the focus ("Too soon",
+        // problem report 2026-11-27). The window still never becomes key for macOS (HolderWindow).
+        let clock = ContinuousClock()
+        let focused = clock.now
+        window?.active = true
         if let w = web {
             // Key-ups still on their way from an earlier action are taken first, so they don't
             // count for this one (third review 2026-11-25).
             await RealInput.settle(w, within: .seconds(1))
-            RealInput.begin(w)
         }
         await pauseMedia()
-        window?.active = true
+        let lead = Self.focusLead - (clock.now - focused)
+        if lead > .zero { try? await Task.sleep(for: lead) }
+        // After the lead: media a page started when it got the focus is paused again, and this
+        // action's keys are counted from here (security review 2026-11-27).
+        await pauseMedia()
+        if let w = web { RealInput.begin(w) }
         defer {
             window?.active = false
             if NSPasteboard.general.changeCount != clipboard {

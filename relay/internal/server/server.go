@@ -50,6 +50,9 @@ type Relay struct {
 	DrainMail func(context.Context)
 	// grantExpired records an approval the purge removed and tells the rest of the relay.
 	grantExpired func(context.Context, store.Grant)
+	// Logger is the relay's logger, which also keeps lines for problem reports (spec 014
+	// FR-1442); a line with reportlog.RelayWide goes into every account's report (FR-1442a).
+	Logger *slog.Logger
 	// SendReports delivers the problem reports users chose to share to the developer's intake
 	// until ctx ends (spec 014 FR-1414). Run it in its own goroutine.
 	SendReports func(ctx context.Context)
@@ -129,6 +132,28 @@ func traceEvents(st *store.Store, rec *events.Recorder, ts *trace.Store) {
 	})
 }
 
+// Shutdown stops the relay for a restart without losing the calls that are running (spec 001
+// FR-095a): srv stops taking requests at once, the calls on the Macs are waited for until ctx
+// ends, then the Macs are disconnected (they reconnect to the next relay) and the last requests
+// are waited for; whatever is still open when ctx ends is closed.
+func (r *Relay) Shutdown(ctx context.Context, srv *http.Server) error {
+	stopped := make(chan error, 1)
+	go func() { stopped <- srv.Shutdown(ctx) }() // closes the listener now; waits for the requests
+	r.Hub.WaitIdle(ctx)
+	r.Hub.Close()
+	err := <-stopped
+	if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
+		// An open event stream holds a request until it is closed; the next relay takes it over.
+		r.Logger.Info("relay closed the requests still open at its shutdown deadline", reportlog.RelayWide, true)
+		_ = srv.Close()
+		return nil
+	}
+	if errors.Is(err, http.ErrServerClosed) {
+		return nil
+	}
+	return err
+}
+
 // New builds the relay: hub, MCP server, OAuth, and account pages on one mux.
 func New(ctx context.Context, o Options) (*Relay, error) {
 	var (
@@ -206,7 +231,7 @@ func New(ctx context.Context, o Options) (*Relay, error) {
 	acc.Register(mux)
 	r := &Relay{
 		Handler: guard(o.PublicURL, o.TrustedProxies, rec, mux), Hub: h, Store: o.Store, Events: rec, Traces: o.Traces,
-		grantExpired: oa.GrantExpired, DrainMail: acc.DrainMail,
+		grantExpired: oa.GrantExpired, DrainMail: acc.DrainMail, Logger: o.Logger,
 	}
 	r.PurgeClients = func(ctx context.Context) error {
 		_, err := oa.PurgeRefusedClients(ctx)

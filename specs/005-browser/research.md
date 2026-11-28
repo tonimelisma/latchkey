@@ -594,3 +594,20 @@ instrumentation"), each fixed in pull request #54:
   reference of its own when its reference isn't unique.
 - Enter in a form of several fields without a send button sends nothing in a browser (no
   implicit submission); the keys test now checks the keys arrived, as a person's would.
+
+## Focused before the first event (2026-11-27)
+
+A sign-in page's Authorize button refused every real click with "Too soon. Wait, then press
+again." while the Mac was locked (problem report, 0.8.252). The page was focused only from the
+start of Claude's call (FR-483), a few tens of milliseconds before the press; waiting between
+calls didn't help, since the page is blurred between them. Options weighed:
+
+- Keep the page focused between calls: FR-483's reason stands (a focused password field turns on
+  secure keyboard entry for the whole Mac).
+- Slower pointer moves before the press: a person's pointer does take longer, but the report's
+  hover and 2 s wait before the click didn't help, so the guard times from the focus.
+- Focus first and let at least 1 s pass before the first event of a call (chosen, FR-483a): what a
+  person's window looks like to the page. 1 s is Firefox's delay for clicks on a window that just
+  came forward (`security.dialog_enable_delay`); Chrome's similar guards use 500 ms. Cost: up to
+  1 s more per acting call (settling the earlier keys and pausing media count towards it); the
+  page's media is paused again after the lead, and the keys of the action are counted from there.

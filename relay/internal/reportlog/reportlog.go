@@ -10,6 +10,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -34,6 +35,7 @@ type Line struct {
 type Ring struct {
 	mu       sync.Mutex
 	accounts map[string][]Line
+	relay    []Line // the relay-wide lines (RelayWide), at most PerAccount
 	now      func() time.Time
 }
 
@@ -48,7 +50,8 @@ func New(now func() time.Time) *Ring {
 // Wrap returns a handler that writes to h and keeps account lines in r.
 func (r *Ring) Wrap(h slog.Handler) slog.Handler { return &handler{next: h, ring: r} }
 
-// Lines are the account's lines from since on, oldest first.
+// Lines are the account's lines from since on, with the relay-wide ones (RelayWide), oldest
+// first.
 func (r *Ring) Lines(account string, since time.Time) []Line {
 	if r == nil {
 		return nil
@@ -57,11 +60,14 @@ func (r *Ring) Lines(account string, since time.Time) []Line {
 	defer r.mu.Unlock()
 	var out []Line
 	cutoff := r.now().Add(-MaxAge)
-	for _, l := range r.accounts[account] {
-		if !l.Time.Before(since) && l.Time.After(cutoff) {
-			out = append(out, l)
+	for _, ls := range [][]Line{r.accounts[account], r.relay} {
+		for _, l := range ls {
+			if !l.Time.Before(since) && l.Time.After(cutoff) {
+				out = append(out, l)
+			}
 		}
 	}
+	sort.SliceStable(out, func(i, j int) bool { return out[i].Time.Before(out[j].Time) })
 	return out
 }
 
@@ -70,6 +76,15 @@ func (r *Ring) Forget(account string) {
 	r.mu.Lock()
 	delete(r.accounts, account)
 	r.mu.Unlock()
+}
+
+func (r *Ring) keepRelayWide(l Line) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.relay = append(r.relay, l)
+	if len(r.relay) > PerAccount {
+		r.relay = append([]Line(nil), r.relay[len(r.relay)-PerAccount:]...)
+	}
 }
 
 func (r *Ring) keep(account string, l Line) {
@@ -96,6 +111,12 @@ func (r *Ring) keep(account string, l Line) {
 // AccountKey is the attribute that names an account in the relay's log lines.
 const AccountKey = "user"
 
+// RelayWide is the attribute (true) that marks a line about the relay itself, not one account:
+// its start (with its version) and its shutdown. Every account's report holds these lines, so a
+// call that failed while the relay restarted can be told from one Latchkey lost (spec 014
+// FR-1442a). Only lines that name no account, machine, or address may carry it.
+const RelayWide = "relay_wide"
+
 type handler struct {
 	next  slog.Handler
 	ring  *Ring
@@ -109,13 +130,18 @@ func (h *handler) Enabled(ctx context.Context, l slog.Level) bool {
 
 func (h *handler) Handle(ctx context.Context, rec slog.Record) error {
 	account := ""
+	relayWide := false
 	var b strings.Builder
 	b.WriteString(rec.Level.String())
 	b.WriteString(" ")
 	b.WriteString(rec.Message)
 	add := func(a slog.Attr) {
-		if a.Key == AccountKey && h.group == "" {
+		switch {
+		case a.Key == AccountKey && h.group == "":
 			account = a.Value.String()
+			return
+		case a.Key == RelayWide && h.group == "":
+			relayWide = a.Value.Kind() == slog.KindBool && a.Value.Bool()
 			return
 		}
 		fmt.Fprintf(&b, " %s=%s", a.Key, a.Value.String())
@@ -124,12 +150,29 @@ func (h *handler) Handle(ctx context.Context, rec slog.Record) error {
 		add(a)
 	}
 	rec.Attrs(func(a slog.Attr) bool { add(a); return true })
-	if account != "" && rec.Level >= slog.LevelInfo {
-		text := b.String()
-		if len(text) > maxLine {
-			text = text[:maxLine]
+	text := b.String()
+	if len(text) > maxLine {
+		text = text[:maxLine]
+	}
+	line := Line{Time: h.ring.now().UTC(), Text: text} // the ring's clock, as Lines reads it
+	switch {
+	case account != "" && rec.Level >= slog.LevelInfo:
+		h.ring.keep(account, line)
+	case relayWide && account == "":
+		// Only the message and the version go into every account's report, whatever else the
+		// line carries: no account's, machine's, or address's detail can get there (security
+		// review 2026-11-27).
+		wide := rec.Level.String() + " " + rec.Message
+		rec.Attrs(func(a slog.Attr) bool {
+			if a.Key == "version" {
+				wide += " version=" + a.Value.String()
+			}
+			return true
+		})
+		if len(wide) > maxLine {
+			wide = wide[:maxLine]
 		}
-		h.ring.keep(account, Line{Time: h.ring.now().UTC(), Text: text}) // the ring's clock, as Lines reads it
+		h.ring.keepRelayWide(Line{Time: line.Time, Text: wide})
 	}
 	if !h.next.Enabled(ctx, rec.Level) {
 		return nil

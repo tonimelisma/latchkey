@@ -124,6 +124,13 @@ Format: EARS ("When <trigger>, the <system> shall <response>"). IDs are stable; 
   list (last list the Mac reported); calling a Mac tool returns the offline answer (FR-010).
 - **FR-014** While the Mac is offline, the relay shall keep the Owner's Claude connection signed
   in, including refreshing tokens.
+- **FR-014a** When the relay is told to stop (a restart for an update or new settings), it shall
+  stop taking new requests at once, let the calls already running on the machines be answered
+  (within 8 seconds), and only then disconnect the machines. Why: a hosted relay restart on
+  2026-11-27 dropped its Macs first, and a running shell_run failed with "lost its connection
+  while the request was running" (problem report; `TestShutdownLetsRunningCallsFinish`). The
+  proxy in front of a hosted relay keeps a request that arrives during the restart until the next
+  relay answers, instead of "Bad Gateway" (the hosted server's own repository).
 
 ### State the relay remembers
 - **FR-020** The relay shall record, per Mac: connected or not, last seen time, last known battery

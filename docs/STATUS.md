@@ -121,6 +121,22 @@ widgets that move the focus, GitHub's real "More options" list, a toggle's state
 returns). Two Uber code texts couldn't be deleted (the window didn't show them); the next
 failure says why.
 
+## Problem reports of 2026-11-26/27 (0.8.249 to 0.8.256), looked into 2026-11-27
+
+Three reports (Toni, 2026-11-27: "fix feedbacks and improve instrumentation for feedback"). All
+three came with no calls, no pages and under a minute of log: the reports themselves were the
+first bug. Fixed on the branch `fix-problem-reports` with tests; none run live.
+
+| Report | Cause | Fix (spec) | Live |
+|---|---|---|---|
+| Every report: no calls, no pages | claude.ai and Claude Code use the MCP protocol without sessions (2026-07-28); the relay put no calls in a report without a session, though FR-1441 says to take the same Claude app's calls of the last 2 hours | Built as FR-1441 says; logs cover at least the 15 minutes before the report; the relay's start and shutdown lines are in every report (FR-1442a) | NOT VERIFIED (the next report Toni's chats file shows it) |
+| Bad Gateway, then "lost its connection", while the Mac was online (Claude Code, 2026-11-27 22:51 UTC) | The hosted relay restarted twice while new settings were applied on the server (its own repository, 14:48–14:57 PST); a restart dropped the Macs before it stopped taking requests, and the proxy answered "Bad Gateway" until the next relay listened | The relay lets running calls finish before it disconnects the Macs (spec 001 FR-014a). The proxy holding requests during a restart is the hosted server's change (its own repository) | NOT VERIFIED |
+| claude.ai's Authorize button: "Too soon. Wait, then press again." to every click, Mac locked | The page had been focused only tens of milliseconds when the click came; a person's window has been in front far longer | The page counts as focused at least 1 s before Claude's first event of a call (spec 005 FR-483a) | Locked, that page: NOT VERIFIED (Toni's conditions, `browser_focus_lead`) |
+| Procare opened signed out in Latchkey's own browser, Mac unlocked | By design while unlocked (no copy of Safari's sign-ins; Procare is a site Latchkey signs in to itself), but the first answer named only logins_fill | The first answer also names sign_in_again into Safari while unlocked (spec 013 FR-1355) | NOT VERIFIED |
+
+Also in the Bad Gateway report, not a bug: `/usr/bin/log` can't run inside the shell's fence, so
+another app's unified log can't be read through Latchkey (a product choice for Toni).
+
 ## Problem reports of 2026-11-24/25 (0.8.238 to 0.8.240)
 
 Eight reports, looked into 2026-11-25; none run live (Toni runs them).
@@ -637,7 +653,10 @@ after the app was quit.
 Ids of problem reports Toni has been asked about once (CLAUDE.md, start of every session); ids
 only, never contents.
 
-- `rep_274857e92fd4415fad0fb6c2d2e953e9` (asked 2026-11-26: later)
+- `rep_274857e92fd4415fad0fb6c2d2e953e9` (asked 2026-11-26: later; fixed 2026-11-27 at Toni's
+  "fix feedbacks")
+- `rep_04182a285e3247409460428d863690e8` (2026-11-27: fixed at Toni's "fix feedbacks")
+- `rep_577c075caf764a48b885c31931d2bb9a` (2026-11-27: fixed at Toni's "fix feedbacks")
 
 ## Next steps
 

@@ -379,3 +379,18 @@ the next run:
   then every try failed with "registration failed" before Claude Code started: the harness
   registered a new OAuth client for each try, and the relay registers 10 at once, then one a
   minute per address. Fixed: one client per relay (`relay/internal/e2e`, test).
+
+### The problem-report fixes' runs (2026-11-27, pull request #74)
+
+Full run on a fresh copy: 33 passed, 3 failed, 6 skipped (36 checks). `setup-names-what-is-off` as
+above. `computer-sidebar-row`: the known first-window failure, passed on the same copy's next run.
+`no-permission-prompts`: during `safari`, macOS asked whether tart-guest-agent (the test Mac's
+own agent, which runs the harness) may find devices on the local network: a question about the
+harness, not Latchkey; it stayed on screen, so the next run on that copy counted it again. Then,
+each on a fresh copy, `safari` and `no-permission-prompts`: main's code passed both; this
+branch's once failed `safari` at the first step (the owner's tab moved while Safari started for
+the first time) with no question, then passed `safari`, `browser` and `no-permission-prompts` on
+the same copy. So far only on Safari's first start in a fresh copy, in code this branch doesn't
+touch (Safari tabs); not fixed. If it comes back: answer the guest agent's question in the image
+(`eval-image.sh`, like the first app starts), and have the watcher read a question's text so one
+about the harness isn't counted as Latchkey's.

@@ -270,5 +270,9 @@ import WebKit
         let line = BrowserCapability.ownBrowser(a, signedIn: false, own: site)
         #expect(
             line.contains("with Latchkey's own sign-in for a.test") && !line.contains("without the owner's sign-ins"))
+        // Problem report 2026-11-26 (0.8.249, unlocked): Procare opened signed out, and the first
+        // answer named only logins_fill, though sign_in_again would have moved the page into
+        // Safari, where the owner was signed in (FR-1355).
+        #expect(line.contains("browser_look sign_in_again moves the page into a Safari tab of Claude's"), "\(line)")
     }
 }
