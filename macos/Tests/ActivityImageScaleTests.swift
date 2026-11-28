@@ -3,7 +3,7 @@ import Testing
 
 @testable import Latchkey
 
-/// A log like Toni's on 2026-10-27: a few hundred entries, about 19 MB, most of it screenshots
+/// A log like the maintainer's on 2026-10-27: a few hundred entries, about 19 MB, most of it screenshots
 /// in computer-control results. The Activity window must open at once (its first page off the
 /// main thread, the main thread doing only cheap work), and Export… must write the images too.
 @Suite(.serialized) struct ActivityImageScaleTests {
@@ -40,7 +40,7 @@ import Testing
             }
         }
         let trace = try time("open the log") { try TraceStore(directory: dir, keys: keys, latest: latest) }
-        #expect(trace.diskBytes > 15_000_000, "about Toni's 19 MB")
+        #expect(trace.diskBytes > 15_000_000, "about Sam's 19 MB")
         let first = try time("first page (200)") { try trace.reader.page(ActivityQuery(), limit: 200) }
         #expect(first.entries.count == 200)
         let rows = time("window rows") { first.entries.map(ActivityRow.init) }

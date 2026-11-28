@@ -80,3 +80,6 @@ import WebKit
         #expect(!LockedBrowser.notTaken(0, of: 2, submit: false).contains("Enter"))
     }
 }
+
+// The requirements this file's tests cite (docs/requirements/; script/process-check).
+// Validates: FR-480, FR-485

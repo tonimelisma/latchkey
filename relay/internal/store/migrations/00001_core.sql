@@ -1,4 +1,4 @@
--- Tables for milestone M1 (specs/001-core/data-model.md). Timestamps are Unix milliseconds, UTC.
+-- Tables for milestone M1 (docs/design/data-model.md). Timestamps are Unix milliseconds, UTC.
 
 -- +goose Up
 CREATE TABLE users (

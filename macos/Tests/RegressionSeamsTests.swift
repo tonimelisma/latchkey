@@ -19,7 +19,7 @@ import Testing
 
     // MARK: regressions.setup_ask_now_says_what_is_off
 
-    /// Toni, 2026-11-21: Ask Now did nothing when Mail had been turned off for Latchkey earlier,
+    /// decided 2026-11-21: Ask Now did nothing when Mail had been turned off for Latchkey earlier,
     /// which macOS never asks about again. Setup's note names the apps and where to turn them on.
     @Test func appsTurnedOffEarlierAreNamedWithWhereToTurnThemOn() throws {
         #expect(AppModel.turnedOffNote([]) == nil)
@@ -66,3 +66,6 @@ import Testing
         }
     }
 }
+
+// The requirements this file's tests cite (docs/requirements/; script/process-check).
+// Validates: FR-623

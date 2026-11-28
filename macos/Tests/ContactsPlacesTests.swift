@@ -272,7 +272,7 @@ func resultText(_ r: ToolResult) -> String {
     }
 
     /// A card with a note (the framework refuses it, Cocoa error 134092) is changed through the
-    /// Contacts app's scripting, opened hidden and quit after (Toni, 2026-11-27: "Via Contacts'
+    /// Contacts app's scripting, opened hidden and quit after (decided 2026-11-27: "Via Contacts'
     /// scripting"; the sandbox check contacts-card-with-note).
     @Test func aCardWithANoteIsChangedThroughTheContactsApp() async throws {
         fake.withNote = ["P2"]
@@ -671,7 +671,7 @@ func resultText(_ r: ToolResult) -> String {
 /// Maps and location in memory; no network.
 final class FakePlaces: PlacesBackend, @unchecked Sendable {
     var access = LocationAccess.allowed
-    let here = Coordinate(latitude: 37.9, longitude: -122.06)
+    let here = Coordinate(latitude: 37.33, longitude: -122.03)
     var lastSearchCenter: Coordinate?
     var lastMode: String?
 
@@ -681,7 +681,7 @@ final class FakePlaces: PlacesBackend, @unchecked Sendable {
         return Fix(coordinate: here, accuracy: 35, at: Date())
     }
     func reverse(_ c: Coordinate) async throws -> Place? {
-        Place(name: "Home", address: "1406 N Broadway, Walnut Creek, CA", coordinate: c)
+        Place(name: "Home", address: "1 Main St, Springfield, CA", coordinate: c)
     }
     func geocode(_ address: String) async throws -> [Place] {
         address == "nowhere"
@@ -695,7 +695,7 @@ final class FakePlaces: PlacesBackend, @unchecked Sendable {
         lastSearchCenter = near
         return [
             Place(
-                name: "Philz Coffee", address: "1 Main St", coordinate: Coordinate(latitude: 37.91, longitude: -122.06),
+                name: "Philz Coffee", address: "1 Main St", coordinate: Coordinate(latitude: 37.34, longitude: -122.03),
                 category: "cafe")
         ]
     }
@@ -716,8 +716,8 @@ final class FakePlaces: PlacesBackend, @unchecked Sendable {
 
     @Test func readsTheMacLocationWithAddress() async throws {
         let t = resultText(try await tool("location_read").handler(.object([:])))
-        #expect(t.contains("37.90000,-122.06000") && t.contains("within about 35 m"))
-        #expect(t.contains("Walnut Creek"))
+        #expect(t.contains("37.33000,-122.03000") && t.contains("within about 35 m"))
+        #expect(t.contains("Springfield"))
     }
 
     @Test func explainsMissingLocation() async throws {
@@ -737,11 +737,12 @@ final class FakePlaces: PlacesBackend, @unchecked Sendable {
         #expect(fake.lastSearchCenter == Coordinate(latitude: 37.5, longitude: -122.2))
     }
 
-    /// Toni, 2026-11-23 ("Only nearby, else none"): with near, a far place of a similar name is
+    /// decided 2026-11-23 ("Only nearby, else none"): with near, a far place of a similar name is
     /// left out, and nothing nearby is said as such ("BARC" near Ubud gave Basra, Iraq).
     @Test func withNearOnlyNearbyPlaces() async throws {
         let near = resultText(
-            try await tool("maps_find").handler(.object(["query": .string("coffee"), "near": .string("37.9,-122.06")])))
+            try await tool("maps_find").handler(
+                .object(["query": .string("coffee"), "near": .string("37.33,-122.03")])))
         #expect(near.contains("Philz Coffee"), "1 km away: kept")
         let far = try await tool("maps_find").handler(
             .object(["query": .string("coffee"), "near": .string("-8.65,115.2")]))
@@ -768,8 +769,8 @@ final class FakePlaces: PlacesBackend, @unchecked Sendable {
     @Test func geocodesBothWays() async throws {
         let there = resultText(try await tool("maps_find").handler(.object(["address": .string("1 Infinite Loop")])))
         #expect(there.contains("37.60000,-122.40000"))
-        let back = resultText(try await tool("maps_find").handler(.object(["address": .string("37.9,-122.06")])))
-        #expect(back.contains("is 1406 N Broadway"))
+        let back = resultText(try await tool("maps_find").handler(.object(["address": .string("37.33,-122.03")])))
+        #expect(back.contains("is 1 Main St"))
         let none = try await tool("maps_find").handler(.object(["address": .string("nowhere")]))
         #expect(none.isError && resultText(none).contains("found nothing"))
     }
@@ -781,3 +782,6 @@ final class FakePlaces: PlacesBackend, @unchecked Sendable {
         #expect(neither.isError)
     }
 }
+
+// The requirements this file's tests cite (docs/requirements/; script/process-check).
+// Validates: FR-724, FR-727, FR-728

@@ -351,7 +351,7 @@ enum RemindersCapability {
     }
 
     /// Flags, tags, subtasks, and sections aren't set any more (2026-11-07: that needed the
-    /// Reminders app's window, which drove an app the Owner may be using; Toni). Refused, not ignored.
+    /// Reminders app's window, which drove an app the Owner may be using; the maintainer). Refused, not ignored.
     static func refuseExtras(_ args: JSONValue) throws {
         for key in ["flagged", "tags", "parent", "section"] where args[key] != nil && args[key] != .null {
             throw ArgumentError(

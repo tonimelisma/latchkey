@@ -132,7 +132,7 @@ enum MessagesCapability {
 
     // MARK: sending (plan D3)
 
-    /// Messages delivers scripted attachments reliably only from Pictures (Toni chose the visible
+    /// Messages delivers scripted attachments reliably only from Pictures (the maintainer chose the visible
     /// folder, 2026-10-22).
     static let staging = URL.homeDirectory.appending(path: "Pictures/Latchkey")
 

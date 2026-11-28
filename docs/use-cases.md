@@ -3,11 +3,11 @@
 Every use case Claude has on a Mac, tried through the hosted relay by a fresh Claude Code in
 each screen state: unlocked, locked (screen on), lid closed while still unlocked (the first
 minutes), and lid closed and locked. The display asleep on an unlocked Mac isn't a state of its
-own: it lasts only the minutes before the screen lock, and on Toni's Mac it never came up in a
-day of waiting (dropped by Toni, 2026-11-04).
+own: it lasts only the minutes before the screen lock, and on the maintainer's Mac it never came up in a
+day of waiting (dropped on 2026-11-04).
 
 Kept by hand. The table is from the last runs of the screen-state kit, now retired (spec 016,
-2026-11-26); what covers each use case now (a test, a sandbox Mac check, an eval task, or Toni's
+2026-11-26); what covers each use case now (a test, a sandbox Mac check, an eval task, or the maintainer's
 conditions) is in `docs/regression-coverage.md`, "Use cases". A row changes only with a new
 result seen in that state on the installed app, quoted with its version and date. ✅ works,
 ⛔ refuses and says why, ❌ fails, ↷ not tried because an earlier step failed, — not run in that
@@ -15,7 +15,7 @@ state yet.
 
 Checked: unlocked: 2026-11-02 22:13:50 (app 0.8.95); locked: 2026-11-03 08:03:04 (app 0.8.100); lid_closed: 2026-11-03 21:08:35 (app 0.8.103); lid_closed_locked: 2026-11-02 13:27:34 (app 0.8.78).
 
-Rows for what was removed on 2026-11-07 (Mail, WhatsApp sending, Notes' window editing, Messages' window actions, Reminders' window setters; Toni: Latchkey never disturbs the user) were taken out by hand; the rest is from the runs above.
+Rows for what was removed on 2026-11-07 (Mail, WhatsApp sending, Notes' window editing, Messages' window actions, Reminders' window setters; decided: Latchkey never disturbs the user) were taken out by hand; the rest is from the runs above.
 
 | Use case | Unlocked | Locked | Lid closed | Lid closed, locked |
 |---|---|---|---|---|

@@ -3,11 +3,11 @@ import Testing
 
 @testable import Latchkey
 
-/// The shared fixtures in specs/001-core/contracts/fixtures: the Go relay reads the same files.
+/// The shared fixtures in docs/design/contracts/fixtures: the Go relay reads the same files.
 enum Fixtures {
     static let dir = URL(fileURLWithPath: #filePath)
         .deletingLastPathComponent()
-        .appendingPathComponent("../../specs/001-core/contracts/fixtures")
+        .appendingPathComponent("../../docs/design/contracts/fixtures")
         .standardizedFileURL
 
     /// The app's own copies of fixtures not yet in the shared folder (FR-190 to FR-192: `clients`,
@@ -117,3 +117,6 @@ extension AgentState {
         thermalState: .nominal, lowPowerMode: false, lidClosed: false, timeZone: "Europe/Helsinki",
         keepAwake: .on, observedAt: Date(timeIntervalSince1970: 1_790_000_000))
 }
+
+// The requirements this file's tests cite (docs/requirements/; script/process-check).
+// Validates: FR-190, FR-192, FR-671, FR-672

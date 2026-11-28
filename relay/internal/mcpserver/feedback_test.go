@@ -109,7 +109,7 @@ func TestSharedReportsReachTheIntakeSealed(t *testing.T) {
 
 	// Claude names the machine involved: the report marks it named, and never holds its name.
 	res, err = cs.CallTool(ctx(t), &mcp.CallToolParams{Name: "feedback", Arguments: map[string]any{
-		"summary": "Shell answered late", "details": "shell_run: 31 s", "machines": []any{"toni's macbook pro"},
+		"summary": "Shell answered late", "details": "shell_run: 31 s", "machines": []any{"sam's macbook pro"},
 	}})
 	require.NoError(t, err)
 	require.False(t, res.IsError, text(t, res))
@@ -229,3 +229,6 @@ func TestTheSenderChecksSharingAgain(t *testing.T) {
 	}, 5*time.Second, 20*time.Millisecond, "dropped by the sender")
 	assert.Empty(t, intake.received(), "never sent")
 }
+
+// The requirements this file's tests cite (docs/requirements/; script/process-check).
+// Validates: FR-1401, FR-1403, FR-1406, FR-1410, FR-1412, FR-1414, FR-1415a, FR-1416

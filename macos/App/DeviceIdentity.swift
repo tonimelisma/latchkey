@@ -86,7 +86,7 @@ struct DeviceIdentity: Sendable {
 
     /// Versions up to 0.8.3 kept the relay and device ID in user defaults, which any program
     /// running as the Owner can change; such a pairing is never used, only removed. (0.8.4 tried
-    /// to move it and lost Toni's, the only one; the move is gone with it: security review,
+    /// to move it and lost the maintainer's, the only one; the move is gone with it: security review,
     /// 2026-10-24.)
     private static func removeOldStylePairing(_ vault: any PairingVault) {
         vault.removeLegacyDefault(legacyRelay)

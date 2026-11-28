@@ -111,7 +111,7 @@ func TestUpdateInstallsASignedNewerRelease(t *testing.T) {
 	require.ErrorIs(t, err, update.ErrUpToDate)
 }
 
-// Releases were tagged server-v<x.y.z> until 2026-11-04 and linux-<x.y.z> since (Toni: "v1.0 and
+// Releases were tagged server-v<x.y.z> until 2026-11-04 and linux-<x.y.z> since (decided: "v1.0 and
 // server-v1.0 doesn't make sense"); the newest under either name wins, never the Mac app's.
 func TestUpdateReadsBothTagNames(t *testing.T) {
 	u, g, priv, program := setup(t, "0.1.0")

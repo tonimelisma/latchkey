@@ -87,9 +87,9 @@ func docker(ctx context.Context, args ...string) (string, error) {
 	return string(out), nil
 }
 
-// asToni runs a command in the container as the server's owner.
-func (c *check) asToni(command string) (string, error) {
-	return docker(c.ctx, "exec", "-u", "toni", "-e", "HOME=/home/toni", "-w", "/home/toni", c.container, "bash", "-lc", command) // a login shell, as an SSH session
+// asOwner runs a command in the container as the server's owner.
+func (c *check) asOwner(command string) (string, error) {
+	return docker(c.ctx, "exec", "-u", "sam", "-e", "HOME=/home/sam", "-w", "/home/sam", c.container, "bash", "-lc", command) // a login shell, as an SSH session
 }
 
 func (c *check) run() error {
@@ -244,7 +244,7 @@ func (c *check) run() error {
 	}
 
 	step("installing with install.sh as the owner; typing the code on the relay's page")
-	installCmd := exec.CommandContext(ctx, "docker", "exec", "-u", "toni", "-e", "HOME=/home/toni", "-w", "/home/toni", c.container, "sh", "-c", //nolint:gosec // docker exec in the check's own container
+	installCmd := exec.CommandContext(ctx, "docker", "exec", "-u", "sam", "-e", "HOME=/home/sam", "-w", "/home/sam", c.container, "sh", "-c", //nolint:gosec // docker exec in the check's own container
 		fmt.Sprintf("curl -fsSL %s/install.sh | LATCHKEY_BASE_URL=%s LATCHKEY_TEST_INSECURE_RELAY=1 sh -s -- %s", releaseURL, releaseURL, fromContainer))
 	stdout, err := installCmd.StdoutPipe()
 	if err != nil {
@@ -343,13 +343,13 @@ func (c *check) run() error {
 	}
 
 	step("uninstalling: the server leaves the account and nothing is left on it")
-	if out, err := c.asToni("latchkey uninstall"); err != nil || !strings.Contains(out, "Removed from your account") {
+	if out, err := c.asOwner("latchkey uninstall"); err != nil || !strings.Contains(out, "Removed from your account") {
 		return fmt.Errorf("uninstall: %w\n%s", err, out)
 	}
 	if _, err := c.waitLinuxOnline(db, r, owner.ID, false); err != nil {
 		return err
 	}
-	if out, _ := c.asToni("ls -a ~/.config ~/.local/share ~/.local/lib ~/.cache 2>&1; systemctl is-enabled latchkey 2>&1; ls /etc/systemd/system/latchkey.service 2>&1"); strings.Contains(out, "latchkey ") ||
+	if out, _ := c.asOwner("ls -a ~/.config ~/.local/share ~/.local/lib ~/.cache 2>&1; systemctl is-enabled latchkey 2>&1; ls /etc/systemd/system/latchkey.service 2>&1"); strings.Contains(out, "latchkey ") ||
 		!strings.Contains(out, "No such file") {
 		return fmt.Errorf("something was left after uninstalling:\n%s", out)
 	}
@@ -470,7 +470,7 @@ func indent(s string) string { return "    " + strings.ReplaceAll(s, "\n", "\n  
 func (c *check) checkShellAndFiles() error {
 	step("shell on the server: as the owner, sudo where allowed, the state line")
 	text, isErr, err := c.call("shell_run", map[string]any{"machine": "homeserver", "command": "id -un; sudo id -u; uname -s"})
-	if err != nil || isErr || !strings.Contains(text, "toni\n0\nLinux") || !strings.Contains(text, "homeserver (Linux): online · up") {
+	if err != nil || isErr || !strings.Contains(text, "sam\n0\nLinux") || !strings.Contains(text, "homeserver (Linux): online · up") {
 		return fmt.Errorf("shell_run on homeserver: %w %q", err, text)
 	}
 
@@ -500,10 +500,10 @@ func (c *check) checkShellAndFiles() error {
 	if err := os.WriteFile(picPath, pic.Bytes(), 0o600); err != nil {
 		return err
 	}
-	if _, err := docker(c.ctx, "cp", picPath, c.container+":/home/toni/pic.png"); err != nil {
+	if _, err := docker(c.ctx, "cp", picPath, c.container+":/home/sam/pic.png"); err != nil {
 		return err
 	}
-	if _, err := docker(c.ctx, "exec", c.container, "chown", "toni:toni", "/home/toni/pic.png"); err != nil {
+	if _, err := docker(c.ctx, "exec", c.container, "chown", "sam:sam", "/home/sam/pic.png"); err != nil {
 		return err
 	}
 	res, err := c.cs.CallTool(c.ctx, &mcp.CallToolParams{Name: "files_read", Arguments: map[string]any{"machine": "homeserver", "path": "pic.png"}})
@@ -522,7 +522,7 @@ func (c *check) checkShellAndFiles() error {
 	if text, isErr, err = c.call("files_change", map[string]any{"machine": "homeserver", "action": "delete", "path": "notes"}); err != nil || isErr || !strings.Contains(text, "for good") {
 		return fmt.Errorf("files_change delete: %w %q", err, text)
 	}
-	if out, _ := c.asToni("test -e ~/notes && echo still-there || echo gone"); strings.TrimSpace(out) != "gone" {
+	if out, _ := c.asOwner("test -e ~/notes && echo still-there || echo gone"); strings.TrimSpace(out) != "gone" {
 		return errors.New("the deleted folder is still there")
 	}
 	return nil
@@ -530,7 +530,7 @@ func (c *check) checkShellAndFiles() error {
 
 func (c *check) checkSettings() error {
 	step("turning Shell off on the server: Claude no longer sees it there")
-	if out, err := c.asToni("latchkey shell off"); err != nil {
+	if out, err := c.asOwner("latchkey shell off"); err != nil {
 		return fmt.Errorf("latchkey shell off: %w %s", err, out)
 	}
 	ok := false
@@ -549,12 +549,12 @@ func (c *check) checkSettings() error {
 	if err != nil || !isErr || !strings.HasPrefix(text, "homeserver doesn't offer shell_run") {
 		return fmt.Errorf("shell_run on homeserver with Shell off: %w %q", err, text)
 	}
-	if _, err := c.asToni("latchkey shell on"); err != nil {
+	if _, err := c.asOwner("latchkey shell on"); err != nil {
 		return err
 	}
 
 	step("pausing on the server: calls are answered at once")
-	if _, err := c.asToni("latchkey pause"); err != nil {
+	if _, err := c.asOwner("latchkey pause"); err != nil {
 		return err
 	}
 	time.Sleep(1500 * time.Millisecond)
@@ -562,16 +562,16 @@ func (c *check) checkSettings() error {
 	if !isErr || !strings.Contains(text, "paused") {
 		return fmt.Errorf("files_find while paused: %q", text)
 	}
-	if _, err := c.asToni("latchkey resume"); err != nil {
+	if _, err := c.asOwner("latchkey resume"); err != nil {
 		return err
 	}
 	time.Sleep(1500 * time.Millisecond)
-	if out, err := c.asToni("latchkey activity | tail -n 5; latchkey status"); err != nil || !strings.Contains(out, "files_find") || !strings.Contains(out, "Service: active") {
+	if out, err := c.asOwner("latchkey activity | tail -n 5; latchkey status"); err != nil || !strings.Contains(out, "files_find") || !strings.Contains(out, "Service: active") {
 		return fmt.Errorf("activity and status on the server: %w\n%s", err, out)
 	}
 	// The full trace in the export line every side shares (spec 001 FR-686, spec 010 FR-1059).
 	day := time.Now().UTC().Format("2006-01-02")
-	if out, err := c.asToni("latchkey activity export --from " + day); err != nil ||
+	if out, err := c.asOwner("latchkey activity export --from " + day); err != nil ||
 		!strings.Contains(out, `"source":"linux"`) || !strings.Contains(out, `"tool":"files_find"`) ||
 		!strings.Contains(out, `"call_id":"`) {
 		return fmt.Errorf("the server's trace export: %w\n%s", err, out)
@@ -596,7 +596,7 @@ func (c *check) checkLog() error {
 			return fmt.Errorf("latchkey_log has no %q:\n%s", want, text)
 		}
 	}
-	for _, private := range []string{"host.docker.internal", "localhost:", "shell_run", "files_", "id -un", "hello", "/home/toni", "sleep 77"} {
+	for _, private := range []string{"host.docker.internal", "localhost:", "shell_run", "files_", "id -un", "hello", "/home/sam", "sleep 77"} {
 		if strings.Contains(text, private) {
 			return fmt.Errorf("latchkey_log shows %q:\n%s", private, text)
 		}

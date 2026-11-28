@@ -1,7 +1,7 @@
 // Package shell is Shell on a Linux server (spec 010 FR-1030 to FR-1033, plan D9): the same two
 // tools as the Mac's, commands in a bash login shell in a terminal, jobs that keep running, sudo
 // that never waits for a password, and what a command leaves running stopped when it finishes
-// unless Claude asked to keep it. There is no write fence (Toni, 2026-10-31: it blocks sudo).
+// unless Claude asked to keep it. There is no write fence (decided 2026-10-31: it blocks sudo).
 package shell
 
 import (

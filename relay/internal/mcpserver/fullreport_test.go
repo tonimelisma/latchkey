@@ -95,7 +95,7 @@ func sharingMac(t *testing.T, e *env, wait time.Duration, part string) {
 			}
 			text = part
 		case "browser_look":
-			text = "Opened page pk4m2: Cart on Toni's MacBook Pro (owner@example.com)"
+			text = "Opened page pk4m2: Cart on Sam's MacBook Pro (owner@example.com)"
 		case "logins_fill":
 			text = "Typed the code 482913 into e7 and pressed e9"
 		}
@@ -274,3 +274,7 @@ func TestReportWithoutASessionCarriesTheAppsCalls(t *testing.T) {
 	assert.Contains(t, string(all), "shutting down", "FR-1442a: the relay's own starts and stops")
 	assert.Contains(t, string(all), "api/checkout", "the Mac was asked for the page the calls used")
 }
+
+// The requirements this file's tests cite (docs/requirements/; script/process-check).
+// Validates: FR-1440, FR-1441, FR-1442, FR-1442a, FR-1443, FR-1447, FR-1448, FR-1449, FR-1451
+// Validates: SC-1405

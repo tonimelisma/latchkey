@@ -3,7 +3,7 @@ import Testing
 
 @testable import Latchkey
 
-/// The README says what Latchkey does and what works when (CLAUDE.md, Toni 2026-11-07): every
+/// The README says what Latchkey does and what works when (CLAUDE.md, decided 2026-11-07): every
 /// capability Claude can be given is named in its "What Latchkey does" section, and the "What works
 /// when" section is there.
 @Suite struct ReadmeTests {

@@ -9,7 +9,7 @@ import Testing
 
     static let csv = """
         Title,URL,Username,Password,Notes,OTPAuth
-        example.com (toni),https://www.example.com/login,toni@example.com,"pa,ss""word",,otpauth://totp/Example:toni?secret=GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ&issuer=Example
+        example.com (sam),https://www.example.com/login,sam@example.com,"pa,ss""word",,otpauth://totp/Example:sam?secret=GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ&issuer=Example
         shop.test,https://shop.test/,buyer,hunter2,"a note
         on two lines",
         nouser.test,https://nouser.test/,,onlypassword,,
@@ -21,7 +21,7 @@ import Testing
         #expect(rows.count == 3)  // the row without a web address is left out
         let first = try #require(rows.first)
         #expect(first.site == "example.com")
-        #expect(first.user == "toni@example.com")
+        #expect(first.user == "sam@example.com")
         #expect(first.password == "pa,ss\"word")
         #expect(first.otp?.hasPrefix("otpauth://totp/") == true)
         #expect(rows[1].site == "shop.test" && rows[1].otp == nil)
@@ -127,3 +127,6 @@ import Testing
         #expect(SiteMatch.site(of: "android://abc@com.example") == nil)
     }
 }
+
+// The requirements this file's tests cite (docs/requirements/; script/process-check).
+// Validates: FR-1300, FR-1303, FR-1321

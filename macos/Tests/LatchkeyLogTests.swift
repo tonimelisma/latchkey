@@ -169,3 +169,6 @@ import Testing
         try AgentMessage.validate(tools: registry.tools)
     }
 }
+
+// The requirements this file's tests cite (docs/requirements/; script/process-check).
+// Validates: FR-662, FR-663, FR-664, FR-665

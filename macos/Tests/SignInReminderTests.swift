@@ -38,3 +38,6 @@ import Testing
         #expect(!SignInReminder.due(now: now, imported: Self.start, since: Self.start, reminded: nil, on: false))
     }
 }
+
+// The requirements this file's tests cite (docs/requirements/; script/process-check).
+// Validates: FR-1304

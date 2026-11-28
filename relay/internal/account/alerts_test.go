@@ -81,19 +81,19 @@ func TestPairingAMacIsEmailed(t *testing.T) {
 	mac := e.browser()
 
 	before := len(e.mail.Sent())
-	code := b.pairCode("Toni's MacBook")
-	status, m := mac.json("/pair/exchange", map[string]string{"code": code, "public_key": p256DER(t), "name": "Toni's MacBook"})
+	code := b.pairCode("Sam's MacBook")
+	status, m := mac.json("/pair/exchange", map[string]string{"code": code, "public_key": p256DER(t), "name": "Sam's MacBook"})
 	require.Equal(t, http.StatusOK, status, m)
 	sent := e.newMail(before)
 	require.Len(t, sent, 1, "one email for the new Mac")
 	assert.Equal(t, "A Mac was connected to your Latchkey account", sent[0].Subject)
-	assert.Contains(t, sent[0].Body, "A Mac named “Toni's MacBook” was connected to your Latchkey account on ")
+	assert.Contains(t, sent[0].Body, "A Mac named “Sam's MacBook” was connected to your Latchkey account on ")
 	e.assertSecurityEmail(sent[0], code)
 
 	// The same Mac pairing again is a new credential too: emailed as well.
 	before = len(e.mail.Sent())
-	code = b.pairCode("Toni's MacBook")
-	status, _ = mac.json("/pair/exchange", map[string]string{"code": code, "public_key": p256DER(t), "name": "Toni's MacBook", "replaces": m["device_id"].(string)})
+	code = b.pairCode("Sam's MacBook")
+	status, _ = mac.json("/pair/exchange", map[string]string{"code": code, "public_key": p256DER(t), "name": "Sam's MacBook", "replaces": m["device_id"].(string)})
 	require.Equal(t, http.StatusOK, status)
 	assert.Len(t, e.newMail(before), 1)
 
@@ -492,3 +492,6 @@ func TestSecurityEmailsAreCappedPerAccount(t *testing.T) {
 	assert.Equal(t, "other@example.com", got[0].To)
 	assert.True(t, strings.HasPrefix(got[0].Subject, "An app was allowed"))
 }
+
+// The requirements this file's tests cite (docs/requirements/; script/process-check).
+// Validates: FR-696, FR-697, FR-699, FR-699a

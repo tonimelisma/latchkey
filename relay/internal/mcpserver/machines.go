@@ -220,7 +220,7 @@ func toMap(v any) (map[string]any, bool) {
 
 // unionSchema unites object schemas: every property of any of them (the first definition wins,
 // enum values are united), a property some kinds lack marked "(Mac only)" or "(Linux servers
-// only)", enum values some kinds lack named the same way in the property's description (Toni,
+// only)", enum values some kinds lack named the same way in the property's description (decided
 // 2026-11-24: a Mac refused latchkey_log's "settings", which only Linux servers have), and
 // required only what all require.
 func unionSchema(schemas []map[string]any, kinds []string) map[string]any {

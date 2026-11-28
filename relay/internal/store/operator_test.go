@@ -241,3 +241,6 @@ func TestOperatorLogIsPurged(t *testing.T) {
 	list, _ := s.BlockedEmails(ctx)
 	assert.Len(t, list, 2, "the blocks themselves stay")
 }
+
+// The requirements this file's tests cite (docs/requirements/; script/process-check).
+// Validates: FR-196, FR-197

@@ -297,7 +297,7 @@ final class ConnectionCounter: @unchecked Sendable {
         let f = try FilesFixture()
         let r = await call(tools(f), "files_read", ["path": .string("Documents/lease.txt")])
         #expect(!r.isError, "\(r.content.jsonText)")
-        #expect(r.content.jsonText.contains("not instructions"), "FR-206")
+        #expect(r.content.jsonText.contains("not instructions"), "FR-216")
         let tilde = await call(tools(f), "files_read", ["path": .string("~/Documents/lease.txt")])
         #expect(!tilde.isError)
     }
@@ -352,7 +352,7 @@ final class ConnectionCounter: @unchecked Sendable {
         #expect(new.activity?.contains("draft.md") == true)
         #expect(try String(contentsOfFile: f.path("Documents/draft.md"), encoding: .utf8) == "# Draft")
         let again = await call(t, "files_write", ["path": .string("Documents/draft.md"), "text": .string("x")])
-        #expect(again.isError, "FR-204")
+        #expect(again.isError, "FR-214")
         _ = await call(
             t, "files_write", ["path": .string("Documents/draft.md"), "text": .string("\nmore"), "append": .bool(true)])
         _ = await call(
@@ -393,7 +393,7 @@ final class ConnectionCounter: @unchecked Sendable {
         #expect(!copied.isError)
         let clash = await call(
             t, "files_copy", ["from": .string("Documents/lease.txt"), "to": .string("Archive/lease.txt")])
-        #expect(clash.isError, "FR-204")
+        #expect(clash.isError, "FR-214")
         let intoFolder = await call(t, "files_move", ["from": .string("latin1.txt"), "to": .string("Archive")])
         #expect(!intoFolder.isError)
         #expect(
@@ -419,3 +419,6 @@ final class ConnectionCounter: @unchecked Sendable {
         #expect(r.content.jsonText.contains("nope.txt"))
     }
 }
+
+// The requirements this file's tests cite (docs/requirements/; script/process-check).
+// Validates: FR-214, FR-216

@@ -107,7 +107,7 @@ import WebKit
         #expect(c.expiresDate == later)
     }
 
-    /// Toni, 2026-11-22 ("Decide fresh each time"): a site that fell back under the old sign-in
+    /// decided 2026-11-22 ("Decide fresh each time"): a site that fell back under the old sign-in
     /// (kept in the item as fellBack) is Latchkey's own again; the rest of the item still reads.
     @Test func anOldFallbackIsForgottenAndTheItemStillReads() throws {
         let vault = MemoryVault()
@@ -276,3 +276,6 @@ import WebKit
         #expect(line.contains("browser_look sign_in_again moves the page into a Safari tab of Claude's"), "\(line)")
     }
 }
+
+// The requirements this file's tests cite (docs/requirements/; script/process-check).
+// Validates: FR-1350, FR-1351, FR-1353, FR-1355

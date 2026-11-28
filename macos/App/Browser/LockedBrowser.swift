@@ -1,7 +1,7 @@
 import AppKit
 import WebKit
 
-/// One page of Claude's in Latchkey's own browser (spec 005 FR-420, FR-444, Toni 2026-11-02 and
+/// One page of Claude's in Latchkey's own browser (spec 005 FR-420, FR-444, decided 2026-11-02 and
 /// 2026-11-15): an off-screen WebKit view, first made for while the Mac is locked (Safari stops
 /// answering scripts then, seen live 2026-11-01), and since 2026-11-15 used for every page Claude
 /// opens, locked or not, so a page's dialog can wait for Claude's answer instead of freezing a
@@ -362,7 +362,7 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownl
     /// plus a toolbar (Safari's is 90 points). WebKit asks the app for it, as it asks Safari; an
     /// app that doesn't answer gets a 0×0 window at no place on the screen. That 0×0 window made
     /// Citi end the sign-in after its code (2026-11-22), a Latchkey bug fixed by answering the
-    /// window frame (Toni: "change the background tab to be more real so this legitimate use case
+    /// window frame (decided: "change the background tab to be more real so this legitimate use case
     /// can work"). Nothing comes on screen: there is no window.
     static func windowFrame(page: CGSize, screen: CGRect?) -> CGRect {
         let free = screen ?? CGRect(x: 0, y: 0, width: 1512, height: 949)
@@ -1449,7 +1449,7 @@ final class LockedBrowser: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownl
         let follow = plan.follow == true
         let chars = Array(value)
         var covered: String?
-        // Why the typing stopped, said in the answer (Toni, 2026-11-25: "if you can't see the
+        // Why the typing stopped, said in the answer (decided 2026-11-25: "if you can't see the
         // issue you're missing instrumentation"). Steps, references and hosts only, never a
         // character typed.
         var why = ""

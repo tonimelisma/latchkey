@@ -56,7 +56,7 @@ check "a relay that doesn't answer audit requests" 1 audit_verdict \
 check "a relay that didn't answer in time" 1 audit_verdict "Audit check not possible: the relay didn't answer"
 check "no audit check line" 1 audit_verdict ""
 
-# Idle before an install (Toni, 2026-11-22): no running call, none for the quiet time.
+# Idle before an install (decided 2026-11-22): no running call, none for the quiet time.
 calls=$(mktemp -d)
 check "no running-calls folder: idle" 0 idle_verdict "$calls/none" 2000000000 600
 touch -t 202001010000 "$calls"
@@ -87,3 +87,6 @@ rm -rf "$repo"
 
 [ "$fails" = 0 ] && echo "all install check tests pass" || echo "$fails install check tests failed"
 [ "$fails" = 0 ]
+
+# The requirements this file's tests cite (docs/requirements/; script/process-check).
+# Validates: FR-622, FR-634, FR-636

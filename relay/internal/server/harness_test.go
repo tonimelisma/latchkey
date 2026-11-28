@@ -309,3 +309,6 @@ func noClients(t *testing.T, c *testagent.Conn) {
 	case <-time.After(300 * time.Millisecond):
 	}
 }
+
+// The requirements this file's tests cite (docs/requirements/; script/process-check).
+// Validates: FR-180

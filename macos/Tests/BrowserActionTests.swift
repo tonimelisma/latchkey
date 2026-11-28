@@ -4,7 +4,7 @@ import WebKit
 
 @testable import Latchkey
 
-/// Spec 005 FR-433 to FR-439 (2026-11-05, Toni: "all the safari stuff"): keys, hover,
+/// Spec 005 FR-433 to FR-439 (2026-11-05: "all the safari stuff"): keys, hover,
 /// scrolling, lists, files into and out of the page, and the copy a picture is drawn from. The
 /// page scripts run in a real WebKit view (the engine Safari uses); the tools run against the
 /// stand-in Safari; real Safari is checked in the sandbox Mac (relay/e2e/sandbox-checks.md).
@@ -240,9 +240,9 @@ enum ActionPage {
         #expect(r.elements.filter { $0.kind == "link" }.count == 1, "the bare anchor stays out")
         let user = try #require(r.elements.first { $0.label == "User ID" }?.ref)
         #expect(r.text.contains("Sign in"), "the frame's text too")
-        _ = try await p.run(PageScripts.type(user, text: "toni", submit: false))
+        _ = try await p.run(PageScripts.type(user, text: "sam", submit: false))
         let typed = try await p.run("document.querySelector('iframe').contentDocument.querySelector('input').value")
-        #expect(typed == "toni")
+        #expect(typed == "sam")
     }
 
     /// What an opened menu shows is listed before the rest, so the cap never hides it (Etsy's
@@ -663,3 +663,6 @@ final class DownloadSafari: ScriptRunner, @unchecked Sendable {
         #expect(try FileManager.default.contentsOfDirectory(atPath: folder.path) == ["r.txt"], "nothing more saved")
     }
 }
+
+// The requirements this file's tests cite (docs/requirements/; script/process-check).
+// Validates: FR-408, FR-410, FR-420, FR-433, FR-437, FR-438, FR-439, FR-481

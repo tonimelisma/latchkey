@@ -1,7 +1,7 @@
 import Foundation
 
 /// Finding a site's sign-in code in the Owner's texts and email, for the two ways of the codes
-/// experiment where Latchkey takes part (Toni, 2026-11-22: "test all approaches for robustness on
+/// experiment where Latchkey takes part (decided 2026-11-22: "test all approaches for robustness on
 /// a wide variety of web sites"; spec 013 FR-1376): Latchkey fetches the code itself, or checks
 /// that a code Claude passes really came from that site. Read from Messages' database and Apple
 /// Mail's files, never a window.
@@ -77,7 +77,7 @@ final class CodeFinder {
 
     /// Whether a message may hold `site`'s code: a site-bound line must name the site; without one,
     /// an email must name the site (its sender or text; security review 2026-11-21), and a text may
-    /// come from anyone (Toni, 2026-11-21: "Any new code text").
+    /// come from anyone (decided 2026-11-21: "Any new code text").
     nonisolated static func mayBe(_ m: Message, for site: String) -> Bool {
         if let b = bound(m.text) { return SiteMatch.fills(site: site, on: "https://\(b.domain)/") }
         if MailCodes.Place(key: m.id) != nil { return MailCodes.names(site, in: m.text) }

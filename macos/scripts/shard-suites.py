@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Splits the tests that run one at a time (page-suites.txt, timing-suites.txt) into N groups
-of about equal time, for mac-build.yml's side-by-side jobs (Toni, 2026-11-26: "split the slow
+of about equal time, for ci.yml's side-by-side Mac jobs (decided 2026-11-26: "split the slow
 step into parallel jobs, get it to 5 minutes").
 
 Usage: shard-suites.py quiet

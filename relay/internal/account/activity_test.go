@@ -101,3 +101,6 @@ func TestActivityPage(t *testing.T) {
 	assert.Less(t, strings.Index(joined, "Signed in with a passkey"), strings.Index(joined, "shell_check"), "newest first")
 	assert.Less(t, strings.Index(joined, "shell_check"), strings.Index(joined, "Machine connected"), "newest first")
 }
+
+// The requirements this file's tests cite (docs/requirements/; script/process-check).
+// Validates: FR-651, FR-652, FR-653, FR-654, FR-655, FR-657

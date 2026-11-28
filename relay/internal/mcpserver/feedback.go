@@ -188,7 +188,7 @@ func (s *Server) report(userID string, ms []machine, named []string, summary, de
 	return r
 }
 
-// reportMachines says what a report holds about machines (FR-1412; Toni, 2026-11-24): each
+// reportMachines says what a report holds about machines (FR-1412; decided 2026-11-24): each
 // machine Claude named, or, when it named none it knows, every machine online now. Names that
 // match no machine are left out; a machine's name never goes in.
 func reportMachines(ms []machine, named []string) []reports.Machine {

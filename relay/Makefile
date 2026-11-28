@@ -35,10 +35,8 @@ tidy-check:
 vuln:
 	$(GOVULNCHECK) ./...
 
-# Secrets committed anywhere in the repository's history, and a working relay's address or an
-# Apple signing team where only placeholders may be. Fails on any.
+# Secrets committed anywhere in the repository's history. Fails on any.
 secrets:
-	cd .. && scripts/private-values-check.sh
 	cd .. && $(GITLEAKS) git --redact --no-banner .
 
 # Static analysis of the Go relay and the Swift app: Semgrep's public Go, Swift, secrets, and
@@ -70,14 +68,8 @@ deps:
 
 # Tests of the repository scripts, in temporary folders: no server, no network.
 script-tests:
-	cd .. && scripts/tests/private_values_test.sh
-	cd .. && scripts/tests/hooks_guard_test.sh
-	cd .. && scripts/tests/hooks_cloud_test.sh
-	cd .. && scripts/tests/tidy_test.sh
 	cd .. && scripts/tests/release_tag_test.sh
 	cd .. && scripts/tests/appcast_test.sh
-	cd .. && scripts/tests/loose_ends_test.sh
-	cd .. && scripts/tests/keep_going_test.sh
 	cd .. && scripts/tests/install_pairing_test.sh
 	cd .. && scripts/tests/install_checks_test.sh
 	cd .. && scripts/tests/auto_update_test.sh

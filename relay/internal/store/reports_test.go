@@ -66,3 +66,6 @@ func TestReportOutbox(t *testing.T) {
 	assert.Len(t, ta, 16)
 	assert.NotContains(t, ta, a.ID)
 }
+
+// The requirements this file's tests cite (docs/requirements/; script/process-check).
+// Validates: FR-1403, FR-1412, FR-1414

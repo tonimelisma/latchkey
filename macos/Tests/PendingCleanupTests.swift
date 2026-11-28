@@ -5,7 +5,7 @@ import Testing
 
 @testable import Latchkey
 
-/// Spec 002 FR-180, spec 008 FR-852 (Toni, 2026-11-22: "The agent reads the messages, archives them
+/// Spec 002 FR-162, spec 008 FR-852 (decided 2026-11-22: "The agent reads the messages, archives them
 /// etc"): what Claude asks to delete or archive is done at once while the Mac is unlocked, else at
 /// the next unlock.
 @MainActor @Suite struct PendingCleanupTests {
@@ -65,7 +65,7 @@ import Testing
     }
 }
 
-/// Spec 002 FR-180: messages_delete, through the cleanup, for a message Messages has.
+/// Spec 002 FR-162: messages_delete, through the cleanup, for a message Messages has.
 /// Two '[Uber] Your code' texts with the same text, 2026-11-22: the window shows both, so the one
 /// to delete is told by how many like it come later.
 @Suite struct SameTextPickTests {
@@ -309,3 +309,6 @@ import Testing
         }
     }
 }
+
+// The requirements this file's tests cite (docs/requirements/; script/process-check).
+// Validates: FR-162, FR-850, FR-852, FR-853

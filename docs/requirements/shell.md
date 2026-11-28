@@ -1,0 +1,173 @@
+# Shell: requirements
+
+Spec 004 (migrated from `specs/004-shell/spec.md`, titled "Spec 004: Shell — WHAT and WHY"). The how is in
+[the design](../design/shell.md), each decision in [the ADRs](../adr/README.md) of plan 004.
+Each requirement is one `- **ID**` item ending `[verified]` (a test carries
+`Validates: <ID>`) or `unverified: <why>`. Withdrawn requirements are kept, undeclared, at
+the end as the record. Some items still carry dated notes of how they came to be; the
+requirement is the sentence they qualify.
+
+Status: Built without a review stop (decided 2026-10-22); reviewed and approved 2026-10-29.
+Scope: Claude runs commands on the Mac as the Owner, including long and interactive ones.
+Out of scope: administrator (root) commands.
+
+## Problem
+
+Anything without a dedicated tool (scripts, git, Homebrew, checking disk space, converting a
+video) needs a terminal. From a phone, there is none.
+
+## User stories
+
+### US1 (P1): Run a command from anywhere
+1. Given Shell is On, when I ask "how much disk space is left?", then Claude runs a command and
+   answers from its output.
+2. Given a command takes ten minutes, then Claude starts it, checks on it later, and tells me
+   when it's done.
+3. Given a command asks "Continue? [y/n]", then Claude can answer it.
+4. Given a command is stuck, then Claude can stop it.
+
+## Requirements
+
+- **FR-301** While Shell is On, Claude shall be able to run a command in the Owner's login
+  shell, as the Owner, in a chosen folder, and get its output and exit status. unverified: no test cites it yet (migrated from spec 004 without one; #75)
+- **FR-302** When a command runs longer than the wait Claude asked for (at most 30 seconds),
+  the answer shall give the output so far and a job id, and the command shall keep running. unverified: no test cites it yet (migrated from spec 004 without one; #75)
+- **FR-303** Claude shall be able to check a job's new output and status, type input into it,
+  stop it, and list jobs. unverified: no test cites it yet (migrated from spec 004 without one; #75)
+- **FR-304** Commands shall run in a terminal, so programs that ask questions behave as in
+  Terminal; terminal control codes shall be removed from what Claude sees. unverified: no test cites it yet (migrated from spec 004 without one; #75)
+- **FR-305** Output shall stay within Claude's result size, keeping the most recent part and
+  saying so. unverified: no test cites it yet (migrated from spec 004 without one; #75)
+- **FR-306** Commands shall never run as administrator; Latchkey's keep-awake helper is not used. unverified: no test cites it yet (migrated from spec 004 without one; #75)
+- **FR-307** Each command Claude runs shall show a notification and appear in the menu's
+  activity. unverified: no test cites it yet (migrated from spec 004 without one; #75)
+- **FR-308** Shell shall have the levels Off and On, and start On (decided 2026-10-22). unverified: no test cites it yet (migrated from spec 004 without one; #75)
+- **FR-309** When Latchkey quits, its running commands shall be stopped. [verified]
+- **FR-310** When the Owner turns Shell off, the Mac shall at once stop every running command,
+  including those that kept running after their answer was given, and answer a command Claude
+  is waiting on with an error saying the Mac's owner turned Shell off (spec 001 FR-066; decided
+  2026-10-25). [verified]
+- **FR-311** When a command is stopped (by Claude, by turning Shell off, or by quitting
+  Latchkey), everything it started that is still running in its terminal shall be stopped with
+  it (security review, 2026-10-25). unverified: no test cites it yet (migrated from spec 004 without one; #75)
+- **FR-312** The Mac shall run at most 32 commands at once; a further one shall be refused with
+  an error telling Claude to wait for one to finish or to stop one (security review,
+  2026-10-25). unverified: no test cites it yet (migrated from spec 004 without one; #75)
+
+### Nothing left behind (decided 2026-10-27)
+
+Why: on 2026-10-25 a command left two headless Chrome processes running for two days, and
+commands left a 118 MB download, Chrome profiles, and logs in `/tmp`, beside results the maintainer
+wanted (receipts in Downloads, a key file). The answer: a command's leftovers are stopped and
+removed unless Claude asked to keep them for a time; writes go only where they are meant to; and
+what is left is on one list.
+
+- **FR-313** When a command finishes, every process it started that is still running shall be
+  stopped, whether it stayed in the command's terminal or left it (a new session, `nohup`),
+  unless Claude asked to keep the command's leftovers (FR-314). [verified]
+- **FR-314** When starting a command, Claude shall be able to ask to keep what it leaves running
+  and its scratch folder for a number of minutes after it finishes (its lease). Checking the job
+  shall start that time again. A lease shall never reach past 24 hours after the command
+  finished. When the lease ends, the leftovers shall be stopped and removed as in FR-313 and
+  FR-316. unverified: no test cites it yet (migrated from spec 004 without one; #75)
+- **FR-315** Each command shall have its own scratch folder, used by programs for their
+  temporary files, and Claude shall be told where it is. unverified: no test cites it yet (migrated from spec 004 without one; #75)
+- **FR-316** When a command's leftovers are removed, its scratch folder shall be moved to the
+  Trash (an empty one is deleted); one of 100 MB or more is deleted outright, and the answer says
+  so (decided 2026-11-21: "Delete big ones outright", after build folders in the Trash, 9.8 GB,
+  filled the Mac's disk). unverified: no test cites it yet (migrated from spec 004 without one; #75)
+- **FR-317** A command, and everything it starts, shall be able to write only to its scratch
+  folder, the folder Claude ran it in (unless that is the home folder or a folder above it),
+  Downloads, the caches package tools use, and what Claude declared when starting it (FR-318).
+  Any other write shall fail. unverified: no test cites it yet (migrated from spec 004 without one; #75)
+- **FR-318** When starting a command, Claude shall be able to declare the folders or files it
+  will write and why. Declaring the home folder, a folder above it, or the whole Library folder
+  shall be refused with an error asking for the specific folder. unverified: no test cites it yet (migrated from spec 004 without one; #75)
+- **FR-319** Shell startup files, launch agents, login items, `~/.ssh`, and git hooks shall be
+  writable only when declared (`~/.ssh` and git hooks added on 2026-10-28), even inside an allowed folder; Latchkey's own files never. unverified: no test cites it yet (migrated from spec 004 without one; #75)
+- **FR-320** When a command's output shows a write refused under FR-317, the answer shall tell
+  Claude how to write there: use the scratch folder, or declare the folder and run it again. unverified: no test cites it yet (migrated from spec 004 without one; #75)
+- **FR-321** When a command finishes, its answer shall say what it left: the processes stopped,
+  the scratch folder removed or kept until when, and the new files in what it declared and in
+  Downloads. unverified: no test cites it yet (migrated from spec 004 without one; #75)
+- **FR-322** While any command is running or its leftovers are kept, every tool answer shall end
+  with a line naming those commands and when each lease ends. unverified: no test cites it yet (migrated from spec 004 without one; #75)
+- **FR-323** What a command left shall be recorded in the activity log as Left Behind entries
+  (spec 001 FR-640): processes stopped, scratch removed, results kept, and declared permanent
+  changes (FR-319) marked as such. unverified: no test cites it yet (migrated from spec 004 without one; #75)
+- **FR-324** When Latchkey starts, it shall stop the processes and remove the scratch folders
+  that an earlier run of Latchkey left (after a crash), and record them. [verified]
+- **FR-325** When a launch agent, a login item, or a shell startup file changes while a command
+  runs or its leftovers are kept, and no command declared it, Latchkey shall record it and notify
+  the Owner. A process of a command that can't be stopped shall be recorded and notified too.
+  Nothing else Shell leaves is notified. [verified]
+- **FR-326** When Latchkey quits or Shell is turned off, kept leftovers shall be stopped and
+  removed as well (FR-309, FR-310). [verified]
+- **FR-327** A program a command started shall be stopped with the command's leftovers however
+  it left the command's terminal session and family (a quick double fork included), and shall
+  be found at the next start when Latchkey quit first. [verified]
+- **FR-328** When a command opens apps, files, or links through macOS (`open`), it shall be
+  refused unless Claude declared it (`uses`: `open`), and the answer shall say how to declare it. [verified]
+- **FR-331** What a command opens through macOS shall open behind the app the Owner is using,
+  unless Claude asks for the front (`/usr/bin/open`), so Claude's work doesn't take the front
+  (decided 2026-11-02: "Background").
+  When a command tells other apps what to do (AppleScript, `osascript`), it shall always be
+  refused, and the answer shall point to Latchkey's own tools (decided 2026-10-29: a script must
+  run outside the fence to reach an app and could then run anything; `app_scripts` withdrawn). Starting
+  background services through launchd (`launchctl`, `brew services`) shall be refused (decided
+  2026-10-28). unverified: no test cites it yet (migrated from spec 004 without one; #75)
+- **FR-329** When a command changes settings through macOS's settings service (`defaults
+  write`), it shall be refused unless Claude declared that domain's file in
+  `~/Library/Preferences` in writes, and Latchkey's own settings never; reading settings shall
+  keep working, and the answer shall say how to declare it (decided 2026-10-28). [verified]
+- **FR-330** When Latchkey starts, it shall check that the fence refuses a write and that a
+  program inside a fence is found by its mark (FR-327). When either fails, commands shall still
+  run, every Shell answer shall say that writes may not be fenced and leftovers may not all be
+  stopped, and the Owner shall be notified once (decided 2026-10-29). [verified]
+- **FR-332** When macOS stops a program a command started (a crash report naming Latchkey as
+  responsible, during the command), the next answer shall name the program and why it stopped,
+  even when the command's exit status hides it; for a program with windows it shall say what
+  makes it run inside the fence (bug report 2026-11-03: headless Chrome aborted three times, the
+  command said exit status 0, and only crash dialogs on the Owner's screen told). [verified]
+- **FR-333** A command shall be able to build software with Apple's build tools inside the
+  fence: `xcodebuild` and `swift` (building, testing, running, and package commands), also when
+  `make` or a project's own script starts them, with the fence still applying to everything they
+  start (decided 2026-11-21: "fix and test"; a feedback report of 2026-11-21: no Xcode project
+  could build through Shell, locked or unlocked, because those tools start sandboxes of their
+  own, which macOS refuses inside another). [verified]
+- **FR-334** When a command's output shows a program starting a sandbox of its own, the answer
+  shall say so and how to run that program without it, not that a write was refused. [verified]
+- **FR-335** When a command that declared `open` runs an Xcode project's tests (`xcodebuild test`
+  or `test-without-building`, also from `make` or a script), the build shall stay inside the
+  fence and only the test step shall run outside it, through Latchkey's own test launcher, which
+  runs nothing else and which the command can't change; without `open`, the tests shall be
+  refused at once with how to declare it (decided 2026-11-21: "Test step outside fence"; found
+  2026-11-21: an app LaunchServices opens for a fenced program gets none of Xcode's test
+  settings, so no app's unit tests could run through Shell).
+- A scratch shell in a throwaway Linux container was considered and left out (decided
+  2026-10-27). [verified]
+
+## Success criteria
+
+- **SC-301** From the phone, "how much disk space is free?" is answered from `df`. unverified: no test cites it yet (migrated from spec 004 without one; #75)
+- **SC-302** A 2-minute command started from the phone finishes and its result is reported. unverified: no test cites it yet (migrated from spec 004 without one; #75)
+- **SC-303** With Shell Off, no shell tool appears (test suite). unverified: no test cites it yet (migrated from spec 004 without one; #75)
+- **SC-304** A command that starts headless Chrome in the background and writes to `/tmp`
+  leaves nothing running and nothing in `/tmp` once it finishes; a file it saves to Downloads
+  stays and is listed (test suite and live check). unverified: no test cites it yet (migrated from spec 004 without one; #75)
+
+## Edge cases
+
+- Commands waiting for a password (`sudo`): Claude is told the command is waiting for input it
+  can't give; it can stop it.
+- Huge output; output with progress bars; commands that never end; many jobs at once.
+- The Mac going to sleep or Latchkey quitting mid-command.
+- A command that detaches something from its terminal (a new session, `nohup`): still known as
+  the command's, stopped with its leftovers (FR-313), also when it leaves through a parent that
+  exits at once (a quick double fork, FR-327). Something opened through macOS (`open -a`) or
+  told what to do by a script is started by macOS, not by the command: refused unless declared
+  (FR-328); once declared, what it starts runs outside the fence and keeps running (it could
+  start Terminal with a command, for example). launchd refuses jobs from inside the fence.
+- Settings changed through `defaults` are refused unless declared (FR-329). Other programs a
+  command asks over their own channels (a database server, a running app's own socket) are
+  outside the fence; only FR-325's places are watched.

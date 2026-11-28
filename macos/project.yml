@@ -14,7 +14,7 @@ packages:
     revision: eef1a539a373c1f1a320624b1130fc5de7b2e100  # 2.10.0
   MimeFoundation:
     url: https://github.com/migueldeicaza/MimeFoundation
-    # Reads mail's MIME structure (spec 008 plan D2, Toni 2026-10-29). The project has no release
+    # Reads mail's MIME structure (spec 008 plan D2, decided 2026-10-29). The project has no release
     # tags, so it is pinned by commit like Sparkle: 2026-02-11 "Fix for iOS".
     revision: dcb6746729d20cf00c42ad6453b4637a075f7d0b
 configFiles:
@@ -40,7 +40,7 @@ settings:
       LATCHKEY_APP_ID: net.melisma.latchkey
       LATCHKEY_URL_SCHEME: latchkey
       LATCHKEY_DISPLAY_NAME: Latchkey
-    # Debug and test builds are their own app in macOS's eyes (Toni, 2026-10-25): their own bundle
+    # Debug and test builds are their own app in macOS's eyes (decided 2026-10-25): their own bundle
     # identifier, and so their own settings, Keychain items, privacy permissions, and helper, and
     # no claim on latchkey:// links. A test copy sharing the installed app's identity erased the
     # Owner's pairing twice, and a leftover Debug build (which carries the debugging entitlement)
@@ -158,4 +158,4 @@ schemes:
         - name: LatchkeyTests
           parallelizable: true
       environmentVariables:
-        LATCHKEY_FIXTURES: "$(SRCROOT)/../specs/001-core/contracts/fixtures"
+        LATCHKEY_FIXTURES: "$(SRCROOT)/../docs/design/contracts/fixtures"

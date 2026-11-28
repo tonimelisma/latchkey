@@ -1,5 +1,5 @@
 // Package agentproto defines the messages of the Mac app ↔ relay agent protocol, v1
-// (specs/001-core/contracts/agent-protocol.md).
+// (docs/design/contracts/agent-protocol.md).
 package agentproto
 
 import (

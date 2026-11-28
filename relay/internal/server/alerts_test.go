@@ -47,3 +47,6 @@ func TestSecurityEmailNamesTheForwardedAddress(t *testing.T) {
 	time.Sleep(200 * time.Millisecond) // anything the refresh would have sent
 	assert.Len(t, h.mail.Sent(), 2)
 }
+
+// The requirements this file's tests cite (docs/requirements/; script/process-check).
+// Validates: FR-082, FR-699

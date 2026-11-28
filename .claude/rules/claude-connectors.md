@@ -1,10 +1,10 @@
 ---
 paths:
   - "relay/**"
-  - "specs/**/contracts/mcp-surface.md"
+  - "docs/design/contracts/mcp-surface.md"
 ---
 
-# How Claude's connector client behaves (verified 2026-10; sources in specs/001-core/research.md)
+# How Claude's connector client behaves (verified 2026-10; sources in docs/research/2026-10-19-core.md)
 
 - Claude calls the relay from Anthropic's cloud (egress `160.79.104.0/21`), never from the user's
   device. The `/authorize` page is opened in the user's own browser, from anywhere.

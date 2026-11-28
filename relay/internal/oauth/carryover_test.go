@@ -134,3 +134,6 @@ func TestFositeTokenRevoked(t *testing.T) {
 	assert.Equal(t, http.StatusUnauthorized, e.mcpStatus(f.AccessToken))
 	assert.Empty(t, e.grants())
 }
+
+// The requirements this file's tests cite (docs/requirements/; script/process-check).
+// Validates: FR-096, FR-188, FR-190

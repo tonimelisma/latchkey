@@ -1,6 +1,6 @@
 #!/bin/sh
 # Installs the newest build/Latchkey-<version>.dmg into /Applications and starts it, as the Owner
-# would by dragging it there (Toni, 2026-10-23: every increment installs itself). Quits the
+# would by dragging it there (decided 2026-10-23: every increment installs itself). Quits the
 # running app cleanly first (SIGTERM: it says goodbye to the relay and restores sleep), swaps the
 # app in place, removes the old copy, opens the new one, and checks it started. Permissions and the
 # pairing carry over: same signature, same settings and Keychain. That is checked, not assumed:
@@ -17,7 +17,7 @@ if [ "${LATCHKEY_INSTALL_LOCKED:-}" != "$LOCK" ]; then
 fi
 cd "$(dirname "$0")/.."
 # Only a release is installed: a commit on GitHub's main carrying the tag mac-<x.y.z> that CI gave
-# it (.github/workflows/mac-tag.yml; Toni, 2026-11-04: releases are tags on commits, so two
+# it (.github/workflows/mac-tag.yml; decided 2026-11-04: releases are tags on commits, so two
 # sessions never ship the same number; 2026-11-23: CI makes them, in the environment "release").
 # Never replace newer work: it must be the newest such tag, so an install can't take back what
 # another session shipped. Checked inside the lock, after a fetch. The Mac's updater
@@ -74,10 +74,10 @@ PAIRED_BEFORE=$(paired_before "$OLD_LINE" "$(pairing_record)")
 PREVIOUS_DMG=""
 [ "$OLD_VERSION" != "$VERSION" ] && [ -f "build/Latchkey-$OLD_VERSION.dmg" ] && PREVIOUS_DMG="build/Latchkey-$OLD_VERSION.dmg"
 
-# Never restart Latchkey under one of Toni's chats (Toni, 2026-11-22: "Batch + wait for idle"):
+# Never restart Latchkey under one of its user's chats (decided 2026-11-22: "Batch + wait for idle"):
 # wait until no call runs and none has for 10 minutes, checking every 30 s for up to 30 minutes,
 # then give up and install nothing (Constitution II). LATCHKEY_INSTALL_NOW=1 skips the wait: only
-# when Toni says so (CLAUDE.md, "Every finished batch ships").
+# when the Mac's user says so.
 CALLS="$HOME/Library/Application Support/Latchkey/Running calls"
 if [ "${LATCHKEY_INSTALL_NOW:-}" != 1 ]; then
   waited=0

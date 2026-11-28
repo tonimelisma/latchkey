@@ -29,11 +29,11 @@ import Testing
     @Test func findListsSitesAndUserNamesNeverSecrets() async throws {
         let s = try store([
             SignInStoreTests.a, SignInStoreTests.b,
-            SavedSignIn(title: "G", site: "github.com", user: "toni", password: "gh-secret", otp: SignInFillTests.otp),
+            SavedSignIn(title: "G", site: "github.com", user: "sam", password: "gh-secret", otp: SignInFillTests.otp),
         ])
         let find = LoginsCapability.find(store: s)
         let all = await find.handler(.object([:])).plainText
-        #expect(all.contains("a.test — ann") && all.contains("github.com — toni (has a verification code)"))
+        #expect(all.contains("a.test — ann") && all.contains("github.com — sam (has a verification code)"))
         #expect(!all.contains("pw-a") && !all.contains("gh-secret") && !all.contains("GEZDGNBV"))
         let one = await find.handler(.object(["site": .string("https://github.com/login")])).plainText
         #expect(one.contains("github.com") && !one.contains("a.test"))
@@ -46,3 +46,6 @@ import Testing
         #expect(empty.plainText.contains("no sign-ins yet"))
     }
 }
+
+// The requirements this file's tests cite (docs/requirements/; script/process-check).
+// Validates: FR-1320, FR-1326, FR-1340

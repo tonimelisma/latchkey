@@ -150,3 +150,6 @@ import Testing
         #expect(result.content.jsonText.contains("Full Disk Access"))
     }
 }
+
+// The requirements this file's tests cite (docs/requirements/; script/process-check).
+// Validates: FR-105

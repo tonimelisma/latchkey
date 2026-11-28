@@ -238,3 +238,6 @@ func TestAuditNeedsTheFeature(t *testing.T) {
 	code, _ := c.Wait(ctxT(t))
 	assert.Equal(t, agentproto.CloseProtocolViolation, code)
 }
+
+// The requirements this file's tests cite (docs/requirements/; script/process-check).
+// Validates: FR-631, FR-632, FR-634, FR-637

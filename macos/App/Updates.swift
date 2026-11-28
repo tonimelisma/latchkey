@@ -77,7 +77,7 @@ final class Updates {
     }
 }
 
-/// Holds a downloaded update until Latchkey is idle (FR-072b; Toni, 2026-11-22: an install had
+/// Holds a downloaded update until Latchkey is idle (FR-072b; decided 2026-11-22: an install had
 /// restarted Latchkey in the middle of his Target order): no call running and none started or
 /// ended for 10 minutes, the same rule the Mac's install script used (`idle_verdict`). Sparkle
 /// asks before installing a downloaded update on quit; the gate keeps its install block, looks

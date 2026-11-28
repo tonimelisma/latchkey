@@ -333,3 +333,6 @@ import WebKit
         #expect(b.takeSaved().contains { $0.contains("homes.json") }, "kept for the next answer")
     }
 }
+
+// The requirements this file's tests cite (docs/requirements/; script/process-check).
+// Validates: FR-438, FR-475, FR-477

@@ -167,3 +167,6 @@ import Testing
         #expect(got.value == "error", "the second call (cancelled) is delivered too")
     }
 }
+
+// The requirements this file's tests cite (docs/requirements/; script/process-check).
+// Validates: FR-026a, FR-077, FR-1607

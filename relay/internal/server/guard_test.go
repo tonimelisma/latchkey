@@ -236,3 +236,6 @@ func TestASuspendedMacRetryingNeverReachesTheConnectionLimit(t *testing.T) {
 	}
 	assert.Positive(t, refused, "a flood from the same address is still limited")
 }
+
+// The requirements this file's tests cite (docs/requirements/; script/process-check).
+// Validates: FR-082, FR-094, FR-204

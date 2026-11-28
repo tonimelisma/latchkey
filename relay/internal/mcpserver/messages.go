@@ -176,7 +176,7 @@ func statusLine(name, kind string, s *agentproto.State) string {
 }
 
 // othersLine names the account's other machines, so any answer tells Claude what else it can
-// reach (Toni, 2026-10-31); "" when there are none.
+// reach (decided 2026-10-31); "" when there are none.
 func othersLine(ms []machine, except string, now time.Time) string {
 	var parts []string
 	for _, m := range ms {

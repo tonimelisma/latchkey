@@ -83,3 +83,6 @@ final class ManualClock: Clock, @unchecked Sendable {
         return sleeping >= count
     }
 }
+
+// The requirements this file's tests cite (docs/requirements/; script/process-check).
+// Validates: FR-1602

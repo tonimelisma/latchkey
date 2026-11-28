@@ -67,3 +67,6 @@ func TestTheDefaultDeveloperKeyReads(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, reports.DefaultIntakeURL, "https://")
 }
+
+// The requirements this file's tests cite (docs/requirements/; script/process-check).
+// Validates: FR-1413, FR-1420, FR-1430

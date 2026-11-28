@@ -77,9 +77,9 @@ import Testing
             "printf 'Name? '; read -r name; echo \"got $name\"", folder: nil, wait: .milliseconds(800))
         #expect(!r.finished)
         #expect(r.output.contains("Name?"))
-        try await jobs.send(r.job, text: "Toni", enter: true)
+        try await jobs.send(r.job, text: "Sam", enter: true)
         let after = try await jobs.check(r.job, wait: .seconds(10))
-        #expect(after.output.contains("got Toni"))
+        #expect(after.output.contains("got Sam"))
         #expect(after.finished)
     }
 
@@ -315,7 +315,7 @@ import Testing
         #expect(name(a.output) != name(b.output), "\(a.output) / \(b.output)")
     }
 
-    /// Tests outside the fence (FR-335; Toni, 2026-11-21: "Test step outside fence"): a test app
+    /// Tests outside the fence (FR-335; decided 2026-11-21: "Test step outside fence"): a test app
     /// LaunchServices opens for a sandboxed xcodebuild gets none of Xcode's test settings, so it
     /// never connects ("The test runner hung before establishing connection"). Only Latchkey's
     /// own launcher leaves the fence, only with open, and the command can't replace it.
@@ -464,3 +464,6 @@ import Testing
         #expect(!text.contains("A write was refused"), "\(text)")
     }
 }
+
+// The requirements this file's tests cite (docs/requirements/; script/process-check).
+// Validates: FR-309, FR-310, FR-333, FR-334, FR-335

@@ -9,7 +9,7 @@ paths:
 # Secrets, pages, and queued actions (security reviews, 2026-11-22)
 
 Three classes of bug an automated review found only after install; check each change for them,
-and have the diff reviewed before commit (CLAUDE.md, "Every finished batch ships", step 1):
+and have the diff reviewed before commit (CLAUDE.md, "Engineering practices"):
 
 1. Never rerun, branch, or retry on output the page controls (a script's result text, a page
    title): decide from what the app itself knows (the browser's own address, JavaScriptCore's

@@ -188,10 +188,10 @@ func (s *sandbox) computerWindowButtons() error {
 }
 
 // computerSidebarRow: a press on a row of Finder's sidebar (or its cell or text) selects the row
-// (the former case computer_press_selects_sidebar_row; Toni, 2026-11-23: "press selects the row"),
+// (the former case computer_press_selects_sidebar_row; decided 2026-11-23: "press selects the row"),
 // as macOS's own Accessibility reads the sidebar (the test Mac's osascript may read it: its image
 // script). Finder opens a folder only on a click, so the window still shows Documents (seen
-// 2026-11-27): that the press also opens is a choice for Toni, not this check.
+// 2026-11-27): that the press also opens is a choice for the maintainer, not this check.
 func (s *sandbox) computerSidebarRow() error {
 	closeWindow, err := finderWindow()
 	if err != nil {
@@ -303,7 +303,7 @@ func (s *sandbox) keepAwakeReal() error {
 
 // setupNamesWhatIsOff: with an app's control turned off for Latchkey earlier (which macOS never
 // asks about again), setup's Ask Now says so and opens the place to turn it on (the former case
-// setup_ask_now_says_what_is_off; Toni, 2026-11-21: Ask Now spun a second and did nothing). Mail's
+// setup_ask_now_says_what_is_off; decided 2026-11-21: Ask Now spun a second and did nothing). Mail's
 // control is turned off in the copy's permission database (root, System Integrity Protection off
 // there), setup's Ask Now pressed with Return in the test Mac (System Events; Latchkey's own
 // computer control never acts on Latchkey's windows), and everything put back after.

@@ -47,7 +47,7 @@ final class OwnSessions {
     }
 
     /// What is kept. An item written while sites could fall back to Safari's sign-in (`fellBack`,
-    /// withdrawn FR-1352) still reads: the extra keys are left out (Toni, 2026-11-22: "Decide
+    /// withdrawn FR-1352) still reads: the extra keys are left out (decided 2026-11-22: "Decide
     /// fresh each time").
     struct Contents: Codable, Equatable {
         var cookies: [Kept] = []

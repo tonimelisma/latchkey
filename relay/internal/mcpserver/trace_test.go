@@ -74,7 +74,7 @@ func TestTraceOfACallThatWorked(t *testing.T) {
 	}
 	c := e.connectMac()
 	cs := e.client(stateful, nil)
-	args := map[string]any{"machine": "Toni's MacBook Pro", "detail": "full & <exact>"}
+	args := map[string]any{"machine": "Sam's MacBook Pro", "detail": "full & <exact>"}
 	before := time.Now().UTC()
 	res, err := cs.CallTool(ctx(t), &mcp.CallToolParams{Name: "battery_status", Arguments: args})
 	require.NoError(t, err)
@@ -85,17 +85,17 @@ func TestTraceOfACallThatWorked(t *testing.T) {
 	assert.Equal(t, trace.KindAction, l.Kind)
 	assert.Equal(t, "relay", l.Source)
 	assert.Equal(t, "battery_status", l.Tool)
-	assert.JSONEq(t, `{"machine":"Toni's MacBook Pro","detail":"full & <exact>"}`, string(l.Arguments))
+	assert.JSONEq(t, `{"machine":"Sam's MacBook Pro","detail":"full & <exact>"}`, string(l.Arguments))
 	assert.Contains(t, string(l.Arguments), "full & <exact>", "not escaped")
 	assert.JSONEq(t, contentJSON(t, res), string(l.Result), "the result as Claude got it")
 	assert.Contains(t, string(l.Result), "iVBORw0KGgo=", "images included")
-	assert.Contains(t, string(l.Result), "Toni's MacBook Pro", "the status line included")
+	assert.Contains(t, string(l.Result), "Sam's MacBook Pro", "the status line included")
 	require.Len(t, res.Content, 3)
 	assert.False(t, l.IsError)
 	assert.Equal(t, "ok", l.Outcome)
 	assert.Equal(t, sent.ID, l.CallID, "joined to the machine's line by the call id")
 	assert.Equal(t, "test-client", l.Client)
-	assert.Equal(t, "Toni's MacBook Pro", l.Machine)
+	assert.Equal(t, "Sam's MacBook Pro", l.Machine)
 	assert.GreaterOrEqual(t, l.DurationMS, int64(0))
 	at, err := time.Parse(time.RFC3339Nano, l.Time)
 	require.NoError(t, err)
@@ -134,7 +134,7 @@ func TestTraceOfAnOfflineCall(t *testing.T) {
 	assert.True(t, l.IsError)
 	assert.JSONEq(t, contentJSON(t, res), string(l.Result))
 	assert.Contains(t, string(l.Result), "is offline")
-	assert.Equal(t, "Toni's MacBook Pro", l.Machine, "the machine the call went to")
+	assert.Equal(t, "Sam's MacBook Pro", l.Machine, "the machine the call went to")
 	assert.NotEmpty(t, l.CallID)
 }
 
@@ -251,7 +251,7 @@ func TestTraceOfTheMachinesTool(t *testing.T) {
 	assert.Equal(t, "test-client", l.Client)
 	assert.NotEmpty(t, l.CallID)
 	assert.JSONEq(t, contentJSON(t, res), string(l.Result))
-	assert.Contains(t, string(l.Result), "Toni's MacBook Pro")
+	assert.Contains(t, string(l.Result), "Sam's MacBook Pro")
 }
 
 // Without a trace store (nil), calls work as before.
@@ -263,3 +263,6 @@ func TestNoTraceStore(t *testing.T) {
 	res := call(t, cs, "battery_status")
 	assert.False(t, res.IsError)
 }
+
+// The requirements this file's tests cite (docs/requirements/; script/process-check).
+// Validates: FR-683

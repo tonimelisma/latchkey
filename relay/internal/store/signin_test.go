@@ -487,3 +487,6 @@ func TestTwentyWrongCodesADay(t *testing.T) {
 	require.ErrorIs(t, s.CheckEmailCode(ctx, u.ID, store.PurposeRecover, []byte("x"), dayOver), store.ErrWrongCode)
 	require.NoError(t, s.CheckEmailCode(ctx, u.ID, store.PurposeRecover, []byte("c"), dayOver), "a new day, a new count")
 }
+
+// The requirements this file's tests cite (docs/requirements/; script/process-check).
+// Validates: FR-042a, FR-044, FR-687

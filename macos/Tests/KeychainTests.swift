@@ -80,3 +80,6 @@ import Testing
                 == .unreadable("Keychain error -25308"))
     }
 }
+
+// The requirements this file's tests cite (docs/requirements/; script/process-check).
+// Validates: FR-201, FR-613

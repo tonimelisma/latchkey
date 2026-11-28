@@ -2,7 +2,7 @@
 # Builds, signs, notarizes, and publishes a Latchkey release (FR-072, plan D9):
 #   scripts/release.sh 0.1.0
 #
-# One-time setup (Toni):
+# One-time setup (maintainer's decision):
 #   1. Developer ID: the "Developer ID Application" certificate in Xcode → Settings → Accounts.
 #   2. Notarization profile:
 #        xcrun notarytool store-credentials latchkey-notary --apple-id <id> --team-id <team>

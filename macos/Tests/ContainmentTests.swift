@@ -4,7 +4,7 @@ import Testing
 @testable import Latchkey
 
 /// Notes' refusals for notes it can't change safely. Tool descriptions and input schemas aren't pinned by
-/// tests (Toni, 2026-11-26).
+/// tests (decided 2026-11-26).
 @Suite struct ContainmentTests {
     func notes() throws -> (FakeScripts, [String: ToolEntry]) {
         let store = try NotesStore(url: NotesFixture.make())

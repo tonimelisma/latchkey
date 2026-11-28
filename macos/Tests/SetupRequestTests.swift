@@ -21,3 +21,6 @@ struct SetupRequestTests {
         #expect(board.string(forType: .string) == SetupRequest.text)
     }
 }
+
+// The requirements this file's tests cite (docs/requirements/; script/process-check).
+// Validates: FR-903

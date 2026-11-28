@@ -21,7 +21,7 @@ Sources: [Willison, the lethal trifecta](https://simonwillison.net/2025/Jun/16/t
 **Latchkey.** Has all three legs in one connector by design.
 - **Done:** others' words are marked as "not instructions" in every result (spotlighting); a
   message can't fake the end of its quote.
-- **Gap (accepted by Toni, 2026-10-23):** Claude runs tools marked read-only without asking
+- **Gap (accepted on 2026-10-23):** Claude runs tools marked read-only without asking
   ([review criteria](https://claude.com/docs/connectors/building/review-criteria): "Read-only tools
   can run without per-call confirmation, and destructive tools always prompt"). `browser_look`
   (which opens pages and goes back) is marked read-only, but opening a URL sends data out
@@ -29,7 +29,7 @@ Sources: [Willison, the lethal trifecta](https://simonwillison.net/2025/Jun/16/t
   read private data and leak it with no approval prompt. Opening pages should ask, or be limited.
 - **Gap:** `messages_send` is marked not destructive. Sending to another person is irreversible
   and outward; OWASP's guidance is human approval for irreversible actions. Claude's built-in
-  approvals (which Toni relies on, FR-115) only trigger on the hints, so the hints must be right.
+  approvals (which the maintainer relies on, FR-115) only trigger on the hints, so the hints must be right.
 
 ## 2. Human approval and tool annotations
 
@@ -50,7 +50,7 @@ ChatGPT agent pauses for logins and runs a "watch mode" on sensitive sites
   actions already set; `computer_open_app`, `computer_move`, `computer_scroll`, `files_move`,
   `files_copy`, `notes_create` are non-destructive and will still ask unless the user allows them.
 - **Not pursued:** a sensitive-site rule for the browser (banking, government, health), as in
-  Claude in Chrome and ChatGPT agent. It changes the product, not its security (Toni,
+  Claude in Chrome and ChatGPT agent. It changes the product, not its security (decided
   2026-10-23).
 
 ## 3. MCP protocol and OAuth
@@ -105,8 +105,8 @@ updates, minimal server-side data.
   outbound-only connection; relay stores no tool content; 30-day metadata log; device key in the
   Secure Enclave; passkeys; Disconnect and levels on the Mac as a kill switch; self-hostable.
 - **Gap:** a compromised relay can call any tool that is on. Shell and Computer control stay on
-  by default (Toni, 2026-10-22). Fresh approvals on the Mac are not pursued: "manual approvals
-  don't improve security" (Toni, 2026-10-23). The real fix is end-to-end protection, below.
+  by default (decided 2026-10-22). Fresh approvals on the Mac are not pursued: "manual approvals
+  don't improve security" (decided 2026-10-23). The real fix is end-to-end protection, below.
 - **Done (2026-10-23):** abuse limits per client address (sign-in, passkeys, pairing, account
   changes: 20 at once then one every 3 s; client registration: 10 then one a minute; consent
   page; token endpoint; Mac connections), sign-in emails capped per address (one a minute, and
@@ -123,7 +123,7 @@ updates, minimal server-side data.
 
 ### End-to-end encryption between Claude and the Mac (researched 2026-10-23)
 
-**Decision (Toni, 2026-10-29):** not possible, not pursued.
+**Decision (decided 2026-10-29):** not possible, not pursued.
 
 **Question.** Can requests be encrypted, or their integrity proven, from Claude's servers to the
 Mac, inside the HTTPS connection that ends at the relay, so the relay can't read, change, or
@@ -170,10 +170,10 @@ have none today.
    hostname is the only thing a relay can route on before decryption. The relay can no longer
    send a readable offline reply without holding a certificate that would also let it
    intercept.
-Manual approvals on the Mac (for new clients or powerful tools) are not a substitute: Toni,
+Manual approvals on the Mac (for new clients or powerful tools) are not a substitute: the maintainer,
 2026-10-23, "manual approvals don't improve security".
 
-Not decided; Toni's call.
+Not decided; the maintainer's call.
 
 ## 5. Tool design (Anthropic's guidance)
 
@@ -198,7 +198,7 @@ Sources: [Writing effective tools for agents](https://www.anthropic.com/engineer
 - **Gap:** no task evaluations. A small suite of realistic tasks ("add milk to my grocery note",
   "what did Sarah say about Saturday") run with real Claude would catch tool-design problems,
   as the live check did.
-- **Not pursued:** prompt-injection tests or Latchkey-side injection defenses. Toni's position
+- **Not pursued:** prompt-injection tests or Latchkey-side injection defenses. The maintainer's position
   (2026-10-23): prompt injection isn't a concern with Anthropic models. For the record,
   Anthropic reports no successful attack on its current models in its Claude in Chrome tests
   ([Anthropic](https://claude.com/resources/articles/claude-in-chrome-generally-available)) and
@@ -222,7 +222,7 @@ possible (Windows runs MCP servers under a separate agent account in a separate 
 - **Later:** Developer ID, notarization, Sparkle keys (releases, decided as much later).
 - **Note:** no macOS equivalent of Windows' agent account exists for an app that must read the
   owner's own data; levels and visibility are the practical containment.
-- **Decided (Toni, 2026-10-23):** the local activity log stays thorough: full arguments and
+- **Decided (decided 2026-10-23):** the local activity log stays thorough: full arguments and
   results for 90 days, on the Mac only.
 
 ## 7. Open-source hygiene and operations
@@ -242,7 +242,7 @@ for local connectors and expected for remote ones); documented incident response
   toolchain pinned (1.27.4); the published image carries an SBOM and build provenance. The
   first scan found 16 reachable vulnerabilities (Go 1.27.1, go-jose 3.0.3, OpenTelemetry
   exporters 1.21.0), all fixed; the history has no leaked secrets.
-- **Done (2026-10-24):** static analysis and more dependency checks in `make security` (Toni):
+- **Done (2026-10-24):** static analysis and more dependency checks in `make security` (maintainer's decision):
   Semgrep (pinned 1.182.0) with the public Go, Swift, secrets, and Dockerfile rules and
   Latchkey's own rules in `scripts/semgrep/` (AppleScript sources fixed text, page scripts splice
   only JSON literals, SQL values bound, outbound HTTP only through the guarded client; each rule
@@ -257,7 +257,7 @@ for local connectors and expected for remote ones); documented incident response
   private repository.
 - **Later:** privacy policy and terms (with the directory listing).
 
-## Decisions after this review (Toni, 2026-10-23)
+## Decisions after this review (decided 2026-10-23)
 
 - Opening pages in Safari stays automatic (gap 1 accepted).
 - Sending messages unchanged: no Latchkey-side stop (gap 2 accepted).
@@ -272,8 +272,8 @@ for local connectors and expected for remote ones); documented incident response
 3. Notify the owner when a new Claude client is granted access.
 4. Page size above Claude Code's 25k-token cap; lower to about 40,000 characters.
 5. Defaults for Shell and Computer control given relay compromise (decided all on; revisit?).
-6. ~~Sensitive-site rule for the browser~~: not pursued, a product change (Toni).
-7. ~~Prompt-injection test~~: not pursued (Toni); task evaluations with real Claude still open.
-8. ~~Local activity log~~: stays thorough (Toni).
+6. ~~Sensitive-site rule for the browser~~: not pursued, a product change (maintainer's decision).
+7. ~~Prompt-injection test~~: not pursued (maintainer's decision); task evaluations with real Claude still open.
+8. ~~Local activity log~~: stays thorough (maintainer's decision).
 9. ~~`SECURITY.md`~~ and ~~dependency scanning~~: done.
 10. ~~Fewer tools~~: 15 now (was 45).

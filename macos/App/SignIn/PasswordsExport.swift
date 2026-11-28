@@ -5,7 +5,7 @@ import ApplicationServices
 /// Latchkey opens Passwords and works its export through Accessibility (Passwords can't be
 /// scripted); the Owner only approves with Touch ID or the Mac's password. The file is saved in
 /// Latchkey's import folder, where `SignInImport` takes it in. Only while the Mac is unlocked,
-/// and only after the Owner's click. English menu and button titles (Toni's Mac).
+/// and only after the Owner's click. English menu and button titles (the maintainer's Mac).
 @MainActor
 enum PasswordsExport {
     static let bundleID = "com.apple.Passwords"

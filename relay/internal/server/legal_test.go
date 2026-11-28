@@ -140,3 +140,6 @@ func TestNoDocumentsWithoutAnOperator(t *testing.T) {
 	assert.NotContains(t, m, "op_tos_uri")
 	assert.NotContains(t, m, "op_policy_uri")
 }
+
+// The requirements this file's tests cite (docs/requirements/; script/process-check).
+// Validates: FR-193, FR-194

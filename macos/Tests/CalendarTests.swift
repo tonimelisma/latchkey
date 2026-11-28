@@ -264,7 +264,7 @@ final class FakeEvents: EventsBackend, @unchecked Sendable {
             end: try date("2026-10-27T16:00"), allDay: false, calendar: "Home", calendarID: "C-HOME",
             attendees: [
                 Attendee(name: "Sarah", email: "sarah@example.com", status: "accepted", isOwner: false),
-                Attendee(name: "Toni", email: "toni@example.com", status: "not answered", isOwner: true),
+                Attendee(name: "Sam", email: "sam@example.com", status: "not answered", isOwner: true),
             ], organizer: "Sarah", ownEvent: false)
         e.canRespond = canRespond
         e.canInvite = canInvite
@@ -529,8 +529,8 @@ final class FakeEvents: EventsBackend, @unchecked Sendable {
     }
 
     @Test func theOwnersAddressesComeFromTheAccount() {
-        let own = EventKitInvitations.addresses(["mailto:Toni@Example.com", "/calendar/dav/x/user/", "a@b.org"])
-        #expect(own == ["toni@example.com", "a@b.org"])
+        let own = EventKitInvitations.addresses(["mailto:Sam@Example.com", "/calendar/dav/x/user/", "a@b.org"])
+        #expect(own == ["sam@example.com", "a@b.org"])
     }
 
     @Test func saysWhatToAllowWithoutAccess() async throws {

@@ -1,11 +1,11 @@
 # Screen states: what works, alternatives, and what other tools do
 
-Research and live tests of 2026-11-01 and 2026-11-02 (Toni: "investigate each and every option").
+Research and live tests of 2026-11-01 and 2026-11-02 (decided: "investigate each and every option").
 States that matter: **unlocked** (lid open, or the first minutes after closing it) and **locked**
 (after idle, lid open or closed). Latchkey never holds off the lock or unlocks the Mac (spec 001
-FR-661, Toni 2026-11-02: "we're not circumventing security").
+FR-661, decided 2026-11-02: "we're not circumventing security").
 
-**Superseded in part on 2026-11-07** (Toni; Constitution IV): Latchkey never disturbs the user
+**Superseded in part on 2026-11-07** (Constitution IV): Latchkey never disturbs the user
 while the Mac is unlocked, so everything below that brought a window forward or drove another
 app's window is gone: all of Mail, WhatsApp sending (WhatsApp Web and WhatsApp for Mac's window),
 Notes' window editing, Messages' window actions, Reminders' window setters. What's left of the
@@ -13,12 +13,12 @@ Notes' window editing, Messages' window actions, Reminders' window setters. What
 `open`. The README's "What works when" is the current summary; the rest of this page is the
 record of what was tried.
 
-## Toni's conditions: the checklist
+## the requester's conditions: the checklist
 
-What no automated layer can show: the Mac locked, the lid closed, Toni's own accounts, real
-sites (spec 016 FR-1611). Each row stays NOT VERIFIED until Toni runs it on his Mac with the
+What no automated layer can show: the Mac locked, the lid closed, the maintainer's own accounts, real
+sites (spec 016 FR-1611). Each row stays NOT VERIFIED until the maintainer runs it on his Mac with the
 installed version; the result is quoted with the version, the time and what was seen. The
-cases named are the rows of `docs/regression-coverage.md` marked "Toni's conditions"; what the
+cases named are the rows of `docs/regression-coverage.md` marked "the requester's conditions"; what the
 sandbox Mac covers unlocked is in `relay/e2e/sandbox-checks.md`.
 
 Screen states (every capability; the last results are in `docs/use-cases.md`):
@@ -26,7 +26,7 @@ Screen states (every capability; the last results are in `docs/use-cases.md`):
   maps, and Claude's pages in Latchkey's own browser with Safari's cookies.
 - Lid closed while still unlocked (the first minutes): the same.
 - Lid closed and locked: the same.
-- Unlocked while Toni works: nothing comes to the front, the pointer, keyboard and clipboard
+- Unlocked while the maintainer works: nothing comes to the front, the pointer, keyboard and clipboard
   stay his (computer control, his Safari tabs and the shell's `open` excepted).
 
 Signing in and real sites:
@@ -45,7 +45,7 @@ Signing in and real sites:
 - A code a site texted is used and the text deleted (`logins.texted_code_deleted`).
 - The Passwords export reaches its save panel (`passwords_export_reaches_save_panel`).
 
-Toni's accounts:
+The maintainer's accounts:
 - Real iMessage: conversations, search, read (`messages.*`).
 - WhatsApp signed in: chats, search, read (`whatsapp.*`).
 - Calendar invitations: his answer shown, inviting the calendar's own address refused

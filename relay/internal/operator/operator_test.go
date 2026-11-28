@@ -330,3 +330,6 @@ func TestFailures(t *testing.T) {
 	assert.Contains(t, operator.Usage, "account suspend <email> [reason]")
 	assert.Contains(t, operator.Usage, "trace export <email> [--from YYYY-MM-DD] [--to YYYY-MM-DD]")
 }
+
+// The requirements this file's tests cite (docs/requirements/; script/process-check).
+// Validates: FR-685, FR-686, FR-687, FR-914

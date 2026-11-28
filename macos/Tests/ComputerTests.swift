@@ -79,7 +79,7 @@ final class FakePoster: InputPoster, @unchecked Sendable {
         #expect(none?.contains("shell") == true, "says what still works")
     }
 
-    /// Toni, 2026-11-02: a sleeping display isn't woken, so the Mac's idle lock comes as usual.
+    /// decided 2026-11-02: a sleeping display isn't woken, so the Mac's idle lock comes as usual.
     @Test func aSleepingDisplayIsLeftAsleep() async {
         let s = FakeScreen()
         s.asleep = true
@@ -254,3 +254,6 @@ final class FakePoster: InputPoster, @unchecked Sendable {
         }
     }
 }
+
+// The requirements this file's tests cite (docs/requirements/; script/process-check).
+// Validates: FR-505, SC-502

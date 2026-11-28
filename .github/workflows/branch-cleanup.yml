@@ -1,4 +1,4 @@
-# Deletes branches whose pull request is over (Toni, 2026-11-24): a cloud session's git proxy
+# Deletes branches whose pull request is over (decided 2026-11-24): a cloud session's git proxy
 # refuses branch deletion, so a pull request closed without a merge left its branch behind.
 # GitHub deletes merged pull requests' branches itself. Runs when a pull request closes, daily,
 # and by hand or repository_dispatch (`branch-cleanup`). The rules: scripts/branch-cleanup.sh.

@@ -332,20 +332,20 @@ func TestPairing(t *testing.T) {
 	b.signUp()
 	u, _ := e.store.UserByEmail(context.Background(), "owner@example.com")
 
-	page := b.get("/pair?name=Toni%27s+MacBook")
-	assert.Contains(t, page.body, "Toni&#39;s MacBook")
+	page := b.get("/pair?name=Sam%27s+MacBook")
+	assert.Contains(t, page.body, "Sam&#39;s MacBook")
 	assert.NotContains(t, page.body, "other machines stay connected")
 
-	code := b.pairCode("Toni's MacBook")
+	code := b.pairCode("Sam's MacBook")
 	mac := e.browser() // the app calls exchange without cookies
-	status, m := mac.json("/pair/exchange", map[string]string{"code": code, "public_key": p256DER(t), "name": "Toni's MacBook"})
+	status, m := mac.json("/pair/exchange", map[string]string{"code": code, "public_key": p256DER(t), "name": "Sam's MacBook"})
 	require.Equal(t, http.StatusOK, status, m)
 	devices, err := e.store.ActiveDevices(context.Background(), u.ID)
 	require.NoError(t, err)
 	require.Len(t, devices, 1)
 	first := devices[0]
 	assert.Equal(t, m["device_id"], first.ID)
-	assert.Equal(t, "Toni's MacBook", first.Name)
+	assert.Equal(t, "Sam's MacBook", first.Name)
 	assert.Equal(t, store.KindMac, first.Kind)
 	assert.Contains(t, e.changed, u.ID)
 
@@ -354,7 +354,7 @@ func TestPairing(t *testing.T) {
 
 	// A second Mac is added; the first stays (spec 010 FR-1001, FR-1012).
 	page = b.get("/pair?name=New+MacBook")
-	assert.Contains(t, page.body, "Your other machines stay connected: Toni&#39;s MacBook.")
+	assert.Contains(t, page.body, "Your other machines stay connected: Sam&#39;s MacBook.")
 	code = b.pairCode("New MacBook")
 	status, _ = mac.json("/pair/exchange", map[string]string{"code": code, "public_key": p256DER(t), "name": "New MacBook"})
 	require.Equal(t, http.StatusOK, status)
@@ -767,12 +767,12 @@ func TestEmailHourlyCap(t *testing.T) {
 }
 
 func TestAllowedEmails(t *testing.T) {
-	e := setup(t, "Toni@example.com")
+	e := setup(t, "Sam@example.com")
 	status, r := e.browser().startEmail("stranger@example.com", false)
 	assert.Equal(t, http.StatusForbidden, status)
 	assert.Contains(t, r["error"], "approved email")
 	assert.Empty(t, e.mail.Sent())
-	status, _ = e.browser().startEmail("toni@example.com", false)
+	status, _ = e.browser().startEmail("sam@example.com", false)
 	assert.Equal(t, http.StatusOK, status)
 	assert.Len(t, e.mail.Sent(), 1)
 }
@@ -1181,3 +1181,7 @@ func TestAccountPageAddToClaude(t *testing.T) {
 	assert.NotContains(t, page.body, `id="next-claude"`, "Claude has access: no next step")
 	assert.Equal(t, 1, strings.Count(page.body, `href="`+link+`"`), "the Claude section keeps its button")
 }
+
+// The requirements this file's tests cite (docs/requirements/; script/process-check).
+// Validates: FR-042a, FR-042b, FR-043, FR-045, FR-047, FR-047a, FR-048, FR-049a, FR-054, FR-082
+// Validates: FR-099, FR-659, FR-660, FR-699, FR-1001, FR-1012, FR-1602

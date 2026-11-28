@@ -23,7 +23,7 @@ struct ReconnectPolicy: Sendable {
     static let suspendedReason = "account suspended"
     /// How often a suspended Mac tries again; a wake or a network change tries at once. Also
     /// for a refused sign-in and an app too old: the app never stops trying while it is paired
-    /// (Toni, 2026-10-31, FR-206).
+    /// (decided 2026-10-31, FR-206).
     static let suspendedRetry: TimeInterval = 300
     /// After another connection of this Mac replaced this one (4003). Only one copy of the app
     /// runs (FR-207), so the other is gone or about to be.

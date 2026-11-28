@@ -51,3 +51,6 @@ func TestShowWritesTheReportAsFiles(t *testing.T) {
 		t.Error("a folder inside a repository is refused")
 	}
 }
+
+// The requirements this file's tests cite (docs/requirements/; script/process-check).
+// Validates: FR-1431, FR-1452

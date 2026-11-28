@@ -79,3 +79,6 @@ import Testing
         #expect(SafariCookies.parse(cut).isEmpty, "a cut-off file is skipped, not guessed")
     }
 }
+
+// The requirements this file's tests cite (docs/requirements/; script/process-check).
+// Validates: FR-420

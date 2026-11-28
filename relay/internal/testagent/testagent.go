@@ -1,5 +1,5 @@
 // Package testagent is a pretend Mac: it speaks the agent protocol
-// (specs/001-core/contracts/agent-protocol.md) so relay tests and local scripts can run
+// (docs/design/contracts/agent-protocol.md) so relay tests and local scripts can run
 // without the Mac app. It can also misbehave on purpose.
 package testagent
 

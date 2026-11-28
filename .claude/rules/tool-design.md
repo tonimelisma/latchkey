@@ -4,7 +4,8 @@ paths:
   - "macos/App/**/*Tools*.swift"
   - "macos/App/Browser/**"
   - "macos/App/SignIn/**"
-  - "specs/**"
+  - "docs/requirements/**"
+  - "docs/design/**"
   - "relay/internal/mcpserver/**"
 ---
 
@@ -22,9 +23,9 @@ paths:
 - Guidance goes in the tool's description ("read the page and judge", "if a site's bot
   protection turns this browser away while locked, tell the owner"), not in branching code.
 - A spec line like "the answer shall say whether X worked" or "Latchkey shall decide" is a warning
-  sign: raise it with Toni as a product choice before planning it.
+  sign: raise it as an undecided product choice (Working style) before planning it.
 - Errors name the fix and the current value ("e5 isn't a password field (it is a search field)").
 - Tool names: a tool keeps its name while it behaves the same; a tool whose behavior changes gets
-  a new name, and open chats break (Toni, 2026-11-22: "just break old chats"; Claude's apps keep
+  a new name, and open chats break (decided 2026-11-22: "just break old chats"; Claude's apps keep
   the tool list a chat started with, even after the relay's list-changed notice). The reply that
   ships a rename says which chats must be restarted.

@@ -25,7 +25,7 @@ enum LogBeforeTheCheck {
     }
 }
 
-/// The activity log kept for good (Toni, 2026-10-26): the tamper check's chain (FR-612), the
+/// The activity log kept for good (decided 2026-10-26): the tamper check's chain (FR-612), the
 /// record of the newest entry (FR-613), browsing and searching (FR-614), and Export… (FR-615).
 @Suite struct ActivityLogTests {
     static func entry(_ n: Int, at: Date, tool: String = "shell_run", result: String? = nil) -> Activity {
@@ -90,7 +90,7 @@ enum LogBeforeTheCheck {
 
     // MARK: upgrade
 
-    /// FR-612: Toni's entries from before the check stay readable after the upgrade, are marked
+    /// FR-612: the maintainer's entries from before the check stay readable after the upgrade, are marked
     /// as from before the check, and entries under a key that is gone are still only counted.
     @MainActor @Test func upgradesTheLogFromBeforeTheCheck() throws {
         let dir = try TraceTests.scratch()
@@ -466,16 +466,16 @@ enum LogBeforeTheCheck {
     // MARK: Export… (FR-615)
 
     @Test func anExportedLineIsReadable() throws {
-        let format = ActivityExport(timeZone: TimeZone(secondsFromGMT: -7 * 3600)!, machine: "Toni’s Mac")
+        let format = ActivityExport(timeZone: TimeZone(secondsFromGMT: -7 * 3600)!, machine: "Sam’s Mac")
         let a = Activity(
             at: Date(timeIntervalSince1970: 1_793_000_000.25), tool: "files_read",
-            arguments: "{\"path\":\"/Users/toni/a.txt\"}", result: "[{\"type\":\"text\",\"text\":\"hi\"}]",
+            arguments: "{\"path\":\"/Users/sam/a.txt\"}", result: "[{\"type\":\"text\",\"text\":\"hi\"}]",
             isError: true, durationMS: 42)
         #expect(
             format.line(a)
-                == #"{"v":1,"source":"mac","machine":"Toni’s Mac","time":"2026-10-26T00:33:20.250-07:00","kind":"action","tool":"files_read","arguments":{"path":"/Users/toni/a.txt"},"result":[{"text":"hi","type":"text"}],"isError":true,"durationMS":42,"call_id":null,"client":null}"#
+                == #"{"v":1,"source":"mac","machine":"Sam’s Mac","time":"2026-10-26T00:33:20.250-07:00","kind":"action","tool":"files_read","arguments":{"path":"/Users/sam/a.txt"},"result":[{"text":"hi","type":"text"}],"isError":true,"durationMS":42,"call_id":null,"client":null}"#
                 || format.line(a)
-                    == #"{"v":1,"source":"mac","machine":"Toni’s Mac","time":"2026-10-26T00:33:20.250-07:00","kind":"action","tool":"files_read","arguments":{"path":"/Users/toni/a.txt"},"result":[{"type":"text","text":"hi"}],"isError":true,"durationMS":42,"call_id":null,"client":null}"#,
+                    == #"{"v":1,"source":"mac","machine":"Sam’s Mac","time":"2026-10-26T00:33:20.250-07:00","kind":"action","tool":"files_read","arguments":{"path":"/Users/sam/a.txt"},"result":[{"type":"text","text":"hi"}],"isError":true,"durationMS":42,"call_id":null,"client":null}"#,
             "\(format.line(a))")
         let plain = Activity(
             at: Date(timeIntervalSince1970: 0), tool: "remove_access", arguments: "Claude (claude.ai)",
@@ -510,3 +510,6 @@ enum LogBeforeTheCheck {
         #expect(durations == Array(stride(from: 2, through: 2500, by: 2)))
     }
 }
+
+// The requirements this file's tests cite (docs/requirements/; script/process-check).
+// Validates: FR-611, FR-612, FR-613, FR-614, FR-615

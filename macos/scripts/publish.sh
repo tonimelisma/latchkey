@@ -6,10 +6,10 @@
 # The assets after the version (CI's release job: Sparkle's update archive and appcast.xml,
 # FR-072c) go with it; when the release already exists, they are added to it (replacing ones of
 # the same name), so the feed is published whichever of CI and the Mac publishes first.
-# The app is signed for development, not notarized (no Developer ID yet; Toni, 2026-11-09): a
+# The app is signed for development, not notarized (no Developer ID yet; decided 2026-11-09): a
 # downloaded copy opens after Privacy & Security → Open Anyway, once.
 # Refuses an image that holds one of the deployment's private values (the relay's address, the
-# server's names). The signer's name and team ID are in every signed app's signature; Toni chose
+# server's names). The signer's name and team ID are in every signed app's signature; the maintainer chose
 # to publish them (2026-11-09).
 # Only the newest three Mac releases are kept, so GitHub's list of 50 newest releases, which the
 # Linux program and its installer read, always has Linux releases in it; older tags stay.
@@ -43,7 +43,7 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
-# The private values, read the way scripts/private-values-check.sh reads them. The DNS zone isn't
+# The private values, read from the gitignored files that hold them. The DNS zone isn't
 # searched: it is also the signer's email domain, published with the signature.
 top=$(git rev-parse --show-toplevel)
 main=$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")

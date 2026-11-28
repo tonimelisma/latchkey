@@ -319,3 +319,6 @@ func TestCutProxyPassesOnAClose(t *testing.T) {
 		t.Fatal("the far side's close never reached the near side")
 	}
 }
+
+// The requirements this file's tests cite (docs/requirements/; script/process-check).
+// Validates: FR-065a

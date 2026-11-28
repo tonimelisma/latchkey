@@ -88,3 +88,6 @@ func TestSudoPromptIsStopped(t *testing.T) {
 	assert.Contains(t, out, shell.SudoHint)
 	assert.Contains(t, out, "Stopped (sudo asked for a password)")
 }
+
+// The requirements this file's tests cite (docs/requirements/; script/process-check).
+// Validates: FR-1031, FR-1032

@@ -4,7 +4,7 @@ import Foundation
 /// page's main frame only (never in a frame from another site), check the page's own address
 /// before typing, and answer "ok", a tab, and JSON, as the browser actions do. Every value is
 /// spliced with `literal()`. They type only into the field Claude named; what the page means is
-/// Claude's to read (Toni, 2026-11-22: "Fill-only tool").
+/// Claude's to read (decided 2026-11-22: "Fill-only tool").
 extension PageScripts {
     /// Nothing but the answer: for the browser's own record of the page's address (FR-1328).
     static let signInHere = "'ok\\t{}'"

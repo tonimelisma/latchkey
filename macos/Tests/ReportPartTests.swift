@@ -213,3 +213,6 @@ import WebKit
         }
     }
 }
+
+// The requirements this file's tests cite (docs/requirements/; script/process-check).
+// Validates: FR-1443, FR-1444, FR-1446, FR-1447, FR-1448, FR-1454

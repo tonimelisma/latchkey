@@ -4,7 +4,7 @@ import Testing
 
 @testable import Latchkey
 
-/// Spec 006 FR-510 (Toni, 2026-11-02, "Background first"): one named app is looked at and acted
+/// Spec 006 FR-510 (decided 2026-11-02, "Background first"): one named app is looked at and acted
 /// on without the pointer or the front.
 @Suite struct ComputerAppTests {
     final class Pressed: @unchecked Sendable {
@@ -72,3 +72,6 @@ import Testing
         #expect(pointer.events.isEmpty)
     }
 }
+
+// The requirements this file's tests cite (docs/requirements/; script/process-check).
+// Validates: FR-510

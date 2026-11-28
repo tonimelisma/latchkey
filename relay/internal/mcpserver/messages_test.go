@@ -33,7 +33,7 @@ func linux(name string) store.Device {
 
 func TestOfflineText(t *testing.T) {
 	threeHoursAgo := now.Add(-3 * time.Hour)
-	m := mac("Toni's MacBook Pro")
+	m := mac("Sam's MacBook Pro")
 	tests := []struct {
 		name string
 		m    machine
@@ -42,63 +42,63 @@ func TestOfflineText(t *testing.T) {
 		{
 			"paired, never connected",
 			machine{Device: m},
-			"Toni's MacBook Pro is offline. It hasn't connected to Latchkey yet.",
+			"Sam's MacBook Pro is offline. It hasn't connected to Latchkey yet.",
 		},
 		{
 			"low battery",
 			machine{Device: m, LastSeen: threeHoursAgo, OfflineReason: agentproto.ReasonLowBattery, State: lastState(14, "battery")},
-			"Toni's MacBook Pro is offline. It went to sleep for low battery at 14%, at 2:02 PM (3 hours ago).",
+			"Sam's MacBook Pro is offline. It went to sleep for low battery at 14%, at 2:02 PM (3 hours ago).",
 		},
 		{
 			"too hot",
 			machine{Device: m, LastSeen: threeHoursAgo, OfflineReason: agentproto.ReasonTooHot, State: lastState(60, "ac")},
-			"Toni's MacBook Pro is offline. It went to sleep because it was too hot, at 2:02 PM (3 hours ago).",
+			"Sam's MacBook Pro is offline. It went to sleep because it was too hot, at 2:02 PM (3 hours ago).",
 		},
 		{
 			"system sleep",
 			machine{Device: m, LastSeen: threeHoursAgo, OfflineReason: agentproto.ReasonSystemSleep, State: lastState(60, "ac")},
-			"Toni's MacBook Pro is offline. It went to sleep at 2:02 PM (3 hours ago).",
+			"Sam's MacBook Pro is offline. It went to sleep at 2:02 PM (3 hours ago).",
 		},
 		{
 			"shutdown",
 			machine{Device: m, LastSeen: threeHoursAgo, OfflineReason: agentproto.ReasonSystemShutdown, State: lastState(60, "ac")},
-			"Toni's MacBook Pro is offline. It shut down at 2:02 PM (3 hours ago).",
+			"Sam's MacBook Pro is offline. It shut down at 2:02 PM (3 hours ago).",
 		},
 		{
 			"app quit",
 			machine{Device: m, LastSeen: threeHoursAgo, OfflineReason: agentproto.ReasonUserQuit, State: lastState(60, "ac")},
-			"Toni's MacBook Pro is offline. The Latchkey app was quit at 2:02 PM (3 hours ago).",
+			"Sam's MacBook Pro is offline. The Latchkey app was quit at 2:02 PM (3 hours ago).",
 		},
 		{
 			"reason unknown, battery",
 			machine{Device: m, LastSeen: threeHoursAgo, State: lastState(62, "battery")},
-			"Toni's MacBook Pro is offline. It was last seen at 2:02 PM (3 hours ago) with 62% battery, on battery power.",
+			"Sam's MacBook Pro is offline. It was last seen at 2:02 PM (3 hours ago) with 62% battery, on battery power.",
 		},
 		{
 			"reason unknown, plugged in",
 			machine{Device: m, LastSeen: threeHoursAgo, State: lastState(100, "ac")},
-			"Toni's MacBook Pro is offline. It was last seen at 2:02 PM (3 hours ago) with 100% battery, plugged in.",
+			"Sam's MacBook Pro is offline. It was last seen at 2:02 PM (3 hours ago) with 100% battery, plugged in.",
 		},
 		{
 			"reason unknown, power unknown",
 			machine{Device: m, LastSeen: threeHoursAgo, State: lastState(50, "unknown")},
-			"Toni's MacBook Pro is offline. It was last seen at 2:02 PM (3 hours ago) with 50% battery.",
+			"Sam's MacBook Pro is offline. It was last seen at 2:02 PM (3 hours ago) with 50% battery.",
 		},
 		{
 			// FR-065a (found by the sandbox Mac, 2026-11-26): a Mac without a battery was "100% battery".
 			"reason unknown, no battery",
 			machine{Device: m, LastSeen: threeHoursAgo, State: withoutBattery(lastState(100, "ac"))},
-			"Toni's MacBook Pro is offline. It was last seen at 2:02 PM (3 hours ago).",
+			"Sam's MacBook Pro is offline. It was last seen at 2:02 PM (3 hours ago).",
 		},
 		{
 			"unrecognized reason",
 			machine{Device: m, LastSeen: threeHoursAgo, OfflineReason: "future_reason", State: lastState(62, "ups")},
-			"Toni's MacBook Pro is offline. It was last seen at 2:02 PM (3 hours ago) with 62% battery, on UPS power.",
+			"Sam's MacBook Pro is offline. It was last seen at 2:02 PM (3 hours ago) with 62% battery, on UPS power.",
 		},
 		{
 			"no state",
 			machine{Device: m, LastSeen: threeHoursAgo},
-			"Toni's MacBook Pro is offline. It was last seen at 9:02 PM UTC on Oct 19 (3 hours ago).",
+			"Sam's MacBook Pro is offline. It was last seen at 9:02 PM UTC on Oct 19 (3 hours ago).",
 		},
 		{
 			"Linux server shut down",
@@ -161,7 +161,7 @@ func TestCallFailureTexts(t *testing.T) {
 }
 
 func TestStatusLine(t *testing.T) {
-	const n = "Toni's MacBook Pro"
+	const n = "Sam's MacBook Pro"
 	s := lastState(64, "battery")
 	assert.Equal(t, n+" (Mac): online · 64% battery, on battery power · keep-awake on", statusLine(n, store.KindMac, s))
 
@@ -206,13 +206,13 @@ func TestStatusLine(t *testing.T) {
 
 func TestOthersLine(t *testing.T) {
 	ms := []machine{
-		{Device: mac("Toni's MacBook Pro"), Online: true},
+		{Device: mac("Sam's MacBook Pro"), Online: true},
 		{Device: linux("homeserver"), LastSeen: now.Add(-3 * time.Hour)},
 		{Device: mac("Old Mac")},
 	}
 	assert.Equal(t, "Other machines: homeserver (Linux, offline, last seen 3 hours ago), Old Mac (Mac, offline, never connected)",
-		othersLine(ms, "dev_Toni's MacBook Pro", now))
-	assert.Empty(t, othersLine(ms[:1], "dev_Toni's MacBook Pro", now), "one machine: no line")
+		othersLine(ms, "dev_Sam's MacBook Pro", now))
+	assert.Empty(t, othersLine(ms[:1], "dev_Sam's MacBook Pro", now), "one machine: no line")
 }
 
 // FR-200: whatever a result ends with, the state line starts on its own line, the result's own
@@ -279,3 +279,6 @@ func withoutBattery(s *agentproto.State) *agentproto.State {
 	s.HasBattery = &no
 	return s
 }
+
+// The requirements this file's tests cite (docs/requirements/; script/process-check).
+// Validates: FR-065a, FR-200, FR-671

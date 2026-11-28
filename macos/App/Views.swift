@@ -324,7 +324,7 @@ struct ConnectionPane: View {
     }
 }
 
-/// What the sharing setting says, in plain words (spec 014 FR-1402, FR-1454; Toni, 2026-11-25:
+/// What the sharing setting says, in plain words (spec 014 FR-1402, FR-1454; decided 2026-11-25:
 /// "Same for everyone, said plainly").
 enum SharingText {
     static let footer =

@@ -1,9 +1,9 @@
 # Latchkey threat model
 
-Written 2026-10-24 before the first whole-repository security scan (Toni chose: threat model
+Written 2026-10-24 before the first whole-repository security scan (the maintainer chose: threat model
 first, then Anthropic's Claude Security scanner, findings proven with a failing test before they
 are fixed). Scanners and reviewers read this file; keep it current when an entry point, trust
-boundary, or decision changes. Design detail lives in `specs/001-core/plan.md` and the capability
+boundary, or decision changes. Design detail lives in `docs/design/core.md` and the capability
 specs; best-practice review and gaps in `docs/best-practices.md`.
 
 ## What is being protected
@@ -50,7 +50,7 @@ Boundaries, each a place where input must be treated as hostile:
   within 2 seconds.
 - **B2 Relay → the outside world.** Client ID Metadata Documents: the relay fetches an HTTPS URL
   the client chooses (SSRF risk). Outbound email through SMTP (header injection).
-- **B3 Relay ↔ Mac.** The agent protocol (`specs/001-core/contracts/agent-protocol.md`): nonce
+- **B3 Relay ↔ Mac.** The agent protocol (`docs/design/contracts/agent-protocol.md`): nonce
   challenge signed by the device key, then tool lists, calls, results, state, notices. The Mac
   must not trust the relay beyond it: capability levels are enforced on the Mac.
 - **B4 Tool arguments → macOS.** Arguments from Claude become shell commands, file paths,
@@ -85,25 +85,25 @@ Boundaries, each a place where input must be treated as hostile:
 
 - **A compromised relay or relay operator can call any capability that is on**, and read tool
   traffic. No end-to-end layer exists for custom connectors today (`docs/best-practices.md` §4);
-  Shell and Computer control stay on by default (Toni, 2026-10-22).
-- **Prompt injection** through tool results (web pages, messages, files): out of scope, Toni
+  Shell and Computer control stay on by default (decided 2026-10-22).
+- **Prompt injection** through tool results (web pages, messages, files): out of scope, decided
   2026-10-23. No Latchkey-side injection defenses.
-- **No per-call approval on the Mac** ("manual approvals don't improve security", Toni
+- **No per-call approval on the Mac** ("manual approvals don't improve security", decided
   2026-10-23). Opening pages in Safari stays automatic; `messages_send` sends without a
   Latchkey-side stop when Claude was asked to.
 - **Tools act with the owner's full rights when on.** Shell runs any command; Files reads and
   writes anywhere the owner can. That is the feature, not a bug.
-- **Emailed codes are 6 digits with no per-visitor limit** (Toni, 2026-10-25): one account is
+- **Emailed codes are 6 digits with no per-visitor limit** (decided 2026-10-25): one account is
   protected by 5 tries per code and 20 wrong codes a day, but guesses spread over many known
   addresses are bounded only by the relay-wide email limit.
-- **The daily lock is per email address** (Toni, 2026-10-25): anyone can enter 20 wrong codes for
+- **The daily lock is per email address** (decided 2026-10-25): anyone can enter 20 wrong codes for
   an address and block its emailed codes for a day at a time; passkeys still sign in.
 - **Shell, when on, can change Latchkey's own files**; only the Files tools refuse that.
 - **Each handled pairing link sends one lookup** to the relay it names before the dialog.
 - **Processes a command deliberately detaches from its terminal** are not stopped with it.
 - **A page that shows a password as plain text** without marking the field is read as text.
 - **Pairing links from outside the app's sign-in window** are accepted after a dialog that names
-  the relay and the link's account email (Toni, 2026-10-24); not bound by a one-time secret.
+  the relay and the link's account email (decided 2026-10-24); not bound by a one-time secret.
 
 - **A whole-disk copy of the server holds the database and its key file together**, so the
   nightly backups protect against loss, not against someone who obtains a backup. Copies made
@@ -122,7 +122,7 @@ Boundaries, each a place where input must be treated as hostile:
    at once ends the grant; revoking Claude's access kills
    every token of that grant.
 3. Consent is shown and approved by a signed-in owner (session cookie plus CSRF token) before
-   any code is issued, every time: approvals are not remembered (Toni, 2026-10-25; RFC 8252
+   any code is issued, every time: approvals are not remembered (decided 2026-10-25; RFC 8252
    §8.6). The client name and redirect host shown are the ones that will be used. Redirects back to
    the client name the relay as issuer (RFC 9207).
 4. Only a device holding the registered Secure Enclave key can act as the Mac; pairing codes are
@@ -159,9 +159,9 @@ Boundaries, each a place where input must be treated as hostile:
     or a shell command line except where the tool's purpose is to run it (`shell_run`, the
     JavaScript action in `browser_act`), and read-only tools don't change anything.
 12. No secret (relay address, server details, team ID, API keys, tokens) is committed, logged, or
-    returned in an error. `scripts/private-values-check.sh` enforces the first part for relay
-    addresses and the team ID, which may only be placeholders (`make secrets` and the push guard),
-    and gitleaks for keys and tokens; the proxy's access log leaves out redirect targets; the app's
+    returned in an error. Relay addresses and the team ID may only be placeholders in the
+    repository (the privacy review of every commit's diff, CLAUDE.md), and gitleaks checks for keys
+    and tokens (`make secrets`); the proxy's access log leaves out redirect targets; the app's
     log carries the relay address only as private data.
 13. A Read only browser read never returns what password, one-time-code or card fields hold
     (spec 005 FR-410).

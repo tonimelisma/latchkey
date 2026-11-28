@@ -56,3 +56,6 @@ func TestReportPartHoldsTheSpansLogAndTheChatsCalls(t *testing.T) {
 	require.False(t, res.IsError, "%v", res.Content)
 	assert.LessOrEqual(t, len(res.Content[0]["text"].(string)), 150, "made to fit")
 }
+
+// The requirements this file's tests cite (docs/requirements/; script/process-check).
+// Validates: FR-1444

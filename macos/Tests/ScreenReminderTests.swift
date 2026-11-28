@@ -7,7 +7,7 @@ import Testing
 struct ScreenReminderTests {
     static let due = Date(timeIntervalSince1970: 1_795_000_000)
 
-    /// The shape macOS 27 writes (seen on Toni's Mac, 2026-10-31).
+    /// The shape macOS 27 writes (seen on the maintainer's Mac, 2026-10-31).
     static func record(_ id: String, due: Date) throws -> Data {
         try PropertyListSerialization.data(
             fromPropertyList: [
@@ -42,3 +42,6 @@ struct ScreenReminderTests {
         #expect(!ScreenReminder.shouldAsk(due: nil, now: after, idle: 0, locked: false, lastTry: nil))
     }
 }
+
+// The requirements this file's tests cite (docs/requirements/; script/process-check).
+// Validates: FR-624

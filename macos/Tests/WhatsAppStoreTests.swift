@@ -295,3 +295,6 @@ import Testing
         }
     }
 }
+
+// The requirements this file's tests cite (docs/requirements/; script/process-check).
+// Validates: FR-1220, FR-1240, FR-1244

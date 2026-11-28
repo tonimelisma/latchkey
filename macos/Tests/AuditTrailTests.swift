@@ -55,7 +55,7 @@ enum LogBeforeEvents {
     }
 }
 
-/// The audit trail without gaps (Toni, 2026-10-27): the app's own events in the activity log
+/// The audit trail without gaps (decided 2026-10-27): the app's own events in the activity log
 /// (FR-633), the relay's call id in each action (FR-632), and the comparison with the relay's
 /// audit (FR-634), each shown recorded (FR-636).
 @Suite struct AuditTrailTests {
@@ -69,7 +69,7 @@ enum LogBeforeEvents {
 
     // MARK: upgrade
 
-    /// Toni's log (about 19 MB, chained) upgrades in place: every entry stays readable, becomes
+    /// the maintainer's log (about 19 MB, chained) upgrades in place: every entry stays readable, becomes
     /// an action without a call id, the chain still holds, and new entries continue it.
     @MainActor @Test func upgradesTheLogFromBeforeEvents() throws {
         let dir = try TraceTests.scratch()
@@ -554,3 +554,6 @@ enum LogBeforeEvents {
         #expect(ActivityRow(entries[0]).client == "Claude Code")
     }
 }
+
+// The requirements this file's tests cite (docs/requirements/; script/process-check).
+// Validates: FR-615, FR-632, FR-633, FR-634, FR-636, FR-637

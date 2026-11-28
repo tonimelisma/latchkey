@@ -4,7 +4,7 @@ import Foundation
 /// Changes a card through the Contacts app's own scripting, for the cards the Contacts framework
 /// can't save: macOS lets only apps with Apple's Contacts notes entitlement save a card that has a
 /// note (Cocoa error 134092; Apple Developer Forums thread 847426, FB23452026), and that
-/// entitlement isn't given to other developers. Toni chose (2026-11-27, "Via Contacts' scripting")
+/// entitlement isn't given to other developers. the maintainer chose (2026-11-27, "Via Contacts' scripting")
 /// to change such cards the way the Contacts app would. Contacts is opened hidden and never in
 /// front (Constitution IV: no window a person at the Mac would see), and quit again when Latchkey
 /// opened it, unless the owner brought it to the front meanwhile (so nothing is left running that

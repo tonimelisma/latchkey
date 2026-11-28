@@ -84,3 +84,6 @@ import Testing
         #expect(SignInImport.Outcome.notAnExport.told.contains("Passwords"))
     }
 }
+
+// The requirements this file's tests cite (docs/requirements/; script/process-check).
+// Validates: FR-1301, FR-1303

@@ -67,7 +67,7 @@ import WebKit
     }
 
     /// Citi, 2026-11-22: the page reported a 0×0 window at no place on the screen, and Citi ended
-    /// the sign-in after its code, a Latchkey bug (Toni: "change the background tab to be more
+    /// the sign-in after its code, a Latchkey bug (decided: "change the background tab to be more
     /// real"). Now it is told of a browser window as big as the page plus a toolbar, at the top
     /// left of the screen, and nothing comes on screen.
     @Test func thePageIsInABrowserSizedWindowThatNeverShows() async throws {
@@ -322,3 +322,6 @@ import WebKit
         await #expect(throws: SafariBrowser.Failure.self) { _ = try await b.signInAgain() }
     }
 }
+
+// The requirements this file's tests cite (docs/requirements/; script/process-check).
+// Validates: FR-420, FR-441, FR-442, FR-467

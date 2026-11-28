@@ -732,3 +732,6 @@ final class FakeSafariTabs: ScriptRunner, @unchecked Sendable {
         #expect(path.contains("https://www.shop.example.com/cart?x=1"))
     }
 }
+
+// The requirements this file's tests cite (docs/requirements/; script/process-check).
+// Validates: FR-406, FR-415, FR-424, FR-427, FR-431, FR-432, FR-455, FR-470

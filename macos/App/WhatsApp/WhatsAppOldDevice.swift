@@ -1,7 +1,7 @@
 import Foundation
 import WebKit
 
-/// Latchkey's own WhatsApp device was withdrawn (Toni, 2026-11-04, plan D4): at the first start
+/// Latchkey's own WhatsApp device was withdrawn (decided 2026-11-04, plan D4): at the first start
 /// without it, what it stored is deleted, once.
 @MainActor
 enum WhatsAppOldDevice {

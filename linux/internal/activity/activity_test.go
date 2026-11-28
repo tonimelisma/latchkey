@@ -333,3 +333,6 @@ func TestTheLogsFirstCallIsComparedToo(t *testing.T) {
 	assert.Empty(t, missingThere)
 	assert.Empty(t, missingHere, "a call from before the log began isn't this log's to have")
 }
+
+// The requirements this file's tests cite (docs/requirements/; script/process-check).
+// Validates: FR-1051, FR-1053, FR-1055, FR-1057, FR-1058

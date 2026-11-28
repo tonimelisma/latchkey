@@ -43,3 +43,6 @@ func TestAllowsRedirects(t *testing.T) {
 	assert.False(t, a.allowsRedirects([]string{"https://localhost.evil.example/cb"}))
 	assert.False(t, a.allowsRedirects([]string{"://"}))
 }
+
+// The requirements this file's tests cite (docs/requirements/; script/process-check).
+// Validates: FR-180

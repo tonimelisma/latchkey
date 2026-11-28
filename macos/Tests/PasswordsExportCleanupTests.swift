@@ -62,3 +62,6 @@ import Testing
                 "Passwords-NONE0001.csv", home: h, every: .milliseconds(50), for: .milliseconds(300))))
     }
 }
+
+// The requirements this file's tests cite (docs/requirements/; script/process-check).
+// Validates: FR-1307

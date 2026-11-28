@@ -232,3 +232,6 @@ func TestFailedRequestsAreCounted(t *testing.T) {
 	assert.Equal(t, "GET /broken: 500 internal error", got[0].Detail)
 	assert.Contains(t, out.String(), `msg="request failed"`)
 }
+
+// The requirements this file's tests cite (docs/requirements/; script/process-check).
+// Validates: FR-024, FR-630, FR-631, FR-636

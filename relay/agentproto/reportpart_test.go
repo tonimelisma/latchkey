@@ -15,3 +15,6 @@ func TestNoMachineMayOfferTheReportPartTool(t *testing.T) {
 		t.Fatalf("err = %v, want a protocol violation", err)
 	}
 }
+
+// The requirements this file's tests cite (docs/requirements/; script/process-check).
+// Validates: FR-1445

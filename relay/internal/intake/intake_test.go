@@ -198,3 +198,6 @@ func TestAllWaitingBytesAreBounded(t *testing.T) {
 	assert.Equal(t, http.StatusAccepted, post(t, srv.URL, body, hour, nonce).StatusCode)
 	assert.Equal(t, http.StatusServiceUnavailable, post(t, srv.URL, body, hour, nonce).StatusCode, "4 MB waiting would be over 3 MB")
 }
+
+// The requirements this file's tests cite (docs/requirements/; script/process-check).
+// Validates: FR-1420, FR-1421, FR-1423, FR-1424, FR-1455, FR-1456

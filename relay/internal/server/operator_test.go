@@ -163,3 +163,6 @@ func TestHousekeeping(t *testing.T) {
 	require.Len(t, log, 1, "records older than a year are deleted (FR-199)")
 	assert.Equal(t, "new@example.com", log[0].Email)
 }
+
+// The requirements this file's tests cite (docs/requirements/; script/process-check).
+// Validates: FR-196, FR-198, FR-199

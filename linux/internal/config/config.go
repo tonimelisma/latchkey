@@ -39,7 +39,7 @@ type Settings struct {
 	AutoUpdate *bool `json:"auto_update,omitempty"`
 }
 
-// Defaults are a newly paired server's settings: Shell On, Files Read & write, as the Mac (Toni,
+// Defaults are a newly paired server's settings: Shell On, Files Read & write, as the Mac (decided
 // 2026-10-31, FR-1024).
 func Defaults() Settings {
 	return Settings{Shell: On, Files: FilesWrite}

@@ -293,3 +293,6 @@ grep -q '^sandbox:' "$root/macos/Makefile" && grep -q '^sandbox-stop:' "$root/ma
 
 [ "$fails" -eq 0 ] || { echo "$fails failed"; exit 1; }
 echo "all passed"
+
+# The requirements this file's tests cite (docs/requirements/; script/process-check).
+# Validates: FR-1605, FR-1606

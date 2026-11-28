@@ -34,3 +34,6 @@ struct SingleCopyTests {
         #expect(await !SingleCopy.anotherStays(wait: .seconds(5), others: others.now))
     }
 }
+
+// The requirements this file's tests cite (docs/requirements/; script/process-check).
+// Validates: FR-207

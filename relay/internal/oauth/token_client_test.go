@@ -42,3 +42,6 @@ func TestAccessTokenOfAClientThatIsGoneIsRefused(t *testing.T) {
 	assert.Equal(t, http.StatusUnauthorized, e.mcpStatus(dcrAccess), "the registered client is gone")
 	assert.Equal(t, http.StatusUnauthorized, e.mcpStatus(cimdAccess), "the metadata document can't be used")
 }
+
+// The requirements this file's tests cite (docs/requirements/; script/process-check).
+// Validates: FR-095, FR-180

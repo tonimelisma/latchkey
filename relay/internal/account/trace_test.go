@@ -104,3 +104,6 @@ func TestDeleteAccountRemovesTraces(t *testing.T) {
 	require.Equal(t, http.StatusOK, r.status, r.body)
 	assert.NoDirExists(t, dir)
 }
+
+// The requirements this file's tests cite (docs/requirements/; script/process-check).
+// Validates: FR-685, FR-687

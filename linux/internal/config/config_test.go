@@ -12,15 +12,15 @@ import (
 )
 
 func TestPathsFollowXDG(t *testing.T) {
-	p := config.PathsFor("/home/toni", "", "", "")
-	assert.Equal(t, "/home/toni/.config/latchkey/settings.json", p.Settings)
-	assert.Equal(t, "/home/toni/.local/share/latchkey/device.key", p.Key)
-	assert.Equal(t, "/home/toni/.cache/latchkey/jobs", p.Jobs)
-	assert.Equal(t, "/home/toni/.local/lib/latchkey", p.Program)
+	p := config.PathsFor("/home/sam", "", "", "")
+	assert.Equal(t, "/home/sam/.config/latchkey/settings.json", p.Settings)
+	assert.Equal(t, "/home/sam/.local/share/latchkey/device.key", p.Key)
+	assert.Equal(t, "/home/sam/.cache/latchkey/jobs", p.Jobs)
+	assert.Equal(t, "/home/sam/.local/lib/latchkey", p.Program)
 
-	p = config.PathsFor("/home/toni", "/x/config", "relative", "/x/cache")
+	p = config.PathsFor("/home/sam", "/x/config", "relative", "/x/cache")
 	assert.Equal(t, "/x/config/latchkey", p.Config)
-	assert.Equal(t, "/home/toni/.local/share/latchkey", p.Data, "a relative XDG path is ignored, as the spec says")
+	assert.Equal(t, "/home/sam/.local/share/latchkey", p.Data, "a relative XDG path is ignored, as the spec says")
 	assert.Equal(t, "/x/cache/latchkey", p.Cache)
 	assert.Contains(t, p.Own(), config.ServiceFile)
 }
@@ -55,3 +55,6 @@ func TestSettingsRoundTrip(t *testing.T) {
 	entries, _ := os.ReadDir(filepath.Dir(p.Settings))
 	assert.Len(t, entries, 1, "no temporary files left")
 }
+
+// The requirements this file's tests cite (docs/requirements/; script/process-check).
+// Validates: FR-1024

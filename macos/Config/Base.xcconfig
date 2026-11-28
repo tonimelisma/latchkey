@@ -1,8 +1,7 @@
 // Shared build settings. Personal signing settings (DEVELOPMENT_TEAM) live in the gitignored
 // Local.xcconfig next to this file; copy Local.xcconfig.example to create it.
 // Sparkle's EdDSA public key for signed updates (spec 001 FR-072). Its private half is in the
-// owner's login keychain and in Azure Key Vault kv-melisma-release (latchkey-sparkle-private-key,
-// managed from the private repository tonimelisma/secrets), which mac-tag.yml's release job reads.
+// release Key Vault (latchkey-sparkle-private-key), which mac-tag.yml's release job reads.
 // Empty: the updater stays off. The public key is not secret.
 SPARKLE_PUBLIC_ED_KEY = taGyPBum8bkweq78chQL0mQhqfMc9jrnXd564+e+adE=
 

@@ -128,3 +128,6 @@ import Testing
         #expect(offending.isEmpty, "\(offending)")
     }
 }
+
+// The requirements this file's tests cite (docs/requirements/; script/process-check).
+// Validates: FR-054, FR-054a, FR-054b

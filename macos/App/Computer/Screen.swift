@@ -96,7 +96,7 @@ enum ScreenLock {
 }
 
 /// Plain reasons the screen can't be used now (FR-504); nil when it can.
-/// A sleeping display is never woken (Toni, 2026-11-02: Latchkey doesn't get around the Mac's
+/// A sleeping display is never woken (decided 2026-11-02: Latchkey doesn't get around the Mac's
 /// idle lock, lid open or closed; waking it reset the idle time, so Claude's looks could keep an
 /// idle Mac from locking).
 enum ScreenCheck {

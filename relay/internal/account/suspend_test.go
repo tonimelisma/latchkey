@@ -125,3 +125,6 @@ func TestBlockedAddress(t *testing.T) {
 	status, r = e.browser().startEmail("someone@example.com", false)
 	assert.Equal(t, http.StatusOK, status, r)
 }
+
+// The requirements this file's tests cite (docs/requirements/; script/process-check).
+// Validates: FR-196, FR-197

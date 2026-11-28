@@ -1,6 +1,6 @@
 // Package files is Files on a Linux server (spec 010 FR-1040 to FR-1044, plan D10): the same three
 // tools as the Mac's (files_find, files_read, files_change), with the server's own rules: search
-// walks the disk instead of asking Spotlight, and delete removes for good (Toni, 2026-10-31).
+// walks the disk instead of asking Spotlight, and delete removes for good (decided 2026-10-31).
 package files
 
 import (

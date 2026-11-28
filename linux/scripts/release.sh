@@ -3,17 +3,17 @@
 # plan D12): latchkey-linux-amd64 and -arm64, each with its .sig, and SHA256SUMS for install.sh.
 # Run by .github/workflows/linux-release.yml after every change to linux/ reaches main (or when a
 # session asks for it with repository_dispatch "linux-release"): there SERVER_SIGNING_KEY comes from
-# Azure Key Vault kv-melisma-release (managed from the private repository tonimelisma/secrets),
-# fetched by the workflow's first step, GH_TOKEN is the workflow's token, and RELEASE_TAG_ON_MAIN=1 lets it release a
-# commit main has meanwhile moved past (scripts/release-tag.sh). Elsewhere (the owner's Mac) it
-# reads the key from the vault itself with the Azure CLI's sign-in (`az login`). Publishes only a clean checkout of a commit on main, so every release is
+# the release Key Vault, fetched by the workflow's first step, GH_TOKEN is the workflow's token, and RELEASE_TAG_ON_MAIN=1 lets it release a
+# commit main has meanwhile moved past (scripts/release-tag.sh). Elsewhere (a developer's Mac) it
+# reads the key from the vault AZURE_KEY_VAULT names, with the Azure CLI's sign-in (`az login`). Publishes only a clean checkout of a commit on main, so every release is
 # code that's on main. Nothing newer to release (a newer commit already has a number): exit 0.
 set -eu
 cd "$(dirname "$0")/.."
 
 if [ -z "${SERVER_SIGNING_KEY:-}" ]; then
-  SERVER_SIGNING_KEY=$(az keyvault secret show --vault-name kv-melisma-release -n latchkey-server-signing-key --query value -o tsv) ||
-    { echo "release: SERVER_SIGNING_KEY isn't set and couldn't be read from Key Vault kv-melisma-release (az login?)" >&2; exit 1; }
+  [ -n "${AZURE_KEY_VAULT:-}" ] || { echo "release: set SERVER_SIGNING_KEY, or AZURE_KEY_VAULT to the release vault's name to read it with az" >&2; exit 1; }
+  SERVER_SIGNING_KEY=$(az keyvault secret show --vault-name "$AZURE_KEY_VAULT" -n latchkey-server-signing-key --query value -o tsv) ||
+    { echo "release: SERVER_SIGNING_KEY isn't set and couldn't be read from Key Vault $AZURE_KEY_VAULT (az login?)" >&2; exit 1; }
 fi
 [ -n "$SERVER_SIGNING_KEY" ] || { echo "release: SERVER_SIGNING_KEY is empty" >&2; exit 1; }
 # Only the signing step gets the key; nothing else this script runs inherits it.
@@ -28,7 +28,7 @@ if [ "${RELEASE_ALLOW_DIRTY:-}" != 1 ]; then
     [ "$(git rev-parse HEAD)" = "$(git rev-parse origin/main)" ] || { echo "release: HEAD isn't origin/main" >&2; exit 1; }
   fi
 fi
-# The number is this commit's tag, linux-<x.y.z>, given or reused (Toni, 2026-11-04: releases are
+# The number is this commit's tag, linux-<x.y.z>, given or reused (decided 2026-11-04: releases are
 # tags on commits, so two sessions never publish the same number). The release goes on that tag.
 # RELEASE_TAG_PREFIX=server-v only for the one bridge release (0.1.4, 2026-11-04) that servers
 # knowing only that name update to; it reads both names.

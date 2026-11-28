@@ -60,3 +60,6 @@ func TestTokensIssuedBeforeKeysWereEncryptedStillWork(t *testing.T) {
 	assert.Equal(t, http.StatusOK, resp.StatusCode, m)
 	assert.Equal(t, http.StatusUnauthorized, after.mcpStatus(access+"x"))
 }
+
+// The requirements this file's tests cite (docs/requirements/; script/process-check).
+// Validates: FR-188

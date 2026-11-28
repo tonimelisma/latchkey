@@ -4,7 +4,7 @@ import Testing
 @testable import Latchkey
 
 /// Spec 012: the WhatsApp tools read and search WhatsApp for Mac's database (the fixture); nothing
-/// sends (Toni, 2026-11-07).
+/// sends (decided 2026-11-07).
 @Suite struct WhatsAppToolsTests {
     /// FR-1222: the database, marked current while WhatsApp for Mac runs, else possibly out of date.
     @Test func readingUsesTheDatabase() async throws {
@@ -36,7 +36,7 @@ import Testing
         #expect(r.isError && r.plainText.contains("No WhatsApp chat matches"))
     }
 
-    /// Reading only, at every level but off: there is no sending (Toni, 2026-11-07).
+    /// Reading only, at every level but off: there is no sending (decided 2026-11-07).
     @Test func onlyFindingAndReading() {
         var registry = CapabilityRegistry(
             capabilities: [WhatsAppCapability.make()], levels: [CapabilityRegistry.whatsapp: .readWrite])
@@ -45,3 +45,6 @@ import Testing
         #expect(registry.tools.isEmpty)
     }
 }
+
+// The requirements this file's tests cite (docs/requirements/; script/process-check).
+// Validates: FR-1222

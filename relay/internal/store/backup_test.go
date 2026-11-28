@@ -67,3 +67,6 @@ func TestThreeCopiesKept(t *testing.T) {
 	require.Len(t, kept, 3)
 	assert.NotContains(t, kept, filepath.Join(dir, "backups", "relay-20260101T000000Z-v7.db"), "the oldest goes")
 }
+
+// The requirements this file's tests cite (docs/requirements/; script/process-check).
+// Validates: FR-909

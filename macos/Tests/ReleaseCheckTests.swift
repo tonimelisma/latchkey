@@ -61,3 +61,6 @@ struct ReleaseCheckTests {
         #expect(notice?.page.absoluteString == "https://github.com/tonimelisma/latchkey/releases/tag/mac-0.9.0")
     }
 }
+
+// The requirements this file's tests cite (docs/requirements/; script/process-check).
+// Validates: FR-669

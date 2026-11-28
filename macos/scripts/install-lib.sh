@@ -146,7 +146,7 @@ audit_verdict() {
 }
 
 # idle_verdict <running-calls folder> <now, epoch seconds> <quiet seconds>: whether Latchkey is
-# idle enough to restart (Toni, 2026-11-22: "Batch + wait for idle", after an install restarted
+# idle enough to restart (decided 2026-11-22: "Batch + wait for idle", after an install restarted
 # it in the middle of his Target order). The app keeps one file per running call in that folder
 # (spec 001 FR-667), so no file means no call runs, and the folder's change time is when a call
 # last started or ended. Exit 0 when idle; 1 with the reason otherwise. No folder: no call since

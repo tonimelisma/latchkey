@@ -1,0 +1,398 @@
+# Spec 016: Test strategy and two ways to work — research
+
+Spec 016's research (migrated from `specs/016-test-strategy/research.md`; started 2026-11-25). Findings as of their dates.
+
+Gathered 2026-11-26 in a cloud session at the maintainer's request ("you don't really have a proper test
+strategy here ... research best practices"; "streamline as much as possible. speed is
+essential, but it needs to be ecologically valid"; "do a proper audit of CLAUDE.md anyway").
+What and why: `docs/requirements/test-strategy.md`.
+
+## 1. What exists today (inventory, 2026-11-26)
+
+GL = GitHub Linux runner, GM = GitHub macOS 26 runner, VM = cloud session, TM = the maintainer's Mac.
+
+| Kind | What is real | Where, when | Size | Run today? |
+|---|---|---|---|---|
+| relay `make test` | unit and contract tests; headless Chrome sign-up, OAuth, pairing with a real MCP client and the pretend Mac (`internal/testagent`); shared protocol fixtures (`docs/design/contracts/fixtures`) | VM, GL (`ci.yml`, again in `relay-image.yml`) | 427 tests | yes, gating |
+| relay `make lint`, `make security`, `make script-tests` | linters, vulnerability and secret scans, the repository scripts with stand-in gh | VM (security needs extra hosts), GL | 15 script tests | yes, gating |
+| linux `make test` | Go unit tests | VM, GL | 59 tests | yes, gating |
+| linux `make test-linux` | every test on Debian with systemd in Docker | by hand | — | no workflow runs it |
+| `linuxcheck` (`make check`) | private relay, pretend Mac, the real Linux program installed in a container, real MCP client, snapshots | GL `e2e.yml` | — | yes, reported |
+| `e2e relay` | the relay's own tools through a private relay, snapshots | GL `e2e.yml` | — | yes, reported |
+| `e2e mac` + `E2EHostTests` | the app's real tool code, in-process in the Debug test host, through a real MCP client and private relay; files, shell, own browser (served pages), a capability off, offline; 32 snapshots | GM `e2e.yml` | 4 checks | yes, reported; Notes, Calendar, Reminders, Contacts, Messages, Mail, WhatsApp, Computer, Logins, Location skipped |
+| macos `make test` (mac-build.yml, 4 jobs) | Swift Testing, hosted in the app; stand-ins for Safari, Mail, Messages, the lock; real WebKit on local pages | GM per PR, ~4.5 min | ≈959 tests | lint and build gate; the tests are reported only, ~30 timing tests fail on main |
+| Regression tests | one per `cases.json` regression row | Go in `ci.yml`; Swift on GM, reported | 119 rows | the Swift half does not gate |
+| `claude-check` (`localcheck`), `guidecheck` | real Claude Code, private relay, pretend Mac | by hand | — | not run (no live checks since 2026-11-23) |
+| `mac-check` (`maccheck` + `LiveRelayTests`) | the app's connection code, private relay | TM by hand | 1 test | last 2026-10-20 |
+| safari-check.sh | real Safari, local pages | TM by hand, unlocked | — | passed once |
+| `state-check/` | real Claude, hosted relay, the maintainer's real Mac, apps and data, each screen state | TM | 237 cases | not run since 2026-11-23 |
+| weekly-eval.sh + `eval-image.sh` | installed release in a Tart VM, real permissions, real Claude (Sonnet), 20 tasks × 3 | Tart, by hand | ≤1 h | never run |
+| install checks (`install-lib.sh`) | pairing kept after an install | TM updater, each tag | — | yes |
+
+What this shows:
+
+1. Files, shell and the own browser are checked three or four times; Notes, Calendar,
+   Reminders, Contacts, Messages, Mail, Logins and Computer only against stand-ins.
+2. Nothing that runs today uses real permissions, a built `.app`'s start and update path, or a
+   screen state: the only routes there (`state-check`, Tart) are not run.
+3. The Mac suite, with every Swift regression test, does not gate merging.
+4. The same setup (private relay, Chrome sign-up, OAuth, pairing) is built in seven harnesses
+   (`TestEndToEndInBrowser`, `e2e relay`, `e2e mac`, `linuxcheck`, `localcheck`, `maccheck`,
+   `guidecheck`); "a capability turned off disappears" is checked in five; the tool list is
+   pinned three times (`PublicToolsTests`, sentence-pinning regression tests, toolsnaps).
+5. `ci.yml` runs on both push and pull request (each push to a PR runs twice); the release
+   workflows run the same tests again after merge.
+6. Every check with real Claude depends on someone running it by hand.
+
+## 2. What good practice says (sources at the end)
+
+- **Shape.** For systems whose bugs live at the seams between services, the "honeycomb"
+  (Spotify) puts most weight on integration tests at each boundary, with few unit and few
+  end-to-end tests; the pyramid (Fowler, Google's "Just say no to more end-to-end tests") and
+  the trophy (Dodds) agree that end-to-end tests are few, slow and flaky. Latchkey's seams are
+  the MCP surface, the relay–Mac protocol, and macOS's APIs.
+- **Sizes and hermeticity** (Google): small (one process, no network or sleep), medium (one
+  machine, localhost), large. Flakiness grows with size (0.5 %, 1.6 %, 14 %).
+- **Fakes are checked against reality** (Software Engineering at Google, ch. 13): every stand-in
+  in the fast layers needs a layer that runs the real thing, or the stand-in drifts. Latchkey has
+  the stand-ins but almost no real-adapter layer.
+- **Contracts:** shared golden messages checked by both sides (Latchkey already has
+  `docs/design/contracts/fixtures`); snapshots of the tool list.
+- **Time:** never assert on wall-clock time on shared runners; use fake clocks (Go's
+  `testing/synctest`, an injected clock in Swift). This is the root of the ~30 failing timing
+  tests on GM.
+- **Speed budgets:** the commit stage under 5 minutes, never over 10 (Humble & Farley; Beck's
+  ten-minute build); select tests by changed paths; shard only slow layers; flaky tests fixed or
+  quarantined with an owner and a date, never left red.
+- **Same command locally and in CI.**
+- **Mac permissions (TCC)** can't be granted interactively on CI; practitioners pre-grant in a
+  throwaway VM (Tart, Anka) or insert rows into the user's permission database there; screen
+  recording can't be granted by a profile. A separate test bundle ID keeps grants and data apart
+  from the installed app.
+- **Evals** (Anthropic, "Writing effective tools for agents", "Demystifying evals for AI
+  agents"): realistic multi-step tasks with checkable end states, clean environment per trial,
+  held-out tasks, pass^k for regression sets, run on tool or description changes and on model
+  upgrades, reported as rates rather than a merge gate. Prompt injection measured as in AgentDojo.
+- **After release:** a scripted probe (synthetic monitoring) against the released system with
+  test machines and data, never as a replacement for earlier layers.
+- **Device-only states** (locked, lid closed): logic tested with an injected state source; the
+  real state only on the device, by the owner's checklist or by evidence recorded during real use.
+
+## 3. A sandboxed copy of Latchkey (decided: "instead of installing, maybe a sandboxed copy")
+
+Verified in code: a Debug build is already a different app to macOS: "Latchkey Dev",
+`net.melisma.latchkey.dev` (`macos/project.yml:39-55`, `Shared/AppIdentity.swift:33-46`), with
+its own settings, Keychain service, permissions, helper label, Application Support folder,
+link scheme; Sparkle off (`Updates.swift:29-31`); `SingleCopy` is per bundle ID, so it runs next
+to the installed app; it pairs with a relay on `http://localhost` (`Pairing.swift:134-146`).
+`make run` builds and opens it.
+
+Not separated: the home folder. A dev copy in the maintainer's account sees his real Messages, Notes,
+Contacts, Calendar, Safari and files (`Permissions.swift:9-11`, `MessagesCapability.swift:137`).
+Hazards found:
+
+- **Install hazard (bug):** both builds are named `Latchkey.app`. `AppLocation.needsMove`
+  (`App/Installation.swift:9`) only spares Xcode's build folders, so a dev copy started from
+  anywhere else offers to move itself, and accepting removes `/Applications/Latchkey.app`.
+- **Keep-awake:** each helper sets the Mac-wide `pmset disablesleep` (`Helper/main.swift:93-112`),
+  so two helpers fight.
+- Debug builds carry the debugging entitlement (`project.yml:32-35`): another program running as
+  the maintainer could attach to a dev copy that holds Full Disk Access or Accessibility.
+
+Permissions are kept per bundle ID and designated requirement: any stable signing certificate
+keeps the grants across rebuilds (a self-signed one made for the sandbox does, which is the
+common way to keep Accessibility grants for self-built tools); ad-hoc signing
+(`CODE_SIGN_IDENTITY=-`, used by `e2e mac`) loses them on every build (macOS knowledge, not
+verified on Latchkey). The sandbox uses its own self-signed identity, never the owner's
+certificate (plan D3).
+
+| Option | Real permissions and apps | The maintainer's data safe | Disturbs the maintainer | Speed | Once for the maintainer |
+|---|---|---|---|---|---|
+| A. Dev copy in the maintainer's account | yes | only for files (fixture folder), shell, own browser | two menu icons, a first-run window | rebuild ~1 min | grant permissions |
+| B. Separate macOS test user on his Mac | yes, every capability with test data | yes | an unlocked run needs a user switch (takes the screen) | fast | make the account, grant |
+| C. Tart VM with the local build | yes inside the guest | yes (nothing of the Mac goes in) | no | image once; a copy starts in ~1–3 min, can stay up through a session | run `eval-image.sh`, approve permissions in the guest |
+| D. In-process test host (today's `e2e mac`) | WebKit, files, shell; no app start or permissions | no on his Mac (real home folder) | no | ~5 min with build | — |
+
+None of them gives the lid closed, his real accounts, or iMessage (absent or unreliable in a
+VM): those stay the maintainer's runs.
+
+## 4. CLAUDE.md audit
+
+Guidance (code.claude.com/docs memory and best practices; Anthropic, "Effective context
+engineering"): under 200 lines (it is loaded in every session; adherence drops with length);
+only what Claude can't derive from the repository; concrete, checkable rules; what must always
+or never happen goes into a hook or a permission rule, not prose; no contradictions ("Claude may
+pick one arbitrarily"); history and dated quotes belong elsewhere; emphasis (IMPORTANT) sparingly;
+the repository's CLAUDE.md reaches cloud sessions, `~/.claude/CLAUDE.md` does not.
+
+Today: 306 lines, 3,400 words, plus 265 lines of `.claude/rules/`. Found:
+
+| # | Finding | Where | Kind |
+|---|---|---|---|
+| 1 | "Open its pull request as soon as there is a commit" and "Open PRs only when asked" | Git | contradiction |
+| 2 | Capability order "files, Notes + iMessage, shell, browser and computer control": all built (specs to 015) | Development process 6 | stale |
+| 3 | Owner setup: done 2026-11-23 | Owner setup | stale (one-time) |
+| 4 | The Mac's stopgap updater (`auto-update.sh`) "until Sparkle runs"; STATUS: never set up | Every finished batch ships 5 | stale |
+| 5 | Every Mac-visible issue needs a `cases.json` case; `state-check` hasn't run since 2026-11-23 | Every issue becomes a regression case | rule feeds a suite nothing runs |
+| 6 | The maintainer's standing rules ("don't ask whether", "never stop while something can move", "tests clean up") live only in `docs/cloud-sessions.md` | — | missing for both modes |
+| 7 | 19 dated attributions, the Citi backstory, the list of what was removed on 2026-11-07 | throughout | history (belongs in `docs/decisions.md`) |
+| 8 | "No weekly run" said three times; commands repeated from `docs/commands.md`; cloud rules split over CLAUDE.md, the start hook and `docs/cloud-sessions.md` | Done means, Every issue, Commands, Cloud sessions | duplicates |
+| 9 | Cloud builds and tests the Mac app through Latchkey's `shell_run`, starts the updater through it, waits 12 minutes because "every Latchkey call counts as use" | `docs/cloud-sessions.md` | superseded on 2026-11-26 (no Latchkey in development) |
+| 10 | "The maintainer decides: ask before acting on anything not settled" next to "never ask whether or how to implement when it's clear" | The maintainer decides; cloud-sessions.md | tension, needs one wording |
+| 11 | Rules the hooks already enforce (no stash, force-push, `git add -A`, private values) repeated in prose | Git, Nothing left behind | duplicate of a hook |
+| 12 | macos/Local.xcconfig (STATUS) vs macos/Config/Local.xcconfig (CLAUDE.md, the real path) | STATUS | stale path |
+
+## Sources
+
+- https://code.claude.com/docs/en/memory.md; https://code.claude.com/docs/en/best-practices.md;
+  https://code.claude.com/docs/en/hooks-guide.md; https://code.claude.com/docs/en/claude-code-on-the-web.md
+- https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents
+- https://www.anthropic.com/engineering/writing-tools-for-agents
+- https://www.anthropic.com/engineering/demystifying-evals-for-ai-agents
+- https://martinfowler.com/articles/practical-test-pyramid.html; https://martinfowler.com/bliki/ContractTest.html
+- https://kentcdodds.com/blog/the-testing-trophy-and-testing-classifications
+- https://engineering.atspotify.com/2018/01/11/testing-of-microservices
+- https://testing.googleblog.com/2010/12/test-sizes.html (read from search excerpts; host blocked in the session)
+- https://testing.googleblog.com/2015/04/just-say-no-to-more-end-to-end-tests.html
+- https://testing.googleblog.com/2016/05/flaky-tests-at-google-and-how-we.html
+- https://abseil.io/resources/swe-book/html/ch13.html (excerpts)
+- https://go.dev/blog/testing-time; https://pkg.go.dev/testing/synctest
+- https://www.jamesshore.com/v2/books/aoad1/ten_minute_build
+- https://github.com/cirruslabs/tart; https://circleci.com/docs/testing-macos
+- https://modelcontextprotocol.io/docs/tools/inspector; https://github.com/modelcontextprotocol/conformance
+- https://arxiv.org/abs/2406.13352 (AgentDojo)
+- https://microsoft.github.io/code-with-engineering-playbook/automated-testing/synthetic-monitoring-tests/
+
+## 5. CI time, push to last check (measured 2026-11-26, FR-1612)
+
+From the workflow runs' created time to the last check's end, per commit (`gh api
+repos/tonimelisma/latchkey/actions/runs?head_sha=…`):
+
+| Commit (pull request head) | macos/ changed | Push → all done | Longest workflow | Why |
+|---|---|---|---|---|
+| 580388a | yes | 4 m 45 s | e2e 4 m 45 s, mac build 4 m 31 s | nothing else running |
+| 83b746a | yes | 8 m 13 s | e2e 8 m 13 s | e2e-mac waited for a free macOS runner |
+| 00f21a0 | yes | 14 m 28 s | mac build 14 m 28 s | runners busy with another run |
+| 3e99547 | yes | 16 m 37 s | mac build (one job) | before the four-job split |
+| c513a21 | no | 2 m 53 s | relay 2 m 35 s | no Mac work |
+
+Per job: each Mac build-and-test job 3 m 56 s to 6 m 30 s (build ~1.5 min of it), e2e-mac
+3 m 3 s to 4 m 8 s after `pick` (47 s), relay tests 2 m 5 s to 2 m 57 s, linux 33 to 52 s,
+scripts 41 to 65 s. Every pull request push ran `ci.yml` twice (push and pull request) until
+this spec.
+
+The limit: GitHub's plan runs at most five macOS jobs at once for the account. A Mac change
+takes all five (four build-and-test jobs and e2e-mac), so a second push, another session's pull
+request, or main's run after a merge waits for a runner: that wait, not the tests, is what
+passes 5 minutes.
+
+## 6. The sandbox's implementation choices (T11, T12; 2026-11-26)
+
+Low-level choices made while writing `macos/scripts/sandbox.sh` and `cmd/e2e sandbox`
+(CLAUDE.md: decided, recorded here). None is verified on a Mac yet.
+
+- **Where the relay runs.** (a) On the host, the copy dialing out to it: the image would have to
+  be paired again with a host address, and the host would serve the copy. (b) Inside the copy,
+  the relay the image was paired with (`prepare`, as the evals do). Chose (b): no new pairing,
+  nothing of the host in the loop. The relay listens on 8444 behind a proxy on 8443, the address
+  Latchkey dials, so a check can cut the network silently (maccheck's proxy, which now also
+  passes a close on, so a relay restart is seen at once).
+- **What the build copies.** (a) Build in `macos/` (Xcode reads `Config/Local.xcconfig` through
+  `#include?`, bringing the owner's team and relay); (b) a copy of `macos/` without git-ignored
+  files (`git ls-files -co --exclude-standard`). Chose (b), with a guard that stops if the copy
+  holds a `Local.xcconfig`. Also passed: `SPARKLE_PUBLIC_ED_KEY=` (no update key, so the copy
+  never replaces the build with a release) and `LATCHKEY_DEFAULT_RELAY_HOST=`.
+- **The Release identifier on the host.** The build is `net.melisma.latchkey`, like the
+  installed app: it is taken out of Launch Services (`lsregister -u`) after each build and its
+  folder carries `.metadata_never_index`, so nothing on the host opens it in place of the
+  installed Latchkey. Never launched on the host.
+- **Turning a capability off in the installed app.** No control file there (the Swift host test
+  had one): Latchkey is quit, `capabilityLevels` gets `files = off` with `defaults`, and it
+  starts again; the settings are exported first and imported after (also at the next start, if a
+  run stopped half-way). Changed on the first runs (§7): only `capabilityLevels` is kept and
+  put back, deleted when it wasn't there (an import adds keys but never removes one).
+- **Moved from maccheck, changed.** Reconnect after the network returns: no network change
+  reaches the copy, so SC-05's 10 s can't apply; the check allows 90 s and prints the time.
+  Suspension lifted: the app retries every 5 minutes, or on a wake or network change; the check
+  restarts Latchkey instead of waiting (the pairing kept is what it shows). Battery: compared
+  with `pmset` from the state line; in a VM, no made-up percent.
+- **Signatures in one image.** macOS files permissions and the login keychain's pairing item
+  under the app's signature, one signature per bundle identifier. So the image is approved and
+  paired with the sandbox-signed build; `evals.sh --release` (CI's signature) may find the
+  permissions missing or the pairing unreadable. Still not checked (no eval run yet: §7).
+
+Ported on the first local runs (§7): every check `relay/e2e/sandbox-checks.md`, "Status",
+lists as written.
+
+### After spec 016's CI changes (pull request #60, 2026-11-26)
+
+| Commit | Push → all done | Mac jobs (start → end) | Wait for a Mac machine | Notes |
+|---|---|---|---|---|
+| 6c46064 | `mac` passed 15 s after the push | none started | none | no `macos/` change: the gate's skip path |
+| 139a3d3 | 7 m 22 s | 3:56 to 4:35 each; job 1 queued 2 m 40 s | runners held by the run that push cancelled | the changes job took 52 s (Go for the pick) |
+| ce45efa | 8 m 16 s | job 1 4:13, job 3 5:08 (end-to-end inside), job 2 5:22, job 0 3:45 | job 0 queued 4 m 17 s, with nothing else of this repository running | the changes job 5 s; ci 2 m 47 s; e2e-linux 2 m 31 s |
+
+Without the wait, ce45efa comes to about 5 m 25 s (the slowest job plus the changes job and
+the gate). What is left over 5 minutes, and why:
+
+- **Another job held two of the account's five macOS machines** (GitHub's limit is per
+  account, across all its repositories): nothing in this repository can prevent that wait.
+- **Each Mac job builds the app itself** (1:06 to 1:50 with the compilation cache): four jobs,
+  four builds. Sharing one build between jobs means uploading and downloading the build
+  products (several hundred MB), which costs about what it saves.
+- **GitHub's macOS runners vary** by about a minute for the same work (job 2: 4:20 in one run,
+  5:22 in the next).
+- **The pages tests are the bulk** (about 10 minutes of test time across the jobs): faster
+  only by making those tests faster, or by more jobs side by side.
+
+## 7. The sandbox's first local runs (T16, 2026-11-26, a local session on the maintainer's Mac)
+
+Apple silicon (8 cores, 16 GB), macOS 27.0.1, Xcode 27.2, Go 1.27.1, Tart 2.42.0 (now from the
+Homebrew tap `openai/tools`); base image `ghcr.io/cirruslabs/macos-tahoe-base` (macOS 26.6.2,
+27 GB compressed, 33 GB on disk; System Integrity Protection off, Spotlight indexing off).
+
+### The local half of FR-1612 (measured)
+
+| What | Time | Notes |
+|---|---|---|
+| `make -C macos test` natively | 168 s cold, 62 s warm | the cold run: 951 tests, 949 passed, 1 failed (a 5 s wall-clock limit took 5.25 s on the busy Mac; now half the 20 s load limit), 1 skipped; the warm run, after the fix: none failed |
+| The sandbox build alone, cold (`sandbox_build`) | 203 s | the Release app and the re-signing |
+| `eval-image.sh`, first time | ~35 min download + the rest | the 27 GB base image; once per Mac |
+| `eval-image.sh` again (base image already pulled) | 263 s | unattended, no window, exit 0 |
+| `make -C macos sandbox`, first run (a new copy of the image) | 7 min 21 s | build 12 s, start 48 s, install 17 s, checks 364 s (run 4) |
+| `make -C macos sandbox`, reused copy | 5 min 50 s | build 7 s, start 1 s, install 6 s, checks 336 s (run 7: 20 passed, 2 failed, the two bugs below, 6 skipped) |
+| `make -C macos sandbox ARGS="--checks computer,reminders"` | 41 s | build 12 s, start 1 s, install 6 s, checks 22 s |
+
+Over 5 minutes, and why: the first sandbox run takes about 7.4 minutes and a reused one about
+5.8, against the plan's under 5 and under 2 (`make -C macos test` natively, 2.8 minutes cold and 1 warm, is
+within). The build, the copy's start and
+the install are well within (12 s, 48 s, 17 s); the checks are the rest, now that every capability
+runs its whole former use-case group (spec 016 T16): Safari's about 2 minutes (pages loaded and
+read in a real Safari, each action waiting for the page), Latchkey's own browser 1.3 minutes,
+the network cut 27 s (the relay's offline detection), and the restarts of the connection checks.
+Faster only by running checks side by side (they share one screen, Safari and the apps, so
+the front-app and Safari checks would interfere) or by a quick subset after each build with the
+full set before merging: the maintainer's choice.
+
+### What the runs found in Latchkey
+
+Each with its row in `docs/regression-coverage.md`, "Found by the sandbox Mac":
+
+1. The relay refused every MCP call that came through a proxy on the same machine: the MCP SDK's
+   DNS rebinding guard allowed only loopback Host names. Fixed: the relay's own public host is
+   allowed too (`host_test.go`).
+2. A tab of Claude's own lost after an action was called "the owner's Safari tab". Fixed
+   (`BrowserOwnerTabTests`).
+3. A card with a note can't be changed: Cocoa error 134092, because macOS lets only apps with
+   Apple's Contacts notes entitlement change such a card (Apple Developer Forums thread 847426,
+   FB23452026). Fixed 2026-11-27 (decided: "Via Contacts' scripting"; spec 007 FR-722a): such a
+   card is changed and deleted through the Contacts app's scripting, Contacts started hidden and
+   quit again; the check passes. On the way, one run left a Contacts running that Latchkey had
+   started (the check had just quit Contacts, and an Apple Event starts an app shown): the
+   scripts now refuse to start Contacts, and Latchkey waits for its hidden launch.
+4. A Mac without a battery is said to have "100% battery": the state message can't say there is
+   none. Not fixed: a protocol change, the maintainer's decision (sandbox check `battery`).
+5. Found by CI on this pull request: a trace writer kept adding day files to an account being
+   deleted by another process. Fixed (`TestADeletedAccountsFolderGetsNoNewDayFile`).
+
+Seen once, cause not found: in run 5 `computer_act` key F12 didn't answer within 90 s; by hand,
+with the screen sampler running, and on a fresh install it answered in under 5 s each time (run 6
+and 7). An open bug until its cause is found; the harness now opens a new MCP session after such
+a call, so one stuck call no longer fails the checks after it.
+
+### What the runs found in the sandbox's own scripts and checks
+
+Each fixed with a test (`scripts/tests/sandbox_test.sh`, `eval_scripts_test.sh`, the Go tests in
+`relay/cmd/e2e` and `relay/internal/e2e`) or, where only the test Mac shows it, seen working in
+the next run:
+
+- Signing imported the sandbox identity into the login keychain and trusted it there (a
+  password dialog on the owner's screen): it now lives in a keychain of its own, untrusted,
+  and codesign signs by its hash; Xcode signs ad hoc first.
+- "Is Xcode installed" looked for `/usr/bin/xcodebuild`, which every Mac has; Tart's install hint
+  named a tap Tart left.
+- `eval-image.sh` asked for the Claude token (only the evals use it) and waited for Enter; it
+  opened the test Mac's window with about twenty approvals for a person (decided 2026-11-26: "you
+  can literally do all of those for me"). Now no window and no person: `vm-permissions.zsh`
+  writes the permissions into the test Mac's databases (the base image has System Integrity
+  Protection off, which it checks), with each program's real path and signature requirement
+  (rows without them were asked about again), the test data's sender's Calendar, Reminders and
+  Contacts access, and screen recording's second question; the script answers Latchkey's own
+  Connect question; no release is installed first (its keychain items asked again).
+- Opening Latchkey right after a start failed with -1712 (retried); a copy still running wasn't
+  deleted (stopped first); Spotlight was off (on; `files_find`'s search uses it).
+- Chrome 158 refused the stored passkey (cdproto always sends a new field); the relay refused a
+  copy's second sign-in as a cloned passkey (counters start from the time); the checks looked
+  for the pairing code's label instead of the Mac's own name.
+- A new build couldn't read the copy's keychain items (no Apple team: the keychain knows a build
+  by its code hash): the pairing is allowed for each new build, and the activity log starts
+  fresh with it.
+- Check bugs: a job's output comes with the input's answer; a moved event has a new id; written
+  checklists read as ☐/☑; a script's number read from the page's name; od's spacing; Notes'
+  folder clean-up; the levels setting put back; a sign-in again after a suspension; the screen
+  sampler's numbers; Reminders' own view lags (and lags longer when asked every 200 ms);
+  Safari's pages had to be https (Latchkey follows its tab across pages only there).
+- Keep-awake in the copy: the self-signed helper is refused ("Couldn't register the helper";
+  macOS asks an administrator about background activity). Expected (plan D3): the helper
+  accepts only an app of an Apple team. Keep-awake stays off there; `keep-awake-real` isn't
+  written.
+
+### The second local session (T17 to T19, 2026-11-27)
+
+- The full `make -C macos sandbox` on main with "no battery" (pull request #66) and the Contacts
+  fix (build d4ba18f): 21 passed, 0 failed, 6 skipped, 6 min 15 s (build 79 s, start 1 s,
+  install 7 s, checks 375 s); `battery` passes.
+- The checks not written until then are written and pass there, except `messages-identical-texts`
+  (no iMessage account in the image) and `keep-awake-real` (the self-signed helper; what it
+  would take: `relay/e2e/sandbox-checks.md`, "Status").
+- They found two Latchkey bugs, fixed with tests (`docs/regression-coverage.md`, "Found by the
+  sandbox Mac"): a lost Safari tab of Claude's stayed listed as Claude's page; a tab busy right
+  after the pick was called gone. The busy tab's answer now comes in about 27 s, within the
+  relay's 30 s but close to it: the pick and the look each give Safari 10 s (FR-432). On a
+  fresh copy it went past 30 s; the pick now says a tab is busy at once (11 s since).
+- The full run on a fresh copy of the image (build 5c122e5, after the image started each app
+  once): 28 passed, 2 failed, 6 skipped, 10 min 46 s (start 41 s, checks 584 s). Failed:
+  `computer-sidebar-row` (the press said "couldn't be pressed" twice; passes on every later
+  run of that copy: only Finder's first window in a never-used Mac) and
+  `setup-names-what-is-off` (below).
+- Before the image started each app once, a fresh copy's first run counted macOS's first-start
+  questions of Apple's apps ("'Mail' Notifications…") as Latchkey's prompts and timed out on
+  Contacts' first start; with the warm-up both pass.
+- `setup-names-what-is-off` passed twice on the earlier image, and fails on the new one: with
+  Mail's control turned off in the copy's permission database, macOS still tells Latchkey it is
+  allowed, so Ask Now has nothing to name. Tried, without change: quitting Mail first;
+  restarting macOS's permission daemon (a plain `killall tccd` is ignored on macOS 26,
+  `killall -9` restarts it). Stopped there after two fixes (CLAUDE.md); open.
+- Seen, not changed (the maintainer's call): a press on a Finder sidebar row selects it, as decided
+  (2026-11-23), but Finder opens a folder only on a click, so the window keeps showing the old
+  folder. Accessibility's "AXOpen" on the row's cell opens it (tried in the test Mac).
+- Check fixes: Finder's green button is named by its help text ("this button also has an action
+  to zoom the window"); setup's buttons are named by their accessibility description, which
+  System Events doesn't read, so the setup check presses Ask Now with Return; Latchkey's
+  computer control never acts on Latchkey's own windows. The image now lets the test Mac's
+  osascript use Accessibility (System Events reads Finder's sidebar selection).
+- Evals (`make -C macos evals`, the working tree's build b9d2fda, Sonnet through Claude Code
+  2.1.332, the subscription token): 20 of 20 tasks passed every try (60 of 60 tries), held out
+  4 of 4, the three tasks with planted instructions passed all 9 tries, the 4 scripted checks
+  passed; 11 min 41 s for the tasks, a try's median 8 s, the longest 34 s. Two runs before it:
+  the first lost the test Mac's Latchkey right after the scripted checks began ("offline, last
+  seen 6:58") and never got it back (the copy is deleted after a run, with its log: cause not
+  found; not seen again in the two runs after); the second passed its first 4 tasks every try,
+  then every try failed with "registration failed" before Claude Code started: the harness
+  registered a new OAuth client for each try, and the relay registers 10 at once, then one a
+  minute per address. Fixed: one client per relay (`relay/internal/e2e`, test).
+
+### The problem-report fixes' runs (2026-11-27, pull request #74)
+
+Full run on a fresh copy: 33 passed, 3 failed, 6 skipped (36 checks). `setup-names-what-is-off` as
+above. `computer-sidebar-row`: the known first-window failure, passed on the same copy's next run.
+`no-permission-prompts`: during `safari`, macOS asked whether tart-guest-agent (the test Mac's
+own agent, which runs the harness) may find devices on the local network: a question about the
+harness, not Latchkey; it stayed on screen, so the next run on that copy counted it again. Then,
+each on a fresh copy, `safari` and `no-permission-prompts`: main's code passed both; this
+branch's once failed `safari` at the first step (the owner's tab moved while Safari started for
+the first time) with no question, then passed `safari`, `browser` and `no-permission-prompts` on
+the same copy. So far only on Safari's first start in a fresh copy, in code this branch doesn't
+touch (Safari tabs); not fixed. If it comes back: answer the guest agent's question in the image
+(`eval-image.sh`, like the first app starts), and have the watcher read a question's text so one
+about the harness isn't counted as Latchkey's.

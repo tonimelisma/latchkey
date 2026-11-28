@@ -15,14 +15,14 @@ with the reason.
 | `browser` | `browser` (Latchkey's own browser, https pages on two sites) |
 | `safari` | `safari-claudes-tab`, `safari-cross-site`, `safari-owner-tab`, `safari-actions` (keys, select, hover, scroll, upload, download), `safari-long-page`, `safari-leaves-nothing`, `composed-text` (Safari's half) |
 | `notes`, `calendar`, `reminders`, `contacts`, `computer`, `maps` | the per-app groups of the same names |
-| `contacts-card-with-note` | new: a card with a note is changed and deleted through the Contacts app's scripting, the note kept, Contacts quit again (spec 007 FR-722a; macOS lets only apps with Apple's Contacts notes entitlement save such a card through the framework; Toni, 2026-11-27: "Via Contacts' scripting"). Passes since 2026-11-27 |
+| `contacts-card-with-note` | new: a card with a note is changed and deleted through the Contacts app's scripting, the note kept, Contacts quit again (spec 007 FR-722a; macOS lets only apps with Apple's Contacts notes entitlement save such a card through the framework; decided 2026-11-27: "Via Contacts' scripting"). Passes since 2026-11-27 |
 | `front-app-unchanged`, `no-permission-prompts` | the same, sampled during every Latchkey call |
 | `sweep` | `sweep` |
 | `turned-off`, `offline`, `relay-restart`, `network-cut`, `suspended`, `battery` | `tool-off-disappears`, the offline answer, `silent-network-cut`, `reconnect`, `suspended-account` with `unsuspended-reconnects`, `battery-vs-pmset` (a Mac without a battery was said to have 100%; fixed 2026-11-27, spec 001 FR-065a; the check now wants "no battery" there, and passes) |
 | `safari-script-navigation`, `safari-busy-tab` | the same (2026-11-27; each found a Latchkey bug, fixed: a lost Safari tab of Claude's stayed listed as Claude's page; a tab busy right after the pick was called gone) |
 | `computer-sidebar-row`, `computer-window-buttons` | the same (the selection read with System Events, which the image lets the test Mac's osascript use) |
 | `headless-chrome-profile` | the same (Chrome is in the image) |
-| `setup-names-what-is-off` | the same: Mail's control turned off in the copy's permission database, setup's Ask Now pressed with Return, the log line and setup's note read. Passed on the image of 2026-11-26; fails on the image that starts each app once (macOS still answers Mail's control allowed): open, `specs/016-test-strategy/research.md` §7 |
+| `setup-names-what-is-off` | the same: Mail's control turned off in the copy's permission database, setup's Ask Now pressed with Return, the log line and setup's note read. Passed on the image of 2026-11-26; fails on the image that starts each app once (macOS still answers Mail's control allowed): open, `docs/research/2026-11-25-test-strategy.md` §7 |
 | `report-from-installed-app` | the same: the relay restarted with a throwaway intake and developer key in the copy, sharing turned on, a password typed into a served page, the report opened with that key |
 | `keep-awake-real` | the same where the build's keep-awake helper runs; skipped in the sandbox (below) |
 
@@ -33,7 +33,7 @@ the sandbox build is signed with a self-made identity, no Apple team, and the ke
 (an `SMAppService` daemon that checks its caller's team) is refused by macOS ("keep-awake off (not
 approved in System Settings)"). It would take a build signed by an Apple team in the image: CI's
 Apple Development identity (its certificate and key in the sandbox's own keychain, which puts the
-team ID on the owner's Mac's disk, so Toni's choice), or the paid Developer Program's Developer
+team ID on the owner's Mac's disk, so the maintainer's choice), or the paid Developer Program's Developer
 ID; then approving the helper in the copy's background items database, as the image script does
 for the other permissions.
 
@@ -44,7 +44,7 @@ The removed code is in git history: `git show 9adb867:<path>` (main, 2026-11-26)
 `macos/Tests/LiveRelayTests.swift`, `relay/cmd/localcheck/main.go`,
 `relay/cmd/guidecheck/main.go`, `macos/scripts/safari-check/main.swift` (and its `pages/`),
 `macos/scripts/state-check/cases.json` (every case's exact steps) and `focus-watch.swift`.
-`docs/regression-coverage.md` maps every former case to its test, check, eval task or Toni's
+`docs/regression-coverage.md` maps every former case to its test, check, eval task or the maintainer's
 conditions.
 
 ## From `maccheck` + `LiveRelayTests` (the app's connection code, a private relay)

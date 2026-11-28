@@ -185,3 +185,6 @@ func textOf(res *mcp.CallToolResult) string {
 	}
 	return strings.Join(parts, "\n")
 }
+
+// The requirements this file's tests cite (docs/requirements/; script/process-check).
+// Validates: FR-065, FR-650

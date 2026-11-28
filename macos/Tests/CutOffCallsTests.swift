@@ -186,3 +186,6 @@ import Testing
         #expect(!CallsInFlight(marks: nil).quitLine.isEmpty && CallsInFlight(marks: nil).quitLine != "Quitting")
     }
 }
+
+// The requirements this file's tests cite (docs/requirements/; script/process-check).
+// Validates: FR-666, FR-667, FR-668

@@ -2,7 +2,7 @@ import AppKit
 import Foundation
 
 /// WhatsApp (spec 012): reading and searching only, from WhatsApp for Mac's own database. Sending
-/// went with WhatsApp Web in Safari and WhatsApp for Mac's window (Toni, 2026-11-07: unreliable,
+/// went with WhatsApp Web in Safari and WhatsApp for Mac's window (decided 2026-11-07: unreliable,
 /// and driving an app the Owner may be using disturbs them).
 enum WhatsAppCapability {
     /// Opens the desktop app's database on first use; nil when it isn't there or can't be read.

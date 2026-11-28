@@ -2,9 +2,9 @@ import AppKit
 import ApplicationServices
 import Foundation
 
-/// What Claude asked to clean up after reading a sign-in code itself (Toni, 2026-11-22: "The
+/// What Claude asked to clean up after reading a sign-in code itself (decided 2026-11-22: "The
 /// agent reads the messages, archives them etc"): a message in Messages deleted (spec 002
-/// FR-180), an email in Apple Mail marked read and archived (spec 008 FR-852). Done at once while
+/// FR-162), an email in Apple Mail marked read and archived (spec 008 FR-852). Done at once while
 /// the Mac is unlocked; while it is locked (Messages' window and Mail's scripting freeze behind
 /// the lock, 2026-11-02), at the next unlock, also after a restart in between.
 @MainActor
@@ -117,7 +117,7 @@ final class PendingCleanup {
     }
 }
 
-/// Deleting one message in Messages' own window, in the background (spec 002 FR-180, was spec 013
+/// Deleting one message in Messages' own window, in the background (spec 002 FR-162, was spec 013
 /// FR-1362; the way spec 002's research found, 2026-11-05): show its conversation at the message without bringing
 /// Messages forward, check the window shows that conversation, find the one message with its
 /// text on the other side, Messages' own "Delete…", then the question's Delete. Done only once

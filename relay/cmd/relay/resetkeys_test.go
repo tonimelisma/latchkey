@@ -48,3 +48,6 @@ func TestResetKeysCommand(t *testing.T) {
 	require.NoError(t, err, "the relay starts again")
 	require.NoError(t, s.Close())
 }
+
+// The requirements this file's tests cite (docs/requirements/; script/process-check).
+// Validates: FR-189

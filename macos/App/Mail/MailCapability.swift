@@ -1,6 +1,6 @@
 import Foundation
 
-/// Mail (spec 008 FR-850 to FR-853; Toni, 2026-11-22: "Claude reads Apple Mail"): Claude finds and
+/// Mail (spec 008 FR-850 to FR-853; decided 2026-11-22: "Claude reads Apple Mail"): Claude finds and
 /// reads recent emails in Apple Mail on this Mac, and marks one read and archives it, for when it
 /// has no email tool of its own (a sign-in code sent by email, above all). Read from Mail's own
 /// index and files, never its window; nothing is written or sent (the rest of spec 008 stays

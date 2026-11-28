@@ -1,216 +1,266 @@
-# Latchkey
+# CLAUDE.md
 
-Your Mac, at Claude's fingertips from anywhere: a Swift menu bar app keeps an outbound WebSocket
-to a Go relay, the MCP server Claude connects to as a custom connector (offline answers when the
-Mac is away). A Go program does the same for Linux servers. Free, open source, self-hostable;
-Apple silicon, current + previous macOS. Owner: Toni Melisma (`tonimelisma`).
+## What this is
 
-At the start of every session:
-1. Read `docs/STATUS.md` (current phase, next steps, open questions), then the spec folder you
-   work in.
-2. List open problem reports: `go run ./cmd/latchkey-reports list` in `relay/` (spec 014). Ask
-   Toni once per report (AskUserQuestion, its summary in a few words): look into it here, in a
-   separate session (`create_session`), or later; add its id to "Problem reports asked about" in
-   `docs/STATUS.md`. Reports already asked about get one line, no question.
+Latchkey puts a person's Mac, and their Linux servers, at Claude's fingertips from anywhere: a
+Swift menu bar app (and a Go program on Linux) keeps an outbound WebSocket to a Go relay, which is
+the MCP server Claude connects to as a custom connector and answers for a machine that is away.
+Free, open source, self-hostable; Apple silicon, the current and previous macOS. It ships as a
+signed Mac app with Sparkle updates, a signed Linux binary, and a signed relay container image.
 
-Why each rule exists, with Toni's words and dates: `docs/decisions.md`.
+## Working style
 
-## Two ways to work (spec 016)
+- When it is clear what is wanted, do it. Ask only for what only the user can do, or for a real
+  product choice nobody has made yet.
+- Don't end a turn with a summary announcing the next step, an offer to continue, or a list of
+  decisions that block nothing: take the next step.
+- Stop only when nothing can move forward without the user, or when what blocks you is
+  deliberately protected (a permission, a ruleset, a secret). Then say exactly what is needed.
+- Still confirm destructive or irreversible actions outside the normal flow (deleting data,
+  rewriting history, changing settings); the normal flow (branch, commit, PR, merge, release) is
+  not one of them.
+- Live tests clean up everything they create in their own teardown, even when they fail, and
+  confirm the removal.
+- A product choice nobody has made yet (behavior or wording users see, a library, a protocol or
+  schema shape, a default) goes to the maintainer as a question, and the answer gets an ADR.
+  Wording and visual design follow Apple's Human Interface Guidelines without asking.
 
-Which one a session is depends on where it runs; everything else here applies to both.
+## Product invariants
 
-- **Cloud session** (the main way; `CLAUDE_CODE_REMOTE=true`, an Ubuntu VM, no macOS): follows
-  `docs/cloud-sessions.md`. No Mac: GitHub's Mac runner builds and tests the Mac app. It never
-  uses Latchkey to reach Toni's MacBook while developing (builds, tests, the updater,
-  screenshots), except a live check Toni asks for in that session.
-- **Local session** (Claude Code Toni started on his Mac; its own worktree): builds and tests
-  natively (`make test`, `make lint` in `macos/`), and after building the Mac app runs `make -C
-  macos sandbox` (spec 016) before calling the change done. It reads the running Latchkey
-  directly: its version (`defaults read /Applications/Latchkey.app/Contents/Info
-  CFBundleShortVersionString`), macOS's log (`log show --last 1h --info --predicate 'subsystem
-  == "net.melisma.latchkey"'`; notice lines last only hours), crash reports
-  (`~/Library/Logs/DiagnosticReports/Latchkey*`); its tool list and activity log through the
-  Latchkey connector (`machines`, `latchkey_log`; each call counts as use and delays an update's
-  install by 10 minutes). Never `make -C macos install` while Toni may be using Latchkey (it
-  quits it).
+- A paired machine never accepts inbound connections: it only dials out to the relay.
+  ([ADR 0001](docs/adr/0001-constitution.md) I, [ADR 0002](docs/adr/0002-nat-traversal-the-mac-app-keeps-one-outbound-websocket-to.md))
+- Fail fast, never hang: every call from Claude is answered within a bounded time, and the relay
+  never waits on a machine without a deadline. ([ADR 0001](docs/adr/0001-constitution.md) II, [ADR 0004](docs/adr/0004-deadlines.md))
+- Disabled means nonexistent: a capability the user turned off is never listed, callable or
+  mentioned to Claude. ([ADR 0001](docs/adr/0001-constitution.md) III)
+- Never disturb the user: while the Mac is unlocked, Latchkey never brings a window to the front,
+  drives an app's window (selection, view, text), moves the pointer or types into the user's
+  apps. Background work they can't see is fine (scripting, databases, Latchkey's off-screen
+  browser). A feature that needs the front or another app's window is not built, even with a
+  guard. The exceptions the user asks for knowingly: computer control, the user's own Safari
+  tabs, the shell's `open`. ([ADR 0001](docs/adr/0001-constitution.md) IV)
+- Self-hostable: the relay is one Go binary and one SQLite file in a Docker image, and the hosted
+  relay runs exactly that code. ([ADR 0001](docs/adr/0001-constitution.md) V, [ADR 0011](docs/adr/0011-relay-implementation.md))
+- Store the minimum: tool arguments and results never go into the relay's database; what it
+  stores is listed in `docs/design/data-model.md`. ([ADR 0001](docs/adr/0001-constitution.md) VI)
+- A tool reports; Claude judges: a tool does the one action Claude names and says what it did and
+  the state as it is; it never decides what a page or app state means, retries, or waits for
+  content on its own (`.claude/rules/tool-design.md`). ([ADR 0001](docs/adr/0001-constitution.md) X)
+- The Release app's identifiers (`net.melisma.latchkey`, its helper, the `latchkey` scheme)
+  never change: installed copies keep their pairing, permissions and settings under them
+  (`.claude/rules/macos.md`). ([ADR 0010](docs/adr/0010-mac-app-packaging.md))
 
-## Done means Toni's conditions
+## Engineering philosophy
 
-For any request about whether Latchkey works somewhere (a capability, a site or app, a screen
-state); docs and process work just say what changed and what was checked.
+- No compatibility shims. When a structure is wrong, replace it and migrate its callers in the
+  same change.
+- The smallest correct design. Simplicity first; measure before optimizing, never optimize on a
+  hunch.
+- One owner per fact, per mutation and per side effect. Two places that know the same thing will
+  disagree.
+- Abstractions only at real boundaries (a process, a network, a storage format, a platform), not
+  in anticipation.
+- Don't guess and don't fabricate: an unknown API, path, value or result is looked up, measured or
+  reported as unknown.
+- You own the repository. Nothing is "pre-existing" or someone else's problem, and red CI is never
+  waived: it is fixed first.
+- Comments and docs describe current behavior and why it is that way, never its history.
+- Whatever doesn't work is a bug in Latchkey: never the site's, the app's, macOS's or the user's,
+  and never "bot protection" or a CAPTCHA. Find what Latchkey does differently from Safari (view,
+  cookies and storage, window and screen, the events a click or key sends, timing) and fix it;
+  until then it is an open issue with what was learned.
 
-- Before starting, write Toni's exact conditions as rows, in his words, plus the spec's success
-  criteria: screen state (unlocked / locked / lid closed), browser (Safari tab / Latchkey's own),
-  fresh vs already signed in, the site or app. Each row is its own work-list item; the first
-  reply lists the rows and how each will be checked.
-- A row is VERIFIED only by a real run in that exact condition with the installed version,
-  quoted with version, time, and the result seen (the page, the database), not Claude's words.
-  Unit tests, a run in another screen state, or reasoning from code verify nothing.
-- No test sessions against Toni's real data except a live check he asks for. A run on GitHub's
-  runners or a test Mac is evidence only for the conditions it has (unlocked, own browser, served
-  pages, test data); locked, lid closed, real iMessage, real sites and his accounts stay NOT
-  VERIFIED until he runs them; say so.
-- Every answer to "can you / does it / is it working" leads with the rows, like "Locked, fresh
-  sign-in: NOT VERIFIED (scheduled for the next lock) | Unlocked: VERIFIED 0.8.218 10:17". Never
-  "done", "works", or "should work" for a row that isn't verified.
-- After two fixes that didn't work for the same row, stop and say so, with what was learned,
-  rather than a third patch.
+## Engineering practices
 
-## Working with Toni
-
-- Plain, short language. Lead with the answer. Explain unavoidable jargon in a few words.
-- Never use internal labels (M1, T015, requirement IDs, `make run`) without saying in words
-  what they are; questions must make sense to someone who hasn't read the plan.
-- No manual work for Toni: Claude runs every test and check itself, scripted. Ask only for what
-  only Toni can do (his accounts, devices, approvals), keep it minimal, and say so up front.
-- Complete solutions, not partial matches. Say plainly when something falls short.
-- Never end a turn while an item Toni asked for can still move forward without him. When one is
-  blocked, go on to the next; prepare each blocked step as a single action for him and list
-  those steps together at the end.
-- Live tests that write to Toni's apps remove what they made in their own teardown, even when
-  they fail, and confirm the removal.
-
-## Toni decides
-
-Toni makes every product and engineering choice. Claude proposes; Toni picks. Ask only for a
-real choice he hasn't made yet; never ask for a go-ahead, or how or in which order to do what
-is already chosen, and never end a turn with a go-ahead question.
-
-- Wording and visual design users see: Claude drafts it against Apple's Human Interface
-  Guidelines and usability guidance, and never asks.
-- Ask about: features and behavior users see, libraries and tools, architecture, repository
-  layout, protocol or schema shape, milestone and task order, test approach, temporary
-  workarounds, user-facing defaults. Never make one of these silently.
-- Don't ask about low-level details (encodings, internal names, private helpers, file names
-  inside a package): weigh two or three options, pick one, and record options, pros and cons and
-  the choice in `research.md` or the contract.
-- Anything not settled in a spec, plan, or `docs/decisions.md` is undecided: ask before acting
-  on it, never write it into a doc as settled. Don't re-ask what `docs/decisions.md` records.
-- Ask with AskUserQuestion: multiple choice, recommended option first with a one-line why, up to
-  4 related questions per call, all of a task's questions before starting its work.
-- Record each answer in the spec or plan and in `docs/decisions.md`, in the same commit.
-
-## Development process (spec-driven)
-
-- Source of truth: `memory/constitution.md` (change only with Toni's approval), then
-  `specs/NNN-name/` (`spec.md`, `plan.md`, `research.md`, `contracts/`, `tasks.md`), which win
-  over every other doc.
-- "Next step", "continue" or similar: take the first item under "Next steps" in
-  `docs/STATUS.md`, do it by this process, verify it ("Done means Toni's conditions"), update
-  STATUS (mark it done, write the new next steps), commit, and report in plain language.
-
-1. Specify what and why in `spec.md`, no technology. Requirements in EARS form ("When X, the
-   system shall Y") with stable IDs: never renumber; mark removed ones "withdrawn". Mark anything
-   undecided `[NEEDS CLARIFICATION: ...]`; never guess.
-2. Plan the how in `plan.md`; every decision names the requirements it serves; end with the
-   constitution check. Before a plan, contract or task list is done, check it holds together:
-   every requirement has a mechanism and, across the relay–Mac boundary, a message in the
-   contracts; no two docs contradict; milestone order matches the dependencies. Fix gaps that
-   follow from the spec; ask Toni only where the spec leaves a real choice.
-3. A tool reports, Claude judges (Constitution X, `.claude/rules/tool-design.md`): a requirement
-   that has a tool decide what a page or app state means is raised with Toni before planning.
-4. Break into `tasks.md`; each task testable, parallel-safe ones marked `[P]`.
-5. Implement test-first: contract and integration tests written and seen failing first.
-   Integration tests use a real MCP client, not mocks.
-6. New work gets its own `specs/NNN-name/`, starting with research (existing MCP servers, macOS
-   APIs, permissions, risks) and an interview of Toni; stop for his review before tasks or code.
-
-Specs, `docs/STATUS.md`, `docs/decisions.md` and `README.md` change in the same commit as the
-code or decision that changes them. The README says in plain words what each capability lets
-Claude do and not do, and what works when (locked, unlocked, the never-disturb rule).
-
-## Git
-
-`main` takes changes only through a pull request whose checks passed (a ruleset).
-
-- One session, one branch, one pull request. Work on the session's branch (or one named for the
-  task), push early and often, and open its pull request at the first commit (a draft while
-  unfinished), so other sessions see what is taken.
-- A pull request's branch is never replaced: fixes, review changes and main go onto it as new
-  commits (`git fetch origin && git merge origin/main`, or GitHub's "Update branch"); never
-  rebase a pushed branch, never close a pull request to redo it elsewhere, never force-push.
-- Merge by squash: once the pull request is ready, turn on auto-merge (`enable_pr_auto_merge`,
-  method squash).
-- Branches are deleted by GitHub (merged) or `branch-cleanup.yml` (closed), never by hand or
-  through Latchkey on the Mac.
-- Stage files by name, never `git add -A` or `git add .`. Never stash: set work aside with a
-  commit on your branch.
-- A local session never works in the main checkout `~/Development/latchkey` (it stays on
-  `main`): `EnterWorktree`, `scripts/link-local-files.sh`, leaving once merged:
-  `docs/git-worktrees.md`.
-
-## Every finished batch ships
-
-A batch is the fixes for one request: per fix run the targeted tests, then the full checks once
-per batch, then:
-
-1. Tests and lint pass for what changed. A diff in `macos/App/SignIn/`, `Browser/`, `Messages/`
-   or `Mail/` gets a security review by a review subagent before commit, its findings fixed or
-   answered in the same commit.
-2. Never write a version number by hand: releases are tags made by CI (`scripts/release-tag.sh`,
-   the highest tag + 1): `mac-<x.y.z>`, `linux-<x.y.z>`. A tagged commit keeps its number.
-3. Specs, STATUS, decisions and README in the same commit; commit files by name; merge (above).
-4. Merging ships: the workflows (`docs/cloud-sessions.md`, "Releases") test, tag, sign and
-   publish what changed; installed Macs and Linux servers update themselves (a Mac only after 10
-   minutes without a tool call). Toni never installs by hand. Watch the runs (`gh api
-   repos/tonimelisma/latchkey/actions/runs`) until the release job ends.
-
-## Nothing left behind
-
-No work is ever lost, and Toni never hears about leftovers. At the end of every turn:
-
-- Finished work is merged into `main`; unfinished work is committed and pushed to its branch
-  (WIP commits are fine) and the reply says in a line what is still open.
-- Leftovers (branches nobody has pushed to for 3 days, abandoned worktrees, Dependabot updates)
-  are tested and merged if they work, otherwise reported to Toni with what they contain. Another
-  session's live branch is never touched.
-- Temporary files (scratch scripts, database copies, old app copies, servers' `/tmp` files) are
-  deleted when their task is done; scratchpad folders end empty.
-- Never commit a working relay's address or the Apple team ID: only placeholders such as
-  `relay.example.com`; the real values live in the gitignored `macos/Config/Local.xcconfig` and
-  `CLAUDE.local.md`.
-
-Hooks enforce this (`docs/hooks.md`): loose ends listed at session start; the work list
-`~/.claude/worklists/<session id>.md` (`- [ ]` open, `- [x]` done and verified, `- [toni]` only
-Toni) keeps a turn going; commands that lose work and pushes with a private value are refused.
-
-## Every issue becomes a regression test
-
-Every issue found (by Toni, a problem report, a review, a test, one caught before merge) gets,
-in its fix's commit, an automated test that fails without the fix, in the lowest test layer that
-reproduces it (spec 016). A problem report or a new eval failure (`latchkey-reports evals`)
-looked into is an issue found; report contents never go into the repository, a pull request or
-a CI log; once fixed on main or Toni has heard why not, `latchkey-reports delete <id>`.
-
-## Whatever doesn't work is a bug in Latchkey
-
-It is Latchkey's bug, never the site's, the app's, macOS's or the user's, and never "bot
-protection" or a CAPTCHA: find what Latchkey does differently from Safari (view, cookies and
-storage, window and screen, the events a click or key sends, timing) and fix it. Until then it is
-an open bug, with what was learned, in reports, rows, STATUS and tests.
-
-## Never disturb the user (Constitution IV)
-
-While unlocked, someone may be using any app: Latchkey never brings a window to the front,
-drives an app's window (selection, view, text), moves the pointer or types into their apps.
-Background work they can't see is fine (scripting, databases, Latchkey's off-screen browser). A
-feature that needs the front or another app's window is not built, even with a guard. Exceptions
-Toni chose: computer control, the user's own Safari tabs, the shell's `open`.
-
-## Gotchas
-
-- `~/Development/Relay` is an unrelated project. This repo is `~/Development/latchkey`.
-- The relay never waits on the Mac without a deadline (Constitution II).
-- A capability the user turned off never appears to Claude (Constitution III).
-- Relay gotchas (test clients, the key file, legal pages): `.claude/rules/relay.md`.
-- One-time setup only Toni does (secrets, package access): `docs/development.md`, "Owner setup".
+- Test first. A change in behavior starts with a test that fails without it. Contract and
+  integration tests use a real MCP client, not mocks of one.
+- Every bug, CI failure and review finding gets a regression test, seen failing before the fix;
+  quote its red output in the PR. Every issue found (a problem report, a review, a test, a new
+  eval failure) gets its test in the lowest layer that reproduces it (fast, integration, or the
+  sandbox Mac; `docs/regression-coverage.md` gets its row).
+- The instrumentation flywheel, every increment:
+  - Never guess a bug's cause. If the logs and metrics can't explain it, add the instrumentation
+    first, so this occurrence or the next one is diagnosable, then fix.
+  - Never guess at performance: measure, keep a baseline, optimize, and report before and after.
+  - Even when nothing is blocked, review the instrumentation on every path you touched: add what
+    was missing, remove what is noise.
+- Tests are hermetic: temporary directories and fixtures, never the developer's real data, config
+  or accounts.
+- A diff in `macos/App/SignIn/`, `Browser/`, `Messages/` or `Mail/` gets a security review by a
+  review subagent before commit (`.claude/rules/secrets-and-pages.md`), its findings fixed or
+  answered in the same commit.
+- Done means the requester's conditions. For a request about whether Latchkey works somewhere (a
+  capability, a site or app, a screen state), write the requester's exact conditions as rows
+  first: screen state (unlocked, locked, lid closed), browser (a Safari tab or Latchkey's own),
+  fresh or signed in, the site or app. A row is verified only by a real run in exactly that
+  condition with the installed version, quoted with version, time and what was seen. A run on
+  GitHub's runners or the sandbox Mac is evidence only for the conditions it has (unlocked, test
+  data); rows that need real accounts, a locked Mac or a closed lid stay unverified until the
+  requester runs them, and the answer says so. After two fixes that didn't work for one row,
+  stop and report what was learned.
+- Problem reports (spec 014): `go run ./cmd/latchkey-reports list` in `relay/` lists the open
+  ones. Each one looked into is an issue found; report contents never go into the repository, a
+  PR or a CI log; once fixed on main, or answered, `latchkey-reports delete <id>`.
+- Go: `make lint` reports 0 issues (golangci-lint with gofumpt). Swift: `make lint` (swift
+  format, strict). `macos/project.yml` is the Xcode project's source; never edit the generated
+  project. Path-specific rules: `.claude/rules/` (macOS, relay, connectors, tool design, secrets).
 
 ## Commands
 
-`make test`, `make lint` (0 issues) in `relay/`, `macos/`, `linux/`; `make security` and `make
-script-tests` in `relay/`. Everything else: `docs/commands.md`.
+```sh
+script/verify                  # everything CI checks that runs on Linux, in one command (before every push)
+make -C relay test             # relay: every test, race detector, headless Chrome
+make -C relay lint             # relay: golangci-lint, 0 issues
+make -C relay security         # relay: vulnerabilities, committed secrets, Semgrep, ShellCheck, tidy modules
+make -C relay script-tests     # the repository scripts' tests
+make -C linux test lint        # the Linux program
+make -C macos test lint        # the Mac app (macOS only)
+cd macos && xcodebuild -project Latchkey.xcodeproj -scheme Latchkey -destination 'platform=macOS' test -only-testing:LatchkeyTests/FilesTests   # one Swift suite
+cd relay && go test ./internal/hub -run TestName   # one Go test
+make -C relay fmt              # format Go; make -C macos fmt for Swift
+script/process-check           # requirements, tests and doc links agree
+script/stage start | pre-merge <PR> | post-merge <PR>
+```
 
-<!-- Maintainers: keep this file under ~200 lines (Anthropic's guidance for CLAUDE.md). Status and
-decisions live in docs/, topic knowledge in .claude/rules/, procedures in docs/. A rule that must
-always hold belongs in a hook or a test, not here. Test each line: would removing it cause Claude
-to make mistakes? -->
+Everything else (end-to-end checks, the sandbox Mac, evals, operator commands):
+`docs/commands.md`.
+
+## Where docs live
+
+- `docs/index.md` maps every doc. Requirements live in `docs/requirements/<capability>.md`
+  (one per former spec): stable IDs (`FR-NNN`, `SC-NNN`), one EARS sentence each, current
+  behavior only, each `[verified]` by a test tagged `Validates: <ID>` or `unverified: <why>`.
+  Future work lives in GitHub issues, not in docs.
+- `docs/design/<capability>.md` (each starts with `GOVERNS: <paths>`) says how that part is built
+  and why; `docs/design/contracts/` holds the protocols and tool contracts; `docs/adr/NNNN-title.md`
+  records each decision (superseded, never deleted; [index](docs/adr/README.md)); dated research
+  in `docs/research/`; `docs/lessons.md` holds rules learned and open problems, and is pruned
+  when they are resolved.
+- New work on a capability starts with research (existing MCP servers, macOS APIs, permissions,
+  risks) in `docs/research/`, then requirements (mark anything undecided and ask, never guess),
+  then the design and its ADRs, checked against the constitution; then tests, then code. Across
+  the relay–Mac boundary every requirement has a message in the contracts.
+- The README says in plain words what each capability lets Claude do and not do, and what works
+  when (locked, unlocked, never disturbing the user).
+- Update the docs and this file in the same PR as the code they describe.
+
+## Two ways to work
+
+- **Cloud session** (the default; `CLAUDE_CODE_REMOTE=true`, an Ubuntu VM): CI is the
+  verification; GitHub's Mac runner builds and tests the Mac app. It never uses Latchkey to reach
+  a developer's Mac while developing. Details: `docs/cloud-sessions.md`.
+- **Local session** on any Mac with Latchkey installed, in its own worktree
+  (`docs/git-worktrees.md`): builds and tests natively, runs `make -C macos sandbox` after
+  building the Mac app, and may inspect the installed app read-only (its version, macOS's log for
+  `net.melisma.latchkey`, crash reports). Never `make -C macos install` while the installed app
+  is in use (it quits it).
+- Either way, live checks on real accounts or data run only when the person running the session
+  asks for them.
+
+## Increment lifecycle
+
+1. **Start**: `script/stage start`. Anything red on main or in the last scheduled run, and any
+   unanswered review comment on recent PRs, is fixed before new work. Read the open issues and
+   the open problem reports.
+2. **Ready**: write the Definition of Ready in the PR body: the problem, requirement IDs or
+   issue, acceptance criteria, what is out of scope.
+3. **Test first**, then implement with the instrumentation flywheel.
+4. **Verify** with the one verify command; it must be green before pushing.
+5. **Docs** (requirements, design, ADRs, lessons, this file) in the same PR.
+6. **Land**: PR, wait for `CI gate`, squash-merge, which releases (see Git, CI and PRs).
+7. **Report**: after the merge, one PR comment with the Definition of Done checklist and the final
+   increment report (below).
+
+A plan that spans several increments lives in a GitHub tracking issue with a checklist, never in
+a file. Never committed: per-PR report or readiness files, session state or resume files, ledgers
+of merged PRs. That information belongs in the PR and its comments.
+
+## Git, CI and PRs
+
+- One branch per increment, cut from a fresh `origin/main`, named `feat/`, `fix/`, `docs/`,
+  `chore/`, `refactor/` or `perf/` plus a short topic. Never reuse a branch after its PR merged;
+  never name a branch for the tool that wrote it.
+- Every change lands through a PR whose body fills `.github/pull_request_template.md`. CI checks
+  the body, and that a PR titled `fix...` changes a test.
+- `CI gate` is the one required check: a job that needs every other job. Wait for it
+  (`script/stage pre-merge <PR>`), and fix every failure; never bypass it.
+- Squash-merge as soon as `CI gate` is green, without asking: in a cloud session with
+  `gh api -X PUT repos/<owner>/<repo>/pulls/<N>/merge -f merge_method=squash -f sha=<head sha>`
+  (`script/stage post-merge <PR>` does this); locally with `gh pr merge --auto --squash`.
+- Merging to main releases; nobody tags or publishes by hand.
+- The cloud sessions' GitHub proxy refuses tag pushes, branch deletion and GraphQL: use the REST
+  API (`gh api`), and leave branch deletion to GitHub's delete-on-merge and the branch-cleanup
+  workflow.
+- Commit messages: an imperative subject saying what changed; the body says why.
+- A PR's branch is never replaced: fixes and main go onto it as new commits (merge
+  `origin/main`, never rebase a pushed branch, never force-push, never close a PR to redo it
+  elsewhere). Stage files by name, never `git add -A`; never stash: set work aside with a commit.
+- CI (`.github/workflows/ci.yml`, workflow `CI`) runs on every PR, on main, daily (so a newly
+  published vulnerability fails without a push) and by hand: the relay's tests, lint and security
+  checks; the Linux program's; the scripts' tests and actionlint; the process checks; and the Mac
+  app's build, lint and tests on four macOS runners side by side, only when `macos/` or the
+  workflow changed (on main, a tree its PR already tested is only built, for the cache).
+  `e2e.yml`'s end-to-end checks are reported, not required.
+- Releases: every change to `macos/` on main gets the tag `mac-<x.y.z>` (`mac-tag.yml`: built,
+  signed, published with Sparkle's feed; installed Macs update after 10 minutes without a tool
+  call); every change to `linux/` gets `linux-<x.y.z>` (`linux-release.yml`: both architectures,
+  Ed25519-signed, with `SHA256SUMS`; servers update within a day); every change to `relay/`
+  publishes `ghcr.io/tonimelisma/latchkey-relay` and the intake image, signed with cosign keyless
+  by `relay-image.yml` on `refs/heads/main` (hosts verify that identity, so the file name and
+  branch never change). The version is the highest tag's patch + 1 (`scripts/release-tag.sh`);
+  `NEXT_VERSION=x.y.z` starts a new series. A tagged commit keeps its number.
+
+## Privacy review
+
+Before every commit, read your own staged diff (`git diff --cached`) and remove anything private
+about the maintainer, their family or their computers: people's names, addresses, personal email
+addresses and accounts, hostnames, home-directory paths, IP addresses, tenant, client or vault
+IDs, real personal documents or photos. Use neutral stand-ins in tests and examples. There is no
+list of private terms to check against: judge the diff. A working relay's address and the Apple
+team ID never go into the repository: only placeholders such as `relay.example.com`; the real
+values live in the gitignored macos/Config/Local.xcconfig.
+
+## Definition of Done
+
+An increment is done when every line holds; the final report marks each ✅ or ❌ with evidence:
+
+- [ ] Start stage clean: main CI, the last scheduled run and recent review comments were green or
+      fixed first.
+- [ ] Tests first; the regression test's red output before the fix is quoted.
+- [ ] The verify command is green, and CI is green on the final commit.
+- [ ] Traceability and doc checks (`script/process-check`, `script/pr-check`) are green.
+- [ ] Docs and CLAUDE.md are updated in the same PR.
+- [ ] Instrumentation reviewed on touched paths: what was added, what removed, or why it is
+      adequate.
+- [ ] Privacy review done on every commit's staged diff.
+- [ ] Every review thread is answered or resolved.
+- [ ] Merged; main CI green; the release it produced is linked.
+- [ ] Clean up: only main and open PRs' branches remain on the remote; the working tree is clean.
+
+### Final increment report
+
+One PR comment after the merge, with these parts:
+
+1. **Done / not done**: what the increment delivered, and anything left out.
+2. **Definition of Ready**: as written, and whether it held.
+3. **Requirements, ADRs and docs**: IDs added, changed or retired; ADRs; docs touched.
+4. **Design decisions**: each with the alternatives considered and why they lost.
+5. **Verification evidence**: commands, CI run links and durations, release link.
+6. **Regression test**: name and red output before the fix (or "no bug fixed").
+7. **Diagnosis**: for a bug, the root cause and how it was established.
+8. **Instrumentation**: added, removed, and gaps still open.
+9. **Performance**: before and after numbers, or "not touched".
+10. **Privacy review**: done on every commit; anything removed.
+11. **Smells**: what looked wrong but was out of scope.
+12. **Follow-ups**: each filed as an issue, linked.
+13. **Definition of Done**: the checklist above, each line ✅ or ❌ with evidence.
+
+## Gotchas
+
+- Relay gotchas (test clients, the key file, legal pages): `.claude/rules/relay.md`. Claude's
+  connector client: `.claude/rules/claude-connectors.md`.
+- The Mac runner is slower than a Mac: about 30 tests miss their timing limits there on main
+  too, so compare a branch's failed tests with main's before calling one new.
+- Pushing again cancels a PR's CI run in progress: push a batch, then wait.
+- One-time maintainer setup (release secrets, package access): `docs/development.md`,
+  "Maintainer setup".

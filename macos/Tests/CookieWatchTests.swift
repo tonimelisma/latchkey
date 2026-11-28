@@ -5,7 +5,7 @@ import Testing
 
 /// Spec 005 FR-453, FR-454: Latchkey's log says which sign-in cookies Claude's pages took from
 /// Safari, how old Safari's cookie file was, and when a site changed one of them, by name and
-/// never by value (Toni, 2026-11-15: Target signed Safari out after Claude's page used a copy).
+/// never by value (decided 2026-11-15: Target signed Safari out after Claude's page used a copy).
 @MainActor @Suite struct CookieWatchTests {
     static func cookie(
         _ name: String, _ value: String, domain: String = ".shop.example", httpOnly: Bool = false
@@ -110,3 +110,6 @@ import Testing
         func add(_ s: String) { lock.withLock { held.append(s) } }
     }
 }
+
+// The requirements this file's tests cite (docs/requirements/; script/process-check).
+// Validates: FR-453, FR-454

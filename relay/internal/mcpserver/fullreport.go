@@ -20,7 +20,7 @@ import (
 	"github.com/tonimelisma/latchkey/relay/reports"
 )
 
-// Everything for the chat that filed a report (spec 014 FR-1440 to FR-1451; Toni, 2026-11-25:
+// Everything for the chat that filed a report (spec 014 FR-1440 to FR-1451; decided 2026-11-25:
 // "Everything for that chat", "5 MB, screenshots included"). Choices: plan.md D7.
 
 // DefaultPartDeadline is how long the relay waits for a machine's part (FR-1443).

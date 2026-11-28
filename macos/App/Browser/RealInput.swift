@@ -2,7 +2,7 @@ import AppKit
 import WebKit
 
 /// A real mouse and keyboard for a page of Latchkey's own browser (spec 005 FR-478 to FR-485,
-/// spec 013 FR-1377, plan D15; Toni, 2026-11-25: "an approach that looks as much as humans look
+/// spec 013 FR-1377, plan D15; decided 2026-11-25: "an approach that looks as much as humans look
 /// on browsers ... no complex tricks with JavaScript"). AppKit's own mouse and key events, made
 /// here for the view's never-shown window and handed straight to the view, as WebKit's own tests
 /// do: WebKit turns them into the page's trusted events and does what the browser does for them.

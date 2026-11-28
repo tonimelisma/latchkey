@@ -3,7 +3,7 @@ import Testing
 
 @testable import Latchkey
 
-/// 2026-11-26, live on 0.8.246 (Toni's Mac, unlocked, a Safari tab of Claude's): typing "hé"
+/// 2026-11-26, live on 0.8.246 (the maintainer's Mac, unlocked, a Safari tab of Claude's): typing "hé"
 /// gave the page "h", "e", U+0301: the text reached Safari decomposed, as a file name is, so a
 /// site comparing what was typed ("Café") saw something else. Latchkey's own browser got U+00E9.
 /// Every program Latchkey starts (osascript for Safari, Messages, Notes, Reminders) gets the

@@ -90,7 +90,7 @@ enum BrowserCapability {
                         // FR-444, FR-445: in the page the call names, else in a new page.
                         let named = Asked.page
                         if let named { _ = try await MainActor.run { try own.page(named) } }
-                        // FR-455 (amended 2026-11-24, Toni: "all actions should default to the
+                        // FR-455 (amended 2026-11-24: "all actions should default to the
                         // background browser, unless the user wants to see"): only when Claude
                         // asks to show it, and the Mac is unlocked, a page opens in a Safari tab of
                         // Claude's; else in Latchkey's own browser.
@@ -619,7 +619,7 @@ enum BrowserCapability {
         return out
     }
 
-    /// FR-443: the first line of every answer from Latchkey's own browser (Toni, 2026-11-15: an
+    /// FR-443: the first line of every answer from Latchkey's own browser (decided 2026-11-15: an
     /// agent there couldn't tell it wasn't in Safari), naming the page (FR-445).
     /// `own`: the site of the page when Latchkey signs in to it itself (spec 013 FR-1355).
     static func ownBrowser(_ name: String, signedIn: Bool = true, own: String? = nil) -> String {

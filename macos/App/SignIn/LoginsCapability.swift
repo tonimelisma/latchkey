@@ -3,7 +3,7 @@ import Foundation
 /// Sign-in (spec 013, contract `contracts/login-tools.md`): Claude lists the sites Latchkey can
 /// sign in to, and asks Latchkey to type a saved user name, password, or code into a field of one
 /// of its own pages and press the button Claude names. Latchkey types the secret; Claude never
-/// sees it, and Claude reads the page and decides what happened (Toni, 2026-11-22: "Fill-only
+/// sees it, and Claude reads the page and decides what happened (decided 2026-11-22: "Fill-only
 /// tool").
 enum LoginsCapability {
     @MainActor static func make(store: SignInStore = .shared, own: OwnPages = BrowserCapability.ownPages) -> Capability
@@ -379,7 +379,7 @@ enum LoginsCapability {
                 usedStep = step
                 fromPasswords = true
             } else {
-                // Toni, 2026-11-22: "The agent reads the messages, archives them etc".
+                // decided 2026-11-22: "The agent reads the messages, archives them etc".
                 return await answer(
                     "Latchkey holds no code generator for \(login.site) in Passwords, so nothing was typed. Read the code yourself (a text with messages_find and messages_read, an email with your own email tool or mail_find and mail_read), then call again with code.",
                     here0.page, isError: true)

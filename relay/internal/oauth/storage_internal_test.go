@@ -73,3 +73,6 @@ func TestTokenFormatReadsEarlierTokens(t *testing.T) {
 	require.True(t, ok)
 	assert.Equal(t, freshSig, got)
 }
+
+// The requirements this file's tests cite (docs/requirements/; script/process-check).
+// Validates: FR-096, FR-188

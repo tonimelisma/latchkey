@@ -26,3 +26,6 @@ import Testing
         #expect(!json.contains("has_battery"), "\(json)")
     }
 }
+
+// The requirements this file's tests cite (docs/requirements/; script/process-check).
+// Validates: FR-065a

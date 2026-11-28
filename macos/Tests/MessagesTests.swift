@@ -203,3 +203,6 @@ extension JSONValue {
         return nil
     }
 }
+
+// The requirements this file's tests cite (docs/requirements/; script/process-check).
+// Validates: FR-111, FR-150, FR-170, SC-104

@@ -48,7 +48,7 @@ const WorkBits = 20
 type Report struct {
 	Format int `json:"format"`
 	// ID is the id the feedback tool gave Claude (fb_…), so the user's chat and the developer's
-	// list name the same report (Toni, 2026-11-24).
+	// list name the same report (decided 2026-11-24).
 	ID           string    `json:"id,omitempty"`
 	At           time.Time `json:"at"`
 	Summary      string    `json:"summary"`
@@ -60,7 +60,7 @@ type Report struct {
 	System         string `json:"system,omitempty"`
 	Screen         string `json:"screen,omitempty"`
 	// Machines (format 2): each machine Claude named as involved, or, when it named none,
-	// every machine online at the time (Toni, 2026-11-24). Never a machine's name (FR-1412).
+	// every machine online at the time (decided 2026-11-24). Never a machine's name (FR-1412).
 	Machines []Machine `json:"machines,omitempty"`
 	Reporter string    `json:"reporter,omitempty"`
 	// Format 3 (2026-11-25, FR-1440 to FR-1451): everything for the chat that filed it.

@@ -120,3 +120,6 @@ func TestNoLinePerRequest(t *testing.T) {
 	assert.NotContains(t, out.String(), "level=INFO", out.String())
 	assert.NotContains(t, out.String(), "level=DEBUG", out.String())
 }
+
+// The requirements this file's tests cite (docs/requirements/; script/process-check).
+// Validates: FR-632, FR-635, FR-637

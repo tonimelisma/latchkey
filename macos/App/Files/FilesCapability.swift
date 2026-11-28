@@ -11,7 +11,7 @@ enum FilesCapability {
 
     struct Failure: Error { var message: String }
 
-    // MARK: reading (FR-201)
+    // MARK: reading (FR-211)
 
     static func readOperations(home: URL, commands: any CommandRunner) -> [ToolEntry] {
         [
@@ -139,7 +139,7 @@ enum FilesCapability {
         ]
     }
 
-    // MARK: changing (FR-202 to FR-204, FR-208, FR-210)
+    // MARK: changing (FR-212 to FR-214, FR-208, FR-210)
 
     static func writeOperations(home: URL, own: OwnFiles = .standard) -> [ToolEntry] {
         [
